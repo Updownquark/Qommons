@@ -22,7 +22,7 @@ public class HttpForwarder
 	{
 		/**
 		 * Intercepts communications from the servlet request
-		 * 
+		 *
 		 * @param request The request to get the data to write to the URL
 		 * @param out The output stream to write to the URL
 		 * @return Data to pass to
@@ -33,7 +33,7 @@ public class HttpForwarder
 
 		/**
 		 * Intercepts responses from the URL
-		 * 
+		 *
 		 * @param response The HTTP response to write the data to
 		 * @param in The input stream of the URL
 		 * @param out The output stream of the response
@@ -50,6 +50,7 @@ public class HttpForwarder
 	{
 		private byte [] buffer = new byte [BUFFER_LENGTH];
 
+		@Override
 		public Object interceptInput(javax.servlet.http.HttpServletRequest request, OutputStream out)
 			throws IOException
 		{
@@ -66,6 +67,7 @@ public class HttpForwarder
 			return null;
 		}
 
+		@Override
 		public void interceptOutput(HttpServletResponse response, InputStream in, OutputStream out,
 			Object fromInput) throws IOException
 		{
@@ -94,7 +96,7 @@ public class HttpForwarder
 
 		/**
 		 * Accepts a JSON-parsed request
-		 * 
+		 *
 		 * @param request The HTTP request
 		 * @param jsonReq The request parameters. Individual parameters are not JSON-parsed
 		 * @param out The output stream to write the parameters to
@@ -137,7 +139,7 @@ public class HttpForwarder
 
 		/**
 		 * Accepts a JSON-parsed response
-		 * 
+		 *
 		 * @param response The HTTP response
 		 * @param retEvents The JSON-parsed response
 		 * @param out The output stream to write the response to
@@ -163,7 +165,7 @@ public class HttpForwarder
 
 	/**
 	 * Creates an HTTP forwarder
-	 * 
+	 *
 	 * @param interceptor The interceptor for this forwarder to use
 	 * @param cookiePrefix The prefix to use for cookies forwarded to the client by this forwarder.
 	 *        This prefix prevents cookie-clashing.
@@ -176,7 +178,7 @@ public class HttpForwarder
 
 	/**
 	 * Forwards the HTTP request to a URL, sending the URL's response to the HTTP response
-	 * 
+	 *
 	 * @param request The request to forward
 	 * @param response The response to respond to
 	 * @param url The URL to forward the request to and get the response from
@@ -315,7 +317,7 @@ public class HttpForwarder
 						continue; // Path is a reserved word in the HTTP cookie spec
 					String value = cookie.substring(idx + 1);
 					response
-						.addCookie(new javax.servlet.http.Cookie(theCookiePrefix + name, value));
+					.addCookie(new javax.servlet.http.Cookie(theCookiePrefix + name, value));
 				}
 			}
 			i++;

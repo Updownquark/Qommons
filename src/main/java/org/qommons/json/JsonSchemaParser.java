@@ -1,14 +1,11 @@
-/*
- * JsonSchemaParser.java Created Dec 21, 2009 by Andrew Butler, PSL
- */
+/* JsonSchemaParser.java Created Dec 21, 2009 by Andrew Butler, PSL */
 package org.qommons.json;
 
 import org.apache.log4j.Logger;
 import org.json.simple.JSONObject;
 
 /** Parses a JSON schema for validation */
-public class JsonSchemaParser
-{
+public class JsonSchemaParser {
 	/** Used by the JSON schema API for logging */
 	public static final Logger log = Logger.getLogger(JsonSchemaParser.class);
 
@@ -19,56 +16,51 @@ public class JsonSchemaParser
 	private java.util.Map<String, JSONObject> theStoredSchemas;
 
 	/** Creates a schema parser */
-	public JsonSchemaParser()
-	{
-		theSchemaRoots = new java.util.HashMap<String, String>();
-		theStoredSchemas = new java.util.HashMap<String, JSONObject>();
+	public JsonSchemaParser() {
+		theSchemaRoots = new java.util.HashMap<>();
+		theStoredSchemas = new java.util.HashMap<>();
 		theParser = new SAJParser();
 	}
 
-	/** @return The JSON parser that parses schema files for this schema parser */
-	public SAJParser getParser()
-	{
+	/**
+	 * @return The JSON parser that parses schema files for this schema parser
+	 */
+	public SAJParser getParser() {
 		return theParser;
 	}
 
 	/**
 	 * Adds a schema to this parser
-	 * 
+	 *
 	 * @param name The name of the schema
 	 * @param schemaRoot The root URL to use to search for .json files under the additional schema
 	 */
-	public void addSchema(String name, String schemaRoot)
-	{
+	public void addSchema(String name, String schemaRoot) {
 		theSchemaRoots.put(name, schemaRoot);
 	}
 
 	/**
 	 * Parses a JSON schema
-	 * 
+	 *
 	 * @param parent The parent element of the schema, or null if called from the root
 	 * @param name The name of the schema element
 	 * @param schemaEl The JSON-source of the schema element
 	 * @return The schema element to validate with
 	 */
-	public JsonElement parseSchema(JsonElement parent, String name, Object schemaEl)
-	{
+	public JsonElement parseSchema(JsonElement parent, String name, Object schemaEl) {
 		JsonElement ret = createElementFor(schemaEl);
-		ret.configure(this, parent, name, schemaEl instanceof JSONObject ? (JSONObject) schemaEl
-			: null);
+		ret.configure(this, parent, name, schemaEl instanceof JSONObject ? (JSONObject) schemaEl : null);
 		return ret;
 	}
 
 	/**
 	 * Creates an unconfigured JsonElement for the given schema object
-	 * 
+	 *
 	 * @param schemaEl The schema object to create an element for
 	 * @return The JsonElement to parse the given schema type
 	 */
-	public JsonElement createElementFor(Object schemaEl)
-	{
-		if(schemaEl instanceof JSONObject)
-		{
+	public JsonElement createElementFor(Object schemaEl) {
+		if(schemaEl instanceof JSONObject) {
 			JSONObject jsonSchema = (JSONObject) schemaEl;
 			String typeName = (String) jsonSchema.get("valueType");
 			if(typeName == null)
@@ -85,21 +77,17 @@ public class JsonSchemaParser
 				return new NumberElement();
 			else
 				return createElementForType(typeName);
-		}
-		else if(schemaEl == null || schemaEl instanceof Boolean || schemaEl instanceof String
-			|| schemaEl instanceof Number)
+		} else if(schemaEl == null || schemaEl instanceof Boolean || schemaEl instanceof String || schemaEl instanceof Number)
 			return new ConstantElement(schemaEl);
 		else
-			throw new IllegalStateException("Unrecognized schema element type: "
-				+ schemaEl.getClass().getName());
+			throw new IllegalStateException("Unrecognized schema element type: " + schemaEl.getClass().getName());
 	}
 
 	/**
 	 * @param type The type of schema to get
 	 * @return The schema for the given type
 	 */
-	public CustomSchemaElement createElementForType(String type)
-	{
+	public CustomSchemaElement createElementForType(String type) {
 		int idx = type.indexOf('/');
 		if(idx < 0)
 			throw new IllegalStateException("No schema root to find schema type " + type);
@@ -111,8 +99,7 @@ public class JsonSchemaParser
 		return new CustomSchemaElement(type, schemaRoot + "/" + typeName + ".json");
 	}
 
-	private static enum CommentState
-	{
+	private static enum CommentState {
 		NONE, LINE, BLOCK;
 	}
 
@@ -122,17 +109,13 @@ public class JsonSchemaParser
 	 * @param parent The parent json element for the schema element
 	 * @return The schema at the given location
 	 */
-	public JsonElement getExternalSchema(String schemaName, String schemaLocation,
-		JsonElement parent)
-	{
+	public JsonElement getExternalSchema(String schemaName, String schemaLocation, JsonElement parent) {
 		JSONObject schema = theStoredSchemas.get(schemaName);
 		if(schema != null)
 			return createElementFor(schema);
-		try
-		{
+		try {
 			schema = (JSONObject) parseJSON(new java.net.URL(schemaLocation));
-		} catch(java.net.MalformedURLException e)
-		{
+		} catch(java.net.MalformedURLException e) {
 			throw new IllegalStateException("Malformed URL: " + schemaLocation, e);
 		}
 		JsonElement ret = createElementFor(schema);
@@ -142,13 +125,12 @@ public class JsonSchemaParser
 
 	/**
 	 * Parses a schema
-	 * 
+	 *
 	 * @param schemaName The name of the schema
 	 * @param schemaRoot The URL to a file in the schema
 	 * @return The parsed file
 	 */
-	public JsonElement parseSchema(String schemaName, java.net.URL schemaRoot)
-	{
+	public JsonElement parseSchema(String schemaName, java.net.URL schemaRoot) {
 		JsonSchemaParser parser = new JsonSchemaParser();
 		String jsonLoc = schemaRoot.toString();
 		jsonLoc = jsonLoc.substring(0, jsonLoc.lastIndexOf('/'));
@@ -162,17 +144,15 @@ public class JsonSchemaParser
 
 	/**
 	 * Parses JSON from a URL. This method removes all line- and block-style commments.
-	 * 
+	 *
 	 * @param url The URL to get the JSON from
 	 * @return The parsed JSON
 	 */
-	public Object parseJSON(java.net.URL url)
-	{
+	public Object parseJSON(java.net.URL url) {
 		String json;
 		java.io.Reader reader = null;
 		java.io.BufferedReader br = null;
-		try
-		{
+		try {
 			reader = new java.io.InputStreamReader(url.openStream());
 			java.io.StringWriter sw = new java.io.StringWriter();
 			br = new java.io.BufferedReader(reader);
@@ -180,15 +160,11 @@ public class JsonSchemaParser
 			CommentState state = CommentState.NONE;
 			int buffer = -1;
 			// This code cleans the JSON of comments before it parses
-			while((read = br.read()) >= 0)
-			{
-				switch(state)
-				{
+			while((read = br.read()) >= 0) {
+				switch (state) {
 				case NONE:
-					if(read == '/')
-					{
-						if(buffer == '/')
-						{
+					if(read == '/') {
+						if(buffer == '/') {
 							buffer = -1;
 							state = CommentState.LINE;
 							continue;
@@ -197,17 +173,12 @@ public class JsonSchemaParser
 							sw.write(buffer);
 						buffer = read;
 						continue;
-					}
-					else if(read == '*' && buffer == '/')
-					{
+					} else if(read == '*' && buffer == '/') {
 						state = CommentState.BLOCK;
 						buffer = -1;
 						continue;
-					}
-					else
-					{
-						if(buffer >= 0)
-						{
+					} else {
+						if(buffer >= 0) {
 							sw.write(buffer);
 							buffer = -1;
 						}
@@ -221,39 +192,30 @@ public class JsonSchemaParser
 				case BLOCK:
 					if(read == '*')
 						buffer = read;
-					else if(read == '/')
-					{
+					else if(read == '/') {
 						if(buffer == '*')
 							state = CommentState.NONE;
 						buffer = -1;
-					}
-					else
+					} else
 						buffer = -1;
 					break;
 				}
 			}
 			json = sw.toString();
-		} catch(java.io.IOException e)
-		{
+		} catch(java.io.IOException e) {
 			throw new IllegalStateException("Could not find JSON at " + url, e);
-		} finally
-		{
+		} finally {
 			if(br != null)
-				try
-				{
+				try {
 					br.close();
-				} catch(java.io.IOException e)
-				{
+				} catch(java.io.IOException e) {
 					log.error("Could not close stream", e);
 				}
 		}
 		JSONObject schema;
-		try
-		{
-			schema = (JSONObject) theParser.parse(new java.io.StringReader(json),
-				new SAJParser.DefaultHandler());
-		} catch(Throwable e)
-		{
+		try {
+			schema = (JSONObject) theParser.parse(new java.io.StringReader(json), new SAJParser.DefaultHandler());
+		} catch(Throwable e) {
 			throw new IllegalStateException("Could not parse JSON at " + url + ":\n" + json, e);
 		}
 		if(schema == null)

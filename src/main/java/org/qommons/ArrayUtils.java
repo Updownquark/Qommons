@@ -147,6 +147,7 @@ public final class ArrayUtils {
 	 * Inserts all elements of {@code array1} and {@code array2} into a new array, maintaining sort order. Both arrays must be sorted prior
 	 * to calling this method or the resulting array's ordering will not be correct.
 	 *
+	 * @param <T> The element type of the array
 	 * @param array1 The first array of elements to add
 	 * @param array2 The second array of elements to add
 	 * @param compare The comparator to get the ordering from, or null if {@code T} extends {@link Comparable} and the natural ordering is
@@ -1262,6 +1263,7 @@ public final class ArrayUtils {
 	}
 
 	/**
+	 * @param <T> The type of the values to iterate over
 	 * @param array The array to iterate over
 	 * @param forward Whether to iterate forward through the array or backward
 	 * @return An iterable that returns an iterator to iterate over each element in the array
@@ -1276,6 +1278,7 @@ public final class ArrayUtils {
 	}
 
 	/**
+	 * @param <T> The type of the values to iterate over
 	 * @param array The array to iterate over
 	 * @param forward Whether to iterate forward through the array or backward
 	 * @return An iterator to iterate over each element in the array
@@ -1311,6 +1314,7 @@ public final class ArrayUtils {
 	}
 
 	/**
+	 * @param <T> The type of the values to iterate over
 	 * @param compound The iterables to compound in a single iterable
 	 * @return An Iterable that iterates through all elements in the given iterables
 	 */
@@ -1368,6 +1372,7 @@ public final class ArrayUtils {
 	}
 
 	/**
+	 * @param <T> The type of the values to iterate over
 	 * @param compound The iterators to compound in a single iterator
 	 * @return An iterator that iterates through all elements in the given iterators
 	 */
@@ -1458,6 +1463,7 @@ public final class ArrayUtils {
 	}
 
 	/**
+	 * @param <T> The type of the values to iterate over
 	 * @param iterator An iterator to cache the values of
 	 * @return A iterable that returns a lazily-loaded cache so the iterables returne once from the given iterator may be reused any number
 	 *         of times
@@ -1533,6 +1539,8 @@ public final class ArrayUtils {
 	}
 
 	/**
+	 * @param <T> The type of the values to iterate over
+	 * @param <V> The type of values to return from the wrapping iterator
 	 * @param wrap The iterator to wrap
 	 * @param accepter The accepter to discriminate which values to return
 	 * @param removable Whether the returned iterator's {@link Iterator#remove()} method should be active
@@ -1743,7 +1751,7 @@ public final class ArrayUtils {
 	 * @throws E If the {@link DifferenceListenerE} throws an exception
 	 */
 	public static <T1, T2, E extends Throwable> T1 [] adjust(T1 [] original, T2 [] modifier, DifferenceListenerE<T1, T2, E> dl) throws E {
-		ArrayAdjuster<T1, T2, E> adjuster = new ArrayAdjuster<T1, T2, E>(original, modifier, dl);
+		ArrayAdjuster<T1, T2, E> adjuster = new ArrayAdjuster<>(original, modifier, dl);
 		return adjuster.adjust();
 	}
 

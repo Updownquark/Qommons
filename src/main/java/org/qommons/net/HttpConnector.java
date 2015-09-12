@@ -134,7 +134,7 @@ public class HttpConnector
 	public HttpConnector(String url)
 	{
 		theURL = url;
-		theCookies = new java.util.LinkedHashMap<String, String>();
+		theCookies = new java.util.LinkedHashMap<>();
 		theConnectTimeout = -1;
 		theReadTimeout = -1;
 	}
@@ -157,7 +157,7 @@ public class HttpConnector
 		if(use == (theCookies != null))
 			return;
 		if(use)
-			theCookies = new java.util.LinkedHashMap<String, String>();
+			theCookies = new java.util.LinkedHashMap<>();
 		else
 			theCookies = null;
 	}
@@ -335,7 +335,7 @@ public class HttpConnector
 			throws IOException
 	{
 		if(reqProps == null)
-			reqProps = new java.util.HashMap<String, String>();
+			reqProps = new java.util.HashMap<>();
 		if(!reqProps.containsKey("Accept-Encoding"))
 			reqProps.put("Accept-Encoding", "gzip");
 		if(!reqProps.containsKey("Accept-Charset"))
@@ -500,7 +500,7 @@ public class HttpConnector
 	 */
 	public java.net.HttpURLConnection getConnection(String... getParams) throws IOException
 	{
-		java.util.HashMap<String, String> gp = new java.util.HashMap<String, String>();
+		java.util.HashMap<String, String> gp = new java.util.HashMap<>();
 		for(int p = 0; p < getParams.length - 1; p += 2)
 			gp.put(getParams[p], getParams[p + 1]);
 		return getConnection(gp);
@@ -577,15 +577,14 @@ public class HttpConnector
 	 * @param getParams The parameters to send as part of the request URL
 	 * @param formParams The parameters to send as form data in the content of the request
 	 * @param reqProps The properties to set in the request
-	 * @param receiver The stream in which the server's return data will be placed. May be null if
-	 *        the return data not needed or expected. This stream will be used when the
-	 *        {@link java.io.OutputStream#close() close()} method is called on the return value of
-	 *        this method. This method will not call close on the receiver.
-	 * @return An output stream that the caller may use to write the file data to. The
-	 *         {@link java.io.OutputStream#close() close()} method must be called when data writing
-	 *         is finished.
-	 * @throws IOException
+	 * @param receiver The stream in which the server's return data will be placed. May be null if the return data not needed or expected.
+	 *            This stream will be used when the {@link java.io.OutputStream#close() close()} method is called on the return value of
+	 *            this method. This method will not call close on the receiver.
+	 * @return An output stream that the caller may use to write the file data to. The {@link java.io.OutputStream#close() close()} method
+	 *         must be called when data writing is finished.
+	 * @throws IOException If the data cannot be uploaded
 	 */
+	@SuppressWarnings("resource")
 	public java.io.OutputStream uploadData(String fileName, String mimeType,
 		java.util.Map<String, String> getParams,
 		java.util.Map<String, ? extends Object> formParams, java.util.Map<String, String> reqProps,
@@ -851,17 +850,17 @@ public class HttpConnector
 			{
 			case 0:
 				if(getParams == null)
-					getParams = new java.util.HashMap<String, String>();
+					getParams = new java.util.HashMap<>();
 				getParams.put((String) params[p], (String) params[p + 1]);
 				break;
 			case 1:
 				if(postParams == null)
-					postParams = new java.util.HashMap<String, Object>();
+					postParams = new java.util.HashMap<>();
 				postParams.put((String) params[p], params[p + 1]);
 				break;
 			default:
 				if(reqProps == null)
-					reqProps = new java.util.HashMap<String, String>();
+					reqProps = new java.util.HashMap<>();
 				reqProps.put((String) params[p], (String) params[p + 1]);
 				break;
 			}
