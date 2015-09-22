@@ -8,7 +8,7 @@ package org.qommons;
  * @param <C> The type whose subtypes are used as keys in this map
  * @param <V> The type of value stored in this map
  */
-public class SubClassMap<C, V> {
+public class SubClassMap<C, V> implements Sealable {
 	class MapItem {
 		final Class<? extends C> theClass;
 
@@ -27,9 +27,27 @@ public class SubClassMap<C, V> {
 
 	private MapItem [] theItems;
 
+	private boolean isSealed;
+
 	/** Creates a SubClassMap */
 	public SubClassMap() {
 		theItems = new SubClassMap.MapItem[0];
+	}
+
+	@Override
+	public boolean isSealed() {
+		return isSealed;
+	}
+
+	@Override
+	public void seal() {
+		isSealed = true;
+	}
+
+	private void assertUnsealed() {
+		if(isSealed) {
+			throw new SealedException(this);
+		}
 	}
 
 	/**
@@ -41,11 +59,13 @@ public class SubClassMap<C, V> {
 	 * @param value The value to store in the map
 	 */
 	public void put(Class<? extends C> clazz, V value) {
-		for(MapItem item : theItems)
+		assertUnsealed();
+		for(MapItem item : theItems) {
 			if(item.theClass == clazz) {
 				item.theValue = value;
 				return;
 			}
+		}
 		theItems = ArrayUtils.add(theItems, new MapItem(clazz, value));
 	}
 
@@ -58,10 +78,12 @@ public class SubClassMap<C, V> {
 	 * @param allDescending Whether all subclasses of <code>clazz</code> should be removed as well
 	 */
 	public void remove(Class<? extends C> clazz, boolean allDescending) {
+		assertUnsealed();
 		for(int i = 0; i < theItems.length; i++) {
 			if(theItems[i].theClass == clazz
-				|| (allDescending && clazz != null && theItems[i].theClass != null && clazz.isAssignableFrom(theItems[i].theClass)))
+				|| (allDescending && clazz != null && theItems[i].theClass != null && clazz.isAssignableFrom(theItems[i].theClass))) {
 				theItems = ArrayUtils.remove(theItems, i);
+			}
 		}
 	}
 
@@ -74,13 +96,15 @@ public class SubClassMap<C, V> {
 	public V get(Class<? extends C> subClass) {
 		MapItem [] matches = new SubClassMap.MapItem[0];
 		for(MapItem item : theItems) {
-			if(item.theClass == subClass)
+			if(item.theClass == subClass) {
 				return item.theValue;
-			else if(item.theClass != null && item.theClass.isAssignableFrom(subClass))
+			} else if(item.theClass != null && item.theClass.isAssignableFrom(subClass)) {
 				matches = ArrayUtils.add(matches, item);
+			}
 		}
-		if(matches.length == 0)
+		if(matches.length == 0) {
 			return null;
+		}
 		int minDist = 0;
 		MapItem match = null;
 		for(MapItem item : matches) {
@@ -88,25 +112,30 @@ public class SubClassMap<C, V> {
 			if(dist >= 0 && (match == null || dist < minDist)) {
 				minDist = dist;
 				match = item;
-				if(dist == 0)
+				if(dist == 0) {
 					break;
+				}
 			}
 		}
 		return match.theValue;
 	}
 
 	private static int getTypeDistance(Class<?> clazz, Class<?> subClass) {
-		if(clazz == subClass)
+		if(clazz == subClass) {
 			return 0;
-		if(clazz == null || subClass == null)
+		}
+		if(clazz == null || subClass == null) {
 			return -1;
+		}
 		int dist = getTypeDistance(clazz, subClass.getSuperclass());
-		if(dist >= 0)
+		if(dist >= 0) {
 			return dist + 1;
+		}
 		for(Class<?> intf : subClass.getInterfaces()) {
 			dist = getTypeDistance(clazz, intf);
-			if(dist >= 0)
+			if(dist >= 0) {
 				return dist + 1;
+			}
 		}
 		return -1;
 	}
@@ -114,8 +143,9 @@ public class SubClassMap<C, V> {
 	@Override
 	public String toString() {
 		StringBuilder ret = new StringBuilder("{");
-		for(MapItem item : theItems)
+		for(MapItem item : theItems) {
 			ret.append('\n').append(item);
+		}
 		ret.append("\n}");
 		return ret.toString();
 	}
