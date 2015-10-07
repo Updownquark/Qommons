@@ -2,7 +2,11 @@
 package org.qommons;
 
 import java.lang.reflect.Array;
+import java.util.ArrayDeque;
 import java.util.Iterator;
+import java.util.Queue;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * ArrayUtils provides some static methods for manipulating arrays easily when using a tool such as {@link java.util.ArrayList} is
@@ -1578,6 +1582,121 @@ public final class ArrayUtils {
 					wrap.remove();
 				else
 					throw new UnsupportedOperationException();
+			}
+		};
+	}
+
+	/**
+	 * Performs a depth-first iteration of nodes in a hierarchy structure
+	 *
+	 * @param <T> The type of nodes to iterate over
+	 * @param value The value at the root level
+	 * @param childGetter Gets children of each node
+	 * @param filter An optional filter that, if it fails for a value, will prevent the value's children (but not the value itself) from
+	 *            being iterated through
+	 * @return An iterable that can iterate depth-first through the hierarchy
+	 */
+	public static <T> Iterable<T> depthFirst(T value, Function<? super T, Iterable<T>> childGetter, Predicate<? super T> filter) {
+		return depthFirstMulti(java.util.Arrays.asList(value), childGetter, filter);
+	}
+
+	/**
+	 * Performs a depth-first iteration of nodes in a hierarchy structure
+	 *
+	 * @param <T> The type of nodes to iterate over
+	 * @param values The values at the top level to iterate through
+	 * @param childGetter Gets children of each node
+	 * @param filter An optional filter that, if it fails for a value, will prevent the value's children (but not the value itself) from
+	 *            being iterated through
+	 * @return An iterable that can iterate depth-first through the hierarchy
+	 */
+	public static <T> Iterable<T> depthFirstMulti(Iterable<T> values, Function<? super T, Iterable<T>> childGetter,
+		Predicate<? super T> filter) {
+		return new Iterable<T>() {
+			@Override
+			public Iterator<T> iterator() {
+				return new Iterator<T>() {
+					private Iterator<T> theTopLevel = values.iterator();
+
+					private Iterator<T> theChildren;
+
+					@Override
+					public boolean hasNext() {
+						if(theChildren != null) {
+							if(theChildren.hasNext())
+								return true;
+							theChildren = null;
+						}
+						return theTopLevel.hasNext();
+					}
+
+					@Override
+					public T next() {
+						if(theChildren != null && theChildren.hasNext())
+							return theChildren.next();
+						T ret = theTopLevel.next();
+						if(filter == null || filter.test(ret)) {
+							Iterable<T> childIter = () -> childGetter.apply(ret).iterator();
+							theChildren = depthFirstMulti(childIter, childGetter, filter).iterator();
+						}
+						return ret;
+					}
+				};
+			}
+		};
+	}
+
+	/**
+	 * Performs a breadth-first iteration of nodes in a hierarchy structure
+	 *
+	 * @param <T> The type of nodes to iterate over
+	 * @param value The value at the root level
+	 * @param childGetter Gets children of each node
+	 * @param filter An optional filter that, if it fails for a value, will prevent the value's children (but not the value itself) from
+	 *            being iterated through
+	 * @return An iterable that can iterate depth-first through the hierarchy
+	 */
+	public <T> Iterable<T> breadthFirst(T value, Function<? super T, Iterable<T>> childGetter, Predicate<? super T> filter) {
+		return breadthFirstMulti(java.util.Arrays.asList(value), childGetter, filter);
+	}
+
+	/**
+	 * Performs a breadth-first iteration of nodes in a hierarchy structure
+	 *
+	 * @param <T> The type of nodes to iterate over
+	 * @param values The value at the top level to iterate through
+	 * @param childGetter Gets children of each node
+	 * @param filter An optional filter that, if it fails for a value, will prevent the value's children (but not the value itself) from
+	 *            being iterated through
+	 * @return An iterable that can iterate depth-first through the hierarchy
+	 */
+	public <T> Iterable<T> breadthFirstMulti(Iterable<T> values, Function<? super T, Iterable<T>> childGetter,
+		Predicate<? super T> filter) {
+		return new Iterable<T>() {
+			@Override
+			public Iterator<T> iterator() {
+				return new Iterator<T>() {
+					private Queue<T> queue = new ArrayDeque<>();
+
+					{
+						for(T value : values)
+							queue.add(value);
+					}
+
+					@Override
+					public boolean hasNext() {
+						return !queue.isEmpty();
+					}
+
+					@Override
+					public T next() {
+						T ret = queue.poll();
+						if(filter == null || filter.test(ret))
+							for(T child : childGetter.apply(ret))
+								queue.add(child);
+						return ret;
+					}
+				};
 			}
 		};
 	}

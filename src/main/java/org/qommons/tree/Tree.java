@@ -1,5 +1,6 @@
 package org.qommons.tree;
 
+import java.util.AbstractCollection;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -48,36 +49,46 @@ public class Tree<N extends TreeNode<N, V>, V> {
 		return ret;
 	}
 
-	public Iterable<N> nodes() {
-		return () -> new Iterator<N>() {
-			private LinkedList<Iterator<N>> theStack;
+	public Collection<N> nodes() {
+		return new AbstractCollection<N>() {
+			@Override
+			public Iterator<N> iterator() {
+				return new Iterator<N>() {
+					private LinkedList<Iterator<N>> theStack;
 
-			{
-				theStack = new LinkedList<>();
-				theStack.add(theRoots.iterator());
+					{
+						theStack = new LinkedList<>();
+						theStack.add(theRoots.iterator());
+					}
+
+					@Override
+					public boolean hasNext() {
+						while(!theStack.isEmpty() && !theStack.getLast().hasNext()) {
+							theStack.removeLast();
+						}
+						return !theStack.isEmpty();
+					}
+
+					@Override
+					public N next() {
+						if(!hasNext()) {
+							throw new NoSuchElementException();
+						}
+						N ret = theStack.getLast().next();
+						theStack.add(ret.getChildren().iterator());
+						return ret;
+					}
+
+					@Override
+					public void remove() {
+						theStack.getLast().remove();
+					}
+				};
 			}
 
 			@Override
-			public boolean hasNext() {
-				while(!theStack.isEmpty() && !theStack.getLast().hasNext()) {
-					theStack.removeLast();
-				}
-				return !theStack.isEmpty();
-			}
-
-			@Override
-			public N next() {
-				if(!hasNext()) {
-					throw new NoSuchElementException();
-				}
-				N ret = theStack.getLast().next();
-				theStack.add(ret.getChildren().iterator());
-				return ret;
-			}
-
-			@Override
-			public void remove() {
-				theStack.getLast().remove();
+			public int size() {
+				return Tree.this.size();
 			}
 		};
 	}
