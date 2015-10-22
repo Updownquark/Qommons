@@ -1,17 +1,15 @@
 package org.qommons.tree;
 
-import java.util.AbstractCollection;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.NavigableSet;
-import java.util.NoSuchElementException;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
+/**
+ * A navigable tree structure
+ *
+ * @param <N> The type of nodes in this tree
+ * @param <V> The type of values held by nodes in this tree
+ */
 public class Tree<N extends TreeNode<N, V>, V> {
 	private final NavigableSet<N> theRoots;
 
@@ -19,10 +17,15 @@ public class Tree<N extends TreeNode<N, V>, V> {
 
 	private final Function<? super V, V> theParentGetter;
 
+	/** @param parentGetter Gets the logical parent value of a value */
 	public Tree(Function<? super V, V> parentGetter) {
 		this(null, parentGetter);
 	}
 
+	/**
+	 * @param compare Allows sorting of values
+	 * @param parentGetter Gets the logical parent value of a value
+	 */
 	public Tree(Comparator<? super V> compare, Function<? super V, V> parentGetter) {
 		if(compare == null) {
 			theRoots = new TreeSet<>();
@@ -33,6 +36,7 @@ public class Tree<N extends TreeNode<N, V>, V> {
 		theParentGetter = parentGetter;
 	}
 
+	/** @return The number of nodes in this tree */
 	public int size() {
 		int ret = 0;
 		for(N root : theRoots) {
@@ -49,6 +53,7 @@ public class Tree<N extends TreeNode<N, V>, V> {
 		return ret;
 	}
 
+	/** @return A collection of this tree's nodes */
 	public Collection<N> nodes() {
 		return new AbstractCollection<N>() {
 			@Override
@@ -93,6 +98,7 @@ public class Tree<N extends TreeNode<N, V>, V> {
 		};
 	}
 
+	/** @return An iterable over this tree's values */
 	public Iterable<V> values() {
 		Iterable<N> nodes = nodes();
 		return () -> new Iterator<V>() {
@@ -127,16 +133,23 @@ public class Tree<N extends TreeNode<N, V>, V> {
 		}
 	}
 
+	/** Removes all nodes from this tree */
 	public void clear() {
 		theRoots.clear();
 	}
 
+	/** @param node The root value to add to this tree */
 	public void addRoot(N node) {
 		theRoots.add(node);
 	}
 
-	public N getNode(V type, BiFunction<V, N, N> creator) {
-		List<V> descent = getDescent(type);
+	/**
+	 * @param value The value to add to this structure
+	 * @param creator Creates a node from the value if needed
+	 * @return The node that the value is not stored in
+	 */
+	public N getNode(V value, BiFunction<V, N, N> creator) {
+		List<V> descent = getDescent(value);
 		return getNode(null, theRoots, descent, creator);
 	}
 
@@ -173,6 +186,12 @@ public class Tree<N extends TreeNode<N, V>, V> {
 		return ret;
 	}
 
+	/**
+	 * Makes a copy of this tree
+	 * 
+	 * @param nodeCopier Creates new nodes given the node to copy (first argument) and the parent for the new node (second argument)
+	 * @return The copied tree structure
+	 */
 	public Tree<N, V> copy(BiFunction<N, N, N> nodeCopier) {
 		Tree<N, V> ret = new Tree<>(theCompare, theParentGetter);
 		for(N root : theRoots) {
