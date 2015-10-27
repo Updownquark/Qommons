@@ -4,6 +4,7 @@ package org.qommons;
 import java.lang.reflect.Array;
 import java.util.ArrayDeque;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Queue;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -2109,6 +2110,58 @@ public final class ArrayUtils {
 			}
 			return item != null;
 		}
+	}
+
+	/**
+	 * The {@link List} version of {@link #adjust(Object[], Object[], DifferenceListenerE)}. In this version, the <code>original</code> list
+	 * passed to the method may be modified.
+	 *
+	 * @param <T1> The type of the original list
+	 * @param <T2> The type of the modifying list
+	 * @param <E> The type of exception that may be thrown
+	 * @param original The original list
+	 * @param modifier The modifying list
+	 * @param dl The listener to determine how to deal with differences between the two lists
+	 * @throws E If the {@link DifferenceListenerE} throws an exception
+	 */
+	public static <T1, T2, E extends Throwable> void adjust(List<T1> original, List<T2> modifier, DifferenceListenerE<T1, T2, E> dl)
+		throws E {
+		ArrayAdjuster<T1, T2, E> adjuster = new ArrayAdjuster<>((T1 []) original.toArray(), (T2 []) modifier.toArray(),
+			new DifferenceListenerE<T1, T2, E>() {
+				@Override
+				public boolean identity(T1 o1, T2 o2) throws E {
+					return dl.identity(o1, o2);
+				}
+
+				@Override
+				public T1 added(T2 o, int mIdx, int retIdx) throws E {
+					T1 newValue = dl.added(o, mIdx, retIdx);
+					if(newValue != null)
+						original.add(retIdx, newValue);
+					return newValue;
+				}
+
+				@Override
+				public T1 removed(T1 o, int oIdx, int incMod, int retIdx) throws E {
+					T1 keepValue = dl.removed(o, oIdx, incMod, retIdx);
+					if(keepValue == null)
+						original.remove(incMod);
+					else
+						original.set(incMod, keepValue);
+					return keepValue;
+				}
+
+				@Override
+				public T1 set(T1 o1, int idx1, int incMod, T2 o2, int idx2, int retIdx) throws E {
+					T1 replaceValue = dl.set(o1, idx1, incMod, o2, idx2, retIdx);
+					if(replaceValue == null)
+						original.remove(incMod);
+					else
+						original.set(incMod, replaceValue);
+					return replaceValue;
+				}
+			});
+		adjuster.adjust();
 	}
 
 	/**
