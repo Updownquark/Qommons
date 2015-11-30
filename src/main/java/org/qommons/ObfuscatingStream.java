@@ -3,41 +3,33 @@
  */
 package org.qommons;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 
-/**
- * A utility class that allows for easy simple obfuscation of streamed data
- */
-public class ObfuscatingStream
-{
-	private static final char [] HEX_CHARS = new char [] {'0', '1', '2', '3', '4', '5', '6', '7',
-		'8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+/** A utility class that allows for easy simple obfuscation of streamed data */
+public class ObfuscatingStream {
+	private static final char[] HEX_CHARS = new char[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
-	/**
-	 * A class that obfuscates data as it is written to a binary stream
-	 */
-	public static class ObfuscatingOutputStream extends OutputStream
-	{
+	/** A class that obfuscates data as it is written to a binary stream */
+	public static class ObfuscatingOutputStream extends OutputStream {
 		private OutputStream theOS;
 
 		private int theWarp;
 
 		private int theCount;
 
-		ObfuscatingOutputStream(OutputStream os)
-		{
+		ObfuscatingOutputStream(OutputStream os) {
 			theOS = os;
 			theWarp = -1;
 		}
 
-		/**
-		 * @see java.io.OutputStream#write(int)
-		 */
 		@Override
-		public void write(int b) throws IOException
-		{
-			if(theWarp < 0)
-			{
+		public void write(int b) throws IOException {
+			if (theWarp < 0) {
 				theWarp = (int) (Math.random() * 8);
 				theOS.write(theWarp);
 			}
@@ -49,34 +41,25 @@ public class ObfuscatingStream
 		}
 	}
 
-	/**
-	 * A class the unobfuscates data that was obfuscated by an {@link ObfuscatingOutputStream} as it
-	 * is read from an input stream
-	 */
-	public static class UnobfuscatingInputStream extends InputStream
-	{
+	/** A class the unobfuscates data that was obfuscated by an {@link ObfuscatingOutputStream} as it is read from an input stream */
+	public static class UnobfuscatingInputStream extends InputStream {
 		private InputStream theIS;
 
 		private int theWarp;
 
 		private int theCount;
 
-		UnobfuscatingInputStream(InputStream is)
-		{
+		UnobfuscatingInputStream(InputStream is) {
 			theIS = is;
 			theWarp = -1;
 		}
 
-		/**
-		 * @see java.io.InputStream#read()
-		 */
 		@Override
-		public int read() throws IOException
-		{
-			if(theWarp < 0)
+		public int read() throws IOException {
+			if (theWarp < 0)
 				theWarp = theIS.read();
 			int read = theIS.read();
-			if(read < 0)
+			if (read < 0)
 				return read;
 			int shift = (theWarp + theCount) % 8;
 			theCount++;
@@ -92,64 +75,53 @@ public class ObfuscatingStream
 	 * @param os The binary output stream for this utility to write obfuscated data to
 	 * @return The output stream for the calling method to write unobfuscated data
 	 */
-	public static OutputStream obfuscate(OutputStream os)
-	{
+	public static OutputStream obfuscate(OutputStream os) {
 		return new ObfuscatingOutputStream(os);
 	}
 
 	/**
 	 * Unobfuscates an input stream
 	 * 
-	 * @param is The binary input stream for this utililty to read obfuscated data from
+	 * @param is The binary input stream for this utility to read obfuscated data from
 	 * @return The input stream for the calling method to read the unobfuscated data from
 	 */
-	public static InputStream unobfuscate(InputStream is)
-	{
+	public static InputStream unobfuscate(InputStream is) {
 		return new UnobfuscatingInputStream(is);
 	}
 
 	/**
-	 * Obfuscates or unobfuscates the second command-line argument, depending on whether the first
-	 * argument starts with "o" or "u"
+	 * Obfuscates or unobfuscates the second command-line argument, depending on whether the first argument starts with "o" or "u"
 	 * 
 	 * @param args Command-line arguments
 	 * @throws IOException If an error occurs obfuscating or unobfuscating
 	 */
-	public static void main(String [] args) throws IOException
-	{
+	public static void main(String[] args) throws IOException {
 		InputStream input = new ByteArrayInputStream(args[1].getBytes());
 		StringBuilder toPrint = new StringBuilder();
-		if(args[0].startsWith("o"))
-		{
+		if (args[0].startsWith("o")) {
 			ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 			OutputStream out = obfuscate(bytes);
 			int read = input.read();
-			while(read >= 0)
-			{
+			while (read >= 0) {
 				out.write(read);
 				read = input.read();
 			}
-			byte [] receiptBytes = bytes.toByteArray();
-			for(int b = 0; b < receiptBytes.length; b++)
-			{
+			byte[] receiptBytes = bytes.toByteArray();
+			for (int b = 0; b < receiptBytes.length; b++) {
 				int chr = (receiptBytes[b] + 256) % 256;
 				toPrint.append(HEX_CHARS[chr >>> 4]);
 				toPrint.append(HEX_CHARS[chr & 0xf]);
 			}
-		}
-		else if(args[0].startsWith("u"))
-		{
-			input = unobfuscate(input);
-			InputStreamReader reader = new InputStreamReader(input);
+		} else if (args[0].startsWith("u")) {
+			InputStream unob = unobfuscate(input);
+			InputStreamReader reader = new InputStreamReader(unob);
 
 			int read = reader.read();
-			while(read >= 0)
-			{
+			while (read >= 0) {
 				toPrint.append((char) read);
 				read = reader.read();
 			}
-		}
-		else
+		} else
 			throw new IllegalArgumentException("First argument must start with o or u");
 		System.out.println(toPrint.toString());
 	}
