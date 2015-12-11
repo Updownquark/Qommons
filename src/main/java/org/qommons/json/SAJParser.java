@@ -399,7 +399,7 @@ public class SAJParser {
 
 		@Override
 		public int hashCode() {
-			return token.hashCode() * 17 + thePropertyName == null ? 0 : thePropertyName.hashCode();
+			return token.hashCode() * 17 + (thePropertyName == null ? 0 : thePropertyName.hashCode());
 		}
 	}
 
