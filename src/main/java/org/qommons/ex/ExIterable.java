@@ -50,7 +50,7 @@ public interface ExIterable<T, E extends Throwable> {
 		};
 	}
 
-	default <V> ExIterable<V, E> map(ExFunction<T, V, E> map) {
+	default <V> ExIterable<V, E> map(ExFunction<? super T, V, ? extends E> map) {
 		ExIterable<T, E> outer = this;
 		return new ExIterable<V, E>() {
 			@Override
@@ -66,6 +66,44 @@ public interface ExIterable<T, E extends Throwable> {
 					@Override
 					public V next() throws E {
 						return map.apply(backing.next());
+					}
+
+					@Override
+					public void remove() {
+						backing.remove();
+					}
+				};
+			}
+		};
+	}
+
+	default ExIterable<T, E> filter(ExPredicate<? super T, ? extends E> filter) {
+		ExIterable<T, E> outer = this;
+		return new ExIterable<T, E>() {
+			@Override
+			public ExIterator<T, E> iterator() {
+				return new ExIterator<T, E>() {
+					private final ExIterator<T, E> backing = outer.iterator();
+					private boolean found;
+					private T next;
+
+					@Override
+					public boolean hasNext() throws E {
+						while (backing.hasNext() && !found) {
+							next = backing.next();
+							if (filter.test(next))
+								found = true;
+							else
+								next = null;
+						}
+						return found;
+					}
+
+					@Override
+					public T next() throws E {
+						if (!found && !hasNext())
+							throw new java.util.NoSuchElementException();
+						return next;
 					}
 
 					@Override
