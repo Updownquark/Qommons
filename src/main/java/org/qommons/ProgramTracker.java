@@ -57,9 +57,7 @@ public class ProgramTracker implements Cloneable {
 		setThreadTracker(Thread.currentThread(), tracker);
 	}
 
-	/**
-	 * @return The tracker for the current thread
-	 */
+	/** @return The tracker for the current thread */
 	public static ProgramTracker getThreadTracker() {
 		return getThreadTracker(Thread.currentThread());
 	}
@@ -87,9 +85,7 @@ public class ProgramTracker implements Cloneable {
 		}
 	}
 
-	/**
-	 * @return All threads for which {@link #setThreadTracker(Thread, ProgramTracker)} has been called
-	 */
+	/** @return All threads for which {@link #setThreadTracker(Thread, ProgramTracker)} has been called */
 	public static Thread [] getTrackedThreads() {
 		return theThreadTrackers.keySet().toArray(new Thread[0]);
 	}
@@ -118,86 +114,62 @@ public class ProgramTracker implements Cloneable {
 			isWithIntro = true;
 		}
 
-		/**
-		 * @return The threshold below which tasks will be omitted from the results
-		 */
+		/** @return The threshold below which tasks will be omitted from the results */
 		public long getTaskDisplayThreshold() {
 			return theTaskDisplayThreshold;
 		}
 
-		/**
-		 * @param thresh The threshold below which tasks will be omitted from the results
-		 */
+		/** @param thresh The threshold below which tasks will be omitted from the results */
 		public void setTaskDisplayThreshold(long thresh) {
 			theTaskDisplayThreshold = thresh;
 		}
 
-		/**
-		 * @return The threshold percent above which a task will be accented in the result
-		 */
+		/** @return The threshold percent above which a task will be accented in the result */
 		public float getAccentThreshold() {
 			return theAccentThreshold;
 		}
 
-		/**
-		 * @param thresh The threshold percent above which a task will be accented in the result
-		 */
+		/** @param thresh The threshold percent above which a task will be accented in the result */
 		public void setAccentThreshold(float thresh) {
 			theAccentThreshold = thresh;
 		}
 
-		/**
-		 * @return Whether the printing is being done concurrently with the tracker's run
-		 */
+		/** @return Whether the printing is being done concurrently with the tracker's run */
 		public boolean isAsync() {
 			return isAsync;
 		}
 
-		/**
-		 * @param async Whether the printing is being done concurrently with the tracker's run
-		 */
+		/** @param async Whether the printing is being done concurrently with the tracker's run */
 		public void setAsync(boolean async) {
 			isAsync = async;
 		}
 
-		/**
-		 * @return The string to indent nested tasks with
-		 */
+		/** @return The string to indent nested tasks with */
 		public String getIndent() {
 			return theIndent;
 		}
 
-		/**
-		 * @param indent The string to indent nested tasks with
-		 */
+		/** @param indent The string to indent nested tasks with */
 		public void setIndent(String indent) {
 			theIndent = indent;
 		}
 
-		/**
-		 * @return The number of spaces to start the indentation of with
-		 */
+		/** @return The number of spaces to start the indentation of with */
 		public String getInitialIndent() {
 			return theInitialIndent;
 		}
 
-		/**
-		 * @param indent The number of spaces to start the indentation of with
-		 */
+		/** @param indent The number of spaces to start the indentation of with */
 		public void setInitialIndent(String indent) {
 			theInitialIndent = indent;
 		}
 
-		/**
-		 * @return Whether program trackers printed with this config will also print a description of the tracker
-		 */
+		/** @return Whether program trackers printed with this config will also print a description of the tracker */
 		public boolean isWithIntro() {
 			return isWithIntro;
 		}
 
-		/**
-		 * @param wi Whether program trackers printed with this config should also print a description of the tracker
-		 */
+		/** @param wi Whether program trackers printed with this config should also print a description of the tracker */
 		public void setWithIntro(boolean wi) {
 			isWithIntro = wi;
 		}
@@ -295,79 +267,62 @@ public class ProgramTracker implements Cloneable {
 				latestStartNanos = System.nanoTime();
 		}
 
-		/**
-		 * @return The name of the routine
-		 */
+		/** Notifies this node's tracker that this routine is over */
+		public void done() {
+			ProgramTracker.this.end(this);
+		}
+
+		/** @return The name of the routine */
 		public String getName() {
 			return name;
 		}
 
-		/**
-		 * @return The parent routine
-		 */
+		/** @return The parent routine */
 		public TrackNode getParent() {
 			return parent;
 		}
 
-		/**
-		 * @return The number of executions aggregated in this node
-		 */
+		/** @return The number of executions aggregated in this node */
 		public int getCount() {
 			return count;
 		}
 
-		/**
-		 * @return The first time this task was executed
-		 */
+		/** @return The first time this task was executed */
 		public long getFirstStart() {
 			return startTime;
 		}
 
-		/**
-		 * @return The last time this task was executed
-		 */
+		/** @return The last time this task was executed */
 		public long getLatestStart() {
 			return latestStartTime;
 		}
 
-		/**
-		 * @return The last time this task ended
-		 */
+		/** @return The last time this task ended */
 		public long getLastEnd() {
 			return endTime;
 		}
 
-		/**
-		 * @return The total amount of time the routine executed
-		 */
+		/** @return The total amount of time the routine executed */
 		public long getLength() {
 			return runLength;
 		}
 
-		/**
-		 * @return The amount of time the routine executed in nanoseconds (will be 0 if length stats are not enabled)
-		 */
+		/** @return The amount of time the routine executed in nanoseconds (will be 0 if length stats are not enabled) */
 		public long getLengthNanos() {
 			return runLengthNanos;
 		}
 
-		/**
-		 * @return The total amount of CPU time the routine has used
-		 */
+		/** @return The total amount of CPU time the routine has used */
 		public long getCpuLength() {
 			return cpuLength;
 		}
 
-		/**
-		 * @return Statistics kept on the length of this routine
-		 */
+		/** @return Statistics kept on the length of this routine */
 		public RunningStatistic getLengthStats() {
 			return lengthStats;
 		}
 
-		/**
-		 * @return The subroutines of this routine
-		 */
+		/** @return The subroutines of this routine */
 		public TrackNode [] getChildren() {
 			return children.toArray(new TrackNode[children.size()]);
 		}
@@ -696,58 +651,42 @@ public class ProgramTracker implements Cloneable {
 		isWithRTStats = withStats;
 	}
 
-	/**
-	 * @return This tracker's name
-	 */
+	/** @return This tracker's name */
 	public String getName() {
 		return theName;
 	}
 
-	/**
-	 * @param name The name for this tracker
-	 */
+	/** @param name The name for this tracker */
 	public void setName(String name) {
 		theName = name;
 	}
 
-	/**
-	 * @return Whether this tracker is recording data
-	 */
+	/** @return Whether this tracker is recording data */
 	public boolean isOn() {
 		return isOn;
 	}
 
-	/**
-	 * @param on Whether this tracker should be on or off
-	 */
+	/** @param on Whether this tracker should be on or off */
 	public void setOn(boolean on) {
 		isOn = on;
 	}
 
-	/**
-	 * @return Whether this tracker records run time statistics about each repeated procedure
-	 */
+	/** @return Whether this tracker records run time statistics about each repeated procedure */
 	public boolean isWithRTStats() {
 		return isWithRTStats;
 	}
 
-	/**
-	 * @param withStats Whether this tracker should record run time statistics about each repeated procedure
-	 */
+	/** @param withStats Whether this tracker should record run time statistics about each repeated procedure */
 	public void setWithRTStats(boolean withStats) {
 		isWithRTStats = withStats;
 	}
 
-	/**
-	 * @return Whether this tracker keeps track of CPU time in addition to run time
-	 */
+	/** @return Whether this tracker keeps track of CPU time in addition to run time */
 	public boolean isWithCPU() {
 		return isWithCPU;
 	}
 
-	/**
-	 * @param cpu Whether this tracker should keep track of CPU time in addition to run time
-	 */
+	/** @param cpu Whether this tracker should keep track of CPU time in addition to run time */
 	public void setWithCPU(boolean cpu) {
 		isWithCPU = cpu;
 		if(isWithCPU) {
@@ -889,16 +828,12 @@ public class ProgramTracker implements Cloneable {
 		}
 	}
 
-	/**
-	 * @return The node representing the task that is currently executing
-	 */
+	/** @return The node representing the task that is currently executing */
 	public TrackNode getCurrentTask() {
 		return theCurrentNode;
 	}
 
-	/**
-	 * @return The raw data gathered by this tracker
-	 */
+	/** @return The raw data gathered by this tracker */
 	public final TrackNode [] getData() {
 		return theNodes.toArray(new TrackNode[theNodes.size()]);
 	}
