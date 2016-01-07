@@ -187,7 +187,7 @@ public class ProgramTracker implements Cloneable {
 	}
 
 	/** A node representing a single execution or an aggregate of executions of a routine */
-	public class TrackNode implements Cloneable {
+	public class TrackNode implements Cloneable, AutoCloseable {
 		/** The name of the routine */
 		String name;
 
@@ -269,6 +269,11 @@ public class ProgramTracker implements Cloneable {
 
 		/** Notifies this node's tracker that this routine is over */
 		public void done() {
+			ProgramTracker.this.end(this);
+		}
+
+		@Override
+		public void close() {
 			ProgramTracker.this.end(this);
 		}
 
