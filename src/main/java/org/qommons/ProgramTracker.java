@@ -240,7 +240,7 @@ public class ProgramTracker implements Cloneable {
 		void init(TrackNode aParent, String aName, boolean withStats) {
 			parent = aParent;
 			name = aName;
-			count = 1;
+			count = 0;
 			startTime = 0;
 			latestStartTime = 0;
 			latestStartCPU = 0;
@@ -272,6 +272,12 @@ public class ProgramTracker implements Cloneable {
 			ProgramTracker.this.end(this);
 		}
 
+		/** Same as {@link #done()} */
+		public void end() {
+			ProgramTracker.this.end(this);
+		}
+
+		/** Same as {@link #done()} */
 		@Override
 		public void close() {
 			ProgramTracker.this.end(this);
