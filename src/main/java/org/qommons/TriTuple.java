@@ -50,17 +50,23 @@ public class TriTuple<V1, V2, V3> {
 
 	@Override
 	public boolean equals(Object o) {
-		if(o == this)
+		if (o == this)
 			return true;
-		if(!(o instanceof TriTuple))
+		if (!(o instanceof TriTuple))
 			return false;
 		TriTuple<?, ?, ?> tuple = (TriTuple<?, ?, ?>) o;
 		return java.util.Objects.equals(theValue1, tuple.theValue1) && java.util.Objects.equals(theValue2, tuple.theValue2)
-			&& java.util.Objects.equals(theValue3, tuple.theValue3);
+				&& java.util.Objects.equals(theValue3, tuple.theValue3);
 	}
 
 	@Override
 	public int hashCode() {
 		return java.util.Objects.hash(theValue1, theValue2, theValue3);
+	}
+
+	@Override
+	public String toString() {
+		return new StringBuilder("[").append(theValue1).append(", ").append(theValue2).append(", ").append(theValue3).append(']')
+				.toString();
 	}
 }

@@ -41,9 +41,9 @@ public class BiTuple<V1, V2> {
 
 	@Override
 	public boolean equals(Object o) {
-		if(o == this)
+		if (o == this)
 			return true;
-		if(!(o instanceof BiTuple))
+		if (!(o instanceof BiTuple))
 			return false;
 		BiTuple<?, ?> tuple = (BiTuple<?, ?>) o;
 		return java.util.Objects.equals(theValue1, tuple.theValue1) && java.util.Objects.equals(theValue2, tuple.theValue2);
@@ -52,5 +52,10 @@ public class BiTuple<V1, V2> {
 	@Override
 	public int hashCode() {
 		return java.util.Objects.hash(theValue1, theValue2);
+	}
+
+	@Override
+	public String toString() {
+		return new StringBuilder("[").append(theValue1).append(", ").append(theValue2).append(']').toString();
 	}
 }
