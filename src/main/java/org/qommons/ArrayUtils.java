@@ -3,8 +3,10 @@ package org.qommons;
 
 import java.lang.reflect.Array;
 import java.util.ArrayDeque;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Queue;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -1324,49 +1326,56 @@ public final class ArrayUtils {
 	 * @return An Iterable that iterates through all elements in the given iterables
 	 */
 	public static <T> Iterable<T> iterable(final Iterable<? extends T>... compound) {
+		return flatten(Arrays.asList(compound));
+	}
+
+	/**
+	 * @param <T> The type of the values to iterate over
+	 * @param compound The iterables to compound in a single iterable
+	 * @return An Iterable that iterates through all elements in the given iterables
+	 */
+	public static <T> Iterable<T> flatten(final Iterable<? extends Iterable<? extends T>> compound) {
 		return new Iterable<T>() {
 			@Override
 			public Iterator<T> iterator() {
 				return new Iterator<T>() {
+					private final Iterator<? extends Iterable<? extends T>> theCompoundIter = compound.iterator();
 					private Iterator<? extends T> theLastValueIter;
 
 					private Iterator<? extends T> theCurrentIter;
 
-					private int theNextIndex;
-
 					private boolean calledHasNext;
-
 					private boolean currentIterHasValue;
 
 					@Override
 					public boolean hasNext() {
 						calledHasNext = true;
-						if(theCurrentIter != null && !theCurrentIter.hasNext()) {
-							if(currentIterHasValue)
-								theLastValueIter = theCurrentIter;
-							theCurrentIter = null;
+						if (currentIterHasValue)
+							theLastValueIter = theCurrentIter;
+
+						currentIterHasValue = theCurrentIter != null && theCurrentIter.hasNext();
+						while (!currentIterHasValue && theCompoundIter.hasNext()) {
+							theCurrentIter = theCompoundIter.next().iterator();
+							currentIterHasValue = theCurrentIter != null && theCurrentIter.hasNext();
 						}
-						while(theCurrentIter == null && theNextIndex < compound.length) {
-							currentIterHasValue = false;
-							theCurrentIter = compound[theNextIndex++].iterator();
-							if(!theCurrentIter.hasNext())
-								theCurrentIter = null;
-						}
-						return theCurrentIter != null;
+						return currentIterHasValue;
 					}
 
 					@Override
 					public T next() {
-						if(!calledHasNext && !hasNext())
-							throw new java.util.NoSuchElementException();
+						if (!calledHasNext && !hasNext())
+							throw new NoSuchElementException();
+						if (theCurrentIter == null)
+							throw new NoSuchElementException();
+						calledHasNext = false;
 						return theCurrentIter.next();
 					}
 
 					@Override
 					public void remove() {
-						if(!currentIterHasValue && theLastValueIter == null)
+						if (!currentIterHasValue && theLastValueIter == null)
 							throw new IllegalStateException("remove() must be called after next()");
-						if(currentIterHasValue)
+						if (currentIterHasValue)
 							theCurrentIter.remove();
 						else
 							theLastValueIter.remove();
