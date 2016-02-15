@@ -954,7 +954,11 @@ public class QommonsTestUtils {
 						return false;
 					return true;
 				} else {
-					return values.containsAll(arg);
+					// Split out here for debugging
+					if (values.containsAll(arg))
+						return true;
+					else
+						return false;
 				}
 			}
 
