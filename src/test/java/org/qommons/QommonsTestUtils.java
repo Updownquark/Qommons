@@ -159,6 +159,7 @@ public class QommonsTestUtils {
 		// Leave the collection empty
 
 		// Not testing toArray() methods. These are pretty simple, but should probably put those in some time.
+		// TODO Test ReversibleCollections
 	}
 
 	private static <T extends Set<Integer>> void testSet(T set, Consumer<? super T> check) {
