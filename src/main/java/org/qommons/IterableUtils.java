@@ -1,10 +1,6 @@
 package org.qommons;
 
-import java.util.ArrayDeque;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.Queue;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -471,6 +467,41 @@ public class IterableUtils {
 			@Override
 			public V next() {
 				return map.apply(backing.next());
+			}
+
+			@Override
+			public void remove() {
+				backing.remove();
+			}
+		};
+	}
+
+	/**
+	 * @param <T> The type of the iterable to filter
+	 * @param iterable The iterable to filter
+	 * @param filter The function to filter items from the iterable
+	 * @return The filtered iterable
+	 */
+	public static <T> Iterable<T> filter(Iterable<T> iterable, Predicate<? super T> filter) {
+		return () -> new Iterator<T>() {
+			private final Iterator<T> backing = iterable.iterator();
+			private T theNext;
+			boolean hasNext;
+
+			@Override
+			public boolean hasNext() {
+				while ((!hasNext || !filter.test(theNext)) && backing.hasNext()) {
+					hasNext = true;
+					theNext = backing.next();
+				}
+				return hasNext && filter.test(theNext);
+			}
+
+			@Override
+			public T next() {
+				if ((!hasNext || !filter.test(theNext)) && !hasNext())
+					throw new NoSuchElementException();
+				return theNext;
 			}
 
 			@Override

@@ -1,5 +1,6 @@
 package org.qommons.ex;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 
 /**
@@ -115,6 +116,14 @@ public interface ExIterable<T, E extends Throwable> {
 		};
 	}
 
+	default ExIterable<T, E> append(ExIterable<? extends T, ? extends E>... others) {
+		ArrayList<ExIterable<? extends T, ? extends E>> list = new ArrayList<>();
+		list.add(this);
+		for (ExIterable<? extends T, ? extends E> other : others)
+			list.add(other);
+		return flatten(iterate(list));
+	}
+
 	static <T, E extends Throwable> ExIterable<T, E> iterate(T... values) {
 		return new ExIterable<T, E>() {
 			@Override
@@ -159,14 +168,16 @@ public interface ExIterable<T, E extends Throwable> {
 		};
 	}
 
-	static <T, E extends Throwable> ExIterable<T, E> flatten(ExIterable<ExIterable<T, E>, E> container) {
+	static <T, E extends Throwable> ExIterable<T, E> flatten(
+			ExIterable<? extends ExIterable<? extends T, ? extends E>, ? extends E> container) {
 		return new ExIterable<T, E>() {
 			@Override
 			public ExIterator<T, E> iterator() {
 				return new ExIterator<T, E>() {
-					private final ExIterator<ExIterable<T, E>, E> containerIterator = container.iterator();
+					private final ExIterator<? extends ExIterable<? extends T, ? extends E>, ? extends E> containerIterator = container
+							.iterator();
 
-					private ExIterator<T, E> elementIterator = null;
+					private ExIterator<? extends T, ? extends E> elementIterator = null;
 
 					@Override
 					public boolean hasNext() throws E {
