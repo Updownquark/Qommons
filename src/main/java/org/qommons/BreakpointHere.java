@@ -92,7 +92,7 @@ public class BreakpointHere {
 					System.err.println(" 3) Type \"ignore local\" and press ENTER to ignore this particular break point (" + source
 						+ ") for this session.");
 					System.err.println(" 4) Type \"ignore class\" and press ENTER to ignore all break points"
-						+ " from the class that is requesting this break (" + source.getClassName() + "for this session.");
+						+ " from the class that is requesting this break (" + source.getClassName() + " for this session.");
 					System.err.println(" 5) Type \"ignore all\" and press ENTER to ignore all break points for this session.");
 
 					scanner = new Scanner(System.in);

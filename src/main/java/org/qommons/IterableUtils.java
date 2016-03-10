@@ -1,6 +1,10 @@
 package org.qommons;
 
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.Queue;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -383,7 +387,7 @@ public class IterableUtils {
 							return theChildren.next();
 						T ret = theTopLevel.next();
 						if(filter == null || filter.test(ret)) {
-							Iterable<T> childIter = () -> childGetter.apply(ret).iterator();
+							Iterable<T> childIter = childGetter.apply(ret);
 							theChildren = depthFirstMulti(childIter, childGetter, filter).iterator();
 						}
 						return ret;
