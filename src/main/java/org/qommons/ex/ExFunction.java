@@ -16,7 +16,7 @@ public interface ExFunction<F, T, E extends Throwable> {
 		};
 	}
 
-	static <F, T, E extends Throwable> ExFunction<F, T, E> wrap(Function<F, T> f) {
+	static <F, T, E extends Throwable> ExFunction<F, T, E> of(Function<F, T> f) {
 		return value -> f.apply(value);
 	}
 }

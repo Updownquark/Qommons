@@ -2,6 +2,8 @@ package org.qommons.ex;
 
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * Like {@link java.util.Iterator}, but returns an ExIterator, an {@link java.util.Iterator} that can throw checked exceptions
@@ -51,7 +53,11 @@ public interface ExIterable<T, E extends Throwable> {
 		};
 	}
 
-	default <V> ExIterable<V, E> map(ExFunction<? super T, V, ? extends E> map) {
+	default <V> ExIterable<V, E> map(Function<? super T, V> map) {
+		return mapEx(ExFunction.of(map));
+	}
+
+	default <V> ExIterable<V, E> mapEx(ExFunction<? super T, V, ? extends E> map) {
 		ExIterable<T, E> outer = this;
 		return new ExIterable<V, E>() {
 			@Override
@@ -104,6 +110,7 @@ public interface ExIterable<T, E extends Throwable> {
 					public T next() throws E {
 						if (!found && !hasNext())
 							throw new java.util.NoSuchElementException();
+						found = false;
 						return next;
 					}
 
@@ -121,10 +128,75 @@ public interface ExIterable<T, E extends Throwable> {
 		list.add(this);
 		for (ExIterable<? extends T, ? extends E> other : others)
 			list.add(other);
-		return flatten(iterate(list));
+		return flatten(fromIterable(list));
 	}
 
-	static <T, E extends Throwable> ExIterable<T, E> iterate(T... values) {
+	default ExIterable<T, E> onEach(Consumer<? super T> onValue) {
+		ExIterable<T, E> outer = this;
+		return new ExIterable<T, E>() {
+			@Override
+			public ExIterator<T, E> iterator() {
+				return new ExIterator<T, E>() {
+					private final ExIterator<T, E> outerIter = outer.iterator();
+
+					@Override
+					public boolean hasNext() throws E {
+						return outerIter.hasNext();
+					}
+
+					@Override
+					public T next() throws E {
+						T value = outerIter.next();
+						onValue.accept(value);
+						return value;
+					}
+
+					@Override
+					public void remove() {
+						outerIter.remove();
+					}
+				};
+			}
+		};
+	}
+
+	default ExIterable<T, E> onFinish(Runnable action) {
+		ExIterable<T, E> outer = this;
+		return new ExIterable<T, E>() {
+			@Override
+			public ExIterator<T, E> iterator() {
+				return new ExIterator<T, E>() {
+					private final ExIterator<T, E> outerIter = outer.iterator();
+					private boolean hasFinished = false;
+
+					@Override
+					public boolean hasNext() throws E {
+						if (hasFinished)
+							return false;
+						else if (outerIter.hasNext())
+							return true;
+						else {
+							hasFinished = true;
+							action.run();
+							return false;
+						}
+					}
+
+					@Override
+					public T next() throws E {
+						return outerIter.next();
+					}
+
+					@Override
+					public void remove() {
+						outerIter.remove();
+					}
+				};
+			}
+		};
+	}
+
+	static <T, E extends Throwable> ExIterable<T, E> from(T... values) {
 		return new ExIterable<T, E>() {
 			@Override
 			public ExIterator<T, E> iterator() {
@@ -147,7 +219,7 @@ public interface ExIterable<T, E extends Throwable> {
 		};
 	}
 
-	static <T, E extends Throwable> ExIterable<T, E> iterate(Iterable<T> values) {
+	static <T, E extends Throwable> ExIterable<T, E> fromIterable(Iterable<T> values) {
 		return new ExIterable<T, E>() {
 			@Override
 			public ExIterator<T, E> iterator() {
