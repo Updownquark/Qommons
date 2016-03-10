@@ -3,7 +3,7 @@ package org.qommons.config;
 import org.jdom2.Document;
 import org.jdom2.Element;
 
-/** A modifiable version of PrismsConfig */
+/** A modifiable version of QommonsConfig */
 public class MutableConfig extends QommonsConfig {
 	/** Listens to changes in a configuration */
 	public static interface ConfigListener {
@@ -39,7 +39,7 @@ public class MutableConfig extends QommonsConfig {
 	 */
 	public MutableConfig(String name) {
 		theName = name;
-		theSubConfigs = new MutableConfig[0];
+		theSubConfigs = createConfigArray(0);
 		theListeners = new ConfigListener[0];
 		theSubConfigListener = new ConfigListener() {
 			@Override
@@ -71,7 +71,7 @@ public class MutableConfig extends QommonsConfig {
 	}
 
 	/**
-	 * Creates a modifiable version of an existing PrismsConfig
+	 * Creates a modifiable version of an existing QommonsConfig
 	 *
 	 * @param parent The configuration that this config is a sub-config for. Null for a top-level configuration.
 	 * @param config The configuration to duplicate as modifiable
@@ -82,9 +82,9 @@ public class MutableConfig extends QommonsConfig {
 		theValue = config.getValue();
 		theListeners = new ConfigListener[0];
 		QommonsConfig [] subs = config.subConfigs();
-		theSubConfigs = new MutableConfig[subs.length];
+		theSubConfigs = createConfigArray(subs.length);
 		for(int i = 0; i < subs.length; i++) {
-			theSubConfigs[i] = new MutableConfig(this, subs[i]);
+			theSubConfigs[i] = copy(subs[i]);
 			theSubConfigs[i].addListener(theSubConfigListener);
 		}
 	}
@@ -140,17 +140,9 @@ public class MutableConfig extends QommonsConfig {
 	 * @return This config, for chaining
 	 */
 	public MutableConfig set(String key, String value) {
-		MutableConfig config = subConfig(key);
-		if(value == null) {
-			if(config != null)
-				removeSubConfig(config);
-		} else {
-			if(config == null) {
-				config = new MutableConfig(key);
-				addSubConfig(config);
-			}
+		MutableConfig config = getOrCreate(key);
+		if (value != null)
 			config.setValue(value);
-		}
 		return this;
 	}
 
@@ -185,15 +177,35 @@ public class MutableConfig extends QommonsConfig {
 	 * already
 	 *
 	 * @param type The name of the configuration to get or create
+	 * @param props The properties to match
 	 * @return The retrieved or created configuration
 	 */
-	public MutableConfig getOrCreate(String type) {
-		MutableConfig ret = subConfig(type);
+	public MutableConfig getOrCreate(String type, String... props) {
+		MutableConfig ret = subConfig(type, props);
 		if(ret == null) {
-			ret = new MutableConfig(type);
-			addSubConfig(ret);
+			ret = addChild(type);
+			for (int i = 0; i < props.length; i += 2)
+				ret.set(props[i], props[i + 1]);
 		}
 		return ret;
+	}
+
+	/**
+	 * @param name The name for the new child
+	 * @return The new child, already added to this config
+	 */
+	public MutableConfig addChild(String name) {
+		MutableConfig ret = new MutableConfig(name);
+		addSubConfig(ret);
+		return ret;
+	}
+
+	/**
+	 * @param config The config to copy
+	 * @return An instance of this class with the same data as <code>config</code>
+	 */
+	protected MutableConfig copy(QommonsConfig config) {
+		return new MutableConfig(this, config);
 	}
 
 	@Override
@@ -280,7 +292,7 @@ public class MutableConfig extends QommonsConfig {
 	@Override
 	public MutableConfig clone() {
 		final MutableConfig ret = (MutableConfig) super.clone();
-		ret.theSubConfigs = new MutableConfig[theSubConfigs.length];
+		ret.theSubConfigs = ret.createConfigArray(theSubConfigs.length);
 		ret.theListeners = new ConfigListener[0];
 		ret.theSubConfigListener = new ConfigListener() {
 			@Override
