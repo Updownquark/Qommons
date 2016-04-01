@@ -567,4 +567,66 @@ public class IterableUtils {
 			}
 		};
 	}
+
+	/**
+	 * @param <T> The type of values to iterate
+	 * @param type The type of values to iterate
+	 * @param iters The iterables for each element of the path
+	 * @return An iterable for all paths. I.e. for each value output by the first iterator, the second iterator will be created. For each
+	 *         element of that iterator, the third will be created, etc. Each path thus produced will be returned by this iterable. All
+	 *         paths are the same length, namely that of the length of <code>iters</code>. In particular, this method reuses the actual
+	 *         array instance to save memory, so the consumer of the values must process or copy the values it receives.
+	 */
+	public static <T> Iterable<List<T>> combine(Iterator<Iterable<? extends T>> iters) {
+		if (!iters.hasNext())
+			return Collections.EMPTY_LIST;
+		return new Iterable<List<T>>() {
+			@Override
+			public Iterator<List<T>> iterator() {
+				return new Iterator<List<T>>() {
+					private final List<T> values = new ArrayList<>();
+					private final List<Iterable<? extends T>> iterables = new ArrayList<>();
+					private final List<Iterator<? extends T>> iterators;
+
+					{
+						iterators = new ArrayList<>();
+						iterables.add(iters.next());
+						iterators.add(iterables.get(0).iterator());
+					}
+
+					@Override
+					public boolean hasNext() {
+						advance();
+						return iterators.get(0) != null;
+					}
+
+					@Override
+					public List<T> next() {
+						if (!hasNext())
+							throw new NoSuchElementException();
+						values.set(values.size() - 1, iterators.get(iterators.size() - 1).next());
+						return values;
+					}
+
+					private void advance() {
+						while (iterators.get(iterators.size() - 1) == null || !iterators.get(iterators.size() - 1).hasNext()
+							|| iters.hasNext()) {
+							int i;
+							for (i = iterators.size() - 1; i >= 0 && !iterators.get(i).hasNext(); i++) {
+								iterables.remove(i);
+								iterators.remove(i);
+							}
+							if (i < 0)
+								break; // No more values from first iterator. Done with paths.
+							for (; iters.hasNext() && iterators.get(i).hasNext(); i++) {
+
+								values[i] = iterators[i].next();
+								iterators[i + 1] = iters[i + 1].iterator();
+							}
+						}
+					}
+				};
+			}
+		};
+	}
 }
