@@ -1012,40 +1012,40 @@ public interface RedBlackTreeSet<E, N extends ValuedRedBlackNode<E>> extends jav
 
 		@Override
 		public N lower(N e) {
-			return lower(e.getValue());
+			return lowerValue(e.getValue());
 		}
 
-		public N lower(E value) {
+		public N lowerValue(E value) {
 			checkRange(value, true, false);
 			return theSet.getClosestNode(value, true, false);
 		}
 
 		@Override
 		public N floor(N e) {
-			return floor(e.getValue());
+			return floorValue(e.getValue());
 		}
 
-		public N floor(E value) {
+		public N floorValue(E value) {
 			checkRange(value, true, true);
 			return theSet.getClosestNode(value, true, true);
 		}
 
 		@Override
 		public N ceiling(N e) {
-			return ceiling(e.getValue());
+			return ceilingValue(e.getValue());
 		}
 
-		public N ceiling(E value) {
+		public N ceilingValue(E value) {
 			checkRange(value, false, true);
 			return theSet.getClosestNode(value, false, true);
 		}
 
 		@Override
 		public N higher(N e) {
-			return higher(e.getValue());
+			return higherValue(e.getValue());
 		}
 
-		public N higher(E value) {
+		public N higherValue(E value) {
 			checkRange(value, false, false);
 			return theSet.getClosestNode(value, false, false);
 		}

@@ -577,7 +577,7 @@ public class IterableUtils {
 	 *         paths are the same length, namely that of the length of <code>iters</code>. In particular, this method reuses the actual
 	 *         array instance to save memory, so the consumer of the values must process or copy the values it receives.
 	 */
-	public static <T> Iterable<List<T>> combine(Iterator<Iterable<? extends T>> iters) {
+	/*public static <T> Iterable<List<T>> combine(Iterator<Iterable<? extends T>> iters) {
 		if (!iters.hasNext())
 			return Collections.EMPTY_LIST;
 		return new Iterable<List<T>>() {
@@ -628,5 +628,5 @@ public class IterableUtils {
 				};
 			}
 		};
-	}
+	}*/
 }
