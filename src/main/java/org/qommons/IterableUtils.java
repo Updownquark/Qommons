@@ -1,6 +1,5 @@
 package org.qommons;
 
-import java.lang.reflect.Array;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -514,26 +513,27 @@ public class IterableUtils {
 
 	/**
 	 * @param <T> The type of values to iterate
-	 * @param type The type of values to iterate
 	 * @param iters The iterables for each element of the path
 	 * @return An iterable for all paths. I.e. for each value output by the first iterator, the second iterator will be created. For each
 	 *         element of that iterator, the third will be created, etc. Each path thus produced will be returned by this iterable. All
-	 *         paths are the same length, namely that of the length of <code>iters</code>. In particular, this method reuses the actual
-	 *         array instance to save memory, so the consumer of the values must process or copy the values it receives.
+	 *         paths are the same length, namely that of the length of <code>iters</code>. In particular, this method reuses the actual list
+	 *         instance to save memory, so the consumer of the values must process or copy the values it receives.
 	 */
-	public static <T> Iterable<T[]> combine(Class<T> type, Iterable<? extends T>... iters) {
+	public static <T> Iterable<List<T>> combine(Iterable<? extends T>... iters) {
 		if (iters.length == 0)
 			return Collections.EMPTY_LIST;
-		return new Iterable<T[]>() {
+		return new Iterable<List<T>>() {
 			@Override
-			public Iterator<T[]> iterator() {
-				return new Iterator<T[]>() {
-					private final T[] values = (T[]) Array.newInstance(type, iters.length);
+			public Iterator<List<T>> iterator() {
+				return new Iterator<List<T>>() {
+					private final List<T> values = new ArrayList<>(iters.length);
 					private final Iterator<? extends T>[] iterators;
 
 					{
 						iterators = new Iterator[iters.length];
 						iterators[0] = iters[0].iterator();
+						for (int i = 0; i < values.size(); i++)
+							values.add(null);
 					}
 
 					@Override
@@ -543,10 +543,10 @@ public class IterableUtils {
 					}
 
 					@Override
-					public T[] next() {
+					public List<T> next() {
 						if (!hasNext())
 							throw new NoSuchElementException();
-						values[values.length - 1] = iterators[iterators.length - 1].next();
+						values.set(values.size() - 1, iterators[iterators.length - 1].next());
 						return values;
 					}
 
@@ -558,7 +558,7 @@ public class IterableUtils {
 							if (i < 0)
 								break; // No more values from first iterator. Done with paths.
 							for (; i < iterators.length - 1 && iterators[i].hasNext(); i++) {
-								values[i] = iterators[i].next();
+								values.set(i, iterators[i].next());
 								iterators[i + 1] = iters[i + 1].iterator();
 							}
 						}
@@ -570,14 +570,13 @@ public class IterableUtils {
 
 	/**
 	 * @param <T> The type of values to iterate
-	 * @param type The type of values to iterate
 	 * @param iters The iterables for each element of the path
 	 * @return An iterable for all paths. I.e. for each value output by the first iterator, the second iterator will be created. For each
 	 *         element of that iterator, the third will be created, etc. Each path thus produced will be returned by this iterable. All
-	 *         paths are the same length, namely that of the length of <code>iters</code>. In particular, this method reuses the actual
-	 *         array instance to save memory, so the consumer of the values must process or copy the values it receives.
+	 *         paths are the same length, namely that of the length of <code>iters</code>. In particular, this method reuses the actual list
+	 *         instance to save memory, so the consumer of the values must process or copy the values it receives.
 	 */
-	/*public static <T> Iterable<List<T>> combine(Iterator<Iterable<? extends T>> iters) {
+	public static <T> Iterable<List<T>> combine(Iterator<Iterable<? extends T>> iters) {
 		if (!iters.hasNext())
 			return Collections.EMPTY_LIST;
 		return new Iterable<List<T>>() {
@@ -620,13 +619,13 @@ public class IterableUtils {
 								break; // No more values from first iterator. Done with paths.
 							for (; iters.hasNext() && iterators.get(i).hasNext(); i++) {
 
-								values[i] = iterators[i].next();
-								iterators[i + 1] = iters[i + 1].iterator();
+//								values[i] = iterators[i].next();
+//								iterators[i + 1] = iters[i + 1].iterator();
 							}
 						}
 					}
 				};
 			}
 		};
-	}*/
+	}
 }
