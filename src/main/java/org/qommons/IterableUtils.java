@@ -527,12 +527,13 @@ public class IterableUtils {
 			public Iterator<List<T>> iterator() {
 				return new Iterator<List<T>>() {
 					private final List<T> values = new ArrayList<>(iters.length);
+					private final List<T> exposedValues = Collections.unmodifiableList(values);
 					private final Iterator<? extends T>[] iterators;
 
 					{
 						iterators = new Iterator[iters.length];
 						iterators[0] = iters[0].iterator();
-						for (int i = 0; i < values.size(); i++)
+						for (int i = 0; i < iters.length; i++)
 							values.add(null);
 					}
 
@@ -547,7 +548,7 @@ public class IterableUtils {
 						if (!hasNext())
 							throw new NoSuchElementException();
 						values.set(values.size() - 1, iterators[iterators.length - 1].next());
-						return values;
+						return exposedValues;
 					}
 
 					private void advance() {
@@ -569,6 +570,8 @@ public class IterableUtils {
 	}
 
 	/**
+	 * Similar to {@link #combine(Iterable...)}, except that the number of elements can be dynamic
+	 * 
 	 * @param <T> The type of values to iterate
 	 * @param iters The iterables for each element of the path
 	 * @return An iterable for all paths. I.e. for each value output by the first iterator, the second iterator will be created. For each
@@ -576,7 +579,7 @@ public class IterableUtils {
 	 *         paths are the same length, namely that of the length of <code>iters</code>. In particular, this method reuses the actual list
 	 *         instance to save memory, so the consumer of the values must process or copy the values it receives.
 	 */
-	public static <T> Iterable<List<T>> combine(Iterator<Iterable<? extends T>> iters) {
+	public static <T> Iterable<List<T>> combineVariable(Iterator<? extends Iterable<? extends T>> iters) {
 		if (!iters.hasNext())
 			return Collections.EMPTY_LIST;
 		return new Iterable<List<T>>() {
@@ -584,8 +587,10 @@ public class IterableUtils {
 			public Iterator<List<T>> iterator() {
 				return new Iterator<List<T>>() {
 					private final List<T> values = new ArrayList<>();
+					private final List<T> exposedValues = Collections.unmodifiableList(values);
 					private final List<Iterable<? extends T>> iterables = new ArrayList<>();
 					private final List<Iterator<? extends T>> iterators;
+					private boolean readyForNext;
 
 					{
 						iterators = new ArrayList<>();
@@ -595,16 +600,19 @@ public class IterableUtils {
 
 					@Override
 					public boolean hasNext() {
+						if (readyForNext)
+							return true;
 						advance();
+						readyForNext = true;
 						return iterators.get(0) != null;
 					}
 
 					@Override
 					public List<T> next() {
-						if (!hasNext())
+						if (!readyForNext && !hasNext())
 							throw new NoSuchElementException();
-						values.set(values.size() - 1, iterators.get(iterators.size() - 1).next());
-						return values;
+						readyForNext = false;
+						return exposedValues;
 					}
 
 					private void advance() {
@@ -612,15 +620,22 @@ public class IterableUtils {
 							|| iters.hasNext()) {
 							int i;
 							for (i = iterators.size() - 1; i >= 0 && !iterators.get(i).hasNext(); i++) {
-								iterables.remove(i);
 								iterators.remove(i);
+								values.remove(i);
 							}
 							if (i < 0)
 								break; // No more values from first iterator. Done with paths.
-							for (; iters.hasNext() && iterators.get(i).hasNext(); i++) {
-
-//								values[i] = iterators[i].next();
-//								iterators[i + 1] = iters[i + 1].iterator();
+							for (; i < iterables.size() - 1 && iterators.get(i).hasNext(); i++) {
+								values.add(iterators.get(i).next());
+								iterators.add(iterables.get(i + 1).iterator());
+							}
+							for (; iterators.get(i).hasNext(); i++) {
+								values.add(iterators.get(i).next());
+								if (iters.hasNext()) {
+									iterables.add(iters.next());
+									iterators.add(iterables.get(i + 1).iterator());
+								} else
+									break;
 							}
 						}
 					}
