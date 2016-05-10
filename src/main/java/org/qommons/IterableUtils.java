@@ -515,87 +515,34 @@ public class IterableUtils {
 	 * @param <T> The type of values to iterate
 	 * @param iters The iterables for each element of the path
 	 * @return An iterable for all paths. I.e. for each value output by the first iterator, the second iterator will be created. For each
-	 *         element of that iterator, the third will be created, etc. Each path thus produced will be returned by this iterable. All
-	 *         paths are the same length, namely that of the length of <code>iters</code>. In particular, this method reuses the actual list
-	 *         instance to save memory, so the consumer of the values must process or copy the values it receives.
+	 *         element of that iterator, the third will be created, etc. Each path thus produced will be returned by this iterable. This
+	 *         method reuses the list instance returned from the path iterator to save memory, so the consumer of the values must process or
+	 *         copy the values it receives.
 	 */
-	public static <T> Iterable<List<T>> combine(Iterable<? extends T>... iters) {
-		if (iters.length == 0)
-			return Collections.EMPTY_LIST;
-		return new Iterable<List<T>>() {
-			@Override
-			public Iterator<List<T>> iterator() {
-				return new Iterator<List<T>>() {
-					private final List<T> values = new ArrayList<>(iters.length);
-					private final List<T> exposedValues = Collections.unmodifiableList(values);
-					private final Iterator<? extends T>[] iterators;
-
-					{
-						iterators = new Iterator[iters.length];
-						iterators[0] = iters[0].iterator();
-						for (int i = 0; i < iters.length; i++)
-							values.add(null);
-					}
-
-					@Override
-					public boolean hasNext() {
-						advance();
-						return iterators[0] != null;
-					}
-
-					@Override
-					public List<T> next() {
-						if (!hasNext())
-							throw new NoSuchElementException();
-						values.set(values.size() - 1, iterators[iterators.length - 1].next());
-						return exposedValues;
-					}
-
-					private void advance() {
-						while (iterators[iterators.length - 1] == null || !iterators[iterators.length - 1].hasNext()) {
-							int i;
-							for (i = iterators.length - 1; i >= 0 && (iterators[i] == null || !iterators[i].hasNext()); i--)
-								iterators[i] = null;
-							if (i < 0)
-								break; // No more values from first iterator. Done with paths.
-							for (; i < iterators.length - 1 && iterators[i].hasNext(); i++) {
-								values.set(i, iterators[i].next());
-								iterators[i + 1] = iters[i + 1].iterator();
-							}
-						}
-					}
-				};
-			}
-		};
-	}
-
-	/**
-	 * Similar to {@link #combine(Iterable...)}, except that the number of elements can be dynamic
-	 * 
-	 * @param <T> The type of values to iterate
-	 * @param iters The iterables for each element of the path
-	 * @return An iterable for all paths. I.e. for each value output by the first iterator, the second iterator will be created. For each
-	 *         element of that iterator, the third will be created, etc. Each path thus produced will be returned by this iterable. All
-	 *         paths are the same length, namely that of the length of <code>iters</code>. In particular, this method reuses the actual list
-	 *         instance to save memory, so the consumer of the values must process or copy the values it receives.
-	 */
-	public static <T> Iterable<List<T>> combineVariable(Iterator<? extends Iterable<? extends T>> iters) {
+	public static <T> Iterable<List<T>> combine(Iterator<? extends Iterable<? extends T>> iters) {
 		if (!iters.hasNext())
 			return Collections.EMPTY_LIST;
 		return new Iterable<List<T>>() {
 			@Override
 			public Iterator<List<T>> iterator() {
 				return new Iterator<List<T>>() {
-					private final List<T> values = new ArrayList<>();
-					private final List<T> exposedValues = Collections.unmodifiableList(values);
-					private final List<Iterable<? extends T>> iterables = new ArrayList<>();
-					private final List<Iterator<? extends T>> iterators;
+					private final LinkedList<T> values;
+					private final List<T> exposedValues;
+					private final List<Iterable<? extends T>> iterables;
+					private final LinkedList<Iterator<? extends T>> iterators;
 					private boolean readyForNext;
 
 					{
-						iterators = new ArrayList<>();
-						iterables.add(iters.next());
-						iterators.add(iterables.get(0).iterator());
+						values = new LinkedList<>();
+						exposedValues = Collections.unmodifiableList(values);
+						iterables = new ArrayList<>();
+						iterators = new LinkedList<>();
+
+						Iterable<? extends T> iterable = iters.next();
+						iterables.add(iterable);
+						Iterator<? extends T> iter = iterable.iterator();
+						iterators.add(iter);
+						values.add(null);
 					}
 
 					@Override
@@ -604,7 +551,7 @@ public class IterableUtils {
 							return true;
 						advance();
 						readyForNext = true;
-						return iterators.get(0) != null;
+						return !iterators.isEmpty();
 					}
 
 					@Override
@@ -616,26 +563,42 @@ public class IterableUtils {
 					}
 
 					private void advance() {
-						while (iterators.get(iterators.size() - 1) == null || !iterators.get(iterators.size() - 1).hasNext()
-							|| iters.hasNext()) {
-							int i;
-							for (i = iterators.size() - 1; i >= 0 && !iterators.get(i).hasNext(); i++) {
-								iterators.remove(i);
-								values.remove(i);
-							}
-							if (i < 0)
-								break; // No more values from first iterator. Done with paths.
-							for (; i < iterables.size() - 1 && iterators.get(i).hasNext(); i++) {
-								values.add(iterators.get(i).next());
-								iterators.add(iterables.get(i + 1).iterator());
-							}
-							for (; iterators.get(i).hasNext(); i++) {
-								values.add(iterators.get(i).next());
-								if (iters.hasNext()) {
-									iterables.add(iters.next());
-									iterators.add(iterables.get(i + 1).iterator());
-								} else
+						// Back up to an iterator with more elements, if any
+						while (!iterators.isEmpty() && !iterators.getLast().hasNext()) {
+							iterators.removeLast();
+							values.removeLast();
+						}
+						if (!iterators.isEmpty()) {
+							values.removeLast();
+							values.add(iterators.getLast().next());
+						} else
+							return; // No more elements in base iterator--no more paths
+
+						boolean pathComplete = false;
+						{
+							ListIterator<Iterable<? extends T>> iterableIter = iterables.listIterator(iterators.size());
+							while (iterableIter.hasNext()) {
+								Iterator<? extends T> iter = iterableIter.next().iterator();
+								if (!iter.hasNext()) {
+									pathComplete = true;
 									break;
+								}
+								iterators.add(iter);
+								values.add(iter.next());
+							}
+						}
+
+						if (!pathComplete) {
+							while (iters.hasNext()) {
+								Iterable<? extends T> iterable = iters.next();
+								iterables.add(iterable);
+								Iterator<? extends T> iter = iterable.iterator();
+								if (!iter.hasNext()) {
+									pathComplete = true;
+									break;
+								}
+								iterators.add(iter);
+								values.add(iter.next());
 							}
 						}
 					}
