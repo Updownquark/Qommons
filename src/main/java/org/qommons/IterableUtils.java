@@ -513,14 +513,14 @@ public class IterableUtils {
 
 	/**
 	 * @param <T> The type of values to iterate
-	 * @param iters The iterables for each element of the path
+	 * @param elements The iterables for each element of the path
 	 * @return An iterable for all paths. I.e. for each value output by the first iterator, the second iterator will be created. For each
 	 *         element of that iterator, the third will be created, etc. Each path thus produced will be returned by this iterable. This
 	 *         method reuses the list instance returned from the path iterator to save memory, so the consumer of the values must process or
 	 *         copy the values it receives.
 	 */
-	public static <T> Iterable<List<T>> combine(Iterator<? extends Iterable<? extends T>> iters) {
-		if (!iters.hasNext())
+	public static <T> Iterable<List<T>> combine(Iterator<? extends Iterable<? extends T>> elements) {
+		if (!elements.hasNext())
 			return Collections.EMPTY_LIST;
 		return new Iterable<List<T>>() {
 			@Override
@@ -538,10 +538,10 @@ public class IterableUtils {
 						iterables = new ArrayList<>();
 						iterators = new LinkedList<>();
 
-						Iterable<? extends T> iterable = iters.next();
+						Iterable<? extends T> iterable = elements.next();
 						iterables.add(iterable);
-						Iterator<? extends T> iter = iterable.iterator();
-						iterators.add(iter);
+						Iterator<? extends T> iterator = iterable.iterator();
+						iterators.add(iterator);
 						values.add(null);
 					}
 
@@ -574,31 +574,34 @@ public class IterableUtils {
 						} else
 							return; // No more elements in base iterator--no more paths
 
+						// Get iterators after the new element
+						// Start with cached iterables
 						boolean pathComplete = false;
 						{
 							ListIterator<Iterable<? extends T>> iterableIter = iterables.listIterator(iterators.size());
 							while (iterableIter.hasNext()) {
-								Iterator<? extends T> iter = iterableIter.next().iterator();
-								if (!iter.hasNext()) {
+								Iterator<? extends T> iterator = iterableIter.next().iterator();
+								if (!iterator.hasNext()) {
 									pathComplete = true;
 									break;
 								}
-								iterators.add(iter);
-								values.add(iter.next());
+								iterators.add(iterator);
+								values.add(iterator.next());
 							}
 						}
 
+						// After cached iterables exhausted, get new iterables and cache them
 						if (!pathComplete) {
-							while (iters.hasNext()) {
-								Iterable<? extends T> iterable = iters.next();
+							while (elements.hasNext()) {
+								Iterable<? extends T> iterable = elements.next();
 								iterables.add(iterable);
-								Iterator<? extends T> iter = iterable.iterator();
-								if (!iter.hasNext()) {
+								Iterator<? extends T> iterator = iterable.iterator();
+								if (!iterator.hasNext()) {
 									pathComplete = true;
 									break;
 								}
-								iterators.add(iter);
-								values.add(iter.next());
+								iterators.add(iterator);
+								values.add(iterator.next());
 							}
 						}
 					}
