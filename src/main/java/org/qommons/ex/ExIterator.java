@@ -1,5 +1,8 @@
 package org.qommons.ex;
 
+import java.util.Iterator;
+import java.util.function.Function;
+
 /**
  * A sequence of values, like an {@link java.util.Iterator}, but one that can throw a checked exception from its {@link #hasNext()} or
  * {@link #next()} method.
@@ -28,5 +31,43 @@ public interface ExIterator<T, E extends Throwable> {
 	 */
 	default void remove(){
 		throw new UnsupportedOperationException();
+	}
+
+	default <V> ExIterator<V, E> map(Function<? super T, V> map) {
+		return mapEx(ExFunction.of(map));
+	}
+
+	default <V> ExIterator<V, E> mapEx(ExFunction<? super T, V, ? extends E> map) {
+		ExIterator<T, E> outer = this;
+		return new ExIterator<V, E>() {
+			@Override
+			public boolean hasNext() throws E {
+				return outer.hasNext();
+			}
+
+			@Override
+			public V next() throws E {
+				return map.apply(outer.next());
+			}
+
+			@Override
+			public void remove() {
+				outer.remove();
+			}
+		};
+	}
+
+	public static <T> ExIterator<T, RuntimeException> fromIterator(Iterator<T> iterator) {
+		return new ExIterator<T, RuntimeException>() {
+			@Override
+			public boolean hasNext() {
+				return iterator.hasNext();
+			}
+
+			@Override
+			public T next() {
+				return iterator.next();
+			}
+		};
 	}
 }

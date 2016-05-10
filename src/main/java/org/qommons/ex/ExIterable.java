@@ -1,7 +1,6 @@
 package org.qommons.ex;
 
-import java.util.ArrayList;
-import java.util.Iterator;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -128,7 +127,11 @@ public interface ExIterable<T, E extends Throwable> {
 		list.add(this);
 		for (ExIterable<? extends T, ? extends E> other : others)
 			list.add(other);
-		return flatten(fromIterable(list));
+
+		ExIterable<ExIterable<? extends T, ? extends E>, ? extends E> iterable;
+		iterable = (ExIterable<ExIterable<? extends T, ? extends E>, ? extends E>) fromIterable(
+			list);
+		return flatten(iterable);
 	}
 
 	default ExIterable<T, E> onEach(Consumer<? super T> onValue) {
@@ -219,23 +222,11 @@ public interface ExIterable<T, E extends Throwable> {
 		};
 	}
 
-	static <T, E extends Throwable> ExIterable<T, E> fromIterable(Iterable<T> values) {
-		return new ExIterable<T, E>() {
+	static <T> ExIterable<T, RuntimeException> fromIterable(Iterable<T> values) {
+		return new ExIterable<T, RuntimeException>() {
 			@Override
-			public ExIterator<T, E> iterator() {
-				return new ExIterator<T, E>() {
-					private final Iterator<T> backing = values.iterator();
-
-					@Override
-					public boolean hasNext() {
-						return backing.hasNext();
-					}
-
-					@Override
-					public T next() {
-						return backing.next();
-					}
-				};
+			public ExIterator<T, RuntimeException> iterator() {
+				return ExIterator.fromIterator(values.iterator());
 			}
 		};
 	}
@@ -270,6 +261,112 @@ public interface ExIterable<T, E extends Throwable> {
 						if(elementIterator == null)
 							throw new java.util.NoSuchElementException();
 						elementIterator.remove();
+					}
+				};
+			}
+		};
+	}
+
+	/**
+	 * @param <T> The type of values to iterate
+	 * @param <E> The super type of exceptions throwable by any of the given iterables
+	 * @param elements The iterables for each element of the path
+	 * @return An iterable for all paths. I.e. for each value output by the first iterator, the second iterator will be created. For each
+	 *         element of that iterator, the third will be created, etc. Each path thus produced will be returned by this iterable. This
+	 *         method reuses the list instance returned from the path iterator to save memory, so the consumer of the values must process or
+	 *         copy the values it receives.
+	 */
+	public static <T, E extends Throwable> ExIterable<List<T>, E> combine(
+		ExIterator<? extends ExIterable<? extends T, ? extends E>, ? extends E> elements) {
+		return new ExIterable<List<T>, E>() {
+			@Override
+			public ExIterator<List<T>, E> iterator() {
+				return new ExIterator<List<T>, E>() {
+					private final LinkedList<T> values;
+					private final List<T> exposedValues;
+					private final List<ExIterable<? extends T, ? extends E>> iterables;
+					private final LinkedList<ExIterator<? extends T, ? extends E>> iterators;
+					private boolean isInitialized;
+					private boolean readyForNext;
+
+					{
+						values = new LinkedList<>();
+						exposedValues = Collections.unmodifiableList(values);
+						iterables = new ArrayList<>();
+						iterators = new LinkedList<>();
+					}
+
+					private void initialize() throws E {
+						if (elements.hasNext()) {
+							ExIterable<? extends T, ? extends E> iterable = elements.next();
+							iterables.add(iterable);
+							ExIterator<? extends T, ? extends E> iterator = iterable.iterator();
+							iterators.add(iterator);
+							values.add(null);
+						}
+					}
+
+					@Override
+					public boolean hasNext() throws E {
+						if (!isInitialized)
+							initialize();
+						if (readyForNext)
+							return true;
+						advance();
+						readyForNext = true;
+						return !iterators.isEmpty();
+					}
+
+					@Override
+					public List<T> next() throws E {
+						if (!readyForNext && !hasNext())
+							throw new NoSuchElementException();
+						readyForNext = false;
+						return exposedValues;
+					}
+
+					private void advance() throws E {
+						// Back up to an iterator with more elements, if any
+						while (!iterators.isEmpty() && !iterators.getLast().hasNext()) {
+							iterators.removeLast();
+							values.removeLast();
+						}
+						if (!iterators.isEmpty()) {
+							values.removeLast();
+							values.add(iterators.getLast().next());
+						} else
+							return; // No more elements in base iterator--no more paths
+
+						// Get iterators after the new element
+						// Start with cached iterables
+						boolean pathComplete = false;
+						{
+							ListIterator<ExIterable<? extends T, ? extends E>> iterableIter = iterables.listIterator(iterators.size());
+							while (iterableIter.hasNext()) {
+								ExIterator<? extends T, ? extends E> iterator = iterableIter.next().iterator();
+								if (!iterator.hasNext()) {
+									pathComplete = true;
+									break;
+								}
+								iterators.add(iterator);
+								values.add(iterator.next());
+							}
+						}
+
+						// After cached iterables exhausted, get new iterables and cache them
+						if (!pathComplete) {
+							while (elements.hasNext()) {
+								ExIterable<? extends T, ? extends E> iterable = elements.next();
+								iterables.add(iterable);
+								ExIterator<? extends T, ? extends E> iterator = iterable.iterator();
+								if (!iterator.hasNext()) {
+									pathComplete = true;
+									break;
+								}
+								iterators.add(iterator);
+								values.add(iterator.next());
+							}
+						}
 					}
 				};
 			}

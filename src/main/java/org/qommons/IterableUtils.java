@@ -4,6 +4,9 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import org.qommons.ex.ExIterable;
+import org.qommons.ex.ExIterator;
+
 /** Utilities dealing with {@link Iterable}s and {@link Iterator}s */
 public class IterableUtils {
 	/**
@@ -520,93 +523,8 @@ public class IterableUtils {
 	 *         copy the values it receives.
 	 */
 	public static <T> Iterable<List<T>> combine(Iterator<? extends Iterable<? extends T>> elements) {
-		if (!elements.hasNext())
-			return Collections.EMPTY_LIST;
-		return new Iterable<List<T>>() {
-			@Override
-			public Iterator<List<T>> iterator() {
-				return new Iterator<List<T>>() {
-					private final LinkedList<T> values;
-					private final List<T> exposedValues;
-					private final List<Iterable<? extends T>> iterables;
-					private final LinkedList<Iterator<? extends T>> iterators;
-					private boolean readyForNext;
-
-					{
-						values = new LinkedList<>();
-						exposedValues = Collections.unmodifiableList(values);
-						iterables = new ArrayList<>();
-						iterators = new LinkedList<>();
-
-						Iterable<? extends T> iterable = elements.next();
-						iterables.add(iterable);
-						Iterator<? extends T> iterator = iterable.iterator();
-						iterators.add(iterator);
-						values.add(null);
-					}
-
-					@Override
-					public boolean hasNext() {
-						if (readyForNext)
-							return true;
-						advance();
-						readyForNext = true;
-						return !iterators.isEmpty();
-					}
-
-					@Override
-					public List<T> next() {
-						if (!readyForNext && !hasNext())
-							throw new NoSuchElementException();
-						readyForNext = false;
-						return exposedValues;
-					}
-
-					private void advance() {
-						// Back up to an iterator with more elements, if any
-						while (!iterators.isEmpty() && !iterators.getLast().hasNext()) {
-							iterators.removeLast();
-							values.removeLast();
-						}
-						if (!iterators.isEmpty()) {
-							values.removeLast();
-							values.add(iterators.getLast().next());
-						} else
-							return; // No more elements in base iterator--no more paths
-
-						// Get iterators after the new element
-						// Start with cached iterables
-						boolean pathComplete = false;
-						{
-							ListIterator<Iterable<? extends T>> iterableIter = iterables.listIterator(iterators.size());
-							while (iterableIter.hasNext()) {
-								Iterator<? extends T> iterator = iterableIter.next().iterator();
-								if (!iterator.hasNext()) {
-									pathComplete = true;
-									break;
-								}
-								iterators.add(iterator);
-								values.add(iterator.next());
-							}
-						}
-
-						// After cached iterables exhausted, get new iterables and cache them
-						if (!pathComplete) {
-							while (elements.hasNext()) {
-								Iterable<? extends T> iterable = elements.next();
-								iterables.add(iterable);
-								Iterator<? extends T> iterator = iterable.iterator();
-								if (!iterator.hasNext()) {
-									pathComplete = true;
-									break;
-								}
-								iterators.add(iterator);
-								values.add(iterator.next());
-							}
-						}
-					}
-				};
-			}
-		};
+		ExIterable<List<T>, RuntimeException> exRes = ExIterable
+			.combine(ExIterator.fromIterator(elements).map(elIter -> ExIterable.fromIterable(elIter)));
+		return exRes.unsafe();
 	}
 }
