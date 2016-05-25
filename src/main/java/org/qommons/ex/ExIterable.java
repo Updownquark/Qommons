@@ -1,6 +1,12 @@
 package org.qommons.ex;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.NoSuchElementException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -134,6 +140,34 @@ public interface ExIterable<T, E extends Throwable> {
 		return flatten(iterable);
 	}
 
+	default ExIterable<T, E> beforeEach(Runnable action) {
+		ExIterable<T, E> outer = this;
+		return new ExIterable<T, E>() {
+			@Override
+			public ExIterator<T, E> iterator() {
+				return new ExIterator<T, E>() {
+					private final ExIterator<T, E> outerIter = outer.iterator();
+
+					@Override
+					public boolean hasNext() throws E {
+						return outerIter.hasNext();
+					}
+
+					@Override
+					public T next() throws E {
+						action.run();
+						return outerIter.next();
+					}
+
+					@Override
+					public void remove() {
+						outerIter.remove();
+					}
+				};
+			}
+		};
+	}
+
 	default ExIterable<T, E> onEach(Consumer<? super T> onValue) {
 		ExIterable<T, E> outer = this;
 		return new ExIterable<T, E>() {
@@ -152,6 +186,38 @@ public interface ExIterable<T, E extends Throwable> {
 						T value = outerIter.next();
 						onValue.accept(value);
 						return value;
+					}
+
+					@Override
+					public void remove() {
+						outerIter.remove();
+					}
+				};
+			}
+		};
+	}
+
+	default ExIterable<T, E> onStart(Runnable action){
+		ExIterable<T, E> outer = this;
+		return new ExIterable<T, E>() {
+			@Override
+			public ExIterator<T, E> iterator() {
+				return new ExIterator<T, E>() {
+					private final ExIterator<T, E> outerIter = outer.iterator();
+					private boolean hasStarted = false;
+
+					@Override
+					public boolean hasNext() throws E {
+						if(!hasStarted) {
+							hasStarted=true;
+							action.run();
+						}
+						return outerIter.hasNext();
+					}
+
+					@Override
+					public T next() throws E {
+						return outerIter.next();
 					}
 
 					@Override
@@ -231,6 +297,10 @@ public interface ExIterable<T, E extends Throwable> {
 		};
 	}
 
+	static <T, E extends Throwable> ExIterable<T, E> forEx(ExIterable<T, RuntimeException> safe) {
+		return (ExIterable<T, E>)(ExIterable<T, ?>) safe;
+	}
+
 	static <T, E extends Throwable> ExIterable<T, E> flatten(
 			ExIterable<? extends ExIterable<? extends T, ? extends E>, ? extends E> container) {
 		return new ExIterable<T, E>() {
@@ -297,6 +367,7 @@ public interface ExIterable<T, E extends Throwable> {
 					}
 
 					private void initialize() throws E {
+						isInitialized = true;
 						if (elements.hasNext()) {
 							ExIterable<? extends T, ? extends E> iterable = elements.next();
 							iterables.add(iterable);
@@ -311,9 +382,9 @@ public interface ExIterable<T, E extends Throwable> {
 						if (!isInitialized)
 							initialize();
 						if (readyForNext)
-							return true;
-						advance();
+							return !iterators.isEmpty();
 						readyForNext = true;
+						trimExhausted();
 						return !iterators.isEmpty();
 					}
 
@@ -321,21 +392,23 @@ public interface ExIterable<T, E extends Throwable> {
 					public List<T> next() throws E {
 						if (!readyForNext && !hasNext())
 							throw new NoSuchElementException();
+						advance();
 						readyForNext = false;
 						return exposedValues;
 					}
 
-					private void advance() throws E {
+					private void trimExhausted() throws E {
 						// Back up to an iterator with more elements, if any
 						while (!iterators.isEmpty() && !iterators.getLast().hasNext()) {
 							iterators.removeLast();
 							values.removeLast();
 						}
-						if (!iterators.isEmpty()) {
-							values.removeLast();
-							values.add(iterators.getLast().next());
-						} else
-							return; // No more elements in base iterator--no more paths
+					}
+
+					private void advance() throws E {
+						values.removeLast();
+						T nextValue = iterators.getLast().next();
+						values.add(nextValue);
 
 						// Get iterators after the new element
 						// Start with cached iterables
@@ -349,7 +422,8 @@ public interface ExIterable<T, E extends Throwable> {
 									break;
 								}
 								iterators.add(iterator);
-								values.add(iterator.next());
+								nextValue = iterator.next();
+								values.add(nextValue);
 							}
 						}
 
@@ -364,7 +438,8 @@ public interface ExIterable<T, E extends Throwable> {
 									break;
 								}
 								iterators.add(iterator);
-								values.add(iterator.next());
+								nextValue = iterator.next();
+								values.add(nextValue);
 							}
 						}
 					}
