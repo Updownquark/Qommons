@@ -198,23 +198,25 @@ public class TreeBuilder<N extends Tree<V, N, ?>, V> {
 		return ret;
 	}
 
-//	/**
-//	 * Makes a copy of this tree
-//	 * 
-//	 * @param nodeCopier Creates new nodes given the node to copy (first argument) and the parent for the new node (second argument)
-//	 * @return The copied tree structure
-//	 */
-//	public TreeBuilder<N, V> copy(BiFunction<N, N, N> nodeCopier) {
-//		TreeBuilder<N, V> ret = new TreeBuilder<>(theCompare, theParentGetter);
-//		for (N root : theRoots)
-//			ret.theRoots.add(copyNode(root, null, nodeCopier));
-//		return ret;
-//	}
-//
-//	private N copyNode(N node, N parent, BiFunction<N, N, N> nodeCopier) {
-//		N ret = nodeCopier.apply(node, parent);
-//		for (N child : node.getChildren())
-//			ret.getChildren().add(copyNode(child, ret, nodeCopier));
-//		return ret;
-//	}
+	/**
+	 * Makes a copy of this tree
+	 * 
+	 * @param nodeCopier Creates new nodes given the node to copy (first argument) and the parent for the new node (second argument)
+	 * @return The copied tree structure
+	 */
+	public TreeBuilder<N, V> copy(BiFunction<N, N, N> nodeCopier) {
+		TreeBuilder<N, V> ret = new TreeBuilder<>(theCompare, theParentGetter);
+		for (N root : theRoots)
+			ret.theRoots.add(copyNode(root, null, nodeCopier));
+		return ret;
+	}
+
+	private N copyNode(N node, N parent, BiFunction<N, N, N> nodeCopier) {
+		N ret = nodeCopier.apply(node, parent);
+		Collection<N> nodeChildren = node.getChildren();
+		for (N child : nodeChildren) {
+			ret.getChildren().add(copyNode(child, ret, nodeCopier));
+		}
+		return ret;
+	}
 }
