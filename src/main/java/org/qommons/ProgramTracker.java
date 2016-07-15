@@ -2,6 +2,9 @@
 package org.qommons;
 
 import java.text.SimpleDateFormat;
+import java.util.Map;
+import java.util.Objects;
+import java.util.WeakHashMap;
 
 import org.apache.log4j.Logger;
 import org.json.simple.JSONObject;
@@ -39,13 +42,32 @@ public class ProgramTracker implements Cloneable {
 	 * without extensive code changes to access the correct tracker. However, if this variable is used in more than one place, it may lead
 	 * to unpredictable results and thrown exceptions. A different mechanism MUST be developed to access a tracker if profiling is to be
 	 * integrated into the application permanently.
+	 * 
+	 * This variable is not initialized by this class, but may be set by other classes.
 	 */
 	public static ProgramTracker instance;
 
-	private static java.util.concurrent.ConcurrentHashMap<Thread, ProgramTracker> theThreadTrackers;
+	private static final ThreadLocal<ProgramTracker> theThreadTrackers;
+	private static final Map<Thread, ProgramTracker> theThreadTrackerMap;
+	private static ProgramTracker ignoring;
 
 	static {
-		theThreadTrackers = new java.util.concurrent.ConcurrentHashMap<>();
+		theThreadTrackers = new ThreadLocal<ProgramTracker>() {
+			@Override
+			protected ProgramTracker initialValue() {
+				Thread currentThread = Thread.currentThread();
+				ProgramTracker newTracker = new ProgramTracker(currentThread.getName() + " Tracking");
+				theThreadTrackerMap.put(currentThread, newTracker);
+				return newTracker;
+			}
+		};
+		theThreadTrackerMap = new WeakHashMap<>();
+		ignoring = new ProgramTracker("ignoring") {
+			@Override
+			public ProgramTracker setOn(boolean on) {
+				return super.setOn(false);
+			}
+		};
 	}
 
 	/**
@@ -54,40 +76,57 @@ public class ProgramTracker implements Cloneable {
 	 * @param tracker The tracker to set as a tracker thread
 	 */
 	public static void setThreadTracker(ProgramTracker tracker) {
-		setThreadTracker(Thread.currentThread(), tracker);
+		if (tracker == null)
+			throw new IllegalArgumentException("Cannot set a null tracker for the current thread");
+		theThreadTrackers.set(tracker);
+		theThreadTrackerMap.put(Thread.currentThread(), tracker);
 	}
 
-	/** @return The tracker for the current thread */
+	/** @return The tracker for the current thread, initialized if none has been previously set */
 	public static ProgramTracker getThreadTracker() {
-		return getThreadTracker(Thread.currentThread());
+		return theThreadTrackers.get();
 	}
 
 	/**
 	 * @param thread The thread to get the tracker for
-	 * @return The tracker assigned to the given thread, or null if none has been assigned
+	 * @return The tracker assigned to the given thread, or null if none has been initialized
 	 */
 	public static ProgramTracker getThreadTracker(Thread thread) {
-		return theThreadTrackers.get(thread);
+		return theThreadTrackerMap.get(thread);
+	}
+
+	/** @return All threads for which {@link #setThreadTracker(ProgramTracker)} or {@link #getThreadTracker()} has been called */
+	public static Thread [] getTrackedThreads() {
+		return theThreadTrackerMap.keySet().toArray(new Thread[0]);
 	}
 
 	/**
-	 * @param thread The thread to assign the tracker for
-	 * @param tracker The tracker to track performance on the given thread
+	 * @param tracker The tracker to start the routine for. May be null, in which case a do-nothing placeholder will be returned.
+	 * @param routine The routine to start
+	 * @return The track node for the routine
 	 */
-	public static void setThreadTracker(Thread thread, ProgramTracker tracker) {
-		if(tracker != null && tracker.theCurrentThread != null && tracker.theCurrentThread != thread)
-			throw new IllegalArgumentException("The given tracker is not tracking for this thread");
-		if(tracker == null)
-			theThreadTrackers.remove(thread);
-		else {
-			tracker.theCurrentThread = thread;
-			theThreadTrackers.put(thread, tracker);
-		}
+	public static TrackNode start(ProgramTracker tracker, String routine) {
+		if (tracker == null)
+			tracker = ignoring;
+		return tracker.start(routine);
 	}
 
-	/** @return All threads for which {@link #setThreadTracker(Thread, ProgramTracker)} has been called */
-	public static Thread [] getTrackedThreads() {
-		return theThreadTrackers.keySet().toArray(new Thread[0]);
+	/**
+	 * @param routine The routine to start on this class' singleton tracker. The tracker must be initialized prior to this call to be
+	 *        effective.
+	 * @return The track node for the routine
+	 */
+	public static TrackNode singletonStart(String routine) {
+		return start(instance, routine);
+	}
+
+	/**
+	 * @param routine The routine to start on the tracker for this thread. Use {@link #setThreadTracker(ProgramTracker)} to initialize the
+	 *        tracker.
+	 * @return The track node for the routine
+	 */
+	public static TrackNode threadStart(String routine) {
+		return start(theThreadTrackerMap.get(Thread.currentThread()), routine);
 	}
 
 	/** A configuration class that allows the printing of results of a tracking session to be customized */
@@ -481,6 +520,11 @@ public class ProgramTracker implements Cloneable {
 		}
 
 		@Override
+		public int hashCode() {
+			return Objects.hash(name, startTime, count, runLength, endTime, latestStartTime, children);
+		}
+
+		@Override
 		public TrackNode clone() {
 			TrackNode ret;
 			try {
@@ -635,8 +679,6 @@ public class ProgramTracker implements Cloneable {
 
 	private boolean isOn;
 
-	private Thread theCurrentThread;
-
 	private java.lang.management.ThreadMXBean theThreadBean;
 
 	/**
@@ -667,9 +709,13 @@ public class ProgramTracker implements Cloneable {
 		return theName;
 	}
 
-	/** @param name The name for this tracker */
-	public void setName(String name) {
+	/**
+	 * @param name The name for this tracker
+	 * @return This tracker
+	 */
+	public ProgramTracker setName(String name) {
 		theName = name;
+		return this;
 	}
 
 	/** @return Whether this tracker is recording data */
@@ -677,9 +723,13 @@ public class ProgramTracker implements Cloneable {
 		return isOn;
 	}
 
-	/** @param on Whether this tracker should be on or off */
-	public void setOn(boolean on) {
+	/**
+	 * @param on Whether this tracker should be on or off
+	 * @return This tracker
+	 */
+	public ProgramTracker setOn(boolean on) {
 		isOn = on;
+		return this;
 	}
 
 	/** @return Whether this tracker records run time statistics about each repeated procedure */
@@ -687,9 +737,13 @@ public class ProgramTracker implements Cloneable {
 		return isWithRTStats;
 	}
 
-	/** @param withStats Whether this tracker should record run time statistics about each repeated procedure */
-	public void setWithRTStats(boolean withStats) {
+	/**
+	 * @param withStats Whether this tracker should record run time statistics about each repeated procedure
+	 * @return This tracker
+	 */
+	public ProgramTracker setWithRTStats(boolean withStats) {
 		isWithRTStats = withStats;
+		return this;
 	}
 
 	/** @return Whether this tracker keeps track of CPU time in addition to run time */
@@ -697,13 +751,17 @@ public class ProgramTracker implements Cloneable {
 		return isWithCPU;
 	}
 
-	/** @param cpu Whether this tracker should keep track of CPU time in addition to run time */
-	public void setWithCPU(boolean cpu) {
+	/**
+	 * @param cpu Whether this tracker should keep track of CPU time in addition to run time
+	 * @return This tracker
+	 */
+	public ProgramTracker setWithCPU(boolean cpu) {
 		isWithCPU = cpu;
 		if(isWithCPU) {
 			java.lang.management.ThreadMXBean tb = java.lang.management.ManagementFactory.getThreadMXBean();
 			tb.setThreadCpuTimeEnabled(true);
 		}
+		return this;
 	}
 
 	TrackNode newNode(TrackNode aParent, String aName) {
@@ -736,15 +794,19 @@ public class ProgramTracker implements Cloneable {
 		node.clear();
 	}
 
-	/** Clears all previous execution data from the tracker */
-	public void clear() {
+	/**
+	 * Clears all previous execution data from the tracker
+	 * 
+	 * @return This tracker
+	 */
+	public ProgramTracker clear() {
 		theCurrentNode = null;
 		if(!theNodes.isEmpty()) {
 			for(TrackNode node : theNodes)
 				releaseNode(node);
 			theNodes.clear();
 		}
-		theCurrentThread = null;
+		return this;
 	}
 
 	/**
@@ -755,7 +817,7 @@ public class ProgramTracker implements Cloneable {
 	 */
 	public final TrackNode start(String routine) {
 		if(!isOn)
-			return null;
+			return new TrackNode(null, routine, false);
 		/* This code may be quite expensive, since this method is used very often and the call to
 		 * Thread.currentThread() is supposed to be fairly expensive. This code may be useful for
 		 * debugging in some situations, but it is not worth keeping it here to degrade performance
@@ -957,7 +1019,6 @@ public class ProgramTracker implements Cloneable {
 		ret.theCacheNodes = new java.util.ArrayList<>();
 		ret.theNodes = new java.util.ArrayList<>();
 		ret.theCurrentNode = null;
-		ret.theCurrentThread = null;
 		for(TrackNode node : theNodes) {
 			TrackNode clone = node.clone();
 			ret.theNodes.add(clone);
