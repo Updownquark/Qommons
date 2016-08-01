@@ -1,6 +1,8 @@
 package org.qommons;
 
+import java.lang.ref.WeakReference;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -15,7 +17,7 @@ import java.util.function.Consumer;
  * @param <E> The type of listener to store
  */
 public class ListenerSet<E> {
-	private final Collection<E> theListeners;
+	private final Collection<WeakReference<E>> theListeners;
 	private final ReentrantReadWriteLock theLock;
 	private final ConcurrentHashMap<IdentityKey<E>, Boolean> theListenersToRemove;
 	private final Collection<E> theListenersToAdd;
@@ -54,52 +56,41 @@ public class ListenerSet<E> {
 		theUsedListener = used;
 	}
 
-	/**
-	 * @param listener The listener to add
-	 * @return Whether the listener was added (only false if the listener is already in this set)
-	 */
-	public boolean add(E listener) {
+	/** @param listener The listener to add */
+	public void add(E listener) {
 		if(theLock.getReadHoldCount() > 0 && !theListeners.contains(listener)) {
 			theListenersToAdd.add(listener);
-			return true;
+			return;
 		}
 		Lock lock = theLock.writeLock();
 		lock.lock();
-		boolean ret;
 		try {
 			boolean wasEmpty = theListeners.isEmpty();
-			ret = theListeners.add(listener);
+			theListeners.add(new WeakReference<>(listener));
 			if(wasEmpty)
 				theUsedListener.accept(true);
 			theOnSubscribe.accept(listener);
 		} finally {
 			lock.unlock();
 		}
-		return ret;
 	}
 
-	/**
-	 * @param listener The listener to remove
-	 * @return Whether the listener was removed (false if the listener was not in this set)
-	 */
-	public boolean remove(E listener) {
+	/** @param listener The listener to remove */
+	public void remove(E listener) {
 		if(theListenersToAdd.remove(listener))
-			return true;
+			return;
 		if(theLock.getReadHoldCount() > 0 && theListeners.contains(listener)) {
 			theListenersToRemove.put(new IdentityKey<>(listener), true);
-			return true;
+			return;
 		}
 		Lock lock = theLock.writeLock();
 		lock.lock();
-		boolean ret;
 		try {
-			ret = theListeners.remove(listener);
-			if(ret && theListeners.isEmpty())
+			if (theListeners.remove(listener) && theListeners.isEmpty())
 				theUsedListener.accept(false);
 		} finally {
 			lock.unlock();
 		}
-		return ret;
 	}
 
 	/**
@@ -111,10 +102,21 @@ public class ListenerSet<E> {
 		Lock lock = theLock.readLock();
 		lock.lock();
 		try {
-			for(E listener : theListeners) {
+			Iterator<WeakReference<E>> iter = theListeners.iterator();
+			boolean wasEmpty = true;
+			while (iter.hasNext()) {
+				wasEmpty = false;
+				WeakReference<E> listenerRef = iter.next();
+				E listener = listenerRef.get();
+				if (listener == null) {
+					iter.remove();
+					continue;
+				}
 				if(!theListenersToRemove.containsKey(listener))
 					call.accept(listener);
 			}
+			if (wasEmpty && theListeners.isEmpty())
+				theUsedListener.accept(false);
 		} finally {
 			lock.unlock();
 		}
@@ -137,7 +139,7 @@ public class ListenerSet<E> {
 			}
 			if(!theListenersToAdd.isEmpty()) {
 				for(E listener : theListenersToAdd) {
-					theListeners.add(listener);
+					theListeners.add(new WeakReference<>(listener));
 					theOnSubscribe.accept(listener);
 				}
 			}
