@@ -1,6 +1,7 @@
 package org.qommons;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * A simple entry with either a settable or an immutable value
@@ -56,5 +57,21 @@ public class SimpleMapEntry<K, V> implements Map.Entry<K, V> {
 		} else {
 			throw new UnsupportedOperationException();
 		}
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(theKey, theValue);
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		return o instanceof Map.Entry && Objects.equals(((Map.Entry<?, ?>) o).getKey(), theKey)
+			&& Objects.equals(((Map.Entry<?, ?>) o).getValue(), theValue);
+	}
+
+	@Override
+	public String toString() {
+		return new StringBuilder().append(theKey).append('=').append(theValue).toString();
 	}
 }
