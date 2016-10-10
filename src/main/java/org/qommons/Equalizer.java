@@ -12,6 +12,15 @@ public interface Equalizer {
 	boolean equals(Object o1, Object o2);
 
 	/**
+	 * @param <V> The type of the value
+	 * @param value The value to make a node for
+	 * @return An equalizer node for the given value using this equalizer
+	 */
+	public default <V> EqualizerNode<V> nodeFor(V value) {
+		return new EqualizerNode<>(this, value);
+	}
+
+	/**
 	 * A node that encapsulates a value and uses an {@link Equalizer} for its {@link #equals(Object)} method
 	 * 
 	 * @param <V> The type of value stored in the node
