@@ -58,6 +58,16 @@ public interface RedBlackTreeMap<K, V, N extends ValuedRedBlackNode<Map.Entry<K,
 		}
 
 		@Override
+		public int hashCode() {
+			return Objects.hashCode(theKey);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof Map.Entry && Objects.equals(((Map.Entry<?, ?>) obj).getKey(), theKey);
+		}
+
+		@Override
 		public String toString() {
 			return theKey + "=" + theValue;
 		}
@@ -110,6 +120,16 @@ public interface RedBlackTreeMap<K, V, N extends ValuedRedBlackNode<Map.Entry<K,
 			@Override
 			public V setValue(V value) {
 				return null;
+			}
+
+			@Override
+			public int hashCode() {
+				return Objects.hashCode(key);
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return obj instanceof Map.Entry && Objects.equals(((Map.Entry<?, ?>) obj).getKey(), key);
 			}
 		};
 	}

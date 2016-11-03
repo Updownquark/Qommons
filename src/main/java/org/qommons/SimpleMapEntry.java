@@ -61,13 +61,12 @@ public class SimpleMapEntry<K, V> implements Map.Entry<K, V> {
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(theKey, theValue);
+		return Objects.hashCode(theKey);
 	}
 
 	@Override
 	public boolean equals(Object o) {
-		return o instanceof Map.Entry && Objects.equals(((Map.Entry<?, ?>) o).getKey(), theKey)
-			&& Objects.equals(((Map.Entry<?, ?>) o).getValue(), theValue);
+		return o instanceof Map.Entry && Objects.equals(((Map.Entry<?, ?>) o).getKey(), theKey);
 	}
 
 	@Override
