@@ -5,14 +5,16 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class LinkedQueue<E> extends AbstractQueue<E> {
-	private final AtomicReference<BiTuple<Node<E>, Node<E>>> theEnds;
+	private volatile Node<E> theStart;
+	private volatile Node<E> theEnd;
+	private final ReentrantLock theLock;
 	private final AtomicInteger theMods;
 
 	public LinkedQueue() {
-		theEnds = new AtomicReference<>(new BiTuple<>(null, null));
+		theLock = new ReentrantLock();
 		theMods = new AtomicInteger();
 	}
 
@@ -41,7 +43,7 @@ public class LinkedQueue<E> extends AbstractQueue<E> {
 
 	@Override
 	public boolean addAll(Collection<? extends E> c) {
-		if(c.isEmpty())
+		if (c.isEmpty())
 			return false;
 		Node<E> addedStart = null;
 		Node<E> addedEnd = null;
@@ -59,23 +61,33 @@ public class LinkedQueue<E> extends AbstractQueue<E> {
 	}
 
 	private void insert(Node<E> start, Node<E> end) {
-		theEnds.accumulateAndGet(new BiTuple<>(start, end), (current, added) -> {
-			added.getValue1().thePrevious = current.getValue2();
-			if (current.getValue1() != null)
-				current.getValue2().theNext = added.getValue1();
-			Node<E> s = current.getValue1() != null ? current.getValue1() : added.getValue1();
-			return new BiTuple<>(s, added.getValue2());
-		});
+		theLock.lock();
+		try {
+			if (theEnd != null) {
+				theEnd.theNext = start;
+				start.thePrevious = theEnd;
+			} else
+				theStart = start;
+			theEnd = end;
+		} finally {
+			theLock.unlock();
+		}
 	}
 
 	@Override
 	public void clear() {
 		theMods.incrementAndGet();
-		Node<E> node = theEnds.getAndSet(new BiTuple<>(null, null)).getValue1();
-		while (node != null) {
-			Node<E> next = node.theNext;
-			node.theNext = null;
-			node = next;
+		theLock.lock();
+		try {
+			Node<E> node = theStart;
+			theStart = theEnd = null;
+			while (node != null) {
+				Node<E> next = node.theNext;
+				node.theNext = null;
+				node = next;
+			}
+		} finally {
+			theLock.unlock();
 		}
 	}
 
@@ -119,14 +131,21 @@ public class LinkedQueue<E> extends AbstractQueue<E> {
 
 	@Override
 	public Iterator<E> iterator() {
-		return new Itr();
+		return new Itr(true);
 	}
 
 	class Itr implements Iterator<E> {
+		private final boolean withLater;
+		private final int theItrMods;
 		private boolean needsAdvance = true;
 		private Node<E> theCurrent;
 		private boolean hasStarted;
 		private boolean hasRemoved;
+
+		Itr(boolean withLater) {
+			this.withLater = withLater;
+			theItrMods = withLater ? 0 : theMods.get();
+		}
 
 		@Override
 		public boolean hasNext() {
@@ -139,9 +158,11 @@ public class LinkedQueue<E> extends AbstractQueue<E> {
 			needsAdvance = false;
 			if (!hasStarted) {
 				hasStarted = true;
-				theCurrent = theEnds.get().getValue1();
+				theCurrent = theStart;
 			} else
 				theCurrent = theCurrent.theNext;
+			if (!withLater && theCurrent != null && theCurrent.theMods > theItrMods)
+				theCurrent = null;
 		}
 
 		@Override
@@ -157,31 +178,31 @@ public class LinkedQueue<E> extends AbstractQueue<E> {
 
 		@Override
 		public void remove() {
-			if (needsAdvance)
+			if (!needsAdvance)
 				throw new IllegalStateException("remove() must be called immediately after next()");
-			if(hasRemoved)
+			if (hasRemoved)
 				throw new IllegalStateException("remove() cannot be called twice in succession");
 			if (theCurrent == null)
 				throw new IllegalStateException("No element to remove");
-			hasRemoved=true;
-			Node<E> prev=theCurrent.thePrevious;
-			if(prev!=null){
-				Node<E> next=theCurrent.theNext;
-				if(next==null){
-					boolean [] updated=new boolean[1];
-					theEnds.updateAndGet(ends->{
-						if(ends.getValue2()==theCurrent)
-							return new BiTuple<>(ends.getValue1(), prev);
-						else
-							return ends;
-					});
+
+			hasRemoved = true;
+			theLock.lock();
+			try {
+				Node<E> prev = theCurrent.thePrevious;
+				Node<E> next = theCurrent.theNext;
+				if (prev != null)
+					prev.theNext = next;
+				else {
+					hasStarted = false;
+					theStart = next;
 				}
-				prev.theNext=next;
-				theCurrent=prev;
-			} else{
-				hasStarted=false;
-				if(theEn
-				//TODO
+				if (next != null)
+					next.thePrevious = prev;
+				else
+					theEnd = prev;
+				theCurrent = prev;
+			} finally {
+				theLock.unlock();
 			}
 		}
 	}
