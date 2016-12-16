@@ -12,17 +12,20 @@ import java.net.HttpURLConnection;
 import java.nio.charset.Charset;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
-import java.util.*;
-
-import org.apache.log4j.Logger;
-import org.qommons.ArrayUtils;
-import org.qommons.LoggingWriter;
-import org.qommons.QommonsUtils;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
+
+import org.apache.log4j.Logger;
+import org.qommons.LoggingWriter;
+import org.qommons.QommonsUtils;
 
 /** Facilitates easier HTTP connections. */
 public class HttpConnector
@@ -117,9 +120,8 @@ public class HttpConnector
 
 	private final int theReadTimeout;
 
-	private HttpConnector(String url, HostnameVerifier hostnameVerifier, KeyManager [] keyManagers, SSLSocketFactory socketFactory, Map<String, String> cookies,
-		Boolean followRedirects, int connectTimeout, int readTimeout)
-	{
+	private HttpConnector(String url, HostnameVerifier hostnameVerifier, KeyManager[] keyManagers, SSLSocketFactory socketFactory,
+		Map<String, String> cookies, Boolean followRedirects, int connectTimeout, int readTimeout) {
 		theURL = url;
 		theHostnameVerifier=hostnameVerifier;
 		theKeyManagers=keyManagers;
@@ -309,13 +311,13 @@ public class HttpConnector
 			theKeyManagers=new ArrayList<>();
 			theTrustManagers=new ArrayList<>();
 			withCookies=true;
-			theCookies=new ParamsBuilder(this);
+			theCookies = new ParamsBuilder<>(this);
 
 			theConnectTimeout=-1;
 			theReadTimeout=-1;
 		}
 
-		public ParamsBuilder withCookies(){
+		public ParamsBuilder<Builder> withCookies() {
 			withCookies=true;
 			return theCookies;
 		}
@@ -410,9 +412,13 @@ public class HttpConnector
 				socketFactory = sc.getSocketFactory();
 			} else
 				socketFactory = null;
-			LinkedHashMap<String, String> cookies = new LinkedHashMap<>();
-			for (Map.Entry<String, Object> cookie : theCookies.theParams.entrySet())
-				cookies.put(cookie.getKey(), (String) cookie.getValue());
+			Map<String, String> cookies;
+			if (withCookies) {
+				cookies = new LinkedHashMap<>();
+				for (Map.Entry<String, Object> cookie : theCookies.theParams.entrySet())
+					cookies.put(cookie.getKey(), (String) cookie.getValue());
+			} else
+				cookies = Collections.emptyMap();
 			return new HttpConnector(theURL, theHostnameVerifier, keyManagers, socketFactory, cookies, isFollowingRedirects,
 				theConnectTimeout, theReadTimeout);
 		}
@@ -582,7 +588,9 @@ public class HttpConnector
 				conn.setRequestMethod("POST");
 				conn.connect();
 				os = conn.getOutputStream();
-				out = new LoggingWriter(new OutputStreamWriter(os, Charset.forName("UTF-8")), null);
+				@SuppressWarnings("resource")
+				LoggingWriter logging = new LoggingWriter(new OutputStreamWriter(os, Charset.forName("UTF-8")), null);
+				out = logging;
 				out.write("--");
 				out.write(BOUNDARY);
 				out.write("\r\n");
