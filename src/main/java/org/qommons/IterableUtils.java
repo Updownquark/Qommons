@@ -1,6 +1,11 @@
 package org.qommons;
 
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Queue;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -233,7 +238,7 @@ public class IterableUtils {
 	/**
 	 * @param <T> The type of the values to iterate over
 	 * @param iterator An iterator to cache the values of
-	 * @return A iterable that returns a lazily-loaded cache so the iterables returne once from the given iterator may be reused any number
+	 * @return A iterable that returns a lazily-loaded cache so the iterables return once from the given iterator may be reused any number
 	 *         of times
 	 */
 	public static <T> Iterable<T> cachingIterable(Iterator<T> iterator) {
@@ -253,6 +258,8 @@ public class IterableUtils {
 						Object lock = theLock;
 						if(lock != null && theIndex == theCache.size()) {
 							synchronized(lock) {
+								if (backing[0] == null)
+									return false;
 								if(theIndex == theCache.size()) {
 									if(backing[0].hasNext())
 										return true;
