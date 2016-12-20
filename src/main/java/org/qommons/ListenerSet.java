@@ -21,12 +21,12 @@ public class ListenerSet<E> {
 	private final Collection<E> theListenersToAdd;
 	private Consumer<Boolean> theUsedListener;
 	private Consumer<E> theOnSubscribe;
+	private volatile boolean isUsed;
 
 	/** Creates the set of listeners */
 	public ListenerSet() {
 		theListeners = new LinkedList<>();
 		theLock = new ReentrantReadWriteLock();
-		// This need not be thread safe since it will
 		theListenersToRemove = new ConcurrentHashMap<>();
 		theListenersToAdd = new ConcurrentLinkedQueue<>();
 		theOnSubscribe = listener -> {
@@ -37,7 +37,7 @@ public class ListenerSet<E> {
 
 	/** @return Whether this listener set is currently being used (has listeners) */
 	public boolean isUsed(){
-		return (theListeners.size() - theListenersToRemove.size() - +theListenersToAdd.size()) > 0;
+		return isUsed;
 	}
 
 	/** @param onSubscribe The function to call for each listener that is added to this set */
@@ -61,6 +61,7 @@ public class ListenerSet<E> {
 	public boolean add(E listener) {
 		if(theLock.getReadHoldCount() > 0 && !theListeners.contains(listener)) {
 			theListenersToAdd.add(listener);
+			theOnSubscribe.accept(listener);
 			return true;
 		}
 		Lock lock = theLock.writeLock();
@@ -69,12 +70,14 @@ public class ListenerSet<E> {
 		try {
 			boolean wasEmpty = theListeners.isEmpty();
 			ret = theListeners.add(listener);
-			if(wasEmpty)
+			if (wasEmpty) {
 				theUsedListener.accept(true);
-			theOnSubscribe.accept(listener);
+				isUsed = true;
+			}
 		} finally {
 			lock.unlock();
 		}
+		theOnSubscribe.accept(listener);
 		return ret;
 	}
 
@@ -94,8 +97,10 @@ public class ListenerSet<E> {
 		boolean ret;
 		try {
 			ret = theListeners.remove(listener);
-			if(ret && theListeners.isEmpty())
+			if (ret && theListeners.isEmpty()) {
 				theUsedListener.accept(false);
+				isUsed = false;
+			}
 		} finally {
 			lock.unlock();
 		}
@@ -136,14 +141,15 @@ public class ListenerSet<E> {
 				theListenersToRemove.clear();
 			}
 			if(!theListenersToAdd.isEmpty()) {
-				for(E listener : theListenersToAdd) {
+				for (E listener : theListenersToAdd)
 					theListeners.add(listener);
-					theOnSubscribe.accept(listener);
-				}
+				theListenersToAdd.clear();
 			}
 
-			if(beforeEmpty != theListeners.isEmpty())
+			if (beforeEmpty != theListeners.isEmpty()) {
 				theUsedListener.accept(!theListeners.isEmpty());
+				isUsed = !theListeners.isEmpty();
+			}
 		} finally {
 			lock.unlock();
 		}
