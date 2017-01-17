@@ -5,6 +5,11 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * A hash set backed by {@link ConcurrentHashMap}
+ * 
+ * @param <E> The type of elements in the set
+ */
 public class ConcurrentHashSet<E> extends AbstractSet<E> {
 	private final ConcurrentHashMap<E, E> theBackingMap = new ConcurrentHashMap<>();
 
