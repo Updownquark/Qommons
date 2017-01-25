@@ -56,4 +56,19 @@ public interface MutableGraph<N, E> extends Graph<N, E> {
 
 	/** Removes all edges from this graph */
 	void clearEdges();
+
+	/** @return An immutable graph backed by this graph's data */
+	default Graph<N, E> immutable() {
+		return new Graph<N, E>() {
+			@Override
+			public Collection<? extends Node<N, E>> getNodes() {
+				return MutableGraph.this.getNodes();
+			}
+
+			@Override
+			public Collection<? extends Edge<N, E>> getEdges() {
+				return MutableGraph.this.getEdges();
+			}
+		};
+	}
 }
