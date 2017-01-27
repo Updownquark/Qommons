@@ -7,10 +7,25 @@ public interface Qollection<E> extends Collection<E> {
 
 	@Override
 	default Iterator<E> iterator() {
-		// TODO Auto-generated method stub
-		return null;
+		return QuiteratorIterator<>(spliterator());
 	}
 
 	@Override
 	abstract Quiterator<E> spliterator();
+
+	class QuiteratorIterator<E> implements Iterator<E> {
+		private final Spliterator<E> theSpliterator;
+
+		@Override
+		public boolean hasNext() {
+			// TODO Auto-generated method stub
+			return false;
+		}
+
+		@Override
+		public E next() {
+			// TODO Auto-generated method stub
+			return null;
+		}
+	}
 }
