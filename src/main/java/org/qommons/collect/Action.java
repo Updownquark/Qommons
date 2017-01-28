@@ -2,6 +2,9 @@ package org.qommons.collect;
 
 import java.lang.reflect.Array;
 
+import com.google.common.reflect.TypeParameter;
+import com.google.common.reflect.TypeToken;
+
 public interface Action<T> {
 	/**
 	 * @param cause An object that may have caused the action (e.g. a user event)
@@ -69,7 +72,7 @@ public interface Action<T> {
 	 * @return A single action that invokes the given actions and returns their values as an array
 	 */
 	static <T> Action<T[]> and(Action<? extends T>... actions) {
-		return and(QommonsList.constant(java.util.Arrays.asList(actions)));
+		return and(QommonsOrderedCollection.constant(java.util.Arrays.asList(actions)));
 	}
 
 	/**
@@ -79,7 +82,7 @@ public interface Action<T> {
 	 * @param actions The actions to combine
 	 * @return A single action that invokes the given actions and returns their values as an array
 	 */
-	static <T> Action<T[]> and(QommonsList<? extends Action<? extends T>> actions) {
+	static <T> Action<T[]> and(QommonsOrderedCollection<? extends Action<? extends T>> actions) {
 		return new AndAction<>(actions);
 	}
 
@@ -116,10 +119,13 @@ public interface Action<T> {
 	 * @param <T> The type of the actions
 	 */
 	class AndAction<T> implements Action<T[]> {
-		private final QommonsList<? extends Action<? extends T>> theActions;
+		private final QommonsOrderedCollection<? extends Action<? extends T>> theActions;
+		private final TypeToken<T[]> theArrayType;
 
-		protected AndAction(QommonsList<? extends Action<? extends T>> actions) {
+		protected AndAction(QommonsOrderedCollection<? extends Action<? extends T>> actions) {
 			theActions = actions;
+			theArrayType = new TypeToken<T[]>() {}.where(new TypeParameter<T>() {}, (TypeToken<T>) actions.getType()
+				.resolveType(QommonsOrderedCollection.class.getTypeParameters()[0]).resolveType(Action.class.getTypeParameters()[0]));
 		}
 
 		@Override
@@ -138,7 +144,7 @@ public interface Action<T> {
 
 		@Override
 		public Value<String> isEnabled() {
-			return QommonsList.flattenValues(theActions.map(action -> action.isEnabled())).findFirst(e -> e != null);
+			return QommonsOrderedCollection.flattenValues(theActions.map(action -> action.isEnabled())).findFirst(e -> e != null);
 		}
 
 		@Override
