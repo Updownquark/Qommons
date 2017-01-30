@@ -5,8 +5,9 @@ import java.util.Objects;
 import java.util.function.Predicate;
 
 import org.qommons.Transaction;
+import org.qommons.value.Value;
 
-public interface QommonsOrderedCollection<E> extends Qollection<E> {
+public interface OrderedQollection<E> extends Qollection<E> {
 	@Override
 	IndexedQuiterator<E> spliterator();
 

@@ -1,4 +1,4 @@
-package org.qommons.collect;
+package org.qommons.value;
 
 import java.util.List;
 import java.util.function.BiFunction;
@@ -113,14 +113,16 @@ public interface Value<T> {
 	 * default if none of the values in the sequence pass.
 	 *
 	 * @param <T> The type of the value
+	 * @param type The run-time type of the value
 	 * @param test The test to for the value. If null, <code>v->v!=null</code> will be used
 	 * @param def Supplies a default value in the case that none of the values in the sequence pass the test. If null, a null default will
 	 *        be used.
 	 * @param values The sequence of values to get the first passing value of
 	 * @return The observable for the first passing value in the sequence
 	 */
-	public static <T> Value<T> firstValue(Predicate<? super T> test, Supplier<? extends T> def, Value<? extends T>... values) {
-		return new FirstValue<>(values, test, def);
+	public static <T> Value<T> firstValue(TypeToken<T> type, Predicate<? super T> test, Supplier<? extends T> def,
+		Value<? extends T>... values) {
+		return new FirstValue<>(type, values, test, def);
 	}
 
 	class MappedValue<T, R> implements Value<R> {
@@ -311,10 +313,16 @@ public interface Value<T> {
 		private final Predicate<? super T> theTest;
 		private final Supplier<? extends T> theDefault;
 
-		protected FirstValue(Value<? extends T>[] values, Predicate<? super T> test, Supplier<? extends T> def) {
+		protected FirstValue(TypeToken<T> type, Value<? extends T>[] values, Predicate<? super T> test, Supplier<? extends T> def) {
+			theType = type;
 			theValues = values;
 			theTest = test == null ? v -> v != null : test;
 			theDefault = def == null ? () -> null : def;
+		}
+
+		@Override
+		public TypeToken<T> getType() {
+			return theType;
 		}
 
 		@Override

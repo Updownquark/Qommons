@@ -1,4 +1,4 @@
-package org.qommons.collect;
+package org.qommons.value;
 
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
