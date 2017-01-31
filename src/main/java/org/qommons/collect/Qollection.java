@@ -1,6 +1,7 @@
 package org.qommons.collect;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -260,8 +261,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 *         applied to the element
 	 */
 	default <K> MultiQMap<K, E> groupBy(TypeToken<K> keyType, Function<E, K> keyMap, Equalizer equalizer) {
-		return d().debug(new GroupedMultiMap<>(this, keyMap, keyType, equalizer)).from("grouped", this).using("keyMap", keyMap)
-			.using("equalizer", equalizer).get();
+		return new GroupedMultiMap<>(this, keyMap, keyType, equalizer);
 	}
 
 	/**
@@ -295,8 +295,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 *         function applied to the element
 	 */
 	default <K> MultiSortedQMap<K, E> groupBy(TypeToken<K> keyType, Function<E, K> keyMap, Comparator<? super K> compare) {
-		return d().debug(new GroupedSortedMultiMap<>(this, keyMap, keyType, compare)).from("grouped", this).using("keyMap", keyMap)
-			.using("compare", compare).get();
+		return new GroupedSortedMultiMap<>(this, keyMap, keyType, compare);
 	}
 
 	/** @return An observable collection that cannot be modified directly but reflects the value of this collection as it changes */
@@ -1291,7 +1290,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public Quiterator<E> spliterator() {
-			Supplier<? extends Function<? super E, ? extends CollectionElement<? extends E>>> fn;
+			Supplier<? extends Function<? super E, ? extends CollectionElement<E>>> fn;
 			fn = () -> {
 				Object[] elementValue = new Object[1];
 				CollectionElement<E> el = new CollectionElement<E>() {
@@ -1406,7 +1405,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public Quiterator<E> spliterator() {
-			Supplier<Function<CollectionElement<? extends Value<? extends E>>, CollectionElement<? extends E>>> fn;
+			Supplier<Function<CollectionElement<? extends Value<? extends E>>, CollectionElement<E>>> fn;
 			fn = () -> {
 				CollectionElement<Value<? extends E>>[] container = new CollectionElement[1];
 				WrappingElement<Value<? extends E>, E> wrapper = new WrappingElement<Value<? extends E>, E>(getType(), container) {
@@ -1580,7 +1579,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					}
 
 					@Override
-					public boolean tryAdvanceElement(Consumer<? super CollectionElement<? extends E>> action) {
+					public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
 						return false;
 					}
 
@@ -1649,12 +1648,10 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	class FlattenedQollection<E> implements PartialQollectionImpl<E> {
 		private final Qollection<? extends Qollection<? extends E>> theOuter;
 		private final TypeToken<E> theType;
-		private final CombinedCollectionSessionObservable theSession;
 
 		protected FlattenedQollection(Qollection<? extends Qollection<? extends E>> collection) {
 			theOuter = collection;
 			theType = (TypeToken<E>) theOuter.getType().resolveType(Qollection.class.getTypeParameters()[0]);
-			theSession = new CombinedCollectionSessionObservable(theOuter);
 		}
 
 		protected Qollection<? extends Qollection<? extends E>> getOuter() {
@@ -1663,7 +1660,15 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public Transaction lock(boolean write, Object cause) {
-			return CombinedCollectionSessionObservable.lock(theOuter, write, cause);
+			Transaction outer = theOuter.lock(write, cause);
+			Transaction[] inner = new Transaction[theOuter.size()];
+			int[] i = new int[1];
+			theOuter.spliterator().forEachRemaining(coll -> inner[i[0]++] = coll.lock(write, cause));
+			return () -> {
+				for (int j = 0; j < inner.length; j++)
+					inner[j].close();
+				outer.close();
+			};
 		}
 
 		@Override
@@ -1695,13 +1700,89 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public Subscription onElement(Consumer<? super CollectionElement<E>> observer) {
-			SimpleObservable<Void> unSubObs = new SimpleObservable<>();
-			Subscription collSub = theOuter
-				.onElement(element -> flattenValue((Value<Qollection<E>>) element).unsubscribeOn(unSubObs).onElement(observer));
-			return () -> {
-				collSub.unsubscribe();
-				unSubObs.onNext(null);
+		public Quiterator<E> spliterator() {
+			return new Quiterator<E>() {
+				private final Quiterator<? extends Qollection<? extends E>> theOuterator = theOuter.spliterator();
+				private WrappingQuiterator<E, E> theInnerator;
+				private Supplier<Function<CollectionElement<? extends E>, CollectionElement<E>>> theElementMap;
+				private AtomicInteger counted = new AtomicInteger();
+				
+				{
+					theElementMap=()->{
+						CollectionElement<? extends E> [] container=new CollectionElement[1];
+						WrappingElement<E, E> wrapper = new WrappingElement<E, E>(getType(), container) {
+							@Override
+							public E get() {
+								return getWrapped().get();
+							}
+
+							@Override
+							public String canAdd(E toAdd) {
+								if (!getWrapped().getType().getRawType().isInstance(toAdd))
+									return "Value of type " + toAdd + " is not acceptable for this element";
+								return ((CollectionElement<E>) getWrapped()).canAdd(toAdd);
+							}
+
+							@Override
+							public void add(E toAdd) throws IllegalArgumentException {
+								if (!getWrapped().getType().getRawType().isInstance(toAdd))
+									throw new IllegalArgumentException("Value of type " + toAdd + " is not acceptable for this element");
+								((CollectionElement<E>) getWrapped()).add(toAdd);
+							}
+
+							@Override
+							public <V extends E> E set(V value, Object cause) throws IllegalArgumentException {
+								if (!getWrapped().getType().getRawType().isInstance(value))
+									throw new IllegalArgumentException("Value of type " + value + " is not acceptable for this element");
+								return ((CollectionElement<E>) getWrapped()).set(value, cause);
+							}
+
+							@Override
+							public <V extends E> String isAcceptable(V value) {
+								if (!getWrapped().getType().getRawType().isInstance(value))
+									return "Value of type " + value + " is not acceptable for this element";
+								return ((CollectionElement<E>) getWrapped()).isAcceptable(value);
+							}
+						};
+						return el->{
+							counted.incrementAndGet();
+							container[0]=el;
+							return wrapper;
+						};
+					};
+				}
+				
+				@Override
+				public long estimateSize() {
+					return size() - counted.get();
+				}
+
+				@Override
+				public int characteristics() {
+					return Spliterator.SIZED;
+				}
+
+				@Override
+				public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
+					if (theInnerator == null
+						&& !theOuterator.tryAdvance(coll -> theInnerator = new WrappingQuiterator<>(coll.spliterator(), theElementMap)))
+						return false;
+					while (!theInnerator.tryAdvanceElement(action)) {
+						if (!theOuterator.tryAdvance(coll -> theInnerator = new WrappingQuiterator<>(coll.spliterator(), theElementMap)))
+							return false;
+					}
+					return true;
+				}
+
+				@Override
+				public Quiterator<E> trySplit() {
+					Quiterator<E>[] ret = new Quiterator[1];
+					theOuterator.tryAdvance(coll -> {
+						counted.addAndGet(coll.size());
+						ret[0] = new WrappingQuiterator<>(coll.spliterator(), theElementMap);
+					});
+					return ret[0];
+				}
 			};
 		}
 

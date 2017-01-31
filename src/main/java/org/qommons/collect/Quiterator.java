@@ -6,7 +6,6 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-import org.qommons.collect.Quiterator.CollectionElement;
 import org.qommons.value.Settable;
 import org.qommons.value.Value;
 
@@ -29,9 +28,9 @@ public interface Quiterator<T> extends Spliterator<T> {
 	 *        than the reference to the Quiterator.
 	 * @return false if no remaining elements existed upon entry to this method, else true.
 	 */
-	boolean tryAdvanceElement(Consumer<? super CollectionElement<? extends T>> action);
+	boolean tryAdvanceElement(Consumer<? super CollectionElement<T>> action);
 
-	default void forEachElement(Consumer<? super CollectionElement<? extends T>> action) {
+	default void forEachElement(Consumer<? super CollectionElement<T>> action) {
 		while (tryAdvanceElement(action)) {
 		}
 	}
@@ -49,68 +48,75 @@ public interface Quiterator<T> extends Spliterator<T> {
 	}
 
 	default <V> Quiterator<V> map(Function<? super T, V> map) {
-		return new MappedQuiterator<>(this, map);
+		return map((TypeToken<V>) TypeToken.of(map.getClass()).resolveType(Function.class.getTypeParameters()[1]), map, null);
+	}
+
+	default <V> Quiterator<V> map(TypeToken<V> type, Function<? super T, V> map, Function<? super V, ? extends T> reverse) {
+		return new MappedQuiterator<>(type, this, map, reverse);
 	}
 
 	default Quiterator<T> filter(Predicate<? super T> filter) {
 		return new FilteredQuiterator<>(this, filter);
 	}
 
-	default <V> Quiterator<V> filterMap(Function<? super T, V> map) {
-		return new FilterMappedQuiterator<>(this, map);
-	}
-
 	@Override
 	Quiterator<T> trySplit();
 
-	class MappedQuiterator<T, V> implements Quiterator<V> {
+	class MappedQuiterator<T, V> extends WrappingQuiterator<T, V> {
 		private final Quiterator<T> theWrapped;
 		private final Function<? super T, V> theMap;
-		private final Function<? super V, T> theReverse;
+		private final Function<? super V, ? extends T> theReverse;
 
-		public MappedQuiterator(Quiterator<T> wrap, Function<? super T, V> map, Function<? super V, T> reverse) {
+		public MappedQuiterator(TypeToken<V> type, Quiterator<T> wrap, Function<? super T, V> map,
+			Function<? super V, ? extends T> reverse) {
+			super(wrap, () -> {
+				CollectionElement<? extends T>[] container = new CollectionElement[1];
+				WrappingElement<T, V> wrapper = new WrappingElement<T, V>(type, container) {
+					@Override
+					public V get() {
+						return map.apply(getWrapped().get());
+					}
+
+					@Override
+					public String canAdd(V toAdd) {
+						if (reverse == null)
+							return "Addition is not enabled for this collection";
+						T reversed = reverse.apply(toAdd);
+						return ((CollectionElement<T>) getWrapped()).canAdd(reversed);
+					}
+
+					@Override
+					public void add(V toAdd) throws IllegalArgumentException {
+						if (reverse == null)
+							throw new IllegalArgumentException("Addition is not enabled for this collection");
+						T reversed = reverse.apply(toAdd);
+						((CollectionElement<T>) getWrapped()).add(reversed);
+					}
+
+					@Override
+					public <V2 extends V> String isAcceptable(V2 value) {
+						if (reverse == null)
+							return "Replacement is not enabled for this collection";
+						T reversed = reverse.apply(value);
+						return ((CollectionElement<T>) getWrapped()).isAcceptable(reversed);
+					}
+
+					@Override
+					public <V2 extends V> V set(V2 value, Object cause) throws IllegalArgumentException {
+						if (reverse == null)
+							throw new IllegalArgumentException("Replacement is not enabled for this collection");
+						T reversed = reverse.apply(value);
+						return map.apply(((CollectionElement<T>) getWrapped()).set(reversed, cause));
+					}
+				};
+				return el -> {
+					container[0] = el;
+					return wrapper;
+				};
+			});
 			theWrapped = wrap;
 			theMap = map;
 			theReverse = reverse;
-		}
-
-		@Override
-		public int operations() {
-			if (theReverse != null)
-				return theWrapped.operations();
-			else
-				return OperationType.without(theWrapped.operations(), OperationType.REPLACE, OperationType.ADD);
-		}
-
-		@Override
-		public boolean tryAdvance(Function<? super V, Operation<? extends V>> action) {
-			return theWrapped.tryAdvance(t ->{
-				Operation<? extends V> op=action.apply(theMap.apply(t));
-				if(op!=null){
-					if(theReverse!=null)
-						
-				}
-			});
-		}
-
-		@Override
-		public Quiterator<V> trySplit() {
-			return theWrapped.trySplit().map(theMap);
-		}
-
-		@Override
-		public long estimateSize() {
-			return theWrapped.estimateSize();
-		}
-
-		@Override
-		public int characteristics() {
-			return theWrapped.characteristics();
-		}
-
-		@Override
-		public long getExactSizeIfKnown() {
-			return theWrapped.getExactSizeIfKnown();
 		}
 	}
 
@@ -124,21 +130,29 @@ public interface Quiterator<T> extends Spliterator<T> {
 		}
 
 		@Override
-		public boolean tryAdvance(Consumer<? super T> action) {
+		public boolean tryAdvanceElement(Consumer<? super CollectionElement<T>> action) {
 			boolean[] found = new boolean[1];
-			while (theWrapped.tryAdvance(t -> {
-				if (theFilter.test(t)) {
+			while (!found[0] && theWrapped.tryAdvanceElement(el -> {
+				if (theFilter.test(el.get())) {
 					found[0] = true;
-					action.accept(t);
+					action.accept(el);
 				}
-			}) && !found[0]) {
+			})) {
 			}
 			return found[0];
 		}
 
 		@Override
+		public void forEachElement(Consumer<? super CollectionElement<T>> action) {
+			theWrapped.forEachElement(el -> {
+				if (theFilter.test(el.get()))
+					action.accept(el);
+			});
+		}
+
+		@Override
 		public long estimateSize() {
-			return theWrapped.estimateSize();
+			return theWrapped.estimateSize(); // May not be right, but it's at least an upper bound
 		}
 
 		@Override
@@ -152,47 +166,13 @@ public interface Quiterator<T> extends Spliterator<T> {
 		}
 	}
 
-	class FilterMappedQuiterator<T, V> implements Quiterator<V> {
-		private final Quiterator<T> theWrapped;
-		private final Function<? super T, V> theMap;
-
-		public FilterMappedQuiterator(Quiterator<T> wrap, Function<? super T, V> map) {
-			theWrapped = wrap;
-			theMap = map;
-		}
-
-		@Override
-		public boolean tryAdvance(Consumer<? super V> action) {
-			return theWrapped.tryAdvance(t -> {
-				V v = theMap.apply(t);
-				if (v != null)
-					action.accept(v);
-			});
-		}
-
-		@Override
-		public Quiterator<V> trySplit() {
-			return theWrapped.trySplit().filterMap(theMap);
-		}
-
-		@Override
-		public long estimateSize() {
-			return theWrapped.estimateSize();
-		}
-
-		@Override
-		public int characteristics() {
-			return theWrapped.characteristics() & (~Spliterator.SIZED);
-		}
-	}
-
 	class SimpleQuiterator<T, V> implements Quiterator<V> {
 		private final Spliterator<T> theWrapped;
-		private final Supplier<? extends Function<? super T, ? extends CollectionElement<? extends V>>> theMap;
-		private final Function<? super T, ? extends CollectionElement<? extends V>> theInstanceMap;
+		private final Supplier<? extends Function<? super T, ? extends CollectionElement<V>>> theMap;
+		private final Function<? super T, ? extends CollectionElement<V>> theInstanceMap;
 
 		public SimpleQuiterator(Spliterator<T> wrap,
-			Supplier<? extends Function<? super T, ? extends org.qommons.collect.Quiterator.CollectionElement<? extends V>>> map) {
+			Supplier<? extends Function<? super T, ? extends org.qommons.collect.Quiterator.CollectionElement<V>>> map) {
 			theWrapped = wrap;
 			theMap = map;
 			theInstanceMap = theMap.get();
@@ -209,10 +189,10 @@ public interface Quiterator<T> extends Spliterator<T> {
 		}
 
 		@Override
-		public boolean tryAdvanceElement(Consumer<? super CollectionElement<? extends V>> action) {
+		public boolean tryAdvanceElement(Consumer<? super CollectionElement<V>> action) {
 			boolean[] passed = new boolean[1];
 			while (!passed[0] && theWrapped.tryAdvance(el -> {
-				CollectionElement<? extends V> mapped = theInstanceMap.apply(el);
+				CollectionElement<V> mapped = theInstanceMap.apply(el);
 				if (mapped != null) {
 					passed[0] = true;
 					action.accept(mapped);
@@ -223,9 +203,9 @@ public interface Quiterator<T> extends Spliterator<T> {
 		}
 
 		@Override
-		public void forEachElement(Consumer<? super CollectionElement<? extends V>> action) {
+		public void forEachElement(Consumer<? super CollectionElement<V>> action) {
 			theWrapped.forEachRemaining(el -> {
-				CollectionElement<? extends V> mapped = theInstanceMap.apply(el);
+				CollectionElement<V> mapped = theInstanceMap.apply(el);
 				if (mapped != null)
 					action.accept(mapped);
 			});
@@ -242,11 +222,11 @@ public interface Quiterator<T> extends Spliterator<T> {
 
 	class WrappingQuiterator<T, V> implements Quiterator<V> {
 		private final Quiterator<? extends T> theWrapped;
-		private final Supplier<? extends Function<? super CollectionElement<? extends T>, ? extends CollectionElement<? extends V>>> theMap;
-		private final Function<? super CollectionElement<? extends T>, ? extends CollectionElement<? extends V>> theInstanceMap;
+		private final Supplier<? extends Function<? super CollectionElement<? extends T>, ? extends CollectionElement<V>>> theMap;
+		private final Function<? super CollectionElement<? extends T>, ? extends CollectionElement<V>> theInstanceMap;
 
 		public WrappingQuiterator(Quiterator<? extends T> wrap,
-			Supplier<? extends Function<? super CollectionElement<? extends T>, ? extends CollectionElement<? extends V>>> map) {
+			Supplier<? extends Function<? super CollectionElement<? extends T>, ? extends CollectionElement<V>>> map) {
 			theWrapped = wrap;
 			theMap = map;
 			theInstanceMap = theMap.get();
@@ -267,10 +247,15 @@ public interface Quiterator<T> extends Spliterator<T> {
 		}
 
 		@Override
-		public boolean tryAdvanceElement(Consumer<? super CollectionElement<? extends V>> action) {
+		public long getExactSizeIfKnown() {
+			return theWrapped.getExactSizeIfKnown();
+		}
+
+		@Override
+		public boolean tryAdvanceElement(Consumer<? super CollectionElement<V>> action) {
 			boolean[] passed = new boolean[1];
 			while (!passed[0] && theWrapped.tryAdvanceElement(el -> {
-				CollectionElement<? extends V> mapped = theInstanceMap.apply(el);
+				CollectionElement<V> mapped = theInstanceMap.apply(el);
 				if (mapped != null) {
 					passed[0] = true;
 					action.accept(mapped);
@@ -281,9 +266,9 @@ public interface Quiterator<T> extends Spliterator<T> {
 		}
 
 		@Override
-		public void forEachElement(Consumer<? super CollectionElement<? extends V>> action) {
+		public void forEachElement(Consumer<? super CollectionElement<V>> action) {
 			theWrapped.forEachElement(el -> {
-				CollectionElement<? extends V> mapped = theInstanceMap.apply(el);
+				CollectionElement<V> mapped = theInstanceMap.apply(el);
 				if (mapped != null)
 					action.accept(mapped);
 			});
