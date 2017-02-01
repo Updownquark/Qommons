@@ -7,9 +7,9 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import org.qommons.Equalizer;
 import org.qommons.IterableUtils;
 import org.qommons.Transaction;
+import org.qommons.collect.MultiMap.MultiEntry;
 import org.qommons.collect.Quiterator.CollectionElement;
 import org.qommons.collect.Quiterator.WrappingElement;
 import org.qommons.collect.Quiterator.WrappingQuiterator;
@@ -17,6 +17,8 @@ import org.qommons.value.Settable;
 import org.qommons.value.Value;
 
 import com.google.common.reflect.TypeToken;
+
+import javafx.collections.ObservableList;
 
 public interface Qollection<E> extends TransactableCollection<E> {
 	/** @return The run-time type of elements in this collection */
@@ -229,27 +231,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 *         applied to the element
 	 */
 	default <K> MultiQMap<K, E> groupBy(Function<E, K> keyMap) {
-		return groupBy(keyMap, (org.qommons.Equalizer) Objects::equals);
-	}
-
-	/**
-	 * @param <K> The type of the key
-	 * @param keyMap The mapping function to group this collection's values by
-	 * @param equalizer The equalizer to use to group the keys
-	 * @return A multi-map containing each of this collection's elements, each in the collection of the value mapped by the given function
-	 *         applied to the element
-	 */
-	default <K> MultiQMap<K, E> groupBy(Function<E, K> keyMap, Equalizer equalizer) {
-		return groupBy(null, keyMap, equalizer);
-	}
-
-	/**
-	 * @param equalizer The equalizer to group the values by
-	 * @return A multi-map containing each of this collection's elements, each in the collection of one value that it matches according to
-	 *         the equalizer
-	 */
-	default MultiQMap<E, E> groupBy(Equalizer equalizer) {
-		return groupBy(getType(), null, equalizer);
+		return groupBy((TypeToken<K>) TypeToken.of(keyMap.getClass()).resolveType(Function.class.getTypeParameters()[1]), keyMap);
 	}
 
 	/**
@@ -260,8 +242,8 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 * @return A multi-map containing each of this collection's elements, each in the collection of the value mapped by the given function
 	 *         applied to the element
 	 */
-	default <K> MultiQMap<K, E> groupBy(TypeToken<K> keyType, Function<E, K> keyMap, Equalizer equalizer) {
-		return new GroupedMultiMap<>(this, keyMap, keyType, equalizer);
+	default <K> MultiQMap<K, E> groupBy(TypeToken<K> keyType, Function<E, K> keyMap) {
+		return new GroupedMultiMap<>(this, keyMap, keyType);
 	}
 
 	/**
@@ -883,7 +865,257 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	}
 
 	/**
-	 * An observable collection that cannot be modified directly, but reflects the value of a wrapped collection as it changes
+	 * Implements {@link Qollection#groupBy(Function)}
+	 *
+	 * @param <K> The key type of the map
+	 * @param <E> The value type of the map
+	 */
+	class GroupedMultiMap<K, E> implements MultiQMap<K, E> {
+		private final Qollection<E> theWrapped;
+		private final Function<E, K> theKeyMap;
+		private final TypeToken<K> theKeyType;
+
+		private final QSet<K> theKeySet;
+
+		GroupedMultiMap(Qollection<E> wrap, Function<E, K> keyMap, TypeToken<K> keyType) {
+			theWrapped = wrap;
+			theKeyMap = keyMap;
+			theKeyType = keyType != null ? keyType
+				: (TypeToken<K>) TypeToken.of(keyMap.getClass()).resolveType(Function.class.getTypeParameters()[1]);
+
+			Qollection<K> mapped;
+			if (theKeyMap != null)
+				mapped = theWrapped.map(theKeyMap);
+			else
+				mapped = (Qollection<K>) theWrapped;
+			theKeySet = unique(mapped);
+		}
+
+		protected QSet<K> unique(Qollection<K> keyCollection) {
+			return QSet.unique(keyCollection);
+		}
+
+		@Override
+		public TypeToken<K> getKeyType() {
+			return theKeyType;
+		}
+
+		@Override
+		public TypeToken<E> getValueType() {
+			return theWrapped.getType();
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return theWrapped.lock(write, cause);
+		}
+
+		@Override
+		public QSet<K> keySet() {
+			return theKeySet;
+		}
+
+		@Override
+		public Qollection<E> get(Object key) {
+			return theWrapped.filter(el -> Objects.equals(theKeyMap.apply(el), key) ? null : "");
+		}
+
+		@Override
+		public QSet<? extends MultiQEntry<K, E>> entrySet() {
+			return MultiQMap.defaultEntrySet(this);
+		}
+
+		@Override
+		public String toString() {
+			return entrySet().toString();
+		}
+	}
+
+	/**
+	 * An entry in a {@link Qollection.GroupedMultiMap}
+	 *
+	 * @param <K> The key type of the entry
+	 * @param <E> The value type of the entry
+	 */
+	class GroupedMultiEntry<K, E> implements MultiQMap.MultiQEntry<K, E> {
+		private final K theKey;
+
+		private final Function<E, K> theKeyMap;
+
+		private final Qollection<E> theElements;
+
+		GroupedMultiEntry(K key, Qollection<E> wrap, Function<E, K> keyMap) {
+			theKey = key;
+			theKeyMap = keyMap;
+			theElements = wrap.filter(el -> Objects.equals(theKey, theKeyMap.apply(el)));
+		}
+
+		@Override
+		public K getKey() {
+			return theKey;
+		}
+
+		@Override
+		public TypeToken<E> getType() {
+			return theElements.getType();
+		}
+
+		@Override
+		public Subscription onElement(Consumer<? super ObservableElement<E>> onElement) {
+			return theElements.onElement(onElement);
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return theElements.lock(write, cause);
+		}
+
+		@Override
+		public int size() {
+			return theElements.size();
+		}
+
+		@Override
+		public Iterator<E> iterator() {
+			return theElements.iterator();
+		}
+
+		@Override
+		public boolean add(E e) {
+			return theElements.add(e);
+		}
+
+		@Override
+		public boolean remove(Object o) {
+			return theElements.remove(o);
+		}
+
+		@Override
+		public boolean addAll(Collection<? extends E> c) {
+			return theElements.addAll(c);
+		}
+
+		@Override
+		public boolean removeAll(Collection<?> c) {
+			return theElements.removeAll(c);
+		}
+
+		@Override
+		public boolean retainAll(Collection<?> c) {
+			return theElements.retainAll(c);
+		}
+
+		@Override
+		public void clear() {
+			theElements.clear();
+		}
+
+		@Override
+		public boolean canRemove(Object value) {
+			return theElements.canRemove(value);
+		}
+
+		@Override
+		public boolean canAdd(E value) {
+			return theElements.canAdd(value);
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (this == o)
+				return true;
+			return o instanceof MultiEntry && Objects.equals(theKey, ((MultiEntry<?, ?>) o).getKey());
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hashCode(theKey);
+		}
+
+		@Override
+		public String toString() {
+			return getKey() + "=" + Qollection.toString(this);
+		}
+	}
+
+	/**
+	 * Implements {@link Qollection#groupBy(Function, Comparator)}
+	 *
+	 * @param <K> The key type of the map
+	 * @param <E> The value type of the map
+	 */
+	class GroupedSortedMultiMap<K, E> implements ObservableSortedMultiMap<K, E> {
+		private final Qollection<E> theWrapped;
+		private final Function<E, K> theKeyMap;
+		private final TypeToken<K> theKeyType;
+		private final Comparator<? super K> theCompare;
+
+		private final ObservableSortedSet<K> theKeySet;
+
+		GroupedSortedMultiMap(Qollection<E> wrap, Function<E, K> keyMap, TypeToken<K> keyType, Comparator<? super K> compare) {
+			theWrapped = wrap;
+			theKeyMap = keyMap;
+			theKeyType = keyType != null ? keyType
+				: (TypeToken<K>) TypeToken.of(keyMap.getClass()).resolveType(Function.class.getTypeParameters()[1]);
+			theCompare = compare;
+
+			Qollection<K> mapped;
+			if (theKeyMap != null)
+				mapped = theWrapped.map(theKeyMap);
+			else
+				mapped = (Qollection<K>) theWrapped;
+			theKeySet = unique(mapped);
+		}
+
+		@Override
+		public Comparator<? super K> comparator() {
+			return theCompare;
+		}
+
+		protected ObservableSortedSet<K> unique(Qollection<K> keyCollection) {
+			return ObservableSortedSet.unique(keyCollection, theCompare);
+		}
+
+		@Override
+		public TypeToken<K> getKeyType() {
+			return theKeyType;
+		}
+
+		@Override
+		public TypeToken<E> getValueType() {
+			return theWrapped.getType();
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return theWrapped.lock(write, cause);
+		}
+
+		@Override
+		public ObservableSortedSet<K> keySet() {
+			return theKeySet;
+		}
+
+		@Override
+		public Qollection<E> get(Object key) {
+			if (!theKeyType.getRawType().isInstance(key))
+				return ObservableList.constant(getValueType());
+			return theWrapped.filter(el -> theCompare.compare(theKeyMap.apply(el), (K) key) == 0);
+		}
+
+		@Override
+		public ObservableSortedSet<? extends ObservableSortedMultiEntry<K, E>> entrySet() {
+			return ObservableSortedMultiMap.defaultEntrySet(this);
+		}
+
+		@Override
+		public String toString() {
+			return entrySet().toString();
+		}
+	}
+
+	/**
+	 * A collection that cannot be modified directly, but reflects the values in a wrapped collection
 	 *
 	 * @param <E> The type of elements in the collection
 	 */
