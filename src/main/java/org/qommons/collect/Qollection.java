@@ -4,9 +4,12 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import org.observe.Subscription;
+import org.observe.collect.ObservableElement;
 import org.qommons.IterableUtils;
 import org.qommons.Transaction;
 import org.qommons.collect.MultiMap.MultiEntry;
@@ -17,8 +20,6 @@ import org.qommons.value.Settable;
 import org.qommons.value.Value;
 
 import com.google.common.reflect.TypeToken;
-
-import javafx.collections.ObservableList;
 
 public interface Qollection<E> extends TransactableCollection<E> {
 	/** @return The run-time type of elements in this collection */
@@ -117,6 +118,37 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			@Override
 			public String toString() {
 				return Qollection.this + ".size()";
+			}
+		};
+	}
+
+	/**
+	 * Searches in this collection for an element.
+	 *
+	 * @param filter The filter function
+	 * @return A value in this list passing the filter, or null if none of this collection's elements pass.
+	 */
+	default Value<E> find(Predicate<E> filter) {
+		return new Value<E>() {
+			private final TypeToken<E> type = Qollection.this.getType().wrap();
+
+			@Override
+			public TypeToken<E> getType() {
+				return type;
+			}
+
+			@Override
+			public E get() {
+				for (E element : Qollection.this) {
+					if (filter.test(element))
+						return element;
+				}
+				return null;
+			}
+
+			@Override
+			public String toString() {
+				return "find in " + Qollection.this;
 			}
 		};
 	}
@@ -1044,13 +1076,13 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 * @param <K> The key type of the map
 	 * @param <E> The value type of the map
 	 */
-	class GroupedSortedMultiMap<K, E> implements ObservableSortedMultiMap<K, E> {
+	class GroupedSortedMultiMap<K, E> implements SortedMultiQMap<K, E> {
 		private final Qollection<E> theWrapped;
 		private final Function<E, K> theKeyMap;
 		private final TypeToken<K> theKeyType;
 		private final Comparator<? super K> theCompare;
 
-		private final ObservableSortedSet<K> theKeySet;
+		private final SortedQSet<K> theKeySet;
 
 		GroupedSortedMultiMap(Qollection<E> wrap, Function<E, K> keyMap, TypeToken<K> keyType, Comparator<? super K> compare) {
 			theWrapped = wrap;
@@ -1072,8 +1104,8 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			return theCompare;
 		}
 
-		protected ObservableSortedSet<K> unique(Qollection<K> keyCollection) {
-			return ObservableSortedSet.unique(keyCollection, theCompare);
+		protected SortedQSet<K> unique(Qollection<K> keyCollection) {
+			return SortedQSet.unique(keyCollection, theCompare);
 		}
 
 		@Override
@@ -1092,20 +1124,20 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public ObservableSortedSet<K> keySet() {
+		public SortedQSet<K> keySet() {
 			return theKeySet;
 		}
 
 		@Override
 		public Qollection<E> get(Object key) {
 			if (!theKeyType.getRawType().isInstance(key))
-				return ObservableList.constant(getValueType());
+				return QList.constant(getValueType());
 			return theWrapped.filter(el -> theCompare.compare(theKeyMap.apply(el), (K) key) == 0);
 		}
 
 		@Override
-		public ObservableSortedSet<? extends ObservableSortedMultiEntry<K, E>> entrySet() {
-			return ObservableSortedMultiMap.defaultEntrySet(this);
+		public SortedQSet<? extends SortedMultiQEntry<K, E>> entrySet() {
+			return SortedMultiQMap.defaultEntrySet(this);
 		}
 
 		@Override

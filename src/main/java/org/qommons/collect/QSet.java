@@ -1,21 +1,21 @@
 package org.qommons.collect;
 
 import java.util.*;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import org.qommons.Equalizer.EqualizerNode;
 import org.qommons.IterableUtils;
 import org.qommons.Transaction;
-import org.qommons.collect.QSet.UniqueElement;
 import org.qommons.collect.Quiterator.CollectionElement;
 import org.qommons.value.Value;
 
-import com.google.common.reflect.TypeParameter;
 import com.google.common.reflect.TypeToken;
 
+/**
+ * A Qollection of unique elements
+ * 
+ * @param <E> The type of elements in the set
+ */
 public interface QSet<E> extends Qollection<E>, Set<E> {
 	@Override
 	default Iterator<E> iterator() {
@@ -492,8 +492,8 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 		}
 
 		@Override
-		public Iterator<E> iterator() {
-			return unique(theCollection.iterator());
+		public Quiterator<E> spliterator() {
+			return unique(theCollection.spliterator());
 		}
 
 		@Override
@@ -512,206 +512,22 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 			return set.contains(value) ? "This value is already present in the set" : null;
 		}
 
-		protected Iterator<E> unique(Iterator<E> backing) {
-			return new Iterator<E>() {
-				private final HashSet<E> set = new HashSet<>();
-
-				private E nextVal;
-
-				@Override
-				public boolean hasNext() {
-					while (nextVal == null && backing.hasNext()) {
-						nextVal = backing.next();
-						if (!set.add(nextVal))
-							nextVal = null;
-					}
-					return nextVal != null;
-				}
-
-				@Override
-				public E next() {
-					if (nextVal == null && !hasNext())
-						throw new java.util.NoSuchElementException();
-					E ret = nextVal;
-					nextVal = null;
-					return ret;
-				}
-
-				@Override
-				public void remove() {
-					backing.remove();
-				}
+		protected Quiterator<E> unique(Quiterator<E> backing) {
+			final HashSet<E> set = new HashSet<>();
+			Supplier<Function<CollectionElement<? extends E>, CollectionElement<E>>> elementMap = () -> {
+				return el -> {
+					if (set.add(el.get()))
+						return (CollectionElement<E>) el;
+					else
+						return null;
+				};
 			};
-		}
-
-		protected class UniqueElementTracking {
-			protected Map<EqualizerNode<E>, UniqueElement<E>> elements = new LinkedHashMap<>();
-		}
-
-		@Override
-		public Subscription onElement(Consumer<? super ObservableElement<E>> onElement) {
-			return onElement(onElement, Qollection::onElement);
-		}
-
-		protected Subscription onElement(Consumer<? super ObservableElement<E>> onElement,
-			BiFunction<Qollection<E>, Consumer<? super ObservableElement<E>>, Subscription> subscriber) {
-			final UniqueElementTracking tracking = createElementTracking();
-			return subscriber.apply(theCollection, element -> {
-				element.subscribe(new Observer<ValueEvent<E>>() {
-					@Override
-					public <EV extends ValueEvent<E>> void onNext(EV event) {
-						EqualizerNode<E> newNode = new EqualizerNode<>(theEqualizer, event.getValue());
-						UniqueElement<E> newUnique = tracking.elements.get(newNode);
-						if (newUnique == null)
-							newUnique = addUniqueElement(tracking, newNode);
-						boolean addElement = newUnique.isEmpty();
-						boolean reAdd;
-						if (event.isInitial()) {
-							reAdd = newUnique.addElement(element, event);
-						} else {
-							EqualizerNode<E> oldNode = new EqualizerNode<>(theEqualizer, event.getOldValue());
-							UniqueElement<E> oldUnique = tracking.elements.get(oldNode);
-							if (oldUnique == newUnique) {
-								reAdd = newUnique.changed(element);
-							} else {
-								if (oldUnique != null)
-									removeFromOld(oldUnique, oldNode, event);
-								reAdd = newUnique.addElement(element, event);
-							}
-						}
-						if (addElement)
-							onElement.accept(newUnique);
-						else if (reAdd) {
-							newUnique.reset(event);
-							onElement.accept(newUnique);
-						}
-					}
-
-					@Override
-					public <EV extends ValueEvent<E>> void onCompleted(EV event) {
-						EqualizerNode<E> node = new EqualizerNode<>(theEqualizer, event.getValue());
-						UniqueElement<E> unique = tracking.elements.get(node);
-						if (unique != null)
-							removeFromOld(unique, node, event);
-					}
-
-					void removeFromOld(UniqueElement<E> unique, EqualizerNode<E> node, Object cause) {
-						boolean reAdd = unique.removeElement(element, cause);
-						if (unique.isEmpty())
-							tracking.elements.remove(node);
-						else if (reAdd) {
-							unique.reset(cause);
-							onElement.accept(unique);
-						}
-					}
-				});
-			});
-		}
-
-		protected UniqueElementTracking createElementTracking() {
-			return new UniqueElementTracking();
-		}
-
-		protected UniqueElement<E> addUniqueElement(UniqueElementTracking tracking, EqualizerNode<E> node) {
-			UniqueElement<E> unique = new UniqueElement<>(this, false);
-			tracking.elements.put(node, unique);
-			return unique;
+			return new Quiterator.WrappingQuiterator<>(null, elementMap);
 		}
 
 		@Override
 		public String toString() {
 			return QSet.toString(this);
-		}
-	}
-
-	/**
-	 * Implements elements for {@link QSet#unique(Qollection)}
-	 *
-	 * @param <E> The type of value in the element
-	 */
-	class UniqueElement<E> implements ObservableElement<E> {
-		private final CollectionWrappingSet<E> theSet;
-		private final boolean isAlwaysUsingFirst;
-		private final Collection<ObservableElement<E>> theElements;
-		private final SimpleSettableValue<ObservableElement<E>> theCurrentElement;
-
-		UniqueElement(CollectionWrappingSet<E> set, boolean alwaysUseFirst) {
-			theSet = set;
-			isAlwaysUsingFirst = alwaysUseFirst;
-			theElements = createElements();
-			theCurrentElement = new SimpleSettableValue<>(
-				new TypeToken<ObservableElement<E>>() {}.where(new TypeParameter<E>() {}, theSet.getType()), true);
-		}
-
-		protected Collection<ObservableElement<E>> createElements() {
-			return new ArrayDeque<>();
-		}
-
-		@Override
-		public TypeToken<E> getType() {
-			return theSet.getType();
-		}
-
-		@Override
-		public E get() {
-			return theElements.isEmpty() ? null : theElements.iterator().next().get();
-		}
-
-		@Override
-		public Subscription subscribe(Observer<? super ValueEvent<E>> observer) {
-			return ObservableElement.flatten(theCurrentElement).subscribe(observer);
-		}
-
-		@Override
-		public boolean isSafe() {
-			return theSet.isSafe();
-		}
-
-		@Override
-		public Value<E> persistent() {
-			return theElements.isEmpty() ? Value.constant(theSet.getType(), null) : theElements.iterator().next().persistent();
-		}
-
-		protected ObservableElement<E> getCurrentElement() {
-			return theCurrentElement.get();
-		}
-
-		protected boolean addElement(ObservableElement<E> element, Object cause) {
-			theElements.add(element);
-			boolean newBest;
-			if (isAlwaysUsingFirst)
-				newBest = theElements.iterator().next() == element;
-			else
-				newBest = theCurrentElement.get() == null;
-			if (newBest)
-				return setCurrentElement(element, cause);
-			else
-				return false;
-		}
-
-		protected boolean removeElement(ObservableElement<E> element, Object cause) {
-			theElements.remove(element);
-			if (theCurrentElement.get() == element)
-				return setCurrentElement(theElements.isEmpty() ? null : theElements.iterator().next(), cause);
-			else
-				return false;
-		}
-
-		protected boolean changed(ObservableElement<E> element) {
-			return false;
-		}
-
-		protected void reset(Object cause) {
-			theCurrentElement.set(theElements.iterator().next(), cause);
-		}
-
-		protected boolean setCurrentElement(ObservableElement<E> element, Object cause) {
-			theCurrentElement.set(element, cause);
-			return false;
-		}
-
-		protected boolean isEmpty() {
-			return theElements.isEmpty();
 		}
 	}
 }
