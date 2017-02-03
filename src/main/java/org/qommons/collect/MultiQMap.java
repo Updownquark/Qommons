@@ -4,8 +4,6 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import org.observe.Subscription;
-import org.observe.collect.*;
 import org.qommons.Transaction;
 import org.qommons.value.Value;
 
@@ -30,16 +28,124 @@ public interface MultiQMap<K, V> extends TransactableMultiMap<K, V> {
 	@Override
 	QSet<K> keySet();
 
+	/**
+	 * <p>
+	 * A default implementation of {@link #keySet()}.
+	 * </p>
+	 * <p>
+	 * No {@link MultiQMap} implementation may use the default implementations for its {@link #keySet()}, {@link #get(Object)}, and
+	 * {@link #entrySet()} methods. {@link #defaultEntrySet(MultiQMap)} may not be used in the same implementation as
+	 * {@link #defaultKeySet(MultiQMap)} or {@link #defaultGet(MultiQMap, Object)}. Either {@link #entrySet()} or both {@link #keySet()} and
+	 * {@link #get(Object)} must be custom. If an implementation supplies custom {@link #keySet()} and {@link #get(Object)} implementations,
+	 * it may use {@link #defaultEntrySet(MultiQMap)} for its {@link #entrySet()} . If an implementation supplies a custom
+	 * {@link #entrySet()} implementation, it may use {@link #defaultKeySet(MultiQMap)} and {@link #defaultGet(MultiQMap, Object)} for its
+	 * {@link #keySet()} and {@link #get(Object)} implementations, respectively. Using default implementations for both will result in
+	 * infinite loops.
+	 * </p>
+	 *
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param map The map to create a key set for
+	 * @return A key set for the map
+	 */
+	public static <K, V> QSet<K> defaultKeySet(MultiQMap<K, V> map) {
+		return map.entrySet().mapEquivalent(map.getKeyType(), MultiQEntry::getKey, null);
+	}
+
 	@Override
 	Qollection<V> get(Object key);
+
+	/**
+	 * <p>
+	 * A default implementation of {@link #get(Object)}.
+	 * </p>
+	 * <p>
+	 * No {@link MultiQMap} implementation may use the default implementations for its {@link #keySet()}, {@link #get(Object)}, and
+	 * {@link #entrySet()} methods. {@link #defaultEntrySet(MultiQMap)} may not be used in the same implementation as
+	 * {@link #defaultKeySet(MultiQMap)} or {@link #defaultGet(MultiQMap, Object)}. Either {@link #entrySet()} or both {@link #keySet()} and
+	 * {@link #get(Object)} must be custom. If an implementation supplies custom {@link #keySet()} and {@link #get(Object)} implementations,
+	 * it may use {@link #defaultEntrySet(MultiQMap)} for its {@link #entrySet()} . If an implementation supplies a custom
+	 * {@link #entrySet()} implementation, it may use {@link #defaultKeySet(MultiQMap)} and {@link #defaultGet(MultiQMap, Object)} for its
+	 * {@link #keySet()} and {@link #get(Object)} implementations, respectively. Using default implementations for both will result in
+	 * infinite loops.
+	 * </p>
+	 *
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param map The map to create an entry set for
+	 * @param key The key to get the value collection for
+	 * @return A key set for the map
+	 */
+	public static <K, V> Qollection<V> defaultGet(MultiQMap<K, V> map, Object key) {
+		if (key != null && !map.getKeyType().isAssignableFrom(key.getClass()))
+			return QList.constant(map.getValueType());
+
+		QSet<? extends MultiQEntry<K, V>> entries = map.entrySet();
+		class KeyEntry extends Qollection.ConstantQollection<Object> implements MultiEntry<Object, Object> {
+			KeyEntry() {
+				super(TypeToken.of(Object.class), Collections.emptyList());
+			}
+
+			@Override
+			public Object getKey() {
+				return key;
+			}
+
+			@Override
+			public int hashCode() {
+				return Objects.hashCode(key);
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return obj instanceof MultiEntry && Objects.equals(((MultiEntry<?, ?>) obj).getKey(), key);
+			}
+
+			@Override
+			public String toString() {
+				return String.valueOf(key);
+			}
+		}
+		KeyEntry keyEntry = new KeyEntry();
+
+		org.qommons.value.Value<? extends MultiQEntry<K, V>> equiv = entries.equivalent(keyEntry);
+		return map.entryFor((K) key, equiv);
+	}
+
+	@Override
+	QSet<? extends MultiQEntry<K, V>> entrySet();
+
+	/**
+	 * <p>
+	 * A default implementation of {@link #entrySet()}.
+	 * </p>
+	 * <p>
+	 * No {@link MultiQMap} implementation may use the default implementations for its {@link #keySet()}, {@link #get(Object)}, and
+	 * {@link #entrySet()} methods. {@link #defaultEntrySet(MultiQMap)} may not be used in the same implementation as
+	 * {@link #defaultKeySet(MultiQMap)} or {@link #defaultGet(MultiQMap, Object)}. Either {@link #entrySet()} or both {@link #keySet()} and
+	 * {@link #get(Object)} must be custom. If an implementation supplies custom {@link #keySet()} and {@link #get(Object)} implementations,
+	 * it may use {@link #defaultEntrySet(MultiQMap)} for its {@link #entrySet()} . If an implementation supplies a custom
+	 * {@link #entrySet()} implementation, it may use {@link #defaultKeySet(MultiQMap)} and {@link #defaultGet(MultiQMap, Object)} for its
+	 * {@link #keySet()} and {@link #get(Object)} implementations, respectively. Using default implementations for both will result in
+	 * infinite loops.
+	 * </p>
+	 *
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param map The map to create an entry set for
+	 * @return An entry set for the map
+	 */
+	public static <K, V> QSet<? extends MultiQEntry<K, V>> defaultEntrySet(MultiQMap<K, V> map) {
+		TypeToken<MultiQEntry<K, V>> entryType = new TypeToken<MultiQEntry<K, V>>() {}//
+			.where(new TypeParameter<K>() {}, map.getKeyType())//
+			.where(new TypeParameter<V>() {}, map.getValueType());
+		return map.keySet().mapEquivalent(entryType, map::entryFor, null);
+	}
 
 	@Override
 	default Qollection<V> values() {
 		return Qollection.flatten(entrySet());
 	}
-
-	@Override
-	QSet<? extends MultiQEntry<K, V>> entrySet();
 
 	@Override
 	default boolean add(K key, V value) {
@@ -197,111 +303,6 @@ public interface MultiQMap<K, V> extends TransactableMultiMap<K, V> {
 			}
 		}
 		return new UniqueMap();
-	}
-
-	/**
-	 * <p>
-	 * A default implementation of {@link #keySet()}.
-	 * </p>
-	 * <p>
-	 * No {@link MultiQMap} implementation may use the default implementations for its {@link #keySet()}, {@link #get(Object)}, and
-	 * {@link #entrySet()} methods. {@link #defaultEntrySet(MultiQMap)} may not be used in the same implementation as
-	 * {@link #defaultKeySet(MultiQMap)} or {@link #defaultGet(MultiQMap, Object)}. Either {@link #entrySet()} or both {@link #keySet()} and
-	 * {@link #get(Object)} must be custom. If an implementation supplies custom {@link #keySet()} and {@link #get(Object)} implementations,
-	 * it may use {@link #defaultEntrySet(MultiQMap)} for its {@link #entrySet()} . If an implementation supplies a custom
-	 * {@link #entrySet()} implementation, it may use {@link #defaultKeySet(MultiQMap)} and {@link #defaultGet(MultiQMap, Object)} for its
-	 * {@link #keySet()} and {@link #get(Object)} implementations, respectively. Using default implementations for both will result in
-	 * infinite loops.
-	 * </p>
-	 *
-	 * @param <K> The key type of the map
-	 * @param <V> The value type of the map
-	 * @param map The map to create a key set for
-	 * @return A key set for the map
-	 */
-	public static <K, V> QSet<K> defaultKeySet(MultiQMap<K, V> map) {
-		return QSet.unique(map.entrySet().map(MultiQEntry::getKey));
-	}
-
-	/**
-	 * <p>
-	 * A default implementation of {@link #get(Object)}.
-	 * </p>
-	 * <p>
-	 * No {@link MultiQMap} implementation may use the default implementations for its {@link #keySet()}, {@link #get(Object)}, and
-	 * {@link #entrySet()} methods. {@link #defaultEntrySet(MultiQMap)} may not be used in the same implementation as
-	 * {@link #defaultKeySet(MultiQMap)} or {@link #defaultGet(MultiQMap, Object)}. Either {@link #entrySet()} or both {@link #keySet()} and
-	 * {@link #get(Object)} must be custom. If an implementation supplies custom {@link #keySet()} and {@link #get(Object)} implementations,
-	 * it may use {@link #defaultEntrySet(MultiQMap)} for its {@link #entrySet()} . If an implementation supplies a custom
-	 * {@link #entrySet()} implementation, it may use {@link #defaultKeySet(MultiQMap)} and {@link #defaultGet(MultiQMap, Object)} for its
-	 * {@link #keySet()} and {@link #get(Object)} implementations, respectively. Using default implementations for both will result in
-	 * infinite loops.
-	 * </p>
-	 *
-	 * @param <K> The key type of the map
-	 * @param <V> The value type of the map
-	 * @param map The map to create an entry set for
-	 * @param key The key to get the value collection for
-	 * @return A key set for the map
-	 */
-	public static <K, V> Qollection<V> defaultGet(MultiQMap<K, V> map, Object key) {
-		if (key != null && !map.getKeyType().isAssignableFrom(key.getClass()))
-			return QList.constant(map.getValueType());
-
-		QSet<? extends MultiQEntry<K, V>> entries = map.entrySet();
-		class KeyEntry extends Qollection.ConstantQollection<Object> implements MultiEntry<Object, Object> {
-			KeyEntry() {
-				super(TypeToken.of(Object.class), Collections.emptyList());
-			}
-
-			@Override
-			public Object getKey() {
-				return key;
-			}
-
-			@Override
-			public int hashCode() {
-				return Objects.hashCode(key);
-			}
-
-			@Override
-			public boolean equals(Object obj) {
-				return obj instanceof MultiEntry && Objects.equals(((MultiEntry<?, ?>) obj).getKey(), key);
-			}
-
-			@Override
-			public String toString() {
-				return String.valueOf(key);
-			}
-		}
-		KeyEntry keyEntry = new KeyEntry();
-
-		org.qommons.value.Value<? extends MultiQEntry<K, V>> equiv = entries.equivalent(keyEntry);
-		return map.entryFor((K) key, equiv);
-	}
-
-	/**
-	 * <p>
-	 * A default implementation of {@link #entrySet()}.
-	 * </p>
-	 * <p>
-	 * No {@link MultiQMap} implementation may use the default implementations for its {@link #keySet()}, {@link #get(Object)}, and
-	 * {@link #entrySet()} methods. {@link #defaultEntrySet(MultiQMap)} may not be used in the same implementation as
-	 * {@link #defaultKeySet(MultiQMap)} or {@link #defaultGet(MultiQMap, Object)}. Either {@link #entrySet()} or both {@link #keySet()} and
-	 * {@link #get(Object)} must be custom. If an implementation supplies custom {@link #keySet()} and {@link #get(Object)} implementations,
-	 * it may use {@link #defaultEntrySet(MultiQMap)} for its {@link #entrySet()} . If an implementation supplies a custom
-	 * {@link #entrySet()} implementation, it may use {@link #defaultKeySet(MultiQMap)} and {@link #defaultGet(MultiQMap, Object)} for its
-	 * {@link #keySet()} and {@link #get(Object)} implementations, respectively. Using default implementations for both will result in
-	 * infinite loops.
-	 * </p>
-	 *
-	 * @param <K> The key type of the map
-	 * @param <V> The value type of the map
-	 * @param map The map to create an entry set for
-	 * @return An entry set for the map
-	 */
-	public static <K, V> QSet<? extends MultiQEntry<K, V>> defaultEntrySet(MultiQMap<K, V> map) {
-		return QSet.unique(map.keySet().map(map::entryFor));
 	}
 
 	/**

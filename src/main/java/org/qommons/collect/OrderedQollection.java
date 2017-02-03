@@ -42,6 +42,15 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		return new OrderedCollectionFinder<>(this, value -> true, false);
 	}
 
+	/** @return The last value in this collection, or null if the collection is empty */
+	default E last() {
+		Object[] returned = new Object[1];
+		if (spliterator().tryAdvance(v -> returned[0] = v))
+			return (E) returned[0];
+		else
+			return null;
+	}
+
 	// Ordered collections need to know the indexes of their elements in a somewhat efficient way, so these index methods make sense here
 
 	/**

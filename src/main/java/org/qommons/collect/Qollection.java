@@ -2,14 +2,9 @@ package org.qommons.collect;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
+import java.util.function.*;
 import java.util.stream.Collectors;
 
-import org.observe.Subscription;
-import org.observe.collect.ObservableElement;
 import org.qommons.IterableUtils;
 import org.qommons.Transaction;
 import org.qommons.collect.MultiMap.MultiEntry;
@@ -41,10 +36,14 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	@Override
 	default boolean contains(Object o) {
 		try (Transaction t = lock(false, null)) {
-			for (Object value : this)
-				if (Objects.equals(value, o))
-					return true;
-			return false;
+			Quiterator<E> iter = spliterator();
+			boolean[] found = new boolean[1];
+			while (!found[0] && iter.tryAdvance(v -> {
+				if (Objects.equals(v, o))
+					found[0] = true;
+			})) {
+			}
+			return found[0];
 		}
 	}
 
@@ -55,13 +54,20 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		ArrayList<Object> copy = new ArrayList<>(c);
 		BitSet found = new BitSet(copy.size());
 		try (Transaction t = lock(false, null)) {
-			Iterator<E> iter = iterator();
-			while (iter.hasNext()) {
-				E next = iter.next();
+			Quiterator<E> iter = spliterator();
+			boolean[] foundOne = new boolean[1];
+			while (iter.tryAdvance(next -> {
 				int stop = found.previousClearBit(copy.size());
 				for (int i = found.nextClearBit(0); i < stop; i = found.nextClearBit(i + 1))
-					if (Objects.equals(next, copy.get(i)))
+					if (Objects.equals(next, copy.get(i))) {
 						found.set(i);
+						foundOne[0] = true;
+					}
+			})) {
+				if (foundOne[0] && found.cardinality() == copy.size()) {
+					break;
+				}
+				foundOne[0] = false;
 			}
 			return found.cardinality() == copy.size();
 		}
@@ -69,10 +75,10 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 	@Override
 	default E[] toArray() {
-		ArrayList<E> ret = new ArrayList<>();
+		ArrayList<E> ret;
 		try (Transaction t = lock(false, null)) {
-			for (E value : this)
-				ret.add(value);
+			ret = new ArrayList<>(size());
+			spliterator().forEachRemaining(v -> ret.add(v));
 		}
 
 		return ret.toArray((E[]) java.lang.reflect.Array.newInstance(getType().wrap().getRawType(), ret.size()));
@@ -80,10 +86,10 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 	@Override
 	default <T> T[] toArray(T[] a) {
-		ArrayList<E> ret = new ArrayList<>();
+		ArrayList<E> ret;
 		try (Transaction t = lock(false, null)) {
-			for (E value : this)
-				ret.add(value);
+			ret = new ArrayList<>();
+			spliterator().forEachRemaining(v -> ret.add(v));
 		}
 		return ret.toArray(a);
 	}
@@ -257,6 +263,139 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	}
 
 	/**
+	 * @param <T> The type of the argument value
+	 * @param <V> The type of the new observable collection
+	 * @param arg The value to combine with each of this collection's elements
+	 * @param func The combination function to apply to this collection's elements and the given value
+	 * @return An observable collection containing this collection's elements combined with the given argument
+	 */
+	default <T, V> Qollection<V> combine(Value<T> arg, BiFunction<? super E, ? super T, V> func) {
+		return combine(arg, (TypeToken<V>) TypeToken.of(func.getClass()).resolveType(BiFunction.class.getTypeParameters()[2]), func);
+	}
+
+	/**
+	 * @param <T> The type of the argument value
+	 * @param <V> The type of the new observable collection
+	 * @param arg The value to combine with each of this collection's elements
+	 * @param type The type for the new collection
+	 * @param func The combination function to apply to this collection's elements and the given value
+	 * @return An observable collection containing this collection's elements combined with the given argument
+	 */
+	default <T, V> Qollection<V> combine(Value<T> arg, TypeToken<V> type, BiFunction<? super E, ? super T, V> func) {
+		return combine(arg, type, func, null);
+	}
+
+	/**
+	 * @param <T> The type of the argument value
+	 * @param <V> The type of the new observable collection
+	 * @param arg The value to combine with each of this collection's elements
+	 * @param type The type for the new collection
+	 * @param func The combination function to apply to this collection's elements and the given value
+	 * @param reverse The reverse function if addition support is desired for the combined collection
+	 * @return An observable collection containing this collection's elements combined with the given argument
+	 */
+	default <T, V> Qollection<V> combine(Value<T> arg, TypeToken<V> type, BiFunction<? super E, ? super T, V> func,
+		BiFunction<? super V, ? super T, E> reverse) {
+		return new CombinedQollection<>(this, type, arg, func, reverse);
+	}
+
+	/**
+	 * Equivalent to {@link #reduce(Object, BiFunction, BiFunction)} with null for the remove function
+	 *
+	 * @param <T> The type of the reduced value
+	 * @param init The seed value before the reduction
+	 * @param reducer The reducer function to accumulate the values. Must be associative.
+	 * @return The reduced value
+	 */
+	default <T> Value<T> reduce(T init, BiFunction<? super T, ? super E, T> reducer) {
+		return reduce(init, reducer, null);
+	}
+
+	/**
+	 * Equivalent to {@link #reduce(TypeToken, Object, BiFunction, BiFunction)} using the type derived from the reducer's return type
+	 *
+	 * @param <T> The type of the reduced value
+	 * @param init The seed value before the reduction
+	 * @param add The reducer function to accumulate the values. Must be associative.
+	 * @param remove The de-reducer function to handle removal or replacement of values. This may be null, in which case removal or
+	 *        replacement of values will result in the entire collection being iterated over for each subscription. Null here will have no
+	 *        consequence if the result is never observed. Must be associative.
+	 * @return The reduced value
+	 */
+	default <T> Value<T> reduce(T init, BiFunction<? super T, ? super E, T> add, BiFunction<? super T, ? super E, T> remove) {
+		return reduce((TypeToken<T>) TypeToken.of(add.getClass()).resolveType(BiFunction.class.getTypeParameters()[2]), init, add, remove);
+	}
+
+	/**
+	 * Reduces all values in this collection to a single value
+	 *
+	 * @param <T> The compile-time type of the reduced value
+	 * @param type The run-time type of the reduced value
+	 * @param init The seed value before the reduction
+	 * @param add The reducer function to accumulate the values. Must be associative.
+	 * @param remove The de-reducer function to handle removal or replacement of values. This may be null, in which case removal or
+	 *        replacement of values will result in the entire collection being iterated over for each subscription. Null here will have no
+	 *        consequence if the result is never observed. Must be associative.
+	 * @return The reduced value
+	 */
+	default <T> Value<T> reduce(TypeToken<T> type, T init, BiFunction<? super T, ? super E, T> add,
+		BiFunction<? super T, ? super E, T> remove) {
+		return new Value<T>() {
+			@Override
+			public TypeToken<T> getType() {
+				return type;
+			}
+
+			@Override
+			public T get() {
+				T ret = init;
+				for (E element : Qollection.this)
+					ret = add.apply(ret, element);
+				return ret;
+			}
+
+			@Override
+			public String toString() {
+				return "reduce " + Qollection.this;
+			}
+		};
+	}
+
+	/**
+	 * @param compare The comparator to use to compare this collection's values
+	 * @return An observable value containing the minimum of the values, by the given comparator
+	 */
+	default Value<E> minBy(Comparator<? super E> compare) {
+		return reduce(getType(), null, (v1, v2) -> {
+			if (v1 == null)
+				return v2;
+			else if (v2 == null)
+				return v1;
+			else if (compare.compare(v1, v2) <= 0)
+				return v1;
+			else
+				return v2;
+		}, null);
+	}
+
+	/**
+	 * @param compare The comparator to use to compare this collection's values
+	 * @return An observable value containing the maximum of the values, by the given comparator
+	 */
+	default Value<E> maxBy(Comparator<? super E> compare) {
+		return reduce(getType(), null, (v1, v2) -> {
+			if (v1 == null)
+				return v2;
+			else if (v2 == null)
+				return v1;
+			else if (compare.compare(v1, v2) >= 0)
+				return v1;
+			else
+				return v2;
+		}, null);
+	}
+
+	/**
 	 * @param <K> The type of the key
 	 * @param keyMap The mapping function to group this collection's values by
 	 * @return A multi-map containing each of this collection's elements, each in the collection of the value mapped by the given function
@@ -285,7 +424,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 * @return A sorted multi-map containing each of this collection's elements, each in the collection of the value mapped by the given
 	 *         function applied to the element
 	 */
-	default <K> MultiSortedQMap<K, E> groupBy(Function<E, K> keyMap, Comparator<? super K> compare) {
+	default <K> SortedMultiQMap<K, E> groupBy(Function<E, K> keyMap, Comparator<? super K> compare) {
 		return groupBy(null, keyMap, compare);
 	}
 
@@ -294,7 +433,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 * @return A sorted multi-map containing each of this collection's elements, each in the collection of one value that it matches
 	 *         according to the comparator
 	 */
-	default MultiSortedQMap<E, E> groupBy(Comparator<? super E> compare) {
+	default SortedMultiQMap<E, E> groupBy(Comparator<? super E> compare) {
 		return groupBy(getType(), null, compare);
 	}
 
@@ -308,7 +447,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 * @return A sorted multi-map containing each of this collection's elements, each in the collection of the value mapped by the given
 	 *         function applied to the element
 	 */
-	default <K> MultiSortedQMap<K, E> groupBy(TypeToken<K> keyType, Function<E, K> keyMap, Comparator<? super K> compare) {
+	default <K> SortedMultiQMap<K, E> groupBy(TypeToken<K> keyType, Function<E, K> keyMap, Comparator<? super K> compare) {
 		return new GroupedSortedMultiMap<>(this, keyMap, keyType, compare);
 	}
 
@@ -888,6 +1027,206 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				};
 
 			});
+		}
+
+		@Override
+		public String toString() {
+			return Qollection.toString(this);
+		}
+	}
+
+	/**
+	 * Implements {@link Qollection#combine(Value, BiFunction)}
+	 *
+	 * @param <E> The type of the collection to be combined
+	 * @param <T> The type of the value to combine the collection elements with
+	 * @param <V> The type of the combined collection
+	 */
+	class CombinedQollection<E, T, V> implements PartialQollectionImpl<V> {
+		private final Qollection<E> theWrapped;
+
+		private final TypeToken<V> theType;
+		private final Value<T> theValue;
+		private final BiFunction<? super E, ? super T, V> theMap;
+		private final BiFunction<? super V, ? super T, E> theReverse;
+
+		protected CombinedQollection(Qollection<E> wrap, TypeToken<V> type, Value<T> value,
+			BiFunction<? super E, ? super T, V> map, BiFunction<? super V, ? super T, E> reverse) {
+			theWrapped = wrap;
+			theType = type;
+			theValue = value;
+			theMap = map;
+			theReverse = reverse;
+		}
+
+		protected Qollection<E> getWrapped() {
+			return theWrapped;
+		}
+
+		protected Value<T> getValue() {
+			return theValue;
+		}
+
+		protected BiFunction<? super E, ? super T, V> getMap() {
+			return theMap;
+		}
+
+		protected BiFunction<? super V, ? super T, E> getReverse() {
+			return theReverse;
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return theWrapped.lock(write, cause);
+		}
+
+		@Override
+		public TypeToken<V> getType() {
+			return theType;
+		}
+
+		@Override
+		public int size() {
+			return theWrapped.size();
+		}
+
+		@Override
+		public boolean add(V e) {
+			if (theReverse == null)
+				throw new UnsupportedOperationException("Add is not enabled for this collection");
+			else
+				return theWrapped.add(theReverse.apply(e, theValue.get()));
+		}
+
+		@Override
+		public boolean addAll(Collection<? extends V> c) {
+			if (theReverse == null)
+				throw new UnsupportedOperationException("Add is not enabled for this collection");
+			else {
+				T combineValue = theValue.get();
+				return theWrapped.addAll(c.stream().map(o -> theReverse.apply(o, combineValue)).collect(Collectors.toList()));
+			}
+		}
+
+		@Override
+		public boolean remove(Object o) {
+			try (Transaction t = lock(true, null)) {
+				T combineValue = theValue.get();
+				Iterator<E> iter = theWrapped.iterator();
+				while (iter.hasNext()) {
+					E el = iter.next();
+					if (Objects.equals(getMap().apply(el, combineValue), o)) {
+						iter.remove();
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+		@Override
+		public boolean removeAll(Collection<?> c) {
+			boolean ret = false;
+			try (Transaction t = lock(true, null)) {
+				T combineValue = theValue.get();
+				Iterator<E> iter = theWrapped.iterator();
+				while (iter.hasNext()) {
+					E el = iter.next();
+					if (c.contains(getMap().apply(el, combineValue))) {
+						iter.remove();
+						ret = true;
+					}
+				}
+			}
+			return ret;
+		}
+
+		@Override
+		public boolean retainAll(Collection<?> c) {
+			boolean ret = false;
+			try (Transaction t = lock(true, null)) {
+				T combineValue = theValue.get();
+				Iterator<E> iter = theWrapped.iterator();
+				while (iter.hasNext()) {
+					E el = iter.next();
+					if (!c.contains(getMap().apply(el, combineValue))) {
+						iter.remove();
+						ret = true;
+					}
+				}
+			}
+			return ret;
+		}
+
+		@Override
+		public void clear() {
+			getWrapped().clear();
+		}
+
+		@Override
+		public String canRemove(Object value) {
+			if (theReverse != null && (value == null || theType.getRawType().isInstance(value)))
+				return theWrapped.canRemove(theReverse.apply((V) value, theValue.get()));
+			else
+				return "remove(Object) is not supported for this collection";
+		}
+
+		@Override
+		public String canAdd(V value) {
+			if (theReverse != null)
+				return theWrapped.canAdd(theReverse.apply(value, theValue.get()));
+			else
+				return "Addition is not supported for this collection";
+		}
+
+		@Override
+		public Quiterator<V> spliterator() {
+			Supplier<Function<CollectionElement<? extends E>, CollectionElement<V>>> elementMap = () -> {
+				CollectionElement<? extends E>[] container = new CollectionElement[1];
+				WrappingElement<E, V> wrapper = new WrappingElement<E, V>(getType(), container) {
+					@Override
+					public V get() {
+						return theMap.apply(getWrapped().get(), theValue.get());
+					}
+
+					@Override
+					public <V2 extends V> String isAcceptable(V2 value) {
+						if (theReverse == null)
+							return "Replacement is not supported for this collection";
+						E reverse = theReverse.apply(value, theValue.get());
+						return ((CollectionElement<E>) getWrapped()).isAcceptable(reverse);
+					}
+
+					@Override
+					public <V2 extends V> V set(V2 value, Object cause) throws IllegalArgumentException {
+						if (theReverse == null)
+							throw new IllegalArgumentException("Replacement is not supported for this collection");
+						E reverse = theReverse.apply(value, theValue.get());
+						return theMap.apply(((CollectionElement<E>) getWrapped()).set(reverse, cause), theValue.get());
+					}
+
+					@Override
+					public String canAdd(V toAdd) {
+						if (theReverse == null)
+							return "Addition is not supported for this collection";
+						E reverse = theReverse.apply(toAdd, theValue.get());
+						return ((CollectionElement<E>) getWrapped()).canAdd(reverse);
+					}
+
+					@Override
+					public void add(V toAdd) throws IllegalArgumentException {
+						if (theReverse == null)
+							throw new IllegalArgumentException("Addition is not supported for this collection");
+						E reverse = theReverse.apply(toAdd, theValue.get());
+						((CollectionElement<E>) getWrapped()).add(reverse);
+					}
+				};
+				return el -> {
+					container[0] = el;
+					return wrapper;
+				};
+			};
+			return new WrappingQuiterator<>(theWrapped.spliterator(), elementMap);
 		}
 
 		@Override
@@ -1949,11 +2288,6 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public Iterator<E> iterator() {
-			return (Iterator<E>) IterableUtils.flatten(theOuter).iterator();
-		}
-
-		@Override
 		public String canRemove(Object value) {
 			return "Removal is not enabled for this collection";
 		}
@@ -2036,6 +2370,13 @@ public interface Qollection<E> extends TransactableCollection<E> {
 							return false;
 					}
 					return true;
+				}
+
+				@Override
+				public void forEachElement(Consumer<? super CollectionElement<E>> action) {
+					try (Transaction t = lock(true, null)) {
+						Quiterator.super.forEachElement(action);
+					}
 				}
 
 				@Override
