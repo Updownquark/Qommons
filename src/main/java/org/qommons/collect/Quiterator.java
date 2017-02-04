@@ -15,9 +15,6 @@ public interface Quiterator<T> extends Spliterator<T> {
 	interface CollectionElement<T> extends Settable<T> {
 		String canRemove();
 		void remove() throws IllegalArgumentException;
-
-		String canAdd(T toAdd);
-		void add(T toAdd) throws IllegalArgumentException;
 	}
 
 	/**
@@ -75,22 +72,6 @@ public interface Quiterator<T> extends Spliterator<T> {
 					@Override
 					public V get() {
 						return map.apply(getWrapped().get());
-					}
-
-					@Override
-					public String canAdd(V toAdd) {
-						if (reverse == null)
-							return "Addition is not enabled for this collection";
-						T reversed = reverse.apply(toAdd);
-						return ((CollectionElement<T>) getWrapped()).canAdd(reversed);
-					}
-
-					@Override
-					public void add(V toAdd) throws IllegalArgumentException {
-						if (reverse == null)
-							throw new IllegalArgumentException("Addition is not enabled for this collection");
-						T reversed = reverse.apply(toAdd);
-						((CollectionElement<T>) getWrapped()).add(reversed);
 					}
 
 					@Override

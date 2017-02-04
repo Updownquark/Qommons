@@ -22,7 +22,7 @@ public interface SortedMultiQMap<K, V> extends MultiQMap<K, V> {
 	}
 
 	@Override
-	default SortedQSet<K> keySet();
+	SortedQSet<K> keySet();
 
 	/**
 	 * <p>
@@ -45,14 +45,11 @@ public interface SortedMultiQMap<K, V> extends MultiQMap<K, V> {
 	 * @return A key set for the map
 	 */
 	public static <K, V> SortedQSet<K> defaultKeySet(SortedMultiQMap<K, V> map) {
-		return map.entrySet().mapEquivalent(map.getKeyType(), MultiQEntry::getKey, null);
+		return map.entrySet().mapEquivalent(map.getKeyType(), MultiQEntry::getKey, map.comparator());
 	}
 
 	@Override
-	default SortedQSet<? extends SortedMultiQEntry<K, V>> entrySet() {
-		// TODO Auto-generated method stub
-		return null;
-	}
+	SortedQSet<? extends SortedMultiQEntry<K, V>> entrySet();
 
 	/**
 	 * <p>
@@ -121,7 +118,6 @@ public interface SortedMultiQMap<K, V> extends MultiQMap<K, V> {
 	@Override
 	default SortedQMap<K, V> unique() {
 		// TODO Auto-generated method stub
-		return MultiQMap.super.unique();
 	}
 
 	@Override

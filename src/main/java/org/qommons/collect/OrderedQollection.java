@@ -1,16 +1,24 @@
 package org.qommons.collect;
 
-import java.util.Iterator;
-import java.util.Objects;
+import java.util.*;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import org.qommons.Transaction;
+import org.qommons.collect.Quiterator.CollectionElement;
 import org.qommons.value.Value;
 
-public interface OrderedQollection<E> extends Qollection<E> {
-	@Override
-	IndexedQuiterator<E> spliterator();
+import com.google.common.reflect.TypeToken;
 
+/**
+ * A Qollection that has a further contract that all its elements are ordered for {@link Iterator iteration} and {@link Spliterator
+ * spliteration}
+ * 
+ * @param <E> The type of elements in the collection
+ */
+public interface OrderedQollection<E> extends Qollection<E> {
 	/**
 	 * @param filter The filter function
 	 * @return The first value in this collection passing the filter, or null if none of this collection's elements pass
@@ -34,7 +42,7 @@ public interface OrderedQollection<E> extends Qollection<E> {
 
 	/**
 	 * Finds the last value in this list. The get() method of this observable may have linear time unless this is an instance of
-	 * {@link ObservableRandomAccessList}
+	 * {@link RandomAccess}
 	 *
 	 * @return The last value in this collection, or null if this collection is empty
 	 */
@@ -98,6 +106,475 @@ public interface OrderedQollection<E> extends Qollection<E> {
 					ret = i;
 			}
 			return ret;
+		}
+	}
+
+	@Override
+	default <T> OrderedQollection<T> map(Function<? super E, T> map) {
+		return (OrderedQollection<T>) Qollection.super.map(map);
+	}
+
+	@Override
+	default <T> OrderedQollection<T> map(TypeToken<T> type, Function<? super E, ? extends T> map) {
+		return (OrderedQollection<T>) Qollection.super.map(type, map);
+	}
+
+	@Override
+	default <T> OrderedQollection<T> map(TypeToken<T> type, Function<? super E, ? extends T> map,
+		Function<? super T, ? extends E> reverse) {
+		return map(type, map, reverse, false);
+	}
+
+	@Override
+	default <T> OrderedQollection<T> map(TypeToken<T> type, Function<? super E, ? extends T> map, Function<? super T, ? extends E> reverse,
+		boolean mapNulls) {
+		return new MappedOrderedQollection<>(this, type, map, reverse, mapNulls);
+	}
+
+	@Override
+	default OrderedQollection<E> filter(Function<? super E, String> filter) {
+		return (OrderedQollection<E>) Qollection.super.filter(filter);
+	}
+
+	@Override
+	default <T> OrderedQollection<T> filter(Class<T> type) {
+		return (OrderedQollection<T>) Qollection.super.filter(type);
+	}
+
+	@Override
+	default <T> OrderedQollection<T> filterMap(Function<? super E, T> filterMap) {
+		return (OrderedQollection<T>) Qollection.super.filterMap(filterMap);
+	}
+
+	@Override
+	default <T> OrderedQollection<T> filterMap(TypeToken<T> type, Function<? super E, ? extends T> map,
+		Function<? super T, ? extends E> reverse) {
+		return (OrderedQollection<T>) Qollection.super.filterMap(type, map, reverse);
+	}
+
+	@Override
+	default <T> OrderedQollection<T> filterMap2(TypeToken<T> type, Function<? super E, FilterMapResult<? extends T>> map,
+		Function<? super T, ? extends E> reverse) {
+		return new FilterMappedOrderedQollection<>(this, type, map, reverse);
+	}
+
+	@Override
+	default <T, V> OrderedQollection<V> combine(Value<T> arg, BiFunction<? super E, ? super T, V> func) {
+		return (OrderedQollection<V>) Qollection.super.combine(arg, func);
+	}
+
+	@Override
+	default <T, V> OrderedQollection<V> combine(Value<T> arg, TypeToken<V> type, BiFunction<? super E, ? super T, V> func) {
+		return (OrderedQollection<V>) Qollection.super.combine(arg, type, func);
+	}
+
+	@Override
+	default <T, V> OrderedQollection<V> combine(Value<T> arg, TypeToken<V> type, BiFunction<? super E, ? super T, V> func,
+		BiFunction<? super V, ? super T, E> reverse) {
+		return new CombinedOrderedQollection<>(this, arg, type, func, reverse);
+	}
+
+	@Override
+	default <K> MultiQMap<K, E> groupBy(TypeToken<K> keyType, Function<E, K> keyMap) {
+		return new GroupedOrderedMultiMap<>(this, keyMap, keyType);
+	}
+
+	/**
+	 * @param compare The comparator to use to sort this collection's elements
+	 * @return A new collection containing all the same elements as this collection, but ordered according to the given comparator
+	 */
+	default OrderedQollection<E> sorted(Comparator<? super E> compare) {
+		return new SortedObservableCollection<>(this, compare);
+	}
+
+	@Override
+	default OrderedQollection<E> immutable() {
+		return new ImmutableOrderedCollection<>(this);
+	}
+
+	@Override
+	default OrderedQollection<E> filterRemove(Function<? super E, String> filter) {
+		return (OrderedQollection<E>) Qollection.super.filterRemove(filter);
+	}
+
+	@Override
+	default OrderedQollection<E> noRemove() {
+		return (OrderedQollection<E>) Qollection.super.noRemove();
+	}
+
+	@Override
+	default OrderedQollection<E> filterAdd(Function<? super E, String> filter) {
+		return (OrderedQollection<E>) Qollection.super.filterAdd(filter);
+	}
+
+	@Override
+	default OrderedQollection<E> noAdd() {
+		return (OrderedQollection<E>) Qollection.super.noAdd();
+	}
+
+	@Override
+	default OrderedQollection<E> filterModification(Function<? super E, String> removeFilter, Function<? super E, String> addFilter) {
+		return new ModFilteredOrderedQollection<>(this, removeFilter, addFilter);
+	}
+
+	/**
+	 * Turns a collection of observable values into a collection composed of those holders' values
+	 *
+	 * @param <E> The type of elements held in the values
+	 * @param collection The collection to flatten
+	 * @return The flattened collection
+	 */
+	public static <E> OrderedQollection<E> flattenValues(OrderedQollection<? extends Value<? extends E>> collection) {
+		return new FlattenedOrderedValuesCollection<>(collection);
+	}
+
+	/**
+	 * Turns an observable value containing an observable collection into the contents of the value
+	 * 
+	 * @param <E> The type of values in the flattened collection
+	 * @param collectionObservable The observable value
+	 * @return A collection representing the contents of the value, or a zero-length collection when null
+	 */
+	public static <E> OrderedQollection<E> flattenValue(Value<? extends OrderedQollection<E>> collectionObservable) {
+		return new FlattenedOrderedValueCollection<>(collectionObservable);
+	}
+
+	/**
+	 * Flattens a collection of ordered collections
+	 *
+	 * @param <E> The super-type of all collections in the wrapping collection
+	 * @param list The collection to flatten
+	 * @return A collection containing all elements of all collections in the outer collection
+	 */
+	public static <E> OrderedQollection<E> flatten(OrderedQollection<? extends OrderedQollection<E>> list) {
+		return new FlattenedOrderedCollection<>(list);
+	}
+
+	/**
+	 * Finds something in an {@link OrderedQollection}
+	 *
+	 * @param <E> The type of value to find
+	 */
+	class OrderedCollectionFinder<E> implements Value<E> {
+		private final OrderedQollection<E> theCollection;
+
+		private final TypeToken<E> theType;
+
+		private final Predicate<? super E> theFilter;
+
+		private final boolean isForward;
+
+		OrderedCollectionFinder(OrderedQollection<E> collection, Predicate<? super E> filter, boolean forward) {
+			theCollection = collection;
+			theType = theCollection.getType().wrap();
+			theFilter = filter;
+			isForward = forward;
+		}
+
+		/** @return The collection that this finder searches */
+		public OrderedQollection<E> getCollection() {
+			return theCollection;
+		}
+
+		/** @return The function to test elements with */
+		public Predicate<? super E> getFilter() {
+			return theFilter;
+		}
+
+		/** @return Whether this finder searches forward or backward in the collection */
+		public boolean isForward() {
+			return isForward;
+		}
+
+		@Override
+		public TypeToken<E> getType() {
+			return theType;
+		}
+
+		@Override
+		public E get() {
+			if (isForward) {
+				for (E element : theCollection) {
+					if (theFilter.test(element))
+						return element;
+				}
+				return null;
+			} else {
+				E ret = null;
+				for (E element : theCollection) {
+					if (theFilter.test(element))
+						ret = element;
+				}
+				return ret;
+			}
+		}
+	}
+
+	/**
+	 * Implements {@link OrderedQollection#map(Function)}
+	 *
+	 * @param <E> The type of the collection to map
+	 * @param <T> The type of the mapped collection
+	 */
+	class MappedOrderedQollection<E, T> extends MappedQollection<E, T> implements OrderedQollection<T> {
+		protected MappedOrderedQollection(OrderedQollection<E> wrap, TypeToken<T> type, Function<? super E, ? extends T> map,
+			Function<? super T, ? extends E> reverse, boolean mapNulls) {
+			super(wrap, type, map, reverse, mapNulls);
+		}
+	}
+
+	/**
+	 * Implements {@link OrderedQollection#filterMap(Function)}
+	 *
+	 * @param <E> The type of the collection to be filter-mapped
+	 * @param <T> The type of the mapped collection
+	 */
+	class FilterMappedOrderedQollection<E, T> extends FilterMappedQollection<E, T> implements OrderedQollection<T> {
+		FilterMappedOrderedQollection(OrderedQollection<E> wrap, TypeToken<T> type, Function<? super E, FilterMapResult<? extends T>> map,
+			Function<? super T, ? extends E> reverse) {
+			super(wrap, type, map, reverse);
+		}
+
+		@Override
+		protected OrderedQollection<E> getWrapped() {
+			return (OrderedQollection<E>) super.getWrapped();
+		}
+	}
+
+	/**
+	 * Implements {@link OrderedQollection#combine(Value, BiFunction)}
+	 *
+	 * @param <E> The type of the collection to be combined
+	 * @param <T> The type of the value to combine the collection elements with
+	 * @param <V> The type of the combined collection
+	 */
+	class CombinedOrderedQollection<E, T, V> extends CombinedQollection<E, T, V> implements OrderedQollection<V> {
+		CombinedOrderedQollection(OrderedQollection<E> collection, Value<T> value, TypeToken<V> type,
+			BiFunction<? super E, ? super T, V> map, BiFunction<? super V, ? super T, E> reverse) {
+			super(collection, type, value, map, reverse);
+		}
+
+		@Override
+		protected OrderedQollection<E> getWrapped() {
+			return (OrderedQollection<E>) super.getWrapped();
+		}
+	}
+
+	/**
+	 * Implements {@link OrderedQollection#groupBy(Function)}
+	 *
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
+	class GroupedOrderedMultiMap<K, V> extends GroupedMultiMap<K, V> {
+		public GroupedOrderedMultiMap(OrderedQollection<V> wrap, Function<V, K> keyMap, TypeToken<K> keyType) {
+			super(wrap, keyMap, keyType);
+		}
+
+		@Override
+		protected QSet<K> unique(Qollection<K> keyCollection) {
+			return OrderedQSet.unique((OrderedQollection<K>) keyCollection);
+		}
+	}
+
+	/**
+	 * Implements {@link OrderedQollection#sorted(Comparator)}
+	 *
+	 * @param <E> The type of the elements in the collection
+	 */
+	class SortedObservableCollection<E> implements PartialQollectionImpl<E>, OrderedQollection<E> {
+		private final OrderedQollection<E> theWrapped;
+		private final Comparator<? super E> theCompare;
+
+		public SortedObservableCollection(OrderedQollection<E> wrap, Comparator<? super E> compare) {
+			theWrapped = wrap;
+			theCompare = compare;
+		}
+
+		@Override
+		public TypeToken<E> getType() {
+			return theWrapped.getType();
+		}
+
+		/** @return The comparator sorting this collection's elements */
+		public Comparator<? super E> comparator() {
+			return theCompare;
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return theWrapped.lock(write, cause);
+		}
+
+		@Override
+		public int size() {
+			return theWrapped.size();
+		}
+
+		@Override
+		public String canRemove(Object value) {
+			return theWrapped.canRemove(value);
+		}
+
+		@Override
+		public String canAdd(E value) {
+			return theWrapped.canAdd(value);
+		}
+
+		@Override
+		public Quiterator<E> spliterator() {
+			// TODO Any way to do this better?
+			ArrayList<E> sorted;
+
+			try (Transaction t = theWrapped.lock(true, null)) {
+				sorted = new ArrayList<>(theWrapped.size());
+				sorted.addAll(theWrapped);
+			}
+			Collections.sort(sorted, theCompare);
+			Supplier<Function<E, CollectionElement<E>>> elementMap = () -> {
+				Object[] value = new Object[1];
+				CollectionElement<E> element = new CollectionElement<E>() {
+					@Override
+					public TypeToken<E> getType() {
+						return theWrapped.getType();
+					}
+
+					@Override
+					public E get() {
+						return (E) value[0];
+					}
+
+					@Override
+					public Value<String> isEnabled() {
+						return Value.constant("Replacement is not enabled for this collection");
+					}
+
+					@Override
+					public <V extends E> String isAcceptable(V value2) {
+						// Logically this would be allowable if value2 is comparably equivalent to this value, but there's not replacement
+						// mechanism
+						return "Replacement is not enabled for this collection";
+					}
+
+					@Override
+					public <V extends E> E set(V value2, Object cause) throws IllegalArgumentException {
+						throw new IllegalArgumentException("Replacement is not enabled for this collection");
+					}
+
+					@Override
+					public String canRemove() {
+						if (theWrapped.indexOf(value[0]) == theWrapped.lastIndexOf(value[0]))
+							return theWrapped.canRemove(value[0]);
+						else
+							// If there are more than one copy of this value, there's no way to tell if the collection would let us remove
+							// them all
+							return "More than one of this value is present in the collection";
+					}
+
+					@Override
+					public void remove() throws IllegalArgumentException {
+						do {
+							theWrapped.remove(value[0]);
+						} while (theWrapped.contains(value[0]));
+					}
+				};
+				return v -> {
+					value[0] = v;
+					return element;
+				};
+			};
+			return new Quiterator.SimpleQuiterator<E, E>(sorted.spliterator(), elementMap) {};
+		}
+
+		@Override
+		public String toString() {
+			return Qollection.toString(this);
+		}
+	}
+
+	/**
+	 * An observable ordered collection that cannot be modified directly, but reflects the value of a wrapped collection as it changes
+	 *
+	 * @param <E> The type of elements in the collection
+	 */
+	class ImmutableOrderedCollection<E> extends ImmutableQollection<E> implements OrderedQollection<E> {
+		protected ImmutableOrderedCollection(OrderedQollection<E> wrap) {
+			super(wrap);
+		}
+
+		@Override
+		protected OrderedQollection<E> getWrapped() {
+			return (OrderedQollection<E>) super.getWrapped();
+		}
+
+		@Override
+		public ImmutableOrderedCollection<E> immutable() {
+			return this;
+		}
+	}
+
+	/**
+	 * Implements {@link OrderedQollection#filterModification(Function, Function)}
+	 *
+	 * @param <E> The type of elements in the collection
+	 */
+	class ModFilteredOrderedQollection<E> extends ModFilteredQollection<E> implements OrderedQollection<E> {
+		public ModFilteredOrderedQollection(OrderedQollection<E> wrapped, Function<? super E, String> removeFilter,
+			Function<? super E, String> addFilter) {
+			super(wrapped, removeFilter, addFilter);
+		}
+
+		@Override
+		protected OrderedQollection<E> getWrapped() {
+			return (OrderedQollection<E>) super.getWrapped();
+		}
+	}
+
+	/**
+	 * Implements {@link OrderedQollection#flattenValues(OrderedQollection)}
+	 *
+	 * @param <E> The type of elements in the collection
+	 */
+	class FlattenedOrderedValuesCollection<E> extends FlattenedValuesQollection<E> implements OrderedQollection<E> {
+		protected FlattenedOrderedValuesCollection(OrderedQollection<? extends Value<? extends E>> collection) {
+			super(collection);
+		}
+
+		@Override
+		protected OrderedQollection<? extends Value<? extends E>> getWrapped() {
+			return (OrderedQollection<? extends Value<? extends E>>) super.getWrapped();
+		}
+	}
+
+	/**
+	 * Implements {@link OrderedQollection#flattenValue(Value)}
+	 *
+	 * @param <E> The type of elements in the collection
+	 */
+	class FlattenedOrderedValueCollection<E> extends FlattenedValueQollection<E> implements OrderedQollection<E> {
+		public FlattenedOrderedValueCollection(Value<? extends OrderedQollection<E>> collectionObservable) {
+			super(collectionObservable);
+		}
+
+		@Override
+		protected Value<? extends OrderedQollection<E>> getWrapped() {
+			return (Value<? extends OrderedQollection<E>>) super.getWrapped();
+		}
+	}
+
+	/**
+	 * Implements {@link OrderedQollection#flatten(OrderedQollection)}
+	 *
+	 * @param <E> The type of the collection
+	 */
+	class FlattenedOrderedCollection<E> extends FlattenedQollection<E> implements OrderedQollection<E> {
+		protected FlattenedOrderedCollection(OrderedQollection<? extends OrderedQollection<? extends E>> outer) {
+			super(outer);
+		}
+
+		@Override
+		protected OrderedQollection<? extends OrderedQollection<? extends E>> getOuter() {
+			return (OrderedQollection<? extends OrderedQollection<? extends E>>) super.getOuter();
 		}
 	}
 }

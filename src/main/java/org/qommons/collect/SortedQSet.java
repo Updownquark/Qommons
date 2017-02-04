@@ -1,6 +1,11 @@
 package org.qommons.collect;
 
+import java.util.Comparator;
+import java.util.function.Function;
+
 import org.qommons.value.Value;
+
+import com.google.common.reflect.TypeToken;
 
 public interface SortedQSet<E> extends QSet<E>, TransactableSortedSet<E> {
 	/**
@@ -49,6 +54,12 @@ public interface SortedQSet<E> extends QSet<E>, TransactableSortedSet<E> {
 	@Override
 	default E higher(E e) {
 		return relative(e, true, false).get();
+	}
+
+	default <T> SortedQSet<T> mapEquivalent(TypeToken<T> type, Function<? super E, ? extends T> map, Comparator<? super T> comparator) {}
+
+	static <K> SortedQSet<K> unique(Qollection<K> keyCollection, Comparator<? super K> compare) {
+		// TODO Auto-generated method stub
 	}
 
 }
