@@ -18,7 +18,7 @@ public interface ReversibleCollection<E> extends Collection<E> {
 	}
 
 	/**
-	 * Implements {@link ObservableReversibleCollection#reverse()}
+	 * Implements {@link ReversibleCollection#reverse()}
 	 *
 	 * @param <E> The type of elements in the collection
 	 */
