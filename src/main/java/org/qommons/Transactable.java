@@ -1,6 +1,11 @@
 package org.qommons;
 
-/** Represents a mutable object whose modifications can be batched for increased efficiency */
+/**
+ * Represents a mutable object whose modifications may possibly be batched for increased efficiency.
+ * 
+ * Some interfaces may extend this interface, but support implementations that do not support locking. Hence the {@link #isLockSupported()}.
+ * Such implementations should return a {@link Transaction#NONE none} transaction or some such non-null transaction.
+ */
 public interface Transactable {
 	/**
 	 * Begins a transaction in which inspections and/or modifications to this object may be batched and combined for increased efficiency.
@@ -11,4 +16,9 @@ public interface Transactable {
 	 * @return The transaction to close when calling code is finished accessing or modifying this object
 	 */
 	Transaction lock(boolean write, Object cause);
+
+	/** @return Whether this object actually support locking */
+	default boolean isLockSupported() {
+		return true;
+	}
 }
