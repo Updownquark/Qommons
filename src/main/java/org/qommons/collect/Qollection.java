@@ -9,6 +9,7 @@ import java.util.stream.Stream;
 import org.qommons.IterableUtils;
 import org.qommons.Transaction;
 import org.qommons.collect.MultiMap.MultiEntry;
+import org.qommons.collect.Qollection.MappedQollectionBuilder;
 import org.qommons.collect.Quiterator.CollectionElement;
 import org.qommons.collect.Quiterator.WrappingElement;
 import org.qommons.collect.Quiterator.WrappingQuiterator;
@@ -766,21 +767,24 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 * Builds a filtered and/or mapped collection
 	 * 
 	 * @param <E> The type of values in the source collection
+	 * @param <I> Intermediate type
 	 * @param <T> The type of values in the mapped collection
 	 */
-	class MappedQollectionBuilder<E, T> {
+	class MappedQollectionBuilder<E, I, T> {
 		private final Qollection<E> theWrapped;
+		private final MappedQollectionBuilder<E, ?, I> theParent;
 		private final TypeToken<T> theType;
-		private Function<? super E, String> theFilter;
+		private Function<? super I, String> theFilter;
 		private boolean areNullsFiltered;
-		private Function<? super E, ? extends T> theMap;
+		private Function<? super I, ? extends T> theMap;
 		private boolean areNullsMapped;
-		private Function<? super T, ? extends E> theReverse;
+		private Function<? super T, ? extends I> theReverse;
 		private boolean areNullsReversed;
 		private boolean withNullResults;
 
-		protected MappedQollectionBuilder(Qollection<E> wrapped, TypeToken<T> type) {
+		protected MappedQollectionBuilder(Qollection<E> wrapped, MappedQollectionBuilder<E, ?, I> parent, TypeToken<T> type) {
 			theWrapped = wrapped;
+			theParent = parent;
 			theType = type;
 			withNullResults = true;
 		}
@@ -789,38 +793,44 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			return (TypeToken<T>) TypeToken.of(fn.getClass()).resolveType(Function.class.getTypeParameters()[1]);
 		}
 
-		public MappedQollectionBuilder<E, T> filter(Function<? super E, String> filter, boolean filterNulls) {
+		public MappedQollectionBuilder<E, I, T> filter(Function<? super I, String> filter, boolean filterNulls) {
 			theFilter = filter;
 			areNullsFiltered = filterNulls;
 			return this;
 		}
 
-		public MappedQollectionBuilder<E, T> notNull() {
+		public MappedQollectionBuilder<E, I, T> notNull() {
 			withNullResults = false;
 			return this;
 		}
 
-		public MappedQollectionBuilder<E, T> map(Function<? super E, ? extends T> map, boolean mapNulls) {
+		public MappedQollectionBuilder<E, I, T> map(Function<? super I, ? extends T> map, boolean mapNulls) {
 			theMap = map;
 			areNullsMapped = mapNulls;
 			return this;
 		}
 
-		public MappedQollectionBuilder<E, T> withReverse(Function<? super T, ? extends E> reverse, boolean reverseNulls) {
+		public MappedQollectionBuilder<E, I, T> withReverse(Function<? super T, ? extends I> reverse, boolean reverseNulls) {
 			theReverse = reverse;
 			areNullsReversed = reverseNulls;
 			return this;
 		}
 
-		public FilterMapDef<E, T> toDef() {
-			return new FilterMapDef<>(theWrapped.getType(), theType, theFilter, areNullsFiltered, theMap, areNullsMapped, theReverse,
-				areNullsReversed, withNullResults);
+		public FilterMapDef<E, I, T> toDef() {
+			FilterMapDef<E, ?, I> parent = theParent == null ? null : theParent.toDef();
+			TypeToken<I> intermediate = parent == null ? (TypeToken<I>) theWrapped.getType() : parent.destType;
+			return new FilterMapDef<>(theWrapped.getType(), intermediate, theType, parent, theFilter, areNullsFiltered, theMap,
+				areNullsMapped, theReverse, areNullsReversed, withNullResults);
 		}
 
 		public Qollection<T> build() {
 			if (theMap == null && !theWrapped.getType().equals(theType))
 				throw new IllegalStateException("Building a type-mapped collection with no map defined");
 			return theWrapped.filterMap(toDef());
+		}
+
+		public <X> MappedQollectionBuilder<E, T, X> andThen(TypeToken<X> nextType) {
+			return new MappedQollectionBuilder<>(theWrapped, this, nextType);
 		}
 	}
 
@@ -830,22 +840,26 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 * @param <E> The type of values in the source collection
 	 * @param <T> The type of values for the mapped collection
 	 */
-	class FilterMapDef<E, T> {
+	class FilterMapDef<E, I, T> {
 		public final TypeToken<E> sourceType;
-		public final TypeToken<T> type;
-		public final Function<? super E, String> filter;
-		public final boolean filterNulls;
-		public final Function<? super E, ? extends T> map;
-		public final boolean mapNulls;
-		public final Function<? super T, ? extends E> reverse;
-		public final boolean reverseNulls;
-		public final boolean withNullResults;
+		private final TypeToken<I> intermediateType;
+		public final TypeToken<T> destType;
+		private final FilterMapDef<E, ?, I> parent;
+		private final Function<? super I, String> filter;
+		private final boolean filterNulls;
+		private final Function<? super I, ? extends T> map;
+		private final boolean mapNulls;
+		private final Function<? super T, ? extends I> reverse;
+		private final boolean reverseNulls;
+		private final boolean withNullResults;
 
-		public FilterMapDef(TypeToken<E> sourceType, TypeToken<T> type, Function<? super E, String> filter, boolean filterNulls,
-			Function<? super E, ? extends T> map, boolean mapNulls, Function<? super T, ? extends E> reverse, boolean reverseNulls,
-			boolean withNullResults) {
+		public FilterMapDef(TypeToken<E> sourceType, TypeToken<I> intermediateType, TypeToken<T> type, FilterMapDef<E, ?, I> parent,
+			Function<? super I, String> filter, boolean filterNulls, Function<? super I, ? extends T> map, boolean mapNulls,
+			Function<? super T, ? extends I> reverse, boolean reverseNulls, boolean withNullResults) {
 			this.sourceType = sourceType;
-			this.type = type;
+			this.intermediateType = intermediateType;
+			this.destType = type;
+			this.parent = parent;
 			this.filter = filter;
 			this.filterNulls = filterNulls;
 			this.map = map;
@@ -855,52 +869,98 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			this.withNullResults = withNullResults;
 		}
 
-		public T map(E value) {
-			if (map == null)
-				return (T) value;
-			else if (value != null || mapNulls) {
-				T mapped = map.apply(value);
-				if (mapped != null && type.getRawType().isInstance(mapped))
+		public FilterMapResult<E, T> map(FilterMapResult<E, T> result) {
+			// Get the starting point for this def
+			I start;
+			if (parent != null) {
+				start = parent.map((FilterMapResult<E, I>) result).result;
+				if (result.error != null)
+					return result;
+				if (start != null && !intermediateType.getRawType().isInstance(start))
 					throw new IllegalStateException(
-						value + " -> " + mapped + ": Result (type " + mapped.getClass().getName() + " does not match type " + type);
-				return mapped;
-			} else
-				return null;
-		}
+						"Implementation error: intermediate value " + start + " is not an instance of " + intermediateType);
+			} else {
+				start = (I) result.source;
+				if (start != null && !intermediateType.getRawType().isInstance(start))
+					throw new IllegalStateException("Source value " + start + " is not an instance of " + intermediateType);
+			}
+			if (result.error != null) {
+				result.result = null;
+				return result;
+			}
 
-		public E reverse(T value) {
+			// Filter
+			if (filter != null) {
+				if (!filterNulls && start == null)
+					result.error = "Null source not allowed";
+				else
+					result.error = filter.apply(start);
+				if (result.error != null) {
+					result.result = null;
+					return result;
+				}
+			}
+
+			// Map
 			if (map == null)
-				return (E) value;
-			else if (reverse == null)
-				throw new IllegalStateException("No reverse implemented");
-			else if (value != null || reverseNulls) {
-				E reversed = reverse.apply(value);
-				if (reversed != null && sourceType.getRawType().isInstance(reversed))
-					throw new IllegalStateException(value + " -> " + reversed + ": Reversed value (type " + reversed.getClass().getName()
-						+ " does not match source type " + sourceType);
-				return reversed;
-			} else
-				return null;
+				result.result = (T) start;
+			else if (start == null && !mapNulls)
+				result.result = null;
+			else
+				result.result = map.apply(start);
+
+			// Check result
+			if (result.result == null && !withNullResults)
+				result.error = "Null values are not allowed";
+
+			return result;
 		}
 
 		public boolean isReversible() {
 			return map == null || reverse != null;
 		}
 
-		public boolean isAllowed(E value) {
-			return filter(value) == null;
-		}
-
-		public String filter(E value) {
-			if (value == null && !filterNulls)
-				return "Null values are not allowed";
-			if (filter != null) {
-				String msg = filter.apply(value);
-				if (msg != null)
-					return msg;
+		public FilterMapResult<T, E> reverse(FilterMapResult<T, E> result) {
+			if (!isReversible())
+				throw new IllegalStateException("This filter map is not reversible");
+			// Check starting point
+			if (result.source == null && !withNullResults) {
+				result.error = "Null values not allowed";
+				return result;
 			}
-			return null;
+
+			// map
+			I interm;
+			if (map == null)
+				interm = (I) result.source;
+			else
+				interm = reverse.apply(result.source);
+
+			// Filter
+			if (filter != null) {
+				if (!filterNulls && interm == null)
+					result.error = "Null source not allowed";
+				else
+					result.error = filter.apply(interm);
+				if (result.error != null) {
+					result.result = null;
+					return result;
+				}
+			}
+
+			if (parent != null) {
+				((FilterMapResult<I, E>) result).source = interm;
+				parent.reverse((FilterMapResult<I, E>) result);
+			} else
+				result.result = (E) interm;
+			return result;
 		}
+	}
+
+	class FilterMapResult<E, T> {
+		E source;
+		T result;
+		String error;
 	}
 
 	/**

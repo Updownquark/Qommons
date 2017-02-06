@@ -110,25 +110,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	}
 
 	@Override
-	default <T> OrderedQollection<T> map(Function<? super E, T> map) {
-		return (OrderedQollection<T>) Qollection.super.map(map);
-	}
-
-	@Override
-	default <T> OrderedQollection<T> map(TypeToken<T> type, Function<? super E, ? extends T> map) {
-		return (OrderedQollection<T>) Qollection.super.map(type, map);
-	}
-
-	@Override
-	default <T> OrderedQollection<T> map(TypeToken<T> type, Function<? super E, ? extends T> map,
-		Function<? super T, ? extends E> reverse) {
-		return map(type, map, reverse, false);
-	}
-
-	@Override
-	default <T> OrderedQollection<T> map(TypeToken<T> type, Function<? super E, ? extends T> map, Function<? super T, ? extends E> reverse,
-		boolean mapNulls) {
-		return new MappedOrderedQollection<>(this, type, map, reverse, mapNulls);
+	default <T> Qollection<T> filterMap(FilterMapDef<E, T> filterMap) {
+		return new FilterMappedOrderedQollection<>(this, filterMap);
 	}
 
 	@Override
@@ -142,20 +125,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	}
 
 	@Override
-	default <T> OrderedQollection<T> filterMap(Function<? super E, T> filterMap) {
-		return (OrderedQollection<T>) Qollection.super.filterMap(filterMap);
-	}
-
-	@Override
-	default <T> OrderedQollection<T> filterMap(TypeToken<T> type, Function<? super E, ? extends T> map,
-		Function<? super T, ? extends E> reverse) {
-		return (OrderedQollection<T>) Qollection.super.filterMap(type, map, reverse);
-	}
-
-	@Override
-	default <T> OrderedQollection<T> filterMap2(TypeToken<T> type, Function<? super E, FilterMapResult<? extends T>> map,
-		Function<? super T, ? extends E> reverse) {
-		return new FilterMappedOrderedQollection<>(this, type, map, reverse);
+	default <T> OrderedQollection<T> map(Function<? super E, T> map) {
+		return (OrderedQollection<T>) Qollection.super.map(map);
 	}
 
 	@Override
@@ -311,28 +282,14 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	}
 
 	/**
-	 * Implements {@link OrderedQollection#map(Function)}
-	 *
-	 * @param <E> The type of the collection to map
-	 * @param <T> The type of the mapped collection
-	 */
-	class MappedOrderedQollection<E, T> extends MappedQollection<E, T> implements OrderedQollection<T> {
-		protected MappedOrderedQollection(OrderedQollection<E> wrap, TypeToken<T> type, Function<? super E, ? extends T> map,
-			Function<? super T, ? extends E> reverse, boolean mapNulls) {
-			super(wrap, type, map, reverse, mapNulls);
-		}
-	}
-
-	/**
-	 * Implements {@link OrderedQollection#filterMap(Function)}
+	 * Implements {@link OrderedQollection#filterMap(FilterMapDef)}
 	 *
 	 * @param <E> The type of the collection to be filter-mapped
 	 * @param <T> The type of the mapped collection
 	 */
 	class FilterMappedOrderedQollection<E, T> extends FilterMappedQollection<E, T> implements OrderedQollection<T> {
-		FilterMappedOrderedQollection(OrderedQollection<E> wrap, TypeToken<T> type, Function<? super E, FilterMapResult<? extends T>> map,
-			Function<? super T, ? extends E> reverse) {
-			super(wrap, type, map, reverse);
+		FilterMappedOrderedQollection(OrderedQollection<E> wrap, FilterMapDef<E, T> def) {
+			super(wrap, def);
 		}
 
 		@Override

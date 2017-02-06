@@ -58,13 +58,24 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 		return Qollection.super.toArray(a);
 	}
 
+	@Override
+	default <T> MappedSetOrQollectionBuilder<E, T> buildMap(TypeToken<T> type) {
+		return new MappedSetOrQollectionBuilder<>(this, type);
+	}
+
+	@Override
+	default <T> Qollection<T> filterMap(FilterMapDef<E, T> filterMap) {
+		// TODO Auto-generated method stub
+		return Qollection.super.filterMap(filterMap);
+	}
+
 	/**
 	 * @param filter The filter function
 	 * @return A collection containing all non-null elements passing the given test
 	 */
 	@Override
 	default QSet<E> filter(Function<? super E, String> filter) {
-		return new FilteredSet<>(this, getType(), filter);
+		return (QSet<E>) Qollection.super.filter(filter);
 	}
 
 	/**
@@ -364,6 +375,12 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 					return value;
 			}
 			return null;
+		}
+	}
+
+	class MappedSetOrQollectionBuilder<E, T> extends MappedQollectionBuilder<E, T> {
+		public MappedSetOrQollectionBuilder(QSet<E> wrapped, TypeToken<T> type) {
+			super(wrapped, type);
 		}
 	}
 
