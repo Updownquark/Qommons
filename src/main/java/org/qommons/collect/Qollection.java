@@ -9,7 +9,6 @@ import java.util.stream.Stream;
 import org.qommons.IterableUtils;
 import org.qommons.Transaction;
 import org.qommons.collect.MultiMap.MultiEntry;
-import org.qommons.collect.Qollection.MappedQollectionBuilder;
 import org.qommons.collect.Quiterator.CollectionElement;
 import org.qommons.collect.Quiterator.WrappingElement;
 import org.qommons.collect.Quiterator.WrappingQuiterator;
@@ -33,7 +32,7 @@ import com.google.common.reflect.TypeToken;
  * instead of<br />
  * &nbsp;&nbsp;&nbsp;&nbsp;<code>coll.stream().map(Function).collect(Collectors.toList())</code>.</li>
  * <li><b>Modification Control</b> The {@link #filterAdd(Function)} and {@link #filterRemove(Function)} methods create collections that
- * forbid certain types of modifications to a collection. The {@link #immutable()} prevents any API modification at all.</li>
+ * forbid certain types of modifications to a collection. The {@link #immutable(String)} prevents any API modification at all.</li>
  * <li><b>Quiterator</b> Qollections must implement {@link #spliterator()}, which returns a {@link Quiterator}, which is an enhanced
  * {@link Spliterator}. This had potential for the improved performance associated with using {@link Spliterator} instead of
  * {@link Iterator} as well as the utility added by {@link Quiterator}.</li>
@@ -47,6 +46,16 @@ import com.google.common.reflect.TypeToken;
  * @param <E> The type of elements in this collection
  */
 public interface Qollection<E> extends TransactableCollection<E> {
+	/** Standard messages returned by this class */
+	interface StdMsg {
+		static String BAD_TYPE = "Object is the wrong type for this collection";
+		static String UNSUPPORTED_OPERATION = "Unsupported Operation";
+		static String NULL_DISALLOWED = "Null is not allowed";
+		static String GROUP_EXISTS = "Group already exists";
+		static String WRONG_GROUP = "Item does not belong to this group";
+		static String NOT_FOUND = "No such item found";
+	}
+
 	/** @return The run-time type of elements in this collection */
 	TypeToken<E> getType();
 
@@ -194,8 +203,8 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 * @param type The run-time type of values to map to
 	 * @return A builder to customize the filter/mapped collection
 	 */
-	default <T> MappedQollectionBuilder<E, T> buildMap(TypeToken<T> type) {
-		return new MappedQollectionBuilder<>(this, type);
+	default <T> MappedQollectionBuilder<E, E, T> buildMap(TypeToken<T> type) {
+		return new MappedQollectionBuilder<>(this, null, type);
 	}
 
 	/**
@@ -205,7 +214,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 * @param filterMap The definition for the filter/mapping
 	 * @return The filter/mapped collection
 	 */
-	default <T> Qollection<T> filterMap(FilterMapDef<E, T> filterMap) {
+	default <T> Qollection<T> filterMap(FilterMapDef<E, ?, T> filterMap) {
 		return new FilterMappedQollection<>(this, filterMap);
 	}
 
@@ -237,7 +246,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			if (type == null || type.isInstance(value))
 				return null;
 			else
-				return value.getClass().getName() + " is not an instance of " + type.getName();
+				return StdMsg.BAD_TYPE;
 		}, true).build();
 	}
 
@@ -451,9 +460,12 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		return new GroupedSortedMultiMap<>(this, keyMap, keyType, compare);
 	}
 
-	/** @return An observable collection that cannot be modified directly but reflects the value of this collection as it changes */
-	default Qollection<E> immutable() {
-		return new ImmutableQollection<>(this);
+	/**
+	 * @param modMsg The message to return when modification is requested
+	 * @return An observable collection that cannot be modified directly but reflects the value of this collection as it changes
+	 */
+	default Qollection<E> immutable(String modMsg) {
+		return new ImmutableQollection<>(this, modMsg);
 	}
 
 	/**
@@ -468,13 +480,12 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 	/**
 	 * Creates a wrapper collection for which removals are rejected with an {@link IllegalStateException}
-	 *
+	 * 
+	 * @param removeMsg The message to return when removal is requested
 	 * @return The removal-disabled collection
 	 */
-	default Qollection<E> noRemove() {
-		return filterModification(value -> {
-			throw new IllegalStateException("This collection does not allow removal");
-		}, null);
+	default Qollection<E> noRemove(String removeMsg) {
+		return filterModification(value -> removeMsg, null);
 	}
 
 	/**
@@ -489,13 +500,12 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 	/**
 	 * Creates a wrapper collection for which additions are rejected with an {@link IllegalStateException}
-	 *
+	 * 
+	 * @param addMsg The message to return when addition is requested
 	 * @return The addition-disabled collection
 	 */
-	default Qollection<E> noAdd() {
-		return filterModification(null, value -> {
-			throw new IllegalStateException("This collection does not allow addition");
-		});
+	default Qollection<E> noAdd(String addMsg) {
+		return filterModification(null, value -> addMsg);
 	}
 
 	/**
@@ -780,13 +790,11 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		private boolean areNullsMapped;
 		private Function<? super T, ? extends I> theReverse;
 		private boolean areNullsReversed;
-		private boolean withNullResults;
 
 		protected MappedQollectionBuilder(Qollection<E> wrapped, MappedQollectionBuilder<E, ?, I> parent, TypeToken<T> type) {
 			theWrapped = wrapped;
 			theParent = parent;
 			theType = type;
-			withNullResults = true;
 		}
 
 		static <T> TypeToken<T> returnType(Function<?, ? extends T> fn) {
@@ -796,11 +804,6 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		public MappedQollectionBuilder<E, I, T> filter(Function<? super I, String> filter, boolean filterNulls) {
 			theFilter = filter;
 			areNullsFiltered = filterNulls;
-			return this;
-		}
-
-		public MappedQollectionBuilder<E, I, T> notNull() {
-			withNullResults = false;
 			return this;
 		}
 
@@ -820,7 +823,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			FilterMapDef<E, ?, I> parent = theParent == null ? null : theParent.toDef();
 			TypeToken<I> intermediate = parent == null ? (TypeToken<I>) theWrapped.getType() : parent.destType;
 			return new FilterMapDef<>(theWrapped.getType(), intermediate, theType, parent, theFilter, areNullsFiltered, theMap,
-				areNullsMapped, theReverse, areNullsReversed, withNullResults);
+				areNullsMapped, theReverse, areNullsReversed);
 		}
 
 		public Qollection<T> build() {
@@ -838,6 +841,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 * A definition for a filter/mapped collection
 	 * 
 	 * @param <E> The type of values in the source collection
+	 * @param <I> Intermediate type, not exposed
 	 * @param <T> The type of values for the mapped collection
 	 */
 	class FilterMapDef<E, I, T> {
@@ -851,11 +855,10 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		private final boolean mapNulls;
 		private final Function<? super T, ? extends I> reverse;
 		private final boolean reverseNulls;
-		private final boolean withNullResults;
 
 		public FilterMapDef(TypeToken<E> sourceType, TypeToken<I> intermediateType, TypeToken<T> type, FilterMapDef<E, ?, I> parent,
 			Function<? super I, String> filter, boolean filterNulls, Function<? super I, ? extends T> map, boolean mapNulls,
-			Function<? super T, ? extends I> reverse, boolean reverseNulls, boolean withNullResults) {
+			Function<? super T, ? extends I> reverse, boolean reverseNulls) {
 			this.sourceType = sourceType;
 			this.intermediateType = intermediateType;
 			this.destType = type;
@@ -866,52 +869,75 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			this.mapNulls = mapNulls;
 			this.reverse = reverse;
 			this.reverseNulls = reverseNulls;
-			this.withNullResults = withNullResults;
+
+			if (parent == null && !sourceType.equals(intermediateType))
+				throw new IllegalArgumentException("A " + getClass().getName()
+					+ " with no parent must have identical source and intermediate types: " + sourceType + ", " + intermediateType);
 		}
 
-		public FilterMapResult<E, T> map(FilterMapResult<E, T> result) {
+		public boolean checkSourceType(Object value) {
+			return value == null || sourceType.getRawType().isInstance(value);
+		}
+
+		private boolean checkIntermediateType(I value) {
+			return value == null || intermediateType.getRawType().isInstance(value);
+		}
+
+		public boolean checkDestType(Object value) {
+			return value == null || destType.getRawType().isInstance(value);
+		}
+
+		public FilterMapResult<E, ?> checkSourceValue(FilterMapResult<E, ?> result) {
+			return internalCheckSourceValue((FilterMapResult<E, I>) result);
+		}
+
+		private FilterMapResult<E, I> internalCheckSourceValue(FilterMapResult<E, I> result) {
+			result.error = null;
+
 			// Get the starting point for this def
-			I start;
+			I interm;
 			if (parent != null) {
-				start = parent.map((FilterMapResult<E, I>) result).result;
+				interm = parent.map(result).result;
+				result.result = null;
 				if (result.error != null)
 					return result;
-				if (start != null && !intermediateType.getRawType().isInstance(start))
+				if (!checkIntermediateType(interm))
 					throw new IllegalStateException(
-						"Implementation error: intermediate value " + start + " is not an instance of " + intermediateType);
+						"Implementation error: intermediate value " + interm + " is not an instance of " + intermediateType);
 			} else {
-				start = (I) result.source;
-				if (start != null && !intermediateType.getRawType().isInstance(start))
-					throw new IllegalStateException("Source value " + start + " is not an instance of " + intermediateType);
+				interm = (I) result.source;
+				if (!checkIntermediateType(interm))
+					throw new IllegalStateException("Source value " + interm + " is not an instance of " + intermediateType);
 			}
 			if (result.error != null) {
-				result.result = null;
 				return result;
 			}
 
 			// Filter
 			if (filter != null) {
-				if (!filterNulls && start == null)
-					result.error = "Null source not allowed";
+				if (!filterNulls && interm == null)
+					result.error = StdMsg.NULL_DISALLOWED;
 				else
-					result.error = filter.apply(start);
-				if (result.error != null) {
-					result.result = null;
-					return result;
-				}
+					result.error = filter.apply(interm);
 			}
+
+			return result;
+		}
+
+		public FilterMapResult<E, T> map(FilterMapResult<E, T> result) {
+			internalCheckSourceValue((FilterMapResult<E, I>) result);
+			I interm = ((FilterMapResult<E, I>) result).result;
 
 			// Map
 			if (map == null)
-				result.result = (T) start;
-			else if (start == null && !mapNulls)
+				result.result = (T) interm;
+			else if (interm == null && !mapNulls)
 				result.result = null;
 			else
-				result.result = map.apply(start);
+				result.result = map.apply(interm);
 
-			// Check result
-			if (result.result == null && !withNullResults)
-				result.error = "Null values are not allowed";
+			if (result.result != null && !destType.getRawType().isInstance(result.result))
+				throw new IllegalStateException("Result value " + result.result + " is not an instance of " + destType);
 
 			return result;
 		}
@@ -923,30 +949,31 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		public FilterMapResult<T, E> reverse(FilterMapResult<T, E> result) {
 			if (!isReversible())
 				throw new IllegalStateException("This filter map is not reversible");
-			// Check starting point
-			if (result.source == null && !withNullResults) {
-				result.error = "Null values not allowed";
-				return result;
-			}
 
-			// map
+			result.error = null;
+
+			if (!checkDestType(result.source))
+				throw new IllegalStateException("Value to reverse " + result.source + " is not an instance of " + destType);
+			// reverse map
 			I interm;
 			if (map == null)
 				interm = (I) result.source;
-			else
+			else if (result.source != null || reverseNulls)
 				interm = reverse.apply(result.source);
+			else
+				interm = null;
+			if (!checkIntermediateType(interm))
+				throw new IllegalStateException("Reversed value " + interm + " is not an instance of " + intermediateType);
 
 			// Filter
 			if (filter != null) {
 				if (!filterNulls && interm == null)
-					result.error = "Null source not allowed";
+					result.error = StdMsg.NULL_DISALLOWED;
 				else
 					result.error = filter.apply(interm);
-				if (result.error != null) {
-					result.result = null;
-					return result;
-				}
 			}
+			if (result.error != null)
+				return result;
 
 			if (parent != null) {
 				((FilterMapResult<I, E>) result).source = interm;
@@ -957,10 +984,26 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 	}
 
+	/**
+	 * Used to query {@link Qollection.FilterMapDef}
+	 * 
+	 * @see Qollection.FilterMapDef#checkSourceValue(FilterMapResult)
+	 * @see Qollection.FilterMapDef#map(FilterMapResult)
+	 * @see Qollection.FilterMapDef#reverse(FilterMapResult)
+	 * 
+	 * @param <E> The source type
+	 * @param <T> The destination type
+	 */
 	class FilterMapResult<E, T> {
-		E source;
-		T result;
-		String error;
+		public E source;
+		public T result;
+		public String error;
+
+		public FilterMapResult() {}
+
+		public FilterMapResult(E src) {
+			source = src;
+		}
 	}
 
 	/**
@@ -971,9 +1014,9 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 */
 	class FilterMappedQollection<E, T> implements PartialQollectionImpl<T> {
 		private final Qollection<E> theWrapped;
-		private final FilterMapDef<E, T> theDef;
+		private final FilterMapDef<E, ?, T> theDef;
 
-		FilterMappedQollection(Qollection<E> wrap, FilterMapDef<E, T> filterMapDef) {
+		FilterMappedQollection(Qollection<E> wrap, FilterMapDef<E, ?, T> filterMapDef) {
 			theWrapped = wrap;
 			theDef = filterMapDef;
 		}
@@ -982,13 +1025,13 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			return theWrapped;
 		}
 
-		protected FilterMapDef<E, T> getDef() {
+		protected FilterMapDef<E, ?, T> getDef() {
 			return theDef;
 		}
 
 		@Override
 		public TypeToken<T> getType() {
-			return theDef.type;
+			return theDef.destType;
 		}
 
 		@Override
@@ -998,18 +1041,18 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public int size() {
-			if (theDef.filter == null && theDef.withNullResults)
+			if (theDef.filter == null)
 				return theWrapped.size();
 
-			int ret = 0;
-			for (E el : theWrapped) {
-				if (!theDef.isAllowed(el))
-					continue;
-				if (!theDef.withNullResults && theDef.map(el) == null)
-					continue;
-				ret++;
-			}
-			return ret;
+			int[] size = new int[1];
+			FilterMapResult<E, T> result = new FilterMapResult<>();
+			theWrapped.spliterator().forEachRemaining(v -> {
+				result.source = v;
+				theDef.checkSourceValue(result);
+				if (result.error == null)
+					size[0]++;
+			});
+			return size[0];
 		}
 
 		@Override
@@ -1019,27 +1062,28 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public boolean add(T e) {
-			if (!theDef.isReversible())
+			if (!theDef.isReversible() || !theDef.checkDestType(e))
 				return false;
-			if (!theDef.withNullResults && e == null)
+			FilterMapResult<T, E> reversed = theDef.reverse(new FilterMapResult<>(e));
+			if (reversed.error != null)
 				return false;
-			E reversed = theDef.reverse(e);
-			if (!theDef.isAllowed(reversed))
-				return false;
-			return theWrapped.add(reversed);
+			return theWrapped.add(reversed.result);
 		}
 
 		@Override
 		public boolean addAll(Collection<? extends T> c) {
 			if (!theDef.isReversible())
 				return false;
+			FilterMapResult<T, E> reversed = new FilterMapResult<>();
 			List<E> toAdd = c.stream().flatMap(v -> {
-				if (!theDef.withNullResults && v == null)
+				if (!theDef.checkDestType(v))
 					return Stream.empty();
-				E reversed = theDef.reverse(v);
-				if (!theDef.isAllowed(reversed))
+				reversed.source = v;
+				theDef.reverse(reversed);
+				if (reversed.error == null)
+					return Stream.of(reversed.result);
+				else
 					return Stream.empty();
-				return Stream.of(reversed);
 			}).collect(Collectors.toList());
 			if (toAdd.isEmpty())
 				return false;
@@ -1048,19 +1092,16 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public boolean remove(Object o) {
-			if (!theDef.withNullResults && o == null)
-				return false;
-			if (o != null && !theDef.type.getRawType().isInstance(o))
+			if (o != null && !theDef.checkDestType(o))
 				return false;
 			boolean[] found = new boolean[1];
 			if (theDef.isReversible()) {
-				E reversed = theDef.reverse((T) o);
-				if (!theDef.isAllowed(reversed))
+				FilterMapResult<T, E> reversed = theDef.reverse(new FilterMapResult<>((T) o));
+				if (reversed.error != null)
 					return false;
 				try (Transaction t = lock(true, null)) {
 					while (!found[0] && theWrapped.spliterator().tryAdvanceElement(el -> {
-						E v = el.get();
-						if (Objects.equals(v, reversed)) {
+						if (Objects.equals(el.get(), reversed.result)) {
 							found[0] = true;
 							el.remove();
 						}
@@ -1069,14 +1110,13 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				}
 			} else {
 				try (Transaction t = lock(true, null)) {
+					FilterMapResult<E, T> result = new FilterMapResult<>();
 					while (!found[0] && theWrapped.spliterator().tryAdvanceElement(el -> {
-						E v = el.get();
-						if (theDef.isAllowed(v)) {
-							T mapped = theDef.map(v);
-							if (Objects.equals(o, mapped)) {
-								found[0] = true;
-								el.remove();
-							}
+						result.source = el.get();
+						theDef.map(result);
+						if (result.error == null && Objects.equals(result.result, o)) {
+							found[0] = true;
+							el.remove();
 						}
 					})) {
 					}
@@ -1089,16 +1129,13 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		public boolean removeAll(Collection<?> c) {
 			boolean[] removed = new boolean[1];
 			try (Transaction t = lock(true, null)) {
+				FilterMapResult<E, T> result = new FilterMapResult<>();
 				theWrapped.spliterator().forEachElement(el -> {
-					E v = el.get();
-					if (theDef.isAllowed(v)) {
-						T mapped = theDef.map(v);
-						if (!theDef.withNullResults && mapped == null)
-							return;
-						if (c.contains(mapped)) {
-							el.remove();
-							removed[0] = true;
-						}
+					result.source = el.get();
+					theDef.map(result);
+					if (result.error == null && c.contains(result.result)) {
+						el.remove();
+						removed[0] = true;
 					}
 				});
 			}
@@ -1109,16 +1146,13 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		public boolean retainAll(Collection<?> c) {
 			boolean[] removed = new boolean[1];
 			try (Transaction t = lock(true, null)) {
+				FilterMapResult<E, T> result = new FilterMapResult<>();
 				theWrapped.spliterator().forEachElement(el -> {
-					E v = el.get();
-					if (theDef.isAllowed(v)) {
-						T mapped = theDef.map(v);
-						if (!theDef.withNullResults && mapped == null)
-							return;
-						if (!c.contains(mapped)) {
-							el.remove();
-							removed[0] = true;
-						}
+					result.source = el.get();
+					theDef.map(result);
+					if (result.error == null && !c.contains(result.result)) {
+						el.remove();
+						removed[0] = true;
 					}
 				});
 			}
@@ -1128,9 +1162,11 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		@Override
 		public void clear() {
 			try (Transaction t = lock(true, null)) {
+				FilterMapResult<E, T> result = new FilterMapResult<>();
 				theWrapped.spliterator().forEachElement(el -> {
-					E v = el.get();
-					if (theDef.isAllowed(v) && (theDef.withNullResults || theDef.map(v) != null))
+					result.source = el.get();
+					theDef.checkSourceValue(result);
+					if (result.error == null)
 						el.remove();
 				});
 			}
@@ -1139,81 +1175,69 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		@Override
 		public String canRemove(Object value) {
 			if (!theDef.isReversible())
-				return "Removal is not enabled for this collection";
-			else if (value != null && !theDef.type.getRawType().isInstance(value))
-				return "Value of type " + value.getClass().getName() + " cannot exist in a collection of type " + theDef.type;
-			else if (!theDef.withNullResults && value == null)
-				return "Null values are not allowed in this collection";
-			E reversed = theDef.reverse((T) value);
-			if (!theDef.isAllowed(reversed))
-				return "This value cannot belong to this collection";
-			return theWrapped.canRemove(reversed);
+				return StdMsg.UNSUPPORTED_OPERATION;
+			else if (!theDef.checkDestType(value))
+				return StdMsg.BAD_TYPE;
+			FilterMapResult<T, E> reversed = theDef.reverse(new FilterMapResult<>((T) value));
+			if (reversed.error != null)
+				return reversed.error;
+			return theWrapped.canRemove(reversed.result);
 		}
 
 		@Override
 		public String canAdd(T value) {
 			if (!theDef.isReversible())
-				return "Addition is not enabled for this collection";
-			else if (!theDef.withNullResults && value == null)
-				return "Null values are not allowed in this collection";
-			E reversed = theDef.reverse(value);
-			if (!theDef.isAllowed(reversed))
-				return "This value cannot belong to this collection";
-			else
-				return theWrapped.canAdd(reversed);
+				return StdMsg.UNSUPPORTED_OPERATION;
+			else if (!theDef.checkDestType(value))
+				return StdMsg.BAD_TYPE;
+			FilterMapResult<T, E> reversed = theDef.reverse(new FilterMapResult<>(value));
+			if (reversed.error != null)
+				return reversed.error;
+			return theWrapped.canAdd(reversed.result);
 		}
 
 		protected Quiterator<T> map(Quiterator<E> iter) {
 			return new WrappingQuiterator<>(iter, () -> {
 				CollectionElement<? extends E>[] container = new CollectionElement[1];
-				Object[] wrapped = new Object[1];
-				Object[] mapped = new Object[1];
+				FilterMapResult<E, T> mapped = new FilterMapResult<>();
 				WrappingElement<E, T> wrapperEl = new WrappingElement<E, T>(getType(), container) {
 					@Override
 					public T get() {
-						return (T) mapped[0];
+						return mapped.result;
 					}
 
 					@Override
 					public <V extends T> String isAcceptable(V value) {
 						if (!theDef.isReversible())
-							return "Replacement is not enabled for this collection";
-						else if (!theDef.withNullResults && value == null)
-							return "Null values are not allowed in this collection";
-						E reversed = theDef.reverse(value);
-						if (theDef.filter != null) {
-							String msg = theDef.filter.apply(reversed);
-							if (msg != null)
-								return msg;
-						}
-						return ((CollectionElement<E>) getWrapped()).isAcceptable(reversed);
+							return StdMsg.UNSUPPORTED_OPERATION;
+						else if (!theDef.checkDestType(value))
+							return StdMsg.BAD_TYPE;
+						FilterMapResult<T, E> reversed = theDef.reverse(new FilterMapResult<>(value));
+						if (reversed.error != null)
+							return reversed.error;
+						return ((CollectionElement<E>) getWrapped()).isAcceptable(reversed.result);
 					}
 
 					@Override
 					public <V extends T> T set(V value, Object cause) throws IllegalArgumentException {
 						if (!theDef.isReversible())
-							throw new IllegalArgumentException("Replacement is not enabled for this collection");
-						else if (!theDef.withNullResults && value == null)
-							throw new IllegalArgumentException("Null values are not allowed in this collection");
-						E reversed = theDef.reverse(value);
-						if (theDef.filter != null) {
-							String msg = theDef.filter.apply(reversed);
-							if (msg != null)
-								throw new IllegalArgumentException(msg);
-						}
-						((CollectionElement<E>) getWrapped()).set(reversed, cause);
-						T old = (T) mapped[0];
-						wrapped[0] = reversed;
-						mapped[0] = value;
+							throw new IllegalArgumentException(StdMsg.UNSUPPORTED_OPERATION);
+						else if (!theDef.checkDestType(value))
+							throw new IllegalArgumentException(StdMsg.BAD_TYPE);
+						FilterMapResult<T, E> reversed = theDef.reverse(new FilterMapResult<>(value));
+						if (reversed.error != null)
+							throw new IllegalArgumentException(reversed.error);
+						((CollectionElement<E>) getWrapped()).set(reversed.result, cause);
+						T old = mapped.result;
+						mapped.source = reversed.result;
+						mapped.result = value;
 						return old;
 					}
 				};
 				return el -> {
-					wrapped[0] = el.get();
-					if (!theDef.isAllowed((E) wrapped[0]))
-						return null;
-					mapped[0] = theDef.map((E) wrapped[0]);
-					if (!theDef.withNullResults && mapped[0] == null)
+					mapped.source = el.get();
+					theDef.map(mapped);
+					if (mapped.error != null)
 						return null;
 					container[0] = el;
 					return wrapperEl;
@@ -1285,7 +1309,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		@Override
 		public boolean add(V e) {
 			if (theReverse == null)
-				throw new UnsupportedOperationException("Add is not enabled for this collection");
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 			else
 				return theWrapped.add(theReverse.apply(e, theValue.get()));
 		}
@@ -1293,7 +1317,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		@Override
 		public boolean addAll(Collection<? extends V> c) {
 			if (theReverse == null)
-				throw new UnsupportedOperationException("Add is not enabled for this collection");
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 			else {
 				T combineValue = theValue.get();
 				return theWrapped.addAll(c.stream().map(o -> theReverse.apply(o, combineValue)).collect(Collectors.toList()));
@@ -1360,7 +1384,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			if (theReverse != null && (value == null || theType.getRawType().isInstance(value)))
 				return theWrapped.canRemove(theReverse.apply((V) value, theValue.get()));
 			else
-				return "remove(Object) is not supported for this collection";
+				return StdMsg.UNSUPPORTED_OPERATION;
 		}
 
 		@Override
@@ -1368,7 +1392,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			if (theReverse != null)
 				return theWrapped.canAdd(theReverse.apply(value, theValue.get()));
 			else
-				return "Addition is not supported for this collection";
+				return StdMsg.UNSUPPORTED_OPERATION;
 		}
 
 		@Override
@@ -1384,7 +1408,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					@Override
 					public <V2 extends V> String isAcceptable(V2 value) {
 						if (theReverse == null)
-							return "Replacement is not supported for this collection";
+							return StdMsg.UNSUPPORTED_OPERATION;
 						E reverse = theReverse.apply(value, theValue.get());
 						return ((CollectionElement<E>) getWrapped()).isAcceptable(reverse);
 					}
@@ -1392,7 +1416,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					@Override
 					public <V2 extends V> V set(V2 value, Object cause) throws IllegalArgumentException {
 						if (theReverse == null)
-							throw new IllegalArgumentException("Replacement is not supported for this collection");
+							throw new IllegalArgumentException(StdMsg.UNSUPPORTED_OPERATION);
 						E reverse = theReverse.apply(value, theValue.get());
 						return theMap.apply(((CollectionElement<E>) getWrapped()).set(reverse, cause), theValue.get());
 					}
@@ -1464,7 +1488,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public Qollection<E> get(Object key) {
-			return theWrapped.filter(el -> Objects.equals(theKeyMap.apply(el), key) ? null : "");
+			return theWrapped.filter(el -> Objects.equals(theKeyMap.apply(el), key) ? null : StdMsg.GROUP_EXISTS);
 		}
 
 		@Override
@@ -1495,7 +1519,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			theKey = key;
 			theKeyMap = keyMap;
 			theElements = wrap
-				.filter(el -> Objects.equals(theKey, theKeyMap.apply(el)) ? null : "This object does not belong in this grouping");
+				.filter(el -> Objects.equals(theKey, theKeyMap.apply(el)) ? null : StdMsg.WRONG_GROUP);
 		}
 
 		@Override
@@ -1645,7 +1669,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			if (!theKeyType.getRawType().isInstance(key))
 				return QList.constant(getValueType());
 			return theWrapped
-				.filter(el -> theCompare.compare(theKeyMap.apply(el), (K) key) == 0 ? null : "This item does not belong in this grouping");
+				.filter(el -> theCompare.compare(theKeyMap.apply(el), (K) key) == 0 ? null : StdMsg.WRONG_GROUP);
 		}
 
 		@Override
@@ -1666,10 +1690,15 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 */
 	class ImmutableQollection<E> implements PartialQollectionImpl<E> {
 		private final Qollection<E> theWrapped;
+		private final String theModificationMessage;
 
-		/** @param wrap The collection to wrap */
-		protected ImmutableQollection(Qollection<E> wrap) {
+		/**
+		 * @param wrap The collection to wrap
+		 * @param modMsg The message to return when modifications are requested
+		 */
+		protected ImmutableQollection(Qollection<E> wrap, String modMsg) {
 			theWrapped = wrap;
+			theModificationMessage = modMsg;
 		}
 
 		protected Qollection<E> getWrapped() {
@@ -1679,7 +1708,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		@Override
 		public Transaction lock(boolean write, Object cause) {
 			if (write)
-				throw new IllegalArgumentException("Immutable collections cannot be locked for writing");
+				throw new IllegalArgumentException(theModificationMessage);
 			return theWrapped.lock(false, cause);
 		}
 
@@ -1695,22 +1724,22 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 					@Override
 					public <V extends E> E set(V value, Object cause) throws IllegalArgumentException {
-						throw new IllegalArgumentException("Replacement is not enabled for this collection");
+						throw new IllegalArgumentException(theModificationMessage);
 					}
 
 					@Override
 					public <V extends E> String isAcceptable(V value) {
-						return "Replacement is not enabled for this collection";
+						return theModificationMessage;
 					}
 
 					@Override
 					public Value<String> isEnabled() {
-						return Value.constant("Replacement is not enabled for this collection");
+						return Value.constant(theModificationMessage);
 					}
 
 					@Override
 					public String canRemove() {
-						return "Removal is not enabled for this collection";
+						return theModificationMessage;
 					}
 
 					@Override
@@ -1737,17 +1766,20 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public String canRemove(Object value) {
-			return "Removal is not enabled for this collection";
+			return theModificationMessage;
 		}
 
 		@Override
 		public String canAdd(E value) {
-			return "Addition is not enabled for this collection";
+			return theModificationMessage;
 		}
 
 		@Override
-		public ImmutableQollection<E> immutable() {
-			return this;
+		public Qollection<E> immutable(String modMsg) {
+			if (modMsg.equals(theModificationMessage))
+				return this;
+			else
+				return theWrapped.immutable(modMsg);
 		}
 
 		@Override
@@ -1991,7 +2023,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			String s = null;
 			if (theRemoveFilter != null) {
 				if (value != null && !theWrapped.getType().getRawType().isInstance(value))
-					s = "Value of type " + value.getClass().getName() + " cannot be removed from collection of type " + getType();
+					s = StdMsg.BAD_TYPE;
 				if (s == null)
 					s = theRemoveFilter.apply((E) value);
 			}
@@ -2043,17 +2075,17 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				CollectionElement<E> el = new CollectionElement<E>() {
 					@Override
 					public <V extends E> E set(V value, Object cause) throws IllegalArgumentException {
-						throw new IllegalArgumentException("This collection cannot be modified");
+						throw new IllegalArgumentException(StdMsg.UNSUPPORTED_OPERATION);
 					}
 
 					@Override
 					public <V extends E> String isAcceptable(V value) {
-						return "This collection cannot be modified";
+						return StdMsg.UNSUPPORTED_OPERATION;
 					}
 
 					@Override
 					public Value<String> isEnabled() {
-						return Value.constant("This collection cannot be modified");
+						return Value.constant(StdMsg.UNSUPPORTED_OPERATION);
 					}
 
 					@Override
@@ -2068,7 +2100,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 					@Override
 					public String canRemove() {
-						return "This collection cannot be modified";
+						return StdMsg.UNSUPPORTED_OPERATION;
 					}
 
 					@Override
@@ -2086,12 +2118,12 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public String canRemove(Object value) {
-			return "Removal is not enabled for this collection";
+			return StdMsg.UNSUPPORTED_OPERATION;
 		}
 
 		@Override
 		public String canAdd(E value) {
-			return "Addition is not enabled for this collection";
+			return StdMsg.UNSUPPORTED_OPERATION;
 		}
 
 		@Override
@@ -2149,10 +2181,9 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					public <V extends E> E set(V value, Object cause) throws IllegalArgumentException {
 						Value<? extends E> element = getWrapped().get();
 						if (!(value instanceof Settable))
-							throw new IllegalArgumentException("Replacement is not enabled for this element");
+							throw new IllegalArgumentException(StdMsg.UNSUPPORTED_OPERATION);
 						if (value != null && !element.getType().getRawType().isInstance(value))
-							throw new IllegalArgumentException("Value of type " + value.getClass().getName()
-								+ " cannot be assigned to this element of type " + element.getType());
+							throw new IllegalArgumentException(StdMsg.BAD_TYPE);
 						return ((Settable<E>) element).set(value, cause);
 					}
 
@@ -2160,10 +2191,9 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					public <V extends E> String isAcceptable(V value) {
 						Value<? extends E> element = getWrapped().get();
 						if (!(value instanceof Settable))
-							return "Replacement is not enabled for this element";
+							return StdMsg.UNSUPPORTED_OPERATION;
 						if (value != null && !element.getType().getRawType().isInstance(value))
-							return "Value of type " + value.getClass().getName() + " cannot be assigned to this element of type "
-								+ element.getType();
+							return StdMsg.BAD_TYPE;
 						return ((Settable<E>) element).isAcceptable(value);
 					}
 
@@ -2184,7 +2214,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 							@Override
 							public String get() {
 								if (!(element instanceof Settable))
-									return "Replacement is not enabled for this element";
+									return StdMsg.UNSUPPORTED_OPERATION;
 								return ((Settable<? extends E>) element).isEnabled().get();
 							}
 						};
@@ -2211,13 +2241,13 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			})) {
 			}
 			if (!found[0])
-				return "No such element in collection";
+				return StdMsg.NOT_FOUND;
 			return msg[0];
 		}
 
 		@Override
 		public String canAdd(E value) {
-			return "Addition is not enabled for this collection";
+			return StdMsg.UNSUPPORTED_OPERATION;
 		}
 
 		@Override
@@ -2270,7 +2300,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		public String canRemove(Object value) {
 			Qollection<E> current = theCollectionObservable.get();
 			if (current == null)
-				return "Removal is not currently enabled for this collection";
+				return StdMsg.UNSUPPORTED_OPERATION;
 			return current.canRemove(value);
 		}
 
@@ -2278,7 +2308,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		public String canAdd(E value) {
 			Qollection<E> current = theCollectionObservable.get();
 			if (current == null)
-				return "Addition is not currently enabled for this collection";
+				return StdMsg.UNSUPPORTED_OPERATION;
 			return current.canAdd(value);
 		}
 
@@ -2321,14 +2351,14 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					@Override
 					public <V extends E> E set(V value, Object cause) throws IllegalArgumentException {
 						if (!getWrapped().getType().getRawType().isInstance(value))
-							throw new IllegalArgumentException("Value's type is invalid for this collection");
+							throw new IllegalArgumentException(StdMsg.BAD_TYPE);
 						return ((CollectionElement<E>) getWrapped()).set(value, cause);
 					}
 
 					@Override
 					public <V extends E> String isAcceptable(V value) {
 						if (!getWrapped().getType().getRawType().isInstance(value))
-							return "Value's type is invalid for this collection";
+							return StdMsg.BAD_TYPE;
 						return ((CollectionElement<E>) getWrapped()).isAcceptable(value);
 					}
 
@@ -2397,12 +2427,12 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public String canRemove(Object value) {
-			return "Removal is not enabled for this collection";
+			return StdMsg.UNSUPPORTED_OPERATION;
 		}
 
 		@Override
 		public String canAdd(E value) {
-			return "Addition is not enabled for this collection";
+			return StdMsg.UNSUPPORTED_OPERATION;
 		}
 
 		@Override
@@ -2425,14 +2455,14 @@ public interface Qollection<E> extends TransactableCollection<E> {
 							@Override
 							public <V extends E> E set(V value, Object cause) throws IllegalArgumentException {
 								if (!getWrapped().getType().getRawType().isInstance(value))
-									throw new IllegalArgumentException("Value of type " + value + " is not acceptable for this element");
+									throw new IllegalArgumentException(StdMsg.BAD_TYPE);
 								return ((CollectionElement<E>) getWrapped()).set(value, cause);
 							}
 
 							@Override
 							public <V extends E> String isAcceptable(V value) {
 								if (!getWrapped().getType().getRawType().isInstance(value))
-									return "Value of type " + value + " is not acceptable for this element";
+									return StdMsg.BAD_TYPE;
 								return ((CollectionElement<E>) getWrapped()).isAcceptable(value);
 							}
 						};
