@@ -110,7 +110,7 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	}
 
 	@Override
-	default <T> Qollection<T> filterMap(FilterMapDef<E, T> filterMap) {
+	default <T> Qollection<T> filterMap(FilterMapDef<E, ?, T> filterMap) {
 		return new FilterMappedOrderedQollection<>(this, filterMap);
 	}
 
@@ -159,8 +159,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	}
 
 	@Override
-	default OrderedQollection<E> immutable() {
-		return new ImmutableOrderedCollection<>(this);
+	default OrderedQollection<E> immutable(String modMsg) {
+		return new ImmutableOrderedQollection<>(this, modMsg);
 	}
 
 	@Override
@@ -169,8 +169,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	}
 
 	@Override
-	default OrderedQollection<E> noRemove() {
-		return (OrderedQollection<E>) Qollection.super.noRemove();
+	default OrderedQollection<E> noRemove(String modMsg) {
+		return (OrderedQollection<E>) Qollection.super.noRemove(modMsg);
 	}
 
 	@Override
@@ -179,8 +179,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	}
 
 	@Override
-	default OrderedQollection<E> noAdd() {
-		return (OrderedQollection<E>) Qollection.super.noAdd();
+	default OrderedQollection<E> noAdd(String modMsg) {
+		return (OrderedQollection<E>) Qollection.super.noAdd(modMsg);
 	}
 
 	@Override
@@ -196,7 +196,7 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	 * @return The flattened collection
 	 */
 	public static <E> OrderedQollection<E> flattenValues(OrderedQollection<? extends Value<? extends E>> collection) {
-		return new FlattenedOrderedValuesCollection<>(collection);
+		return new FlattenedOrderedValuesQollection<>(collection);
 	}
 
 	/**
@@ -207,7 +207,7 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	 * @return A collection representing the contents of the value, or a zero-length collection when null
 	 */
 	public static <E> OrderedQollection<E> flattenValue(Value<? extends OrderedQollection<E>> collectionObservable) {
-		return new FlattenedOrderedValueCollection<>(collectionObservable);
+		return new FlattenedOrderedValueQollection<>(collectionObservable);
 	}
 
 	/**
@@ -218,7 +218,12 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	 * @return A collection containing all elements of all collections in the outer collection
 	 */
 	public static <E> OrderedQollection<E> flatten(OrderedQollection<? extends OrderedQollection<E>> list) {
-		return new FlattenedOrderedCollection<>(list);
+		return new FlattenedOrderedQollection<>(list);
+	}
+
+	public static <E> OrderedQollection<E> intersperse(Qollection<? extends OrderedQollection<? extends E>> coll,
+		Function<? super E[], Integer> discriminator) {
+		return new InterspersedQollection<>(coll, discriminator);
 	}
 
 	/**
@@ -288,7 +293,7 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	 * @param <T> The type of the mapped collection
 	 */
 	class FilterMappedOrderedQollection<E, T> extends FilterMappedQollection<E, T> implements OrderedQollection<T> {
-		FilterMappedOrderedQollection(OrderedQollection<E> wrap, FilterMapDef<E, T> def) {
+		FilterMappedOrderedQollection(OrderedQollection<E> wrap, FilterMapDef<E, ?, T> def) {
 			super(wrap, def);
 		}
 
@@ -454,9 +459,9 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	 *
 	 * @param <E> The type of elements in the collection
 	 */
-	class ImmutableOrderedCollection<E> extends ImmutableQollection<E> implements OrderedQollection<E> {
-		protected ImmutableOrderedCollection(OrderedQollection<E> wrap) {
-			super(wrap);
+	class ImmutableOrderedQollection<E> extends ImmutableQollection<E> implements OrderedQollection<E> {
+		protected ImmutableOrderedQollection(OrderedQollection<E> wrap, String modMsg) {
+			super(wrap, modMsg);
 		}
 
 		@Override
@@ -465,8 +470,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		}
 
 		@Override
-		public ImmutableOrderedCollection<E> immutable() {
-			return this;
+		public OrderedQollection<E> immutable(String modMsg) {
+			return (OrderedQollection<E>) super.immutable(modMsg);
 		}
 	}
 
@@ -492,8 +497,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	 *
 	 * @param <E> The type of elements in the collection
 	 */
-	class FlattenedOrderedValuesCollection<E> extends FlattenedValuesQollection<E> implements OrderedQollection<E> {
-		protected FlattenedOrderedValuesCollection(OrderedQollection<? extends Value<? extends E>> collection) {
+	class FlattenedOrderedValuesQollection<E> extends FlattenedValuesQollection<E> implements OrderedQollection<E> {
+		protected FlattenedOrderedValuesQollection(OrderedQollection<? extends Value<? extends E>> collection) {
 			super(collection);
 		}
 
@@ -508,8 +513,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	 *
 	 * @param <E> The type of elements in the collection
 	 */
-	class FlattenedOrderedValueCollection<E> extends FlattenedValueQollection<E> implements OrderedQollection<E> {
-		public FlattenedOrderedValueCollection(Value<? extends OrderedQollection<E>> collectionObservable) {
+	class FlattenedOrderedValueQollection<E> extends FlattenedValueQollection<E> implements OrderedQollection<E> {
+		public FlattenedOrderedValueQollection(Value<? extends OrderedQollection<E>> collectionObservable) {
 			super(collectionObservable);
 		}
 
@@ -524,14 +529,63 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	 *
 	 * @param <E> The type of the collection
 	 */
-	class FlattenedOrderedCollection<E> extends FlattenedQollection<E> implements OrderedQollection<E> {
-		protected FlattenedOrderedCollection(OrderedQollection<? extends OrderedQollection<? extends E>> outer) {
+	class FlattenedOrderedQollection<E> extends FlattenedQollection<E> implements OrderedQollection<E> {
+		protected FlattenedOrderedQollection(OrderedQollection<? extends OrderedQollection<? extends E>> outer) {
 			super(outer);
 		}
 
 		@Override
-		protected OrderedQollection<? extends OrderedQollection<? extends E>> getOuter() {
-			return (OrderedQollection<? extends OrderedQollection<? extends E>>) super.getOuter();
+		protected OrderedQollection<? extends OrderedQollection<? extends E>> getWrapped() {
+			return (OrderedQollection<? extends OrderedQollection<? extends E>>) super.getWrapped();
+		}
+
+		@Override
+		public E last() {
+			// TODO Auto-generated method stub
+			return OrderedQollection.super.last();
+		}
+
+		@Override
+		public E get(int index) {
+			// TODO Auto-generated method stub
+			return OrderedQollection.super.get(index);
+		}
+
+		@Override
+		public int indexOf(Object value) {
+			// TODO Auto-generated method stub
+			return OrderedQollection.super.indexOf(value);
+		}
+
+		@Override
+		public int lastIndexOf(Object value) {
+			// TODO Auto-generated method stub
+			return OrderedQollection.super.lastIndexOf(value);
+		}
+	}
+
+	class InterspersedQollection<E> extends FlattenedQollection<E> implements OrderedQollection<E> {
+		private final Function<? super E[], Integer> theDiscriminator;
+
+		public InterspersedQollection(Qollection<? extends OrderedQollection<? extends E>> coll,
+			Function<? super E[], Integer> discriminator) {
+			super(coll);
+			theDiscriminator = discriminator;
+		}
+
+		@Override
+		protected Qollection<? extends OrderedQollection<? extends E>> getWrapped() {
+			return (Qollection<? extends OrderedQollection<? extends E>>) super.getWrapped();
+		}
+
+		protected Function<? super E[], Integer> getDiscriminator() {
+			return theDiscriminator;
+		}
+
+		@Override
+		public Quiterator<E> spliterator() {
+			// TODO Auto-generated method stub
+			return null;
 		}
 	}
 }

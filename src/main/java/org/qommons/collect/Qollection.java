@@ -1518,8 +1518,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		GroupedMultiEntry(K key, Qollection<E> wrap, Function<E, K> keyMap) {
 			theKey = key;
 			theKeyMap = keyMap;
-			theElements = wrap
-				.filter(el -> Objects.equals(theKey, theKeyMap.apply(el)) ? null : StdMsg.WRONG_GROUP);
+			theElements = wrap.filter(el -> Objects.equals(theKey, theKeyMap.apply(el)) ? null : StdMsg.WRONG_GROUP);
 		}
 
 		@Override
@@ -1668,8 +1667,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		public Qollection<E> get(Object key) {
 			if (!theKeyType.getRawType().isInstance(key))
 				return QList.constant(getValueType());
-			return theWrapped
-				.filter(el -> theCompare.compare(theKeyMap.apply(el), (K) key) == 0 ? null : StdMsg.WRONG_GROUP);
+			return theWrapped.filter(el -> theCompare.compare(theKeyMap.apply(el), (K) key) == 0 ? null : StdMsg.WRONG_GROUP);
 		}
 
 		@Override
@@ -1703,6 +1701,10 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		protected Qollection<E> getWrapped() {
 			return theWrapped;
+		}
+
+		protected String getModMessage() {
+			return theModificationMessage;
 		}
 
 		@Override
@@ -2395,7 +2397,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			theType = (TypeToken<E>) theOuter.getType().resolveType(Qollection.class.getTypeParameters()[0]);
 		}
 
-		protected Qollection<? extends Qollection<? extends E>> getOuter() {
+		protected Qollection<? extends Qollection<? extends E>> getWrapped() {
 			return theOuter;
 		}
 
@@ -2427,12 +2429,66 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public String canRemove(Object value) {
-			return StdMsg.UNSUPPORTED_OPERATION;
+			if (theOuter.isEmpty())
+				return StdMsg.UNSUPPORTED_OPERATION;
+			String msg = null;
+			for (Qollection<? extends E> sub : theOuter) {
+				if (sub.contains(value)) {
+					String subMsg = sub.canRemove(value);
+					if (subMsg == null)
+						return null;
+					else if (msg == null)
+						subMsg = msg;
+				}
+			}
+			return msg;
+		}
+
+		@Override
+		public boolean remove(Object o) {
+			if (theOuter.isEmpty())
+				return false;
+			for (Qollection<? extends E> sub : theOuter) {
+				if (sub.remove(o))
+					return true;
+			}
+			return false;
 		}
 
 		@Override
 		public String canAdd(E value) {
-			return StdMsg.UNSUPPORTED_OPERATION;
+			if (theOuter.isEmpty())
+				return StdMsg.UNSUPPORTED_OPERATION;
+			String msg = null;
+			for (Qollection<? extends E> sub : theOuter) {
+				if (value == null || sub.getType().getRawType().isInstance(value)) {
+					String subMsg = ((OrderedQollection<E>) sub).canAdd(value);
+					if (subMsg == null)
+						return null;
+					else if (msg == null)
+						subMsg = msg;
+				}
+			}
+			return msg;
+		}
+
+		@Override
+		public boolean add(E e) {
+			if (theOuter.isEmpty())
+				return false;
+			for (Qollection<? extends E> sub : theOuter) {
+				if (e == null || sub.getType().getRawType().isInstance(e)) {
+					if (((Qollection<E>) sub).add(e))
+						return true;
+				}
+			}
+			return false;
+		}
+
+		@Override
+		public void clear() {
+			for (Qollection<? extends E> sub : theOuter)
+				sub.clear();
 		}
 
 		@Override
