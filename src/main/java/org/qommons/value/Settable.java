@@ -7,6 +7,8 @@ import java.util.function.Supplier;
 
 import org.qommons.TriFunction;
 
+import com.google.common.reflect.TypeToken;
+
 public interface Settable<T> extends Value<T> {
 	/**
 	 * @param <V> The type of the value to set
@@ -32,6 +34,11 @@ public interface Settable<T> extends Value<T> {
 	default Value<T> unsettable() {
 		return new Value<T>() {
 			@Override
+			public TypeToken<T> getType() {
+				return Settable.this.getType();
+			}
+
+			@Override
 			public T get() {
 				return Settable.this.get();
 			}
@@ -46,6 +53,11 @@ public interface Settable<T> extends Value<T> {
 	default Settable<T> filterAccept(Function<? super T, String> accept) {
 		Settable<T> outer = this;
 		return new Settable<T>() {
+			@Override
+			public TypeToken<T> getType() {
+				return outer.getType();
+			}
+
 			@Override
 			public T get() {
 				return outer.get();
@@ -89,6 +101,11 @@ public interface Settable<T> extends Value<T> {
 		Settable<T> outer = this;
 		return new Settable<T>() {
 			@Override
+			public TypeToken<T> getType() {
+				return outer.getType();
+			}
+
+			@Override
 			public T get() {
 				return outer.get();
 			}
@@ -118,15 +135,17 @@ public interface Settable<T> extends Value<T> {
 
 	/**
 	 * @param <R> The type of the new settable value to create
+	 * @param type The run-time type of the new value
 	 * @param function The function to map this value to another
 	 * @param reverse The function to map the other value to this one
 	 * @param combineNull Whether to apply the combination function if the arguments are null. If false and any arguments are null, the
 	 *        result will be null.
 	 * @return The mapped settable value
 	 */
-	public default <R> Settable<R> mapV(Function<? super T, R> function, Function<? super R, ? extends T> reverse, boolean combineNull) {
+	public default <R> Settable<R> mapV(TypeToken<R> type, Function<? super T, R> function, Function<? super R, ? extends T> reverse,
+		boolean combineNull) {
 		Settable<T> root = this;
-		return new ComposedSettable<R>(args -> {
+		return new ComposedSettable<R>(type, args -> {
 			return function.apply((T) args[0]);
 		}, combineNull, this) {
 			@Override
@@ -154,6 +173,7 @@ public interface Settable<T> extends Value<T> {
 	 *
 	 * @param <U> The type of the value to compose this value with
 	 * @param <R> The type of the new settable value to create
+	 * @param type The run-time type of the new value
 	 * @param function The function to combine the values into another value
 	 * @param arg The value to combine this value with
 	 * @param reverse The function to reverse the transformation
@@ -161,10 +181,10 @@ public interface Settable<T> extends Value<T> {
 	 *        result will be null.
 	 * @return The composed settable value
 	 */
-	public default <U, R> Settable<R> combineV(BiFunction<? super T, ? super U, R> function, Value<U> arg,
+	public default <U, R> Settable<R> combineV(TypeToken<R> type, BiFunction<? super T, ? super U, R> function, Value<U> arg,
 		BiFunction<? super R, ? super U, ? extends T> reverse, boolean combineNull) {
 		Settable<T> root = this;
-		return new ComposedSettable<R>(args -> {
+		return new ComposedSettable<R>(type, args -> {
 			return function.apply((T) args[0], (U) args[1]);
 		}, combineNull, this, arg) {
 			@Override
@@ -194,6 +214,7 @@ public interface Settable<T> extends Value<T> {
 	 *
 	 * @param <U> The type of the value to compose this value with
 	 * @param <R> The type of the new settable value to create
+	 * @param type The run-time type of the new value
 	 * @param function The function to combine the values into another value
 	 * @param arg The value to combine this value with
 	 * @param accept The function to filter acceptance of values for the new value
@@ -201,10 +222,10 @@ public interface Settable<T> extends Value<T> {
 	 * @param combineNull Whether to apply the filter to null values or simply preserve the null
 	 * @return The composed settable value
 	 */
-	public default <U, R> Settable<R> combineV(BiFunction<? super T, ? super U, R> function, Value<U> arg,
+	public default <U, R> Settable<R> combineV(TypeToken<R> type, BiFunction<? super T, ? super U, R> function, Value<U> arg,
 		BiFunction<? super R, ? super U, String> accept, BiFunction<? super R, ? super U, ? extends T> reverse, boolean combineNull) {
 		Settable<T> root = this;
-		return new ComposedSettable<R>(args -> {
+		return new ComposedSettable<R>(type, args -> {
 			return function.apply((T) args[0], (U) args[1]);
 		}, combineNull, this, arg) {
 			@Override
@@ -239,6 +260,7 @@ public interface Settable<T> extends Value<T> {
 	 * @param <U> The type of the first value to compose this value with
 	 * @param <V> The type of the second value to compose this value with
 	 * @param <R> The type of the new settable value to create
+	 * @param type The run-time type of the new value
 	 * @param function The function to combine the values into another value
 	 * @param arg2 The first other value to combine this value with
 	 * @param arg3 The second other value to combine this value with
@@ -247,10 +269,11 @@ public interface Settable<T> extends Value<T> {
 	 *        result will be null.
 	 * @return The composed settable value
 	 */
-	public default <U, V, R> Settable<R> combineV(TriFunction<? super T, ? super U, ? super V, R> function, Value<U> arg2, Value<V> arg3,
+	public default <U, V, R> Settable<R> combineV(TypeToken<R> type, TriFunction<? super T, ? super U, ? super V, R> function,
+		Value<U> arg2, Value<V> arg3,
 		TriFunction<? super R, ? super U, ? super V, ? extends T> reverse, boolean combineNull) {
 		Settable<T> root = this;
-		return new ComposedSettable<R>(args -> {
+		return new ComposedSettable<R>(type, args -> {
 			return function.apply((T) args[0], (U) args[1], (V) args[2]);
 		}, combineNull, this, arg2, arg3) {
 			@Override
@@ -311,8 +334,8 @@ public interface Settable<T> extends Value<T> {
 	 * @param <T> The type of the value
 	 */
 	abstract class ComposedSettable<T> extends ComposedValue<T> implements Settable<T> {
-		public ComposedSettable(Function<Object[], T> function, boolean combineNull, Value<?>... composed) {
-			super(function, combineNull, composed);
+		public ComposedSettable(TypeToken<T> type, Function<Object[], T> function, boolean combineNull, Value<?>... composed) {
+			super(type, function, combineNull, composed);
 		}
 	}
 

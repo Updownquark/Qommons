@@ -41,7 +41,8 @@ public interface Quiterator<T> extends Spliterator<T> {
 
 	@Override
 	default void forEachRemaining(Consumer<? super T> action) {
-		forEachElement(el -> action.accept(el.get()));
+		while (tryAdvanceElement(el -> action.accept(el.get())))
+			;
 	}
 
 	default <V> Quiterator<V> map(Function<? super T, V> map) {

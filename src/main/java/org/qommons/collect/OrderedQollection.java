@@ -1,10 +1,7 @@
 package org.qommons.collect;
 
 import java.util.*;
-import java.util.function.BiFunction;
-import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
+import java.util.function.*;
 
 import org.qommons.Transaction;
 import org.qommons.collect.Quiterator.CollectionElement;
@@ -53,10 +50,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	/** @return The last value in this collection, or null if the collection is empty */
 	default E last() {
 		Object[] returned = new Object[1];
-		if (spliterator().tryAdvance(v -> returned[0] = v))
-			return (E) returned[0];
-		else
-			return null;
+		spliterator().forEachRemaining(v -> returned[0] = v);
+		return (E) returned[0];
 	}
 
 	// Ordered collections need to know the indexes of their elements in a somewhat efficient way, so these index methods make sense here
@@ -189,6 +184,26 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	}
 
 	/**
+	 * @param <E> The type of the values
+	 * @param type The type of the collection
+	 * @param collection The collection
+	 * @return An immutable collection with the same values as those in the given collection
+	 */
+	public static <E> OrderedQollection<E> constant(TypeToken<E> type, List<E> collection) {
+		return new ConstantOrderedQollection<>(type, collection);
+	}
+
+	/**
+	 * @param <E> The type of the values
+	 * @param type The type of the collection
+	 * @param values The values for the new collection
+	 * @return An immutable collection with the same values as those in the given collection
+	 */
+	public static <E> Qollection<E> constant(TypeToken<E> type, E... values) {
+		return constant(type, java.util.Arrays.asList(values));
+	}
+
+	/**
 	 * Turns a collection of observable values into a collection composed of those holders' values
 	 *
 	 * @param <E> The type of elements held in the values
@@ -221,8 +236,19 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		return new FlattenedOrderedQollection<>(list);
 	}
 
-	public static <E> OrderedQollection<E> intersperse(Qollection<? extends OrderedQollection<? extends E>> coll,
-		Function<? super E[], Integer> discriminator) {
+	/**
+	 * Similar to {@link #flatten(OrderedQollection)} except that the elements from the inner collections can be interspersed in the
+	 * returned collection via a discriminator function. The relative ordering of each inner collection will be unchanged in the returned
+	 * collection.
+	 * 
+	 * @param <E> The type of elements in the collection
+	 * @param coll The collection of collections whose elements to intersperse
+	 * @param discriminator A function that is given an element from each of the collections in the outer collection and decides which of
+	 *        those elements will be the next element returned in the outer collection
+	 * @return A collection containing all elements of each of the outer collection's contents, ordered by the discriminator
+	 */
+	public static <E> OrderedQollection<E> intersperse(OrderedQollection<? extends OrderedQollection<? extends E>> coll,
+		Function<? super List<E>, Integer> discriminator) {
 		return new InterspersedQollection<>(coll, discriminator);
 	}
 
@@ -492,6 +518,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		}
 	}
 
+	class ConstantOrderedQollection<E> extends ConstantQollection<E> implements OrderedQollection<E> {}
+
 	/**
 	 * Implements {@link OrderedQollection#flattenValues(OrderedQollection)}
 	 *
@@ -540,52 +568,167 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		}
 
 		@Override
-		public E last() {
-			// TODO Auto-generated method stub
-			return OrderedQollection.super.last();
-		}
-
-		@Override
 		public E get(int index) {
-			// TODO Auto-generated method stub
-			return OrderedQollection.super.get(index);
+			int passed = 0;
+			try (Transaction t = lock(false, null)) {
+				for (OrderedQollection<? extends E> coll : getWrapped()) {
+					int size = coll.size();
+					if (passed + size > index)
+						return coll.get(index - passed);
+					passed += size;
+				}
+			}
+			throw new IndexOutOfBoundsException(index + " of " + passed);
 		}
 
 		@Override
 		public int indexOf(Object value) {
-			// TODO Auto-generated method stub
-			return OrderedQollection.super.indexOf(value);
+			int passed = 0;
+			try (Transaction t = lock(false, null)) {
+				for (OrderedQollection<? extends E> coll : getWrapped()) {
+					int index = coll.indexOf(value);
+					if (index >= 0)
+						return passed + index;
+					else
+						passed += coll.size();
+				}
+			}
+			return -1;
 		}
 
 		@Override
 		public int lastIndexOf(Object value) {
-			// TODO Auto-generated method stub
-			return OrderedQollection.super.lastIndexOf(value);
+			int passed = 0;
+			int lastIndex = -1;
+			try (Transaction t = lock(false, null)) {
+				for (OrderedQollection<? extends E> coll : getWrapped()) {
+					int index = coll.lastIndexOf(value);
+					if (index >= 0)
+						lastIndex = passed + index;
+					passed += coll.size();
+				}
+			}
+			return lastIndex;
 		}
 	}
 
+	/**
+	 * Implements {@link OrderedQollection#intersperse(OrderedQollection, Function)}
+	 * 
+	 * @param <E> The type of elements in the collection
+	 */
 	class InterspersedQollection<E> extends FlattenedQollection<E> implements OrderedQollection<E> {
-		private final Function<? super E[], Integer> theDiscriminator;
+		private final Function<? super List<E>, Integer> theDiscriminator;
 
-		public InterspersedQollection(Qollection<? extends OrderedQollection<? extends E>> coll,
-			Function<? super E[], Integer> discriminator) {
+		public InterspersedQollection(OrderedQollection<? extends OrderedQollection<? extends E>> coll,
+			Function<? super List<E>, Integer> discriminator) {
 			super(coll);
 			theDiscriminator = discriminator;
 		}
 
 		@Override
-		protected Qollection<? extends OrderedQollection<? extends E>> getWrapped() {
-			return (Qollection<? extends OrderedQollection<? extends E>>) super.getWrapped();
+		protected OrderedQollection<? extends OrderedQollection<? extends E>> getWrapped() {
+			return (OrderedQollection<? extends OrderedQollection<? extends E>>) super.getWrapped();
 		}
 
-		protected Function<? super E[], Integer> getDiscriminator() {
+		protected Function<? super List<E>, Integer> getDiscriminator() {
 			return theDiscriminator;
 		}
 
 		@Override
 		public Quiterator<E> spliterator() {
-			// TODO Auto-generated method stub
-			return null;
+			ArrayList<Quiterator<? extends E>> colls = new ArrayList<>();
+			getWrapped().spliterator().forEachRemaining(coll -> colls.add(coll.spliterator()));
+			colls.trimToSize();
+			List<CollectionElement<? extends E>> elements = new ArrayList<>(colls.size());
+			List<E> values = new ArrayList<>(colls.size());
+			List<E> immutableValues = Collections.unmodifiableList(values);
+			CollectionElement<? extends E>[] container = new CollectionElement[1];
+			Quiterator.WrappingElement<E, E> wrapper = new Quiterator.WrappingElement<E, E>(getType(), container) {
+				@Override
+				public E get() {
+					return getWrapped().get();
+				}
+
+				@Override
+				public <V extends E> String isAcceptable(V value) {
+					if (value != null && !getWrapped().getType().getRawType().isInstance(value))
+						return StdMsg.BAD_TYPE;
+					else
+						return ((CollectionElement<E>) getWrapped()).isAcceptable(value);
+				}
+
+				@Override
+				public <V extends E> E set(V value, Object cause) throws IllegalArgumentException {
+					if (value != null && !getWrapped().getType().getRawType().isInstance(value))
+						throw new IllegalArgumentException(StdMsg.BAD_TYPE);
+					else
+						return ((CollectionElement<E>) getWrapped()).set(value, cause);
+				}
+			};
+			return new Quiterator<E>() {
+				@Override
+				public long estimateSize() {
+					return size();
+				}
+
+				@Override
+				public int characteristics() {
+					return Spliterator.SIZED | Spliterator.ORDERED;
+				}
+
+				@Override
+				public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
+					if (colls.isEmpty())
+						return false;
+					if (elements.isEmpty()) {
+						// Need to initialize
+						Iterator<Quiterator<? extends E>> iter = colls.iterator();
+						while (iter.hasNext()) {
+							Quiterator<? extends E> q = iter.next();
+							if (!q.tryAdvanceElement(el -> {
+								elements.add(el);
+								values.add(el.get());
+							})) {
+								iter.remove();
+							}
+						}
+					}
+					int nextIndex = theDiscriminator.apply(immutableValues);
+					if (nextIndex < 0 || nextIndex >= values.size())
+						throw new IndexOutOfBoundsException(nextIndex + " of " + values.size());
+					container[0] = elements.get(nextIndex);
+					if (!colls.get(nextIndex).tryAdvanceElement(el -> {
+						elements.set(nextIndex, el);
+						values.set(nextIndex, el.get());
+					})) {
+						colls.remove(nextIndex);
+						elements.remove(nextIndex);
+						values.remove(nextIndex);
+					}
+					action.accept(wrapper);
+					return true;
+				}
+
+				@Override
+				public void forEachElement(Consumer<? super CollectionElement<E>> action) {
+					try (Transaction t = lock(true, null)) {
+						Quiterator.super.forEachElement(action);
+					}
+				}
+
+				@Override
+				public void forEachRemaining(Consumer<? super E> action) {
+					try (Transaction t = lock(false, null)) {
+						Quiterator.super.forEachRemaining(action);
+					}
+				}
+
+				@Override
+				public Quiterator<E> trySplit() {
+					return null;
+				}
+			};
 		}
 	}
 }

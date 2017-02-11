@@ -73,8 +73,9 @@ public interface Action<T> {
 	 * @param actions The actions to combine
 	 * @return A single action that invokes the given actions and returns their values as an array
 	 */
-	static <T> Action<T[]> and(Action<? extends T>... actions) {
-		return and(OrderedQollection.constant(java.util.Arrays.asList(actions)));
+	static <T> Action<T[]> and(TypeToken<T> type, Action<? extends T>... actions) {
+		return and(OrderedQollection.constant(new TypeToken<Action<? extends T>>() {}.where(new TypeParameter<T>() {}, type),
+			java.util.Arrays.asList(actions)));
 	}
 
 	/**
