@@ -69,6 +69,11 @@ public interface MutableGraph<N, E> extends Graph<N, E> {
 			public Collection<? extends Edge<N, E>> getEdges() {
 				return MutableGraph.this.getEdges();
 			}
+
+			@Override
+			public org.qommons.collect.Graph.Node<N, E> nodeFor(N value) {
+				return MutableGraph.this.nodeFor(value);
+			}
 		};
 	}
 }

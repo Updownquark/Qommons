@@ -1,10 +1,6 @@
 package org.qommons.collect;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.ListIterator;
+import java.util.*;
 
 public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 	private final Collection<DefaultNode<N, E>> theNodes;
@@ -23,6 +19,14 @@ public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 	@Override
 	public Collection<DefaultEdge<N, E>> getEdges() {
 		return Collections.unmodifiableCollection(theEdges);
+	}
+
+	@Override
+	public Node<N, E> nodeFor(N value) {
+		for (Node<N, E> node : theNodes)
+			if (Objects.equals(node.getValue(), value))
+				return node;
+		return null;
 	}
 
 	@Override

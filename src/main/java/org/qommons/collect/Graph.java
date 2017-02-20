@@ -1,11 +1,6 @@
 package org.qommons.collect;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public interface Graph<N, E> {
@@ -77,6 +72,12 @@ public interface Graph<N, E> {
 
 	/** @return An observable collection containing all edges stored in this graph */
 	Collection<? extends Edge<N, E>> getEdges();
+
+	/**
+	 * @param value The node value to get the node for
+	 * @return The node in this graph with the given value, or null if no such node exists in this graph
+	 */
+	Node<N, E> nodeFor(N value);
 
 	/**
 	 * Walks this graph from a starting point, stepping through each edge connected to the given node
