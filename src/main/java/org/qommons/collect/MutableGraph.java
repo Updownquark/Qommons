@@ -2,6 +2,12 @@ package org.qommons.collect;
 
 import java.util.Collection;
 
+/**
+ * A graph that can be modified directly
+ * 
+ * @param <N> The type of values stored in this graph's nodes
+ * @param <E> The type of values stored in this graph's edges
+ */
 public interface MutableGraph<N, E> extends Graph<N, E> {
 	/**
 	 * Adds a node to the graph
@@ -15,6 +21,7 @@ public interface MutableGraph<N, E> extends Graph<N, E> {
 	 * Adds a collection of nodes to a graph
 	 *
 	 * @param values The node values to add
+	 * @return The nodes that were added to this graph
 	 */
 	Collection<? extends Node<N, E>> addNodes(Collection<? extends N> values);
 

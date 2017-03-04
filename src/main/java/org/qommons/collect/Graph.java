@@ -4,6 +4,13 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * A set of nodes, interconnected by a set of edges, each of which may or may not be directed. Each node and each edge in the graph may have
+ * a value.
+ * 
+ * @param <N> The type of values stored in this graph's nodes
+ * @param <E> The type of values stored in this graph's edges
+ */
 public interface Graph<N, E> {
 	/**
 	 * A node in a graph
@@ -168,6 +175,12 @@ public interface Graph<N, E> {
 		return Collections.unmodifiableList(subGraphs);
 	}
 
+	/**
+	 * A helper for walking a graph
+	 * 
+	 * @param <N> Types of node-values this walker supports
+	 * @param <E> Types of edge-values this walker supports
+	 */
 	class Walker<N, E> {
 		private static class VisitingStruct<N, E> {
 			final Node<N, E> from;
