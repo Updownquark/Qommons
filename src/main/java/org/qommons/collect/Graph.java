@@ -1,6 +1,7 @@
 package org.qommons.collect;
 
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public interface Graph<N, E> {
@@ -107,6 +108,64 @@ public interface Graph<N, E> {
 				break;
 		}
 		return finished;
+	}
+
+	/**
+	 * @param subGraphSupplier A function to generate new graphs for each independent sub-graph in this graph
+	 * @return A list of sub-graphs, totalling all nodes and edges in this graph, which are not connected by any edges in this graph
+	 */
+	default List<MutableGraph<N, E>> split(
+		Function<? super Node<? extends N, ? extends E>, ? extends MutableGraph<N, E>> subGraphSupplier) {
+		class SubGraphBuilder implements Graph.GraphWalkListener<N, E> {
+			private final MutableGraph<N, E> theSubGraph;
+			/** For caching. Makes retrieval of the from node copy in the sub-graph quicker for linear walks */
+			private Node<N, E> lastNode;
+
+			SubGraphBuilder(MutableGraph<N, E> subGraph, Node<? extends N, ? extends E> node) {
+				theSubGraph = subGraph;
+				lastNode = subGraph.addNode(node.getValue());
+			}
+
+			@Override
+			public boolean step(Node<? extends N, ? extends E> from, Graph.Edge<? extends N, ? extends E> path,
+				Node<? extends N, ? extends E> to) {
+				Node<N, E> fromNode = lastNode.getValue() == from.getValue() ? lastNode : theSubGraph.nodeFor(from.getValue());
+				if (fromNode == null)
+					return false;
+				Node<N, E> toNode = theSubGraph.nodeFor(to.getValue());
+				if (toNode == null)
+					toNode = theSubGraph.addNode(to.getValue());
+				theSubGraph.addEdge(fromNode, toNode, false, path.getValue());
+				lastNode = toNode;
+				return true;
+			}
+		}
+		
+		List<MutableGraph<N, E>> subGraphs = new LinkedList<>();
+		Walker<N, E>[] walker = new Walker[1];
+		GraphWalkListener<N, E> outerListener = new GraphWalkListener<N, E>() {
+			private SubGraphBuilder theBuilder;
+
+			@Override
+			public boolean step(Node<? extends N, ? extends E> from, Edge<? extends N, ? extends E> path,
+				Node<? extends N, ? extends E> to) {
+				if (theBuilder == null || !theBuilder.step(from, path, to)) {
+					theBuilder = createNewSubGraph(from);
+					theBuilder.step(from, path, to);
+				}
+				return true;
+			}
+
+			private SubGraphBuilder createNewSubGraph(Node<? extends N, ? extends E> from) {
+				MutableGraph<N, E> newGraph = subGraphSupplier.apply(from);
+				subGraphs.add(newGraph);
+				return new SubGraphBuilder(newGraph, newGraph.addNode(from.getValue()));
+			}
+		};
+		walker[0] = new Walker<>(outerListener);
+		for (Node<N, E> node : getNodes())
+			walker[0].walk(node, true);
+		return Collections.unmodifiableList(subGraphs);
 	}
 
 	class Walker<N, E> {
