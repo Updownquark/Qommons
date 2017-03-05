@@ -50,6 +50,21 @@ public interface Graph<N, E> {
 		Node<N, E> getEnd();
 
 		/**
+		 * @param oneEnd Either the start or the end of this edge
+		 * @return The opposite point of this edge
+		 */
+		default Node<N, E> getOtherEnd(Node<?, ?> oneEnd) {
+			Node<N, E> start=getStart();
+			Node<N, E> end=getEnd();
+			if(start==oneEnd)
+				return end;
+			else if(end==oneEnd)
+				return start;
+			else
+				throw new IllegalArgumentException("Node "+oneEnd+" is not an end of this edge");
+		}
+
+		/**
 		 * @return Whether this graph edge is to be interpreted as directional, i.e. if true, this edge does not represent a connection from
 		 *         {@link #getEnd() end} to {@link #getStart() start}.
 		 */

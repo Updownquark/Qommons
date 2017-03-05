@@ -1,6 +1,7 @@
 package org.qommons.collect;
 
-import java.util.Collection;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * A graph that can be modified directly
@@ -23,7 +24,7 @@ public interface MutableGraph<N, E> extends Graph<N, E> {
 	 * @param values The node values to add
 	 * @return The nodes that were added to this graph
 	 */
-	Collection<? extends Node<N, E>> addNodes(Collection<? extends N> values);
+	List<? extends Node<N, E>> addNodes(Collection<? extends N> values);
 
 	/**
 	 * Adds an edge between two nodes which must already be in the graph. The nodes cannot be the same.
@@ -63,6 +64,28 @@ public interface MutableGraph<N, E> extends Graph<N, E> {
 
 	/** Removes all edges from this graph */
 	void clearEdges();
+
+	/**
+	 * Adds all nodes and edges from the given graph into this graph
+	 * 
+	 * @param graph The graph to add into this graph
+	 */
+	default void addAll(Graph<? extends N, ? extends E> graph) {
+		List<? extends Node<? extends N, ? extends E>> oldNodes;
+		if (graph.getNodes() instanceof List)
+			oldNodes = (List<? extends Node<? extends N, ? extends E>>) graph.getNodes();
+		else
+			oldNodes = new ArrayList<>(graph.getNodes());
+		List<? extends Node<N, E>> newNodes = addNodes(oldNodes.stream().map(n -> n.getValue()).collect(Collectors.toList()));
+		Map<Node<? extends N, ? extends E>, Node<N, E>> oldToNewNodes = new HashMap<>();
+		for (int n = 0; n < oldNodes.size(); n++)
+			oldToNewNodes.put(oldNodes.get(n), newNodes.get(n));
+		for (Edge<? extends N, ? extends E> edge : graph.getEdges()) {
+			Node<N, E> from = oldToNewNodes.get(edge.getStart());
+			Node<N, E> to = oldToNewNodes.get(edge.getEnd());
+			addEdge(from, to, edge.isDirected(), edge.getValue());
+		}
+	}
 
 	/** @return An immutable graph backed by this graph's data */
 	default Graph<N, E> immutable() {

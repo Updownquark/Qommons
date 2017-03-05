@@ -37,7 +37,7 @@ public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 	}
 
 	@Override
-	public Collection<DefaultNode<N, E>> addNodes(Collection<? extends N> values) {
+	public List<DefaultNode<N, E>> addNodes(Collection<? extends N> values) {
 		ArrayList<DefaultNode<N, E>> added = new ArrayList<>(values.size());
 		for (N value : values) {
 			added.add(addNode(value));
