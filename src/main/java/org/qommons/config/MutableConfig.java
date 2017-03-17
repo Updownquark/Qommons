@@ -2,6 +2,7 @@ package org.qommons.config;
 
 import org.jdom2.Document;
 import org.jdom2.Element;
+import org.jdom2.Verifier;
 
 /** A modifiable version of QommonsConfig */
 public class MutableConfig extends QommonsConfig {
@@ -195,9 +196,20 @@ public class MutableConfig extends QommonsConfig {
 	 * @return The new child, already added to this config
 	 */
 	public MutableConfig addChild(String name) {
-		MutableConfig ret = new MutableConfig(name);
+		int slashIdx = name.indexOf('/');
+		if (slashIdx >= 0)
+			return getOrCreate(name.substring(0, slashIdx)).addChild(name.substring(slashIdx + 1));
+		MutableConfig ret = createChild(name);
 		addSubConfig(ret);
 		return ret;
+	}
+
+	/**
+	 * @param name The name for the new child
+	 * @return A new config element to be added as a child to this config
+	 */
+	protected MutableConfig createChild(String name) {
+		return new MutableConfig(name);
 	}
 
 	/**
@@ -323,7 +335,7 @@ public class MutableConfig extends QommonsConfig {
 	 * @return The XML element representing this configuration
 	 */
 	public Element toXML() {
-		Element ret = new Element(theName);
+		Element ret = new Element(xmlIfy(theName));
 		if(theValue != null)
 			ret.setText(theValue);
 		java.util.HashMap<String, int []> attrs = new java.util.HashMap<>();
@@ -337,11 +349,29 @@ public class MutableConfig extends QommonsConfig {
 		}
 		for(MutableConfig sub : theSubConfigs) {
 			if(attrs.get(sub.theName)[0] == 1 && sub.theSubConfigs.length == 0 && sub.theValue != null && sub.theValue.indexOf('\n') < 0)
-				ret.setAttribute(sub.theName, sub.theValue);
+				ret.setAttribute(xmlIfy(sub.theName), sub.theValue);
 			else
 				ret.addContent(sub.toXML());
 		}
 		return ret;
+	}
+
+	private static String xmlIfy(String name) {
+		if (Verifier.checkElementName(name) == null)
+			return name;
+		StringBuilder str = new StringBuilder();
+		if (!Character.isLetter(name.charAt(0)) && name.charAt(0) != '_')
+			str.append(PREFIX);
+		for (int i = 0; i < name.length(); i++) {
+			char c = name.charAt(i);
+			if (c == ' ')
+				str.append(SPACE_REPLACEMENT);
+			else if (Character.isLetterOrDigit(c) || c == '-' || c == '_' || c == '.')
+				str.append(c);
+			else
+				str.append(INVALID_REPLACEMENT_TEXT.replace("XXXX", Integer.toHexString(c)));
+		}
+		return str.toString();
 	}
 
 	/**

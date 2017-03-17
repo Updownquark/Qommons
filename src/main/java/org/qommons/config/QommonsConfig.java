@@ -1,5 +1,8 @@
 package org.qommons.config;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.jdom2.Attribute;
 import org.jdom2.Element;
 
@@ -14,6 +17,11 @@ import org.jdom2.Element;
  * </p>
  */
 public abstract class QommonsConfig implements Cloneable {
+	protected static final String SPACE_REPLACEMENT = "._sp_.";
+	protected static final String PREFIX = "_.pfx._";
+	protected static final Pattern INVALID_REPLACEMENT_PATT = Pattern.compile("\\._ch(?<code>[0-9A-Fa-f]{4})_\\.");
+	protected static final String INVALID_REPLACEMENT_TEXT = "._chXXXX_.";
+
 	/** The default config implementation */
 	public static class DefaultConfig extends QommonsConfig {
 		private final String theName;
@@ -328,6 +336,24 @@ public abstract class QommonsConfig implements Cloneable {
 	}
 
 	/**
+	 * Parses a double from an attribute of this config
+	 *
+	 * @param key The name of the attribute to get the value of
+	 * @param def The value to return if the attribute is missing from the config
+	 * @return The float parsed from the given attribute of this config, or the given default value if the attribute is missing
+	 */
+	public double getDouble(String key, double def) {
+		String ret = get(key);
+		if (ret == null)
+			return def;
+		try {
+			return Double.parseDouble(ret);
+		} catch (NumberFormatException e) {
+			throw new IllegalArgumentException("Value of property " + key + " (" + ret + ") is not a double", e);
+		}
+	}
+
+	/**
 	 * Parses a boolean from an attribute of this config
 	 *
 	 * @param key The name of the attribute to get the value of
@@ -630,16 +656,43 @@ public abstract class QommonsConfig implements Cloneable {
 		java.util.List<Attribute> atts = xml.getAttributes();
 		int attSize = atts.size();
 		if(children.size() == 0 && attSize == 0)
-			return new QommonsConfig[] {new DefaultConfig(xml.getName(), value, null)};
+			return new QommonsConfig[] { new DefaultConfig(deXmlIfy(xml.getName()), value, null) };
 		java.util.ArrayList<QommonsConfig> childConfigs = new java.util.ArrayList<>();
 		if(attSize > 0)
 			for(Attribute att : atts)
 				if(!att.getName().equals("if"))
-					childConfigs.add(new DefaultConfig(att.getName(), att.getValue(), null));
+					childConfigs.add(new DefaultConfig(deXmlIfy(att.getName()), att.getValue(), null));
 		for(Element child : children)
 			for(QommonsConfig toAdd : fromXml(child, location, relative))
 				childConfigs.add(toAdd);
 		return new QommonsConfig[] {create(xml.getName(), value, childConfigs.toArray(new QommonsConfig[childConfigs.size()]))};
+	}
+
+	private static String deXmlIfy(String name) {
+		if (name.startsWith(PREFIX))
+			name = name.substring(PREFIX.length());
+		String oldName;
+		do {
+			oldName = name;
+			name = name.replace(SPACE_REPLACEMENT, " ");
+		} while (oldName != name);
+
+		Matcher matcher = INVALID_REPLACEMENT_PATT.matcher(name);
+		StringBuilder str = null;
+		int lastMatchEnd = 0;
+		while (matcher.find()) {
+			if (str == null)
+				str = new StringBuilder();
+			str.append(name.substring(lastMatchEnd, matcher.start()));
+			int code = Integer.parseInt(matcher.group("code"));
+			str.append((char) code);
+			lastMatchEnd = matcher.end();
+		}
+		if (str == null)
+			return name;
+
+		str.append(name.substring(lastMatchEnd));
+		return str.toString();
 	}
 
 	/**
