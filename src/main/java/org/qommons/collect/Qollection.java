@@ -809,6 +809,42 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			theType = type;
 		}
 
+		protected Qollection<E> getQollection() {
+			return theWrapped;
+		}
+
+		protected MappedQollectionBuilder<E, ?, I> getParent() {
+			return theParent;
+		}
+
+		protected TypeToken<T> getType() {
+			return theType;
+		}
+
+		protected Function<? super I, String> getFilter() {
+			return theFilter;
+		}
+
+		protected boolean areNullsFiltered() {
+			return areNullsFiltered;
+		}
+
+		protected Function<? super I, ? extends T> getMap() {
+			return theMap;
+		}
+
+		protected boolean areNullsMapped() {
+			return areNullsMapped;
+		}
+
+		protected Function<? super T, ? extends I> getReverse() {
+			return theReverse;
+		}
+
+		protected boolean areNullsReversed() {
+			return areNullsReversed;
+		}
+
 		static <T> TypeToken<T> returnType(Function<?, ? extends T> fn) {
 			return (TypeToken<T>) TypeToken.of(fn.getClass()).resolveType(Function.class.getTypeParameters()[1]);
 		}

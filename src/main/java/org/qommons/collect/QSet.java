@@ -1,6 +1,12 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Objects;
+import java.util.Set;
+import java.util.Spliterator;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -59,14 +65,19 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 	}
 
 	@Override
-	default <T> MappedSetOrQollectionBuilder<E, T> buildMap(TypeToken<T> type) {
-		return new MappedSetOrQollectionBuilder<>(this, type);
+	default <T> MappedSetOrQollectionBuilder<E, E, T> buildMap(TypeToken<T> type) {
+		return new MappedSetOrQollectionBuilder<>(this, null, type);
 	}
 
-	@Override
-	default <T> Qollection<T> filterMap(FilterMapDef<E, T> filterMap) {
-		// TODO Auto-generated method stub
-		return Qollection.super.filterMap(filterMap);
+	/**
+	 * Similar to {@link #filterMap(FilterMapDef)}, but produces a set, as {@link EquivalentFilterMapDef} instances can only be produced
+	 * with the assertion that any map operations preserve the Set's uniqueness contract.
+	 * 
+	 * @param filterMap The filter-map definition
+	 * @return A set, filtered and mapped with the given definition
+	 */
+	default <T> QSet<T> filterMap(EquivalentFilterMapDef<E, ?, T> filterMap) {
+		return new FilterMappedSet<>(this, filterMap);
 	}
 
 	/**
@@ -78,51 +89,14 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 		return (QSet<E>) Qollection.super.filter(filter);
 	}
 
-	/**
-	 * @param <T> The type for the new collection
-	 * @param type The type to filter this collection by
-	 * @return A collection backed by this collection, consisting only of elements in this collection whose values are instances of the
-	 *         given class
-	 */
 	@Override
 	default <T> QSet<T> filter(Class<T> type) {
-		return new FilteredSet<>(this, TypeToken.of(type), value -> {
-			if (type.isInstance(value))
-				return null;
-			else
-				return value.getClass().getName() + " is not an instance of " + type.getName();
-		});
-	}
-
-	/**
-	 * Creates a mapped set, relying on the caller to guarantee that values returned by the function are equivalent to the argument
-	 *
-	 * @param <T> The type of the mapped collection
-	 * @param type The run-time type for the mapped collection (may be null)
-	 * @param map The mapping function to map the elements of this collection
-	 * @param reverse The reverse function if addition support is desired for the mapped collection
-	 * @return The mapped collection
-	 */
-	default <T> QSet<T> mapEquivalent(Function<? super E, T> map, Function<? super T, E> reverse) {
-		return mapEquivalent((TypeToken<T>) TypeToken.of(map.getClass()).resolveType(Function.class.getTypeParameters()[1]), map, reverse);
-	}
-
-	/**
-	 * Creates a mapped set, relying on the caller to guarantee that values returned by the function are equivalent to the argument
-	 *
-	 * @param <T> The type of the mapped collection
-	 * @param type The run-time type for the mapped collection (may be null)
-	 * @param map The mapping function to map the elements of this collection
-	 * @param reverse The reverse function if addition support is desired for the mapped collection
-	 * @return The mapped collection
-	 */
-	default <T> QSet<T> mapEquivalent(TypeToken<T> type, Function<? super E, T> map, Function<? super T, E> reverse) {
-		return new MappedQSet<>(this, type, map, reverse);
+		return (QSet<T>) Qollection.super.filter(type);
 	}
 
 	@Override
-	default QSet<E> immutable() {
-		return new ImmutableQSet<>(this);
+	default QSet<E> immutable(String modMsg) {
+		return new ImmutableQSet<>(this, modMsg);
 	}
 
 	@Override
@@ -131,8 +105,8 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 	}
 
 	@Override
-	default QSet<E> noRemove() {
-		return (QSet<E>) Qollection.super.noRemove();
+	default QSet<E> noRemove(String modMsg) {
+		return (QSet<E>) Qollection.super.noRemove(modMsg);
 	}
 
 	@Override
@@ -141,8 +115,8 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 	}
 
 	@Override
-	default QSet<E> noAdd() {
-		return (QSet<E>) Qollection.super.noAdd();
+	default QSet<E> noAdd(String modMsg) {
+		return (QSet<E>) Qollection.super.noAdd(modMsg);
 	}
 
 	@Override
@@ -228,16 +202,6 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 					public void remove() throws IllegalArgumentException {
 						throw new IllegalArgumentException("This collection is immutable");
 					}
-
-					@Override
-					public String canAdd(T toAdd) {
-						return "This collection is immutable";
-					}
-
-					@Override
-					public void add(T toAdd) throws IllegalArgumentException {
-						throw new IllegalArgumentException("This collection is immutable");
-					}
 				});
 			}
 		}
@@ -284,6 +248,11 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 						return super.characteristics() | Spliterator.IMMUTABLE;
 					}
 				};
+			}
+
+			@Override
+			public String toString() {
+				return QSet.toString(this);
 			}
 		}
 		return new ConstantQSet();
@@ -378,46 +347,118 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 		}
 	}
 
-	class MappedSetOrQollectionBuilder<E, T> extends MappedQollectionBuilder<E, T> {
-		public MappedSetOrQollectionBuilder(QSet<E> wrapped, TypeToken<T> type) {
-			super(wrapped, type);
+	/**
+	 * A filter-map builder that may produce either a plain {@link Qollection} or a {@link QSet}. It will produce a QSet unless {#link
+	 * #map(Function, boolean)} is called, producing a plain {@link Qollection.MappedQollectionBuilder} that will produce a Qollection as
+	 * normal. {@link #mapEquiv(Function, boolean)} may be used alternatively to preserve the uniqueness contract and produce a mapped QSet.
+	 * 
+	 * @param <E> The type of values in the source collection
+	 * @param <I> Intermediate type
+	 * @param <T> The type of values in the mapped collection
+	 */
+	class MappedSetOrQollectionBuilder<E, I, T> extends MappedQollectionBuilder<E, I, T> {
+		public MappedSetOrQollectionBuilder(QSet<E> wrapped, MappedSetOrQollectionBuilder<E, ?, I> parent, TypeToken<T> type) {
+			super(wrapped, parent, type);
+		}
+
+		@Override
+		public QSet<E> getQollection() {
+			return (QSet<E>) super.getQollection();
+		}
+
+		@Override
+		protected MappedSetOrQollectionBuilder<E, ?, I> getParent() {
+			return (MappedSetOrQollectionBuilder<E, ?, I>) super.getParent();
+		}
+
+		/**
+		 * This method differs from its super method slightly in that it does not return this builder. Since no assumption can be made that
+		 * a set mapped with the given function would retain its unique contract, this method returns a different builder that produces a
+		 * plain {@link Qollection} instead of a {@link QSet}. If it is known that the given function preserves the uniqueness quality
+		 * required of {@link Set} implementations and a {@link QSet} is desired for the result, use {@link #mapEquiv(Function, boolean)}.
+		 * 
+		 * @param map The mapping function
+		 * @param mapNulls Whether to apply the function to null values or simply pass them through to the mapped set as null values
+		 * @return A plain {@link Qollection} builder with the same properties as this builder, plus the given map
+		 */
+		@Override
+		public MappedQollectionBuilder<E, I, T> map(Function<? super I, ? extends T> map, boolean mapNulls) {
+			MappedQollectionBuilder<E, I, T> nonEquivBuilder = new MappedQollectionBuilder<>(getQollection(), getParent(), getType());
+			if (getFilter() != null)
+				nonEquivBuilder.filter(getFilter(), areNullsFiltered());
+			if (getReverse() != null)
+				nonEquivBuilder.withReverse(getReverse(), areNullsReversed());
+			return nonEquivBuilder.map(map, mapNulls);
+		}
+
+		/**
+		 * Similar to {@link #map(Function, boolean)}, but with the additional (unenforced) assertion that the given function applied to
+		 * this set will produce a set of similarly unique values. Although this assertion is not enforced here and no exceptions will be
+		 * thrown for violation of it, uniqueness is part of the contract of a {@link Set} that may be relied on by other code that may fail
+		 * if that contract is not met.
+		 * 
+		 * @param map The mapping function
+		 * @param mapNulls Whether to apply the function to null values or simply pass them through to the mapped set as null values
+		 * @return This builder
+		 */
+		public MappedSetOrQollectionBuilder<E, I, T> mapEquiv(Function<? super I, ? extends T> map, boolean mapNulls) {
+			return (MappedSetOrQollectionBuilder<E, I, T>) super.map(map, mapNulls);
+		}
+
+		@Override
+		public <X> MappedSetOrQollectionBuilder<E, T, X> andThen(TypeToken<X> nextType) {
+			return new MappedSetOrQollectionBuilder<>(getQollection(), this, nextType);
+		}
+
+		@Override
+		public EquivalentFilterMapDef<E, I, T> toDef() {
+			EquivalentFilterMapDef<E, ?, I> parent = getParent() == null ? null : getParent().toDef();
+			TypeToken<I> intermediate = parent == null ? (TypeToken<I>) getQollection().getType() : parent.destType;
+			return new EquivalentFilterMapDef<>(getQollection().getType(), intermediate, getType(), parent, getFilter(), areNullsFiltered(),
+				getMap(), areNullsMapped(), getReverse(), areNullsReversed());
+		}
+
+		@Override
+		public QSet<T> build() {
+			return (QSet<T>) super.build();
 		}
 	}
 
 	/**
-	 * Implements {@link QSet#filter(Function)} and {@link QSet#filter(Class)}
-	 *
-	 * @param <E> The type of the set to filter
-	 * @param <T> the type of the mapped set
+	 * The type of {@link Qollection.FilterMapDef} produced by {@link QSet.MappedSetOrQollectionBuilder}s when the uniqueness contract is
+	 * preserved.
+	 * 
+	 * @param <E> The type of values in the source collection
+	 * @param <I> Intermediate type
+	 * @param <T> The type of values in the mapped collection
 	 */
-	class FilteredSet<E, T> extends FilterMappedQollection<E, T> implements PartialSetImpl<T> {
-		protected FilteredSet(QSet<E> wrap, TypeToken<T> type, Function<? super E, String> filter) {
-			super(wrap, type, value -> {
-				String pass = filter.apply(value);
-				return new FilterMapResult<>(pass == null ? (T) value : null, pass);
-			}, value -> (E) value);
+	class EquivalentFilterMapDef<E, I, T> extends FilterMapDef<E, I, T> {
+		public EquivalentFilterMapDef(TypeToken<E> sourceType, TypeToken<I> intermediateType, TypeToken<T> type,
+			EquivalentFilterMapDef<E, ?, I> parent, Function<? super I, String> filter, boolean filterNulls,
+			Function<? super I, ? extends T> map, boolean mapNulls, Function<? super T, ? extends I> reverse, boolean reverseNulls) {
+			super(sourceType, intermediateType, type, parent, filter, filterNulls, map, mapNulls, reverse, reverseNulls);
+		}
+	}
+
+	/**
+	 * A set that is a result of a filter-map operation applied to another set
+	 * 
+	 * @param <E> The type of values in the source set
+	 * @param <T> The type of values in this set
+	 */
+	class FilterMappedSet<E, T> extends FilterMappedQollection<E, T> implements PartialSetImpl<T> {
+		public FilterMappedSet(QSet<E> wrap, EquivalentFilterMapDef<E, ?, T> filterMapDef) {
+			super(wrap, filterMapDef);
 		}
 
 		@Override
 		protected QSet<E> getWrapped() {
 			return (QSet<E>) super.getWrapped();
 		}
-	}
-
-	/**
-	 * Implements {@link QSet#mapEquivalent(TypeToken, Function, Function)}
-	 *
-	 * @param <E> The type of the set to map
-	 * @param <T> The type of the mapped set
-	 */
-	class MappedQSet<E, T> extends FilterMappedQollection<E, T> implements QSet<T> {
-		protected MappedQSet(QSet<E> wrap, TypeToken<T> type, Function<? super E, T> map, Function<? super T, E> reverse) {
-			super(wrap, type, value -> new FilterMapResult<>(map.apply(value), null), reverse);
-		}
 
 		@Override
-		protected QSet<E> getWrapped() {
-			return (QSet<E>) super.getWrapped();
+		protected EquivalentFilterMapDef<E, ?, T> getDef() {
+			return (EquivalentFilterMapDef<E, ?, T>) super.getDef();
 		}
 	}
 
@@ -427,8 +468,8 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 	 * @param <E> The type of elements in the set
 	 */
 	class ImmutableQSet<E> extends ImmutableQollection<E> implements PartialSetImpl<E> {
-		protected ImmutableQSet(QSet<E> wrap) {
-			super(wrap);
+		protected ImmutableQSet(QSet<E> wrap, String modMsg) {
+			super(wrap, modMsg);
 		}
 
 		@Override
@@ -437,8 +478,8 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 		}
 
 		@Override
-		public ImmutableQSet<E> immutable() {
-			return this;
+		public ImmutableQSet<E> immutable(String modMsg) {
+			return (ImmutableQSet<E>) super.immutable(modMsg);
 		}
 	}
 

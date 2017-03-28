@@ -1,7 +1,18 @@
 package org.qommons.collect;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
+import java.util.RandomAccess;
+import java.util.Spliterator;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import org.qommons.Transaction;
 import org.qommons.collect.Quiterator.CollectionElement;
@@ -518,7 +529,16 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		}
 	}
 
-	class ConstantOrderedQollection<E> extends ConstantQollection<E> implements OrderedQollection<E> {}
+	/**
+	 * Implements {@link OrderedQollection#constant(TypeToken, List)}
+	 * 
+	 * @param <E> The type of elements in the collection
+	 */
+	class ConstantOrderedQollection<E> extends ConstantQollection<E> implements OrderedQollection<E> {
+		public ConstantOrderedQollection(TypeToken<E> type, List<E> collection) {
+			super(type, collection);
+		}
+	}
 
 	/**
 	 * Implements {@link OrderedQollection#flattenValues(OrderedQollection)}
