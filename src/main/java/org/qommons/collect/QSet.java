@@ -23,6 +23,8 @@ import com.google.common.reflect.TypeToken;
  * @param <E> The type of elements in the set
  */
 public interface QSet<E> extends Qollection<E>, Set<E> {
+	// Overrides needed by the compiler
+
 	@Override
 	default Iterator<E> iterator() {
 		return Qollection.super.iterator();
@@ -46,14 +48,6 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 		return Qollection.super.containsAll(coll);
 	}
 
-	/**
-	 * @param o The object to get the equivalent of
-	 * @return The object in this set whose value is equivalent to the given value
-	 */
-	default Value<E> equivalent(Object o) {
-		return new QSetEquivalentFinder<>(this, o);
-	}
-
 	@Override
 	default E[] toArray() {
 		return Qollection.super.toArray();
@@ -63,6 +57,18 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 	default <T> T[] toArray(T[] a) {
 		return Qollection.super.toArray(a);
 	}
+
+	// Additional methods
+
+	/**
+	 * @param o The object to get the equivalent of
+	 * @return The object in this set whose value is equivalent to the given value
+	 */
+	default Value<E> equivalent(Object o) {
+		return new QSetEquivalentFinder<>(this, o);
+	}
+
+	// Filter/mapping
 
 	@Override
 	default <T> MappedSetOrQollectionBuilder<E, E, T> buildMap(TypeToken<T> type) {
@@ -94,9 +100,11 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 		return (QSet<T>) Qollection.super.filter(type);
 	}
 
+	// Modification controls
+
 	@Override
 	default QSet<E> immutable(String modMsg) {
-		return new ImmutableQSet<>(this, modMsg);
+		return (QSet<E>) Qollection.super.immutable(modMsg);
 	}
 
 	@Override
@@ -123,6 +131,8 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 	default QSet<E> filterModification(Function<? super E, String> removeFilter, Function<? super E, String> addFilter) {
 		return new ModFilteredSet<>(this, removeFilter, addFilter);
 	}
+
+	// Static utility methods
 
 	/**
 	 * Turns an observable value containing an observable collection into the contents of the value
@@ -276,6 +286,8 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 	public static <T> QSet<T> unique(Qollection<T> coll) {
 		return new CollectionWrappingSet<>(coll);
 	}
+
+	// Implementation member classes
 
 	/**
 	 * An extension of QSet that implements some of the redundant methods and throws UnsupportedOperationExceptions for modifications.
@@ -459,27 +471,6 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 		@Override
 		protected EquivalentFilterMapDef<E, ?, T> getDef() {
 			return (EquivalentFilterMapDef<E, ?, T>) super.getDef();
-		}
-	}
-
-	/**
-	 * An observable set that cannot be modified directly, but reflects the value of a wrapped set as it changes
-	 *
-	 * @param <E> The type of elements in the set
-	 */
-	class ImmutableQSet<E> extends ImmutableQollection<E> implements PartialSetImpl<E> {
-		protected ImmutableQSet(QSet<E> wrap, String modMsg) {
-			super(wrap, modMsg);
-		}
-
-		@Override
-		protected QSet<E> getWrapped() {
-			return (QSet<E>) super.getWrapped();
-		}
-
-		@Override
-		public ImmutableQSet<E> immutable(String modMsg) {
-			return (ImmutableQSet<E>) super.immutable(modMsg);
 		}
 	}
 

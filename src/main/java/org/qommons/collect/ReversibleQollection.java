@@ -12,7 +12,13 @@ import org.qommons.value.Value;
 
 import com.google.common.reflect.TypeToken;
 
+/**
+ * An {@link OrderedQollection} that also knows how to return its elements in reverse order
+ * 
+ * @param <E>
+ */
 public interface ReversibleQollection<E> extends OrderedQollection<E>, ReversibleCollection<E> {
+	/** @return A Quiterator that returns this collection's elements in reverse order */
 	Quiterator<E> reverseSpliterator();
 
 	@Override
@@ -65,23 +71,6 @@ public interface ReversibleQollection<E> extends OrderedQollection<E>, Reversibl
 	}
 
 	@Override
-	default <T> ReversibleQollection<T> map(TypeToken<T> type, Function<? super E, ? extends T> map) {
-		return (ReversibleQollection<T>) OrderedQollection.super.map(type, map);
-	}
-
-	@Override
-	default <T> ReversibleQollection<T> map(TypeToken<T> type, Function<? super E, ? extends T> map,
-		Function<? super T, ? extends E> reverse) {
-		return map(type, map, reverse, false);
-	}
-
-	@Override
-	default <T> ReversibleQollection<T> map(TypeToken<T> type, Function<? super E, ? extends T> map,
-		Function<? super T, ? extends E> reverse, boolean mapNulls) {
-		return new MappedReversibleQollection<>(this, type, map, reverse, mapNulls);
-	}
-
-	@Override
 	default ReversibleQollection<E> filter(Function<? super E, String> filter) {
 		return (ReversibleQollection<E>) OrderedQollection.super.filter(filter);
 	}
@@ -92,32 +81,198 @@ public interface ReversibleQollection<E> extends OrderedQollection<E>, Reversibl
 	}
 
 	@Override
-	default <T> ReversibleQollection<T> filterMap(Function<? super E, T> filterMap) {
-		return (ReversibleQollection<T>) OrderedQollection.super.filterMap(filterMap);
+	default <T> ReversibleQollection<T> filterMap(FilterMapDef<E, ?, T> filterMap) {
+		return new FilterMappedReversibleQollection<>(this, filterMap);
 	}
 
 	@Override
-	default <T> ReversibleQollection<T> filterMap(TypeToken<T> type, Function<? super E, ? extends T> map,
-		Function<? super T, ? extends E> reverse) {
-		return (ReversibleQollection<T>) OrderedQollection.super.filterMap(type, map, reverse);
+	default <T, V> ReversibleQollection<V> combine(Value<T> arg, BiFunction<? super E, ? super T, V> func) {
+		return (ReversibleQollection<V>) OrderedQollection.super.combine(arg, func);
 	}
 
 	@Override
-	default <T> ReversibleQollection<T> filterMap2(TypeToken<T> type, Function<? super E, FilterMapResult<T>> map,
-		Function<? super T, E> reverse) {
-		return new FilteredMappedReversibleQollection<>(this, type, map, reverse);
+	default <T, V> ReversibleQollection<V> combine(Value<T> arg, TypeToken<V> type, BiFunction<? super E, ? super T, V> func) {
+		return (ReversibleQollection<V>) OrderedQollection.super.combine(arg, type, func);
+	}
+
+	@Override
+	default <T, V> ReversibleQollection<V> combine(Value<T> arg, TypeToken<V> type, BiFunction<? super E, ? super T, V> func,
+		BiFunction<? super V, ? super T, E> reverse) {
+		return new CombinedReversibleQollection<>(this, arg, type, func, reverse);
+	}
+
+	@Override
+	default ReversibleQollection<E> immutable(String modMsg) {
+		return (ReversibleQollection<E>) OrderedQollection.super.immutable(modMsg);
+	}
+
+	@Override
+	default ReversibleQollection<E> filterRemove(Function<? super E, String> filter) {
+		return (ReversibleQollection<E>) OrderedQollection.super.filterRemove(filter);
+	}
+
+	@Override
+	default ReversibleQollection<E> noRemove(String modMsg) {
+		return (ReversibleQollection<E>) OrderedQollection.super.noRemove(modMsg);
+	}
+
+	@Override
+	default ReversibleQollection<E> filterAdd(Function<? super E, String> filter) {
+		return (ReversibleQollection<E>) OrderedQollection.super.filterAdd(filter);
+	}
+
+	@Override
+	default ReversibleQollection<E> noAdd(String modMsg) {
+		return (ReversibleQollection<E>) OrderedQollection.super.noAdd(modMsg);
+	}
+
+	@Override
+	default ReversibleQollection<E> filterModification(Function<? super E, String> removeFilter, Function<? super E, String> addFilter) {
+		return new ModFilteredReversibleQollection<>(this, removeFilter, addFilter);
 	}
 
 	/**
-	 * Implements {@link OrderedQollection#map(Function)}
-	 *
-	 * @param <E> The type of the collection to map
-	 * @param <T> The type of the mapped collection
+	 * Implements {@link ReversibleQollection#reverse()} by default
+	 * 
+	 * @param <E> The type of elements in the collection
 	 */
-	class MappedReversibleQollection<E, T> extends MappedOrderedQollection<E, T> implements ReversibleQollection<T> {
-		protected MappedReversibleQollection(ReversibleQollection<E> wrap, TypeToken<T> type, Function<? super E, ? extends T> map,
-			Function<? super T, ? extends E> reverse, boolean mapNulls) {
-			super(wrap, type, map, reverse, mapNulls);
+	class ReversedQollection<E> extends ReversedCollection<E> implements PartialQollectionImpl<E>, ReversibleQollection<E> {
+		public ReversedQollection(ReversibleQollection<E> wrap) {
+			super(wrap);
+		}
+
+		@Override
+		protected ReversibleQollection<E> getWrapped() {
+			return (ReversibleQollection<E>) super.getWrapped();
+		}
+
+		@Override
+		public ReversibleQollection<E> reverse() {
+			return (ReversibleQollection<E>) super.reverse();
+		}
+
+		@Override
+		public TypeToken<E> getType() {
+			return getWrapped().getType();
+		}
+
+		@Override
+		public Quiterator<E> spliterator() {
+			return getWrapped().reverseSpliterator();
+		}
+
+		@Override
+		public String canRemove(Object value) {
+			return getWrapped().canRemove(value);
+		}
+
+		@Override
+		public String canAdd(E value) {
+			return getWrapped().canAdd(value);
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return getWrapped().lock(write, cause);
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return getWrapped().isLockSupported();
+		}
+
+		@Override
+		public Quiterator<E> reverseSpliterator() {
+			return getWrapped().spliterator();
+		}
+
+		@Override
+		public E get(int index) {
+			try (Transaction t = getWrapped().lock(false, null)) {
+				return getWrapped().get(getWrapped().size() - index - 1);
+			}
+		}
+
+		@Override
+		public int indexOf(Object value) {
+			try (Transaction t = getWrapped().lock(false, null)) {
+				return getWrapped().size() - getWrapped().lastIndexOf(value) - 1;
+			}
+		}
+
+		@Override
+		public int lastIndexOf(Object value) {
+			try (Transaction t = getWrapped().lock(false, null)) {
+				return getWrapped().size() - getWrapped().indexOf(value) - 1;
+			}
+		}
+
+		@Override
+		public Value<E> findFirst(Predicate<E> filter) {
+			return getWrapped().findLast(filter);
+		}
+
+		@Override
+		public Value<E> findLast(Predicate<E> filter) {
+			return getWrapped().findFirst(filter);
+		}
+
+		@Override
+		public Value<E> getFirst() {
+			return getWrapped().getLast();
+		}
+
+		@Override
+		public Value<E> getLast() {
+			return getWrapped().getFirst();
+		}
+
+		@Override
+		public E last() {
+			return getWrapped().getFirst().get();
+		}
+
+		@Override
+		public E[] toArray() {
+			return (E[]) super.toArray();
+		}
+	}
+
+	/**
+	 * Implements {@link ReversibleQollection#findLast(Predicate)}
+	 * 
+	 * @param <E> The type of elements in this collection
+	 */
+	class OrderedReversibleCollectionFinder<E> extends OrderedCollectionFinder<E> {
+		public OrderedReversibleCollectionFinder(ReversibleQollection<E> collection, Predicate<? super E> filter, boolean forward) {
+			super(collection, filter, forward);
+		}
+
+		@Override
+		public ReversibleQollection<E> getCollection() {
+			return (ReversibleQollection<E>) super.getCollection();
+		}
+
+		@Override
+		public E get() {
+			if (isForward())
+				return super.get();
+			for (E value : getCollection().descending())
+				if (getFilter().test(value))
+					return value;
+			return null;
+		}
+	}
+
+	/**
+	 * Implements {@link ReversibleQollection#filterMap(Qollection.FilterMapDef)}
+	 * 
+	 * @param <E> The type of values in the source collection
+	 * @param <T> The type of values in this collection
+	 */
+	class FilterMappedReversibleQollection<E, T> extends FilterMappedOrderedQollection<E, T> implements ReversibleQollection<T> {
+		public FilterMappedReversibleQollection(ReversibleQollection<E> wrap, Qollection.FilterMapDef<E, ?, T> def) {
+			super(wrap, def);
 		}
 
 		@Override
@@ -132,39 +287,48 @@ public interface ReversibleQollection<E> extends OrderedQollection<E>, Reversibl
 	}
 
 	/**
-	 * Implements {@link OrderedQollection#filterMap(Function)}
-	 *
-	 * @param <E> The type of the collection to be filter-mapped
-	 * @param <T> The type of the mapped collection
+	 * Implements {@link ReversibleQollection#combine(Value, TypeToken, BiFunction, BiFunction)}
+	 * 
+	 * @param <E> The type of values in the source collection
+	 * @param <T> The type of the combined value
+	 * @param <V> The type of values in this collection
 	 */
-	class FilterMappedOrderedQollection<E, T> extends FilterMappedQollection<E, T> implements OrderedQollection<T> {
-		FilterMappedOrderedQollection(OrderedQollection<E> wrap, TypeToken<T> type, Function<? super E, FilterMapResult<? extends T>> map,
-			Function<? super T, ? extends E> reverse) {
-			super(wrap, type, map, reverse);
+	class CombinedReversibleQollection<E, T, V> extends CombinedOrderedQollection<E, T, V> implements ReversibleQollection<V> {
+		public CombinedReversibleQollection(ReversibleQollection<E> collection, Value<T> value, TypeToken<V> type,
+			BiFunction<? super E, ? super T, V> map, BiFunction<? super V, ? super T, E> reverse) {
+			super(collection, value, type, map, reverse);
 		}
 
 		@Override
-		protected OrderedQollection<E> getWrapped() {
-			return (OrderedQollection<E>) super.getWrapped();
+		protected ReversibleQollection<E> getWrapped() {
+			return (ReversibleQollection<E>) super.getWrapped();
+		}
+
+		@Override
+		public Quiterator<V> reverseSpliterator() {
+			return combine(getWrapped().reverseSpliterator());
 		}
 	}
 
 	/**
-	 * Implements {@link OrderedQollection#combine(Value, BiFunction)}
-	 *
-	 * @param <E> The type of the collection to be combined
-	 * @param <T> The type of the value to combine the collection elements with
-	 * @param <V> The type of the combined collection
+	 * Implements {@link ReversibleQollection#filterModification(Function, Function)}
+	 * 
+	 * @param <E> The type of values in this collection
 	 */
-	class CombinedOrderedQollection<E, T, V> extends CombinedQollection<E, T, V> implements OrderedQollection<V> {
-		CombinedOrderedQollection(OrderedQollection<E> collection, Value<T> value, TypeToken<V> type,
-			BiFunction<? super E, ? super T, V> map, BiFunction<? super V, ? super T, E> reverse) {
-			super(collection, type, value, map, reverse);
+	class ModFilteredReversibleQollection<E> extends ModFilteredOrderedQollection<E> implements ReversibleQollection<E> {
+		public ModFilteredReversibleQollection(ReversibleQollection<E> wrapped, Function<? super E, String> removeFilter,
+			Function<? super E, String> addFilter) {
+			super(wrapped, removeFilter, addFilter);
 		}
 
 		@Override
-		protected OrderedQollection<E> getWrapped() {
-			return (OrderedQollection<E>) super.getWrapped();
+		protected ReversibleQollection<E> getWrapped() {
+			return (ReversibleQollection<E>) super.getWrapped();
+		}
+
+		@Override
+		public Quiterator<E> reverseSpliterator() {
+			return modFilter(getWrapped().reverseSpliterator());
 		}
 	}
 }

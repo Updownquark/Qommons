@@ -27,6 +27,8 @@ import com.google.common.reflect.TypeToken;
  * @param <E> The type of elements in the collection
  */
 public interface OrderedQollection<E> extends Qollection<E> {
+	// Additional methods
+
 	/**
 	 * @param filter The filter function
 	 * @return The first value in this collection passing the filter, or null if none of this collection's elements pass
@@ -115,6 +117,16 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		}
 	}
 
+	/**
+	 * @param compare The comparator to use to sort this collection's elements
+	 * @return A new collection containing all the same elements as this collection, but ordered according to the given comparator
+	 */
+	default OrderedQollection<E> sorted(Comparator<? super E> compare) {
+		return new SortedObservableCollection<>(this, compare);
+	}
+
+	// Filter/mapping
+
 	@Override
 	default <T> OrderedQollection<T> filterMap(FilterMapDef<E, ?, T> filterMap) {
 		return new FilterMappedOrderedQollection<>(this, filterMap);
@@ -135,6 +147,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		return (OrderedQollection<T>) Qollection.super.map(map);
 	}
 
+	// Combination
+
 	@Override
 	default <T, V> OrderedQollection<V> combine(Value<T> arg, BiFunction<? super E, ? super T, V> func) {
 		return (OrderedQollection<V>) Qollection.super.combine(arg, func);
@@ -151,22 +165,18 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		return new CombinedOrderedQollection<>(this, arg, type, func, reverse);
 	}
 
+	// Grouping
+
 	@Override
 	default <K> MultiQMap<K, E> groupBy(TypeToken<K> keyType, Function<E, K> keyMap) {
 		return new GroupedOrderedMultiMap<>(this, keyMap, keyType);
 	}
 
-	/**
-	 * @param compare The comparator to use to sort this collection's elements
-	 * @return A new collection containing all the same elements as this collection, but ordered according to the given comparator
-	 */
-	default OrderedQollection<E> sorted(Comparator<? super E> compare) {
-		return new SortedObservableCollection<>(this, compare);
-	}
+	// Modification control
 
 	@Override
 	default OrderedQollection<E> immutable(String modMsg) {
-		return new ImmutableOrderedQollection<>(this, modMsg);
+		return (OrderedQollection<E>) Qollection.super.immutable(modMsg);
 	}
 
 	@Override
@@ -193,6 +203,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	default OrderedQollection<E> filterModification(Function<? super E, String> removeFilter, Function<? super E, String> addFilter) {
 		return new ModFilteredOrderedQollection<>(this, removeFilter, addFilter);
 	}
+
+	// Static utility methods
 
 	/**
 	 * @param <E> The type of the values
@@ -263,6 +275,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		return new InterspersedQollection<>(coll, discriminator);
 	}
 
+	// Implementation member classes
+
 	/**
 	 * Finds something in an {@link OrderedQollection}
 	 *
@@ -270,11 +284,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	 */
 	class OrderedCollectionFinder<E> implements Value<E> {
 		private final OrderedQollection<E> theCollection;
-
 		private final TypeToken<E> theType;
-
 		private final Predicate<? super E> theFilter;
-
 		private final boolean isForward;
 
 		OrderedCollectionFinder(OrderedQollection<E> collection, Predicate<? super E> filter, boolean forward) {
@@ -488,27 +499,6 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		@Override
 		public String toString() {
 			return Qollection.toString(this);
-		}
-	}
-
-	/**
-	 * An observable ordered collection that cannot be modified directly, but reflects the value of a wrapped collection as it changes
-	 *
-	 * @param <E> The type of elements in the collection
-	 */
-	class ImmutableOrderedQollection<E> extends ImmutableQollection<E> implements OrderedQollection<E> {
-		protected ImmutableOrderedQollection(OrderedQollection<E> wrap, String modMsg) {
-			super(wrap, modMsg);
-		}
-
-		@Override
-		protected OrderedQollection<E> getWrapped() {
-			return (OrderedQollection<E>) super.getWrapped();
-		}
-
-		@Override
-		public OrderedQollection<E> immutable(String modMsg) {
-			return (OrderedQollection<E>) super.immutable(modMsg);
 		}
 	}
 

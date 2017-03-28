@@ -25,7 +25,7 @@ public interface OrderedQSet<E> extends QSet<E>, OrderedQollection<E> {
 
 	@Override
 	default OrderedQSet<E> immutable(String modMsg) {
-		return new ImmutableOrderedQSet<>(this, modMsg);
+		return (OrderedQSet<E>) QSet.super.immutable(modMsg);
 	}
 
 	@Override
@@ -75,27 +75,6 @@ public interface OrderedQSet<E> extends QSet<E>, OrderedQollection<E> {
 		@Override
 		protected OrderedQSet<E> getWrapped() {
 			return (OrderedQSet<E>) super.getWrapped();
-		}
-	}
-
-	/**
-	 * Implements {@link OrderedQSet#immutable(String)}
-	 * 
-	 * @param <E> The type of values in the set
-	 */
-	class ImmutableOrderedQSet<E> extends ImmutableQSet<E> implements OrderedQSet<E> {
-		public ImmutableOrderedQSet(OrderedQSet<E> wrap, String modMsg) {
-			super(wrap, modMsg);
-		}
-
-		@Override
-		protected OrderedQSet<E> getWrapped() {
-			return (OrderedQSet<E>) super.getWrapped();
-		}
-
-		@Override
-		public ImmutableOrderedQSet<E> immutable(String modMsg) {
-			return (ImmutableOrderedQSet<E>) super.immutable(modMsg);
 		}
 	}
 

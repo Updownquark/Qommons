@@ -44,7 +44,8 @@ import com.google.common.reflect.TypeToken;
  * instead of<br />
  * &nbsp;&nbsp;&nbsp;&nbsp;<code>coll.stream().map(Function).collect(Collectors.toList())</code>.</li>
  * <li><b>Modification Control</b> The {@link #filterAdd(Function)} and {@link #filterRemove(Function)} methods create collections that
- * forbid certain types of modifications to a collection. The {@link #immutable(String)} prevents any API modification at all.</li>
+ * forbid certain types of modifications to a collection. The {@link #immutable(String)} prevents any API modification at all. Modification
+ * control can also be used to intercept and perform actions based on modifications to a collection.</li>
  * <li><b>Quiterator</b> Qollections must implement {@link #spliterator()}, which returns a {@link Quiterator}, which is an enhanced
  * {@link Spliterator}. This had potential for the improved performance associated with using {@link Spliterator} instead of
  * {@link Iterator} as well as the utility added by {@link Quiterator}.</li>
@@ -68,11 +69,37 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		static String NOT_FOUND = "No such item found";
 	}
 
+	// Additional contract methods
+
 	/** @return The run-time type of elements in this collection */
 	TypeToken<E> getType();
 
 	@Override
 	abstract Quiterator<E> spliterator();
+
+	/**
+	 * Tests the removability of an element from this collection. This method exposes a "best guess" on whether an element in the collection
+	 * could be removed, but does not provide any guarantee. This method should return true for any object for which {@link #remove(Object)}
+	 * is successful, but the fact that an object passes this test does not guarantee that it would be removed successfully. E.g. the
+	 * position of the element in the collection may be a factor, but may not be tested for here.
+	 *
+	 * @param value The value to test removability for
+	 * @return Null if given value could possibly be removed from this collection, or a message why it can't
+	 */
+	String canRemove(Object value);
+
+	/**
+	 * Tests the compatibility of an object with this collection. This method exposes a "best guess" on whether an element could be added to
+	 * the collection , but does not provide any guarantee. This method should return true for any object for which {@link #add(Object)} is
+	 * successful, but the fact that an object passes this test does not guarantee that it would be removed successfully. E.g. the position
+	 * of the element in the collection may be a factor, but is tested for here.
+	 *
+	 * @param value The value to test compatibility for
+	 * @return Null if given value could possibly be added to this collection, or a message why it can't
+	 */
+	String canAdd(E value);
+
+	// Default implementations of redundant Collection methods
 
 	@Override
 	default Iterator<E> iterator() {
@@ -145,11 +172,13 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		return ret.toArray(a);
 	}
 
+	// Simple utility methods
+
 	/**
 	 * @param values The values to add to the collection
 	 * @return This collection
 	 */
-	public default Qollection<E> addValues(E... values) {
+	default Qollection<E> addValues(E... values) {
 		try (Transaction t = lock(true, null)) {
 			for (E value : values)
 				add(value);
@@ -210,25 +239,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		};
 	}
 
-	/**
-	 * @param <T> The type of values to map to
-	 * @param type The run-time type of values to map to
-	 * @return A builder to customize the filter/mapped collection
-	 */
-	default <T> MappedQollectionBuilder<E, E, T> buildMap(TypeToken<T> type) {
-		return new MappedQollectionBuilder<>(this, null, type);
-	}
-
-	/**
-	 * Creates a collection using the results of a {@link MappedQollectionBuilder}
-	 * 
-	 * @param <T> The type of values to map to
-	 * @param filterMap The definition for the filter/mapping
-	 * @return The filter/mapped collection
-	 */
-	default <T> Qollection<T> filterMap(FilterMapDef<E, ?, T> filterMap) {
-		return new FilterMappedQollection<>(this, filterMap);
-	}
+	// Filter/mapping
 
 	/**
 	 * @param <T> The type of the new collection
@@ -263,6 +274,30 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	}
 
 	/**
+	 * Creates a builder that can be used to create a highly customized and efficient chain of filter-mappings. The
+	 * {@link MappedQollectionBuilder#build() result} will be a collection backed by this collection's values but filtered/mapped according
+	 * to the methods called on the builder.
+	 * 
+	 * @param <T> The type of values to map to
+	 * @param type The run-time type of values to map to
+	 * @return A builder to customize the filter/mapped collection
+	 */
+	default <T> MappedQollectionBuilder<E, E, T> buildMap(TypeToken<T> type) {
+		return new MappedQollectionBuilder<>(this, null, type);
+	}
+
+	/**
+	 * Creates a collection using the results of a {@link MappedQollectionBuilder}
+	 * 
+	 * @param <T> The type of values to map to
+	 * @param filterMap The definition for the filter/mapping
+	 * @return The filter/mapped collection
+	 */
+	default <T> Qollection<T> filterMap(FilterMapDef<E, ?, T> filterMap) {
+		return new FilterMappedQollection<>(this, filterMap);
+	}
+
+	/**
 	 * Shorthand for {@link #flatten(Qollection) flatten}({@link #map(Function) map}(Function))
 	 * 
 	 * @param <T> The type of the values produced
@@ -282,6 +317,8 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			qollectionType = new TypeToken<Qollection<? extends T>>() {}.where(new TypeParameter<T>() {}, type);
 		return flatten(this.<Qollection<? extends T>> buildMap(qollectionType).map(map, false).build());
 	}
+
+	// Combination
 
 	/**
 	 * @param <T> The type of the argument value
@@ -319,6 +356,8 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		BiFunction<? super V, ? super T, E> reverse) {
 		return new CombinedQollection<>(this, type, arg, func, reverse);
 	}
+
+	// Reduction
 
 	/**
 	 * Equivalent to {@link #reduce(Object, BiFunction, BiFunction)} with null for the remove function
@@ -416,6 +455,8 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}, null);
 	}
 
+	// Grouping
+
 	/**
 	 * @param <K> The type of the key
 	 * @param keyMap The mapping function to group this collection's values by
@@ -472,12 +513,14 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		return new GroupedSortedMultiMap<>(this, keyMap, keyType, compare);
 	}
 
+	// Modification controls
+
 	/**
 	 * @param modMsg The message to return when modification is requested
 	 * @return An observable collection that cannot be modified directly but reflects the value of this collection as it changes
 	 */
 	default Qollection<E> immutable(String modMsg) {
-		return new ImmutableQollection<>(this, modMsg);
+		return filterModification(v -> modMsg, v -> modMsg);
 	}
 
 	/**
@@ -537,27 +580,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		return new ModFilteredQollection<>(this, removeFilter, addFilter);
 	}
 
-	/**
-	 * Tests the removability of an element from this collection. This method exposes a "best guess" on whether an element in the collection
-	 * could be removed, but does not provide any guarantee. This method should return true for any object for which {@link #remove(Object)}
-	 * is successful, but the fact that an object passes this test does not guarantee that it would be removed successfully. E.g. the
-	 * position of the element in the collection may be a factor, but may not be tested for here.
-	 *
-	 * @param value The value to test removability for
-	 * @return Null if given value could possibly be removed from this collection, or a message why it can't
-	 */
-	String canRemove(Object value);
-
-	/**
-	 * Tests the compatibility of an object with this collection. This method exposes a "best guess" on whether an element could be added to
-	 * the collection , but does not provide any guarantee. This method should return true for any object for which {@link #add(Object)} is
-	 * successful, but the fact that an object passes this test does not guarantee that it would be removed successfully. E.g. the position
-	 * of the element in the collection may be a factor, but is tested for here.
-	 *
-	 * @param value The value to test compatibility for
-	 * @return Null if given value could possibly be added to this collection, or a message why it can't
-	 */
-	String canAdd(E value);
+	// Static utility methods
 
 	/**
 	 * @param <E> The type of the values
@@ -640,6 +663,8 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		ret.append(')');
 		return ret.toString();
 	}
+
+	// Implementation member classes
 
 	/**
 	 * An iterator backed by a Quiterator
@@ -1445,6 +1470,10 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public Quiterator<V> spliterator() {
+			return combine(theWrapped.spliterator());
+		}
+
+		protected Quiterator<V> combine(Quiterator<E> source) {
 			Supplier<Function<CollectionElement<? extends E>, CollectionElement<V>>> elementMap = () -> {
 				CollectionElement<? extends E>[] container = new CollectionElement[1];
 				WrappingElement<E, V> wrapper = new WrappingElement<E, V>(getType(), container) {
@@ -1474,7 +1503,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					return wrapper;
 				};
 			};
-			return new WrappingQuiterator<>(theWrapped.spliterator(), getType(), elementMap);
+			return new WrappingQuiterator<>(source, getType(), elementMap);
 		}
 
 		@Override
@@ -1730,115 +1759,6 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	}
 
 	/**
-	 * A collection that cannot be modified directly, but reflects the values in a wrapped collection
-	 *
-	 * @param <E> The type of elements in the collection
-	 */
-	class ImmutableQollection<E> implements PartialQollectionImpl<E> {
-		private final Qollection<E> theWrapped;
-		private final String theModificationMessage;
-
-		/**
-		 * @param wrap The collection to wrap
-		 * @param modMsg The message to return when modifications are requested
-		 */
-		protected ImmutableQollection(Qollection<E> wrap, String modMsg) {
-			theWrapped = wrap;
-			theModificationMessage = modMsg;
-		}
-
-		protected Qollection<E> getWrapped() {
-			return theWrapped;
-		}
-
-		protected String getModMessage() {
-			return theModificationMessage;
-		}
-
-		@Override
-		public Transaction lock(boolean write, Object cause) {
-			if (write)
-				throw new IllegalArgumentException(theModificationMessage);
-			return theWrapped.lock(false, cause);
-		}
-
-		@Override
-		public Quiterator<E> spliterator() {
-			return new WrappingQuiterator<>(theWrapped.spliterator(), getType(), () -> {
-				CollectionElement<E>[] container = new CollectionElement[1];
-				WrappingElement<E, E> wrapperEl = new WrappingElement<E, E>(getType(), container) {
-					@Override
-					public E get() {
-						return getWrapped().get();
-					}
-
-					@Override
-					public <V extends E> E set(V value, Object cause) throws IllegalArgumentException {
-						throw new IllegalArgumentException(theModificationMessage);
-					}
-
-					@Override
-					public <V extends E> String isAcceptable(V value) {
-						return theModificationMessage;
-					}
-
-					@Override
-					public Value<String> isEnabled() {
-						return Value.constant(theModificationMessage);
-					}
-
-					@Override
-					public String canRemove() {
-						return theModificationMessage;
-					}
-
-					@Override
-					public void remove() {
-						throw new IllegalArgumentException(canRemove());
-					}
-				};
-				return el -> {
-					container[0] = (CollectionElement<E>) el;
-					return wrapperEl;
-				};
-			});
-		}
-
-		@Override
-		public TypeToken<E> getType() {
-			return theWrapped.getType();
-		}
-
-		@Override
-		public int size() {
-			return theWrapped.size();
-		}
-
-		@Override
-		public String canRemove(Object value) {
-			return theModificationMessage;
-		}
-
-		@Override
-		public String canAdd(E value) {
-			return theModificationMessage;
-		}
-
-		@Override
-		public Qollection<E> immutable(String modMsg) {
-			if (modMsg.equals(theModificationMessage))
-				return this;
-			else
-				return theWrapped.immutable(modMsg);
-		}
-
-		@Override
-		public String toString() {
-			return theWrapped.toString();
-		}
-	}
-
-	/**
 	 * Implements {@link Qollection#filterModification(Function, Function)}
 	 *
 	 * @param <E> The type of the collection to control
@@ -1875,7 +1795,11 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public Quiterator<E> spliterator() {
-			return new WrappingQuiterator<>(theWrapped.spliterator(), getType(), () -> {
+			return modFilter(theWrapped.spliterator());
+		}
+
+		protected Quiterator<E> modFilter(Quiterator<E> source) {
+			return new WrappingQuiterator<>(source, getType(), () -> {
 				CollectionElement<E>[] container = new CollectionElement[1];
 				WrappingElement<E, E> wrapperEl = new WrappingElement<E, E>(getType(), container) {
 					@Override

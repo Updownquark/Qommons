@@ -44,8 +44,13 @@ public interface ReversibleCollection<E> extends Collection<E> {
 		}
 
 		@Override
-		public Iterable<E> descending() {
+		public ReversibleCollection<E> reverse() {
 			return theWrapped;
+		}
+
+		@Override
+		public Iterable<E> descending() {
+			return () -> theWrapped.iterator();
 		}
 
 		@Override
