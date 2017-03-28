@@ -21,8 +21,8 @@ import org.qommons.value.Value;
 import com.google.common.reflect.TypeToken;
 
 /**
- * A Qollection that has a further contract that all its elements are ordered for {@link Iterator iteration} and {@link Spliterator
- * spliteration}
+ * A Qollection that has a further contract that all its elements are given in a constant order (barring modifications) by {@link Iterator
+ * iteration} and {@link Spliterator spliteration}
  * 
  * @param <E> The type of elements in the collection
  */
@@ -116,7 +116,7 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	}
 
 	@Override
-	default <T> Qollection<T> filterMap(FilterMapDef<E, ?, T> filterMap) {
+	default <T> OrderedQollection<T> filterMap(FilterMapDef<E, ?, T> filterMap) {
 		return new FilterMappedOrderedQollection<>(this, filterMap);
 	}
 
@@ -482,7 +482,7 @@ public interface OrderedQollection<E> extends Qollection<E> {
 					return element;
 				};
 			};
-			return new Quiterator.SimpleQuiterator<E, E>(sorted.spliterator(), elementMap) {};
+			return new Quiterator.SimpleQuiterator<E, E>(sorted.spliterator(), theWrapped.getType(), elementMap) {};
 		}
 
 		@Override
@@ -687,6 +687,11 @@ public interface OrderedQollection<E> extends Qollection<E> {
 				}
 			};
 			return new Quiterator<E>() {
+				@Override
+				public TypeToken<E> getType() {
+					return InterspersedQollection.this.getType();
+				}
+
 				@Override
 				public long estimateSize() {
 					return size();

@@ -1,6 +1,11 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -577,7 +582,7 @@ public interface MultiQMap<K, V> extends TransactableMultiMap<K, V> {
 		}
 
 		@Override
-		public IndexedQuiterator<V> spliterator() {
+		public Quiterator<V> spliterator() {
 			// TODO Auto-generated method stub
 		}
 

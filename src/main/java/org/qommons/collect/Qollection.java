@@ -1245,7 +1245,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		protected Quiterator<T> map(Quiterator<E> iter) {
-			return new WrappingQuiterator<>(iter, () -> {
+			return new WrappingQuiterator<>(iter, getType(), () -> {
 				CollectionElement<? extends E>[] container = new CollectionElement[1];
 				FilterMapResult<E, T> mapped = new FilterMapResult<>();
 				WrappingElement<E, T> wrapperEl = new WrappingElement<E, T>(getType(), container) {
@@ -1474,7 +1474,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					return wrapper;
 				};
 			};
-			return new WrappingQuiterator<>(theWrapped.spliterator(), elementMap);
+			return new WrappingQuiterator<>(theWrapped.spliterator(), getType(), elementMap);
 		}
 
 		@Override
@@ -1764,7 +1764,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public Quiterator<E> spliterator() {
-			return new WrappingQuiterator<>(theWrapped.spliterator(), () -> {
+			return new WrappingQuiterator<>(theWrapped.spliterator(), getType(), () -> {
 				CollectionElement<E>[] container = new CollectionElement[1];
 				WrappingElement<E, E> wrapperEl = new WrappingElement<E, E>(getType(), container) {
 					@Override
@@ -1875,7 +1875,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public Quiterator<E> spliterator() {
-			return new WrappingQuiterator<>(theWrapped.spliterator(), () -> {
+			return new WrappingQuiterator<>(theWrapped.spliterator(), getType(), () -> {
 				CollectionElement<E>[] container = new CollectionElement[1];
 				WrappingElement<E, E> wrapperEl = new WrappingElement<E, E>(getType(), container) {
 					@Override
@@ -2163,7 +2163,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					return el;
 				};
 			};
-			return new Quiterator.SimpleQuiterator<>(theCollection.spliterator(), fn);
+			return new Quiterator.SimpleQuiterator<>(theCollection.spliterator(), getType(), fn);
 		}
 
 		@Override
@@ -2275,7 +2275,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					return wrapper;
 				};
 			};
-			return new WrappingQuiterator<Value<? extends E>, E>(theCollection.spliterator(), fn);
+			return new WrappingQuiterator<Value<? extends E>, E>(theCollection.spliterator(), theType, fn);
 		}
 
 		@Override
@@ -2374,6 +2374,11 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			if (coll == null) {
 				return new Quiterator<E>() {
 					@Override
+					public TypeToken<E> getType() {
+						return theType;
+					}
+
+					@Override
 					public long estimateSize() {
 						return 0;
 					}
@@ -2422,7 +2427,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					return wrappingEl;
 				};
 			};
-			return new WrappingQuiterator<>(coll.spliterator(), fn);
+			return new WrappingQuiterator<>(coll.spliterator(), theType, fn);
 		}
 
 		@Override
@@ -2579,6 +2584,11 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				}
 
 				@Override
+				public TypeToken<E> getType() {
+					return theType;
+				}
+
+				@Override
 				public long estimateSize() {
 					return size() - counted.get();
 				}
@@ -2590,11 +2600,12 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 				@Override
 				public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
-					if (theInnerator == null
-						&& !theOuterator.tryAdvance(coll -> theInnerator = new WrappingQuiterator<>(coll.spliterator(), theElementMap)))
+					if (theInnerator == null && !theOuterator
+						.tryAdvance(coll -> theInnerator = new WrappingQuiterator<>(coll.spliterator(), theType, theElementMap)))
 						return false;
 					while (!theInnerator.tryAdvanceElement(action)) {
-						if (!theOuterator.tryAdvance(coll -> theInnerator = new WrappingQuiterator<>(coll.spliterator(), theElementMap)))
+						if (!theOuterator
+							.tryAdvance(coll -> theInnerator = new WrappingQuiterator<>(coll.spliterator(), theType, theElementMap)))
 							return false;
 					}
 					return true;
@@ -2603,7 +2614,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				@Override
 				public void forEachElement(Consumer<? super CollectionElement<E>> action) {
 					theOuterator.forEachRemaining(coll -> {
-						new WrappingQuiterator<>(coll.spliterator(), theElementMap).forEachElement(action);
+						new WrappingQuiterator<>(coll.spliterator(), theType, theElementMap).forEachElement(action);
 					});
 				}
 
@@ -2612,7 +2623,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					Quiterator<E>[] ret = new Quiterator[1];
 					theOuterator.tryAdvance(coll -> {
 						counted.addAndGet(coll.size());
-						ret[0] = new WrappingQuiterator<>(coll.spliterator(), theElementMap);
+						ret[0] = new WrappingQuiterator<>(coll.spliterator(), theType, theElementMap);
 					});
 					return ret[0];
 				}

@@ -32,7 +32,7 @@ public interface ReversibleQollection<E> extends OrderedQollection<E>, Reversibl
 		return new OrderedReversibleCollectionFinder<>(this, filter, false);
 	}
 
-	/* Overridden for performance.  get() is linear in the super, constant time here */
+	/* Overridden for performance.  get() may be faster here since we can start at the end */
 	@Override
 	default Value<E> getLast() {
 		return new OrderedReversibleCollectionFinder<>(this, value -> true, false);

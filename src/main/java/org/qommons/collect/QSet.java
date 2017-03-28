@@ -242,7 +242,7 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 				Supplier<Function<T, CollectionElement<T>>> elementSupplier = () -> {
 					return value -> modSet.get(value);
 				};
-				return new Quiterator.SimpleQuiterator<T, T>(modSet.keySet().spliterator(), elementSupplier) {
+				return new Quiterator.SimpleQuiterator<T, T>(modSet.keySet().spliterator(), type, elementSupplier) {
 					@Override
 					public int characteristics() {
 						return super.characteristics() | Spliterator.IMMUTABLE;
@@ -580,7 +580,7 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 						return null;
 				};
 			};
-			return new Quiterator.WrappingQuiterator<>(null, elementMap);
+			return new Quiterator.WrappingQuiterator<>(null, theCollection.getType(), elementMap);
 		}
 
 		@Override
