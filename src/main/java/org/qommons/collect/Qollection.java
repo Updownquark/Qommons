@@ -1,8 +1,20 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.BitSet;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
+import java.util.Spliterator;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.*;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -2182,7 +2194,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					@Override
 					public <V extends E> E set(V value, Object cause) throws IllegalArgumentException {
 						Value<? extends E> element = getWrapped().get();
-						if (!(value instanceof Settable))
+						if (!(element instanceof Settable))
 							throw new IllegalArgumentException(StdMsg.UNSUPPORTED_OPERATION);
 						if (value != null && !element.getType().getRawType().isInstance(value))
 							throw new IllegalArgumentException(StdMsg.BAD_TYPE);
@@ -2192,7 +2204,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					@Override
 					public <V extends E> String isAcceptable(V value) {
 						Value<? extends E> element = getWrapped().get();
-						if (!(value instanceof Settable))
+						if (!(element instanceof Settable))
 							return StdMsg.UNSUPPORTED_OPERATION;
 						if (value != null && !element.getType().getRawType().isInstance(value))
 							return StdMsg.BAD_TYPE;
@@ -2438,7 +2450,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					if (subMsg == null)
 						return null;
 					else if (msg == null)
-						subMsg = msg;
+						msg = subMsg;
 				}
 			}
 			return msg;
@@ -2466,7 +2478,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					if (subMsg == null)
 						return null;
 					else if (msg == null)
-						subMsg = msg;
+						msg = subMsg;
 				}
 			}
 			return msg;
