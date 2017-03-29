@@ -1,14 +1,17 @@
 package org.qommons.collect;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.Spliterator;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.qommons.IterableUtils;
 import org.qommons.Transaction;
@@ -167,17 +170,107 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 		return ret.toString();
 	}
 
+	/** An interface allowing sets to be defined with their uniqueness defined other than by {@link Object#equals(Object)} */
+	interface Equalizer {
+		/**
+		 * @param o1 The first object to test
+		 * @param o2 The second object to test
+		 * @return Whether the two objects are equivalent in this context
+		 */
+		boolean equals(Object o1, Object o2);
+
+		/**
+		 * @param o The object to hash
+		 * @return A hash code such that hashCode(o1)==hashCode(o2) for all items for which {@link #equals(Object, Object) equals(o1, o2)}
+		 *         is true
+		 */
+		int hashCode(Object o);
+
+		/**
+		 * @param <V> The type of the value
+		 * @param value The value to make a node for
+		 * @return An equalizer node for the given value using this equalizer
+		 */
+		public default <V> EqualizerNode<V> nodeFor(V value) {
+			return new EqualizerNode<>(this, value);
+		}
+
+		/**
+		 * A node that encapsulates a value and uses an {@link Equalizer} for its {@link #equals(Object)} and {@link #hashCode()} methods
+		 * 
+		 * @param <V> The type of value stored in the node
+		 */
+		public static class EqualizerNode<V> {
+			private final Equalizer theEqualizer;
+			private final V theValue;
+
+			/**
+			 * @param equalizer The equalizer for equals testing
+			 * @param value The value to test
+			 */
+			public EqualizerNode(Equalizer equalizer, V value) {
+				theEqualizer = equalizer;
+				theValue = value;
+			}
+
+			/** @return The value in this node */
+			public V get() {
+				return theValue;
+			}
+
+			@Override
+			public boolean equals(Object o) {
+				if (o instanceof EqualizerNode)
+					return theEqualizer.equals(theValue, ((EqualizerNode<?>) o).get());
+				else
+					return theEqualizer.equals(theValue, o);
+			}
+
+			@Override
+			public int hashCode() {
+				return theEqualizer.hashCode(theValue);
+			}
+		}
+
+		/** An equalizer that uses default equality ({@link Objects#equals(Object)} and {@link Objects#hashCode(Object)}) */
+		static Equalizer def = new Equalizer() {
+			@Override
+			public boolean equals(Object o1, Object o2) {
+				return Objects.equals(o1, o2);
+			}
+
+			@Override
+			public int hashCode(Object o) {
+				return Objects.hashCode(o);
+			}
+		};
+
+		/** An equalizer that uses identity equality (== and {@link System#identityHashCode(Object)}) */
+		static Equalizer id = new Equalizer() {
+			@Override
+			public boolean equals(Object o1, Object o2) {
+				return o1 == o2;
+			}
+
+			@Override
+			public int hashCode(Object o) {
+				return System.identityHashCode(o);
+			}
+		};
+	}
+
 	/**
 	 * @param <T> The type of the collection
 	 * @param type The run-time type of the collection
+	 * @param equalizer The equalizer to test for uniqueness in the set
 	 * @param coll The collection with elements to wrap
 	 * @return A collection containing the given elements that cannot be changed
 	 */
-	public static <T> QSet<T> constant(TypeToken<T> type, java.util.Collection<T> coll) {
-		LinkedHashMap<T, CollectionElement<T>> modSet = new LinkedHashMap<>(coll.size());
+	public static <T> QSet<T> constant(TypeToken<T> type, Equalizer equalizer, java.util.Collection<T> coll) {
+		LinkedHashMap<Equalizer.EqualizerNode<T>, CollectionElement<T>> modSet = new LinkedHashMap<>(coll.size());
 		for (T value : coll) {
 			if (!modSet.containsKey(value)) {
-				modSet.put(value, new CollectionElement<T>() {
+				modSet.put(equalizer.nodeFor(value), new CollectionElement<T>() {
 					@Override
 					public TypeToken<T> getType() {
 						return type;
@@ -215,6 +308,8 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 				});
 			}
 		}
+		List<T> values = new ArrayList<>(modSet.size());
+		values.addAll(modSet.keySet().stream().map(node -> node.get()).collect(Collectors.toList()));
 		class ConstantQSet implements PartialSetImpl<T> {
 			@Override
 			public Transaction lock(boolean write, Object cause) {
@@ -234,7 +329,7 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 
 			@Override
 			public Iterator<T> iterator() {
-				return IterableUtils.immutableIterator(modSet.keySet().iterator());
+				return IterableUtils.immutableIterator(values.iterator());
 			}
 
 			@Override
@@ -249,10 +344,11 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 
 			@Override
 			public Quiterator<T> spliterator() {
-				Supplier<Function<T, CollectionElement<T>>> elementSupplier = () -> {
+				Supplier<Function<Equalizer.EqualizerNode<T>, CollectionElement<T>>> elementSupplier = () -> {
 					return value -> modSet.get(value);
 				};
-				return new Quiterator.SimpleQuiterator<T, T>(modSet.keySet().spliterator(), type, elementSupplier) {
+				return new Quiterator.SimpleQuiterator<Equalizer.EqualizerNode<T>, T>(modSet.keySet().spliterator(), type,
+					elementSupplier) {
 					@Override
 					public int characteristics() {
 						return super.characteristics() | Spliterator.IMMUTABLE;
@@ -271,20 +367,22 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 	/**
 	 * @param <T> The type of the collection
 	 * @param type The run-time type of the collection
+	 * @param equalizer The equalizer to test for uniqueness in the set
 	 * @param values The array with elements to wrap
 	 * @return A collection containing the given elements that cannot be changed
 	 */
-	public static <T> QSet<T> constant(TypeToken<T> type, T... values) {
-		return constant(type, java.util.Arrays.asList(values));
+	public static <T> QSet<T> constant(TypeToken<T> type, Equalizer equalizer, T... values) {
+		return constant(type, equalizer, java.util.Arrays.asList(values));
 	}
 
 	/**
 	 * @param <T> The type of the collection
 	 * @param coll The collection to turn into a set
+	 * @param equalizer The Equalizer to determine uniqueness for the set
 	 * @return A set containing all unique elements of the given collection
 	 */
-	public static <T> QSet<T> unique(Qollection<T> coll) {
-		return new CollectionWrappingSet<>(coll);
+	public static <T> QSet<T> unique(Qollection<T> coll, Equalizer equalizer) {
+		return new CollectionWrappingSet<>(coll, equalizer);
 	}
 
 	// Implementation member classes
@@ -410,7 +508,7 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 		 * if that contract is not met.
 		 * 
 		 * @param map The mapping function
-		 * @param mapNulls Whether to apply the function to null values or simply pass them through to the mapped set as null values
+		 * @param mapNulls Whether to apply the mapping function to null values or simply pass them through to the mapped set as null values
 		 * @return This builder
 		 */
 		public MappedSetOrQollectionBuilder<E, I, T> mapEquiv(Function<? super I, ? extends T> map, boolean mapNulls) {
@@ -507,15 +605,17 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 	}
 
 	/**
-	 * Implements {@link QSet#unique(Qollection)}
+	 * Implements {@link QSet#unique(Qollection, Equalizer)}
 	 *
 	 * @param <E> The type of elements in the set
 	 */
 	class CollectionWrappingSet<E> implements PartialSetImpl<E> {
 		private final Qollection<E> theCollection;
+		private final Equalizer theEqualizer;
 
-		public CollectionWrappingSet(Qollection<E> collection) {
+		public CollectionWrappingSet(Qollection<E> collection, Equalizer equalizer) {
 			theCollection = collection;
+			theEqualizer = equalizer;
 		}
 
 		protected Qollection<E> getWrapped() {
@@ -562,10 +662,11 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 		}
 
 		protected Quiterator<E> unique(Quiterator<E> backing) {
-			final HashSet<E> set = new HashSet<>();
+			final HashSet<Equalizer.EqualizerNode<E>> set = new HashSet<>();
 			Supplier<Function<CollectionElement<? extends E>, CollectionElement<E>>> elementMap = () -> {
 				return el -> {
-					if (set.add(el.get()))
+					QSet.Equalizer.EqualizerNode<E> node = theEqualizer.nodeFor((E) el.get());
+					if (set.add(node))
 						return (CollectionElement<E>) el;
 					else
 						return null;

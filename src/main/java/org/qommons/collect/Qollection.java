@@ -57,6 +57,22 @@ import com.google.common.reflect.TypeToken;
  * </ul>
  * 
  * @param <E> The type of elements in this collection
+ * 
+ * @param TODO Need to go through all Qollection implementations and implement (where possible):
+ *        <ul>
+ *        <li>{@link #canAdd(Object)}</li>
+ *        <li>{@link #add(Object)}</li>
+ *        <li>{@link #addAll(Collection)}</li>
+ *        <li>{@link #addValues(Object...)}</li>
+ *        <li>{@link #canRemove(Object)}</li>
+ *        <li>{@link #remove(Object)}</li>
+ *        <li>{@link #clear()}</li>
+ *        <li>{@link #contains(Object)}</li>
+ *        <li>{@link #containsAll(Collection)}</li>
+ *        <li>{@link #isEmpty()}</li>
+ *        <li>{@link #isLockSupported()}</li>
+ *        <li>{@link #toString()}</li>
+ *        </ul>
  */
 public interface Qollection<E> extends TransactableCollection<E> {
 	/** Standard messages returned by this class */
@@ -152,6 +168,42 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	}
 
 	@Override
+	default boolean removeAll(Collection<?> c) {
+		if (c.isEmpty())
+			return false;
+		try (Transaction t = lock(true, null)) {
+			boolean modified = false;
+			Iterator<?> it = iterator();
+			while (it.hasNext()) {
+				if (c.contains(it.next())) {
+					it.remove();
+					modified = true;
+				}
+			}
+			return modified;
+		}
+	}
+
+	@Override
+	default boolean retainAll(Collection<?> c) {
+		if (c.isEmpty()) {
+			clear();
+			return false;
+		}
+		try (Transaction t = lock(true, null)) {
+			boolean modified = false;
+			Iterator<E> it = iterator();
+			while (it.hasNext()) {
+				if (!c.contains(it.next())) {
+					it.remove();
+					modified = true;
+				}
+			}
+			return modified;
+		}
+	}
+
+	@Override
 	default E[] toArray() {
 		ArrayList<E> ret;
 		try (Transaction t = lock(false, null)) {
@@ -184,28 +236,6 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				add(value);
 		}
 		return this;
-	}
-
-	/** @return A value for the size of this collection */
-	default Value<Integer> sizeValue() {
-		return new Value<Integer>() {
-			private final TypeToken<Integer> intType = TypeToken.of(Integer.TYPE);
-
-			@Override
-			public TypeToken<Integer> getType() {
-				return intType;
-			}
-
-			@Override
-			public Integer get() {
-				return size();
-			}
-
-			@Override
-			public String toString() {
-				return Qollection.this + ".size()";
-			}
-		};
 	}
 
 	/**
@@ -464,19 +494,21 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 *         applied to the element
 	 */
 	default <K> MultiQMap<K, E> groupBy(Function<E, K> keyMap) {
-		return groupBy((TypeToken<K>) TypeToken.of(keyMap.getClass()).resolveType(Function.class.getTypeParameters()[1]), keyMap);
+		return groupBy((TypeToken<K>) TypeToken.of(keyMap.getClass()).resolveType(Function.class.getTypeParameters()[1]), keyMap,
+			QSet.Equalizer.def);
 	}
 
 	/**
 	 * @param <K> The type of the key
 	 * @param keyType The type of the key
 	 * @param keyMap The mapping function to group this collection's values by
+	 * @param keyEqualizer the equalizer to determine uniqueness for the key set of the map
 	 * @param equalizer The equalizer to use to group the keys
 	 * @return A multi-map containing each of this collection's elements, each in the collection of the value mapped by the given function
 	 *         applied to the element
 	 */
-	default <K> MultiQMap<K, E> groupBy(TypeToken<K> keyType, Function<E, K> keyMap) {
-		return new GroupedMultiMap<>(this, keyMap, keyType);
+	default <K> MultiQMap<K, E> groupBy(TypeToken<K> keyType, Function<E, K> keyMap, QSet.Equalizer keyEqualizer) {
+		return new GroupedMultiMap<>(this, keyMap, keyType, keyEqualizer);
 	}
 
 	/**
@@ -731,83 +763,71 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 *
 	 * @param <E> The type of element in the collection
 	 */
-	interface PartialQollectionImpl<E> extends Qollection<E> {
+	interface WrapperQollection<E> extends Qollection<E> {
 		@Override
-		default boolean add(E e) {
-			throw new UnsupportedOperationException(getClass().getName() + " does not implement add(value)");
-		}
+		abstract boolean isEmpty();
 
 		@Override
-		default boolean addAll(Collection<? extends E> c) {
-			try (Transaction t = lock(true, null)) {
-				boolean modified = false;
-				for (E e : c)
-					if (add(e))
-						modified = true;
-				return modified;
-			}
-		}
+		abstract boolean contains(Object o);
 
 		@Override
-		default boolean remove(Object o) {
-			try (Transaction t = lock(true, null)) {
-				Iterator<E> it = iterator();
-				while (it.hasNext()) {
-					if (Objects.equals(it.next(), o)) {
-						it.remove();
-						return true;
-					}
-				}
-				return false;
-			}
-		}
+		abstract boolean containsAll(Collection<?> c);
 
 		@Override
-		default boolean removeAll(Collection<?> c) {
-			if (c.isEmpty())
-				return false;
-			try (Transaction t = lock(true, null)) {
-				boolean modified = false;
-				Iterator<?> it = iterator();
-				while (it.hasNext()) {
-					if (c.contains(it.next())) {
-						it.remove();
-						modified = true;
-					}
-				}
-				return modified;
-			}
-		}
+		abstract boolean removeAll(Collection<?> c);
 
 		@Override
-		default boolean retainAll(Collection<?> c) {
-			if (c.isEmpty()) {
-				clear();
-				return false;
-			}
-			try (Transaction t = lock(true, null)) {
-				boolean modified = false;
-				Iterator<E> it = iterator();
-				while (it.hasNext()) {
-					if (!c.contains(it.next())) {
-						it.remove();
-						modified = true;
-					}
-				}
-				return modified;
-			}
-		}
+		abstract boolean retainAll(Collection<?> c);
 
 		@Override
-		default void clear() {
-			try (Transaction t = lock(true, null)) {
-				Iterator<E> it = iterator();
-				while (it.hasNext()) {
-					it.next();
-					it.remove();
-				}
-			}
-		}
+		abstract Qollection<E> addValues(E... values);
+
+		@Override
+		abstract boolean isLockSupported();
+
+		@Override
+		abstract String toString();
+
+//		@Override
+//		default boolean add(E e) {
+//			throw new UnsupportedOperationException(getClass().getName() + " does not implement add(value)");
+//		}
+//
+//		@Override
+//		default boolean addAll(Collection<? extends E> c) {
+//			try (Transaction t = lock(true, null)) {
+//				boolean modified = false;
+//				for (E e : c)
+//					if (add(e))
+//						modified = true;
+//				return modified;
+//			}
+//		}
+//
+//		@Override
+//		default boolean remove(Object o) {
+//			try (Transaction t = lock(true, null)) {
+//				Iterator<E> it = iterator();
+//				while (it.hasNext()) {
+//					if (Objects.equals(it.next(), o)) {
+//						it.remove();
+//						return true;
+//					}
+//				}
+//				return false;
+//			}
+//		}
+//
+//		@Override
+//		default void clear() {
+//			try (Transaction t = lock(true, null)) {
+//				Iterator<E> it = iterator();
+//				while (it.hasNext()) {
+//					it.next();
+//					it.remove();
+//				}
+//			}
+//		}
 	}
 
 	/**
@@ -997,6 +1017,10 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			return result;
 		}
 
+		public boolean isMapped() {
+			return map != null || parent.isMapped();
+		}
+
 		public FilterMapResult<E, T> map(FilterMapResult<E, T> result) {
 			internalCheckSourceValue((FilterMapResult<E, I>) result);
 			I interm = ((FilterMapResult<E, I>) result).result;
@@ -1085,7 +1109,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 * @param <E> The type of the collection to filter/map
 	 * @param <T> The type of the filter/mapped collection
 	 */
-	class FilterMappedQollection<E, T> implements PartialQollectionImpl<T> {
+	class FilterMappedQollection<E, T> implements WrapperQollection<T> {
 		private final Qollection<E> theWrapped;
 		private final FilterMapDef<E, ?, T> theDef;
 
@@ -1134,6 +1158,63 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
+		public boolean contains(Object o) {
+			if (!theDef.checkDestType(o))
+				return false;
+			if (!theDef.isReversible())
+				return WrapperQollection.super.contains(o);
+			FilterMapResult<T, E> reversed = theDef.reverse(new FilterMapResult<>((T) o));
+			if (reversed.error != null)
+				return false;
+			return theWrapped.contains(reversed.result);
+		}
+
+		protected List<E> reverse(Collection<?> input) {
+			FilterMapResult<T, E> reversed = new FilterMapResult<>();
+			return input.stream().<E> flatMap(v -> {
+				if (!theDef.checkDestType(v))
+					return Stream.empty();
+				reversed.source = (T) v;
+				theDef.reverse(reversed);
+				if (reversed.error == null)
+					return Stream.of(reversed.result);
+				else
+					return Stream.empty();
+			}).collect(Collectors.toList());
+		}
+
+		@Override
+		public boolean containsAll(Collection<?> c) {
+			if (theDef.isMapped() && size() < c.size()) // Try to map the fewest elements
+				return WrapperQollection.super.containsAll(c);
+
+			return theWrapped.containsAll(reverse(c));
+		}
+
+		@Override
+		public Qollection<T> addValues(T... values) {
+			addAll(java.util.Arrays.asList(values));
+			return this;
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return theWrapped.isLockSupported();
+		}
+
+		@Override
+		public String canAdd(T value) {
+			if (!theDef.isReversible())
+				return StdMsg.UNSUPPORTED_OPERATION;
+			else if (!theDef.checkDestType(value))
+				return StdMsg.BAD_TYPE;
+			FilterMapResult<T, E> reversed = theDef.reverse(new FilterMapResult<>(value));
+			if (reversed.error != null)
+				return reversed.error;
+			return theWrapped.canAdd(reversed.result);
+		}
+
+		@Override
 		public boolean add(T e) {
 			if (!theDef.isReversible() || !theDef.checkDestType(e))
 				return false;
@@ -1147,20 +1228,19 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		public boolean addAll(Collection<? extends T> c) {
 			if (!theDef.isReversible())
 				return false;
-			FilterMapResult<T, E> reversed = new FilterMapResult<>();
-			List<E> toAdd = c.stream().flatMap(v -> {
-				if (!theDef.checkDestType(v))
-					return Stream.empty();
-				reversed.source = v;
-				theDef.reverse(reversed);
-				if (reversed.error == null)
-					return Stream.of(reversed.result);
-				else
-					return Stream.empty();
-			}).collect(Collectors.toList());
-			if (toAdd.isEmpty())
-				return false;
-			return theWrapped.addAll(toAdd);
+			return theWrapped.addAll(reverse(c));
+		}
+
+		@Override
+		public String canRemove(Object value) {
+			if (!theDef.isReversible())
+				return StdMsg.UNSUPPORTED_OPERATION;
+			else if (!theDef.checkDestType(value))
+				return StdMsg.BAD_TYPE;
+			FilterMapResult<T, E> reversed = theDef.reverse(new FilterMapResult<>((T) value));
+			if (reversed.error != null)
+				return reversed.error;
+			return theWrapped.canRemove(reversed.result);
 		}
 
 		@Override
@@ -1245,30 +1325,6 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			}
 		}
 
-		@Override
-		public String canRemove(Object value) {
-			if (!theDef.isReversible())
-				return StdMsg.UNSUPPORTED_OPERATION;
-			else if (!theDef.checkDestType(value))
-				return StdMsg.BAD_TYPE;
-			FilterMapResult<T, E> reversed = theDef.reverse(new FilterMapResult<>((T) value));
-			if (reversed.error != null)
-				return reversed.error;
-			return theWrapped.canRemove(reversed.result);
-		}
-
-		@Override
-		public String canAdd(T value) {
-			if (!theDef.isReversible())
-				return StdMsg.UNSUPPORTED_OPERATION;
-			else if (!theDef.checkDestType(value))
-				return StdMsg.BAD_TYPE;
-			FilterMapResult<T, E> reversed = theDef.reverse(new FilterMapResult<>(value));
-			if (reversed.error != null)
-				return reversed.error;
-			return theWrapped.canAdd(reversed.result);
-		}
-
 		protected Quiterator<T> map(Quiterator<E> iter) {
 			return new WrappingQuiterator<>(iter, getType(), () -> {
 				CollectionElement<? extends E>[] container = new CollectionElement[1];
@@ -1331,7 +1387,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 * @param <T> The type of the value to combine the collection elements with
 	 * @param <V> The type of the combined collection
 	 */
-	class CombinedQollection<E, T, V> implements PartialQollectionImpl<V> {
+	class CombinedQollection<E, T, V> implements WrapperQollection<V> {
 		private final Qollection<E> theWrapped;
 
 		private final TypeToken<V> theType;
@@ -1473,13 +1529,17 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			return combine(theWrapped.spliterator());
 		}
 
+		protected V combine(E value) {
+			return theMap.apply(value, theValue.get());
+		}
+
 		protected Quiterator<V> combine(Quiterator<E> source) {
 			Supplier<Function<CollectionElement<? extends E>, CollectionElement<V>>> elementMap = () -> {
 				CollectionElement<? extends E>[] container = new CollectionElement[1];
 				WrappingElement<E, V> wrapper = new WrappingElement<E, V>(getType(), container) {
 					@Override
 					public V get() {
-						return theMap.apply(getWrapped().get(), theValue.get());
+						return combine(getWrapped().get());
 					}
 
 					@Override
@@ -1522,14 +1582,16 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		private final Qollection<E> theWrapped;
 		private final Function<E, K> theKeyMap;
 		private final TypeToken<K> theKeyType;
+		private final QSet.Equalizer theKeyEqualizer;
 
 		private final QSet<K> theKeySet;
 
-		GroupedMultiMap(Qollection<E> wrap, Function<E, K> keyMap, TypeToken<K> keyType) {
+		GroupedMultiMap(Qollection<E> wrap, Function<E, K> keyMap, TypeToken<K> keyType, QSet.Equalizer keyEqualizer) {
 			theWrapped = wrap;
 			theKeyMap = keyMap;
 			theKeyType = keyType != null ? keyType
 				: (TypeToken<K>) TypeToken.of(keyMap.getClass()).resolveType(Function.class.getTypeParameters()[1]);
+			theKeyEqualizer = keyEqualizer;
 
 			Qollection<K> mapped;
 			if (theKeyMap != null)
@@ -1540,7 +1602,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		protected QSet<K> unique(Qollection<K> keyCollection) {
-			return QSet.unique(keyCollection);
+			return QSet.unique(keyCollection, theKeyEqualizer);
 		}
 
 		@Override
@@ -1565,7 +1627,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public Qollection<E> get(Object key) {
-			return theWrapped.filter(el -> Objects.equals(theKeyMap.apply(el), key) ? null : StdMsg.GROUP_EXISTS);
+			return theWrapped.filter(el -> theKeyEqualizer.equals(theKeyMap.apply(el), key) ? null : StdMsg.GROUP_EXISTS);
 		}
 
 		@Override
@@ -1763,7 +1825,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 *
 	 * @param <E> The type of the collection to control
 	 */
-	class ModFilteredQollection<E> implements PartialQollectionImpl<E> {
+	class ModFilteredQollection<E> implements WrapperQollection<E> {
 		private final Qollection<E> theWrapped;
 
 		private final Function<? super E, String> theRemoveFilter;
@@ -2027,7 +2089,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 *
 	 * @param <E> The type of elements in the collection
 	 */
-	class ConstantQollection<E> implements PartialQollectionImpl<E> {
+	class ConstantQollection<E> implements WrapperQollection<E> {
 		private final TypeToken<E> theType;
 		private final Collection<E> theCollection;
 
@@ -2041,8 +2103,17 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			return theType;
 		}
 
+		/** @return The collection backing this collection */
+		protected Collection<E> getWrapped() {
+			return theCollection;
+		}
+
 		@Override
 		public Quiterator<E> spliterator() {
+			return wrap(theCollection.spliterator());
+		}
+
+		protected Quiterator<E> wrap(Spliterator<E> toWrap) {
 			Supplier<? extends Function<? super E, ? extends CollectionElement<E>>> fn;
 			fn = () -> {
 				Object[] elementValue = new Object[1];
@@ -2087,7 +2158,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					return el;
 				};
 			};
-			return new Quiterator.SimpleQuiterator<>(theCollection.spliterator(), getType(), fn);
+			return new Quiterator.SimpleQuiterator<>(toWrap, getType(), fn);
 		}
 
 		@Override
@@ -2121,7 +2192,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 *
 	 * @param <E> The type of elements in the collection
 	 */
-	class FlattenedValuesQollection<E> implements PartialQollectionImpl<E> {
+	class FlattenedValuesQollection<E> implements WrapperQollection<E> {
 		private Qollection<? extends Value<? extends E>> theCollection;
 		private final TypeToken<E> theType;
 
@@ -2145,8 +2216,16 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			return theType;
 		}
 
+		protected E get(Value<? extends E> value) {
+			return value == null ? null : value.get();
+		}
+
 		@Override
 		public Quiterator<E> spliterator() {
+			return wrap(theCollection.spliterator());
+		}
+
+		protected Quiterator<E> wrap(Quiterator<? extends Value<? extends E>> wrap) {
 			Supplier<Function<CollectionElement<? extends Value<? extends E>>, CollectionElement<E>>> fn;
 			fn = () -> {
 				CollectionElement<Value<? extends E>>[] container = new CollectionElement[1];
@@ -2173,7 +2252,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 					@Override
 					public E get() {
-						return getWrapped().get().get();
+						return FlattenedValuesQollection.this.get(getWrapped().get());
 					}
 
 					@Override
@@ -2199,7 +2278,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					return wrapper;
 				};
 			};
-			return new WrappingQuiterator<Value<? extends E>, E>(theCollection.spliterator(), theType, fn);
+			return new WrappingQuiterator<Value<? extends E>, E>(wrap, theType, fn);
 		}
 
 		@Override
@@ -2240,7 +2319,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 *
 	 * @param <E> The type of elements in the collection
 	 */
-	class FlattenedValueQollection<E> implements PartialQollectionImpl<E> {
+	class FlattenedValueQollection<E> implements WrapperQollection<E> {
 		private final Value<? extends Qollection<E>> theCollectionObservable;
 		private final TypeToken<E> theType;
 
@@ -2295,34 +2374,12 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		@Override
 		public Quiterator<E> spliterator() {
 			Qollection<? extends E> coll = theCollectionObservable.get();
-			if (coll == null) {
-				return new Quiterator<E>() {
-					@Override
-					public TypeToken<E> getType() {
-						return theType;
-					}
+			if (coll == null)
+				return Quiterator.empty(theType);
+			return wrap(coll.spliterator());
+		}
 
-					@Override
-					public long estimateSize() {
-						return 0;
-					}
-
-					@Override
-					public int characteristics() {
-						return Spliterator.IMMUTABLE | Spliterator.SIZED;
-					}
-
-					@Override
-					public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
-						return false;
-					}
-
-					@Override
-					public Quiterator<E> trySplit() {
-						return null;
-					}
-				};
-			}
+		protected Quiterator<E> wrap(Quiterator<? extends E> wrap) {
 			Supplier<Function<CollectionElement<? extends E>, CollectionElement<E>>> fn;
 			fn = () -> {
 				CollectionElement<? extends E>[] container = new CollectionElement[1];
@@ -2351,7 +2408,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					return wrappingEl;
 				};
 			};
-			return new WrappingQuiterator<>(coll.spliterator(), theType, fn);
+			return new WrappingQuiterator<>(wrap, theType, fn);
 		}
 
 		@Override
@@ -2365,7 +2422,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 *
 	 * @param <E> The type of elements in the collection
 	 */
-	class FlattenedQollection<E> implements PartialQollectionImpl<E> {
+	class FlattenedQollection<E> implements WrapperQollection<E> {
 		private final Qollection<? extends Qollection<? extends E>> theOuter;
 		private final TypeToken<E> theType;
 
@@ -2470,8 +2527,12 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public Quiterator<E> spliterator() {
+			return wrap(theOuter.spliterator(), Qollection::spliterator);
+		}
+
+		protected Quiterator<E> wrap(Quiterator<? extends Qollection<? extends E>> outer,
+			Function<Qollection<? extends E>, Quiterator<? extends E>> innerSplit) {
 			return new Quiterator<E>() {
-				private final Quiterator<? extends Qollection<? extends E>> theOuterator = theOuter.spliterator();
 				private WrappingQuiterator<E, E> theInnerator;
 				private Supplier<Function<CollectionElement<? extends E>, CollectionElement<E>>> theElementMap;
 				private AtomicInteger counted = new AtomicInteger();
@@ -2524,12 +2585,12 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 				@Override
 				public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
-					if (theInnerator == null && !theOuterator
-						.tryAdvance(coll -> theInnerator = new WrappingQuiterator<>(coll.spliterator(), theType, theElementMap)))
+					if (theInnerator == null && !outer
+						.tryAdvance(coll -> theInnerator = new WrappingQuiterator<>(innerSplit.apply(coll), theType, theElementMap)))
 						return false;
 					while (!theInnerator.tryAdvanceElement(action)) {
-						if (!theOuterator
-							.tryAdvance(coll -> theInnerator = new WrappingQuiterator<>(coll.spliterator(), theType, theElementMap)))
+						if (!outer
+							.tryAdvance(coll -> theInnerator = new WrappingQuiterator<>(innerSplit.apply(coll), theType, theElementMap)))
 							return false;
 					}
 					return true;
@@ -2537,17 +2598,17 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 				@Override
 				public void forEachElement(Consumer<? super CollectionElement<E>> action) {
-					theOuterator.forEachRemaining(coll -> {
-						new WrappingQuiterator<>(coll.spliterator(), theType, theElementMap).forEachElement(action);
+					outer.forEachRemaining(coll -> {
+						new WrappingQuiterator<>(innerSplit.apply(coll), theType, theElementMap).forEachElement(action);
 					});
 				}
 
 				@Override
 				public Quiterator<E> trySplit() {
 					Quiterator<E>[] ret = new Quiterator[1];
-					theOuterator.tryAdvance(coll -> {
+					outer.tryAdvance(coll -> {
 						counted.addAndGet(coll.size());
-						ret[0] = new WrappingQuiterator<>(coll.spliterator(), theType, theElementMap);
+						ret[0] = new WrappingQuiterator<>(innerSplit.apply(coll), theType, theElementMap);
 					});
 					return ret[0];
 				}

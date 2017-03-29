@@ -368,6 +368,11 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		protected OrderedQollection<E> getWrapped() {
 			return (OrderedQollection<E>) super.getWrapped();
 		}
+
+		@Override
+		public V get(int index) {
+			return combine(getWrapped().get(index));
+		}
 	}
 
 	/**
@@ -517,6 +522,11 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		protected OrderedQollection<E> getWrapped() {
 			return (OrderedQollection<E>) super.getWrapped();
 		}
+
+		@Override
+		public E get(int index) {
+			return getWrapped().get(index);
+		}
 	}
 
 	/**
@@ -527,6 +537,16 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	class ConstantOrderedQollection<E> extends ConstantQollection<E> implements OrderedQollection<E> {
 		public ConstantOrderedQollection(TypeToken<E> type, List<E> collection) {
 			super(type, collection);
+		}
+
+		@Override
+		protected List<E> getWrapped() {
+			return (List<E>) super.getWrapped();
+		}
+
+		@Override
+		public E get(int index) {
+			return getWrapped().get(index);
 		}
 	}
 
@@ -647,8 +667,14 @@ public interface OrderedQollection<E> extends Qollection<E> {
 
 		@Override
 		public Quiterator<E> spliterator() {
+			return intersperse(getWrapped().spliterator(), Qollection::spliterator, theDiscriminator);
+		}
+
+		protected Quiterator<E> intersperse(Quiterator<? extends OrderedQollection<? extends E>> outer,
+			Function<OrderedQollection<? extends E>, Quiterator<? extends E>> innerSplit,
+			Function<? super List<E>, Integer> discriminator) {
 			ArrayList<Quiterator<? extends E>> colls = new ArrayList<>();
-			getWrapped().spliterator().forEachRemaining(coll -> colls.add(coll.spliterator()));
+			outer.forEachRemaining(coll -> colls.add(innerSplit.apply(coll)));
 			colls.trimToSize();
 			List<CollectionElement<? extends E>> elements = new ArrayList<>(colls.size());
 			List<E> values = new ArrayList<>(colls.size());
@@ -709,7 +735,7 @@ public interface OrderedQollection<E> extends Qollection<E> {
 							}
 						}
 					}
-					int nextIndex = theDiscriminator.apply(immutableValues);
+					int nextIndex = discriminator.apply(immutableValues);
 					if (nextIndex < 0 || nextIndex >= values.size())
 						throw new IndexOutOfBoundsException(nextIndex + " of " + values.size());
 					container[0] = elements.get(nextIndex);

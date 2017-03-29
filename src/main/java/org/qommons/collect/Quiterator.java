@@ -105,6 +105,39 @@ public interface Quiterator<T> extends Spliterator<T> {
 	Quiterator<T> trySplit();
 
 	/**
+	 * @param type The type for the Quiterator
+	 * @return An empty Quiterator of the given type
+	 */
+	static <E> Quiterator<E> empty(TypeToken<E> type) {
+		return new Quiterator<E>() {
+			@Override
+			public long estimateSize() {
+				return 0;
+			}
+
+			@Override
+			public int characteristics() {
+				return Spliterator.IMMUTABLE | Spliterator.SIZED;
+			}
+
+			@Override
+			public TypeToken<E> getType() {
+				return type;
+			}
+
+			@Override
+			public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
+				return false;
+			}
+
+			@Override
+			public Quiterator<E> trySplit() {
+				return null;
+			}
+		};
+	}
+
+	/**
 	 * Implements {@link Quiterator#map(TypeToken, Function, Function)}
 	 * 
 	 * @param <T> The type of values returned by the wrapped Quiterator
