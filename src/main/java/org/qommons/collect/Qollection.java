@@ -1,6 +1,7 @@
 package org.qommons.collect;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
 import java.util.Collections;
@@ -1017,8 +1018,34 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			return result;
 		}
 
+		public boolean isFiltered() {
+			FilterMapDef<?, ?, ?> def = this;
+			while (def != null) {
+				if (def.filter != null)
+					return true;
+				def = def.parent;
+			}
+			return false;
+		}
+
 		public boolean isMapped() {
-			return map != null || parent.isMapped();
+			FilterMapDef<?, ?, ?> def = this;
+			while (def != null) {
+				if (def.map != null)
+					return true;
+				def = def.parent;
+			}
+			return false;
+		}
+
+		public boolean isReversible() {
+			FilterMapDef<?, ?, ?> def = this;
+			while (def != null) {
+				if (def.map != null && def.reverse == null)
+					return false;
+				def = def.parent;
+			}
+			return true;
 		}
 
 		public FilterMapResult<E, T> map(FilterMapResult<E, T> result) {
@@ -1037,10 +1064,6 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				throw new IllegalStateException("Result value " + result.result + " is not an instance of " + destType);
 
 			return result;
-		}
-
-		public boolean isReversible() {
-			return map == null || reverse != null;
 		}
 
 		public FilterMapResult<T, E> reverse(FilterMapResult<T, E> result) {
@@ -1138,7 +1161,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public int size() {
-			if (theDef.filter == null)
+			if (!theDef.isFiltered())
 				return theWrapped.size();
 
 			int[] size = new int[1];
@@ -1150,6 +1173,24 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					size[0]++;
 			});
 			return size[0];
+		}
+
+		@Override
+		public boolean isEmpty() {
+			if (theWrapped.isEmpty())
+				return true;
+			else if (!theDef.isFiltered())
+				return false;
+			FilterMapResult<E, T> result = new FilterMapResult<>();
+			boolean[] contained = new boolean[1];
+			while (!contained[0] && theWrapped.spliterator().tryAdvance(v -> {
+				result.source = v;
+				theDef.checkSourceValue(result);
+				if (result.error == null)
+					contained[0] = true;
+			})) {
+			}
+			return !contained[0];
 		}
 
 		@Override
@@ -1185,16 +1226,10 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public boolean containsAll(Collection<?> c) {
-			if (theDef.isMapped() && size() < c.size()) // Try to map the fewest elements
+			if (!theDef.isReversible() || size() < c.size()) // Try to map the fewest elements
 				return WrapperQollection.super.containsAll(c);
 
 			return theWrapped.containsAll(reverse(c));
-		}
-
-		@Override
-		public Qollection<T> addValues(T... values) {
-			addAll(java.util.Arrays.asList(values));
-			return this;
 		}
 
 		@Override
@@ -1229,6 +1264,12 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			if (!theDef.isReversible())
 				return false;
 			return theWrapped.addAll(reverse(c));
+		}
+
+		@Override
+		public Qollection<T> addValues(T... values) {
+			addAll(java.util.Arrays.asList(values));
+			return this;
 		}
 
 		@Override
@@ -1421,6 +1462,11 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
+		public boolean isLockSupported() {
+			return theWrapped.isLockSupported();
+		}
+
+		@Override
 		public Transaction lock(boolean write, Object cause) {
 			return theWrapped.lock(write, cause);
 		}
@@ -1433,6 +1479,42 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		@Override
 		public int size() {
 			return theWrapped.size();
+		}
+
+		@Override
+		public boolean isEmpty() {
+			return theWrapped.isEmpty();
+		}
+
+		@Override
+		public boolean contains(Object o) {
+			if (!theType.getRawType().isInstance(o))
+				return false;
+			if (theReverse != null)
+				return theWrapped.contains(theReverse.apply((V) o, theValue.get()));
+			else
+				return WrapperCollection.super.contains(o);
+		}
+
+		@Override
+		public boolean containsAll(Collection<?> c) {
+			if (theReverse == null || c.size() > size())
+				return WrapperCollection.super.containsAll(c);
+			else {
+				T value = theValue.get();
+				for (Object o : c)
+					if (!theType.getRawType().isInstance(o))
+						return false;
+				return theWrapped.containsAll(c.stream().map(o -> theReverse.apply((V) o, value)).collect(Collectors.toList()));
+			}
+		}
+
+		@Override
+		public String canAdd(V value) {
+			if (theReverse != null)
+				return theWrapped.canAdd(theReverse.apply(value, theValue.get()));
+			else
+				return StdMsg.UNSUPPORTED_OPERATION;
 		}
 
 		@Override
@@ -1451,6 +1533,25 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				T combineValue = theValue.get();
 				return theWrapped.addAll(c.stream().map(o -> theReverse.apply(o, combineValue)).collect(Collectors.toList()));
 			}
+		}
+
+		@Override
+		public Qollection<V> addValues(V... values) {
+			if (theReverse == null)
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			else {
+				T combineValue = theValue.get();
+				theWrapped.addAll(Arrays.stream(values).map(o -> theReverse.apply(o, combineValue)).collect(Collectors.toList()));
+				return this;
+			}
+		}
+
+		@Override
+		public String canRemove(Object value) {
+			if (theReverse != null && (value == null || theType.getRawType().isInstance(value)))
+				return theWrapped.canRemove(theReverse.apply((V) value, theValue.get()));
+			else
+				return StdMsg.UNSUPPORTED_OPERATION;
 		}
 
 		@Override
@@ -1506,22 +1607,6 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		@Override
 		public void clear() {
 			getWrapped().clear();
-		}
-
-		@Override
-		public String canRemove(Object value) {
-			if (theReverse != null && (value == null || theType.getRawType().isInstance(value)))
-				return theWrapped.canRemove(theReverse.apply((V) value, theValue.get()));
-			else
-				return StdMsg.UNSUPPORTED_OPERATION;
-		}
-
-		@Override
-		public String canAdd(V value) {
-			if (theReverse != null)
-				return theWrapped.canAdd(theReverse.apply(value, theValue.get()));
-			else
-				return StdMsg.UNSUPPORTED_OPERATION;
 		}
 
 		@Override
@@ -1927,6 +2012,36 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
+		public boolean isEmpty() {
+			return theWrapped.isEmpty();
+		}
+
+		@Override
+		public boolean contains(Object o) {
+			return theWrapped.contains(o);
+		}
+
+		@Override
+		public boolean containsAll(Collection<?> c) {
+			return theWrapped.containsAll(c);
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return theWrapped.isLockSupported();
+		}
+
+		@Override
+		public String canAdd(E value) {
+			String s = null;
+			if (theAddFilter != null)
+				s = theAddFilter.apply(value);
+			if (s == null)
+				s = theWrapped.canAdd(value);
+			return s;
+		}
+
+		@Override
 		public boolean add(E value) {
 			if (theAddFilter == null || theAddFilter.apply(value) == null)
 				return theWrapped.add(value);
@@ -1940,6 +2055,29 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				return theWrapped.addAll(values.stream().filter(v -> theAddFilter.apply(v) == null).collect(Collectors.toList()));
 			else
 				return theWrapped.addAll(values);
+		}
+
+		@Override
+		public Qollection<E> addValues(E... values) {
+			if (theAddFilter != null)
+				theWrapped.addAll(Arrays.stream(values).filter(v -> theAddFilter.apply(v) == null).collect(Collectors.toList()));
+			else
+				theWrapped.addValues(values);
+			return this;
+		}
+
+		@Override
+		public String canRemove(Object value) {
+			String s = null;
+			if (theRemoveFilter != null) {
+				if (value != null && !theWrapped.getType().getRawType().isInstance(value))
+					s = StdMsg.BAD_TYPE;
+				if (s == null)
+					s = theRemoveFilter.apply((E) value);
+			}
+			if (s == null)
+				s = theWrapped.canRemove(value);
+			return s;
 		}
 
 		@Override
@@ -2055,30 +2193,6 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public String canRemove(Object value) {
-			String s = null;
-			if (theRemoveFilter != null) {
-				if (value != null && !theWrapped.getType().getRawType().isInstance(value))
-					s = StdMsg.BAD_TYPE;
-				if (s == null)
-					s = theRemoveFilter.apply((E) value);
-			}
-			if (s == null)
-				s = theWrapped.canRemove(value);
-			return s;
-		}
-
-		@Override
-		public String canAdd(E value) {
-			String s = null;
-			if (theAddFilter != null)
-				s = theAddFilter.apply(value);
-			if (s == null)
-				s = theWrapped.canAdd(value);
-			return s;
-		}
-
-		@Override
 		public String toString() {
 			return theWrapped.toString();
 		}
@@ -2098,14 +2212,44 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			theCollection = collection;
 		}
 
+		/** @return The collection backing this collection */
+		protected Collection<E> getWrapped() {
+			return theCollection;
+		}
+
 		@Override
 		public TypeToken<E> getType() {
 			return theType;
 		}
 
-		/** @return The collection backing this collection */
-		protected Collection<E> getWrapped() {
-			return theCollection;
+		@Override
+		public boolean isLockSupported() {
+			return false;
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return Transaction.NONE;
+		}
+
+		@Override
+		public int size() {
+			return theCollection.size();
+		}
+
+		@Override
+		public boolean isEmpty() {
+			return theCollection.isEmpty();
+		}
+
+		@Override
+		public boolean contains(Object o) {
+			return theCollection.contains(o);
+		}
+
+		@Override
+		public boolean containsAll(Collection<?> c) {
+			return theCollection.containsAll(c);
 		}
 
 		@Override
@@ -2162,6 +2306,11 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
+		public Iterator<E> iterator() {
+			return IterableUtils.immutableIterator(theCollection.iterator());
+		}
+
+		@Override
 		public String canRemove(Object value) {
 			return StdMsg.UNSUPPORTED_OPERATION;
 		}
@@ -2172,18 +2321,37 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public int size() {
-			return theCollection.size();
+		public boolean add(E e) {
+			return false;
 		}
 
 		@Override
-		public Iterator<E> iterator() {
-			return IterableUtils.immutableIterator(theCollection.iterator());
+		public boolean addAll(Collection<? extends E> c) {
+			return false;
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return Transaction.NONE;
+		public Qollection<E> addValues(E... values) {
+			return this;
+		}
+
+		@Override
+		public boolean remove(Object o) {
+			return false;
+		}
+
+		@Override
+		public boolean removeAll(Collection<?> c) {
+			return false;
+		}
+
+		@Override
+		public boolean retainAll(Collection<?> c) {
+			return false;
+		}
+
+		@Override
+		public void clear() {
 		}
 	}
 
@@ -2207,13 +2375,28 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
+		public TypeToken<E> getType() {
+			return theType;
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return theCollection.isLockSupported();
+		}
+
+		@Override
 		public Transaction lock(boolean write, Object cause) {
 			return theCollection.lock(write, cause);
 		}
 
 		@Override
-		public TypeToken<E> getType() {
-			return theType;
+		public int size() {
+			return theCollection.size();
+		}
+
+		@Override
+		public boolean isEmpty() {
+			return theCollection.isEmpty();
 		}
 
 		protected E get(Value<? extends E> value) {
@@ -2282,14 +2465,34 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
+		public String canAdd(E value) {
+			return StdMsg.UNSUPPORTED_OPERATION;
+		}
+
+		@Override
+		public boolean add(E e) {
+			return false;
+		}
+
+		@Override
+		public boolean addAll(Collection<? extends E> c) {
+			return false;
+		}
+
+		@Override
+		public Qollection<E> addValues(E... values) {
+			return this;
+		}
+
+		@Override
 		public String canRemove(Object value) {
 			boolean[] found = new boolean[1];
 			String[] msg = new String[1];
 			Quiterator<? extends Value<? extends E>> iter = theCollection.spliterator();
-			while (!found[0] && iter.tryAdvance(v -> {
-				if (Objects.equals(v.get(), value)) {
+			while (!found[0] && iter.tryAdvanceElement(el -> {
+				if (Objects.equals(el.get().get(), value)) {
 					found[0] = true;
-					msg[0] = ((Qollection<Value<? extends E>>) theCollection).canRemove(v);
+					msg[0] = el.canRemove();
 				}
 			})) {
 			}
@@ -2299,13 +2502,59 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public String canAdd(E value) {
-			return StdMsg.UNSUPPORTED_OPERATION;
+		public boolean remove(Object o) {
+			boolean[] found = new boolean[1];
+			Quiterator<? extends Value<? extends E>> iter = theCollection.spliterator();
+			while (!found[0] && iter.tryAdvanceElement(el -> {
+				if (Objects.equals(el.get().get(), o)) {
+					found[0] = true;
+					String msg = el.canRemove();
+					if (msg == null)
+						el.remove();
+				}
+			})) {
+			}
+			return found[0];
 		}
 
 		@Override
-		public int size() {
-			return theCollection.size();
+		public boolean removeAll(Collection<?> c) {
+			boolean[] found = new boolean[1];
+			Quiterator<? extends Value<? extends E>> iter = theCollection.spliterator();
+			iter.forEachElement(el -> {
+				if (c.contains(el.get().get())) {
+					found[0] = true;
+					String msg = el.canRemove();
+					if (msg == null)
+						el.remove();
+				}
+			});
+			return found[0];
+		}
+
+		@Override
+		public boolean retainAll(Collection<?> c) {
+			boolean[] found = new boolean[1];
+			Quiterator<? extends Value<? extends E>> iter = theCollection.spliterator();
+			iter.forEachElement(el -> {
+				if (!c.contains(el.get().get())) {
+					found[0] = true;
+					String msg = el.canRemove();
+					if (msg == null)
+						el.remove();
+				}
+			});
+			return found[0];
+		}
+
+		@Override
+		public void clear() {
+			Quiterator<? extends Value<? extends E>> iter = theCollection.spliterator();
+			iter.forEachElement(el -> {
+				String msg = el.canRemove();
+				if (msg == null)
+					el.remove();
+			});
 		}
 
 		@Override
@@ -2338,9 +2587,39 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
+		public boolean isLockSupported() {
+			Qollection<? extends E> coll = theCollectionObservable.get();
+			return coll == null ? false : coll.isLockSupported();
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			Qollection<? extends E> coll = theCollectionObservable.get();
+			return coll == null ? Transaction.NONE : coll.lock(write, cause);
+		}
+
+		@Override
 		public int size() {
 			Qollection<? extends E> coll = theCollectionObservable.get();
 			return coll == null ? 0 : coll.size();
+		}
+
+		@Override
+		public boolean isEmpty() {
+			Qollection<? extends E> coll = theCollectionObservable.get();
+			return coll == null ? true : coll.isEmpty();
+		}
+
+		@Override
+		public boolean contains(Object o) {
+			Qollection<? extends E> coll = theCollectionObservable.get();
+			return coll == null ? false : coll.contains(o);
+		}
+
+		@Override
+		public boolean containsAll(Collection<?> c) {
+			Qollection<? extends E> coll = theCollectionObservable.get();
+			return coll == null ? false : coll.containsAll(c);
 		}
 
 		@Override
@@ -2350,11 +2629,11 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public String canRemove(Object value) {
-			Qollection<E> current = theCollectionObservable.get();
-			if (current == null)
-				return StdMsg.UNSUPPORTED_OPERATION;
-			return current.canRemove(value);
+		public Quiterator<E> spliterator() {
+			Qollection<? extends E> coll = theCollectionObservable.get();
+			if (coll == null)
+				return Quiterator.empty(theType);
+			return wrap(coll.spliterator());
 		}
 
 		@Override
@@ -2366,17 +2645,56 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			Qollection<? extends E> coll = theCollectionObservable.get();
-			return coll == null ? Transaction.NONE : coll.lock(write, cause);
+		public boolean add(E e) {
+			Qollection<E> current = theCollectionObservable.get();
+			return current == null ? false : current.add(e);
 		}
 
 		@Override
-		public Quiterator<E> spliterator() {
-			Qollection<? extends E> coll = theCollectionObservable.get();
-			if (coll == null)
-				return Quiterator.empty(theType);
-			return wrap(coll.spliterator());
+		public boolean addAll(Collection<? extends E> c) {
+			Qollection<E> current = theCollectionObservable.get();
+			return current == null ? false : current.addAll(c);
+		}
+
+		@Override
+		public Qollection<E> addValues(E... values) {
+			Qollection<E> current = theCollectionObservable.get();
+			if (current != null)
+				current.addValues(values);
+			return this;
+		}
+
+		@Override
+		public String canRemove(Object value) {
+			Qollection<E> current = theCollectionObservable.get();
+			if (current == null)
+				return StdMsg.UNSUPPORTED_OPERATION;
+			return current.canRemove(value);
+		}
+
+		@Override
+		public boolean remove(Object o) {
+			Qollection<E> current = theCollectionObservable.get();
+			return current == null ? false : current.remove(o);
+		}
+
+		@Override
+		public boolean removeAll(Collection<?> c) {
+			Qollection<E> current = theCollectionObservable.get();
+			return current == null ? false : current.removeAll(c);
+		}
+
+		@Override
+		public boolean retainAll(Collection<?> c) {
+			Qollection<E> current = theCollectionObservable.get();
+			return current == null ? false : current.retainAll(c);
+		}
+
+		@Override
+		public void clear() {
+			Qollection<E> current = theCollectionObservable.get();
+			if (current != null)
+				current.clear();
 		}
 
 		protected Quiterator<E> wrap(Quiterator<? extends E> wrap) {
@@ -2436,6 +2754,39 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
+		public TypeToken<E> getType() {
+			return theType;
+		}
+
+		@Override
+		public int size() {
+			int ret = 0;
+			for (Qollection<? extends E> subColl : theOuter)
+				ret += subColl.size();
+			return ret;
+		}
+
+		@Override
+		public boolean isEmpty() {
+			if (theOuter.isEmpty())
+				return true;
+			for (Qollection<? extends E> subColl : theOuter)
+				if (!subColl.isEmpty())
+					return false;
+			return true;
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			if (!theOuter.isLockSupported())
+				return false;
+			for (Qollection<? extends E> subColl : theOuter)
+				if (!subColl.isLockSupported())
+					return false;
+			return true;
+		}
+
+		@Override
 		public Transaction lock(boolean write, Object cause) {
 			Transaction outer = theOuter.lock(write, cause);
 			Transaction[] inner = new Transaction[theOuter.size()];
@@ -2449,16 +2800,33 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public TypeToken<E> getType() {
-			return theType;
+		public String canAdd(E value) {
+			if (theOuter.isEmpty())
+				return StdMsg.UNSUPPORTED_OPERATION;
+			String msg = null;
+			for (Qollection<? extends E> sub : theOuter) {
+				if (value == null || sub.getType().getRawType().isInstance(value)) {
+					String subMsg = ((OrderedQollection<E>) sub).canAdd(value);
+					if (subMsg == null)
+						return null;
+					else if (msg == null)
+						msg = subMsg;
+				}
+			}
+			return msg;
 		}
 
 		@Override
-		public int size() {
-			int ret = 0;
-			for (Qollection<? extends E> subColl : theOuter)
-				ret += subColl.size();
-			return ret;
+		public boolean add(E e) {
+			if (theOuter.isEmpty())
+				return false;
+			for (Qollection<? extends E> sub : theOuter) {
+				if (e == null || sub.getType().getRawType().isInstance(e)) {
+					if (((Qollection<E>) sub).add(e))
+						return true;
+				}
+			}
+			return false;
 		}
 
 		@Override
@@ -2490,33 +2858,21 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public String canAdd(E value) {
+		public boolean removeAll(Collection<?> c) {
 			if (theOuter.isEmpty())
-				return StdMsg.UNSUPPORTED_OPERATION;
-			String msg = null;
-			for (Qollection<? extends E> sub : theOuter) {
-				if (value == null || sub.getType().getRawType().isInstance(value)) {
-					String subMsg = ((OrderedQollection<E>) sub).canAdd(value);
-					if (subMsg == null)
-						return null;
-					else if (msg == null)
-						msg = subMsg;
-				}
-			}
-			return msg;
+				return false;
+			boolean modified = false;
+			for (Qollection<? extends E> sub : theOuter)
+				modified |= sub.removeAll(c);
+			return modified;
 		}
 
 		@Override
-		public boolean add(E e) {
-			if (theOuter.isEmpty())
-				return false;
-			for (Qollection<? extends E> sub : theOuter) {
-				if (e == null || sub.getType().getRawType().isInstance(e)) {
-					if (((Qollection<E>) sub).add(e))
-						return true;
-				}
-			}
-			return false;
+		public boolean retainAll(Collection<?> c) {
+			boolean modified = false;
+			for (Qollection<? extends E> sub : theOuter)
+				modified |= sub.retainAll(c);
+			return modified;
 		}
 
 		@Override

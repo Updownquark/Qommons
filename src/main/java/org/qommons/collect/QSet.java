@@ -628,6 +628,11 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 		}
 
 		@Override
+		public boolean isLockSupported() {
+			return theCollection.isLockSupported();
+		}
+
+		@Override
 		public Transaction lock(boolean write, Object cause) {
 			return theCollection.lock(write, cause);
 		}
@@ -641,13 +646,13 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 		}
 
 		@Override
-		public Quiterator<E> spliterator() {
-			return unique(theCollection.spliterator());
+		public boolean isEmpty() {
+			return theCollection.isEmpty();
 		}
 
 		@Override
-		public String canRemove(Object value) {
-			return theCollection.canRemove(value);
+		public Quiterator<E> spliterator() {
+			return unique(theCollection.spliterator());
 		}
 
 		@Override
@@ -659,6 +664,11 @@ public interface QSet<E> extends Qollection<E>, Set<E> {
 			for (E v : theCollection)
 				set.add(v);
 			return set.contains(value) ? "This value is already present in the set" : null;
+		}
+
+		@Override
+		public String canRemove(Object value) {
+			return theCollection.canRemove(value);
 		}
 
 		protected Quiterator<E> unique(Quiterator<E> backing) {
