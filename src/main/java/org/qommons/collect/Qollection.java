@@ -1,8 +1,21 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
+import java.util.Spliterator;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.*;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -47,22 +60,6 @@ import com.google.common.reflect.TypeToken;
  * </ul>
  * 
  * @param <E> The type of elements in this collection
- * 
- * @param TODO Need to go through all Qollection implementations and implement (where possible):
- *        <ul>
- *        <li>{@link #canAdd(Object)}</li>
- *        <li>{@link #add(Object)}</li>
- *        <li>{@link #addAll(Collection)}</li>
- *        <li>{@link #addValues(Object...)}</li>
- *        <li>{@link #canRemove(Object)}</li>
- *        <li>{@link #remove(Object)}</li>
- *        <li>{@link #clear()}</li>
- *        <li>{@link #contains(Object)}</li>
- *        <li>{@link #containsAll(Collection)}</li>
- *        <li>{@link #isEmpty()}</li>
- *        <li>{@link #isLockSupported()}</li>
- *        <li>{@link #toString()}</li>
- *        </ul>
  */
 public interface Qollection<E> extends TransactableCollection<E> {
 	/** Standard messages returned by this class */
@@ -113,97 +110,6 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	}
 
 	@Override
-	default boolean isEmpty() {
-		return size() == 0;
-	}
-
-	@Override
-	default boolean contains(Object o) {
-		try (Transaction t = lock(false, null)) {
-			Quiterator<E> iter = spliterator();
-			boolean[] found = new boolean[1];
-			while (!found[0] && iter.tryAdvance(v -> {
-				if (Objects.equals(v, o))
-					found[0] = true;
-			})) {
-			}
-			return found[0];
-		}
-	}
-
-	@Override
-	default boolean containsAll(Collection<?> c) {
-		if (c.isEmpty())
-			return true;
-		ArrayList<Object> copy = new ArrayList<>(c);
-		BitSet found = new BitSet(copy.size());
-		try (Transaction t = lock(false, null)) {
-			Quiterator<E> iter = spliterator();
-			boolean[] foundOne = new boolean[1];
-			while (iter.tryAdvance(next -> {
-				int stop = found.previousClearBit(copy.size());
-				for (int i = found.nextClearBit(0); i < stop; i = found.nextClearBit(i + 1))
-					if (Objects.equals(next, copy.get(i))) {
-						found.set(i);
-						foundOne[0] = true;
-					}
-			})) {
-				if (foundOne[0] && found.cardinality() == copy.size()) {
-					break;
-				}
-				foundOne[0] = false;
-			}
-			return found.cardinality() == copy.size();
-		}
-	}
-
-	@Override
-	default boolean addAll(Collection<? extends E> c) {
-		boolean mod = false;
-		try (Transaction t = lock(true, null)) {
-			for (E o : c)
-				mod |= add(o);
-		}
-		return mod;
-	}
-
-	@Override
-	default boolean removeAll(Collection<?> c) {
-		if (c.isEmpty())
-			return false;
-		try (Transaction t = lock(true, null)) {
-			boolean modified = false;
-			Iterator<?> it = iterator();
-			while (it.hasNext()) {
-				if (c.contains(it.next())) {
-					it.remove();
-					modified = true;
-				}
-			}
-			return modified;
-		}
-	}
-
-	@Override
-	default boolean retainAll(Collection<?> c) {
-		if (c.isEmpty()) {
-			clear();
-			return false;
-		}
-		try (Transaction t = lock(true, null)) {
-			boolean modified = false;
-			Iterator<E> it = iterator();
-			while (it.hasNext()) {
-				if (!c.contains(it.next())) {
-					it.remove();
-					modified = true;
-				}
-			}
-			return modified;
-		}
-	}
-
-	@Override
 	default E[] toArray() {
 		ArrayList<E> ret;
 		try (Transaction t = lock(false, null)) {
@@ -231,10 +137,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 * @return This collection
 	 */
 	default Qollection<E> addValues(E... values) {
-		try (Transaction t = lock(true, null)) {
-			for (E value : values)
-				add(value);
-		}
+		addAll(java.util.Arrays.asList(values));
 		return this;
 	}
 
@@ -761,6 +664,93 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	}
 
 	/**
+	 * Static implementations to Collection methods that may be implemented in a generic way. These are not implemented as default methods
+	 * In order to highly encourage subclasses to implement them in a more performant way if possible.
+	 */
+	class DefaultQollectionMethods {
+		public static boolean contains(Qollection<?> coll, Object value) {
+			try (Transaction t = coll.lock(false, null)) {
+				Quiterator<?> iter = coll.spliterator();
+				boolean[] found = new boolean[1];
+				while (!found[0] && iter.tryAdvance(v -> {
+					if (Objects.equals(v, value))
+						found[0] = true;
+				})) {
+				}
+				return found[0];
+			}
+		}
+
+		public static boolean containsAll(Qollection<?> coll, Collection<?> values) {
+			if (values.isEmpty())
+				return true;
+			ArrayList<Object> copy = new ArrayList<>(values);
+			BitSet found = new BitSet(copy.size());
+			try (Transaction t = coll.lock(false, null)) {
+				Quiterator<?> iter = coll.spliterator();
+				boolean[] foundOne = new boolean[1];
+				while (iter.tryAdvance(next -> {
+					int stop = found.previousClearBit(copy.size());
+					for (int i = found.nextClearBit(0); i < stop; i = found.nextClearBit(i + 1))
+						if (Objects.equals(next, copy.get(i))) {
+							found.set(i);
+							foundOne[0] = true;
+						}
+				})) {
+					if (foundOne[0] && found.cardinality() == copy.size()) {
+						break;
+					}
+					foundOne[0] = false;
+				}
+				return found.cardinality() == copy.size();
+			}
+		}
+
+		public static <E> boolean addAll(Qollection<E> coll, Collection<? extends E> values) {
+			boolean mod = false;
+			try (Transaction t = coll.lock(true, null)) {
+				for (E o : values)
+					mod |= coll.add(o);
+			}
+			return mod;
+		}
+
+		public static boolean removeAll(Qollection<?> coll, Collection<?> values) {
+			if (values.isEmpty())
+				return false;
+			try (Transaction t = coll.lock(true, null)) {
+				boolean modified = false;
+				Iterator<?> it = coll.iterator();
+				while (it.hasNext()) {
+					if (values.contains(it.next())) {
+						it.remove();
+						modified = true;
+					}
+				}
+				return modified;
+			}
+		}
+
+		public static boolean retainAll(Qollection<?> coll, Collection<?> values) {
+			if (values.isEmpty()) {
+				coll.clear();
+				return false;
+			}
+			try (Transaction t = coll.lock(true, null)) {
+				boolean modified = false;
+				Iterator<?> it = coll.iterator();
+				while (it.hasNext()) {
+					if (!values.contains(it.next())) {
+						it.remove();
+						modified = true;
+					}
+				}
+				return modified;
+			}
+		}
+	}
+
+	/**
 	 * Builds a filtered and/or mapped collection
 	 * 
 	 * @param <E> The type of values in the source collection
@@ -1134,7 +1124,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			if (!theDef.checkDestType(o))
 				return false;
 			if (!theDef.isReversible())
-				return Qollection.super.contains(o);
+				return DefaultQollectionMethods.contains(this, o);
 			FilterMapResult<T, E> reversed = theDef.reverse(new FilterMapResult<>((T) o));
 			if (reversed.error != null)
 				return false;
@@ -1158,7 +1148,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		@Override
 		public boolean containsAll(Collection<?> c) {
 			if (!theDef.isReversible() || size() < c.size()) // Try to map the fewest elements
-				return Qollection.super.containsAll(c);
+				return DefaultQollectionMethods.containsAll(this, c);
 
 			return theWrapped.containsAll(reverse(c));
 		}
@@ -1195,12 +1185,6 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			if (!theDef.isReversible())
 				return false;
 			return theWrapped.addAll(reverse(c));
-		}
-
-		@Override
-		public Qollection<T> addValues(T... values) {
-			addAll(java.util.Arrays.asList(values));
-			return this;
 		}
 
 		@Override
@@ -1424,13 +1408,13 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			if (theReverse != null)
 				return theWrapped.contains(theReverse.apply((V) o, theValue.get()));
 			else
-				return Qollection.super.contains(o);
+				return DefaultQollectionMethods.contains(this, o);
 		}
 
 		@Override
 		public boolean containsAll(Collection<?> c) {
 			if (theReverse == null || c.size() > size())
-				return Qollection.super.containsAll(c);
+				return DefaultQollectionMethods.containsAll(this, c);
 			else {
 				T value = theValue.get();
 				for (Object o : c)
@@ -1710,8 +1694,28 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
+		public boolean isEmpty() {
+			return theElements.isEmpty();
+		}
+
+		@Override
+		public boolean contains(Object o) {
+			return theElements.contains(o);
+		}
+
+		@Override
+		public boolean containsAll(Collection<?> c) {
+			return theElements.containsAll(c);
+		}
+
+		@Override
 		public Iterator<E> iterator() {
 			return theElements.iterator();
+		}
+
+		@Override
+		public String canAdd(E value) {
+			return theElements.canAdd(value);
 		}
 
 		@Override
@@ -1720,13 +1724,24 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public boolean remove(Object o) {
-			return theElements.remove(o);
+		public boolean addAll(Collection<? extends E> c) {
+			return theElements.addAll(c);
 		}
 
 		@Override
-		public boolean addAll(Collection<? extends E> c) {
-			return theElements.addAll(c);
+		public Qollection<E> addValues(E... values) {
+			theElements.addValues(values);
+			return this;
+		}
+
+		@Override
+		public String canRemove(Object value) {
+			return theElements.canRemove(value);
+		}
+
+		@Override
+		public boolean remove(Object o) {
+			return theElements.remove(o);
 		}
 
 		@Override
@@ -1742,16 +1757,6 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		@Override
 		public void clear() {
 			theElements.clear();
-		}
-
-		@Override
-		public String canRemove(Object value) {
-			return theElements.canRemove(value);
-		}
-
-		@Override
-		public String canAdd(E value) {
-			return theElements.canAdd(value);
 		}
 
 		@Override
@@ -2348,6 +2353,16 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			return theCollection.isEmpty();
 		}
 
+		@Override
+		public boolean contains(Object o) {
+			return DefaultQollectionMethods.contains(this, o);
+		}
+
+		@Override
+		public boolean containsAll(Collection<?> c) {
+			return DefaultQollectionMethods.containsAll(this, c);
+		}
+
 		protected E get(Value<? extends E> value) {
 			return value == null ? null : value.get();
 		}
@@ -2708,24 +2723,6 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public int size() {
-			int ret = 0;
-			for (Qollection<? extends E> subColl : theOuter)
-				ret += subColl.size();
-			return ret;
-		}
-
-		@Override
-		public boolean isEmpty() {
-			if (theOuter.isEmpty())
-				return true;
-			for (Qollection<? extends E> subColl : theOuter)
-				if (!subColl.isEmpty())
-					return false;
-			return true;
-		}
-
-		@Override
 		public boolean isLockSupported() {
 			if (!theOuter.isLockSupported())
 				return false;
@@ -2749,17 +2746,63 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
+		public int size() {
+			int ret = 0;
+			for (Qollection<? extends E> subColl : theOuter)
+				ret += subColl.size();
+			return ret;
+		}
+
+		@Override
+		public boolean isEmpty() {
+			if (theOuter.isEmpty())
+				return true;
+			for (Qollection<? extends E> subColl : theOuter)
+				if (!subColl.isEmpty())
+					return false;
+			return true;
+		}
+
+		@Override
+		public boolean contains(Object o) {
+			try (Transaction t = theOuter.lock(false, null)) {
+				for (Qollection<? extends E> inner : theOuter)
+					if (inner.contains(o))
+						return true;
+			}
+			return false;
+		}
+
+		@Override
+		public boolean containsAll(Collection<?> c) {
+			if (c.size() > size())
+				return DefaultQollectionMethods.containsAll(this, c);
+			ArrayList<Object> c2 = new ArrayList<>(c);
+			try (Transaction t = theOuter.lock(false, null)) {
+				for (Qollection<? extends E> inner : theOuter) {
+					Iterator<Object> iter = c2.iterator();
+					while (iter.hasNext())
+						if (inner.contains(iter.next()))
+							iter.remove();
+				}
+			}
+			return c2.isEmpty();
+		}
+
+		@Override
 		public String canAdd(E value) {
 			if (theOuter.isEmpty())
 				return StdMsg.UNSUPPORTED_OPERATION;
 			String msg = null;
-			for (Qollection<? extends E> sub : theOuter) {
-				if (value == null || sub.getType().getRawType().isInstance(value)) {
-					String subMsg = ((OrderedQollection<E>) sub).canAdd(value);
-					if (subMsg == null)
-						return null;
-					else if (msg == null)
-						msg = subMsg;
+			try (Transaction t = theOuter.lock(false, null)) {
+				for (Qollection<? extends E> sub : theOuter) {
+					if (value == null || sub.getType().getRawType().isInstance(value)) {
+						String subMsg = ((OrderedQollection<E>) sub).canAdd(value);
+						if (subMsg == null)
+							return null;
+						else if (msg == null)
+							msg = subMsg;
+					}
 				}
 			}
 			return msg;
@@ -2769,13 +2812,44 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		public boolean add(E e) {
 			if (theOuter.isEmpty())
 				return false;
-			for (Qollection<? extends E> sub : theOuter) {
-				if (e == null || sub.getType().getRawType().isInstance(e)) {
-					if (((Qollection<E>) sub).add(e))
-						return true;
+			try (Transaction t = theOuter.lock(false, null)) { // Not modifying the outer collection
+				for (Qollection<? extends E> sub : theOuter) {
+					if (e == null || sub.getType().getRawType().isInstance(e)) {
+						if (((Qollection<E>) sub).add(e))
+							return true;
+					}
 				}
 			}
 			return false;
+		}
+
+		@Override
+		public boolean addAll(Collection<? extends E> c) {
+			if (theOuter.isEmpty())
+				return false;
+			boolean modified = false;
+			ArrayList<E> copy = new ArrayList<>(c);
+			ArrayList<E> toAdd = new ArrayList<>();
+			try (Transaction t = theOuter.lock(false, null)) { // Not modifying the outer collection
+				for (Qollection<? extends E> sub : theOuter) {
+					try (Transaction t2 = sub.lock(true, null)) {
+						toAdd.clear();
+						Iterator<E> iter = copy.iterator();
+						while (iter.hasNext()) {
+							E e = iter.next();
+							if (e == null || sub.getType().getRawType().isInstance(e) && ((OrderedQollection<E>) sub).canAdd(e) == null) {
+								toAdd.add(e);
+								iter.remove();
+							}
+						}
+						if (!toAdd.isEmpty()) {
+							modified = true;
+							((OrderedQollection<E>) sub).addAll(toAdd);
+						}
+					}
+				}
+			}
+			return modified;
 		}
 
 		@Override

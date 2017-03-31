@@ -1,11 +1,20 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.Spliterator;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.qommons.Equalizer;
+import org.qommons.Equalizer.EqualizerNode;
 import org.qommons.Hasher;
 import org.qommons.IterableUtils;
 import org.qommons.Transaction;
@@ -31,31 +40,6 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 	abstract Quiterator<E> spliterator();
 
 	@Override
-	default boolean isEmpty() {
-		return Qollection.super.isEmpty();
-	}
-
-	@Override
-	default boolean contains(Object o) {
-		return Qollection.super.contains(o);
-	}
-
-	@Override
-	default boolean containsAll(java.util.Collection<?> coll) {
-		return Qollection.super.containsAll(coll);
-	}
-
-	@Override
-	default boolean removeAll(Collection<?> c) {
-		return Qollection.super.removeAll(c);
-	}
-
-	@Override
-	default boolean retainAll(Collection<?> c) {
-		return Qollection.super.retainAll(c);
-	}
-
-	@Override
 	default E[] toArray() {
 		return Qollection.super.toArray();
 	}
@@ -71,9 +55,7 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 	 * @param o The object to get the equivalent of
 	 * @return The object in this set whose value is equivalent to the given value
 	 */
-	default Value<E> equivalent(Object o) {
-		return new QSetEquivalentFinder<>(this, o);
-	}
+	E equivalent(Object o);
 
 	// Filter/mapping
 
@@ -254,6 +236,18 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 				return modSet.isEmpty();
 			}
 
+			protected EqualizerNode<T> nodeFor(T value) {
+				return equalizer.nodeFor(value, hasher.hash(value));
+			}
+
+			@Override
+			public T equivalent(Object o) {
+				if (!type.getRawType().isInstance(o))
+					return null;
+				CollectionElement<T> element = modSet.get(nodeFor((T) o));
+				return element == null ? null : element.get();
+			}
+
 			@Override
 			public boolean contains(Object o) {
 				if (o != null && !type.getRawType().isInstance(o))
@@ -267,7 +261,7 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 					if (o != null && !type.getRawType().isInstance(o))
 						return false;
 				if (coll2.size() > size() * 2)
-					return QSet.super.containsAll(coll2); // Maybe better than making nodes for them all
+					return DefaultQollectionMethods.containsAll(this, coll2); // Maybe better than making nodes for them all
 				return modSet.keySet()
 					.containsAll(coll2.stream().map(o -> equalizer.nodeFor(o, hasher.hash((T) o))).collect(Collectors.toList()));
 			}
@@ -448,6 +442,9 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 		 * thrown for violation of it, uniqueness is part of the contract of a {@link Set} that may be relied on by other code that may fail
 		 * if that contract is not met.
 		 * 
+		 * Although not strictly required, in many cases set operations will be more efficient for {@link #withReverse(Function, boolean)
+		 * reverse}-mapped sets. So whenever possible, a reversing function should be provided.
+		 * 
 		 * @param map The mapping function
 		 * @param mapNulls Whether to apply the mapping function to null values or simply pass them through to the mapped set as null values
 		 * @return This builder
@@ -527,6 +524,11 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 		protected QSet<E> getWrapped() {
 			return (QSet<E>) super.getWrapped();
 		}
+
+		@Override
+		public E equivalent(Object o) {
+			return getWrapped().equivalent(o);
+		}
 	}
 
 	/**
@@ -542,6 +544,12 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 		@Override
 		protected Value<? extends QSet<E>> getWrapped() {
 			return (Value<? extends QSet<E>>) super.getWrapped();
+		}
+
+		@Override
+		public E equivalent(Object o) {
+			QSet<E> current = getWrapped().get();
+			return current == null ? null : current.equivalent(o);
 		}
 	}
 
@@ -597,6 +605,40 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 			return theCollection.isEmpty();
 		}
 
+		protected HashSet<EqualizerNode<E>> getNodeSet() {
+			HashSet<EqualizerNode<E>> set = new HashSet<>();
+			for (E v : theCollection)
+				set.add(nodeFor(v));
+			return set;
+		}
+
+		protected EqualizerNode<E> nodeFor(E value) {
+			return theEqualizer.nodeFor(value, theHasher.hash(value));
+		}
+
+		@Override
+		public E equivalent(Object o) {
+			// TODO Auto-generated method stub
+		}
+
+		@Override
+		public boolean contains(Object o) {
+			if (o != null && !getType().getRawType().isInstance(o))
+				return false;
+			return getNodeSet().contains(nodeFor((E) o));
+		}
+
+		@Override
+		public boolean containsAll(Collection<?> c) {
+			HashSet<EqualizerNode<E>> copy = new HashSet<>(c.size() * 4 / 3);
+			for (Object o : c) {
+				if (o != null && !getType().getRawType().isInstance(o))
+					return false;
+				copy.add(nodeFor((E) o));
+			}
+			return getNodeSet().containsAll(copy);
+		}
+
 		@Override
 		public Quiterator<E> spliterator() {
 			return unique(theCollection.spliterator());
@@ -607,13 +649,31 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 			String canAdd = theCollection.canAdd(value);
 			if (canAdd != null)
 				return canAdd;
-			HashSet<E> set = new HashSet<>();
-			for (E v : theCollection)
-				set.add(v);
-			return set.contains(value) ? "This value is already present in the set" : null;
+			HashSet<EqualizerNode<E>> set = getNodeSet();
+			return set.contains(nodeFor(value)) ? "This value is already present in the set" : null;
 		}
 		
-		//TODO Add methods
+		@Override
+		public boolean add(E value) {
+			String canAdd = theCollection.canAdd(value);
+			if (canAdd != null)
+				return false;
+			HashSet<EqualizerNode<E>> set = getNodeSet();
+			if (set.contains(nodeFor(value)))
+				return false;
+			return theCollection.add(value);
+		}
+
+		@Override
+		public boolean addAll(Collection<? extends E> c) {
+			HashSet<EqualizerNode<E>> set = getNodeSet();
+			ArrayList<E> toAdd = new ArrayList<>(c.size());
+			for (E value : c) {
+				if (!set.add(nodeFor(value)))
+					toAdd.add(value);
+			}
+			return theCollection.addAll(toAdd);
+		}
 
 		@Override
 		public String canRemove(Object value) {
@@ -622,7 +682,10 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 
 		@Override
 		public boolean remove(Object o) {
-			return theCollection.remove(o);
+			boolean mod = false;
+			while (theCollection.remove(o))
+				mod = true;
+			return mod;
 		}
 
 		@Override
@@ -644,7 +707,7 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 			final HashSet<Equalizer.EqualizerNode<E>> set = new HashSet<>();
 			Supplier<Function<CollectionElement<? extends E>, CollectionElement<E>>> elementMap = () -> {
 				return el -> {
-					Equalizer.EqualizerNode<E> node = theEqualizer.nodeFor((E) el.get(), theHasher.hash((E) el.get()));
+					EqualizerNode<E> node = nodeFor(el.get());
 					if (set.add(node))
 						return (CollectionElement<E>) el;
 					else
