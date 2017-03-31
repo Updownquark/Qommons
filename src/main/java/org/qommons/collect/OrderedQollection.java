@@ -245,11 +245,13 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	 * @param coll The collection of collections whose elements to intersperse
 	 * @param discriminator A function that is given an element from each of the collections in the outer collection and decides which of
 	 *        those elements will be the next element returned in the outer collection
+	 * @param withRemove Whether the discriminator may return a negative value <b>d</b> signifying that the element at -d-1 should not be
+	 *        included in the returned collection
 	 * @return A collection containing all elements of each of the outer collection's contents, ordered by the discriminator
 	 */
-	public static <E> OrderedQollection<E> intersperse(OrderedQollection<? extends OrderedQollection<? extends E>> coll,
-		Function<? super List<E>, Integer> discriminator) {
-		return new InterspersedQollection<>(coll, discriminator);
+	public static <E> OrderedQollection<E> intersperse(Qollection<? extends OrderedQollection<? extends E>> coll,
+		Function<? super List<E>, Integer> discriminator, boolean withRemove) {
+		return new InterspersedQollection<>(coll, discriminator, withRemove);
 	}
 
 	/**
@@ -518,7 +520,46 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		}
 	}
 
-	class ConstantOrderedQollection<E> extends ConstantQollection<E> implements OrderedQollection<E> {}
+	/**
+	 * Implements {@link OrderedQollection#constant(TypeToken, List)}
+	 * 
+	 * @param <E> The type of values in the collection
+	 */
+	class ConstantOrderedQollection<E> extends ConstantQollection<E> implements OrderedQollection<E> {
+		public ConstantOrderedQollection(TypeToken<E> type, List<E> collection) {
+			super(type, collection);
+		}
+
+		@Override
+		protected List<E> getCollection() {
+			return (List<E>) super.getCollection();
+		}
+
+		@Override
+		public Value<E> getLast() {
+			return Value.constant(getType(), last());
+		}
+
+		@Override
+		public E last() {
+			return getCollection().isEmpty() ? null : getCollection().get(getCollection().size() - 1);
+		}
+
+		@Override
+		public E get(int index) {
+			return getCollection().get(index);
+		}
+
+		@Override
+		public int indexOf(Object value) {
+			return getCollection().indexOf(value);
+		}
+
+		@Override
+		public int lastIndexOf(Object value) {
+			return getCollection().lastIndexOf(value);
+		}
+	}
 
 	/**
 	 * Implements {@link OrderedQollection#flattenValues(OrderedQollection)}
@@ -613,26 +654,41 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	}
 
 	/**
-	 * Implements {@link OrderedQollection#intersperse(OrderedQollection, Function)}
+	 * Implements {@link OrderedQollection#intersperse(Qollection, Function, boolean)}
 	 * 
 	 * @param <E> The type of elements in the collection
 	 */
 	class InterspersedQollection<E> extends FlattenedQollection<E> implements OrderedQollection<E> {
 		private final Function<? super List<E>, Integer> theDiscriminator;
+		private final boolean isWithRemove;
 
-		public InterspersedQollection(OrderedQollection<? extends OrderedQollection<? extends E>> coll,
-			Function<? super List<E>, Integer> discriminator) {
+		public InterspersedQollection(Qollection<? extends OrderedQollection<? extends E>> coll,
+			Function<? super List<E>, Integer> discriminator, boolean withRemove) {
 			super(coll);
 			theDiscriminator = discriminator;
+			isWithRemove = withRemove;
 		}
 
 		@Override
-		protected OrderedQollection<? extends OrderedQollection<? extends E>> getWrapped() {
+		protected Qollection<? extends OrderedQollection<? extends E>> getWrapped() {
 			return (OrderedQollection<? extends OrderedQollection<? extends E>>) super.getWrapped();
 		}
 
 		protected Function<? super List<E>, Integer> getDiscriminator() {
 			return theDiscriminator;
+		}
+
+		protected boolean isWithRemove() {
+			return isWithRemove;
+		}
+
+		@Override
+		public int size() {
+			if (!isWithRemove)
+				return super.size();
+			int[] size = new int[1];
+			spliterator().forEachRemaining(v -> size[0]++);
+			return size[0];
 		}
 
 		@Override
@@ -694,20 +750,33 @@ public interface OrderedQollection<E> extends Qollection<E> {
 							}
 						}
 					}
-					int nextIndex = theDiscriminator.apply(immutableValues);
+					int nextIndex;
+					do {
+						nextIndex = theDiscriminator.apply(immutableValues);
+						if (nextIndex < 0 && isWithRemove()) {
+							int remove = -nextIndex - 1;
+							if (remove >= values.size())
+								throw new IndexOutOfBoundsException(remove + " of " + values.size());
+							advanceElement(remove);
+						}
+					} while (nextIndex < 0);
 					if (nextIndex < 0 || nextIndex >= values.size())
 						throw new IndexOutOfBoundsException(nextIndex + " of " + values.size());
 					container[0] = elements.get(nextIndex);
-					if (!colls.get(nextIndex).tryAdvanceElement(el -> {
-						elements.set(nextIndex, el);
-						values.set(nextIndex, el.get());
-					})) {
-						colls.remove(nextIndex);
-						elements.remove(nextIndex);
-						values.remove(nextIndex);
-					}
 					action.accept(wrapper);
+					advanceElement(nextIndex);
 					return true;
+				}
+
+				private void advanceElement(int index) {
+					if (!colls.get(index).tryAdvanceElement(el -> {
+						elements.set(index, el);
+						values.set(index, el.get());
+					})) {
+						colls.remove(index);
+						elements.remove(index);
+						values.remove(index);
+					}
 				}
 
 				@Override
