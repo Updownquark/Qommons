@@ -1,7 +1,5 @@
 package org.qommons;
 
-import java.util.Objects;
-
 /** A simple binary predicate testing the equivalence of two objects in some context */
 public interface Equalizer {
 	/**
@@ -14,10 +12,11 @@ public interface Equalizer {
 	/**
 	 * @param <V> The type of the value
 	 * @param value The value to make a node for
+	 * @param hashCode The hash code for the value
 	 * @return An equalizer node for the given value using this equalizer
 	 */
-	public default <V> EqualizerNode<V> nodeFor(V value) {
-		return new EqualizerNode<>(this, value);
+	public default <V> EqualizerNode<V> nodeFor(V value, int hashCode) {
+		return new EqualizerNode<>(this, value, hashCode);
 	}
 
 	/**
@@ -28,14 +27,17 @@ public interface Equalizer {
 	public static class EqualizerNode<V> {
 		private final Equalizer theEqualizer;
 		private final V theValue;
+		private final int theHashCode;
 
 		/**
 		 * @param equalizer The equalizer for equals testing
 		 * @param value The value to test
+		 * @param hashCode The hash code for the value
 		 */
-		public EqualizerNode(Equalizer equalizer, V value) {
+		public EqualizerNode(Equalizer equalizer, V value, int hashCode) {
 			theEqualizer = equalizer;
 			theValue = value;
+			theHashCode = hashCode;
 		}
 
 		/** @return The value in this node */
@@ -53,7 +55,7 @@ public interface Equalizer {
 
 		@Override
 		public int hashCode() {
-			return Objects.hashCode(theValue);
+			return theHashCode;
 		}
 	}
 }
