@@ -1021,6 +1021,27 @@ public class IntList implements Iterable<Integer>, Sealable, Cloneable
 		}
 	}
 
+	@Override
+	public int hashCode() {
+		int res = 0;
+		for (int i = 0; i < size(); i++)
+			res += get(i) * 7 + 1;
+		return res;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (!(obj instanceof IntList))
+			return false;
+		IntList list = (IntList) obj;
+		if (list.size() != size())
+			return false;
+		for (int i = 0; i < size(); i++)
+			if (get(i) != list.get(i))
+				return false;
+		return true;
+	}
+
 	private class IntListIterator implements java.util.ListIterator<Integer>
 	{
 		private int [] theContent;

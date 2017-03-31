@@ -1,7 +1,11 @@
 package org.qommons.collect;
 
-import java.util.*;
-import java.util.function.Consumer;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 
 import org.qommons.Transaction;
@@ -19,7 +23,15 @@ public interface MultiQMap<K, V> extends TransactableMultiMap<K, V> {
 	 * @param <K> The type of key this entry uses
 	 * @param <V> The type of value this entry stores
 	 */
-	public interface ValueSortedMultiEntry<K, V> extends MultiQEntry<K, V>, SortedQSet<V> {}
+	public interface ValueSortedMultiEntry<K, V> extends MultiQEntry<K, V>, SortedQSet<V> {
+		@Override
+		abstract Quiterator<V> spliterator();
+
+		@Override
+		default Iterator<V> iterator() {
+			return SortedQSet.super.iterator();
+		}
+	}
 
 	TypeToken<K> getKeyType();
 
@@ -49,7 +61,7 @@ public interface MultiQMap<K, V> extends TransactableMultiMap<K, V> {
 	 * @return A key set for the map
 	 */
 	public static <K, V> QSet<K> defaultKeySet(MultiQMap<K, V> map) {
-		return map.entrySet().mapEquivalent(map.getKeyType(), MultiQEntry::getKey, null);
+		return map.entrySet().buildMap(map.getKeyType()).mapEquiv(MultiQEntry::getKey, true).build();
 	}
 
 	@Override
@@ -139,7 +151,7 @@ public interface MultiQMap<K, V> extends TransactableMultiMap<K, V> {
 		TypeToken<MultiQEntry<K, V>> entryType = new TypeToken<MultiQEntry<K, V>>() {}//
 			.where(new TypeParameter<K>() {}, map.getKeyType())//
 			.where(new TypeParameter<V>() {}, map.getValueType());
-		return map.keySet().mapEquivalent(entryType, map::entryFor, null);
+		return map.keySet().buildMap(entryType).mapEquiv(map::entryFor, true).build();
 	}
 
 	@Override
@@ -353,8 +365,11 @@ public interface MultiQMap<K, V> extends TransactableMultiMap<K, V> {
 		};
 	}
 
-	/** @return An immutable copy of this map */
-	default MultiQMap<K, V> immutable() {
+	/**
+	 * @param modMsg The message to give on attempted modification
+	 * @return An immutable copy of this map
+	 */
+	default MultiQMap<K, V> immutable(String modMsg) {
 		MultiQMap<K, V> outer = this;
 		return new MultiQMap<K, V>() {
 			@Override
@@ -374,17 +389,17 @@ public interface MultiQMap<K, V> extends TransactableMultiMap<K, V> {
 
 			@Override
 			public QSet<K> keySet() {
-				return outer.keySet().immutable();
+				return outer.keySet().immutable(modMsg);
 			}
 
 			@Override
 			public Qollection<V> get(Object key) {
-				return outer.get(key).immutable();
+				return outer.get(key).immutable(modMsg);
 			}
 
 			@Override
 			public QSet<? extends MultiQEntry<K, V>> entrySet() {
-				return outer.entrySet().immutable();
+				return outer.entrySet().immutable(modMsg);
 			}
 
 			@Override
@@ -577,13 +592,8 @@ public interface MultiQMap<K, V> extends TransactableMultiMap<K, V> {
 		}
 
 		@Override
-		public IndexedQuiterator<V> spliterator() {
+		public Quiterator<V> spliterator() {
 			// TODO Auto-generated method stub
-		}
-
-		@Override
-		public Subscription onOrderedElement(Consumer<? super ObservableOrderedElement<V>> onElement) {
-			return OrderedQollection.flattenValue(getWrappedObservable()).onOrderedElement(onElement);
 		}
 	}
 
@@ -674,11 +684,6 @@ public interface MultiQMap<K, V> extends TransactableMultiMap<K, V> {
 			SortedQSet<V> current = getWrapped();
 			return current == null ? Collections.EMPTY_LIST : current.iterateFrom(element, included, reversed);
 		}
-
-		@Override
-		public Subscription onElementReverse(Consumer<? super ObservableOrderedElement<V>> onElement) {
-			return ObservableReversibleCollection.flattenValue(getWrappedObservable()).onElementReverse(onElement);
-		}
 	}
 
 	/**
@@ -766,11 +771,6 @@ public interface MultiQMap<K, V> extends TransactableMultiMap<K, V> {
 		public int lastIndexOf(Object o) {
 			QList<V> current = getWrapped();
 			return current != null ? current.lastIndexOf(o) : -1;
-		}
-
-		@Override
-		public Subscription onElementReverse(Consumer<? super ObservableOrderedElement<V>> onElement) {
-			return ObservableReversibleCollection.flattenValue(getWrappedObservable()).onElementReverse(onElement);
 		}
 	}
 

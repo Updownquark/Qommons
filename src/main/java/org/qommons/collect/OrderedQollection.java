@@ -1,7 +1,18 @@
 package org.qommons.collect;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
+import java.util.RandomAccess;
+import java.util.Spliterator;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import org.qommons.Transaction;
 import org.qommons.collect.Quiterator.CollectionElement;
@@ -10,12 +21,14 @@ import org.qommons.value.Value;
 import com.google.common.reflect.TypeToken;
 
 /**
- * A Qollection that has a further contract that all its elements are ordered for {@link Iterator iteration} and {@link Spliterator
- * spliteration}
+ * A Qollection that has a further contract that all its elements are given in a constant order (barring modifications) by {@link Iterator
+ * iteration} and {@link Spliterator spliteration}
  * 
  * @param <E> The type of elements in the collection
  */
 public interface OrderedQollection<E> extends Qollection<E> {
+	// Additional methods
+
 	/**
 	 * @param filter The filter function
 	 * @return The first value in this collection passing the filter, or null if none of this collection's elements pass
@@ -104,8 +117,18 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		}
 	}
 
+	/**
+	 * @param compare The comparator to use to sort this collection's elements
+	 * @return A new collection containing all the same elements as this collection, but ordered according to the given comparator
+	 */
+	default OrderedQollection<E> sorted(Comparator<? super E> compare) {
+		return new SortedObservableCollection<>(this, compare);
+	}
+
+	// Filter/mapping
+
 	@Override
-	default <T> Qollection<T> filterMap(FilterMapDef<E, ?, T> filterMap) {
+	default <T> OrderedQollection<T> filterMap(FilterMapDef<E, ?, T> filterMap) {
 		return new FilterMappedOrderedQollection<>(this, filterMap);
 	}
 
@@ -124,6 +147,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		return (OrderedQollection<T>) Qollection.super.map(map);
 	}
 
+	// Combination
+
 	@Override
 	default <T, V> OrderedQollection<V> combine(Value<T> arg, BiFunction<? super E, ? super T, V> func) {
 		return (OrderedQollection<V>) Qollection.super.combine(arg, func);
@@ -140,22 +165,18 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		return new CombinedOrderedQollection<>(this, arg, type, func, reverse);
 	}
 
+	// Grouping
+
 	@Override
 	default <K> MultiQMap<K, E> groupBy(TypeToken<K> keyType, Function<E, K> keyMap) {
 		return new GroupedOrderedMultiMap<>(this, keyMap, keyType);
 	}
 
-	/**
-	 * @param compare The comparator to use to sort this collection's elements
-	 * @return A new collection containing all the same elements as this collection, but ordered according to the given comparator
-	 */
-	default OrderedQollection<E> sorted(Comparator<? super E> compare) {
-		return new SortedObservableCollection<>(this, compare);
-	}
+	// Modification control
 
 	@Override
 	default OrderedQollection<E> immutable(String modMsg) {
-		return new ImmutableOrderedQollection<>(this, modMsg);
+		return (OrderedQollection<E>) Qollection.super.immutable(modMsg);
 	}
 
 	@Override
@@ -182,6 +203,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	default OrderedQollection<E> filterModification(Function<? super E, String> removeFilter, Function<? super E, String> addFilter) {
 		return new ModFilteredOrderedQollection<>(this, removeFilter, addFilter);
 	}
+
+	// Static utility methods
 
 	/**
 	 * @param <E> The type of the values
@@ -254,6 +277,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		return new InterspersedQollection<>(coll, discriminator, withRemove);
 	}
 
+	// Implementation member classes
+
 	/**
 	 * Finds something in an {@link OrderedQollection}
 	 *
@@ -261,11 +286,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	 */
 	class OrderedCollectionFinder<E> implements Value<E> {
 		private final OrderedQollection<E> theCollection;
-
 		private final TypeToken<E> theType;
-
 		private final Predicate<? super E> theFilter;
-
 		private final boolean isForward;
 
 		OrderedCollectionFinder(OrderedQollection<E> collection, Predicate<? super E> filter, boolean forward) {
@@ -347,6 +369,11 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		@Override
 		protected OrderedQollection<E> getWrapped() {
 			return (OrderedQollection<E>) super.getWrapped();
+		}
+
+		@Override
+		public V get(int index) {
+			return combine(getWrapped().get(index));
 		}
 	}
 
@@ -473,33 +500,12 @@ public interface OrderedQollection<E> extends Qollection<E> {
 					return element;
 				};
 			};
-			return new Quiterator.SimpleQuiterator<E, E>(sorted.spliterator(), elementMap) {};
+			return new Quiterator.SimpleQuiterator<E, E>(sorted.spliterator(), theWrapped.getType(), elementMap) {};
 		}
 
 		@Override
 		public String toString() {
 			return Qollection.toString(this);
-		}
-	}
-
-	/**
-	 * An observable ordered collection that cannot be modified directly, but reflects the value of a wrapped collection as it changes
-	 *
-	 * @param <E> The type of elements in the collection
-	 */
-	class ImmutableOrderedQollection<E> extends ImmutableQollection<E> implements OrderedQollection<E> {
-		protected ImmutableOrderedQollection(OrderedQollection<E> wrap, String modMsg) {
-			super(wrap, modMsg);
-		}
-
-		@Override
-		protected OrderedQollection<E> getWrapped() {
-			return (OrderedQollection<E>) super.getWrapped();
-		}
-
-		@Override
-		public OrderedQollection<E> immutable(String modMsg) {
-			return (OrderedQollection<E>) super.immutable(modMsg);
 		}
 	}
 
@@ -518,12 +524,17 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		protected OrderedQollection<E> getWrapped() {
 			return (OrderedQollection<E>) super.getWrapped();
 		}
+
+		@Override
+		public E get(int index) {
+			return getWrapped().get(index);
+		}
 	}
 
 	/**
 	 * Implements {@link OrderedQollection#constant(TypeToken, List)}
 	 * 
-	 * @param <E> The type of values in the collection
+	 * @param <E> The type of elements in the collection
 	 */
 	class ConstantOrderedQollection<E> extends ConstantQollection<E> implements OrderedQollection<E> {
 		public ConstantOrderedQollection(TypeToken<E> type, List<E> collection) {
@@ -531,33 +542,13 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		}
 
 		@Override
-		protected List<E> getCollection() {
-			return (List<E>) super.getCollection();
-		}
-
-		@Override
-		public Value<E> getLast() {
-			return Value.constant(getType(), last());
-		}
-
-		@Override
-		public E last() {
-			return getCollection().isEmpty() ? null : getCollection().get(getCollection().size() - 1);
+		protected List<E> getWrapped() {
+			return (List<E>) super.getWrapped();
 		}
 
 		@Override
 		public E get(int index) {
-			return getCollection().get(index);
-		}
-
-		@Override
-		public int indexOf(Object value) {
-			return getCollection().indexOf(value);
-		}
-
-		@Override
-		public int lastIndexOf(Object value) {
-			return getCollection().lastIndexOf(value);
+			return getWrapped().get(index);
 		}
 	}
 
@@ -693,8 +684,14 @@ public interface OrderedQollection<E> extends Qollection<E> {
 
 		@Override
 		public Quiterator<E> spliterator() {
+			return intersperse(getWrapped().spliterator(), Qollection::spliterator, theDiscriminator);
+		}
+
+		protected Quiterator<E> intersperse(Quiterator<? extends OrderedQollection<? extends E>> outer,
+			Function<OrderedQollection<? extends E>, Quiterator<? extends E>> innerSplit,
+			Function<? super List<E>, Integer> discriminator) {
 			ArrayList<Quiterator<? extends E>> colls = new ArrayList<>();
-			getWrapped().spliterator().forEachRemaining(coll -> colls.add(coll.spliterator()));
+			outer.forEachRemaining(coll -> colls.add(innerSplit.apply(coll)));
 			colls.trimToSize();
 			List<CollectionElement<? extends E>> elements = new ArrayList<>(colls.size());
 			List<E> values = new ArrayList<>(colls.size());
@@ -724,6 +721,11 @@ public interface OrderedQollection<E> extends Qollection<E> {
 			};
 			return new Quiterator<E>() {
 				@Override
+				public TypeToken<E> getType() {
+					return InterspersedQollection.this.getType();
+				}
+
+				@Override
 				public long estimateSize() {
 					return size();
 				}
@@ -752,7 +754,7 @@ public interface OrderedQollection<E> extends Qollection<E> {
 					}
 					int nextIndex;
 					do {
-						nextIndex = theDiscriminator.apply(immutableValues);
+						nextIndex = discriminator.apply(immutableValues);
 						if (nextIndex < 0 && isWithRemove()) {
 							int remove = -nextIndex - 1;
 							if (remove >= values.size())

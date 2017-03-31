@@ -259,7 +259,7 @@ public interface QMap<K, V> extends TransactableMap<K, V> {
 	@Override
 	default Qollection<V> values() {
 		TypeToken<Value<V>> obValType = new TypeToken<Value<V>>() {}.where(new TypeParameter<V>() {}, getValueType());
-		return Qollection.flattenValues(keySet().map(obValType, this::valueOf));
+		return Qollection.flattenValues(keySet().buildMap(obValType).map(this::valueOf, true).build());
 	}
 
 	@Override
@@ -382,8 +382,13 @@ public interface QMap<K, V> extends TransactableMap<K, V> {
 		};
 	}
 
-	/** @return An immutable copy of this map */
-	default QMap<K, V> immutable() {
+	// TODO Modification control
+
+	/**
+	 * @param modMsg The message to return when attempting modification
+	 * @return An immutable copy of this map
+	 */
+	default QMap<K, V> immutable(String modMsg) {
 		QMap<K, V> outer = this;
 		class Immutable implements QMap<K, V> {
 			@Override
@@ -398,17 +403,17 @@ public interface QMap<K, V> extends TransactableMap<K, V> {
 
 			@Override
 			public QSet<K> keySet() {
-				return outer.keySet().immutable();
+				return outer.keySet().immutable(modMsg);
 			}
 
 			@Override
 			public Qollection<V> values() {
-				return outer.values().immutable();
+				return outer.values().immutable(modMsg);
 			}
 
 			@Override
 			public QSet<? extends QMapEntry<K, V>> valueEntries() {
-				return outer.valueEntries().immutable();
+				return outer.valueEntries().immutable(modMsg);
 			}
 
 			@Override
@@ -542,7 +547,9 @@ public interface QMap<K, V> extends TransactableMap<K, V> {
 
 			@Override
 			public QSet<? extends QMapEntry<K, V>> valueEntries() {
-				return map.valueEntries().mapEquivalent(entry -> (QMapEntry<K, V>) QMapEntry.flatten(entry), null);
+				TypeToken<QMapEntry<K, V>> type = new TypeToken<QMapEntry<K, V>>() {}.where(new TypeParameter<K>() {}, map.getKeyType())
+					.where(new TypeParameter<V>() {}, getValueType());
+				return map.valueEntries().buildMap(type).mapEquiv(entry -> (QMapEntry<K, V>) QMapEntry.flatten(entry), false).build();
 			}
 		};
 	}
