@@ -1,14 +1,6 @@
 package org.qommons.collect;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -29,6 +21,21 @@ import com.google.common.reflect.TypeToken;
  * @param <E> The type of elements in the set
  */
 public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
+	// Additional methods
+
+	/**
+	 * @return The equalizer that enforces this set's uniqueness. The equalizer is only guaranteed to return valid results when given
+	 *         objects that this set understands. If either value passed to {@link Equalizer#equals(Object, Object)} is not in this set's
+	 *         domain, false will be returned.
+	 */
+	Equalizer equalizer();
+
+	/**
+	 * @param o The object to get the equivalent of
+	 * @return The object in this set whose value is equivalent to the given value, if present
+	 */
+	Optional<E> equivalent(Object o);
+
 	// Overrides needed by the compiler
 
 	@Override
@@ -48,14 +55,6 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 	default <T> T[] toArray(T[] a) {
 		return Qollection.super.toArray(a);
 	}
-
-	// Additional methods
-
-	/**
-	 * @param o The object to get the equivalent of
-	 * @return The object in this set whose value is equivalent to the given value
-	 */
-	E equivalent(Object o);
 
 	// Filter/mapping
 
@@ -227,6 +226,11 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 			}
 
 			@Override
+			public Equalizer equalizer() {
+				return equalizer;
+			}
+
+			@Override
 			public int size() {
 				return modSet.size();
 			}
@@ -241,11 +245,11 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 			}
 
 			@Override
-			public T equivalent(Object o) {
+			public Optional<T> equivalent(Object o) {
 				if (!type.getRawType().isInstance(o))
 					return null;
 				CollectionElement<T> element = modSet.get(nodeFor((T) o));
-				return element == null ? null : element.get();
+				return element == null ? Optional.empty() : Optional.of(element.get());
 			}
 
 			@Override
@@ -395,7 +399,8 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 	/**
 	 * A filter-map builder that may produce either a plain {@link Qollection} or a {@link QSet}. It will produce a QSet unless {#link
 	 * #map(Function, boolean)} is called, producing a plain {@link Qollection.MappedQollectionBuilder} that will produce a Qollection as
-	 * normal. {@link #mapEquiv(Function, boolean)} may be used alternatively to preserve the uniqueness contract and produce a mapped QSet.
+	 * normal. {@link #mapEquiv(Function, boolean, Function, boolean)} may be used alternatively to preserve the uniqueness contract and
+	 * produce a mapped QSet.
 	 * 
 	 * @param <E> The type of values in the source collection
 	 * @param <I> Intermediate type
@@ -420,7 +425,8 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 		 * This method differs from its super method slightly in that it does not return this builder. Since no assumption can be made that
 		 * a set mapped with the given function would retain its unique contract, this method returns a different builder that produces a
 		 * plain {@link Qollection} instead of a {@link QSet}. If it is known that the given function preserves the uniqueness quality
-		 * required of {@link Set} implementations and a {@link QSet} is desired for the result, use {@link #mapEquiv(Function, boolean)}.
+		 * required of {@link Set} implementations and a {@link QSet} is desired for the result, use
+		 * {@link #mapEquiv(Function, boolean, Function, boolean)}.
 		 * 
 		 * @param map The mapping function
 		 * @param mapNulls Whether to apply the function to null values or simply pass them through to the mapped set as null values
@@ -442,15 +448,19 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 		 * thrown for violation of it, uniqueness is part of the contract of a {@link Set} that may be relied on by other code that may fail
 		 * if that contract is not met.
 		 * 
-		 * Although not strictly required, in many cases set operations will be more efficient for {@link #withReverse(Function, boolean)
-		 * reverse}-mapped sets. So whenever possible, a reversing function should be provided.
-		 * 
 		 * @param map The mapping function
 		 * @param mapNulls Whether to apply the mapping function to null values or simply pass them through to the mapped set as null values
+		 * @param reverse The reverse function to map from the results of a map operation back to objects that the wrapped set can
+		 *        understand
+		 * @param reverseNulls Whether to apply the reverse function to null values or simply pass them through to the wrapped set as null
+		 *        values
 		 * @return This builder
 		 */
-		public MappedSetOrQollectionBuilder<E, I, T> mapEquiv(Function<? super I, ? extends T> map, boolean mapNulls) {
-			return (MappedSetOrQollectionBuilder<E, I, T>) super.map(map, mapNulls);
+		public MappedSetOrQollectionBuilder<E, I, T> mapEquiv(Function<? super I, ? extends T> map, boolean mapNulls,
+			Function<? super T, ? extends I> reverse, boolean reverseNulls) {
+			Objects.requireNonNull(map);
+			Objects.requireNonNull(reverse);
+			return (MappedSetOrQollectionBuilder<E, I, T>) super.map(map, mapNulls).withReverse(reverse, reverseNulls);
 		}
 
 		@Override
@@ -508,6 +518,33 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 		protected EquivalentFilterMapDef<E, ?, T> getDef() {
 			return (EquivalentFilterMapDef<E, ?, T>) super.getDef();
 		}
+
+		@Override
+		public Equalizer equalizer() {
+			return (t1, t2) -> {
+				if (!getType().getRawType().isInstance(t1) || !getType().getRawType().isInstance(t2))
+					return false;
+				FilterMapResult<T, E> reversed1 = getDef().reverse(new FilterMapResult<>((T) t1));
+				FilterMapResult<T, E> reversed2 = getDef().reverse(new FilterMapResult<>((T) t2));
+				if (reversed1.error != null || reversed2.error != null)
+					return false;
+				return getWrapped().equalizer().equals(reversed1.result, reversed2.result);
+			};
+		}
+
+		@Override
+		public Optional<T> equivalent(Object o) {
+			if (!getType().getRawType().isInstance(o))
+				return Optional.empty();
+			FilterMapResult<T, E> reversed = getDef().reverse(new FilterMapResult<>((T) o));
+			if (reversed.error != null)
+				return Optional.empty();
+			Optional<E> wrappedEquiv = getWrapped().equivalent(reversed.result);
+			return wrappedEquiv.flatMap(e -> {
+				FilterMapResult<E, T> res = getDef().map(new FilterMapResult<>(e));
+				return res.error != null ? Optional.empty() : Optional.of(res.result);
+			});
+		}
 	}
 
 	/**
@@ -526,7 +563,12 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 		}
 
 		@Override
-		public E equivalent(Object o) {
+		public Equalizer equalizer() {
+			return getWrapped().equalizer();
+		}
+
+		@Override
+		public Optional<E> equivalent(Object o) {
 			return getWrapped().equivalent(o);
 		}
 	}
@@ -547,9 +589,15 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 		}
 
 		@Override
-		public E equivalent(Object o) {
+		public Equalizer equalizer() {
 			QSet<E> current = getWrapped().get();
-			return current == null ? null : current.equivalent(o);
+			return current == null ? Objects::equals : current.equalizer();
+		}
+
+		@Override
+		public Optional<E> equivalent(Object o) {
+			QSet<E> current = getWrapped().get();
+			return current == null ? Optional.empty() : current.equivalent(o);
 		}
 	}
 
@@ -573,6 +621,11 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 			return theCollection;
 		}
 
+		@Override
+		public Equalizer equalizer() {
+			return theEqualizer;
+		}
+
 		protected Hasher<? super E> getHasher() {
 			return theHasher;
 		}
@@ -594,10 +647,7 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 
 		@Override
 		public int size() {
-			HashSet<E> set = new HashSet<>();
-			for (E value : theCollection)
-				set.add(value);
-			return set.size();
+			return getNodeSet().size();
 		}
 
 		@Override
@@ -606,10 +656,12 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 		}
 
 		protected HashSet<EqualizerNode<E>> getNodeSet() {
-			HashSet<EqualizerNode<E>> set = new HashSet<>();
-			for (E v : theCollection)
-				set.add(nodeFor(v));
-			return set;
+			try (Transaction t = theCollection.lock(false, null)) {
+				HashSet<EqualizerNode<E>> set = new HashSet<>();
+				for (E v : theCollection)
+					set.add(nodeFor(v));
+				return set;
+			}
 		}
 
 		protected EqualizerNode<E> nodeFor(E value) {
@@ -617,8 +669,19 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 		}
 
 		@Override
-		public E equivalent(Object o) {
-			// TODO Auto-generated method stub
+		public Optional<E> equivalent(Object o) {
+			if(!getType().getRawType().isInstance(o))
+				return null;
+			try(Transaction t=theCollection.lock(false, null)){
+				HashMap<EqualizerNode<E>, E> map=new HashMap<>();
+				for (E v : theCollection)
+					map.put(nodeFor(v), v);
+				EqualizerNode<E> node = nodeFor((E) o);
+				if (map.containsKey(node))
+					return Optional.of(map.get(node));
+				else
+					return Optional.empty();
+			}
 		}
 
 		@Override

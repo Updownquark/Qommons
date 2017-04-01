@@ -1,16 +1,6 @@
 package org.qommons.collect;
 
-import java.util.ArrayList;
-import java.util.BitSet;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.ConcurrentModificationException;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -28,21 +18,6 @@ import com.google.common.reflect.TypeToken;
  */
 public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 	// De-conflicting declarations required by the compiler
-
-	@Override
-	default boolean isEmpty() {
-		return ReversibleQollection.super.isEmpty();
-	}
-
-	@Override
-	default boolean contains(Object o) {
-		return ReversibleQollection.super.contains(o);
-	}
-
-	@Override
-	default boolean containsAll(Collection<?> o) {
-		return ReversibleQollection.super.containsAll(o);
-	}
 
 	@Override
 	default E[] toArray() {
@@ -207,7 +182,8 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 
 	/**
 	 * Turns an observable value containing an observable list into the contents of the value
-	 *
+	 * 
+	 * @param <E> The type of elements in the list
 	 * @param collectionObservable The observable value
 	 * @return A list representing the contents of the value, or a zero-length list when null
 	 */
@@ -769,93 +745,11 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 	}
 
 	/**
-	 * An extension of ObservableList that implements some of the redundant methods and throws UnsupportedOperationExceptions for
-	 * modifications. Mostly copied from {@link java.util.AbstractList}.
-	 *
-	 * @param <E> The type of element in the list
-	 */
-	interface PartialListImpl<E> extends PartialQollectionImpl<E>, QList<E> {
-		@Override
-		default boolean contains(Object o) {
-			return QList.super.contains(o);
-		}
-
-		@Override
-		default boolean containsAll(Collection<?> coll) {
-			return QList.super.containsAll(coll);
-		}
-
-		@Override
-		default boolean add(E o) {
-			return QList.super.add(o);
-		}
-
-		@Override
-		default boolean addAll(Collection<? extends E> c) {
-			return addAll(size(), c);
-		}
-
-		@Override
-		default void add(int index, E element) {
-			throw new UnsupportedOperationException(getClass().getName() + " does not implement add(index, value)");
-		}
-
-		@Override
-		default boolean addAll(int index, Collection<? extends E> c) {
-			try (Transaction t = lock(true, null)) {
-				if (index < 0 || index > size())
-					throw new IndexOutOfBoundsException("Index: " + index + ", Size: " + size());
-				boolean modified = false;
-				for (E e : c) {
-					add(index++, e);
-					modified = true;
-				}
-				return modified;
-			}
-		}
-
-		@Override
-		default boolean retainAll(Collection<?> coll) {
-			return PartialQollectionImpl.super.retainAll(coll);
-		}
-
-		@Override
-		default boolean removeAll(Collection<?> coll) {
-			return PartialQollectionImpl.super.removeAll(coll);
-		}
-
-		@Override
-		default boolean remove(Object o) {
-			return PartialQollectionImpl.super.remove(o);
-		}
-
-		@Override
-		default E remove(int index) {
-			throw new UnsupportedOperationException(getClass().getName() + " does not implement remove(index)");
-		}
-
-		@Override
-		default void clear() {
-			QList.super.clear();
-		}
-
-		@Override
-		default E set(int index, E element) {
-			throw new UnsupportedOperationException(getClass().getName() + " does not implement set(index, value)");
-		}
-
-		@Override
-		default Iterator<E> iterator() {
-			return listIterator();
-		}
-	}
-
-	/**
 	 * Implements {@link QList#reverse()}
 	 * 
 	 * @param <E> The type of elements in the list
 	 */
-	class ReversedQList<E> extends ReversedQollection<E> implements PartialListImpl<E> {
+	class ReversedQList<E> extends ReversedQollection<E> implements QList<E> {
 		public ReversedQList(QList<E> wrap) {
 			super(wrap);
 		}
@@ -877,7 +771,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 	 * @param <E> The type of elements in the source list
 	 * @param <T> The type of elements in this list
 	 */
-	class FilterMappedQList<E, T> extends FilterMappedReversibleQollection<E, T> implements PartialListImpl<T> {
+	class FilterMappedQList<E, T> extends FilterMappedReversibleQollection<E, T> implements QList<T> {
 		public FilterMappedQList(QList<E> wrap, org.qommons.collect.Qollection.FilterMapDef<E, ?, T> def) {
 			super(wrap, def);
 		}
@@ -900,7 +794,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 	 * @param <T> The type of the value to combine with
 	 * @param <V> The type of elements in this list
 	 */
-	class CombinedQList<E, T, V> extends CombinedReversibleQollection<E, T, V> implements PartialListImpl<V> {
+	class CombinedQList<E, T, V> extends CombinedReversibleQollection<E, T, V> implements QList<V> {
 		public CombinedQList(QList<E> collection, Value<T> value, TypeToken<V> type, BiFunction<? super E, ? super T, V> map,
 			BiFunction<? super V, ? super T, E> reverse) {
 			super(collection, value, type, map, reverse);
@@ -917,7 +811,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 	 * 
 	 * @param <E> The type of elements in the list
 	 */
-	class ModFilteredQList<E> extends ModFilteredReversibleQollection<E> implements PartialListImpl<E> {
+	class ModFilteredQList<E> extends ModFilteredReversibleQollection<E> implements QList<E> {
 		public ModFilteredQList(QList<E> wrapped, Function<? super E, String> removeFilter, Function<? super E, String> addFilter) {
 			super(wrapped, removeFilter, addFilter);
 		}
@@ -933,7 +827,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 	 * 
 	 * @param <E> The type of elements in the list
 	 */
-	class ConstantQList<E> extends ConstantOrderedQollection<E> implements PartialListImpl<E> {
+	class ConstantQList<E> extends ConstantOrderedQollection<E> implements QList<E> {
 		public ConstantQList(TypeToken<E> type, List<E> collection) {
 			super(type, collection);
 		}
@@ -1023,7 +917,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 	 * 
 	 * @param <E> The type of elements in the list
 	 */
-	class FlattenedValuesList<E> extends FlattenedOrderedValuesQollection<E> implements PartialListImpl<E> {
+	class FlattenedValuesList<E> extends FlattenedOrderedValuesQollection<E> implements QList<E> {
 		public FlattenedValuesList(QList<? extends Value<? extends E>> collection) {
 			super(collection);
 		}
@@ -1049,7 +943,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 	 * 
 	 * @param <E> The type of elements in the list
 	 */
-	class FlattenedValueList<E> extends FlattenedOrderedValueQollection<E> implements PartialListImpl<E> {
+	class FlattenedValueList<E> extends FlattenedOrderedValueQollection<E> implements QList<E> {
 		public FlattenedValueList(Value<? extends QList<E>> collectionObservable) {
 			super(collectionObservable);
 		}
@@ -1081,7 +975,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 	 * 
 	 * @param <E> The type of elements in the list
 	 */
-	class FlattenedQList<E> extends FlattenedOrderedQollection<E> implements PartialListImpl<E> {
+	class FlattenedQList<E> extends FlattenedOrderedQollection<E> implements QList<E> {
 		public FlattenedQList(QList<? extends QList<? extends E>> outer) {
 			super(outer);
 		}
@@ -1102,7 +996,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 	 * 
 	 * @param <E> The type of elements in the list
 	 */
-	class InterspersedQList<E> extends InterspersedQollection<E> implements PartialListImpl<E> {
+	class InterspersedQList<E> extends InterspersedQollection<E> implements QList<E> {
 		private final Function<? super List<E>, Integer> theReverse;
 
 		public InterspersedQList(QList<? extends QList<? extends E>> coll, Function<? super List<E>, Integer> discriminator,
@@ -1137,7 +1031,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 	 * 
 	 * @param <E> The type of elements in the list
 	 */
-	class CollectionWrappingList<E> implements PartialListImpl<E> {
+	class CollectionWrappingList<E> implements QList<E> {
 		private final Qollection<E> theWrapped;
 
 		public CollectionWrappingList(Qollection<E> wrap) {

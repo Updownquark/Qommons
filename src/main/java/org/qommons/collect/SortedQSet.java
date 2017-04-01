@@ -1,17 +1,13 @@
 package org.qommons.collect;
 
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
-import java.util.NavigableSet;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.qommons.Equalizer;
 import org.qommons.Transaction;
-import org.qommons.value.Value;
+import org.qommons.collect.SortedQSet.PartialSortedSetImpl;
 
 import com.google.common.reflect.TypeToken;
 
@@ -28,6 +24,16 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 		return OrderedQSet.super.iterator();
 	}
 
+	@Override
+	default E pollFirst() {
+		return ReversibleQollection.super.pollFirst();
+	}
+
+	@Override
+	default E pollLast() {
+		return ReversibleQollection.super.pollLast();
+	}
+
 	/**
 	 * Returns a value at or adjacent to another value
 	 *
@@ -36,7 +42,7 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 	 * @param withValue Whether to return the given value if it exists in the map
 	 * @return An observable value with the result of the operation
 	 */
-	default Value<E> relative(E value, boolean up, boolean withValue) {
+	default E relative(E value, boolean up, boolean withValue) {
 		if (up)
 			return tailSet(value, withValue).getFirst();
 		else
@@ -89,6 +95,15 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 	// Default implementations of redundant methods
 
 	@Override
+	default Equalizer equalizer() {
+		return (o1, o2) -> {
+			if (!getType().getRawType().isInstance(o1) || !getType().getRawType().isInstance(o2))
+				return false;
+			return comparator().compare((E) o1, (E) o2) == 0;
+		};
+	}
+
+	@Override
 	default Quiterator<E> spliterator() {
 		return spliterateFrom(null, true, false);
 	}
@@ -107,49 +122,34 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 	default E first() {
 		if (isEmpty())
 			throw new java.util.NoSuchElementException();
-		return getFirst().get();
+		return getFirst();
 	}
 
 	@Override
 	default E last() {
-		// Can't throw NoSuchElementException to comply with ObservableOrderedCollection.last()
-		return getLast().get();
+		if (isEmpty())
+			throw new java.util.NoSuchElementException();
+		return getLast();
 	}
 
 	@Override
 	default E floor(E e) {
-		return relative(e, false, true).get();
+		return relative(e, false, true);
 	}
 
 	@Override
 	default E lower(E e) {
-		return relative(e, false, false).get();
+		return relative(e, false, false);
 	}
 
 	@Override
 	default E ceiling(E e) {
-		return relative(e, true, true).get();
+		return relative(e, true, true);
 	}
 
 	@Override
 	default E higher(E e) {
-		return relative(e, true, false).get();
-	}
-
-	@Override
-	default E pollFirst() {
-		Object[] value = new Object[1];
-		if (!spliterator().tryAdvance(v -> value[0] = v))
-			return null;
-		return (E) value[0];
-	}
-
-	@Override
-	default E pollLast() {
-		Object[] value = new Object[1];
-		if (!reverseSpliterator().tryAdvance(v -> value[0] = v))
-			return null;
-		return (E) value[0];
+		return relative(e, true, false);
 	}
 
 	@Override
@@ -248,54 +248,11 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 	// Implementation member classes
 
 	/**
-	 * An extension of ObservableSortedSet that implements some of the redundant methods and throws UnsupportedOperationExceptions for
-	 * modifications.
-	 *
-	 * @param <E> The type of element in the set
-	 */
-	interface PartialSortedSetImpl<E> extends PartialSetImpl<E>, SortedQSet<E> {
-		@Override
-		default Value<E> relative(E value, boolean up, boolean withValue) {
-			if (up)
-				return tailSet(value, withValue).getFirst();
-			else
-				return headSet(value, withValue).getFirst();
-		}
-
-		@Override
-		default E pollFirst() {
-			Iterator<E> iter = iterator();
-			if (iter.hasNext()) {
-				E ret = iter.next();
-				iter.remove();
-				return ret;
-			}
-			return null;
-		}
-
-		@Override
-		default E pollLast() {
-			Iterator<E> iter = descendingIterator();
-			if (iter.hasNext()) {
-				E ret = iter.next();
-				iter.remove();
-				return ret;
-			}
-			return null;
-		}
-
-		@Override
-		default Quiterator<E> spliterator() {
-			return SortedQSet.super.spliterator();
-		}
-	}
-
-	/**
 	 * Implements {@link SortedQSet#subSet(Object, boolean, Object, boolean, boolean)}
 	 * 
 	 * @param <E> The type of elements in this set
 	 */
-	class SubSortedQSet<E> implements PartialSortedSetImpl<E> {
+	class SubSortedQSet<E> implements SortedQSet<E> {
 		public static final String NOT_IN_RANGE = "Element is outside the range of this sub-set";
 
 		private final SortedQSet<E> theWrapped;
@@ -520,21 +477,22 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 		}
 
 		@Override
-		public Value<E> relative(E value, boolean up, boolean withValue) {
+		public E relative(E value, boolean up, boolean withValue) {
 			if (isReversed)
 				up = !up;
 			Comparator<? super E> compare = theWrapped.comparator();
 			if (!up && theMin != null) {
 				int comp = compare.compare(value, theMin);
 				if (comp < 0 || (!withValue && comp == 0))
-					return Value.constant(getType(), null);
+					return null;
 			}
 			if (up && theMax != null) {
 				int comp = compare.compare(value, theMax);
 				if (comp > 0 || (!withValue && comp == 0))
-					return Value.constant(getType(), null);
+					return null;
 			}
-			return theWrapped.relative(value, up, withValue).mapV(v -> isInRange(v) ? v : null);
+			E rel = theWrapped.relative(value, up, withValue);
+			return isInRange(rel) ? rel : null;
 		}
 
 		@Override
@@ -606,7 +564,7 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 				if (comp < 0 || (!isMaxIncluded && comp == 0))
 					return isReversed ? -1 : -size() - 1;
 			}
-			return PartialSortedSetImpl.super.indexOf(value);
+			return SortedQSet.super.indexOf(value);
 		}
 
 		@Override
@@ -648,6 +606,7 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 
 		@Override
 		public boolean removeAll(Collection<?> values) {
+			// TODO Type check
 			List<?> toRemove = values.stream().filter(v -> isInRange((E) v)).collect(Collectors.toList());
 			return theWrapped.removeAll(toRemove);
 		}

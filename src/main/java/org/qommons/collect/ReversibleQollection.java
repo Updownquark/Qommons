@@ -2,6 +2,7 @@ package org.qommons.collect;
 
 import java.util.Iterator;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -15,7 +16,7 @@ import com.google.common.reflect.TypeToken;
 /**
  * An {@link OrderedQollection} that also knows how to return its elements in reverse order
  * 
- * @param <E>
+ * @param <E> The type of elements in the collection
  */
 public interface ReversibleQollection<E> extends OrderedQollection<E>, ReversibleCollection<E> {
 	/** @return A Quiterator that returns this collection's elements in reverse order */
@@ -32,17 +33,50 @@ public interface ReversibleQollection<E> extends OrderedQollection<E>, Reversibl
 		return new ReversedQollection<>(this);
 	}
 
-	/* Overridden for performance */
-	@Override
-	default Value<E> findLast(Predicate<E> filter) {
-		return new OrderedReversibleCollectionFinder<>(this, filter, false);
+	/**
+	 * @param filter The filter function
+	 * @return The last value in this collection passing the filter, or empty if none of this collection's elements pass
+	 */
+	default Optional<E> findLast(Predicate<? super E> filter) {
+		try (Transaction t = lock(false, null)) {
+			for (E element : descending()) {
+				if (filter.test(element))
+					return Optional.of(element);
+			}
+			return Optional.empty();
+		}
 	}
 
-	/* Overridden for performance.  get() may be faster here since we can start at the end */
-	@Override
-	default Value<E> getLast() {
-		return new OrderedReversibleCollectionFinder<>(this, value -> true, false);
+	/** @return The last value in this collection, or null if this collection is empty */
+	default E getLast() {
+		Object[] value = new Object[1];
+		if (!reverseSpliterator().tryAdvanceElement(el -> {
+			value[0] = el.get();
+		}))
+			return null;
+		return (E) value[0];
 	}
+
+	/**
+	 * Finds and removes the last value in the collection if it is not empty
+	 * 
+	 * @return The last value in the collection, or null if this collection was empty
+	 */
+	default E pollLast() {
+		Object[] value = new Object[1];
+		if (!reverseSpliterator().tryAdvanceElement(el -> {
+			value[0] = el.get();
+			try {
+				el.remove();
+			} catch (IllegalArgumentException e) {
+				throw new UnsupportedOperationException(e);
+			}
+		}))
+			return null;
+		return (E) value[0];
+	}
+
+	/* Overridden for performance */
 
 	@Override
 	default int lastIndexOf(Object value) {
@@ -54,14 +88,6 @@ public interface ReversibleQollection<E> extends OrderedQollection<E>, Reversibl
 					return size - i - 1;
 			}
 			return -1;
-		}
-	}
-
-	@Override
-	default E last() {
-		try (Transaction t = lock(false, null)) {
-			Iterator<E> iter = descending().iterator();
-			return iter.hasNext() ? iter.next() : null;
 		}
 	}
 
@@ -136,7 +162,7 @@ public interface ReversibleQollection<E> extends OrderedQollection<E>, Reversibl
 	 * 
 	 * @param <E> The type of elements in the collection
 	 */
-	class ReversedQollection<E> extends ReversedCollection<E> implements PartialQollectionImpl<E>, ReversibleQollection<E> {
+	class ReversedQollection<E> extends ReversedCollection<E> implements ReversibleQollection<E> {
 		public ReversedQollection(ReversibleQollection<E> wrap) {
 			super(wrap);
 		}
@@ -208,28 +234,23 @@ public interface ReversibleQollection<E> extends OrderedQollection<E>, Reversibl
 		}
 
 		@Override
-		public Value<E> findFirst(Predicate<E> filter) {
+		public Optional<E> findFirst(Predicate<? super E> filter) {
 			return getWrapped().findLast(filter);
 		}
 
 		@Override
-		public Value<E> findLast(Predicate<E> filter) {
+		public Optional<E> findLast(Predicate<? super E> filter) {
 			return getWrapped().findFirst(filter);
 		}
 
 		@Override
-		public Value<E> getFirst() {
+		public E getFirst() {
 			return getWrapped().getLast();
 		}
 
 		@Override
-		public Value<E> getLast() {
+		public E getLast() {
 			return getWrapped().getFirst();
-		}
-
-		@Override
-		public E last() {
-			return getWrapped().getFirst().get();
 		}
 
 		@Override

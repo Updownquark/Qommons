@@ -2,6 +2,9 @@ package org.qommons.collect;
 
 import java.util.function.Function;
 
+import org.qommons.Equalizer;
+import org.qommons.Hasher;
+
 /**
  * A {@link QSet} that is also an {@link OrderedQollection}
  * 
@@ -54,11 +57,14 @@ public interface OrderedQSet<E> extends QSet<E>, OrderedQollection<E> {
 	}
 
 	/**
+	 * @param <E> The type of elements in the collection
 	 * @param collection The collection to wrap
+	 * @param equalizer The equalizer to enforce uniqueness in the set
+	 * @param hasher To provide hash codes for the elements
 	 * @return An ordered set consisting of the unique elements in the given collection
 	 */
-	static <E> OrderedQSet<E> unique(OrderedQollection<E> collection) {
-		return new OrderedCollectionWrappingSet<>(collection);
+	static <E> OrderedQSet<E> unique(OrderedQollection<E> collection, Equalizer equalizer, Hasher<? super E> hasher) {
+		return new OrderedCollectionWrappingSet<>(collection, equalizer, hasher);
 	}
 
 	/**
@@ -96,13 +102,13 @@ public interface OrderedQSet<E> extends QSet<E>, OrderedQollection<E> {
 	}
 
 	/**
-	 * Implements {@link OrderedQSet#unique(OrderedQollection)}
+	 * Implements {@link OrderedQSet#unique(OrderedQollection, Equalizer, Hasher)}
 	 * 
 	 * @param <E> The type of values in this set
 	 */
 	class OrderedCollectionWrappingSet<E> extends CollectionWrappingSet<E> implements OrderedQSet<E> {
-		public OrderedCollectionWrappingSet(OrderedQollection<E> collection) {
-			super(collection);
+		public OrderedCollectionWrappingSet(OrderedQollection<E> collection, Equalizer equalizer, Hasher<? super E> hasher) {
+			super(collection, equalizer, hasher);
 		}
 
 		@Override

@@ -1,21 +1,8 @@
 package org.qommons.collect;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Objects;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
+import java.util.function.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -145,31 +132,16 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 * Searches in this collection for an element.
 	 *
 	 * @param filter The filter function
-	 * @return A value in this list passing the filter, or null if none of this collection's elements pass.
+	 * @return A value in this list passing the filter, or empty if none of this collection's elements pass.
 	 */
-	default Value<E> find(Predicate<E> filter) {
-		return new Value<E>() {
-			private final TypeToken<E> type = Qollection.this.getType().wrap();
-
-			@Override
-			public TypeToken<E> getType() {
-				return type;
+	default Optional<E> find(Predicate<? super E> filter) {
+		try (Transaction t = lock(false, null)) {
+			for (E element : Qollection.this) {
+				if (filter.test(element))
+					return Optional.of(element);
 			}
-
-			@Override
-			public E get() {
-				for (E element : Qollection.this) {
-					if (filter.test(element))
-						return element;
-				}
-				return null;
-			}
-
-			@Override
-			public String toString() {
-				return "find in " + Qollection.this;
-			}
-		};
+			return Optional.empty();
+		}
 	}
 
 	// Filter/mapping
@@ -293,30 +265,15 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	// Reduction
 
 	/**
-	 * Equivalent to {@link #reduce(Object, BiFunction, BiFunction)} with null for the remove function
-	 *
-	 * @param <T> The type of the reduced value
-	 * @param init The seed value before the reduction
-	 * @param reducer The reducer function to accumulate the values. Must be associative.
-	 * @return The reduced value
-	 */
-	default <T> Value<T> reduce(T init, BiFunction<? super T, ? super E, T> reducer) {
-		return reduce(init, reducer, null);
-	}
-
-	/**
-	 * Equivalent to {@link #reduce(TypeToken, Object, BiFunction, BiFunction)} using the type derived from the reducer's return type
+	 * Equivalent to {@link #reduce(TypeToken, Object, BiFunction)} using the type derived from the reducer's return type
 	 *
 	 * @param <T> The type of the reduced value
 	 * @param init The seed value before the reduction
 	 * @param add The reducer function to accumulate the values. Must be associative.
-	 * @param remove The de-reducer function to handle removal or replacement of values. This may be null, in which case removal or
-	 *        replacement of values will result in the entire collection being iterated over for each subscription. Null here will have no
-	 *        consequence if the result is never observed. Must be associative.
 	 * @return The reduced value
 	 */
-	default <T> Value<T> reduce(T init, BiFunction<? super T, ? super E, T> add, BiFunction<? super T, ? super E, T> remove) {
-		return reduce((TypeToken<T>) TypeToken.of(add.getClass()).resolveType(BiFunction.class.getTypeParameters()[2]), init, add, remove);
+	default <T> T reduce(T init, BiFunction<? super T, ? super E, T> add) {
+		return reduce((TypeToken<T>) TypeToken.of(add.getClass()).resolveType(BiFunction.class.getTypeParameters()[2]), init, add);
 	}
 
 	/**
@@ -326,39 +283,20 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 * @param type The run-time type of the reduced value
 	 * @param init The seed value before the reduction
 	 * @param add The reducer function to accumulate the values. Must be associative.
-	 * @param remove The de-reducer function to handle removal or replacement of values. This may be null, in which case removal or
-	 *        replacement of values will result in the entire collection being iterated over for each subscription. Null here will have no
-	 *        consequence if the result is never observed. Must be associative.
 	 * @return The reduced value
 	 */
-	default <T> Value<T> reduce(TypeToken<T> type, T init, BiFunction<? super T, ? super E, T> add,
-		BiFunction<? super T, ? super E, T> remove) {
-		return new Value<T>() {
-			@Override
-			public TypeToken<T> getType() {
-				return type;
-			}
-
-			@Override
-			public T get() {
-				T ret = init;
-				for (E element : Qollection.this)
-					ret = add.apply(ret, element);
-				return ret;
-			}
-
-			@Override
-			public String toString() {
-				return "reduce " + Qollection.this;
-			}
-		};
+	default <T> T reduce(TypeToken<T> type, T init, BiFunction<? super T, ? super E, T> add) {
+		T ret = init;
+		for (E element : Qollection.this)
+			ret = add.apply(ret, element);
+		return ret;
 	}
 
 	/**
 	 * @param compare The comparator to use to compare this collection's values
 	 * @return An observable value containing the minimum of the values, by the given comparator
 	 */
-	default Value<E> minBy(Comparator<? super E> compare) {
+	default E minBy(Comparator<? super E> compare) {
 		return reduce(getType(), null, (v1, v2) -> {
 			if (v1 == null)
 				return v2;
@@ -368,14 +306,14 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				return v1;
 			else
 				return v2;
-		}, null);
+		});
 	}
 
 	/**
 	 * @param compare The comparator to use to compare this collection's values
 	 * @return An observable value containing the maximum of the values, by the given comparator
 	 */
-	default Value<E> maxBy(Comparator<? super E> compare) {
+	default E maxBy(Comparator<? super E> compare) {
 		return reduce(getType(), null, (v1, v2) -> {
 			if (v1 == null)
 				return v2;
@@ -385,7 +323,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				return v1;
 			else
 				return v2;
-		}, null);
+		});
 	}
 
 	// Grouping
@@ -1606,6 +1544,14 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		protected QSet<K> unique(Qollection<K> keyCollection) {
 			return QSet.unique(keyCollection, theKeyEqualizer, theKeyHasher);
+		}
+
+		protected Equalizer getKeyEqualizer() {
+			return theKeyEqualizer;
+		}
+
+		protected Hasher<? super K> getKeyHasher() {
+			return theKeyHasher;
 		}
 
 		@Override

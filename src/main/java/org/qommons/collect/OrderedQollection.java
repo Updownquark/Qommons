@@ -1,19 +1,10 @@
 package org.qommons.collect;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Objects;
-import java.util.RandomAccess;
-import java.util.Spliterator;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
+import java.util.*;
+import java.util.function.*;
 
+import org.qommons.Equalizer;
+import org.qommons.Hasher;
 import org.qommons.Transaction;
 import org.qommons.collect.Quiterator.CollectionElement;
 import org.qommons.value.Value;
@@ -31,40 +22,39 @@ public interface OrderedQollection<E> extends Qollection<E> {
 
 	/**
 	 * @param filter The filter function
-	 * @return The first value in this collection passing the filter, or null if none of this collection's elements pass
+	 * @return The first value in this collection passing the filter, or empty if none of this collection's elements pass
 	 */
-	default Value<E> findFirst(Predicate<E> filter) {
-		return new OrderedCollectionFinder<>(this, filter, true);
-	}
-
-	/**
-	 * @param filter The filter function
-	 * @return The first value in this collection passing the filter, or null if none of this collection's elements pass
-	 */
-	default Value<E> findLast(Predicate<E> filter) {
-		return new OrderedCollectionFinder<>(this, filter, false);
+	default Optional<E> findFirst(Predicate<? super E> filter) {
+		return Qollection.super.find(filter);
 	}
 
 	/** @return The first value in this collection, or null if this collection is empty */
-	default Value<E> getFirst() {
-		return new OrderedCollectionFinder<>(this, value -> true, true);
+	default E getFirst() {
+		Object[] value = new Object[1];
+		if (!spliterator().tryAdvanceElement(el -> {
+			value[0] = el.get();
+		}))
+			return null;
+		return (E) value[0];
 	}
 
 	/**
-	 * Finds the last value in this list. The get() method of this observable may have linear time unless this is an instance of
-	 * {@link RandomAccess}
-	 *
-	 * @return The last value in this collection, or null if this collection is empty
+	 * Finds and removes the first value in the collection if it is not empty
+	 * 
+	 * @return The first value in the collection, or null if this collection was empty
 	 */
-	default Value<E> getLast() {
-		return new OrderedCollectionFinder<>(this, value -> true, false);
-	}
-
-	/** @return The last value in this collection, or null if the collection is empty */
-	default E last() {
-		Object[] returned = new Object[1];
-		spliterator().forEachRemaining(v -> returned[0] = v);
-		return (E) returned[0];
+	default E pollFirst() {
+		Object[] value = new Object[1];
+		if (!spliterator().tryAdvanceElement(el -> {
+			value[0] = el.get();
+			try {
+				el.remove();
+			} catch (IllegalArgumentException e) {
+				throw new UnsupportedOperationException(e);
+			}
+		}))
+			return null;
+		return (E) value[0];
 	}
 
 	// Ordered collections need to know the indexes of their elements in a somewhat efficient way, so these index methods make sense here
@@ -168,8 +158,8 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	// Grouping
 
 	@Override
-	default <K> MultiQMap<K, E> groupBy(TypeToken<K> keyType, Function<E, K> keyMap) {
-		return new GroupedOrderedMultiMap<>(this, keyMap, keyType);
+	default <K> MultiQMap<K, E> groupBy(TypeToken<K> keyType, Function<E, K> keyMap, Equalizer equalizer, Hasher<? super K> hasher) {
+		return new GroupedOrderedMultiMap<>(this, keyMap, keyType, equalizer, hasher);
 	}
 
 	// Modification control
@@ -384,13 +374,14 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	 * @param <V> The value type of the map
 	 */
 	class GroupedOrderedMultiMap<K, V> extends GroupedMultiMap<K, V> {
-		public GroupedOrderedMultiMap(OrderedQollection<V> wrap, Function<V, K> keyMap, TypeToken<K> keyType) {
-			super(wrap, keyMap, keyType);
+		public GroupedOrderedMultiMap(OrderedQollection<V> wrap, Function<V, K> keyMap, TypeToken<K> keyType, Equalizer equalizer,
+			Hasher<? super K> hasher) {
+			super(wrap, keyMap, keyType, equalizer, hasher);
 		}
 
 		@Override
 		protected QSet<K> unique(Qollection<K> keyCollection) {
-			return OrderedQSet.unique((OrderedQollection<K>) keyCollection);
+			return OrderedQSet.unique((OrderedQollection<K>) keyCollection, getKeyEqualizer(), getKeyHasher());
 		}
 	}
 
@@ -399,7 +390,7 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	 *
 	 * @param <E> The type of the elements in the collection
 	 */
-	class SortedObservableCollection<E> implements PartialQollectionImpl<E>, OrderedQollection<E> {
+	class SortedObservableCollection<E> implements OrderedQollection<E> {
 		private final OrderedQollection<E> theWrapped;
 		private final Comparator<? super E> theCompare;
 
@@ -419,6 +410,11 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		}
 
 		@Override
+		public boolean isLockSupported() {
+			return theWrapped.isLockSupported();
+		}
+
+		@Override
 		public Transaction lock(boolean write, Object cause) {
 			return theWrapped.lock(write, cause);
 		}
@@ -429,13 +425,64 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		}
 
 		@Override
-		public String canRemove(Object value) {
-			return theWrapped.canRemove(value);
+		public boolean isEmpty() {
+			return theWrapped.isEmpty();
+		}
+
+		@Override
+		public boolean contains(Object o) {
+			return theWrapped.contains(o);
+		}
+
+		@Override
+		public boolean containsAll(Collection<?> c) {
+			return theWrapped.containsAll(c);
 		}
 
 		@Override
 		public String canAdd(E value) {
 			return theWrapped.canAdd(value);
+		}
+
+		@Override
+		public boolean add(E e) {
+			return theWrapped.add(e);
+		}
+
+		@Override
+		public boolean addAll(Collection<? extends E> c) {
+			return theWrapped.addAll(c);
+		}
+
+		@Override
+		public Qollection<E> addValues(E... values) {
+			theWrapped.addValues(values);
+			return this;
+		}
+
+		@Override
+		public String canRemove(Object value) {
+			return theWrapped.canRemove(value);
+		}
+
+		@Override
+		public boolean remove(Object o) {
+			return theWrapped.remove(o);
+		}
+
+		@Override
+		public boolean removeAll(Collection<?> c) {
+			return theWrapped.removeAll(c);
+		}
+
+		@Override
+		public boolean retainAll(Collection<?> c) {
+			return theWrapped.retainAll(c);
+		}
+
+		@Override
+		public void clear() {
+			theWrapped.clear();
 		}
 
 		@Override
