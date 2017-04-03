@@ -270,63 +270,6 @@ public interface OrderedQollection<E> extends Qollection<E> {
 	// Implementation member classes
 
 	/**
-	 * Finds something in an {@link OrderedQollection}
-	 *
-	 * @param <E> The type of value to find
-	 */
-	class OrderedCollectionFinder<E> implements Value<E> {
-		private final OrderedQollection<E> theCollection;
-		private final TypeToken<E> theType;
-		private final Predicate<? super E> theFilter;
-		private final boolean isForward;
-
-		OrderedCollectionFinder(OrderedQollection<E> collection, Predicate<? super E> filter, boolean forward) {
-			theCollection = collection;
-			theType = theCollection.getType().wrap();
-			theFilter = filter;
-			isForward = forward;
-		}
-
-		/** @return The collection that this finder searches */
-		public OrderedQollection<E> getCollection() {
-			return theCollection;
-		}
-
-		/** @return The function to test elements with */
-		public Predicate<? super E> getFilter() {
-			return theFilter;
-		}
-
-		/** @return Whether this finder searches forward or backward in the collection */
-		public boolean isForward() {
-			return isForward;
-		}
-
-		@Override
-		public TypeToken<E> getType() {
-			return theType;
-		}
-
-		@Override
-		public E get() {
-			if (isForward) {
-				for (E element : theCollection) {
-					if (theFilter.test(element))
-						return element;
-				}
-				return null;
-			} else {
-				E ret = null;
-				for (E element : theCollection) {
-					if (theFilter.test(element))
-						ret = element;
-				}
-				return ret;
-			}
-		}
-	}
-
-	/**
 	 * Implements {@link OrderedQollection#filterMap(FilterMapDef)}
 	 *
 	 * @param <E> The type of the collection to be filter-mapped
@@ -437,6 +380,11 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		@Override
 		public boolean containsAll(Collection<?> c) {
 			return theWrapped.containsAll(c);
+		}
+
+		@Override
+		public boolean containsAny(Collection<?> c) {
+			return theWrapped.containsAny(c);
 		}
 
 		@Override

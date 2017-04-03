@@ -1,7 +1,6 @@
 package org.qommons.collect;
 
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -88,6 +87,13 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	 * @return Null if given value could possibly be added to this collection, or a message why it can't
 	 */
 	String canAdd(E value);
+
+	/**
+	 * @param c collection to be checked for containment in this collection
+	 * @return Whether this collection contains at least one of the elements in the specified collection
+	 * @see #containsAll(Collection)
+	 */
+	boolean containsAny(Collection<?> c);
 
 	// Default implementations of redundant Collection methods
 
@@ -619,6 +625,15 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			}
 		}
 
+		public static boolean containsAny(Qollection<?> coll, Collection<?> values) {
+			try (Transaction t = coll.lock(false, null)) {
+				for (Object o : values)
+					if (coll.contains(o))
+						return true;
+			}
+			return false;
+		}
+
 		public static boolean containsAll(Qollection<?> coll, Collection<?> values) {
 			if (values.isEmpty())
 				return true;
@@ -1092,6 +1107,14 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
+		public boolean containsAny(Collection<?> c) {
+			if (!theDef.isReversible() || size() < c.size()) // Try to map the fewest elements
+				return DefaultQollectionMethods.containsAll(this, c);
+
+			return theWrapped.containsAny(reverse(c));
+		}
+
+		@Override
 		public boolean isLockSupported() {
 			return theWrapped.isLockSupported();
 		}
@@ -1359,6 +1382,19 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					if (!theType.getRawType().isInstance(o))
 						return false;
 				return theWrapped.containsAll(c.stream().map(o -> theReverse.apply((V) o, value)).collect(Collectors.toList()));
+			}
+		}
+
+		@Override
+		public boolean containsAny(Collection<?> c) {
+			if (theReverse == null || c.size() > size())
+				return DefaultQollectionMethods.containsAny(this, c);
+			else {
+				T value = theValue.get();
+				for (Object o : c)
+					if (!theType.getRawType().isInstance(o))
+						return false;
+				return theWrapped.containsAny(c.stream().map(o -> theReverse.apply((V) o, value)).collect(Collectors.toList()));
 			}
 		}
 
@@ -1655,6 +1691,11 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
+		public boolean containsAny(Collection<?> c) {
+			return theElements.containsAny(c);
+		}
+
+		@Override
 		public Iterator<E> iterator() {
 			return theElements.iterator();
 		}
@@ -1927,6 +1968,11 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
+		public boolean containsAny(Collection<?> c) {
+			return theWrapped.containsAny(c);
+		}
+
+		@Override
 		public boolean isLockSupported() {
 			return theWrapped.isLockSupported();
 		}
@@ -2153,6 +2199,16 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
+		public boolean containsAny(Collection<?> c) {
+			try (Transaction t = lock(false, null)) {
+				for (Object o : c)
+					if (theCollection.contains(o))
+						return true;
+			}
+			return false;
+		}
+
+		@Override
 		public Quiterator<E> spliterator() {
 			return wrap(theCollection.spliterator());
 		}
@@ -2307,6 +2363,11 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		@Override
 		public boolean containsAll(Collection<?> c) {
 			return DefaultQollectionMethods.containsAll(this, c);
+		}
+
+		@Override
+		public boolean containsAny(Collection<?> c) {
+			return DefaultQollectionMethods.containsAny(this, c);
 		}
 
 		protected E get(Value<? extends E> value) {
@@ -2533,6 +2594,12 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
+		public boolean containsAny(Collection<?> c) {
+			Qollection<? extends E> coll = theCollectionObservable.get();
+			return coll == null ? false : coll.containsAny(c);
+		}
+
+		@Override
 		public Iterator<E> iterator() {
 			Qollection<? extends E> coll = theCollectionObservable.get();
 			return coll == null ? Collections.EMPTY_LIST.iterator() : (Iterator<E>) coll.iterator();
@@ -2736,6 +2803,16 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
+		public boolean containsAny(Collection<?> c) {
+			try (Transaction t = theOuter.lock(false, null)) {
+				for (Qollection<? extends E> inner : theOuter)
+					if (inner.containsAny(c))
+						return true;
+			}
+			return false;
+		}
+
+		@Override
 		public String canAdd(E value) {
 			if (theOuter.isEmpty())
 				return StdMsg.UNSUPPORTED_OPERATION;
@@ -2860,7 +2937,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			return new Quiterator<E>() {
 				private WrappingQuiterator<E, E> theInnerator;
 				private Supplier<Function<CollectionElement<? extends E>, CollectionElement<E>>> theElementMap;
-				private AtomicInteger counted = new AtomicInteger();
+				private boolean isSplit;
 
 				{
 					theElementMap = () -> {
@@ -2886,7 +2963,6 @@ public interface Qollection<E> extends TransactableCollection<E> {
 							}
 						};
 						return el -> {
-							counted.incrementAndGet();
 							container[0] = el;
 							return wrapper;
 						};
@@ -2900,7 +2976,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 				@Override
 				public long estimateSize() {
-					return size() - counted.get();
+					return size();
 				}
 
 				@Override
@@ -2923,16 +2999,17 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 				@Override
 				public void forEachElement(Consumer<? super CollectionElement<E>> action) {
-					outer.forEachRemaining(coll -> {
-						new WrappingQuiterator<>(innerSplit.apply(coll), theType, theElementMap).forEachElement(action);
-					});
+					try (Transaction t = isSplit ? Transaction.NONE : theOuter.lock(false, null)) { // Won't modify the outer
+						outer.forEachRemaining(coll -> {
+							new WrappingQuiterator<>(innerSplit.apply(coll), theType, theElementMap).forEachElement(action);
+						});
+					}
 				}
 
 				@Override
 				public Quiterator<E> trySplit() {
 					Quiterator<E>[] ret = new Quiterator[1];
-					outer.tryAdvance(coll -> {
-						counted.addAndGet(coll.size());
+					isSplit |= outer.tryAdvance(coll -> {
 						ret[0] = new WrappingQuiterator<>(innerSplit.apply(coll), theType, theElementMap);
 					});
 					return ret[0];

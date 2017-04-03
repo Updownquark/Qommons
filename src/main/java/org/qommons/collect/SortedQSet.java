@@ -606,9 +606,33 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 
 		@Override
 		public boolean removeAll(Collection<?> values) {
-			// TODO Type check
-			List<?> toRemove = values.stream().filter(v -> isInRange((E) v)).collect(Collectors.toList());
-			return theWrapped.removeAll(toRemove);
+			boolean allGood = true;
+			for (Object o : values) {
+				if (o == null || !theWrapped.getType().getRawType().isInstance(o)) {
+					allGood = false;
+					break;
+				}
+			}
+			if (!allGood)
+				values = values.stream().filter(o -> o != null && theWrapped.getType().getRawType().isInstance(o))
+					.collect(Collectors.toCollection(() -> new TreeSet<>(theWrapped.comparator())));
+			Quiterator<E> iter = theWrapped.spliterateFrom(theMin, isMinIncluded, false);
+			boolean[] done = new boolean[1];
+			Comparator<? super E> compare = theWrapped.comparator();
+			while (!done[0] && iter.tryAdvanceElement(el -> {
+				E e = el.get();
+				if (theMax != null) {
+					int comp = compare.compare(e, theMax);
+					if (comp > 0 || (comp == 0 && !isMaxIncluded)) {
+						done[0] = true;
+						return;
+					}
+				}
+
+				if (el.canRemove() == null)
+					el.remove();
+			})) {
+			}
 		}
 
 		@Override
@@ -618,7 +642,21 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 
 		@Override
 		public void clear() {
-			PartialSortedSetImpl.super.clear();
+			Quiterator<E> iter = theWrapped.spliterateFrom(theMin, isMinIncluded, false);
+			boolean[] done = new boolean[1];
+			Comparator<? super E> compare = theWrapped.comparator();
+			while (!done[0] && iter.tryAdvanceElement(el -> {
+				if (theMax != null) {
+					int comp = compare.compare(el.get(), theMax);
+					if (comp > 0 || (comp == 0 && !isMaxIncluded)) {
+						done[0] = true;
+						return;
+					}
+				}
+				if (el.canRemove() == null)
+					el.remove();
+			})) {
+			}
 		}
 
 		@Override

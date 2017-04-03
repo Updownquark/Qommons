@@ -271,6 +271,17 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 			}
 
 			@Override
+			public boolean containsAny(Collection<?> coll2) {
+				for (Object o : coll2) {
+					if (o != null && !type.getRawType().isInstance(o))
+						continue;
+					if (modSet.containsKey(equalizer.nodeFor(o, hasher.hash((T) o))))
+						return true;
+				}
+				return false;
+			}
+
+			@Override
 			public Iterator<T> iterator() {
 				return IterableUtils.immutableIterator(values.iterator());
 			}
@@ -365,36 +376,6 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 	}
 
 	// Implementation member classes
-
-	/**
-	 * Implements {@link QSet#equivalent(Object)}
-	 *
-	 * @param <E> The type of the set to find the value in
-	 */
-	class QSetEquivalentFinder<E> implements Value<E> {
-		private final QSet<E> theSet;
-
-		private final Object theKey;
-
-		protected QSetEquivalentFinder(QSet<E> set, Object key) {
-			theSet = set;
-			theKey = key;
-		}
-
-		@Override
-		public TypeToken<E> getType() {
-			return theSet.getType();
-		}
-
-		@Override
-		public E get() {
-			for (E value : theSet) {
-				if (Objects.equals(value, theKey))
-					return value;
-			}
-			return null;
-		}
-	}
 
 	/**
 	 * A filter-map builder that may produce either a plain {@link Qollection} or a {@link QSet}. It will produce a QSet unless {#link
@@ -700,6 +681,17 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 				copy.add(nodeFor((E) o));
 			}
 			return getNodeSet().containsAll(copy);
+		}
+
+		@Override
+		public boolean containsAny(Collection<?> c) {
+			for (Object o : c) {
+				if (o != null && !getType().getRawType().isInstance(o))
+					continue;
+				if (getNodeSet().contains(nodeFor((E) o)))
+					return true;
+			}
+			return false;
 		}
 
 		@Override

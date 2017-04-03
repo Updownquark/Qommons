@@ -1,5 +1,6 @@
 package org.qommons.collect;
 
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.Objects;
 import java.util.Optional;
@@ -183,18 +184,8 @@ public interface ReversibleQollection<E> extends OrderedQollection<E>, Reversibl
 		}
 
 		@Override
-		public Quiterator<E> spliterator() {
-			return getWrapped().reverseSpliterator();
-		}
-
-		@Override
-		public String canRemove(Object value) {
-			return getWrapped().canRemove(value);
-		}
-
-		@Override
-		public String canAdd(E value) {
-			return getWrapped().canAdd(value);
+		public boolean isLockSupported() {
+			return getWrapped().isLockSupported();
 		}
 
 		@Override
@@ -203,8 +194,29 @@ public interface ReversibleQollection<E> extends OrderedQollection<E>, Reversibl
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return getWrapped().isLockSupported();
+		public boolean containsAny(Collection<?> c) {
+			return getWrapped().containsAny(c);
+		}
+
+		@Override
+		public Quiterator<E> spliterator() {
+			return getWrapped().reverseSpliterator();
+		}
+
+		@Override
+		public String canAdd(E value) {
+			return getWrapped().canAdd(value);
+		}
+
+		@Override
+		public Qollection<E> addValues(E... values) {
+			getWrapped().addValues(values);
+			return this;
+		}
+
+		@Override
+		public String canRemove(Object value) {
+			return getWrapped().canRemove(value);
 		}
 
 		@Override
@@ -256,32 +268,6 @@ public interface ReversibleQollection<E> extends OrderedQollection<E>, Reversibl
 		@Override
 		public E[] toArray() {
 			return (E[]) super.toArray();
-		}
-	}
-
-	/**
-	 * Implements {@link ReversibleQollection#findLast(Predicate)}
-	 * 
-	 * @param <E> The type of elements in this collection
-	 */
-	class OrderedReversibleCollectionFinder<E> extends OrderedCollectionFinder<E> {
-		public OrderedReversibleCollectionFinder(ReversibleQollection<E> collection, Predicate<? super E> filter, boolean forward) {
-			super(collection, filter, forward);
-		}
-
-		@Override
-		public ReversibleQollection<E> getCollection() {
-			return (ReversibleQollection<E>) super.getCollection();
-		}
-
-		@Override
-		public E get() {
-			if (isForward())
-				return super.get();
-			for (E value : getCollection().descending())
-				if (getFilter().test(value))
-					return value;
-			return null;
 		}
 	}
 
