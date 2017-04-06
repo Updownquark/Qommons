@@ -1,6 +1,16 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.Spliterator;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -221,8 +231,7 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 
 			@Override
 			public Transaction lock(boolean write, Object cause) {
-				return () -> {
-				};
+				return Transaction.NONE;
 			}
 
 			@Override

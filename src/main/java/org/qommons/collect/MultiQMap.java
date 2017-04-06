@@ -61,7 +61,7 @@ public interface MultiQMap<K, V> extends TransactableMultiMap<K, V> {
 	 * @return A key set for the map
 	 */
 	public static <K, V> QSet<K> defaultKeySet(MultiQMap<K, V> map) {
-		return map.entrySet().buildMap(map.getKeyType()).mapEquiv(MultiQEntry::getKey, true).build();
+		return map.entrySet().buildMap(map.getKeyType()).mapEquiv(MultiQEntry::getKey, false, key -> map.entryFor(key), true).build();
 	}
 
 	@Override
@@ -151,7 +151,7 @@ public interface MultiQMap<K, V> extends TransactableMultiMap<K, V> {
 		TypeToken<MultiQEntry<K, V>> entryType = new TypeToken<MultiQEntry<K, V>>() {}//
 			.where(new TypeParameter<K>() {}, map.getKeyType())//
 			.where(new TypeParameter<V>() {}, map.getValueType());
-		return map.keySet().buildMap(entryType).mapEquiv(map::entryFor, true).build();
+		return map.keySet().buildMap(entryType).mapEquiv(map::entryFor, true, MultiQEntry::getKey, false).build();
 	}
 
 	@Override
