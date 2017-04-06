@@ -1,5 +1,7 @@
 package org.qommons;
 
+import java.util.Objects;
+
 /** A simple binary predicate testing the equivalence of two objects in some context */
 public interface Equalizer {
 	/**
@@ -38,6 +40,19 @@ public interface Equalizer {
 			theEqualizer = equalizer;
 			theValue = value;
 			theHashCode = hashCode;
+		}
+
+		/**
+		 * @deprecated This constructor uses {@link Objects#hashCode(Object)} to generate a hash code for the object. This may be
+		 *             inconsistent with the {@link Equalizer}'s {@link Equalizer#equals(Object, Object) equals} method, resulting in this
+		 *             node's {@link #hashCode()} contract being broken. Use {@link EqualizerNode#EqualizerNode(Equalizer, Object, int)}
+		 *             instead.
+		 * @param equalizer The equalizer for equals testing
+		 * @param value The value to test
+		 */
+		@Deprecated
+		public EqualizerNode(Equalizer equalizer, V value) {
+			this(equalizer, value, Objects.hashCode(value));
 		}
 
 		/** @return The value in this node */
