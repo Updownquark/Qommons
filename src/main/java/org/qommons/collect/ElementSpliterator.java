@@ -16,44 +16,24 @@ import com.google.common.reflect.TypeToken;
  * source collection to be replaced (using {@link Settable#set(Object, Object)}) or {@link CollectionElement#remove() removed} during
  * iteration.
  * 
- * @param <T> The type of values that this Quiterator provides
+ * @param <T> The type of values that this ElementSpliterator provides
  */
-public interface Quiterator<T> extends Spliterator<T> {
-	/**
-	 * Represents an element in a collection returned by a {@link Quiterator} that contains a value (retrieved via {@link Settable#get()})
-	 * that may {@link Settable#isAcceptable(Object) possibly} be {@link Settable#set(Object, Object) replaced} or (again
-	 * {@link #canRemove() possibly}) {@link #remove() removed} during iteration.
-	 * 
-	 * @param <T>
-	 */
-	interface CollectionElement<T> extends Settable<T> {
-		/** @return null if this element can be removed. Non-null indicates a message describing why removal is prevented. */
-		String canRemove();
-
-		/**
-		 * Removes this element from the source collection
-		 * 
-		 * @throws IllegalArgumentException If the element cannot be removed
-		 * @see #canRemove()
-		 */
-		void remove() throws IllegalArgumentException;
-	}
-
-	/** @return The type of elements returned by this Quiterator */
+public interface ElementSpliterator<T> extends Spliterator<T> {
+	/** @return The type of elements returned by this ElementSpliterator */
 	TypeToken<T> getType();
 
 	/**
-	 * Iterates through each element covered by this Quiterator
+	 * Iterates through each element covered by this ElementSpliterator
 	 * 
-	 * @param action Accepts each element in sequence. Unless a sub-type of Quiterator or a specific supplier of a Quiterator advertises
+	 * @param action Accepts each element in sequence. Unless a sub-type of ElementSpliterator or a specific supplier of a ElementSpliterator advertises
 	 *        otherwise, the element object may only be treated as valid until the next element is returned and also should not be kept
-	 *        longer than the reference to the Quiterator.
+	 *        longer than the reference to the ElementSpliterator.
 	 * @return false if no remaining elements existed upon entry to this method, else true.
 	 */
 	boolean tryAdvanceElement(Consumer<? super CollectionElement<T>> action);
 
 	/**
-	 * Operates on each element remaining in this Quiterator
+	 * Operates on each element remaining in this ElementSpliterator
 	 * 
 	 * @param action The action to perform on each element
 	 */
@@ -71,15 +51,15 @@ public interface Quiterator<T> extends Spliterator<T> {
 
 	@Override
 	default void forEachRemaining(Consumer<? super T> action) {
-		while (tryAdvanceElement(el -> action.accept(el.get()))) {
+		while (tryAdvance(v -> action.accept(v))) {
 		}
 	}
 
 	/**
 	 * @param map The mapping function
-	 * @return A new Quiterator whose values are the given map applied to this Quiterator's values
+	 * @return A new ElementSpliterator whose values are the given map applied to this ElementSpliterator's values
 	 */
-	default <V> Quiterator<V> map(Function<? super T, V> map) {
+	default <V> ElementSpliterator<V> map(Function<? super T, V> map) {
 		return map((TypeToken<V>) TypeToken.of(map.getClass()).resolveType(Function.class.getTypeParameters()[1]), map, null);
 	}
 
@@ -87,29 +67,29 @@ public interface Quiterator<T> extends Spliterator<T> {
 	 * @param type The run-time type of the map result
 	 * @param map The mapping function
 	 * @param reverse The reverse-function for allowing {@link CollectionElement#set(Object, Object) replacement} of values
-	 * @return A new Quiterator whose values are the given map applied to this Quiterator's values
+	 * @return A new ElementSpliterator whose values are the given map applied to this ElementSpliterator's values
 	 */
-	default <V> Quiterator<V> map(TypeToken<V> type, Function<? super T, V> map, Function<? super V, ? extends T> reverse) {
+	default <V> ElementSpliterator<V> map(TypeToken<V> type, Function<? super T, V> map, Function<? super V, ? extends T> reverse) {
 		return new MappedQuiterator<>(type, this, map, reverse);
 	}
 
 	/**
 	 * @param filter The filter
-	 * @return A new Quiterator whose values are the this Quiterator's values that pass the given filter
+	 * @return A new ElementSpliterator whose values are the this ElementSpliterator's values that pass the given filter
 	 */
-	default Quiterator<T> filter(Predicate<? super T> filter) {
+	default ElementSpliterator<T> filter(Predicate<? super T> filter) {
 		return new FilteredQuiterator<>(this, filter);
 	}
 
 	@Override
-	Quiterator<T> trySplit();
+	ElementSpliterator<T> trySplit();
 
 	/**
-	 * @param type The type for the Quiterator
-	 * @return An empty Quiterator of the given type
+	 * @param type The type for the ElementSpliterator
+	 * @return An empty ElementSpliterator of the given type
 	 */
-	static <E> Quiterator<E> empty(TypeToken<E> type) {
-		return new Quiterator<E>() {
+	static <E> ElementSpliterator<E> empty(TypeToken<E> type) {
+		return new ElementSpliterator<E>() {
 			@Override
 			public long estimateSize() {
 				return 0;
@@ -131,20 +111,20 @@ public interface Quiterator<T> extends Spliterator<T> {
 			}
 
 			@Override
-			public Quiterator<E> trySplit() {
+			public ElementSpliterator<E> trySplit() {
 				return null;
 			}
 		};
 	}
 
 	/**
-	 * Implements {@link Quiterator#map(TypeToken, Function, Function)}
+	 * Implements {@link ElementSpliterator#map(TypeToken, Function, Function)}
 	 * 
-	 * @param <T> The type of values returned by the wrapped Quiterator
-	 * @param <V> The type of values returned by this Quiterator
+	 * @param <T> The type of values returned by the wrapped ElementSpliterator
+	 * @param <V> The type of values returned by this ElementSpliterator
 	 */
 	class MappedQuiterator<T, V> extends WrappingQuiterator<T, V> {
-		public MappedQuiterator(TypeToken<V> type, Quiterator<T> wrap, Function<? super T, V> map,
+		public MappedQuiterator(TypeToken<V> type, ElementSpliterator<T> wrap, Function<? super T, V> map,
 			Function<? super V, ? extends T> reverse) {
 			super(wrap, type, () -> {
 				CollectionElement<? extends T>[] container = new CollectionElement[1];
@@ -179,15 +159,15 @@ public interface Quiterator<T> extends Spliterator<T> {
 	}
 
 	/**
-	 * Implements {@link Quiterator#filter(Predicate)}
+	 * Implements {@link ElementSpliterator#filter(Predicate)}
 	 * 
-	 * @param <T> The type of values returned by this Quiterator
+	 * @param <T> The type of values returned by this ElementSpliterator
 	 */
-	class FilteredQuiterator<T> implements Quiterator<T> {
-		private final Quiterator<T> theWrapped;
+	class FilteredQuiterator<T> implements ElementSpliterator<T> {
+		private final ElementSpliterator<T> theWrapped;
 		private final Predicate<? super T> theFilter;
 
-		public FilteredQuiterator(Quiterator<T> wrap, Predicate<? super T> filter) {
+		public FilteredQuiterator(ElementSpliterator<T> wrap, Predicate<? super T> filter) {
 			theWrapped = wrap;
 			theFilter = filter;
 		}
@@ -229,25 +209,25 @@ public interface Quiterator<T> extends Spliterator<T> {
 		}
 
 		@Override
-		public Quiterator<T> trySplit() {
+		public ElementSpliterator<T> trySplit() {
 			return theWrapped.trySplit().filter(theFilter);
 		}
 	}
 
 	/**
-	 * A Quiterator whose elements are the result of some filter-map operation on a vanilla {@link Spliterator}'s elements
+	 * A ElementSpliterator whose elements are the result of some filter-map operation on a vanilla {@link Spliterator}'s elements
 	 * 
 	 * @param <T> The type of elements in the wrapped Spliterator
-	 * @param <V> The type of this Quiterator's elements
+	 * @param <V> The type of this ElementSpliterator's elements
 	 */
-	class SimpleQuiterator<T, V> implements Quiterator<V> {
+	class SimpleQuiterator<T, V> implements ElementSpliterator<V> {
 		private final Spliterator<T> theWrapped;
 		private final TypeToken<V> theType;
 		private final Supplier<? extends Function<? super T, ? extends CollectionElement<V>>> theMap;
 		private final Function<? super T, ? extends CollectionElement<V>> theInstanceMap;
 
 		public SimpleQuiterator(Spliterator<T> wrap, TypeToken<V> type,
-			Supplier<? extends Function<? super T, ? extends Quiterator.CollectionElement<V>>> map) {
+			Supplier<? extends Function<? super T, ? extends CollectionElement<V>>> map) {
 			theWrapped = wrap;
 			theType = type;
 			theMap = map;
@@ -293,7 +273,7 @@ public interface Quiterator<T> extends Spliterator<T> {
 		}
 
 		@Override
-		public Quiterator<V> trySplit() {
+		public ElementSpliterator<V> trySplit() {
 			Spliterator<T> split = theWrapped.trySplit();
 			if (split == null)
 				return null;
@@ -302,18 +282,18 @@ public interface Quiterator<T> extends Spliterator<T> {
 	}
 
 	/**
-	 * A Quiterator whose elements are the result of some filter-map operation on another Quiterator's elements
+	 * A ElementSpliterator whose elements are the result of some filter-map operation on another ElementSpliterator's elements
 	 * 
-	 * @param <T> The type of elements in the wrapped Quiterator
-	 * @param <V> The type of this Quiterator's elements
+	 * @param <T> The type of elements in the wrapped ElementSpliterator
+	 * @param <V> The type of this ElementSpliterator's elements
 	 */
-	class WrappingQuiterator<T, V> implements Quiterator<V> {
-		private final Quiterator<? extends T> theWrapped;
+	class WrappingQuiterator<T, V> implements ElementSpliterator<V> {
+		private final ElementSpliterator<? extends T> theWrapped;
 		private final TypeToken<V> theType;
 		private final Supplier<? extends Function<? super CollectionElement<? extends T>, ? extends CollectionElement<V>>> theMap;
 		private final Function<? super CollectionElement<? extends T>, ? extends CollectionElement<V>> theInstanceMap;
 
-		public WrappingQuiterator(Quiterator<? extends T> wrap, TypeToken<V> type,
+		public WrappingQuiterator(ElementSpliterator<? extends T> wrap, TypeToken<V> type,
 			Supplier<? extends Function<? super CollectionElement<? extends T>, ? extends CollectionElement<V>>> map) {
 			theWrapped = wrap;
 			theType = type;
@@ -326,7 +306,7 @@ public interface Quiterator<T> extends Spliterator<T> {
 			return theType;
 		}
 
-		protected Quiterator<? extends T> getWrapped() {
+		protected ElementSpliterator<? extends T> getWrapped() {
 			return theWrapped;
 		}
 
@@ -369,8 +349,8 @@ public interface Quiterator<T> extends Spliterator<T> {
 		}
 
 		@Override
-		public Quiterator<V> trySplit() {
-			Quiterator<? extends T> wrapSplit = theWrapped.trySplit();
+		public ElementSpliterator<V> trySplit() {
+			ElementSpliterator<? extends T> wrapSplit = theWrapped.trySplit();
 			if (wrapSplit == null)
 				return null;
 			return new WrappingQuiterator<>(wrapSplit, theType, theMap);
@@ -378,7 +358,7 @@ public interface Quiterator<T> extends Spliterator<T> {
 	}
 
 	/**
-	 * An element returned from {@link Quiterator.WrappingQuiterator}
+	 * An element returned from {@link ElementSpliterator.WrappingQuiterator}
 	 * 
 	 * @param <T> The type of value in the element wrapped by this element
 	 * @param <V> The type of this element

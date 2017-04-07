@@ -10,7 +10,6 @@ import org.qommons.Equalizer.EqualizerNode;
 import org.qommons.Hasher;
 import org.qommons.IterableUtils;
 import org.qommons.Transaction;
-import org.qommons.collect.Quiterator.CollectionElement;
 import org.qommons.value.Value;
 
 import com.google.common.reflect.TypeToken;
@@ -44,7 +43,7 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 	}
 
 	@Override
-	abstract Quiterator<E> spliterator();
+	abstract ElementSpliterator<E> spliterator();
 
 	@Override
 	default E[] toArray() {
@@ -331,11 +330,11 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 			}
 
 			@Override
-			public Quiterator<T> spliterator() {
+			public ElementSpliterator<T> spliterator() {
 				Supplier<Function<Equalizer.EqualizerNode<T>, CollectionElement<T>>> elementSupplier = () -> {
 					return value -> modSet.get(value);
 				};
-				return new Quiterator.SimpleQuiterator<Equalizer.EqualizerNode<T>, T>(modSet.keySet().spliterator(), type,
+				return new ElementSpliterator.SimpleQuiterator<Equalizer.EqualizerNode<T>, T>(modSet.keySet().spliterator(), type,
 					elementSupplier) {
 					@Override
 					public int characteristics() {
@@ -695,7 +694,7 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 		}
 
 		@Override
-		public Quiterator<E> spliterator() {
+		public ElementSpliterator<E> spliterator() {
 			return unique(theCollection.spliterator());
 		}
 
@@ -758,7 +757,7 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 			theCollection.clear();
 		}
 
-		protected Quiterator<E> unique(Quiterator<E> backing) {
+		protected ElementSpliterator<E> unique(ElementSpliterator<E> backing) {
 			final HashSet<Equalizer.EqualizerNode<E>> set = new HashSet<>();
 			Supplier<Function<CollectionElement<? extends E>, CollectionElement<E>>> elementMap = () -> {
 				return el -> {
@@ -769,7 +768,7 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 						return null;
 				};
 			};
-			return new Quiterator.WrappingQuiterator<>(null, theCollection.getType(), elementMap);
+			return new ElementSpliterator.WrappingQuiterator<>(null, theCollection.getType(), elementMap);
 		}
 
 		@Override

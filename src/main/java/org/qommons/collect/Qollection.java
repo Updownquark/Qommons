@@ -10,9 +10,8 @@ import org.qommons.Hasher;
 import org.qommons.IterableUtils;
 import org.qommons.Transaction;
 import org.qommons.collect.MultiMap.MultiEntry;
-import org.qommons.collect.Quiterator.CollectionElement;
-import org.qommons.collect.Quiterator.WrappingElement;
-import org.qommons.collect.Quiterator.WrappingQuiterator;
+import org.qommons.collect.ElementSpliterator.WrappingElement;
+import org.qommons.collect.ElementSpliterator.WrappingQuiterator;
 import org.qommons.value.Settable;
 import org.qommons.value.Value;
 
@@ -35,9 +34,9 @@ import com.google.common.reflect.TypeToken;
  * <li><b>Modification Control</b> The {@link #filterAdd(Function)} and {@link #filterRemove(Function)} methods create collections that
  * forbid certain types of modifications to a collection. The {@link #immutable(String)} prevents any API modification at all. Modification
  * control can also be used to intercept and perform actions based on modifications to a collection.</li>
- * <li><b>Quiterator</b> Qollections must implement {@link #spliterator()}, which returns a {@link Quiterator}, which is an enhanced
+ * <li><b>ElementSpliterator</b> Qollections must implement {@link #spliterator()}, which returns a {@link ElementSpliterator}, which is an enhanced
  * {@link Spliterator}. This had potential for the improved performance associated with using {@link Spliterator} instead of
- * {@link Iterator} as well as the utility added by {@link Quiterator}.</li>
+ * {@link Iterator} as well as the utility added by {@link ElementSpliterator}.</li>
  * <li><b>Transactionality</b> Qollections support the {@link org.qommons.Transactable} interface, allowing callers to reserve a collection
  * for write or to ensure that the collection is not written to during an operation (for implementations that support this. See
  * {@link org.qommons.Transactable#isLockSupported() isLockSupported()}).</li>
@@ -64,7 +63,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	TypeToken<E> getType();
 
 	@Override
-	abstract Quiterator<E> spliterator();
+	abstract ElementSpliterator<E> spliterator();
 
 	/**
 	 * Tests the removability of an element from this collection. This method exposes a "best guess" on whether an element in the collection
@@ -549,26 +548,26 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	// Implementation member classes
 
 	/**
-	 * An iterator backed by a Quiterator
+	 * An iterator backed by a ElementSpliterator
 	 * 
 	 * @param <E> The type of elements to iterate over
 	 */
 	class QuiteratorIterator<E> implements Iterator<E> {
-		private final Quiterator<E> theQuiterator;
+		private final ElementSpliterator<E> theSpliterator;
 
 		private boolean isNextCached;
 		private boolean isDone;
 		private CollectionElement<? extends E> cachedNext;
 
-		public QuiteratorIterator(Quiterator<E> quiterator) {
-			theQuiterator = quiterator;
+		public QuiteratorIterator(ElementSpliterator<E> quiterator) {
+			theSpliterator = quiterator;
 		}
 
 		@Override
 		public boolean hasNext() {
 			cachedNext = null;
 			if (!isNextCached && !isDone) {
-				if (theQuiterator.tryAdvanceElement(element -> {
+				if (theSpliterator.tryAdvanceElement(element -> {
 					cachedNext = element;
 				}))
 					isNextCached = true;
@@ -603,7 +602,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				action.accept(next());
 			cachedNext = null;
 			isDone = true;
-			theQuiterator.forEachRemaining(action);
+			theSpliterator.forEachRemaining(action);
 		}
 	}
 
@@ -614,7 +613,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	class DefaultQollectionMethods {
 		public static boolean contains(Qollection<?> coll, Object value) {
 			try (Transaction t = coll.lock(false, null)) {
-				Quiterator<?> iter = coll.spliterator();
+				ElementSpliterator<?> iter = coll.spliterator();
 				boolean[] found = new boolean[1];
 				while (!found[0] && iter.tryAdvance(v -> {
 					if (Objects.equals(v, value))
@@ -640,7 +639,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			ArrayList<Object> copy = new ArrayList<>(values);
 			BitSet found = new BitSet(copy.size());
 			try (Transaction t = coll.lock(false, null)) {
-				Quiterator<?> iter = coll.spliterator();
+				ElementSpliterator<?> iter = coll.spliterator();
 				boolean[] foundOne = new boolean[1];
 				while (iter.tryAdvance(next -> {
 					int stop = found.previousClearBit(copy.size());
@@ -1068,7 +1067,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public Quiterator<T> spliterator() {
+		public ElementSpliterator<T> spliterator() {
 			return map(theWrapped.spliterator());
 		}
 
@@ -1242,7 +1241,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			}
 		}
 
-		protected Quiterator<T> map(Quiterator<E> iter) {
+		protected ElementSpliterator<T> map(ElementSpliterator<E> iter) {
 			return new WrappingQuiterator<>(iter, getType(), () -> {
 				CollectionElement<? extends E>[] container = new CollectionElement[1];
 				FilterMapResult<E, T> mapped = new FilterMapResult<>();
@@ -1499,7 +1498,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public Quiterator<V> spliterator() {
+		public ElementSpliterator<V> spliterator() {
 			return combine(theWrapped.spliterator());
 		}
 
@@ -1507,7 +1506,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			return theMap.apply(value, theValue.get());
 		}
 
-		protected Quiterator<V> combine(Quiterator<E> source) {
+		protected ElementSpliterator<V> combine(ElementSpliterator<E> source) {
 			Supplier<Function<CollectionElement<? extends E>, CollectionElement<V>>> elementMap = () -> {
 				CollectionElement<? extends E>[] container = new CollectionElement[1];
 				WrappingElement<E, V> wrapper = new WrappingElement<E, V>(getType(), container) {
@@ -1747,7 +1746,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public Quiterator<E> spliterator() {
+		public ElementSpliterator<E> spliterator() {
 			return theElements.spliterator();
 		}
 
@@ -1882,11 +1881,11 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public Quiterator<E> spliterator() {
+		public ElementSpliterator<E> spliterator() {
 			return modFilter(theWrapped.spliterator());
 		}
 
-		protected Quiterator<E> modFilter(Quiterator<E> source) {
+		protected ElementSpliterator<E> modFilter(ElementSpliterator<E> source) {
 			return new WrappingQuiterator<>(source, getType(), () -> {
 				CollectionElement<E>[] container = new CollectionElement[1];
 				WrappingElement<E, E> wrapperEl = new WrappingElement<E, E>(getType(), container) {
@@ -2209,11 +2208,11 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public Quiterator<E> spliterator() {
+		public ElementSpliterator<E> spliterator() {
 			return wrap(theCollection.spliterator());
 		}
 
-		protected Quiterator<E> wrap(Spliterator<E> toWrap) {
+		protected ElementSpliterator<E> wrap(Spliterator<E> toWrap) {
 			Supplier<? extends Function<? super E, ? extends CollectionElement<E>>> fn;
 			fn = () -> {
 				Object[] elementValue = new Object[1];
@@ -2258,7 +2257,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					return el;
 				};
 			};
-			return new Quiterator.SimpleQuiterator<>(toWrap, getType(), fn);
+			return new ElementSpliterator.SimpleQuiterator<>(toWrap, getType(), fn);
 		}
 
 		@Override
@@ -2375,11 +2374,11 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public Quiterator<E> spliterator() {
+		public ElementSpliterator<E> spliterator() {
 			return wrap(theCollection.spliterator());
 		}
 
-		protected Quiterator<E> wrap(Quiterator<? extends Value<? extends E>> wrap) {
+		protected ElementSpliterator<E> wrap(ElementSpliterator<? extends Value<? extends E>> wrap) {
 			Supplier<Function<CollectionElement<? extends Value<? extends E>>, CollectionElement<E>>> fn;
 			fn = () -> {
 				CollectionElement<Value<? extends E>>[] container = new CollectionElement[1];
@@ -2459,7 +2458,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		public String canRemove(Object value) {
 			boolean[] found = new boolean[1];
 			String[] msg = new String[1];
-			Quiterator<? extends Value<? extends E>> iter = theCollection.spliterator();
+			ElementSpliterator<? extends Value<? extends E>> iter = theCollection.spliterator();
 			while (!found[0] && iter.tryAdvanceElement(el -> {
 				if (Objects.equals(el.get().get(), value)) {
 					found[0] = true;
@@ -2475,7 +2474,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		@Override
 		public boolean remove(Object o) {
 			boolean[] found = new boolean[1];
-			Quiterator<? extends Value<? extends E>> iter = theCollection.spliterator();
+			ElementSpliterator<? extends Value<? extends E>> iter = theCollection.spliterator();
 			while (!found[0] && iter.tryAdvanceElement(el -> {
 				if (Objects.equals(el.get().get(), o)) {
 					found[0] = true;
@@ -2491,7 +2490,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		@Override
 		public boolean removeAll(Collection<?> c) {
 			boolean[] found = new boolean[1];
-			Quiterator<? extends Value<? extends E>> iter = theCollection.spliterator();
+			ElementSpliterator<? extends Value<? extends E>> iter = theCollection.spliterator();
 			iter.forEachElement(el -> {
 				if (c.contains(el.get().get())) {
 					found[0] = true;
@@ -2506,7 +2505,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		@Override
 		public boolean retainAll(Collection<?> c) {
 			boolean[] found = new boolean[1];
-			Quiterator<? extends Value<? extends E>> iter = theCollection.spliterator();
+			ElementSpliterator<? extends Value<? extends E>> iter = theCollection.spliterator();
 			iter.forEachElement(el -> {
 				if (!c.contains(el.get().get())) {
 					found[0] = true;
@@ -2520,7 +2519,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public void clear() {
-			Quiterator<? extends Value<? extends E>> iter = theCollection.spliterator();
+			ElementSpliterator<? extends Value<? extends E>> iter = theCollection.spliterator();
 			iter.forEachElement(el -> {
 				String msg = el.canRemove();
 				if (msg == null)
@@ -2606,10 +2605,10 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public Quiterator<E> spliterator() {
+		public ElementSpliterator<E> spliterator() {
 			Qollection<? extends E> coll = theCollectionObservable.get();
 			if (coll == null)
-				return Quiterator.empty(theType);
+				return ElementSpliterator.empty(theType);
 			return wrap(coll.spliterator());
 		}
 
@@ -2674,7 +2673,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				current.clear();
 		}
 
-		protected Quiterator<E> wrap(Quiterator<? extends E> wrap) {
+		protected ElementSpliterator<E> wrap(ElementSpliterator<? extends E> wrap) {
 			Supplier<Function<CollectionElement<? extends E>, CollectionElement<E>>> fn;
 			fn = () -> {
 				CollectionElement<? extends E>[] container = new CollectionElement[1];
@@ -2928,13 +2927,13 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public Quiterator<E> spliterator() {
+		public ElementSpliterator<E> spliterator() {
 			return wrap(theOuter.spliterator(), Qollection::spliterator);
 		}
 
-		protected Quiterator<E> wrap(Quiterator<? extends Qollection<? extends E>> outer,
-			Function<Qollection<? extends E>, Quiterator<? extends E>> innerSplit) {
-			return new Quiterator<E>() {
+		protected ElementSpliterator<E> wrap(ElementSpliterator<? extends Qollection<? extends E>> outer,
+			Function<Qollection<? extends E>, ElementSpliterator<? extends E>> innerSplit) {
+			return new ElementSpliterator<E>() {
 				private WrappingQuiterator<E, E> theInnerator;
 				private Supplier<Function<CollectionElement<? extends E>, CollectionElement<E>>> theElementMap;
 				private boolean isSplit;
@@ -3007,8 +3006,8 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				}
 
 				@Override
-				public Quiterator<E> trySplit() {
-					Quiterator<E>[] ret = new Quiterator[1];
+				public ElementSpliterator<E> trySplit() {
+					ElementSpliterator<E>[] ret = new ElementSpliterator[1];
 					isSplit |= outer.tryAdvance(coll -> {
 						ret[0] = new WrappingQuiterator<>(innerSplit.apply(coll), theType, theElementMap);
 					});

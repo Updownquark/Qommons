@@ -20,8 +20,8 @@ import com.google.common.reflect.TypeToken;
  * @param <E> The type of elements in the collection
  */
 public interface ReversibleQollection<E> extends OrderedQollection<E>, ReversibleCollection<E> {
-	/** @return A Quiterator that returns this collection's elements in reverse order */
-	Quiterator<E> reverseSpliterator();
+	/** @return A ElementSpliterator that returns this collection's elements in reverse order */
+	ElementSpliterator<E> reverseSpliterator();
 
 	@Override
 	default Iterable<E> descending() {
@@ -199,7 +199,7 @@ public interface ReversibleQollection<E> extends OrderedQollection<E>, Reversibl
 		}
 
 		@Override
-		public Quiterator<E> spliterator() {
+		public ElementSpliterator<E> spliterator() {
 			return getWrapped().reverseSpliterator();
 		}
 
@@ -220,7 +220,7 @@ public interface ReversibleQollection<E> extends OrderedQollection<E>, Reversibl
 		}
 
 		@Override
-		public Quiterator<E> reverseSpliterator() {
+		public ElementSpliterator<E> reverseSpliterator() {
 			return getWrapped().spliterator();
 		}
 
@@ -288,7 +288,7 @@ public interface ReversibleQollection<E> extends OrderedQollection<E>, Reversibl
 		}
 
 		@Override
-		public Quiterator<T> reverseSpliterator() {
+		public ElementSpliterator<T> reverseSpliterator() {
 			return map(getWrapped().reverseSpliterator());
 		}
 	}
@@ -312,7 +312,7 @@ public interface ReversibleQollection<E> extends OrderedQollection<E>, Reversibl
 		}
 
 		@Override
-		public Quiterator<V> reverseSpliterator() {
+		public ElementSpliterator<V> reverseSpliterator() {
 			return combine(getWrapped().reverseSpliterator());
 		}
 	}
@@ -334,7 +334,7 @@ public interface ReversibleQollection<E> extends OrderedQollection<E>, Reversibl
 		}
 
 		@Override
-		public Quiterator<E> reverseSpliterator() {
+		public ElementSpliterator<E> reverseSpliterator() {
 			return modFilter(getWrapped().reverseSpliterator());
 		}
 	}

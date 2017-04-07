@@ -25,7 +25,7 @@ public interface MultiQMap<K, V> extends TransactableMultiMap<K, V> {
 	 */
 	public interface ValueSortedMultiEntry<K, V> extends MultiQEntry<K, V>, SortedQSet<V> {
 		@Override
-		abstract Quiterator<V> spliterator();
+		abstract ElementSpliterator<V> spliterator();
 
 		@Override
 		default Iterator<V> iterator() {
@@ -486,7 +486,7 @@ public interface MultiQMap<K, V> extends TransactableMultiMap<K, V> {
 		}
 
 		@Override
-		public Quiterator<V> spliterator() {
+		public ElementSpliterator<V> spliterator() {
 			// TODO Auto-generated method stub
 		}
 
@@ -592,7 +592,7 @@ public interface MultiQMap<K, V> extends TransactableMultiMap<K, V> {
 		}
 
 		@Override
-		public Quiterator<V> spliterator() {
+		public ElementSpliterator<V> spliterator() {
 			// TODO Auto-generated method stub
 		}
 	}

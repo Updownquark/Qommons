@@ -45,7 +45,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 	}
 
 	@Override
-	abstract Quiterator<E> spliterator();
+	abstract ElementSpliterator<E> spliterator();
 
 	@Override
 	abstract E get(int index);
@@ -833,9 +833,9 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 		}
 
 		@Override
-		public Quiterator<E> reverseSpliterator() {
+		public ElementSpliterator<E> reverseSpliterator() {
 			ListIterator<E> wrapped = getWrapped().listIterator(getWrapped().size());
-			return new Quiterator<E>() {
+			return new ElementSpliterator<E>() {
 				@Override
 				public long estimateSize() {
 					return getWrapped().size();
@@ -905,7 +905,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 				}
 
 				@Override
-				public Quiterator<E> trySplit() {
+				public ElementSpliterator<E> trySplit() {
 					return null;
 				}
 			};
@@ -933,7 +933,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 		}
 
 		@Override
-		public Quiterator<E> reverseSpliterator() {
+		public ElementSpliterator<E> reverseSpliterator() {
 			return wrap(getWrapped().reverseSpliterator());
 		}
 	}
@@ -962,10 +962,10 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 		}
 
 		@Override
-		public Quiterator<E> reverseSpliterator() {
+		public ElementSpliterator<E> reverseSpliterator() {
 			QList<E> list = getWrapped().get();
 			if (list == null)
-				return Quiterator.empty(FlattenedValueList.this.getType());
+				return ElementSpliterator.empty(FlattenedValueList.this.getType());
 			return wrap(list.reverseSpliterator());
 		}
 	}
@@ -986,7 +986,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 		}
 
 		@Override
-		public Quiterator<E> reverseSpliterator() {
+		public ElementSpliterator<E> reverseSpliterator() {
 			return wrap(getWrapped().reverseSpliterator(), coll -> ((ReversibleQollection<E>) coll).reverseSpliterator());
 		}
 	}
@@ -1020,7 +1020,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 		}
 
 		@Override
-		public Quiterator<E> reverseSpliterator() {
+		public ElementSpliterator<E> reverseSpliterator() {
 			return intersperse(getWrapped().reverseSpliterator(), coll -> ((ReversibleQollection<? extends E>) coll).reverseSpliterator(),
 				theReverse);
 		}
@@ -1058,7 +1058,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 		}
 
 		@Override
-		public Quiterator<E> spliterator() {
+		public ElementSpliterator<E> spliterator() {
 			return theWrapped.spliterator();
 		}
 
@@ -1077,7 +1077,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 		}
 
 		@Override
-		public Quiterator<E> reverseSpliterator() {
+		public ElementSpliterator<E> reverseSpliterator() {
 			if (theWrapped instanceof ReversibleQollection)
 				return ((ReversibleQollection<E>) theWrapped).reverseSpliterator();
 			ArrayList<E> reversed;
@@ -1086,7 +1086,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 				reversed.addAll(theWrapped);
 			}
 			Collections.reverse(reversed);
-			return new Quiterator.SimpleQuiterator<>(reversed.spliterator(), getType(), () -> v -> new Quiterator.CollectionElement<E>() {
+			return new ElementSpliterator.SimpleQuiterator<>(reversed.spliterator(), getType(), () -> v -> new CollectionElement<E>() {
 				@Override
 				public TypeToken<E> getType() {
 					return CollectionWrappingList.this.getType();

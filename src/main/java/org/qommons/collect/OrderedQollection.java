@@ -6,7 +6,6 @@ import java.util.function.*;
 import org.qommons.Equalizer;
 import org.qommons.Hasher;
 import org.qommons.Transaction;
-import org.qommons.collect.Quiterator.CollectionElement;
 import org.qommons.value.Value;
 
 import com.google.common.reflect.TypeToken;
@@ -434,7 +433,7 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		}
 
 		@Override
-		public Quiterator<E> spliterator() {
+		public ElementSpliterator<E> spliterator() {
 			// TODO Any way to do this better?
 			ArrayList<E> sorted;
 
@@ -495,7 +494,7 @@ public interface OrderedQollection<E> extends Qollection<E> {
 					return element;
 				};
 			};
-			return new Quiterator.SimpleQuiterator<E, E>(sorted.spliterator(), theWrapped.getType(), elementMap) {};
+			return new ElementSpliterator.SimpleQuiterator<E, E>(sorted.spliterator(), theWrapped.getType(), elementMap) {};
 		}
 
 		@Override
@@ -678,21 +677,21 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		}
 
 		@Override
-		public Quiterator<E> spliterator() {
+		public ElementSpliterator<E> spliterator() {
 			return intersperse(getWrapped().spliterator(), Qollection::spliterator, theDiscriminator);
 		}
 
-		protected Quiterator<E> intersperse(Quiterator<? extends OrderedQollection<? extends E>> outer,
-			Function<OrderedQollection<? extends E>, Quiterator<? extends E>> innerSplit,
+		protected ElementSpliterator<E> intersperse(ElementSpliterator<? extends OrderedQollection<? extends E>> outer,
+			Function<OrderedQollection<? extends E>, ElementSpliterator<? extends E>> innerSplit,
 			Function<? super List<E>, Integer> discriminator) {
-			ArrayList<Quiterator<? extends E>> colls = new ArrayList<>();
+			ArrayList<ElementSpliterator<? extends E>> colls = new ArrayList<>();
 			outer.forEachRemaining(coll -> colls.add(innerSplit.apply(coll)));
 			colls.trimToSize();
 			List<CollectionElement<? extends E>> elements = new ArrayList<>(colls.size());
 			List<E> values = new ArrayList<>(colls.size());
 			List<E> immutableValues = Collections.unmodifiableList(values);
 			CollectionElement<? extends E>[] container = new CollectionElement[1];
-			Quiterator.WrappingElement<E, E> wrapper = new Quiterator.WrappingElement<E, E>(getType(), container) {
+			ElementSpliterator.WrappingElement<E, E> wrapper = new ElementSpliterator.WrappingElement<E, E>(getType(), container) {
 				@Override
 				public E get() {
 					return getWrapped().get();
@@ -714,7 +713,7 @@ public interface OrderedQollection<E> extends Qollection<E> {
 						return ((CollectionElement<E>) getWrapped()).set(value, cause);
 				}
 			};
-			return new Quiterator<E>() {
+			return new ElementSpliterator<E>() {
 				@Override
 				public TypeToken<E> getType() {
 					return InterspersedQollection.this.getType();
@@ -736,9 +735,9 @@ public interface OrderedQollection<E> extends Qollection<E> {
 						return false;
 					if (elements.isEmpty()) {
 						// Need to initialize
-						Iterator<Quiterator<? extends E>> iter = colls.iterator();
+						Iterator<ElementSpliterator<? extends E>> iter = colls.iterator();
 						while (iter.hasNext()) {
-							Quiterator<? extends E> q = iter.next();
+							ElementSpliterator<? extends E> q = iter.next();
 							if (!q.tryAdvanceElement(el -> {
 								elements.add(el);
 								values.add(el.get());
@@ -779,19 +778,19 @@ public interface OrderedQollection<E> extends Qollection<E> {
 				@Override
 				public void forEachElement(Consumer<? super CollectionElement<E>> action) {
 					try (Transaction t = lock(true, null)) {
-						Quiterator.super.forEachElement(action);
+						ElementSpliterator.super.forEachElement(action);
 					}
 				}
 
 				@Override
 				public void forEachRemaining(Consumer<? super E> action) {
 					try (Transaction t = lock(false, null)) {
-						Quiterator.super.forEachRemaining(action);
+						ElementSpliterator.super.forEachRemaining(action);
 					}
 				}
 
 				@Override
-				public Quiterator<E> trySplit() {
+				public ElementSpliterator<E> trySplit() {
 					return null;
 				}
 			};
