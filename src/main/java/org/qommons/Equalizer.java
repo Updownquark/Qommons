@@ -21,6 +21,12 @@ public interface Equalizer {
 		return new EqualizerNode<>(this, value, hashCode);
 	}
 
+	/** An equalizer that uses {@link Object#equals(Object)} (allowing for nulls) */
+	public static final Equalizer object = Objects::equals;
+
+	/** An equalizer that uses == */
+	public static final Equalizer id = (o1, o2) -> o1 == o2;
+
 	/**
 	 * A node that encapsulates a value and uses an {@link Equalizer} for its {@link #equals(Object)} method
 	 * 
