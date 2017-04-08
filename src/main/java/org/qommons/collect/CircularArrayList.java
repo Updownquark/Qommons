@@ -478,7 +478,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 
 	@Override
 	public ListIterator<E> listIterator(int index) {
-		return new ReversibleSpliterator.PartialListIterator<E>(new ArraySpliterator(0, theSize, index)) {
+		return new ReversibleSpliterator.PartialListIterator<E>(new ArraySpliterator(0, theSize, index, true)) {
 			@Override
 			public int nextIndex() {
 				return ((ArraySpliterator) backing).getIndex() + 1;
@@ -831,7 +831,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 
 		@Override
 		public ReversibleSpliterator<E> spliterator() {
-			return new ArraySpliterator(start, end, start) {
+			return new ArraySpliterator(start, end, start, true) {
 				@Override
 				public void removed() {
 					end--;
@@ -926,15 +926,15 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			int outerSize = CircularArrayList.this.size();
 			if (start >= outerSize)
 				throw new IllegalStateException("Out of range: " + start + " of " + theSize);
+			boolean mod;
 			if(index>outerSize){
-				CircularArrayList.this.addAll(c);
-				int add=c.size()-
+				mod = CircularArrayList.this.addAll(c);
+				end = theSize;
 			} else{
-				CircularArrayList.this.addAll(end, c);
+				mod = CircularArrayList.this.addAll(end, c);
 				end+=c.size();
 			}
-			// TODO Auto-generated method stub
-			return false;
+			return mod;
 		}
 
 		@Override
