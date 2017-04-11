@@ -1,17 +1,10 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.AbstractList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Objects;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.StampedLock;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -36,36 +29,55 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 	private static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
 
 	private Object[] theArray;
+	private final boolean isCapLocked;
+	private final ThreadLocal<ThreadState> theStampCollection;
+	private final StampedLock theLocker;
 	private int theOffset;
 	private int theSize;
 
-	private final ReentrantReadWriteLock theLock;
-
 	public CircularArrayList() {
-		this(true);
+		this(0, true);
 	}
 
-	public CircularArrayList(boolean locking) {
-		this(locking ? new ReentrantReadWriteLock() : null, 0);
-	}
-
-	public CircularArrayList(ReentrantReadWriteLock lock, int initCap) {
-		theLock = lock;
+	public CircularArrayList(int initCap, boolean adjustCapacity) {
 		theArray = initCap == 0 ? EMPTY_ARRAY : new Object[initCap];
+		isCapLocked = adjustCapacity;
+		theStampCollection = new ThreadLocal<ThreadState>() {
+			@Override
+			protected ThreadState initialValue() {
+				return new ThreadState();
+			}
+		};
+		theLocker = new StampedLock();
 	}
 
 	@Override
 	public boolean isLockSupported() {
-		return theLock != null;
+		return true;
 	}
 
 	@Override
 	public Transaction lock(boolean write, Object cause) {
-		if (theLock == null)
+		ThreadState state = theStampCollection.get();
+		if (state.stamp > 0) {
+			if (write && !state.isWrite) {
+				// Alright, I'll try
+				long stamp = theLocker.tryConvertToWriteLock(state.stamp);
+				if (stamp == 0)
+					throw new IllegalStateException("Could not upgrade to write lock");
+				state.stamp = stamp; // Got lucky
+			}
 			return Transaction.NONE;
-		Lock lock = write ? theLock.writeLock() : theLock.readLock();
-		lock.lock();
-		return () -> lock.unlock();
+		} else {
+			state.set(write ? theLocker.writeLock() : theLocker.readLock(), write);
+			return () -> {
+				if (write)
+					theLocker.unlockWrite(state.stamp);
+				else
+					theLocker.unlockRead(state.stamp);
+				state.stamp = 0;
+			};
+		}
 	}
 
 	@Override
@@ -204,8 +216,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 
 	@Override
 	public E set(int index, E element) {
-		// Although we're modifying, the modification is atomic--no need to lock for write
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(true, null)) {
 			int translated = translateToInternalIndex(index, false);
 			E old = (E) theArray[translated];
 			theArray[translated] = element;
@@ -265,7 +276,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			for (E e : c) {
 				theArray[ti] = e;
 				ti++;
-				if (ti > theArray.length)
+				if (ti == theArray.length)
 					ti = 0;
 			}
 		}
@@ -646,6 +657,12 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		return removed;
 	}
 
+	private static final String CO_MOD_MSG = "Use\n"//
+		+ "try(Transaction t=lock(forWrite, null)){\n"//
+		+ "\t//iteration\n" //
+		+ "}\n" //
+		+ "to enusre this does not happen.";
+
 	private class ArraySpliterator implements ReversibleSpliterator<E> {
 		private final boolean isForward;
 		private int theStart;
@@ -654,6 +671,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		private int theTranslatedCursor;
 		private boolean elementExists;
 		private final CollectionElement<E> element;
+		private long theOptimisticStamp;
 
 		ArraySpliterator(int start, int end, int initIndex, boolean forward) {
 			isForward = forward;
@@ -661,6 +679,13 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			theEnd = end;
 			theCursor = initIndex;
 			theTranslatedCursor = (theCursor + theOffset) % theArray.length;
+			ThreadState state = theStampCollection.get();
+			if (state.stamp == 0) {
+				// Not locked! Well, we'll try to make sure nothing is changed out from under us
+				theOptimisticStamp = theLocker.tryOptimisticRead();
+				if (theOptimisticStamp == 0)
+					throw new ConcurrentModificationException("The collection is currently being modified by another thread!  "+CO_MOD_MSG);
+			}
 			element = new CollectionElement<E>() {
 				@Override
 				public TypeToken<E> getType() {
@@ -683,8 +708,13 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 				public <V extends E> E set(V value, Object cause) throws IllegalArgumentException {
 					if (!elementExists)
 						throw new IllegalArgumentException("Element has been removed");
+					long writeStamp = theLocker.tryConvertToWriteLock(theOptimisticStamp);
+					if (writeStamp == 0)
+						throw new ConcurrentModificationException(
+							"The collection has been or is being modified by another thread.  " + CO_MOD_MSG);
 					E old = (E) theArray[theTranslatedCursor];
 					theArray[theTranslatedCursor] = value;
+					theOptimisticStamp = theLocker.tryConvertToOptimisticRead(writeStamp);
 					return old;
 				}
 
@@ -1024,6 +1054,16 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			else if (toIndex > size())
 				throw new IndexOutOfBoundsException(toIndex + " of " + size());
 			return CircularArrayList.this.subList(start + fromIndex, start + toIndex);
+		}
+	}
+
+	private static class ThreadState {
+		long stamp;
+		boolean isWrite;
+
+		void set(long stamp, boolean write) {
+			this.stamp = stamp;
+			isWrite = write;
 		}
 	}
 }
