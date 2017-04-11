@@ -16,6 +16,9 @@ import com.google.common.reflect.TypeToken;
  * source collection to be replaced (using {@link Settable#set(Object, Object)}) or {@link CollectionElement#remove() removed} during
  * iteration.
  * 
+ * ElementSpliterators are {@link #trySplit() splittable} just as Spliterators are, though the added functionality (particularly
+ * {@link CollectionElement#remove()}) may be disabled for split spliterators.
+ * 
  * @param <T> The type of values that this ElementSpliterator provides
  */
 public interface ElementSpliterator<T> extends Spliterator<T> {
