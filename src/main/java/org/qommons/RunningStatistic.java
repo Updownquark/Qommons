@@ -1,6 +1,8 @@
 /* RunningStatistic.java Created Mar 22, 2011 by Andrew Butler, PSL */
 package org.qommons;
 
+import java.text.DecimalFormat;
+
 import org.json.simple.JSONObject;
 
 /** Efficiently collects statistics one datum at a time. */
@@ -527,6 +529,11 @@ public class RunningStatistic implements Cloneable {
 				}
 		}
 		return ret.toString();
+	}
+
+	@Override
+	public String toString() {
+		return toString(new DecimalFormat("0.0"));
 	}
 
 	/**
