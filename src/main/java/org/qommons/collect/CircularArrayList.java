@@ -2,12 +2,14 @@ package org.qommons.collect;
 
 import java.lang.reflect.Array;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.concurrent.locks.StampedLock;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
+import org.qommons.BreakpointHere;
 import org.qommons.ReversibleCollection;
 import org.qommons.Transaction;
 import org.qommons.value.Value;
@@ -657,11 +659,87 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		return removed;
 	}
 
-	private static final String CO_MOD_MSG = "Use\n"//
-		+ "try(Transaction t=lock(forWrite, null)){\n"//
-		+ "\t//iteration\n" //
-		+ "}\n" //
-		+ "to enusre this does not happen.";
+	private static boolean IS_SUB_WRITE_LOCK_WARNED = false;
+
+	private class SubLock {
+		private static final String CO_MOD_MSG = "Use\n"//
+			+ "try(Transaction t=lock(forWrite, null)){\n"//
+			+ "\t//iteration\n" //
+			+ "}\n" //
+			+ "to enusre this does not happen.";
+
+		private final ThreadState theState;
+		private final boolean isSplit;
+		private final long theStateStamp;
+		private long theSubStamp;
+
+		private SubLock(boolean split) {
+			isSplit = split;
+			theState = theStampCollection.get();
+			theStateStamp = theState.stamp;
+			if (theStateStamp == 0) {
+				// Not locked! Well, we'll try to make sure nothing is changed out from under us
+				theSubStamp = theLocker.tryOptimisticRead();
+				if (theSubStamp == 0)
+					throw new ConcurrentModificationException(
+						"The collection is currently being modified by another thread!  " + CO_MOD_MSG);
+			} else {
+				theSubStamp = 0;
+			}
+		}
+
+		void check() {
+			if (theStateStamp != 0){
+				if(theState.stamp!=theStateStamp)
+					throw new ConcurrentModificationException("Locks held when creating a substructure "); int todo=todo;
+				return;
+			}
+			if (theSubStamp != 0 && !theLocker.validate(theSubStamp))
+				throw new ConcurrentModificationException("The collection is currently being modified by another thread!  " + CO_MOD_MSG);
+		}
+
+		Transaction lockWrite() {
+			check();
+			if (theState.isWrite)
+				return Transaction.NONE;
+
+			if (isSplit)
+				throw new IllegalStateException("Modification via split spliterator must happen within a write transaction.  Use\n"//
+					+ "try(Transaction t=lock(true, null)){\n"//
+					+ "\t//Iteration\n"//
+					+ "}");
+			if (!IS_SUB_WRITE_LOCK_WARNED) {
+				IS_SUB_WRITE_LOCK_WARNED = true;
+				StackTraceElement el = BreakpointHere.getCodeLine();
+				StringBuilder msg = new StringBuilder(CircularArrayList.class.getName());
+				if (el != null && el.getLineNumber() > 0)
+					msg.append(" Line ").append(el.getLineNumber());
+				msg.append(": ").append("Locking from a substructure (iterator, spliterator, sub-list) is necessary.")
+					.append(" Repeated locking by a substructure is inefficient.  ");
+				msg.append(CO_MOD_MSG);
+				System.err.println(msg);
+			}
+			if (theState.stamp != 0) {
+				long writeLock = theLocker.tryConvertToWriteLock(theState.stamp);
+				if (writeLock == 0)
+					throw new ConcurrentModificationException(
+						"The collection is currently being modified by another thread!  " + CO_MOD_MSG);
+				return () -> {
+					theState.stamp = theLocker.tryConvertToReadLock(writeLock);
+				};
+			} else {
+				long writeLock = theLocker.tryConvertToWriteLock(theSubStamp);
+				if (writeLock == 0)
+					throw new ConcurrentModificationException(
+						"Write lock cannot be obtained! Modification from a substructure (iterator, spliterator, sub-list) outside"
+							+ " a whole-collection lock can only happen if no other threads are concurrently accessing the collection. "
+							+ CO_MOD_MSG);
+				return () -> {
+					theSubStamp = theLocker.tryConvertToOptimisticRead(writeLock);
+				};
+			}
+		}
+	}
 
 	private class ArraySpliterator implements ReversibleSpliterator<E> {
 		private final boolean isForward;
@@ -671,7 +749,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		private int theTranslatedCursor;
 		private boolean elementExists;
 		private final CollectionElement<E> element;
-		private long theOptimisticStamp;
+		private SubLock theSubLock;
 
 		ArraySpliterator(int start, int end, int initIndex, boolean forward) {
 			isForward = forward;
@@ -679,13 +757,6 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			theEnd = end;
 			theCursor = initIndex;
 			theTranslatedCursor = (theCursor + theOffset) % theArray.length;
-			ThreadState state = theStampCollection.get();
-			if (state.stamp == 0) {
-				// Not locked! Well, we'll try to make sure nothing is changed out from under us
-				theOptimisticStamp = theLocker.tryOptimisticRead();
-				if (theOptimisticStamp == 0)
-					throw new ConcurrentModificationException("The collection is currently being modified by another thread!  "+CO_MOD_MSG);
-			}
 			element = new CollectionElement<E>() {
 				@Override
 				public TypeToken<E> getType() {
@@ -774,6 +845,8 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		private boolean tryElement(Consumer<? super CollectionElement<E>> action, boolean advance) {
 			if (!isForward)
 				advance = !advance;
+			if (theSubLock == null)
+				theSubLock = new SubLock();
 			if (advance) {
 				if (theCursor > theEnd)
 					return false;
@@ -1057,7 +1130,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		}
 	}
 
-	private static class ThreadState {
+	static class ThreadState {
 		long stamp;
 		boolean isWrite;
 

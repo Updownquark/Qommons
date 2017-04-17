@@ -150,4 +150,15 @@ public class BreakpointHere {
 			}
 		}
 	}
+
+	/**
+	 * @return The StackTraceElement representing the line of code that this method was called from. May be null if the necessary debugging
+	 *         info is not available to the VM.
+	 */
+	public static StackTraceElement getCodeLine() {
+		StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+		if (stack == null || stack.length < 2)
+			return null;
+		return stack[1];
+	}
 }
