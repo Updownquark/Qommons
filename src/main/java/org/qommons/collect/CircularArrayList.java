@@ -1,15 +1,18 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.concurrent.locks.StampedLock;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
-import org.qommons.BreakpointHere;
 import org.qommons.ReversibleCollection;
 import org.qommons.Transaction;
 import org.qommons.value.Value;
@@ -92,7 +95,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			int size = theSize;
 			int t = offset;
 			for (int i = 0; i < size; i++) {
-				Object v = array[i];
+				Object v = array[t];
 				if (!theLocker.check(stamp))
 					return false;
 				if (Objects.equals(v, o))
@@ -115,7 +118,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 				boolean found = false;
 				int t = offset;
 				for (int i = 0; i < size; i++) {
-					Object v = array[i];
+					Object v = array[t];
 					if (!theLocker.check(stamp))
 						return false;
 					if (Objects.equals(v, o)) {
@@ -141,8 +144,8 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			int size = theSize;
 			if (!theLocker.check(stamp))
 				return a;
-			if (a == null || a.length != theSize)
-				a = new Object[theSize];
+			if (a == null || a.length != size)
+				a = new Object[size];
 			internalArrayCopy(array, offset, size, a);
 			return a;
 		});
@@ -249,7 +252,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			int size = theSize;
 			int t = offset;
 			for (int i = 0; i < size; i++) {
-				Object v = array[i];
+				Object v = array[t];
 				if (!theLocker.check(stamp))
 					return -1;
 				if (Objects.equals(v, o))
@@ -270,7 +273,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			int size = theSize;
 			int t = offset;
 			for (int i = size - 1; i >= 0; i--) {
-				Object v = array[i];
+				Object v = array[t];
 				if (!theLocker.check(stamp))
 					return -1;
 				if (Objects.equals(v, o))
@@ -558,37 +561,14 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 
 	@Override
 	public ListIterator<E> listIterator(int index) {
-		return new ReversibleSpliterator.PartialListIterator<E>(new ArraySpliterator(0, theSize, index, true)) {
-			@Override
-			public int nextIndex() {
-				return ((ArraySpliterator) backing).getIndex() + 1;
-			}
-
-			@Override
-			public int previousIndex() {
-				return ((ArraySpliterator) backing).getIndex();
-			}
-
-			@Override
-			public void add(E e) {
-				CircularArrayList.this.add(((ArraySpliterator) backing).getIndex(), e);
-				next(); // Skip over the element just inserted
-			}
-		};
+		return new ListIter(new ArraySpliterator(0, -1, index, true, theLocker.subLock()));
 	}
 
 	@Override
 	public List<E> subList(int fromIndex, int toIndex) {
-		int count = toIndex - fromIndex;
-		if (count == 0)
+		if (toIndex == fromIndex)
 			return Collections.emptyList();
-		if (count < 0)
-			throw new IllegalArgumentException(fromIndex + ">" + toIndex);
-		if (fromIndex < 0)
-			throw new IndexOutOfBoundsException("" + fromIndex);
-		if (toIndex > theSize)
-			throw new IndexOutOfBoundsException(toIndex + " of " + theSize);
-		return new SubList(fromIndex, toIndex);
+		return new SubList(fromIndex, toIndex, theLocker.subLock());
 	}
 
 	@Override
@@ -628,7 +608,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 	}
 
 	public ReversibleSpliterator<E> spliterator(boolean forward) {
-		return new ArraySpliterator(0, theSize, forward ? 0 : theSize, forward);
+		return new ArraySpliterator(0, theSize, forward ? 0 : theSize, forward, theLocker.subLock());
 	}
 
 	protected final int translateToInternalIndex(int index, boolean adding) {
@@ -684,6 +664,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			// Neither interval is wrapped
 			System.arraycopy(theArray, sourceStart, theArray, destStart, count);
 		}
+		theLocker.indexChanged();
 	}
 
 	private void clearEntries(int from, int count) {
@@ -710,6 +691,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 	protected final void internalAdd(int index, E element) {
 		makeRoom(index, 1);
 		theArray[translateToInternalIndex(theSize, true)] = element;
+		theLocker.indexChanged();
 		theSize++;
 	}
 
@@ -729,89 +711,8 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			theArray[(theOffset + theSize) % theArray.length] = null; // Remove reference
 			theSize--;
 		}
+		theLocker.indexChanged();
 		return removed;
-	}
-
-	private static boolean IS_SUB_WRITE_LOCK_WARNED = false;
-
-	private class SubLock {
-		private static final String CO_MOD_MSG = "Use\n"//
-			+ "try(Transaction t=lock(forWrite, null)){\n"//
-			+ "\t//iteration\n" //
-			+ "}\n" //
-			+ "to enusre this does not happen.";
-
-		private final ThreadState theState;
-		private final boolean isSplit;
-		private final long theStateStamp;
-		private long theSubStamp;
-
-		private SubLock(boolean split) {
-			isSplit = split;
-			theState = theStampCollection.get();
-			theStateStamp = theState.stamp;
-			if (theStateStamp == 0) {
-				// Not locked! Well, we'll try to make sure nothing is changed out from under us
-				theSubStamp = theLocker.tryOptimisticRead();
-				if (theSubStamp == 0)
-					throw new ConcurrentModificationException(
-						"The collection is currently being modified by another thread!  " + CO_MOD_MSG);
-			} else {
-				theSubStamp = 0;
-			}
-		}
-
-		void check() {
-			if (theStateStamp != 0){
-				if(theState.stamp!=theStateStamp)
-					throw new ConcurrentModificationException("Locks held when creating a substructure "); int todo=todo;
-				return;
-			}
-			if (theSubStamp != 0 && !theLocker.validate(theSubStamp))
-				throw new ConcurrentModificationException("The collection is currently being modified by another thread!  " + CO_MOD_MSG);
-		}
-
-		Transaction lockWrite() {
-			check();
-			if (theState.isWrite)
-				return Transaction.NONE;
-
-			if (isSplit)
-				throw new IllegalStateException("Modification via split spliterator must happen within a write transaction.  Use\n"//
-					+ "try(Transaction t=lock(true, null)){\n"//
-					+ "\t//Iteration\n"//
-					+ "}");
-			if (!IS_SUB_WRITE_LOCK_WARNED) {
-				IS_SUB_WRITE_LOCK_WARNED = true;
-				StackTraceElement el = BreakpointHere.getCodeLine();
-				StringBuilder msg = new StringBuilder(CircularArrayList.class.getName());
-				if (el != null && el.getLineNumber() > 0)
-					msg.append(" Line ").append(el.getLineNumber());
-				msg.append(": ").append("Locking from a substructure (iterator, spliterator, sub-list) is necessary.")
-					.append(" Repeated locking by a substructure is inefficient.  ");
-				msg.append(CO_MOD_MSG);
-				System.err.println(msg);
-			}
-			if (theState.stamp != 0) {
-				long writeLock = theLocker.tryConvertToWriteLock(theState.stamp);
-				if (writeLock == 0)
-					throw new ConcurrentModificationException(
-						"The collection is currently being modified by another thread!  " + CO_MOD_MSG);
-				return () -> {
-					theState.stamp = theLocker.tryConvertToReadLock(writeLock);
-				};
-			} else {
-				long writeLock = theLocker.tryConvertToWriteLock(theSubStamp);
-				if (writeLock == 0)
-					throw new ConcurrentModificationException(
-						"Write lock cannot be obtained! Modification from a substructure (iterator, spliterator, sub-list) outside"
-							+ " a whole-collection lock can only happen if no other threads are concurrently accessing the collection. "
-							+ CO_MOD_MSG);
-				return () -> {
-					theSubStamp = theLocker.tryConvertToOptimisticRead(writeLock);
-				};
-			}
-		}
 	}
 
 	private class ArraySpliterator implements ReversibleSpliterator<E> {
@@ -822,13 +723,24 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		private int theTranslatedCursor;
 		private boolean elementExists;
 		private final CollectionElement<E> element;
-		private SubLock theSubLock;
+		private final StampedLockingStrategy.SubLockingStrategy theSubLock;
 
-		ArraySpliterator(int start, int end, int initIndex, boolean forward) {
+		ArraySpliterator(int start, int end, int initIndex, boolean forward, StampedLockingStrategy.SubLockingStrategy subLock) {
+			int size = theSize;
+			subLock.check();
+			if (end < 0)
+				end = size;
+			if (start < 0)
+				throw new IndexOutOfBoundsException("" + start);
+			if (end > size)
+				throw new IndexOutOfBoundsException(end + " of " + size);
+			if (start > end)
+				throw new IndexOutOfBoundsException(start + ">" + end);
 			isForward = forward;
 			theStart = start;
 			theEnd = end;
 			theCursor = initIndex;
+			theSubLock = subLock;
 			theTranslatedCursor = (theCursor + theOffset) % theArray.length;
 			element = new CollectionElement<E>() {
 				@Override
@@ -852,13 +764,11 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 				public <V extends E> E set(V value, Object cause) throws IllegalArgumentException {
 					if (!elementExists)
 						throw new IllegalArgumentException("Element has been removed");
-					long writeStamp = theLocker.tryConvertToWriteLock(theOptimisticStamp);
-					if (writeStamp == 0)
-						throw new ConcurrentModificationException(
-							"The collection has been or is being modified by another thread.  " + CO_MOD_MSG);
-					E old = (E) theArray[theTranslatedCursor];
-					theArray[theTranslatedCursor] = value;
-					theOptimisticStamp = theLocker.tryConvertToOptimisticRead(writeStamp);
+					E old;
+					try (Transaction t = theSubLock.lockForWrite()) {
+						old = (E) theArray[theTranslatedCursor];
+						theArray[theTranslatedCursor] = value;
+					}
 					return old;
 				}
 
@@ -866,7 +776,10 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 				public E get() {
 					if (!elementExists)
 						throw new IllegalStateException("Element has been removed");
-					return (E) theArray[theTranslatedCursor];
+					return theSubLock.doOptimistically(null, (v, stamp) -> {
+						Object[] array = theArray;
+						return theTranslatedCursor < array.length ? (E) array[theTranslatedCursor] : null;
+					});
 				}
 
 				@Override
@@ -880,15 +793,15 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 				public void remove() throws IllegalArgumentException {
 					if (!elementExists)
 						throw new IllegalArgumentException("Element is already removed");
-					internalRemove(theCursor, theTranslatedCursor);
-					removed();
-					theEnd--;
+					try (Transaction t = theSubLock.lockForWrite()) {
+						internalRemove(theCursor, theTranslatedCursor);
+						theEnd--;
+						theSubLock.indexChanged(-1);
+					}
 					elementExists = false;
 				}
 			};
 		}
-
-		protected void removed() {}
 
 		@Override
 		public TypeToken<E> getType() {
@@ -918,8 +831,6 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		private boolean tryElement(Consumer<? super CollectionElement<E>> action, boolean advance) {
 			if (!isForward)
 				advance = !advance;
-			if (theSubLock == null)
-				theSubLock = new SubLock();
 			if (advance) {
 				if (theCursor > theEnd)
 					return false;
@@ -951,10 +862,10 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			int mid = (theStart + theEnd) / 2;
 			ArraySpliterator split;
 			if (theCursor <= mid) {
-				split = new ArraySpliterator(mid, theEnd, mid, isForward);
+				split = new ArraySpliterator(mid, theEnd, mid, isForward, theSubLock.siblingLock());
 				theEnd = mid;
 			} else {
-				split = new ArraySpliterator(theStart, mid, mid, isForward);
+				split = new ArraySpliterator(theStart, mid, mid, isForward, theSubLock.siblingLock());
 				theStart = mid;
 			}
 			return split;
@@ -965,241 +876,464 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		}
 	}
 
-	class SubList extends AbstractList<E> implements BetterCollection<E>, ReversibleCollection<E>, RRList<E> {
-		private final int start;
-		private int end;
+	class ListIter extends ReversibleSpliterator.PartialListIterator<E> {
+		ListIter(ArraySpliterator backing) {
+			super(backing);
+		}
 
-		SubList(int start, int end) {
-			this.start = start;
-			this.end = end;
+		@Override
+		public int nextIndex() {
+			return ((ArraySpliterator) backing).getIndex() + 1;
+		}
+
+		@Override
+		public int previousIndex() {
+			return ((ArraySpliterator) backing).getIndex();
+		}
+
+		@Override
+		public void add(E e) {
+			try (Transaction t = ((ArraySpliterator) backing).theSubLock.lockForWrite()) {
+				CircularArrayList.this.add(((ArraySpliterator) backing).getIndex(), e);
+				next(); // Skip over the element just inserted
+				((ArraySpliterator) backing).theSubLock.indexChanged(1);
+			}
+		}
+	}
+
+	class SubList implements BetterCollection<E>, ReversibleCollection<E>, RRList<E> {
+		private final int theStart;
+		private int theEnd;
+		private final StampedLockingStrategy.SubLockingStrategy theSubLock;
+
+		SubList(int start, int end, StampedLockingStrategy.SubLockingStrategy subLock) {
+			int size = theSize;
+			subLock.check();
+			if (start < 0)
+				throw new IndexOutOfBoundsException("" + start);
+			if (end > size)
+				throw new IndexOutOfBoundsException(end + " of " + size);
+			if (start > end)
+				throw new IndexOutOfBoundsException(start + ">" + end);
+			this.theStart = start;
+			this.theEnd = end;
+			theSubLock = subLock;
 		}
 
 		@Override
 		public int size() {
-			int outerSize = CircularArrayList.this.size();
-			if (start >= outerSize)
-				return 0;
-			if (end > outerSize)
-				return outerSize - start;
+			int start = theStart;
+			int end = theEnd;
+			theSubLock.check();
 			return end - start;
 		}
 
 		@Override
+		public boolean isEmpty() {
+			int start=theStart;
+			int end=theEnd;
+			theSubLock.check();
+			return start == end;
+		}
+
+		@Override
 		public boolean contains(Object o) {
-			try (Transaction t = lock(false, null)) {
-				for (E value : this)
-					if (Objects.equals(value, o))
+			return theSubLock.doOptimistically(false, (bool, stamp) -> {
+				Object[] array = theArray;
+				int offset = theOffset;
+				int size = theSize;
+				int index = theStart;
+				int end = theEnd;
+				int t = translateToInternalIndex(array, offset, size, index);
+				for (; index < end; index++) {
+					Object v = array[t];
+					if (!theSubLock.check(stamp))
+						return false;
+					if (Objects.equals(v, o))
 						return true;
-			}
-			return false;
+					t++;
+					if (t == array.length)
+						t = 0;
+				}
+				return false;
+			});
 		}
 
 		@Override
-		public Betterator<E> iterator() {
-			return new ElementSpliterator.SpliteratorBetterator<E>(spliterator()) {
-				@Override
-				public void remove() {
-					super.remove();
-					end--;
+		public boolean containsAll(Collection<?> c) {
+			return theSubLock.doOptimistically(false, (bool, stamp) -> {
+				Object[] array = theArray;
+				int offset = theOffset;
+				int size = theSize;
+				int start = theStart;
+				int end = theEnd;
+				for (Object o : c) {
+					boolean found = false;
+					int index = start;
+					int t = translateToInternalIndex(array, offset, size, index);
+					for (; index < end; index++) {
+						Object v = array[t];
+						if (!theSubLock.check(stamp))
+							return false;
+						if (Objects.equals(v, o)) {
+							found = true;
+							break;
+						}
+						t++;
+						if (t == array.length)
+							t = 0;
+					}
+					if (!found)
+						return false;
 				}
-			};
-		}
-
-		@Override
-		public ReversibleSpliterator<E> spliterator() {
-			return new ArraySpliterator(start, end, start, true) {
-				@Override
-				public void removed() {
-					end--;
-				}
-			};
+				return true;
+			});
 		}
 
 		@Override
 		public Object[] toArray() {
-			try (Transaction t = lock(false, null)) {
-				return super.toArray();
-			}
+			return theSubLock.doOptimistically((Object[]) null, (a, stamp) -> {
+				Object[] array = theArray;
+				int offset = theOffset;
+				int size = theSize;
+				int start = theStart;
+				int end = theEnd;
+				if (!theSubLock.check(stamp))
+					return a;
+
+				if (a == null || a.length != end - start)
+					a = new Object[end - start];
+				internalArrayCopy(array, translateToInternalIndex(array, offset, size, start), end - start, a);
+				return a;
+			});
 		}
 
 		@Override
-		public <T> T[] toArray(T[] a) {
-			try (Transaction t = lock(false, null)) {
-				return super.toArray(a);
-			}
+		public <T> T[] toArray(final T[] a) {
+			return theSubLock.doOptimistically(a, (arr, stamp) -> {
+				Object[] array = theArray;
+				int offset = theOffset;
+				int size = theSize;
+				int start = theStart;
+				int end = theEnd;
+				if (!theSubLock.check(stamp))
+					return arr;
+				if (arr.length == end - start) {
+				} else if (arr.length > end - start && arr == a) {
+				} else
+					arr = (T[]) Array.newInstance(a.getClass().getComponentType(), end - start);
+				if (!theSubLock.check(stamp))
+					return arr;
+				internalArrayCopy(array, translateToInternalIndex(array, offset, size, start), end - start, arr);
+				return a;
+			});
+		}
+
+		@Override
+		public E get(int index) {
+			if (index < 0)
+				throw new IndexOutOfBoundsException("" + index);
+			return theSubLock.doOptimistically(null, (v, stamp) -> {
+				Object[] array = theArray;
+				int offset = theOffset;
+				int start = theStart;
+				int end = theEnd;
+				if (!theSubLock.check(stamp))
+					return null;
+				if (index >= (end - start))
+					throw new IndexOutOfBoundsException(index + " of " + (end - start));
+				int t = offset + start + index;
+				if (t >= array.length)
+					t -= array.length;
+				if (t >= array.length) // Multiple offsets could push the translated index out 2 lengths
+					t -= array.length;
+				return (E) array[t];
+			});
+		}
+
+		@Override
+		public int indexOf(Object o) {
+			return theSubLock.doOptimistically(-1, (idx, stamp) -> {
+				Object[] array = theArray;
+				int offset = theOffset;
+				int size = theSize;
+				int start = theStart;
+				int end = theStart;
+				if (!theSubLock.check(stamp))
+					return -1;
+				int index = start;
+				int t = translateToInternalIndex(array, offset, size, index);
+				for (; index < end; index++) {
+					Object v = array[t];
+					if (!theSubLock.check(stamp))
+						return -1;
+					if (Objects.equals(v, o))
+						return index - start;
+					t++;
+					if (t == array.length)
+						t = 0;
+				}
+				return -1;
+			});
+		}
+
+		@Override
+		public int lastIndexOf(Object o) {
+			return theSubLock.doOptimistically(-1, (idx, stamp) -> {
+				Object[] array = theArray;
+				int offset = theOffset;
+				int size = theSize;
+				int start = theStart;
+				int end = theStart;
+				if (!theSubLock.check(stamp))
+					return -1;
+				int index = end - 1;
+				int t = translateToInternalIndex(array, offset, size, index);
+				for (; index >= start; index--) {
+					Object v = array[t];
+					if (!theSubLock.check(stamp))
+						return -1;
+					if (Objects.equals(v, o))
+						return index - start;
+					t--;
+					if (t < 0)
+						t = array.length - 1;
+				}
+				return -1;
+			});
+		}
+
+		@Override
+		public Betterator<E> iterator() {
+			return new ElementSpliterator.SpliteratorBetterator<>(spliterator());
+		}
+
+		@Override
+		public Iterable<E> descending() {
+			return () -> new ElementSpliterator.SpliteratorBetterator<>(spliterator(false));
+		}
+
+		@Override
+		public ReversibleSpliterator<E> spliterator() {
+			return spliterator(true);
+		}
+
+		public ReversibleSpliterator<E> spliterator(boolean forward) {
+			return new ArraySpliterator(theStart, theEnd, theStart, forward, theSubLock.subLock(added -> theEnd += added));
 		}
 
 		@Override
 		public boolean add(E e) {
-			int outerSize = CircularArrayList.this.size();
-			if (start >= outerSize)
-				throw new IllegalStateException("Out of range: " + start + " of " + theSize);
-			if (end > outerSize)
-				CircularArrayList.this.add(e);
-			else {
-				CircularArrayList.this.add(end, e);
-				end++;
+			try (Transaction t = theSubLock.lockForWrite()) {
+				CircularArrayList.this.add(theEnd, e);
+				theEnd++;
+				theSubLock.indexChanged(1);
 			}
 			return true;
 		}
 
 		@Override
-		public boolean remove(Object o) {
-			try (Transaction t = lock(false, null)) {
-				boolean mod = super.remove(o);
-				if (mod)
-					end--;
-				return mod;
-			}
-		}
-
-		@Override
-		public Iterable<E> descending() {
-			// TODO Auto-generated method stub
-			return null;
-		}
-
-		@Override
-		public void removeRange(int fromIndex, int toIndex) {
-			if (fromIndex == toIndex)
-				return;
-			else if (fromIndex > toIndex)
-				throw new IllegalArgumentException(fromIndex + ">" + toIndex);
-			if (fromIndex < 0)
-				throw new IndexOutOfBoundsException("" + fromIndex);
-			else if (toIndex > size())
-				throw new IndexOutOfBoundsException(toIndex + " of " + size());
-			CircularArrayList.this.removeRange(start + fromIndex, start + toIndex);
-		}
-
-		@Override
-		public boolean containsAll(Collection<?> c) {
-			try (Transaction t = lock(false, null)) {
-				return super.containsAll(c);
+		public void add(int index, E element) {
+			if (index < 0)
+				throw new IndexOutOfBoundsException("" + index);
+			try (Transaction t = theSubLock.lockForWrite()) {
+				if (index > theEnd - theStart)
+					throw new IndexOutOfBoundsException(index + " of " + (theEnd - theStart));
+				internalAdd(theStart + index, element);
+				theSubLock.indexChanged(1);
 			}
 		}
 
 		@Override
 		public boolean addAll(Collection<? extends E> c) {
-			int outerSize = CircularArrayList.this.size();
-			if (start >= outerSize)
-				throw new IllegalStateException("Out of range: " + start + " of " + theSize);
-			if (end > outerSize)
-				CircularArrayList.this.addAll(c);
-			else {
-				CircularArrayList.this.addAll(end, c);
-				end += c.size();
+			if (c.isEmpty())
+				return false;
+			try (Transaction t = theSubLock.lockForWrite()) {
+				int oldSize = theSize;
+				CircularArrayList.this.addAll(theEnd, c);
+				if (theSize != oldSize) {
+					theEnd += theSize - oldSize;
+					theSubLock.indexChanged(theSize - oldSize);
+					return true;
+				} else
+					return false;
 			}
-			return true;
 		}
 
 		@Override
 		public boolean addAll(int index, Collection<? extends E> c) {
 			if(index<0)
 				throw new IndexOutOfBoundsException(""+index);
-			if(index-start>end)
-				throw new IndexOutOfBoundsException(index+" of "+size());
-			int outerSize = CircularArrayList.this.size();
-			if (start >= outerSize)
-				throw new IllegalStateException("Out of range: " + start + " of " + theSize);
-			boolean mod;
-			if(index>outerSize){
-				mod = CircularArrayList.this.addAll(c);
-				end = theSize;
-			} else{
-				mod = CircularArrayList.this.addAll(end, c);
-				end+=c.size();
-			}
-			return mod;
-		}
-
-		@Override
-		public boolean removeAll(Collection<?> c) {
-			try (Transaction t = lock(false, null)) {
-				return super.removeAll(c);
+			if (c.isEmpty())
+				return false;
+			try (Transaction t = theSubLock.lockForWrite()) {
+				if (index > theEnd - theStart)
+					throw new IndexOutOfBoundsException(index + " of " + (theEnd - theStart));
+				int oldSize = theSize;
+				CircularArrayList.this.addAll(theStart + index, c);
+				if (theSize != oldSize) {
+					theEnd += theSize - oldSize;
+					theSubLock.indexChanged(theSize - oldSize);
+					return true;
+				} else
+					return false;
 			}
 		}
 
 		@Override
-		public boolean retainAll(Collection<?> c) {
-			try (Transaction t = lock(false, null)) {
-				return super.retainAll(c);
+		public boolean remove(Object o) {
+			try (Transaction t = theSubLock.lockForWrite()) {
+				int index = theStart;
+				int ti = translateToInternalIndex(index, false);
+				for (; index < theEnd; index++) {
+					if (Objects.equals(theArray[ti], o)) {
+						internalRemove(index, ti);
+						theEnd--;
+						theSubLock.indexChanged(-1);
+						return true;
+					}
+				}
 			}
-		}
-
-		@Override
-		public void clear() {
-			int outerSize = theSize;
-			if (start >= outerSize)
-				return;
-
-			if (end > outerSize)
-				CircularArrayList.this.removeRange(start, outerSize);
-			else
-				CircularArrayList.this.removeRange(start, end);
-			end = start;
-		}
-
-		@Override
-		public E get(int index) {
-			super.
-			// TODO Auto-generated method stub
-			return null;
-		}
-
-		@Override
-		public E set(int index, E element) {
-			// TODO Auto-generated method stub
-			return null;
-		}
-
-		@Override
-		public void add(int index, E element) {
-			// TODO Auto-generated method stub
-
+			return false;
 		}
 
 		@Override
 		public E remove(int index) {
-			// TODO Auto-generated method stub
-			return null;
+			if (index < 0)
+				throw new IndexOutOfBoundsException("" + index);
+			try (Transaction t = theSubLock.lockForWrite()) {
+				if (index >= theEnd - theStart)
+					throw new IndexOutOfBoundsException(index + " of " + (theEnd - theStart));
+				E old = internalRemove(index, translateToInternalIndex(theStart + index, false));
+				theSubLock.indexChanged(-1);
+				return old;
+			}
 		}
 
 		@Override
-		public int indexOf(Object o) {
-			// TODO Auto-generated method stub
-			return 0;
+		public void removeRange(int fromIndex, int toIndex) {
+			if (fromIndex < 0)
+				throw new IndexOutOfBoundsException("" + fromIndex);
+			else if (fromIndex > toIndex)
+				throw new IndexOutOfBoundsException(fromIndex + ">" + toIndex);
+			else if (fromIndex == toIndex)
+				return;
+			try (Transaction t = theSubLock.lockForWrite()) {
+				if (toIndex > theEnd - theStart)
+					throw new IndexOutOfBoundsException(toIndex + " of " + (theEnd - theStart));
+				CircularArrayList.this.removeRange(theStart + fromIndex, theStart + toIndex);
+				theEnd -= toIndex - fromIndex;
+				theSubLock.indexChanged(fromIndex - toIndex);
+			}
 		}
 
 		@Override
-		public int lastIndexOf(Object o) {
-			// TODO Auto-generated method stub
-			return 0;
+		public boolean removeAll(Collection<?> c) {
+			if (c.isEmpty())
+				return false;
+			return removeIf(o -> c.contains(o));
+		}
+
+		@Override
+		public boolean retainAll(Collection<?> c) {
+			if (c.isEmpty()) {
+				boolean modified = theSize > 0;
+				clear();
+				return modified;
+			}
+			return removeIf(o -> !c.contains(o));
+		}
+
+		@Override
+		public boolean removeIf(Predicate<? super E> filter) {
+			if (theSize == 0)
+				return false;
+			int removed = 0;
+			try (Transaction t = theSubLock.lockForWrite()) {
+				int cap = theArray.length;
+				int inspect = translateToInternalIndex(theStart, false);
+				int copyTo = inspect;
+				int dest = (theOffset + theEnd) % cap;
+				while (inspect != dest) {
+					E value = (E) theArray[inspect];
+					if (filter.test(value)) {
+						removed++;
+					} else {
+						if (removed > 0)
+							theArray[copyTo] = value;
+						copyTo++;
+						if (copyTo == cap)
+							copyTo = 0;
+					}
+					inspect++;
+					if (inspect == cap)
+						inspect = 0;
+				}
+				clearEntries(copyTo, removed);
+				theSize -= removed;
+				theEnd -= removed;
+				theSubLock.indexChanged(-removed);
+			}
+			return removed > 0;
+		}
+
+		@Override
+		public void clear() {
+			try (Transaction t = theSubLock.lockForWrite()) {
+				int size = theEnd - theStart;
+				CircularArrayList.this.removeRange(theStart, theEnd);
+				theEnd = theStart;
+				theSubLock.indexChanged(-size);
+			}
+		}
+
+		@Override
+		public E set(int index, E element) {
+			if (index < 0)
+				throw new IndexOutOfBoundsException("" + index);
+			try (Transaction t = theSubLock.lockForWrite()) {
+				if (index >= theEnd - theStart)
+					throw new IndexOutOfBoundsException(index + " of " + (theEnd - theStart));
+				int ti = translateToInternalIndex(theStart + index, false);
+				E old = (E) theArray[ti];
+				theArray[ti] = element;
+				return old;
+			}
 		}
 
 		@Override
 		public ListIterator<E> listIterator() {
-			// TODO Auto-generated method stub
-			return null;
+			return listIterator(0);
 		}
 
 		@Override
 		public ListIterator<E> listIterator(int index) {
-			// TODO Auto-generated method stub
-			return null;
+			if (index < 0)
+				throw new IndexOutOfBoundsException("" + index);
+			int start = theStart;
+			int end = theEnd;
+			theSubLock.check();
+			if (index > end - start)
+				throw new IndexOutOfBoundsException(index + " of " + (end - start));
+			return new ListIter(new ArraySpliterator(start, end, start + index, true, theSubLock.subLock(added -> theEnd += added)));
 		}
 
 		@Override
 		public List<E> subList(int fromIndex, int toIndex) {
-			if (fromIndex == toIndex)
-				return Collections.emptyList();
-			else if (fromIndex > toIndex)
-				throw new IllegalArgumentException(fromIndex + ">" + toIndex);
 			if (fromIndex < 0)
 				throw new IndexOutOfBoundsException("" + fromIndex);
-			else if (toIndex > size())
-				throw new IndexOutOfBoundsException(toIndex + " of " + size());
-			return CircularArrayList.this.subList(start + fromIndex, start + toIndex);
+			if (fromIndex == toIndex)
+				return Collections.emptyList();
+			if (fromIndex > toIndex)
+				throw new IndexOutOfBoundsException(fromIndex + ">" + toIndex);
+			int start = theStart;
+			int end = theEnd;
+			theSubLock.check();
+			if (toIndex > end - start)
+				throw new IndexOutOfBoundsException(toIndex + " of " + (end - start));
+			int from = start + fromIndex;
+			int to = start + toIndex;
+			return new SubList(from, to, theSubLock.subLock(added -> theEnd += added));
 		}
 	}
 

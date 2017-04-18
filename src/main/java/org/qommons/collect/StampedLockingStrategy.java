@@ -1,18 +1,29 @@
 package org.qommons.collect;
 
+import java.util.ConcurrentModificationException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.StampedLock;
+import java.util.function.Consumer;
 
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 
 public class StampedLockingStrategy implements Transactable {
 	private static final int MAX_OPTIMISTIC_TRIES = 3;
+	private static final String CO_MOD_MSG = "Use\n"//
+		+ "try(Transaction t=lock(forWrite, null)){\n"//
+		+ "\t//iteration\n" //
+		+ "}\n" //
+		+ "to enusre this does not happen.";
+
 	@FunctionalInterface
 	interface OptimisticOperation<T> {
 		T apply(T init, long stamp);
 	}
+
 	private final ThreadLocal<ThreadState> theStampCollection;
 	private final StampedLock theLocker;
+	private final AtomicInteger theIndexChanges;
 
 	public StampedLockingStrategy() {
 		theStampCollection = new ThreadLocal<ThreadState>() {
@@ -22,6 +33,7 @@ public class StampedLockingStrategy implements Transactable {
 			}
 		};
 		theLocker = new StampedLock();
+		theIndexChanges = new AtomicInteger();
 	}
 
 	@Override
@@ -38,7 +50,9 @@ public class StampedLockingStrategy implements Transactable {
 				long stamp = theLocker.tryConvertToWriteLock(state.stamp);
 				if (stamp == 0)
 					throw new IllegalStateException("Could not upgrade to write lock");
-				state.stamp = stamp; // Got lucky
+				// Got lucky
+				state.stamp = stamp;
+				return () -> state.stamp = theLocker.tryConvertToReadLock(state.stamp);
 			}
 			return Transaction.NONE;
 		} else {
@@ -71,12 +85,95 @@ public class StampedLockingStrategy implements Transactable {
 		}
 	}
 
+	public void indexChanged() {
+		theIndexChanges.getAndIncrement();
+	}
+
 	public long getStamp() {
 		return theLocker.tryOptimisticRead();
 	}
 
 	public boolean check(long stamp) {
 		return theLocker.validate(stamp);
+	}
+
+	public SubLockingStrategy subLock() {
+		return new SubLockingStrategy(this);
+	}
+
+	public static class SubLockingStrategy {
+		private final StampedLockingStrategy theTop;
+		private final SubLockingStrategy theParent;
+		private final AtomicInteger theSubIndexChanges;
+		private final Consumer<Integer> theIndexChangeCallback;
+
+		private SubLockingStrategy(StampedLockingStrategy top) {
+			theTop = top;
+			theParent = null;
+			theSubIndexChanges = new AtomicInteger(top.theIndexChanges.get());
+			theIndexChangeCallback = null;
+		}
+
+		private SubLockingStrategy(SubLockingStrategy parent, Consumer<Integer> indexChangeCallback) {
+			theTop = parent.theTop;
+			theParent = parent;
+			theSubIndexChanges = new AtomicInteger(parent.theSubIndexChanges.get());
+			theIndexChangeCallback = indexChangeCallback;
+		}
+
+		public void check() throws ConcurrentModificationException {
+			theTop.doOptimistically(null, (v, stamp) -> _check());
+		}
+
+		private int _check() throws ConcurrentModificationException {
+			int val = checkParent();
+			if (val != theSubIndexChanges.get())
+				throw new ConcurrentModificationException("Collection has changed underneath this view.  " + CO_MOD_MSG);
+			return val;
+		}
+
+		private int checkParent() {
+			if (theParent != null)
+				return theParent._check();
+			else
+				return theTop.theIndexChanges.get();
+		}
+
+		public Transaction lockForWrite() {
+			Transaction t = theTop.lock(true, null);
+			_check();
+			return t;
+		}
+
+		public <T> T doOptimistically(T init, OptimisticOperation<T> operation) {
+			return theTop.doOptimistically(init, (value, stamp) -> {
+				_check();
+				return operation.apply(value, stamp);
+			});
+		}
+
+		public boolean check(long stamp) {
+			if (!theTop.check(stamp))
+				return false;
+			_check();
+			return true;
+		}
+
+		public void indexChanged(int added) {
+			theSubIndexChanges.getAndIncrement();
+			if (theIndexChangeCallback != null)
+				theIndexChangeCallback.accept(added);
+			if (theParent != null)
+				theParent.indexChanged(added);
+		}
+
+		public SubLockingStrategy subLock(Consumer<Integer> indexChangeCallback) {
+			return new SubLockingStrategy(this, indexChangeCallback);
+		}
+
+		public SubLockingStrategy siblingLock() {
+			return theParent != null ? new SubLockingStrategy(theParent, theIndexChangeCallback) : new SubLockingStrategy(theTop);
+		}
 	}
 
 	static class ThreadState {
