@@ -32,8 +32,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 
 	private Object[] theArray;
 	private final boolean isCapLocked;
-	private final ThreadLocal<ThreadState> theStampCollection;
-	private final StampedLock theLocker;
+	private final StampedLockingStrategy theLocker;
 	private int theOffset;
 	private int theSize;
 
@@ -44,13 +43,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 	public CircularArrayList(int initCap, boolean adjustCapacity) {
 		theArray = initCap == 0 ? EMPTY_ARRAY : new Object[initCap];
 		isCapLocked = adjustCapacity;
-		theStampCollection = new ThreadLocal<ThreadState>() {
-			@Override
-			protected ThreadState initialValue() {
-				return new ThreadState();
-			}
-		};
-		theLocker = new StampedLock();
+		theLocker = new StampedLockingStrategy();
 	}
 
 	@Override
@@ -60,26 +53,15 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 
 	@Override
 	public Transaction lock(boolean write, Object cause) {
-		ThreadState state = theStampCollection.get();
-		if (state.stamp > 0) {
-			if (write && !state.isWrite) {
-				// Alright, I'll try
-				long stamp = theLocker.tryConvertToWriteLock(state.stamp);
-				if (stamp == 0)
-					throw new IllegalStateException("Could not upgrade to write lock");
-				state.stamp = stamp; // Got lucky
-			}
-			return Transaction.NONE;
-		} else {
-			state.set(write ? theLocker.writeLock() : theLocker.readLock(), write);
-			return () -> {
-				if (write)
-					theLocker.unlockWrite(state.stamp);
-				else
-					theLocker.unlockRead(state.stamp);
-				state.stamp = 0;
-			};
-		}
+		return theLocker.lock(write, cause);
+	}
+
+	public long getStamp() {
+		return theLocker.getStamp();
+	}
+
+	public boolean check(long stamp) {
+		return theLocker.check(stamp);
 	}
 
 	@Override
@@ -104,86 +86,149 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 
 	@Override
 	public boolean contains(Object o) {
-		try (Transaction t = lock(false, null)) {
-			for (E value : this)
-				if (Objects.equals(value, o))
+		return theLocker.doOptimistically(false, (bool, stamp) -> {
+			Object[] array = theArray;
+			int offset = theOffset;
+			int size = theSize;
+			int t = offset;
+			for (int i = 0; i < size; i++) {
+				Object v = array[i];
+				if (!theLocker.check(stamp))
+					return false;
+				if (Objects.equals(v, o))
 					return true;
-		}
-		return false;
+				t++;
+				if (t == array.length)
+					t = 0;
+			}
+			return false;
+		});
 	}
 
 	@Override
 	public boolean containsAll(Collection<?> c) {
-		try (Transaction t = lock(false, null)) {
-			boolean found = false;
-			for (Object e : c) {
-				for (E value : this) {
-					if (Objects.equals(value, e)) {
+		return theLocker.doOptimistically(false, (bool, stamp) -> {
+			Object[] array = theArray;
+			int offset = theOffset;
+			int size = theSize;
+			for (Object o : c) {
+				boolean found = false;
+				int t = offset;
+				for (int i = 0; i < size; i++) {
+					Object v = array[i];
+					if (!theLocker.check(stamp))
+						return false;
+					if (Objects.equals(v, o)) {
 						found = true;
 						break;
 					}
+					t++;
+					if (t == array.length)
+						t = 0;
 				}
 				if (!found)
 					return false;
 			}
 			return true;
-		}
+		});
 	}
 
 	@Override
 	public Object[] toArray() {
-		try (Transaction t = lock(false, null)) {
-			Object[] array = new Object[theSize];
-			internalArrayCopy(array);
-			return array;
-		}
+		return theLocker.doOptimistically((Object[]) null, (a, stamp) -> {
+			Object[] array = theArray;
+			int offset = theOffset;
+			int size = theSize;
+			if (!theLocker.check(stamp))
+				return a;
+			if (a == null || a.length != theSize)
+				a = new Object[theSize];
+			internalArrayCopy(array, offset, size, a);
+			return a;
+		});
 	}
 
 	@Override
-	public <T> T[] toArray(T[] a) {
-		try (Transaction t = lock(false, null)) {
-			if (a.length < theSize)
-				a = (T[]) Array.newInstance(a.getClass().getComponentType(), theSize);
-			internalArrayCopy(a);
+	public <T> T[] toArray(final T[] a) {
+		return theLocker.doOptimistically(a, (arr, stamp) -> {
+			Object[] array = theArray;
+			int offset = theOffset;
+			int size = theSize;
+			if (!theLocker.check(stamp))
+				return arr;
+			if (arr.length == size) {
+			} else if (arr.length > size && arr == a) {
+			} else
+				arr = (T[]) Array.newInstance(a.getClass().getComponentType(), size);
+			if (!theLocker.check(stamp))
+				return arr;
+			internalArrayCopy(array, offset, size, arr);
 			return a;
-		}
+		});
 	}
 
 	@Override
 	public E get(int index) {
-		try (Transaction t = lock(false, null)) {
-			return (E) theArray[translateToInternalIndex(index, false)];
-		}
+		return theLocker.doOptimistically(null, (v, stamp) -> {
+			Object[] array = theArray;
+			int offset = theOffset;
+			int size = theSize;
+			if (!theLocker.check(stamp))
+				return null;
+			return (E) array[translateToInternalIndex(array, offset, size, index)];
+		});
 	}
 
 	@Override
 	public E getFirst() {
-		return get(0);
+		return theLocker.doOptimistically(null, (v, stamp) -> {
+			Object[] array = theArray;
+			int offset = theOffset;
+			int size = theSize;
+			if (!theLocker.check(stamp))
+				return null;
+			if (size == 0)
+				throw new NoSuchElementException();
+			return (E) array[offset];
+		});
 	}
 
 	@Override
 	public E getLast() {
-		try (Transaction t = lock(false, null)) {
-			return (E) theArray[translateToInternalIndex(theSize - 1, false)];
-		}
+		return theLocker.doOptimistically(null, (v, stamp) -> {
+			Object[] array = theArray;
+			int offset = theOffset;
+			int size = theSize;
+			if (!theLocker.check(stamp))
+				return null;
+			if (size == 0)
+				throw new NoSuchElementException();
+			return (E) array[translateToInternalIndex(array, offset, size, size - 1)];
+		});
 	}
 
 	@Override
 	public E peekFirst() {
-		try (Transaction t = lock(false, null)) {
-			if (theSize == 0)
+		return theLocker.doOptimistically(null, (v, stamp) -> {
+			Object[] array = theArray;
+			int offset = theOffset;
+			int size = theSize;
+			if (!theLocker.check(stamp))
 				return null;
-			return (E) theArray[translateToInternalIndex(0, false)];
-		}
+			return size == 0 ? null : (E) array[offset];
+		});
 	}
 
 	@Override
 	public E peekLast() {
-		try (Transaction t = lock(false, null)) {
-			if (theSize == 0)
+		return theLocker.doOptimistically(null, (v, stamp) -> {
+			Object[] array = theArray;
+			int offset = theOffset;
+			int size = theSize;
+			if (!theLocker.check(stamp))
 				return null;
-			return (E) theArray[translateToInternalIndex(theSize - 1, false)];
-		}
+			return size == 0 ? null : (E) array[translateToInternalIndex(array, offset, size, size - 1)];
+		});
 	}
 
 	@Override
@@ -198,22 +243,44 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 
 	@Override
 	public int indexOf(Object o) {
-		try (Transaction t = lock(false, null)) {
-			for (int i = 0; i < theSize; i++)
-				if (Objects.equals(theArray[translateToInternalIndex(i, false)], o))
+		return theLocker.doOptimistically(-1, (idx, stamp) -> {
+			Object[] array = theArray;
+			int offset = theOffset;
+			int size = theSize;
+			int t = offset;
+			for (int i = 0; i < size; i++) {
+				Object v = array[i];
+				if (!theLocker.check(stamp))
+					return -1;
+				if (Objects.equals(v, o))
 					return i;
-		}
-		return -1;
+				t++;
+				if (t == array.length)
+					t = 0;
+			}
+			return -1;
+		});
 	}
 
 	@Override
 	public int lastIndexOf(Object o) {
-		try (Transaction t = lock(false, null)) {
-			for (int i = theSize - 1; i >= 0; i--)
-				if (Objects.equals(theArray[translateToInternalIndex(i, false)], o))
+		return theLocker.doOptimistically(-1, (idx, stamp) -> {
+			Object[] array = theArray;
+			int offset = theOffset;
+			int size = theSize;
+			int t = offset;
+			for (int i = size - 1; i >= 0; i--) {
+				Object v = array[i];
+				if (!theLocker.check(stamp))
+					return -1;
+				if (Objects.equals(v, o))
 					return i;
-		}
-		return -1;
+				t--;
+				if (t < 0)
+					t = array.length - 1;
+			}
+			return -1;
+		});
 	}
 
 	@Override
@@ -565,17 +632,19 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 	}
 
 	protected final int translateToInternalIndex(int index, boolean adding) {
+		if (adding && index == theSize)
+			ensureCapacity(theSize + 1);
+		return translateToInternalIndex(theArray, theOffset, theSize, index);
+	}
+
+	private static final int translateToInternalIndex(Object[] array, int offset, int size, int index) {
 		if (index < 0)
 			throw new ArrayIndexOutOfBoundsException(index);
-		else if (index > theSize)
-			throw new ArrayIndexOutOfBoundsException(index + " of " + theSize);
-		else if (index == theSize) {
-			if (!adding)
-				throw new ArrayIndexOutOfBoundsException(index + " of " + theSize);
-			else
-				ensureCapacity(theSize + 1);
-		}
-		return (index + theOffset) % theArray.length;
+		else if (index > size)
+			throw new ArrayIndexOutOfBoundsException(index + " of " + size);
+		else if (index == size)
+			throw new ArrayIndexOutOfBoundsException(index + " of " + size);
+		return (index + offset) % array.length;
 	}
 
 	private void makeRoom(int index, int spaces) {
@@ -629,9 +698,13 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 	}
 
 	protected final void internalArrayCopy(Object[] a) {
-		System.arraycopy(theArray, theOffset, a, 0, Math.min(theSize, theArray.length - theOffset));
-		if (theOffset + theSize > theArray.length)
-			System.arraycopy(theArray, 0, a, theArray.length - theOffset, theSize - theArray.length + theOffset);
+		internalArrayCopy(theArray, theOffset, theSize, a);
+	}
+
+	private static final void internalArrayCopy(Object[] src, int offset, int size, Object[] dest) {
+		System.arraycopy(src, offset, dest, 0, Math.min(size, src.length - offset));
+		if (offset + size > src.length)
+			System.arraycopy(src, 0, dest, src.length - offset, size - src.length + offset);
 	}
 
 	protected final void internalAdd(int index, E element) {
