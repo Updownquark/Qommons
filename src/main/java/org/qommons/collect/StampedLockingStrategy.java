@@ -110,19 +110,20 @@ public class StampedLockingStrategy implements Transactable {
 		private SubLockingStrategy(StampedLockingStrategy top) {
 			theTop = top;
 			theParent = null;
-			theSubIndexChanges = new AtomicInteger(top.theIndexChanges.get());
+			theSubIndexChanges = new AtomicInteger();
+			theSubIndexChanges.set(top.doOptimistically(0, (v, stamp) -> top.theIndexChanges.get()));
 			theIndexChangeCallback = null;
 		}
 
 		private SubLockingStrategy(SubLockingStrategy parent, Consumer<Integer> indexChangeCallback) {
 			theTop = parent.theTop;
 			theParent = parent;
-			theSubIndexChanges = new AtomicInteger(parent.theSubIndexChanges.get());
+			theSubIndexChanges = new AtomicInteger(parent.check());
 			theIndexChangeCallback = indexChangeCallback;
 		}
 
-		public void check() throws ConcurrentModificationException {
-			theTop.doOptimistically(null, (v, stamp) -> _check());
+		public int check() throws ConcurrentModificationException {
+			return theTop.doOptimistically(0, (v, stamp) -> _check());
 		}
 
 		private int _check() throws ConcurrentModificationException {
