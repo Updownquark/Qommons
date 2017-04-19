@@ -422,8 +422,8 @@ public interface ElementSpliterator<T> extends Spliterator<T> {
 
 		@Override
 		public boolean hasNext() {
-			cachedNext = null;
 			if (!isNextCached && !isDone) {
+				cachedNext = null;
 				if (theSpliterator.tryAdvanceElement(element -> {
 					cachedNext = element;
 				}))
@@ -494,6 +494,11 @@ public interface ElementSpliterator<T> extends Spliterator<T> {
 			cachedNext = null;
 			isDone = true;
 			theSpliterator.forEachRemaining(action);
+		}
+
+		@Override
+		public String toString() {
+			return theSpliterator.toString();
 		}
 	}
 }

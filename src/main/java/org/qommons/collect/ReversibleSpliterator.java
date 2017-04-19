@@ -96,6 +96,8 @@ public interface ReversibleSpliterator<T> extends ElementSpliterator<T> {
 			if (element == null)
 				throw new IllegalStateException("Iteration has not begun");
 			element.remove();
+			element = null;
+			hasPrevious = Ternian.NONE;
 		}
 
 		@Override
@@ -103,6 +105,16 @@ public interface ReversibleSpliterator<T> extends ElementSpliterator<T> {
 			if (element == null)
 				throw new IllegalStateException("Iteration has not begun");
 			element.set(e, null);
+		}
+
+		protected boolean isCachedNext() {
+			return element != null && elementIsNext;
+		}
+
+		protected void clearCache() {
+			element = null;
+			hasNext = Ternian.NONE;
+			hasPrevious = Ternian.NONE;
 		}
 
 		@Override
@@ -113,5 +125,10 @@ public interface ReversibleSpliterator<T> extends ElementSpliterator<T> {
 
 		@Override
 		public abstract void add(T e);
+
+		@Override
+		public String toString() {
+			return backing.toString();
+		}
 	}
 }

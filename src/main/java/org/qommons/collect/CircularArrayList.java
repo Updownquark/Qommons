@@ -1,7 +1,16 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -26,22 +35,42 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 	private static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
 
 	private Object[] theArray;
-	private final boolean isCapLocked;
 	private final StampedLockingStrategy theLocker;
 	private int theOffset;
 	private int theSize;
+	private int theMaxCapacity = MAX_ARRAY_SIZE;
 
 	private int theAdvanced;
 	private int theAdded;
 
 	public CircularArrayList() {
-		this(0, true);
+		this(0);
 	}
 
-	public CircularArrayList(int initCap, boolean adjustCapacity) {
+	public CircularArrayList(int initCap) {
 		theArray = initCap == 0 ? EMPTY_ARRAY : new Object[initCap];
-		isCapLocked = adjustCapacity;
 		theLocker = new StampedLockingStrategy();
+	}
+
+	public CircularArrayList<E> setMaxCapacity(int maxCap) {
+		if (maxCap <= 0)
+			throw new IllegalArgumentException("Illegal max capacity: " + maxCap);
+		try (Transaction t = lock(true, null)) {
+			if (maxCap < theSize)
+				removeRange(0, theSize - maxCap);
+			if (theArray.length > maxCap) {
+				Object[] newArray = new Object[maxCap];
+				internalArrayCopy(newArray);
+				theArray = newArray;
+				theOffset = 0;
+			}
+			theMaxCapacity = maxCap;
+		}
+		return this;
+	}
+
+	public int getMaxCapacity() {
+		return theMaxCapacity;
 	}
 
 	@Override
@@ -246,6 +275,8 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			int offset = theOffset;
 			int size = theSize;
 			int t = offset;
+			if (!theLocker.check(stamp))
+				return -1;
 			for (int i = 0; i < size; i++) {
 				Object v = array[t];
 				if (!theLocker.check(stamp))
@@ -266,13 +297,16 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			Object[] array = theArray;
 			int offset = theOffset;
 			int size = theSize;
-			int t = offset;
-			for (int i = size - 1; i >= 0; i--) {
+			if (!theLocker.check(stamp))
+				return -1;
+			int index = size - 1;
+			int t = translateToInternalIndex(array, offset, size, index);
+			for (; index >= 0; index--) {
 				Object v = array[t];
 				if (!theLocker.check(stamp))
 					return -1;
 				if (Objects.equals(v, o))
-					return i;
+					return index;
 				t--;
 				if (t < 0)
 					t = array.length - 1;
@@ -284,7 +318,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 	@Override
 	public E set(int index, E element) {
 		try (Transaction t = lock(true, null)) {
-			int translated = translateToInternalIndex(index, false);
+			int translated = translateToInternalIndex(index);
 			E old = (E) theArray[translated];
 			theArray[translated] = element;
 			return old;
@@ -294,13 +328,15 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 	@Override
 	public boolean add(E e) {
 		try (Transaction t = lock(true, null)) {
-			if (theSize == theArray.length && isCapLocked) {
+			if (theSize == theMaxCapacity) {
+				ensureCapacity(theMaxCapacity);
 				theArray[theOffset] = e;
 				theOffset++;
 				theAdvanced = 1;
 			} else {
-				theArray[translateToInternalIndex(theSize, true)] = e;
+				ensureCapacity(theSize + 1);
 				theSize++;
+				theArray[translateToInternalIndex(theSize - 1)] = e;
 			}
 			theAdded = 1;
 			theLocker.indexChanged();
@@ -315,32 +351,34 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		try (Transaction t = lock(true, null)) {
 			// Very little we can do cheaply here to protect against c changing during the operation, but if it did it could do some damage
 			int cSize = c.size();
-			if (isCapLocked && cSize + theSize > theArray.length) {
-				if (cSize >= theArray.length) {
+			if (cSize + theSize > theMaxCapacity) {
+				ensureCapacity(theMaxCapacity);
+				if (cSize >= theMaxCapacity) {
 					theOffset = 0;
 					theAdvanced = theSize;
-					theAdded = theArray.length;
-					theSize = theArray.length;
+					theAdded = theMaxCapacity;
+					theSize = theMaxCapacity;
 					Iterator<? extends E> iter = c.iterator();
-					for (int i = cSize; i > theArray.length; i++)
+					for (int i = cSize; i > theMaxCapacity; i++)
 						iter.next(); // Bleed off items that would be dropped due to capacity
-					for (int i = 0; i < theArray.length; i++)
+					for (int i = 0; i < theMaxCapacity; i++)
 						theArray[i] = iter.next();
 				} else {
-					theAdvanced = cSize + theSize - theArray.length;
+					theAdvanced = cSize + theSize - theMaxCapacity;
 					theAdded = cSize;
-					int start = translateToInternalIndex(theSize, true);
+					int start = translateToInternalIndex(theSize);
 					theOffset += theAdvanced;
 					if (theOffset > theArray.length)
 						theOffset -= theArray.length;
-					theSize = theArray.length;
+					theSize = theMaxCapacity;
 					for (E e : c)
 						theArray[start++] = e;
 				}
 			} else {
 				ensureCapacity(theSize + cSize);
+				int preSize = theSize;
 				theSize += cSize;
-				int idx = translateToInternalIndex(theSize, false);
+				int idx = translateToInternalIndex(preSize);
 				for (E e : c) {
 					theArray[idx] = e;
 					idx++;
@@ -355,21 +393,23 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 
 	@Override
 	public void add(int index, E element) {
+		if (index < 0)
+			throw new IndexOutOfBoundsException("" + index);
 		try (Transaction t = lock(true, null)) {
+			if (index > theSize)
+				throw new IndexOutOfBoundsException(index + " of " + theSize);
 			internalAdd(index, element);
 		}
 	}
 
 	@Override
 	public boolean addAll(int index, Collection<? extends E> c) {
-		if (index == 0)
-			return addAll(c);
 		if (c.isEmpty())
 			return false;
 		try (Transaction t = lock(true, null)) {
 			int cSize = c.size();
 			int spaces = makeRoom(index, cSize);
-			int ti = translateToInternalIndex(index, false);
+			int ti = translateToInternalIndex(index);
 			Iterator<? extends E> iter = c.iterator();
 			int i;
 			for (i = 0; i < cSize - spaces; i++)
@@ -450,6 +490,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 				clearEntries(theOffset, fromIndex);
 				theOffset = (theOffset + count) % theArray.length;
 				theSize -= count;
+				theLocker.indexChanged();
 			}
 		}
 	}
@@ -477,11 +518,13 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			return false;
 		int removed = 0;
 		try (Transaction t = lock(true, null)) {
+			if (theSize == 0)
+				return false;
 			int cap = theArray.length;
 			int inspect = theOffset;
 			int copyTo = inspect;
-			int dest = (theOffset + theSize) % cap;
-			while (inspect != dest) {
+			int dest = (theOffset + theSize + cap) % cap;
+			do {
 				E value = (E) theArray[inspect];
 				if (filter.test(value)) {
 					removed++;
@@ -495,7 +538,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 				inspect++;
 				if (inspect == cap)
 					inspect = 0;
-			}
+			} while (inspect != dest);
 			clearEntries(copyTo, removed);
 			theSize -= removed;
 			if (removed > 0)
@@ -519,7 +562,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 	@Override
 	public E remove(int index) {
 		try (Transaction t = lock(true, null)) {
-			return internalRemove(index, translateToInternalIndex(index, false));
+			return internalRemove(index, translateToInternalIndex(index));
 		}
 	}
 
@@ -531,7 +574,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 	@Override
 	public E removeLast() {
 		try (Transaction t = lock(true, null)) {
-			return internalRemove(theSize - 1, translateToInternalIndex(theSize - 1, false));
+			return internalRemove(theSize - 1, translateToInternalIndex(theSize - 1));
 		}
 	}
 
@@ -540,7 +583,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		try (Transaction t = lock(true, null)) {
 			if (theSize == 0)
 				return null;
-			return internalRemove(0, translateToInternalIndex(0, false));
+			return internalRemove(0, translateToInternalIndex(0));
 		}
 	}
 
@@ -549,7 +592,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		try (Transaction t = lock(true, null)) {
 			if (theSize == 0)
 				return null;
-			return internalRemove(theSize - 1, translateToInternalIndex(theSize - 1, false));
+			return internalRemove(theSize - 1, translateToInternalIndex(theSize - 1));
 		}
 	}
 
@@ -584,7 +627,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		try (Transaction t = lock(true, null)) {
 			if (theSize == 0)
 				return null;
-			return internalRemove(0, translateToInternalIndex(0, false));
+			return internalRemove(0, translateToInternalIndex(0));
 		}
 	}
 
@@ -615,13 +658,95 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		return new ElementSpliterator.SpliteratorBetterator<>(spliterator(false));
 	}
 
-	public boolean ensureCapacity(int size) {
-		if (isCapLocked)
+	@Override
+	public int hashCode() {
+		return theLocker.doOptimistically(0, (h, stamp) -> {
+			Object[] array = theArray;
+			int offset = theOffset;
+			int size = theSize;
+			if (!theLocker.check(stamp))
+				return -1;
+			int hash = 0;
+			int t = offset;
+			for (int i = 0; i < size; i++) {
+				E v = (E) array[t];
+				if (!theLocker.check(stamp))
+					return -1;
+				hash += v == null ? 0 : v.hashCode();
+				t++;
+				if (t == array.length)
+					t = 0;
+			}
+			return hash;
+		});
+	}
+
+	@Override
+	public boolean equals(Object o){
+		if(!(o instanceof Collection))
 			return false;
+		Collection<?> c=(Collection<?>) o;
+		return theLocker.doOptimistically(false, (b, stamp) -> {
+			Object[] array = theArray;
+			int offset = theOffset;
+			int size = theSize;
+			if (!theLocker.check(stamp))
+				return false;
+			if (c.size() != size)
+				return false;
+			int t = offset;
+			Iterator<?> iter = c.iterator();
+			for (int i = 0; i < size; i++) {
+				if (!iter.hasNext())
+					return false;
+				Object co = iter.next();
+				E v = (E) array[t];
+				if (!theLocker.check(stamp))
+					return false;
+				if (!Objects.equals(v, co))
+					return false;
+				t++;
+				if (t == array.length)
+					t = 0;
+			}
+			return true;
+		});
+	}
+
+	@Override
+	public String toString() {
+		return theLocker.doOptimistically(new StringBuilder(), (str, stamp) -> {
+			Object[] array = theArray;
+			int offset = theOffset;
+			int size = theSize;
+			if (!theLocker.check(stamp))
+				return str;
+			str.setLength(0);
+			str.append('[');
+			int t = offset;
+			for (int i = 0; i < size; i++) {
+				E v = (E) array[t];
+				if (!theLocker.check(stamp))
+					return str;
+				if (i > 0)
+					str.append(", ");
+				str.append(v);
+				t++;
+				if (t == array.length)
+					t = 0;
+			}
+			str.append(']');
+			return str;
+		}).toString();
+	}
+
+	public boolean ensureCapacity(int size) {
+		if (size > theMaxCapacity)
+			size = theMaxCapacity;
 		if (theArray.length < size) {
 			// overflow-conscious code
 			int oldCapacity = theArray.length;
-			int newCapacity = oldCapacity + (oldCapacity >> 1);
+			int newCapacity = oldCapacity == 0 ? 10 : oldCapacity + (oldCapacity >> 1);
 			if (newCapacity - size < 0)
 				newCapacity = size;
 			if (newCapacity - MAX_ARRAY_SIZE > 0)
@@ -647,9 +772,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		return new ArraySpliterator(0, theSize, forward ? 0 : theSize, forward, theLocker.subLock());
 	}
 
-	protected final int translateToInternalIndex(int index, boolean adding) {
-		if (adding && !isCapLocked && index == theSize)
-			ensureCapacity(theSize + 1);
+	protected final int translateToInternalIndex(int index) {
 		return translateToInternalIndex(theArray, theOffset, theSize, index);
 	}
 
@@ -664,26 +787,30 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 	}
 
 	private int makeRoom(int index, int spaces) {
-		if (isCapLocked && theSize + spaces > theArray.length) {
-			if (spaces >= theArray.length) {
+		if (theSize + spaces > theMaxCapacity) {
+			ensureCapacity(theMaxCapacity);
+			if (spaces >= theMaxCapacity) {
 				theAdvanced = theSize;
 				theOffset = 0;
-				theSize = theArray.length;
-				return theArray.length;
+				theSize = theMaxCapacity;
+				return theMaxCapacity;
 			} else {
-				theAdvanced = theSize + spaces - theArray.length;
+				theAdvanced = theSize + spaces - theMaxCapacity;
 				if (index <= theSize / 2)
 					moveContents(theOffset + theAdvanced, index, -spaces);
 				else
 					moveContents(theOffset + index, theSize - index - theAdvanced, spaces);
-				theSize = theArray.length;
+				theSize = theMaxCapacity;
 				return spaces;
 			}
 		} else {
 			ensureCapacity(theSize + spaces);
-			if (index <= theSize / 2)
+			if (index <= theSize / 2) {
 				moveContents(theOffset, index, -spaces);
-			else
+				theOffset -= spaces;
+				if (theOffset < 0)
+					theOffset += theArray.length;
+			} else
 				moveContents(theOffset + index, theSize - index, spaces);
 			theSize += spaces;
 			return spaces;
@@ -691,35 +818,62 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 	}
 
 	private void moveContents(int sourceStart, int count, int offset) {
+		if (count == 0)
+			return;
 		int cap = theArray.length;
+		if (sourceStart > cap)
+			sourceStart -= cap;
 		int sourceEnd = sourceStart + count;
 		int destStart = sourceStart + offset;
 		int destEnd = destStart + count;
 		if (destStart < 0) {
 			destStart += cap;
 			destEnd += cap;
+		} else if (destStart >= cap) {
+			destStart -= cap;
+			destEnd -= cap;
 		}
 
-		// Either the source interval or the destination interval or neither may be wrapped, but the other must be contiguous
-		// because count+offset<=capacity
-		if (sourceEnd < 0 || sourceEnd > cap) {
+		if (sourceEnd > cap) {
 			// The source interval is wrapped
-			if (destStart > cap) {
-				destStart -= cap;
-			}
 			int firstSectionLength = cap - sourceStart;
-			System.arraycopy(theArray, sourceStart, theArray, destStart, firstSectionLength);
-			System.arraycopy(theArray, 0, theArray, destStart + firstSectionLength, count - firstSectionLength);
+			if (destEnd > cap) {
+				// The destination interval is also wrapped
+				int destSL = cap - destStart;
+				if (destSL < firstSectionLength)
+					firstSectionLength = destSL;
+				if (offset > 0) {
+					System.arraycopy(theArray, 0, theArray, offset, count - firstSectionLength - offset);
+					System.arraycopy(theArray, sourceStart + firstSectionLength, theArray, 0, offset);
+					System.arraycopy(theArray, sourceStart, theArray, destStart, firstSectionLength);
+				} else {
+					System.arraycopy(theArray, sourceStart, theArray, destStart, firstSectionLength);
+					System.arraycopy(theArray, 0, theArray, destStart + firstSectionLength, -offset);
+					System.arraycopy(theArray, -offset, theArray, 0, count - firstSectionLength + offset);
+				}
+			} else {
+				if (offset > 0) {
+					System.arraycopy(theArray, 0, theArray, destStart + firstSectionLength, count - firstSectionLength);
+					System.arraycopy(theArray, sourceStart, theArray, destStart, firstSectionLength);
+				} else {
+					System.arraycopy(theArray, sourceStart, theArray, destStart, firstSectionLength);
+					System.arraycopy(theArray, 0, theArray, destStart + firstSectionLength, count - firstSectionLength);
+				}
+			}
 		} else if (destEnd > cap) {
 			// The destination interval is wrapped
 			int firstSectionLength = cap - destStart;
-			System.arraycopy(theArray, sourceStart, theArray, destStart, firstSectionLength);
-			System.arraycopy(theArray, sourceStart + firstSectionLength, theArray, 0, count - firstSectionLength);
+			if (offset > 0) {
+				System.arraycopy(theArray, sourceStart + firstSectionLength, theArray, 0, count - firstSectionLength);
+				System.arraycopy(theArray, sourceStart, theArray, destStart, firstSectionLength);
+			} else {
+				System.arraycopy(theArray, sourceStart, theArray, destStart, firstSectionLength);
+				System.arraycopy(theArray, sourceStart + firstSectionLength, theArray, 0, count - firstSectionLength);
+			}
 		} else {
 			// Neither interval is wrapped
 			System.arraycopy(theArray, sourceStart, theArray, destStart, count);
 		}
-		theLocker.indexChanged();
 	}
 
 	private void clearEntries(int from, int count) {
@@ -733,6 +887,11 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			Arrays.fill(theArray, from, end, null);
 	}
 
+	/**
+	 * Copies this list's contents into the given array
+	 * 
+	 * @param a The array to copy this list's contents into
+	 */
 	protected final void internalArrayCopy(Object[] a) {
 		internalArrayCopy(theArray, theOffset, theSize, a);
 	}
@@ -745,7 +904,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 
 	protected final void internalAdd(int index, E element) {
 		makeRoom(index, 1);
-		theArray[translateToInternalIndex(theSize - 1, true)] = element;
+		theArray[translateToInternalIndex(index)] = element;
 		theAdded = 1;
 		theLocker.indexChanged();
 	}
@@ -762,7 +921,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			theOffset++;
 			theSize--;
 		} else {
-			moveContents(theOffset + listIndex + 1, theSize - listIndex - 1, -1);
+			moveContents(translatedIndex + 1, theSize - listIndex - 1, -1);
 			theArray[(theOffset + theSize) % theArray.length] = null; // Remove reference
 			theSize--;
 		}
@@ -855,6 +1014,14 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 					}
 					elementExists = false;
 				}
+
+				@Override
+				public String toString() {
+					if (!elementExists)
+						return "(removed)";
+					else
+						return String.valueOf(get());
+				}
 			};
 		}
 
@@ -887,24 +1054,19 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			if (!isForward)
 				advance = !advance;
 			if (advance) {
-				if (theCursor > theEnd)
+				if (theCursor >= theEnd)
 					return false;
 				if (elementExists) { // Advance the cursor beyond the current element
-					if (theCursor == theEnd)
+					if (theCursor >= theEnd - 1)
 						return false;
 					theCursor++;
-					theTranslatedCursor++;
-					if (theTranslatedCursor == theArray.length)
-						theTranslatedCursor = 0;
 				}
 			} else {
 				if (theCursor == theStart)
 					return false;
 				theCursor--;
-				theTranslatedCursor--;
-				if (theTranslatedCursor < 0)
-					theTranslatedCursor = theArray.length - 1;
 			}
+			theTranslatedCursor = translateToInternalIndex(theCursor);
 			elementExists = true;
 			action.accept(element);
 			return true;
@@ -929,6 +1091,51 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		int getIndex() {
 			return theCursor;
 		}
+
+		void setCursor(int cursor) {
+			theCursor = cursor;
+			theTranslatedCursor = translateToInternalIndex(cursor);
+		}
+
+		@Override
+		public String toString() {
+			return theSubLock.doOptimistically(new StringBuilder(), (str, stamp) -> {
+				Object[] array = theArray;
+				int offset = theOffset;
+				int size = theSize;
+				int start = theStart;
+				int end = theEnd;
+				int cursor = theCursor;
+				if (!theSubLock.check(stamp))
+					return str;
+				str.setLength(0);
+				str.append('<');
+				int index = start;
+				int t = translateToInternalIndex(array, offset, size, index);
+				boolean first = true;
+				for (; index < end; index++) {
+					Object v = array[t];
+					if (!theSubLock.check(stamp))
+						return str;
+					if (!first)
+						str.append(", ");
+					first = false;
+					if (index == cursor) {
+						str.append('*');
+						if (!elementExists)
+							str.append('*');
+					}
+					str.append(v);
+					if (elementExists && index == cursor)
+						str.append('*');
+					t++;
+					if (t == array.length)
+						t = 0;
+				}
+				str.append('>');
+				return str;
+			}).toString();
+		}
 	}
 
 	class ListIter extends ReversibleSpliterator.PartialListIterator<E> {
@@ -938,21 +1145,27 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 
 		@Override
 		public int nextIndex() {
-			return ((ArraySpliterator) backing).getIndex() + 1 - ((ArraySpliterator) backing).theStart;
+			int index = ((ArraySpliterator) backing).getIndex() - ((ArraySpliterator) backing).theStart;
+			if (!isCachedNext())
+				index++;
+			return index;
 		}
 
 		@Override
 		public int previousIndex() {
-			return ((ArraySpliterator) backing).getIndex() - ((ArraySpliterator) backing).theStart;
+			return nextIndex() - 1;
 		}
 
 		@Override
 		public void add(E e) {
 			try (Transaction t = ((ArraySpliterator) backing).theSubLock.lockForWrite()) {
-				CircularArrayList.this.add(((ArraySpliterator) backing).getIndex(), e);
+				int index = nextIndex();
+				CircularArrayList.this.add(index, e);
 				((ArraySpliterator) backing).theStart += theAdvanced;
-				next(); // Skip over the element just inserted
+				((ArraySpliterator) backing).theEnd++;
+				((ArraySpliterator) backing).setCursor(index + 1);
 				((ArraySpliterator) backing).theSubLock.indexChanged(1);
+				clearCache();
 			}
 		}
 	}
@@ -1274,7 +1487,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		public boolean remove(Object o) {
 			try (Transaction t = theSubLock.lockForWrite()) {
 				int index = theStart;
-				int ti = translateToInternalIndex(index, false);
+				int ti = translateToInternalIndex(index);
 				for (; index < theEnd; index++) {
 					if (Objects.equals(theArray[ti], o)) {
 						internalRemove(index, ti);
@@ -1294,7 +1507,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			try (Transaction t = theSubLock.lockForWrite()) {
 				if (index >= theEnd - theStart)
 					throw new IndexOutOfBoundsException(index + " of " + (theEnd - theStart));
-				E old = internalRemove(index, translateToInternalIndex(theStart + index, false));
+				E old = internalRemove(index, translateToInternalIndex(theStart + index));
 				theSubLock.indexChanged(-1);
 				return old;
 			}
@@ -1341,7 +1554,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			int removed = 0;
 			try (Transaction t = theSubLock.lockForWrite()) {
 				int cap = theArray.length;
-				int inspect = translateToInternalIndex(theStart, false);
+				int inspect = translateToInternalIndex(theStart);
 				int copyTo = inspect;
 				int dest = (theOffset + theEnd) % cap;
 				while (inspect != dest) {
@@ -1384,7 +1597,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			try (Transaction t = theSubLock.lockForWrite()) {
 				if (index >= theEnd - theStart)
 					throw new IndexOutOfBoundsException(index + " of " + (theEnd - theStart));
-				int ti = translateToInternalIndex(theStart + index, false);
+				int ti = translateToInternalIndex(theStart + index);
 				E old = (E) theArray[ti];
 				theArray[ti] = element;
 				return old;
