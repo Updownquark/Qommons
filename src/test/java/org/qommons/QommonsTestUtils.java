@@ -483,7 +483,7 @@ public class QommonsTestUtils {
 		for (i = 0; listIter2.hasPrevious(); i++) {
 			assertTrue("On Iteration " + i, listIter1.hasPrevious());
 			int prev = listIter1.previous();
-			assertThat("On Iteration " + i, listIter2.previous(), equalTo(prev));
+			assertThat("On Iteration " + i, prev, equalTo(listIter2.previous()));
 			switch (i % 5) {
 			case 0:
 				int toAdd = i * 17 + 100;
@@ -509,14 +509,14 @@ public class QommonsTestUtils {
 		for (i = 0; listIter2.hasNext(); i++) {
 			assertTrue("On Iteration " + i, listIter1.hasNext());
 			int next = listIter1.next();
-			assertThat("On Iteration " + i, listIter2.next(), equalTo(next));
-			switch (i % 5) {
+			assertThat("On Iteration " + i, next, equalTo(listIter2.next()));
+			switch (i % 3) {
 			case 0:
 				int toAdd = i * 53 + 1000;
 				listIter1.add(toAdd);
 				listIter2.add(toAdd);
 				assertTrue("On Iteration " + i, listIter1.hasPrevious());
-				assertThat("On Iteration " + i, toAdd, equalTo(listIter1.previous()));
+				assertThat("On Iteration " + i, listIter1.previous(), equalTo(toAdd));
 				listIter1.next();
 				break;
 			case 1:
@@ -528,7 +528,7 @@ public class QommonsTestUtils {
 				listIter2.set(next + 1000);
 				break;
 			}
-			assertThat("On Iteration " + i, test, equalTo(list));
+			assertThat("On Iteration " + i, list, equalTo(test));
 			if (check != null)
 				check.accept(list);
 		}
