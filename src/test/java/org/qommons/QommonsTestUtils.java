@@ -35,7 +35,7 @@ public class QommonsTestUtils {
 	public static final int COLLECTION_TEST_DEPTH = 5;
 
 	/**
-	 * Runs a barrage of tests against a collection, observable or not
+	 * Runs a barrage of tests against a collection
 	 *
 	 * @param <T> The type of the collection
 	 * @param coll The collection to test
@@ -48,7 +48,7 @@ public class QommonsTestUtils {
 	}
 
 	/**
-	 * Runs a barrage of tests against a collection, observable or not
+	 * Runs a barrage of tests against a collection
 	 *
 	 * @param <T> The type of the collection
 	 * @param coll The collection to test
@@ -597,7 +597,7 @@ public class QommonsTestUtils {
 	}
 
 	/**
-	 * Runs a barrage of tests against a map, observable or not
+	 * Runs a barrage of tests against a map
 	 *
 	 * @param <T> The type of the map
 	 * @param map The map to test
@@ -610,7 +610,7 @@ public class QommonsTestUtils {
 	}
 
 	/**
-	 * Runs a barrage of tests against a map, observable or not
+	 * Runs a barrage of tests against a map
 	 *
 	 * @param <T> The type of the map
 	 * @param map The map to test
