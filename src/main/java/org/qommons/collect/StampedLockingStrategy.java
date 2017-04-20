@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 
+/** A collection-locking strategy using {@link StampedLock} */
 public class StampedLockingStrategy implements Transactable {
 	private static final int MAX_OPTIMISTIC_TRIES = 3;
 	private static final String CO_MOD_MSG = "Use\n"//
@@ -25,6 +26,7 @@ public class StampedLockingStrategy implements Transactable {
 	private final StampedLock theLocker;
 	private final AtomicInteger theIndexChanges;
 
+	/** Creates the locking strategy */
 	public StampedLockingStrategy() {
 		theStampCollection = new ThreadLocal<ThreadState>() {
 			@Override
@@ -67,6 +69,24 @@ public class StampedLockingStrategy implements Transactable {
 		}
 	}
 
+	/**
+	 * Performs a safe, read-only operation, potentially without obtaining any locks.
+	 * 
+	 * The operation must have no side effects (i.e. it must not modify fields or values outside of the scope of the operation). A typical
+	 * operation will:
+	 * <ol>
+	 * <li>Atomically copy the set of values it needs into local variables</li>
+	 * <li>Check the stamp to ensure that the copied values are consistent</li>
+	 * <li>Perform one or more atomic operations on the local variables which only affect local variables declared in the scope, checking
+	 * the stamp in between operations to continuously ensure consistency and to avoid unnecessary work</li>
+	 * <li>Compile and return a value that can be used outside the scope</li>
+	 * </ol>
+	 * 
+	 * @param <T> The type of value produced by the operation
+	 * @param init The initial value to feed to the operation
+	 * @param operation The operation to perform
+	 * @return The result of the operation
+	 */
 	public <T> T doOptimistically(T init, OptimisticOperation<T> operation) {
 		ThreadState state = theStampCollection.get();
 		if (state.stamp > 0) // Already holding a lock
