@@ -1,16 +1,7 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -482,16 +473,19 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			throw new IllegalArgumentException(fromIndex + ">" + toIndex);
 		if (fromIndex < 0)
 			throw new IndexOutOfBoundsException("" + fromIndex);
-		if (toIndex > theSize)
-			throw new IndexOutOfBoundsException(toIndex + " of " + theSize);
 		try (Transaction t = lock(true, null)) {
+			if (toIndex > theSize)
+				throw new IndexOutOfBoundsException(toIndex + " of " + theSize);
 			if (fromIndex < theSize - toIndex) {
 				moveContents(theOffset, fromIndex, count);
 				clearEntries(theOffset, fromIndex);
 				theOffset = (theOffset + count) % theArray.length;
-				theSize -= count;
-				theLocker.indexChanged();
+			} else {
+				moveContents(theOffset + toIndex, theSize - toIndex, -count);
+				clearEntries(translateToInternalIndex(theSize - count), count);
 			}
+			theSize -= count;
+			theLocker.indexChanged();
 		}
 	}
 
@@ -1327,7 +1321,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 				int offset = theOffset;
 				int size = theSize;
 				int start = theStart;
-				int end = theStart;
+				int end = theEnd;
 				if (!theSubLock.check(stamp))
 					return -1;
 				int index = start;
@@ -1353,7 +1347,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 				int offset = theOffset;
 				int size = theSize;
 				int start = theStart;
-				int end = theStart;
+				int end = theEnd;
 				if (!theSubLock.check(stamp))
 					return -1;
 				int index = end - 1;
@@ -1495,6 +1489,9 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 						theSubLock.indexChanged(-1);
 						return true;
 					}
+					ti++;
+					if (ti == theArray.length)
+						ti = 0;
 				}
 			}
 			return false;
@@ -1507,7 +1504,8 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			try (Transaction t = theSubLock.lockForWrite()) {
 				if (index >= theEnd - theStart)
 					throw new IndexOutOfBoundsException(index + " of " + (theEnd - theStart));
-				E old = internalRemove(index, translateToInternalIndex(theStart + index));
+				E old = internalRemove(theStart + index, translateToInternalIndex(theStart + index));
+				theEnd--;
 				theSubLock.indexChanged(-1);
 				return old;
 			}
@@ -1556,8 +1554,8 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 				int cap = theArray.length;
 				int inspect = translateToInternalIndex(theStart);
 				int copyTo = inspect;
-				int dest = (theOffset + theEnd) % cap;
-				while (inspect != dest) {
+				int dest = translateToInternalIndex(theEnd);
+				do {
 					E value = (E) theArray[inspect];
 					if (filter.test(value)) {
 						removed++;
@@ -1571,11 +1569,16 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 					inspect++;
 					if (inspect == cap)
 						inspect = 0;
-				}
+				} while (inspect != dest);
+				moveContents(theEnd, theSize - theEnd, -removed);
+				copyTo += theSize - theEnd;
+				if (copyTo > cap)
+					copyTo -= cap;
 				clearEntries(copyTo, removed);
 				theSize -= removed;
 				theEnd -= removed;
 				theSubLock.indexChanged(-removed);
+				theLocker.indexChanged();
 			}
 			return removed > 0;
 		}
@@ -1654,15 +1657,94 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 					theEnd++;
 			}));
 		}
-	}
 
-	static class ThreadState {
-		long stamp;
-		boolean isWrite;
+		@Override
+		public int hashCode() {
+			return theSubLock.doOptimistically(0, (h, stamp) -> {
+				Object[] array = theArray;
+				int offset = theOffset;
+				int size = theSize;
+				int start = theStart;
+				int end = theEnd;
+				if (!theSubLock.check(stamp))
+					return 0;
+				int hash = 0;
+				int index = start;
+				int t = translateToInternalIndex(array, offset, size, index);
+				for (; index < end; index++) {
+					Object v = array[t];
+					if (!theSubLock.check(stamp))
+						return 0;
+					hash += v == null ? 0 : v.hashCode();
+					t++;
+					if (t == array.length)
+						t = 0;
+				}
+				return hash;
+			});
+		}
 
-		void set(long stamp, boolean write) {
-			this.stamp = stamp;
-			isWrite = write;
+		@Override
+		public boolean equals(Object o) {
+			if (!(o instanceof Collection))
+				return false;
+			Collection<?> c = (Collection<?>) o;
+			return theSubLock.doOptimistically(false, (b, stamp) -> {
+				Object[] array = theArray;
+				int offset = theOffset;
+				int size = theSize;
+				int start = theStart;
+				int end = theEnd;
+				if (!theSubLock.check(stamp))
+					return false;
+				if (c.size() != size)
+					return false;
+				int index = start;
+				int t = translateToInternalIndex(array, offset, size, index);
+				Iterator<?> iter = c.iterator();
+				for (; index < end; index++) {
+					Object v = array[t];
+					if (!iter.hasNext())
+						return false;
+					Object co = iter.next();
+					if (!theSubLock.check(stamp))
+						return false;
+					if (!Objects.equals(v, co))
+						return false;
+					t++;
+					if (t == array.length)
+						t = 0;
+				}
+				return true;
+			});
+		}
+
+		@Override
+		public String toString() {
+			return theSubLock.doOptimistically(new StringBuilder(), (str, stamp) -> {
+				Object[] array = theArray;
+				int offset = theOffset;
+				int size = theSize;
+				int start = theStart;
+				int end = theEnd;
+				if (!theSubLock.check(stamp))
+					return str;
+				str.setLength(0);
+				int index = start;
+				int t = translateToInternalIndex(array, offset, size, index);
+				for (; index < end; index++) {
+					Object v = array[t];
+					if (!theSubLock.check(stamp))
+						return str;
+					if (index > start)
+						str.append(", ");
+					str.append(v);
+					t++;
+					if (t == array.length)
+						t = 0;
+				}
+				return str;
+			}).toString();
 		}
 	}
 }
