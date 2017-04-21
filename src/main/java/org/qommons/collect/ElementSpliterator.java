@@ -62,6 +62,7 @@ public interface ElementSpliterator<T> extends Spliterator<T> {
 	}
 
 	/**
+	 * @param <V> The type to map to
 	 * @param map The mapping function
 	 * @return A new ElementSpliterator whose values are the given map applied to this ElementSpliterator's values
 	 */
@@ -70,6 +71,7 @@ public interface ElementSpliterator<T> extends Spliterator<T> {
 	}
 
 	/**
+	 * @param <V> The compile-time type to map to
 	 * @param type The run-time type of the map result
 	 * @param map The mapping function
 	 * @param reverse The reverse-function for allowing {@link CollectionElement#set(Object, Object) replacement} of values
@@ -91,6 +93,7 @@ public interface ElementSpliterator<T> extends Spliterator<T> {
 	ElementSpliterator<T> trySplit();
 
 	/**
+	 * @param <E> The compile-time type for the spliterator
 	 * @param type The type for the ElementSpliterator
 	 * @return An empty ElementSpliterator of the given type
 	 */

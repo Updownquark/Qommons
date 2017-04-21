@@ -1,16 +1,27 @@
-package org.qommons;
+package org.qommons.collect;
 
 import java.util.Collection;
-import java.util.Iterator;
+
+import org.qommons.ArrayUtils;
 
 /**
  * A collection that can be reversed
  * 
  * @param <E> The type of values in the collection
  */
-public interface ReversibleCollection<E> extends Collection<E> {
+public interface ReversibleCollection<E> extends BetterCollection<E> {
 	/** @return An iterable that iterates through this collection's values in reverse */
-	Iterable<E> descending();
+	default Iterable<E> descending() {
+		return () -> descendingIterator();
+	}
+
+	/** @return An iterator to traverse this collection's elements in reverse */
+	default Betterator<E> descendingIterator() {
+		return new ElementSpliterator.SpliteratorBetterator<>(spliterator());
+	}
+
+	@Override
+	ReversibleSpliterator<E> spliterator();
 
 	/** @return A collection that is identical to this one, but with its elements reversed */
 	default ReversibleCollection<E> reverse() {
@@ -39,8 +50,13 @@ public interface ReversibleCollection<E> extends Collection<E> {
 		}
 
 		@Override
-		public Iterator<E> iterator() {
-			return theWrapped.descending().iterator();
+		public Betterator<E> descendingIterator() {
+			return theWrapped.iterator();
+		}
+
+		@Override
+		public ReversibleSpliterator<E> spliterator() {
+			return theWrapped.spliterator().reverse();
 		}
 
 		@Override

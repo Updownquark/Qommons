@@ -8,7 +8,6 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-import org.qommons.ReversibleCollection;
 import org.qommons.Transaction;
 import org.qommons.value.Value;
 

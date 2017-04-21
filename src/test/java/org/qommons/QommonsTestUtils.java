@@ -8,21 +8,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.NavigableSet;
-import java.util.Objects;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -140,6 +126,19 @@ public class QommonsTestUtils {
 		if (check != null)
 			check.accept(coll);
 
+		// Test toArray() methods. Assuming that the collection's iteration order is the same as the order in the returned array.
+		Object[] array = coll.toArray();
+		assertEquals(coll.size(), array.length);
+		int idx = 0;
+		for (Integer v : coll)
+			assertEquals(v, array[idx++]);
+		array = coll.toArray(new Integer[0]);
+		assertEquals(Integer[].class, array.getClass());
+		assertEquals(coll.size(), array.length);
+		idx = 0;
+		for (Integer v : coll)
+			assertEquals(v, array[idx++]);
+
 		ArrayList<Integer> copy = new ArrayList<>(coll); // More iterator testing
 		assertThat(copy, collectionsEqual(coll, coll instanceof List));
 
@@ -158,7 +157,6 @@ public class QommonsTestUtils {
 		assertThat(coll, not(contains(2)));
 		// Leave the collection empty
 
-		// Not testing toArray() methods. These are pretty simple, but should probably put those in some time.
 		// TODO Test ReversibleCollections
 	}
 
