@@ -1153,7 +1153,9 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 		@Override
 		public void add(E e) {
 			try (Transaction t = ((ArraySpliterator) backing).theSubLock.lockForWrite()) {
-				int index = nextIndex();
+				int index = ((ArraySpliterator) backing).getIndex();
+				if (!isCachedNext())
+					index++;
 				CircularArrayList.this.add(index, e);
 				((ArraySpliterator) backing).theStart += theAdvanced;
 				((ArraySpliterator) backing).theEnd++;
@@ -1459,22 +1461,26 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 				int oldSize = theSize;
 				CircularArrayList.this.addAll(theStart + index, c);
 				if (theSize != oldSize) {
-					int moveStartBack = theAdvanced;
-					int moveEndFwd = theAdded - theAdvanced;
-					if (moveStartBack > theStart) {
-						moveEndFwd += moveStartBack - theStart;
-						theStart = 0;
-					} else
-						theStart -= moveStartBack;
-					if (theEnd + moveEndFwd > theSize)
-						theEnd = theSize;
-					else
-						theEnd += moveEndFwd;
+					adjustIndicesOnAdd(theAdvanced, theAdded);
 					theSubLock.indexChanged(theAdded - theAdvanced);
 					return true;
 				} else
 					return false;
 			}
+		}
+
+		private void adjustIndicesOnAdd(int advanced, int added) {
+			int moveStartBack = advanced;
+			int moveEndFwd = added - advanced;
+			if (moveStartBack > theStart) {
+				moveEndFwd += moveStartBack - theStart;
+				theStart = 0;
+			} else
+				theStart -= moveStartBack;
+			if (theEnd + moveEndFwd > theSize)
+				theEnd = theSize;
+			else
+				theEnd += moveEndFwd;
 		}
 
 		@Override
@@ -1622,13 +1628,10 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			if (index > end - start)
 				throw new IndexOutOfBoundsException(index + " of " + (end - start));
 			return new ListIter(new ArraySpliterator(start, end, start + index, true, theSubLock.subLock(added -> {
-				if (theAdvanced > 0) {
-					if (theStart > 0)
-						theStart--;
-					else if (theEnd < theSize)
-						theEnd++;
-				} else
-					theEnd++;
+				if (added > 0)
+					adjustIndicesOnAdd(theAdvanced, added);
+				else
+					theEnd += added;
 			})));
 		}
 
@@ -1648,13 +1651,10 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 			int from = start + fromIndex;
 			int to = start + toIndex;
 			return new SubList(from, to, theSubLock.subLock(added -> {
-				if (theAdvanced > 0) {
-					if (theStart > 0)
-						theStart--;
-					else if (theEnd < theSize)
-						theEnd++;
-				} else
-					theEnd++;
+				if (added > 0)
+					adjustIndicesOnAdd(theAdvanced, added);
+				else
+					theEnd += added;
 			}));
 		}
 
@@ -1697,7 +1697,7 @@ public class CircularArrayList<E> implements BetterCollection<E>, ReversibleColl
 				int end = theEnd;
 				if (!theSubLock.check(stamp))
 					return false;
-				if (c.size() != size)
+				if (c.size() != end - start)
 					return false;
 				int index = start;
 				int t = translateToInternalIndex(array, offset, size, index);
