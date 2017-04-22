@@ -25,7 +25,9 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, List<E> {
 	}
 
 	@Override
-	ReversibleSpliterator<E> spliterator();
+	default ReversibleSpliterator<E> spliterator() {
+		return ReversibleCollection.super.spliterator();
+	}
 
 	@Override
 	default ReversibleList<E> reverse() {

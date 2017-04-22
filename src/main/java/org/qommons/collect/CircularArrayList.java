@@ -18,6 +18,8 @@ import com.google.common.reflect.TypeToken;
  * 
  * TODO What happens with add(index, e) or addAll(index, c) when capacity is reached?
  * 
+ * TODO Make reverse() thread-safe
+ * 
  * @param <E> The type of elements in the list
  */
 public class CircularArrayList<E> implements ReversibleList<E>, TransactableList<E>, Deque<E> {
@@ -126,8 +128,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	}
 
 	@Override
-	public ReversibleSpliterator<E> spliterator() {
-		return spliterator(true);
+	public Betterator<E> descendingIterator() {
+		return ReversibleList.super.descendingIterator();
 	}
 
 	@Override
@@ -677,22 +679,12 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 
 	@Override
 	public ListIterator<E> listIterator(int index) {
-		return new ListIter(new ArraySpliterator(0, -1, index, true, theLocker.subLock()));
+		return new ListIter(new ArraySpliterator(0, -1, index, theLocker.subLock()));
 	}
 
 	@Override
 	public SubList subList(int fromIndex, int toIndex) {
 		return new SubList(fromIndex, toIndex, theLocker.subLock());
-	}
-
-	@Override
-	public Iterable<E> descending() {
-		return () -> descendingIterator();
-	}
-
-	@Override
-	public Betterator<E> descendingIterator() {
-		return new ElementSpliterator.SpliteratorBetterator<>(spliterator(false));
 	}
 
 	@Override
@@ -820,8 +812,9 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	 * @param forward Whether the spliterator's {@link Spliterator#tryAdvance(Consumer)} method should go forward in index or backward
 	 * @return The spliterator
 	 */
+	@Override
 	public ReversibleSpliterator<E> spliterator(boolean forward) {
-		return new ArraySpliterator(0, theSize, forward ? 0 : theSize, forward, theLocker.subLock());
+		return new ArraySpliterator(0, theSize, forward ? 0 : theSize, theLocker.subLock());
 	}
 
 	private final int translateToInternalIndex(int index) {
@@ -983,7 +976,6 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	}
 
 	private class ArraySpliterator implements ReversibleSpliterator<E> {
-		private final boolean isForward;
 		private int theStart;
 		private int theEnd;
 		private int theCursor; // The index of the element that would be given to the consumer for tryAdvance()
@@ -992,7 +984,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		private final CollectionElement<E> element;
 		private final StampedLockingStrategy.SubLockingStrategy theSubLock;
 
-		ArraySpliterator(int start, int end, int initIndex, boolean forward, StampedLockingStrategy.SubLockingStrategy subLock) {
+		ArraySpliterator(int start, int end, int initIndex, StampedLockingStrategy.SubLockingStrategy subLock) {
 			int size = theSize;
 			subLock.check();
 			if (end < 0)
@@ -1003,7 +995,6 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				throw new IndexOutOfBoundsException(end + " of " + size);
 			if (start > end)
 				throw new IndexOutOfBoundsException(start + ">" + end);
-			isForward = forward;
 			theStart = start;
 			theEnd = end;
 			theCursor = initIndex;
@@ -1104,8 +1095,6 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		}
 
 		private boolean tryElement(Consumer<? super CollectionElement<E>> action, boolean advance) {
-			if (!isForward)
-				advance = !advance;
 			if (advance) {
 				if (theCursor >= theEnd)
 					return false;
@@ -1132,10 +1121,10 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			int mid = (theStart + theEnd) / 2;
 			ArraySpliterator split;
 			if (theCursor <= mid) {
-				split = new ArraySpliterator(mid, theEnd, mid, isForward, theSubLock.siblingLock());
+				split = new ArraySpliterator(mid, theEnd, mid, theSubLock.siblingLock());
 				theEnd = mid;
 			} else {
-				split = new ArraySpliterator(theStart, mid, mid, isForward, theSubLock.siblingLock());
+				split = new ArraySpliterator(theStart, mid, mid, theSubLock.siblingLock());
 				theStart = mid;
 			}
 			return split;
@@ -1184,6 +1173,10 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 					t++;
 					if (t == array.length)
 						t = 0;
+				}
+				if (index == cursor) {
+					str.append('*');
+					str.append('*');
 				}
 				str.append('>');
 				return str;
@@ -1262,6 +1255,11 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			int end=theEnd;
 			theSubLock.check();
 			return start == end;
+		}
+
+		@Override
+		public Betterator<E> iterator() {
+			return ReversibleList.super.iterator();
 		}
 
 		@Override
@@ -1432,27 +1430,10 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		}
 
 		@Override
-		public Betterator<E> iterator() {
-			return new ElementSpliterator.SpliteratorBetterator<>(spliterator());
-		}
-
-		@Override
-		public Iterable<E> descending() {
-			return () -> new ElementSpliterator.SpliteratorBetterator<>(spliterator(false));
-		}
-
-		@Override
-		public ReversibleSpliterator<E> spliterator() {
-			return spliterator(true);
-		}
-
-		/**
-		 * @param forward Whether the spliterator's {@link Spliterator#tryAdvance(Consumer)} method should go forward in index or backward
-		 * @return The spliterator
-		 */
 		public ReversibleSpliterator<E> spliterator(boolean forward) {
 			// Can only remove, so no need to account for capacity dropping
-			return new ArraySpliterator(theStart, theEnd, theStart, forward, theSubLock.subLock(added -> theEnd += added));
+			int init = forward ? theStart : theEnd;
+			return new ArraySpliterator(theStart, theEnd, init, theSubLock.subLock(added -> theEnd += added));
 		}
 
 		@Override
@@ -1714,7 +1695,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			theSubLock.check();
 			if (index > end - start)
 				throw new IndexOutOfBoundsException(index + " of " + (end - start));
-			return new ListIter(new ArraySpliterator(start, end, start + index, true, theSubLock.subLock(added -> {
+			return new ListIter(new ArraySpliterator(start, end, start + index, theSubLock.subLock(added -> {
 				if (added > 0)
 					adjustIndicesOnAdd(theAdvanced, added);
 				else

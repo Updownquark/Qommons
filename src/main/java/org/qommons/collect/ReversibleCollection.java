@@ -1,6 +1,8 @@
 package org.qommons.collect;
 
 import java.util.Collection;
+import java.util.Iterator;
+import java.util.Objects;
 
 import org.qommons.ArrayUtils;
 
@@ -17,11 +19,19 @@ public interface ReversibleCollection<E> extends BetterCollection<E> {
 
 	/** @return An iterator to traverse this collection's elements in reverse */
 	default Betterator<E> descendingIterator() {
-		return new ElementSpliterator.SpliteratorBetterator<>(spliterator());
+		return new ElementSpliterator.SpliteratorBetterator<>(spliterator(false).reverse());
 	}
 
 	@Override
-	ReversibleSpliterator<E> spliterator();
+	default ReversibleSpliterator<E> spliterator() {
+		return spliterator(true);
+	}
+
+	/**
+	 * @param fromStart Whether the spliterator should begin at the beginning or the end of this collection
+	 * @return The spliterator
+	 */
+	ReversibleSpliterator<E> spliterator(boolean fromStart);
 
 	/** @return A collection that is identical to this one, but with its elements reversed */
 	default ReversibleCollection<E> reverse() {
@@ -50,23 +60,28 @@ public interface ReversibleCollection<E> extends BetterCollection<E> {
 		}
 
 		@Override
+		public Iterable<E> descending() {
+			return () -> theWrapped.iterator();
+		}
+
+		@Override
+		public Betterator<E> iterator() {
+			return theWrapped.descendingIterator();
+		}
+
+		@Override
 		public Betterator<E> descendingIterator() {
 			return theWrapped.iterator();
 		}
 
 		@Override
-		public ReversibleSpliterator<E> spliterator() {
-			return theWrapped.spliterator().reverse();
+		public ReversibleSpliterator<E> spliterator(boolean fromStart) {
+			return theWrapped.spliterator(!fromStart).reverse();
 		}
 
 		@Override
 		public ReversibleCollection<E> reverse() {
 			return theWrapped;
-		}
-
-		@Override
-		public Iterable<E> descending() {
-			return () -> theWrapped.iterator();
 		}
 
 		@Override
@@ -126,6 +141,46 @@ public interface ReversibleCollection<E> extends BetterCollection<E> {
 		@Override
 		public void clear() {
 			theWrapped.clear();
+		}
+
+		@Override
+		public int hashCode() {
+			int hash = 0;
+			for (E v : this) {
+				hash += v == null ? 0 : v.hashCode();
+			}
+			return hash;
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (!(o instanceof Collection))
+				return false;
+			Collection<?> c = (Collection<?>) o;
+			Iterator<E> iter = iterator();
+			Iterator<?> cIter = c.iterator();
+			while (iter.hasNext()) {
+				if (!cIter.hasNext())
+					return false;
+				if (Objects.equals(iter.next(), cIter.next()))
+					return false;
+			}
+			if (cIter.hasNext())
+				return false;
+			return true;
+		}
+
+		@Override
+		public String toString() {
+			StringBuilder str = new StringBuilder();
+			boolean first = true;
+			for (E v : this) {
+				if (!first)
+					str.append(", ");
+				first = false;
+				str.append(v);
+			}
+			return str.toString();
 		}
 	}
 }

@@ -103,6 +103,16 @@ public interface ReversibleSpliterator<T> extends ElementSpliterator<T> {
 		}
 
 		@Override
+		public boolean tryAdvanceElement(Consumer<? super CollectionElement<T>> action) {
+			return theWrapped.tryReverseElement(action);
+		}
+
+		@Override
+		public boolean tryReverseElement(Consumer<? super CollectionElement<T>> action) {
+			return theWrapped.tryAdvanceElement(action);
+		}
+
+		@Override
 		public void forEachElement(Consumer<? super CollectionElement<T>> action) {
 			theWrapped.forEachReverseElement(action);
 		}
@@ -115,16 +125,6 @@ public interface ReversibleSpliterator<T> extends ElementSpliterator<T> {
 		@Override
 		public ReversibleSpliterator<T> reverse() {
 			return theWrapped;
-		}
-
-		@Override
-		public boolean tryAdvanceElement(Consumer<? super CollectionElement<T>> action) {
-			return theWrapped.tryReverseElement(action);
-		}
-
-		@Override
-		public boolean tryReverseElement(Consumer<? super CollectionElement<T>> action) {
-			return theWrapped.tryAdvanceElement(action);
 		}
 
 		@Override

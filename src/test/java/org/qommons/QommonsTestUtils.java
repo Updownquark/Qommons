@@ -14,6 +14,8 @@ import java.util.function.Function;
 
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
+import org.qommons.collect.ReversibleCollection;
+import org.qommons.collect.ReversibleSpliterator;
 
 /** Testing utilities */
 public class QommonsTestUtils {
@@ -56,6 +58,73 @@ public class QommonsTestUtils {
 			}
 		}
 
+		// Test ReversibleCollections
+		List<Collection<Integer>> derived = new ArrayList<>();
+		if (coll instanceof ReversibleCollection) {
+			ReversibleCollection<Integer> rc = (ReversibleCollection<Integer>) coll;
+			ReversibleCollection<Integer> rrc = rc.reverse();
+			derived.add(rrc);
+			Consumer<? super T> fCheck = check;
+			ArrayList<Integer> copy = new ArrayList<>();
+			Consumer<Collection<?>> rCheck = c -> {
+				// Test that reversed is really reversed
+				assertEquals(rc.size(), rrc.size());
+				for (Integer v : rc)
+					copy.add(v);
+				Collections.reverse(copy);
+				assertThat(rrc, collectionsEqual(copy, true));
+				copy.clear();
+
+				// Test descending iteration
+				Iterator<Integer> rIter = rc.iterator();
+				Iterator<Integer> rrIter = rrc.descendingIterator();
+				while (rIter.hasNext()) {
+					assertTrue(rrIter.hasNext());
+					assertEquals(rIter.next(), rrIter.next());
+				}
+				assertFalse(rrIter.hasNext());
+
+				rIter = rc.descendingIterator();
+				rrIter = rrc.iterator();
+				while (rIter.hasNext()) {
+					assertTrue(rrIter.hasNext());
+					assertEquals(rIter.next(), rrIter.next());
+				}
+				assertFalse(rrIter.hasNext());
+
+				// Test reversible spliterator
+				ReversibleSpliterator<Integer> rSplit = rc.spliterator();
+				ReversibleSpliterator<Integer> rrSplit = rc.spliterator(false);
+				int count = 0;
+				Object[] prevV = new Object[1];
+				splitLoop: while (true) {
+					switch (count % 3) {
+					case 0:
+					case 1:
+						if (!rSplit.tryAdvance(v -> {
+							assertTrue(rrSplit.tryReverse(v2 -> {
+								assertEquals(v, v2);
+							}));
+							prevV[0] = v;
+						}))
+							break splitLoop;
+						break;
+					default:
+						assertTrue(rSplit.tryReverse(v -> {
+							assertEquals(prevV[0], v);
+							assertTrue(rrSplit.tryAdvance(v2 -> {
+								assertEquals(v, v2);
+							}));
+						}));
+					}
+					count++;
+				}
+
+				if (fCheck != null)
+					fCheck.accept(coll);
+			};
+			check = rCheck;
+		}
 		if (coll instanceof List)
 			testList((List<Integer>) coll, (Consumer<? super List<Integer>>) check, depth);
 		else if (coll instanceof NavigableSet)
@@ -64,6 +133,11 @@ public class QommonsTestUtils {
 			testSet((Set<Integer>) coll, (Consumer<? super Set<Integer>>) check);
 		else
 			testBasicCollection(coll, check);
+
+		Consumer<? super T> fCheck = check;
+		for (Collection<Integer> d : derived) {
+			testCollection(d, c -> fCheck.accept(coll), null, depth + 1);
+		}
 	}
 
 	/**
@@ -156,8 +230,6 @@ public class QommonsTestUtils {
 			check.accept(coll);
 		assertThat(coll, not(contains(2)));
 		// Leave the collection empty
-
-		// TODO Test ReversibleCollections
 	}
 
 	private static <T extends Set<Integer>> void testSet(T set, Consumer<? super T> check) {
