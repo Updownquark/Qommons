@@ -124,6 +124,11 @@ public interface ReversibleCollection<E> extends BetterCollection<E> {
 		}
 
 		@Override
+		public boolean containsAny(Collection<?> c) {
+			return theWrapped.containsAny(c);
+		}
+
+		@Override
 		public boolean addAll(Collection<? extends E> c) {
 			return theWrapped.addAll(c);
 		}

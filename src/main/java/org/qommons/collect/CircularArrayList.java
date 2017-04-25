@@ -182,6 +182,30 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	}
 
 	@Override
+	public boolean containsAny(Collection<?> c) {
+		return theLocker.doOptimistically(false, (bool, stamp) -> {
+			Object[] array = theArray;
+			int offset = theOffset;
+			int size = theSize;
+			for (Object o : c) {
+				int t = offset;
+				for (int i = 0; i < size; i++) {
+					Object v = array[t];
+					if (!theLocker.check(stamp))
+						return false;
+					if (Objects.equals(v, o)) {
+						return true;
+					}
+					t++;
+					if (t == array.length)
+						t = 0;
+				}
+			}
+			return false;
+		});
+	}
+
+	@Override
 	public Object[] toArray() {
 		return theLocker.doOptimistically((Object[]) null, (a, stamp) -> {
 			Object[] array = theArray;
@@ -1313,6 +1337,33 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 						return false;
 				}
 				return true;
+			});
+		}
+
+		@Override
+		public boolean containsAny(Collection<?> c) {
+			return theLocker.doOptimistically(false, (bool, stamp) -> {
+				Object[] array = theArray;
+				int offset = theOffset;
+				int size = theSize;
+				int start = theStart;
+				int end = theEnd;
+				for (Object o : c) {
+					int index = start;
+					int t = translateToInternalIndex(array, offset, size, index);
+					for (; index < end; index++) {
+						Object v = array[t];
+						if (!theSubLock.check(stamp))
+							return false;
+						if (Objects.equals(v, o)) {
+							return true;
+						}
+						t++;
+						if (t == array.length)
+							t = 0;
+					}
+				}
+				return false;
 			});
 		}
 
