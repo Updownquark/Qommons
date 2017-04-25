@@ -94,7 +94,7 @@ public class QommonsTestUtils {
 
 				// Test reversible spliterator
 				ReversibleSpliterator<Integer> rSplit = rc.spliterator();
-				ReversibleSpliterator<Integer> rrSplit = rc.spliterator(false);
+				ReversibleSpliterator<Integer> rrSplit = rrc.spliterator(false);
 				int count = 0;
 				Object[] prevV = new Object[1];
 				splitLoop: while (true) {
