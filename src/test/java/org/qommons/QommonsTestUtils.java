@@ -551,7 +551,8 @@ public class QommonsTestUtils {
 		listIter2 = test.listIterator(list.size() / 2);
 		int i;
 		for (i = 0; listIter2.hasPrevious(); i++) {
-			assertTrue("On Iteration " + i, listIter1.hasPrevious());
+			assertTrue("On Iteration " + i, //
+				listIter1.hasPrevious());
 			int prev = listIter1.previous();
 			assertThat("On Iteration " + i, prev, equalTo(listIter2.previous()));
 			switch (i % 5) {
@@ -559,8 +560,10 @@ public class QommonsTestUtils {
 				int toAdd = i * 17 + 100;
 				listIter1.add(toAdd);
 				listIter2.add(toAdd);
-				assertTrue("On Iteration " + i, listIter1.hasPrevious());
-				assertThat("On Iteration " + i, listIter1.previous(), equalTo(toAdd)); // Back up over the added value
+				assertTrue("On Iteration " + i, //
+					listIter1.hasPrevious());
+				assertThat("On Iteration " + i, //
+					listIter1.previous(), equalTo(toAdd)); // Back up over the added value
 				listIter2.previous();
 				break;
 			case 1:

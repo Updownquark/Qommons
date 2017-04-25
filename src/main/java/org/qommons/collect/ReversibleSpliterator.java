@@ -156,12 +156,8 @@ public interface ReversibleSpliterator<T> extends ElementSpliterator<T> {
 
 		@Override
 		public boolean hasNext() {
-			if (hasNext == Ternian.NONE) {
-				hasNext = Ternian.of(backing.tryAdvanceElement(el -> {
-					element = el;
-					elementIsNext = true;
-				}));
-			}
+			if (hasNext == Ternian.NONE)
+				getElement(true);
 			return hasNext.value;
 		}
 
@@ -169,11 +165,9 @@ public interface ReversibleSpliterator<T> extends ElementSpliterator<T> {
 		public T next() {
 			if (!hasNext())
 				throw new NoSuchElementException();
-			if (!elementIsNext) {
-				backing.tryAdvanceElement(el -> {
-					element = el;
-				});
-			}
+			if (!elementIsNext)
+				getElement(true);
+			move(true);
 			elementIsNext = false;
 			hasPrevious = Ternian.TRUE;
 			hasNext = Ternian.NONE;
@@ -182,12 +176,8 @@ public interface ReversibleSpliterator<T> extends ElementSpliterator<T> {
 
 		@Override
 		public boolean hasPrevious() {
-			if (hasPrevious == Ternian.NONE) {
-				hasPrevious = Ternian.of(backing.tryReverseElement(el -> {
-					element = el;
-					elementIsNext = false;
-				}));
-			}
+			if (hasPrevious == Ternian.NONE)
+				getElement(false);
 			return hasPrevious.value;
 		}
 
@@ -195,16 +185,31 @@ public interface ReversibleSpliterator<T> extends ElementSpliterator<T> {
 		public T previous() {
 			if (!hasPrevious())
 				throw new NoSuchElementException();
-			if (elementIsNext) {
-				backing.tryReverseElement(el -> {
-					element = el;
-				});
-			}
+			if (elementIsNext)
+				getElement(false);
+			move(false);
 			elementIsNext = true;
 			hasPrevious = Ternian.NONE;
 			hasNext = Ternian.TRUE;
 			return element.get();
 		}
+
+		protected void getElement(boolean forward) {
+			if (forward) {
+				if (hasPrevious == Ternian.TRUE && elementIsNext) // Need to advance the spliterator over the cached previous
+					backing.tryAdvance(v -> {
+					});
+				hasNext = Ternian.of(backing.tryAdvanceElement(el -> element = el));
+			} else {
+				if (hasNext == Ternian.TRUE && !elementIsNext) // Need to reverse the spliterator over the cached next
+					backing.tryReverse(v -> {
+					});
+				hasPrevious = Ternian.of(backing.tryReverseElement(el -> element = el));
+			}
+			elementIsNext = forward;
+		}
+
+		protected void move(boolean forward) {}
 
 		@Override
 		public void remove() {
