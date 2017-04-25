@@ -1,11 +1,6 @@
 package org.qommons;
 
-import java.util.ArrayDeque;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Queue;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -530,8 +525,9 @@ public class IterableUtils {
 	 *         copy the values it receives.
 	 */
 	public static <T> Iterable<List<T>> combine(Iterator<? extends Iterable<? extends T>> elements) {
-		ExIterable<List<T>, RuntimeException> exRes = ExIterable
-			.combine(ExIterator.fromIterator(elements).map(elIter -> ExIterable.fromIterable(elIter)));
+		ExIterator<? extends ExIterable<? extends T, RuntimeException>, RuntimeException> exArg = ExIterator.fromIterator(elements)
+			.map(elIter -> ExIterable.fromIterable(elIter));
+		ExIterable<List<T>, RuntimeException> exRes = ExIterable.combine(exArg);
 		return exRes.unsafe();
 	}
 }
