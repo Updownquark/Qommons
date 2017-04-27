@@ -665,7 +665,7 @@ public abstract class QommonsConfig implements Cloneable {
 		for(Element child : children)
 			for(QommonsConfig toAdd : fromXml(child, location, relative))
 				childConfigs.add(toAdd);
-		return new QommonsConfig[] {create(xml.getName(), value, childConfigs.toArray(new QommonsConfig[childConfigs.size()]))};
+		return new QommonsConfig[] { create(deXmlIfy(xml.getName()), value, childConfigs.toArray(new QommonsConfig[childConfigs.size()])) };
 	}
 
 	private static String deXmlIfy(String name) {
