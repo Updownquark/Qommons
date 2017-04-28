@@ -147,6 +147,9 @@ public interface ReversibleSpliterator<T> extends ElementSpliterator<T> {
 		private Ternian hasPrevious;
 		private CollectionElement<T> element;
 		private boolean elementIsNext;
+		// False if the spliterator's cursor is on the leading (left) side of the cached element, true if on the trailing (right) side
+		private boolean spliteratorSide;
+		private boolean isReadyForRemove;
 
 		public PartialListIterator(ReversibleSpliterator<T> backing) {
 			this.backing = backing;
@@ -171,6 +174,7 @@ public interface ReversibleSpliterator<T> extends ElementSpliterator<T> {
 			elementIsNext = false;
 			hasPrevious = Ternian.TRUE;
 			hasNext = Ternian.NONE;
+			isReadyForRemove = true;
 			return element.get();
 		}
 
@@ -191,50 +195,58 @@ public interface ReversibleSpliterator<T> extends ElementSpliterator<T> {
 			elementIsNext = true;
 			hasPrevious = Ternian.NONE;
 			hasNext = Ternian.TRUE;
+			isReadyForRemove = true;
 			return element.get();
 		}
 
 		protected void getElement(boolean forward) {
 			if (forward) {
-				if (hasPrevious == Ternian.TRUE && elementIsNext) // Need to advance the spliterator over the cached previous
+				if (hasPrevious == Ternian.TRUE && !spliteratorSide) // Need to advance the spliterator over the cached previous
 					backing.tryAdvance(v -> {
 					});
 				hasNext = Ternian.of(backing.tryAdvanceElement(el -> element = el));
 			} else {
-				if (hasNext == Ternian.TRUE && !elementIsNext) // Need to reverse the spliterator over the cached next
+				if (hasNext == Ternian.TRUE && spliteratorSide) // Need to reverse the spliterator over the cached next
 					backing.tryReverse(v -> {
 					});
 				hasPrevious = Ternian.of(backing.tryReverseElement(el -> element = el));
 			}
+			spliteratorSide = forward;
 			elementIsNext = forward;
+			isReadyForRemove = false;
 		}
 
 		protected void move(boolean forward) {}
 
 		@Override
 		public void remove() {
-			if (element == null)
-				throw new IllegalStateException("Iteration has not begun");
+			if (!isReadyForRemove)
+				throw new UnsupportedOperationException("Element has already been removed or iteration has not begun");
 			element.remove();
-			element = null;
-			hasPrevious = Ternian.NONE;
+			clearCache();
 		}
 
 		@Override
 		public void set(T e) {
-			if (element == null)
-				throw new IllegalStateException("Iteration has not begun");
+			if (!isReadyForRemove)
+				throw new UnsupportedOperationException("Element has been removed or iteration has not begun");
 			element.set(e, null);
-		}
-
-		protected boolean isCachedNext() {
-			return element != null && elementIsNext;
 		}
 
 		protected void clearCache() {
 			element = null;
 			hasNext = Ternian.NONE;
 			hasPrevious = Ternian.NONE;
+			isReadyForRemove = false;
+		}
+
+		protected int getSpliteratorCursorOffset() {
+			if (element == null)
+				return 0;
+			else if (elementIsNext)
+				return spliteratorSide ? 1 : 0;
+			else
+				return spliteratorSide ? 0 : -1;
 		}
 
 		@Override

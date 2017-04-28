@@ -1003,7 +1003,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		private int theStart;
 		private int theEnd;
 		private int theCursor; // The index of the element that would be given to the consumer for tryAdvance()
-		private int theTranslatedCursor;
+		private int theCurrentIndex; // The index of the element last returned by this iterator from tryAdvance or tryReverse()
+		private int theTranslatedIndex;
 		private boolean elementExists;
 		private final CollectionElement<E> element;
 		private final StampedLockingStrategy.SubLockingStrategy theSubLock;
@@ -1022,8 +1023,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			theStart = start;
 			theEnd = end;
 			theCursor = initIndex;
+			theCurrentIndex = initIndex; // Just for toString()
 			theSubLock = subLock;
-			theTranslatedCursor = (theCursor + theOffset) % theArray.length;
 			element = new CollectionElement<E>() {
 				@Override
 				public TypeToken<E> getType() {
@@ -1048,8 +1049,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 						throw new IllegalArgumentException("Element has been removed");
 					E old;
 					try (Transaction t = theSubLock.lockForWrite()) {
-						old = (E) theArray[theTranslatedCursor];
-						theArray[theTranslatedCursor] = value;
+						old = (E) theArray[theTranslatedIndex];
+						theArray[theTranslatedIndex] = value;
 					}
 					return old;
 				}
@@ -1060,7 +1061,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 						throw new IllegalStateException("Element has been removed");
 					return theSubLock.doOptimistically(null, (v, stamp) -> {
 						Object[] array = theArray;
-						return theTranslatedCursor < array.length ? (E) array[theTranslatedCursor] : null;
+						return theTranslatedIndex < array.length ? (E) array[theTranslatedIndex] : null;
 					});
 				}
 
@@ -1076,11 +1077,13 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 					if (!elementExists)
 						throw new IllegalArgumentException("Element is already removed");
 					try (Transaction t = theSubLock.lockForWrite()) {
-						internalRemove(theCursor, theTranslatedCursor);
+						if (!elementExists)
+							throw new IllegalArgumentException("Element is already removed");
+						internalRemove(theCurrentIndex, theTranslatedIndex);
 						theEnd--;
+						elementExists = false;
 						theSubLock.indexChanged(-1);
 					}
-					elementExists = false;
 				}
 
 				@Override
@@ -1122,17 +1125,15 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			if (advance) {
 				if (theCursor >= theEnd)
 					return false;
-				if (elementExists) { // Advance the cursor beyond the current element
-					if (theCursor >= theEnd - 1)
-						return false;
-					theCursor++;
-				}
+				theCurrentIndex = theCursor;
+				theCursor++;
 			} else {
 				if (theCursor == theStart)
 					return false;
 				theCursor--;
+				theCurrentIndex = theCursor;
 			}
-			theTranslatedCursor = translateToInternalIndex(theCursor);
+			theTranslatedIndex = translateToInternalIndex(theCurrentIndex);
 			elementExists = true;
 			action.accept(element);
 			return true;
@@ -1154,13 +1155,20 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			return split;
 		}
 
-		int getIndex() {
+		int getStart() {
+			return theStart;
+		}
+
+		int getCursor() {
 			return theCursor;
+		}
+
+		int getRelativeCursor() {
+			return theCursor - theStart;
 		}
 
 		void setCursor(int cursor) {
 			theCursor = cursor;
-			theTranslatedCursor = translateToInternalIndex(cursor);
 		}
 
 		@Override
@@ -1171,7 +1179,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				int size = theSize;
 				int start = theStart;
 				int end = theEnd;
-				int cursor = theCursor;
+				int cursor = theCurrentIndex;
+				boolean ee = elementExists;
 				if (!theSubLock.check(stamp))
 					return str;
 				str.setLength(0);
@@ -1188,11 +1197,11 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 					first = false;
 					if (index == cursor) {
 						str.append('*');
-						if (!elementExists)
+						if (!ee)
 							str.append('*');
 					}
 					str.append(v);
-					if (elementExists && index == cursor)
+					if (ee && index == cursor)
 						str.append('*');
 					t++;
 					if (t == array.length)
@@ -1215,10 +1224,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 
 		@Override
 		public int nextIndex() {
-			int index = ((ArraySpliterator) backing).getIndex() - ((ArraySpliterator) backing).theStart;
-			if (!isCachedNext())
-				index++;
-			return index;
+			return ((ArraySpliterator) backing).getRelativeCursor() - getSpliteratorCursorOffset();
 		}
 
 		@Override
@@ -1227,17 +1233,27 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		}
 
 		@Override
+		public void remove() {
+			super.remove();
+		}
+
+		@Override
 		public void add(E e) {
-			try (Transaction t = ((ArraySpliterator) backing).theSubLock.lockForWrite()) {
-				int index = ((ArraySpliterator) backing).getIndex();
-				if (!isCachedNext())
-					index++;
-				CircularArrayList.this.add(index, e);
-				((ArraySpliterator) backing).theStart += theAdvanced;
-				((ArraySpliterator) backing).theEnd++;
-				((ArraySpliterator) backing).setCursor(index + 1);
-				((ArraySpliterator) backing).theSubLock.indexChanged(1);
+			ArraySpliterator ab = (ArraySpliterator) backing;
+			try (Transaction t = ab.theSubLock.lockForWrite()) {
+				int cursor = ((ArraySpliterator) backing).getCursor() - getSpliteratorCursorOffset();
+				CircularArrayList.this.add(cursor, e);
+				if (theAdvanced > 0) {
+					if (ab.theStart > 0)
+						ab.theStart--;
+					else if (ab.theEnd < theSize)
+						ab.theEnd++;
+				} else
+					ab.theEnd++;
+				ab.theSubLock.indexChanged(1);
+				((ArraySpliterator) backing).setCursor(cursor);
 				clearCache();
+				next();
 			}
 		}
 	}

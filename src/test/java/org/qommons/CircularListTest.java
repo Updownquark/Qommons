@@ -14,6 +14,7 @@ public class CircularListTest {
 	 */
 	@Test
 	public void basicCALTest() {
+		int todo; // TODO Add a check to make sure all non-included elements in the array are always null
 		QommonsTestUtils.testCollection(new CircularArrayList<>(), null, null);
 	}
 
