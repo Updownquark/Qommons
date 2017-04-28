@@ -57,7 +57,7 @@ public interface ExIterator<T, E extends Throwable> {
 		};
 	}
 
-	public static <T> ExIterator<T, RuntimeException> fromIterator(Iterator<T> iterator) {
+	public static <T> ExIterator<T, RuntimeException> fromIterator(Iterator<? extends T> iterator) {
 		return new ExIterator<T, RuntimeException>() {
 			@Override
 			public boolean hasNext() {

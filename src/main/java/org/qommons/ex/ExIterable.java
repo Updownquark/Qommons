@@ -288,7 +288,7 @@ public interface ExIterable<T, E extends Throwable> {
 		};
 	}
 
-	static <T> ExIterable<T, RuntimeException> fromIterable(Iterable<T> values) {
+	static <T> ExIterable<T, RuntimeException> fromIterable(Iterable<? extends T> values) {
 		return new ExIterable<T, RuntimeException>() {
 			@Override
 			public ExIterator<T, RuntimeException> iterator() {
