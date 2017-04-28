@@ -167,7 +167,7 @@ public interface ReversibleCollection<E> extends BetterCollection<E> {
 			while (iter.hasNext()) {
 				if (!cIter.hasNext())
 					return false;
-				if (Objects.equals(iter.next(), cIter.next()))
+				if (!Objects.equals(iter.next(), cIter.next()))
 					return false;
 			}
 			if (cIter.hasNext())
@@ -178,6 +178,7 @@ public interface ReversibleCollection<E> extends BetterCollection<E> {
 		@Override
 		public String toString() {
 			StringBuilder str = new StringBuilder();
+			str.append('[');
 			boolean first = true;
 			for (E v : this) {
 				if (!first)
@@ -185,6 +186,7 @@ public interface ReversibleCollection<E> extends BetterCollection<E> {
 				first = false;
 				str.append(v);
 			}
+			str.append(']');
 			return str.toString();
 		}
 	}

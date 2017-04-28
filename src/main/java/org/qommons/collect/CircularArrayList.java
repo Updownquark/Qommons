@@ -1,7 +1,14 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Deque;
+import java.util.Iterator;
+import java.util.ListIterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -9,6 +16,7 @@ import org.qommons.Transaction;
 import org.qommons.value.Value;
 
 import com.google.common.reflect.TypeToken;
+import com.sun.xml.internal.bind.v2.TODO;
 
 /**
  * A list/deque that uses an array that is indexed circularly. This allows performance improvements due to not having to move array contents
@@ -16,9 +24,13 @@ import com.google.common.reflect.TypeToken;
  * 
  * This class also supports a {@link #setMaxCapacity(int) max capacity} option which will drop elements to maintain a maxiumum size.
  * 
- * TODO What happens with add(index, e) or addAll(index, c) when capacity is reached?
- * 
- * TODO Make reverse() thread-safe
+ * {@link TODO} TODO
+ * <ul>
+ * <li>What happens with add(index, e) or addAll(index, c) when capacity is reached?</li>
+ * <li>Make reverse() thread-safe</li>
+ * <li>Make thread-safety optional</li>
+ * <li>Add optional capacity reduction (and trimToCapacity())</li>
+ * </ul>
  * 
  * @param <E> The type of elements in the list
  */
@@ -1081,6 +1093,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 							throw new IllegalArgumentException("Element is already removed");
 						internalRemove(theCurrentIndex, theTranslatedIndex);
 						theEnd--;
+						if (theCursor > theCurrentIndex)
+							theCursor--;
 						elementExists = false;
 						theSubLock.indexChanged(-1);
 					}
@@ -1153,10 +1167,6 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				theStart = mid;
 			}
 			return split;
-		}
-
-		int getStart() {
-			return theStart;
 		}
 
 		int getCursor() {
@@ -1621,7 +1631,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			try (Transaction t = theSubLock.lockForWrite()) {
 				int index = theEnd - 1;
 				int ti = translateToInternalIndex(index);
-				for (; index >= theStart; index++) {
+				for (; index >= theStart; index--) {
 					if (Objects.equals(theArray[ti], o)) {
 						internalRemove(index, ti);
 						theEnd--;
@@ -1863,6 +1873,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				if (!theSubLock.check(stamp))
 					return str;
 				str.setLength(0);
+				str.append('[');
 				int index = start;
 				int t = translateToInternalIndex(array, offset, size, index);
 				for (; index < end; index++) {
@@ -1876,6 +1887,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 					if (t == array.length)
 						t = 0;
 				}
+				str.append(']');
 				return str;
 			}).toString();
 		}

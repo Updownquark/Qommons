@@ -84,13 +84,16 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, List<E> {
 			return copy;
 		}
 
-		private int reflect(int index, boolean add) {
+		private int reflect(int index, boolean terminalInclusive) {
 			int size = getWrapped().size();
 			if (index < 0)
 				throw new IndexOutOfBoundsException("" + index);
-			if (index > size || (!add && index == size))
+			if (index > size || (!terminalInclusive && index == size))
 				throw new IndexOutOfBoundsException(index + " of " + size);
-			return size - index - 1;
+			int reflected = size - index;
+			if (!terminalInclusive)
+				reflected--;
+			return reflected;
 		}
 
 		@Override
@@ -120,12 +123,12 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, List<E> {
 
 		@Override
 		public int indexOf(Object o) {
-			return getWrapped().lastIndexOf(o);
+			return reflect(getWrapped().lastIndexOf(o), false);
 		}
 
 		@Override
 		public int lastIndexOf(Object o) {
-			return getWrapped().indexOf(o);
+			return reflect(getWrapped().indexOf(o), false);
 		}
 
 		@Override
@@ -137,10 +140,7 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, List<E> {
 		public ListIterator<E> listIterator(int index) {
 			if (index < 0)
 				throw new IndexOutOfBoundsException("" + index);
-			int size = getWrapped().size();
-			if (index > size)
-				throw new IndexOutOfBoundsException(index + " of " + size);
-			ListIterator<E> wrap = getWrapped().listIterator(size - index);
+			ListIterator<E> wrap = getWrapped().listIterator(reflect(index, true));
 			return new ListIterator<E>() {
 				@Override
 				public boolean hasNext() {
@@ -164,12 +164,15 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, List<E> {
 
 				@Override
 				public int nextIndex() {
-					return reflect(wrap.previousIndex(), false);
+					int pi = wrap.previousIndex();
+					if (pi < 0)
+						return getWrapped().size();
+					return reflect(pi, false);
 				}
 
 				@Override
 				public int previousIndex() {
-					return reflect(wrap.nextIndex(), true);
+					return nextIndex() - 1;
 				}
 
 				@Override
@@ -196,10 +199,7 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, List<E> {
 				throw new IndexOutOfBoundsException("" + fromIndex);
 			if (fromIndex > toIndex)
 				throw new IndexOutOfBoundsException(fromIndex + ">" + toIndex);
-			int size = getWrapped().size();
-			if (toIndex > size)
-				throw new IndexOutOfBoundsException(toIndex + " of " + size);
-			return getWrapped().subList(size - toIndex, size - fromIndex).reverse();
+			return getWrapped().subList(reflect(toIndex, true), reflect(fromIndex, true)).reverse();
 		}
 	}
 }
