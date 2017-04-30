@@ -1,40 +1,135 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Deque;
-import java.util.Iterator;
-import java.util.ListIterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
+import org.junit.Assert;
 import org.qommons.Transaction;
 import org.qommons.value.Value;
 
 import com.google.common.reflect.TypeToken;
-import com.sun.xml.internal.bind.v2.TODO;
 
 /**
  * A list/deque that uses an array that is indexed circularly. This allows performance improvements due to not having to move array contents
  * when items are removed from the beginning of the list.
  * 
- * This class also supports a {@link #setMaxCapacity(int) max capacity} option which will drop elements to maintain a maxiumum size.
+ * This class also supports a {@link #setMaxCapacity(int) max capacity} option which will drop elements to maintain a maximum size.
  * 
- * {@link TODO} TODO
+ * {@link ToDo} TODO
  * <ul>
  * <li>What happens with add(index, e) or addAll(index, c) when capacity is reached?</li>
  * <li>Make reverse() thread-safe</li>
- * <li>Make thread-safety optional</li>
  * <li>Add optional capacity reduction (and trimToCapacity())</li>
  * </ul>
  * 
  * @param <E> The type of elements in the list
  */
 public class CircularArrayList<E> implements ReversibleList<E>, TransactableList<E>, Deque<E> {
+	/** Builds a {@link CircularArrayList} */
+	public static class Builder implements Cloneable {
+		private int theInitCapacity;
+		private int theMaxCapacity;
+		private boolean isThreadSafe;
+
+		private Builder() {
+			theInitCapacity = 0;
+			theMaxCapacity = MAX_ARRAY_SIZE;
+			isThreadSafe = true;
+		}
+
+		/**
+		 * @param initCap The initial capacity for the list
+		 * @return This builder
+		 */
+		public Builder withInitCapacity(int initCap) {
+			if (initCap < 0)
+				throw new IllegalArgumentException(initCap + "<0");
+			theInitCapacity = initCap;
+			return this;
+		}
+
+		/**
+		 * @param maxCap The maximum capacity for the list
+		 * @return This builder
+		 * @see CircularArrayList#setMaxCapacity(int)
+		 */
+		public Builder withMaxCapacity(int maxCap) {
+			if (maxCap <= 0)
+				throw new IllegalArgumentException("Max capacity must be at least 1");
+			theMaxCapacity = maxCap;
+			return this;
+		}
+
+		/**
+		 * Makes the list thread-unsafe, but more performant
+		 * 
+		 * @return This builder
+		 */
+		public Builder unsafe() {
+			isThreadSafe = false;
+			return this;
+		}
+
+		/**
+		 * Makes the list thread-safe at a slight performance cost
+		 * 
+		 * @return This builder
+		 */
+		public Builder safe() {
+			isThreadSafe = true;
+			return this;
+		}
+
+		/** @return A copy of this builder */
+		public Builder copy() {
+			Builder builder;
+			try {
+				builder = (Builder) super.clone();
+			} catch (CloneNotSupportedException e) {
+				throw new IllegalStateException(e);
+			}
+			return builder;
+		}
+
+		/** @return The initial capacity for the list */
+		public int getInitCapacity() {
+			return theInitCapacity;
+		}
+
+		/**
+		 * @return The maximum capacity for the list
+		 * @see CircularArrayList#setMaxCapacity(int)
+		 */
+		public int getMaxCapacity() {
+			return theMaxCapacity;
+		}
+
+		/** @return Whether the collection will be thread-safe */
+		public boolean isThreadSafe() {
+			return isThreadSafe;
+		}
+
+		/** @return The locking strategy for the list */
+		public CollectionLockingStrategy makeLockingStrategy() {
+			return isThreadSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy();
+		}
+
+		/**
+		 * @param <E> The type of the list
+		 * @return The built list
+		 */
+		public <E> CircularArrayList<E> build() {
+			return new CircularArrayList<>(this, true);
+		}
+	}
+
+	/** @return A builder to build a customized {@link CircularArrayList} */
+	public static Builder build() {
+		return new Builder();
+	}
+
 	private static final Object[] EMPTY_ARRAY = new Object[0];
 	/**
 	 * The maximum size of array to allocate. Some VMs reserve some header words in an array. Attempts to allocate larger arrays may result
@@ -43,23 +138,41 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	private static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
 
 	private Object[] theArray;
-	private final StampedLockingStrategy theLocker;
+	private final CollectionLockingStrategy theLocker;
+	private final boolean wasBuilt;
 	private int theOffset;
 	private int theSize;
-	private int theMaxCapacity = MAX_ARRAY_SIZE;
+	private int theMaxCapacity;
 
 	private int theAdvanced;
 	private int theAdded;
 
 	/** Creates an empty list */
 	public CircularArrayList() {
-		this(0);
+		this(build(), false);
 	}
 
 	/** @param initCap The initial capacity for the list */
-	public CircularArrayList(int initCap) {
-		theArray = initCap == 0 ? EMPTY_ARRAY : new Object[initCap];
-		theLocker = new StampedLockingStrategy();
+	private CircularArrayList(Builder builder, boolean built) {
+		theArray = builder.getInitCapacity() == 0 ? EMPTY_ARRAY : new Object[builder.getInitCapacity()];
+		theMaxCapacity = builder.getMaxCapacity();
+		theLocker = builder.makeLockingStrategy();
+		wasBuilt = built;
+	}
+
+	void check() {
+		Assert.assertTrue(theSize <= theArray.length);
+		Assert.assertTrue(theArray.length <= theMaxCapacity);
+		
+		int t = theOffset + theSize;
+		if (t > theArray.length)
+			t -= theArray.length;
+		while (t != theOffset) {
+			Assert.assertNull(theArray[t]);
+			t++;
+			if (t == theArray.length)
+				t = 0;
+		}
 	}
 
 	/**
@@ -70,6 +183,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	 * @return This list
 	 */
 	public CircularArrayList<E> setMaxCapacity(int maxCap) {
+		if (wasBuilt)
+			throw new IllegalStateException("This list was built with build() and cannot have its feature set changed directly");
 		if (maxCap <= 0)
 			throw new IllegalArgumentException("Illegal max capacity: " + maxCap);
 		try (Transaction t = lock(true, null)) {
@@ -396,7 +511,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				theArray[translateToInternalIndex(theSize - 1)] = e;
 			}
 			theAdded = 1;
-			theLocker.indexChanged();
+			theLocker.indexChanged(1);
 		}
 		return true;
 	}
@@ -443,7 +558,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 						idx = 0;
 				}
 			}
-			theLocker.indexChanged();
+			theLocker.indexChanged(0); // This value should not matter for the root locker
 		}
 		return true;
 	}
@@ -479,7 +594,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			}
 			theOffset += theAdvanced;
 			theAdded = spaces;
-			theLocker.indexChanged();
+			theLocker.indexChanged(0); // This value should not matter for the root locker
 		}
 		return true;
 	}
@@ -534,7 +649,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	@Override
 	public boolean removeLast(Object o) {
 		try (Transaction t = lock(true, null)) {
-			ReversibleSpliterator<E> iter = spliterator();
+			ReversibleSpliterator<E> iter = spliterator(false);
 			boolean[] found = new boolean[1];
 			while (!found[0] && iter.tryReverseElement(el -> {
 				if (Objects.equals(el.get(), o)) {
@@ -568,7 +683,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				clearEntries(translateToInternalIndex(theSize - count), count);
 			}
 			theSize -= count;
-			theLocker.indexChanged();
+			theLocker.indexChanged(-count);
 		}
 	}
 
@@ -619,7 +734,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			clearEntries(copyTo, removed);
 			theSize -= removed;
 			if (removed > 0)
-				theLocker.indexChanged();
+				theLocker.indexChanged(-removed);
 		}
 		return removed > 0;
 	}
@@ -630,9 +745,10 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			Arrays.fill(theArray, theOffset, Math.min(theOffset + theSize, theArray.length), null);
 			if (theOffset + theSize > theArray.length)
 				Arrays.fill(theArray, 0, theOffset + theSize - theArray.length, null);
+			int preSize = theSize;
 			theSize = 0;
 			theOffset = 0;
-			theLocker.indexChanged();
+			theLocker.indexChanged(-preSize);
 		}
 	}
 
@@ -825,11 +941,10 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				if (newCapacity - capacity < 0)
 					newCapacity = capacity;
 				if (newCapacity - MAX_ARRAY_SIZE > 0)
-					newCapacity = hugeCapacity(capacity);
+					throw new OutOfMemoryError("Cannot allocate an array of size " + newCapacity);
 				Object[] newArray = new Object[newCapacity];
-				if (theSize > 0) {
+				if (theSize > 0)
 					internalArrayCopy(newArray);
-				}
 				theOffset = 0;
 				theArray = newArray;
 			}
@@ -838,16 +953,6 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			return false;
 	}
 
-	private static int hugeCapacity(int minCapacity) {
-		if (minCapacity < 0) // overflow
-			throw new OutOfMemoryError();
-		return (minCapacity > MAX_ARRAY_SIZE) ? Integer.MAX_VALUE : MAX_ARRAY_SIZE;
-	}
-
-	/**
-	 * @param forward Whether the spliterator's {@link Spliterator#tryAdvance(Consumer)} method should go forward in index or backward
-	 * @return The spliterator
-	 */
 	@Override
 	public ReversibleSpliterator<E> spliterator(boolean forward) {
 		return new ArraySpliterator(0, theSize, forward ? 0 : theSize, theLocker.subLock());
@@ -988,7 +1093,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		theArray[translateToInternalIndex(index)] = element;
 		theOffset += theAdvanced;
 		theAdded = 1;
-		theLocker.indexChanged();
+		theLocker.indexChanged(1);
 	}
 
 	private final E internalRemove(int listIndex, int translatedIndex) {
@@ -1007,7 +1112,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			theArray[(theOffset + theSize) % theArray.length] = null; // Remove reference
 			theSize--;
 		}
-		theLocker.indexChanged();
+		theLocker.indexChanged(-1);
 		return removed;
 	}
 
@@ -1019,9 +1124,9 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		private int theTranslatedIndex;
 		private boolean elementExists;
 		private final CollectionElement<E> element;
-		private final StampedLockingStrategy.SubLockingStrategy theSubLock;
+		private final CollectionLockingStrategy.SubLockingStrategy theSubLock;
 
-		ArraySpliterator(int start, int end, int initIndex, StampedLockingStrategy.SubLockingStrategy subLock) {
+		ArraySpliterator(int start, int end, int initIndex, CollectionLockingStrategy.SubLockingStrategy subLock) {
 			int size = theSize;
 			subLock.check();
 			if (end < 0)
@@ -1060,7 +1165,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 					if (!elementExists)
 						throw new IllegalArgumentException("Element has been removed");
 					E old;
-					try (Transaction t = theSubLock.lockForWrite()) {
+					try (Transaction t = theSubLock.lock(true, null)) {
 						old = (E) theArray[theTranslatedIndex];
 						theArray[theTranslatedIndex] = value;
 					}
@@ -1088,7 +1193,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				public void remove() throws IllegalArgumentException {
 					if (!elementExists)
 						throw new IllegalArgumentException("Element is already removed");
-					try (Transaction t = theSubLock.lockForWrite()) {
+					try (Transaction t = theSubLock.lock(true, null)) {
 						if (!elementExists)
 							throw new IllegalArgumentException("Element is already removed");
 						internalRemove(theCurrentIndex, theTranslatedIndex);
@@ -1250,7 +1355,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		@Override
 		public void add(E e) {
 			ArraySpliterator ab = (ArraySpliterator) backing;
-			try (Transaction t = ab.theSubLock.lockForWrite()) {
+			try (Transaction t = ab.theSubLock.lock(true, null)) {
 				int cursor = ((ArraySpliterator) backing).getCursor() - getSpliteratorCursorOffset();
 				CircularArrayList.this.add(cursor, e);
 				if (theAdvanced > 0) {
@@ -1515,7 +1620,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 
 		@Override
 		public boolean add(E e) {
-			try (Transaction t = theSubLock.lockForWrite()) {
+			try (Transaction t = theSubLock.lock(true, null)) {
 				CircularArrayList.this.add(theEnd, e);
 				if (theAdvanced > 0) {
 					if (theStart > 0)
@@ -1533,7 +1638,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		public void add(int index, E element) {
 			if (index < 0)
 				throw new IndexOutOfBoundsException("" + index);
-			try (Transaction t = theSubLock.lockForWrite()) {
+			try (Transaction t = theSubLock.lock(true, null)) {
 				if (index > theEnd - theStart)
 					throw new IndexOutOfBoundsException(index + " of " + (theEnd - theStart));
 				internalAdd(theStart + index, element);
@@ -1552,7 +1657,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		public boolean addAll(Collection<? extends E> c) {
 			if (c.isEmpty())
 				return false;
-			try (Transaction t = theSubLock.lockForWrite()) {
+			try (Transaction t = theSubLock.lock(true, null)) {
 				if (CircularArrayList.this.addAll(theEnd, c)) {
 					int moveStartBack = theAdvanced;
 					int moveEndFwd = theAdded - theAdvanced;
@@ -1578,7 +1683,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				throw new IndexOutOfBoundsException(""+index);
 			if (c.isEmpty())
 				return false;
-			try (Transaction t = theSubLock.lockForWrite()) {
+			try (Transaction t = theSubLock.lock(true, null)) {
 				if (index > theEnd - theStart)
 					throw new IndexOutOfBoundsException(index + " of " + (theEnd - theStart));
 				int oldSize = theSize;
@@ -1608,7 +1713,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 
 		@Override
 		public boolean remove(Object o) {
-			try (Transaction t = theSubLock.lockForWrite()) {
+			try (Transaction t = theSubLock.lock(true, null)) {
 				int index = theStart;
 				int ti = translateToInternalIndex(index);
 				for (; index < theEnd; index++) {
@@ -1628,7 +1733,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 
 		@Override
 		public boolean removeLast(Object o) {
-			try (Transaction t = theSubLock.lockForWrite()) {
+			try (Transaction t = theSubLock.lock(true, null)) {
 				int index = theEnd - 1;
 				int ti = translateToInternalIndex(index);
 				for (; index >= theStart; index--) {
@@ -1650,7 +1755,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		public E remove(int index) {
 			if (index < 0)
 				throw new IndexOutOfBoundsException("" + index);
-			try (Transaction t = theSubLock.lockForWrite()) {
+			try (Transaction t = theSubLock.lock(true, null)) {
 				if (index >= theEnd - theStart)
 					throw new IndexOutOfBoundsException(index + " of " + (theEnd - theStart));
 				E old = internalRemove(theStart + index, translateToInternalIndex(theStart + index));
@@ -1668,7 +1773,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				throw new IndexOutOfBoundsException(fromIndex + ">" + toIndex);
 			else if (fromIndex == toIndex)
 				return;
-			try (Transaction t = theSubLock.lockForWrite()) {
+			try (Transaction t = theSubLock.lock(true, null)) {
 				if (toIndex > theEnd - theStart)
 					throw new IndexOutOfBoundsException(toIndex + " of " + (theEnd - theStart));
 				CircularArrayList.this.removeRange(theStart + fromIndex, theStart + toIndex);
@@ -1699,7 +1804,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			if (theSize == 0)
 				return false;
 			int removed = 0;
-			try (Transaction t = theSubLock.lockForWrite()) {
+			try (Transaction t = theSubLock.lock(true, null)) {
 				int cap = theArray.length;
 				int inspect = translateToInternalIndex(theStart);
 				int copyTo = inspect;
@@ -1727,14 +1832,14 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				theSize -= removed;
 				theEnd -= removed;
 				theSubLock.indexChanged(-removed);
-				theLocker.indexChanged();
+				theLocker.indexChanged(-removed);
 			}
 			return removed > 0;
 		}
 
 		@Override
 		public void clear() {
-			try (Transaction t = theSubLock.lockForWrite()) {
+			try (Transaction t = theSubLock.lock(true, null)) {
 				int size = theEnd - theStart;
 				if (size == 0)
 					return;
@@ -1748,7 +1853,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		public E set(int index, E element) {
 			if (index < 0)
 				throw new IndexOutOfBoundsException("" + index);
-			try (Transaction t = theSubLock.lockForWrite()) {
+			try (Transaction t = theSubLock.lock(true, null)) {
 				if (index >= theEnd - theStart)
 					throw new IndexOutOfBoundsException(index + " of " + (theEnd - theStart));
 				int ti = translateToInternalIndex(theStart + index);

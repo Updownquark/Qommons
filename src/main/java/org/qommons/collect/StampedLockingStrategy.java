@@ -5,22 +5,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.StampedLock;
 import java.util.function.Consumer;
 
-import org.qommons.Transactable;
 import org.qommons.Transaction;
 
 /** A collection-locking strategy using {@link StampedLock} */
-public class StampedLockingStrategy implements Transactable {
+public class StampedLockingStrategy implements CollectionLockingStrategy {
 	private static final int MAX_OPTIMISTIC_TRIES = 3;
 	private static final String CO_MOD_MSG = "Use\n"//
 		+ "try(Transaction t=lock(forWrite, null)){\n"//
 		+ "\t//iteration\n" //
 		+ "}\n" //
-		+ "to enusre this does not happen.";
-
-	@FunctionalInterface
-	interface OptimisticOperation<T> {
-		T apply(T init, long stamp);
-	}
+		+ "to ensure this does not happen.";
 
 	private final ThreadLocal<ThreadState> theStampCollection;
 	private final StampedLock theLocker;
@@ -69,24 +63,7 @@ public class StampedLockingStrategy implements Transactable {
 		}
 	}
 
-	/**
-	 * Performs a safe, read-only operation, potentially without obtaining any locks.
-	 * 
-	 * The operation must have no side effects (i.e. it must not modify fields or values outside of the scope of the operation). A typical
-	 * operation will:
-	 * <ol>
-	 * <li>Atomically copy the set of values it needs into local variables</li>
-	 * <li>Check the stamp to ensure that the copied values are consistent</li>
-	 * <li>Perform one or more atomic operations on the local variables which only affect local variables declared in the scope, checking
-	 * the stamp in between operations to continuously ensure consistency and to avoid unnecessary work</li>
-	 * <li>Compile and return a value that can be used outside the scope</li>
-	 * </ol>
-	 * 
-	 * @param <T> The type of value produced by the operation
-	 * @param init The initial value to feed to the operation
-	 * @param operation The operation to perform
-	 * @return The result of the operation
-	 */
+	@Override
 	public <T> T doOptimistically(T init, OptimisticOperation<T> operation) {
 		ThreadState state = theStampCollection.get();
 		if (state.stamp > 0) // Already holding a lock
@@ -105,29 +82,33 @@ public class StampedLockingStrategy implements Transactable {
 		}
 	}
 
-	public void indexChanged() {
+	@Override
+	public void indexChanged(int added) {
 		theIndexChanges.getAndIncrement();
 	}
 
+	@Override
 	public long getStamp() {
 		return theLocker.tryOptimisticRead();
 	}
 
+	@Override
 	public boolean check(long stamp) {
 		return theLocker.validate(stamp);
 	}
 
-	public SubLockingStrategy subLock() {
-		return new SubLockingStrategy(this);
+	@Override
+	public SubStampedLockingStrategy subLock() {
+		return new SubStampedLockingStrategy(this);
 	}
 
-	public static class SubLockingStrategy {
+	private static class SubStampedLockingStrategy implements CollectionLockingStrategy.SubLockingStrategy {
 		private final StampedLockingStrategy theTop;
-		private final SubLockingStrategy theParent;
+		private final SubStampedLockingStrategy theParent;
 		private final AtomicInteger theSubIndexChanges;
 		private final Consumer<Integer> theIndexChangeCallback;
 
-		private SubLockingStrategy(StampedLockingStrategy top) {
+		private SubStampedLockingStrategy(StampedLockingStrategy top) {
 			theTop = top;
 			theParent = null;
 			theSubIndexChanges = new AtomicInteger();
@@ -135,13 +116,14 @@ public class StampedLockingStrategy implements Transactable {
 			theIndexChangeCallback = null;
 		}
 
-		private SubLockingStrategy(SubLockingStrategy parent, Consumer<Integer> indexChangeCallback) {
+		private SubStampedLockingStrategy(SubStampedLockingStrategy parent, Consumer<Integer> indexChangeCallback) {
 			theTop = parent.theTop;
 			theParent = parent;
 			theSubIndexChanges = new AtomicInteger(parent.check());
 			theIndexChangeCallback = indexChangeCallback;
 		}
 
+		@Override
 		public int check() throws ConcurrentModificationException {
 			return theTop.doOptimistically(0, (v, stamp) -> _check());
 		}
@@ -160,12 +142,14 @@ public class StampedLockingStrategy implements Transactable {
 				return theTop.theIndexChanges.get();
 		}
 
-		public Transaction lockForWrite() {
-			Transaction t = theTop.lock(true, null);
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			Transaction t = theTop.lock(write, cause);
 			_check();
 			return t;
 		}
 
+		@Override
 		public <T> T doOptimistically(T init, OptimisticOperation<T> operation) {
 			return theTop.doOptimistically(init, (value, stamp) -> {
 				_check();
@@ -173,6 +157,12 @@ public class StampedLockingStrategy implements Transactable {
 			});
 		}
 
+		@Override
+		public long getStamp() {
+			return theTop.getStamp();
+		}
+
+		@Override
 		public boolean check(long stamp) {
 			if (!theTop.check(stamp))
 				return false;
@@ -180,6 +170,7 @@ public class StampedLockingStrategy implements Transactable {
 			return true;
 		}
 
+		@Override
 		public void indexChanged(int added) {
 			theSubIndexChanges.getAndIncrement();
 			if (theIndexChangeCallback != null)
@@ -188,12 +179,21 @@ public class StampedLockingStrategy implements Transactable {
 				theParent.indexChanged(added);
 		}
 
+		@Override
 		public SubLockingStrategy subLock(Consumer<Integer> indexChangeCallback) {
-			return new SubLockingStrategy(this, indexChangeCallback);
+			return new SubStampedLockingStrategy(this, indexChangeCallback);
 		}
 
+		@Override
+		public SubLockingStrategy subLock() {
+			return subLock(idx -> {
+			});
+		}
+
+		@Override
 		public SubLockingStrategy siblingLock() {
-			return theParent != null ? new SubLockingStrategy(theParent, theIndexChangeCallback) : new SubLockingStrategy(theTop);
+			return theParent != null ? new SubStampedLockingStrategy(theParent, theIndexChangeCallback)
+				: new SubStampedLockingStrategy(theTop);
 		}
 	}
 
