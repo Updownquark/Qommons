@@ -63,7 +63,9 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		}
 
 		/**
-		 * Makes the list thread-unsafe, but more performant
+		 * Makes the list thread-unsafe, but slightly more performant.
+		 * 
+		 * 30Apr2017: Unsafe is ~10% faster
 		 * 
 		 * @return This builder
 		 */
@@ -160,15 +162,21 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		wasBuilt = built;
 	}
 
+	/**
+	 * For unit tests. Ensures the integrity of the list. In particular, ensures only elements contained in the list are referenced by the
+	 * list
+	 */
 	void check() {
 		Assert.assertTrue(theSize <= theArray.length);
+		Assert.assertTrue(theOffset < theArray.length);
 		Assert.assertTrue(theArray.length <= theMaxCapacity);
 		
 		int t = theOffset + theSize;
-		if (t > theArray.length)
+		if (t >= theArray.length)
 			t -= theArray.length;
 		while (t != theOffset) {
-			Assert.assertNull(theArray[t]);
+			if (theArray[t] != null)
+				Assert.assertNull(theArray[t]);
 			t++;
 			if (t == theArray.length)
 				t = 0;
@@ -504,6 +512,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				ensureCapacity(theMaxCapacity);
 				theArray[theOffset] = e;
 				theOffset++;
+				if (theOffset == theArray.length)
+					theOffset = 0;
 				theAdvanced = 1;
 			} else {
 				ensureCapacity(theSize + 1);
@@ -540,7 +550,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 					theAdded = cSize;
 					int start = translateToInternalIndex(theSize % theArray.length);
 					theOffset += theAdvanced;
-					if (theOffset > theArray.length)
+					if (theOffset >= theArray.length)
 						theOffset -= theArray.length;
 					theSize = theMaxCapacity;
 					for (E e : c)
@@ -593,6 +603,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 					ti = 0;
 			}
 			theOffset += theAdvanced;
+			if (theOffset >= theArray.length)
+				theOffset -= theArray.length;
 			theAdded = spaces;
 			theLocker.indexChanged(0); // This value should not matter for the root locker
 		}
@@ -1092,6 +1104,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		makeRoom(index, 1);
 		theArray[translateToInternalIndex(index)] = element;
 		theOffset += theAdvanced;
+		if (theOffset >= theArray.length)
+			theOffset -= theArray.length;
 		theAdded = 1;
 		theLocker.indexChanged(1);
 	}
@@ -1106,10 +1120,12 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			moveContents(theOffset, listIndex, 1);
 			theArray[theOffset] = null; // Remove reference
 			theOffset++;
+			if (theOffset == theArray.length)
+				theOffset = 0;
 			theSize--;
 		} else {
 			moveContents(translatedIndex + 1, theSize - listIndex - 1, -1);
-			theArray[(theOffset + theSize) % theArray.length] = null; // Remove reference
+			theArray[translateToInternalIndex(theSize - 1)] = null; // Remove reference
 			theSize--;
 		}
 		theLocker.indexChanged(-1);
@@ -1744,7 +1760,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 						return true;
 					}
 					ti--;
-					if (ti == 0)
+					if (ti < 0)
 						ti = theArray.length - 1;
 				}
 			}
