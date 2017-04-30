@@ -46,6 +46,8 @@ public class QommonsTestUtils {
 	 */
 	public static <T extends Collection<Integer>> void testCollection(T coll, Consumer<? super T> check,
 			Function<? super T, Consumer<? super T>> checkGenerator, int depth) {
+		if (depth > COLLECTION_TEST_DEPTH)
+			return;
 		if (checkGenerator != null) {
 			Consumer<? super T> moreCheck = checkGenerator.apply(coll);
 			if (moreCheck != null) {
