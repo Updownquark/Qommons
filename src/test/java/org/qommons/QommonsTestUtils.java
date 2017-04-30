@@ -557,7 +557,7 @@ public class QommonsTestUtils {
 				listIter1.hasPrevious());
 			int prev = listIter1.previous();
 			assertThat("On Iteration " + i, prev, equalTo(listIter2.previous()));
-			switch (i % 5) {
+			switch (i % 3) {
 			case 0:
 				int toAdd = i * 17 + 100;
 				listIter1.add(toAdd);
