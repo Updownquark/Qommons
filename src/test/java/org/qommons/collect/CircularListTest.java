@@ -1,9 +1,9 @@
-package org.qommons;
+package org.qommons.collect;
 
 import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
-import org.qommons.collect.CircularArrayList;
+import org.qommons.QommonsTestUtils;
 
 /** Tests {@link CircularArrayList} */
 public class CircularListTest {
@@ -13,9 +13,19 @@ public class CircularListTest {
 	 * test suite against a basic {@link CircularArrayList}.
 	 */
 	@Test
-	public void basicCALTest() {
+	public void safeCALTest() {
 		int todo; // TODO Add a check to make sure all non-included elements in the array are always null
-		QommonsTestUtils.testCollection(new CircularArrayList<>(), null, null);
+		QommonsTestUtils.testCollection(new CircularArrayList<>(), list -> list.check(), null);
+	}
+
+	/**
+	 * Runs the basic
+	 * {@link QommonsTestUtils#testCollection(java.util.Collection, java.util.function.Consumer, java.util.function.Function)} collection
+	 * test suite against a basic {@link CircularArrayList}.
+	 */
+	@Test
+	public void unsafeCALTest() {
+		QommonsTestUtils.testCollection(CircularArrayList.build().unsafe().build(), list -> list.check(), null);
 	}
 
 	/** Tests {@link CircularArrayList}'s {@link CircularArrayList#setMaxCapacity(int) max capacity} capability */
