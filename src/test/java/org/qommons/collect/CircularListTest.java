@@ -2,6 +2,8 @@ package org.qommons.collect;
 
 import static org.junit.Assert.assertEquals;
 
+import java.util.ArrayList;
+
 import org.junit.Test;
 import org.qommons.QommonsTestUtils;
 
@@ -14,7 +16,6 @@ public class CircularListTest {
 	 */
 	@Test
 	public void safeCALTest() {
-		int todo; // TODO Add a check to make sure all non-included elements in the array are always null
 		QommonsTestUtils.testCollection(new CircularArrayList<>(), list -> list.check(), null);
 	}
 
@@ -28,13 +29,55 @@ public class CircularListTest {
 		QommonsTestUtils.testCollection(CircularArrayList.build().unsafe().build(), list -> list.check(), null);
 	}
 
+	/** Runs a gauntlet of tests against */
+	//@Test
+	public void testPerformance() {
+		ArrayList<Integer> java = new ArrayList<>();
+		CircularArrayList<Integer> unsafe = CircularArrayList.build().unsafe().build();
+		// CircularArrayList<Integer> safe = new CircularArrayList<>();
+
+		long javaTime = 0;
+		// long safeTime = 0;
+		long unsafeTime = 0;
+		int preTries = 5;
+		int tries = 200;
+		System.out.print(tries);
+		System.out.flush();
+		for (int i = 0; i < tries + preTries; i++) {
+			long now = System.nanoTime();
+			QommonsTestUtils.testCollection(java, null, null);
+			long next = System.nanoTime();
+			if (i >= preTries)
+				javaTime += next - now;
+			System.out.print(".");
+			System.out.flush();
+			now = next;
+			QommonsTestUtils.testCollection(unsafe, null, null);
+			next = System.nanoTime();
+			if (i >= preTries)
+				unsafeTime += next - now;
+			// System.out.print(".");
+			// System.out.flush();
+			// now = next;
+			// QommonsTestUtils.testCollection(safe, null, null);
+			// if (i >= preTries)
+			// safeTime += System.nanoTime() - now;
+			System.out.print(tries + preTries - 1 - i);
+			System.out.flush();
+		}
+		System.out.println();
+		System.out.println("Java: " + org.qommons.QommonsUtils.printTimeLength(javaTime / 1000000));
+		System.out.println("Unsafe: " + org.qommons.QommonsUtils.printTimeLength(unsafeTime / 1000000));
+		// System.out.println("Safe: " + org.qommons.QommonsUtils.printTimeLength(safeTime / 1000000));
+	}
+
 	/** Tests {@link CircularArrayList}'s {@link CircularArrayList#setMaxCapacity(int) max capacity} capability */
 	@Test
 	public void maxCapTest() {
 		CircularArrayList<Integer> list = new CircularArrayList<>();
 		list.setMaxCapacity(10000);
 		// Run a basic test with a capacity sufficient to avoid dropping elements
-		QommonsTestUtils.testCollection(list, null, null);
+		QommonsTestUtils.testCollection(list, c -> c.check(), null);
 
 		// Test basic element-dropping
 		list.addAll(QommonsTestUtils.sequence(150, null, false));
@@ -83,7 +126,5 @@ public class CircularListTest {
 
 	/* TODO Test:
 	 * Thread safeness
-	 * 
-	 * Add toArray and reversibility tests in QommonsTestUtils
 	 */
 }
