@@ -32,7 +32,8 @@ public class CircularListTest {
 	 */
 	@Test
 	public void unsafeCALTest() {
-		QommonsTestUtils.testCollection(CircularArrayList.build().unsafe().build(), list -> list.check(), null);
+		QommonsTestUtils.testCollection(CircularArrayList.build().unsafe().withMinCapacity(20).withMinOccupancy(0.5).build(),
+			list -> list.check(), null);
 	}
 
 	/** Runs a gauntlet of tests against */

@@ -1,7 +1,14 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Deque;
+import java.util.Iterator;
+import java.util.ListIterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -15,27 +22,39 @@ import com.google.common.reflect.TypeToken;
  * A list/deque that uses an array that is indexed circularly. This allows performance improvements due to not having to move array contents
  * when items are removed from the beginning of the list.
  * 
- * This class also supports a {@link #setMaxCapacity(int) max capacity} option which will drop elements to maintain a maximum size.
- * 
- * {@link ToDo} TODO
+ * This class also supports:
  * <ul>
- * <li>What happens with add(index, e) or addAll(index, c) when capacity is reached?</li>
- * <li>Make reverse() thread-safe</li>
- * <li>Add optional capacity reduction (and trimToCapacity())</li>
+ * <li>A {@link #setMaxCapacity(int) max capacity} option which will drop elements to maintain a maximum size.</li>
+ * <li>Thread-safety</li>
+ * <li>Automatic capacity management with {@link #setMinOccupancy(double)}</li>
+ * <li>{@link ReversibleList Reversibility}</li>
  * </ul>
  * 
  * @param <E> The type of elements in the list
  */
 public class CircularArrayList<E> implements ReversibleList<E>, TransactableList<E>, Deque<E> {
+	/**
+	 * The maximum size of array to allocate. Some VMs reserve some header words in an array. Attempts to allocate larger arrays may result
+	 * in OutOfMemoryError: Requested array size exceeds VM limit
+	 */
+	private static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
+	/** The relative amount by which the internal array will grow, by default, when the list's size needs exceed its capacity */
+	private static final double DEFAULT_GROWTH_FACTOR = 0.5;
+
 	/** Builds a {@link CircularArrayList} */
 	public static class Builder implements Cloneable {
 		private int theInitCapacity;
+		private int theMinCapacity;
 		private int theMaxCapacity;
+		private double theMinOccupancy;
+		private double theGrowthFactor;
+		private boolean isFeatureLocked;
 		private boolean isThreadSafe;
 
 		private Builder() {
 			theInitCapacity = 0;
 			theMaxCapacity = MAX_ARRAY_SIZE;
+			theGrowthFactor = DEFAULT_GROWTH_FACTOR;
 			isThreadSafe = true;
 		}
 
@@ -51,14 +70,52 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		}
 
 		/**
+		 * @param minCap The minimum capacity for the list
+		 * @return This builder
+		 */
+		public Builder withMinCapacity(int minCap) {
+			theInitCapacity = capConstraintsAdjusted(theInitCapacity, minCap, theMaxCapacity);
+			theMinCapacity = minCap;
+			return this;
+		}
+
+		/**
 		 * @param maxCap The maximum capacity for the list
 		 * @return This builder
 		 * @see CircularArrayList#setMaxCapacity(int)
 		 */
 		public Builder withMaxCapacity(int maxCap) {
-			if (maxCap <= 0)
-				throw new IllegalArgumentException("Max capacity must be at least 1");
+			theInitCapacity = capConstraintsAdjusted(theInitCapacity, theMinCapacity, maxCap);
 			theMaxCapacity = maxCap;
+			return this;
+		}
+
+		/**
+		 * @param minOccupancy The minimum amount of the list's capacity that must be occupied. When occupancy drops below this threshold,
+		 *        the array will be trimmed to the maximum of its size and minimum capacity.
+		 * @return This builder
+		 */
+		public Builder withMinOccupancy(double minOccupancy) {
+			if (Double.isNaN(minOccupancy) || Double.isInfinite(minOccupancy))
+				throw new IllegalArgumentException("Min occupancy must a finite number");
+			if (minOccupancy < 0 || minOccupancy > 1)
+				throw new IllegalArgumentException("Min occupancy must be between 0 and 1");
+			theMinOccupancy = minOccupancy;
+			return this;
+		}
+
+		/**
+		 * @param factor The growth factor for the array, i.e. the relative amount by which the internal array will grow, at minimum, when
+		 *        the list's size needs exceed its capacity. A value of zero means the array will only grow to accommodate all values. A
+		 *        value of 1 means the array will at least double in size when new space is needed.
+		 * @return This builder
+		 */
+		public Builder withGrowthFactor(double factor) {
+			if (factor < 0)
+				throw new IllegalArgumentException("Growth factor must be at least zero");
+			if (Double.isNaN(factor) || Double.isInfinite(factor) || factor >= 100)
+				throw new IllegalArgumentException("Growth factor must be a finite number less than 100");
+			theGrowthFactor = factor;
 			return this;
 		}
 
@@ -84,6 +141,26 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			return this;
 		}
 
+		/**
+		 * Locks the list's feature set so that its capacity adjustment capabilities cannot be directly modified on the list
+		 * 
+		 * @return This builder
+		 */
+		public Builder lockFeatures() {
+			isFeatureLocked = true;
+			return this;
+		}
+
+		/**
+		 * Unlocks the list's feature set so that its capacity adjustment capabilities can be directly modified on the list
+		 * 
+		 * @return This builder
+		 */
+		public Builder unlockFeatures() {
+			isFeatureLocked = false;
+			return this;
+		}
+
 		/** @return A copy of this builder */
 		public Builder copy() {
 			Builder builder;
@@ -101,11 +178,35 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		}
 
 		/**
+		 * @return The minimum capacity for the list
+		 * @see CircularArrayList#setMinCapacity(int)
+		 */
+		public int getMinCapacity() {
+			return theMinCapacity;
+		}
+
+		/**
 		 * @return The maximum capacity for the list
 		 * @see CircularArrayList#setMaxCapacity(int)
 		 */
 		public int getMaxCapacity() {
 			return theMaxCapacity;
+		}
+
+		/**
+		 * @return The minimum occupancy for the list
+		 * @see CircularArrayList#setMinOccupancy(double)
+		 */
+		public double getMinOccupancy() {
+			return theMinOccupancy;
+		}
+
+		/**
+		 * @return The relative amount by which the internal array will grow when the list's size needs exceed its capacity
+		 * @see CircularArrayList#setGrowthFactor(double)
+		 */
+		public double getGrowthFactor() {
+			return theGrowthFactor;
 		}
 
 		/** @return Whether the collection will be thread-safe */
@@ -123,7 +224,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		 * @return The built list
 		 */
 		public <E> CircularArrayList<E> build() {
-			return new CircularArrayList<>(this, true);
+			return new CircularArrayList<>(this, isFeatureLocked);
 		}
 	}
 
@@ -132,19 +233,32 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		return new Builder();
 	}
 
+	private static int capConstraintsAdjusted(int cap, int minCap, int maxCap) {
+		if (maxCap <= 0)
+			throw new IllegalArgumentException("Max capacity must be at least 1");
+		if (maxCap > MAX_ARRAY_SIZE)
+			throw new IllegalArgumentException("Maximum allowed capacity is " + MAX_ARRAY_SIZE);
+		if (minCap > maxCap)
+			throw new IllegalArgumentException("Min capacity " + minCap + " cannot be greater than max capacity " + maxCap);
+		if (cap < minCap)
+			return minCap;
+		else if (cap > maxCap)
+			return maxCap;
+		return cap;
+	}
+
+	/** Static value to avoid needing to instantiate multiple zero-length arrays */
 	private static final Object[] EMPTY_ARRAY = new Object[0];
-	/**
-	 * The maximum size of array to allocate. Some VMs reserve some header words in an array. Attempts to allocate larger arrays may result
-	 * in OutOfMemoryError: Requested array size exceeds VM limit
-	 */
-	private static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
 
 	private Object[] theArray;
 	private final CollectionLockingStrategy theLocker;
-	private final boolean wasBuilt;
+	private final boolean isFeatureLocked;
 	private int theOffset;
 	private int theSize;
+	private int theMinCapacity;
 	private int theMaxCapacity;
+	private double theMinOccupancy;
+	private double theGrowthFactor;
 
 	private int theAdvanced;
 	private int theAdded;
@@ -154,23 +268,32 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		this(build(), false);
 	}
 
-	/** @param initCap The initial capacity for the list */
-	private CircularArrayList(Builder builder, boolean built) {
+	private CircularArrayList(Builder builder, boolean featureLocked) {
 		theArray = builder.getInitCapacity() == 0 ? EMPTY_ARRAY : new Object[builder.getInitCapacity()];
+		theMinCapacity = builder.getMinCapacity();
 		theMaxCapacity = builder.getMaxCapacity();
+		theMinOccupancy = builder.getMinOccupancy();
+		theGrowthFactor = builder.getGrowthFactor();
 		theLocker = builder.makeLockingStrategy();
-		wasBuilt = built;
+		isFeatureLocked = featureLocked;
 	}
 
-	/**
-	 * For unit tests. Ensures the integrity of the list. In particular, ensures only elements contained in the list are referenced by the
-	 * list
-	 */
+	/** For unit tests. Ensures the integrity of the list. */
 	void check() {
+		// Can't have more elements than the capacity
 		Assert.assertTrue(theSize <= theArray.length);
+		// The offset must be a valid index in the array
 		Assert.assertTrue(theOffset < theArray.length);
+		// The array must be within the list's capacity settings
 		Assert.assertTrue(theArray.length <= theMaxCapacity);
+		Assert.assertTrue(theArray.length >= theMinCapacity);
+		if (theMinOccupancy > 0) {
+			// Ensure the minimum occupancy requirement is met
+			int occSize = Math.max((int) Math.ceil(theSize / theMinOccupancy), theMinCapacity);
+			Assert.assertTrue(theArray.length <= occSize);
+		}
 		
+		// Ensure only elements contained in the list are referenced by the list
 		int t = theOffset + theSize;
 		if (t >= theArray.length)
 			t -= theArray.length;
@@ -184,6 +307,28 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	}
 
 	/**
+	 * Sets this list's minimum capacity, which will always be kept if this list's capacity is reduced, either manually via
+	 * {@link #trimToSize()} or automatically via #setMinOccupancy(double).
+	 * 
+	 * @param minCap The minimum capacity for this list
+	 * @return This list
+	 */
+	public CircularArrayList<E> setMinCapacity(int minCap) {
+		if (isFeatureLocked)
+			throw new IllegalStateException("This list's feature set is locked--its feature set cannot be changed directly");
+		try (Transaction t = lock(true, null)) {
+			int cap = capConstraintsAdjusted(theArray.length, minCap, theMaxCapacity);
+			if (theArray.length < cap) {
+				Object[] newArray = new Object[cap];
+				internalArrayCopy(newArray);
+				theArray = newArray;
+				theOffset = 0;
+			}
+		}
+		return this;
+	}
+
+	/**
 	 * Sets this list's maximum capacity. When items are added to a list whose size equals its maximum capacity, items at the beginning (low
 	 * index) of the list will be removed from the list to maintain the list's size at the maximum capacity.
 	 * 
@@ -191,22 +336,58 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	 * @return This list
 	 */
 	public CircularArrayList<E> setMaxCapacity(int maxCap) {
-		if (wasBuilt)
-			throw new IllegalStateException("This list was built with build() and cannot have its feature set changed directly");
-		if (maxCap <= 0)
-			throw new IllegalArgumentException("Illegal max capacity: " + maxCap);
+		if (isFeatureLocked)
+			throw new IllegalStateException("This list's feature set is locked--its feature set cannot be changed directly");
 		try (Transaction t = lock(true, null)) {
-			if (maxCap < theSize)
+			int cap = capConstraintsAdjusted(theArray.length, theMinCapacity, maxCap);
+			theMaxCapacity = maxCap;
+			if (cap < theSize)
 				removeRange(0, theSize - maxCap);
-			if (theArray.length > maxCap) {
-				Object[] newArray = new Object[maxCap];
+			if (theArray.length > cap) {
+				Object[] newArray = new Object[cap];
 				internalArrayCopy(newArray);
 				theArray = newArray;
 				theOffset = 0;
 			}
-			theMaxCapacity = maxCap;
 		}
 		return this;
+	}
+
+	/**
+	 * @param minOccupancy The minimum amount of the list's capacity that must be occupied. When occupancy drops below this threshold, the
+	 *        array will be trimmed to the maximum of its size and minimum capacity.
+	 * @return This list
+	 */
+	public CircularArrayList<E> setMinOccupancy(double minOccupancy) {
+		if (Double.isNaN(minOccupancy) || Double.isInfinite(minOccupancy))
+			throw new IllegalArgumentException("Min occupancy must a finite number");
+		if (minOccupancy < 0 || minOccupancy > 1)
+			throw new IllegalArgumentException("Min occupancy must be between 0 and 1");
+		theMinOccupancy = minOccupancy;
+		return this;
+	}
+
+	/**
+	 * @param factor The growth factor for the array, i.e. the relative amount by which the internal array will grow, at minimum, when the
+	 *        list's size needs exceed its capacity. A value of zero means the array will only grow to accommodate all values. A value of 1
+	 *        means the array will at least double in size when new space is needed.
+	 * @return This list
+	 */
+	public CircularArrayList<E> setGrowthFactor(double factor) {
+		if (factor < 0)
+			throw new IllegalArgumentException("Growth factor must be at least zero");
+		if (Double.isNaN(factor) || Double.isInfinite(factor) || factor >= 100)
+			throw new IllegalArgumentException("Growth factor must be a finite number less than 100");
+		theGrowthFactor = factor;
+		return this;
+	}
+
+	/**
+	 * @return This list's minimum capacity
+	 * @see #setMinCapacity(int)
+	 */
+	protected int getMinCapacity() {
+		return theMinCapacity;
 	}
 
 	/**
@@ -215,6 +396,22 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	 */
 	public int getMaxCapacity() {
 		return theMaxCapacity;
+	}
+
+	/**
+	 * @return This list's minimum occupancy
+	 * @see #setMinOccupancy(double)
+	 */
+	protected double getMinOccupancy() {
+		return theMinOccupancy;
+	}
+
+	/**
+	 * @return This list's growth factor
+	 * @see #setGrowthFactor(double)
+	 */
+	protected double getGrowthFactor() {
+		return theGrowthFactor;
 	}
 
 	@Override
@@ -372,6 +569,11 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			internalArrayCopy(array, offset, size, arr);
 			return arr;
 		});
+	}
+
+	@Override
+	public ReversibleList<E> reverse() {
+		return new ReversedListImpl<>(this, theLocker);
 	}
 
 	@Override
@@ -662,6 +864,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				}
 			})) {
 			}
+			if (found[0])
+				trimIfNeeded();
 			return found[0];
 		}
 	}
@@ -678,6 +882,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				}
 			})) {
 			}
+			if (found[0])
+				trimIfNeeded();
 			return found[0];
 		}
 	}
@@ -704,6 +910,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			}
 			theSize -= count;
 			theLocker.indexChanged(-count);
+			if (count > 0)
+				trimIfNeeded();
 		}
 	}
 
@@ -753,8 +961,10 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			} while (inspect != dest);
 			clearEntries(copyTo, removed);
 			theSize -= removed;
-			if (removed > 0)
+			if (removed > 0) {
+				trimIfNeeded();
 				theLocker.indexChanged(-removed);
+			}
 		}
 		return removed > 0;
 	}
@@ -768,6 +978,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			int preSize = theSize;
 			theSize = 0;
 			theOffset = 0;
+			trimIfNeeded();
 			theLocker.indexChanged(-preSize);
 		}
 	}
@@ -830,6 +1041,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				}
 			})) {
 			}
+			if (found[0])
+				trimIfNeeded();
 			return found[0];
 		}
 	}
@@ -961,11 +1174,14 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		if (capacity - theArray.length > 0) {
 			try (Transaction t = theLocker.lock(true, null)) {
 				int oldCapacity = theArray.length;
-				int newCapacity = oldCapacity == 0 ? 10 : oldCapacity + (oldCapacity >> 1);
+				if (capacity - MAX_ARRAY_SIZE > 0)
+					throw new OutOfMemoryError("Cannot allocate an array of size " + capacity);
+				int growCapacity = oldCapacity == 0 ? 10 : oldCapacity + (int) Math.round(theGrowthFactor * oldCapacity);
+				if (growCapacity - MAX_ARRAY_SIZE > 0)
+					growCapacity = MAX_ARRAY_SIZE;
+				int newCapacity = growCapacity;
 				if (newCapacity - capacity < 0)
 					newCapacity = capacity;
-				if (newCapacity - MAX_ARRAY_SIZE > 0)
-					throw new OutOfMemoryError("Cannot allocate an array of size " + newCapacity);
 				Object[] newArray = new Object[newCapacity];
 				if (theSize > 0)
 					internalArrayCopy(newArray);
@@ -977,9 +1193,39 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			return false;
 	}
 
+	/**
+	 * Shrinks the size of this list's internal array to be exactly large enough to hold all the list's current content
+	 * 
+	 * @return This list
+	 */
+	public CircularArrayList<E> trimToSize() {
+		try (Transaction t = theLocker.lock(true, null)) {
+			_trimToSize();
+		}
+		return this;
+	}
+
 	@Override
 	public ReversibleSpliterator<E> spliterator(boolean forward) {
 		return new ArraySpliterator(0, theSize, forward ? 0 : theSize, theLocker.subLock());
+	}
+
+	private void _trimToSize() {
+		int newCap = Math.max(theSize, theMinCapacity);
+		if (newCap != theArray.length) {
+			Object[] newArray = newCap == 0 ? EMPTY_ARRAY : new Object[newCap];
+			internalArrayCopy(newArray);
+			theOffset = 0;
+			theArray = newArray;
+		}
+	}
+
+	private void trimIfNeeded() {
+		if (theArray.length > theMinCapacity && theMinOccupancy > 0) {
+			int dropSize = (int) Math.round(theMinOccupancy * theArray.length);
+			if (theSize < dropSize)
+				_trimToSize();
+		}
 	}
 
 	private final int translateToInternalIndex(int index) {
@@ -1139,6 +1385,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			theArray[translateToInternalIndex(theSize - 1)] = null; // Remove reference
 			theSize--;
 		}
+		trimIfNeeded();
 		theLocker.indexChanged(-1);
 		return removed;
 	}
@@ -1646,6 +1893,11 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		}
 
 		@Override
+		public ReversibleList<E> reverse() {
+			return new ReversedListImpl<>(this, theSubLock);
+		}
+
+		@Override
 		public boolean add(E e) {
 			try (Transaction t = theSubLock.lock(true, null)) {
 				CircularArrayList.this.add(theEnd, e);
@@ -1860,6 +2112,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				clearEntries(copyTo, removed);
 				theSize -= removed;
 				theEnd -= removed;
+				trimIfNeeded();
 				theSubLock.indexChanged(-removed);
 				theLocker.indexChanged(-removed);
 			}
@@ -2024,6 +2277,81 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				str.append(']');
 				return str;
 			}).toString();
+		}
+	}
+
+	/**
+	 * A reversed list for {@link CircularArrayList} and {@link SubList}. The default implementation of {@link ReversedList#reverse()} would
+	 * not be thread-safe.
+	 * 
+	 * More work could be done in some of the methods to take advantage of optimistic locking, but it would have to be done separately for
+	 * the top-level and the sub-list and would't be able to use the super calls. Kind of an edge case anyway, so for now we'll just use
+	 * straight-up locking.
+	 * 
+	 * @param <E> The type of elements in the list
+	 */
+	private static class ReversedListImpl<E> extends ReversibleList.ReversedList<E> {
+		private final CollectionLockingStrategy theLocker;
+
+		ReversedListImpl(ReversibleList<E> wrap, CollectionLockingStrategy locker) {
+			super(wrap);
+			theLocker = locker;
+		}
+
+		@Override
+		public boolean addAll(int index, Collection<? extends E> c) {
+			try (Transaction t = theLocker.lock(true, null)) {
+				return super.addAll(index, c);
+			}
+		}
+
+		@Override
+		public E get(int index) {
+			try (Transaction t = theLocker.lock(false, null)) {
+				return super.get(index);
+			}
+		}
+
+		@Override
+		public E set(int index, E element) {
+			try (Transaction t = theLocker.lock(true, null)) {
+				return super.set(index, element);
+			}
+		}
+
+		@Override
+		public void add(int index, E element) {
+			try (Transaction t = theLocker.lock(true, null)) {
+				super.add(index, element);
+			}
+		}
+
+		@Override
+		public E remove(int index) {
+			try (Transaction t = theLocker.lock(true, null)) {
+				return super.remove(index);
+			}
+		}
+
+		@Override
+		public int indexOf(Object o) {
+			try (Transaction t = theLocker.lock(false, null)) {
+				return super.indexOf(o);
+			}
+		}
+
+		@Override
+		public int lastIndexOf(Object o) {
+			try (Transaction t = theLocker.lock(false, null)) {
+				return super.lastIndexOf(o);
+			}
+		}
+
+		@Override
+		public ReversibleList<E> subList(int fromIndex, int toIndex) {
+			try (Transaction t = theLocker.lock(false, null)) {
+				return super.subList(fromIndex, toIndex);
+			}
 		}
 	}
 }
