@@ -376,6 +376,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 
 	@Override
 	public E get(int index) {
+		if (index < 0)
+			throw new IndexOutOfBoundsException("" + index);
 		return theLocker.doOptimistically(null, (v, stamp) -> {
 			Object[] array = theArray;
 			int offset = theOffset;
@@ -420,7 +422,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			Object[] array = theArray;
 			int offset = theOffset;
 			int size = theSize;
-			if (!theLocker.check(stamp))
+			if (size == 0 || !theLocker.check(stamp))
 				return null;
 			return size == 0 ? null : (E) array[offset];
 		});
@@ -432,7 +434,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			Object[] array = theArray;
 			int offset = theOffset;
 			int size = theSize;
-			if (!theLocker.check(stamp))
+			if (size == 0 || !theLocker.check(stamp))
 				return null;
 			return size == 0 ? null : (E) array[translateToInternalIndex(array, offset, size, size - 1)];
 		});
@@ -477,7 +479,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			Object[] array = theArray;
 			int offset = theOffset;
 			int size = theSize;
-			if (!theLocker.check(stamp))
+			if (size == 0 || !theLocker.check(stamp))
 				return -1;
 			int index = size - 1;
 			int t = translateToInternalIndex(array, offset, size, index);
@@ -497,6 +499,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 
 	@Override
 	public E set(int index, E element) {
+		if (index < 0)
+			throw new IndexOutOfBoundsException("" + index);
 		try (Transaction t = lock(true, null)) {
 			int translated = translateToInternalIndex(index);
 			E old = (E) theArray[translated];
@@ -516,9 +520,11 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 					theOffset = 0;
 				theAdvanced = 1;
 			} else {
-				ensureCapacity(theSize + 1);
-				theSize++;
-				theArray[translateToInternalIndex(theSize - 1)] = e;
+				int oldSize = theSize;
+				int newSize = theSize + 1;
+				ensureCapacity(newSize);
+				theSize = newSize;
+				theArray[translateToInternalIndex(oldSize)] = e;
 			}
 			theAdded = 1;
 			theLocker.indexChanged(1);
@@ -586,6 +592,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 
 	@Override
 	public boolean addAll(int index, Collection<? extends E> c) {
+		if (index < 0)
+			throw new IndexOutOfBoundsException("" + index);
 		if (c.isEmpty())
 			return false;
 		try (Transaction t = lock(true, null)) {
@@ -766,6 +774,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 
 	@Override
 	public E remove(int index) {
+		if (index < 0)
+			throw new IndexOutOfBoundsException("" + index);
 		try (Transaction t = lock(true, null)) {
 			return internalRemove(index, translateToInternalIndex(index));
 		}
@@ -779,6 +789,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	@Override
 	public E removeLast() {
 		try (Transaction t = lock(true, null)) {
+			if (theSize == 0)
+				throw new NoSuchElementException();
 			return internalRemove(theSize - 1, translateToInternalIndex(theSize - 1));
 		}
 	}
@@ -943,11 +955,11 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	 * @return Whether this list's internal array was switched as a result of this call
 	 */
 	public boolean ensureCapacity(int capacity) {
-		if (capacity > theMaxCapacity)
+		// overflow-conscious code
+		if (capacity - theMaxCapacity > 0)
 			capacity = theMaxCapacity;
-		if (theArray.length < capacity) {
+		if (capacity - theArray.length > 0) {
 			try (Transaction t = theLocker.lock(true, null)) {
-				// overflow-conscious code
 				int oldCapacity = theArray.length;
 				int newCapacity = oldCapacity == 0 ? 10 : oldCapacity + (oldCapacity >> 1);
 				if (newCapacity - capacity < 0)
@@ -975,13 +987,12 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	}
 
 	private static final int translateToInternalIndex(Object[] array, int offset, int size, int index) {
-		if (index < 0)
-			throw new ArrayIndexOutOfBoundsException(index);
-		else if (index > size)
+		if (index >= size)
 			throw new ArrayIndexOutOfBoundsException(index + " of " + size);
-		else if (index == size)
-			throw new ArrayIndexOutOfBoundsException(index + " of " + size);
-		return (index + offset) % array.length;
+		int t = index + offset;
+		if (t >= array.length)
+			t -= array.length;
+		return t;
 	}
 
 	private int makeRoom(int index, int spaces) {
@@ -1609,7 +1620,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 				int size = theSize;
 				int start = theStart;
 				int end = theEnd;
-				if (!theSubLock.check(stamp))
+				if (start == end || !theSubLock.check(stamp))
 					return -1;
 				int index = end - 1;
 				int t = translateToInternalIndex(array, offset, size, index);
@@ -1750,6 +1761,8 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		@Override
 		public boolean removeLast(Object o) {
 			try (Transaction t = theSubLock.lock(true, null)) {
+				if (theStart == theEnd)
+					return false;
 				int index = theEnd - 1;
 				int ti = translateToInternalIndex(index);
 				for (; index >= theStart; index--) {
