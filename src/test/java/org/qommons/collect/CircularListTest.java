@@ -1,14 +1,20 @@
 package org.qommons.collect;
 
 import static org.junit.Assert.assertEquals;
+import static org.qommons.QommonsUtils.printTimeLength;
 
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 
+import org.junit.Assert;
 import org.junit.Test;
 import org.qommons.QommonsTestUtils;
 
 /** Tests {@link CircularArrayList} */
 public class CircularListTest {
+	private static boolean WITH_PROGRESS = false;
+	private static final DecimalFormat PC_FMT = new DecimalFormat("0%");
+
 	/**
 	 * Runs the basic
 	 * {@link QommonsTestUtils#testCollection(java.util.Collection, java.util.function.Consumer, java.util.function.Function)} collection
@@ -66,9 +72,158 @@ public class CircularListTest {
 			System.out.flush();
 		}
 		System.out.println();
-		System.out.println("Java: " + org.qommons.QommonsUtils.printTimeLength(javaTime / 1000000));
-		System.out.println("Unsafe: " + org.qommons.QommonsUtils.printTimeLength(unsafeTime / 1000000));
+		System.out.println(
+			"Java: " + printTime(javaTime) + ", unsafe: " + printTime(unsafeTime) + ": " + PC_FMT.format(unsafeTime * 1.0 / javaTime));
 		// System.out.println("Safe: " + org.qommons.QommonsUtils.printTimeLength(safeTime / 1000000));
+	}
+
+	/**
+	 * Ensures the thread-unsafe performance of CircularArrayList does not regress.
+	 * 
+	 * This method tests operations where CircularArrayList excels versus java's ArrayList due to its ability to move at most half of its
+	 * elements for any operation.
+	 */
+	@Test
+	public void testRandomAddPerformance() {
+		ArrayList<Integer> java = new ArrayList<>();
+		CircularArrayList<Integer> unsafe = CircularArrayList.build().unsafe().build();
+
+		int size = 100000; // CAL performs relatively well for large sizes
+
+		long javaAddTime = 0;
+		long unsafeAddTime = 0;
+		if (WITH_PROGRESS) {
+			System.out.print("0%");
+			System.out.flush();
+		}
+		while (java.size() < size) {
+			int index = (int) (Math.random() * java.size());
+
+			long start = System.nanoTime();
+			java.add(index, index);
+			javaAddTime += System.nanoTime() - start;
+			start = System.nanoTime();
+			unsafe.add(index, index);
+			unsafeAddTime += System.nanoTime() - start;
+
+			if (WITH_PROGRESS && (java.size() * 100) % size == 0) {
+				int div = java.size() * 100 / size;
+				if (div % 10 == 0)
+					System.out.print(div + "%");
+				else
+					System.out.print('.');
+				System.out.flush();
+			}
+		}
+		if (WITH_PROGRESS)
+			System.out.println();
+
+		long javaRemoveTime = 0;
+		long unsafeRemoveTime = 0;
+		while (java.size() > 0) {
+			if (WITH_PROGRESS && (java.size() * 100) % size == 0) {
+				int div = java.size() * 100 / size;
+				if (div % 10 == 0)
+					System.out.print(div + "%");
+				else
+					System.out.print('.');
+				System.out.flush();
+			}
+
+			int index = (int) (Math.random() * java.size());
+
+			long start = System.nanoTime();
+			java.remove(index);
+			javaRemoveTime += System.nanoTime() - start;
+			start = System.nanoTime();
+			unsafe.remove(index);
+			unsafeRemoveTime += System.nanoTime() - start;
+		}
+		if (WITH_PROGRESS) {
+			System.out.println("0%");
+		}
+
+		double prop = 0.6;
+		if (WITH_PROGRESS || !checkTime(unsafeAddTime, javaAddTime, prop) || !checkTime(unsafeRemoveTime, javaRemoveTime, prop)) {
+			System.out.println("Random Add: Java: " + printTime(javaAddTime) + ", CAL: " + printTime(unsafeAddTime) + ": "
+				+ PC_FMT.format(unsafeAddTime * 1.0 / javaAddTime));
+			System.out.println(
+				"Random Remove: Java: " + printTime(javaRemoveTime) + ", CAL: " + printTime(unsafeRemoveTime) + ": "
+					+ PC_FMT.format(unsafeRemoveTime * 1.0 / javaRemoveTime));
+			Assert.assertTrue(checkTime(unsafeAddTime, javaRemoveTime, prop));
+			Assert.assertTrue(checkTime(unsafeRemoveTime, javaRemoveTime, prop));
+		}
+	}
+
+	/**
+	 * Ensures the thread-unsafe performance of CircularArrayList does not regress.
+	 * 
+	 * This method tests operations where CircularArrayList must do more work than java's ArrayList due to its support of features like
+	 * thread-safety and max capacity, even if these features are not used. Hence the checks allow for significantly worse performance than
+	 * ArrayList.
+	 */
+	@Test
+	public void testAgainstJava() {
+		ArrayList<Integer> java = new ArrayList<>();
+		CircularArrayList<Integer> unsafe = CircularArrayList.build().unsafe().build();
+
+		int size = 100; // CAL performs relatively poorly for small sizes
+
+		long javaAddTime = 0;
+		long unsafeAddTime = 0;
+		int tries = 100;
+
+		// Sequential add
+		for (int t = 0; t < tries; t++) {
+			java.clear();
+			unsafe.clear();
+			for (int i = 0; i < size; i++) {
+				long start = System.nanoTime();
+				java.add(i);
+				javaAddTime += System.nanoTime() - start;
+				start = System.nanoTime();
+				unsafe.add(i);
+				unsafeAddTime += System.nanoTime() - start;
+			}
+		}
+
+		long javaGetTime = 0;
+		long unsafeGetTime = 0;
+		tries = 25000000;
+
+		// Random get
+		for (int t = 0; t < tries; t++) {
+			int index = (int) (Math.random() * size);
+			long start = System.nanoTime();
+			java.get(index);
+			javaGetTime += System.nanoTime() - start;
+			start = System.nanoTime();
+			unsafe.get(index);
+			unsafeGetTime += System.nanoTime() - start;
+		}
+		// Currently, CAL is 2x to 3x slower than java for sequential add and random get for this list size
+		if (WITH_PROGRESS || !checkTime(unsafeAddTime, javaAddTime, 3.25)) {
+			System.out.println("Seq add: Java: " + printTime(javaAddTime) + ", CAL: " + printTime(unsafeAddTime) + ": "
+				+ PC_FMT.format(unsafeAddTime * 1.0 / javaAddTime));
+			Assert.assertTrue(checkTime(unsafeAddTime, javaAddTime, 3.25));
+		}
+		if (WITH_PROGRESS || !checkTime(unsafeGetTime, javaGetTime, 3.25)) {
+			System.out.println("Random get: Java: " + printTime(javaGetTime) + ", CAL: " + printTime(unsafeGetTime) + ": "
+				+ PC_FMT.format(unsafeGetTime * 1.0 / javaGetTime));
+			Assert.assertTrue(checkTime(unsafeGetTime, javaGetTime, 3.25));
+		}
+	}
+
+	private static String printTime(long nanos) {
+		long millis = nanos / 1000000;
+		if (millis != 0)
+			return printTimeLength(millis) + " " + (nanos % 1000000) + "ns";
+		else
+			return (nanos % 1000000) + "ns";
+	}
+
+	private static boolean checkTime(long testing, long standard, double tolerance) {
+		return testing <= standard * tolerance;
 	}
 
 	/** Tests {@link CircularArrayList}'s {@link CircularArrayList#setMaxCapacity(int) max capacity} capability */
