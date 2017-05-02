@@ -494,7 +494,7 @@ public interface OrderedQollection<E> extends Qollection<E> {
 					return element;
 				};
 			};
-			return new ElementSpliterator.SimpleQuiterator<E, E>(sorted.spliterator(), theWrapped.getType(), elementMap) {};
+			return new ElementSpliterator.SimpleSpliterator<E, E>(sorted.spliterator(), theWrapped.getType(), elementMap) {};
 		}
 
 		@Override

@@ -1086,7 +1086,7 @@ public interface QList<E> extends ReversibleQollection<E>, TransactableList<E> {
 				reversed.addAll(theWrapped);
 			}
 			Collections.reverse(reversed);
-			return new ElementSpliterator.SimpleQuiterator<>(reversed.spliterator(), getType(), () -> v -> new CollectionElement<E>() {
+			return new ElementSpliterator.SimpleSpliterator<>(reversed.spliterator(), getType(), () -> v -> new CollectionElement<E>() {
 				@Override
 				public TypeToken<E> getType() {
 					return CollectionWrappingList.this.getType();

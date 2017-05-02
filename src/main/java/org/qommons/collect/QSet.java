@@ -334,7 +334,7 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 				Supplier<Function<Equalizer.EqualizerNode<T>, CollectionElement<T>>> elementSupplier = () -> {
 					return value -> modSet.get(value);
 				};
-				return new ElementSpliterator.SimpleQuiterator<Equalizer.EqualizerNode<T>, T>(modSet.keySet().spliterator(), type,
+				return new ElementSpliterator.SimpleSpliterator<Equalizer.EqualizerNode<T>, T>(modSet.keySet().spliterator(), type,
 					elementSupplier) {
 					@Override
 					public int characteristics() {
@@ -768,7 +768,7 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 						return null;
 				};
 			};
-			return new ElementSpliterator.WrappingQuiterator<>(null, theCollection.getType(), elementMap);
+			return new ElementSpliterator.WrappingSplterator<>(null, theCollection.getType(), elementMap);
 		}
 
 		@Override
