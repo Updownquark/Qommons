@@ -768,7 +768,7 @@ public interface QSet<E> extends Qollection<E>, TransactableSet<E> {
 						return null;
 				};
 			};
-			return new ElementSpliterator.WrappingSplterator<>(null, theCollection.getType(), elementMap);
+			return new ElementSpliterator.WrappingSpliterator<>(null, theCollection.getType(), elementMap);
 		}
 
 		@Override

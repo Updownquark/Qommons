@@ -132,7 +132,7 @@ public interface ElementSpliterator<T> extends Spliterator<T> {
 	 * @param <T> The type of values returned by the wrapped ElementSpliterator
 	 * @param <V> The type of values returned by this ElementSpliterator
 	 */
-	class MappedQuiterator<T, V> extends WrappingSplterator<T, V> {
+	class MappedQuiterator<T, V> extends WrappingSpliterator<T, V> {
 		public MappedQuiterator(TypeToken<V> type, ElementSpliterator<T> wrap, Function<? super T, V> map,
 			Function<? super V, ? extends T> reverse) {
 			super(wrap, type, () -> {
@@ -296,13 +296,13 @@ public interface ElementSpliterator<T> extends Spliterator<T> {
 	 * @param <T> The type of elements in the wrapped ElementSpliterator
 	 * @param <V> The type of this ElementSpliterator's elements
 	 */
-	class WrappingSplterator<T, V> implements ElementSpliterator<V> {
+	class WrappingSpliterator<T, V> implements ElementSpliterator<V> {
 		private final ElementSpliterator<? extends T> theWrapped;
 		private final TypeToken<V> theType;
 		private final Supplier<? extends Function<? super CollectionElement<? extends T>, ? extends CollectionElement<V>>> theMap;
 		private final Function<? super CollectionElement<? extends T>, ? extends CollectionElement<V>> theInstanceMap;
 
-		public WrappingSplterator(ElementSpliterator<? extends T> wrap, TypeToken<V> type,
+		public WrappingSpliterator(ElementSpliterator<? extends T> wrap, TypeToken<V> type,
 			Supplier<? extends Function<? super CollectionElement<? extends T>, ? extends CollectionElement<V>>> map) {
 			theWrapped = wrap;
 			theType = type;
@@ -362,12 +362,12 @@ public interface ElementSpliterator<T> extends Spliterator<T> {
 			ElementSpliterator<? extends T> wrapSplit = theWrapped.trySplit();
 			if (wrapSplit == null)
 				return null;
-			return new WrappingSplterator<>(wrapSplit, theType, theMap);
+			return new WrappingSpliterator<>(wrapSplit, theType, theMap);
 		}
 	}
 
 	/**
-	 * An element returned from {@link ElementSpliterator.WrappingSplterator}
+	 * An element returned from {@link ElementSpliterator.WrappingSpliterator}
 	 * 
 	 * @param <T> The type of value in the element wrapped by this element
 	 * @param <V> The type of this element

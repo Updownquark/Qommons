@@ -11,7 +11,7 @@ import org.qommons.IterableUtils;
 import org.qommons.Transaction;
 import org.qommons.collect.MultiMap.MultiEntry;
 import org.qommons.collect.ElementSpliterator.WrappingElement;
-import org.qommons.collect.ElementSpliterator.WrappingSplterator;
+import org.qommons.collect.ElementSpliterator.WrappingSpliterator;
 import org.qommons.value.Settable;
 import org.qommons.value.Value;
 
@@ -1242,7 +1242,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		protected ElementSpliterator<T> map(ElementSpliterator<E> iter) {
-			return new WrappingSplterator<>(iter, getType(), () -> {
+			return new WrappingSpliterator<>(iter, getType(), () -> {
 				CollectionElement<? extends E>[] container = new CollectionElement[1];
 				FilterMapResult<E, T> mapped = new FilterMapResult<>();
 				WrappingElement<E, T> wrapperEl = new WrappingElement<E, T>(getType(), container) {
@@ -1536,7 +1536,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					return wrapper;
 				};
 			};
-			return new WrappingSplterator<>(source, getType(), elementMap);
+			return new WrappingSpliterator<>(source, getType(), elementMap);
 		}
 
 		@Override
@@ -1886,7 +1886,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		protected ElementSpliterator<E> modFilter(ElementSpliterator<E> source) {
-			return new WrappingSplterator<>(source, getType(), () -> {
+			return new WrappingSpliterator<>(source, getType(), () -> {
 				CollectionElement<E>[] container = new CollectionElement[1];
 				WrappingElement<E, E> wrapperEl = new WrappingElement<E, E>(getType(), container) {
 					@Override
@@ -2431,7 +2431,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					return wrapper;
 				};
 			};
-			return new WrappingSplterator<Value<? extends E>, E>(wrap, theType, fn);
+			return new WrappingSpliterator<Value<? extends E>, E>(wrap, theType, fn);
 		}
 
 		@Override
@@ -2702,7 +2702,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					return wrappingEl;
 				};
 			};
-			return new WrappingSplterator<>(wrap, theType, fn);
+			return new WrappingSpliterator<>(wrap, theType, fn);
 		}
 
 		@Override
@@ -2934,7 +2934,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		protected ElementSpliterator<E> wrap(ElementSpliterator<? extends Qollection<? extends E>> outer,
 			Function<Qollection<? extends E>, ElementSpliterator<? extends E>> innerSplit) {
 			return new ElementSpliterator<E>() {
-				private WrappingSplterator<E, E> theInnerator;
+				private WrappingSpliterator<E, E> theInnerator;
 				private Supplier<Function<CollectionElement<? extends E>, CollectionElement<E>>> theElementMap;
 				private boolean isSplit;
 
@@ -2986,11 +2986,11 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				@Override
 				public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
 					if (theInnerator == null && !outer
-						.tryAdvance(coll -> theInnerator = new WrappingSplterator<>(innerSplit.apply(coll), theType, theElementMap)))
+						.tryAdvance(coll -> theInnerator = new WrappingSpliterator<>(innerSplit.apply(coll), theType, theElementMap)))
 						return false;
 					while (!theInnerator.tryAdvanceElement(action)) {
 						if (!outer
-							.tryAdvance(coll -> theInnerator = new WrappingSplterator<>(innerSplit.apply(coll), theType, theElementMap)))
+							.tryAdvance(coll -> theInnerator = new WrappingSpliterator<>(innerSplit.apply(coll), theType, theElementMap)))
 							return false;
 					}
 					return true;
@@ -3000,7 +3000,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				public void forEachElement(Consumer<? super CollectionElement<E>> action) {
 					try (Transaction t = isSplit ? Transaction.NONE : theOuter.lock(false, null)) { // Won't modify the outer
 						outer.forEachRemaining(coll -> {
-							new WrappingSplterator<>(innerSplit.apply(coll), theType, theElementMap).forEachElement(action);
+							new WrappingSpliterator<>(innerSplit.apply(coll), theType, theElementMap).forEachElement(action);
 						});
 					}
 				}
@@ -3009,7 +3009,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				public ElementSpliterator<E> trySplit() {
 					ElementSpliterator<E>[] ret = new ElementSpliterator[1];
 					isSplit |= outer.tryAdvance(coll -> {
-						ret[0] = new WrappingSplterator<>(innerSplit.apply(coll), theType, theElementMap);
+						ret[0] = new WrappingSpliterator<>(innerSplit.apply(coll), theType, theElementMap);
 					});
 					return ret[0];
 				}
