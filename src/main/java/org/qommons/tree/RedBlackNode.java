@@ -477,7 +477,7 @@ public abstract class RedBlackNode implements Comparable<RedBlackNode>, Cloneabl
 	}
 
 	/**
-	 * Removes this node from its structure, rebalancing if necessary
+	 * Removes this node (but not its children) from its structure, rebalancing if necessary
 	 *
 	 * @return The new root of this node's structure
 	 */

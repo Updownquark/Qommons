@@ -2,7 +2,10 @@ package org.qommons.collect;
 
 import java.util.ListIterator;
 import java.util.NoSuchElementException;
+import java.util.Spliterator;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 import org.qommons.Ternian;
 
@@ -54,6 +57,45 @@ public interface ReversibleSpliterator<T> extends ElementSpliterator<T> {
 
 	@Override
 	ReversibleSpliterator<T> trySplit();
+
+	/**
+	 * @param <E> The compile-time type for the spliterator
+	 * @param type The type for the ReversibleSpliterator
+	 * @return An empty ReversibleSpliterator of the given type
+	 */
+	static <E> ReversibleSpliterator<E> empty(TypeToken<E> type) {
+		return new ReversibleSpliterator<E>() {
+			@Override
+			public long estimateSize() {
+				return 0;
+			}
+
+			@Override
+			public int characteristics() {
+				return Spliterator.IMMUTABLE | Spliterator.SIZED;
+			}
+
+			@Override
+			public TypeToken<E> getType() {
+				return type;
+			}
+
+			@Override
+			public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
+				return false;
+			}
+
+			@Override
+			public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
+				return false;
+			}
+
+			@Override
+			public ReversibleSpliterator<E> trySplit() {
+				return null;
+			}
+		};
+	}
 
 	/**
 	 * Implements {@link ReversibleSpliterator#reverse()}
@@ -261,6 +303,55 @@ public interface ReversibleSpliterator<T> extends ElementSpliterator<T> {
 		@Override
 		public String toString() {
 			return backing.toString();
+		}
+	}
+
+	/**
+	 * A ElementSpliterator whose elements are the result of some filter-map operation on another ElementSpliterator's elements
+	 * 
+	 * @param <T> The type of elements in the wrapped ElementSpliterator
+	 * @param <V> The type of this ElementSpliterator's elements
+	 */
+	class WrappingReversibleSpliterator<T, V> extends ElementSpliterator.WrappingSpliterator<T, V> implements ReversibleSpliterator<V> {
+		public WrappingReversibleSpliterator(ReversibleSpliterator<? extends T> wrap, TypeToken<V> type,
+			Supplier<? extends Function<? super CollectionElement<? extends T>, ? extends CollectionElement<V>>> map) {
+			super(wrap, type, map);
+		}
+
+		@Override
+		protected ReversibleSpliterator<? extends T> getWrapped() {
+			return (ReversibleSpliterator<? extends T>) super.getWrapped();
+		}
+
+		@Override
+		public boolean tryReverseElement(Consumer<? super CollectionElement<V>> action) {
+			boolean[] passed = new boolean[1];
+			while (!passed[0] && getWrapped().tryReverseElement(el -> {
+				CollectionElement<V> mapped = getInstanceMap().apply(el);
+				if (mapped != null) {
+					passed[0] = true;
+					action.accept(mapped);
+				}
+			})) {
+			}
+			return passed[0];
+		}
+
+		@Override
+		public void forEachReverseElement(Consumer<? super CollectionElement<V>> action) {
+			getWrapped().forEachReverseElement(el -> {
+				CollectionElement<V> mapped = getInstanceMap().apply(el);
+				if (mapped != null)
+					action.accept(mapped);
+			});
+		}
+
+		@Override
+		public ReversibleSpliterator<V> trySplit() {
+			ReversibleSpliterator<? extends T> wrapSplit = getWrapped().trySplit();
+			if (wrapSplit == null)
+				return null;
+			return new WrappingReversibleSpliterator<>(wrapSplit, getType(), getMap());
 		}
 	}
 }

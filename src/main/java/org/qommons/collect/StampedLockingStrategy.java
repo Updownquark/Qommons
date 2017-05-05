@@ -9,7 +9,7 @@ import org.qommons.Transaction;
 
 /** A collection-locking strategy using {@link StampedLock} */
 public class StampedLockingStrategy implements CollectionLockingStrategy {
-	private static final int MAX_OPTIMISTIC_TRIES = 3;
+	private static final int MAX_OPTIMISTIC_TRIES = 1; // If we fail the first time, probably not gonna get lucky immediately
 	private static final String CO_MOD_MSG = "Use\n"//
 		+ "try(Transaction t=lock(forWrite, null)){\n"//
 		+ "\t//iteration\n" //

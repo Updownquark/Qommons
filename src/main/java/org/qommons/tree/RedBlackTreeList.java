@@ -1,10 +1,20 @@
 package org.qommons.tree;
 
-import java.util.AbstractList;
 import java.util.Collection;
-import java.util.Iterator;
+import java.util.Deque;
 import java.util.ListIterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.function.Function;
+
+import org.qommons.Ternian;
+import org.qommons.Transaction;
+import org.qommons.collect.Betterator;
+import org.qommons.collect.CollectionLockingStrategy;
+import org.qommons.collect.FastFailLockingStrategy;
+import org.qommons.collect.ReversibleList;
+import org.qommons.collect.ReversibleSpliterator;
+import org.qommons.collect.TransactableList;
 
 /**
  * A list backed by a binary red/black tree structure. Tree lists are O(log(n)) for get(index) and all modifications; constant time-from a
@@ -13,71 +23,30 @@ import java.util.function.Function;
  * @param <N> The sub-type of {@link CountedRedBlackNode} used to store the data
  * @param <E> The type of values in the list
  */
-public class RedBlackTreeList<N extends CountedRedBlackNode<E>, E> extends AbstractList<E> {
-	private final Function<E, N> theNodeCreator;
-
-	private N theRoot;
-
+public class RedBlackTreeList<N extends CountedRedBlackNode<E>, E> extends AbstractRBTCollection<E, N>
+	implements ReversibleList<E>, TransactableList<E>, Deque<E> {
 	/** @param nodeCreator The function to create nodes for the list */
 	public RedBlackTreeList(Function<E, N> nodeCreator) {
-		theNodeCreator = nodeCreator;
+		this(nodeCreator, new FastFailLockingStrategy());
+	}
+
+	public RedBlackTreeList(Function<E, N> nodeCreator, CollectionLockingStrategy locker) {
+		super(nodeCreator, locker);
 	}
 
 	/** @return The root of this list's tree structure */
+	@Override
 	public N getRoot() {
-		return theRoot;
-	}
-
-	/**
-	 * @param value The value to create the node for
-	 * @return The new node for the value
-	 */
-	protected N createNode(E value) {
-		return theNodeCreator.apply(value);
+		return super.getRoot();
 	}
 
 	/**
 	 * @param index The index to get the node at
 	 * @return The node at the given index
 	 */
+	@Override
 	public N getNodeAt(int index) {
-		return getNodeAt(theRoot, index, 0);
-	}
-
-	private N getNodeAt(N node, int index, int passed) {
-		if(node == null)
-			throw new IndexOutOfBoundsException((passed + index) + " of " + CountedRedBlackNode.size(theRoot));
-		int leftCount = CountedRedBlackNode.size(node.getLeft());
-		if(index < leftCount)
-			return getNodeAt((N) node.getLeft(), index, passed);
-		else if(index == leftCount)
-			return node;
-		else
-			return getNodeAt((N) node.getRight(), index - leftCount - 1, passed + leftCount + 1);
-	}
-
-	private void replace(N toReplace, N replacement) {
-		toReplace.replace(replacement);
-		if(theRoot == toReplace)
-			theRoot = replacement;
-	}
-
-	/** @return The last node in this tree */
-	public N getLastNode() {
-		N ret = theRoot;
-		while(ret != null && ret.getRight() != null)
-			ret = (N) ret.getRight();
-		return ret;
-	}
-
-	@Override
-	public int size() {
-		return CountedRedBlackNode.size(theRoot);
-	}
-
-	@Override
-	public boolean isEmpty() {
-		return theRoot == null;
+		return super.getNodeAt(index);
 	}
 
 	@Override
@@ -87,123 +56,73 @@ public class RedBlackTreeList<N extends CountedRedBlackNode<E>, E> extends Abstr
 	}
 
 	@Override
-	public Iterator<E> iterator() {
-		return iterator(true);
+	public int indexOf(Object o) {
+		return getLocker().doOptimistically(0, (idx, stamp) -> {
+			N found = findNode(v -> Objects.equals(v, o), Ternian.TRUE);
+			return found == null ? -1 : found.getIndex();
+		});
 	}
 
-	/**
-	 * @param forward Whether to iterate forward through the list or backward
-	 * @return The iterator
-	 */
-	public Iterator<E> iterator(boolean forward) {
-		N root = theRoot;
-		if(root == null)
-			return java.util.Collections.EMPTY_LIST.iterator();
-		return iterator(forward ? getNodeAt(0) : getLastNode(), forward);
+	@Override
+	public int lastIndexOf(Object o) {
+		return getLocker().doOptimistically(0, (idx, stamp) -> {
+			N found = findNode(v -> Objects.equals(v, o), Ternian.FALSE);
+			return found == null ? -1 : found.getIndex();
+		});
 	}
 
-	/**
-	 * @param forward Whether to iterate forward through the list or backward
-	 * @return The node iterator
-	 */
-	public Iterator<N> nodeIterator(boolean forward) {
-		N root = theRoot;
-		if(root == null)
-			return java.util.Collections.EMPTY_LIST.iterator();
-		return nodeIterator(getNodeAt(0), forward);
-	}
-
-	private Iterator<E> iterator(N start, boolean forward) {
-		return new Iterator<E>() {
-			private final Iterator<N> backing = nodeIterator(start, forward);
-
-			@Override
-			public boolean hasNext() {
-				return backing.hasNext();
-			}
-
-			@Override
-			public E next() {
-				return backing.next().getValue();
-			}
-
-			@Override
-			public void remove() {
-				backing.remove();
-			}
-		};
-	}
-
-	private Iterator<N> nodeIterator(N start, boolean forward) {
-		return new Iterator<N>() {
-			private N theLastNode = null;
-
-			private N theNextNode = start;
-
-			@Override
-			public boolean hasNext() {
-				return theNextNode != null;
-			}
-
-			@Override
-			public N next() {
-				N nextNode = theNextNode;
-				if(nextNode == null)
-					throw new java.util.NoSuchElementException();
-				theLastNode = nextNode;
-				theNextNode = (N) nextNode.getClosest(!forward);
-				return theLastNode;
-			}
-
-			@Override
-			public void remove() {
-				if(theLastNode == null)
-					throw new IllegalStateException("remove() may only be called after next() and only once after each call to next()");
-				theRoot = (N) theLastNode.delete();
-				theLastNode = null;
-			}
-		};
+	@Override
+	public Betterator<E> iterator() {
+		return ReversibleList.super.iterator();
 	}
 
 	@Override
 	public boolean add(E e) {
-		N node = getLastNode();
-		addAfter(e, node);
-		return true;
+		try (Transaction t = lock(true, null)) {
+			N node = getEndNode(false);
+			addAfter(e, node);
+			return true;
+		}
 	}
 
 	@Override
 	public void add(int index, E element) {
-		if(theRoot == null && index == 0) {
-			theRoot = createNode(element);
-			return;
+		try (Transaction t = lock(true, null)) {
+			if (isEmpty() && index == 0)
+				addAfter(element, null);
+			else {
+				N node = getNodeAt(index);
+				addBefore(element, node);
+			}
 		}
-		N node = getNodeAt(index);
-		addBefore(element, node);
 	}
 
 	@Override
 	public boolean addAll(Collection<? extends E> c) {
-		N node = getLastNode();
-		for(E o : c)
-			node = addAfter(o, node);
-		return !c.isEmpty();
+		try (Transaction t = lock(true, null)) {
+			N node = getEndNode(false);
+			for (E o : c)
+				node = addAfter(o, node);
+			return !c.isEmpty();
+		}
 	}
 
 	@Override
 	public boolean addAll(int index, Collection<? extends E> c) {
-		if(index == size())
-			return addAll(c);
-		N node = getNodeAt(index);
-		boolean first = true;
-		for(E o : c) {
-			if(first) {
-				node = addBefore(o, node);
-				first = false;
-			} else
-				node = addAfter(o, node);
+		try (Transaction t = lock(true, null)) {
+			if (index == size())
+				return addAll(c);
+			N node = getNodeAt(index);
+			boolean first = true;
+			for (E o : c) {
+				if (first) {
+					node = addBefore(o, node);
+					first = false;
+				} else
+					node = addAfter(o, node);
+			}
+			return !c.isEmpty();
 		}
-		return !c.isEmpty();
 	}
 
 	/**
@@ -211,19 +130,9 @@ public class RedBlackTreeList<N extends CountedRedBlackNode<E>, E> extends Abstr
 	 * @param before The node to add the element before
 	 * @return The new node
 	 */
+	@Override
 	public N addBefore(E element, N before) {
-		N newNode = createNode(element);
-		N left = (N) before.getLeft();
-		RedBlackNode.TreeOpResult result;
-		if(left == null)
-			result = before.addOnSide(newNode, true, true);
-		else {
-			while(left.getRight() != null)
-				left = (N) left.getRight();
-			result = left.addOnSide(newNode, false, true);
-		}
-		theRoot = (N) result.getNewRoot();
-		return newNode;
+		return super.addBefore(element, before);
 	}
 
 	/**
@@ -231,172 +140,228 @@ public class RedBlackTreeList<N extends CountedRedBlackNode<E>, E> extends Abstr
 	 * @param after The node to add the element after
 	 * @return The new node
 	 */
+	@Override
 	public N addAfter(E element, N after) {
-		N newNode = createNode(element);
-		if(after == null) {
-			if(theRoot == null) {
-				theRoot = newNode;
-				newNode.setRed(false);
-			} else {
-				N farLeft = theRoot;
-				while(farLeft.getChild(true) != null)
-					farLeft = (N) farLeft.getChild(true);
-				RedBlackNode.TreeOpResult result = farLeft.addOnSide(newNode, true, true);
-				theRoot = (N) result.getNewRoot();
-			}
-		} else {
-			N right = (N) after.getRight();
-			RedBlackNode.TreeOpResult result;
-			if(right == null)
-				result = after.addOnSide(newNode, false, true);
-			else {
-				while(right.getLeft() != null)
-					right = (N) right.getLeft();
-				result = right.addOnSide(newNode, true, true);
-			}
-			theRoot = (N) result.getNewRoot();
-		}
-		return newNode;
+		return super.addAfter(element, after);
 	}
 
 	@Override
 	public E remove(int index) {
-		N node = getNodeAt(index);
-		theRoot = (N) node.delete();
-		return node.getValue();
-	}
-
-	@Override
-	public void clear() {
-		theRoot = null;
+		try (Transaction t = lock(true, null)) {
+			N node = getNodeAt(index);
+			delete(node);
+			return node.getValue();
+		}
 	}
 
 	@Override
 	public E set(int index, E element) {
-		N node = getNodeAt(index);
-		E old = node.getValue();
-		replace(node, createNode(element));
-		return old;
+		try (Transaction t = lock(true, null)) {
+			N node = getNodeAt(index);
+			E old = node.getValue();
+			replace(node, createNode(element));
+			return old;
+		}
+	}
+
+	@Override
+	public void addFirst(E e) {
+		offerFirst(e);
+	}
+
+	@Override
+	public void addLast(E e) {
+		add(e);
+	}
+
+	@Override
+	public boolean offerFirst(E e) {
+		try (Transaction t = lock(true, null)) {
+			N first = getEndNode(true);
+			if (first == null)
+				addAfter(e, null);
+			else
+				addBefore(e, first);
+			return true;
+		}
+	}
+
+	@Override
+	public boolean offerLast(E e) {
+		return add(e);
+	}
+
+	@Override
+	public E removeFirst() {
+		try (Transaction t = lock(true, null)) {
+			N first = getEndNode(true);
+			if (first == null)
+				throw new NoSuchElementException();
+			delete(first);
+			return first.getValue();
+		}
+	}
+
+	@Override
+	public E removeLast() {
+		try (Transaction t = lock(true, null)) {
+			N first = getEndNode(false);
+			if (first == null)
+				throw new NoSuchElementException();
+			delete(first);
+			return first.getValue();
+		}
+	}
+
+	@Override
+	public E pollFirst() {
+		try (Transaction t = lock(true, null)) {
+			N first = getEndNode(true);
+			if (first == null)
+				return null;
+			delete(first);
+			return first.getValue();
+		}
+	}
+
+	@Override
+	public E pollLast() {
+		try (Transaction t = lock(true, null)) {
+			N first = getEndNode(true);
+			if (first == null)
+				return null;
+			delete(first);
+			return first.getValue();
+		}
+	}
+
+	@Override
+	public E getFirst() {
+		return getLocker().doOptimistically(null, (v, stamp) -> {
+			N node = getEndNode(true);
+			if (node == null)
+				throw new NoSuchElementException();
+			return node.getValue();
+		});
+	}
+
+	@Override
+	public E getLast() {
+		return getLocker().doOptimistically(null, (v, stamp) -> {
+			N node = getEndNode(false);
+			if (node == null)
+				throw new NoSuchElementException();
+			return node.getValue();
+		});
+	}
+
+	@Override
+	public E peekFirst() {
+		return getLocker().doOptimistically(null, (v, stamp) -> {
+			N node = getEndNode(true);
+			if (node == null)
+				return null;
+			return node.getValue();
+		});
+	}
+
+	@Override
+	public E peekLast() {
+		return getLocker().doOptimistically(null, (v, stamp) -> {
+			N node = getEndNode(false);
+			if (node == null)
+				return null;
+			return node.getValue();
+		});
+	}
+
+	@Override
+	public boolean removeFirstOccurrence(Object o) {
+		return remove(o);
+	}
+
+	@Override
+	public boolean removeLastOccurrence(Object o) {
+		return removeLast(o);
+	}
+
+	@Override
+	public boolean offer(E e) {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public E remove() {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public E poll() {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public E element() {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public E peek() {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public void push(E e) {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public E pop() {
+		// TODO Auto-generated method stub
 	}
 
 	@Override
 	public ListIterator<E> listIterator(int index) {
-		N start;
-		boolean startingAfter;
-		if(index==size()){
-			start = getLastNode();
-			startingAfter = true;
+		N prev, next;
+		if (index == size()) {
+			prev = getEndNode(false);
+			next = null;
 		} else {
-			start=getNodeAt(index);
-			startingAfter = false;
+			next = getNodeAt(index);
+			prev = (N) next.getClosest(true);
 		}
-		return new ListIterator<E>() {
-			private N theLastNode;
-			private N theNextNode;
-			private boolean calledNextMostRecently;
 
-			private boolean hasCalledAnything;
+		return new ListIter(nodeSpliterator(prev, next));
+	}
 
-			{
-				if(startingAfter) {
-					theLastNode = start;
-					theNextNode = (N) theLastNode.getClosest(false);
-				} else {
-					theNextNode = start;
-					theLastNode = (N) theNextNode.getClosest(true);
-				}
-			}
+	@Override
+	public ReversibleList<E> subList(int fromIndex, int toIndex) {
+	}
 
-			@Override
-			public boolean hasNext() {
-				return theNextNode != null;
-			}
+	private class ListIter extends ReversibleSpliterator.PartialListIterator<E> {
+		private final NodeSpliterator theNodes;
 
-			@Override
-			public E next() {
-				N node = theNextNode;
-				if(node == null)
-					throw new java.util.NoSuchElementException();
-				theNextNode = (N) theNextNode.getClosest(false);
-				calledNextMostRecently = true;
-				hasCalledAnything = true;
-				theLastNode = node;
-				return node.getValue();
-			}
+		ListIter(NodeSpliterator nodes) {
+			super(values(nodes));
+			theNodes = nodes;
+		}
 
-			@Override
-			public boolean hasPrevious() {
-				return theLastNode != null;
-			}
+		@Override
+		public int nextIndex() {
+			N nextNode = theNodes.getNextNode();
+			return nextNode == null ? size() : nextNode.getIndex();
+		}
 
-			@Override
-			public E previous() {
-				N node = theLastNode;
-				if(node == null)
-					throw new java.util.NoSuchElementException();
-				theLastNode = (N) theLastNode.getClosest(true);
-				calledNextMostRecently = false;
-				hasCalledAnything = true;
-				theNextNode = node;
-				return node.getValue();
-			}
+		@Override
+		public int previousIndex() {
+			N prevNode = theNodes.getPreviousNode();
+			return prevNode == null ? 0 : prevNode.getIndex();
+		}
 
-			@Override
-			public int nextIndex() {
-				if(theNextNode == null)
-					return size();
-				return theNextNode.getIndex();
-			}
-
-			@Override
-			public int previousIndex() {
-				if(theLastNode == null)
-					return 0;
-				return theLastNode.getIndex();
-			}
-
-			@Override
-			public void remove() {
-				if(!hasCalledAnything)
-					throw new IllegalStateException("remove() must be called after next() or previous()");
-				if(calledNextMostRecently) {
-					if(theLastNode == null)
-						throw new IllegalStateException("remove() cannot be called twice in a row");
-					theRoot = (N) theLastNode.delete();
-					theLastNode = (N) theLastNode.getClosest(true);
-				} else {
-					if(theNextNode == null)
-						throw new IllegalStateException("remove() cannot be called twice in a row");
-					theRoot = (N) theNextNode.delete();
-					theNextNode = (N) theNextNode.getClosest(true);
-				}
-			}
-
-			@Override
-			public void set(E e) {
-				if(!hasCalledAnything)
-					throw new IllegalStateException("set() must be called after next() or previous()");
-				if(calledNextMostRecently) {
-					N newNode = createNode(e);
-					replace(theLastNode, newNode);
-					theLastNode = newNode;
-				} else {
-					N newNode = createNode(e);
-					replace(theNextNode, newNode);
-					theNextNode = newNode;
-				}
-			}
-
-			@Override
-			public void add(E e) {
-				if(!hasCalledAnything)
-					throw new IllegalStateException("set() must be called after next() or previous()");
-				if(calledNextMostRecently) {
-					theLastNode = addAfter(e, theLastNode);
-				} else {
-					theLastNode = addBefore(e, theNextNode);
-				}
-			}
-		};
+		@Override
+		public void add(E e) {
+			int todo = todo;// TOOD
+		}
 	}
 }
