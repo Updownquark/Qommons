@@ -21,4 +21,19 @@ public interface Transactable {
 	default boolean isLockSupported() {
 		return true;
 	}
+
+	/**
+	 * Locks the transactable if it is one
+	 * 
+	 * @param lockable The (possibly) transactable object to lock
+	 * @param write Whether to lock the object for write or read
+	 * @param cause The cause of the lock
+	 * @return The transaction to use to unlock the object
+	 */
+	static Transaction lock(Object lockable, boolean write, Object cause) {
+		if (lockable instanceof Transactable)
+			return ((Transactable) lockable).lock(write, cause);
+		else
+			return Transaction.NONE;
+	}
 }

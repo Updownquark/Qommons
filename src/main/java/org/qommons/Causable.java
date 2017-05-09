@@ -1,38 +1,40 @@
 package org.qommons;
 
-import java.util.function.Consumer;
+import java.util.Map;
 import java.util.function.Function;
 
 /** An event or something that may have a cause */
 public interface Causable {
+	/** An action to be fired when a causable finishes */
+	interface TerminalAction {
+		/**
+		 * @param cause The causable that has finished
+		 * @param values The values added to the causable for this action
+		 */
+		void finished(Causable cause, Map<Object, Object> values);
+	}
+
 	/** @return The cause of this event or thing--typically another event or null */
 	Object getCause();
 
-	/**
-	 * @param action The action to run when this event or thing finishes
-	 * @return This causable
-	 */
-	Causable onFinish(Consumer<Object> action);
-
-	/**
-	 * @param action The action to run when the root causable of this causable finishes
-	 * @return This causable
-	 */
-	Causable onRootFinish(Consumer<Object> action);
-
-	/** Runs the finish actions of this causable */
-	void finish();
-
 	/** @return The thing that caused the chain of events that led to this event or thing */
+	Causable getRootCausable();
+
+	/** @return The root cause of this causable (the root may or may not be causable itself) */
 	default Object getRootCause() {
-		Causable root = this;
-		Object cause = getCause();
-		while (cause != null) {
-			root = (Causable) cause;
-			cause = root.getCause();
-		}
-		return root;
+		Causable root = getRootCausable();
+		if (root.getCause() != null)
+			return root.getCause();
+		else
+			return root;
 	}
+
+	/**
+	 * @param key The key to add the action for. An action will only be added once to a causable for a given key.
+	 * @param action The action to run when this event or thing finishes
+	 * @return A map of key-values that may be modified to keep track of information from multiple sub-causes of this cause
+	 */
+	Map<Object, Object> onFinish(Object key, TerminalAction action);
 
 	/**
 	 * Applies a function to each cause in the chain of events that led to this event and returns the first non-null value. Allows a quick

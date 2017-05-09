@@ -378,31 +378,19 @@ public abstract class AbstractRBTCollection<E, N extends CountedRedBlackNode<E>>
 	@Override
 	public boolean remove(Object o) {
 		try (Transaction t = lock(true, null)) {
-			ReversibleSpliterator<N> spliter = nodeSpliterator(null, getEndNode(true));
-			boolean[] removed = new boolean[1];
-			while (spliter.tryAdvanceElement(el -> {
-				if (Objects.equals(el.get().getValue(), o)) {
-					el.remove();
-					removed[0] = true;
-				}
-			}) && !removed[0]) {
-			}
-			return removed[0];
+			N node = findNode(v -> Objects.equals(v, o), Ternian.TRUE);
+			if (node != null)
+				delete(node);
+			return node != null;
 		}
 	}
 
 	public boolean removeLast(Object o) {
 		try (Transaction t = lock(true, null)) {
-			ReversibleSpliterator<N> spliter = nodeSpliterator(getEndNode(false), null);
-			boolean[] removed = new boolean[1];
-			while (spliter.tryReverseElement(el -> {
-				if (Objects.equals(el.get().getValue(), o)) {
-					el.remove();
-					removed[0] = true;
-				}
-			}) && !removed[0]) {
-			}
-			return removed[0];
+			N node = findNode(v -> Objects.equals(v, o), Ternian.FALSE);
+			if (node != null)
+				delete(node);
+			return node != null;
 		}
 	}
 
@@ -454,6 +442,18 @@ public abstract class AbstractRBTCollection<E, N extends CountedRedBlackNode<E>>
 		try (Transaction t = lock(true, null)) {
 			theRoot = null;
 			theLocker.indexChanged(-1);
+		}
+	}
+
+	public E findAndReplace(Predicate<? super E> test, Function<? super E, ? extends E> map) {
+		try (Transaction t = lock(true, null)) {
+			N node = findNode(n -> test.test(n.getValue()), Ternian.NONE);
+			if (node != null) {
+				E newValue = map.apply(node.getValue());
+				if (newValue != node.getValue())
+					replace(node, createNode(newValue));
+			}
+			return node == null ? null : node.getValue();
 		}
 	}
 
