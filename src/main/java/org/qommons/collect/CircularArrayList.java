@@ -1515,6 +1515,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		}
 
 		private boolean tryElement(Consumer<? super CollectionElement<E>> action, boolean advance) {
+			theSubLock.check();
 			if (advance) {
 				if (theCursor >= theEnd)
 					return false;

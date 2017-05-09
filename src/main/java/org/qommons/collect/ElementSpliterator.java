@@ -319,6 +319,14 @@ public interface ElementSpliterator<T> extends Spliterator<T> {
 			return theWrapped;
 		}
 
+		protected Supplier<? extends Function<? super CollectionElement<? extends T>, ? extends CollectionElement<V>>> getMap() {
+			return theMap;
+		}
+
+		protected Function<? super CollectionElement<? extends T>, ? extends CollectionElement<V>> getInstanceMap() {
+			return theInstanceMap;
+		}
+
 		@Override
 		public long estimateSize() {
 			return theWrapped.estimateSize();
