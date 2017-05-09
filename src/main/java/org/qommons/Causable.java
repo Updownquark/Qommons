@@ -1,5 +1,6 @@
 package org.qommons;
 
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /** An event or something that may have a cause */
@@ -11,13 +12,13 @@ public interface Causable {
 	 * @param action The action to run when this event or thing finishes
 	 * @return This causable
 	 */
-	Causable onFinish(Runnable action);
+	Causable onFinish(Consumer<Object> action);
 
 	/**
 	 * @param action The action to run when the root causable of this causable finishes
 	 * @return This causable
 	 */
-	Causable onRootFinish(Runnable action);
+	Causable onRootFinish(Consumer<Object> action);
 
 	/** Runs the finish actions of this causable */
 	void finish();

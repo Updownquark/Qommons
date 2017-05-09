@@ -1,12 +1,13 @@
 package org.qommons;
 
 import java.util.LinkedHashSet;
+import java.util.function.Consumer;
 
 /** An efficient abstract implementation of Causable */
 public abstract class AbstractCausable implements Causable {
 	private final Object theCause;
-	private LinkedHashSet<Runnable> theActions;
-	private LinkedHashSet<Runnable> theRootActions;
+	private LinkedHashSet<Consumer<Object>> theActions;
+	private LinkedHashSet<Consumer<Object>> theRootActions;
 
 	/** @param cause The cause of this causable */
 	public AbstractCausable(Object cause) {
@@ -19,14 +20,14 @@ public abstract class AbstractCausable implements Causable {
 	}
 
 	@Override
-	public Causable onFinish(Runnable action) {
+	public Causable onFinish(Consumer<Object> action) {
 		getActions().add(action);
 		return this;
 	}
 
 	@Override
-	public Causable onRootFinish(Runnable action) {
-		LinkedHashSet<Runnable> actions = getRootActions();
+	public Causable onRootFinish(Consumer<Object> action) {
+		LinkedHashSet<Consumer<Object>> actions = getRootActions();
 		if (actions != null)
 			actions.add(action);
 		else // The cause is a causable that doesn't extend AbstractCausable
@@ -37,8 +38,8 @@ public abstract class AbstractCausable implements Causable {
 	@Override
 	public void finish() {
 		if (theActions != null) {
-			for (Runnable action : theActions)
-				action.run();
+			for (Consumer<Object> action : theActions)
+				action.accept(this);
 			theActions.clear();
 		}
 	}
@@ -47,7 +48,7 @@ public abstract class AbstractCausable implements Causable {
 		return !(theCause instanceof Causable);
 	}
 
-	private LinkedHashSet<Runnable> getActions() {
+	private LinkedHashSet<Consumer<Object>> getActions() {
 		if (theActions != null)
 			return theActions;
 		else if (isRoot())
@@ -56,7 +57,7 @@ public abstract class AbstractCausable implements Causable {
 			return theActions = new LinkedHashSet<>();
 	}
 
-	private LinkedHashSet<Runnable> getRootActions() {
+	private LinkedHashSet<Consumer<Object>> getRootActions() {
 		if (theRootActions != null)
 			return theRootActions;
 		else if (isRoot())
