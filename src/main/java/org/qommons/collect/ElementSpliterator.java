@@ -243,6 +243,14 @@ public interface ElementSpliterator<T> extends Spliterator<T> {
 			theInstanceMap = theMap.get();
 		}
 
+		protected Spliterator<T> getWrapped() {
+			return theWrapped;
+		}
+
+		protected Supplier<? extends Function<? super T, ? extends CollectionElement<V>>> getMap() {
+			return theMap;
+		}
+
 		@Override
 		public TypeToken<V> getType() {
 			return theType;

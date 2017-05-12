@@ -22,7 +22,7 @@ public interface BetterCollection<E> extends Collection<E> {
 
 	/**
 	 * @param value The value to search for
-	 * @return The element in this collection matching the given value.
+	 * @return The element in this collection matching the given value, or null if there is no such value in this collection
 	 */
 	default CollectionElement<E> elementFor(Object value) {
 		ElementSpliterator<E> spliter = spliterator();
@@ -45,7 +45,7 @@ public interface BetterCollection<E> extends Collection<E> {
 	default boolean find(Predicate<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement) {
 		ElementSpliterator<E> spliter = spliterator();
 		boolean[] found = new boolean[1];
-		while (!found[0] && spliter.tryAdvanceElement(el -> {
+		while (spliter.tryAdvanceElement(el -> {
 			if (search.test(el.get())) {
 				found[0] = true;
 				onElement.accept(el);
