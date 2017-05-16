@@ -30,6 +30,10 @@ public class RedBlackTreeList<N extends CountedRedBlackNode<E>, E> extends Abstr
 		this(nodeCreator, new FastFailLockingStrategy());
 	}
 
+	/**
+	 * @param nodeCreator The function to create nodes for the list
+	 * @param locker The locking strategy for the list
+	 */
 	public RedBlackTreeList(Function<E, N> nodeCreator, CollectionLockingStrategy locker) {
 		super(nodeCreator, locker);
 	}
@@ -74,6 +78,11 @@ public class RedBlackTreeList<N extends CountedRedBlackNode<E>, E> extends Abstr
 	@Override
 	public Betterator<E> iterator() {
 		return ReversibleList.super.iterator();
+	}
+
+	@Override
+	public Betterator<E> descendingIterator() {
+		return super.descendingIterator();
 	}
 
 	@Override
@@ -287,38 +296,37 @@ public class RedBlackTreeList<N extends CountedRedBlackNode<E>, E> extends Abstr
 
 	@Override
 	public boolean offer(E e) {
-		// TODO Auto-generated method stub
+		return add(e);
 	}
 
 	@Override
 	public E remove() {
-		// TODO Auto-generated method stub
+		return removeFirst();
 	}
 
 	@Override
 	public E poll() {
-		// TODO Auto-generated method stub
+		return pollFirst();
 	}
 
 	@Override
 	public E element() {
-		// TODO Auto-generated method stub
+		return getFirst();
 	}
 
 	@Override
 	public E peek() {
-		// TODO Auto-generated method stub
+		return peekFirst();
 	}
 
 	@Override
 	public void push(E e) {
-		// TODO Auto-generated method stub
-
+		add(0, e);
 	}
 
 	@Override
 	public E pop() {
-		// TODO Auto-generated method stub
+		return removeFirst();
 	}
 
 	@Override
