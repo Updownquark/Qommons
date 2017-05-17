@@ -239,6 +239,12 @@ public interface RedBlackTreeSet<E, N extends ValuedRedBlackNode<E>> extends jav
 		return addedNode;
 	}
 
+	/** @param node The node in this tree to delete */
+	default void removeNode(N node) {
+		if (node != null)
+			setRoot((N) node.delete());
+	}
+
 	@Override
 	default boolean remove(Object value) {
 		N found = getNode(value);
