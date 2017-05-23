@@ -3,6 +3,8 @@ package org.qommons.collect;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Objects;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import org.qommons.ArrayUtils;
 
@@ -22,6 +24,14 @@ public interface ReversibleCollection<E> extends BetterCollection<E> {
 		return new ElementSpliterator.SpliteratorBetterator<>(spliterator(false).reverse());
 	}
 
+	/**
+	 * Removes the last occurrence of the given value in this collection, if it exists
+	 * 
+	 * @param o The value to remove
+	 * @return Whether the value was found (and removed)
+	 */
+	boolean removeLast(Object o);
+
 	@Override
 	default ReversibleSpliterator<E> spliterator() {
 		return spliterator(true);
@@ -32,6 +42,65 @@ public interface ReversibleCollection<E> extends BetterCollection<E> {
 	 * @return The spliterator
 	 */
 	ReversibleSpliterator<E> spliterator(boolean fromStart);
+
+	/**
+	 * @param value The value to search for
+	 * @param first Whether to find the first or the last matching element
+	 * @return The element in this collection matching the given value, or null if there is no such value in this collection
+	 */
+	default CollectionElement<E> elementFor(Object value, boolean first) {
+		ElementSpliterator<E> spliter = spliterator(first);
+		CollectionElement<E>[] foundEl = new CollectionElement[1];
+		while (foundEl[0] == null && spliter.tryAdvanceElement(el -> {
+			if (Objects.equals(el.get(), value))
+				foundEl[0] = el;
+		})) {
+		}
+		return foundEl[0];
+	}
+
+	/**
+	 * Finds a value in this collection matching the given search and performs an action on the {@link CollectionElement} for that element
+	 * 
+	 * @param search The search function
+	 * @param onElement The action to perform on the search's result
+	 * @param first Whether to find the first or the last element which passes the test
+	 * @return Whether a result was found
+	 */
+	default boolean find(Predicate<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
+		ElementSpliterator<E> spliter = spliterator(first);
+		boolean[] found = new boolean[1];
+		while (spliter.tryAdvanceElement(el -> {
+			if (search.test(el.get())) {
+				found[0] = true;
+				onElement.accept(el);
+			}
+		})) {
+		}
+		return found[0];
+	}
+
+	/**
+	 * Finds all values in this collection matching the given search and performs an action on the {@link CollectionElement} for each
+	 * element
+	 * 
+	 * @param search The search function
+	 * @param onElement The action to perform on the search's results
+	 * @param fromStart Whether the spliterator should begin at the beginning or the end of this collection
+	 * @return The number of results found
+	 */
+	default int findAll(Predicate<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement, boolean fromStart) {
+		ElementSpliterator<E> spliter = spliterator(fromStart);
+		int[] found = new int[1];
+		while (spliter.tryAdvanceElement(el -> {
+			if (search.test(el.get())) {
+				found[0]++;
+				onElement.accept(el);
+			}
+		})) {
+		}
+		return found[0];
+	}
 
 	/** @return A collection that is identical to this one, but with its elements reversed */
 	default ReversibleCollection<E> reverse() {
@@ -115,6 +184,11 @@ public interface ReversibleCollection<E> extends BetterCollection<E> {
 
 		@Override
 		public boolean remove(Object o) {
+			return theWrapped.removeLast(o);
+		}
+
+		@Override
+		public boolean removeLast(Object o) {
 			return theWrapped.remove(o);
 		}
 
