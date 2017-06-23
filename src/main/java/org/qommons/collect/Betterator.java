@@ -25,6 +25,8 @@ public interface Betterator<E> extends Iterator<E> {
 	 * @param value The value to set
 	 * @param cause The cause of the operation. May be null.
 	 * @return The replaced value
+	 * @throws IllegalArgumentException If the given value is {@link #isAcceptable(Object) unacceptable}
+	 * @throws UnsupportedOperationException If this operation is unsupported
 	 */
-	E set(E value, Object cause);
+	E set(E value, Object cause) throws IllegalArgumentException, UnsupportedOperationException;
 }

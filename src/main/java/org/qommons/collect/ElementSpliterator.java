@@ -1,5 +1,6 @@
 package org.qommons.collect;
 
+import java.util.Comparator;
 import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -91,6 +92,47 @@ public interface ElementSpliterator<T> extends Spliterator<T> {
 
 	@Override
 	ElementSpliterator<T> trySplit();
+
+	/** @return An immutable spliterator backed by this spliterator */
+	default Spliterator<T> immutable() {
+		return new Spliterator<T>() {
+			@Override
+			public boolean tryAdvance(Consumer<? super T> action) {
+				return ElementSpliterator.this.tryAdvance(action);
+			}
+
+			@Override
+			public void forEachRemaining(Consumer<? super T> action) {
+				ElementSpliterator.this.forEachRemaining(action);
+			}
+
+			@Override
+			public Spliterator<T> trySplit() {
+				ElementSpliterator<T> split = ElementSpliterator.this.trySplit();
+				return split == null ? null : split.immutable();
+			}
+
+			@Override
+			public long estimateSize() {
+				return ElementSpliterator.this.estimateSize();
+			}
+
+			@Override
+			public long getExactSizeIfKnown() {
+				return ElementSpliterator.this.getExactSizeIfKnown();
+			}
+
+			@Override
+			public int characteristics() {
+				return ElementSpliterator.this.characteristics();
+			}
+
+			@Override
+			public Comparator<? super T> getComparator() {
+				return ElementSpliterator.this.getComparator();
+			}
+		};
+	}
 
 	/**
 	 * @param <E> The compile-time type for the spliterator

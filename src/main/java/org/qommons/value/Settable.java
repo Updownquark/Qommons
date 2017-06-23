@@ -16,8 +16,9 @@ public interface Settable<T> extends Value<T> {
 	 * @param cause Something that may have caused this change
 	 * @return The value that was previously set for in this container
 	 * @throws IllegalArgumentException If the value is not acceptable or setting it fails
+	 * @throws UnsupportedOperationException If this operation is not supported (e.g. because this value is {@link #isEnabled() disabled}
 	 */
-	<V extends T> T set(V value, Object cause) throws IllegalArgumentException;
+	<V extends T> T set(V value, Object cause) throws IllegalArgumentException, UnsupportedOperationException;
 
 	/**
 	 * @param <V> The type of the value to check
