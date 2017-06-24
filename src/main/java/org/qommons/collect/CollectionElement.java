@@ -16,8 +16,8 @@ public interface CollectionElement<T> extends Settable<T> {
 	/**
 	 * Removes this element from the source collection
 	 * 
-	 * @throws IllegalArgumentException If the element cannot be removed
+	 * @throws UnsupportedOperationException If the element cannot be removed
 	 * @see #canRemove()
 	 */
-	void remove() throws IllegalArgumentException;
+	void remove() throws UnsupportedOperationException;
 }

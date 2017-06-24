@@ -4,7 +4,6 @@ import java.util.Comparator;
 import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import org.qommons.value.Settable;
@@ -20,14 +19,14 @@ import com.google.common.reflect.TypeToken;
  * ElementSpliterators are {@link #trySplit() splittable} just as Spliterators are, though the added functionality (particularly
  * {@link CollectionElement#remove()}) may be disabled for split spliterators.
  * 
- * @param <T> The type of values that this ElementSpliterator provides
+ * @param <E> The type of values that this ElementSpliterator provides
  */
-public interface ElementSpliterator<T> extends Spliterator<T> {
+public interface ElementSpliterator<E> extends Spliterator<E> {
 	/** Message returned for attempting to put an element into a space that is not compatible with its type */
 	static String BAD_TYPE = "Object is the wrong type for this collection";
 
 	/** @return The type of elements returned by this ElementSpliterator */
-	TypeToken<T> getType();
+	TypeToken<E> getType();
 
 	/**
 	 * Iterates through each element covered by this ElementSpliterator
@@ -37,78 +36,94 @@ public interface ElementSpliterator<T> extends Spliterator<T> {
 	 *        longer than the reference to the ElementSpliterator.
 	 * @return false if no remaining elements existed upon entry to this method, else true.
 	 */
-	boolean tryAdvanceElement(Consumer<? super CollectionElement<T>> action);
+	boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action);
 
 	/**
 	 * Operates on each element remaining in this ElementSpliterator
 	 * 
 	 * @param action The action to perform on each element
 	 */
-	default void forEachElement(Consumer<? super CollectionElement<T>> action) {
+	default void forEachElement(Consumer<? super CollectionElement<E>> action) {
 		while (tryAdvanceElement(action)) {
 		}
 	}
 
 	@Override
-	default boolean tryAdvance(Consumer<? super T> action) {
+	default boolean tryAdvance(Consumer<? super E> action) {
 		return tryAdvanceElement(v -> {
 			action.accept(v.get());
 		});
 	}
 
 	@Override
-	default void forEachRemaining(Consumer<? super T> action) {
+	default void forEachRemaining(Consumer<? super E> action) {
 		while (tryAdvance(v -> action.accept(v))) {
 		}
 	}
 
-	/**
-	 * @param <V> The type to map to
-	 * @param map The mapping function
-	 * @return A new ElementSpliterator whose values are the given map applied to this ElementSpliterator's values
-	 */
-	default <V> ElementSpliterator<V> map(Function<? super T, V> map) {
-		return map((TypeToken<V>) TypeToken.of(map.getClass()).resolveType(Function.class.getTypeParameters()[1]), map, null);
-	}
-
-	/**
-	 * @param <V> The compile-time type to map to
-	 * @param type The run-time type of the map result
-	 * @param map The mapping function
-	 * @param reverse The reverse-function for allowing {@link CollectionElement#set(Object, Object) replacement} of values
-	 * @return A new ElementSpliterator whose values are the given map applied to this ElementSpliterator's values
-	 */
-	default <V> ElementSpliterator<V> map(TypeToken<V> type, Function<? super T, V> map, Function<? super V, ? extends T> reverse) {
-		return new MappedQuiterator<>(type, this, map, reverse);
-	}
-
-	/**
-	 * @param filter The filter
-	 * @return A new ElementSpliterator whose values are the this ElementSpliterator's values that pass the given filter
-	 */
-	default ElementSpliterator<T> filter(Predicate<? super T> filter) {
-		return new FilteredSpliterator<>(this, filter);
-	}
-
 	@Override
-	ElementSpliterator<T> trySplit();
+	ElementSpliterator<E> trySplit();
+
+	interface ElementSpliteratorMap<E, T> {
+		TypeToken<T> getType();
+
+		T map(E value);
+
+		E reverse(T value);
+
+		String filterEnabled(CollectionElement<E> el);
+
+		String filterRemove(CollectionElement<E> sourceEl);
+
+		default boolean canFilterValues() {
+			return true;
+		}
+		boolean test(E srcValue);
+		default boolean test(CollectionElement<E> el) {
+			return test(el.get());
+		}
+
+		default String filterAccept(T value) throws IllegalArgumentException, UnsupportedOperationException {
+			return null;
+		}
+
+		default long filterEstimatedSize(long srcSize) {
+			return srcSize;
+		}
+
+		default int filterExactSize(long srcSize) {
+			return -1;
+		}
+
+		default int modifyCharacteristics(int srcChars) {
+			return srcChars;
+		}
+
+		default Comparator<? super T> mapComparator(Comparator<? super E> srcCompare) {
+			return null;
+		}
+	}
+
+	default <T> ElementSpliterator<T> map(ElementSpliteratorMap<E, T> map) {
+		return new MappedElementSpliterator<>(this, map);
+	}
 
 	/** @return An immutable spliterator backed by this spliterator */
-	default Spliterator<T> immutable() {
-		return new Spliterator<T>() {
+	default Spliterator<E> immutable() {
+		return new Spliterator<E>() {
 			@Override
-			public boolean tryAdvance(Consumer<? super T> action) {
+			public boolean tryAdvance(Consumer<? super E> action) {
 				return ElementSpliterator.this.tryAdvance(action);
 			}
 
 			@Override
-			public void forEachRemaining(Consumer<? super T> action) {
+			public void forEachRemaining(Consumer<? super E> action) {
 				ElementSpliterator.this.forEachRemaining(action);
 			}
 
 			@Override
-			public Spliterator<T> trySplit() {
-				ElementSpliterator<T> split = ElementSpliterator.this.trySplit();
+			public Spliterator<E> trySplit() {
+				ElementSpliterator<E> split = ElementSpliterator.this.trySplit();
 				return split == null ? null : split.immutable();
 			}
 
@@ -128,7 +143,7 @@ public interface ElementSpliterator<T> extends Spliterator<T> {
 			}
 
 			@Override
-			public Comparator<? super T> getComparator() {
+			public Comparator<? super E> getComparator() {
 				return ElementSpliterator.this.getComparator();
 			}
 		};
@@ -169,99 +184,280 @@ public interface ElementSpliterator<T> extends Spliterator<T> {
 	}
 
 	/**
-	 * Implements {@link ElementSpliterator#map(TypeToken, Function, Function)}
+	 * An ElementSpliterator mapped by an {@link ElementSpliterator.ElementSpliteratorMap}
 	 * 
-	 * @param <T> The type of values returned by the wrapped ElementSpliterator
-	 * @param <V> The type of values returned by this ElementSpliterator
+	 * @param <E> The type of the source spliterator
+	 * @param <T> The type of this spliterator
 	 */
-	class MappedQuiterator<T, V> extends WrappingSpliterator<T, V> {
-		public MappedQuiterator(TypeToken<V> type, ElementSpliterator<T> wrap, Function<? super T, V> map,
-			Function<? super V, ? extends T> reverse) {
-			super(wrap, type, () -> {
-				CollectionElement<? extends T>[] container = new CollectionElement[1];
-				WrappingElement<T, V> wrapper = new WrappingElement<T, V>(type, container) {
-					@Override
-					public V get() {
-						return map.apply(getWrapped().get());
-					}
+	class MappedElementSpliterator<E, T> implements ElementSpliterator<T> {
+		private final ElementSpliterator<E> theSource;
+		private final ElementSpliteratorMap<E, T> theMap;
 
-					@Override
-					public <V2 extends V> String isAcceptable(V2 value) {
-						if (reverse == null)
-							return "Replacement is not enabled for this collection";
-						T reversed = reverse.apply(value);
-						return ((CollectionElement<T>) getWrapped()).isAcceptable(reversed);
-					}
+		private TypeToken<T> theType;
+		private final MappedElement<E, T> theElement;
 
-					@Override
-					public <V2 extends V> V set(V2 value, Object cause) throws IllegalArgumentException {
-						if (reverse == null)
-							throw new IllegalArgumentException("Replacement is not enabled for this collection");
-						T reversed = reverse.apply(value);
-						return map.apply(((CollectionElement<T>) getWrapped()).set(reversed, cause));
-					}
-				};
-				return el -> {
-					container[0] = el;
-					return wrapper;
-				};
-			});
-		}
-	}
-
-	/**
-	 * Implements {@link ElementSpliterator#filter(Predicate)}
-	 * 
-	 * @param <T> The type of values returned by this ElementSpliterator
-	 */
-	class FilteredSpliterator<T> implements ElementSpliterator<T> {
-		private final ElementSpliterator<T> theWrapped;
-		private final Predicate<? super T> theFilter;
-
-		public FilteredSpliterator(ElementSpliterator<T> wrap, Predicate<? super T> filter) {
-			theWrapped = wrap;
-			theFilter = filter;
+		public MappedElementSpliterator(ElementSpliterator<E> source, ElementSpliteratorMap<E, T> map) {
+			theSource = source;
+			theMap = map;
+			theElement = createElement();
 		}
 
-		@Override
-		public TypeToken<T> getType() {
-			return theWrapped.getType();
+		protected ElementSpliterator<E> getSource() {
+			return theSource;
 		}
 
-		@Override
-		public boolean tryAdvanceElement(Consumer<? super CollectionElement<T>> action) {
-			boolean[] found = new boolean[1];
-			while (!found[0] && theWrapped.tryAdvanceElement(el -> {
-				if (theFilter.test(el.get())) {
-					found[0] = true;
-					action.accept(el);
-				}
-			})) {
-			}
-			return found[0];
+		protected ElementSpliteratorMap<E, T> getMap() {
+			return theMap;
 		}
 
-		@Override
-		public void forEachElement(Consumer<? super CollectionElement<T>> action) {
-			theWrapped.forEachElement(el -> {
-				if (theFilter.test(el.get()))
-					action.accept(el);
-			});
+		protected MappedElement<E, T> getElement() {
+			return theElement;
+		}
+
+		protected MappedElement<E, T> createElement() {
+			return new MappedElement<>(theMap, this::getType);
 		}
 
 		@Override
 		public long estimateSize() {
-			return theWrapped.estimateSize(); // May not be right, but it's at least an upper bound
+			return theMap.filterEstimatedSize(theSource.estimateSize());
+		}
+
+		@Override
+		public long getExactSizeIfKnown() {
+			return theMap.filterExactSize(theSource.getExactSizeIfKnown());
 		}
 
 		@Override
 		public int characteristics() {
-			return theWrapped.characteristics() & (~Spliterator.SIZED);
+			return theMap.modifyCharacteristics(theSource.characteristics());
+		}
+
+		@Override
+		public Comparator<? super T> getComparator() {
+			return theMap.mapComparator(theSource.getComparator());
+		}
+
+		@Override
+		public TypeToken<T> getType() {
+			if (theType == null)
+				theType = theMap.getType();
+			return theType;
+		}
+
+		@Override
+		public boolean tryAdvanceElement(Consumer<? super CollectionElement<T>> action) {
+			while (theSource.tryAdvanceElement(el -> {
+				theElement.setSource(el);
+				if (theElement.isAccepted())
+					action.accept(theElement);
+			})) {
+				if (theElement.isAccepted())
+					return true;
+			}
+			return false;
+		}
+
+		@Override
+		public void forEachElement(Consumer<? super CollectionElement<T>> action) {
+			theSource.forEachElement(el -> {
+				theElement.setSource(el);
+				if (theElement.isAccepted())
+					action.accept(theElement);
+			});
+		}
+
+		@Override
+		public boolean tryAdvance(Consumer<? super T> action) {
+			if (theMap.canFilterValues()) {
+				boolean[] accepted = new boolean[1];
+				while (!accepted[0] && theSource.tryAdvance(v -> {
+					accepted[0] = theMap.test(v);
+					if (accepted[0])
+						action.accept(theMap.map(v));
+				})) {
+				}
+				return accepted[0];
+			} else
+				return ElementSpliterator.super.tryAdvance(action);
+		}
+
+		@Override
+		public void forEachRemaining(Consumer<? super T> action) {
+			if (theMap.canFilterValues()) {
+				theSource.forEachRemaining(v -> {
+					if (theMap.test(v))
+						action.accept(theMap.map(v));
+				});
+			} else
+				ElementSpliterator.super.forEachRemaining(action);
 		}
 
 		@Override
 		public ElementSpliterator<T> trySplit() {
-			return theWrapped.trySplit().filter(theFilter);
+			ElementSpliterator<E> split = theSource.trySplit();
+			return split == null ? null : split.map(theMap);
+		}
+
+		@Override
+		public Spliterator<T> immutable() {
+			if (theMap.canFilterValues()) {
+				Spliterator<E> srcSplit = theSource.immutable();
+				return new MappedSpliterator<>(srcSplit, theMap);
+			} else
+				return ElementSpliterator.super.immutable();
+		}
+
+		protected static class MappedElement<E, T> implements CollectionElement<T> {
+			private CollectionElement<E> theSourceEl;
+			private final ElementSpliteratorMap<E, T> theMap;
+			private final Supplier<TypeToken<T>> theType;
+			private boolean isAccepted;
+
+			protected MappedElement(ElementSpliteratorMap<E, T> map, Supplier<TypeToken<T>> type) {
+				theMap = map;
+				theType = type;
+			}
+
+			protected void setSource(CollectionElement<E> sourceEl) {
+				isAccepted = theMap.test(sourceEl);
+				theSourceEl = isAccepted ? sourceEl : null;
+			}
+
+			protected CollectionElement<E> getSourceEl() {
+				return theSourceEl;
+			}
+
+			protected boolean isAccepted() {
+				return isAccepted;
+			}
+
+			@Override
+			public TypeToken<T> getType() {
+				return theType.get();
+			}
+
+			@Override
+			public T get() {
+				return theMap.map(theSourceEl.get());
+			}
+
+			@Override
+			public Value<String> isEnabled() {
+				return new Value<String>() {
+					@Override
+					public TypeToken<String> getType() {
+						return TypeToken.of(String.class);
+					}
+
+					@Override
+					public String get() {
+						String filterEnabled = theMap.filterEnabled(theSourceEl);
+						if (filterEnabled != null)
+							return filterEnabled;
+						return theSourceEl.isEnabled().get();
+					}
+				};
+			}
+
+			@Override
+			public <V extends T> String isAcceptable(V value) {
+				String preFilter = theMap.filterAccept(value);
+				if (preFilter != null)
+					throw new IllegalArgumentException(preFilter);
+				return theSourceEl.isAcceptable(theMap.reverse(value));
+			}
+
+			@Override
+			public <V extends T> T set(V value, Object cause) throws IllegalArgumentException, UnsupportedOperationException {
+				String preFilter = theMap.filterAccept(value);
+				if (preFilter != null)
+					throw new IllegalArgumentException(preFilter);
+				return theMap.map(theSourceEl.set(theMap.reverse(value), cause));
+			}
+
+			@Override
+			public String canRemove() {
+				String msg = theMap.filterRemove(theSourceEl);
+				if (msg != null)
+					return msg;
+				return theSourceEl.canRemove();
+			}
+
+			@Override
+			public void remove() throws UnsupportedOperationException {
+				String msg = theMap.filterRemove(theSourceEl);
+				if (msg != null)
+					throw new UnsupportedOperationException(msg);
+				theSourceEl.remove();
+			}
+
+			@Override
+			public String toString() {
+				return String.valueOf(get());
+			}
+		}
+	}
+
+	/**
+	 * A Spliterator mapped by an {@link ElementSpliterator.ElementSpliteratorMap}
+	 * 
+	 * @param <T> The type of the source spliterator
+	 * @param <E> The type of this spliterator
+	 */
+	class MappedSpliterator<T, E> implements Spliterator<E> {
+		private final Spliterator<T> theSource;
+		private final ElementSpliteratorMap<T, E> theMap;
+
+		public MappedSpliterator(Spliterator<T> source, ElementSpliteratorMap<T, E> map) {
+			theSource = source;
+			theMap = map;
+		}
+
+		@Override
+		public boolean tryAdvance(Consumer<? super E> action) {
+			boolean [] accepted=new boolean[1];
+			while(!accepted[0] && theSource.tryAdvance(v->{
+				accepted[0] = theMap.test(v);
+				if (accepted[0])
+					action.accept(theMap.map(v));
+			})) {
+			}
+			return accepted[0];
+		}
+
+		@Override
+		public void forEachRemaining(Consumer<? super E> action) {
+			theSource.forEachRemaining(v -> {
+				if (theMap.test(v))
+					action.accept(theMap.map(v));
+			});
+		}
+
+		@Override
+		public Spliterator<E> trySplit() {
+			Spliterator<T> split = theSource.trySplit();
+			return new MappedSpliterator<>(split, theMap);
+		}
+
+		@Override
+		public long estimateSize() {
+			return theMap.filterEstimatedSize(theSource.estimateSize());
+		}
+
+		@Override
+		public int characteristics() {
+			return theMap.modifyCharacteristics(theSource.characteristics());
+		}
+
+		@Override
+		public long getExactSizeIfKnown() {
+			return theMap.filterExactSize(theSource.getExactSizeIfKnown());
+		}
+
+		@Override
+		public Comparator<? super E> getComparator() {
+			return theMap.mapComparator(theSource.getComparator());
 		}
 	}
 
