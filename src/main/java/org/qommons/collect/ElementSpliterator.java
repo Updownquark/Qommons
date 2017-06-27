@@ -83,7 +83,7 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 			return test(el.get());
 		}
 
-		default String filterAccept(T value) throws IllegalArgumentException, UnsupportedOperationException {
+		default String filterAccept(T value) {
 			return null;
 		}
 
@@ -91,7 +91,7 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 			return srcSize;
 		}
 
-		default int filterExactSize(long srcSize) {
+		default long filterExactSize(long srcSize) {
 			return -1;
 		}
 
