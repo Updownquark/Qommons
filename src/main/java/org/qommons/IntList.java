@@ -92,14 +92,16 @@ public class IntList implements Iterable<Integer>, Sealable, Cloneable
 	 * sort the current value set.
 	 *
 	 * @param sorted Whether the elements in this list should be sorted or not
+	 * @return This list
 	 */
-	public void setSorted(boolean sorted)
+	public IntList setSorted(boolean sorted)
 	{
 		if(isSealed)
 			throw new IllegalStateException("This list has been sealed and cannot be modified");
 		if(sorted && !isSorted)
 			java.util.Arrays.sort(theValue, 0, theSize);
 		isSorted = sorted;
+		return this;
 	}
 
 	/**
@@ -129,8 +131,9 @@ public class IntList implements Iterable<Integer>, Sealable, Cloneable
 	 * eliminate duplicate values that may exist in the current set.
 	 *
 	 * @param unique Whether this list should eliminate duplicate values
+	 * @return This list
 	 */
-	public void setUnique(boolean unique)
+	public IntList setUnique(boolean unique)
 	{
 		if(isSealed)
 			throw new IllegalStateException("This list has been sealed and cannot be modified");
@@ -152,6 +155,7 @@ public class IntList implements Iterable<Integer>, Sealable, Cloneable
 				}
 		}
 		isUnique = unique;
+		return this;
 	}
 
 	/**
@@ -230,10 +234,9 @@ public class IntList implements Iterable<Integer>, Sealable, Cloneable
 	 * </p>
 	 *
 	 * @param value The value to add to the list
-	 * @return Whether the value was added. This will only be false if this list is unique and the
-	 *         value already exists.
+	 * @return The index that the value was added at, or &lt;0 if this list is unique and the value already exists.
 	 */
-	public boolean add(int value)
+	public int add(int value)
 	{
 		assertUnsealed();
 		ensureCapacity(theSize + 1);
@@ -241,15 +244,18 @@ public class IntList implements Iterable<Integer>, Sealable, Cloneable
 		{
 			int index = indexFor(value);
 			if(isUnique && index < theSize && theValue[index] == value)
-				return false;
+				return -index-1;
 			for(int i = theSize; i > index; i--)
 				theValue[i] = theValue[i - 1];
 			theValue[index] = value;
 			theSize++;
+			return index;
 		}
-		else if(!isUnique || indexOf(value) < 0)
+		else if(!isUnique || indexOf(value) < 0){
 			theValue[theSize++] = value;
-		return true;
+			return theSize-1;
+		} else
+			return -1;
 	}
 
 	/**
@@ -263,26 +269,28 @@ public class IntList implements Iterable<Integer>, Sealable, Cloneable
 	 *         {@link #add(int) add} operation.
 	 * @throws IllegalStateException If this list is not sorted
 	 */
-	public int indexFor(int value)
-	{
-		if(!isSorted)
-			throw new IllegalStateException("The indexFor method is only meaningful for a"
-				+ " sorted list");
-		if(theSize == 0)
+	public int indexFor(int value) {
+		if (!isSorted)
+			throw new IllegalStateException("The indexFor method is only meaningful for a sorted list");
+		if (theSize == 0)
 			return 0;
 		int min = 0, max = theSize - 1;
-		while(min < max)
-		{
+		// Add some optimizations for adding values in the right order
+		if (value > theValue[max])
+			return theSize;
+		else if (value < theValue[0])
+			return 0;
+		while (min < max) {
 			int mid = (min + max) >>> 1;
-		int diff = value - theValue[mid];
-		if(diff > 0)
-			min = mid + 1;
-		else if(diff < 0)
-			max = mid;
-		else
-			return mid;
+			int diff = value - theValue[mid];
+			if (diff > 0)
+				min = mid + 1;
+			else if (diff < 0)
+				max = mid;
+			else
+				return mid;
 		}
-		if(theValue[max] < value)
+		if (theValue[max] < value)
 			max++;
 		return max;
 	}
@@ -308,7 +316,7 @@ public class IntList implements Iterable<Integer>, Sealable, Cloneable
 	{
 		assertUnsealed();
 		if(isSorted)
-			return add(value);
+			return add(value) >= 0;
 		else if(!isUnique || indexOf(value) < 0)
 		{
 			if(index < 0 || index > theSize)
