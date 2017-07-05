@@ -14,15 +14,23 @@ import org.qommons.ArrayUtils;
  * @param <E> The type of values in the collection
  */
 public interface ReversibleCollection<E> extends BetterCollection<E> {
-	/** @return An iterable that iterates through this collection's values in reverse */
-	default Iterable<E> descending() {
-		return () -> descendingIterator();
+	@Override
+	default ReversibleSpliterator<E> spliterator() {
+		return spliterator(true);
 	}
 
-	/** @return An iterator to traverse this collection's elements in reverse */
-	default Betterator<E> descendingIterator() {
-		return new ElementSpliterator.SpliteratorBetterator<>(spliterator(false).reverse());
+	ReversibleSpliterator<E> spliterator(boolean fromStart);
+
+	@Override
+	default ReversibleElementSpliterator<E> mutableSpliterator() {
+		return mutableSpliterator(true);
 	}
+
+	/**
+	 * @param fromStart Whether the spliterator should begin at the beginning or the end of this collection
+	 * @return The spliterator
+	 */
+	ReversibleElementSpliterator<E> mutableSpliterator(boolean fromStart);
 
 	/**
 	 * Removes the last occurrence of the given value in this collection, if it exists
@@ -32,24 +40,13 @@ public interface ReversibleCollection<E> extends BetterCollection<E> {
 	 */
 	boolean removeLast(Object o);
 
-	@Override
-	default ReversibleSpliterator<E> spliterator() {
-		return spliterator(true);
-	}
-
-	/**
-	 * @param fromStart Whether the spliterator should begin at the beginning or the end of this collection
-	 * @return The spliterator
-	 */
-	ReversibleSpliterator<E> spliterator(boolean fromStart);
-
 	/**
 	 * @param value The value to search for
 	 * @param first Whether to find the first or the last matching element
 	 * @return The element in this collection matching the given value, or null if there is no such value in this collection
 	 */
 	default CollectionElement<E> elementFor(Object value, boolean first) {
-		ElementSpliterator<E> spliter = spliterator(first);
+		ElementSpliterator<E> spliter = mutableSpliterator(first);
 		CollectionElement<E>[] foundEl = new CollectionElement[1];
 		while (foundEl[0] == null && spliter.tryAdvanceElement(el -> {
 			if (Objects.equals(el.get(), value))
@@ -68,7 +65,7 @@ public interface ReversibleCollection<E> extends BetterCollection<E> {
 	 * @return Whether a result was found
 	 */
 	default boolean find(Predicate<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
-		ElementSpliterator<E> spliter = spliterator(first);
+		ElementSpliterator<E> spliter = mutableSpliterator(first);
 		boolean[] found = new boolean[1];
 		while (spliter.tryAdvanceElement(el -> {
 			if (search.test(el.get())) {
@@ -90,7 +87,7 @@ public interface ReversibleCollection<E> extends BetterCollection<E> {
 	 * @return The number of results found
 	 */
 	default int findAll(Predicate<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement, boolean fromStart) {
-		ElementSpliterator<E> spliter = spliterator(fromStart);
+		ElementSpliterator<E> spliter = mutableSpliterator(fromStart);
 		int[] found = new int[1];
 		while (spliter.tryAdvanceElement(el -> {
 			if (search.test(el.get())) {
@@ -129,23 +126,13 @@ public interface ReversibleCollection<E> extends BetterCollection<E> {
 		}
 
 		@Override
-		public Iterable<E> descending() {
-			return () -> theWrapped.iterator();
-		}
-
-		@Override
-		public Betterator<E> iterator() {
-			return theWrapped.descendingIterator();
-		}
-
-		@Override
-		public Betterator<E> descendingIterator() {
-			return theWrapped.iterator();
-		}
-
-		@Override
 		public ReversibleSpliterator<E> spliterator(boolean fromStart) {
 			return theWrapped.spliterator(!fromStart).reverse();
+		}
+
+		@Override
+		public ReversibleElementSpliterator<E> mutableSpliterator(boolean fromStart) {
+			return theWrapped.mutableSpliterator(!fromStart).reverse();
 		}
 
 		@Override

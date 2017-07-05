@@ -873,7 +873,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	@Override
 	public boolean removeLast(Object o) {
 		try (Transaction t = lock(true, null)) {
-			ReversibleSpliterator<E> iter = spliterator(false);
+			ReversibleElementSpliterator<E> iter = spliterator(false);
 			boolean[] found = new boolean[1];
 			while (!found[0] && iter.tryReverseElement(el -> {
 				if (Objects.equals(el.get(), o)) {
@@ -1206,7 +1206,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	}
 
 	@Override
-	public ReversibleSpliterator<E> spliterator(boolean forward) {
+	public ReversibleElementSpliterator<E> spliterator(boolean forward) {
 		return new ArraySpliterator(0, theSize, forward ? 0 : theSize, theLocker.subLock());
 	}
 
@@ -1390,7 +1390,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		return removed;
 	}
 
-	private class ArraySpliterator implements ReversibleSpliterator<E> {
+	private class ArraySpliterator implements ReversibleElementSpliterator<E> {
 		private int theStart;
 		private int theEnd;
 		private int theCursor; // The index of the element that would be given to the consumer for tryAdvance()
@@ -1534,7 +1534,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		}
 
 		@Override
-		public ReversibleSpliterator<E> trySplit() {
+		public ReversibleElementSpliterator<E> trySplit() {
 			if (theEnd - theStart <= 1)
 				return null;
 			int mid = (theStart + theEnd) / 2;
@@ -1607,7 +1607,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		}
 	}
 
-	class ListIter extends ReversibleSpliterator.PartialListIterator<E> {
+	class ListIter extends ReversibleElementSpliterator.PartialListIterator<E> {
 		ListIter(ArraySpliterator backing) {
 			super(backing);
 		}
@@ -1887,7 +1887,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		}
 
 		@Override
-		public ReversibleSpliterator<E> spliterator(boolean forward) {
+		public ReversibleElementSpliterator<E> spliterator(boolean forward) {
 			// Can only remove, so no need to account for capacity dropping
 			int init = forward ? theStart : theEnd;
 			return new ArraySpliterator(theStart, theEnd, init, theSubLock.subLock(added -> theEnd += added));

@@ -20,7 +20,7 @@ import org.qommons.collect.CollectionElement;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementSpliterator;
 import org.qommons.collect.ReversibleCollection;
-import org.qommons.collect.ReversibleSpliterator;
+import org.qommons.collect.ReversibleElementSpliterator;
 import org.qommons.collect.TransactableCollection;
 import org.qommons.value.Value;
 
@@ -123,7 +123,7 @@ public abstract class AbstractRBTCollection<E, N extends CountedRedBlackNode<E>>
 	}
 
 	@Override
-	public ReversibleSpliterator<E> spliterator(boolean fromStart) {
+	public ReversibleElementSpliterator<E> spliterator(boolean fromStart) {
 		N begin=getEndNode(fromStart);
 		return values(nodeSpliterator((N) begin.getClosest(true), begin));
 	}
@@ -132,9 +132,9 @@ public abstract class AbstractRBTCollection<E, N extends CountedRedBlackNode<E>>
 		return new NodeSpliterator(previous, next, theLocker.subLock());
 	}
 
-	protected ReversibleSpliterator<E> values(ReversibleSpliterator<N> nodeSpliterator) {
+	protected ReversibleElementSpliterator<E> values(ReversibleElementSpliterator<N> nodeSpliterator) {
 		TypeToken<E> type = (TypeToken<E>) TypeToken.of(Object.class);
-		return new ReversibleSpliterator.WrappingReversibleSpliterator<>(nodeSpliterator, type, () -> {
+		return new ReversibleElementSpliterator.WrappingReversibleSpliterator<>(nodeSpliterator, type, () -> {
 			CollectionElement<N>[] container = new CollectionElement[1];
 			ElementSpliterator.WrappingElement<N, E> wrapperEl = new ElementSpliterator.WrappingElement<N, E>(type, container) {
 				@Override
@@ -520,7 +520,7 @@ public abstract class AbstractRBTCollection<E, N extends CountedRedBlackNode<E>>
 		return newNode;
 	}
 	
-	protected class NodeSpliterator implements ReversibleSpliterator<N> {
+	protected class NodeSpliterator implements ReversibleElementSpliterator<N> {
 		private N theBegin;
 		private boolean isBeginInclusive;
 		private N theEnd;
@@ -693,7 +693,7 @@ public abstract class AbstractRBTCollection<E, N extends CountedRedBlackNode<E>>
 		}
 
 		@Override
-		public ReversibleSpliterator<N> trySplit() {
+		public ReversibleElementSpliterator<N> trySplit() {
 			int startIdx = theBegin == null ? 0 : theBegin.getIndex();
 			int endIdx = theEnd == null ? size() : theEnd.getIndex();
 			theSubLock.check();

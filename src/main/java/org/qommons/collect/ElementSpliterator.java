@@ -162,6 +162,11 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 			}
 
 			@Override
+			public long getExactSizeIfKnown() {
+				return 0;
+			}
+
+			@Override
 			public int characteristics() {
 				return Spliterator.IMMUTABLE | Spliterator.SIZED;
 			}

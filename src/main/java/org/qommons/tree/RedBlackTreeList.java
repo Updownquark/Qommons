@@ -13,7 +13,7 @@ import org.qommons.collect.Betterator;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.ReversibleList;
-import org.qommons.collect.ReversibleSpliterator;
+import org.qommons.collect.ReversibleElementSpliterator;
 import org.qommons.collect.TransactableList;
 
 /**
@@ -347,7 +347,7 @@ public class RedBlackTreeList<N extends CountedRedBlackNode<E>, E> extends Abstr
 	public ReversibleList<E> subList(int fromIndex, int toIndex) {
 	}
 
-	private class ListIter extends ReversibleSpliterator.PartialListIterator<E> {
+	private class ListIter extends ReversibleElementSpliterator.PartialListIterator<E> {
 		private final NodeSpliterator theNodes;
 
 		ListIter(NodeSpliterator nodes) {

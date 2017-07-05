@@ -21,11 +21,11 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, RRList<E> {
 	}
 
 	@Override
-	default ReversibleSpliterator<E> spliterator() {
+	default ReversibleElementSpliterator<E> spliterator() {
 		return spliterator(0);
 	}
 
-	ReversibleSpliterator<E> spliterator(int index);
+	ReversibleElementSpliterator<E> spliterator(int index);
 
 	@Override
 	default ReversibleList<E> reverse() {
@@ -47,8 +47,8 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, RRList<E> {
 			}
 
 			@Override
-			public ReversibleSpliterator<E> spliterator(boolean fromStart) {
-				return ReversibleSpliterator.empty((TypeToken<E>) TypeToken.of(Object.class));
+			public ReversibleElementSpliterator<E> spliterator(boolean fromStart) {
+				return ReversibleElementSpliterator.empty((TypeToken<E>) TypeToken.of(Object.class));
 			}
 
 			@Override
@@ -155,7 +155,7 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, RRList<E> {
 			}
 
 			@Override
-			public ReversibleSpliterator<E> spliterator(int index) {
+			public ReversibleElementSpliterator<E> spliterator(int index) {
 				if (index != 0)
 					throw new IndexOutOfBoundsException(index + " of 0");
 				return spliterator();
@@ -194,12 +194,12 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, RRList<E> {
 		}
 
 		@Override
-		public ReversibleSpliterator<E> spliterator(boolean fromStart) {
+		public ReversibleElementSpliterator<E> spliterator(boolean fromStart) {
 			return getWrapped().spliterator(!fromStart).reverse();
 		}
 
 		@Override
-		public ReversibleSpliterator<E> spliterator(int index) {
+		public ReversibleElementSpliterator<E> spliterator(int index) {
 			return getWrapped().spliterator(reflect(index, true));
 		}
 

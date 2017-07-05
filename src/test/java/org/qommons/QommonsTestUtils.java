@@ -15,7 +15,7 @@ import java.util.function.Function;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.qommons.collect.ReversibleCollection;
-import org.qommons.collect.ReversibleSpliterator;
+import org.qommons.collect.ReversibleElementSpliterator;
 
 /** Testing utilities */
 public class QommonsTestUtils {
@@ -95,8 +95,8 @@ public class QommonsTestUtils {
 				assertFalse(rrIter.hasNext());
 
 				// Test reversible spliterator
-				ReversibleSpliterator<Integer> rSplit = rc.spliterator();
-				ReversibleSpliterator<Integer> rrSplit = rrc.spliterator(false);
+				ReversibleElementSpliterator<Integer> rSplit = rc.spliterator();
+				ReversibleElementSpliterator<Integer> rrSplit = rrc.spliterator(false);
 				int count = 0;
 				Object[] prevV = new Object[1];
 				splitLoop: while (true) {
