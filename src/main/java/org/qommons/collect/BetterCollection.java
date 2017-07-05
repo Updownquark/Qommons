@@ -13,24 +13,6 @@ import java.util.function.Predicate;
  * @param <E> The type of value in the collection
  */
 public interface BetterCollection<E> extends Collection<E>, Betterable<E> {
-	@Override
-	default Spliterator<E> spliterator() {
-		return mutableSpliterator().immutable();
-	}
-
-	/** @return A (typically) mutable element spliterator to use to iterate over and modify this collection */
-	ElementSpliterator<E> mutableSpliterator();
-
-	@Override
-	default ImmutableIterator<E> iterator() {
-		return new ImmutableIterator.SpliteratorImmutableIterator<>(spliterator());
-	}
-
-	@Override
-	default Betterator<E> mutableIterator() {
-		return new ElementSpliterator.SpliteratorBetterator<>(mutableSpliterator());
-	}
-
 	/**
 	 * @param c The collection to test
 	 * @return Whether this collection contains any of the given collection's elements
@@ -91,5 +73,15 @@ public interface BetterCollection<E> extends Collection<E>, Betterable<E> {
 		})) {
 		}
 		return found[0];
+	}
+
+	@Override
+	default ImmutableIterator<E> iterator() {
+		return Betterable.super.iterator();
+	}
+
+	@Override
+	default Spliterator<E> spliterator() {
+		return Betterable.super.spliterator();
 	}
 }

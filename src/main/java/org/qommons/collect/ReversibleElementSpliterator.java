@@ -12,16 +12,16 @@ import com.google.common.reflect.TypeToken;
 /**
  * An {@link ElementSpliterator} that can traverse elements in either direction
  * 
- * @param <T> The type of values returned by the spliterator
+ * @param <E> The type of values returned by the spliterator
  */
-public interface ReversibleElementSpliterator<T> extends ElementSpliterator<T> {
+public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E> {
 	/**
 	 * Gets the previous element in the spliterator, if available
 	 * 
 	 * @param action The action to perform on the element
 	 * @return Whether there was a previous element in the spliterator
 	 */
-	boolean tryReverseElement(Consumer<? super CollectionElement<T>> action);
+	boolean tryReverseElement(Consumer<? super CollectionElement<E>> action);
 
 	/**
 	 * Gets the previous value in the spliterator, if available
@@ -29,18 +29,18 @@ public interface ReversibleElementSpliterator<T> extends ElementSpliterator<T> {
 	 * @param action The action to perform on the value
 	 * @return Whether there was a previous value in the spliterator
 	 */
-	default boolean tryReverse(Consumer<? super T> action) {
+	default boolean tryReverse(Consumer<? super E> action) {
 		return tryReverseElement(el -> action.accept(el.get()));
 	}
 
 	/** @param action The action to perform on all the previous elements in the spliterator */
-	default void forEachReverseElement(Consumer<? super CollectionElement<T>> action) {
-		while(tryReverseElement(action)){
+	default void forEachReverseElement(Consumer<? super CollectionElement<E>> action) {
+		while (tryReverseElement(action)) {
 		}
 	}
 
 	/** @param action The action to perform on all the previous values in the spliterator */
-	default void forEachReverse(Consumer<? super T> action) {
+	default void forEachReverse(Consumer<? super E> action) {
 		while (tryReverse(action)) {
 		}
 	}
@@ -49,12 +49,17 @@ public interface ReversibleElementSpliterator<T> extends ElementSpliterator<T> {
 	 * @return A reversed view of this spliterator, where {@link #tryAdvance(Consumer)} traverses this spliterator's element in reverse and
 	 *         {@link #tryReverse(Consumer)} traverses them in the forward direction
 	 */
-	default ReversibleElementSpliterator<T> reverse() {
+	default ReversibleElementSpliterator<E> reverse() {
 		return new ReversedElementSpliterator<>(this);
 	}
 
 	@Override
-	ReversibleElementSpliterator<T> trySplit();
+	default ReversibleSpliterator<E> immutable() {
+		return new ImmutableReversibleElementSpliterator<>(this);
+	}
+
+	@Override
+	ReversibleElementSpliterator<E> trySplit();
 
 	/**
 	 * @param <E> The compile-time type for the spliterator
@@ -98,6 +103,11 @@ public interface ReversibleElementSpliterator<T> extends ElementSpliterator<T> {
 				return null;
 			}
 		};
+	}
+
+	@Override
+	default <T> ReversibleElementSpliterator<T> map(ElementSpliteratorMap<E, T> map) {
+		return new MappedReversibleElementSpliterator<>(this, map);
 	}
 
 	/**
@@ -187,6 +197,145 @@ public interface ReversibleElementSpliterator<T> extends ElementSpliterator<T> {
 			if (wrapSpit == null)
 				return null;
 			return new ReversedElementSpliterator<>(wrapSpit);
+		}
+	}
+
+	class ImmutableReversibleElementSpliterator<E> extends ImmutableElementSpliterator<E> implements ReversibleSpliterator<E> {
+		public ImmutableReversibleElementSpliterator(ReversibleElementSpliterator<E> wrapped) {
+			super(wrapped);
+		}
+
+		@Override
+		protected ReversibleElementSpliterator<E> getWrapped() {
+			return (ReversibleElementSpliterator<E>) super.getWrapped();
+		}
+
+		@Override
+		public boolean tryReverse(Consumer<? super E> action) {
+			return getWrapped().tryReverse(action);
+		}
+
+		@Override
+		public ReversibleSpliterator<E> trySplit() {
+			ReversibleElementSpliterator<E> split = getWrapped().trySplit();
+			return split == null ? null : split.immutable();
+		}
+	}
+
+	class MappedReversibleElementSpliterator<E, T> extends MappedElementSpliterator<E, T> implements ReversibleElementSpliterator<T> {
+		public MappedReversibleElementSpliterator(ReversibleElementSpliterator<E> source, ElementSpliteratorMap<E, T> map) {
+			super(source, map);
+		}
+
+		@Override
+		protected ReversibleElementSpliterator<E> getSource() {
+			return (ReversibleElementSpliterator<E>) super.getSource();
+		}
+
+		@Override
+		public boolean tryReverseElement(Consumer<? super CollectionElement<T>> action) {
+			while (getSource().tryReverseElement(el -> {
+				getElement().setSource(el);
+				if (getElement().isAccepted())
+					action.accept(getElement());
+			})) {
+				if (getElement().isAccepted())
+					return true;
+			}
+			return false;
+		}
+
+		@Override
+		public void forEachReverseElement(Consumer<? super CollectionElement<T>> action) {
+			getSource().forEachReverseElement(el -> {
+				getElement().setSource(el);
+				if (getElement().isAccepted())
+					action.accept(getElement());
+			});
+		}
+
+		@Override
+		public boolean tryReverse(Consumer<? super T> action) {
+			if (getMap().canFilterValues()) {
+				boolean[] accepted = new boolean[1];
+				while (!accepted[0] && getSource().tryReverse(v -> {
+					accepted[0] = getMap().test(v);
+					if (accepted[0])
+						action.accept(getMap().map(v));
+				})) {
+				}
+				return accepted[0];
+			} else
+				return ReversibleElementSpliterator.super.tryReverse(action);
+		}
+
+		@Override
+		public void forEachReverse(Consumer<? super T> action) {
+			if (getMap().canFilterValues()) {
+				getSource().forEachReverse(v -> {
+					if (getMap().test(v))
+						action.accept(getMap().map(v));
+				});
+			} else
+				ReversibleElementSpliterator.super.forEachReverse(action);
+		}
+
+		@Override
+		public ReversibleElementSpliterator<T> trySplit() {
+			ReversibleElementSpliterator<E> split = getSource().trySplit();
+			return split == null ? null : split.map(getMap());
+		}
+
+		@Override
+		public ReversibleSpliterator<T> immutable() {
+			if (getMap().canFilterValues()) {
+				ReversibleSpliterator<E> srcSplit = getSource().immutable();
+				return new MappedReversibleSpliterator<>(srcSplit, getMap());
+			} else
+				return ReversibleElementSpliterator.super.immutable();
+		}
+	}
+
+	/**
+	 * A Spliterator mapped by an {@link ElementSpliterator.ElementSpliteratorMap}
+	 * 
+	 * @param <T> The type of the source spliterator
+	 * @param <E> The type of this spliterator
+	 */
+	class MappedReversibleSpliterator<T, E> extends MappedSpliterator<T, E> implements ReversibleSpliterator<E> {
+		public MappedReversibleSpliterator(ReversibleSpliterator<T> source, ElementSpliteratorMap<T, E> map) {
+			super(source, map);
+		}
+
+		@Override
+		protected ReversibleSpliterator<T> getSource() {
+			return (ReversibleSpliterator<T>) super.getSource();
+		}
+
+		@Override
+		public boolean tryReverse(Consumer<? super E> action) {
+			boolean[] accepted = new boolean[1];
+			while (!accepted[0] && getSource().tryReverse(v -> {
+				accepted[0] = getMap().test(v);
+				if (accepted[0])
+					action.accept(getMap().map(v));
+			})) {
+			}
+			return accepted[0];
+		}
+
+		@Override
+		public void forEachReverse(Consumer<? super E> action) {
+			getSource().forEachReverse(v -> {
+				if (getMap().test(v))
+					action.accept(getMap().map(v));
+			});
+		}
+
+		@Override
+		public ReversibleSpliterator<E> trySplit() {
+			ReversibleSpliterator<T> split = getSource().trySplit();
+			return new MappedReversibleSpliterator<>(split, getMap());
 		}
 	}
 

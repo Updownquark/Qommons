@@ -16,11 +16,13 @@ public abstract class AbstractCausable implements Causable {
 
 	/** @param cause The cause of this causable */
 	public AbstractCausable(Object cause) {
+		theCause = wrapCausable(cause);
+		theRootCausable = ((Causable) cause).getRootCausable();
+	}
+
+	private AbstractCausable(Object cause, Void root) {
 		theCause = cause;
-		if (cause instanceof Causable)
-			theRootCausable = ((Causable) cause).getRootCausable();
-		else
-			theRootCausable = this;
+		theRootCausable = this;
 	}
 
 	@Override
@@ -67,6 +69,19 @@ public abstract class AbstractCausable implements Causable {
 		action.accept(event);
 		((AbstractCausable) event).finish();
 		return event;
+	}
+
+	private static Causable wrapCausable(Object cause) {
+		if (cause instanceof Causable)
+			return (Causable) cause;
+		else
+			return new CausableWrapper(cause);
+	}
+
+	private static final class CausableWrapper extends AbstractCausable {
+		CausableWrapper(Object cause) {
+			super(cause, null);
+		}
 	}
 
 	private static final class TerminalActionHolder implements Map<Object, Object> {

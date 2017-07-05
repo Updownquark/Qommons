@@ -110,43 +110,7 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 
 	/** @return An immutable spliterator backed by this spliterator */
 	default Spliterator<E> immutable() {
-		return new Spliterator<E>() {
-			@Override
-			public boolean tryAdvance(Consumer<? super E> action) {
-				return ElementSpliterator.this.tryAdvance(action);
-			}
-
-			@Override
-			public void forEachRemaining(Consumer<? super E> action) {
-				ElementSpliterator.this.forEachRemaining(action);
-			}
-
-			@Override
-			public Spliterator<E> trySplit() {
-				ElementSpliterator<E> split = ElementSpliterator.this.trySplit();
-				return split == null ? null : split.immutable();
-			}
-
-			@Override
-			public long estimateSize() {
-				return ElementSpliterator.this.estimateSize();
-			}
-
-			@Override
-			public long getExactSizeIfKnown() {
-				return ElementSpliterator.this.getExactSizeIfKnown();
-			}
-
-			@Override
-			public int characteristics() {
-				return ElementSpliterator.this.characteristics();
-			}
-
-			@Override
-			public Comparator<? super E> getComparator() {
-				return ElementSpliterator.this.getComparator();
-			}
-		};
+		return new ImmutableElementSpliterator<>(this);
 	}
 
 	/**
@@ -186,6 +150,54 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 				return null;
 			}
 		};
+	}
+
+	class ImmutableElementSpliterator<E> implements Spliterator<E> {
+		private final ElementSpliterator<E> theWrapped;
+
+		public ImmutableElementSpliterator(ElementSpliterator<E> wrapped) {
+			theWrapped = wrapped;
+		}
+
+		protected ElementSpliterator<E> getWrapped() {
+			return theWrapped;
+		}
+
+		@Override
+		public boolean tryAdvance(Consumer<? super E> action) {
+			return theWrapped.tryAdvance(action);
+		}
+
+		@Override
+		public void forEachRemaining(Consumer<? super E> action) {
+			theWrapped.forEachRemaining(action);
+		}
+
+		@Override
+		public Spliterator<E> trySplit() {
+			ElementSpliterator<E> split = theWrapped.trySplit();
+			return split == null ? null : split.immutable();
+		}
+
+		@Override
+		public long estimateSize() {
+			return theWrapped.estimateSize();
+		}
+
+		@Override
+		public long getExactSizeIfKnown() {
+			return theWrapped.getExactSizeIfKnown();
+		}
+
+		@Override
+		public int characteristics() {
+			return theWrapped.characteristics();
+		}
+
+		@Override
+		public Comparator<? super E> getComparator() {
+			return theWrapped.getComparator();
+		}
 	}
 
 	/**
@@ -417,6 +429,14 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 		public MappedSpliterator(Spliterator<T> source, ElementSpliteratorMap<T, E> map) {
 			theSource = source;
 			theMap = map;
+		}
+
+		protected Spliterator<T> getSource() {
+			return theSource;
+		}
+
+		protected ElementSpliteratorMap<T, E> getMap() {
+			return theMap;
 		}
 
 		@Override

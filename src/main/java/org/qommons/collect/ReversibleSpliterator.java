@@ -18,6 +18,40 @@ public interface ReversibleSpliterator<E> extends Spliterator<E> {
 		return new ReversedSpliterator<>(this);
 	}
 
+	public static <E> ReversibleSpliterator<E> empty() {
+		return new ReversibleSpliterator<E>() {
+			@Override
+			public boolean tryAdvance(Consumer<? super E> action) {
+				return false;
+			}
+
+			@Override
+			public long estimateSize() {
+				return 0;
+			}
+
+			@Override
+			public long getExactSizeIfKnown() {
+				return 0;
+			}
+
+			@Override
+			public int characteristics() {
+				return IMMUTABLE | SIZED;
+			}
+
+			@Override
+			public boolean tryReverse(Consumer<? super E> action) {
+				return false;
+			}
+
+			@Override
+			public ReversibleSpliterator<E> trySplit() {
+				return null;
+			}
+		};
+	}
+
 	/**
 	 * Implements {@link ReversibleElementSpliterator#reverse()}
 	 * 

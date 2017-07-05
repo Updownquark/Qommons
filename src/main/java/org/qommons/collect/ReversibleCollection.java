@@ -13,25 +13,7 @@ import org.qommons.ArrayUtils;
  * 
  * @param <E> The type of values in the collection
  */
-public interface ReversibleCollection<E> extends BetterCollection<E> {
-	@Override
-	default ReversibleSpliterator<E> spliterator() {
-		return spliterator(true);
-	}
-
-	ReversibleSpliterator<E> spliterator(boolean fromStart);
-
-	@Override
-	default ReversibleElementSpliterator<E> mutableSpliterator() {
-		return mutableSpliterator(true);
-	}
-
-	/**
-	 * @param fromStart Whether the spliterator should begin at the beginning or the end of this collection
-	 * @return The spliterator
-	 */
-	ReversibleElementSpliterator<E> mutableSpliterator(boolean fromStart);
-
+public interface ReversibleCollection<E> extends BetterCollection<E>, ReversibleIterable<E> {
 	/**
 	 * Removes the last occurrence of the given value in this collection, if it exists
 	 * 
@@ -100,8 +82,19 @@ public interface ReversibleCollection<E> extends BetterCollection<E> {
 	}
 
 	/** @return A collection that is identical to this one, but with its elements reversed */
+	@Override
 	default ReversibleCollection<E> reverse() {
 		return new ReversedCollection<>(this);
+	}
+
+	@Override
+	default ReversibleSpliterator<E> spliterator() {
+		return ReversibleIterable.super.spliterator();
+	}
+
+	@Override
+	default ReversibleElementSpliterator<E> mutableSpliterator() {
+		return ReversibleIterable.super.mutableSpliterator();
 	}
 
 	/**
@@ -109,104 +102,103 @@ public interface ReversibleCollection<E> extends BetterCollection<E> {
 	 *
 	 * @param <E> The type of elements in the collection
 	 */
-	class ReversedCollection<E> implements ReversibleCollection<E> {
-		private final ReversibleCollection<E> theWrapped;
-
+	class ReversedCollection<E> extends ReversedIterable<E> implements ReversibleCollection<E> {
 		protected ReversedCollection(ReversibleCollection<E> wrap) {
-			theWrapped = wrap;
+			super(wrap);
 		}
 
+		@Override
 		protected ReversibleCollection<E> getWrapped() {
-			return theWrapped;
+			return (ReversibleCollection<E>) super.getWrapped();
 		}
 
 		@Override
 		public int size() {
-			return theWrapped.size();
+			return getWrapped().size();
 		}
 
 		@Override
 		public ReversibleSpliterator<E> spliterator(boolean fromStart) {
-			return theWrapped.spliterator(!fromStart).reverse();
+			return getWrapped().spliterator(!fromStart).reverse();
 		}
 
 		@Override
 		public ReversibleElementSpliterator<E> mutableSpliterator(boolean fromStart) {
-			return theWrapped.mutableSpliterator(!fromStart).reverse();
+			return getWrapped().mutableSpliterator(!fromStart).reverse();
 		}
 
 		@Override
 		public ReversibleCollection<E> reverse() {
-			return theWrapped;
+			return getWrapped();
 		}
 
 		@Override
 		public boolean isEmpty() {
-			return theWrapped.isEmpty();
+			return getWrapped().isEmpty();
 		}
 
 		@Override
 		public boolean contains(Object o) {
-			return theWrapped.contains(o);
+			return getWrapped().contains(o);
 		}
 
 		@Override
 		public Object[] toArray() {
-			Object[] ret = theWrapped.toArray();
+			Object[] ret = getWrapped().toArray();
 			ArrayUtils.reverse(ret);
 			return ret;
 		}
 
 		@Override
 		public <T> T[] toArray(T[] a) {
-			T[] ret = theWrapped.toArray(a);
+			T[] ret = getWrapped().toArray(a);
 			ArrayUtils.reverse(ret);
 			return ret;
 		}
 
 		@Override
 		public boolean add(E e) {
-			return theWrapped.add(e);
+			return getWrapped().add(e);
 		}
 
 		@Override
 		public boolean remove(Object o) {
-			return theWrapped.removeLast(o);
+			return getWrapped().removeLast(o);
 		}
 
 		@Override
 		public boolean removeLast(Object o) {
-			return theWrapped.remove(o);
+			return getWrapped().remove(o);
 		}
 
 		@Override
 		public boolean containsAll(Collection<?> c) {
-			return theWrapped.containsAll(c);
+			return getWrapped().containsAll(c);
 		}
 
 		@Override
 		public boolean containsAny(Collection<?> c) {
-			return theWrapped.containsAny(c);
+			return getWrapped().containsAny(c);
 		}
 
 		@Override
 		public boolean addAll(Collection<? extends E> c) {
-			return theWrapped.addAll(c);
+			return getWrapped().addAll(c);
 		}
 
 		@Override
 		public boolean removeAll(Collection<?> c) {
-			return theWrapped.removeAll(c);
+			return getWrapped().removeAll(c);
 		}
 
 		@Override
 		public boolean retainAll(Collection<?> c) {
-			return theWrapped.retainAll(c);
+			return getWrapped().retainAll(c);
 		}
 
 		@Override
 		public void clear() {
-			theWrapped.clear();
+			getWrapped().clear();
 		}
 
 		@Override

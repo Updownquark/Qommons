@@ -15,17 +15,9 @@ import com.google.common.reflect.TypeToken;
  * @param <E> The type of value in the list
  */
 public interface ReversibleList<E> extends ReversibleCollection<E>, RRList<E> {
-	@Override
-	default Betterator<E> iterator() {
-		return ReversibleCollection.super.iterator();
-	}
+	ReversibleSpliterator<E> spliterator(int index);
 
-	@Override
-	default ReversibleElementSpliterator<E> spliterator() {
-		return spliterator(0);
-	}
-
-	ReversibleElementSpliterator<E> spliterator(int index);
+	ReversibleElementSpliterator<E> mutableSpliterator(int index);
 
 	@Override
 	default ReversibleList<E> reverse() {
@@ -35,11 +27,22 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, RRList<E> {
 	@Override
 	ReversibleList<E> subList(int fromIndex, int toIndex);
 
+	@Override
+	default ReversibleSpliterator<E> spliterator() {
+		return ReversibleCollection.super.spliterator();
+	}
+
+	@Override
+	default ImmutableIterator<E> iterator() {
+		return ReversibleCollection.super.iterator();
+	}
+
 	/**
 	 * @param <E> The type of the list
+	 * @param type The type of the list
 	 * @return An empty reversible list
 	 */
-	public static <E> ReversibleList<E> empty() {
+	public static <E> ReversibleList<E> empty(TypeToken<E> type) {
 		class EmptyReversibleList implements ReversibleList<E> {
 			@Override
 			public boolean removeLast(Object o) {
@@ -47,8 +50,27 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, RRList<E> {
 			}
 
 			@Override
-			public ReversibleElementSpliterator<E> spliterator(boolean fromStart) {
-				return ReversibleElementSpliterator.empty((TypeToken<E>) TypeToken.of(Object.class));
+			public ReversibleSpliterator<E> spliterator(boolean fromStart) {
+				return ReversibleSpliterator.empty();
+			}
+
+			@Override
+			public ReversibleSpliterator<E> spliterator(int index) {
+				if (index != 0)
+					throw new IndexOutOfBoundsException(index + " of 0");
+				return ReversibleSpliterator.empty();
+			}
+
+			@Override
+			public ReversibleElementSpliterator<E> mutableSpliterator(boolean fromStart) {
+				return ReversibleElementSpliterator.empty(type);
+			}
+
+			@Override
+			public ReversibleElementSpliterator<E> mutableSpliterator(int index) {
+				if (index != 0)
+					throw new IndexOutOfBoundsException(index + " of 0");
+				return ReversibleElementSpliterator.empty(type);
 			}
 
 			@Override
@@ -155,13 +177,6 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, RRList<E> {
 			}
 
 			@Override
-			public ReversibleElementSpliterator<E> spliterator(int index) {
-				if (index != 0)
-					throw new IndexOutOfBoundsException(index + " of 0");
-				return spliterator();
-			}
-
-			@Override
 			public ReversibleList<E> subList(int fromIndex, int toIndex) {
 				if (fromIndex != 0)
 					throw new IndexOutOfBoundsException(fromIndex + " of 0");
@@ -194,13 +209,23 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, RRList<E> {
 		}
 
 		@Override
-		public ReversibleElementSpliterator<E> spliterator(boolean fromStart) {
+		public ReversibleSpliterator<E> spliterator(boolean fromStart) {
 			return getWrapped().spliterator(!fromStart).reverse();
 		}
 
 		@Override
-		public ReversibleElementSpliterator<E> spliterator(int index) {
+		public ReversibleSpliterator<E> spliterator(int index) {
 			return getWrapped().spliterator(reflect(index, true));
+		}
+
+		@Override
+		public ReversibleElementSpliterator<E> mutableSpliterator(boolean fromStart) {
+			return getWrapped().mutableSpliterator(!fromStart).reverse();
+		}
+
+		@Override
+		public ReversibleElementSpliterator<E> mutableSpliterator(int index) {
+			return getWrapped().mutableSpliterator(reflect(index, true));
 		}
 
 		@Override
