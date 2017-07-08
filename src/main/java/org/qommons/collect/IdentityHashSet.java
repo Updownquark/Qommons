@@ -6,11 +6,17 @@ import java.util.Iterator;
 import java.util.Set;
 
 /**
- * Stores a set of values uniquely by identity
+ * <p>
+ * Stores a set of values uniquely by identity.
+ * </p>
+ * <p>
+ * This class implements {@link UpdatableSet}, but since an object's identity can never change, this is just for convenience and the
+ * {@link #update(Object) update} method just delegates to {@link #contains(Object) contains}.
+ * </p>
  * 
  * @param <E> The type of values in the set
  */
-public class IdentityHashSet<E> implements Set<E> {
+public class IdentityHashSet<E> implements UpdatableSet<E> {
 	private IdentityHashMap<E, E> backing = new IdentityHashMap<>();
 
 	/** Creates an empty set */
@@ -109,6 +115,11 @@ public class IdentityHashSet<E> implements Set<E> {
 	@Override
 	public void clear() {
 		backing.clear();
+	}
+
+	@Override
+	public boolean update(E value) {
+		return contains(value);
 	}
 
 	@Override
