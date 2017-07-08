@@ -1,7 +1,6 @@
 package org.qommons.collect;
 
 import java.util.Collection;
-import java.util.Objects;
 import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -21,18 +20,10 @@ public interface BetterCollection<E> extends Collection<E>, Betterable<E> {
 
 	/**
 	 * @param value The value to search for
-	 * @return The element in this collection matching the given value, or null if there is no such value in this collection
+	 * @param onElement The action to perform on the element containing the given value, if found
+	 * @return Whether such a value was found
 	 */
-	default CollectionElement<E> elementFor(Object value) {
-		ElementSpliterator<E> spliter = mutableSpliterator();
-		CollectionElement<E>[] foundEl = new CollectionElement[1];
-		while (foundEl[0] == null && spliter.tryAdvanceElement(el -> {
-			if (Objects.equals(el.get(), value))
-				foundEl[0] = el;
-		})) {
-		}
-		return foundEl[0];
-	}
+	boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement);
 
 	/**
 	 * Finds a value in this collection matching the given search and performs an action on the {@link CollectionElement} for that element
