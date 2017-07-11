@@ -1,6 +1,10 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.AbstractSet;
+import java.util.IdentityHashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Objects;
 
 /**
  * A hash implementation of {@link UpdatableSet}
@@ -17,17 +21,17 @@ public class UpdatableHashSet<E> extends AbstractSet<E> implements UpdatableSet<
 	public static class HashWrapper<E> {
 		/** This wrapper's value */
 		public final E value;
-		int hashCode;
+		private int hashCode;
 
 		/** @param value The value for the wrapper */
 		public HashWrapper(E value) {
 			this.value = value;
-			updateHashCode();
+			setHashCode(Objects.hashCode(value));
 		}
 
-		/** Updates this wrapper's cached hash code from its value */
-		public void updateHashCode() {
-			hashCode = Objects.hashCode(value);
+		/** @param hashCode The value's new hash code */
+		public void setHashCode(int hashCode) {
+			this.hashCode = hashCode;
 		}
 
 		@Override
@@ -59,15 +63,20 @@ public class UpdatableHashSet<E> extends AbstractSet<E> implements UpdatableSet<
 	}
 
 	@Override
-	public boolean update(E value) {
+	public ElementUpdateResult update(E value) {
 		HashWrapper<E> wrapper = theWrappersById.get(value);
 		if (wrapper != null) {
+			int hashCode = Objects.hashCode(wrapper.value);
+			if (hashCode == wrapper.hashCode())
+				return ElementUpdateResult.NotChanged;
 			theWrapperSet.remove(wrapper);
-			wrapper.updateHashCode();
-			theWrapperSet.put(wrapper, wrapper);
-			return true;
+			wrapper.setHashCode(hashCode);
+			if (theWrapperSet.computeIfAbsent(wrapper, w -> wrapper) == wrapper)
+				return ElementUpdateResult.ReStored;
+			else
+				return ElementUpdateResult.Removed;
 		}
-		return false;
+		return ElementUpdateResult.NotFound;
 	}
 
 	@Override
@@ -122,6 +131,11 @@ public class UpdatableHashSet<E> extends AbstractSet<E> implements UpdatableSet<
 		HashWrapper<E> wrapper = theWrapperSet.remove(new HashWrapper<>(o));
 		if (wrapper != null)
 			theWrappersById.remove(wrapper.value);
+		else {
+			wrapper = theWrappersById.remove(o);
+			if (wrapper != null)
+				theWrapperSet.remove(wrapper);
+		}
 		return wrapper != null;
 	}
 

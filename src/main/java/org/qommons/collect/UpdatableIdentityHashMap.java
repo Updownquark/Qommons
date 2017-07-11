@@ -1,9 +1,15 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.IdentityHashMap;
+import java.util.Iterator;
+import java.util.Set;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
+
+import org.qommons.collect.UpdatableSet.ElementUpdateResult;
 
 /**
  * A convenience {@link IdentityHashMap} that implements {@link UpdatableMap}. Since keys cannot change their identity, this class does not
@@ -14,8 +20,8 @@ import java.util.stream.Stream;
  */
 public class UpdatableIdentityHashMap<K, V> extends IdentityHashMap<K, V> implements UpdatableMap<K, V> {
 	@Override
-	public boolean update(K key) {
-		return containsKey(key);
+	public ElementUpdateResult update(K key) {
+		return containsKey(key) ? ElementUpdateResult.NotChanged : ElementUpdateResult.NotFound;
 	}
 
 	@Override
@@ -23,8 +29,8 @@ public class UpdatableIdentityHashMap<K, V> extends IdentityHashMap<K, V> implem
 		Set<K> keySet = super.keySet();
 		return new UpdatableSet<K>() {
 			@Override
-			public boolean update(K value) {
-				return keySet.contains(value);
+			public ElementUpdateResult update(K value) {
+				return keySet.contains(value) ? ElementUpdateResult.NotChanged : ElementUpdateResult.NotFound;
 			}
 
 			@Override
