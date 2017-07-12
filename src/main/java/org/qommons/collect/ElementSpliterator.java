@@ -381,7 +381,7 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 			public <V extends T> String isAcceptable(V value) {
 				String preFilter = theMap.filterAccept(value);
 				if (preFilter != null)
-					throw new IllegalArgumentException(preFilter);
+					return preFilter;
 				return theSourceEl.isAcceptable(theMap.reverse(value));
 			}
 
@@ -407,6 +407,22 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 				if (msg != null)
 					throw new UnsupportedOperationException(msg);
 				theSourceEl.remove();
+			}
+
+			@Override
+			public String canAdd(T value, boolean before) {
+				String preFilter = theMap.filterAccept(value);
+				if (preFilter != null)
+					return preFilter;
+				return theSourceEl.canAdd(theMap.reverse(value), before);
+			}
+
+			@Override
+			public void add(T value, boolean before, Object cause) throws UnsupportedOperationException, IllegalArgumentException {
+				String preFilter = theMap.filterAccept(value);
+				if (preFilter != null)
+					throw new IllegalArgumentException(preFilter);
+				theSourceEl.set(theMap.reverse(value), cause);
 			}
 
 			@Override

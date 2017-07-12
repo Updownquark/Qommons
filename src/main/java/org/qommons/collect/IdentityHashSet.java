@@ -118,8 +118,8 @@ public class IdentityHashSet<E> implements UpdatableSet<E> {
 	}
 
 	@Override
-	public boolean update(E value) {
-		return contains(value);
+	public ElementUpdateResult update(E value) {
+		return contains(value) ? ElementUpdateResult.NotChanged : ElementUpdateResult.NotFound;
 	}
 
 	@Override

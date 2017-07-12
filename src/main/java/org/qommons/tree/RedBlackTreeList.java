@@ -347,7 +347,7 @@ public class RedBlackTreeList<N extends CountedRedBlackNode<E>, E> extends Abstr
 	public ReversibleList<E> subList(int fromIndex, int toIndex) {
 	}
 
-	private class ListIter extends ReversibleElementSpliterator.PartialListIterator<E> {
+	private class ListIter extends ReversibleElementSpliterator.SpliteratorListIterator<E> {
 		private final NodeSpliterator theNodes;
 
 		ListIter(NodeSpliterator nodes) {

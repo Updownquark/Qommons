@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /** An efficient abstract implementation of Causable */
 public abstract class AbstractCausable implements Causable {
@@ -17,7 +18,7 @@ public abstract class AbstractCausable implements Causable {
 	/** @param cause The cause of this causable */
 	public AbstractCausable(Object cause) {
 		theCause = wrapCausable(cause);
-		theRootCausable = ((Causable) cause).getRootCausable();
+		theRootCausable = theCause == null ? this : ((Causable) theCause).getRootCausable();
 	}
 
 	private AbstractCausable(Object cause, Void root) {
@@ -60,19 +61,35 @@ public abstract class AbstractCausable implements Causable {
 	/**
 	 * Fires a causable event (or thing) and then finishes it. A cause may only be finished once.
 	 * 
+	 * @param <T> The type of the action's result
 	 * @param <C> The sub-type of causable to fire
 	 * @param event The event (causable) to fire and finish
 	 * @param action The action to perform with the cause
-	 * @return The (finished) event
+	 * @return The result of the operation
 	 */
+	public static <C extends AbstractCausable, T> T doWithF(C event, Function<? super C, T> action) {
+		T ret;
+		try {
+			ret = action.apply(event);
+		} finally {
+			((AbstractCausable) event).finish();
+		}
+		return ret;
+	}
+
 	public static <C extends AbstractCausable> C doWith(C event, Consumer<? super C> action) {
-		action.accept(event);
-		((AbstractCausable) event).finish();
+		try {
+			action.accept(event);
+		} finally {
+			((AbstractCausable) event).finish();
+		}
 		return event;
 	}
 
 	private static Causable wrapCausable(Object cause) {
-		if (cause instanceof Causable)
+		if (cause == null)
+			return null;
+		else if (cause instanceof Causable)
 			return (Causable) cause;
 		else
 			return new CausableWrapper(cause);

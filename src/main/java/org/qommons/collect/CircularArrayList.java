@@ -1607,7 +1607,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		}
 	}
 
-	class ListIter extends ReversibleElementSpliterator.PartialListIterator<E> {
+	class ListIter extends ReversibleElementSpliterator.SpliteratorListIterator<E> {
 		ListIter(ArraySpliterator backing) {
 			super(backing);
 		}

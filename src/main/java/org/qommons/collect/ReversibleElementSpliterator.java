@@ -6,6 +6,7 @@ import java.util.Spliterator;
 import java.util.function.Consumer;
 
 import org.qommons.Ternian;
+import org.qommons.value.Value;
 
 import com.google.common.reflect.TypeToken;
 
@@ -168,22 +169,22 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E> {
 
 		@Override
 		public boolean tryAdvanceElement(Consumer<? super CollectionElement<T>> action) {
-			return theWrapped.tryReverseElement(action);
+			return theWrapped.tryReverseElement(el -> action.accept(new ReversedCollectionElement<>(el)));
 		}
 
 		@Override
 		public boolean tryReverseElement(Consumer<? super CollectionElement<T>> action) {
-			return theWrapped.tryAdvanceElement(action);
+			return theWrapped.tryAdvanceElement(el -> action.accept(new ReversedCollectionElement<>(el)));
 		}
 
 		@Override
 		public void forEachElement(Consumer<? super CollectionElement<T>> action) {
-			theWrapped.forEachReverseElement(action);
+			theWrapped.forEachReverseElement(el -> action.accept(new ReversedCollectionElement<>(el)));
 		}
 
 		@Override
 		public void forEachReverseElement(Consumer<? super CollectionElement<T>> action) {
-			theWrapped.forEachElement(action);
+			theWrapped.forEachElement(el -> action.accept(new ReversedCollectionElement<>(el)));
 		}
 
 		@Override
@@ -197,6 +198,63 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E> {
 			if (wrapSpit == null)
 				return null;
 			return new ReversedElementSpliterator<>(wrapSpit);
+		}
+	}
+
+	class ReversedCollectionElement<E> implements CollectionElement<E> {
+		private final CollectionElement<E> theWrapped;
+
+		public ReversedCollectionElement(CollectionElement<E> wrapped) {
+			theWrapped = wrapped;
+		}
+
+		protected CollectionElement<E> getWrapped() {
+			return theWrapped;
+		}
+
+		@Override
+		public TypeToken<E> getType() {
+			return theWrapped.getType();
+		}
+
+		@Override
+		public E get() {
+			return theWrapped.get();
+		}
+
+		@Override
+		public Value<String> isEnabled() {
+			return theWrapped.isEnabled();
+		}
+
+		@Override
+		public <V extends E> String isAcceptable(V value) {
+			return theWrapped.isAcceptable(value);
+		}
+
+		@Override
+		public <V extends E> E set(V value, Object cause) throws IllegalArgumentException, UnsupportedOperationException {
+			return theWrapped.set(value, cause);
+		}
+
+		@Override
+		public String canRemove() {
+			return theWrapped.canRemove();
+		}
+
+		@Override
+		public void remove() throws UnsupportedOperationException {
+			theWrapped.remove();
+		}
+
+		@Override
+		public String canAdd(E value, boolean before) {
+			return theWrapped.canAdd(value, !before);
+		}
+
+		@Override
+		public void add(E value, boolean before, Object cause) throws UnsupportedOperationException, IllegalArgumentException {
+			theWrapped.add(value, !before, cause);
 		}
 	}
 
@@ -344,7 +402,7 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E> {
 	 * 
 	 * @param <T> The type of values in the spliterator
 	 */
-	abstract class PartialListIterator<T> implements ListIterator<T> {
+	abstract class SpliteratorListIterator<T> implements ListIterator<T> {
 		protected final ReversibleElementSpliterator<T> backing;
 		private Ternian hasNext;
 		private Ternian hasPrevious;
@@ -354,7 +412,7 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E> {
 		private boolean spliteratorSide;
 		private boolean isReadyForRemove;
 
-		public PartialListIterator(ReversibleElementSpliterator<T> backing) {
+		public SpliteratorListIterator(ReversibleElementSpliterator<T> backing) {
 			this.backing = backing;
 			hasNext = Ternian.NONE;
 			hasPrevious = Ternian.NONE;
@@ -459,7 +517,11 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E> {
 		public abstract int previousIndex();
 
 		@Override
-		public abstract void add(T e);
+		public void add(T e) {
+			if (!isReadyForRemove)
+				throw new UnsupportedOperationException("Element has been removed or iteration has not begun");
+			element.add(e, true, null);
+		}
 
 		@Override
 		public String toString() {

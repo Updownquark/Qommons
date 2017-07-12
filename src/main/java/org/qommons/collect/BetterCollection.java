@@ -53,7 +53,7 @@ public interface BetterCollection<E> extends Collection<E>, Betterable<E> {
 	 * @param onElement The action to perform on the search's results
 	 * @return The number of results found
 	 */
-	default int findAll(Predicate<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement) {
+	default int findAll(Predicate<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement, boolean forward) {
 		ElementSpliterator<E> spliter = mutableSpliterator();
 		int[] found = new int[1];
 		while (spliter.tryAdvanceElement(el -> {

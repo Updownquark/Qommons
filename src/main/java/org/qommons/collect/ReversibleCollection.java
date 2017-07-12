@@ -22,21 +22,12 @@ public interface ReversibleCollection<E> extends BetterCollection<E>, Reversible
 	 */
 	boolean removeLast(Object o);
 
-	/**
-	 * @param value The value to search for
-	 * @param first Whether to find the first or the last matching element
-	 * @return The element in this collection matching the given value, or null if there is no such value in this collection
-	 */
-	default CollectionElement<E> elementFor(Object value, boolean first) {
-		ElementSpliterator<E> spliter = mutableSpliterator(first);
-		CollectionElement<E>[] foundEl = new CollectionElement[1];
-		while (foundEl[0] == null && spliter.tryAdvanceElement(el -> {
-			if (Objects.equals(el.get(), value))
-				foundEl[0] = el;
-		})) {
-		}
-		return foundEl[0];
+	@Override
+	default boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement) {
+		return forElement(value, onElement, true);
 	}
+
+	boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first);
 
 	/**
 	 * Finds a value in this collection matching the given search and performs an action on the {@link CollectionElement} for that element
@@ -68,6 +59,7 @@ public interface ReversibleCollection<E> extends BetterCollection<E>, Reversible
 	 * @param fromStart Whether the spliterator should begin at the beginning or the end of this collection
 	 * @return The number of results found
 	 */
+	@Override
 	default int findAll(Predicate<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement, boolean fromStart) {
 		ElementSpliterator<E> spliter = mutableSpliterator(fromStart);
 		int[] found = new int[1];
@@ -115,6 +107,12 @@ public interface ReversibleCollection<E> extends BetterCollection<E>, Reversible
 		@Override
 		public int size() {
 			return getWrapped().size();
+		}
+
+		@Override
+		public boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
+			return getWrapped().forElement(value, el -> onElement.accept(new ReversibleElementSpliterator.ReversedCollectionElement<>(el)),
+				!first);
 		}
 
 		@Override

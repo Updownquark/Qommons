@@ -16,8 +16,12 @@ public interface CollectionElement<T> extends Settable<T> {
 	/**
 	 * Removes this element from the source collection
 	 * 
+	 * @param cause The cause of the removal
 	 * @throws UnsupportedOperationException If the element cannot be removed
 	 * @see #canRemove()
 	 */
-	void remove() throws UnsupportedOperationException;
+	void remove(Object cause) throws UnsupportedOperationException;
+
+	String canAdd(T value, boolean before);
+	void add(T value, boolean before, Object cause) throws UnsupportedOperationException, IllegalArgumentException;
 }

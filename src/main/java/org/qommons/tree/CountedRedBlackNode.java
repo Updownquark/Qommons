@@ -256,7 +256,7 @@ public abstract class CountedRedBlackNode<E> extends ValuedRedBlackNode<E> {
 		}
 
 		@Override
-		protected CountedRedBlackNode<E> createNode(E value) {
+		protected DefaultNode<E> createNode(E value) {
 			return new DefaultNode<>(value, theCompare);
 		}
 
