@@ -1,7 +1,9 @@
 package org.qommons.collect;
 
 import java.util.Collection;
+import java.util.Deque;
 import java.util.Iterator;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -13,7 +15,12 @@ import org.qommons.ArrayUtils;
  * 
  * @param <E> The type of values in the collection
  */
-public interface ReversibleCollection<E> extends BetterCollection<E>, ReversibleIterable<E> {
+public interface ReversibleCollection<E> extends BetterCollection<E>, ReversibleIterable<E>, Deque<E> {
+	@Override
+	default ImmutableIterator<E> iterator() {
+		return BetterCollection.super.iterator();
+	}
+
 	/**
 	 * Removes the last occurrence of the given value in this collection, if it exists
 	 * 
@@ -71,6 +78,175 @@ public interface ReversibleCollection<E> extends BetterCollection<E>, Reversible
 		})) {
 		}
 		return found[0];
+	}
+
+	@Override
+	default void addFirst(E e) {
+		try {
+			if (!mutableSpliterator(true).tryAdvanceElement(el -> el.add(e, true, null)))
+				throw new IllegalStateException("Could not add element");
+		} catch (UnsupportedOperationException | IllegalArgumentException ex) {
+			throw new IllegalStateException("Could not add element", ex);
+		}
+	}
+
+	@Override
+	default void addLast(E e) {
+		try {
+			if (!mutableSpliterator(false).tryReverseElement(el -> el.add(e, false, null)))
+				throw new IllegalStateException("Could not add element");
+		} catch (UnsupportedOperationException | IllegalArgumentException ex) {
+			throw new IllegalStateException("Could not add element", ex);
+		}
+	}
+
+	@Override
+	default boolean offerFirst(E e) {
+		boolean[] success = new boolean[1];
+		if (!mutableSpliterator(true).tryAdvanceElement(el -> {
+			if (el.canAdd(e, true) == null) {
+				el.add(e, true, null);
+				success[0] = true;
+			}
+		}))
+			success[0] = add(e);
+		return success[0];
+	}
+
+	@Override
+	default boolean offerLast(E e) {
+		boolean[] success = new boolean[1];
+		if (!mutableSpliterator(false).tryReverseElement(el -> {
+			if (el.canAdd(e, false) == null) {
+				el.add(e, false, null);
+				success[0] = true;
+			}
+		}))
+			success[0] = add(e);
+		return success[0];
+	}
+
+	@Override
+	default E removeFirst() {
+		Object[] value = new Object[1];
+		if (!mutableSpliterator(true).tryAdvanceElement(el -> {
+			value[0] = el.get();
+			el.remove(null);
+		}))
+			throw new NoSuchElementException("Empty collection");
+		return (E) value[0];
+	}
+
+	@Override
+	default E removeLast() {
+		Object[] value = new Object[1];
+		if (!mutableSpliterator(true).tryAdvanceElement(el -> {
+			value[0] = el.get();
+			el.remove(null);
+		}))
+			throw new NoSuchElementException("Empty collection");
+		return (E) value[0];
+	}
+
+	@Override
+	default E pollFirst() {
+		Object[] value = new Object[1];
+		mutableSpliterator(true).tryAdvanceElement(el -> {
+			value[0] = el.get();
+			el.remove(null); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an
+								// exception
+		});
+		return (E) value[0];
+	}
+
+	@Override
+	default E pollLast() {
+		Object[] value = new Object[1];
+		mutableSpliterator(false).tryReverseElement(el -> {
+			value[0] = el.get();
+			el.remove(null); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an
+								// exception
+		});
+		return (E) value[0];
+	}
+
+	@Override
+	default E getFirst() {
+		Object[] value = new Object[1];
+		if (!spliterator(true).tryAdvance(v -> value[0] = v))
+			throw new NoSuchElementException("Empty collection");
+		return (E) value[0];
+	}
+
+	@Override
+	default E getLast() {
+		Object[] value = new Object[1];
+		spliterator(false).tryReverse(v -> value[0] = v);
+		return (E) value[0];
+	}
+
+	@Override
+	default E peekFirst() {
+		Object[] value = new Object[1];
+		spliterator(true).tryAdvance(v -> value[0] = v);
+		return (E) value[0];
+	}
+
+	@Override
+	default E peekLast() {
+		Object[] value = new Object[1];
+		spliterator(false).tryReverse(v -> value[0] = v);
+		return (E) value[0];
+	}
+
+	@Override
+	default boolean removeFirstOccurrence(Object o) {
+		return forElement((E) o, el -> SimpleCause.doWith(new SimpleCause(), c -> el.remove(c)), true);
+	}
+
+	@Override
+	default boolean removeLastOccurrence(Object o) {
+		return forElement((E) o, el -> SimpleCause.doWith(new SimpleCause(), c -> el.remove(c)), false);
+	}
+
+	@Override
+	default boolean offer(E e) {
+		return offerLast(e);
+	}
+
+	@Override
+	default E remove() {
+		return removeFirst();
+	}
+
+	@Override
+	default E poll() {
+		return pollFirst();
+	}
+
+	@Override
+	default E element() {
+		return getFirst();
+	}
+
+	@Override
+	default E peek() {
+		return peekFirst();
+	}
+
+	@Override
+	default void push(E e) {
+		addFirst(e);
+	}
+
+	@Override
+	default E pop() {
+		return removeFirst();
+	}
+
+	@Override
+	default Iterator<E> descendingIterator() {
+		return reverse().iterator();
 	}
 
 	/** @return A collection that is identical to this one, but with its elements reversed */
