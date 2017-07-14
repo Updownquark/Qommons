@@ -385,6 +385,7 @@ public abstract class AbstractRBTCollection<E, N extends CountedRedBlackNode<E>>
 		}
 	}
 
+	@Override
 	public boolean removeLast(Object o) {
 		try (Transaction t = lock(true, null)) {
 			N node = findNode(v -> Objects.equals(v, o), Ternian.FALSE);
@@ -457,11 +458,11 @@ public abstract class AbstractRBTCollection<E, N extends CountedRedBlackNode<E>>
 		}
 	}
 
-	protected void delete(N toDelete) {
+	public void delete(N toDelete) {
 		theRoot = (N) toDelete.delete();
 	}
 
-	protected void replace(N toReplace, N replacement) {
+	public void replace(N toReplace, N replacement) {
 		toReplace.replace(replacement);
 		if (theRoot == toReplace)
 			theRoot = replacement;

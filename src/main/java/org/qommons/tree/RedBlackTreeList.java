@@ -12,8 +12,8 @@ import org.qommons.Transaction;
 import org.qommons.collect.Betterator;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.FastFailLockingStrategy;
-import org.qommons.collect.ReversibleList;
 import org.qommons.collect.ReversibleElementSpliterator;
+import org.qommons.collect.ReversibleList;
 import org.qommons.collect.TransactableList;
 
 /**
@@ -91,6 +91,13 @@ public class RedBlackTreeList<N extends CountedRedBlackNode<E>, E> extends Abstr
 			N node = getEndNode(false);
 			addAfter(e, node);
 			return true;
+		}
+	}
+
+	public N addGetNode(E e) {
+		try (Transaction t = lock(true, null)) {
+			N node = getEndNode(false);
+			return addAfter(e, node);
 		}
 	}
 
