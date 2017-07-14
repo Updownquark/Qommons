@@ -4,6 +4,10 @@ import org.qommons.AbstractCausable;
 
 public class SimpleCause extends AbstractCausable {
 	public SimpleCause() {
-		super(null);
+		this(null);
+	}
+
+	public SimpleCause(Object cause) {
+		super(cause);
 	}
 }
