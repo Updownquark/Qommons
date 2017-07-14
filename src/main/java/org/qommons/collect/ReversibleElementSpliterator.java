@@ -243,8 +243,8 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E> {
 		}
 
 		@Override
-		public void remove() throws UnsupportedOperationException {
-			theWrapped.remove();
+		public void remove(Object cause) throws UnsupportedOperationException {
+			theWrapped.remove(cause);
 		}
 
 		@Override
@@ -418,6 +418,10 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E> {
 			hasPrevious = Ternian.NONE;
 		}
 
+		protected CollectionElement<T> getCurrentElement() {
+			return element;
+		}
+
 		@Override
 		public boolean hasNext() {
 			if (hasNext == Ternian.NONE)
@@ -483,7 +487,7 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E> {
 		public void remove() {
 			if (!isReadyForRemove)
 				throw new UnsupportedOperationException("Element has already been removed or iteration has not begun");
-			element.remove();
+			element.remove(null);
 			clearCache();
 		}
 

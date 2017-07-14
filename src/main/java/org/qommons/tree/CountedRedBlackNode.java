@@ -40,7 +40,24 @@ public abstract class CountedRedBlackNode<E> extends ValuedRedBlackNode<E> {
 		while(node != null) {
 			CountedRedBlackNode<E> parent = node.getParent();
 			if(parent != null && parent.getRight() == node) {
+				left = parent.getLeft();
 				ret += size(left) + 1;
+			}
+			node = parent;
+		}
+		return ret;
+	}
+
+	/** @return The number of nodes stored after this node in the tree */
+	public int getElementsGreater() {
+		CountedRedBlackNode<E> node = this;
+		CountedRedBlackNode<E> right = node.getRight();
+		int ret = size(right);
+		while (node != null) {
+			CountedRedBlackNode<E> parent = node.getParent();
+			if (parent != null && parent.getLeft() == node) {
+				right = parent.getRight();
+				ret += size(right) + 1;
 			}
 			node = parent;
 		}
