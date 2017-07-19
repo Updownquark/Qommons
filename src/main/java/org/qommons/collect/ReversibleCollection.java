@@ -21,13 +21,20 @@ public interface ReversibleCollection<E> extends BetterCollection<E>, Reversible
 		return BetterCollection.super.iterator();
 	}
 
+	@Override
+	default boolean contains(Object o) {
+		return BetterCollection.super.contains(o);
+	}
+
 	/**
 	 * Removes the last occurrence of the given value in this collection, if it exists
 	 * 
 	 * @param o The value to remove
 	 * @return Whether the value was found (and removed)
 	 */
-	boolean removeLast(Object o);
+	default boolean removeLast(Object o) {
+		return removeLastOccurrence(o);
+	}
 
 	@Override
 	default boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement) {
@@ -245,6 +252,11 @@ public interface ReversibleCollection<E> extends BetterCollection<E>, Reversible
 	}
 
 	@Override
+	default boolean remove(Object o) {
+		return removeFirstOccurrence(o);
+	}
+
+	@Override
 	default Iterator<E> descendingIterator() {
 		return reverse().iterator();
 	}
@@ -278,6 +290,11 @@ public interface ReversibleCollection<E> extends BetterCollection<E>, Reversible
 		@Override
 		protected ReversibleCollection<E> getWrapped() {
 			return (ReversibleCollection<E>) super.getWrapped();
+		}
+		
+		@Override
+		public boolean belongs(Object o){
+			return getWrapped().belongs(o);
 		}
 
 		@Override
@@ -346,28 +363,8 @@ public interface ReversibleCollection<E> extends BetterCollection<E>, Reversible
 		}
 
 		@Override
-		public boolean containsAll(Collection<?> c) {
-			return getWrapped().containsAll(c);
-		}
-
-		@Override
-		public boolean containsAny(Collection<?> c) {
-			return getWrapped().containsAny(c);
-		}
-
-		@Override
 		public boolean addAll(Collection<? extends E> c) {
 			return getWrapped().addAll(c);
-		}
-
-		@Override
-		public boolean removeAll(Collection<?> c) {
-			return getWrapped().removeAll(c);
-		}
-
-		@Override
-		public boolean retainAll(Collection<?> c) {
-			return getWrapped().retainAll(c);
 		}
 
 		@Override

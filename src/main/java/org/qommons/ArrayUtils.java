@@ -430,40 +430,72 @@ public final class ArrayUtils {
 	}
 
 	/**
-	 * Searches an array using binary search. If the array is not sorted by the given comparator (or by its natural order if <code>T</code>
-	 * implements {@link Comparable}), this method will give unpredictable results. By using binary search, this method can achieve much
-	 * better performance than {@link #indexOf(Object[], Object)}, especially for large arrays.
+	 * Searches an array using binary search.
+	 * 
+	 * This method has an advantage over {@link java.util.Arrays#binarySearch(Object[], Object, java.util.Comparator)} in that the
+	 * comparable given to this method need not be an actual <code>T</code>-typed value, but may be any algorithm that can find a value by
+	 * knowing whether the value it is looking for is greater or less than a given value.
 	 *
-	 * It should be noted that the compare method ({@link Comparable#compareTo(Object)} or
-	 * {@link java.util.Comparator#compare(Object, Object)}) is used for identity comparison, not {@link Object#equals(Object)}. So the
-	 * compare method may return 0 where equals returns false or vice versa, this method may return a different result than
-	 * {@link #indexOf(Object[], Object)} even for sorted arrays.
+	 * It should be noted that the compare method ({@link Comparable#compareTo(Object)} is used for identity comparison, not
+	 * {@link Object#equals(Object)}; therefore the compare method may return 0 where equals returns false or vice versa, and this method
+	 * may return a different result than {@link #indexOf(Object[], Object)} even for sorted arrays.
+	 * 
+	 * If the array is not sorted according to the search comparable, this method will give unpredictable results.
 	 *
 	 * @param <T> The type of array to search
 	 * @param array The array to search
-	 * @param anElement The element to search for
-	 * @param compare The comparator to use to compare the items. <code>T</code> implements {@link Comparable}, this may be null.
-	 * @return The index where the given item was found, or -1 if it was not found
+	 * @param search A comparable value to use to search the array
+	 * @return If there exists in the array an <code>element</code> for which <code>search.compareTo(element)==0</search>, then the index
+	 * of that element; otherwise <code>-(index+1)</code>, where <code>index</code> is the index where such an element would be inserted
+	 *         into the sorted array
 	 */
-	public static <T> int binaryIndexOf(T [] array, T anElement, java.util.Comparator<? super T> compare) {
-		int min = 0, max = array.length - 1;
-		while(min < max) {
-			int mid = (min + max) >>> 1;
-		int comp = compare == null ? ((Comparable<T>) array[mid]).compareTo(anElement) : compare.compare(array[mid], anElement);
-		if(comp > 0)
-			max = mid - 1;
-		else if(comp < 0)
-			min = mid + 1;
-		else
-			return mid;
+	public static <T> int binarySearch(T[] array, Comparable<? super T> search) {
+		return binarySearch(java.util.Arrays.asList(array), search);
+	}
+
+	/**
+	 * Searches a list using binary search.
+	 * 
+	 * This method has an advantage over {@link java.util.Collections#binarySearch(List, Object, java.util.Comparator)} in that the
+	 * comparable given to this method need not be an actual <code>T</code>-typed value, but may be any algorithm that can find a value by
+	 * knowing whether the value it is looking for is greater or less than a given value.
+	 *
+	 * It should be noted that the compare method ({@link Comparable#compareTo(Object)} is used for identity comparison, not
+	 * {@link Object#equals(Object)}; therefore the compare method may return 0 where equals returns false or vice versa, and this method
+	 * may return a different result than {@link List#indexOf(Object)} even for sorted lists.
+	 * 
+	 * If the list is not sorted according to the search comparable, this method will give unpredictable results.
+	 *
+	 * @param <T> The type of list to search
+	 * @param list The list to search
+	 * @param search A comparable value to use to search the list
+	 * @return If there exists in the list an <code>element</code> for which <code>search.compareTo(element)==0</search>, then the index
+	 * of that element; otherwise <code>-(index+1)</code>, where <code>index</code> is the index where such an element would be inserted
+	 *         into the sorted list
+	 */
+	public static <T> int binarySearch(List<? extends T> list, Comparable<? super T> search) {
+		if (list.isEmpty())
+			return -1;
+		int min = 0, max = list.size() - 1;
+		int mid = -1;
+		int comp = 0;
+		while (min < max) {
+			mid = (min + max) >>> 1;
+			comp = search.compareTo(list.get(mid));
+			if (comp > 0)
+				max = mid - 1;
+			else if (comp < 0)
+				min = mid + 1;
+			else
+				return mid;
 		}
-		if(min != max)
-			return -1;
-		int comp = compare == null ? ((Comparable<T>) array[min]).compareTo(anElement) : compare.compare(array[min], anElement);
-		if(comp == 0)
+		if (mid != min)
+			comp = search.compareTo(list.get(min));
+		if (comp == 0)
 			return min;
-		else
-			return -1;
+		else if (comp > 0)
+			min++;
+		return -(min + 1);
 	}
 
 	/**

@@ -15,7 +15,7 @@ import com.google.common.reflect.TypeToken;
  * 
  * @param <E> The type of values returned by the spliterator
  */
-public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E> {
+public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E>, ReversibleSpliterator<E> {
 	/**
 	 * Gets the previous element in the spliterator, if available
 	 * 
@@ -30,6 +30,7 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E> {
 	 * @param action The action to perform on the value
 	 * @return Whether there was a previous value in the spliterator
 	 */
+	@Override
 	default boolean tryReverse(Consumer<? super E> action) {
 		return tryReverseElement(el -> action.accept(el.get()));
 	}
@@ -41,6 +42,7 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E> {
 	}
 
 	/** @param action The action to perform on all the previous values in the spliterator */
+	@Override
 	default void forEachReverse(Consumer<? super E> action) {
 		while (tryReverse(action)) {
 		}
@@ -50,6 +52,7 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E> {
 	 * @return A reversed view of this spliterator, where {@link #tryAdvance(Consumer)} traverses this spliterator's element in reverse and
 	 *         {@link #tryReverse(Consumer)} traverses them in the forward direction
 	 */
+	@Override
 	default ReversibleElementSpliterator<E> reverse() {
 		return new ReversedElementSpliterator<>(this);
 	}
