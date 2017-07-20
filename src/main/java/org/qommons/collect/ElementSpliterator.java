@@ -402,11 +402,11 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 			}
 
 			@Override
-			public void remove() throws UnsupportedOperationException {
+			public void remove(Object cause) throws UnsupportedOperationException {
 				String msg = theMap.filterRemove(theSourceEl);
 				if (msg != null)
 					throw new UnsupportedOperationException(msg);
-				theSourceEl.remove();
+				theSourceEl.remove(cause);
 			}
 
 			@Override
@@ -696,8 +696,8 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 		}
 
 		@Override
-		public void remove() {
-			theWrapped[0].remove();
+		public void remove(Object cause) {
+			theWrapped[0].remove(cause);
 		}
 	}
 
@@ -757,7 +757,7 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 					"First element has not been read, element has already been removed, or iterator has finished");
 			if (isNextCached)
 				throw new IllegalStateException("remove() must be called after next() and before the next call to hasNext()");
-			cachedNext.remove();
+			cachedNext.remove(null);
 			cachedNext = null;
 		}
 

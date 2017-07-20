@@ -1,11 +1,11 @@
 package org.qommons.collect;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.ListIterator;
+import java.lang.reflect.Array;
+import java.util.*;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
+
+import org.qommons.value.Value;
 
 import com.google.common.reflect.TypeToken;
 
@@ -20,12 +20,44 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, RRList<E> {
 	ReversibleElementSpliterator<E> mutableSpliterator(int index);
 
 	@Override
+	default boolean contains(Object o) {
+		return ReversibleCollection.super.contains(o);
+	}
+
+	@Override
+	default boolean containsAny(Collection<?> c) {
+		return ReversibleCollection.super.containsAny(c);
+	}
+
+	@Override
+	default boolean containsAll(Collection<?> c) {
+		return ReversibleCollection.super.containsAll(c);
+	}
+
+	@Override
+	default boolean remove(Object o) {
+		return ReversibleCollection.super.remove(o);
+	}
+
+	@Override
+	default boolean removeAll(Collection<?> c) {
+		return ReversibleCollection.super.removeAll(c);
+	}
+
+	@Override
+	default boolean retainAll(Collection<?> c) {
+		return ReversibleCollection.super.retainAll(c);
+	}
+
+	@Override
 	default ReversibleList<E> reverse() {
 		return new ReversedList<>(this);
 	}
 
 	@Override
-	ReversibleList<E> subList(int fromIndex, int toIndex);
+	default ReversibleList<E> subList(int fromIndex, int toIndex) {
+		return new ReversibleSubList<>(this, fromIndex, toIndex);
+	}
 
 	@Override
 	default ReversibleSpliterator<E> spliterator() {
@@ -183,6 +215,16 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, RRList<E> {
 				if (toIndex != 0)
 					throw new IndexOutOfBoundsException(toIndex + " of 0");
 				return this;
+			}
+
+			@Override
+			public boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
+				return false;
+			}
+
+			@Override
+			public boolean belongs(Object o) {
+				return false;
 			}
 		}
 		return new EmptyReversibleList();
@@ -385,4 +427,356 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, RRList<E> {
 		}
 	}
 
+	class ReversibleSubList<E> implements ReversibleList<E> {
+		private final ReversibleList<E> theWrapped;
+		private int theStart;
+		private int theEnd;
+
+		public ReversibleSubList(ReversibleList<E> wrapped, int start, int end) {
+			if (end > wrapped.size())
+				throw new IndexOutOfBoundsException(end + " of " + wrapped.size());
+			if (start < 0)
+				throw new IndexOutOfBoundsException("" + start);
+			if (start > end)
+				throw new IndexOutOfBoundsException(start + ">" + end);
+			theWrapped = wrapped;
+			theStart = start;
+			theEnd = end;
+		}
+
+		@Override
+		public boolean belongs(Object o) {
+			return theWrapped.belongs(o);
+		}
+
+		@Override
+		public int size() {
+			int sz = theWrapped.size();
+			if (sz < theStart)
+				return 0;
+			return Math.min(sz, theEnd) - theStart;
+		}
+
+		@Override
+		public boolean isEmpty() {
+			return theWrapped.size() <= theStart;
+		}
+
+		@Override
+		public Object[] toArray() {
+			Object[] array = new Object[size()];
+			for (int i = 0; i < array.length; i++)
+				array[i] = get(i);
+			return array;
+		}
+
+		@Override
+		public <T> T[] toArray(T[] a) {
+			T[] array = a.length >= size() ? a : (T[]) Array.newInstance(a.getClass().getComponentType(), size());
+			for (int i = 0; i < array.length; i++)
+				array[i] = (T) get(i);
+			return array;
+		}
+
+		@Override
+		public boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
+			if (!belongs(value))
+				return false;
+			boolean[] success = new boolean[1];
+			ElementSpliterator<E> spliter = first ? mutableSpliterator(true) : mutableSpliterator(false).reverse();
+			while (!success[0] && spliter.tryAdvanceElement(el -> {
+				if (Objects.equals(el.get(), value)) {
+					onElement.accept(wrapElement(el));
+					success[0] = true;
+				}
+			})) {
+			}
+			return success[0];
+		}
+
+		protected CollectionElement<E> wrapElement(CollectionElement<E> el) {
+			return new CollectionElement<E>() {
+				@Override
+				public TypeToken<E> getType() {
+					return el.getType();
+				}
+
+				@Override
+				public <V extends E> E set(V value, Object cause) throws IllegalArgumentException, UnsupportedOperationException {
+					return el.set(value, cause);
+				}
+
+				@Override
+				public <V extends E> String isAcceptable(V value) {
+					return el.isAcceptable(value);
+				}
+
+				@Override
+				public Value<String> isEnabled() {
+					return el.isEnabled();
+				}
+
+				@Override
+				public E get() {
+					return el.get();
+				}
+
+				@Override
+				public String canRemove() {
+					return el.canRemove();
+				}
+
+				@Override
+				public void remove(Object cause) throws UnsupportedOperationException {
+					el.remove(cause);
+					theEnd--;
+				}
+
+				@Override
+				public String canAdd(E value, boolean before) {
+					return el.canAdd(value, before);
+				}
+
+				@Override
+				public void add(E value, boolean before, Object cause) throws UnsupportedOperationException, IllegalArgumentException {
+					el.add(value, before, cause);
+					theEnd++;
+				}
+			};
+		}
+
+		@Override
+		public ReversibleElementSpliterator<E> mutableSpliterator(boolean fromStart) {
+			int index = fromStart ? theStart : theEnd;
+			return new SubSpliterator(theWrapped.mutableSpliterator(index), index);
+		}
+
+		@Override
+		public ReversibleSpliterator<E> spliterator(int index) {
+			return mutableSpliterator(index).immutable();
+		}
+
+		@Override
+		public ReversibleElementSpliterator<E> mutableSpliterator(int index) {
+			return new SubSpliterator(theWrapped.mutableSpliterator(theStart + checkIndex(index, true)), theStart + index);
+		}
+
+		class SubSpliterator implements ReversibleElementSpliterator<E> {
+			private final ReversibleElementSpliterator<E> wrapSpliter;
+			private int spliterIndex;
+
+			SubSpliterator(ReversibleElementSpliterator<E> spliter, int position) {
+				wrapSpliter = spliter;
+				spliterIndex = position;
+			}
+
+			@Override
+			public TypeToken<E> getType() {
+				return wrapSpliter.getType();
+			}
+
+			@Override
+			public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
+				if (spliterIndex >= theEnd)
+					return false;
+				if (wrapSpliter.tryAdvanceElement(el -> {
+					action.accept(wrapElement(el));
+				})) {
+					spliterIndex++;
+					return true;
+				}
+				return false;
+			}
+
+			@Override
+			public long estimateSize() {
+				return size();
+			}
+
+			@Override
+			public long getExactSizeIfKnown() {
+				return size();
+			}
+
+			@Override
+			public int characteristics() {
+				return wrapSpliter.characteristics();
+			}
+
+			@Override
+			public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
+				if (spliterIndex <= theStart)
+					return false;
+				if (wrapSpliter.tryReverseElement(el -> {
+					action.accept(wrapElement(el));
+				})) {
+					spliterIndex--;
+					return true;
+				}
+				return false;
+			}
+
+			@Override
+			public ReversibleElementSpliterator<E> trySplit() {
+				return null;
+			}
+		}
+
+		private int checkIndex(int index, boolean includeTerminus) {
+			if (index < 0)
+				throw new IndexOutOfBoundsException("" + index);
+			if (index > theEnd - theStart || (index == theEnd - theStart && !includeTerminus))
+				throw new IndexOutOfBoundsException(index + " of " + (theEnd - theStart));
+			return index;
+		}
+
+		@Override
+		public E get(int index) {
+			return theWrapped.get(checkIndex(index, false) + theStart);
+		}
+
+		@Override
+		public boolean add(E e) {
+			theWrapped.add(theEnd, e);
+			theEnd++;
+			return true;
+		}
+
+		@Override
+		public void add(int index, E element) {
+			theWrapped.add(theStart + checkIndex(index, true), element);
+			theEnd++;
+		}
+
+		@Override
+		public boolean addAll(Collection<? extends E> c) {
+			int preSize = theWrapped.size();
+			if (!theWrapped.addAll(theEnd, c))
+				return false;
+			theEnd += theWrapped.size() - preSize;
+			return true;
+		}
+
+		@Override
+		public boolean addAll(int index, Collection<? extends E> c) {
+			int preSize = theWrapped.size();
+			if (!theWrapped.addAll(theStart + checkIndex(index, true), c))
+				return false;
+			theEnd += theWrapped.size() - preSize;
+			return true;
+		}
+
+		@Override
+		public void clear() {
+			int sz = theWrapped.size();
+			if (sz <= theStart)
+				return;
+			int end = theEnd;
+			if (sz < end)
+				end = sz;
+			theWrapped.removeRange(theStart, end);
+			theEnd = theStart;
+		}
+
+		@Override
+		public E set(int index, E element) {
+			return theWrapped.set(theStart + checkIndex(index, false), element);
+		}
+
+		@Override
+		public E remove(int index) {
+			E old = theWrapped.remove(theStart + checkIndex(index, false));
+			theEnd--;
+			return old;
+		}
+
+		@Override
+		public int indexOf(Object o) {
+			if (!belongs(o))
+				return -1;
+			int[] res = new int[] { -1 };
+			Spliterator<E> spliter = spliterator(true);
+			int[] index = new int[1];
+			while (res[0] < 0 && spliter.tryAdvance(v -> {
+				if (Objects.equals(v, o))
+					res[0] = index[0];
+				index[0]++;
+			})) {
+			}
+			return res[0];
+		}
+
+		@Override
+		public int lastIndexOf(Object o) {
+			if (!belongs(o))
+				return -1;
+			int[] res = new int[] { -1 };
+			Spliterator<E> spliter = spliterator(false).reverse();
+			int[] index = new int[1];
+			while (res[0] < 0 && spliter.tryAdvance(v -> {
+				if (Objects.equals(v, o))
+					res[0] = index[0];
+				index[0]++;
+			})) {
+			}
+			return res[0];
+		}
+
+		@Override
+		public ListIterator<E> listIterator(int index) {
+			return new ListIterator<E>() {
+				private final ListIterator<E> wrapIter = theWrapped.listIterator(theStart + checkIndex(index, true));
+
+				@Override
+				public boolean hasNext() {
+					return wrapIter.hasNext() && wrapIter.nextIndex() < theEnd;
+				}
+
+				@Override
+				public E next() {
+					if (wrapIter.nextIndex() >= theEnd)
+						throw new NoSuchElementException();
+					return wrapIter.next();
+				}
+
+				@Override
+				public boolean hasPrevious() {
+					return wrapIter.hasPrevious() && wrapIter.previousIndex() >= theStart;
+				}
+
+				@Override
+				public E previous() {
+					if (wrapIter.previousIndex() < theStart)
+						throw new NoSuchElementException();
+					return wrapIter.previous();
+				}
+
+				@Override
+				public int nextIndex() {
+					return wrapIter.nextIndex() - theStart;
+				}
+
+				@Override
+				public int previousIndex() {
+					return wrapIter.previousIndex() - theStart;
+				}
+
+				@Override
+				public void remove() {
+					wrapIter.remove();
+				}
+
+				@Override
+				public void set(E e) {
+					wrapIter.set(e);
+				}
+
+				@Override
+				public void add(E e) {
+					wrapIter.add(e);
+					theEnd++;
+				}
+			};
+		}
+	}
 }

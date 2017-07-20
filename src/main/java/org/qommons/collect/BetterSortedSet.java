@@ -1,12 +1,10 @@
 package org.qommons.collect;
 
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.ListIterator;
-import java.util.NavigableSet;
+import java.lang.reflect.Array;
+import java.util.*;
 import java.util.function.Consumer;
 
+import org.qommons.Ternian;
 import org.qommons.collect.CollectionElement.StdMsg;
 import org.qommons.value.Value;
 
@@ -335,27 +333,28 @@ public interface BetterSortedSet<E> extends ReversibleList<E>, NavigableSet<E> {
 
 		@Override
 		public Object[] toArray() {
-			// TODO Auto-generated method stub
+			Object[] array = new Object[size()];
+			for (int i = 0; i < array.length; i++)
+				array[i] = get(i);
+			return array;
 		}
 
 		@Override
 		public <T> T[] toArray(T[] a) {
-			// TODO Auto-generated method stub
+			T[] array = a.length >= size() ? a : (T[]) Array.newInstance(a.getClass().getComponentType(), size());
+			for (int i = 0; i < array.length; i++)
+				array[i] = (T) get(i);
+			return array;
 		}
 
 		@Override
 		public ReversibleSpliterator<E> spliterator(int index) {
-			// TODO Auto-generated method stub
+			return new BoundedSpliterator(theWrapped.spliterator(checkIndex(index, true)));
 		}
 
 		@Override
 		public ReversibleElementSpliterator<E> mutableSpliterator(int index) {
-			// TODO Auto-generated method stub
-		}
-
-		@Override
-		public ReversibleList<E> subList(int fromIndex, int toIndex) {
-			// TODO Auto-generated method stub
+			return new BoundedMutableSpliterator(theWrapped.mutableSpliterator(checkIndex(index, true)));
 		}
 
 		@Override
@@ -363,10 +362,19 @@ public interface BetterSortedSet<E> extends ReversibleList<E>, NavigableSet<E> {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
 
+		private int checkIndex(int index, boolean includeTerminus) {
+			if (index < 0)
+				throw new IndexOutOfBoundsException("" + index);
+			int min = getMinIndex();
+			int max = getMaxIndex();
+			if (index > max - min || (index == max - min && !includeTerminus))
+				throw new IndexOutOfBoundsException(index + " of " + (max - min));
+			return min + index;
+		}
+
 		@Override
 		public E get(int index) {
-			// TODO Auto-generated method stub
-			return null;
+			return theWrapped.get(checkIndex(index, false));
 		}
 
 		@Override
@@ -381,13 +389,111 @@ public interface BetterSortedSet<E> extends ReversibleList<E>, NavigableSet<E> {
 
 		@Override
 		public E remove(int index) {
-			// TODO Auto-generated method stub
-			return null;
+			return theWrapped.remove(checkIndex(index, false));
 		}
 
 		@Override
 		public ListIterator<E> listIterator(int index) {
-			// TODO Auto-generated method stub
+			return new ListIterator<E>() {
+				private final ListIterator<E> wrapIter = theWrapped.listIterator(checkIndex(index, true));
+				private Ternian hasNext = Ternian.NONE;
+				private Ternian hasPrevious = Ternian.NONE;
+
+				@Override
+				public boolean hasNext() {
+					if (hasNext == Ternian.NONE) {
+						if (!wrapIter.hasNext())
+							hasNext = Ternian.FALSE;
+						else {
+							E next = wrapIter.next();
+							hasNext = Ternian.of(isInRange(next) == 0);
+							wrapIter.previous();
+						}
+					}
+					return hasNext.value;
+				}
+
+				@Override
+				public E next() {
+					E next = wrapIter.next();
+					switch (hasNext) {
+					case NONE:
+						if (isInRange(next) != 0) {
+							wrapIter.previous();
+							throw new NoSuchElementException();
+						}
+						break;
+					case FALSE:
+						wrapIter.previous();
+						throw new NoSuchElementException();
+					case TRUE:
+						break;
+					}
+					hasNext = Ternian.NONE;
+					hasPrevious = Ternian.TRUE;
+					return next;
+				}
+
+				@Override
+				public boolean hasPrevious() {
+					if (hasPrevious == Ternian.NONE) {
+						if (!wrapIter.hasPrevious())
+							hasPrevious = Ternian.FALSE;
+						else {
+							E prev = wrapIter.previous();
+							hasPrevious = Ternian.of(isInRange(prev) == 0);
+							wrapIter.next();
+						}
+					}
+					return hasPrevious.value;
+				}
+
+				@Override
+				public E previous() {
+					E prev = wrapIter.previous();
+					switch (hasPrevious) {
+					case NONE:
+						if (isInRange(prev) != 0) {
+							wrapIter.next();
+							throw new NoSuchElementException();
+						}
+						break;
+					case FALSE:
+						wrapIter.next();
+						throw new NoSuchElementException();
+					case TRUE:
+						break;
+					}
+					hasPrevious = Ternian.NONE;
+					hasNext = Ternian.TRUE;
+					return prev;
+				}
+
+				@Override
+				public int nextIndex() {
+					return wrapIter.nextIndex() - getMinIndex();
+				}
+
+				@Override
+				public int previousIndex() {
+					return wrapIter.previousIndex() - getMinIndex();
+				}
+
+				@Override
+				public void remove() {
+					wrapIter.remove();
+				}
+
+				@Override
+				public void set(E e) {
+					wrapIter.set(e);
+				}
+
+				@Override
+				public void add(E e) {
+					wrapIter.add(e);
+				}
+			};
 		}
 
 		@Override
