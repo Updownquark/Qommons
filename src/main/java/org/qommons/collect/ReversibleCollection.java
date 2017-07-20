@@ -5,6 +5,7 @@ import java.util.Deque;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -43,6 +44,19 @@ public interface ReversibleCollection<E> extends BetterCollection<E>, Reversible
 
 	boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first);
 
+	default boolean find(Predicate<? super E> search, Consumer<? super E> onValue, boolean first) {
+		Spliterator<E> spliter = spliterator(first);
+		boolean[] found = new boolean[1];
+		while (spliter.tryAdvance(v -> {
+			if (search.test(v)) {
+				found[0] = true;
+				onValue.accept(v);
+			}
+		})) {
+		}
+		return found[0];
+	}
+
 	/**
 	 * Finds a value in this collection matching the given search and performs an action on the {@link CollectionElement} for that element
 	 * 
@@ -51,7 +65,7 @@ public interface ReversibleCollection<E> extends BetterCollection<E>, Reversible
 	 * @param first Whether to find the first or the last element which passes the test
 	 * @return Whether a result was found
 	 */
-	default boolean find(Predicate<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
+	default boolean findElement(Predicate<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
 		ElementSpliterator<E> spliter = mutableSpliterator(first);
 		boolean[] found = new boolean[1];
 		while (spliter.tryAdvanceElement(el -> {

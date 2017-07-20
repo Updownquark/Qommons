@@ -6,6 +6,7 @@ import java.util.function.Function;
 /** An event or something that may have a cause */
 public interface Causable {
 	/** An action to be fired when a causable finishes */
+	@FunctionalInterface
 	interface TerminalAction {
 		/**
 		 * @param cause The causable that has finished

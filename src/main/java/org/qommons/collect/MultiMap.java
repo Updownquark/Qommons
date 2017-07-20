@@ -17,9 +17,12 @@ public interface MultiMap<K, V> {
 	 * @param <K> The key type of the map
 	 * @param <V> The value type of the map
 	 */
-	interface MultiEntry<K, V> extends Collection<V> {
+	interface MultiEntry<K, V> {
 		/** @return The key associated with this entry's values */
 		K getKey();
+
+		/** @return All values associated with this entry's key */
+		Collection<V> getValues();
 	}
 
 	/** @return The keys that have least one value in this map */
