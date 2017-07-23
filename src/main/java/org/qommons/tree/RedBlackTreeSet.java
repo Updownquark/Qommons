@@ -7,7 +7,7 @@ import java.util.NavigableSet;
 import java.util.SortedSet;
 import java.util.function.Function;
 
-import org.qommons.tree.RedBlackNode.TreeOpResult;
+import org.qommons.tree.MutableBinaryTreeNode.TreeOpResult;
 import org.qommons.tree.RedBlackNode.ValuedRedBlackNode;
 
 /**
@@ -215,7 +215,7 @@ public interface RedBlackTreeSet<E, N extends ValuedRedBlackNode<E>> extends jav
 			setRoot(createNode(value));
 			return true;
 		} else {
-			TreeOpResult res = root.add(value, true);
+			MutableBinaryTreeNode.TreeOpResult res = root.add(value, true);
 			setRoot((N) res.getNewRoot());
 			return res.getFoundNode() == null;
 		}
@@ -232,7 +232,7 @@ public interface RedBlackTreeSet<E, N extends ValuedRedBlackNode<E>> extends jav
 			addedNode = createNode(value);
 			setRoot(addedNode);
 		} else {
-			TreeOpResult res = root.add(value, true);
+			MutableBinaryTreeNode.TreeOpResult res = root.add(value, true);
 			setRoot((N) res.getNewRoot());
 			addedNode = (N) res.getNewNode();
 		}

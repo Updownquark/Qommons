@@ -6,10 +6,17 @@ public interface BinaryTreeNode<E> {
 	BinaryTreeNode<E> getParent();
 
 	BinaryTreeNode<E> getLeft();
-
 	BinaryTreeNode<E> getRight();
 
 	int size();
+
+	/**
+	 * @param node The node to get the size of
+	 * @return The size of the given node, or 0 if the node is null
+	 */
+	static int sizeOf(BinaryTreeNode node) {
+		return node == null ? 0 : node.size();
+	}
 
 	/** @return The root of the tree structure that this node exists in */
 	default BinaryTreeNode<E> getRoot() {
@@ -70,31 +77,58 @@ public interface BinaryTreeNode<E> {
 	 * @return The found node
 	 */
 	default BinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean withExact) {
-		class Finder {
-
-			private BinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean withExact,
-				BinaryTreeNode<E> found) {
-				int compare = finder.compareTo(this);
-				if (compare == 0) {
-					if (withExact)
-						return this;
-					BinaryTreeNode<E> child = getChild(lesser);
-					if (child == null)
-						return found;
-					while (child.getChild(!lesser) != null)
-						child = child.getChild(!lesser);
-					return child;
-				}
-				if (compare > 0 == lesser)
-					found = this;
-				BinaryTreeNode<E> child = getChild(compare < 0);
-				if (child != null)
-					return child.findClosest(finder, lesser, withExact, found);
-				else
+		BinaryTreeNode<E> node = this;
+		BinaryTreeNode<E> found = null;
+		while (true) {
+			int compare = finder.compareTo(node);
+			if (compare == 0) {
+				if (withExact)
+					return node;
+				BinaryTreeNode<E> child = getChild(lesser);
+				if (child == null)
 					return found;
+				while (child.getChild(!lesser) != null)
+					child = child.getChild(!lesser);
+				return child;
 			}
+			if (compare > 0 == lesser)
+				found = node;
+			BinaryTreeNode<E> child = getChild(compare < 0);
+			if (child == null)
+				return found;
+			node = child;
 		}
-		return findClosest(finder, lesser, withExact, null);
 	}
 
+	/** @return The number of nodes stored before this node in the tree */
+	default int getNodesBefore() {
+		BinaryTreeNode<E> node = this;
+		BinaryTreeNode<E> left = node.getLeft();
+		int ret = size(left);
+		while (node != null) {
+			BinaryTreeNode<E> parent = node.getParent();
+			if (parent != null && parent.getRight() == node) {
+				left = parent.getLeft();
+				ret += size(left) + 1;
+			}
+			node = parent;
+		}
+		return ret;
+	}
+
+	/** @return The number of nodes stored after this node in the tree */
+	default int getNodesAfter() {
+		BinaryTreeNode<E> node = this;
+		BinaryTreeNode<E> right = node.getRight();
+		int ret = size(right);
+		while (node != null) {
+			BinaryTreeNode<E> parent = node.getParent();
+			if (parent != null && parent.getLeft() == node) {
+				right = parent.getRight();
+				ret += size(right) + 1;
+			}
+			node = parent;
+		}
+		return ret;
+	}
 }

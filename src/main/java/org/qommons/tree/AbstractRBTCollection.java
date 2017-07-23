@@ -16,13 +16,8 @@ import java.util.function.Predicate;
 
 import org.qommons.Ternian;
 import org.qommons.Transaction;
-import org.qommons.collect.MutableElementHandle;
-import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.MutableElementSpliterator;
-import org.qommons.collect.ReversibleElementSpliterator;
-import org.qommons.collect.BetterList;
-import org.qommons.collect.TransactableCollection;
-import org.qommons.collect.TransactableList;
+import org.qommons.collect.*;
+import org.qommons.tree.MutableBinaryTreeNode.TransactableCollection;
 import org.qommons.value.Value;
 
 import com.google.common.reflect.TypeToken;
@@ -330,8 +325,8 @@ public abstract class AbstractRBTCollection<E, N extends RedBlackNode<E>> implem
 		if (c.isEmpty())
 			return false;
 		Transaction t;
-		if (c instanceof TransactableCollection)
-			t = ((TransactableCollection<?>) c).lock(false, null);
+		if (c instanceof MutableBinaryTreeNode.TransactableCollection)
+			t = ((MutableBinaryTreeNode.TransactableCollection<?>) c).lock(false, null);
 		else
 			t = Transaction.NONE;
 		try {
@@ -398,8 +393,8 @@ public abstract class AbstractRBTCollection<E, N extends RedBlackNode<E>> implem
 	@Override
 	public boolean removeAll(Collection<?> c) {
 		Transaction t;
-		if (c instanceof TransactableCollection)
-			t = ((TransactableCollection<?>) c).lock(false, null);
+		if (c instanceof MutableBinaryTreeNode.TransactableCollection)
+			t = ((MutableBinaryTreeNode.TransactableCollection<?>) c).lock(false, null);
 		else
 			t = Transaction.NONE;
 		try {
@@ -412,8 +407,8 @@ public abstract class AbstractRBTCollection<E, N extends RedBlackNode<E>> implem
 	@Override
 	public boolean retainAll(Collection<?> c) {
 		Transaction t;
-		if (c instanceof TransactableCollection)
-			t = ((TransactableCollection<?>) c).lock(false, null);
+		if (c instanceof MutableBinaryTreeNode.TransactableCollection)
+			t = ((MutableBinaryTreeNode.TransactableCollection<?>) c).lock(false, null);
 		else
 			t = Transaction.NONE;
 		try {
@@ -476,7 +471,7 @@ public abstract class AbstractRBTCollection<E, N extends RedBlackNode<E>> implem
 	protected N addBefore(E element, N before) {
 		N newNode = createNode(element);
 		N left = (N) before.getLeft();
-		RedBlackNode.TreeOpResult result;
+		MutableBinaryTreeNode.TreeOpResult result;
 		if (left == null)
 			result = before.addOnSide(newNode, true, true);
 		else {
@@ -503,12 +498,12 @@ public abstract class AbstractRBTCollection<E, N extends RedBlackNode<E>> implem
 				N farLeft = theRoot;
 				while (farLeft.getChild(true) != null)
 					farLeft = (N) farLeft.getChild(true);
-				RedBlackNode.TreeOpResult result = farLeft.addOnSide(newNode, true, true);
+				MutableBinaryTreeNode.TreeOpResult result = farLeft.addOnSide(newNode, true, true);
 				theRoot = (N) result.getNewRoot();
 			}
 		} else {
 			N right = (N) after.getRight();
-			RedBlackNode.TreeOpResult result;
+			MutableBinaryTreeNode.TreeOpResult result;
 			if (right == null)
 				result = after.addOnSide(newNode, false, true);
 			else {

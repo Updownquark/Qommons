@@ -1,28 +1,32 @@
 package org.qommons.tree;
 
+import static org.qommons.tree.BinaryTreeNode.sizeOf;
+
 import java.util.Map;
 
 /**
  * A node in a red/black binary tree structure. This class does all the work of keeping itself balanced and has hooks that allow specialized
  * tree structures to achieve optimal performance without worrying about balancing.
  */
-public abstract class RedBlackNode<E> implements Comparable<RedBlackNode<E>>, Cloneable {
+public abstract class RedBlackNode<E> implements BinaryTreeNode<E> {
 	/** Returned from {@link RedBlackNode#add(RedBlackNode, boolean)} to provide information about the result of the add operation */
-	public static class TreeOpResult {
-		private RedBlackNode theFoundNode;
+	class TreeOpResult<E> {
+		private BinaryTreeNode<E> theFoundNode;
 
-		private RedBlackNode theNewNode;
+		private BinaryTreeNode<E> theNewNode;
 
-		RedBlackNode theNewRoot;
+		BinaryTreeNode<E> theNewRoot;
 
-		TreeOpResult(RedBlackNode foundNode, RedBlackNode newNode, RedBlackNode root) {
+		TreeOpResult(BinaryTreeNode<E> foundNode, BinaryTreeNode<E> newNode, BinaryTreeNode<E> root) {
 			theFoundNode = foundNode;
 			theNewNode = newNode;
 			theNewRoot = root;
 		}
 
-		/** @return The node that was found in the tree that was equivalent to the given node. May be null if no equivalent node was found. */
-		public RedBlackNode getFoundNode() {
+		/**
+		 * @return The node that was found in the tree that was equivalent to the given node. May be null if no equivalent node was found.
+		 */
+		public BinaryTreeNode<E> getFoundNode() {
 			return theFoundNode;
 		}
 
@@ -30,7 +34,7 @@ public abstract class RedBlackNode<E> implements Comparable<RedBlackNode<E>>, Cl
 		 * @return The node that is now in the tree that is equivalent to the given node. May be identical to the given node or to the
 		 *         {@link #getFoundNode() found node}.
 		 */
-		public RedBlackNode getNewNode() {
+		public BinaryTreeNode<E> getNewNode() {
 			return theNewNode;
 		}
 
@@ -39,7 +43,7 @@ public abstract class RedBlackNode<E> implements Comparable<RedBlackNode<E>>, Cl
 		 *
 		 * @return The new root for the tree structure
 		 */
-		public RedBlackNode getNewRoot() {
+		public BinaryTreeNode<E> getNewRoot() {
 			return theNewRoot;
 		}
 	}
@@ -66,6 +70,7 @@ public abstract class RedBlackNode<E> implements Comparable<RedBlackNode<E>>, Cl
 	}
 
 	/** @return This node's value */
+	@Override
 	public E getValue() {
 		return theValue;
 	}
@@ -76,16 +81,9 @@ public abstract class RedBlackNode<E> implements Comparable<RedBlackNode<E>>, Cl
 	}
 
 	/** @return The parent of this node in the tree structure. Will be null if and only if this node is the root (or an orphan). */
+	@Override
 	public RedBlackNode<E> getParent() {
 		return theParent;
-	}
-
-	/** @return The root of the tree structure that this node exists in */
-	public RedBlackNode<E> getRoot() {
-		RedBlackNode<E> ret = this;
-		while(ret.getParent() != null)
-			ret = ret.getParent();
-		return ret;
 	}
 
 	/** Runs debugging checks on this tree structure to assure that all internal constraints are currently met. */
@@ -134,16 +132,8 @@ public abstract class RedBlackNode<E> implements Comparable<RedBlackNode<E>>, Cl
 			} else if(!leafBlackDepth.equals(blackDepth))
 				throw new IllegalStateException("Different leaf black depths: " + leafBlackDepth + " and " + blackDepth);
 		}
-		if (theSize != size(getLeft()) + size(getRight()) + 1)
+		if (theSize != sizeOf(getLeft()) + sizeOf(getRight()) + 1)
 			throw new IllegalStateException("Size is incorrect: " + this);
-	}
-
-	/**
-	 * @param node The node to get the size of
-	 * @return The size of the given node, or 0 if the node is null
-	 */
-	public static final int size(RedBlackNode<?> node) {
-		return node == null ? 0 : node.theSize;
 	}
 
 	/**
@@ -163,36 +153,28 @@ public abstract class RedBlackNode<E> implements Comparable<RedBlackNode<E>>, Cl
 	}
 
 	/** @return The child node that is on the left of this node */
+	@Override
 	public RedBlackNode<E> getLeft() {
 		return theLeft;
 	}
 
 	/** @return The child node that is on the right of this node */
+	@Override
 	public RedBlackNode<E> getRight() {
 		return theRight;
-	}
-
-	@Override
-	public abstract int compareTo(RedBlackNode<E> node);
-
-	/** @return Whether this node is on the right (false) or the left (true) of its parent. False for the root. */
-	public boolean getSide() {
-		if(theParent == null)
-			return false;
-		if(this == theParent.getLeft())
-			return true;
-		return false;
 	}
 
 	/**
 	 * @param left Whether to get the left or right child
 	 * @return The left or right child of this node
 	 */
+	@Override
 	public RedBlackNode<E> getChild(boolean left) {
 		return left ? theLeft : theRight;
 	}
 
 	/** @return The other child of this node's parent. Null if the parent is null. */
+	@Override
 	public RedBlackNode<E> getSibling() {
 		if(theParent == null)
 			return null;
@@ -202,114 +184,19 @@ public abstract class RedBlackNode<E> implements Comparable<RedBlackNode<E>>, Cl
 			return theParent.getLeft();
 	}
 
-	/**
-	 * @param finder The compare operation to use to find the node. Must obey the ordering used to construct this structure.
-	 * @return The node in this structure for which finder.compareTo(node)==0, or null if no such node exists.
-	 */
-	public RedBlackNode<E> find(Comparable<RedBlackNode<E>> finder) {
-		int compare = finder.compareTo(this);
-		if(compare == 0)
-			return this;
-		RedBlackNode<E> child = getChild(compare < 0);
-		if(child != null)
-			return child.find(finder);
-		else
-			return null;
-	}
-
-	/**
-	 * Finds the node in this tree that is closest to {@code finder.compareTo(node)==0)}, on either the right or left side.
-	 *
-	 * @param finder The compare operation to use to find the node. Must obey the ordering used to construct this structure.
-	 * @param lesser Whether to search for lesser or greater values (left or right, respectively)
-	 * @param withExact Whether to accept an equivalent node, if present (as opposed to strictly left or right of)
-	 * @return The found node
-	 */
-	public RedBlackNode<E> findClosest(Comparable<RedBlackNode<E>> finder, boolean lesser, boolean withExact) {
-		return findClosest(finder, lesser, withExact, null);
-	}
-
-	private RedBlackNode<E> findClosest(Comparable<RedBlackNode<E>> finder, boolean lesser, boolean withExact, RedBlackNode<E> found) {
-		int compare = finder.compareTo(this);
-		if(compare == 0) {
-			if(withExact)
-				return this;
-			RedBlackNode<E> child = getChild(lesser);
-			if(child == null)
-				return found;
-			while(child.getChild(!lesser) != null)
-				child = child.getChild(!lesser);
-			return child;
-		}
-		if(compare > 0 == lesser)
-			found = this;
-		RedBlackNode<E> child = getChild(compare < 0);
-		if(child != null)
-			return child.findClosest(finder, lesser, withExact, found);
-		else
-			return found;
-	}
-
 	/** @return The number of nodes in this structure (this node plus all its descendants) */
-	public int getSize() {
+	@Override
+	public int size() {
 		return theSize;
 	}
 
 	/**
-	 * This should NEVER be called outside of the {@link CountedRedBlackNode<E>} class, but may be overridden by subclasses if the super is
-	 * called.
+	 * This should NEVER be called outside of the {@link RedBlackNode} class, but may be overridden by subclasses if the super is called.
 	 *
 	 * @param size The new size
 	 */
 	protected void setSize(int size) {
 		theSize = size;
-	}
-
-	/** @return The number of nodes stored before this node in the tree */
-	public int getIndex() {
-		RedBlackNode<E> node = this;
-		RedBlackNode<E> left = node.getLeft();
-		int ret = size(left);
-		while (node != null) {
-			RedBlackNode<E> parent = node.getParent();
-			if (parent != null && parent.getRight() == node) {
-				left = parent.getLeft();
-				ret += size(left) + 1;
-			}
-			node = parent;
-		}
-		return ret;
-	}
-
-	/** @return The number of nodes stored after this node in the tree */
-	public int getElementsGreater() {
-		RedBlackNode<E> node = this;
-		RedBlackNode<E> right = node.getRight();
-		int ret = size(right);
-		while (node != null) {
-			RedBlackNode<E> parent = node.getParent();
-			if (parent != null && parent.getLeft() == node) {
-				right = parent.getRight();
-				ret += size(right) + 1;
-			}
-			node = parent;
-		}
-		return ret;
-	}
-
-	@Override
-	public RedBlackNode<E> clone() {
-		RedBlackNode<E> ret;
-		try {
-			ret = (RedBlackNode<E>) super.clone();
-		} catch(CloneNotSupportedException e) {
-			throw new IllegalStateException("Not cloneable");
-		}
-		if(ret.theLeft != null)
-			ret.setChild(ret.theLeft.clone(), true);
-		if(ret.theRight != null)
-			ret.setChild(ret.theRight.clone(), false);
-		return ret;
 	}
 
 	/**
@@ -348,7 +235,7 @@ public abstract class RedBlackNode<E> implements Comparable<RedBlackNode<E>>, Cl
 		if(child != null)
 			child.setParent(this);
 
-		int sizeDiff = size(child) - size(oldChild);
+		int sizeDiff = sizeOf(child) - sizeOf(oldChild);
 		adjustSize(sizeDiff);
 		return oldChild;
 	}
@@ -368,29 +255,29 @@ public abstract class RedBlackNode<E> implements Comparable<RedBlackNode<E>>, Cl
 	 *
 	 * @param node The node to replace this node in the tree
 	 */
-	protected void replace(RedBlackNode<E> node) {
-		RedBlackNode<E> counted = node;
+	public void replace(BinaryTreeNode<E> node) {
+		RedBlackNode<E> rbn = (RedBlackNode<E>) node;
 		RedBlackNode<E> parent = getParent();
 		startCountTransaction();
-		counted.startCountTransaction();
+		rbn.startCountTransaction();
 		if (parent != null)
 			parent.startCountTransaction();
 		try {
-			if (node != theLeft)
-				node.setChild(theLeft, true);
-			if (node != theRight)
-				node.setChild(theRight, false);
+			if (rbn != theLeft)
+				rbn.setChild(theLeft, true);
+			if (rbn != theRight)
+				rbn.setChild(theRight, false);
 			setChild(null, true);
 			setChild(null, false);
-			node.setRed(isRed);
+			rbn.setRed(isRed);
 			if (theParent != null) {
-				theParent.setChild(node, getSide());
+				theParent.setChild(rbn, getSide());
 				setParent(null);
 			} else
-				node.setParent(theParent);
+				rbn.setParent(theParent);
 		} finally {
 			endCountTransaction();
-			counted.endCountTransaction();
+			rbn.endCountTransaction();
 			if (parent != null)
 				parent.endCountTransaction();
 		}
@@ -504,14 +391,15 @@ public abstract class RedBlackNode<E> implements Comparable<RedBlackNode<E>>, Cl
 	 * @param replaceIfFound Whether to replace an equivalent node if found, or leave the tree as-is
 	 * @return The result of the addition
 	 */
-	protected TreeOpResult add(RedBlackNode<E> node, boolean replaceIfFound) {
+	@Override
+	protected TreeOpResult<E> add(BinaryTreeNode<E> node, boolean replaceIfFound) {
 		int compare = node.compareTo(this);
 		if(compare == 0) {
 			if(replaceIfFound) {
 				replace(node);
-				return new TreeOpResult(this, node, node);
+				return new TreeOpResult<>(this, node, node);
 			} else
-				return new TreeOpResult(this, this, this);
+				return new TreeOpResult<>(this, this, this);
 		}
 		return addOnSide(node, compare < 0, replaceIfFound);
 	}
@@ -529,13 +417,13 @@ public abstract class RedBlackNode<E> implements Comparable<RedBlackNode<E>>, Cl
 	 * @param replaceIfFound Whether to replace an equivalent node if found, or leave the tree as-is
 	 * @return The result of the addition
 	 */
-	protected TreeOpResult addOnSide(RedBlackNode<E> node, boolean left, boolean replaceIfFound) {
+	protected MutableBinaryTreeNode.TreeOpResult addOnSide(RedBlackNode<E> node, boolean left, boolean replaceIfFound) {
 		RedBlackNode<E> child = getChild(left);
-		TreeOpResult r;
+		MutableBinaryTreeNode.TreeOpResult r;
 		if(child == null) {
 			setChild(node, left);
 			child = node;
-			r = new TreeOpResult(null, node, this);
+			r = new MutableBinaryTreeNode.TreeOpResult(null, node, this);
 		} else {
 			r = child.add(node, replaceIfFound);
 			if(r.theNewRoot == theParent) {
@@ -544,38 +432,7 @@ public abstract class RedBlackNode<E> implements Comparable<RedBlackNode<E>>, Cl
 			r.theNewRoot = this;
 		}
 
-		if(SPECIAL_BALANCING) {
-			// Rebalance after add
-			if(theParent == null) {
-				isRed = false; // Root is black
-				return r;
-			} else if(!isRed || !child.isRed) {
-				// We're good, nothing to do
-				return r;
-			} else {
-				boolean parentLeft = getSide();
-				RedBlackNode<E> uncle = getSibling(); // Get the other sibling
-				if(uncle != null && uncle.isRed) {
-					// Switch colors of this node, its parent, and the uncle
-					setRed(false);
-					uncle.setRed(false);
-					theParent.setRed(true);
-					return r;
-				} else {
-					RedBlackNode<E> ret = this;
-					if(parentLeft != left) { // New node on right
-						ret = rotate(parentLeft);
-					}
-					ret.setRed(false);
-					ret.getParent().setRed(true);
-					r.theNewRoot = ret.theParent.rotate(!parentLeft);
-					return r;
-				}
-			}
-		} else {
-			r.theNewRoot = fixAfterInsertion(this);
-			return r;
-		}
+		r.theNewRoot = fixAfterInsertion(this);
 	}
 
 	/**
@@ -834,7 +691,7 @@ public abstract class RedBlackNode<E> implements Comparable<RedBlackNode<E>>, Cl
 		 *            there
 		 * @return The tree result of the addition
 		 */
-		protected TreeOpResult add(E value, boolean replaceIfFound) {
+		protected MutableBinaryTreeNode.TreeOpResult add(E value, boolean replaceIfFound) {
 			ValuedRedBlackNode<E> node = createNode(value);
 			return add(node, replaceIfFound);
 		}

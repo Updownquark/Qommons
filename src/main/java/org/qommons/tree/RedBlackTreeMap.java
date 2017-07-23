@@ -9,7 +9,7 @@ import java.util.NavigableSet;
 import java.util.Objects;
 import java.util.SortedMap;
 
-import org.qommons.tree.RedBlackNode.TreeOpResult;
+import org.qommons.tree.MutableBinaryTreeNode.TreeOpResult;
 import org.qommons.tree.RedBlackNode.ValuedRedBlackNode;
 
 /**
@@ -397,7 +397,7 @@ public interface RedBlackTreeMap<K, V, N extends ValuedRedBlackNode<Map.Entry<K,
 			setRoot(root);
 			return root;
 		}
-		TreeOpResult result = root.add(new RedBlackTreeMap.DefaultEntry<>(key), false);
+		MutableBinaryTreeNode.TreeOpResult result = root.add(new RedBlackTreeMap.DefaultEntry<>(key), false);
 		if(root != result.getNewRoot())
 			setRoot((N) result.getNewRoot());
 		return (N) result.getNewNode();
