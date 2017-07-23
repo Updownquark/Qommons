@@ -5,7 +5,7 @@ import java.util.*;
 import java.util.function.Consumer;
 
 import org.qommons.Ternian;
-import org.qommons.collect.CollectionElement.StdMsg;
+import org.qommons.collect.MutableElementHandle.StdMsg;
 import org.qommons.value.Value;
 
 import com.google.common.reflect.TypeToken;
@@ -82,7 +82,7 @@ public interface BetterSortedSet<E> extends ReversibleList<E>, NavigableSet<E> {
 	 * @return Whether such a value was found
 	 */
 	@Override
-	default boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
+	default boolean forElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
 		boolean[] success = new boolean[1];
 		forElement(v -> comparator().compare(value, v), true, el -> {
 			if (comparator().compare(value, el.get()) == 0) {
@@ -95,7 +95,7 @@ public interface BetterSortedSet<E> extends ReversibleList<E>, NavigableSet<E> {
 
 	boolean forValue(Comparable<? super E> search, boolean up, Consumer<? super E> onValue);
 
-	boolean forElement(Comparable<? super E> search, boolean up, Consumer<? super CollectionElement<? extends E>> onElement);
+	boolean forElement(Comparable<? super E> search, boolean up, Consumer<? super MutableElementHandle<? extends E>> onElement);
 
 	@Override
 	default E first() {
@@ -509,7 +509,7 @@ public interface BetterSortedSet<E> extends ReversibleList<E>, NavigableSet<E> {
 		}
 
 		@Override
-		public boolean forElement(Comparable<? super E> search, boolean up, Consumer<? super CollectionElement<? extends E>> onElement) {
+		public boolean forElement(Comparable<? super E> search, boolean up, Consumer<? super MutableElementHandle<? extends E>> onElement) {
 			boolean[] success = new boolean[1];
 			theWrapped.forElement(search, up, el -> {
 				if (isInRange(el.get()) == 0) {
@@ -730,7 +730,7 @@ public interface BetterSortedSet<E> extends ReversibleList<E>, NavigableSet<E> {
 			}
 
 			@Override
-			public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
+			public boolean tryAdvanceElement(Consumer<? super MutableElementHandle<E>> action) {
 				boolean[] success = new boolean[1];
 				if (getWrappedSpliter().tryAdvanceElement(el -> {
 					if (isInRange(el.get()) == 0) {
@@ -746,7 +746,7 @@ public interface BetterSortedSet<E> extends ReversibleList<E>, NavigableSet<E> {
 			}
 
 			@Override
-			public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
+			public boolean tryReverseElement(Consumer<? super MutableElementHandle<E>> action) {
 				boolean[] success = new boolean[1];
 				if (getWrappedSpliter().tryReverseElement(el -> {
 					if (isInRange(el.get()) == 0) {
@@ -762,7 +762,7 @@ public interface BetterSortedSet<E> extends ReversibleList<E>, NavigableSet<E> {
 			}
 
 			@Override
-			public void forEachElement(Consumer<? super CollectionElement<E>> action) {
+			public void forEachElement(Consumer<? super MutableElementHandle<E>> action) {
 				boolean[] lastOutOfRange = new boolean[1];
 				getWrappedSpliter().forEachElement(el -> {
 					if (isInRange(el.get()) == 0)
@@ -778,7 +778,7 @@ public interface BetterSortedSet<E> extends ReversibleList<E>, NavigableSet<E> {
 			}
 
 			@Override
-			public void forEachReverseElement(Consumer<? super CollectionElement<E>> action) {
+			public void forEachReverseElement(Consumer<? super MutableElementHandle<E>> action) {
 				boolean[] lastOutOfRange = new boolean[1];
 				getWrappedSpliter().forEachReverseElement(el -> {
 					if (isInRange(el.get()) == 0)
@@ -800,10 +800,10 @@ public interface BetterSortedSet<E> extends ReversibleList<E>, NavigableSet<E> {
 			}
 		}
 
-		class BoundedMutableElement<T extends E> implements CollectionElement<T> {
-			private final CollectionElement<T> theWrappedEl;
+		class BoundedMutableElement<T extends E> implements MutableElementHandle<T> {
+			private final MutableElementHandle<T> theWrappedEl;
 
-			BoundedMutableElement(CollectionElement<T> wrappedEl) {
+			BoundedMutableElement(MutableElementHandle<T> wrappedEl) {
 				theWrappedEl = wrappedEl;
 			}
 
@@ -940,7 +940,7 @@ public interface BetterSortedSet<E> extends ReversibleList<E>, NavigableSet<E> {
 		}
 
 		@Override
-		public boolean forElement(Comparable<? super E> search, boolean up, Consumer<? super CollectionElement<? extends E>> onElement) {
+		public boolean forElement(Comparable<? super E> search, boolean up, Consumer<? super MutableElementHandle<? extends E>> onElement) {
 			return getWrapped().forElement(search, !up, onElement);
 		}
 	}

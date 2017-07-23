@@ -38,11 +38,11 @@ public interface ReversibleCollection<E> extends BetterCollection<E>, Reversible
 	}
 
 	@Override
-	default boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement) {
+	default boolean forElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement) {
 		return forElement(value, onElement, true);
 	}
 
-	boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first);
+	boolean forElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first);
 
 	default boolean find(Predicate<? super E> search, Consumer<? super E> onValue, boolean first) {
 		Spliterator<E> spliter = spliterator(first);
@@ -58,15 +58,15 @@ public interface ReversibleCollection<E> extends BetterCollection<E>, Reversible
 	}
 
 	/**
-	 * Finds a value in this collection matching the given search and performs an action on the {@link CollectionElement} for that element
+	 * Finds a value in this collection matching the given search and performs an action on the {@link MutableElementHandle} for that element
 	 * 
 	 * @param search The search function
 	 * @param onElement The action to perform on the search's result
 	 * @param first Whether to find the first or the last element which passes the test
 	 * @return Whether a result was found
 	 */
-	default boolean findElement(Predicate<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
-		ElementSpliterator<E> spliter = mutableSpliterator(first);
+	default boolean findElement(Predicate<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
+		MutableElementSpliterator<E> spliter = mutableSpliterator(first);
 		boolean[] found = new boolean[1];
 		while (spliter.tryAdvanceElement(el -> {
 			if (search.test(el.get())) {
@@ -79,7 +79,7 @@ public interface ReversibleCollection<E> extends BetterCollection<E>, Reversible
 	}
 
 	/**
-	 * Finds all values in this collection matching the given search and performs an action on the {@link CollectionElement} for each
+	 * Finds all values in this collection matching the given search and performs an action on the {@link MutableElementHandle} for each
 	 * element
 	 * 
 	 * @param search The search function
@@ -88,8 +88,8 @@ public interface ReversibleCollection<E> extends BetterCollection<E>, Reversible
 	 * @return The number of results found
 	 */
 	@Override
-	default int findAll(Predicate<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement, boolean fromStart) {
-		ElementSpliterator<E> spliter = mutableSpliterator(fromStart);
+	default int findAll(Predicate<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean fromStart) {
+		MutableElementSpliterator<E> spliter = mutableSpliterator(fromStart);
 		int[] found = new int[1];
 		while (spliter.tryAdvanceElement(el -> {
 			if (search.test(el.get())) {
@@ -317,7 +317,7 @@ public interface ReversibleCollection<E> extends BetterCollection<E>, Reversible
 		}
 
 		@Override
-		public boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
+		public boolean forElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
 			return getWrapped().forElement(value, el -> onElement.accept(new ReversibleElementSpliterator.ReversedCollectionElement<>(el)),
 				!first);
 		}

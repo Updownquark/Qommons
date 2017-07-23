@@ -20,7 +20,7 @@ public interface Betterable<E> extends Iterable<E> {
 	 *         supports queries on whether these operations are supported.
 	 */
 	default Betterator<E> mutableIterator() {
-		return new ElementSpliterator.SpliteratorBetterator<>(mutableSpliterator());
+		return new MutableElementSpliterator.SpliteratorBetterator<>(mutableSpliterator());
 	}
 
 	@Override
@@ -29,5 +29,5 @@ public interface Betterable<E> extends Iterable<E> {
 	}
 
 	/** @return A (typically) mutable element spliterator to use to iterate over and modify this collection */
-	ElementSpliterator<E> mutableSpliterator();
+	MutableElementSpliterator<E> mutableSpliterator();
 }

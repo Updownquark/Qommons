@@ -11,18 +11,18 @@ import org.qommons.value.Value;
 import com.google.common.reflect.TypeToken;
 
 /**
- * An {@link ElementSpliterator} that can traverse elements in either direction
+ * An {@link MutableElementSpliterator} that can traverse elements in either direction
  * 
  * @param <E> The type of values returned by the spliterator
  */
-public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E>, ReversibleSpliterator<E> {
+public interface ReversibleElementSpliterator<E> extends MutableElementSpliterator<E>, ReversibleSpliterator<E> {
 	/**
 	 * Gets the previous element in the spliterator, if available
 	 * 
 	 * @param action The action to perform on the element
 	 * @return Whether there was a previous element in the spliterator
 	 */
-	boolean tryReverseElement(Consumer<? super CollectionElement<E>> action);
+	boolean tryReverseElement(Consumer<? super MutableElementHandle<E>> action);
 
 	/**
 	 * Gets the previous value in the spliterator, if available
@@ -36,7 +36,7 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E>, 
 	}
 
 	/** @param action The action to perform on all the previous elements in the spliterator */
-	default void forEachReverseElement(Consumer<? super CollectionElement<E>> action) {
+	default void forEachReverseElement(Consumer<? super MutableElementHandle<E>> action) {
 		while (tryReverseElement(action)) {
 		}
 	}
@@ -93,12 +93,12 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E>, 
 			}
 
 			@Override
-			public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
+			public boolean tryAdvanceElement(Consumer<? super MutableElementHandle<E>> action) {
 				return false;
 			}
 
 			@Override
-			public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
+			public boolean tryReverseElement(Consumer<? super MutableElementHandle<E>> action) {
 				return false;
 			}
 
@@ -171,22 +171,22 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E>, 
 		}
 
 		@Override
-		public boolean tryAdvanceElement(Consumer<? super CollectionElement<T>> action) {
+		public boolean tryAdvanceElement(Consumer<? super MutableElementHandle<T>> action) {
 			return theWrapped.tryReverseElement(el -> action.accept(new ReversedCollectionElement<>(el)));
 		}
 
 		@Override
-		public boolean tryReverseElement(Consumer<? super CollectionElement<T>> action) {
+		public boolean tryReverseElement(Consumer<? super MutableElementHandle<T>> action) {
 			return theWrapped.tryAdvanceElement(el -> action.accept(new ReversedCollectionElement<>(el)));
 		}
 
 		@Override
-		public void forEachElement(Consumer<? super CollectionElement<T>> action) {
+		public void forEachElement(Consumer<? super MutableElementHandle<T>> action) {
 			theWrapped.forEachReverseElement(el -> action.accept(new ReversedCollectionElement<>(el)));
 		}
 
 		@Override
-		public void forEachReverseElement(Consumer<? super CollectionElement<T>> action) {
+		public void forEachReverseElement(Consumer<? super MutableElementHandle<T>> action) {
 			theWrapped.forEachElement(el -> action.accept(new ReversedCollectionElement<>(el)));
 		}
 
@@ -204,14 +204,14 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E>, 
 		}
 	}
 
-	class ReversedCollectionElement<E> implements CollectionElement<E> {
-		private final CollectionElement<E> theWrapped;
+	class ReversedCollectionElement<E> implements MutableElementHandle<E> {
+		private final MutableElementHandle<E> theWrapped;
 
-		public ReversedCollectionElement(CollectionElement<E> wrapped) {
+		public ReversedCollectionElement(MutableElementHandle<E> wrapped) {
 			theWrapped = wrapped;
 		}
 
-		protected CollectionElement<E> getWrapped() {
+		protected MutableElementHandle<E> getWrapped() {
 			return theWrapped;
 		}
 
@@ -294,7 +294,7 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E>, 
 		}
 
 		@Override
-		public boolean tryReverseElement(Consumer<? super CollectionElement<T>> action) {
+		public boolean tryReverseElement(Consumer<? super MutableElementHandle<T>> action) {
 			while (getSource().tryReverseElement(el -> {
 				getElement().setSource(el);
 				if (getElement().isAccepted())
@@ -307,7 +307,7 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E>, 
 		}
 
 		@Override
-		public void forEachReverseElement(Consumer<? super CollectionElement<T>> action) {
+		public void forEachReverseElement(Consumer<? super MutableElementHandle<T>> action) {
 			getSource().forEachReverseElement(el -> {
 				getElement().setSource(el);
 				if (getElement().isAccepted())
@@ -358,7 +358,7 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E>, 
 	}
 
 	/**
-	 * A Spliterator mapped by an {@link ElementSpliterator.ElementSpliteratorMap}
+	 * A Spliterator mapped by an {@link MutableElementSpliterator.ElementSpliteratorMap}
 	 * 
 	 * @param <T> The type of the source spliterator
 	 * @param <E> The type of this spliterator
@@ -409,7 +409,7 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E>, 
 		protected final ReversibleElementSpliterator<T> backing;
 		private Ternian hasNext;
 		private Ternian hasPrevious;
-		private CollectionElement<T> element;
+		private MutableElementHandle<T> element;
 		private boolean elementIsNext;
 		// False if the spliterator's cursor is on the leading (left) side of the cached element, true if on the trailing (right) side
 		private boolean spliteratorSide;
@@ -421,7 +421,7 @@ public interface ReversibleElementSpliterator<E> extends ElementSpliterator<E>, 
 			hasPrevious = Ternian.NONE;
 		}
 
-		protected CollectionElement<T> getCurrentElement() {
+		protected MutableElementHandle<T> getCurrentElement() {
 			return element;
 		}
 

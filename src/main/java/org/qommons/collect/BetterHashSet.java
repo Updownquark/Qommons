@@ -55,6 +55,6 @@ public class BetterHashSet<E> implements BetterCollection<E>, TransactableSet<E>
 	}
 
 	@Override
-	public ElementSpliterator<E> spliterator() {
+	public MutableElementSpliterator<E> spliterator() {
 	}
 }

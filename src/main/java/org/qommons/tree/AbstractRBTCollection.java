@@ -16,9 +16,9 @@ import java.util.function.Predicate;
 
 import org.qommons.Ternian;
 import org.qommons.Transaction;
-import org.qommons.collect.CollectionElement;
+import org.qommons.collect.MutableElementHandle;
 import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.ElementSpliterator;
+import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.ReversibleElementSpliterator;
 import org.qommons.collect.ReversibleList;
 import org.qommons.collect.TransactableCollection;
@@ -135,8 +135,8 @@ public abstract class AbstractRBTCollection<E, N extends RedBlackNode<E>> implem
 	protected ReversibleElementSpliterator<E> values(ReversibleElementSpliterator<N> nodeSpliterator) {
 		TypeToken<E> type = (TypeToken<E>) TypeToken.of(Object.class);
 		return new ReversibleElementSpliterator.WrappingReversibleSpliterator<>(nodeSpliterator, type, () -> {
-			CollectionElement<N>[] container = new CollectionElement[1];
-			ElementSpliterator.WrappingElement<N, E> wrapperEl = new ElementSpliterator.WrappingElement<N, E>(type, container) {
+			MutableElementHandle<N>[] container = new MutableElementHandle[1];
+			MutableElementSpliterator.WrappingElement<N, E> wrapperEl = new MutableElementSpliterator.WrappingElement<N, E>(type, container) {
 				@Override
 				public E get() {
 					return getWrapped().get().getValue();
@@ -144,12 +144,12 @@ public abstract class AbstractRBTCollection<E, N extends RedBlackNode<E>> implem
 
 				@Override
 				public <V extends E> String isAcceptable(V value) {
-					return ((CollectionElement<N>) getWrapped()).isAcceptable(createNode(value));
+					return ((MutableElementHandle<N>) getWrapped()).isAcceptable(createNode(value));
 				}
 
 				@Override
 				public <V extends E> E set(V value, Object cause) throws IllegalArgumentException {
-					return ((CollectionElement<N>) getWrapped()).set(createNode(value), cause).getValue();
+					return ((MutableElementHandle<N>) getWrapped()).set(createNode(value), cause).getValue();
 				}
 
 				@Override
@@ -163,7 +163,7 @@ public abstract class AbstractRBTCollection<E, N extends RedBlackNode<E>> implem
 				}
 			};
 			return el -> {
-				container[0] = (CollectionElement<N>) el;
+				container[0] = (MutableElementHandle<N>) el;
 				return wrapperEl;
 			};
 		});
@@ -349,7 +349,7 @@ public abstract class AbstractRBTCollection<E, N extends RedBlackNode<E>> implem
 				a = new Object[size];
 			}
 			Object[] array = a;
-			ElementSpliterator<E> spliter = spliterator();
+			MutableElementSpliterator<E> spliter = spliterator();
 			int[] i = new int[1];
 			while (theLocker.check(stamp) && spliter.tryAdvance(v -> array[i[0]] = v)) {
 				i[0]++;
@@ -366,7 +366,7 @@ public abstract class AbstractRBTCollection<E, N extends RedBlackNode<E>> implem
 				arr = (T[]) Array.newInstance(a.getClass().getComponentType(), size);
 			}
 			T[] array = arr;
-			ElementSpliterator<E> spliter = spliterator();
+			MutableElementSpliterator<E> spliter = spliterator();
 			int[] i = new int[1];
 			while (theLocker.check(stamp) && spliter.tryAdvance(v -> array[i[0]] = (T) v)) {
 				i[0]++;
@@ -529,7 +529,7 @@ public abstract class AbstractRBTCollection<E, N extends RedBlackNode<E>> implem
 		private N theCurrentNode;
 		private N theNextNode;
 		private N thePreviousNode;
-		private final CollectionElement<N> element;
+		private final MutableElementHandle<N> element;
 		private final TypeToken<N> theType;
 		private final CollectionLockingStrategy.SubLockingStrategy theSubLock;
 		
@@ -538,7 +538,7 @@ public abstract class AbstractRBTCollection<E, N extends RedBlackNode<E>> implem
 			theNextNode = next;
 			theSubLock = subLock;
 			theType = new TypeToken<N>() {};
-			element = new CollectionElement<N>() {
+			element = new MutableElementHandle<N>() {
 				@Override
 				public TypeToken<N> getType() {
 					return theType;
@@ -660,7 +660,7 @@ public abstract class AbstractRBTCollection<E, N extends RedBlackNode<E>> implem
 		}
 
 		@Override
-		public boolean tryAdvanceElement(Consumer<? super CollectionElement<N>> action) {
+		public boolean tryAdvanceElement(Consumer<? super MutableElementHandle<N>> action) {
 			if (isEndInclusive) {
 				if (thePreviousNode == theEnd)
 					return false;
@@ -677,7 +677,7 @@ public abstract class AbstractRBTCollection<E, N extends RedBlackNode<E>> implem
 		}
 
 		@Override
-		public boolean tryReverseElement(Consumer<? super CollectionElement<N>> action) {
+		public boolean tryReverseElement(Consumer<? super MutableElementHandle<N>> action) {
 			if (isBeginInclusive) {
 				if (theNextNode == theBegin)
 					return false;

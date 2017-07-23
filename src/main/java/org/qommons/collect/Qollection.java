@@ -10,8 +10,8 @@ import org.qommons.Hasher;
 import org.qommons.IterableUtils;
 import org.qommons.Transaction;
 import org.qommons.collect.MultiMap.MultiEntry;
-import org.qommons.collect.ElementSpliterator.WrappingElement;
-import org.qommons.collect.ElementSpliterator.WrappingSpliterator;
+import org.qommons.collect.MutableElementSpliterator.WrappingElement;
+import org.qommons.collect.MutableElementSpliterator.WrappingSpliterator;
 import org.qommons.value.Settable;
 import org.qommons.value.Value;
 
@@ -34,9 +34,9 @@ import com.google.common.reflect.TypeToken;
  * <li><b>Modification Control</b> The {@link #filterAdd(Function)} and {@link #filterRemove(Function)} methods create collections that
  * forbid certain types of modifications to a collection. The {@link #immutable(String)} prevents any API modification at all. Modification
  * control can also be used to intercept and perform actions based on modifications to a collection.</li>
- * <li><b>ElementSpliterator</b> Qollections must implement {@link #spliterator()}, which returns a {@link ElementSpliterator}, which is an enhanced
+ * <li><b>MutableElementSpliterator</b> Qollections must implement {@link #spliterator()}, which returns a {@link MutableElementSpliterator}, which is an enhanced
  * {@link Spliterator}. This had potential for the improved performance associated with using {@link Spliterator} instead of
- * {@link Iterator} as well as the utility added by {@link ElementSpliterator}.</li>
+ * {@link Iterator} as well as the utility added by {@link MutableElementSpliterator}.</li>
  * <li><b>Transactionality</b> Qollections support the {@link org.qommons.Transactable} interface, allowing callers to reserve a collection
  * for write or to ensure that the collection is not written to during an operation (for implementations that support this. See
  * {@link org.qommons.Transactable#isLockSupported() isLockSupported()}).</li>
@@ -63,7 +63,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	TypeToken<E> getType();
 
 	@Override
-	abstract ElementSpliterator<E> spliterator();
+	abstract MutableElementSpliterator<E> spliterator();
 
 	/**
 	 * Tests the removability of an element from this collection. This method exposes a "best guess" on whether an element in the collection
@@ -548,18 +548,18 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	// Implementation member classes
 
 	/**
-	 * An iterator backed by a ElementSpliterator
+	 * An iterator backed by a MutableElementSpliterator
 	 * 
 	 * @param <E> The type of elements to iterate over
 	 */
 	class QuiteratorIterator<E> implements Iterator<E> {
-		private final ElementSpliterator<E> theSpliterator;
+		private final MutableElementSpliterator<E> theSpliterator;
 
 		private boolean isNextCached;
 		private boolean isDone;
-		private CollectionElement<? extends E> cachedNext;
+		private MutableElementHandle<? extends E> cachedNext;
 
-		public QuiteratorIterator(ElementSpliterator<E> quiterator) {
+		public QuiteratorIterator(MutableElementSpliterator<E> quiterator) {
 			theSpliterator = quiterator;
 		}
 
@@ -613,7 +613,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 	class DefaultQollectionMethods {
 		public static boolean contains(Qollection<?> coll, Object value) {
 			try (Transaction t = coll.lock(false, null)) {
-				ElementSpliterator<?> iter = coll.spliterator();
+				MutableElementSpliterator<?> iter = coll.spliterator();
 				boolean[] found = new boolean[1];
 				while (!found[0] && iter.tryAdvance(v -> {
 					if (Objects.equals(v, value))
@@ -639,7 +639,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			ArrayList<Object> copy = new ArrayList<>(values);
 			BitSet found = new BitSet(copy.size());
 			try (Transaction t = coll.lock(false, null)) {
-				ElementSpliterator<?> iter = coll.spliterator();
+				MutableElementSpliterator<?> iter = coll.spliterator();
 				boolean[] foundOne = new boolean[1];
 				while (iter.tryAdvance(next -> {
 					int stop = found.previousClearBit(copy.size());
@@ -1067,7 +1067,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public ElementSpliterator<T> spliterator() {
+		public MutableElementSpliterator<T> spliterator() {
 			return map(theWrapped.spliterator());
 		}
 
@@ -1241,9 +1241,9 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			}
 		}
 
-		protected ElementSpliterator<T> map(ElementSpliterator<E> iter) {
+		protected MutableElementSpliterator<T> map(MutableElementSpliterator<E> iter) {
 			return new WrappingSpliterator<>(iter, getType(), () -> {
-				CollectionElement<? extends E>[] container = new CollectionElement[1];
+				MutableElementHandle<? extends E>[] container = new MutableElementHandle[1];
 				FilterMapResult<E, T> mapped = new FilterMapResult<>();
 				WrappingElement<E, T> wrapperEl = new WrappingElement<E, T>(getType(), container) {
 					@Override
@@ -1260,7 +1260,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 						FilterMapResult<T, E> reversed = theDef.reverse(new FilterMapResult<>(value));
 						if (reversed.error != null)
 							return reversed.error;
-						return ((CollectionElement<E>) getWrapped()).isAcceptable(reversed.result);
+						return ((MutableElementHandle<E>) getWrapped()).isAcceptable(reversed.result);
 					}
 
 					@Override
@@ -1272,7 +1272,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 						FilterMapResult<T, E> reversed = theDef.reverse(new FilterMapResult<>(value));
 						if (reversed.error != null)
 							throw new IllegalArgumentException(reversed.error);
-						((CollectionElement<E>) getWrapped()).set(reversed.result, cause);
+						((MutableElementHandle<E>) getWrapped()).set(reversed.result, cause);
 						T old = mapped.result;
 						mapped.source = reversed.result;
 						mapped.result = value;
@@ -1498,7 +1498,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public ElementSpliterator<V> spliterator() {
+		public MutableElementSpliterator<V> spliterator() {
 			return combine(theWrapped.spliterator());
 		}
 
@@ -1506,9 +1506,9 @@ public interface Qollection<E> extends TransactableCollection<E> {
 			return theMap.apply(value, theValue.get());
 		}
 
-		protected ElementSpliterator<V> combine(ElementSpliterator<E> source) {
-			Supplier<Function<CollectionElement<? extends E>, CollectionElement<V>>> elementMap = () -> {
-				CollectionElement<? extends E>[] container = new CollectionElement[1];
+		protected MutableElementSpliterator<V> combine(MutableElementSpliterator<E> source) {
+			Supplier<Function<MutableElementHandle<? extends E>, MutableElementHandle<V>>> elementMap = () -> {
+				MutableElementHandle<? extends E>[] container = new MutableElementHandle[1];
 				WrappingElement<E, V> wrapper = new WrappingElement<E, V>(getType(), container) {
 					@Override
 					public V get() {
@@ -1520,7 +1520,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 						if (theReverse == null)
 							return StdMsg.UNSUPPORTED_OPERATION;
 						E reverse = theReverse.apply(value, theValue.get());
-						return ((CollectionElement<E>) getWrapped()).isAcceptable(reverse);
+						return ((MutableElementHandle<E>) getWrapped()).isAcceptable(reverse);
 					}
 
 					@Override
@@ -1528,7 +1528,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 						if (theReverse == null)
 							throw new IllegalArgumentException(StdMsg.UNSUPPORTED_OPERATION);
 						E reverse = theReverse.apply(value, theValue.get());
-						return theMap.apply(((CollectionElement<E>) getWrapped()).set(reverse, cause), theValue.get());
+						return theMap.apply(((MutableElementHandle<E>) getWrapped()).set(reverse, cause), theValue.get());
 					}
 				};
 				return el -> {
@@ -1746,7 +1746,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public ElementSpliterator<E> spliterator() {
+		public MutableElementSpliterator<E> spliterator() {
 			return theElements.spliterator();
 		}
 
@@ -1881,13 +1881,13 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public ElementSpliterator<E> spliterator() {
+		public MutableElementSpliterator<E> spliterator() {
 			return modFilter(theWrapped.spliterator());
 		}
 
-		protected ElementSpliterator<E> modFilter(ElementSpliterator<E> source) {
+		protected MutableElementSpliterator<E> modFilter(MutableElementSpliterator<E> source) {
 			return new WrappingSpliterator<>(source, getType(), () -> {
-				CollectionElement<E>[] container = new CollectionElement[1];
+				MutableElementHandle<E>[] container = new MutableElementHandle[1];
 				WrappingElement<E, E> wrapperEl = new WrappingElement<E, E>(getType(), container) {
 					@Override
 					public E get() {
@@ -1900,7 +1900,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 						if (theAddFilter != null)
 							s = theAddFilter.apply(value);
 						if (s == null)
-							s = ((CollectionElement<E>) getWrapped()).isAcceptable(value);
+							s = ((MutableElementHandle<E>) getWrapped()).isAcceptable(value);
 						return s;
 					}
 
@@ -1911,7 +1911,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 							if (s != null)
 								throw new IllegalArgumentException(s);
 						}
-						return ((CollectionElement<E>) getWrapped()).set(value, cause);
+						return ((MutableElementHandle<E>) getWrapped()).set(value, cause);
 					}
 
 					@Override
@@ -1935,7 +1935,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					}
 				};
 				return el -> {
-					container[0] = (CollectionElement<E>) el;
+					container[0] = (MutableElementHandle<E>) el;
 					return wrapperEl;
 				};
 			});
@@ -2208,15 +2208,15 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public ElementSpliterator<E> spliterator() {
+		public MutableElementSpliterator<E> spliterator() {
 			return wrap(theCollection.spliterator());
 		}
 
-		protected ElementSpliterator<E> wrap(Spliterator<E> toWrap) {
-			Supplier<? extends Function<? super E, ? extends CollectionElement<E>>> fn;
+		protected MutableElementSpliterator<E> wrap(Spliterator<E> toWrap) {
+			Supplier<? extends Function<? super E, ? extends MutableElementHandle<E>>> fn;
 			fn = () -> {
 				Object[] elementValue = new Object[1];
-				CollectionElement<E> el = new CollectionElement<E>() {
+				MutableElementHandle<E> el = new MutableElementHandle<E>() {
 					@Override
 					public <V extends E> E set(V value, Object cause) throws IllegalArgumentException {
 						throw new IllegalArgumentException(StdMsg.UNSUPPORTED_OPERATION);
@@ -2257,7 +2257,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					return el;
 				};
 			};
-			return new ElementSpliterator.SimpleSpliterator<>(toWrap, getType(), fn);
+			return new MutableElementSpliterator.SimpleSpliterator<>(toWrap, getType(), fn);
 		}
 
 		@Override
@@ -2374,14 +2374,14 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public ElementSpliterator<E> spliterator() {
+		public MutableElementSpliterator<E> spliterator() {
 			return wrap(theCollection.spliterator());
 		}
 
-		protected ElementSpliterator<E> wrap(ElementSpliterator<? extends Value<? extends E>> wrap) {
-			Supplier<Function<CollectionElement<? extends Value<? extends E>>, CollectionElement<E>>> fn;
+		protected MutableElementSpliterator<E> wrap(MutableElementSpliterator<? extends Value<? extends E>> wrap) {
+			Supplier<Function<MutableElementHandle<? extends Value<? extends E>>, MutableElementHandle<E>>> fn;
 			fn = () -> {
-				CollectionElement<Value<? extends E>>[] container = new CollectionElement[1];
+				MutableElementHandle<Value<? extends E>>[] container = new MutableElementHandle[1];
 				WrappingElement<Value<? extends E>, E> wrapper = new WrappingElement<Value<? extends E>, E>(getType(), container) {
 					@Override
 					public <V extends E> E set(V value, Object cause) throws IllegalArgumentException {
@@ -2427,7 +2427,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 					}
 				};
 				return el -> {
-					container[0] = (CollectionElement<Value<? extends E>>) el;
+					container[0] = (MutableElementHandle<Value<? extends E>>) el;
 					return wrapper;
 				};
 			};
@@ -2458,7 +2458,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		public String canRemove(Object value) {
 			boolean[] found = new boolean[1];
 			String[] msg = new String[1];
-			ElementSpliterator<? extends Value<? extends E>> iter = theCollection.spliterator();
+			MutableElementSpliterator<? extends Value<? extends E>> iter = theCollection.spliterator();
 			while (!found[0] && iter.tryAdvanceElement(el -> {
 				if (Objects.equals(el.get().get(), value)) {
 					found[0] = true;
@@ -2474,7 +2474,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		@Override
 		public boolean remove(Object o) {
 			boolean[] found = new boolean[1];
-			ElementSpliterator<? extends Value<? extends E>> iter = theCollection.spliterator();
+			MutableElementSpliterator<? extends Value<? extends E>> iter = theCollection.spliterator();
 			while (!found[0] && iter.tryAdvanceElement(el -> {
 				if (Objects.equals(el.get().get(), o)) {
 					found[0] = true;
@@ -2490,7 +2490,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		@Override
 		public boolean removeAll(Collection<?> c) {
 			boolean[] found = new boolean[1];
-			ElementSpliterator<? extends Value<? extends E>> iter = theCollection.spliterator();
+			MutableElementSpliterator<? extends Value<? extends E>> iter = theCollection.spliterator();
 			iter.forEachElement(el -> {
 				if (c.contains(el.get().get())) {
 					found[0] = true;
@@ -2505,7 +2505,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		@Override
 		public boolean retainAll(Collection<?> c) {
 			boolean[] found = new boolean[1];
-			ElementSpliterator<? extends Value<? extends E>> iter = theCollection.spliterator();
+			MutableElementSpliterator<? extends Value<? extends E>> iter = theCollection.spliterator();
 			iter.forEachElement(el -> {
 				if (!c.contains(el.get().get())) {
 					found[0] = true;
@@ -2519,7 +2519,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 
 		@Override
 		public void clear() {
-			ElementSpliterator<? extends Value<? extends E>> iter = theCollection.spliterator();
+			MutableElementSpliterator<? extends Value<? extends E>> iter = theCollection.spliterator();
 			iter.forEachElement(el -> {
 				String msg = el.canRemove();
 				if (msg == null)
@@ -2605,10 +2605,10 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public ElementSpliterator<E> spliterator() {
+		public MutableElementSpliterator<E> spliterator() {
 			Qollection<? extends E> coll = theCollectionObservable.get();
 			if (coll == null)
-				return ElementSpliterator.empty(theType);
+				return MutableElementSpliterator.empty(theType);
 			return wrap(coll.spliterator());
 		}
 
@@ -2673,23 +2673,23 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				current.clear();
 		}
 
-		protected ElementSpliterator<E> wrap(ElementSpliterator<? extends E> wrap) {
-			Supplier<Function<CollectionElement<? extends E>, CollectionElement<E>>> fn;
+		protected MutableElementSpliterator<E> wrap(MutableElementSpliterator<? extends E> wrap) {
+			Supplier<Function<MutableElementHandle<? extends E>, MutableElementHandle<E>>> fn;
 			fn = () -> {
-				CollectionElement<? extends E>[] container = new CollectionElement[1];
+				MutableElementHandle<? extends E>[] container = new MutableElementHandle[1];
 				WrappingElement<E, E> wrappingEl = new WrappingElement<E, E>(getType(), container) {
 					@Override
 					public <V extends E> E set(V value, Object cause) throws IllegalArgumentException {
 						if (!getWrapped().getType().getRawType().isInstance(value))
 							throw new IllegalArgumentException(StdMsg.BAD_TYPE);
-						return ((CollectionElement<E>) getWrapped()).set(value, cause);
+						return ((MutableElementHandle<E>) getWrapped()).set(value, cause);
 					}
 
 					@Override
 					public <V extends E> String isAcceptable(V value) {
 						if (!getWrapped().getType().getRawType().isInstance(value))
 							return StdMsg.BAD_TYPE;
-						return ((CollectionElement<E>) getWrapped()).isAcceptable(value);
+						return ((MutableElementHandle<E>) getWrapped()).isAcceptable(value);
 					}
 
 					@Override
@@ -2927,20 +2927,20 @@ public interface Qollection<E> extends TransactableCollection<E> {
 		}
 
 		@Override
-		public ElementSpliterator<E> spliterator() {
+		public MutableElementSpliterator<E> spliterator() {
 			return wrap(theOuter.spliterator(), Qollection::spliterator);
 		}
 
-		protected ElementSpliterator<E> wrap(ElementSpliterator<? extends Qollection<? extends E>> outer,
-			Function<Qollection<? extends E>, ElementSpliterator<? extends E>> innerSplit) {
-			return new ElementSpliterator<E>() {
+		protected MutableElementSpliterator<E> wrap(MutableElementSpliterator<? extends Qollection<? extends E>> outer,
+			Function<Qollection<? extends E>, MutableElementSpliterator<? extends E>> innerSplit) {
+			return new MutableElementSpliterator<E>() {
 				private WrappingSpliterator<E, E> theInnerator;
-				private Supplier<Function<CollectionElement<? extends E>, CollectionElement<E>>> theElementMap;
+				private Supplier<Function<MutableElementHandle<? extends E>, MutableElementHandle<E>>> theElementMap;
 				private boolean isSplit;
 
 				{
 					theElementMap = () -> {
-						CollectionElement<? extends E>[] container = new CollectionElement[1];
+						MutableElementHandle<? extends E>[] container = new MutableElementHandle[1];
 						WrappingElement<E, E> wrapper = new WrappingElement<E, E>(getType(), container) {
 							@Override
 							public E get() {
@@ -2951,14 +2951,14 @@ public interface Qollection<E> extends TransactableCollection<E> {
 							public <V extends E> E set(V value, Object cause) throws IllegalArgumentException {
 								if (!getWrapped().getType().getRawType().isInstance(value))
 									throw new IllegalArgumentException(StdMsg.BAD_TYPE);
-								return ((CollectionElement<E>) getWrapped()).set(value, cause);
+								return ((MutableElementHandle<E>) getWrapped()).set(value, cause);
 							}
 
 							@Override
 							public <V extends E> String isAcceptable(V value) {
 								if (!getWrapped().getType().getRawType().isInstance(value))
 									return StdMsg.BAD_TYPE;
-								return ((CollectionElement<E>) getWrapped()).isAcceptable(value);
+								return ((MutableElementHandle<E>) getWrapped()).isAcceptable(value);
 							}
 						};
 						return el -> {
@@ -2984,7 +2984,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				}
 
 				@Override
-				public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
+				public boolean tryAdvanceElement(Consumer<? super MutableElementHandle<E>> action) {
 					if (theInnerator == null && !outer
 						.tryAdvance(coll -> theInnerator = new WrappingSpliterator<>(innerSplit.apply(coll), theType, theElementMap)))
 						return false;
@@ -2997,7 +2997,7 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				}
 
 				@Override
-				public void forEachElement(Consumer<? super CollectionElement<E>> action) {
+				public void forEachElement(Consumer<? super MutableElementHandle<E>> action) {
 					try (Transaction t = isSplit ? Transaction.NONE : theOuter.lock(false, null)) { // Won't modify the outer
 						outer.forEachRemaining(coll -> {
 							new WrappingSpliterator<>(innerSplit.apply(coll), theType, theElementMap).forEachElement(action);
@@ -3006,8 +3006,8 @@ public interface Qollection<E> extends TransactableCollection<E> {
 				}
 
 				@Override
-				public ElementSpliterator<E> trySplit() {
-					ElementSpliterator<E>[] ret = new ElementSpliterator[1];
+				public MutableElementSpliterator<E> trySplit() {
+					MutableElementSpliterator<E>[] ret = new MutableElementSpliterator[1];
 					isSplit |= outer.tryAdvance(coll -> {
 						ret[0] = new WrappingSpliterator<>(innerSplit.apply(coll), theType, theElementMap);
 					});

@@ -62,9 +62,9 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 	 * @param element The element to start iteration at
 	 * @param included Whether to include the given element in the iteration
 	 * @param reversed Whether to iterate backward or forward from the given element
-	 * @return A ElementSpliterator that starts iteration from the given element
+	 * @return A MutableElementSpliterator that starts iteration from the given element
 	 */
-	ElementSpliterator<E> spliterateFrom(E element, boolean included, boolean reversed);
+	MutableElementSpliterator<E> spliterateFrom(E element, boolean included, boolean reversed);
 
 	/**
 	 * Wraps {@link #spliterateFrom(Object, boolean, boolean)} in an Iterable
@@ -104,12 +104,12 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 	}
 
 	@Override
-	default ElementSpliterator<E> spliterator() {
+	default MutableElementSpliterator<E> spliterator() {
 		return spliterateFrom(null, true, false);
 	}
 
 	@Override
-	default ElementSpliterator<E> reverseSpliterator() {
+	default MutableElementSpliterator<E> reverseSpliterator() {
 		return spliterateFrom(null, true, true);
 	}
 
@@ -384,7 +384,7 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 		}
 
 		@Override
-		public ElementSpliterator<E> spliterateFrom(E start, boolean included, boolean reversed) {
+		public MutableElementSpliterator<E> spliterateFrom(E start, boolean included, boolean reversed) {
 			E stop;
 			boolean includeStop;
 			Comparator<? super E> compare = comparator();
@@ -408,11 +408,11 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 			E fStart = stop;
 			boolean fIncluded = included;
 			boolean fReversed = reversed;
-			class Wrapper implements ElementSpliterator<E> {
-				private final ElementSpliterator<E> backing;
+			class Wrapper implements MutableElementSpliterator<E> {
+				private final MutableElementSpliterator<E> backing;
 				private boolean isEnded;
 
-				Wrapper(ElementSpliterator<E> backing) {
+				Wrapper(MutableElementSpliterator<E> backing) {
 					this.backing = backing;
 				}
 
@@ -432,7 +432,7 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 				}
 
 				@Override
-				public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
+				public boolean tryAdvanceElement(Consumer<? super MutableElementHandle<E>> action) {
 					if (isEnded)
 						return false;
 					boolean[] advanced = new boolean[1];
@@ -451,10 +451,10 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 				}
 
 				@Override
-				public ElementSpliterator<E> trySplit() {
+				public MutableElementSpliterator<E> trySplit() {
 					if (isEnded)
 						return null;
-					ElementSpliterator<E> back = backing.trySplit();
+					MutableElementSpliterator<E> back = backing.trySplit();
 					if (back == null)
 						return back;
 					return new Wrapper(back);
@@ -616,7 +616,7 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 			if (!allGood)
 				values = values.stream().filter(o -> o != null && theWrapped.getType().getRawType().isInstance(o))
 					.collect(Collectors.toCollection(() -> new TreeSet<>(theWrapped.comparator())));
-			ElementSpliterator<E> iter = theWrapped.spliterateFrom(theMin, isMinIncluded, false);
+			MutableElementSpliterator<E> iter = theWrapped.spliterateFrom(theMin, isMinIncluded, false);
 			boolean[] done = new boolean[1];
 			Comparator<? super E> compare = theWrapped.comparator();
 			while (!done[0] && iter.tryAdvanceElement(el -> {
@@ -642,7 +642,7 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 
 		@Override
 		public void clear() {
-			ElementSpliterator<E> iter = theWrapped.spliterateFrom(theMin, isMinIncluded, false);
+			MutableElementSpliterator<E> iter = theWrapped.spliterateFrom(theMin, isMinIncluded, false);
 			boolean[] done = new boolean[1];
 			Comparator<? super E> compare = theWrapped.comparator();
 			while (!done[0] && iter.tryAdvanceElement(el -> {
@@ -682,7 +682,7 @@ public interface SortedQSet<E> extends OrderedQSet<E>, ReversibleQollection<E>, 
 		}
 
 		@Override
-		public ElementSpliterator<E> spliterateFrom(E element, boolean included, boolean reversed) {
+		public MutableElementSpliterator<E> spliterateFrom(E element, boolean included, boolean reversed) {
 			return modFilter(getWrapped().spliterateFrom(element, included, reversed));
 		}
 	}

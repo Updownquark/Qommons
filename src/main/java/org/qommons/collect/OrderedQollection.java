@@ -433,7 +433,7 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		}
 
 		@Override
-		public ElementSpliterator<E> spliterator() {
+		public MutableElementSpliterator<E> spliterator() {
 			// TODO Any way to do this better?
 			ArrayList<E> sorted;
 
@@ -442,9 +442,9 @@ public interface OrderedQollection<E> extends Qollection<E> {
 				sorted.addAll(theWrapped);
 			}
 			Collections.sort(sorted, theCompare);
-			Supplier<Function<E, CollectionElement<E>>> elementMap = () -> {
+			Supplier<Function<E, MutableElementHandle<E>>> elementMap = () -> {
 				Object[] value = new Object[1];
-				CollectionElement<E> element = new CollectionElement<E>() {
+				MutableElementHandle<E> element = new MutableElementHandle<E>() {
 					@Override
 					public TypeToken<E> getType() {
 						return theWrapped.getType();
@@ -494,7 +494,7 @@ public interface OrderedQollection<E> extends Qollection<E> {
 					return element;
 				};
 			};
-			return new ElementSpliterator.SimpleSpliterator<E, E>(sorted.spliterator(), theWrapped.getType(), elementMap) {};
+			return new MutableElementSpliterator.SimpleSpliterator<E, E>(sorted.spliterator(), theWrapped.getType(), elementMap) {};
 		}
 
 		@Override
@@ -677,21 +677,21 @@ public interface OrderedQollection<E> extends Qollection<E> {
 		}
 
 		@Override
-		public ElementSpliterator<E> spliterator() {
+		public MutableElementSpliterator<E> spliterator() {
 			return intersperse(getWrapped().spliterator(), Qollection::spliterator, theDiscriminator);
 		}
 
-		protected ElementSpliterator<E> intersperse(ElementSpliterator<? extends OrderedQollection<? extends E>> outer,
-			Function<OrderedQollection<? extends E>, ElementSpliterator<? extends E>> innerSplit,
+		protected MutableElementSpliterator<E> intersperse(MutableElementSpliterator<? extends OrderedQollection<? extends E>> outer,
+			Function<OrderedQollection<? extends E>, MutableElementSpliterator<? extends E>> innerSplit,
 			Function<? super List<E>, Integer> discriminator) {
-			ArrayList<ElementSpliterator<? extends E>> colls = new ArrayList<>();
+			ArrayList<MutableElementSpliterator<? extends E>> colls = new ArrayList<>();
 			outer.forEachRemaining(coll -> colls.add(innerSplit.apply(coll)));
 			colls.trimToSize();
-			List<CollectionElement<? extends E>> elements = new ArrayList<>(colls.size());
+			List<MutableElementHandle<? extends E>> elements = new ArrayList<>(colls.size());
 			List<E> values = new ArrayList<>(colls.size());
 			List<E> immutableValues = Collections.unmodifiableList(values);
-			CollectionElement<? extends E>[] container = new CollectionElement[1];
-			ElementSpliterator.WrappingElement<E, E> wrapper = new ElementSpliterator.WrappingElement<E, E>(getType(), container) {
+			MutableElementHandle<? extends E>[] container = new MutableElementHandle[1];
+			MutableElementSpliterator.WrappingElement<E, E> wrapper = new MutableElementSpliterator.WrappingElement<E, E>(getType(), container) {
 				@Override
 				public E get() {
 					return getWrapped().get();
@@ -702,7 +702,7 @@ public interface OrderedQollection<E> extends Qollection<E> {
 					if (value != null && !getWrapped().getType().getRawType().isInstance(value))
 						return StdMsg.BAD_TYPE;
 					else
-						return ((CollectionElement<E>) getWrapped()).isAcceptable(value);
+						return ((MutableElementHandle<E>) getWrapped()).isAcceptable(value);
 				}
 
 				@Override
@@ -710,10 +710,10 @@ public interface OrderedQollection<E> extends Qollection<E> {
 					if (value != null && !getWrapped().getType().getRawType().isInstance(value))
 						throw new IllegalArgumentException(StdMsg.BAD_TYPE);
 					else
-						return ((CollectionElement<E>) getWrapped()).set(value, cause);
+						return ((MutableElementHandle<E>) getWrapped()).set(value, cause);
 				}
 			};
-			return new ElementSpliterator<E>() {
+			return new MutableElementSpliterator<E>() {
 				@Override
 				public TypeToken<E> getType() {
 					return InterspersedQollection.this.getType();
@@ -730,14 +730,14 @@ public interface OrderedQollection<E> extends Qollection<E> {
 				}
 
 				@Override
-				public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
+				public boolean tryAdvanceElement(Consumer<? super MutableElementHandle<E>> action) {
 					if (colls.isEmpty())
 						return false;
 					if (elements.isEmpty()) {
 						// Need to initialize
-						Iterator<ElementSpliterator<? extends E>> iter = colls.iterator();
+						Iterator<MutableElementSpliterator<? extends E>> iter = colls.iterator();
 						while (iter.hasNext()) {
-							ElementSpliterator<? extends E> q = iter.next();
+							MutableElementSpliterator<? extends E> q = iter.next();
 							if (!q.tryAdvanceElement(el -> {
 								elements.add(el);
 								values.add(el.get());
@@ -776,21 +776,21 @@ public interface OrderedQollection<E> extends Qollection<E> {
 				}
 
 				@Override
-				public void forEachElement(Consumer<? super CollectionElement<E>> action) {
+				public void forEachElement(Consumer<? super MutableElementHandle<E>> action) {
 					try (Transaction t = lock(true, null)) {
-						ElementSpliterator.super.forEachElement(action);
+						MutableElementSpliterator.super.forEachElement(action);
 					}
 				}
 
 				@Override
 				public void forEachRemaining(Consumer<? super E> action) {
 					try (Transaction t = lock(false, null)) {
-						ElementSpliterator.super.forEachRemaining(action);
+						MutableElementSpliterator.super.forEachRemaining(action);
 					}
 				}
 
 				@Override
-				public ElementSpliterator<E> trySplit() {
+				public MutableElementSpliterator<E> trySplit() {
 					return null;
 				}
 			};

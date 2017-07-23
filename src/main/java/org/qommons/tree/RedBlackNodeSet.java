@@ -8,7 +8,7 @@ import java.util.function.Function;
 
 import org.qommons.Transaction;
 import org.qommons.collect.BetterSortedSet;
-import org.qommons.collect.CollectionElement;
+import org.qommons.collect.MutableElementHandle;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ReversibleElementSpliterator;
 import org.qommons.collect.ReversibleList;
@@ -25,7 +25,7 @@ public class RedBlackNodeSet<E> implements ReversibleList<E>, BetterSortedSet<E>
 	private N theRoot;
 
 	@Override
-	public boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
+	public boolean forElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
 		// TODO Auto-generated method stub
 		return false;
 	}
@@ -169,7 +169,7 @@ public class RedBlackNodeSet<E> implements ReversibleList<E>, BetterSortedSet<E>
 	}
 
 	@Override
-	public boolean forElement(Comparable<? super E> search, boolean up, Consumer<? super CollectionElement<? extends E>> onElement) {
+	public boolean forElement(Comparable<? super E> search, boolean up, Consumer<? super MutableElementHandle<? extends E>> onElement) {
 		// TODO Auto-generated method stub
 		return false;
 	}

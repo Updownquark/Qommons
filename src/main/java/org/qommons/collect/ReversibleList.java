@@ -218,7 +218,7 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, RRList<E> {
 			}
 
 			@Override
-			public boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
+			public boolean forElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
 				return false;
 			}
 
@@ -479,11 +479,11 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, RRList<E> {
 		}
 
 		@Override
-		public boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
+		public boolean forElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
 			if (!belongs(value))
 				return false;
 			boolean[] success = new boolean[1];
-			ElementSpliterator<E> spliter = first ? mutableSpliterator(true) : mutableSpliterator(false).reverse();
+			MutableElementSpliterator<E> spliter = first ? mutableSpliterator(true) : mutableSpliterator(false).reverse();
 			while (!success[0] && spliter.tryAdvanceElement(el -> {
 				if (Objects.equals(el.get(), value)) {
 					onElement.accept(wrapElement(el));
@@ -494,8 +494,8 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, RRList<E> {
 			return success[0];
 		}
 
-		protected CollectionElement<E> wrapElement(CollectionElement<E> el) {
-			return new CollectionElement<E>() {
+		protected MutableElementHandle<E> wrapElement(MutableElementHandle<E> el) {
+			return new MutableElementHandle<E>() {
 				@Override
 				public TypeToken<E> getType() {
 					return el.getType();
@@ -576,7 +576,7 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, RRList<E> {
 			}
 
 			@Override
-			public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
+			public boolean tryAdvanceElement(Consumer<? super MutableElementHandle<E>> action) {
 				if (spliterIndex >= theEnd)
 					return false;
 				if (wrapSpliter.tryAdvanceElement(el -> {
@@ -604,7 +604,7 @@ public interface ReversibleList<E> extends ReversibleCollection<E>, RRList<E> {
 			}
 
 			@Override
-			public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
+			public boolean tryReverseElement(Consumer<? super MutableElementHandle<E>> action) {
 				if (spliterIndex <= theStart)
 					return false;
 				if (wrapSpliter.tryReverseElement(el -> {

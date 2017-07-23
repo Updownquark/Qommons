@@ -855,7 +855,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	@Override
 	public boolean remove(Object o) {
 		try (Transaction t = lock(true, null)) {
-			ElementSpliterator<E> iter = spliterator();
+			MutableElementSpliterator<E> iter = spliterator();
 			boolean[] found = new boolean[1];
 			while (!found[0] && iter.tryAdvanceElement(el -> {
 				if (Objects.equals(el.get(), o)) {
@@ -1032,7 +1032,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	@Override
 	public boolean removeLastOccurrence(Object o) {
 		try (Transaction t = lock(true, null)) {
-			ElementSpliterator<E> iter = spliterator(false);
+			MutableElementSpliterator<E> iter = spliterator(false);
 			boolean[] found = new boolean[1];
 			while (!found[0] && iter.tryAdvanceElement(el -> {
 				if (Objects.equals(el.get(), o)) {
@@ -1397,7 +1397,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		private int theCurrentIndex; // The index of the element last returned by this iterator from tryAdvance or tryReverse()
 		private int theTranslatedIndex;
 		private boolean elementExists;
-		private final CollectionElement<E> element;
+		private final MutableElementHandle<E> element;
 		private final CollectionLockingStrategy.SubLockingStrategy theSubLock;
 
 		ArraySpliterator(int start, int end, int initIndex, CollectionLockingStrategy.SubLockingStrategy subLock) {
@@ -1416,7 +1416,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 			theCursor = initIndex;
 			theCurrentIndex = initIndex; // Just for toString()
 			theSubLock = subLock;
-			element = new CollectionElement<E>() {
+			element = new MutableElementHandle<E>() {
 				@Override
 				public TypeToken<E> getType() {
 					return ArraySpliterator.this.getType();
@@ -1505,16 +1505,16 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		}
 
 		@Override
-		public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
+		public boolean tryAdvanceElement(Consumer<? super MutableElementHandle<E>> action) {
 			return tryElement(action, true);
 		}
 
 		@Override
-		public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
+		public boolean tryReverseElement(Consumer<? super MutableElementHandle<E>> action) {
 			return tryElement(action, false);
 		}
 
-		private boolean tryElement(Consumer<? super CollectionElement<E>> action, boolean advance) {
+		private boolean tryElement(Consumer<? super MutableElementHandle<E>> action, boolean advance) {
 			theSubLock.check();
 			if (advance) {
 				if (theCursor >= theEnd)
