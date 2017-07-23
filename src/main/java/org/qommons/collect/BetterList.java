@@ -18,7 +18,9 @@ import org.qommons.collect.MutableElementHandle.StdMsg;
  * @param <E> The type of value in the list
  */
 public interface BetterList<E> extends BetterCollection<E>, RRList<E> {
-	ElementSpliterator<E> spliterator(int index);
+	default ElementSpliterator<E> spliterator(int index) {
+		return mutableSpliterator(index).immutable();
+	}
 
 	MutableElementSpliterator<E> mutableSpliterator(int index);
 
@@ -275,7 +277,7 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E> {
 
 		@Override
 		public ElementSpliterator<E> spliterator(int index) {
-			return getWrapped().spliterator(reflect(index, true));
+			return getWrapped().spliterator(reflect(index, true)).reverse();
 		}
 
 		@Override
@@ -285,7 +287,7 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E> {
 
 		@Override
 		public MutableElementSpliterator<E> mutableSpliterator(int index) {
-			return getWrapped().mutableSpliterator(reflect(index, true));
+			return getWrapped().mutableSpliterator(reflect(index, true)).reverse();
 		}
 
 		@Override

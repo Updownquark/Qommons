@@ -1,12 +1,14 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.NavigableSet;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
-import org.qommons.Ternian;
 import org.qommons.collect.MutableElementHandle.StdMsg;
-import org.qommons.value.Value;
 
 import com.google.common.reflect.TypeToken;
 
@@ -14,7 +16,7 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 	TypeToken<E> getType();
 
 	@Override
-	default ReversibleSpliterator<E> spliterator() {
+	default ElementSpliterator<E> spliterator() {
 		return BetterList.super.spliterator();
 	}
 
@@ -48,23 +50,16 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		return BetterList.super.retainAll(c);
 	}
 
-	@Override
-	default void clear() {
-		BetterList.super.clear();
-	}
-
 	int indexFor(Comparable<? super E> search);
 
 	@Override
 	default int indexOf(Object o) {
-		if (!belongs(o))
-			return -1;
-		return indexFor(v -> comparator().compare((E) o, v));
+		return BetterList.super.indexOf(o);
 	}
 
 	@Override
 	default int lastIndexOf(Object o) {
-		return indexOf(o);
+		return BetterList.super.lastIndexOf(o);
 	}
 
 	/**
@@ -82,20 +77,41 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 	 * @return Whether such a value was found
 	 */
 	@Override
-	default boolean forElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
+	default boolean forElement(E value, Consumer<? super ElementHandle<? extends E>> onElement, boolean first) {
 		boolean[] success = new boolean[1];
-		forElement(v -> comparator().compare(value, v), true, el -> {
+		forElement(v -> comparator().compare(value, v), el -> {
 			if (comparator().compare(value, el.get()) == 0) {
 				onElement.accept(el);
 				success[0] = true;
 			}
-		});
+		}, true);
 		return success[0];
 	}
 
-	boolean forValue(Comparable<? super E> search, boolean up, Consumer<? super E> onValue);
+	/**
+	 * @param value The value to search for
+	 * @param onElement The action to perform on the element containing the given value, if found
+	 * @return Whether such a value was found
+	 */
+	@Override
+	default boolean forMutableElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
+		boolean[] success = new boolean[1];
+		forMutableElement(v -> comparator().compare(value, v), el -> {
+			if (comparator().compare(value, el.get()) == 0) {
+				onElement.accept(el);
+				success[0] = true;
+			}
+		}, true);
+		return success[0];
+	}
 
-	boolean forElement(Comparable<? super E> search, boolean up, Consumer<? super MutableElementHandle<? extends E>> onElement);
+	default boolean forValue(Comparable<? super E> search, Consumer<? super E> onValue, boolean up) {
+		return forElement(search, el -> onValue.accept(el.get()), up);
+	}
+
+	boolean forElement(Comparable<? super E> search, Consumer<? super ElementHandle<? extends E>> onElement, boolean up);
+
+	boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean up);
 
 	@Override
 	default E first() {
@@ -162,11 +178,11 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		return reverse().iterator();
 	}
 
-	default ReversibleSpliterator<E> spliterator(Comparable<? super E> search, boolean up) {
-		return mutableSpliterator(search, up).immutable();
+	default ElementSpliterator<E> spliterator(Comparable<? super E> search, boolean fromStart) {
+		return mutableSpliterator(search, fromStart).immutable();
 	}
 
-	ReversibleElementSpliterator<E> mutableSpliterator(Comparable<? super E> search, boolean up);
+	MutableElementSpliterator<E> mutableSpliterator(Comparable<? super E> search, boolean fromStart);
 
 	/**
 	 * A sub-set of this set. Like {@link #subSet(Object, boolean, Object, boolean)}, but may be reversed.
@@ -230,6 +246,9 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 	default BetterSortedSet<E> tailSet(E fromElement) {
 		return tailSet(fromElement, true);
 	}
+
+	@Override
+	void clear();
 
 	/**
 	 * Implements {@link BetterSortedSet#subSet(Comparable, Comparable)}
@@ -332,6 +351,28 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		}
 
 		@Override
+		public int getElementsBefore(ElementId id) {
+			int wIndex = theWrapped.getElementsBefore(id);
+			int minIdx = getMinIndex();
+			if (wIndex < minIdx)
+				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+			if (wIndex >= getMaxIndex())
+				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+			return wIndex - minIdx;
+		}
+
+		@Override
+		public int getElementsAfter(ElementId id) {
+			int wIndex = theWrapped.getElementsBefore(id);
+			int maxIdx = getMaxIndex();
+			if (wIndex >= maxIdx)
+				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+			if (wIndex < getMinIndex())
+				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+			return maxIdx - wIndex;
+		}
+
+		@Override
 		public Object[] toArray() {
 			Object[] array = new Object[size()];
 			for (int i = 0; i < array.length; i++)
@@ -348,12 +389,12 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		}
 
 		@Override
-		public ReversibleSpliterator<E> spliterator(int index) {
+		public ElementSpliterator<E> spliterator(int index) {
 			return new BoundedSpliterator(theWrapped.spliterator(checkIndex(index, true)));
 		}
 
 		@Override
-		public ReversibleElementSpliterator<E> mutableSpliterator(int index) {
+		public MutableElementSpliterator<E> mutableSpliterator(int index) {
 			return new BoundedMutableSpliterator(theWrapped.mutableSpliterator(checkIndex(index, true)));
 		}
 
@@ -383,6 +424,13 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		}
 
 		@Override
+		public String canAdd(E value) {
+			if (!belongs(value))
+				return StdMsg.ILLEGAL_ELEMENT;
+			return theWrapped.canAdd(value);
+		}
+
+		@Override
 		public void add(int index, E element) {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
@@ -393,131 +441,76 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		}
 
 		@Override
-		public ListIterator<E> listIterator(int index) {
-			return new ListIterator<E>() {
-				private final ListIterator<E> wrapIter = theWrapped.listIterator(checkIndex(index, true));
-				private Ternian hasNext = Ternian.NONE;
-				private Ternian hasPrevious = Ternian.NONE;
-
-				@Override
-				public boolean hasNext() {
-					if (hasNext == Ternian.NONE) {
-						if (!wrapIter.hasNext())
-							hasNext = Ternian.FALSE;
-						else {
-							E next = wrapIter.next();
-							hasNext = Ternian.of(isInRange(next) == 0);
-							wrapIter.previous();
-						}
-					}
-					return hasNext.value;
-				}
-
-				@Override
-				public E next() {
-					E next = wrapIter.next();
-					switch (hasNext) {
-					case NONE:
-						if (isInRange(next) != 0) {
-							wrapIter.previous();
-							throw new NoSuchElementException();
-						}
-						break;
-					case FALSE:
-						wrapIter.previous();
-						throw new NoSuchElementException();
-					case TRUE:
-						break;
-					}
-					hasNext = Ternian.NONE;
-					hasPrevious = Ternian.TRUE;
-					return next;
-				}
-
-				@Override
-				public boolean hasPrevious() {
-					if (hasPrevious == Ternian.NONE) {
-						if (!wrapIter.hasPrevious())
-							hasPrevious = Ternian.FALSE;
-						else {
-							E prev = wrapIter.previous();
-							hasPrevious = Ternian.of(isInRange(prev) == 0);
-							wrapIter.next();
-						}
-					}
-					return hasPrevious.value;
-				}
-
-				@Override
-				public E previous() {
-					E prev = wrapIter.previous();
-					switch (hasPrevious) {
-					case NONE:
-						if (isInRange(prev) != 0) {
-							wrapIter.next();
-							throw new NoSuchElementException();
-						}
-						break;
-					case FALSE:
-						wrapIter.next();
-						throw new NoSuchElementException();
-					case TRUE:
-						break;
-					}
-					hasPrevious = Ternian.NONE;
-					hasNext = Ternian.TRUE;
-					return prev;
-				}
-
-				@Override
-				public int nextIndex() {
-					return wrapIter.nextIndex() - getMinIndex();
-				}
-
-				@Override
-				public int previousIndex() {
-					return wrapIter.previousIndex() - getMinIndex();
-				}
-
-				@Override
-				public void remove() {
-					wrapIter.remove();
-				}
-
-				@Override
-				public void set(E e) {
-					wrapIter.set(e);
-				}
-
-				@Override
-				public void add(E e) {
-					wrapIter.add(e);
-				}
-			};
-		}
-
-		@Override
-		public boolean forValue(Comparable<? super E> search, boolean up, Consumer<? super E> onValue) {
+		public boolean forValue(Comparable<? super E> search, Consumer<? super E> onValue, boolean up) {
 			boolean[] success = new boolean[1];
-			theWrapped.forValue(search, up, v -> {
+			theWrapped.forValue(search, v -> {
 				if (isInRange(v) == 0) {
 					onValue.accept(v);
 					success[0] = true;
 				}
-			});
+			}, up);
 			return success[0];
 		}
 
 		@Override
-		public boolean forElement(Comparable<? super E> search, boolean up, Consumer<? super MutableElementHandle<? extends E>> onElement) {
+		public boolean forElement(Comparable<? super E> search, Consumer<? super ElementHandle<? extends E>> onElement, boolean up) {
 			boolean[] success = new boolean[1];
-			theWrapped.forElement(search, up, el -> {
+			theWrapped.forElement(search, el -> {
 				if (isInRange(el.get()) == 0) {
 					onElement.accept(el);
 					success[0] = true;
 				}
-			});
+			}, up);
 			return success[0];
+		}
+
+		@Override
+		public boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement,
+			boolean up) {
+			boolean[] success = new boolean[1];
+			theWrapped.forMutableElement(search, el -> {
+				if (isInRange(el.get()) == 0) {
+					onElement.accept(el);
+					success[0] = true;
+				}
+			}, up);
+			return success[0];
+		}
+
+		@Override
+		public <T> T ofElementAt(int index, Function<? super ElementHandle<? extends E>, T> onElement) {
+			int minIdx = getMinIndex();
+			int maxIdx = getMaxIndex();
+			if (index < 0 || index > (maxIdx - minIdx))
+				throw new IndexOutOfBoundsException(index + " of " + (maxIdx - minIdx + 1));
+			return theWrapped.ofElementAt(index, onElement);
+		}
+
+		@Override
+		public <T> T ofMutableElementAt(int index, Function<? super MutableElementHandle<? extends E>, T> onElement) {
+			int minIdx = getMinIndex();
+			int maxIdx = getMaxIndex();
+			if (index < 0 || index > (maxIdx - minIdx))
+				throw new IndexOutOfBoundsException(index + " of " + (maxIdx - minIdx + 1));
+			return theWrapped.ofMutableElementAt(index, onElement);
+		}
+
+		@Override
+		public <T> T ofElementAt(ElementId elementId, Function<? super ElementHandle<? extends E>, T> onElement) {
+			return theWrapped.ofElementAt(elementId, el -> {
+				if (isInRange(el.get()) != 0)
+					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+				return onElement.apply(el);
+			});
+		}
+
+		@Override
+		public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableElementHandle<? extends E>, T> onElement) {
+			return theWrapped.ofMutableElementAt(elementId, el -> {
+				if (isInRange(el.get()) != 0)
+					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+				return onElement.apply(el);
+			});
 		}
 
 		@Override
@@ -532,8 +525,8 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		}
 
 		@Override
-		public ReversibleSpliterator<E> spliterator(boolean fromStart) {
-			ReversibleSpliterator<E> wrapSpliter;
+		public ElementSpliterator<E> spliterator(boolean fromStart) {
+			ElementSpliterator<E> wrapSpliter;
 			if (fromStart) {
 				if (from == null)
 					wrapSpliter = theWrapped.spliterator(true);
@@ -549,8 +542,8 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		}
 
 		@Override
-		public ReversibleElementSpliterator<E> mutableSpliterator(boolean fromStart) {
-			ReversibleElementSpliterator<E> wrapSpliter;
+		public MutableElementSpliterator<E> mutableSpliterator(boolean fromStart) {
+			MutableElementSpliterator<E> wrapSpliter;
 			if (fromStart) {
 				if (from == null)
 					wrapSpliter = theWrapped.mutableSpliterator(true);
@@ -566,12 +559,12 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		}
 
 		@Override
-		public ReversibleSpliterator<E> spliterator(Comparable<? super E> search, boolean up) {
+		public ElementSpliterator<E> spliterator(Comparable<? super E> search, boolean up) {
 			return new BoundedSpliterator(theWrapped.spliterator(boundSearch(search), up));
 		}
 
 		@Override
-		public ReversibleElementSpliterator<E> mutableSpliterator(Comparable<? super E> search, boolean up) {
+		public MutableElementSpliterator<E> mutableSpliterator(Comparable<? super E> search, boolean up) {
 			return new BoundedMutableSpliterator(theWrapped.mutableSpliterator(boundSearch(search), up));
 		}
 
@@ -599,7 +592,7 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 
 		@Override
 		public void clear() {
-			SimpleCause.doWith(new SimpleCause(), c -> mutableSpliterator().forEachElement(el -> el.remove(c)));
+			mutableSpliterator().forEachElementM(el -> el.remove());
 		}
 
 		@Override
@@ -617,14 +610,14 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 			return ret.toString();
 		}
 
-		private class BoundedSpliterator implements ReversibleSpliterator<E> {
-			private final ReversibleSpliterator<E> theWrappedSpliter;
+		private class BoundedSpliterator implements ElementSpliterator<E> {
+			private final ElementSpliterator<E> theWrappedSpliter;
 
-			BoundedSpliterator(ReversibleSpliterator<E> wrappedSpliter) {
+			BoundedSpliterator(ElementSpliterator<E> wrappedSpliter) {
 				theWrappedSpliter = wrappedSpliter;
 			}
 
-			protected ReversibleSpliterator<E> getWrappedSpliter() {
+			protected ElementSpliterator<E> getWrappedSpliter() {
 				return theWrappedSpliter;
 			}
 
@@ -644,12 +637,12 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 			}
 
 			@Override
-			public boolean tryAdvance(Consumer<? super E> action) {
+			public boolean tryAdvanceElement(Consumer<? super ElementHandle<E>> action) {
 				boolean[] success = new boolean[1];
-				if (theWrappedSpliter.tryAdvance(v -> {
-					if (isInRange(v) == 0) {
+				if (theWrappedSpliter.tryAdvanceElement(el -> {
+					if (isInRange(el.get()) == 0) {
 						success[0] = true;
-						action.accept(v);
+						action.accept(el);
 					}
 				}) && !success[0]) {
 					// If there was a super-set element that was not in range, need to back up back to the last in-range element
@@ -660,12 +653,12 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 			}
 
 			@Override
-			public boolean tryReverse(Consumer<? super E> action) {
+			public boolean tryReverseElement(Consumer<? super ElementHandle<E>> action) {
 				boolean[] success = new boolean[1];
-				if (theWrappedSpliter.tryReverse(v -> {
-					if (isInRange(v) == 0) {
+				if (theWrappedSpliter.tryReverseElement(el -> {
+					if (isInRange(el.get()) == 0) {
 						success[0] = true;
-						action.accept(v);
+						action.accept(el);
 					}
 				}) && !success[0]) {
 					// If there was a super-set element that was not in range, need to back up back to the last in-range element
@@ -676,63 +669,26 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 			}
 
 			@Override
-			public void forEachRemaining(Consumer<? super E> action) {
-				boolean[] lastOutOfRange = new boolean[1];
-				theWrappedSpliter.forEachRemaining(v -> {
-					if (isInRange(v) == 0)
-						action.accept(v);
-					else
-						lastOutOfRange[0] = true;
-				});
-				if (lastOutOfRange[0]) {
-					// Need to back up back to the last in-range element
-					theWrappedSpliter.tryReverse(v -> {
-					});
-				}
-			}
-
-			@Override
-			public void forEachReverse(Consumer<? super E> action) {
-				boolean[] lastOutOfRange = new boolean[1];
-				theWrappedSpliter.forEachReverse(v -> {
-					if (isInRange(v) == 0)
-						action.accept(v);
-					else
-						lastOutOfRange[0] = true;
-				});
-				if (lastOutOfRange[0]) {
-					// Need to back up back to the last in-range element
-					theWrappedSpliter.tryAdvance(v -> {
-					});
-				}
-			}
-
-			@Override
-			public ReversibleSpliterator<E> trySplit() {
-				ReversibleSpliterator<E> wrapSplit = theWrappedSpliter.trySplit();
+			public ElementSpliterator<E> trySplit() {
+				ElementSpliterator<E> wrapSplit = theWrappedSpliter.trySplit();
 				return wrapSplit == null ? null : new BoundedSpliterator(wrapSplit);
 			}
 		}
 
-		private class BoundedMutableSpliterator extends BoundedSpliterator implements ReversibleElementSpliterator<E> {
-			BoundedMutableSpliterator(ReversibleElementSpliterator<E> wrappedSpliter) {
+		private class BoundedMutableSpliterator extends BoundedSpliterator implements MutableElementSpliterator<E> {
+			BoundedMutableSpliterator(MutableElementSpliterator<E> wrappedSpliter) {
 				super(wrappedSpliter);
 			}
 
 			@Override
-			protected ReversibleElementSpliterator<E> getWrappedSpliter() {
-				return (ReversibleElementSpliterator<E>) super.getWrappedSpliter();
+			protected MutableElementSpliterator<E> getWrappedSpliter() {
+				return (MutableElementSpliterator<E>) super.getWrappedSpliter();
 			}
 
 			@Override
-			public TypeToken<E> getType() {
-				return BetterSubSet.this.getType();
-			}
-
-			@Override
-			public boolean tryAdvanceElement(Consumer<? super MutableElementHandle<E>> action) {
+			public boolean tryAdvanceElementM(Consumer<? super MutableElementHandle<E>> action) {
 				boolean[] success = new boolean[1];
-				if (getWrappedSpliter().tryAdvanceElement(el -> {
+				if (getWrappedSpliter().tryAdvanceElementM(el -> {
 					if (isInRange(el.get()) == 0) {
 						success[0] = true;
 						action.accept(new BoundedMutableElement<>(el));
@@ -746,9 +702,9 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 			}
 
 			@Override
-			public boolean tryReverseElement(Consumer<? super MutableElementHandle<E>> action) {
+			public boolean tryReverseElementM(Consumer<? super MutableElementHandle<E>> action) {
 				boolean[] success = new boolean[1];
-				if (getWrappedSpliter().tryReverseElement(el -> {
+				if (getWrappedSpliter().tryReverseElementM(el -> {
 					if (isInRange(el.get()) == 0) {
 						success[0] = true;
 						action.accept(new BoundedMutableElement<>(el));
@@ -762,40 +718,8 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 			}
 
 			@Override
-			public void forEachElement(Consumer<? super MutableElementHandle<E>> action) {
-				boolean[] lastOutOfRange = new boolean[1];
-				getWrappedSpliter().forEachElement(el -> {
-					if (isInRange(el.get()) == 0)
-						action.accept(new BoundedMutableElement<>(el));
-					else
-						lastOutOfRange[0] = true;
-				});
-				if (lastOutOfRange[0]) {
-					// Need to back up back to the last in-range element
-					getWrappedSpliter().tryReverse(v -> {
-					});
-				}
-			}
-
-			@Override
-			public void forEachReverseElement(Consumer<? super MutableElementHandle<E>> action) {
-				boolean[] lastOutOfRange = new boolean[1];
-				getWrappedSpliter().forEachReverseElement(el -> {
-					if (isInRange(el.get()) == 0)
-						action.accept(new BoundedMutableElement<>(el));
-					else
-						lastOutOfRange[0] = true;
-				});
-				if (lastOutOfRange[0]) {
-					// Need to back up back to the last in-range element
-					getWrappedSpliter().tryAdvance(v -> {
-					});
-				}
-			}
-
-			@Override
-			public ReversibleElementSpliterator<E> trySplit() {
-				ReversibleElementSpliterator<E> wrapSplit = getWrappedSpliter().trySplit();
+			public MutableElementSpliterator<E> trySplit() {
+				MutableElementSpliterator<E> wrapSplit = getWrappedSpliter().trySplit();
 				return wrapSplit == null ? null : new BoundedMutableSpliterator(wrapSplit);
 			}
 		}
@@ -808,8 +732,8 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 			}
 
 			@Override
-			public TypeToken<T> getType() {
-				return theWrappedEl.getType();
+			public ElementId getElementId() {
+				return theWrappedEl.getElementId();
 			}
 
 			@Override
@@ -818,22 +742,22 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 			}
 
 			@Override
-			public Value<String> isEnabled() {
+			public String isEnabled() {
 				return theWrappedEl.isEnabled();
 			}
 
 			@Override
-			public <V extends T> String isAcceptable(V value) {
+			public String isAcceptable(T value) {
 				if (isInRange(value) != 0)
 					return StdMsg.ILLEGAL_ELEMENT;
 				return theWrappedEl.isAcceptable(value);
 			}
 
 			@Override
-			public <V extends T> T set(V value, Object cause) throws IllegalArgumentException, UnsupportedOperationException {
+			public void set(T value) throws IllegalArgumentException, UnsupportedOperationException {
 				if (isInRange(value) != 0)
 					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-				return theWrappedEl.set(value, cause);
+				theWrappedEl.set(value);
 			}
 
 			@Override
@@ -842,8 +766,8 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 			}
 
 			@Override
-			public void remove(Object cause) throws UnsupportedOperationException {
-				theWrappedEl.remove(cause);
+			public void remove() throws UnsupportedOperationException {
+				theWrappedEl.remove();
 			}
 
 			@Override
@@ -854,10 +778,10 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 			}
 
 			@Override
-			public void add(T value, boolean before, Object cause) throws UnsupportedOperationException, IllegalArgumentException {
+			public void add(T value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
 				if (isInRange(value) != 0)
 					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-				theWrappedEl.add(value, before, cause);
+				theWrappedEl.add(value, before);
 			}
 
 			@Override
@@ -910,23 +834,23 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		}
 
 		@Override
-		public ReversibleElementSpliterator<E> mutableSpliterator(Comparable<? super E> value, boolean up) {
-			return getWrapped().mutableSpliterator(value, !up);
+		public MutableElementSpliterator<E> mutableSpliterator(Comparable<? super E> value, boolean fromStart) {
+			return getWrapped().mutableSpliterator(value, !fromStart).reverse();
 		}
 
 		@Override
 		public BetterSortedSet<E> subSet(E fromElement, boolean fromInclusive, E toElement, boolean toInclusive) {
-			return getWrapped().subSet(toElement, toInclusive, fromElement, fromInclusive);
+			return getWrapped().subSet(toElement, toInclusive, fromElement, fromInclusive).reverse();
 		}
 
 		@Override
 		public BetterSortedSet<E> headSet(E toElement, boolean inclusive) {
-			return getWrapped().tailSet(toElement, inclusive);
+			return getWrapped().tailSet(toElement, inclusive).reverse();
 		}
 
 		@Override
 		public BetterSortedSet<E> tailSet(E fromElement, boolean inclusive) {
-			return getWrapped().headSet(fromElement, inclusive);
+			return getWrapped().headSet(fromElement, inclusive).reverse();
 		}
 
 		@Override
@@ -935,13 +859,19 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		}
 
 		@Override
-		public boolean forValue(Comparable<? super E> search, boolean up, Consumer<? super E> onValue) {
-			return getWrapped().forValue(search, !up, onValue);
+		public boolean forValue(Comparable<? super E> search, Consumer<? super E> onValue, boolean up) {
+			return getWrapped().forValue(search, onValue, !up);
 		}
 
 		@Override
-		public boolean forElement(Comparable<? super E> search, boolean up, Consumer<? super MutableElementHandle<? extends E>> onElement) {
-			return getWrapped().forElement(search, !up, onElement);
+		public boolean forElement(Comparable<? super E> search, Consumer<? super ElementHandle<? extends E>> onElement, boolean up) {
+			return getWrapped().forElement(search, el -> onElement.accept(el.reverse()), !up);
+		}
+
+		@Override
+		public boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement,
+			boolean up) {
+			return getWrapped().forMutableElement(search, el -> onElement.accept(el.reverse()), !up);
 		}
 	}
 }

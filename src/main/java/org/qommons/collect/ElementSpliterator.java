@@ -114,7 +114,7 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 		}
 
 		@Override
-		public ReversibleElementSpliterator<E> trySplit() {
+		public ElementSpliterator<E> trySplit() {
 			return null;
 		}
 	}

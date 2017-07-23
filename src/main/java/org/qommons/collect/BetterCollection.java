@@ -533,6 +533,25 @@ public interface BetterCollection<E> extends Deque<E> {
 		}
 
 		@Override
+		public boolean isEmpty() {
+			return getWrapped().isEmpty();
+		}
+
+		@Override
+		public Object[] toArray() {
+			Object[] ret = getWrapped().toArray();
+			ArrayUtils.reverse(ret);
+			return ret;
+		}
+
+		@Override
+		public <T> T[] toArray(T[] a) {
+			T[] ret = getWrapped().toArray(a);
+			ArrayUtils.reverse(ret);
+			return ret;
+		}
+
+		@Override
 		public boolean forElement(E value, Consumer<? super ElementHandle<? extends E>> onElement, boolean first) {
 			return getWrapped().forElement(value, el -> onElement.accept(el.reverse()), !first);
 		}
@@ -568,30 +587,6 @@ public interface BetterCollection<E> extends Deque<E> {
 		}
 
 		@Override
-		public boolean isEmpty() {
-			return getWrapped().isEmpty();
-		}
-
-		@Override
-		public boolean contains(Object o) {
-			return getWrapped().contains(o);
-		}
-
-		@Override
-		public Object[] toArray() {
-			Object[] ret = getWrapped().toArray();
-			ArrayUtils.reverse(ret);
-			return ret;
-		}
-
-		@Override
-		public <T> T[] toArray(T[] a) {
-			T[] ret = getWrapped().toArray(a);
-			ArrayUtils.reverse(ret);
-			return ret;
-		}
-
-		@Override
 		public String canAdd(E value) {
 			return getWrapped().canAdd(value);
 		}
@@ -599,16 +594,6 @@ public interface BetterCollection<E> extends Deque<E> {
 		@Override
 		public boolean add(E e) {
 			return getWrapped().add(e);
-		}
-
-		@Override
-		public boolean remove(Object o) {
-			return getWrapped().removeLast(o);
-		}
-
-		@Override
-		public boolean removeLast(Object o) {
-			return getWrapped().remove(o);
 		}
 
 		@Override
@@ -624,9 +609,8 @@ public interface BetterCollection<E> extends Deque<E> {
 		@Override
 		public int hashCode() {
 			int hash = 0;
-			for (E v : this) {
+			for (E v : this)
 				hash += v == null ? 0 : v.hashCode();
-			}
 			return hash;
 		}
 
