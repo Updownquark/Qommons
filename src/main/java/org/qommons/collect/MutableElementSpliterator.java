@@ -48,8 +48,36 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 		}
 	}
 
+	/**
+	 * Operates on each previous element remaining in this MutableElementSpliterator
+	 * 
+	 * @param action The action to perform on each element
+	 */
+	default void forEachElementReverseM(Consumer<? super MutableElementHandle<E>> action) {
+		while (tryReverseElementM(action)) {
+		}
+	}
+
 	@Override
 	MutableElementSpliterator<E> trySplit();
+
+	@Override
+	default MutableElementSpliterator<E> reverse() {
+		return new ReversedMutableSpliterator<>(this);
+	}
+
+	/** @return An immutable spliterator backed by this spliterator */
+	default ElementSpliterator<E> immutable() {
+		return new ImmutableElementSpliterator<>(this);
+	}
+
+	/**
+	 * @param <E> The type for the spliterator
+	 * @return An empty MutableElementSpliterator of the given type
+	 */
+	static <E> MutableElementSpliterator<E> empty() {
+		return new EmptyMutableSpliterator<>();
+	}
 
 	interface ElementSpliteratorMap<E, T> {
 		TypeToken<T> getType();
@@ -95,28 +123,35 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 		return new MappedElementSpliterator<>(this, map);
 	}
 
-	/** @return An immutable spliterator backed by this spliterator */
-	default ElementSpliterator<E> immutable() {
-		return new ImmutableElementSpliterator<>(this);
-	}
+	class ReversedMutableSpliterator<E> extends ReversedElementSpliterator<E> implements MutableElementSpliterator<E> {
+		public ReversedMutableSpliterator(ElementSpliterator<E> wrap) {
+			super(wrap);
+		}
 
-	/**
-	 * @param <E> The type for the spliterator
-	 * @return An empty MutableElementSpliterator of the given type
-	 */
-	static <E> MutableElementSpliterator<E> empty() {
-		return new EmptyMutableSpliterator<>();
-	}
+		@Override
+		protected MutableElementSpliterator<E> getWrapped() {
+			return (MutableElementSpliterator<E>) super.getWrapped();
+		}
 
-	class EmptyMutableSpliterator<E> extends EmptyElementSpliterator<E> implements MutableElementSpliterator<E> {
 		@Override
 		public boolean tryAdvanceElementM(Consumer<? super MutableElementHandle<E>> action) {
-			return false;
+			return getWrapped().tryReverseElementM(el -> action.accept(el.reverse()));
 		}
 
 		@Override
 		public boolean tryReverseElementM(Consumer<? super MutableElementHandle<E>> action) {
-			return false;
+			return getWrapped().tryAdvanceElementM(el -> action.accept(el.reverse()));
+		}
+
+		@Override
+		public MutableElementSpliterator<E> reverse() {
+			return getWrapped();
+		}
+
+		@Override
+		public MutableElementSpliterator<E> trySplit() {
+			MutableElementSpliterator<E> split = getWrapped().trySplit();
+			return split == null ? null : new ReversedMutableSpliterator<>(split);
 		}
 	}
 
@@ -165,6 +200,18 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 		@Override
 		public Comparator<? super E> getComparator() {
 			return theWrapped.getComparator();
+		}
+	}
+
+	class EmptyMutableSpliterator<E> extends EmptyElementSpliterator<E> implements MutableElementSpliterator<E> {
+		@Override
+		public boolean tryAdvanceElementM(Consumer<? super MutableElementHandle<E>> action) {
+			return false;
+		}
+
+		@Override
+		public boolean tryReverseElementM(Consumer<? super MutableElementHandle<E>> action) {
+			return false;
 		}
 	}
 

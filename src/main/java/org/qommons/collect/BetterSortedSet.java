@@ -10,47 +10,47 @@ import org.qommons.value.Value;
 
 import com.google.common.reflect.TypeToken;
 
-public interface BetterSortedSet<E> extends ReversibleList<E>, NavigableSet<E> {
+public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 	TypeToken<E> getType();
 
 	@Override
 	default ReversibleSpliterator<E> spliterator() {
-		return ReversibleList.super.spliterator();
+		return BetterList.super.spliterator();
 	}
 
 	@Override
 	default ImmutableIterator<E> iterator() {
-		return ReversibleList.super.iterator();
+		return BetterList.super.iterator();
 	}
 
 	@Override
 	default boolean contains(Object c) {
-		return ReversibleList.super.contains(c);
+		return BetterList.super.contains(c);
 	}
 
 	@Override
 	default boolean containsAll(Collection<?> c) {
-		return ReversibleList.super.containsAll(c);
+		return BetterList.super.containsAll(c);
 	}
 
 	@Override
 	default boolean remove(Object c) {
-		return ReversibleList.super.remove(c);
+		return BetterList.super.remove(c);
 	}
 
 	@Override
 	default boolean removeAll(Collection<?> c) {
-		return ReversibleList.super.removeAll(c);
+		return BetterList.super.removeAll(c);
 	}
 
 	@Override
 	default boolean retainAll(Collection<?> c) {
-		return ReversibleList.super.retainAll(c);
+		return BetterList.super.retainAll(c);
 	}
 
 	@Override
 	default void clear() {
-		ReversibleList.super.clear();
+		BetterList.super.clear();
 	}
 
 	int indexFor(Comparable<? super E> search);
@@ -109,12 +109,12 @@ public interface BetterSortedSet<E> extends ReversibleList<E>, NavigableSet<E> {
 
 	@Override
 	default E pollLast() {
-		return ReversibleList.super.pollLast();
+		return BetterList.super.pollLast();
 	}
 
 	@Override
 	default E pollFirst() {
-		return ReversibleList.super.pollFirst();
+		return BetterList.super.pollFirst();
 	}
 
 	@Override

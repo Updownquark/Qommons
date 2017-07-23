@@ -27,12 +27,12 @@ import com.google.common.reflect.TypeToken;
  * <li>A {@link #setMaxCapacity(int) max capacity} option which will drop elements to maintain a maximum size.</li>
  * <li>Thread-safety</li>
  * <li>Automatic capacity management with {@link #setMinOccupancy(double)}</li>
- * <li>{@link ReversibleList Reversibility}</li>
+ * <li>{@link BetterList Reversibility}</li>
  * </ul>
  * 
  * @param <E> The type of elements in the list
  */
-public class CircularArrayList<E> implements ReversibleList<E>, TransactableList<E>, Deque<E> {
+public class CircularArrayList<E> implements BetterList<E>, TransactableList<E>, Deque<E> {
 	/**
 	 * The maximum size of array to allocate. Some VMs reserve some header words in an array. Attempts to allocate larger arrays may result
 	 * in OutOfMemoryError: Requested array size exceeds VM limit
@@ -456,12 +456,12 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 
 	@Override
 	public Betterator<E> iterator() {
-		return ReversibleList.super.iterator();
+		return BetterList.super.iterator();
 	}
 
 	@Override
 	public Betterator<E> descendingIterator() {
-		return ReversibleList.super.descendingIterator();
+		return BetterList.super.descendingIterator();
 	}
 
 	@Override
@@ -572,7 +572,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	}
 
 	@Override
-	public ReversibleList<E> reverse() {
+	public BetterList<E> reverse() {
 		return new ReversedListImpl<>(this, theLocker);
 	}
 
@@ -1652,7 +1652,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	 * The type of list returned from {@link CircularArrayList#subList(int, int)}. This list's {@link #subList(int, int)} also returns a
 	 * list of this type.
 	 */
-	public class SubList implements ReversibleList<E>, RRList<E> {
+	public class SubList implements BetterList<E>, RRList<E> {
 		private int theStart;
 		private int theEnd;
 		private final StampedLockingStrategy.SubLockingStrategy theSubLock;
@@ -1689,7 +1689,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 
 		@Override
 		public Betterator<E> iterator() {
-			return ReversibleList.super.iterator();
+			return BetterList.super.iterator();
 		}
 
 		@Override
@@ -1894,7 +1894,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		}
 
 		@Override
-		public ReversibleList<E> reverse() {
+		public BetterList<E> reverse() {
 			return new ReversedListImpl<>(this, theSubLock);
 		}
 
@@ -2291,10 +2291,10 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 	 * 
 	 * @param <E> The type of elements in the list
 	 */
-	private static class ReversedListImpl<E> extends ReversibleList.ReversedList<E> {
+	private static class ReversedListImpl<E> extends BetterList.ReversedList<E> {
 		private final CollectionLockingStrategy theLocker;
 
-		ReversedListImpl(ReversibleList<E> wrap, CollectionLockingStrategy locker) {
+		ReversedListImpl(BetterList<E> wrap, CollectionLockingStrategy locker) {
 			super(wrap);
 			theLocker = locker;
 		}
@@ -2349,7 +2349,7 @@ public class CircularArrayList<E> implements ReversibleList<E>, TransactableList
 		}
 
 		@Override
-		public ReversibleList<E> subList(int fromIndex, int toIndex) {
+		public BetterList<E> subList(int fromIndex, int toIndex) {
 			try (Transaction t = theLocker.lock(false, null)) {
 				return super.subList(fromIndex, toIndex);
 			}

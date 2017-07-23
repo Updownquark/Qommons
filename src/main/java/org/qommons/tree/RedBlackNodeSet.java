@@ -11,14 +11,14 @@ import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.MutableElementHandle;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ReversibleElementSpliterator;
-import org.qommons.collect.ReversibleList;
+import org.qommons.collect.BetterList;
 import org.qommons.collect.ReversibleSpliterator;
 import org.qommons.collect.TransactableList;
 import org.qommons.collect.TransactableSortedSet;
 
 import com.google.common.reflect.TypeToken;
 
-public class RedBlackNodeSet<E> implements ReversibleList<E>, BetterSortedSet<E>, TransactableList<E>, TransactableSortedSet<E> {
+public class RedBlackNodeSet<E> implements BetterList<E>, BetterSortedSet<E>, TransactableList<E>, TransactableSortedSet<E> {
 	private final Function<E, RedBlackTreeNode<E>> theNodeCreator;
 	private final CollectionLockingStrategy theLocker;
 

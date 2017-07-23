@@ -9,15 +9,45 @@ import java.util.function.UnaryOperator;
 import org.qommons.ArrayUtils;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
+import org.qommons.collect.MutableElementHandle.StdMsg;
 
 /**
  * A Collection whose primary means of iteration is backed by {@link #spliterator()} and that also provides a {@link #mutableSpliterator()
- * mutable spliterator}.
+ * mutable spliterator}. TODO
  * 
  * @param <E> The type of value in the collection
  */
 public interface BetterCollection<E> extends Deque<E> {
 	boolean belongs(Object o);
+
+	/**
+	 * Tests the compatibility of an object with this collection. This method exposes a "best guess" on whether an element could be added to
+	 * the collection , but does not provide any guarantee. This method should return null for any object for which {@link #add(Object)} is
+	 * successful, but the fact that an object passes this test does not guarantee that it would be removed successfully. E.g. the position
+	 * of the element in the collection may be a factor, but is tested for here.
+	 *
+	 * @param value The value to test compatibility for
+	 * @return Null if given value could possibly be added to this collection, or a message why it can't
+	 */
+	String canAdd(E value);
+
+	/**
+	 * Tests the removability of an element from this collection. This method exposes a "best guess" on whether an element in the collection
+	 * could be removed, but does not provide any guarantee. This method should return null for any object for which {@link #remove(Object)}
+	 * is successful, but the fact that an object passes this test does not guarantee that it would be removed successfully. E.g. the
+	 * position of the element in the collection may be a factor, but may not be tested for here.
+	 *
+	 * @param value The value to test removability for
+	 * @return Null if given value could possibly be removed from this collection, or a message why it can't
+	 */
+	default String canRemove(Object value) {
+		if (!belongs(value))
+			return MutableElementHandle.StdMsg.NOT_FOUND;
+		String[] msg = new String[1];
+		if (!forMutableElement((E) value, el -> msg[0] = el.canRemove(), true))
+			return MutableElementHandle.StdMsg.NOT_FOUND;
+		return msg[0];
+	}
 
 	@Override
 	default boolean contains(Object o) {
@@ -104,6 +134,16 @@ public interface BetterCollection<E> extends Deque<E> {
 			return true;
 		}
 		return findAll(v -> !c.contains(v), el -> el.remove(), true) > 0;
+	}
+
+	@Override
+	default boolean removeIf(Predicate<? super E> filter) {
+		boolean[] removed = new boolean[1];
+		findAll(filter, el -> {
+			el.remove();
+			removed[0] = true;
+		}, true);
+		return removed[0];
 	}
 
 	/**
@@ -213,8 +253,29 @@ public interface BetterCollection<E> extends Deque<E> {
 	 * @param onElement The action to perform on the search's result
 	 * @return Whether a result was found
 	 */
-	default boolean find(Predicate<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
-		MutableElementSpliterator<E> spliter = mutableSpliterator();
+	default boolean find(Predicate<? super E> search, Consumer<? super ElementHandle<? extends E>> onElement, boolean first) {
+		ElementSpliterator<E> spliter = first ? spliterator(first) : spliterator(first).reverse();
+		boolean[] found = new boolean[1];
+		while (spliter.tryAdvanceElement(el -> {
+			if (search.test(el.get())) {
+				found[0] = true;
+				onElement.accept(el);
+			}
+		})) {
+		}
+		return found[0];
+	}
+
+	/**
+	 * Finds a value in this collection matching the given search and performs an action on the {@link MutableElementHandle} for that
+	 * element
+	 * 
+	 * @param search The search function
+	 * @param onElement The action to perform on the search's result
+	 * @return Whether a result was found
+	 */
+	default boolean findMutable(Predicate<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
+		MutableElementSpliterator<E> spliter = first ? mutableSpliterator(first) : mutableSpliterator(first).reverse();
 		boolean[] found = new boolean[1];
 		while (spliter.tryAdvanceElementM(el -> {
 			if (search.test(el.get())) {
@@ -268,8 +329,185 @@ public interface BetterCollection<E> extends Deque<E> {
 
 	MutableElementSpliterator<E> mutableSpliterator(boolean fromStart);
 
+	default BetterCollection<E> reverse() {
+		return new ReversedCollection<>(this);
+	}
+
+	// Deque methods
+
+	@Override
+	default void addFirst(E e) {
+		try {
+			if (!mutableSpliterator(true).tryAdvanceElementM(el -> el.add(e, true)))
+				throw new IllegalStateException("Could not add element");
+		} catch (UnsupportedOperationException | IllegalArgumentException ex) {
+			throw new IllegalStateException("Could not add element", ex);
+		}
+	}
+
+	@Override
+	default void addLast(E e) {
+		try {
+			if (!mutableSpliterator(false).tryReverseElementM(el -> el.add(e, false)))
+				throw new IllegalStateException("Could not add element");
+		} catch (UnsupportedOperationException | IllegalArgumentException ex) {
+			throw new IllegalStateException("Could not add element", ex);
+		}
+	}
+
+	@Override
+	default boolean offerFirst(E e) {
+		boolean[] success = new boolean[1];
+		if (!mutableSpliterator(true).tryAdvanceElementM(el -> {
+			if (el.canAdd(e, true) == null) {
+				el.add(e, true);
+				success[0] = true;
+			}
+		}))
+			success[0] = add(e);
+		return success[0];
+	}
+
+	@Override
+	default boolean offerLast(E e) {
+		boolean[] success = new boolean[1];
+		if (!mutableSpliterator(false).tryReverseElementM(el -> {
+			if (el.canAdd(e, false) == null) {
+				el.add(e, false);
+				success[0] = true;
+			}
+		}))
+			success[0] = add(e);
+		return success[0];
+	}
+
+	@Override
+	default E removeFirst() {
+		Object[] value = new Object[1];
+		if (!mutableSpliterator(true).tryAdvanceElementM(el -> {
+			value[0] = el.get();
+			el.remove();
+		}))
+			throw new NoSuchElementException("Empty collection");
+		return (E) value[0];
+	}
+
+	@Override
+	default E removeLast() {
+		Object[] value = new Object[1];
+		if (!mutableSpliterator(true).tryAdvanceElementM(el -> {
+			value[0] = el.get();
+			el.remove();
+		}))
+			throw new NoSuchElementException("Empty collection");
+		return (E) value[0];
+	}
+
+	@Override
+	default E pollFirst() {
+		Object[] value = new Object[1];
+		mutableSpliterator(true).tryAdvanceElementM(el -> {
+			value[0] = el.get();
+			el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an exception
+		});
+		return (E) value[0];
+	}
+
+	@Override
+	default E pollLast() {
+		Object[] value = new Object[1];
+		mutableSpliterator(false).tryReverseElementM(el -> {
+			value[0] = el.get();
+			el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an exception
+		});
+		return (E) value[0];
+	}
+
+	@Override
+	default E getFirst() {
+		Object[] value = new Object[1];
+		if (!spliterator(true).tryAdvance(v -> value[0] = v))
+			throw new NoSuchElementException("Empty collection");
+		return (E) value[0];
+	}
+
+	@Override
+	default E getLast() {
+		Object[] value = new Object[1];
+		spliterator(false).tryReverse(v -> value[0] = v);
+		return (E) value[0];
+	}
+
+	@Override
+	default E peekFirst() {
+		Object[] value = new Object[1];
+		spliterator(true).tryAdvance(v -> value[0] = v);
+		return (E) value[0];
+	}
+
+	@Override
+	default E peekLast() {
+		Object[] value = new Object[1];
+		spliterator(false).tryReverse(v -> value[0] = v);
+		return (E) value[0];
+	}
+
+	@Override
+	default boolean removeFirstOccurrence(Object o) {
+		return remove(o);
+	}
+
+	@Override
+	default boolean removeLastOccurrence(Object o) {
+		return removeLast(o);
+	}
+
+	@Override
+	default boolean offer(E e) {
+		return offerLast(e);
+	}
+
+	@Override
+	default E remove() {
+		return removeFirst();
+	}
+
+	@Override
+	default E poll() {
+		return pollFirst();
+	}
+
+	@Override
+	default E element() {
+		return getFirst();
+	}
+
+	@Override
+	default E peek() {
+		return peekFirst();
+	}
+
+	@Override
+	default void push(E e) {
+		addFirst(e);
+	}
+
+	@Override
+	default E pop() {
+		return removeFirst();
+	}
+
+	@Override
+	default Iterator<E> descendingIterator() {
+		return reverse().iterator();
+	}
+
+	public static <E> BetterCollection<E> empty() {
+		return new EmptyCollection<>();
+	}
+
 	/**
-	 * Implements {@link ReversibleCollection#reverse()}
+	 * Implements {@link #reverse()}
 	 *
 	 * @param <E> The type of elements in the collection
 	 */
@@ -281,7 +519,7 @@ public interface BetterCollection<E> extends Deque<E> {
 		}
 
 		protected BetterCollection<E> getWrapped() {
-			return (BetterCollection<E>) super.getWrapped();
+			return theWrapped;
 		}
 
 		@Override
@@ -295,23 +533,37 @@ public interface BetterCollection<E> extends Deque<E> {
 		}
 
 		@Override
-		public boolean forElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
-			return getWrapped().forElement(value, el -> onElement.accept(new ReversibleElementSpliterator.ReversedCollectionElement<>(el)),
-				!first);
+		public boolean forElement(E value, Consumer<? super ElementHandle<? extends E>> onElement, boolean first) {
+			return getWrapped().forElement(value, el -> onElement.accept(el.reverse()), !first);
 		}
 
 		@Override
-		public ReversibleSpliterator<E> spliterator(boolean fromStart) {
+		public boolean forMutableElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
+			return getWrapped().forMutableElement(value, el -> onElement.accept(el.reverse()), !first);
+		}
+
+		@Override
+		public <T> T ofElementAt(ElementId elementId, Function<? super ElementHandle<? extends E>, T> onElement) {
+			return getWrapped().ofElementAt(elementId.reverse(), onElement);
+		}
+
+		@Override
+		public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableElementHandle<? extends E>, T> onElement) {
+			return getWrapped().ofMutableElementAt(elementId.reverse(), onElement);
+		}
+
+		@Override
+		public ElementSpliterator<E> spliterator(boolean fromStart) {
 			return getWrapped().spliterator(!fromStart).reverse();
 		}
 
 		@Override
-		public ReversibleElementSpliterator<E> mutableSpliterator(boolean fromStart) {
+		public MutableElementSpliterator<E> mutableSpliterator(boolean fromStart) {
 			return getWrapped().mutableSpliterator(!fromStart).reverse();
 		}
 
 		@Override
-		public ReversibleCollection<E> reverse() {
+		public BetterCollection<E> reverse() {
 			return getWrapped();
 		}
 
@@ -337,6 +589,11 @@ public interface BetterCollection<E> extends Deque<E> {
 			T[] ret = getWrapped().toArray(a);
 			ArrayUtils.reverse(ret);
 			return ret;
+		}
+
+		@Override
+		public String canAdd(E value) {
+			return getWrapped().canAdd(value);
 		}
 
 		@Override
@@ -404,6 +661,76 @@ public interface BetterCollection<E> extends Deque<E> {
 			}
 			str.append(']');
 			return str.toString();
+		}
+	}
+
+	class EmptyCollection<E> implements BetterCollection<E> {
+		@Override
+		public boolean belongs(Object o) {
+			return false;
+		}
+
+		@Override
+		public int size() {
+			return 0;
+		}
+
+		@Override
+		public boolean isEmpty() {
+			return true;
+		}
+
+		@Override
+		public Object[] toArray() {
+			return new Object[0];
+		}
+
+		@Override
+		public <T> T[] toArray(T[] a) {
+			return a;
+		}
+
+		@Override
+		public String canAdd(E value) {
+			return StdMsg.UNSUPPORTED_OPERATION;
+		}
+
+		@Override
+		public boolean add(E e) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public boolean addAll(Collection<? extends E> c) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public void clear() {}
+
+		@Override
+		public boolean forElement(E value, Consumer<? super ElementHandle<? extends E>> onElement, boolean first) {
+			return false;
+		}
+
+		@Override
+		public boolean forMutableElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
+			return false;
+		}
+
+		@Override
+		public <T> T ofElementAt(ElementId elementId, Function<? super ElementHandle<? extends E>, T> onElement) {
+			throw new IllegalArgumentException("Element is not in this collection: " + elementId);
+		}
+
+		@Override
+		public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableElementHandle<? extends E>, T> onElement) {
+			throw new IllegalArgumentException("Element is not in this collection: " + elementId);
+		}
+
+		@Override
+		public MutableElementSpliterator<E> mutableSpliterator(boolean fromStart) {
+			return MutableElementSpliterator.empty();
 		}
 	}
 }

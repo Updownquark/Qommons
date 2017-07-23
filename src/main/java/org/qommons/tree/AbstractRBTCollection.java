@@ -20,14 +20,14 @@ import org.qommons.collect.MutableElementHandle;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.ReversibleElementSpliterator;
-import org.qommons.collect.ReversibleList;
+import org.qommons.collect.BetterList;
 import org.qommons.collect.TransactableCollection;
 import org.qommons.collect.TransactableList;
 import org.qommons.value.Value;
 
 import com.google.common.reflect.TypeToken;
 
-public abstract class AbstractRBTCollection<E, N extends RedBlackNode<E>> implements ReversibleList<E>, TransactableList<E> {
+public abstract class AbstractRBTCollection<E, N extends RedBlackNode<E>> implements BetterList<E>, TransactableList<E> {
 	private final Function<E, N> theNodeCreator;
 	private final CollectionLockingStrategy theLocker;
 

@@ -13,7 +13,7 @@ import org.qommons.collect.Betterator;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.ReversibleElementSpliterator;
-import org.qommons.collect.ReversibleList;
+import org.qommons.collect.BetterList;
 import org.qommons.collect.TransactableList;
 
 /**
@@ -24,7 +24,7 @@ import org.qommons.collect.TransactableList;
  * @param <E> The type of values in the list
  */
 public class RedBlackTreeList<N extends CountedRedBlackNode<E>, E> extends AbstractRBTCollection<E, N>
-	implements ReversibleList<E>, TransactableList<E>, Deque<E> {
+	implements BetterList<E>, TransactableList<E>, Deque<E> {
 	/** @param nodeCreator The function to create nodes for the list */
 	public RedBlackTreeList(Function<E, N> nodeCreator) {
 		this(nodeCreator, new FastFailLockingStrategy());
@@ -77,7 +77,7 @@ public class RedBlackTreeList<N extends CountedRedBlackNode<E>, E> extends Abstr
 
 	@Override
 	public Betterator<E> iterator() {
-		return ReversibleList.super.iterator();
+		return BetterList.super.iterator();
 	}
 
 	@Override
@@ -351,7 +351,7 @@ public class RedBlackTreeList<N extends CountedRedBlackNode<E>, E> extends Abstr
 	}
 
 	@Override
-	public ReversibleList<E> subList(int fromIndex, int toIndex) {
+	public BetterList<E> subList(int fromIndex, int toIndex) {
 	}
 
 	private class ListIter extends ReversibleElementSpliterator.SpliteratorListIterator<E> {
