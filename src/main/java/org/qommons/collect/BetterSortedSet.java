@@ -10,11 +10,7 @@ import java.util.function.Function;
 
 import org.qommons.collect.MutableElementHandle.StdMsg;
 
-import com.google.common.reflect.TypeToken;
-
 public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
-	TypeToken<E> getType();
-
 	@Override
 	default ElementSpliterator<E> spliterator() {
 		return BetterList.super.spliterator();
@@ -33,6 +29,11 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 	@Override
 	default boolean containsAll(Collection<?> c) {
 		return BetterList.super.containsAll(c);
+	}
+
+	@Override
+	default Object[] toArray() {
+		return BetterList.super.toArray();
 	}
 
 	@Override
@@ -67,7 +68,7 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 	 *
 	 * @param value The relative value
 	 * @param up Whether to get the closest value greater or less than the given value
-	 * @return An observable value with the result of the operation
+	 * @return The result of the search, or null if no such value was found
 	 */
 	E relative(Comparable<? super E> search, boolean up);
 
@@ -178,11 +179,11 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		return reverse().iterator();
 	}
 
-	default ElementSpliterator<E> spliterator(Comparable<? super E> search, boolean fromStart) {
-		return mutableSpliterator(search, fromStart).immutable();
+	default ElementSpliterator<E> spliterator(Comparable<? super E> searchForStart, boolean higher) {
+		return mutableSpliterator(searchForStart, higher).immutable();
 	}
 
-	MutableElementSpliterator<E> mutableSpliterator(Comparable<? super E> search, boolean fromStart);
+	MutableElementSpliterator<E> mutableSpliterator(Comparable<? super E> searchForStart, boolean higher);
 
 	/**
 	 * A sub-set of this set. Like {@link #subSet(Object, boolean, Object, boolean)}, but may be reversed.
@@ -294,11 +295,6 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 					compare = search.compareTo(v);
 				return compare;
 			};
-		}
-
-		@Override
-		public TypeToken<E> getType() {
-			return theWrapped.getType();
 		}
 
 		@Override
@@ -559,13 +555,13 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		}
 
 		@Override
-		public ElementSpliterator<E> spliterator(Comparable<? super E> search, boolean up) {
-			return new BoundedSpliterator(theWrapped.spliterator(boundSearch(search), up));
+		public ElementSpliterator<E> spliterator(Comparable<? super E> search, boolean higher) {
+			return new BoundedSpliterator(theWrapped.spliterator(boundSearch(search), higher));
 		}
 
 		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(Comparable<? super E> search, boolean up) {
-			return new BoundedMutableSpliterator(theWrapped.mutableSpliterator(boundSearch(search), up));
+		public MutableElementSpliterator<E> mutableSpliterator(Comparable<? super E> search, boolean higher) {
+			return new BoundedMutableSpliterator(theWrapped.mutableSpliterator(boundSearch(search), higher));
 		}
 
 		@Override
@@ -585,7 +581,7 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 
 		@Override
 		public boolean removeLast(Object o) {
-			if ((o != null && !theWrapped.getType().getRawType().isInstance(o)) || isInRange((E) o) != 0)
+			if ((o != null && !theWrapped.belongs(o)) || isInRange((E) o) != 0)
 				return false;
 			return theWrapped.removeLast(o);
 		}
@@ -812,11 +808,6 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		}
 
 		@Override
-		public TypeToken<E> getType() {
-			return getWrapped().getType();
-		}
-
-		@Override
 		public int indexFor(Comparable<? super E> search) {
 			int index = getWrapped().indexFor(search);
 			if (index >= 0)
@@ -828,14 +819,18 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 			}
 		}
 
+		private static <X> Comparable<X> reverse(Comparable<X> compare) {
+			return v -> -compare.compareTo(v);
+		}
+
 		@Override
 		public E relative(Comparable<? super E> search, boolean up) {
 			return getWrapped().relative(search, !up);
 		}
 
 		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(Comparable<? super E> value, boolean fromStart) {
-			return getWrapped().mutableSpliterator(value, !fromStart).reverse();
+		public MutableElementSpliterator<E> mutableSpliterator(Comparable<? super E> value, boolean higher) {
+			return getWrapped().mutableSpliterator(reverse(value), !higher).reverse();
 		}
 
 		@Override
@@ -860,18 +855,18 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 
 		@Override
 		public boolean forValue(Comparable<? super E> search, Consumer<? super E> onValue, boolean up) {
-			return getWrapped().forValue(search, onValue, !up);
+			return getWrapped().forValue(reverse(search), onValue, !up);
 		}
 
 		@Override
 		public boolean forElement(Comparable<? super E> search, Consumer<? super ElementHandle<? extends E>> onElement, boolean up) {
-			return getWrapped().forElement(search, el -> onElement.accept(el.reverse()), !up);
+			return getWrapped().forElement(reverse(search), el -> onElement.accept(el.reverse()), !up);
 		}
 
 		@Override
 		public boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement,
 			boolean up) {
-			return getWrapped().forMutableElement(search, el -> onElement.accept(el.reverse()), !up);
+			return getWrapped().forMutableElement(reverse(search), el -> onElement.accept(el.reverse()), !up);
 		}
 	}
 }

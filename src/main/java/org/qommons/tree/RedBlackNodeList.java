@@ -24,12 +24,12 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 		theLocker = locker;
 	}
 
-	protected RedBlackNode<E> getRoot() {
-		return theRoot;
+	protected BinaryTreeNode<E> getRoot() {
+		return wrap(theRoot);
 	}
 
-	protected RedBlackNode<E> getTerminalNode(boolean start) {
-		return theRoot == null ? null : theRoot.getTerminal(start);
+	protected BinaryTreeNode<E> getTerminalNode(boolean start) {
+		return theRoot == null ? null : wrap(theRoot.getTerminal(start));
 	}
 
 	@Override
@@ -82,32 +82,16 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 	}
 
 	@Override
-	public abstract boolean forElement(E value, Consumer<? super ElementHandle<? extends E>> onElement, boolean first);
-
-	@Override
-	public abstract boolean forMutableElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first);
-
-	@Override
 	public <T> T ofElementAt(ElementId elementId, Function<? super ElementHandle<? extends E>, T> onElement) {
-		if (!(elementId instanceof RedBlackNodeList.NodeWrapper))
-			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-		NodeWrapper node = (NodeWrapper) elementId;
 		try (Transaction t = lock(false, null)) {
-			if (!node.check())
-				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			return onElement.apply(node);
+			return onElement.apply(handleFor(elementId));
 		}
 	}
 
 	@Override
 	public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableElementHandle<? extends E>, T> onElement) {
-		if (!(elementId instanceof RedBlackNodeList.NodeWrapper))
-			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-		NodeWrapper node = (NodeWrapper) elementId;
 		try (Transaction t = lock(true, null)) {
-			if (!node.check())
-				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			return onElement.apply(wrapMutable(node.theNode));
+			return onElement.apply(mutableHandleFor(elementId));
 		}
 	}
 
@@ -131,7 +115,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 
 	@Override
 	public MutableElementSpliterator<E> mutableSpliterator(boolean fromStart) {
-		return new MutableNodeSpliterator(getTerminalNode(fromStart), fromStart);
+		return mutableSpliterator(wrap(theRoot == null ? null : theRoot.getTerminal(fromStart)), fromStart);
 	}
 
 	@Override
@@ -173,6 +157,49 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 	@Override
 	public void clear() {
 		theRoot = null;
+	}
+
+	protected BinaryTreeNode<E> nodeFor(ElementId elementId) {
+		return checkNode(elementId);
+	}
+
+	protected MutableBinaryTreeNode<E> mutableNodeFor(ElementId elementId) {
+		return wrapMutable(checkNode(elementId).theNode);
+	}
+
+	protected MutableBinaryTreeNode<E> mutableNodeFor(BinaryTreeNode<E> node) {
+		return wrapMutable(checkNode(node).theNode);
+	}
+
+	protected ElementHandle<E> handleFor(ElementId elementId) {
+		return checkNode(elementId);
+	}
+
+	protected MutableElementHandle<E> mutableHandleFor(ElementId elementId) {
+		return wrapMutable(checkNode(elementId).theNode);
+	}
+
+	protected MutableElementHandle<E> mutableHandleFor(BinaryTreeNode<E> node) {
+		return wrapMutable(checkNode(node).theNode);
+	}
+
+	protected MutableElementSpliterator<E> mutableSpliterator(BinaryTreeNode<E> node, boolean next) {
+		return mutableSpliterator(node, next, null, null);
+	}
+
+	protected MutableElementSpliterator<E> mutableSpliterator(BinaryTreeNode<E> node, boolean next, BinaryTreeNode<E> leftBound,
+		BinaryTreeNode<E> rightBound) {
+		return new MutableNodeSpliterator(checkNode(node).theNode, next, leftBound == null ? null : checkNode(leftBound).theNode,
+			rightBound == null ? null : checkNode(rightBound).theNode);
+	}
+
+	private NodeWrapper checkNode(Object nodeRef) {
+		if (!(nodeRef instanceof RedBlackNodeList.NodeWrapper))
+			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+		NodeWrapper node = (NodeWrapper) nodeRef;
+		if (!node.check())
+			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+		return node;
 	}
 
 	private NodeWrapper wrap(RedBlackNode<E> node) {
@@ -477,7 +504,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 			return true;
 		}
 
-		private boolean isIncluded(RedBlackNode<E> node) {
+		protected boolean isIncluded(RedBlackNode<E> node) {
 			if (theLeftBound != null) {
 				if (node == theLeftBound)
 					return true; // Left bound is included
@@ -568,11 +595,10 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 		@Override
 		public MutableElementSpliterator<E> trySplit() {
 			try(Transaction t=lock(false, null)){
-				if (current == null) {
-					if (theRoot == null)
-						return null;
+				if (theRoot == null)
+					return null;
+				if (current == null)
 					current = theRoot.getTerminal(!wasNext);
-				}
 				RedBlackNode<E> divider;
 				if(theLeftBound==null){
 					if(theRightBound==null){
@@ -596,12 +622,12 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 				
 				MutableNodeSpliterator split;
 				if(current.getNodesBefore()<divider.getNodesBefore()){ //We're on the left of the divider
-					RedBlackNode<E> right=theRightBound==null ? getTerminalNode(false) : theRightBound;
+					RedBlackNode<E> right = theRightBound == null ? theRoot.getTerminal(false) : theRightBound;
 					RedBlackNode<E> start=current==divider ? right : divider;
 					split= new MutableNodeSpliterator(start, true, divider, right);
 					theRightBound=divider;
 				} else{
-					RedBlackNode<E> left=theLeftBound==null ? getTerminalNode(true) : theLeftBound;
+					RedBlackNode<E> left = theLeftBound == null ? theRoot.getTerminal(true) : theLeftBound;
 					RedBlackNode<E> start=current==divider ? left : divider;
 					split=new MutableNodeSpliterator(start, true, left, divider);
 					theLeftBound=divider;

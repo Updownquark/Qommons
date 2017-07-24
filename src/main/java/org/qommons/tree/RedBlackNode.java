@@ -188,7 +188,7 @@ public class RedBlackNode<E> {
 		while (node != null && index != nodeIndex) {
 			boolean left = index < nodeIndex;
 			if (!left)
-				passed = nodeIndex;
+				passed = nodeIndex + 1;
 			node = getChild(left);
 			if (node != null)
 				nodeIndex = passed + sizeOf(node.theLeft);
@@ -290,7 +290,7 @@ public class RedBlackNode<E> {
 	 * @param finder The compare operation to use to find the node. Must obey the ordering used to construct this structure.
 	 * @param lesser Whether to return the closest node lesser or greater than (to the left or right, respectively) the given search if an
 	 *        exact match ({@link Comparable#compareTo(Object) finder.compareTo(node)}==0) is not found or is excluded (via
-	 *        <code>withExact=valse</code>)
+	 *        <code>withExact=false</code>)
 	 * @param withExact Whether to accept an equivalent node, if present (as opposed to strictly left or right of)
 	 * @return The found node
 	 */

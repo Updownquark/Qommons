@@ -55,6 +55,30 @@ public interface BinaryTreeNode<E> extends ElementId {
 			return getParent().getLeft();
 	}
 
+	/**
+	 * @param left Whether to get the closest node on the left or right
+	 * @return The closest (in value) node to this node on one side or the other
+	 */
+	default BinaryTreeNode<E> getClosest(boolean left) {
+		BinaryTreeNode<E> child = getChild(left);
+		if (child != null) {
+			BinaryTreeNode<E> next = child.getChild(!left);
+			while (next != null) {
+				child = next;
+				next = next.getChild(!left);
+			}
+			return child;
+		} else {
+			BinaryTreeNode<E> parent = getParent();
+			child = this;
+			while (parent != null && parent.getChild(left) == child) {
+				child = parent;
+				parent = parent.getParent();
+			}
+			return parent;
+		}
+	}
+
 	default BinaryTreeNode<E> get(int index) {
 		if (index < 0)
 			throw new IndexOutOfBoundsException("" + index);
@@ -72,6 +96,24 @@ public interface BinaryTreeNode<E> extends ElementId {
 		if (node == null)
 			throw new IndexOutOfBoundsException(index + " of " + nodeIndex);
 		return node;
+	}
+
+	default int indexFor(Comparable<? super BinaryTreeNode<? extends E>> search) {
+		BinaryTreeNode<E> node = this;
+		int passed = 0;
+		int compare = search.compareTo(node);
+		while (node != null && compare != 0) {
+			if (compare > 0) {
+				passed += sizeOf(node.getLeft()) + 1;
+				node = node.getRight();
+			} else
+				node = node.getLeft();
+			compare = search.compareTo(node);
+		}
+		if (node != null)
+			return passed;
+		else
+			return -(passed + 1);
 	}
 
 	default BinaryTreeNode<E> getTerminal(boolean left) {
