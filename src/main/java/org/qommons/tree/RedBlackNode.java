@@ -1,53 +1,23 @@
 package org.qommons.tree;
 
-import static org.qommons.tree.BinaryTreeNode.sizeOf;
-
 import java.util.Map;
 
 /**
- * A node in a red/black binary tree structure. This class does all the work of keeping itself balanced and has hooks that allow specialized
- * tree structures to achieve optimal performance without worrying about balancing.
+ * A node in a red/black binary tree structure.
+ * 
+ * This class does all the work of keeping itself balanced and has hooks that allow specialized tree structures to achieve optimal
+ * performance without worrying about balancing.
+ * 
+ * This class assumes nothing about how it is built. In particular it does not require or care that the values of the nodes be ordered in
+ * any particular way. It does not have methods to add values to the structure, but the {@link #findClosest(Comparable, boolean, boolean)
+ * findClosest} method allows log(n) searching among nodes and the {@link #add(RedBlackNode, boolean) add} method allows adding a node to
+ * the structure. The node is not checked to see if it belongs in the structure at that location. Only rebalancing is handled.
+ * 
+ * This class does not implement {@link BinaryTreeNode} because returning this from an API would be dangerous.
+ * 
+ * @param <E> The type of value that the node holds
  */
-public abstract class RedBlackNode<E> implements BinaryTreeNode<E> {
-	/** Returned from {@link RedBlackNode#add(RedBlackNode, boolean)} to provide information about the result of the add operation */
-	class TreeOpResult<E> {
-		private BinaryTreeNode<E> theFoundNode;
-
-		private BinaryTreeNode<E> theNewNode;
-
-		BinaryTreeNode<E> theNewRoot;
-
-		TreeOpResult(BinaryTreeNode<E> foundNode, BinaryTreeNode<E> newNode, BinaryTreeNode<E> root) {
-			theFoundNode = foundNode;
-			theNewNode = newNode;
-			theNewRoot = root;
-		}
-
-		/**
-		 * @return The node that was found in the tree that was equivalent to the given node. May be null if no equivalent node was found.
-		 */
-		public BinaryTreeNode<E> getFoundNode() {
-			return theFoundNode;
-		}
-
-		/**
-		 * @return The node that is now in the tree that is equivalent to the given node. May be identical to the given node or to the
-		 *         {@link #getFoundNode() found node}.
-		 */
-		public BinaryTreeNode<E> getNewNode() {
-			return theNewNode;
-		}
-
-		/**
-		 * Due to balancing rotation operations or replacement, the root of the tree may have changed as a result of the tree addition.
-		 *
-		 * @return The new root for the tree structure
-		 */
-		public BinaryTreeNode<E> getNewRoot() {
-			return theNewRoot;
-		}
-	}
-
+public class RedBlackNode<E> {
 	private boolean isRed;
 
 	private RedBlackNode<E> theParent;
@@ -59,9 +29,9 @@ public abstract class RedBlackNode<E> implements BinaryTreeNode<E> {
 	private boolean isTransaction;
 	private int theTransaction;
 
-	private final E theValue;
+	private E theValue;
 
-	/** Creates a node */
+	/** @param value The value for this node */
 	public RedBlackNode(E value) {
 		isRed = true;
 		theSize = 1;
@@ -70,9 +40,13 @@ public abstract class RedBlackNode<E> implements BinaryTreeNode<E> {
 	}
 
 	/** @return This node's value */
-	@Override
 	public E getValue() {
 		return theValue;
+	}
+
+	/** @param value The new value for this node */
+	public void setValue(E value) {
+		theValue = value;
 	}
 
 	/** @return Whether this node is red or black */
@@ -81,9 +55,16 @@ public abstract class RedBlackNode<E> implements BinaryTreeNode<E> {
 	}
 
 	/** @return The parent of this node in the tree structure. Will be null if and only if this node is the root (or an orphan). */
-	@Override
 	public RedBlackNode<E> getParent() {
 		return theParent;
+	}
+
+	/** @return The root of the tree structure holding this node */
+	public RedBlackNode<E> getRoot() {
+		RedBlackNode<E> root = this;
+		while (root.theParent != null)
+			root = root.theParent;
+		return root;
 	}
 
 	/** Runs debugging checks on this tree structure to assure that all internal constraints are currently met. */
@@ -153,13 +134,11 @@ public abstract class RedBlackNode<E> implements BinaryTreeNode<E> {
 	}
 
 	/** @return The child node that is on the left of this node */
-	@Override
 	public RedBlackNode<E> getLeft() {
 		return theLeft;
 	}
 
 	/** @return The child node that is on the right of this node */
-	@Override
 	public RedBlackNode<E> getRight() {
 		return theRight;
 	}
@@ -168,13 +147,20 @@ public abstract class RedBlackNode<E> implements BinaryTreeNode<E> {
 	 * @param left Whether to get the left or right child
 	 * @return The left or right child of this node
 	 */
-	@Override
 	public RedBlackNode<E> getChild(boolean left) {
 		return left ? theLeft : theRight;
 	}
 
+	/** @return Whether this node is on the right (false) or the left (true) of its parent. False for the root. */
+	public boolean getSide() {
+		if (getParent() == null)
+			return false;
+		if (this == getParent().getLeft())
+			return true;
+		return false;
+	}
+
 	/** @return The other child of this node's parent. Null if the parent is null. */
-	@Override
 	public RedBlackNode<E> getSibling() {
 		if(theParent == null)
 			return null;
@@ -185,9 +171,57 @@ public abstract class RedBlackNode<E> implements BinaryTreeNode<E> {
 	}
 
 	/** @return The number of nodes in this structure (this node plus all its descendants) */
-	@Override
 	public int size() {
 		return theSize;
+	}
+
+	public static int sizeOf(RedBlackNode<?> node) {
+		return node == null ? 0 : node.theSize;
+	}
+
+	public RedBlackNode<E> get(int index) {
+		if (index < 0)
+			throw new IndexOutOfBoundsException("" + index);
+		RedBlackNode<E> node = this;
+		int passed = 0;
+		int nodeIndex = sizeOf(theLeft);
+		while (node != null && index != nodeIndex) {
+			boolean left = index < nodeIndex;
+			if (!left)
+				passed = nodeIndex;
+			node = getChild(left);
+			if (node != null)
+				nodeIndex = passed + sizeOf(node.theLeft);
+		}
+		if (node == null)
+			throw new IndexOutOfBoundsException(index + " of " + nodeIndex);
+		return node;
+	}
+
+	public RedBlackNode<E> getTerminal(boolean left) {
+		RedBlackNode<E> parent = this;
+		RedBlackNode<E> child = parent.getChild(left);
+		while (child != null) {
+			parent = child;
+			child = parent.getChild(left);
+		}
+		return parent;
+	}
+
+	/** @return The number of nodes stored before this node in the tree */
+	public int getNodesBefore() {
+		RedBlackNode<E> node = this;
+		RedBlackNode<E> left = node.getLeft();
+		int ret = sizeOf(left);
+		while (node != null) {
+			RedBlackNode<E> parent = node.getParent();
+			if (parent != null && parent.getRight() == node) {
+				left = parent.getLeft();
+				ret += sizeOf(left) + 1;
+			}
+			node = parent;
+		}
+		return ret;
 	}
 
 	/**
@@ -251,33 +285,67 @@ public abstract class RedBlackNode<E> implements BinaryTreeNode<E> {
 	}
 
 	/**
+	 * Finds the node in this tree that is closest to {@code finder.compareTo(node)==0)}, on either the left or right side.
+	 *
+	 * @param finder The compare operation to use to find the node. Must obey the ordering used to construct this structure.
+	 * @param lesser Whether to return the closest node lesser or greater than (to the left or right, respectively) the given search if an
+	 *        exact match ({@link Comparable#compareTo(Object) finder.compareTo(node)}==0) is not found or is excluded (via
+	 *        <code>withExact=valse</code>)
+	 * @param withExact Whether to accept an equivalent node, if present (as opposed to strictly left or right of)
+	 * @return The found node
+	 */
+	public RedBlackNode<E> findClosest(Comparable<RedBlackNode<E>> finder, boolean lesser, boolean withExact) {
+		RedBlackNode<E> node = this;
+		RedBlackNode<E> found = null;
+		while (true) {
+			int compare = finder.compareTo(node);
+			if (compare == 0) {
+				if (withExact)
+					return node;
+				RedBlackNode<E> child = getChild(lesser);
+				if (child == null)
+					return found;
+				while (child.getChild(!lesser) != null)
+					child = child.getChild(!lesser);
+				return child;
+			}
+			if (compare > 0 == lesser)
+				found = node;
+			RedBlackNode<E> child = getChild(compare < 0);
+			if (child == null)
+				return found;
+			node = child;
+		}
+	}
+
+	/**
 	 * Replaces this node in the tree with the given node, orphaning this node.
 	 *
 	 * @param node The node to replace this node in the tree
 	 */
-	public void replace(BinaryTreeNode<E> node) {
-		RedBlackNode<E> rbn = (RedBlackNode<E>) node;
+	public void replace(RedBlackNode<E> node) {
 		RedBlackNode<E> parent = getParent();
 		startCountTransaction();
-		rbn.startCountTransaction();
+		node.startCountTransaction();
 		if (parent != null)
 			parent.startCountTransaction();
 		try {
-			if (rbn != theLeft)
-				rbn.setChild(theLeft, true);
-			if (rbn != theRight)
-				rbn.setChild(theRight, false);
+			if (node != theLeft)
+				node.setChild(theLeft, true);
+			if (node != theRight)
+				node.setChild(theRight, false);
 			setChild(null, true);
 			setChild(null, false);
-			rbn.setRed(isRed);
+			node.setRed(isRed);
+			setRed(true);
 			if (theParent != null) {
-				theParent.setChild(rbn, getSide());
+				theParent.setChild(node, getSide());
 				setParent(null);
 			} else
-				rbn.setParent(theParent);
+				node.setParent(theParent);
 		} finally {
 			endCountTransaction();
-			rbn.endCountTransaction();
+			node.endCountTransaction();
 			if (parent != null)
 				parent.endCountTransaction();
 		}
@@ -384,55 +452,27 @@ public abstract class RedBlackNode<E> implements BinaryTreeNode<E> {
 		}
 	}
 
-	/**
-	 * Adds a new node into the correct place in this structure, rebalancing if necessary
-	 *
-	 * @param node The node to add
-	 * @param replaceIfFound Whether to replace an equivalent node if found, or leave the tree as-is
-	 * @return The result of the addition
-	 */
-	@Override
-	protected TreeOpResult<E> add(BinaryTreeNode<E> node, boolean replaceIfFound) {
-		int compare = node.compareTo(this);
-		if(compare == 0) {
-			if(replaceIfFound) {
-				replace(node);
-				return new TreeOpResult<>(this, node, node);
-			} else
-				return new TreeOpResult<>(this, this, this);
-		}
-		return addOnSide(node, compare < 0, replaceIfFound);
-	}
-
-	/** A new implementation of balancing, which causes errors if not called from {@link #add(RedBlackNode, boolean)} on the root. */
-	private static final boolean SPECIAL_BALANCING = false;
-
 	static boolean DEBUG_PRINT = false;
 
 	/**
-	 * Adds a new node into this structure, rebalancing if necessary
+	 * Adds a new node into this structure, adjacent to this node, rebalancing if necessary
 	 *
 	 * @param node The node to add
 	 * @param left The side on which to place the node
-	 * @param replaceIfFound Whether to replace an equivalent node if found, or leave the tree as-is
-	 * @return The result of the addition
+	 * @return The new root for the tree structure
 	 */
-	protected MutableBinaryTreeNode.TreeOpResult addOnSide(RedBlackNode<E> node, boolean left, boolean replaceIfFound) {
+	protected RedBlackNode<E> add(RedBlackNode<E> node, boolean left) {
+		RedBlackNode<E> parent = this;
 		RedBlackNode<E> child = getChild(left);
-		MutableBinaryTreeNode.TreeOpResult r;
-		if(child == null) {
-			setChild(node, left);
-			child = node;
-			r = new MutableBinaryTreeNode.TreeOpResult(null, node, this);
-		} else {
-			r = child.add(node, replaceIfFound);
-			if(r.theNewRoot == theParent) {
-				return r;
-			}
-			r.theNewRoot = this;
+		boolean childSide = child == null ? left : !left;
+		while (child != null) {
+			parent = child;
+			child = parent.getChild(childSide);
 		}
-
-		r.theNewRoot = fixAfterInsertion(this);
+		parent.setChild(node, childSide);
+		while (parent != this)
+			fixAfterInsertion(parent);
+		return fixAfterInsertion(this);
 	}
 
 	/**
@@ -440,7 +480,7 @@ public abstract class RedBlackNode<E> implements BinaryTreeNode<E> {
 	 *
 	 * @return The new root of this node's structure
 	 */
-	protected RedBlackNode<E> delete() {
+	public RedBlackNode<E> delete() {
 		if(theLeft != null && theRight != null) {
 			RedBlackNode<E> successor = getClosest(false);
 			switchWith(successor);
@@ -526,12 +566,8 @@ public abstract class RedBlackNode<E> implements BinaryTreeNode<E> {
 
 	@Override
 	public String toString() {
-		String ret = String.valueOf(theValue) + " (" + (isRed() ? "red" : "black") + ")";
-		if (getParent() != null && getParent().getParent() == this)
-			return ret;
-		ret = ret.substring(0, ret.length() - 1);
-		ret += ", " + theSize + ") [" + getIndex() + "]";
-		return ret;
+		StringBuilder str = new StringBuilder().append(theValue);
+		return str.append(" (").append(isRed() ? "red" : "black").append(", ").append(theSize).append(')').toString();
 	}
 
 	/** This is not used, but here for reference. It is the rebalancing code from {@link java.util.TreeMap}, refactored for RedBlackTree. */
@@ -644,117 +680,5 @@ public abstract class RedBlackNode<E> implements BinaryTreeNode<E> {
 		RedBlackNode<?> left = tree.getLeft();
 		if(left != null)
 			print(left, str, indent + 1);
-	}
-
-	/**
-	 * A subclass of {@link RedBlackNode<E>} that contains a value, which is (typically) the key by which nodes are compared
-	 *
-	 * @param <E> The type of value contained in each node
-	 */
-	public static abstract class ValuedRedBlackNode<E> extends RedBlackNode {
-		private final E theValue;
-
-		/** @param value The value for the node */
-		public ValuedRedBlackNode(E value) {
-			theValue = value;
-		}
-
-		/** @return This node's value */
-		@Override
-		public E getValue() {
-			return theValue;
-		}
-
-		/**
-		 * @param o1 One of the values to compare
-		 * @param o2 The other value to compare
-		 * @return -1 if o1&lt;o2, 1 if o1&gt;o2, or 0 if the two are logically equal
-		 */
-		protected abstract int compare(E o1, E o2);
-
-		/**
-		 * @param value The value to create the node for
-		 * @return The new node for the given value
-		 */
-		protected abstract ValuedRedBlackNode<E> createNode(E value);
-
-		@Override
-		public int compareTo(RedBlackNode node) {
-			return compare(getValue(), ((ValuedRedBlackNode<E>) node).getValue());
-		}
-
-		/**
-		 * Adds a value to this tree
-		 *
-		 * @param value The value to add
-		 * @param replaceIfFound If another equivalent value is found in this tree, whether to replace it with the given value or leave it
-		 *            there
-		 * @return The tree result of the addition
-		 */
-		protected MutableBinaryTreeNode.TreeOpResult add(E value, boolean replaceIfFound) {
-			ValuedRedBlackNode<E> node = createNode(value);
-			return add(node, replaceIfFound);
-		}
-
-		/**
-		 * @param value The value to get the node for
-		 * @return The node with the given value (or equivalent) in this tree
-		 */
-		public ValuedRedBlackNode<E> findValue(E value) {
-			return (ValuedRedBlackNode<E>) find(node -> compare(value, ((ValuedRedBlackNode<E>) node).getValue()));
-		}
-
-		/**
-		 * Finds the given value in the tree or the closest value to one side
-		 *
-		 * @param value The value to search for
-		 * @param lesser Whether to search lesser values or greater
-		 * @param withEqual Whether to accept the equivalent of the given value (as opposed to strictly less or greater than)
-		 * @return The node in the tree matching the given constraints
-		 */
-		public ValuedRedBlackNode<E> findClosestValue(E value, boolean lesser, boolean withEqual) {
-			return (ValuedRedBlackNode<E>) findClosest(node -> compare(value, ((ValuedRedBlackNode<E>) node).getValue()), lesser, withEqual);
-		}
-
-		@Override
-		public String toString() {
-			return String.valueOf(theValue) + " (" + (isRed() ? "red" : "black") + ")";
-		}
-	}
-
-	/**
-	 * A value node for comparable values
-	 *
-	 * @param <E> The type of comparable value for the node
-	 */
-	public static class ComparableValuedRedBlackNode<E extends Comparable<E>> extends ValuedRedBlackNode<E> {
-		/** @param value The value for the node */
-		public ComparableValuedRedBlackNode(E value) {
-			super(value);
-		}
-
-		@Override
-		public int compareTo(RedBlackNode o) {
-			return getValue().compareTo(((ComparableValuedRedBlackNode<E>) o).getValue());
-		}
-
-		@Override
-		protected ComparableValuedRedBlackNode<E> createNode(E value) {
-			return new ComparableValuedRedBlackNode<>(value);
-		}
-
-		@Override
-		protected int compare(E o1, E o2) {
-			return o1.compareTo(o2);
-		}
-
-		/**
-		 * @param <E> The type of the value
-		 * @param value The value for the new node
-		 * @return The new node for the given value
-		 */
-		public static <E extends Comparable<E>> ComparableValuedRedBlackNode<E> valueOf(E value) {
-			return new ComparableValuedRedBlackNode<>(value);
-		}
 	}
 }

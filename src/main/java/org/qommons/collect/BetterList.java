@@ -1,7 +1,14 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -13,7 +20,7 @@ import org.qommons.Transaction;
 import org.qommons.collect.MutableElementHandle.StdMsg;
 
 /**
- * A {@link List} that is also a {@link ReversibleCollection}
+ * A {@link List} that is also a {@link BetterCollection}
  * 
  * @param <E> The type of value in the list
  */
@@ -23,6 +30,11 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E> {
 	}
 
 	MutableElementSpliterator<E> mutableSpliterator(int index);
+
+	@Override
+	default Object[] toArray() {
+		return BetterCollection.super.toArray();
+	}
 
 	/**
 	 * @param id The ID of the element

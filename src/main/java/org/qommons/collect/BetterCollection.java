@@ -1,6 +1,13 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Set;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -103,6 +110,25 @@ public interface BetterCollection<E> extends Deque<E> {
 				return cSet.isEmpty();
 			}
 		}
+	}
+
+	@Override
+	default Object[] toArray() {
+		Object[] array = new Object[size()];
+		int[] index = new int[1];
+		spliterator().forEachRemaining(v -> array[index[0]++] = v);
+		return array;
+	}
+
+	@Override
+	default <T> T[] toArray(T[] a) {
+		int size = size();
+		if (a.length < size)
+			a = (T[]) java.lang.reflect.Array.newInstance(a.getClass().getComponentType(), size);
+		int[] index = new int[1];
+		T[] array = a;
+		spliterator().forEachRemaining(v -> array[index[0]++] = (T) v);
+		return a;
 	}
 
 	@Override

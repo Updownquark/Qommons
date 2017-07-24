@@ -59,13 +59,11 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 
 	@Override
 	default void forEachRemaining(Consumer<? super E> action) {
-		while (tryAdvance(action)) {
-		}
+		forEachElement(el -> action.accept(el.get()));
 	}
 
 	default void forEachReverse(Consumer<? super E> action) {
-		while (tryReverse(action)) {
-		}
+		forEachElementReverse(el -> action.accept(el.get()));
 	}
 
 	@Override

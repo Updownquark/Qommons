@@ -1,6 +1,8 @@
 package org.qommons.tree;
 
-public interface BinaryTreeNode<E> {
+import org.qommons.collect.ElementId;
+
+public interface BinaryTreeNode<E> extends ElementId {
 	E getValue();
 
 	BinaryTreeNode<E> getParent();
@@ -14,7 +16,7 @@ public interface BinaryTreeNode<E> {
 	 * @param node The node to get the size of
 	 * @return The size of the given node, or 0 if the node is null
 	 */
-	static int sizeOf(BinaryTreeNode node) {
+	static int sizeOf(BinaryTreeNode<?> node) {
 		return node == null ? 0 : node.size();
 	}
 
@@ -53,26 +55,42 @@ public interface BinaryTreeNode<E> {
 			return getParent().getLeft();
 	}
 
-	/**
-	 * @param finder The compare operation to use to find the node. Must obey the ordering used to construct this structure.
-	 * @return The node in this structure for which finder.compareTo(node)==0, or null if no such node exists.
-	 */
-	default BinaryTreeNode<E> find(Comparable<BinaryTreeNode<E>> finder) {
-		int compare = finder.compareTo(this);
-		if (compare == 0)
-			return this;
-		BinaryTreeNode<E> child = getChild(compare < 0);
-		if (child != null)
-			return child.find(finder);
-		else
-			return null;
+	default BinaryTreeNode<E> get(int index) {
+		if (index < 0)
+			throw new IndexOutOfBoundsException("" + index);
+		BinaryTreeNode<E> node = this;
+		int passed = 0;
+		int nodeIndex = sizeOf(getLeft());
+		while (node != null && index != nodeIndex) {
+			boolean left = index < nodeIndex;
+			if (!left)
+				passed = nodeIndex;
+			node = getChild(left);
+			if (node != null)
+				nodeIndex = passed + sizeOf(node.getLeft());
+		}
+		if (node == null)
+			throw new IndexOutOfBoundsException(index + " of " + nodeIndex);
+		return node;
+	}
+
+	default BinaryTreeNode<E> getTerminal(boolean left) {
+		BinaryTreeNode<E> parent = this;
+		BinaryTreeNode<E> child = parent.getChild(left);
+		while (child != null) {
+			parent = child;
+			child = parent.getChild(left);
+		}
+		return parent;
 	}
 
 	/**
-	 * Finds the node in this tree that is closest to {@code finder.compareTo(node)==0)}, on either the right or left side.
+	 * Finds the node in this tree that is closest to {@code finder.compareTo(node)==0)}, on either the left or right side.
 	 *
 	 * @param finder The compare operation to use to find the node. Must obey the ordering used to construct this structure.
-	 * @param lesser Whether to search for lesser or greater values (left or right, respectively)
+	 * @param lesser Whether to return the closest node lesser or greater than (to the left or right, respectively) the given search if an
+	 *        exact match ({@link Comparable#compareTo(Object) finder.compareTo(node)}==0) is not found or is excluded (via
+	 *        <code>withExact=valse</code>)
 	 * @param withExact Whether to accept an equivalent node, if present (as opposed to strictly left or right of)
 	 * @return The found node
 	 */
@@ -104,12 +122,12 @@ public interface BinaryTreeNode<E> {
 	default int getNodesBefore() {
 		BinaryTreeNode<E> node = this;
 		BinaryTreeNode<E> left = node.getLeft();
-		int ret = size(left);
+		int ret = sizeOf(left);
 		while (node != null) {
 			BinaryTreeNode<E> parent = node.getParent();
 			if (parent != null && parent.getRight() == node) {
 				left = parent.getLeft();
-				ret += size(left) + 1;
+				ret += sizeOf(left) + 1;
 			}
 			node = parent;
 		}
@@ -120,15 +138,20 @@ public interface BinaryTreeNode<E> {
 	default int getNodesAfter() {
 		BinaryTreeNode<E> node = this;
 		BinaryTreeNode<E> right = node.getRight();
-		int ret = size(right);
+		int ret = sizeOf(right);
 		while (node != null) {
 			BinaryTreeNode<E> parent = node.getParent();
 			if (parent != null && parent.getLeft() == node) {
 				right = parent.getRight();
-				ret += size(right) + 1;
+				ret += sizeOf(right) + 1;
 			}
 			node = parent;
 		}
 		return ret;
+	}
+
+	@Override
+	default int compareTo(ElementId o) {
+		return getNodesBefore() - ((BinaryTreeNode<E>) o).getNodesBefore();
 	}
 }
