@@ -268,15 +268,6 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	 */
 	MutableElementSpliterator<E> mutableSpliterator(Comparable<? super E> searchForStart, boolean higher);
 
-	/**
-	 * A sub-set of this set. Like {@link #subSet(Object, boolean, Object, boolean)}, but may be reversed.
-	 *
-	 * @param fromElement The minimum bounding element for the sub set
-	 * @param fromInclusive Whether the minimum bound will be included in the sub set (if present in this set)
-	 * @param toElement The maximum bounding element for the sub set
-	 * @param toInclusive Whether the maximum bound will be included in the sub set (if present in this set)
-	 * @return The sub set
-	 */
 	@Override
 	default BetterSortedSet<E> subSet(E fromElement, boolean fromInclusive, E toElement, boolean toInclusive) {
 		return subSet(v -> {

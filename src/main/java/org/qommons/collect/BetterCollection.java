@@ -19,13 +19,24 @@ import org.qommons.Transaction;
 import org.qommons.collect.MutableElementHandle.StdMsg;
 
 /**
- * A Collection whose primary means of iteration is backed by {@link #spliterator()} and that also provides a {@link #mutableSpliterator()
- * mutable spliterator}. TODO
+ * BetterCollection is an ordered {@link Collection} (also a {@link Deque}) that provides a great deal of extra functionality.
+ * 
+ * Fundamentally, each value in a BetterCollection is stored in an element, each of which has an {@link ElementId}. The ID of an element is
+ * like an address. It is immutable until that element is removed from the collection, so it can be used to access elements even if the
+ * properties used to store the elements may have changed, e.g. the hash code of an item in a hash set or the name of an item in a sorted
+ * set ordered by name. Since it is a direct link to the placeholder of the element, access or modification to the element by its ID may be
+ * significantly faster than access by value.
+ * 
+ * A BetterCollection must provide access to its elements by ID and value; and iteration from a BetterCollection is by element and not value
+ * only. BetterCollection itself provides more functionality on top of this and implements most of the {@link Collection} API as well.
  * 
  * @param <E> The type of value in the collection
  */
 public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E> {
 	boolean belongs(Object o);
+
+	@Override
+	abstract boolean isLockSupported();
 
 	/**
 	 * Tests the compatibility of an object with this collection. This method exposes a "best guess" on whether an element could be added to
