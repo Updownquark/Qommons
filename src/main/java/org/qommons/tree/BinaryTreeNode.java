@@ -1,9 +1,13 @@
 package org.qommons.tree;
 
+import org.qommons.collect.ElementHandle;
 import org.qommons.collect.ElementId;
 
-public interface BinaryTreeNode<E> extends ElementId {
-	E getValue();
+public interface BinaryTreeNode<E> extends ElementId, ElementHandle<E> {
+	@Override
+	default ElementId getElementId() {
+		return this;
+	}
 
 	BinaryTreeNode<E> getParent();
 
@@ -131,28 +135,24 @@ public interface BinaryTreeNode<E> extends ElementId {
 	 *
 	 * @param finder The compare operation to use to find the node. Must obey the ordering used to construct this structure.
 	 * @param lesser Whether to return the closest node lesser or greater than (to the left or right, respectively) the given search if an
-	 *        exact match ({@link Comparable#compareTo(Object) finder.compareTo(node)}==0) is not found or is excluded (via
-	 *        <code>withExact=valse</code>)
-	 * @param withExact Whether to accept an equivalent node, if present (as opposed to strictly left or right of)
+	 *        exact match ({@link Comparable#compareTo(Object) finder.compareTo(node)}==0) is not found
+	 * @param strictly If false, this method will return a node that does not obey the <code>lesser</code> parameter if there is no such
+	 *        node that obeys it. In other words, if <code>strictly</code> is false, this method will always return a node.
 	 * @return The found node
 	 */
-	default BinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean withExact) {
+	default BinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly) {
 		BinaryTreeNode<E> node = this;
 		BinaryTreeNode<E> found = null;
+		boolean foundMatchesLesser = false;
 		while (true) {
 			int compare = finder.compareTo(node);
-			if (compare == 0) {
-				if (withExact)
-					return node;
-				BinaryTreeNode<E> child = getChild(lesser);
-				if (child == null)
-					return found;
-				while (child.getChild(!lesser) != null)
-					child = child.getChild(!lesser);
-				return child;
-			}
-			if (compare > 0 == lesser)
+			if (compare == 0)
+				return node;
+			boolean matchesLesser = compare > 0 == lesser;
+			if (found == null || (!foundMatchesLesser && matchesLesser)) {
 				found = node;
+				foundMatchesLesser = matchesLesser;
+			}
 			BinaryTreeNode<E> child = getChild(compare < 0);
 			if (child == null)
 				return found;
@@ -195,5 +195,56 @@ public interface BinaryTreeNode<E> extends ElementId {
 	@Override
 	default int compareTo(ElementId o) {
 		return getNodesBefore() - ((BinaryTreeNode<E>) o).getNodesBefore();
+	}
+
+	@Override
+	default BinaryTreeNode<E> reverse() {
+		return new ReversedBinaryTreeNode<>(this);
+	}
+
+	class ReversedBinaryTreeNode<E> extends ReversedElementHandle<E> implements BinaryTreeNode<E> {
+		public ReversedBinaryTreeNode(BinaryTreeNode<E> wrap) {
+			super(wrap);
+		}
+
+		@Override
+		protected BinaryTreeNode<E> getWrapped() {
+			return (BinaryTreeNode<E>) super.getWrapped();
+		}
+
+		@Override
+		public BinaryTreeNode<E> getParent() {
+			return getWrapped().getParent().reverse();
+		}
+
+		@Override
+		public BinaryTreeNode<E> getLeft() {
+			return getWrapped().getRight().reverse();
+		}
+
+		@Override
+		public BinaryTreeNode<E> getRight() {
+			return getWrapped().getLeft().reverse();
+		}
+
+		@Override
+		public int size() {
+			return getWrapped().size();
+		}
+
+		@Override
+		public int getNodesBefore() {
+			return getWrapped().getNodesAfter();
+		}
+
+		@Override
+		public int getNodesAfter() {
+			return getWrapped().getNodesBefore();
+		}
+
+		@Override
+		public BinaryTreeNode<E> reverse() {
+			return getWrapped();
+		}
 	}
 }

@@ -8,9 +8,10 @@ import java.util.NavigableSet;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import org.qommons.Transaction;
 import org.qommons.collect.MutableElementHandle.StdMsg;
 
-public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
+public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, NavigableSet<E> {
 	@Override
 	default ElementSpliterator<E> spliterator() {
 		return BetterList.super.spliterator();
@@ -35,6 +36,44 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 	default Object[] toArray() {
 		return BetterList.super.toArray();
 	}
+
+	@Override
+	default String canAdd(E value) {
+		try (Transaction t = lock(true, null)) {
+			String[] msg = new String[1];
+			MutableElementSpliterator<E> spliter = mutableSpliterator(v -> comparator().compare(value, v), false);
+			if (spliter.tryAdvanceElementM(el -> {
+				int compare = comparator().compare(el.get(), value);
+				if (compare == 0)
+					msg[0] = StdMsg.ELEMENT_EXISTS;
+				else
+					msg[0] = el.canAdd(value, false);
+			})) {
+				return msg[0];
+			} else {
+				return null;
+			}
+		}
+	}
+
+	@Override
+	default ElementId addElement(E e) {
+		try (Transaction t = lock(true, null)) {
+			ElementId[] id = new ElementId[1];
+			if (forMutableElement(v -> comparator().compare(e, v), el -> {
+				int compare = comparator().compare(el.get(), e);
+				if (compare == 0)
+					id[0] = null;
+				else
+					id[0] = ((MutableElementHandle<E>) el).add(e, compare > 0);
+			}, false))
+				return id[0];
+			else
+				return addIfEmpty(e);
+		}
+	}
+
+	ElementId addIfEmpty(E value) throws IllegalStateException;
 
 	@Override
 	default boolean remove(Object c) {
@@ -106,12 +145,39 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		return success[0];
 	}
 
+	/**
+	 * Searches for a value in this sorted set
+	 * 
+	 * @param search The search to use. Must follow this sorted set's ordering.
+	 * @param onValue The action to perform on the closest found value in the sorted set
+	 * @param up Whether to prefer a greater or lesser value. This parameter will be ignored if such a value is not found. In other words,
+	 *        this method will always provide a value unless this set is empty.
+	 * @return True unless this set was empty
+	 */
 	default boolean forValue(Comparable<? super E> search, Consumer<? super E> onValue, boolean up) {
 		return forElement(search, el -> onValue.accept(el.get()), up);
 	}
 
+	/**
+	 * Searches for an element in this sorted set
+	 * 
+	 * @param search The search to use. Must follow this sorted set's ordering.
+	 * @param onElement The action to perform on the closest found element in the sorted set
+	 * @param up Whether to prefer a greater or lesser element. This parameter will be ignored if such an element is not found. In other
+	 *        words, this method will always provide an element unless this set is empty.
+	 * @return True unless this set was empty
+	 */
 	boolean forElement(Comparable<? super E> search, Consumer<? super ElementHandle<? extends E>> onElement, boolean up);
 
+	/**
+	 * Like {@link #forElement(Comparable, Consumer, boolean)}, but provides a mutable element
+	 * 
+	 * @param search The search to use. Must follow this sorted set's ordering.
+	 * @param onElement The action to perform on the closest found element in the sorted set
+	 * @param up Whether to prefer a greater or lesser element. This parameter will be ignored if such an element is not found. In other
+	 *        words, this method will always provide an element unless this set is empty.
+	 * @return True unless this set was empty
+	 */
 	boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean up);
 
 	@Override
@@ -179,10 +245,27 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		return reverse().iterator();
 	}
 
+	/**
+	 * Gets a spliterator for this set, positioned according to a search result. If an exact match is found, that will be the spliterator's
+	 * next element (the one provided via {@link ElementSpliterator#tryAdvanceElement(Consumer)}). Otherwise, if a preferred match (one for
+	 * which ({@link Comparable#compareTo(Object) search.compareTo(value)}>0)<code>==higher</code>), then that will be the next element.
+	 * Otherwise the spliterator will be positioned at the beginning or the end of this set, depending on the search.
+	 * 
+	 * @param searchForStart The search to use to position the search
+	 * @param higher Whether to prefer an element that is higher than the search or lower
+	 * @return The spliterator
+	 */
 	default ElementSpliterator<E> spliterator(Comparable<? super E> searchForStart, boolean higher) {
 		return mutableSpliterator(searchForStart, higher).immutable();
 	}
 
+	/**
+	 * Like {@link #spliterator(Comparable, boolean)}, but returns a mutable spliterator.
+	 * 
+	 * @param searchForStart The search to use to position the search
+	 * @param higher Whether to prefer an element that is higher than the search or lower
+	 * @return The spliterator
+	 */
 	MutableElementSpliterator<E> mutableSpliterator(Comparable<? super E> searchForStart, boolean higher);
 
 	/**
@@ -270,6 +353,16 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 
 		public BetterSortedSet<E> getWrapped() {
 			return theWrapped;
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return theWrapped.isLockSupported();
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return theWrapped.lock(write, cause);
 		}
 
 		public Comparable<? super E> getFrom() {
@@ -415,8 +508,19 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		}
 
 		@Override
+		public ElementId addIfEmpty(E value) throws IllegalStateException {
+			if (!belongs(value))
+				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
+			return theWrapped.addElement(value);
+		}
+
+		@Override
 		public E set(int index, E element) {
-			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			if (!belongs(element))
+				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
+			try (Transaction t = lock(true, null)) {
+				return theWrapped.set(checkIndex(index, false), element);
+			}
 		}
 
 		@Override
@@ -428,24 +532,16 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 
 		@Override
 		public void add(int index, E element) {
-			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			if (!belongs(element))
+				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
+			try (Transaction t = lock(true, null)) {
+				theWrapped.add(checkIndex(index, true), element);
+			}
 		}
 
 		@Override
 		public E remove(int index) {
 			return theWrapped.remove(checkIndex(index, false));
-		}
-
-		@Override
-		public boolean forValue(Comparable<? super E> search, Consumer<? super E> onValue, boolean up) {
-			boolean[] success = new boolean[1];
-			theWrapped.forValue(search, v -> {
-				if (isInRange(v) == 0) {
-					onValue.accept(v);
-					success[0] = true;
-				}
-			}, up);
-			return success[0];
 		}
 
 		@Override
@@ -774,10 +870,10 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 			}
 
 			@Override
-			public void add(T value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+			public ElementId add(T value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
 				if (isInRange(value) != 0)
 					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-				theWrappedEl.add(value, before);
+				return theWrappedEl.add(value, before);
 			}
 
 			@Override
@@ -867,6 +963,11 @@ public interface BetterSortedSet<E> extends BetterList<E>, NavigableSet<E> {
 		public boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement,
 			boolean up) {
 			return getWrapped().forMutableElement(reverse(search), el -> onElement.accept(el.reverse()), !up);
+		}
+
+		@Override
+		public ElementId addIfEmpty(E value) throws IllegalStateException {
+			return ElementId.reverse(getWrapped().addIfEmpty(value));
 		}
 	}
 }

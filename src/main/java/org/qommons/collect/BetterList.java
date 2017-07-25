@@ -24,7 +24,7 @@ import org.qommons.collect.MutableElementHandle.StdMsg;
  * 
  * @param <E> The type of value in the list
  */
-public interface BetterList<E> extends BetterCollection<E>, RRList<E> {
+public interface BetterList<E> extends BetterCollection<E>, RRList<E>, TransactableList<E> {
 	default ElementSpliterator<E> spliterator(int index) {
 		return mutableSpliterator(index).immutable();
 	}
@@ -148,10 +148,14 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E> {
 
 	@Override
 	default boolean addAll(int index, Collection<? extends E> c) {
-		if (c.isEmpty())
-			return false;
-		forMutableElementAt(index, el -> {
-			try (Transaction t = Transactable.lock(c, false, null)) {
+		try (Transaction t = lock(true, null); Transaction t2 = Transactable.lock(c, false, null)) {
+			if (c.isEmpty())
+				return false;
+			if (index == size()) {
+				addAll(c);
+				return true;
+			}
+			forMutableElementAt(index, el -> {
 				Spliterator<? extends E> spliter;
 				if (c instanceof BetterCollection)
 					spliter = ((BetterCollection<? extends E>) c).spliterator(false).reverse();
@@ -161,14 +165,28 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E> {
 					spliter = list.spliterator();
 				}
 				spliter.forEachRemaining(v -> ((MutableElementHandle<E>) el).add(v, true));
-			}
-		});
-		return true;
+			});
+			return true;
+		}
+	}
+
+	@Override
+	default boolean add(E value) {
+		return BetterCollection.super.add(value);
 	}
 
 	@Override
 	default void add(int index, E element) {
-		forMutableElementAt(index, el -> ((MutableElementHandle<E>) el).add(element, true));
+		addElement(index, element);
+	}
+
+	default ElementId addElement(int index, E element) {
+		try (Transaction t = lock(true, null)) {
+			if (index == size())
+				return addElement(element);
+			else
+				return ofMutableElementAt(index, el -> ((MutableElementHandle<E>) el).add(element, true));
+		}
 	}
 
 	@Override
@@ -197,9 +215,11 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E> {
 
 	@Override
 	default void removeRange(int fromIndex, int toIndex) {
-		MutableElementSpliterator<E> spliter = mutableSpliterator(fromIndex);
-		for (int i = fromIndex; i < toIndex; i++)
-			spliter.tryAdvanceElementM(el -> el.remove());
+		try (Transaction t = lock(true, null)) {
+			MutableElementSpliterator<E> spliter = mutableSpliterator(fromIndex);
+			for (int i = fromIndex; i < toIndex; i++)
+				spliter.tryAdvanceElementM(el -> el.remove());
+		}
 	}
 
 	@Override
@@ -641,6 +661,16 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E> {
 		}
 
 		@Override
+		public boolean isLockSupported() {
+			return theWrapped.isLockSupported();
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return theWrapped.lock(write, cause);
+		}
+
+		@Override
 		public int getElementsBefore(ElementId id) {
 			int wrappedEls = theWrapped.getElementsBefore(id);
 			if (wrappedEls < theStart || wrappedEls >= theEnd)
@@ -801,9 +831,10 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E> {
 				}
 
 				@Override
-				public void add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-					el.add(value, before);
+				public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+					ElementId id = el.add(value, before);
 					theEnd++;
+					return id;
 				}
 			};
 		}
@@ -928,15 +959,23 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E> {
 
 		@Override
 		public boolean add(E e) {
-			theWrapped.add(theEnd, e);
-			theEnd++;
-			return true;
+			return BetterList.super.add(e);
 		}
 
 		@Override
-		public void add(int index, E element) {
-			theWrapped.add(theStart + checkIndex(index, true), element);
-			theEnd++;
+		public ElementId addElement(E e) {
+			ElementId id = theWrapped.addElement(theEnd, e);
+			if (id != null)
+				theEnd++;
+			return id;
+		}
+
+		@Override
+		public ElementId addElement(int index, E element) {
+			ElementId id = theWrapped.addElement(theStart + checkIndex(index, true), element);
+			if (id != null)
+				theEnd++;
+			return id;
 		}
 
 		@Override

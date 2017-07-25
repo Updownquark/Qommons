@@ -5,6 +5,7 @@ import java.util.ConcurrentModificationException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.CollectionLockingStrategy;
@@ -13,9 +14,8 @@ import org.qommons.collect.ElementId;
 import org.qommons.collect.MutableElementHandle;
 import org.qommons.collect.MutableElementHandle.StdMsg;
 import org.qommons.collect.MutableElementSpliterator;
-import org.qommons.collect.TransactableList;
 
-public abstract class RedBlackNodeList<E> implements BetterList<E>, TransactableList<E> {
+public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	private final CollectionLockingStrategy theLocker;
 
 	private RedBlackNode<E> theRoot;
@@ -24,11 +24,17 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 		theLocker = locker;
 	}
 
-	protected BinaryTreeNode<E> getRoot() {
+	public BinaryTreeNode<E> getRoot() {
 		return wrap(theRoot);
 	}
 
-	protected BinaryTreeNode<E> getTerminalNode(boolean start) {
+	public BinaryTreeNode<E> getNode(int index) {
+		if (theRoot == null)
+			throw new IndexOutOfBoundsException(index + " of 0");
+		return wrap(theRoot.get(index));
+	}
+
+	public BinaryTreeNode<E> getTerminalNode(boolean start) {
 		return theRoot == null ? null : wrap(theRoot.getTerminal(start));
 	}
 
@@ -84,14 +90,14 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 	@Override
 	public <T> T ofElementAt(ElementId elementId, Function<? super ElementHandle<? extends E>, T> onElement) {
 		try (Transaction t = lock(false, null)) {
-			return onElement.apply(handleFor(elementId));
+			return onElement.apply(nodeFor(elementId));
 		}
 	}
 
 	@Override
 	public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableElementHandle<? extends E>, T> onElement) {
 		try (Transaction t = lock(true, null)) {
-			return onElement.apply(mutableHandleFor(elementId));
+			return onElement.apply(mutableNodeFor(elementId));
 		}
 	}
 
@@ -139,19 +145,39 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 	}
 
 	@Override
-	public boolean add(E e) {
-		if (theRoot == null)
-			theRoot = new RedBlackNode<>(e);
-		else
-			mutableSpliterator(false).tryAdvanceElementM(el -> el.add(e, false));
-		return true;
+	public BinaryTreeNode<E> addElement(E value) {
+		BinaryTreeNode<E>[] node = new BinaryTreeNode[1];
+		try (Transaction t = lock(true, null)) {
+			if (theRoot == null)
+				node[0] = wrap(theRoot = new RedBlackNode<>(value));
+			else
+				mutableSpliterator(false).tryReverseElementM(el -> node[0] = (BinaryTreeNode<E>) el.add(value, false));
+		}
+		return node[0];
+	}
+
+	@Override
+	public BinaryTreeNode<E> addElement(int index, E value) {
+		BinaryTreeNode<E>[] node = new BinaryTreeNode[1];
+		try (Transaction t = lock(true, null)) {
+			if (theRoot == null) {
+				if (index == 0)
+					node[0] = wrap(theRoot = new RedBlackNode<>(value));
+				else
+					throw new IndexOutOfBoundsException(index + " of 0");
+			} else
+				mutableSpliterator(index).tryReverseElementM(el -> node[0] = (BinaryTreeNode<E>) el.add(value, false));
+		}
+		return node[0];
 	}
 
 	@Override
 	public boolean addAll(Collection<? extends E> c) {
-		for (E value : c)
-			add(value);
-		return !c.isEmpty();
+		try (Transaction t = lock(true, null); Transaction t2 = Transactable.lock(c, false, null)) {
+			for (E value : c)
+				add(value);
+			return !c.isEmpty();
+		}
 	}
 
 	@Override
@@ -159,27 +185,15 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 		theRoot = null;
 	}
 
-	protected BinaryTreeNode<E> nodeFor(ElementId elementId) {
+	public BinaryTreeNode<E> nodeFor(ElementId elementId) {
 		return checkNode(elementId);
 	}
 
 	protected MutableBinaryTreeNode<E> mutableNodeFor(ElementId elementId) {
-		return wrapMutable(checkNode(elementId).theNode);
+		return mutableNodeFor(nodeFor(elementId));
 	}
 
 	protected MutableBinaryTreeNode<E> mutableNodeFor(BinaryTreeNode<E> node) {
-		return wrapMutable(checkNode(node).theNode);
-	}
-
-	protected ElementHandle<E> handleFor(ElementId elementId) {
-		return checkNode(elementId);
-	}
-
-	protected MutableElementHandle<E> mutableHandleFor(ElementId elementId) {
-		return wrapMutable(checkNode(elementId).theNode);
-	}
-
-	protected MutableElementHandle<E> mutableHandleFor(BinaryTreeNode<E> node) {
 		return wrapMutable(checkNode(node).theNode);
 	}
 
@@ -210,7 +224,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 		return node == null ? null : new MutableNodeWrapper(node);
 	}
 
-	class NodeWrapper implements BinaryTreeNode<E>, ElementHandle<E> {
+	class NodeWrapper implements BinaryTreeNode<E> {
 		final RedBlackNode<E> theNode;
 
 		NodeWrapper(RedBlackNode<E> node) {
@@ -228,13 +242,6 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 
 		@Override
 		public E get() {
-			if (!check())
-				throw new IllegalStateException("This element has been removed");
-			return theNode.getValue();
-		}
-
-		@Override
-		public E getValue() {
 			if (!check())
 				throw new IllegalStateException("This element has been removed");
 			return theNode.getValue();
@@ -269,40 +276,13 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 		}
 
 		@Override
-		public ReversedNodeWrapper reverse() {
-			return new ReversedNodeWrapper(this);
-		}
-	}
-
-	class ReversedNodeWrapper implements ElementId, ElementHandle<E> {
-		private final NodeWrapper theNode;
-
-		ReversedNodeWrapper(NodeWrapper node) {
-			theNode = node;
-		}
-
-		protected NodeWrapper getNode() {
-			return theNode;
+		public int hashCode() {
+			return theNode.hashCode();
 		}
 
 		@Override
-		public ElementId getElementId() {
-			return this;
-		}
-
-		@Override
-		public E get() {
-			return theNode.get();
-		}
-
-		@Override
-		public int compareTo(ElementId other) {
-			return theNode.compareTo(((ReversedNodeWrapper) other).theNode);
-		}
-
-		@Override
-		public NodeWrapper reverse() {
-			return theNode;
+		public boolean equals(Object obj) {
+			return obj instanceof RedBlackNodeList.NodeWrapper && theNode.equals(((NodeWrapper) obj).theNode);
 		}
 	}
 
@@ -327,15 +307,6 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 		}
 
 		@Override
-		public void setValue(E value) {
-			if (!check())
-				throw new IllegalStateException("This element has been removed");
-			try (Transaction t = lock(true, null)) {
-				theNode.setValue(value);
-			}
-		}
-
-		@Override
 		public String isEnabled() {
 			return null;
 		}
@@ -346,10 +317,12 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 		}
 
 		@Override
-		public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
+		public void set(E value) {
 			if (!check())
 				throw new IllegalStateException("This element has been removed");
-			setValue(value);
+			try (Transaction t = lock(true, null)) {
+				theNode.setValue(value);
+			}
 		}
 
 		@Override
@@ -372,68 +345,14 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 		}
 
 		@Override
-		public void add(E value, boolean onLeft) {
+		public BinaryTreeNode<E> add(E value, boolean onLeft) {
 			if (!check())
 				throw new IllegalStateException("This element has been removed");
 			try (Transaction t = lock(true, null)) {
-				theRoot = theNode.add(new RedBlackNode<>(value), onLeft);
+				RedBlackNode<E> newNode = new RedBlackNode<>(value);
+				theRoot = theNode.add(newNode, onLeft);
+				return wrap(newNode);
 			}
-		}
-
-		@Override
-		public ReversedMutableNodeWrapper reverse() {
-			return new ReversedMutableNodeWrapper(this);
-		}
-	}
-
-	class ReversedMutableNodeWrapper extends ReversedNodeWrapper implements MutableElementHandle<E> {
-		ReversedMutableNodeWrapper(MutableNodeWrapper node) {
-			super(node);
-		}
-
-		@Override
-		protected MutableNodeWrapper getNode() {
-			return (MutableNodeWrapper) super.getNode();
-		}
-
-		@Override
-		public String isEnabled() {
-			return null;
-		}
-
-		@Override
-		public String isAcceptable(E value) {
-			return null;
-		}
-
-		@Override
-		public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
-			getNode().set(value);
-		}
-
-		@Override
-		public String canRemove() {
-			return null;
-		}
-
-		@Override
-		public void remove() throws UnsupportedOperationException {
-			getNode().remove();
-		}
-
-		@Override
-		public String canAdd(E value, boolean before) {
-			return null;
-		}
-
-		@Override
-		public void add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-			getNode().add(value, before);
-		}
-
-		@Override
-		public MutableNodeWrapper reverse() {
-			return getNode();
 		}
 	}
 
@@ -545,7 +464,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 			try (Transaction t = lock(true, null)) {
 				if (!tryElement(false))
 					return false;
-				action.accept(new MutableSpliteratorHandle(current));
+				action.accept(new MutableSpliteratorNode(current, wrapMutable(current)));
 				return true;
 			}
 		}
@@ -555,7 +474,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 			try (Transaction t = lock(true, null)) {
 				if (!tryElement(true))
 					return false;
-				action.accept(new MutableSpliteratorHandle(current));
+				action.accept(new MutableSpliteratorNode(current, wrapMutable(current)));
 				return true;
 			}
 		}
@@ -580,7 +499,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 		public void forEachElementM(Consumer<? super MutableElementHandle<E>> action) {
 			try (Transaction t = lock(true, null)) {
 				while (tryElement(false))
-					action.accept(new MutableSpliteratorHandle(current));
+					action.accept(new MutableSpliteratorNode(current, wrapMutable(current)));
 			}
 		}
 
@@ -588,7 +507,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 		public void forEachElementReverseM(Consumer<? super MutableElementHandle<E>> action) {
 			try (Transaction t = lock(true, null)) {
 				while (tryElement(true))
-					action.accept(new MutableSpliteratorHandle(current));
+					action.accept(new MutableSpliteratorNode(current, wrapMutable(current)));
 			}
 		}
 
@@ -645,26 +564,105 @@ public abstract class RedBlackNodeList<E> implements BetterList<E>, Transactable
 			return node.getChild(left);
 		}
 
-		private class MutableSpliteratorHandle extends MutableNodeWrapper {
-			MutableSpliteratorHandle(RedBlackNode<E> node) {
-				super(node);
+		private class MutableSpliteratorNode implements MutableBinaryTreeNode<E> {
+			private final RedBlackNode<E> theNode;
+			private final MutableBinaryTreeNode<E> theWrapped;
+
+			MutableSpliteratorNode(RedBlackNode<E> node, MutableBinaryTreeNode<E> wrap) {
+				theNode = node;
+				theWrapped = wrap;
+			}
+
+			@Override
+			public E get() {
+				return theWrapped.get();
+			}
+
+			@Override
+			public int size() {
+				return theWrapped.size();
+			}
+
+			@Override
+			public String isEnabled() {
+				return theWrapped.isEnabled();
+			}
+
+			@Override
+			public String isAcceptable(E value) {
+				return theWrapped.isAcceptable(value);
+			}
+
+			@Override
+			public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
+				theWrapped.set(value);
+			}
+
+			@Override
+			public String canRemove() {
+				return theWrapped.canRemove();
 			}
 
 			@Override
 			public void remove() {
 				try (Transaction t = lock(true, null)) {
+					RedBlackNode<E> newCurrent;
+					boolean newWasNext;
 					if (theNode == current) {
-						RedBlackNode<E> newCurrent = current.getClosest(true);
+						newCurrent = current.getClosest(true);
 						if (newCurrent != null)
-							wasNext = false;
+							newWasNext = false;
 						else {
 							newCurrent = current.getClosest(false);
-							wasNext = true;
+							newWasNext = true;
 						}
 						current = newCurrent;
+					} else {
+						newCurrent = current;
+						newWasNext = wasNext;
 					}
-					super.remove();
+					theWrapped.remove();
+					current = newCurrent;
+					wasNext = newWasNext;
 				}
+			}
+
+			@Override
+			public String canAdd(E value, boolean before) {
+				return theWrapped.canAdd(value, before);
+			}
+
+			@Override
+			public BinaryTreeNode<E> add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+				return theWrapped.add(value, before);
+			}
+
+			@Override
+			public MutableBinaryTreeNode<E> getParent() {
+				RedBlackNode<E> parent = theNode.getParent();
+				return parent == null ? null : new MutableSpliteratorNode(parent, theWrapped.getParent());
+			}
+
+			@Override
+			public MutableBinaryTreeNode<E> getLeft() {
+				RedBlackNode<E> left = theNode.getLeft();
+				return left == null ? null : new MutableSpliteratorNode(left, theWrapped.getLeft());
+			}
+
+			@Override
+			public MutableBinaryTreeNode<E> getRight() {
+				RedBlackNode<E> right = theNode.getRight();
+				return right == null ? null : new MutableSpliteratorNode(right, theWrapped.getRight());
+			}
+
+			@Override
+			public int hashCode() {
+				return theNode.hashCode();
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return theNode.equals(checkNode(obj).theNode);
 			}
 		}
 	}

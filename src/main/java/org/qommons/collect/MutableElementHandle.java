@@ -39,7 +39,8 @@ public interface MutableElementHandle<E> extends ElementHandle<E> {
 	void remove() throws UnsupportedOperationException;
 
 	String canAdd(E value, boolean before);
-	void add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException;
+
+	ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException;
 
 	/** @return An immutable observable element backed by this mutable element's data */
 	default ElementHandle<E> immutable() {
@@ -113,8 +114,8 @@ public interface MutableElementHandle<E> extends ElementHandle<E> {
 		}
 
 		@Override
-		public void add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-			getWrapped().add(value, !before);
+		public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+			return getWrapped().add(value, !before).reverse();
 		}
 
 		@Override

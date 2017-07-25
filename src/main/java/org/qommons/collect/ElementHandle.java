@@ -34,5 +34,15 @@ public interface ElementHandle<E> {
 		public ElementHandle<E> reverse() {
 			return theWrapped;
 		}
+
+		@Override
+		public int hashCode() {
+			return theWrapped.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			return o instanceof ReversedElementHandle && theWrapped.equals(((ReversedElementHandle<?>) o).theWrapped);
+		}
 	}
 }

@@ -20,21 +20,6 @@ public class TreeList<E> extends RedBlackNodeList<E> {
 	// The structure doesn't mean anything except order, so if someone wants to mess with it, they can go right ahead
 
 	@Override
-	public BinaryTreeNode<E> getRoot() {
-		return super.getRoot();
-	}
-
-	@Override
-	public BinaryTreeNode<E> getTerminalNode(boolean start) {
-		return super.getTerminalNode(start);
-	}
-
-	@Override
-	public BinaryTreeNode<E> nodeFor(ElementId elementId) {
-		return super.nodeFor(elementId);
-	}
-
-	@Override
 	public MutableBinaryTreeNode<E> mutableNodeFor(BinaryTreeNode<E> node) {
 		return super.mutableNodeFor(node);
 	}

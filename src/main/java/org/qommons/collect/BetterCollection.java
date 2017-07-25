@@ -24,7 +24,7 @@ import org.qommons.collect.MutableElementHandle.StdMsg;
  * 
  * @param <E> The type of value in the collection
  */
-public interface BetterCollection<E> extends Deque<E> {
+public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E> {
 	boolean belongs(Object o);
 
 	/**
@@ -37,6 +37,20 @@ public interface BetterCollection<E> extends Deque<E> {
 	 * @return Null if given value could possibly be added to this collection, or a message why it can't
 	 */
 	String canAdd(E value);
+
+	/**
+	 * Similar to {@link #add(Object)}, but returns the element ID for the new element at which the value was added. Similarly to
+	 * {@link #add(Object)}, this method may return null if the collection was not changed as a result of the operation.
+	 * 
+	 * @param value The value to add
+	 * @return The element ID for the new element at which the value was added, or null if the value was not added
+	 */
+	ElementId addElement(E value);
+
+	@Override
+	default boolean add(E value) {
+		return addElement(value) != null;
+	}
 
 	/**
 	 * Tests the removability of an element from this collection. This method exposes a "best guess" on whether an element in the collection
@@ -60,7 +74,7 @@ public interface BetterCollection<E> extends Deque<E> {
 	default boolean contains(Object o) {
 		if (!belongs(o))
 			return false;
-		return forMutableElement((E) o, el -> {
+		return forElement((E) o, el -> {
 		}, true);
 	}
 
@@ -69,7 +83,7 @@ public interface BetterCollection<E> extends Deque<E> {
 	 * @return Whether this collection contains any of the given collection's elements
 	 */
 	default boolean containsAny(Collection<?> c) {
-		try (Transaction ct = Transactable.lock(c, false, null)) {
+		try (Transaction t = lock(false, null); Transaction ct = Transactable.lock(c, false, null)) {
 			if (c.isEmpty())
 				return true;
 			if (c.size() < size()) {
@@ -94,7 +108,7 @@ public interface BetterCollection<E> extends Deque<E> {
 
 	@Override
 	default boolean containsAll(Collection<?> c) {
-		try (Transaction ct = Transactable.lock(c, false, null)) {
+		try (Transaction t = lock(false, null); Transaction ct = Transactable.lock(c, false, null)) {
 			if (c.isEmpty())
 				return true;
 			if (c.size() < size()) {
@@ -114,21 +128,25 @@ public interface BetterCollection<E> extends Deque<E> {
 
 	@Override
 	default Object[] toArray() {
-		Object[] array = new Object[size()];
-		int[] index = new int[1];
-		spliterator().forEachRemaining(v -> array[index[0]++] = v);
-		return array;
+		try (Transaction t = lock(false, null)) {
+			Object[] array = new Object[size()];
+			int[] index = new int[1];
+			spliterator().forEachRemaining(v -> array[index[0]++] = v);
+			return array;
+		}
 	}
 
 	@Override
 	default <T> T[] toArray(T[] a) {
-		int size = size();
-		if (a.length < size)
-			a = (T[]) java.lang.reflect.Array.newInstance(a.getClass().getComponentType(), size);
-		int[] index = new int[1];
-		T[] array = a;
-		spliterator().forEachRemaining(v -> array[index[0]++] = (T) v);
-		return a;
+		try (Transaction t = lock(false, null)) {
+			int size = size();
+			if (a.length < size)
+				a = (T[]) java.lang.reflect.Array.newInstance(a.getClass().getComponentType(), size);
+			int[] index = new int[1];
+			T[] array = a;
+			spliterator().forEachRemaining(v -> array[index[0]++] = (T) v);
+			return a;
+		}
 	}
 
 	@Override
@@ -183,17 +201,19 @@ public interface BetterCollection<E> extends Deque<E> {
 	 * @throws IllegalArgumentException If a mapped value is not acceptable as a replacement
 	 */
 	default boolean replaceAll(Function<? super E, ? extends E> map, boolean soft) {
-		boolean[] replaced = new boolean[1];
-		MutableElementSpliterator<E> iter = mutableSpliterator();
-		iter.forEachElementM(el -> {
-			E value = el.get();
-			E newValue = map.apply(value);
-			if (value != newValue && (!soft || el.isAcceptable(newValue) == null)) {
-				el.set(newValue);
-				replaced[0] = true;
-			}
-		});
-		return replaced[0];
+		try (Transaction t = lock(true, null)) {
+			boolean[] replaced = new boolean[1];
+			MutableElementSpliterator<E> iter = mutableSpliterator();
+			iter.forEachElementM(el -> {
+				E value = el.get();
+				E newValue = map.apply(value);
+				if (value != newValue && (!soft || el.isAcceptable(newValue) == null)) {
+					el.set(newValue);
+					replaced[0] = true;
+				}
+			});
+			return replaced[0];
+		}
 	}
 
 	/**
@@ -280,16 +300,18 @@ public interface BetterCollection<E> extends Deque<E> {
 	 * @return Whether a result was found
 	 */
 	default boolean find(Predicate<? super E> search, Consumer<? super ElementHandle<? extends E>> onElement, boolean first) {
-		ElementSpliterator<E> spliter = first ? spliterator(first) : spliterator(first).reverse();
-		boolean[] found = new boolean[1];
-		while (spliter.tryAdvanceElement(el -> {
-			if (search.test(el.get())) {
-				found[0] = true;
-				onElement.accept(el);
+		try (Transaction t = lock(false, null)) {
+			ElementSpliterator<E> spliter = first ? spliterator(first) : spliterator(first).reverse();
+			boolean[] found = new boolean[1];
+			while (spliter.tryAdvanceElement(el -> {
+				if (search.test(el.get())) {
+					found[0] = true;
+					onElement.accept(el);
+				}
+			})) {
 			}
-		})) {
+			return found[0];
 		}
-		return found[0];
 	}
 
 	/**
@@ -301,16 +323,18 @@ public interface BetterCollection<E> extends Deque<E> {
 	 * @return Whether a result was found
 	 */
 	default boolean findMutable(Predicate<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
-		MutableElementSpliterator<E> spliter = first ? mutableSpliterator(first) : mutableSpliterator(first).reverse();
-		boolean[] found = new boolean[1];
-		while (spliter.tryAdvanceElementM(el -> {
-			if (search.test(el.get())) {
-				found[0] = true;
-				onElement.accept(el);
+		try (Transaction t = lock(true, null)) {
+			MutableElementSpliterator<E> spliter = first ? mutableSpliterator(first) : mutableSpliterator(first).reverse();
+			boolean[] found = new boolean[1];
+			while (spliter.tryAdvanceElementM(el -> {
+				if (search.test(el.get())) {
+					found[0] = true;
+					onElement.accept(el);
+				}
+			})) {
 			}
-		})) {
+			return found[0];
 		}
-		return found[0];
 	}
 
 	/**
@@ -322,16 +346,18 @@ public interface BetterCollection<E> extends Deque<E> {
 	 * @return The number of results found
 	 */
 	default int findAll(Predicate<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean forward) {
-		MutableElementSpliterator<E> spliter = mutableSpliterator();
-		int[] found = new int[1];
-		while (spliter.tryAdvanceElementM(el -> {
-			if (search.test(el.get())) {
-				found[0]++;
-				onElement.accept(el);
+		try (Transaction t = lock(true, null)) {
+			MutableElementSpliterator<E> spliter = mutableSpliterator();
+			int[] found = new int[1];
+			while (spliter.tryAdvanceElementM(el -> {
+				if (search.test(el.get())) {
+					found[0]++;
+					onElement.accept(el);
+				}
+			})) {
 			}
-		})) {
+			return found[0];
 		}
-		return found[0];
 	}
 
 	@Override
@@ -363,7 +389,14 @@ public interface BetterCollection<E> extends Deque<E> {
 
 	@Override
 	default void addFirst(E e) {
-		try {
+		try (Transaction t = lock(true, null)) {
+			if (isEmpty()) {
+				String msg = canAdd(e);
+				if (msg == null)
+					throw new IllegalArgumentException(msg);
+				if (!add(e))
+					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			}
 			if (!mutableSpliterator(true).tryAdvanceElementM(el -> el.add(e, true)))
 				throw new IllegalStateException("Could not add element");
 		} catch (UnsupportedOperationException | IllegalArgumentException ex) {
@@ -373,7 +406,14 @@ public interface BetterCollection<E> extends Deque<E> {
 
 	@Override
 	default void addLast(E e) {
-		try {
+		try (Transaction t = lock(true, null)) {
+			if (isEmpty()) {
+				String msg = canAdd(e);
+				if (msg == null)
+					throw new IllegalArgumentException(msg);
+				if (!add(e))
+					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			}
 			if (!mutableSpliterator(false).tryReverseElementM(el -> el.add(e, false)))
 				throw new IllegalStateException("Could not add element");
 		} catch (UnsupportedOperationException | IllegalArgumentException ex) {
@@ -384,68 +424,92 @@ public interface BetterCollection<E> extends Deque<E> {
 	@Override
 	default boolean offerFirst(E e) {
 		boolean[] success = new boolean[1];
-		if (!mutableSpliterator(true).tryAdvanceElementM(el -> {
-			if (el.canAdd(e, true) == null) {
-				el.add(e, true);
-				success[0] = true;
+		try (Transaction t = lock(true, null)) {
+			if (isEmpty()) {
+				if (canAdd(e) != null)
+					return false;
+				return add(e);
 			}
-		}))
-			success[0] = add(e);
+			if (!mutableSpliterator(true).tryAdvanceElementM(el -> {
+				if (el.canAdd(e, true) == null) {
+					el.add(e, true);
+					success[0] = true;
+				}
+			}))
+				success[0] = add(e);
+		}
 		return success[0];
 	}
 
 	@Override
 	default boolean offerLast(E e) {
 		boolean[] success = new boolean[1];
-		if (!mutableSpliterator(false).tryReverseElementM(el -> {
-			if (el.canAdd(e, false) == null) {
-				el.add(e, false);
-				success[0] = true;
+		try (Transaction t = lock(true, null)) {
+			if (isEmpty()) {
+				if (canAdd(e) != null)
+					return false;
+				return add(e);
 			}
-		}))
-			success[0] = add(e);
+			if (!mutableSpliterator(false).tryReverseElementM(el -> {
+				if (el.canAdd(e, false) == null) {
+					el.add(e, false);
+					success[0] = true;
+				}
+			}))
+				success[0] = add(e);
+		}
 		return success[0];
 	}
 
 	@Override
 	default E removeFirst() {
 		Object[] value = new Object[1];
-		if (!mutableSpliterator(true).tryAdvanceElementM(el -> {
-			value[0] = el.get();
-			el.remove();
-		}))
-			throw new NoSuchElementException("Empty collection");
+		try (Transaction t = lock(true, null)) {
+			if (!mutableSpliterator(true).tryAdvanceElementM(el -> {
+				value[0] = el.get();
+				el.remove();
+			}))
+				throw new NoSuchElementException("Empty collection");
+		}
 		return (E) value[0];
 	}
 
 	@Override
 	default E removeLast() {
 		Object[] value = new Object[1];
-		if (!mutableSpliterator(true).tryAdvanceElementM(el -> {
-			value[0] = el.get();
-			el.remove();
-		}))
-			throw new NoSuchElementException("Empty collection");
+		try (Transaction t = lock(true, null)) {
+			if (!mutableSpliterator(true).tryAdvanceElementM(el -> {
+				value[0] = el.get();
+				el.remove();
+			}))
+				throw new NoSuchElementException("Empty collection");
+		}
 		return (E) value[0];
 	}
 
 	@Override
 	default E pollFirst() {
 		Object[] value = new Object[1];
-		mutableSpliterator(true).tryAdvanceElementM(el -> {
-			value[0] = el.get();
-			el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an exception
-		});
+		try (Transaction t = lock(true, null)) {
+			mutableSpliterator(true).tryAdvanceElementM(el -> {
+				value[0] = el.get();
+				el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an
+								// exception
+			});
+		}
 		return (E) value[0];
 	}
 
 	@Override
 	default E pollLast() {
 		Object[] value = new Object[1];
-		mutableSpliterator(false).tryReverseElementM(el -> {
-			value[0] = el.get();
-			el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an exception
-		});
+		try (Transaction t = lock(true, null)) {
+			mutableSpliterator(false).tryReverseElementM(el -> {
+				value[0] = el.get();
+				el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an
+								// exception
+			});
+		}
 		return (E) value[0];
 	}
 
@@ -528,6 +592,50 @@ public interface BetterCollection<E> extends Deque<E> {
 		return reverse().iterator();
 	}
 
+	public static int hashCode(Collection<?> c) {
+		try (Transaction t = Transactable.lock(c, false, null)) {
+			int hash = 0;
+			for (Object v : c)
+				hash += v == null ? 0 : v.hashCode();
+			return hash;
+		}
+	}
+
+	public static boolean equals(Collection<?> c, Object o) {
+		try (Transaction t = Transactable.lock(c, false, null); Transaction t2 = Transactable.lock(o, false, null)) {
+			if (!(o instanceof Collection))
+				return false;
+			Collection<?> c2 = (Collection<?>) o;
+			Iterator<?> iter = c.iterator();
+			Iterator<?> cIter = c2.iterator();
+			while (iter.hasNext()) {
+				if (!cIter.hasNext())
+					return false;
+				if (!Objects.equals(iter.next(), cIter.next()))
+					return false;
+			}
+			if (cIter.hasNext())
+				return false;
+			return true;
+		}
+	}
+
+	public static String toString(Collection<?> c) {
+		try (Transaction t = Transactable.lock(c, false, null)) {
+			StringBuilder str = new StringBuilder();
+			str.append('[');
+			boolean first = true;
+			for (Object v : c) {
+				if (!first)
+					str.append(", ");
+				first = false;
+				str.append(v);
+			}
+			str.append(']');
+			return str.toString();
+		}
+	}
+
 	public static <E> BetterCollection<E> empty() {
 		return new EmptyCollection<>();
 	}
@@ -546,6 +654,16 @@ public interface BetterCollection<E> extends Deque<E> {
 
 		protected BetterCollection<E> getWrapped() {
 			return theWrapped;
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return theWrapped.isLockSupported();
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return theWrapped.lock(write, cause);
 		}
 
 		@Override
@@ -618,8 +736,8 @@ public interface BetterCollection<E> extends Deque<E> {
 		}
 
 		@Override
-		public boolean add(E e) {
-			return getWrapped().add(e);
+		public ElementId addElement(E e) {
+			return getWrapped().addElement(e).reverse();
 		}
 
 		@Override
@@ -634,47 +752,31 @@ public interface BetterCollection<E> extends Deque<E> {
 
 		@Override
 		public int hashCode() {
-			int hash = 0;
-			for (E v : this)
-				hash += v == null ? 0 : v.hashCode();
-			return hash;
+			return BetterCollection.hashCode(this);
 		}
 
 		@Override
 		public boolean equals(Object o) {
-			if (!(o instanceof Collection))
-				return false;
-			Collection<?> c = (Collection<?>) o;
-			Iterator<E> iter = iterator();
-			Iterator<?> cIter = c.iterator();
-			while (iter.hasNext()) {
-				if (!cIter.hasNext())
-					return false;
-				if (!Objects.equals(iter.next(), cIter.next()))
-					return false;
-			}
-			if (cIter.hasNext())
-				return false;
-			return true;
+			return BetterCollection.equals(this, o);
 		}
 
 		@Override
 		public String toString() {
-			StringBuilder str = new StringBuilder();
-			str.append('[');
-			boolean first = true;
-			for (E v : this) {
-				if (!first)
-					str.append(", ");
-				first = false;
-				str.append(v);
-			}
-			str.append(']');
-			return str.toString();
+			return BetterCollection.toString(this);
 		}
 	}
 
 	class EmptyCollection<E> implements BetterCollection<E> {
+		@Override
+		public boolean isLockSupported() {
+			return true;
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return Transaction.NONE;
+		}
+
 		@Override
 		public boolean belongs(Object o) {
 			return false;
@@ -706,7 +808,7 @@ public interface BetterCollection<E> extends Deque<E> {
 		}
 
 		@Override
-		public boolean add(E e) {
+		public ElementId addElement(E e) {
 			throw new UnsupportedOperationException();
 		}
 
@@ -741,6 +843,21 @@ public interface BetterCollection<E> extends Deque<E> {
 		@Override
 		public MutableElementSpliterator<E> mutableSpliterator(boolean fromStart) {
 			return MutableElementSpliterator.empty();
+		}
+
+		@Override
+		public int hashCode() {
+			return 0;
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			return o instanceof Collection && ((Collection<?>) o).isEmpty();
+		}
+
+		@Override
+		public String toString() {
+			return "[]";
 		}
 	}
 }

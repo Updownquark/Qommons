@@ -5,6 +5,7 @@ import java.util.function.Consumer;
 
 import org.qommons.Transaction;
 import org.qommons.tree.BinaryTreeNode;
+import org.qommons.tree.MutableBinaryTreeNode;
 import org.qommons.tree.RedBlackNodeList;
 
 public class TreeSet<E> extends RedBlackNodeList<E> implements BetterSortedSet<E> {
@@ -42,7 +43,7 @@ public class TreeSet<E> extends RedBlackNodeList<E> implements BetterSortedSet<E
 	@Override
 	public int indexFor(Comparable<? super E> search) {
 		BinaryTreeNode<E> root = getRoot();
-		return root == null ? -1 : root.indexFor(node -> search.compareTo(node.getValue()));
+		return root == null ? -1 : root.indexFor(node -> search.compareTo(node.get()));
 	}
 
 	@Override
@@ -58,10 +59,10 @@ public class TreeSet<E> extends RedBlackNodeList<E> implements BetterSortedSet<E
 		try (Transaction t = lock(false, null)) {
 			if (isEmpty())
 				return false;
-			BinaryTreeNode<E> node = getRoot().findClosest(n -> search.compareTo(n.getValue()), !up, true);
+			BinaryTreeNode<E> node = getRoot().findClosest(n -> search.compareTo(n.get()), !up, false);
 			if (node == null)
 				return false;
-			onElement.accept(handleFor(node));
+			onElement.accept(node);
 			return true;
 		}
 	}
@@ -72,10 +73,10 @@ public class TreeSet<E> extends RedBlackNodeList<E> implements BetterSortedSet<E
 		try (Transaction t = lock(true, null)) {
 			if (isEmpty())
 				return false;
-			BinaryTreeNode<E> node = getRoot().findClosest(n -> search.compareTo(n.getValue()), !up, true);
+			BinaryTreeNode<E> node = getRoot().findClosest(n -> search.compareTo(n.get()), !up, false);
 			if (node == null)
 				return false;
-			onElement.accept(mutableHandleFor(node));
+			onElement.accept(mutableNodeFor(node));
 			return true;
 		}
 	}
@@ -83,7 +84,11 @@ public class TreeSet<E> extends RedBlackNodeList<E> implements BetterSortedSet<E
 	@Override
 	public MutableElementSpliterator<E> mutableSpliterator(Comparable<? super E> search, boolean higher) {
 		try (Transaction t = lock(false, null)) {
-			BinaryTreeNode<E> node = getRoot() == null ? null : getRoot().findClosest(n -> search.compareTo(n.getValue()), higher, true);
+			if (getRoot() == null)
+				return mutableSpliterator(true);
+			BinaryTreeNode<E> node = getRoot() == null ? null : getRoot().findClosest(n -> search.compareTo(n.get()), higher, false);
+			if (higher && search.compareTo(node.get()) < 0)
+				higher = false;
 			return mutableSpliterator(node, higher);
 		}
 	}
@@ -94,19 +99,33 @@ public class TreeSet<E> extends RedBlackNodeList<E> implements BetterSortedSet<E
 	}
 
 	@Override
-	protected MutableElementHandle<E> mutableHandleFor(ElementId elementId) {
-		return new SortedMutableElementHandle<>(super.mutableHandleFor(elementId));
+	protected MutableBinaryTreeNode<E> mutableNodeFor(BinaryTreeNode<E> node) {
+		return new SortedMutableTreeNode(super.mutableNodeFor(node));
 	}
 
 	@Override
-	protected MutableElementHandle<E> mutableHandleFor(BinaryTreeNode<E> node) {
-		return new SortedMutableElementHandle<>(super.mutableHandleFor(node));
+	public BinaryTreeNode<E> addIfEmpty(E value) throws IllegalStateException {
+		try (Transaction t = lock(true, null)) {
+			if (getRoot() != null)
+				throw new IllegalStateException("Tree is not empty");
+			return super.addElement(value);
+		}
 	}
 
-	private class SortedMutableElementHandle<E> implements MutableElementHandle<E> {
-		private final MutableElementHandle<E> theWrapped;
+	@Override
+	public String canAdd(E value) {
+		return BetterSortedSet.super.canAdd(value);
+	}
 
-		SortedMutableElementHandle(MutableElementHandle<E> wrapped) {
+	@Override
+	public boolean add(E e) {
+		return BetterSortedSet.super.add(e);
+	}
+
+	private class SortedMutableTreeNode implements MutableBinaryTreeNode<E> {
+		private final MutableBinaryTreeNode<E> theWrapped;
+
+		SortedMutableTreeNode(MutableBinaryTreeNode<E> wrapped) {
 			theWrapped = wrapped;
 		}
 
@@ -121,46 +140,95 @@ public class TreeSet<E> extends RedBlackNodeList<E> implements BetterSortedSet<E
 		}
 
 		@Override
+		public int size() {
+			return theWrapped.size();
+		}
+
+		@Override
+		public MutableBinaryTreeNode<E> getParent() {
+			return new SortedMutableTreeNode(theWrapped.getParent());
+		}
+
+		@Override
+		public MutableBinaryTreeNode<E> getLeft() {
+			return new SortedMutableTreeNode(theWrapped.getLeft());
+		}
+
+		@Override
+		public MutableBinaryTreeNode<E> getRight() {
+			return new SortedMutableTreeNode(theWrapped.getRight());
+		}
+
+		@Override
 		public String isEnabled() {
 			return null;
 		}
 
 		@Override
 		public String isAcceptable(E value) {
-			BinaryTreeNode<E> node=nodeFor(theWrapped.getElementId());
-			BinaryTreeNode<E> left=node.getC
-			// TODO Auto-generated method stub
+			if (!belongs(value))
+				return StdMsg.ILLEGAL_ELEMENT;
+			BinaryTreeNode<E> left = getLeft();
+			BinaryTreeNode<E> right = getRight();
+			if (left != null && comparator().compare(left.get(), value) >= 0)
+				return StdMsg.UNSUPPORTED_OPERATION;
+			if (right != null && comparator().compare(value, right.get()) >= 0)
+				return StdMsg.UNSUPPORTED_OPERATION;
 			return null;
 		}
 
 		@Override
 		public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
-			// TODO Auto-generated method stub
-
+			String msg = isAcceptable(value);
+			if (msg != null)
+				throw new IllegalArgumentException(msg);
+			theWrapped.set(value);
 		}
 
 		@Override
 		public String canRemove() {
-			// TODO Auto-generated method stub
-			return null;
+			return theWrapped.canRemove();
 		}
 
 		@Override
 		public void remove() throws UnsupportedOperationException {
-			// TODO Auto-generated method stub
-
+			theWrapped.remove();
 		}
 
 		@Override
 		public String canAdd(E value, boolean before) {
-			// TODO Auto-generated method stub
+			int compare = comparator().compare(get(), value);
+			if (compare == 0)
+				return StdMsg.ELEMENT_EXISTS;
+			if (before != (compare < 0))
+				return StdMsg.UNSUPPORTED_OPERATION;
+			BinaryTreeNode<E> side = getClosest(before);
+			if (side != null) {
+				compare = comparator().compare(side.get(), value);
+				if (compare == 0)
+					return StdMsg.ELEMENT_EXISTS;
+				if (before != (compare > 0))
+					return StdMsg.UNSUPPORTED_OPERATION;
+			}
 			return null;
 		}
 
 		@Override
-		public void add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-			// TODO Auto-generated method stub
+		public BinaryTreeNode<E> add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+			String msg = canAdd(value, before);
+			if (msg != null)
+				throw new IllegalArgumentException(msg);
+			return theWrapped.add(value, before);
+		}
 
+		@Override
+		public int hashCode() {
+			return theWrapped.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof TreeSet.SortedMutableTreeNode && theWrapped.equals(((SortedMutableTreeNode) obj).theWrapped);
 		}
 	}
 }

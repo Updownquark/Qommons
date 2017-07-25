@@ -289,28 +289,24 @@ public class RedBlackNode<E> {
 	 *
 	 * @param finder The compare operation to use to find the node. Must obey the ordering used to construct this structure.
 	 * @param lesser Whether to return the closest node lesser or greater than (to the left or right, respectively) the given search if an
-	 *        exact match ({@link Comparable#compareTo(Object) finder.compareTo(node)}==0) is not found or is excluded (via
-	 *        <code>withExact=false</code>)
-	 * @param withExact Whether to accept an equivalent node, if present (as opposed to strictly left or right of)
+	 *        exact match ({@link Comparable#compareTo(Object) finder.compareTo(node)}==0) is not found
+	 * @param strictly If false, this method will return a node that does not obey the <code>lesser</code> parameter if there is no such
+	 *        node that obeys it. In other words, if <code>strictly</code> is false, this method will always return a node.
 	 * @return The found node
 	 */
-	public RedBlackNode<E> findClosest(Comparable<RedBlackNode<E>> finder, boolean lesser, boolean withExact) {
+	public RedBlackNode<E> findClosest(Comparable<RedBlackNode<E>> finder, boolean lesser, boolean strictly) {
 		RedBlackNode<E> node = this;
 		RedBlackNode<E> found = null;
+		boolean foundMatchesLesser = false;
 		while (true) {
 			int compare = finder.compareTo(node);
-			if (compare == 0) {
-				if (withExact)
-					return node;
-				RedBlackNode<E> child = getChild(lesser);
-				if (child == null)
-					return found;
-				while (child.getChild(!lesser) != null)
-					child = child.getChild(!lesser);
-				return child;
-			}
-			if (compare > 0 == lesser)
+			if (compare == 0)
+				return node;
+			boolean matchesLesser = compare > 0 == lesser;
+			if (found == null || (!foundMatchesLesser && matchesLesser)) {
 				found = node;
+				foundMatchesLesser = matchesLesser;
+			}
 			RedBlackNode<E> child = getChild(compare < 0);
 			if (child == null)
 				return found;

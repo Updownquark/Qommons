@@ -1,6 +1,6 @@
 package org.qommons.collect;
 
-import org.qommons.tree.CountedRedBlackNode.DefaultNode;
+import org.qommons.tree.BinaryTreeNode;
 
 /**
  * Although not every ObservableCollection must be indexed, all ObservableCollections must have some notion of order. All change events and
@@ -62,11 +62,11 @@ public interface ElementId extends Comparable<ElementId> {
 		private final TreeList<Void> theIds;
 
 		public SimpleElementIdGenerator() {
-			theIds = new TreeList<>();
+			theIds = new TreeList<>(false);
 		}
 
 		public ElementId newId() {
-			return new SimpleGeneratedId(theIds.addGetNode(null));
+			return new SimpleGeneratedId(theIds.addElement(null));
 		}
 
 		public ElementId newId(ElementId relative, boolean left) {
@@ -78,15 +78,15 @@ public interface ElementId extends Comparable<ElementId> {
 		}
 
 		public ElementId get(int index) {
-			return new SimpleGeneratedId(theIds.getNodeAt(index));
+			return new SimpleGeneratedId(theIds.getNode(index));
 		}
 
 		public int getElementsBefore(ElementId id) {
-			return ((SimpleGeneratedId) id).theNode.getIndex();
+			return ((SimpleGeneratedId) id).theNode.getNodesBefore();
 		}
 
 		public int getElementsAfter(ElementId id) {
-			return ((SimpleGeneratedId) id).theNode.getElementsGreater();
+			return ((SimpleGeneratedId) id).theNode.getNodesAfter();
 		}
 
 		public int size() {
@@ -98,10 +98,10 @@ public interface ElementId extends Comparable<ElementId> {
 		}
 
 		private class SimpleGeneratedId implements ElementId {
-			private final DefaultNode<Void> theNode;
+			private final BinaryTreeNode<Void> theNode;
 			private int theRemovedIndex; // Keeps state after this node has been removed (while remove event is firing)
 
-			SimpleGeneratedId(DefaultNode<Void> node) {
+			SimpleGeneratedId(BinaryTreeNode<Void> node) {
 				theNode = node;
 				theRemovedIndex = -1;
 			}
@@ -110,9 +110,9 @@ public interface ElementId extends Comparable<ElementId> {
 			public int compareTo(ElementId o) {
 				if (theNode == ((SimpleGeneratedId) o).theNode)
 					return 0;
-				int otherIndex = ((SimpleGeneratedId) o).theNode.getIndex();
+				int otherIndex = ((SimpleGeneratedId) o).theNode.getNodesBefore();
 				if (theRemovedIndex < 0)
-					return theNode.getIndex() - otherIndex;
+					return theNode.getNodesBefore() - otherIndex;
 				else if (theRemovedIndex != otherIndex)
 					return theRemovedIndex - otherIndex;
 				else
@@ -121,12 +121,13 @@ public interface ElementId extends Comparable<ElementId> {
 			}
 
 			SimpleGeneratedId nextTo(boolean left) {
-				return new SimpleGeneratedId(left ? theIds.addBefore(null, theNode) : theIds.addAfter(null, theNode));
+				return new SimpleGeneratedId(
+					left ? theIds.mutableNodeFor(theNode).add(null, true) : theIds.mutableNodeFor(theNode).add(null, false));
 			}
 
 			void remove() {
-				theRemovedIndex = theNode.getIndex();
-				theIds.delete(theNode);
+				theRemovedIndex = theNode.getNodesBefore();
+				theIds.mutableNodeFor(theNode).remove();
 			}
 
 			@Override
@@ -141,8 +142,12 @@ public interface ElementId extends Comparable<ElementId> {
 
 			@Override
 			public String toString() {
-				return "[" + theNode.getIndex() + "]";
+				return "[" + theNode.getNodesBefore() + "]";
 			}
 		}
+	}
+
+	static ElementId reverse(ElementId id) {
+		return id == null ? null : id.reverse();
 	}
 }
