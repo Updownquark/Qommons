@@ -213,6 +213,11 @@ public interface BinaryTreeNode<E> extends ElementId, ElementHandle<E> {
 		}
 
 		@Override
+		public BinaryTreeNode<E> getElementId() {
+			return this;
+		}
+
+		@Override
 		public BinaryTreeNode<E> getParent() {
 			return getWrapped().getParent().reverse();
 		}

@@ -1,6 +1,7 @@
 package org.qommons.collect;
 
 import org.qommons.tree.BinaryTreeNode;
+import org.qommons.tree.BetterTreeList;
 
 /**
  * Although not every ObservableCollection must be indexed, all ObservableCollections must have some notion of order. All change events and
@@ -59,10 +60,10 @@ public interface ElementId extends Comparable<ElementId> {
 	}
 
 	class SimpleElementIdGenerator {
-		private final TreeList<Void> theIds;
+		private final BetterTreeList<Void> theIds;
 
 		public SimpleElementIdGenerator() {
-			theIds = new TreeList<>(false);
+			theIds = new BetterTreeList<>(false);
 		}
 
 		public ElementId newId() {

@@ -286,7 +286,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		}
 	}
 
-	class MutableNodeWrapper extends NodeWrapper implements MutableBinaryTreeNode<E>, MutableElementHandle<E> {
+	class MutableNodeWrapper extends NodeWrapper implements MutableBinaryTreeNode<E> {
 		MutableNodeWrapper(RedBlackNode<E> node) {
 			super(node);
 		}

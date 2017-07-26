@@ -1,19 +1,23 @@
-package org.qommons.collect;
+package org.qommons.tree;
 
 import java.util.Objects;
 import java.util.function.Consumer;
 
 import org.qommons.Transaction;
-import org.qommons.tree.BinaryTreeNode;
-import org.qommons.tree.MutableBinaryTreeNode;
-import org.qommons.tree.RedBlackNodeList;
+import org.qommons.collect.CollectionLockingStrategy;
+import org.qommons.collect.ElementHandle;
+import org.qommons.collect.ElementSpliterator;
+import org.qommons.collect.FastFailLockingStrategy;
+import org.qommons.collect.MutableElementHandle;
+import org.qommons.collect.MutableElementSpliterator;
+import org.qommons.collect.StampedLockingStrategy;
 
-public class TreeList<E> extends RedBlackNodeList<E> {
-	public TreeList(boolean safe) {
+public class BetterTreeList<E> extends RedBlackNodeList<E> {
+	public BetterTreeList(boolean safe) {
 		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy());
 	}
 
-	public TreeList(CollectionLockingStrategy locking) {
+	public BetterTreeList(CollectionLockingStrategy locking) {
 		super(locking);
 	}
 

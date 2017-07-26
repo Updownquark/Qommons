@@ -1,4 +1,4 @@
-package org.qommons;
+package org.qommons.collect;
 
 import java.util.Map;
 import java.util.Objects;

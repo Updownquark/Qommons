@@ -12,9 +12,6 @@ import org.qommons.collect.MutableElementHandle.StdMsg;
 
 public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	@Override
-	abstract boolean isLockSupported();
-
-	@Override
 	BetterSet<K> keySet();
 
 	@Override
@@ -27,15 +24,39 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		return new BetterMapValueCollection<>(this);
 	}
 
-	ElementId putElement(K key, V value);
+	@Override
+	default boolean isLockSupported() {
+		return keySet().isLockSupported();
+	}
 
-	boolean forEntry(K key, Consumer<? super MapEntryHandle<K, V>> onElement);
+	@Override
+	default Transaction lock(boolean write, Object cause) {
+		return keySet().lock(write, cause);
+	}
 
-	boolean forMutableEntry(K key, Consumer<? super MutableMapEntryHandle<K, V>> onElement);
+	ElementId putEntry(K key, V value);
 
-	<X> X ofEntry(ElementId entryId, Function<? super MapEntryHandle<K, V>, X> onElement);
+	boolean forEntry(K key, Consumer<? super MapEntryHandle<K, V>> onEntry);
 
-	<X> X ofMutableEntry(ElementId entryId, Function<? super MutableMapEntryHandle<K, V>, X> onElement);
+	boolean forMutableEntry(K key, Consumer<? super MutableMapEntryHandle<K, V>> onEntry);
+
+	<X> X ofEntry(ElementId entryId, Function<? super MapEntryHandle<K, V>, X> onEntry);
+
+	<X> X ofMutableEntry(ElementId entryId, Function<? super MutableMapEntryHandle<K, V>, X> onEntry);
+
+	default void forEntry(ElementId entryId, Consumer<? super MapEntryHandle<K, V>> onEntry) {
+		ofEntry(entryId, entry -> {
+			onEntry.accept(entry);
+			return null;
+		});
+	}
+
+	default void forMutableEntry(ElementId entryId, Consumer<? super MutableMapEntryHandle<K, V>> onEntry) {
+		ofMutableEntry(entryId, entry -> {
+			onEntry.accept(entry);
+			return null;
+		});
+	}
 
 	default BetterMap<K, V> reverse() {
 		return new ReversedMap<>(this);
@@ -90,7 +111,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		if (forMutableEntry(key, entry -> old[0] = entry.setValue(value)))
 			return (V) old[0];
 		else {
-			putElement(key, value);
+			putEntry(key, value);
 			return null;
 		}
 	}
@@ -115,14 +136,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			theWrapped = wrapped;
 		}
 
-		@Override
-		public boolean isLockSupported() {
-			return theWrapped.isLockSupported();
-		}
-
-		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theWrapped.lock(write, cause);
+		protected BetterMap<K, V> getWrapped() {
+			return theWrapped;
 		}
 
 		@Override
@@ -131,8 +146,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public ElementId putElement(K key, V value) {
-			return ElementId.reverse(theWrapped.putElement(key, value));
+		public ElementId putEntry(K key, V value) {
+			return ElementId.reverse(theWrapped.putEntry(key, value));
 		}
 
 		@Override
@@ -227,13 +242,12 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 		@Override
 		public MutableElementSpliterator<Map.Entry<K, V>> mutableSpliterator(boolean fromStart) {
-			return new EntrySpliterator(theMap.keySet().mutableSpliterator(fromStart));
+			return wrap(theMap.keySet().mutableSpliterator(fromStart));
 		}
 
 		protected ElementHandle<Map.Entry<K, V>> handleFor(MapEntryHandle<K, V> entry) {}
 
-		protected MutableElementHandle<Map.Entry<K, V>> mutableHandleFor(MutableMapEntryHandle<K, V> entry) {
-		}
+		protected MutableElementHandle<Map.Entry<K, V>> mutableHandleFor(MutableMapEntryHandle<K, V> entry) {}
 
 		@Override
 		public String canAdd(Map.Entry<K, V> value) {
@@ -253,6 +267,10 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		@Override
 		public void clear() {
 			theMap.clear();
+		}
+
+		protected MutableElementSpliterator<Map.Entry<K, V>> wrap(MutableElementSpliterator<K> keySpliter) {
+			return new EntrySpliterator(keySpliter);
 		}
 
 		class EntrySpliterator implements MutableElementSpliterator<Map.Entry<K, V>> {

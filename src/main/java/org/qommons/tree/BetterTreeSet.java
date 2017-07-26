@@ -1,38 +1,28 @@
-package org.qommons.collect;
+package org.qommons.tree;
 
 import java.util.Comparator;
 import java.util.function.Consumer;
 
 import org.qommons.Transaction;
-import org.qommons.tree.BinaryTreeNode;
-import org.qommons.tree.MutableBinaryTreeNode;
-import org.qommons.tree.RedBlackNodeList;
+import org.qommons.collect.BetterSortedSet;
+import org.qommons.collect.CollectionLockingStrategy;
+import org.qommons.collect.ElementHandle;
+import org.qommons.collect.ElementId;
+import org.qommons.collect.FastFailLockingStrategy;
+import org.qommons.collect.MutableElementHandle;
+import org.qommons.collect.MutableElementSpliterator;
+import org.qommons.collect.StampedLockingStrategy;
 
-public class TreeSet<E> extends RedBlackNodeList<E> implements BetterSortedSet<E> {
+public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSortedSet<E> {
 	private final Comparator<? super E> theCompare;
 
-	public TreeSet(boolean safe, Comparator<? super E> compare) {
+	public BetterTreeSet(boolean safe, Comparator<? super E> compare) {
 		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), compare);
 	}
 
-	public TreeSet(CollectionLockingStrategy locker, Comparator<? super E> compare) {
+	public BetterTreeSet(CollectionLockingStrategy locker, Comparator<? super E> compare) {
 		super(locker);
 		theCompare = compare;
-	}
-
-	@Override
-	public BinaryTreeNode<E> getRoot() {
-		return super.getRoot();
-	}
-
-	@Override
-	public BinaryTreeNode<E> getTerminalNode(boolean start) {
-		return super.getTerminalNode(start);
-	}
-
-	@Override
-	public BinaryTreeNode<E> nodeFor(ElementId elementId) {
-		return super.nodeFor(elementId);
 	}
 
 	@Override
@@ -47,19 +37,12 @@ public class TreeSet<E> extends RedBlackNodeList<E> implements BetterSortedSet<E
 	}
 
 	@Override
-	public E relative(Comparable<? super E> search, boolean up) {
-		Object[] found = new Object[1];
-		if (!forElement(search, el -> found[0] = el.get(), up))
-			return null;
-		return (E) found[0];
-	}
-
-	@Override
-	public boolean forElement(Comparable<? super E> search, Consumer<? super ElementHandle<? extends E>> onElement, boolean up) {
+	public boolean forElement(Comparable<? super E> search, Consumer<? super ElementHandle<? extends E>> onElement,
+		SortedSearchFilter filter) {
 		try (Transaction t = lock(false, null)) {
 			if (isEmpty())
 				return false;
-			BinaryTreeNode<E> node = getRoot().findClosest(n -> search.compareTo(n.get()), !up, false);
+			BinaryTreeNode<E> node = getRoot().findClosest(n -> search.compareTo(n.get()), filter.less.withDefault(true), filter.strict);
 			if (node == null)
 				return false;
 			onElement.accept(node);
@@ -69,11 +52,11 @@ public class TreeSet<E> extends RedBlackNodeList<E> implements BetterSortedSet<E
 
 	@Override
 	public boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement,
-		boolean up) {
+		SortedSearchFilter filter) {
 		try (Transaction t = lock(true, null)) {
 			if (isEmpty())
 				return false;
-			BinaryTreeNode<E> node = getRoot().findClosest(n -> search.compareTo(n.get()), !up, false);
+			BinaryTreeNode<E> node = getRoot().findClosest(n -> search.compareTo(n.get()), filter.less.withDefault(true), filter.strict);
 			if (node == null)
 				return false;
 			onElement.accept(mutableNodeFor(node));
@@ -228,7 +211,7 @@ public class TreeSet<E> extends RedBlackNodeList<E> implements BetterSortedSet<E
 
 		@Override
 		public boolean equals(Object obj) {
-			return obj instanceof TreeSet.SortedMutableTreeNode && theWrapped.equals(((SortedMutableTreeNode) obj).theWrapped);
+			return obj instanceof BetterTreeSet.SortedMutableTreeNode && theWrapped.equals(((SortedMutableTreeNode) obj).theWrapped);
 		}
 	}
 }
