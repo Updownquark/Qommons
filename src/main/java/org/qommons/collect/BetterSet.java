@@ -48,4 +48,25 @@ public interface BetterSet<E> extends BetterCollection<E>, Set<E> {
 	default boolean retainAll(Collection<?> c) {
 		return BetterCollection.super.retainAll(c);
 	}
+
+	@Override
+	default BetterSet<E> reverse() {
+		return new ReversedBetterSet<>(this);
+	}
+
+	class ReversedBetterSet<E> extends ReversedCollection<E> implements BetterSet<E> {
+		public ReversedBetterSet(BetterSet<E> wrap) {
+			super(wrap);
+		}
+
+		@Override
+		protected BetterSet<E> getWrapped() {
+			return (BetterSet<E>) super.getWrapped();
+		}
+
+		@Override
+		public BetterSet<E> reverse() {
+			return getWrapped();
+		}
+	}
 }
