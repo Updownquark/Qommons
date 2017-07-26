@@ -21,14 +21,14 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	public static final double MIN_LOAD_FACTOR = 0.2;
 	public static final double MAX_LOAD_FACTOR = 0.9;
 
-	public static class Builder<E> {
+	public static class HashSetBuilder {
 		private boolean isSafe;
 		private ToIntFunction<Object> theHasher;
 		private BiFunction<Object, Object, Boolean> theEquals;
 		private int theInitExpectedSize;
 		private double theLoadFactor;
 
-		Builder() {
+		protected HashSetBuilder() {
 			isSafe = true;
 			theHasher = Objects::hashCode;
 			theEquals = Objects::equals;
@@ -36,41 +36,41 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			theLoadFactor = .75;
 		}
 
-		public Builder<E> unsafe() {
+		public HashSetBuilder unsafe() {
 			isSafe = false;
 			return this;
 		}
 
-		public Builder<E> withEquivalence(ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals) {
+		public HashSetBuilder withEquivalence(ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals) {
 			theHasher = hasher;
 			theEquals = equals;
 			return this;
 		}
 
-		public Builder<E> identity() {
+		public HashSetBuilder identity() {
 			return withEquivalence(System::identityHashCode, (o1, o2) -> o1 == o2);
 		}
 
-		public Builder<E> withLoadFactor(double loadFactor) {
+		public HashSetBuilder withLoadFactor(double loadFactor) {
 			if (loadFactor < MIN_LOAD_FACTOR || loadFactor > MAX_LOAD_FACTOR)
 				throw new IllegalArgumentException("Load factor must be between " + MIN_LOAD_FACTOR + " and " + MAX_LOAD_FACTOR);
 			theLoadFactor = loadFactor;
 			return this;
 		}
 
-		public Builder<E> withInitialCapacity(int initExpectedSize) {
+		public HashSetBuilder withInitialCapacity(int initExpectedSize) {
 			theInitExpectedSize = initExpectedSize;
 			return this;
 		}
 
-		public BetterHashSet<E> build() {
+		public <E> BetterHashSet<E> buildSet() {
 			return new BetterHashSet<>(isSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), theHasher, theEquals,
 				theInitExpectedSize, theLoadFactor);
 		}
 	}
 
-	public static <E> Builder<E> build() {
-		return new Builder<>();
+	public static HashSetBuilder build() {
+		return new HashSetBuilder();
 	}
 
 	private final CollectionLockingStrategy theLocker;
@@ -95,7 +95,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		if (loadFactor < MIN_LOAD_FACTOR || loadFactor > MAX_LOAD_FACTOR)
 			throw new IllegalArgumentException("Load factor must be between " + MIN_LOAD_FACTOR + " and " + MAX_LOAD_FACTOR);
 		theLoadFactor = loadFactor;
-		theTable = new BetterHashSet.HashTableEntry[(int) Math.ceil(initExpectedSize / theLoadFactor)];
+		rehash(initExpectedSize);
 	}
 
 	private void rehash(int expectedSize) {
@@ -117,9 +117,11 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	protected void ensureCapacity(int expectedSize) {
-		int neededTableSize = (int) Math.ceil(expectedSize / theLoadFactor);
-		if (neededTableSize > theTable.length)
-			rehash(expectedSize);
+		try (Transaction t = lock(false, null)) {
+			int neededTableSize = (int) Math.ceil(expectedSize / theLoadFactor);
+			if (neededTableSize > theTable.length)
+				rehash(expectedSize);
+		}
 	}
 
 	private HashEntry getEntry(int hashCode, E value) {
@@ -225,7 +227,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		if (!(elementId instanceof BetterHashSet.HashEntry))
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		HashEntry entry = (HashEntry) elementId;
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(true, null)) {
 			entry.check();
 			return onElement.apply(entry);
 		}
