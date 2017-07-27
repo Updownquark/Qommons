@@ -3,6 +3,7 @@ package org.qommons.collect;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -245,9 +246,83 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			return wrap(theMap.keySet().mutableSpliterator(fromStart));
 		}
 
-		protected ElementHandle<Map.Entry<K, V>> handleFor(MapEntryHandle<K, V> entry) {}
+		protected ElementHandle<Map.Entry<K, V>> handleFor(MapEntryHandle<K, V> entry) {
+			return new ElementHandle<Map.Entry<K, V>>() {
+				@Override
+				public ElementId getElementId() {
+					return entry.getElementId();
+				}
 
-		protected MutableElementHandle<Map.Entry<K, V>> mutableHandleFor(MutableMapEntryHandle<K, V> entry) {}
+				@Override
+				public Map.Entry<K, V> get() {
+					return new Map.Entry<K, V>() {
+						@Override
+						public K getKey() {
+							return entry.getKey();
+						}
+
+						@Override
+						public V getValue() {
+							return entry.get();
+						}
+
+						@Override
+						public V setValue(V value) {
+							throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+						}
+					};
+				}
+			};
+		}
+
+		protected MutableElementHandle<Map.Entry<K, V>> mutableHandleFor(MutableMapEntryHandle<K, V> entry) {
+			return new MutableElementHandle<Map.Entry<K, V>>() {
+				@Override
+				public ElementId getElementId() {
+					return entry.getElementId();
+				}
+
+				@Override
+				public Map.Entry<K, V> get() {
+					return entry;
+				}
+
+				@Override
+				public String isEnabled() {
+					return entry.isEnabled();
+				}
+
+				@Override
+				public String isAcceptable(Map.Entry<K, V> value) {
+					return StdMsg.UNSUPPORTED_OPERATION;
+				}
+
+				@Override
+				public void set(Map.Entry<K, V> value) throws UnsupportedOperationException, IllegalArgumentException {
+					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+				}
+
+				@Override
+				public String canRemove() {
+					return entry.canRemove();
+				}
+
+				@Override
+				public void remove() throws UnsupportedOperationException {
+					entry.remove();
+				}
+
+				@Override
+				public String canAdd(Map.Entry<K, V> value, boolean before) {
+					return StdMsg.UNSUPPORTED_OPERATION;
+				}
+
+				@Override
+				public ElementId add(Map.Entry<K, V> value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+				}
+			};
+		}
 
 		@Override
 		public String canAdd(Map.Entry<K, V> value) {
@@ -393,27 +468,99 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 		@Override
 		public boolean forElement(V value, Consumer<? super ElementHandle<? extends V>> onElement, boolean first) {
-			// TODO Auto-generated method stub
+			try (Transaction t = lock(false, null)) {
+				ElementSpliterator<V> spliter = first ? spliterator(first) : spliterator(first).reverse();
+				boolean[] success = new boolean[1];
+				while (success[0] && spliter.tryAdvanceElement(el -> {
+					if (Objects.equals(el.get(), value)) {
+						success[0] = true;
+						onElement.accept(el);
+					}
+				})) {
+				}
+				return success[0];
+			}
 		}
 
 		@Override
 		public boolean forMutableElement(V value, Consumer<? super MutableElementHandle<? extends V>> onElement, boolean first) {
-			// TODO Auto-generated method stub
+			try (Transaction t = lock(false, null)) {
+				MutableElementSpliterator<V> spliter = first ? mutableSpliterator(first) : mutableSpliterator(first).reverse();
+				boolean[] success = new boolean[1];
+				while (success[0] && spliter.tryAdvanceElementM(el -> {
+					if (Objects.equals(el.get(), value)) {
+						success[0] = true;
+						onElement.accept(el);
+					}
+				})) {
+				}
+				return success[0];
+			}
 		}
 
 		@Override
 		public <T> T ofElementAt(ElementId elementId, Function<? super ElementHandle<? extends V>, T> onElement) {
-			// TODO Auto-generated method stub
+			return theMap.ofEntry(elementId, entry -> onElement.apply(entry));
 		}
 
 		@Override
 		public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableElementHandle<? extends V>, T> onElement) {
-			// TODO Auto-generated method stub
+			return theMap.ofMutableEntry(elementId, entry -> onElement.apply(entry));
 		}
 
 		@Override
 		public MutableElementSpliterator<V> mutableSpliterator(boolean fromStart) {
-			// TODO Auto-generated method stub
+			class ValueSpliterator implements MutableElementSpliterator<V> {
+				private final MutableElementSpliterator<K> theKeySpliter;
+
+				ValueSpliterator(MutableElementSpliterator<K> keySpliter) {
+					theKeySpliter = keySpliter;
+				}
+
+				@Override
+				public long estimateSize() {
+					return theKeySpliter.estimateSize();
+				}
+
+				@Override
+				public long getExactSizeIfKnown() {
+					return theKeySpliter.getExactSizeIfKnown();
+				}
+
+				@Override
+				public int characteristics() {
+					return theKeySpliter.characteristics() & (~SORTED);
+				}
+
+				@Override
+				public boolean tryAdvanceElement(Consumer<? super ElementHandle<V>> action) {
+					return theKeySpliter.tryAdvanceElement(keyEl -> theMap.forEntry(keyEl.getElementId(), entry -> action.accept(entry)));
+				}
+
+				@Override
+				public boolean tryReverseElement(Consumer<? super ElementHandle<V>> action) {
+					return theKeySpliter.tryReverseElement(keyEl -> theMap.forEntry(keyEl.getElementId(), entry -> action.accept(entry)));
+				}
+
+				@Override
+				public boolean tryAdvanceElementM(Consumer<? super MutableElementHandle<V>> action) {
+					return theKeySpliter
+						.tryAdvanceElementM(keyEl -> theMap.forMutableEntry(keyEl.getElementId(), entry -> action.accept(entry)));
+				}
+
+				@Override
+				public boolean tryReverseElementM(Consumer<? super MutableElementHandle<V>> action) {
+					return theKeySpliter
+						.tryReverseElementM(keyEl -> theMap.forMutableEntry(keyEl.getElementId(), entry -> action.accept(entry)));
+				}
+
+				@Override
+				public MutableElementSpliterator<V> trySplit() {
+					MutableElementSpliterator<K> keySplit = theKeySpliter.trySplit();
+					return keySplit == null ? null : new ValueSpliterator(keySplit);
+				}
+			}
+			return new ValueSpliterator(theMap.keySet().mutableSpliterator(fromStart));
 		}
 	}
 }

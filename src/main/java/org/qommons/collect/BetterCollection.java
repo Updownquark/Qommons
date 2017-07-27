@@ -565,7 +565,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	@Override
 	default boolean offer(E e) {
-		return offerLast(e);
+		return add(e);
 	}
 
 	@Override

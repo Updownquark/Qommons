@@ -1,5 +1,6 @@
 package org.qommons.collect;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.ConcurrentModificationException;
 import java.util.Objects;
@@ -66,6 +67,16 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		public <E> BetterHashSet<E> buildSet() {
 			return new BetterHashSet<>(isSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), theHasher, theEquals,
 				theInitExpectedSize, theLoadFactor);
+		}
+
+		public <E> BetterHashSet<E> buildSet(E... values) {
+			return buildSet(Arrays.asList(values));
+		}
+
+		public <E> BetterHashSet<E> buildSet(Collection<? extends E> values) {
+			BetterHashSet<E> set = buildSet();
+			set.addAll(values);
+			return set;
 		}
 	}
 
