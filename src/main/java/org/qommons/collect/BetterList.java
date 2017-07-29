@@ -1,14 +1,7 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -17,19 +10,22 @@ import java.util.function.UnaryOperator;
 import org.qommons.Ternian;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
-import org.qommons.collect.MutableElementHandle.StdMsg;
+import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
  * A {@link List} that is also a {@link BetterCollection}
  * 
  * @param <E> The type of value in the list
  */
-public interface BetterList<E> extends BetterCollection<E>, RRList<E>, TransactableList<E> {
+public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> {
+	CollectionElement<E> getElement(int index);
 	default ElementSpliterator<E> spliterator(int index) {
 		return mutableSpliterator(index).immutable();
 	}
 
-	MutableElementSpliterator<E> mutableSpliterator(int index);
+	default MutableElementSpliterator<E> mutableSpliterator(int index) {
+		return mutableSpliterator(getElement(index), true);
+	}
 
 	@Override
 	default Object[] toArray() {
@@ -37,16 +33,16 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 	}
 
 	/**
-	 * @param id The ID of the element
+	 * @param id The element
 	 * @return The number of elements in this collection positioned before the given element
 	 */
-	int getElementsBefore(ElementId id);
+	int getElementsBefore(CollectionElement<E> id);
 
 	/**
-	 * @param id The ID of the element
+	 * @param id The element
 	 * @return The number of elements in this collection positioned after the given element
 	 */
-	int getElementsAfter(ElementId id);
+	int getElementsAfter(CollectionElement<E> id);
 
 	/**
 	 * @param value The value to get the index of in this collection
@@ -57,10 +53,8 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 	default int indexOf(Object value) {
 		if (!belongs(value))
 			return -1;
-		int[] index = new int[1];
-		if (!forElement((E) value, el -> index[0] = getElementsBefore(el.getElementId()), true))
-			return -1;
-		return index[0];
+		CollectionElement<E> element = getElement((E) value, true);
+		return element == null ? -1 : getElementsBefore(element);
 	}
 
 	/**
@@ -72,10 +66,8 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 	default int lastIndexOf(Object value) {
 		if (!belongs(value))
 			return -1;
-		int[] index = new int[1];
-		if (!forElement((E) value, el -> index[0] = getElementsBefore(el.getElementId()), false))
-			return -1;
-		return index[0];
+		CollectionElement<E> element = getElement((E) value, false);
+		return element == null ? -1 : getElementsBefore(element);
 	}
 
 	/**
@@ -93,7 +85,7 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 	 * @param index The index of the element to get
 	 * @param onElement The listener to be called on the element
 	 */
-	default void forElementAt(int index, Consumer<? super ElementHandle<? extends E>> onElement) {
+	default void forElementAt(int index, Consumer<? super CollectionElement<? extends E>> onElement) {
 		ofElementAt(index, el -> {
 			onElement.accept(el);
 			return null;
@@ -106,7 +98,7 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 	 * @param index The index of the element to get
 	 * @param onElement The listener to be called on the mutable element
 	 */
-	default void forMutableElementAt(int index, Consumer<? super MutableElementHandle<? extends E>> onElement) {
+	default void forMutableElementAt(int index, Consumer<? super MutableCollectionElement<? extends E>> onElement) {
 		ofMutableElementAt(index, el -> {
 			onElement.accept(el);
 			return null;
@@ -120,7 +112,9 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 	 * @param onElement The function to be called on the element
 	 * @return The result of the function
 	 */
-	<T> T ofElementAt(int index, Function<? super ElementHandle<? extends E>, T> onElement);
+	default <T> T ofElementAt(int index, Function<? super CollectionElement<? extends E>, T> onElement) {
+		return onElement.apply(getElement(index));
+	}
 
 	/**
 	 * Calls a function on an element by index
@@ -129,7 +123,9 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 	 * @param onElement The function to be called on the mutable element
 	 * @return The result of the function
 	 */
-	<T> T ofMutableElementAt(int index, Function<? super MutableElementHandle<? extends E>, T> onElement);
+	default <T> T ofMutableElementAt(int index, Function<? super MutableCollectionElement<? extends E>, T> onElement) {
+		return ofMutableElement(getElement(index), onElement);
+	}
 
 	@Override
 	default boolean contains(Object o) {
@@ -164,7 +160,7 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 					Collections.reverse(list);
 					spliter = list.spliterator();
 				}
-				spliter.forEachRemaining(v -> ((MutableElementHandle<E>) el).add(v, true));
+				spliter.forEachRemaining(v -> ((MutableCollectionElement<E>) el).add(v, true));
 			});
 			return true;
 		}
@@ -180,12 +176,12 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 		addElement(index, element);
 	}
 
-	default ElementId addElement(int index, E element) {
+	default CollectionElement<E> addElement(int index, E element) {
 		try (Transaction t = lock(true, null)) {
 			if (index == size())
 				return addElement(element);
 			else
-				return ofMutableElementAt(index, el -> ((MutableElementHandle<E>) el).add(element, true));
+				return ofMutableElementAt(index, el -> ((MutableCollectionElement<E>) el).add(element, true));
 		}
 	}
 
@@ -233,7 +229,7 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 			throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 		return ofMutableElementAt(index, el -> {
 			E old = el.get();
-			((MutableElementHandle<E>) el).set(element);
+			((MutableCollectionElement<E>) el).set(element);
 			return old;
 		});
 	}
@@ -265,7 +261,6 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 
 	/**
 	 * @param <E> The type of the list
-	 * @param type The type of the list
 	 * @return An empty reversible list
 	 */
 	public static <E> BetterList<E> empty() {
@@ -293,53 +288,25 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 		}
 
 		@Override
-		public int getElementsBefore(ElementId id) {
+		public CollectionElement<E> getElement(int index) {
+			try (Transaction t = lock(false, null)) {
+				return getWrapped().getElement(reflect(index, false));
+			}
+		}
+
+		@Override
+		public int getElementsBefore(CollectionElement<E> id) {
 			return getWrapped().getElementsAfter(id);
 		}
 
 		@Override
-		public int getElementsAfter(ElementId id) {
+		public int getElementsAfter(CollectionElement<E> id) {
 			return getWrapped().getElementsBefore(id);
 		}
 
 		@Override
 		public ElementSpliterator<E> spliterator(boolean fromStart) {
 			return getWrapped().spliterator(!fromStart).reverse();
-		}
-
-		@Override
-		public ElementSpliterator<E> spliterator(int index) {
-			return getWrapped().spliterator(reflect(index, true)).reverse();
-		}
-
-		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(boolean fromStart) {
-			return getWrapped().mutableSpliterator(!fromStart).reverse();
-		}
-
-		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(int index) {
-			return getWrapped().mutableSpliterator(reflect(index, true)).reverse();
-		}
-
-		@Override
-		public <T> T ofElementAt(int index, Function<? super ElementHandle<? extends E>, T> onElement) {
-			if (index < 0)
-				throw new IndexOutOfBoundsException("" + index);
-			int size = size();
-			if (index >= size)
-				throw new IndexOutOfBoundsException(index + " of " + size);
-			return getWrapped().ofElementAt(reflect(index, false), el -> onElement.apply(el.reverse()));
-		}
-
-		@Override
-		public <T> T ofMutableElementAt(int index, Function<? super MutableElementHandle<? extends E>, T> onElement) {
-			if (index < 0)
-				throw new IndexOutOfBoundsException("" + index);
-			int size = size();
-			if (index >= size)
-				throw new IndexOutOfBoundsException(index + " of " + size);
-			return getWrapped().ofMutableElementAt(reflect(index, false), el -> onElement.apply(el.reverse()));
 		}
 
 		protected int reflect(int index, boolean terminalInclusive) {
@@ -357,36 +324,17 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 
 	class EmptyList<E> extends EmptyCollection<E> implements BetterList<E> {
 		@Override
-		public ElementSpliterator<E> spliterator(int index) {
-			if (index != 0)
-				throw new IndexOutOfBoundsException(index + " of 0");
-			return ElementSpliterator.empty();
-		}
-
-		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(int index) {
-			if (index != 0)
-				throw new IndexOutOfBoundsException(index + " of 0");
-			return MutableElementSpliterator.empty();
-		}
-
-		@Override
-		public <T> T ofElementAt(int index, Function<? super ElementHandle<? extends E>, T> onElement) {
+		public CollectionElement<E> getElement(int index) {
 			throw new IndexOutOfBoundsException(index + " of 0");
 		}
 
 		@Override
-		public <T> T ofMutableElementAt(int index, Function<? super MutableElementHandle<? extends E>, T> onElement) {
-			throw new IndexOutOfBoundsException(index + " of 0");
-		}
-
-		@Override
-		public int getElementsBefore(ElementId id) {
+		public int getElementsBefore(CollectionElement<E> id) {
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		}
 
 		@Override
-		public int getElementsAfter(ElementId id) {
+		public int getElementsAfter(CollectionElement<E> id) {
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		}
 
@@ -511,7 +459,7 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 		protected final MutableElementSpliterator<E> backing;
 		private Ternian hasNext;
 		private Ternian hasPrevious;
-		private MutableElementHandle<E> element;
+		private MutableCollectionElement<E> element;
 		private boolean elementIsNext;
 		// False if the spliterator's cursor is on the leading (left) side of the cached element, true if on the trailing (right) side
 		private boolean spliteratorSide;
@@ -524,7 +472,7 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 			hasPrevious = Ternian.NONE;
 		}
 
-		protected MutableElementHandle<E> getCurrentElement() {
+		protected MutableCollectionElement<E> getCurrentElement() {
 			return element;
 		}
 
@@ -622,12 +570,12 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 
 		@Override
 		public int nextIndex() {
-			return theList.getElementsBefore(getCurrentElement().getElementId()) + getSpliteratorCursorOffset();
+			return theList.getElementsBefore(getCurrentElement()) + getSpliteratorCursorOffset();
 		}
 
 		@Override
 		public int previousIndex() {
-			return theList.getElementsBefore(getCurrentElement().getElementId()) + getSpliteratorCursorOffset() - 1;
+			return theList.getElementsBefore(getCurrentElement()) + getSpliteratorCursorOffset() - 1;
 		}
 
 		@Override
@@ -671,7 +619,54 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 		}
 
 		@Override
-		public int getElementsBefore(ElementId id) {
+		public CollectionElement<E> getElement(E value, boolean first) {
+			try (Transaction t = lock(false, null)) {
+				CollectionElement<E> firstMatch = theWrapped.getElement(value, first);
+				int index = getElementsBefore(firstMatch);
+				if ((first && index >= theEnd) || (!first && index < theStart))
+					return null;
+				ElementSpliterator<E> spliter = theWrapped.spliterator(firstMatch, !first);
+				// For !first, we'll switch things just to make the problem easier
+				int firstIdx = first ? theStart : theEnd - 1;
+				int lastIdx = first ? theEnd - 1 : theStart;
+				if (!first) {
+					index = firstIdx - (index - lastIdx);
+					spliter = spliter.reverse();
+				}
+				while (index < firstIdx && spliter.tryAdvanceElement(el -> {
+				})) {
+					index++;
+				}
+				if (index < firstIdx)
+					return null;
+				CollectionElement<E>[] found = new CollectionElement[1];
+				while (found[0] == null && index <= lastIdx && spliter.tryAdvanceElement(el -> {
+					if (Objects.equals(el.get(), value))
+						found[0] = el;
+				})) {
+					index++;
+				}
+				return found[0];
+			}
+		}
+
+		@Override
+		public <X> X ofMutableElement(CollectionElement<E> element, Function<? super MutableCollectionElement<E>, X> onElement) {
+			return theWrapped.ofMutableElement(element, onElement);
+		}
+
+		@Override
+		public MutableElementSpliterator<E> mutableSpliterator(CollectionElement<E> element, boolean asNext) {
+			return new SubSpliterator(theWrapped.mutableSpliterator(element, asNext), getElementsBefore(element));
+		}
+
+		@Override
+		public CollectionElement<E> getElement(int index) {
+			return theWrapped.getElement(checkIndex(index, false));
+		}
+
+		@Override
+		public int getElementsBefore(CollectionElement<E> id) {
 			int wrappedEls = theWrapped.getElementsBefore(id);
 			if (wrappedEls < theStart || wrappedEls >= theEnd)
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
@@ -679,7 +674,7 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 		}
 
 		@Override
-		public int getElementsAfter(ElementId id) {
+		public int getElementsAfter(CollectionElement<E> id) {
 			int wrappedEls = theWrapped.getElementsBefore(id);
 			if (wrappedEls < theStart || wrappedEls >= theEnd)
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
@@ -721,77 +716,17 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 		}
 
 
-		@Override
-		public boolean forElement(E value, Consumer<? super ElementHandle<? extends E>> onElement, boolean first) {
-			if (!belongs(value))
-				return false;
-			boolean[] success = new boolean[1];
-			MutableElementSpliterator<E> spliter = first ? mutableSpliterator(true) : mutableSpliterator(false).reverse();
-			while (!success[0] && spliter.tryAdvanceElement(el -> {
-				if (Objects.equals(el.get(), value)) {
-					onElement.accept(el);
-					success[0] = true;
-				}
-			})) {
-			}
-			return success[0];
-		}
 
-		@Override
-		public boolean forMutableElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
-			if (!belongs(value))
-				return false;
-			boolean[] success = new boolean[1];
-			MutableElementSpliterator<E> spliter = first ? mutableSpliterator(true) : mutableSpliterator(false).reverse();
-			while (!success[0] && spliter.tryAdvanceElementM(el -> {
-				if (Objects.equals(el.get(), value)) {
-					onElement.accept(wrapElement(el));
-					success[0] = true;
-				}
-			})) {
-			}
-			return success[0];
-		}
-
-		@Override
-		public <T> T ofElementAt(ElementId elementId, Function<? super ElementHandle<? extends E>, T> onElement) {
-			return theWrapped.ofElementAt(elementId, el -> {
-				int index = theWrapped.getElementsBefore(elementId);
-				if (index < theStart || index >= theEnd)
-					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-				return onElement.apply(el);
-			});
-		}
-
-		@Override
-		public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableElementHandle<? extends E>, T> onElement) {
-			return theWrapped.ofMutableElementAt(elementId, el -> {
-				int index = theWrapped.getElementsBefore(elementId);
-				if (index < theStart || index >= theEnd)
-					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-				return onElement.apply(el);
-			});
-		}
-
-		@Override
-		public <T> T ofElementAt(int index, Function<? super ElementHandle<? extends E>, T> onElement) {
-			if (index + theStart >= theEnd)
-				throw new IndexOutOfBoundsException(index + " of " + (theEnd - theStart));
-			return theWrapped.ofElementAt(index, onElement);
-		}
-
-		@Override
-		public <T> T ofMutableElementAt(int index, Function<? super MutableElementHandle<? extends E>, T> onElement) {
-			if (index + theStart >= theEnd)
-				throw new IndexOutOfBoundsException(index + " of " + (theEnd - theStart));
-			return theWrapped.ofMutableElementAt(index, onElement);
-		}
-
-		protected MutableElementHandle<E> wrapElement(MutableElementHandle<E> el) {
-			return new MutableElementHandle<E>() {
+		protected MutableCollectionElement<E> wrapElement(MutableCollectionElement<E> el) {
+			return new MutableCollectionElement<E>() {
 				@Override
-				public ElementId getElementId() {
-					return el.getElementId();
+				public boolean isPresent() {
+					return el.isPresent();
+				}
+
+				@Override
+				public int compareTo(CollectionElement<E> o) {
+					return el.compareTo(o);
 				}
 
 				@Override
@@ -831,10 +766,10 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 				}
 
 				@Override
-				public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-					ElementId id = el.add(value, before);
+				public CollectionElement<E> add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+					CollectionElement<E> newEl = el.add(value, before);
 					theEnd++;
-					return id;
+					return newEl;
 				}
 			};
 		}
@@ -865,7 +800,7 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 			}
 
 			@Override
-			public boolean tryAdvanceElementM(Consumer<? super MutableElementHandle<E>> action) {
+			public boolean tryAdvanceElementM(Consumer<? super MutableCollectionElement<E>> action) {
 				if (spliterIndex >= theEnd)
 					return false;
 				if (wrapSpliter.tryAdvanceElementM(el -> {
@@ -878,7 +813,7 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 			}
 
 			@Override
-			public boolean tryReverseElementM(Consumer<? super MutableElementHandle<E>> action) {
+			public boolean tryReverseElementM(Consumer<? super MutableCollectionElement<E>> action) {
 				if (spliterIndex <= theStart)
 					return false;
 				if (wrapSpliter.tryReverseElementM(el -> {
@@ -891,7 +826,7 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 			}
 
 			@Override
-			public boolean tryAdvanceElement(Consumer<? super ElementHandle<E>> action) {
+			public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
 				if (spliterIndex >= theEnd)
 					return false;
 				if (wrapSpliter.tryAdvanceElementM(el -> {
@@ -904,7 +839,7 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 			}
 
 			@Override
-			public boolean tryReverseElement(Consumer<? super ElementHandle<E>> action) {
+			public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
 				if (spliterIndex <= theStart)
 					return false;
 				if (wrapSpliter.tryAdvanceElement(el -> {
@@ -954,7 +889,7 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 		public String canAdd(E value) {
 			if (!belongs(value))
 				return StdMsg.ILLEGAL_ELEMENT;
-			return ofMutableElementAt(size() - 1, el -> ((MutableElementHandle<E>) el).canAdd(value, false));
+			return ofMutableElementAt(size() - 1, el -> ((MutableCollectionElement<E>) el).canAdd(value, false));
 		}
 
 		@Override
@@ -963,19 +898,19 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 		}
 
 		@Override
-		public ElementId addElement(E e) {
-			ElementId id = theWrapped.addElement(theEnd, e);
-			if (id != null)
+		public CollectionElement<E> addElement(E e) {
+			CollectionElement<E> newEl = theWrapped.addElement(theEnd, e);
+			if (newEl != null)
 				theEnd++;
-			return id;
+			return newEl;
 		}
 
 		@Override
-		public ElementId addElement(int index, E element) {
-			ElementId id = theWrapped.addElement(theStart + checkIndex(index, true), element);
-			if (id != null)
+		public CollectionElement<E> addElement(int index, E element) {
+			CollectionElement<E> newEl = theWrapped.addElement(theStart + checkIndex(index, true), element);
+			if (newEl != null)
 				theEnd++;
-			return id;
+			return newEl;
 		}
 
 		@Override
@@ -1006,107 +941,6 @@ public interface BetterList<E> extends BetterCollection<E>, RRList<E>, Transacta
 				end = sz;
 			theWrapped.removeRange(theStart, end);
 			theEnd = theStart;
-		}
-
-		@Override
-		public E set(int index, E element) {
-			return theWrapped.set(theStart + checkIndex(index, false), element);
-		}
-
-		@Override
-		public E remove(int index) {
-			E old = theWrapped.remove(theStart + checkIndex(index, false));
-			theEnd--;
-			return old;
-		}
-
-		@Override
-		public int indexOf(Object o) {
-			if (!belongs(o))
-				return -1;
-			int[] res = new int[] { -1 };
-			Spliterator<E> spliter = spliterator(true);
-			int[] index = new int[1];
-			while (res[0] < 0 && spliter.tryAdvance(v -> {
-				if (Objects.equals(v, o))
-					res[0] = index[0];
-				index[0]++;
-			})) {
-			}
-			return res[0];
-		}
-
-		@Override
-		public int lastIndexOf(Object o) {
-			if (!belongs(o))
-				return -1;
-			int[] res = new int[] { -1 };
-			Spliterator<E> spliter = spliterator(false).reverse();
-			int[] index = new int[1];
-			while (res[0] < 0 && spliter.tryAdvance(v -> {
-				if (Objects.equals(v, o))
-					res[0] = index[0];
-				index[0]++;
-			})) {
-			}
-			return res[0];
-		}
-
-		@Override
-		public ListIterator<E> listIterator(int index) {
-			return new ListIterator<E>() {
-				private final ListIterator<E> wrapIter = theWrapped.listIterator(theStart + checkIndex(index, true));
-
-				@Override
-				public boolean hasNext() {
-					return wrapIter.hasNext() && wrapIter.nextIndex() < theEnd;
-				}
-
-				@Override
-				public E next() {
-					if (wrapIter.nextIndex() >= theEnd)
-						throw new NoSuchElementException();
-					return wrapIter.next();
-				}
-
-				@Override
-				public boolean hasPrevious() {
-					return wrapIter.hasPrevious() && wrapIter.previousIndex() >= theStart;
-				}
-
-				@Override
-				public E previous() {
-					if (wrapIter.previousIndex() < theStart)
-						throw new NoSuchElementException();
-					return wrapIter.previous();
-				}
-
-				@Override
-				public int nextIndex() {
-					return wrapIter.nextIndex() - theStart;
-				}
-
-				@Override
-				public int previousIndex() {
-					return wrapIter.previousIndex() - theStart;
-				}
-
-				@Override
-				public void remove() {
-					wrapIter.remove();
-				}
-
-				@Override
-				public void set(E e) {
-					wrapIter.set(e);
-				}
-
-				@Override
-				public void add(E e) {
-					wrapIter.add(e);
-					theEnd++;
-				}
-			};
 		}
 	}
 }

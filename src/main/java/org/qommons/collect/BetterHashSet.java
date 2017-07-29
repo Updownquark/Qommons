@@ -12,8 +12,8 @@ import java.util.function.ToIntFunction;
 
 import org.qommons.Transactable;
 import org.qommons.Transaction;
-import org.qommons.collect.MutableElementHandle.ReversedMutableElement;
-import org.qommons.collect.MutableElementHandle.StdMsg;
+import org.qommons.collect.MutableCollectionElement.ReversedMutableElement;
+import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.tree.BetterTreeList;
 import org.qommons.tree.BinaryTreeNode;
 import org.qommons.tree.MutableBinaryTreeNode;
@@ -203,7 +203,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public boolean forElement(E value, Consumer<? super ElementHandle<? extends E>> onElement, boolean first) {
+	public boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
 		try (Transaction t = lock(false, null)) {
 			HashEntry entry = getEntry(theHasher.applyAsInt(value), value);
 			if (entry != null)
@@ -213,7 +213,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public boolean forMutableElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
+	public boolean forMutableElement(E value, Consumer<? super MutableCollectionElement<? extends E>> onElement, boolean first) {
 		try (Transaction t = lock(true, null)) {
 			HashEntry entry = getEntry(theHasher.applyAsInt(value), value);
 			if (entry != null)
@@ -223,7 +223,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public <T> T ofElementAt(ElementId elementId, Function<? super ElementHandle<? extends E>, T> onElement) {
+	public <T> T ofElementAt(ElementId elementId, Function<? super CollectionElement<? extends E>, T> onElement) {
 		if (!(elementId instanceof BetterHashSet.HashEntry))
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		HashEntry entry = (HashEntry) elementId;
@@ -234,7 +234,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableElementHandle<? extends E>, T> onElement) {
+	public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableCollectionElement<? extends E>, T> onElement) {
 		if (!(elementId instanceof BetterHashSet.HashEntry))
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		HashEntry entry = (HashEntry) elementId;
@@ -293,7 +293,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			}
 
 			@Override
-			public boolean tryAdvanceElement(Consumer<? super ElementHandle<E>> action) {
+			public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
 				try (Transaction t = lock(false, null)) {
 					if (!tryElement(false))
 						return false;
@@ -303,7 +303,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			}
 
 			@Override
-			public boolean tryReverseElement(Consumer<? super ElementHandle<E>> action) {
+			public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
 				try (Transaction t = lock(false, null)) {
 					if (!tryElement(true))
 						return false;
@@ -313,7 +313,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			}
 
 			@Override
-			public boolean tryAdvanceElementM(Consumer<? super MutableElementHandle<E>> action) {
+			public boolean tryAdvanceElementM(Consumer<? super MutableCollectionElement<E>> action) {
 				try (Transaction t = lock(true, null)) {
 					if (!tryElement(false))
 						return false;
@@ -323,7 +323,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			}
 
 			@Override
-			public boolean tryReverseElementM(Consumer<? super MutableElementHandle<E>> action) {
+			public boolean tryReverseElementM(Consumer<? super MutableCollectionElement<E>> action) {
 				try (Transaction t = lock(true, null)) {
 					if (!tryElement(true))
 						return false;
@@ -333,7 +333,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			}
 
 			@Override
-			public void forEachElement(Consumer<? super ElementHandle<E>> action) {
+			public void forEachElement(Consumer<? super CollectionElement<E>> action) {
 				try (Transaction t = lock(false, null)) {
 					while (tryElement(false))
 						action.accept(current);
@@ -341,7 +341,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			}
 
 			@Override
-			public void forEachElementReverse(Consumer<? super ElementHandle<E>> action) {
+			public void forEachElementReverse(Consumer<? super CollectionElement<E>> action) {
 				try (Transaction t = lock(false, null)) {
 					while (tryElement(true))
 						action.accept(current);
@@ -349,7 +349,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			}
 
 			@Override
-			public void forEachElementM(Consumer<? super MutableElementHandle<E>> action) {
+			public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action) {
 				try (Transaction t = lock(true, null)) {
 					while (tryElement(false))
 						action.accept(new MutableSpliteratorEntry(current));
@@ -357,7 +357,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			}
 
 			@Override
-			public void forEachElementReverseM(Consumer<? super MutableElementHandle<E>> action) {
+			public void forEachElementReverseM(Consumer<? super MutableCollectionElement<E>> action) {
 				try (Transaction t = lock(true, null)) {
 					while (tryElement(true))
 						action.accept(new MutableSpliteratorEntry(current));
@@ -369,7 +369,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 				return null; // No real good way to do this
 			}
 
-			class MutableSpliteratorEntry implements MutableElementHandle<E> {
+			class MutableSpliteratorEntry implements MutableCollectionElement<E> {
 				private final HashEntry theEntry;
 
 				MutableSpliteratorEntry(HashEntry entry) {
@@ -464,7 +464,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		}
 	}
 
-	private class HashEntry implements ElementId, MutableElementHandle<E> {
+	private class HashEntry implements ElementId, MutableCollectionElement<E> {
 		private final long theId;
 		private final int hashCode;
 		private MutableBinaryTreeNode<HashEntry> theTreeNode;
@@ -576,7 +576,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		}
 	}
 
-	class ImmutableEntry implements ElementHandle<E>, ElementId {
+	class ImmutableEntry implements CollectionElement<E>, ElementId {
 		private final HashEntry theEntry;
 
 		ImmutableEntry(BetterHashSet<E>.HashEntry entry) {

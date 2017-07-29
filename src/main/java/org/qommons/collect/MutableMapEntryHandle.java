@@ -2,7 +2,7 @@ package org.qommons.collect;
 
 import java.util.Map;
 
-public interface MutableMapEntryHandle<K, V> extends MapEntryHandle<K, V>, MutableElementHandle<V>, Map.Entry<K, V> {
+public interface MutableMapEntryHandle<K, V> extends MapEntryHandle<K, V>, MutableCollectionElement<V>, Map.Entry<K, V> {
 	@Override
 	default V getValue() {
 		return get();

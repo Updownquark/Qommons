@@ -5,10 +5,10 @@ import java.util.function.Consumer;
 
 import org.qommons.Transaction;
 import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.ElementHandle;
+import org.qommons.collect.CollectionElement;
 import org.qommons.collect.ElementSpliterator;
 import org.qommons.collect.FastFailLockingStrategy;
-import org.qommons.collect.MutableElementHandle;
+import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.StampedLockingStrategy;
 
@@ -34,7 +34,7 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 	}
 
 	@Override
-	public boolean forElement(E value, Consumer<? super ElementHandle<? extends E>> onElement, boolean first) {
+	public boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
 		boolean[] success = new boolean[1];
 		try (Transaction t = lock(false, null)) {
 			ElementSpliterator<E> spliter = first ? spliterator(first) : spliterator(first).reverse();
@@ -50,7 +50,7 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 	}
 
 	@Override
-	public boolean forMutableElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
+	public boolean forMutableElement(E value, Consumer<? super MutableCollectionElement<? extends E>> onElement, boolean first) {
 		boolean[] success = new boolean[1];
 		try (Transaction t = lock(true, null)) {
 			MutableElementSpliterator<E> spliter = first ? mutableSpliterator(first) : mutableSpliterator(first).reverse();

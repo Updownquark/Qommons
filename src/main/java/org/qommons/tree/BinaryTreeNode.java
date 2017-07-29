@@ -1,19 +1,20 @@
 package org.qommons.tree;
 
-import org.qommons.collect.ElementHandle;
-import org.qommons.collect.ElementId;
+import org.qommons.collect.CollectionElement;
 
-public interface BinaryTreeNode<E> extends ElementId, ElementHandle<E> {
-	@Override
-	default ElementId getElementId() {
-		return this;
-	}
-
+public interface BinaryTreeNode<E> extends CollectionElement<E> {
 	BinaryTreeNode<E> getParent();
 
 	BinaryTreeNode<E> getLeft();
 	BinaryTreeNode<E> getRight();
 
+	/**
+	 * @param left Whether to get the closest node on the left or right
+	 * @return The closest (in value) node to this node on one side or the other
+	 */
+	BinaryTreeNode<E> getClosest(boolean left);
+
+	/** @return The size of this sub-tree */
 	int size();
 
 	/**
@@ -57,30 +58,6 @@ public interface BinaryTreeNode<E> extends ElementId, ElementHandle<E> {
 			return getParent().getRight();
 		else
 			return getParent().getLeft();
-	}
-
-	/**
-	 * @param left Whether to get the closest node on the left or right
-	 * @return The closest (in value) node to this node on one side or the other
-	 */
-	default BinaryTreeNode<E> getClosest(boolean left) {
-		BinaryTreeNode<E> child = getChild(left);
-		if (child != null) {
-			BinaryTreeNode<E> next = child.getChild(!left);
-			while (next != null) {
-				child = next;
-				next = next.getChild(!left);
-			}
-			return child;
-		} else {
-			BinaryTreeNode<E> parent = getParent();
-			child = this;
-			while (parent != null && parent.getChild(left) == child) {
-				child = parent;
-				parent = parent.getParent();
-			}
-			return parent;
-		}
 	}
 
 	default BinaryTreeNode<E> get(int index) {
@@ -193,7 +170,7 @@ public interface BinaryTreeNode<E> extends ElementId, ElementHandle<E> {
 	}
 
 	@Override
-	default int compareTo(ElementId o) {
+	default int compareTo(CollectionElement<E> o) {
 		return getNodesBefore() - ((BinaryTreeNode<E>) o).getNodesBefore();
 	}
 
@@ -202,7 +179,7 @@ public interface BinaryTreeNode<E> extends ElementId, ElementHandle<E> {
 		return new ReversedBinaryTreeNode<>(this);
 	}
 
-	class ReversedBinaryTreeNode<E> extends ReversedElementHandle<E> implements BinaryTreeNode<E> {
+	class ReversedBinaryTreeNode<E> extends ReversedCollectionElement<E> implements BinaryTreeNode<E> {
 		public ReversedBinaryTreeNode(BinaryTreeNode<E> wrap) {
 			super(wrap);
 		}
@@ -210,11 +187,6 @@ public interface BinaryTreeNode<E> extends ElementId, ElementHandle<E> {
 		@Override
 		protected BinaryTreeNode<E> getWrapped() {
 			return (BinaryTreeNode<E>) super.getWrapped();
-		}
-
-		@Override
-		public BinaryTreeNode<E> getElementId() {
-			return this;
 		}
 
 		@Override
@@ -230,6 +202,11 @@ public interface BinaryTreeNode<E> extends ElementId, ElementHandle<E> {
 		@Override
 		public BinaryTreeNode<E> getRight() {
 			return getWrapped().getLeft().reverse();
+		}
+
+		@Override
+		public BinaryTreeNode<E> getClosest(boolean left) {
+			return BinaryTreeNode.reverse(getWrapped().getClosest(!left));
 		}
 
 		@Override
@@ -251,5 +228,9 @@ public interface BinaryTreeNode<E> extends ElementId, ElementHandle<E> {
 		public BinaryTreeNode<E> reverse() {
 			return getWrapped();
 		}
+	}
+
+	static <E> BinaryTreeNode<E> reverse(BinaryTreeNode<E> node) {
+		return node == null ? node : node.reverse();
 	}
 }

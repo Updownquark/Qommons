@@ -486,7 +486,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public boolean forElement(E value, Consumer<? super ElementHandle<? extends E>> onElement, boolean first) {
+	public boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
 		try (Transaction t = theLocker.lock(false, null)) {
 			ArrayElement element = getElement(value, first);
 			if (element == null)
@@ -497,7 +497,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public boolean forMutableElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
+	public boolean forMutableElement(E value, Consumer<? super MutableCollectionElement<? extends E>> onElement, boolean first) {
 		try (Transaction t = theLocker.lock(true, null)) {
 			ArrayElement element = getElement(value, first);
 			if (element == null)
@@ -508,7 +508,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public <T> T ofElementAt(ElementId elementId, Function<? super ElementHandle<? extends E>, T> onElement) {
+	public <T> T ofElementAt(ElementId elementId, Function<? super CollectionElement<? extends E>, T> onElement) {
 		try (Transaction t = theLocker.lock(false, null)) {
 			int index = ((ArrayElementId) elementId).getIndex();
 			if (index < 0)
@@ -519,7 +519,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableElementHandle<? extends E>, T> onElement) {
+	public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableCollectionElement<? extends E>, T> onElement) {
 		try (Transaction t = theLocker.lock(true, null)) {
 			int index = ((ArrayElementId) elementId).getIndex();
 			if (index < 0)
@@ -548,14 +548,14 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public <T> T ofElementAt(int index, Function<? super ElementHandle<? extends E>, T> onElement) {
+	public <T> T ofElementAt(int index, Function<? super CollectionElement<? extends E>, T> onElement) {
 		try (Transaction t = lock(false, null)) {
 			return onElement.apply(theArray[translateToInternalIndex(index)].immutable());
 		}
 	}
 
 	@Override
-	public <T> T ofMutableElementAt(int index, Function<? super MutableElementHandle<? extends E>, T> onElement) {
+	public <T> T ofMutableElementAt(int index, Function<? super MutableCollectionElement<? extends E>, T> onElement) {
 		try (Transaction t = lock(false, null)) {
 			return onElement.apply(theArray[translateToInternalIndex(index)]);
 		}
@@ -1270,7 +1270,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		}
 
 		@Override
-		public boolean tryAdvanceElement(Consumer<? super ElementHandle<E>> action) {
+		public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
 			int tIndex = tryElement(action, true);
 			if (tIndex < 0)
 				return false;
@@ -1279,7 +1279,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		}
 
 		@Override
-		public boolean tryReverseElement(Consumer<? super ElementHandle<E>> action) {
+		public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
 			int tIndex = tryElement(action, false);
 			if (tIndex < 0)
 				return false;
@@ -1288,7 +1288,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		}
 
 		@Override
-		public boolean tryAdvanceElementM(Consumer<? super MutableElementHandle<E>> action) {
+		public boolean tryAdvanceElementM(Consumer<? super MutableCollectionElement<E>> action) {
 			int tIndex = tryElement(action, true);
 			if (tIndex < 0)
 				return false;
@@ -1297,7 +1297,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		}
 
 		@Override
-		public boolean tryReverseElementM(Consumer<? super MutableElementHandle<E>> action) {
+		public boolean tryReverseElementM(Consumer<? super MutableCollectionElement<E>> action) {
 			int tIndex = tryElement(action, false);
 			if (tIndex < 0)
 				return false;
@@ -1305,7 +1305,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 			return true;
 		}
 
-		private int tryElement(Consumer<? super MutableElementHandle<E>> action, boolean advance) {
+		private int tryElement(Consumer<? super MutableCollectionElement<E>> action, boolean advance) {
 			theSubLock.check();
 			if (advance) {
 				if (theCursor >= theEnd)
@@ -1397,7 +1397,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		}
 	}
 
-	private class ArrayElement implements MutableElementHandle<E> {
+	private class ArrayElement implements MutableCollectionElement<E> {
 		private final int[] index;
 		private final ArrayElementId theElementId;
 		private E theValue;

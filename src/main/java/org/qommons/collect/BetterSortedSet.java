@@ -11,7 +11,7 @@ import java.util.function.Function;
 
 import org.qommons.Ternian;
 import org.qommons.Transaction;
-import org.qommons.collect.MutableElementHandle.StdMsg;
+import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, NavigableSet<E> {
 	/**
@@ -110,7 +110,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			if (compare == 0)
 				msg[0] = StdMsg.ELEMENT_EXISTS;
 			else
-				msg[0] = ((MutableElementHandle<E>) el).canAdd(value, compare < 0);
+				msg[0] = ((MutableCollectionElement<E>) el).canAdd(value, compare < 0);
 		}, SortedSearchFilter.PreferLess);
 		return msg[0];
 	}
@@ -124,7 +124,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 				if (compare == 0)
 					id[0] = null;
 				else
-					id[0] = ((MutableElementHandle<E>) el).add(e, compare < 0);
+					id[0] = ((MutableCollectionElement<E>) el).add(e, compare < 0);
 			}, SortedSearchFilter.PreferLess))
 				return id[0];
 			else
@@ -191,7 +191,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	 * @return Whether such a value was found
 	 */
 	@Override
-	default boolean forElement(E value, Consumer<? super ElementHandle<? extends E>> onElement, boolean first) {
+	default boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
 		return forElement(searchFor(value, 0), onElement, SortedSearchFilter.OnlyMatch);
 	}
 
@@ -201,7 +201,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	 * @return Whether such a value was found
 	 */
 	@Override
-	default boolean forMutableElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
+	default boolean forMutableElement(E value, Consumer<? super MutableCollectionElement<? extends E>> onElement, boolean first) {
 		return forMutableElement(searchFor(value, 0), onElement, SortedSearchFilter.OnlyMatch);
 	}
 
@@ -225,7 +225,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	 * @param filter The filter on the result
 	 * @return Whether an element matching the filter was found in the set
 	 */
-	boolean forElement(Comparable<? super E> search, Consumer<? super ElementHandle<? extends E>> onElement, SortedSearchFilter filter);
+	boolean forElement(Comparable<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement, SortedSearchFilter filter);
 
 	/**
 	 * Like {@link #forElement(Comparable, Consumer, SortedSearchFilter)}, but provides a mutable element
@@ -235,7 +235,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	 * @param filter The filter on the result
 	 * @return Whether an element matching the filter was found in the set
 	 */
-	boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement,
+	boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableCollectionElement<? extends E>> onElement,
 		SortedSearchFilter filter);
 
 	@Override
@@ -584,7 +584,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public boolean forElement(Comparable<? super E> search, Consumer<? super ElementHandle<? extends E>> onElement,
+		public boolean forElement(Comparable<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement,
 			SortedSearchFilter filter) {
 			boolean[] success = new boolean[1];
 			theWrapped.forElement(boundSearch(search), el -> {
@@ -597,7 +597,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement,
+		public boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableCollectionElement<? extends E>> onElement,
 			SortedSearchFilter filter) {
 			boolean[] success = new boolean[1];
 			theWrapped.forMutableElement(boundSearch(search), el -> {
@@ -610,7 +610,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public <T> T ofElementAt(int index, Function<? super ElementHandle<? extends E>, T> onElement) {
+		public <T> T ofElementAt(int index, Function<? super CollectionElement<? extends E>, T> onElement) {
 			int minIdx = getMinIndex();
 			int maxIdx = getMaxIndex();
 			if (index < 0 || index > (maxIdx - minIdx))
@@ -619,7 +619,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public <T> T ofMutableElementAt(int index, Function<? super MutableElementHandle<? extends E>, T> onElement) {
+		public <T> T ofMutableElementAt(int index, Function<? super MutableCollectionElement<? extends E>, T> onElement) {
 			int minIdx = getMinIndex();
 			int maxIdx = getMaxIndex();
 			if (index < 0 || index > (maxIdx - minIdx))
@@ -628,7 +628,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public <T> T ofElementAt(ElementId elementId, Function<? super ElementHandle<? extends E>, T> onElement) {
+		public <T> T ofElementAt(ElementId elementId, Function<? super CollectionElement<? extends E>, T> onElement) {
 			return theWrapped.ofElementAt(elementId, el -> {
 				if (isInRange(el.get()) != 0)
 					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
@@ -637,7 +637,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableElementHandle<? extends E>, T> onElement) {
+		public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableCollectionElement<? extends E>, T> onElement) {
 			return theWrapped.ofMutableElementAt(elementId, el -> {
 				if (isInRange(el.get()) != 0)
 					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
@@ -769,7 +769,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 
 			@Override
-			public boolean tryAdvanceElement(Consumer<? super ElementHandle<E>> action) {
+			public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
 				boolean[] success = new boolean[1];
 				if (theWrappedSpliter.tryAdvanceElement(el -> {
 					if (isInRange(el.get()) == 0) {
@@ -785,7 +785,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 
 			@Override
-			public boolean tryReverseElement(Consumer<? super ElementHandle<E>> action) {
+			public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
 				boolean[] success = new boolean[1];
 				if (theWrappedSpliter.tryReverseElement(el -> {
 					if (isInRange(el.get()) == 0) {
@@ -818,7 +818,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 
 			@Override
-			public boolean tryAdvanceElementM(Consumer<? super MutableElementHandle<E>> action) {
+			public boolean tryAdvanceElementM(Consumer<? super MutableCollectionElement<E>> action) {
 				boolean[] success = new boolean[1];
 				if (getWrappedSpliter().tryAdvanceElementM(el -> {
 					if (isInRange(el.get()) == 0) {
@@ -834,7 +834,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 
 			@Override
-			public boolean tryReverseElementM(Consumer<? super MutableElementHandle<E>> action) {
+			public boolean tryReverseElementM(Consumer<? super MutableCollectionElement<E>> action) {
 				boolean[] success = new boolean[1];
 				if (getWrappedSpliter().tryReverseElementM(el -> {
 					if (isInRange(el.get()) == 0) {
@@ -856,10 +856,10 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 		}
 
-		class BoundedMutableElement<T extends E> implements MutableElementHandle<T> {
-			private final MutableElementHandle<T> theWrappedEl;
+		class BoundedMutableElement<T extends E> implements MutableCollectionElement<T> {
+			private final MutableCollectionElement<T> theWrappedEl;
 
-			BoundedMutableElement(MutableElementHandle<T> wrappedEl) {
+			BoundedMutableElement(MutableCollectionElement<T> wrappedEl) {
 				theWrappedEl = wrappedEl;
 			}
 
@@ -990,13 +990,13 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public boolean forElement(Comparable<? super E> search, Consumer<? super ElementHandle<? extends E>> onElement,
+		public boolean forElement(Comparable<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement,
 			SortedSearchFilter filter) {
 			return getWrapped().forElement(reverse(search), el -> onElement.accept(el.reverse()), filter.opposite());
 		}
 
 		@Override
-		public boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement,
+		public boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableCollectionElement<? extends E>> onElement,
 			SortedSearchFilter filter) {
 			return getWrapped().forMutableElement(reverse(search), el -> onElement.accept(el.reverse()), filter.opposite());
 		}

@@ -1,13 +1,6 @@
 package org.qommons.collect;
 
-import java.util.Collection;
-import java.util.Deque;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -16,7 +9,7 @@ import java.util.function.UnaryOperator;
 import org.qommons.ArrayUtils;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
-import org.qommons.collect.MutableElementHandle.StdMsg;
+import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
  * BetterCollection is an ordered {@link Collection} (also a {@link Deque}) that provides a great deal of extra functionality.
@@ -38,6 +31,17 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	@Override
 	abstract boolean isLockSupported();
 
+	CollectionElement<E> getElement(E value, boolean first);
+
+	<X> X ofMutableElement(CollectionElement<E> element, Function<? super MutableCollectionElement<E>, X> onElement);
+
+	default void forMutableElement(CollectionElement<E> element, Consumer<? super MutableCollectionElement<E>> onElement) {
+		ofMutableElement(element, el -> {
+			onElement.accept(el);
+			return null;
+		});
+	}
+
 	/**
 	 * Tests the compatibility of an object with this collection. This method exposes a "best guess" on whether an element could be added to
 	 * the collection , but does not provide any guarantee. This method should return null for any object for which {@link #add(Object)} is
@@ -54,9 +58,9 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * {@link #add(Object)}, this method may return null if the collection was not changed as a result of the operation.
 	 * 
 	 * @param value The value to add
-	 * @return The element ID for the new element at which the value was added, or null if the value was not added
+	 * @return The element at which the value was added, or null if the value was not added
 	 */
-	ElementId addElement(E value);
+	CollectionElement<E> addElement(E value);
 
 	@Override
 	default boolean add(E value) {
@@ -74,10 +78,10 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 */
 	default String canRemove(Object value) {
 		if (!belongs(value))
-			return MutableElementHandle.StdMsg.NOT_FOUND;
+			return MutableCollectionElement.StdMsg.NOT_FOUND;
 		String[] msg = new String[1];
 		if (!forMutableElement((E) value, el -> msg[0] = el.canRemove(), true))
-			return MutableElementHandle.StdMsg.NOT_FOUND;
+			return MutableCollectionElement.StdMsg.NOT_FOUND;
 		return msg[0];
 	}
 
@@ -245,72 +249,34 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @param first Whether to find the first or last occurrence of the value
 	 * @return Whether the value was found
 	 */
-	boolean forElement(E value, Consumer<? super ElementHandle<? extends E>> onElement, boolean first);
+	default boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
+		CollectionElement<E> el = getElement(value, first);
+		if (el != null)
+			onElement.accept(el);
+		return el != null;
+	}
 
 	/**
 	 * @param value The value to search for
 	 * @param onElement The action to perform on the element containing the given value, if found
 	 * @return Whether such a value was found
 	 */
-	boolean forMutableElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first);
-
-	/**
-	 * Addresses an element in this collection
-	 *
-	 * @param elementId The element to get
-	 * @param onElement The listener to be called with the element
-	 * @throws IllegalArgumentException If the given element ID is unrecognized in this collection
-	 */
-	default void forElementAt(ElementId elementId, Consumer<? super ElementHandle<? extends E>> onElement) {
-		ofElementAt(elementId, el -> {
-			onElement.accept(el);
-			return null;
-		});
+	default boolean forMutableElement(E value, Consumer<? super MutableCollectionElement<? extends E>> onElement, boolean first) {
+		CollectionElement<E> el = getElement(value, first);
+		if (el != null)
+			forMutableElement(el, onElement);
+		return el != null;
 	}
 
 	/**
-	 * Addresses an element in this collection
-	 *
-	 * @param elementId The element to get
-	 * @param onElement The listener to be called with the mutable element
-	 * @throws IllegalArgumentException If the given element ID is unrecognized in this collection
-	 */
-	default void forMutableElementAt(ElementId elementId, Consumer<? super MutableElementHandle<? extends E>> onElement) {
-		ofMutableElementAt(elementId, el -> {
-			onElement.accept(el);
-			return null;
-		});
-	}
-
-	/**
-	 * Calls a function on an element
-	 *
-	 * @param elementId The element to apply the function to
-	 * @param onElement The function to be called on the element
-	 * @return The result of the function
-	 * @throws IllegalArgumentException If the given element ID is unrecognized in this collection
-	 */
-	<T> T ofElementAt(ElementId elementId, Function<? super ElementHandle<? extends E>, T> onElement);
-
-	/**
-	 * Calls a function on an element
-	 *
-	 * @param elementId The element to apply the function to
-	 * @param onElement The function to be called on the mutable element
-	 * @return The result of the function
-	 * @throws IllegalArgumentException If the given element ID is unrecognized in this collection
-	 */
-	<T> T ofMutableElementAt(ElementId elementId, Function<? super MutableElementHandle<? extends E>, T> onElement);
-
-	/**
-	 * Finds a value in this collection matching the given search and performs an action on the {@link MutableElementHandle} for that
+	 * Finds a value in this collection matching the given search and performs an action on the {@link MutableCollectionElement} for that
 	 * element
 	 * 
 	 * @param search The search function
 	 * @param onElement The action to perform on the search's result
 	 * @return Whether a result was found
 	 */
-	default boolean find(Predicate<? super E> search, Consumer<? super ElementHandle<? extends E>> onElement, boolean first) {
+	default boolean find(Predicate<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
 		try (Transaction t = lock(false, null)) {
 			ElementSpliterator<E> spliter = first ? spliterator(first) : spliterator(first).reverse();
 			boolean[] found = new boolean[1];
@@ -326,14 +292,15 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	}
 
 	/**
-	 * Finds a value in this collection matching the given search and performs an action on the {@link MutableElementHandle} for that
+	 * Finds a value in this collection matching the given search and performs an action on the {@link MutableCollectionElement} for that
 	 * element
 	 * 
 	 * @param search The search function
 	 * @param onElement The action to perform on the search's result
 	 * @return Whether a result was found
 	 */
-	default boolean findMutable(Predicate<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
+	default boolean findMutable(Predicate<? super E> search, Consumer<? super MutableCollectionElement<? extends E>> onElement,
+		boolean first) {
 		try (Transaction t = lock(true, null)) {
 			MutableElementSpliterator<E> spliter = first ? mutableSpliterator(first) : mutableSpliterator(first).reverse();
 			boolean[] found = new boolean[1];
@@ -349,14 +316,14 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	}
 
 	/**
-	 * Finds all values in this collection matching the given search and performs an action on the {@link MutableElementHandle} for each
+	 * Finds all values in this collection matching the given search and performs an action on the {@link MutableCollectionElement} for each
 	 * element
 	 * 
 	 * @param search The search function
 	 * @param onElement The action to perform on the search's results
 	 * @return The number of results found
 	 */
-	default int findAll(Predicate<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean forward) {
+	default int findAll(Predicate<? super E> search, Consumer<? super MutableCollectionElement<? extends E>> onElement, boolean forward) {
 		try (Transaction t = lock(true, null)) {
 			MutableElementSpliterator<E> spliter = mutableSpliterator();
 			int[] found = new int[1];
@@ -380,6 +347,10 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		return mutableSpliterator(fromStart).immutable();
 	}
 
+	default ElementSpliterator<E> spliterator(CollectionElement<E> element, boolean asNext) {
+		return mutableSpliterator(element, asNext).immutable();
+	}
+
 	/** @return An immutable (Iterator#remove()} will always throw an exception) iterator for iterating across this object's data */
 	@Override
 	default ImmutableIterator<E> iterator() {
@@ -391,6 +362,8 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	}
 
 	MutableElementSpliterator<E> mutableSpliterator(boolean fromStart);
+
+	MutableElementSpliterator<E> mutableSpliterator(CollectionElement<E> element, boolean asNext);
 
 	default BetterCollection<E> reverse() {
 		return new ReversedCollection<>(this);
@@ -707,23 +680,18 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public boolean forElement(E value, Consumer<? super ElementHandle<? extends E>> onElement, boolean first) {
-			return getWrapped().forElement(value, el -> onElement.accept(el.reverse()), !first);
+		public CollectionElement<E> getElement(E value, boolean first) {
+			return CollectionElement.reverse(getWrapped().getElement(value, !first));
 		}
 
 		@Override
-		public boolean forMutableElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
-			return getWrapped().forMutableElement(value, el -> onElement.accept(el.reverse()), !first);
+		public <X> X ofMutableElement(CollectionElement<E> element, Function<? super MutableCollectionElement<E>, X> onElement) {
+			return getWrapped().ofMutableElement(element.reverse(), el -> onElement.apply(el.reverse()));
 		}
 
 		@Override
-		public <T> T ofElementAt(ElementId elementId, Function<? super ElementHandle<? extends E>, T> onElement) {
-			return getWrapped().ofElementAt(elementId.reverse(), onElement);
-		}
-
-		@Override
-		public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableElementHandle<? extends E>, T> onElement) {
-			return getWrapped().ofMutableElementAt(elementId.reverse(), onElement);
+		public MutableElementSpliterator<E> mutableSpliterator(CollectionElement<E> element, boolean asNext) {
+			return getWrapped().mutableSpliterator(element.reverse(), !asNext).reverse();
 		}
 
 		@Override
@@ -747,7 +715,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public ElementId addElement(E e) {
+		public CollectionElement<E> addElement(E e) {
 			return getWrapped().addElement(e).reverse();
 		}
 
@@ -819,7 +787,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public ElementId addElement(E e) {
+		public CollectionElement<E> addElement(E e) {
 			throw new UnsupportedOperationException();
 		}
 
@@ -832,23 +800,18 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		public void clear() {}
 
 		@Override
-		public boolean forElement(E value, Consumer<? super ElementHandle<? extends E>> onElement, boolean first) {
-			return false;
+		public CollectionElement<E> getElement(E value, boolean first) {
+			return null;
 		}
 
 		@Override
-		public boolean forMutableElement(E value, Consumer<? super MutableElementHandle<? extends E>> onElement, boolean first) {
-			return false;
+		public <X> X ofMutableElement(CollectionElement<E> element, Function<? super MutableCollectionElement<E>, X> onElement) {
+			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		}
 
 		@Override
-		public <T> T ofElementAt(ElementId elementId, Function<? super ElementHandle<? extends E>, T> onElement) {
-			throw new IllegalArgumentException("Element is not in this collection: " + elementId);
-		}
-
-		@Override
-		public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableElementHandle<? extends E>, T> onElement) {
-			throw new IllegalArgumentException("Element is not in this collection: " + elementId);
+		public MutableElementSpliterator<E> mutableSpliterator(CollectionElement<E> element, boolean asNext) {
+			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		}
 
 		@Override

@@ -8,7 +8,7 @@ import org.qommons.value.Settable;
  * 
  * @param <E> The type of the value in the element
  */
-public interface MutableElementHandle<E> extends ElementHandle<E> {
+public interface MutableCollectionElement<E> extends CollectionElement<E> {
 	/** Standard messages returned by this class */
 	interface StdMsg {
 		static String BAD_TYPE = "Object is the wrong type for this collection";
@@ -40,47 +40,74 @@ public interface MutableElementHandle<E> extends ElementHandle<E> {
 
 	String canAdd(E value, boolean before);
 
-	ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException;
+	CollectionElement<E> add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException;
 
 	/** @return An immutable observable element backed by this mutable element's data */
-	default ElementHandle<E> immutable() {
-		return new ElementHandle<E>() {
-			@Override
-			public E get() {
-				return MutableElementHandle.this.get();
-			}
-
-			@Override
-			public ElementId getElementId() {
-				return MutableElementHandle.this.getElementId();
-			}
-
-			@Override
-			public String toString() {
-				return MutableElementHandle.this.toString();
-			}
-		};
+	default CollectionElement<E> immutable() {
+		return new ImmutableCollectionElement<>(this);
 	}
 
 	@Override
-	default MutableElementHandle<E> reverse() {
+	default MutableCollectionElement<E> reverse() {
 		return new ReversedMutableElement<>(this);
 	}
 
-	class ReversedMutableElement<E> extends ElementHandle.ReversedElementHandle<E>
-		implements MutableElementHandle<E> {
-		public ReversedMutableElement(MutableElementHandle<E> wrapped) {
+	class ImmutableCollectionElement<E> implements CollectionElement<E>{
+		private final MutableCollectionElement<E> theWrapped;
+
+		public ImmutableCollectionElement(MutableCollectionElement<E> wrapped) {
+			theWrapped = wrapped;
+		}
+		
+		protected MutableCollectionElement<E> getWrapped(){
+			return theWrapped;
+		}
+
+		@Override
+		public boolean isPresent() {
+			return theWrapped.isPresent();
+		}
+		
+		@Override
+		public E get(){
+			return theWrapped.get();
+		}
+
+		@Override
+		public int compareTo(CollectionElement<E> o) {
+			return theWrapped.compareTo(strip(o));
+		}
+
+		private CollectionElement<E> strip(CollectionElement<E> o) {
+			if(o instanceof ImmutableCollectionElement)
+				o=((ImmutableCollectionElement<E>) o).getWrapped();
+			return o;
+		}
+		
+		@Override
+		public int hashCode(){
+			return theWrapped.hashCode();
+		}
+		
+		@Override
+		public boolean equals(Object o){
+			return o instanceof CollectionElement && theWrapped.equals(strip((CollectionElement<E>) o));
+		}
+
+		@Override
+		public String toString() {
+			return theWrapped.toString();
+		}
+	}
+
+	class ReversedMutableElement<E> extends CollectionElement.ReversedCollectionElement<E> implements MutableCollectionElement<E> {
+		public ReversedMutableElement(MutableCollectionElement<E> wrapped) {
 			super(wrapped);
 		}
 
 		@Override
-		protected MutableElementHandle<E> getWrapped() {
-			return (MutableElementHandle<E>) super.getWrapped();
-		}
-
-		@Override
-		public ElementId getElementId() {
-			return getWrapped().getElementId().reverse();
+		protected MutableCollectionElement<E> getWrapped() {
+			return (MutableCollectionElement<E>) super.getWrapped();
 		}
 
 		@Override
@@ -114,13 +141,17 @@ public interface MutableElementHandle<E> extends ElementHandle<E> {
 		}
 
 		@Override
-		public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+		public CollectionElement<E> add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
 			return getWrapped().add(value, !before).reverse();
 		}
 
 		@Override
-		public MutableElementHandle<E> reverse() {
-			return (MutableElementHandle<E>) super.reverse();
+		public MutableCollectionElement<E> reverse() {
+			return (MutableCollectionElement<E>) super.reverse();
 		}
+	}
+
+	static <E> MutableCollectionElement<E> reverse(MutableCollectionElement<E> element) {
+		return element == null ? null : element.reverse();
 	}
 }

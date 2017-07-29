@@ -12,7 +12,7 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 	 *        and also should not be kept longer than the reference to the ElementSpliterator.
 	 * @return false if no remaining elements existed upon entry to this method, else true.
 	 */
-	boolean tryAdvanceElement(Consumer<? super ElementHandle<E>> action);
+	boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action);
 
 	/**
 	 * Retrieves the previous element available to this ElementSpliterator
@@ -22,14 +22,14 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 	 *        be kept longer than the reference to the ElementSpliterator.
 	 * @return false if no remaining elements existed upon entry to this method, else true.
 	 */
-	boolean tryReverseElement(Consumer<? super ElementHandle<E>> action);
+	boolean tryReverseElement(Consumer<? super CollectionElement<E>> action);
 
 	/**
 	 * Operates on each element remaining in this ElementSpliterator
 	 * 
 	 * @param action The action to perform on each element
 	 */
-	default void forEachElement(Consumer<? super ElementHandle<E>> action) {
+	default void forEachElement(Consumer<? super CollectionElement<E>> action) {
 		while (tryAdvanceElement(action)) {
 		}
 	}
@@ -39,7 +39,7 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 	 * 
 	 * @param action The action to perform on each element
 	 */
-	default void forEachElementReverse(Consumer<? super ElementHandle<E>> action) {
+	default void forEachElementReverse(Consumer<? super CollectionElement<E>> action) {
 		while (tryReverseElement(action)) {
 		}
 	}
@@ -102,12 +102,12 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 		}
 
 		@Override
-		public boolean tryAdvanceElement(Consumer<? super ElementHandle<E>> action) {
+		public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
 			return false;
 		}
 
 		@Override
-		public boolean tryReverseElement(Consumer<? super ElementHandle<E>> action) {
+		public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
 			return false;
 		}
 
@@ -169,22 +169,22 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 		}
 
 		@Override
-		public boolean tryAdvanceElement(Consumer<? super ElementHandle<E>> action) {
+		public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
 			return theWrapped.tryReverseElement(el -> action.accept(el.reverse()));
 		}
 
 		@Override
-		public boolean tryReverseElement(Consumer<? super ElementHandle<E>> action) {
+		public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
 			return theWrapped.tryAdvanceElement(el -> action.accept(el.reverse()));
 		}
 
 		@Override
-		public void forEachElement(Consumer<? super ElementHandle<E>> action) {
+		public void forEachElement(Consumer<? super CollectionElement<E>> action) {
 			theWrapped.forEachElementReverse(el -> action.accept(el.reverse()));
 		}
 
 		@Override
-		public void forEachElementReverse(Consumer<? super ElementHandle<E>> action) {
+		public void forEachElementReverse(Consumer<? super CollectionElement<E>> action) {
 			theWrapped.forEachElement(el -> action.accept(el.reverse()));
 		}
 

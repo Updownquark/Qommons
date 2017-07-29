@@ -12,12 +12,12 @@ import org.qommons.collect.BetterSortedMap;
 import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.ElementHandle;
+import org.qommons.collect.CollectionElement;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MapEntryHandle;
-import org.qommons.collect.MutableElementHandle;
-import org.qommons.collect.MutableElementHandle.StdMsg;
+import org.qommons.collect.MutableCollectionElement;
+import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.MutableMapEntryHandle;
 import org.qommons.collect.SimpleMapEntry;
@@ -63,7 +63,7 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		return new SimpleMapEntry<>(key, value, true);
 	}
 
-	protected MapEntryHandle<K, V> handleFor(ElementHandle<? extends Map.Entry<K, V>> entryHandle) {
+	protected MapEntryHandle<K, V> handleFor(CollectionElement<? extends Map.Entry<K, V>> entryHandle) {
 		return new MapEntryHandle<K, V>() {
 			@Override
 			public ElementId getElementId() {
@@ -82,7 +82,7 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		};
 	}
 
-	protected MutableMapEntryHandle<K, V> mutableHandleFor(MutableElementHandle<? extends Map.Entry<K, V>> entryHandle) {
+	protected MutableMapEntryHandle<K, V> mutableHandleFor(MutableCollectionElement<? extends Map.Entry<K, V>> entryHandle) {
 		return new MutableMapEntryHandle<K, V>() {
 			@Override
 			public ElementId getElementId() {
@@ -289,8 +289,8 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 			return theEntries.indexFor(e -> search.compareTo(e.getKey()));
 		}
 
-		protected ElementHandle<K> handleFor(ElementHandle<? extends Map.Entry<K, V>> entryHandle) {
-			return new ElementHandle<K>() {
+		protected CollectionElement<K> handleFor(CollectionElement<? extends Map.Entry<K, V>> entryHandle) {
+			return new CollectionElement<K>() {
 				@Override
 				public ElementId getElementId() {
 					return entryHandle.getElementId();
@@ -303,8 +303,8 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 			};
 		}
 
-		protected MutableElementHandle<K> mutableHandleFor(MutableElementHandle<? extends Map.Entry<K, V>> entryHandle) {
-			return new MutableElementHandle<K>() {
+		protected MutableCollectionElement<K> mutableHandleFor(MutableCollectionElement<? extends Map.Entry<K, V>> entryHandle) {
+			return new MutableCollectionElement<K>() {
 				@Override
 				public ElementId getElementId() {
 					return entryHandle.getElementId();
@@ -353,33 +353,33 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		}
 
 		@Override
-		public <T> T ofElementAt(int index, Function<? super ElementHandle<? extends K>, T> onElement) {
+		public <T> T ofElementAt(int index, Function<? super CollectionElement<? extends K>, T> onElement) {
 			return theEntries.ofElementAt(index, el -> onElement.apply(handleFor(el)));
 		}
 
 		@Override
-		public <T> T ofMutableElementAt(int index, Function<? super MutableElementHandle<? extends K>, T> onElement) {
+		public <T> T ofMutableElementAt(int index, Function<? super MutableCollectionElement<? extends K>, T> onElement) {
 			return theEntries.ofMutableElementAt(index, el -> onElement.apply(mutableHandleFor(el)));
 		}
 
 		@Override
-		public <T> T ofElementAt(ElementId elementId, Function<? super ElementHandle<? extends K>, T> onElement) {
+		public <T> T ofElementAt(ElementId elementId, Function<? super CollectionElement<? extends K>, T> onElement) {
 			return theEntries.ofElementAt(strip(elementId), el -> onElement.apply(handleFor(el)));
 		}
 
 		@Override
-		public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableElementHandle<? extends K>, T> onElement) {
+		public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableCollectionElement<? extends K>, T> onElement) {
 			return theEntries.ofMutableElementAt(strip(elementId), el -> onElement.apply(mutableHandleFor(el)));
 		}
 
 		@Override
-		public boolean forElement(Comparable<? super K> search, Consumer<? super ElementHandle<? extends K>> onElement,
+		public boolean forElement(Comparable<? super K> search, Consumer<? super CollectionElement<? extends K>> onElement,
 			SortedSearchFilter filter) {
 			return theEntries.forElement(e -> search.compareTo(e.getKey()), el -> onElement.accept(handleFor(el)), filter);
 		}
 
 		@Override
-		public boolean forMutableElement(Comparable<? super K> search, Consumer<? super MutableElementHandle<? extends K>> onElement,
+		public boolean forMutableElement(Comparable<? super K> search, Consumer<? super MutableCollectionElement<? extends K>> onElement,
 			SortedSearchFilter filter) {
 			return theEntries.forMutableElement(e -> search.compareTo(e.getKey()), el -> onElement.accept(mutableHandleFor(el)), filter);
 		}
@@ -442,22 +442,22 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 			}
 
 			@Override
-			public boolean tryAdvanceElement(Consumer<? super ElementHandle<K>> action) {
+			public boolean tryAdvanceElement(Consumer<? super CollectionElement<K>> action) {
 				return theEntrySpliter.tryAdvanceElement(el -> action.accept(handleFor(el)));
 			}
 
 			@Override
-			public boolean tryReverseElement(Consumer<? super ElementHandle<K>> action) {
+			public boolean tryReverseElement(Consumer<? super CollectionElement<K>> action) {
 				return theEntrySpliter.tryReverseElement(el -> action.accept(handleFor(el)));
 			}
 
 			@Override
-			public boolean tryAdvanceElementM(Consumer<? super MutableElementHandle<K>> action) {
+			public boolean tryAdvanceElementM(Consumer<? super MutableCollectionElement<K>> action) {
 				return theEntrySpliter.tryAdvanceElementM(el -> action.accept(mutableHandleFor(el)));
 			}
 
 			@Override
-			public boolean tryReverseElementM(Consumer<? super MutableElementHandle<K>> action) {
+			public boolean tryReverseElementM(Consumer<? super MutableCollectionElement<K>> action) {
 				return theEntrySpliter.tryReverseElementM(el -> action.accept(mutableHandleFor(el)));
 			}
 

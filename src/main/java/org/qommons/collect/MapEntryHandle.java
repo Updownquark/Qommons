@@ -1,6 +1,6 @@
 package org.qommons.collect;
 
-public interface MapEntryHandle<K, V> extends ElementHandle<V> {
+public interface MapEntryHandle<K, V> extends CollectionElement<V> {
 	K getKey();
 
 	@Override

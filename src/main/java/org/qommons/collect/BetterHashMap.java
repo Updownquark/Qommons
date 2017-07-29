@@ -8,7 +8,7 @@ import java.util.function.Function;
 import java.util.function.ToIntFunction;
 
 import org.qommons.Transaction;
-import org.qommons.collect.MutableElementHandle.StdMsg;
+import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	public static class HashMapBuilder extends BetterHashSet.HashSetBuilder {
@@ -74,7 +74,7 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 	}
 
-	protected MapEntryHandle<K, V> handleFor(ElementHandle<? extends Map.Entry<K, V>> entry) {
+	protected MapEntryHandle<K, V> handleFor(CollectionElement<? extends Map.Entry<K, V>> entry) {
 		return new MapEntryHandle<K, V>() {
 			@Override
 			public ElementId getElementId() {
@@ -93,7 +93,7 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		};
 	}
 
-	protected MutableMapEntryHandle<K, V> mutableHandleFor(MutableElementHandle<? extends Map.Entry<K, V>> entry) {
+	protected MutableMapEntryHandle<K, V> mutableHandleFor(MutableCollectionElement<? extends Map.Entry<K, V>> entry) {
 		return new MutableMapEntryHandle<K, V>() {
 			@Override
 			public ElementId getElementId() {
@@ -203,8 +203,8 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 			return BetterSet.super.toArray(a);
 		}
 
-		protected ElementHandle<K> handleFor(ElementHandle<? extends Map.Entry<K, V>> entryEl) {
-			return new ElementHandle<K>() {
+		protected CollectionElement<K> handleFor(CollectionElement<? extends Map.Entry<K, V>> entryEl) {
+			return new CollectionElement<K>() {
 				@Override
 				public ElementId getElementId() {
 					return entryEl.getElementId();
@@ -217,8 +217,8 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 			};
 		}
 
-		protected MutableElementHandle<K> mutableHandleFor(MutableElementHandle<? extends Map.Entry<K, V>> entryEl) {
-			return new MutableElementHandle<K>() {
+		protected MutableCollectionElement<K> mutableHandleFor(MutableCollectionElement<? extends Map.Entry<K, V>> entryEl) {
+			return new MutableCollectionElement<K>() {
 				@Override
 				public ElementId getElementId() {
 					return entryEl.getElementId();
@@ -236,12 +236,12 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 
 				@Override
 				public String isAcceptable(K value) {
-					return ((MutableElementHandle<Map.Entry<K, V>>) entryEl).isAcceptable(new SimpleMapEntry<>(value, null));
+					return ((MutableCollectionElement<Map.Entry<K, V>>) entryEl).isAcceptable(new SimpleMapEntry<>(value, null));
 				}
 
 				@Override
 				public void set(K value) throws UnsupportedOperationException, IllegalArgumentException {
-					((MutableElementHandle<Map.Entry<K, V>>) entryEl).set(new SimpleMapEntry<>(value, entryEl.get().getValue()));
+					((MutableCollectionElement<Map.Entry<K, V>>) entryEl).set(new SimpleMapEntry<>(value, entryEl.get().getValue()));
 				}
 
 				@Override
@@ -256,35 +256,35 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 
 				@Override
 				public String canAdd(K value, boolean before) {
-					return ((MutableElementHandle<Map.Entry<K, V>>) entryEl).canAdd(new SimpleMapEntry<>(value, null), before);
+					return ((MutableCollectionElement<Map.Entry<K, V>>) entryEl).canAdd(new SimpleMapEntry<>(value, null), before);
 				}
 
 				@Override
 				public ElementId add(K value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-					return ((MutableElementHandle<Map.Entry<K, V>>) entryEl).add(new SimpleMapEntry<>(value, entryEl.get().getValue()),
+					return ((MutableCollectionElement<Map.Entry<K, V>>) entryEl).add(new SimpleMapEntry<>(value, entryEl.get().getValue()),
 						before);
 				}
 			};
 		}
 
 		@Override
-		public boolean forElement(K value, Consumer<? super ElementHandle<? extends K>> onElement, boolean first) {
+		public boolean forElement(K value, Consumer<? super CollectionElement<? extends K>> onElement, boolean first) {
 			return theEntries.forElement(new SimpleMapEntry<>(value, null), entryEl -> onElement.accept(handleFor(entryEl)), first);
 		}
 
 		@Override
-		public boolean forMutableElement(K value, Consumer<? super MutableElementHandle<? extends K>> onElement, boolean first) {
+		public boolean forMutableElement(K value, Consumer<? super MutableCollectionElement<? extends K>> onElement, boolean first) {
 			return theEntries.forMutableElement(new SimpleMapEntry<>(value, null), entryEl -> onElement.accept(mutableHandleFor(entryEl)),
 				first);
 		}
 
 		@Override
-		public <T> T ofElementAt(ElementId elementId, Function<? super ElementHandle<? extends K>, T> onElement) {
+		public <T> T ofElementAt(ElementId elementId, Function<? super CollectionElement<? extends K>, T> onElement) {
 			return theEntries.ofElementAt(elementId, entryEl -> onElement.apply(handleFor(entryEl)));
 		}
 
 		@Override
-		public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableElementHandle<? extends K>, T> onElement) {
+		public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableCollectionElement<? extends K>, T> onElement) {
 			return theEntries.ofMutableElementAt(elementId, entryEl -> onElement.apply(mutableHandleFor(entryEl)));
 		}
 
@@ -336,22 +336,22 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 			}
 
 			@Override
-			public boolean tryAdvanceElement(Consumer<? super ElementHandle<K>> action) {
+			public boolean tryAdvanceElement(Consumer<? super CollectionElement<K>> action) {
 				return theEntrySpliter.tryAdvanceElement(el -> action.accept(handleFor(el)));
 			}
 
 			@Override
-			public boolean tryReverseElement(Consumer<? super ElementHandle<K>> action) {
+			public boolean tryReverseElement(Consumer<? super CollectionElement<K>> action) {
 				return theEntrySpliter.tryReverseElement(el -> action.accept(handleFor(el)));
 			}
 
 			@Override
-			public boolean tryAdvanceElementM(Consumer<? super MutableElementHandle<K>> action) {
+			public boolean tryAdvanceElementM(Consumer<? super MutableCollectionElement<K>> action) {
 				return theEntrySpliter.tryAdvanceElementM(el -> action.accept(mutableHandleFor(el)));
 			}
 
 			@Override
-			public boolean tryReverseElementM(Consumer<? super MutableElementHandle<K>> action) {
+			public boolean tryReverseElementM(Consumer<? super MutableCollectionElement<K>> action) {
 				return theEntrySpliter.tryReverseElementM(el -> action.accept(mutableHandleFor(el)));
 			}
 

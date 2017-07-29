@@ -23,6 +23,8 @@ public class RedBlackNode<E> {
 	private RedBlackNode<E> theParent;
 	private RedBlackNode<E> theLeft;
 	private RedBlackNode<E> theRight;
+	private RedBlackNode<E> theNext; // TODO Next and Previous not implemented
+	private RedBlackNode<E> thePrevious;
 
 	private int theSize;
 
@@ -98,6 +100,10 @@ public class RedBlackNode<E> {
 			throw new IllegalStateException("(" + this + "): left (" + theLeft + ")'s parent is not this");
 		if(theRight != null && theRight.theParent != this)
 			throw new IllegalStateException("(" + this + "): right (" + theRight + ")'s parent is not this");
+		if (thePrevious != null && thePrevious.theNext != this)
+			throw new IllegalStateException("(" + this + "): previous (" + thePrevious + ")'s next is not this");
+		if (theNext != null && theNext.thePrevious != this)
+			throw new IllegalStateException("(" + this + "): next (" + theNext + ")'s previous is not this");
 		Integer blackDepth = (Integer) properties.get("black-depth");
 		if(isRed) {
 			if((theLeft != null && theLeft.isRed) || (theRight != null && theRight.isRed))
@@ -541,23 +547,7 @@ public class RedBlackNode<E> {
 	 * @return The closest (in value) node to this node on one side or the other
 	 */
 	public RedBlackNode<E> getClosest(boolean left) {
-		RedBlackNode<E> child = getChild(left);
-		if(child != null) {
-			RedBlackNode<E> next = child.getChild(!left);
-			while(next != null) {
-				child = next;
-				next = next.getChild(!left);
-			}
-			return child;
-		} else {
-			RedBlackNode<E> parent = theParent;
-			child = this;
-			while(parent != null && parent.getChild(left) == child) {
-				child = parent;
-				parent = parent.theParent;
-			}
-			return parent;
-		}
+		return left ? thePrevious : theNext;
 	}
 
 	@Override

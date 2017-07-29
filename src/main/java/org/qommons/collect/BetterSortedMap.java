@@ -8,7 +8,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
-import org.qommons.collect.MutableElementHandle.StdMsg;
+import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, V> {
 	@Override
@@ -329,13 +329,13 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		@Override
-		public <T> T ofElementAt(int index, Function<? super ElementHandle<? extends Map.Entry<K, V>>, T> onElement) {
+		public <T> T ofElementAt(int index, Function<? super CollectionElement<? extends Map.Entry<K, V>>, T> onElement) {
 			return getMap().keySet().ofElementAt(index,
 				keyEl -> getMap().ofEntry(keyEl.getElementId(), entry -> onElement.apply(handleFor(entry))));
 		}
 
 		@Override
-		public <T> T ofMutableElementAt(int index, Function<? super MutableElementHandle<? extends Map.Entry<K, V>>, T> onElement) {
+		public <T> T ofMutableElementAt(int index, Function<? super MutableCollectionElement<? extends Map.Entry<K, V>>, T> onElement) {
 			return getMap().keySet().ofMutableElementAt(index,
 				keyEl -> getMap().ofMutableEntry(keyEl.getElementId(), entry -> onElement.apply(mutableHandleFor(entry))));
 		}
@@ -361,13 +361,13 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 		@Override
 		public boolean forElement(Comparable<? super Map.Entry<K, V>> search,
-			Consumer<? super ElementHandle<? extends Map.Entry<K, V>>> onElement, SortedSearchFilter filter) {
+			Consumer<? super CollectionElement<? extends Map.Entry<K, V>>> onElement, SortedSearchFilter filter) {
 			return getMap().forEntry(keyCompare(search), entry -> onElement.accept(handleFor(entry)), filter);
 		}
 
 		@Override
 		public boolean forMutableElement(Comparable<? super Map.Entry<K, V>> search,
-			Consumer<? super MutableElementHandle<? extends Map.Entry<K, V>>> onElement, SortedSearchFilter filter) {
+			Consumer<? super MutableCollectionElement<? extends Map.Entry<K, V>>> onElement, SortedSearchFilter filter) {
 			return getMap().forMutableEntry(keyCompare(search), entry -> onElement.accept(mutableHandleFor(entry)), filter);
 		}
 

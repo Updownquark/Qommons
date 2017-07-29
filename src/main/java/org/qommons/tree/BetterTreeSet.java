@@ -6,10 +6,10 @@ import java.util.function.Consumer;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.ElementHandle;
+import org.qommons.collect.CollectionElement;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
-import org.qommons.collect.MutableElementHandle;
+import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.StampedLockingStrategy;
 
@@ -37,7 +37,7 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 	}
 
 	@Override
-	public boolean forElement(Comparable<? super E> search, Consumer<? super ElementHandle<? extends E>> onElement,
+	public boolean forElement(Comparable<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement,
 		SortedSearchFilter filter) {
 		try (Transaction t = lock(false, null)) {
 			if (isEmpty())
@@ -51,7 +51,7 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 	}
 
 	@Override
-	public boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableElementHandle<? extends E>> onElement,
+	public boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableCollectionElement<? extends E>> onElement,
 		SortedSearchFilter filter) {
 		try (Transaction t = lock(true, null)) {
 			if (isEmpty())

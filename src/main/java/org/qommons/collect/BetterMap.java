@@ -9,7 +9,7 @@ import java.util.function.Function;
 
 import org.qommons.Transactable;
 import org.qommons.Transaction;
-import org.qommons.collect.MutableElementHandle.StdMsg;
+import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	@Override
@@ -219,25 +219,25 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public boolean forElement(Map.Entry<K, V> value, Consumer<? super ElementHandle<? extends Map.Entry<K, V>>> onElement,
+		public boolean forElement(Map.Entry<K, V> value, Consumer<? super CollectionElement<? extends Map.Entry<K, V>>> onElement,
 			boolean first) {
 			return theMap.forEntry(value.getKey(), entry -> onElement.accept(handleFor(entry)));
 		}
 
 		@Override
-		public boolean forMutableElement(Map.Entry<K, V> value, Consumer<? super MutableElementHandle<? extends Map.Entry<K, V>>> onElement,
+		public boolean forMutableElement(Map.Entry<K, V> value, Consumer<? super MutableCollectionElement<? extends Map.Entry<K, V>>> onElement,
 			boolean first) {
 			return theMap.forMutableEntry(value.getKey(), entry -> onElement.accept(mutableHandleFor(entry)));
 		}
 
 		@Override
-		public <T> T ofElementAt(ElementId elementId, Function<? super ElementHandle<? extends Map.Entry<K, V>>, T> onElement) {
+		public <T> T ofElementAt(ElementId elementId, Function<? super CollectionElement<? extends Map.Entry<K, V>>, T> onElement) {
 			return theMap.ofEntry(elementId, entry -> onElement.apply(handleFor(entry)));
 		}
 
 		@Override
 		public <T> T ofMutableElementAt(ElementId elementId,
-			Function<? super MutableElementHandle<? extends Map.Entry<K, V>>, T> onElement) {
+			Function<? super MutableCollectionElement<? extends Map.Entry<K, V>>, T> onElement) {
 			return theMap.ofMutableEntry(elementId, entry -> onElement.apply(mutableHandleFor(entry)));
 		}
 
@@ -246,8 +246,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			return wrap(theMap.keySet().mutableSpliterator(fromStart));
 		}
 
-		protected ElementHandle<Map.Entry<K, V>> handleFor(MapEntryHandle<K, V> entry) {
-			return new ElementHandle<Map.Entry<K, V>>() {
+		protected CollectionElement<Map.Entry<K, V>> handleFor(MapEntryHandle<K, V> entry) {
+			return new CollectionElement<Map.Entry<K, V>>() {
 				@Override
 				public ElementId getElementId() {
 					return entry.getElementId();
@@ -275,8 +275,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			};
 		}
 
-		protected MutableElementHandle<Map.Entry<K, V>> mutableHandleFor(MutableMapEntryHandle<K, V> entry) {
-			return new MutableElementHandle<Map.Entry<K, V>>() {
+		protected MutableCollectionElement<Map.Entry<K, V>> mutableHandleFor(MutableMapEntryHandle<K, V> entry) {
+			return new MutableCollectionElement<Map.Entry<K, V>>() {
 				@Override
 				public ElementId getElementId() {
 					return entry.getElementId();
@@ -379,24 +379,24 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			}
 
 			@Override
-			public boolean tryAdvanceElement(Consumer<? super ElementHandle<Map.Entry<K, V>>> action) {
+			public boolean tryAdvanceElement(Consumer<? super CollectionElement<Map.Entry<K, V>>> action) {
 				return theKeySpliter.tryAdvance(key -> theMap.forEntry(key, entry -> action.accept(handleFor(entry))));
 			}
 
 			@Override
-			public boolean tryReverseElement(Consumer<? super ElementHandle<Map.Entry<K, V>>> action) {
+			public boolean tryReverseElement(Consumer<? super CollectionElement<Map.Entry<K, V>>> action) {
 				return theKeySpliter.tryReverse(key -> theMap.forEntry(key, entry -> action.accept(handleFor(entry))));
 			}
 
 			@Override
-			public boolean tryAdvanceElementM(Consumer<? super MutableElementHandle<Map.Entry<K, V>>> action) {
+			public boolean tryAdvanceElementM(Consumer<? super MutableCollectionElement<Map.Entry<K, V>>> action) {
 				// Using the mutable version on the key spliterator to avoid problems upgrading a read to a write lock
 				return theKeySpliter
 					.tryAdvanceElementM(keyEl -> theMap.forMutableEntry(keyEl.get(), entry -> action.accept(mutableHandleFor(entry))));
 			}
 
 			@Override
-			public boolean tryReverseElementM(Consumer<? super MutableElementHandle<Map.Entry<K, V>>> action) {
+			public boolean tryReverseElementM(Consumer<? super MutableCollectionElement<Map.Entry<K, V>>> action) {
 				// Using the mutable version on the key spliterator to avoid problems upgrading a read to a write lock
 				return theKeySpliter
 					.tryReverseElementM(keyEl -> theMap.forMutableEntry(keyEl.get(), entry -> action.accept(mutableHandleFor(entry))));
@@ -467,7 +467,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public boolean forElement(V value, Consumer<? super ElementHandle<? extends V>> onElement, boolean first) {
+		public boolean forElement(V value, Consumer<? super CollectionElement<? extends V>> onElement, boolean first) {
 			try (Transaction t = lock(false, null)) {
 				ElementSpliterator<V> spliter = first ? spliterator(first) : spliterator(first).reverse();
 				boolean[] success = new boolean[1];
@@ -483,7 +483,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public boolean forMutableElement(V value, Consumer<? super MutableElementHandle<? extends V>> onElement, boolean first) {
+		public boolean forMutableElement(V value, Consumer<? super MutableCollectionElement<? extends V>> onElement, boolean first) {
 			try (Transaction t = lock(false, null)) {
 				MutableElementSpliterator<V> spliter = first ? mutableSpliterator(first) : mutableSpliterator(first).reverse();
 				boolean[] success = new boolean[1];
@@ -499,12 +499,12 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public <T> T ofElementAt(ElementId elementId, Function<? super ElementHandle<? extends V>, T> onElement) {
+		public <T> T ofElementAt(ElementId elementId, Function<? super CollectionElement<? extends V>, T> onElement) {
 			return theMap.ofEntry(elementId, entry -> onElement.apply(entry));
 		}
 
 		@Override
-		public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableElementHandle<? extends V>, T> onElement) {
+		public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableCollectionElement<? extends V>, T> onElement) {
 			return theMap.ofMutableEntry(elementId, entry -> onElement.apply(entry));
 		}
 
@@ -533,23 +533,23 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 				}
 
 				@Override
-				public boolean tryAdvanceElement(Consumer<? super ElementHandle<V>> action) {
+				public boolean tryAdvanceElement(Consumer<? super CollectionElement<V>> action) {
 					return theKeySpliter.tryAdvanceElement(keyEl -> theMap.forEntry(keyEl.getElementId(), entry -> action.accept(entry)));
 				}
 
 				@Override
-				public boolean tryReverseElement(Consumer<? super ElementHandle<V>> action) {
+				public boolean tryReverseElement(Consumer<? super CollectionElement<V>> action) {
 					return theKeySpliter.tryReverseElement(keyEl -> theMap.forEntry(keyEl.getElementId(), entry -> action.accept(entry)));
 				}
 
 				@Override
-				public boolean tryAdvanceElementM(Consumer<? super MutableElementHandle<V>> action) {
+				public boolean tryAdvanceElementM(Consumer<? super MutableCollectionElement<V>> action) {
 					return theKeySpliter
 						.tryAdvanceElementM(keyEl -> theMap.forMutableEntry(keyEl.getElementId(), entry -> action.accept(entry)));
 				}
 
 				@Override
-				public boolean tryReverseElementM(Consumer<? super MutableElementHandle<V>> action) {
+				public boolean tryReverseElementM(Consumer<? super MutableCollectionElement<V>> action) {
 					return theKeySpliter
 						.tryReverseElementM(keyEl -> theMap.forMutableEntry(keyEl.getElementId(), entry -> action.accept(entry)));
 				}
