@@ -64,6 +64,11 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 		}
 
 		@Override
+		public ElementId getElementId() {
+			return theWrapped.getElementId();
+		}
+
+		@Override
 		public boolean isPresent() {
 			return theWrapped.isPresent();
 		}

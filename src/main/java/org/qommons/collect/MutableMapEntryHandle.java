@@ -64,6 +64,11 @@ public interface MutableMapEntryHandle<K, V> extends MapEntryHandle<K, V>, Mutab
 		}
 
 		@Override
+		public boolean isPresent() {
+			return theWrapped.isPresent();
+		}
+
+		@Override
 		public K getKey() {
 			return theWrapped.getKey();
 		}

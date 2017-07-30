@@ -35,29 +35,18 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		return keySet().lock(write, cause);
 	}
 
-	ElementId putEntry(K key, V value);
+	MapEntryHandle<K, V> putEntry(K key, V value);
 
-	boolean forEntry(K key, Consumer<? super MapEntryHandle<K, V>> onEntry);
+	MapEntryHandle<K, V> getEntry(K key);
 
-	boolean forMutableEntry(K key, Consumer<? super MutableMapEntryHandle<K, V>> onEntry);
-
-	<X> X ofEntry(ElementId entryId, Function<? super MapEntryHandle<K, V>, X> onEntry);
-
-	<X> X ofMutableEntry(ElementId entryId, Function<? super MutableMapEntryHandle<K, V>, X> onEntry);
-
-	default void forEntry(ElementId entryId, Consumer<? super MapEntryHandle<K, V>> onEntry) {
-		ofEntry(entryId, entry -> {
-			onEntry.accept(entry);
+	default void forMutableEntry(MapEntryHandle<K, V> entry, Consumer<? super MutableMapEntryHandle<K, V>> onEntry) {
+		ofMutableEntry(entry, el -> {
+			onEntry.accept(el);
 			return null;
 		});
 	}
 
-	default void forMutableEntry(ElementId entryId, Consumer<? super MutableMapEntryHandle<K, V>> onEntry) {
-		ofMutableEntry(entryId, entry -> {
-			onEntry.accept(entry);
-			return null;
-		});
-	}
+	<X> X ofMutableEntry(MapEntryHandle<K, V> entryId, Function<? super MutableMapEntryHandle<K, V>, X> onEntry);
 
 	default BetterMap<K, V> reverse() {
 		return new ReversedMap<>(this);
@@ -87,33 +76,38 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	default V get(Object key) {
 		if (!keySet().belongs(key))
 			return null;
-		Object[] value = new Object[1];
-		if (!forEntry((K) key, entry -> value[0] = entry.get()))
-			return null;
-		return (V) value[0];
+		MapEntryHandle<K, V> entry = getEntry((K) key);
+		return entry == null ? null : entry.get();
 	}
 
 	@Override
 	default V remove(Object key) {
 		if (!keySet().belongs(key))
 			return null;
-		Object[] value = new Object[1];
-		if (!forMutableEntry((K) key, entry -> {
-			value[0] = entry.get();
-			entry.remove();
-		}))
+		MapEntryHandle<K, V> entry = getEntry((K) key);
+		if (entry == null)
 			return null;
-		return (V) value[0];
+		return ofMutableEntry(entry, el -> {
+			V old = el.get();
+			el.remove();
+			return old;
+		});
 	}
 
 	@Override
 	default V put(K key, V value) {
-		Object[] old = new Object[1];
-		if (forMutableEntry(key, entry -> old[0] = entry.setValue(value)))
-			return (V) old[0];
-		else {
-			putEntry(key, value);
-			return null;
+		try (Transaction t = lock(true, null)) {
+			MapEntryHandle<K, V> entry = getEntry(key);
+			if (entry != null)
+				return ofMutableEntry(entry, el -> {
+					V old = el.get();
+					el.set(value);
+					return old;
+				});
+			else {
+				putEntry(key, value);
+				return null;
+			}
 		}
 	}
 
@@ -147,8 +141,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public ElementId putEntry(K key, V value) {
-			return ElementId.reverse(theWrapped.putEntry(key, value));
+		public MapEntryHandle<K, V> putEntry(K key, V value) {
+			return theWrapped.putEntry(key, value).reverse();
 		}
 
 		@Override
@@ -157,18 +151,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public boolean forMutableEntry(K key, Consumer<? super MutableMapEntryHandle<K, V>> onElement) {
-			return theWrapped.forMutableEntry(key, el -> onElement.accept(el.reverse()));
-		}
-
-		@Override
-		public <X> X ofEntry(ElementId entryId, Function<? super MapEntryHandle<K, V>, X> onElement) {
-			return theWrapped.ofEntry(entryId.reverse(), el -> onElement.apply(el.reverse()));
-		}
-
-		@Override
-		public <X> X ofMutableEntry(ElementId entryId, Function<? super MutableMapEntryHandle<K, V>, X> onElement) {
-			return theWrapped.ofMutableEntry(entryId.reverse(), el -> onElement.apply(el.reverse()));
+		public <X> X ofMutableEntry(MapEntryHandle<K, V> entry, Function<? super MutableMapEntryHandle<K, V>, X> onElement) {
+			return theWrapped.ofMutableEntry(entry.reverse(), el -> onElement.apply(el.reverse()));
 		}
 	}
 

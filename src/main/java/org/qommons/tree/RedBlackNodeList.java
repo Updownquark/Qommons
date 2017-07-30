@@ -193,6 +193,16 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		public int compareTo(ElementId id) {
 			return theNode.getNodesBefore() - ((NodeId) id).theNode.getNodesBefore();
 		}
+
+		@Override
+		public int hashCode() {
+			return theNode.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			return o instanceof RedBlackNodeList.NodeId && theNode.equals(((NodeId) o).theNode);
+		}
 	}
 
 	class NodeWrapper implements BinaryTreeNode<E> {

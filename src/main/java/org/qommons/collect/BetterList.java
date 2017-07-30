@@ -36,13 +36,13 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 * @param id The element
 	 * @return The number of elements in this collection positioned before the given element
 	 */
-	int getElementsBefore(CollectionElement<E> id);
+	int getElementsBefore(ElementId id);
 
 	/**
 	 * @param id The element
 	 * @return The number of elements in this collection positioned after the given element
 	 */
-	int getElementsAfter(CollectionElement<E> id);
+	int getElementsAfter(ElementId id);
 
 	/**
 	 * @param value The value to get the index of in this collection
@@ -54,7 +54,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		if (!belongs(value))
 			return -1;
 		CollectionElement<E> element = getElement((E) value, true);
-		return element == null ? -1 : getElementsBefore(element);
+		return element == null ? -1 : getElementsBefore(element.getElementId());
 	}
 
 	/**
@@ -67,7 +67,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		if (!belongs(value))
 			return -1;
 		CollectionElement<E> element = getElement((E) value, false);
-		return element == null ? -1 : getElementsBefore(element);
+		return element == null ? -1 : getElementsBefore(element.getElementId());
 	}
 
 	/**
@@ -295,13 +295,13 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public int getElementsBefore(CollectionElement<E> id) {
-			return getWrapped().getElementsAfter(id);
+		public int getElementsBefore(ElementId id) {
+			return getWrapped().getElementsAfter(id.reverse());
 		}
 
 		@Override
-		public int getElementsAfter(CollectionElement<E> id) {
-			return getWrapped().getElementsBefore(id);
+		public int getElementsAfter(ElementId id) {
+			return getWrapped().getElementsBefore(id.reverse());
 		}
 
 		@Override
@@ -329,12 +329,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public int getElementsBefore(CollectionElement<E> id) {
+		public int getElementsBefore(ElementId id) {
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		}
 
 		@Override
-		public int getElementsAfter(CollectionElement<E> id) {
+		public int getElementsAfter(ElementId id) {
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		}
 
@@ -570,12 +570,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public int nextIndex() {
-			return theList.getElementsBefore(getCurrentElement()) + getSpliteratorCursorOffset();
+			return theList.getElementsBefore(getCurrentElement().getElementId()) + getSpliteratorCursorOffset();
 		}
 
 		@Override
 		public int previousIndex() {
-			return theList.getElementsBefore(getCurrentElement()) + getSpliteratorCursorOffset() - 1;
+			return theList.getElementsBefore(getCurrentElement().getElementId()) + getSpliteratorCursorOffset() - 1;
 		}
 
 		@Override
@@ -622,7 +622,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		public CollectionElement<E> getElement(E value, boolean first) {
 			try (Transaction t = lock(false, null)) {
 				CollectionElement<E> firstMatch = theWrapped.getElement(value, first);
-				int index = getElementsBefore(firstMatch);
+				int index = getElementsBefore(firstMatch.getElementId());
 				if ((first && index >= theEnd) || (!first && index < theStart))
 					return null;
 				ElementSpliterator<E> spliter = theWrapped.spliterator(firstMatch, !first);
@@ -657,7 +657,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public MutableElementSpliterator<E> mutableSpliterator(CollectionElement<E> element, boolean asNext) {
-			return new SubSpliterator(theWrapped.mutableSpliterator(element, asNext), getElementsBefore(element));
+			return new SubSpliterator(theWrapped.mutableSpliterator(element, asNext), getElementsBefore(element.getElementId()));
 		}
 
 		@Override
@@ -666,7 +666,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public int getElementsBefore(CollectionElement<E> id) {
+		public int getElementsBefore(ElementId id) {
 			int wrappedEls = theWrapped.getElementsBefore(id);
 			if (wrappedEls < theStart || wrappedEls >= theEnd)
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
@@ -674,7 +674,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public int getElementsAfter(CollectionElement<E> id) {
+		public int getElementsAfter(ElementId id) {
 			int wrappedEls = theWrapped.getElementsBefore(id);
 			if (wrappedEls < theStart || wrappedEls >= theEnd)
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
@@ -719,6 +719,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		protected MutableCollectionElement<E> wrapElement(MutableCollectionElement<E> el) {
 			return new MutableCollectionElement<E>() {
+				@Override
+				public ElementId getElementId() {
+					return el.getElementId();
+				}
+
 				@Override
 				public boolean isPresent() {
 					return el.isPresent();

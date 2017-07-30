@@ -8,7 +8,7 @@ public interface MapEntryHandle<K, V> extends CollectionElement<V> {
 		return new ReversedMapEntryHandle<>(this);
 	}
 
-	class ReversedMapEntryHandle<K, V> extends ReversedElementHandle<V> implements MapEntryHandle<K, V> {
+	class ReversedMapEntryHandle<K, V> extends ReversedCollectionElement<V> implements MapEntryHandle<K, V> {
 		public ReversedMapEntryHandle(MapEntryHandle<K, V> wrapped) {
 			super(wrapped);
 		}

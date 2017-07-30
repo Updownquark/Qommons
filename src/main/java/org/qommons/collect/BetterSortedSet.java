@@ -1,16 +1,13 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.NavigableSet;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.qommons.Ternian;
 import org.qommons.Transaction;
+import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, NavigableSet<E> {
@@ -104,35 +101,41 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	default String canAdd(E value) {
 		if (!belongs(value))
 			return StdMsg.ILLEGAL_ELEMENT;
-		String[] msg = new String[1];
-		forMutableElement(searchFor(value, 0), el -> {
-			int compare = comparator().compare(value, el.get());
-			if (compare == 0)
-				msg[0] = StdMsg.ELEMENT_EXISTS;
-			else
-				msg[0] = ((MutableCollectionElement<E>) el).canAdd(value, compare < 0);
-		}, SortedSearchFilter.PreferLess);
-		return msg[0];
-	}
-
-	@Override
-	default ElementId addElement(E e) {
 		try (Transaction t = lock(true, null)) {
-			ElementId[] id = new ElementId[1];
-			if (forMutableElement(searchFor(e, 0), el -> {
-				int compare = comparator().compare(e, el.get());
-				if (compare == 0)
-					id[0] = null;
-				else
-					id[0] = ((MutableCollectionElement<E>) el).add(e, compare < 0);
-			}, SortedSearchFilter.PreferLess))
-				return id[0];
-			else
-				return addIfEmpty(e);
+			CollectionElement<E> found = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
+			if (found != null) {
+				return ofMutableElement(found, el -> {
+					int compare = comparator().compare(value, el.get());
+					if (compare == 0)
+						return StdMsg.ELEMENT_EXISTS;
+					else
+						return el.canAdd(value, compare < 0);
+				});
+			} else
+				return null;
 		}
 	}
 
-	ElementId addIfEmpty(E value) throws IllegalStateException;
+	@Override
+	default CollectionElement<E> addElement(E value) {
+		if (!belongs(value))
+			throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
+		try (Transaction t = lock(true, null)) {
+			CollectionElement<E> found = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
+			if (found != null) {
+				return ofMutableElement(found, el -> {
+					int compare = comparator().compare(value, el.get());
+					if (compare == 0)
+						return null;
+					else
+						return el.add(value, compare < 0);
+				});
+			} else
+				return addIfEmpty(value);
+		}
+	}
+
+	CollectionElement<E> addIfEmpty(E value) throws IllegalStateException;
 
 	@Override
 	default boolean remove(Object c) {
@@ -171,72 +174,15 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	}
 
 	/**
-	 * Searches this sorted set for a value
+	 * Searches this sorted set for an element
 	 *
 	 * @param search The search to navigate through this set for the target value. The search must follow this set's {@link #comparator()
 	 *        order}.
 	 * @param filter The filter on the result
-	 * @return The result of the search, or null if no such value was found
+	 * @return The element that is the best found result of the search, or null if this set is empty or does not contain any element
+	 *         matching the given filter
 	 */
-	default E relative(Comparable<? super E> search, SortedSearchFilter filter) {
-		Object[] found = new Object[1];
-		if (!forElement(search, el -> found[0] = el.get(), filter))
-			return null;
-		return (E) found[0];
-	}
-
-	/**
-	 * @param value The value to search for
-	 * @param onElement The action to perform on the element containing the given value, if found
-	 * @return Whether such a value was found
-	 */
-	@Override
-	default boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
-		return forElement(searchFor(value, 0), onElement, SortedSearchFilter.OnlyMatch);
-	}
-
-	/**
-	 * @param value The value to search for
-	 * @param onElement The action to perform on the element containing the given value, if found
-	 * @return Whether such a value was found
-	 */
-	@Override
-	default boolean forMutableElement(E value, Consumer<? super MutableCollectionElement<? extends E>> onElement, boolean first) {
-		return forMutableElement(searchFor(value, 0), onElement, SortedSearchFilter.OnlyMatch);
-	}
-
-	/**
-	 * Searches for a value in this sorted set
-	 * 
-	 * @param search The search to use. Must follow this sorted set's ordering.
-	 * @param onValue The action to perform on the closest found value in the sorted set
-	 * @param filter The filter on the result
-	 * @return True unless this set was empty
-	 */
-	default boolean forValue(Comparable<? super E> search, Consumer<? super E> onValue, SortedSearchFilter filter) {
-		return forElement(search, el -> onValue.accept(el.get()), filter);
-	}
-
-	/**
-	 * Searches for an element in this sorted set
-	 * 
-	 * @param search The search to use. Must follow this sorted set's ordering.
-	 * @param onElement The action to perform on the closest found element in the sorted set
-	 * @param filter The filter on the result
-	 * @return Whether an element matching the filter was found in the set
-	 */
-	boolean forElement(Comparable<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement, SortedSearchFilter filter);
-
-	/**
-	 * Like {@link #forElement(Comparable, Consumer, SortedSearchFilter)}, but provides a mutable element
-	 * 
-	 * @param search The search to use. Must follow this sorted set's ordering.
-	 * @param onElement The action to perform on the closest found element in the sorted set
-	 * @param filter The filter on the result
-	 * @return Whether an element matching the filter was found in the set
-	 */
-	boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableCollectionElement<? extends E>> onElement,
-		SortedSearchFilter filter);
+	CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter);
 
 	@Override
 	default E first() {
@@ -260,22 +206,26 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 	@Override
 	default E floor(E e) {
-		return relative(searchFor(e, 0), SortedSearchFilter.Less);
+		CollectionElement<E> element = search(searchFor(e, 0), SortedSearchFilter.Less);
+		return element == null ? null : element.get();
 	}
 
 	@Override
 	default E lower(E e) {
-		return relative(searchFor(e, 1), SortedSearchFilter.Less);
+		CollectionElement<E> element = search(searchFor(e, 1), SortedSearchFilter.Less);
+		return element == null ? null : element.get();
 	}
 
 	@Override
 	default E ceiling(E e) {
-		return relative(searchFor(e, 0), SortedSearchFilter.Greater);
+		CollectionElement<E> element = search(searchFor(e, 0), SortedSearchFilter.Greater);
+		return element == null ? null : element.get();
 	}
 
 	@Override
 	default E higher(E e) {
-		return relative(searchFor(e, -1), SortedSearchFilter.Greater);
+		CollectionElement<E> element = search(searchFor(e, -1), SortedSearchFilter.Greater);
+		return element == null ? null : element.get();
 	}
 
 	@Override
@@ -292,29 +242,6 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	default Iterator<E> descendingIterator() {
 		return reverse().iterator();
 	}
-
-	/**
-	 * Gets a spliterator for this set, positioned according to a search result. If an exact match is found, that will be the spliterator's
-	 * next element (the one provided via {@link ElementSpliterator#tryAdvanceElement(Consumer)}). Otherwise, if a preferred match (one for
-	 * which ({@link Comparable#compareTo(Object) search.compareTo(value)}>0)<code>==higher</code>), then that will be the next element.
-	 * Otherwise the spliterator will be positioned at the beginning or the end of this set, depending on the search.
-	 * 
-	 * @param searchForStart The search to use to position the search
-	 * @param higher Whether to prefer an element that is higher than the search or lower
-	 * @return The spliterator
-	 */
-	default ElementSpliterator<E> spliterator(Comparable<? super E> searchForStart, boolean higher) {
-		return mutableSpliterator(searchForStart, higher).immutable();
-	}
-
-	/**
-	 * Like {@link #spliterator(Comparable, boolean)}, but returns a mutable spliterator.
-	 * 
-	 * @param searchForStart The search to use to position the search
-	 * @param higher Whether to prefer an element that is higher than the search or lower
-	 * @return The spliterator
-	 */
-	MutableElementSpliterator<E> mutableSpliterator(Comparable<? super E> searchForStart, boolean higher);
 
 	@Override
 	default BetterSortedSet<E> subSet(E fromElement, boolean fromInclusive, E toElement, boolean toInclusive) {
@@ -547,7 +474,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public ElementId addIfEmpty(E value) throws IllegalStateException {
+		public CollectionElement<E> addIfEmpty(E value) throws IllegalStateException {
 			if (!belongs(value))
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 			return theWrapped.addElement(value);
@@ -584,93 +511,39 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public boolean forElement(Comparable<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement,
-			SortedSearchFilter filter) {
-			boolean[] success = new boolean[1];
-			theWrapped.forElement(boundSearch(search), el -> {
-				if (isInRange(el.get()) == 0) {
-					onElement.accept(el);
-					success[0] = true;
-				}
-			}, filter);
-			return success[0];
+		public CollectionElement<E> getElement(int index) {
+			return theWrapped.getElement(checkIndex(index, false));
 		}
 
 		@Override
-		public boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableCollectionElement<? extends E>> onElement,
-			SortedSearchFilter filter) {
-			boolean[] success = new boolean[1];
-			theWrapped.forMutableElement(boundSearch(search), el -> {
-				if (isInRange(el.get()) == 0) {
-					onElement.accept(el);
-					success[0] = true;
-				}
-			}, filter);
-			return success[0];
+		public CollectionElement<E> getElement(E value, boolean first) {
+			if (!belongs(value))
+				return null;
+			return theWrapped.getElement(value, first);
 		}
 
 		@Override
-		public <T> T ofElementAt(int index, Function<? super CollectionElement<? extends E>, T> onElement) {
-			int minIdx = getMinIndex();
-			int maxIdx = getMaxIndex();
-			if (index < 0 || index > (maxIdx - minIdx))
-				throw new IndexOutOfBoundsException(index + " of " + (maxIdx - minIdx + 1));
-			return theWrapped.ofElementAt(index, onElement);
+		public <X> X ofMutableElement(CollectionElement<E> element, Function<? super MutableCollectionElement<E>, X> onElement) {
+			if (isInRange(element.get()) != 0)
+				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+			return theWrapped.ofMutableElement(element, el -> onElement.apply(new BoundedMutableElement(el)));
 		}
 
 		@Override
-		public <T> T ofMutableElementAt(int index, Function<? super MutableCollectionElement<? extends E>, T> onElement) {
-			int minIdx = getMinIndex();
-			int maxIdx = getMaxIndex();
-			if (index < 0 || index > (maxIdx - minIdx))
-				throw new IndexOutOfBoundsException(index + " of " + (maxIdx - minIdx + 1));
-			return theWrapped.ofMutableElementAt(index, onElement);
+		public MutableElementSpliterator<E> mutableSpliterator(CollectionElement<E> element, boolean asNext) {
+			if (isInRange(element.get()) != 0)
+				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+			return new BoundedMutableSpliterator(theWrapped.mutableSpliterator(element, asNext));
 		}
 
 		@Override
-		public <T> T ofElementAt(ElementId elementId, Function<? super CollectionElement<? extends E>, T> onElement) {
-			return theWrapped.ofElementAt(elementId, el -> {
-				if (isInRange(el.get()) != 0)
-					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-				return onElement.apply(el);
-			});
+		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+			return theWrapped.search(boundSearch(search), filter);
 		}
 
 		@Override
-		public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableCollectionElement<? extends E>, T> onElement) {
-			return theWrapped.ofMutableElementAt(elementId, el -> {
-				if (isInRange(el.get()) != 0)
-					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-				return onElement.apply(el);
-			});
-		}
-
-		@Override
-		public E relative(Comparable<? super E> search, SortedSearchFilter filter) {
-			E v = theWrapped.relative(boundSearch(search), filter);
-			return (v != null && isInRange(v) == 0) ? v : null;
-		}
-
-		@Override
-		public BetterSortedSet<E> subSet(Comparable<? super E> from, Comparable<? super E> to) {
-			return new BetterSubSet<>(theWrapped, boundSearch(from), boundSearch(to));
-		}
-
-		@Override
-		public ElementSpliterator<E> spliterator(boolean fromStart) {
-			ElementSpliterator<E> wrapSpliter;
-			if (fromStart) {
-				if (from == null)
-					wrapSpliter = theWrapped.spliterator(true);
-				else
-					wrapSpliter = theWrapped.spliterator(from, true);
-			} else {
-				if (to == null)
-					wrapSpliter = theWrapped.spliterator(false);
-				else
-					wrapSpliter = theWrapped.spliterator(to, false);
-			}
-			return new BoundedSpliterator(wrapSpliter);
+		public BetterSortedSet<E> subSet(Comparable<? super E> innerFrom, Comparable<? super E> innerTo) {
+			return new BetterSubSet<>(theWrapped, boundSearch(innerFrom), boundSearch(innerTo));
 		}
 
 		@Override
@@ -679,25 +552,25 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			if (fromStart) {
 				if (from == null)
 					wrapSpliter = theWrapped.mutableSpliterator(true);
-				else
-					wrapSpliter = theWrapped.mutableSpliterator(from, true);
+				else {
+					CollectionElement<E> element = theWrapped.search(from, SortedSearchFilter.PreferGreater);
+					if (element == null)
+						wrapSpliter = theWrapped.mutableSpliterator(true);
+					else
+						wrapSpliter = theWrapped.mutableSpliterator(element, from.compareTo(element.get()) <= 0);
+				}
 			} else {
 				if (to == null)
 					wrapSpliter = theWrapped.mutableSpliterator(false);
-				else
-					wrapSpliter = theWrapped.mutableSpliterator(to, false);
+				else {
+					CollectionElement<E> element = theWrapped.search(to, SortedSearchFilter.PreferLess);
+					if (element == null)
+						wrapSpliter = theWrapped.mutableSpliterator(true);
+					else
+						wrapSpliter = theWrapped.mutableSpliterator(element, to.compareTo(element.get()) > 0);
+				}
 			}
 			return new BoundedMutableSpliterator(wrapSpliter);
-		}
-
-		@Override
-		public ElementSpliterator<E> spliterator(Comparable<? super E> search, boolean higher) {
-			return new BoundedSpliterator(theWrapped.spliterator(boundSearch(search), higher));
-		}
-
-		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(Comparable<? super E> search, boolean higher) {
-			return new BoundedMutableSpliterator(theWrapped.mutableSpliterator(boundSearch(search), higher));
 		}
 
 		@Override
@@ -823,7 +696,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 				if (getWrappedSpliter().tryAdvanceElementM(el -> {
 					if (isInRange(el.get()) == 0) {
 						success[0] = true;
-						action.accept(new BoundedMutableElement<>(el));
+						action.accept(new BoundedMutableElement(el));
 					}
 				}) && !success[0]) {
 					// If there was a super-set element that was not in range, need to back up back to the last in-range element
@@ -839,7 +712,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 				if (getWrappedSpliter().tryReverseElementM(el -> {
 					if (isInRange(el.get()) == 0) {
 						success[0] = true;
-						action.accept(new BoundedMutableElement<>(el));
+						action.accept(new BoundedMutableElement(el));
 					}
 				}) && !success[0]) {
 					// If there was a super-set element that was not in range, need to back up back to the last in-range element
@@ -856,10 +729,10 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 		}
 
-		class BoundedMutableElement<T extends E> implements MutableCollectionElement<T> {
-			private final MutableCollectionElement<T> theWrappedEl;
+		class BoundedMutableElement implements MutableCollectionElement<E> {
+			private final MutableCollectionElement<E> theWrappedEl;
 
-			BoundedMutableElement(MutableCollectionElement<T> wrappedEl) {
+			BoundedMutableElement(MutableCollectionElement<E> wrappedEl) {
 				theWrappedEl = wrappedEl;
 			}
 
@@ -869,7 +742,12 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 
 			@Override
-			public T get() {
+			public boolean isPresent() {
+				return theWrappedEl.isPresent();
+			}
+
+			@Override
+			public E get() {
 				return theWrappedEl.get();
 			}
 
@@ -879,14 +757,14 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 
 			@Override
-			public String isAcceptable(T value) {
+			public String isAcceptable(E value) {
 				if (isInRange(value) != 0)
 					return StdMsg.ILLEGAL_ELEMENT;
 				return theWrappedEl.isAcceptable(value);
 			}
 
 			@Override
-			public void set(T value) throws IllegalArgumentException, UnsupportedOperationException {
+			public void set(E value) throws IllegalArgumentException, UnsupportedOperationException {
 				if (isInRange(value) != 0)
 					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 				theWrappedEl.set(value);
@@ -903,14 +781,14 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 
 			@Override
-			public String canAdd(T value, boolean before) {
+			public String canAdd(E value, boolean before) {
 				if (isInRange(value) != 0)
 					return StdMsg.ILLEGAL_ELEMENT;
 				return theWrappedEl.canAdd(value, before);
 			}
 
 			@Override
-			public ElementId add(T value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+			public CollectionElement<E> add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
 				if (isInRange(value) != 0)
 					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 				return theWrappedEl.add(value, before);
@@ -955,18 +833,18 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 		}
 
+		@Override
+		public CollectionElement<E> addIfEmpty(E value) throws IllegalStateException {
+			return CollectionElement.reverse(getWrapped().addIfEmpty(value));
+		}
+
 		private static <X> Comparable<X> reverse(Comparable<X> compare) {
 			return v -> -compare.compareTo(v);
 		}
 
 		@Override
-		public E relative(Comparable<? super E> search, SortedSearchFilter filter) {
-			return getWrapped().relative(search, filter.opposite());
-		}
-
-		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(Comparable<? super E> value, boolean higher) {
-			return getWrapped().mutableSpliterator(reverse(value), !higher).reverse();
+		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+			return getWrapped().search(reverse(search), filter.opposite());
 		}
 
 		@Override
@@ -987,23 +865,6 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		@Override
 		public BetterSortedSet<E> reverse() {
 			return getWrapped();
-		}
-
-		@Override
-		public boolean forElement(Comparable<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement,
-			SortedSearchFilter filter) {
-			return getWrapped().forElement(reverse(search), el -> onElement.accept(el.reverse()), filter.opposite());
-		}
-
-		@Override
-		public boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableCollectionElement<? extends E>> onElement,
-			SortedSearchFilter filter) {
-			return getWrapped().forMutableElement(reverse(search), el -> onElement.accept(el.reverse()), filter.opposite());
-		}
-
-		@Override
-		public ElementId addIfEmpty(E value) throws IllegalStateException {
-			return ElementId.reverse(getWrapped().addIfEmpty(value));
 		}
 	}
 }
