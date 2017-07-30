@@ -170,11 +170,6 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 	}
 
 	@Override
-	default int compareTo(CollectionElement<E> o) {
-		return getNodesBefore() - ((BinaryTreeNode<E>) o).getNodesBefore();
-	}
-
-	@Override
 	default BinaryTreeNode<E> reverse() {
 		return new ReversedBinaryTreeNode<>(this);
 	}

@@ -11,9 +11,16 @@ package org.qommons.collect;
  * @param <E> The type of value in the element
  */
 public interface CollectionElement<E> extends Comparable<CollectionElement<E>> {
+	ElementId getElementId();
+
 	boolean isPresent();
 
 	E get();
+
+	@Override
+	default int compareTo(CollectionElement<E> other) {
+		return getElementId().compareTo(other.getElementId());
+	}
 
 	default CollectionElement<E> reverse() {
 		return new ReversedCollectionElement<>(this);
@@ -31,13 +38,13 @@ public interface CollectionElement<E> extends Comparable<CollectionElement<E>> {
 		}
 
 		@Override
-		public boolean isPresent() {
-			return theWrapped.isPresent();
+		public ElementId getElementId() {
+			return theWrapped.getElementId().reverse();
 		}
 
 		@Override
-		public int compareTo(CollectionElement<E> o) {
-			return -theWrapped.compareTo(o.reverse());
+		public boolean isPresent() {
+			return theWrapped.isPresent();
 		}
 
 		@Override

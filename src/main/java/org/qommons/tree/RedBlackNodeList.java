@@ -84,7 +84,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 	@Override
 	public MutableElementSpliterator<E> mutableSpliterator(CollectionElement<E> element, boolean asNext) {
-		return new MutableNodeSpliterator(checkNode(element).theNode, asNext);
+		return new MutableNodeSpliterator(checkNode(element.getElementId()).theNode, asNext);
 	}
 
 	@Override
@@ -96,9 +96,9 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public <T> T ofMutableElement(CollectionElement<E> elementId, Function<? super MutableCollectionElement<E>, T> onElement) {
+	public <T> T ofMutableElement(CollectionElement<E> element, Function<? super MutableCollectionElement<E>, T> onElement) {
 		try (Transaction t = lock(true, null)) {
-			return onElement.apply(mutableNodeFor(elementId));
+			return onElement.apply(mutableNodeFor(element));
 		}
 	}
 
@@ -125,21 +125,6 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public BinaryTreeNode<E> addElement(int index, E value) {
-		BinaryTreeNode<E>[] node = new BinaryTreeNode[1];
-		try (Transaction t = lock(true, null)) {
-			if (theRoot == null) {
-				if (index == 0)
-					node[0] = wrap(theRoot = new RedBlackNode<>(value));
-				else
-					throw new IndexOutOfBoundsException(index + " of 0");
-			} else
-				mutableSpliterator(index).tryReverseElementM(el -> node[0] = (BinaryTreeNode<E>) el.add(value, false));
-		}
-		return node[0];
-	}
-
-	@Override
 	public boolean addAll(Collection<? extends E> c) {
 		try (Transaction t = lock(true, null); Transaction t2 = Transactable.lock(c, false, null)) {
 			for (E value : c)
@@ -153,16 +138,16 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		theRoot = null;
 	}
 
-	public BinaryTreeNode<E> nodeFor(CollectionElement<E> elementId) {
-		return checkNode(elementId);
+	public BinaryTreeNode<E> nodeFor(CollectionElement<E> element) {
+		return wrap(checkNode(element.getElementId()).theNode);
 	}
 
 	protected MutableBinaryTreeNode<E> mutableNodeFor(CollectionElement<E> node) {
-		return wrapMutable(checkNode(node).theNode);
+		return wrapMutable(checkNode(node.getElementId()).theNode);
 	}
 
 	protected MutableBinaryTreeNode<E> mutableNodeFor(BinaryTreeNode<E> node) {
-		return wrapMutable(checkNode(node).theNode);
+		return wrapMutable(checkNode(node.getElementId()).theNode);
 	}
 
 	protected MutableElementSpliterator<E> mutableSpliterator(BinaryTreeNode<E> node, boolean next) {
@@ -171,17 +156,18 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 	protected MutableElementSpliterator<E> mutableSpliterator(BinaryTreeNode<E> node, boolean next, BinaryTreeNode<E> leftBound,
 		BinaryTreeNode<E> rightBound) {
-		return new MutableNodeSpliterator(checkNode(node).theNode, next, leftBound == null ? null : checkNode(leftBound).theNode,
-			rightBound == null ? null : checkNode(rightBound).theNode);
+		return new MutableNodeSpliterator(checkNode(node.getElementId()).theNode, next,
+			leftBound == null ? null : checkNode(leftBound.getElementId()).theNode,
+			rightBound == null ? null : checkNode(rightBound.getElementId()).theNode);
 	}
 
-	private NodeWrapper checkNode(Object nodeRef) {
-		if (!(nodeRef instanceof RedBlackNodeList.NodeWrapper))
+	private NodeId checkNode(ElementId id) {
+		if (!(id instanceof RedBlackNodeList.NodeId))
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-		NodeWrapper node = (NodeWrapper) nodeRef;
-		if (!node.isPresent())
+		NodeId nodeId = (NodeId) id;
+		if (!nodeId.isPresent())
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-		return node;
+		return nodeId;
 	}
 
 	private NodeWrapper wrap(RedBlackNode<E> node) {
@@ -192,11 +178,33 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		return node == null ? null : new MutableNodeWrapper(node);
 	}
 
+	class NodeId implements ElementId {
+		final RedBlackNode<E> theNode;
+
+		NodeId(RedBlackNode<E> node) {
+			theNode = node;
+		}
+
+		boolean isPresent() {
+			return theNode.getParent() != null || theRoot == theNode;
+		}
+
+		@Override
+		public int compareTo(ElementId id) {
+			return theNode.getNodesBefore() - ((NodeId) id).theNode.getNodesBefore();
+		}
+	}
+
 	class NodeWrapper implements BinaryTreeNode<E> {
 		final RedBlackNode<E> theNode;
 
 		NodeWrapper(RedBlackNode<E> node) {
 			theNode = node;
+		}
+
+		@Override
+		public ElementId getElementId() {
+			return new NodeId(theNode);
 		}
 
 		@Override
@@ -550,6 +558,11 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 			}
 
 			@Override
+			public ElementId getElementId() {
+				return theWrapped.getElementId();
+			}
+
+			@Override
 			public boolean isPresent() {
 				return theWrapped.isPresent();
 			}
@@ -649,7 +662,9 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 			@Override
 			public boolean equals(Object obj) {
-				return theNode.equals(checkNode(obj).theNode);
+				if (!(obj instanceof RedBlackNodeList.NodeId))
+					return false;
+				return theNode.equals(((NodeId) obj).theNode);
 			}
 		}
 	}
