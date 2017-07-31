@@ -1,7 +1,11 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.NavigableSet;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -104,7 +108,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		try (Transaction t = lock(true, null)) {
 			CollectionElement<E> found = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
 			if (found != null) {
-				return ofMutableElement(found, el -> {
+				return ofMutableElement(found.getElementId(), el -> {
 					int compare = comparator().compare(value, el.get());
 					if (compare == 0)
 						return StdMsg.ELEMENT_EXISTS;
@@ -123,13 +127,14 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		try (Transaction t = lock(true, null)) {
 			CollectionElement<E> found = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
 			if (found != null) {
-				return ofMutableElement(found, el -> {
+				ElementId id = ofMutableElement(found.getElementId(), el -> {
 					int compare = comparator().compare(value, el.get());
 					if (compare == 0)
 						return null;
 					else
 						return el.add(value, compare < 0);
 				});
+				return id == null ? null : getElement(id);
 			} else
 				return addIfEmpty(value);
 		}
@@ -183,6 +188,11 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	 *         matching the given filter
 	 */
 	CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter);
+
+	@Override
+	default CollectionElement<E> getElement(E value, boolean first) {
+		return search(searchFor(value, 0), SortedSearchFilter.OnlyMatch);
+	}
 
 	@Override
 	default E first() {
@@ -523,17 +533,29 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public <X> X ofMutableElement(CollectionElement<E> element, Function<? super MutableCollectionElement<E>, X> onElement) {
-			if (isInRange(element.get()) != 0)
+		public CollectionElement<E> getElement(ElementId id) {
+			CollectionElement<E> el = theWrapped.getElement(id);
+			if (isInRange(el.get()) != 0)
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			return theWrapped.ofMutableElement(element, el -> onElement.apply(new BoundedMutableElement(el)));
+			return el;
 		}
 
 		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(CollectionElement<E> element, boolean asNext) {
-			if (isInRange(element.get()) != 0)
-				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			return new BoundedMutableSpliterator(theWrapped.mutableSpliterator(element, asNext));
+		public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement) {
+			return theWrapped.ofMutableElement(element, el -> {
+				if (isInRange(el.get()) != 0)
+					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+				return onElement.apply(new BoundedMutableElement(el));
+			});
+		}
+
+		@Override
+		public MutableElementSpliterator<E> mutableSpliterator(ElementId element, boolean asNext) {
+			try (Transaction t = lock(false, null)) {
+				if (isInRange(theWrapped.getElement(element).get()) != 0)
+					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+				return new BoundedMutableSpliterator(theWrapped.mutableSpliterator(element, asNext));
+			}
 		}
 
 		@Override
@@ -557,7 +579,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 					if (element == null)
 						wrapSpliter = theWrapped.mutableSpliterator(true);
 					else
-						wrapSpliter = theWrapped.mutableSpliterator(element, from.compareTo(element.get()) <= 0);
+						wrapSpliter = theWrapped.mutableSpliterator(element.getElementId(), from.compareTo(element.get()) <= 0);
 				}
 			} else {
 				if (to == null)
@@ -567,7 +589,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 					if (element == null)
 						wrapSpliter = theWrapped.mutableSpliterator(true);
 					else
-						wrapSpliter = theWrapped.mutableSpliterator(element, to.compareTo(element.get()) > 0);
+						wrapSpliter = theWrapped.mutableSpliterator(element.getElementId(), to.compareTo(element.get()) > 0);
 				}
 			}
 			return new BoundedMutableSpliterator(wrapSpliter);
@@ -742,11 +764,6 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 
 			@Override
-			public boolean isPresent() {
-				return theWrappedEl.isPresent();
-			}
-
-			@Override
 			public E get() {
 				return theWrappedEl.get();
 			}
@@ -788,7 +805,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 
 			@Override
-			public CollectionElement<E> add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+			public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
 				if (isInRange(value) != 0)
 					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 				return theWrappedEl.add(value, before);

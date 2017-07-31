@@ -12,8 +12,6 @@ import java.util.function.ToIntFunction;
 
 import org.qommons.Transactable;
 import org.qommons.Transaction;
-import org.qommons.collect.MutableCollectionElement.ReversedMutableElement;
-import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.tree.BetterTreeList;
 import org.qommons.tree.BinaryTreeNode;
 import org.qommons.tree.MutableBinaryTreeNode;
@@ -184,7 +182,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public ElementId addElement(E value) {
+	public CollectionElement<E> addElement(E value) {
 		try (Transaction t = lock(true, null)) {
 			int hashCode = theHasher.applyAsInt(value);
 			HashEntry entry = getEntry(hashCode, value);
@@ -203,244 +201,30 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
+	public CollectionElement<E> getElement(E value, boolean first) {
 		try (Transaction t = lock(false, null)) {
 			HashEntry entry = getEntry(theHasher.applyAsInt(value), value);
-			if (entry != null)
-				onElement.accept(entry.immutable());
-			return entry != null;
+			return entry == null ? null : entry.immutable();
 		}
 	}
 
 	@Override
-	public boolean forMutableElement(E value, Consumer<? super MutableCollectionElement<? extends E>> onElement, boolean first) {
-		try (Transaction t = lock(true, null)) {
-			HashEntry entry = getEntry(theHasher.applyAsInt(value), value);
-			if (entry != null)
-				onElement.accept(entry);
-			return entry != null;
-		}
+	public CollectionElement<E> getElement(ElementId id) {
+		return ((HashId) id).entry.check().immutable();
 	}
 
 	@Override
-	public <T> T ofElementAt(ElementId elementId, Function<? super CollectionElement<? extends E>, T> onElement) {
-		if (!(elementId instanceof BetterHashSet.HashEntry))
-			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-		HashEntry entry = (HashEntry) elementId;
-		try (Transaction t = lock(false, null)) {
-			entry.check();
-			return onElement.apply(entry.immutable());
-		}
+	public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement) {
+		return onElement.apply(((HashId) element).entry.check());
 	}
 
 	@Override
-	public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableCollectionElement<? extends E>, T> onElement) {
-		if (!(elementId instanceof BetterHashSet.HashEntry))
-			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-		HashEntry entry = (HashEntry) elementId;
-		try (Transaction t = lock(true, null)) {
-			entry.check();
-			return onElement.apply(entry);
-		}
+	public MutableElementSpliterator<E> mutableSpliterator(ElementId element, boolean asNext) {
+		return new MutableHashSpliterator(((HashId) element).entry.check(), asNext);
 	}
 
 	@Override
 	public MutableElementSpliterator<E> mutableSpliterator(boolean fromStart) {
-		class MutableHashSpliterator implements MutableElementSpliterator<E> {
-			private HashEntry current;
-			private boolean wasNext;
-
-			MutableHashSpliterator(HashEntry current, boolean next) {
-				this.current = current;
-				this.wasNext = !next;
-			}
-
-			@Override
-			public long estimateSize() {
-				return BetterHashSet.this.size();
-			}
-
-			@Override
-			public long getExactSizeIfKnown() {
-				return estimateSize();
-			}
-
-			@Override
-			public int characteristics() {
-				return SIZED;
-			}
-
-			protected boolean tryElement(boolean left) {
-				if (current == null)
-					current = wasNext ? theLast : theFirst;
-				if (current == null)
-					return false;
-				// We can tolerate external modification as long as the node that this spliterator is anchored to has not been removed
-				// This situation is easy to detect
-				if (current.next == null && theLast != current)
-					throw new ConcurrentModificationException(
-						"The collection has been modified externally such that this spliterator has been orphaned");
-				if (wasNext != left) {
-					HashEntry next = current.previous;
-					if (next != null)
-						current = next;
-					else {
-						wasNext = left;
-						return false;
-					}
-				}
-				return true;
-			}
-
-			@Override
-			public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
-				try (Transaction t = lock(false, null)) {
-					if (!tryElement(false))
-						return false;
-					action.accept(current.immutable());
-					return true;
-				}
-			}
-
-			@Override
-			public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
-				try (Transaction t = lock(false, null)) {
-					if (!tryElement(true))
-						return false;
-					action.accept(current.immutable());
-					return true;
-				}
-			}
-
-			@Override
-			public boolean tryAdvanceElementM(Consumer<? super MutableCollectionElement<E>> action) {
-				try (Transaction t = lock(true, null)) {
-					if (!tryElement(false))
-						return false;
-					action.accept(new MutableSpliteratorEntry(current));
-					return true;
-				}
-			}
-
-			@Override
-			public boolean tryReverseElementM(Consumer<? super MutableCollectionElement<E>> action) {
-				try (Transaction t = lock(true, null)) {
-					if (!tryElement(true))
-						return false;
-					action.accept(new MutableSpliteratorEntry(current));
-					return true;
-				}
-			}
-
-			@Override
-			public void forEachElement(Consumer<? super CollectionElement<E>> action) {
-				try (Transaction t = lock(false, null)) {
-					while (tryElement(false))
-						action.accept(current);
-				}
-			}
-
-			@Override
-			public void forEachElementReverse(Consumer<? super CollectionElement<E>> action) {
-				try (Transaction t = lock(false, null)) {
-					while (tryElement(true))
-						action.accept(current);
-				}
-			}
-
-			@Override
-			public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action) {
-				try (Transaction t = lock(true, null)) {
-					while (tryElement(false))
-						action.accept(new MutableSpliteratorEntry(current));
-				}
-			}
-
-			@Override
-			public void forEachElementReverseM(Consumer<? super MutableCollectionElement<E>> action) {
-				try (Transaction t = lock(true, null)) {
-					while (tryElement(true))
-						action.accept(new MutableSpliteratorEntry(current));
-				}
-			}
-
-			@Override
-			public MutableElementSpliterator<E> trySplit() {
-				return null; // No real good way to do this
-			}
-
-			class MutableSpliteratorEntry implements MutableCollectionElement<E> {
-				private final HashEntry theEntry;
-
-				MutableSpliteratorEntry(HashEntry entry) {
-					theEntry = entry;
-				}
-
-				@Override
-				public ElementId getElementId() {
-					return theEntry;
-				}
-
-				@Override
-				public E get() {
-					return theEntry.get();
-				}
-
-				@Override
-				public String isEnabled() {
-					return theEntry.isEnabled();
-				}
-
-				@Override
-				public String isAcceptable(E value) {
-					return theEntry.isAcceptable(value);
-				}
-
-				@Override
-				public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
-					theEntry.set(value);
-				}
-
-				@Override
-				public String canRemove() {
-					return theEntry.canRemove();
-				}
-
-				@Override
-				public void remove() throws UnsupportedOperationException {
-					try (Transaction t = lock(true, null)) {
-						HashEntry newCurrent;
-						boolean newWasNext;
-						if (theEntry == current) {
-							newCurrent = current.previous;
-							if (newCurrent != null)
-								newWasNext = false;
-							else {
-								newCurrent = current.next;
-								newWasNext = true;
-							}
-							current = newCurrent;
-						} else {
-							newCurrent = current;
-							newWasNext = wasNext;
-						}
-						theEntry.remove();
-						current = newCurrent;
-						wasNext = newWasNext;
-					}
-				}
-
-				@Override
-				public String canAdd(E value, boolean before) {
-					return theEntry.canAdd(value, before);
-				}
-
-				@Override
-				public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-					return theEntry.add(value, before);
-				}
-			}
-		}
 		return new MutableHashSpliterator(fromStart ? theFirst : theLast, fromStart);
 	}
 
@@ -464,7 +248,35 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		}
 	}
 
-	private class HashEntry implements ElementId, MutableCollectionElement<E> {
+	private class HashId implements ElementId {
+		final HashEntry entry;
+
+		HashId(HashEntry entry) {
+			this.entry = entry;
+		}
+
+		@Override
+		public boolean isPresent() {
+			return entry.next != null || theLast == entry;
+		}
+
+		@Override
+		public int compareTo(ElementId o) {
+			return Long.compare(entry.theId, ((HashId) o).entry.theId);
+		}
+
+		@Override
+		public int hashCode() {
+			return entry.hashCode;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return entry == ((HashId) obj).entry;
+		}
+	}
+
+	private class HashEntry implements MutableCollectionElement<E> {
 		private final long theId;
 		private final int hashCode;
 		private MutableBinaryTreeNode<HashEntry> theTreeNode;
@@ -482,24 +294,24 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			theTreeNode = treeNode;
 		}
 
-		void check() {
-			if (next == null && theLast != this)
-				throw new IllegalArgumentException("Element has been removed");
+		private boolean isPresent() {
+			return next != null || theLast == this;
+		}
+
+		HashEntry check() {
+			if (!isPresent())
+				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+			return this;
 		}
 
 		@Override
 		public ElementId getElementId() {
-			return this;
+			return new HashId(this);
 		}
 
 		@Override
 		public E get() {
 			return theValue;
-		}
-
-		@Override
-		public int compareTo(ElementId o) {
-			return Long.compare(theId, ((HashEntry) o).theId);
 		}
 
 		@Override
@@ -516,6 +328,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 		@Override
 		public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
+			if (!isPresent())
+				throw new IllegalStateException("This element has been removed");
 			if (hashCode != theHasher.applyAsInt(value))
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 			theValue = value;
@@ -529,6 +343,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		@Override
 		public void remove() throws UnsupportedOperationException {
 			try (Transaction t = lock(true, null)) {
+				if (!isPresent())
+					throw new IllegalStateException("This element has been removed");
 				theTreeNode.remove();
 				if (theFirst == this)
 					theFirst = next;
@@ -551,121 +367,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		}
 
 		@Override
-		public ReversedHashEntry reverse() {
-			return new ReversedHashEntry(this);
-		}
-
-		@Override
-		public ImmutableEntry immutable() {
-			return new ImmutableEntry(this);
-		}
-
-		@Override
-		public int hashCode() {
-			return hashCode;
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			return theEquals.apply(theValue, obj);
-		}
-
-		@Override
 		public String toString() {
 			return String.valueOf(theValue);
-		}
-	}
-
-	class ImmutableEntry implements CollectionElement<E>, ElementId {
-		private final HashEntry theEntry;
-
-		ImmutableEntry(BetterHashSet<E>.HashEntry entry) {
-			theEntry = entry;
-		}
-
-		protected HashEntry getEntry() {
-			return theEntry;
-		}
-
-		@Override
-		public ElementId getElementId() {
-			return this;
-		}
-
-		@Override
-		public E get() {
-			return theEntry.get();
-		}
-
-		@Override
-		public int compareTo(ElementId o) {
-			if (o instanceof BetterHashSet.ImmutableEntry)
-				o = ((ImmutableEntry) o).theEntry;
-			return theEntry.compareTo(o);
-		}
-
-		@Override
-		public ImmutableEntry reverse() {
-			return new ReversedImmutableEntry(theEntry);
-		}
-
-		@Override
-		public int hashCode() {
-			return theEntry.hashCode;
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			if (obj instanceof BetterHashSet.ImmutableEntry)
-				obj = ((ImmutableEntry) obj).theEntry;
-			return theEntry.equals(obj);
-		}
-
-		@Override
-		public String toString() {
-			return theEntry.toString();
-		}
-	}
-
-	class ReversedHashEntry extends ReversedMutableElement<E> implements ElementId {
-		ReversedHashEntry(BetterHashSet<E>.HashEntry entry) {
-			super(entry);
-		}
-
-		@Override
-		protected HashEntry getWrapped() {
-			return (BetterHashSet<E>.HashEntry) super.getWrapped();
-		}
-
-		@Override
-		public ElementId getElementId() {
-			return this;
-		}
-
-		@Override
-		public int compareTo(ElementId o) {
-			return -getWrapped().compareTo(o.reverse());
-		}
-
-		@Override
-		public HashEntry reverse() {
-			return getWrapped();
-		}
-	}
-
-	class ReversedImmutableEntry extends ImmutableEntry {
-		ReversedImmutableEntry(BetterHashSet<E>.HashEntry entry) {
-			super(entry);
-		}
-
-		@Override
-		public int compareTo(ElementId o) {
-			return -super.compareTo(o.reverse());
-		}
-
-		@Override
-		public ImmutableEntry reverse() {
-			return new ImmutableEntry(getEntry());
 		}
 	}
 
@@ -722,6 +425,202 @@ public class BetterHashSet<E> implements BetterSet<E> {
 				node2 = node2.getClosest(false);
 			}
 			return null;
+		}
+	}
+
+	class MutableHashSpliterator implements MutableElementSpliterator<E> {
+		private HashEntry current;
+		private boolean wasNext;
+
+		MutableHashSpliterator(HashEntry current, boolean next) {
+			this.current = current;
+			this.wasNext = !next;
+		}
+
+		@Override
+		public long estimateSize() {
+			return BetterHashSet.this.size();
+		}
+
+		@Override
+		public long getExactSizeIfKnown() {
+			return estimateSize();
+		}
+
+		@Override
+		public int characteristics() {
+			return SIZED;
+		}
+
+		protected boolean tryElement(boolean left) {
+			if (current == null)
+				current = wasNext ? theLast : theFirst;
+			if (current == null)
+				return false;
+			// We can tolerate external modification as long as the node that this spliterator is anchored to has not been removed
+			// This situation is easy to detect
+			if (current.next == null && theLast != current)
+				throw new ConcurrentModificationException(
+					"The collection has been modified externally such that this spliterator has been orphaned");
+			if (wasNext != left) {
+				HashEntry next = current.previous;
+				if (next != null)
+					current = next;
+				else {
+					wasNext = left;
+					return false;
+				}
+			}
+			return true;
+		}
+
+		@Override
+		public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
+			try (Transaction t = lock(false, null)) {
+				if (!tryElement(false))
+					return false;
+				action.accept(current.immutable());
+				return true;
+			}
+		}
+
+		@Override
+		public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
+			try (Transaction t = lock(false, null)) {
+				if (!tryElement(true))
+					return false;
+				action.accept(current.immutable());
+				return true;
+			}
+		}
+
+		@Override
+		public boolean tryAdvanceElementM(Consumer<? super MutableCollectionElement<E>> action) {
+			try (Transaction t = lock(true, null)) {
+				if (!tryElement(false))
+					return false;
+				action.accept(new MutableSpliteratorEntry(current));
+				return true;
+			}
+		}
+
+		@Override
+		public boolean tryReverseElementM(Consumer<? super MutableCollectionElement<E>> action) {
+			try (Transaction t = lock(true, null)) {
+				if (!tryElement(true))
+					return false;
+				action.accept(new MutableSpliteratorEntry(current));
+				return true;
+			}
+		}
+
+		@Override
+		public void forEachElement(Consumer<? super CollectionElement<E>> action) {
+			try (Transaction t = lock(false, null)) {
+				while (tryElement(false))
+					action.accept(current);
+			}
+		}
+
+		@Override
+		public void forEachElementReverse(Consumer<? super CollectionElement<E>> action) {
+			try (Transaction t = lock(false, null)) {
+				while (tryElement(true))
+					action.accept(current);
+			}
+		}
+
+		@Override
+		public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action) {
+			try (Transaction t = lock(true, null)) {
+				while (tryElement(false))
+					action.accept(new MutableSpliteratorEntry(current));
+			}
+		}
+
+		@Override
+		public void forEachElementReverseM(Consumer<? super MutableCollectionElement<E>> action) {
+			try (Transaction t = lock(true, null)) {
+				while (tryElement(true))
+					action.accept(new MutableSpliteratorEntry(current));
+			}
+		}
+
+		@Override
+		public MutableElementSpliterator<E> trySplit() {
+			return null; // No real good way to do this
+		}
+
+		class MutableSpliteratorEntry implements MutableCollectionElement<E> {
+			private final HashEntry theEntry;
+
+			MutableSpliteratorEntry(HashEntry entry) {
+				theEntry = entry;
+			}
+
+			@Override
+			public ElementId getElementId() {
+				return theEntry.getElementId();
+			}
+
+			@Override
+			public E get() {
+				return theEntry.get();
+			}
+
+			@Override
+			public String isEnabled() {
+				return theEntry.isEnabled();
+			}
+
+			@Override
+			public String isAcceptable(E value) {
+				return theEntry.isAcceptable(value);
+			}
+
+			@Override
+			public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
+				theEntry.set(value);
+			}
+
+			@Override
+			public String canRemove() {
+				return theEntry.canRemove();
+			}
+
+			@Override
+			public void remove() throws UnsupportedOperationException {
+				try (Transaction t = lock(true, null)) {
+					HashEntry newCurrent;
+					boolean newWasNext;
+					if (theEntry == current) {
+						newCurrent = current.previous;
+						if (newCurrent != null)
+							newWasNext = false;
+						else {
+							newCurrent = current.next;
+							newWasNext = true;
+						}
+						current = newCurrent;
+					} else {
+						newCurrent = current;
+						newWasNext = wasNext;
+					}
+					theEntry.remove();
+					current = newCurrent;
+					wasNext = newWasNext;
+				}
+			}
+
+			@Override
+			public String canAdd(E value, boolean before) {
+				return theEntry.canAdd(value, before);
+			}
+
+			@Override
+			public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+				return theEntry.add(value, before);
+			}
 		}
 	}
 }

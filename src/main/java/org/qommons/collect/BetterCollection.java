@@ -1,6 +1,13 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Set;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -33,9 +40,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	CollectionElement<E> getElement(E value, boolean first);
 
-	<X> X ofMutableElement(CollectionElement<E> element, Function<? super MutableCollectionElement<E>, X> onElement);
+	CollectionElement<E> getElement(ElementId id);
 
-	default void forMutableElement(CollectionElement<E> element, Consumer<? super MutableCollectionElement<E>> onElement) {
+	<X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement);
+
+	default void forMutableElement(ElementId element, Consumer<? super MutableCollectionElement<E>> onElement) {
 		ofMutableElement(element, el -> {
 			onElement.accept(el);
 			return null;
@@ -264,7 +273,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default boolean forMutableElement(E value, Consumer<? super MutableCollectionElement<? extends E>> onElement, boolean first) {
 		CollectionElement<E> el = getElement(value, first);
 		if (el != null)
-			forMutableElement(el, onElement);
+			forMutableElement(el.getElementId(), onElement);
 		return el != null;
 	}
 
@@ -347,7 +356,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		return mutableSpliterator(fromStart).immutable();
 	}
 
-	default ElementSpliterator<E> spliterator(CollectionElement<E> element, boolean asNext) {
+	default ElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
 		return mutableSpliterator(element, asNext).immutable();
 	}
 
@@ -363,7 +372,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	MutableElementSpliterator<E> mutableSpliterator(boolean fromStart);
 
-	MutableElementSpliterator<E> mutableSpliterator(CollectionElement<E> element, boolean asNext);
+	MutableElementSpliterator<E> mutableSpliterator(ElementId element, boolean asNext);
 
 	default BetterCollection<E> reverse() {
 		return new ReversedCollection<>(this);
@@ -685,12 +694,17 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public <X> X ofMutableElement(CollectionElement<E> element, Function<? super MutableCollectionElement<E>, X> onElement) {
+		public CollectionElement<E> getElement(ElementId id) {
+			return getWrapped().getElement(id).reverse();
+		}
+
+		@Override
+		public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement) {
 			return getWrapped().ofMutableElement(element.reverse(), el -> onElement.apply(el.reverse()));
 		}
 
 		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(CollectionElement<E> element, boolean asNext) {
+		public MutableElementSpliterator<E> mutableSpliterator(ElementId element, boolean asNext) {
 			return getWrapped().mutableSpliterator(element.reverse(), !asNext).reverse();
 		}
 
@@ -805,12 +819,17 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public <X> X ofMutableElement(CollectionElement<E> element, Function<? super MutableCollectionElement<E>, X> onElement) {
+		public CollectionElement<E> getElement(ElementId id) {
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		}
 
 		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(CollectionElement<E> element, boolean asNext) {
+		public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement) {
+			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+		}
+
+		@Override
+		public MutableElementSpliterator<E> mutableSpliterator(ElementId element, boolean asNext) {
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		}
 

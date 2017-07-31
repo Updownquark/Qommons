@@ -1,16 +1,12 @@
 package org.qommons.tree;
 
 import java.util.Comparator;
-import java.util.function.Consumer;
 
 import org.qommons.Transaction;
 import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.CollectionElement;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
-import org.qommons.collect.MutableCollectionElement;
-import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.StampedLockingStrategy;
 
 public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSortedSet<E> {
@@ -37,48 +33,15 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 	}
 
 	@Override
-	public boolean forElement(Comparable<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement,
-		SortedSearchFilter filter) {
+	public BinaryTreeNode<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
 		try (Transaction t = lock(false, null)) {
 			if (isEmpty())
-				return false;
+				return null;
 			BinaryTreeNode<E> node = getRoot().findClosest(n -> search.compareTo(n.get()), filter.less.withDefault(true), filter.strict);
 			if (node == null)
-				return false;
-			onElement.accept(node);
-			return true;
+				return null;
+			return node;
 		}
-	}
-
-	@Override
-	public boolean forMutableElement(Comparable<? super E> search, Consumer<? super MutableCollectionElement<? extends E>> onElement,
-		SortedSearchFilter filter) {
-		try (Transaction t = lock(true, null)) {
-			if (isEmpty())
-				return false;
-			BinaryTreeNode<E> node = getRoot().findClosest(n -> search.compareTo(n.get()), filter.less.withDefault(true), filter.strict);
-			if (node == null)
-				return false;
-			onElement.accept(mutableNodeFor(node));
-			return true;
-		}
-	}
-
-	@Override
-	public MutableElementSpliterator<E> mutableSpliterator(Comparable<? super E> search, boolean higher) {
-		try (Transaction t = lock(false, null)) {
-			if (getRoot() == null)
-				return mutableSpliterator(true);
-			BinaryTreeNode<E> node = getRoot() == null ? null : getRoot().findClosest(n -> search.compareTo(n.get()), higher, false);
-			if (higher && search.compareTo(node.get()) < 0)
-				higher = false;
-			return mutableSpliterator(node, higher);
-		}
-	}
-
-	@Override
-	public MutableElementSpliterator<E> mutableSpliterator(BinaryTreeNode<E> node, boolean next) {
-		return super.mutableSpliterator(node, next);
 	}
 
 	@Override
@@ -143,6 +106,11 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 		}
 
 		@Override
+		public MutableBinaryTreeNode<E> getClosest(boolean left) {
+			return new SortedMutableTreeNode(theWrapped.getClosest(left));
+		}
+
+		@Override
 		public String isEnabled() {
 			return null;
 		}
@@ -197,7 +165,7 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 		}
 
 		@Override
-		public BinaryTreeNode<E> add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+		public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
 			String msg = canAdd(value, before);
 			if (msg != null)
 				throw new IllegalArgumentException(msg);

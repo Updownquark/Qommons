@@ -8,14 +8,28 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Map;
+import java.util.NavigableMap;
+import java.util.NavigableSet;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
-import org.qommons.collect.ReversibleCollection;
-import org.qommons.collect.ReversibleElementSpliterator;
+import org.qommons.collect.BetterCollection;
+import org.qommons.collect.ElementSpliterator;
 
 /** Testing utilities */
 public class QommonsTestUtils {
@@ -60,11 +74,11 @@ public class QommonsTestUtils {
 			}
 		}
 
-		// Test ReversibleCollections
+		// Test reversible collections
 		List<Collection<Integer>> derived = new ArrayList<>();
-		if (coll instanceof ReversibleCollection) {
-			ReversibleCollection<Integer> rc = (ReversibleCollection<Integer>) coll;
-			ReversibleCollection<Integer> rrc = rc.reverse();
+		if (coll instanceof BetterCollection) {
+			BetterCollection<Integer> rc = (BetterCollection<Integer>) coll;
+			BetterCollection<Integer> rrc = rc.reverse();
 			derived.add(rrc);
 			Consumer<? super T> fCheck = check;
 			ArrayList<Integer> copy = new ArrayList<>();
@@ -95,8 +109,8 @@ public class QommonsTestUtils {
 				assertFalse(rrIter.hasNext());
 
 				// Test reversible spliterator
-				ReversibleElementSpliterator<Integer> rSplit = rc.spliterator();
-				ReversibleElementSpliterator<Integer> rrSplit = rrc.spliterator(false);
+				ElementSpliterator<Integer> rSplit = rc.spliterator();
+				ElementSpliterator<Integer> rrSplit = rrc.spliterator(false);
 				int count = 0;
 				Object[] prevV = new Object[1];
 				splitLoop: while (true) {

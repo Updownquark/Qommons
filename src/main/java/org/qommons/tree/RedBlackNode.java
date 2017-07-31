@@ -27,6 +27,8 @@ public class RedBlackNode<E> {
 	private RedBlackNode<E> thePrevious;
 
 	private int theSize;
+	/** Records the node's position when it was removed */
+	private int theRemovedIndex;
 
 	private boolean isTransaction;
 	private int theTransaction;
@@ -37,6 +39,7 @@ public class RedBlackNode<E> {
 	public RedBlackNode(E value) {
 		isRed = true;
 		theSize = 1;
+		theRemovedIndex = -1;
 
 		theValue = value;
 	}
@@ -216,6 +219,8 @@ public class RedBlackNode<E> {
 
 	/** @return The number of nodes stored before this node in the tree */
 	public int getNodesBefore() {
+		if (theRemovedIndex >= 0)
+			return theRemovedIndex;
 		RedBlackNode<E> node = this;
 		RedBlackNode<E> left = node.getLeft();
 		int ret = sizeOf(left);
@@ -230,22 +235,29 @@ public class RedBlackNode<E> {
 		return ret;
 	}
 
-	/**
-	 * This should NEVER be called outside of the {@link RedBlackNode} class, but may be overridden by subclasses if the super is called.
-	 *
-	 * @param size The new size
-	 */
-	protected void setSize(int size) {
-		theSize = size;
+	/** @return The number of nodes stored after this node in the tree */
+	public int getNodesAfter() {
+		RedBlackNode<E> node = this;
+		RedBlackNode<E> right = node.getRight();
+		int ret = sizeOf(right);
+		while (node != null) {
+			RedBlackNode<E> parent = node.getParent();
+			if (parent != null && parent.getLeft() == node) {
+				right = parent.getRight();
+				ret += sizeOf(right) + 1;
+			}
+			node = parent;
+		}
+		return ret;
 	}
 
 	/**
-	 * Sets this node's parent. This method should <b>NEVER</b> be called from outside of the {@link RedBlackNode} class.
+	 * Sets this node's parent.
 	 *
 	 * @param parent The parent for this node
 	 * @return The node that was previously this node's parent, or null if it did not have a parent
 	 */
-	protected RedBlackNode<E> setParent(RedBlackNode<E> parent) {
+	private RedBlackNode<E> setParent(RedBlackNode<E> parent) {
 		if(parent == this)
 			throw new IllegalArgumentException("A tree node cannot be its own parent: " + parent);
 		RedBlackNode<E> oldParent = theParent;
@@ -254,13 +266,13 @@ public class RedBlackNode<E> {
 	}
 
 	/**
-	 * Sets one of this node's children. This method should <b>NEVER</b> be called from outside of the {@link RedBlackNode} class.
+	 * Sets one of this node's children.
 	 *
 	 * @param child The new child for this node
 	 * @param left Whether to set the left or the right child
 	 * @return The child (or null) that was replaced as this node's left or right child
 	 */
-	protected RedBlackNode<E> setChild(RedBlackNode<E> child, boolean left) {
+	private RedBlackNode<E> setChild(RedBlackNode<E> child, boolean left) {
 		if(child == this)
 			throw new IllegalArgumentException("A tree node cannot have itself as a child: " + this + " (" + (left ? "left" : "right")
 					+ ")");
@@ -281,12 +293,11 @@ public class RedBlackNode<E> {
 	}
 
 	/**
-	 * Sets this node's color. This method should <b>NEVER</b> be called from outside of the {@link RedBlackNode} class unless this node is
-	 * the root of the tree, but may be overridden by subclasses if the super is called with the argument.
+	 * Sets this node's color.
 	 *
 	 * @param red Whether this node will be red or black
 	 */
-	protected void setRed(boolean red) {
+	private void setRed(boolean red) {
 		isRed = red;
 	}
 
@@ -321,45 +332,11 @@ public class RedBlackNode<E> {
 	}
 
 	/**
-	 * Replaces this node in the tree with the given node, orphaning this node.
-	 *
-	 * @param node The node to replace this node in the tree
-	 */
-	public void replace(RedBlackNode<E> node) {
-		RedBlackNode<E> parent = getParent();
-		startCountTransaction();
-		node.startCountTransaction();
-		if (parent != null)
-			parent.startCountTransaction();
-		try {
-			if (node != theLeft)
-				node.setChild(theLeft, true);
-			if (node != theRight)
-				node.setChild(theRight, false);
-			setChild(null, true);
-			setChild(null, false);
-			node.setRed(isRed);
-			setRed(true);
-			if (theParent != null) {
-				theParent.setChild(node, getSide());
-				setParent(null);
-			} else
-				node.setParent(theParent);
-		} finally {
-			endCountTransaction();
-			node.endCountTransaction();
-			if (parent != null)
-				parent.endCountTransaction();
-		}
-	}
-
-	/**
-	 * Causes this node to switch places in the tree with the given node. This method should <b>NEVER</b> be called from outside of the
-	 * {@link RedBlackNode} class, but may be overridden by subclasses if the super is called with the argument.
+	 * Causes this node to switch places in the tree with the given node.
 	 *
 	 * @param node The node to switch places with
 	 */
-	protected void switchWith(RedBlackNode<E> node) {
+	private void switchWith(RedBlackNode<E> node) {
 		RedBlackNode<E> counted = node;
 		RedBlackNode<E> parent = getParent();
 		startCountTransaction();
@@ -421,13 +398,12 @@ public class RedBlackNode<E> {
 	}
 
 	/**
-	 * Performs a rotation for balancing. This method should <b>NEVER</b> be called from outside of the {@link RedBlackNode} class, but may
-	 * be overridden by subclasses if the super is called with the argument.
+	 * Performs a rotation for balancing.
 	 *
 	 * @param left Whether to rotate left or right
 	 * @return The new parent of this node
 	 */
-	protected RedBlackNode<E> rotate(boolean left) {
+	private RedBlackNode<E> rotate(boolean left) {
 		RedBlackNode<E> countedChild = getChild(!left);
 		RedBlackNode<E> parent = getParent();
 		startCountTransaction();
@@ -457,13 +433,24 @@ public class RedBlackNode<E> {
 	static boolean DEBUG_PRINT = false;
 
 	/**
-	 * Adds a new node into this structure, adjacent to this node, rebalancing if necessary
+	 * Adds a new node into this structure, adjacent to this node in the structure's order, rebalancing if necessary
 	 *
 	 * @param node The node to add
 	 * @param left The side on which to place the node
 	 * @return The new root for the tree structure
 	 */
-	protected RedBlackNode<E> add(RedBlackNode<E> node, boolean left) {
+	public RedBlackNode<E> add(RedBlackNode<E> node, boolean left) {
+		// First let's link up the next and previous fields
+		if (left) {
+			node.thePrevious = thePrevious;
+			thePrevious = node;
+			node.theNext = this;
+		} else {
+			node.theNext = theNext;
+			theNext = node;
+			node.thePrevious = this;
+		}
+
 		RedBlackNode<E> parent = this;
 		RedBlackNode<E> child = getChild(left);
 		boolean childSide = child == null ? left : !left;
@@ -483,6 +470,12 @@ public class RedBlackNode<E> {
 	 * @return The new root of this node's structure
 	 */
 	public RedBlackNode<E> delete() {
+		// First let's link up the next and previous fields
+		if (theNext != null)
+			theNext.thePrevious = thePrevious;
+		if (thePrevious != null)
+			thePrevious.theNext = theNext;
+
 		if(theLeft != null && theRight != null) {
 			RedBlackNode<E> successor = getClosest(false);
 			switchWith(successor);
@@ -493,6 +486,8 @@ public class RedBlackNode<E> {
 			replacement = theLeft;
 		else if(theRight != null)
 			replacement = theRight;
+
+		theRemovedIndex = getNodesBefore();
 
 		if(replacement != null) {
 			boolean oldRed = replacement.isRed;
@@ -523,7 +518,7 @@ public class RedBlackNode<E> {
 			if (isTransaction) {
 				theTransaction += diff;
 			} else {
-				setSize(theSize + diff);
+				theSize += diff;
 				RedBlackNode<E> parent = getParent();
 				if (parent != null)
 					parent.adjustSize(diff);

@@ -1,8 +1,6 @@
 package org.qommons.collect;
 
-import java.util.Map;
-
-public interface MutableMapEntryHandle<K, V> extends MapEntryHandle<K, V>, MutableCollectionElement<V>, Map.Entry<K, V> {
+public interface MutableMapEntryHandle<K, V> extends MapEntryHandle<K, V>, MutableCollectionElement<V> {
 	@Override
 	default V getValue() {
 		return get();
@@ -58,14 +56,13 @@ public interface MutableMapEntryHandle<K, V> extends MapEntryHandle<K, V>, Mutab
 			theWrapped = wrapped;
 		}
 
-		@Override
-		public ElementId getElementId() {
-			return theWrapped.getElementId();
+		protected MutableMapEntryHandle<K, V> getWrapped() {
+			return theWrapped;
 		}
 
 		@Override
-		public boolean isPresent() {
-			return theWrapped.isPresent();
+		public ElementId getElementId() {
+			return theWrapped.getElementId();
 		}
 
 		@Override

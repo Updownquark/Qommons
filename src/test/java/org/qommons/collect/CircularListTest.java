@@ -257,7 +257,7 @@ public class CircularListTest {
 		// Test element-dropping as a result of modification of views (sublists and iterators)
 		list.clear();
 		list.addAll(QommonsTestUtils.sequence(100, null, false));
-		CircularArrayList<Integer>.SubList sub1 = list.subList(25, 75);
+		BetterList<Integer> sub1 = list.subList(25, 75);
 		sub1.removeRange(0, 10);
 		assertEquals(40, sub1.size());
 		assertEquals(90, list.size());

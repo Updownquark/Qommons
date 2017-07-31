@@ -1,14 +1,13 @@
 package org.qommons.tree;
 
 import java.util.Objects;
-import java.util.function.Consumer;
 
 import org.qommons.Transaction;
-import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.CollectionElement;
+import org.qommons.collect.CollectionLockingStrategy;
+import org.qommons.collect.ElementId;
 import org.qommons.collect.ElementSpliterator;
 import org.qommons.collect.FastFailLockingStrategy;
-import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.StampedLockingStrategy;
 
@@ -24,6 +23,11 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 	// The structure doesn't mean anything except order, so if someone wants to mess with it, they can go right ahead
 
 	@Override
+	public MutableBinaryTreeNode<E> mutableNodeFor(ElementId node) {
+		return super.mutableNodeFor(node);
+	}
+
+	@Override
 	public MutableBinaryTreeNode<E> mutableNodeFor(BinaryTreeNode<E> node) {
 		return super.mutableNodeFor(node);
 	}
@@ -34,34 +38,16 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 	}
 
 	@Override
-	public boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
-		boolean[] success = new boolean[1];
+	public CollectionElement<E> getElement(E value, boolean first) {
 		try (Transaction t = lock(false, null)) {
+			CollectionElement<E>[] element = new CollectionElement[1];
 			ElementSpliterator<E> spliter = first ? spliterator(first) : spliterator(first).reverse();
-			while (!success[0] && spliter.tryAdvanceElement(el -> {
-				if (Objects.equals(el.get(), value)) {
-					success[0] = true;
-					onElement.accept(el);
-				}
+			while (element[0] == null && spliter.tryAdvanceElement(el -> {
+				if (Objects.equals(el.get(), value))
+					element[0] = el;
 			})) {
 			}
+			return element[0];
 		}
-		return success[0];
-	}
-
-	@Override
-	public boolean forMutableElement(E value, Consumer<? super MutableCollectionElement<? extends E>> onElement, boolean first) {
-		boolean[] success = new boolean[1];
-		try (Transaction t = lock(true, null)) {
-			MutableElementSpliterator<E> spliter = first ? mutableSpliterator(first) : mutableSpliterator(first).reverse();
-			while (!success[0] && spliter.tryAdvanceElementM(el -> {
-				if (Objects.equals(el.get(), value)) {
-					success[0] = true;
-					onElement.accept(el);
-				}
-			})) {
-			}
-		}
-		return success[0];
 	}
 }

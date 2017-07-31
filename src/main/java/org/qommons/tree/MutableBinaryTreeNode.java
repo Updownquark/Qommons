@@ -1,5 +1,6 @@
 package org.qommons.tree;
 
+import org.qommons.collect.ElementId;
 import org.qommons.collect.MutableCollectionElement;
 
 /**
@@ -47,9 +48,6 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 	default MutableBinaryTreeNode<E> reverse() {
 		return new ReversedMutableTreeNode<>(this);
 	}
-
-	@Override
-	BinaryTreeNode<E> add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException;
 
 	class ImmutableTreeNode<E> extends ImmutableCollectionElement<E> implements BinaryTreeNode<E> {
 		public ImmutableTreeNode(MutableBinaryTreeNode<E> wrapped) {
@@ -148,8 +146,8 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 		}
 
 		@Override
-		public BinaryTreeNode<E> add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-			return getWrapped().add(value, !before);
+		public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+			return getWrapped().add(value, !before).reverse();
 		}
 
 		@Override

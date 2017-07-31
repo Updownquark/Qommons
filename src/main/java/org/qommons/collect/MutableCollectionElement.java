@@ -40,7 +40,7 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 
 	String canAdd(E value, boolean before);
 
-	CollectionElement<E> add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException;
+	ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException;
 
 	/** @return An immutable observable element backed by this mutable element's data */
 	default CollectionElement<E> immutable() {
@@ -68,11 +68,6 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 			return theWrapped.getElementId();
 		}
 
-		@Override
-		public boolean isPresent() {
-			return theWrapped.isPresent();
-		}
-		
 		@Override
 		public E get(){
 			return theWrapped.get();
@@ -146,7 +141,7 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 		}
 
 		@Override
-		public CollectionElement<E> add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+		public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
 			return getWrapped().add(value, !before).reverse();
 		}
 

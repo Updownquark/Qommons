@@ -8,11 +8,7 @@ import java.util.Iterator;
 import java.util.Map;
 
 import org.junit.Test;
-import org.qommons.tree.CountedRedBlackNode.DefaultNode;
-import org.qommons.tree.CountedRedBlackNode.DefaultTreeMap;
-import org.qommons.tree.CountedRedBlackNode.DefaultTreeSet;
-import org.qommons.tree.RedBlackNode.ComparableValuedRedBlackNode;
-import org.qommons.tree.RedBlackNode.ValuedRedBlackNode;
+import org.qommons.QommonsTestUtils;
 
 /** Runs tests on the red-black tree structures behind the ObServe tree collections */
 public class TreeUtilsTest {
@@ -24,7 +20,7 @@ public class TreeUtilsTest {
 	 * @param tree The initial tree node
 	 * @param nodes The sequence of nodes to add to the tree. Must repeat.
 	 */
-	public static <T> void test(ValuedRedBlackNode<T> tree, Iterable<T> nodes) {
+	public static <T> void test(RedBlackNode<T> tree, Iterable<T> nodes) {
 		RedBlackNode.DEBUG_PRINT = PRINT;
 		Iterator<T> iter = nodes.iterator();
 		iter.next(); // Skip the first value, assuming that's what's in the tree
@@ -36,7 +32,7 @@ public class TreeUtilsTest {
 			T value = iter.next();
 			if(PRINT)
 				System.out.println("Adding " + value);
-			tree = (ValuedRedBlackNode<T>) tree.add(value, false).getNewRoot();
+			tree = tree.getTerminal(false).add(new RedBlackNode<>(value), false);
 			if(PRINT)
 				System.out.println(RedBlackNode.print(tree));
 			tree.checkValid();
@@ -51,7 +47,7 @@ public class TreeUtilsTest {
 			T value = iter.next();
 			if(PRINT)
 				System.out.println("Deleting " + value);
-			tree = (ValuedRedBlackNode<T>) tree.findValue(value).delete();
+			tree = tree.getTerminal(true).delete();
 			if(PRINT)
 				System.out.println(RedBlackNode.print(tree));
 			if(tree != null)
@@ -90,77 +86,41 @@ public class TreeUtilsTest {
 	/** A simple test against {@link RedBlackNode} */
 	@Test
 	public void testTreeBasic() {
-		test(ComparableValuedRedBlackNode.valueOf("a"), alphaBet('q'));
-	}
-
-	/** A simple test against {@link CountedRedBlackNode} */
-	@Test
-	public void countedTreeBasic() {
-		class CountedStringNode extends CountedRedBlackNode<String> {
-			public CountedStringNode(String value) {
-				super(value);
-			}
-
-			@Override
-			protected CountedRedBlackNode<String> createNode(String value) {
-				return new CountedStringNode(value);
-			}
-
-			@Override
-			protected int compare(String o1, String o2) {
-				return o1.compareTo(o2);
-			}
-		}
-		test(new CountedStringNode("a"), alphaBet('q'));
+		test(new RedBlackNode<>("a"), alphaBet('q'));
 	}
 
 	/**
-	 * Runs the {@link ObservableCollectionsTest#testCollection(java.util.Collection, java.util.function.Consumer)} tests against
-	 * {@link DefaultTreeSet}
+	 * Runs the {@link QommonsTestUtils#testCollection(java.util.Collection, java.util.function.Consumer, java.util.function.Function)}
+	 * tests against {@link BetterTreeSet}
 	 */
 	@Test
 	public void testTreeSet() {
-		DefaultTreeSet<Integer> set = new DefaultTreeSet<>(Integer::compareTo);
-		testCollection(set, s -> {
-			DefaultNode<Integer> root = set.getRoot();
-			if(root != null)
-				root.checkValid();
-		} , null);
+		BetterTreeSet<Integer> set = new BetterTreeSet<>(false, Integer::compareTo);
+		testCollection(set, s -> s.checkValid(), null);
 	}
 
-	/** Runs the {@link ObservableAssocTest#testMap(Map, java.util.function.Consumer)} tests against {@link DefaultTreeMap} */
+	/**
+	 * Runs the {@link QommonsTestUtils#testMap(Map, java.util.function.Consumer, java.util.function.Function)} tests against
+	 * {@link BetterTreeMap}
+	 */
 	@Test
 	public void testTreeMap() {
-		DefaultTreeMap<Integer, Integer> map = new DefaultTreeMap<>(new Comparator<Integer>() {
+		BetterTreeMap<Integer, Integer> map = new BetterTreeMap<>(false, new Comparator<Integer>() {
 			@Override
 			public int compare(Integer o1, Integer o2) {
 				return o1.compareTo(o2);
 			}
 		});
-		testMap(map, s -> {
-			DefaultNode<Map.Entry<Integer, Integer>> root = map.getRoot();
-			if(root != null)
-				root.checkValid();
-		} , null);
+		testMap(map, s -> s.checkValid(), null);
 	}
 
 	/**
-	 * Runs the {@link ObservableCollectionsTest#testCollection(java.util.Collection, java.util.function.Consumer)} tests against
-	 * {@link RedBlackTreeList}
+	 * Runs the {@link QommonsTestUtils#testCollection(java.util.Collection, java.util.function.Consumer, java.util.function.Function)}
+	 * tests against {@link BetterTreeList}
 	 */
 	@Test
 	public void testTreeList() {
-		RedBlackTreeList<DefaultNode<Integer>, Integer> list = new RedBlackTreeList<>(value -> new DefaultNode<>(value,
-			new Comparator<Integer>() {
-			@Override
-			public int compare(Integer o1, Integer o2) {
-				return o1.compareTo(o2);
-			}
-		}));
-		testCollection(list, l -> {
-			DefaultNode<Integer> root = list.getRoot();
-			if(root != null)
-				root.checkValid();
-		} , null);
+		BetterTreeList<Integer> list = new BetterTreeList<>(false);
+		testCollection(list, l -> list.checkValid(), null);
 	}
 }

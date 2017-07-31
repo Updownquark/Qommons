@@ -477,61 +477,47 @@ public class CircularArrayList<E> implements BetterList<E> {
 		return null;
 	}
 
-	private ArrayElement getElement(Object value, boolean first) {
+	@Override
+	public CollectionElement<E> getElement(E value, boolean first) {
 		for (int i = 0; i < theSize; i++) {
 			if (Objects.equals(theArray[i].get(), value))
-				return theArray[i];
+				return theArray[i].immutable();
 		}
 		return null;
 	}
 
 	@Override
-	public boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
-		try (Transaction t = theLocker.lock(false, null)) {
-			ArrayElement element = getElement(value, first);
-			if (element == null)
-				return false;
-			onElement.accept(element.immutable());
-			return true;
+	public CollectionElement<E> getElement(ElementId id) {
+		return ((ArrayElementId) id).element.check().immutable();
+	}
+
+	@Override
+	public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement) {
+		try (Transaction t = lock(true, null)) {
+			return onElement.apply(((ArrayElementId) element).element.check());
 		}
 	}
 
 	@Override
-	public boolean forMutableElement(E value, Consumer<? super MutableCollectionElement<? extends E>> onElement, boolean first) {
-		try (Transaction t = theLocker.lock(true, null)) {
-			ArrayElement element = getElement(value, first);
-			if (element == null)
-				return false;
-			onElement.accept(element);
-			return true;
+	public MutableElementSpliterator<E> mutableSpliterator(boolean forward) {
+		return new ArraySpliterator(0, theSize, forward ? 0 : theSize, theLocker.subLock());
+	}
+
+	@Override
+	public MutableElementSpliterator<E> mutableSpliterator(ElementId element, boolean asNext) {
+		try (Transaction t = lock(false, null)) {
+			return new ArraySpliterator(0, size(), ((ArrayElementId) element).element.check().getIndex(), theLocker.subLock());
 		}
 	}
 
 	@Override
-	public <T> T ofElementAt(ElementId elementId, Function<? super CollectionElement<? extends E>, T> onElement) {
-		try (Transaction t = theLocker.lock(false, null)) {
-			int index = ((ArrayElementId) elementId).getIndex();
-			if (index < 0)
-				throw new IllegalArgumentException("Element has been removed");
-			int tIndex = translateToInternalIndex(index);
-			return onElement.apply(theArray[tIndex].immutable());
-		}
-	}
-
-	@Override
-	public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableCollectionElement<? extends E>, T> onElement) {
-		try (Transaction t = theLocker.lock(true, null)) {
-			int index = ((ArrayElementId) elementId).getIndex();
-			if (index < 0)
-				throw new IllegalArgumentException("Element has been removed");
-			int tIndex = translateToInternalIndex(index);
-			return onElement.apply(theArray[tIndex]);
-		}
+	public CollectionElement<E> getElement(int index) {
+		return theArray[translateToInternalIndex(index)].immutable();
 	}
 
 	@Override
 	public int getElementsBefore(ElementId id) {
-		int index = ((ArrayElementId) id).getIndex();
+		int index = ((ArrayElementId) id).element.check().getIndex();
 		if (index < 0)
 			throw new IllegalArgumentException("Element has been removed");
 		return index;
@@ -540,25 +526,11 @@ public class CircularArrayList<E> implements BetterList<E> {
 	@Override
 	public int getElementsAfter(ElementId id) {
 		return theLocker.doOptimistically(-1, (value, stamp) -> {
-			int index = ((ArrayElementId) id).getIndex();
+			int index = ((ArrayElementId) id).element.check().getIndex();
 			if (index < 0)
 				throw new IllegalArgumentException("Element has been removed");
 			return theSize - index - 1;
 		});
-	}
-
-	@Override
-	public <T> T ofElementAt(int index, Function<? super CollectionElement<? extends E>, T> onElement) {
-		try (Transaction t = lock(false, null)) {
-			return onElement.apply(theArray[translateToInternalIndex(index)].immutable());
-		}
-	}
-
-	@Override
-	public <T> T ofMutableElementAt(int index, Function<? super MutableCollectionElement<? extends E>, T> onElement) {
-		try (Transaction t = lock(false, null)) {
-			return onElement.apply(theArray[translateToInternalIndex(index)]);
-		}
 	}
 
 	@Override
@@ -706,20 +678,20 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public ElementId addElement(E value) {
+	public CollectionElement<E> addElement(E value) {
 		try (Transaction t = lock(true, null)) {
-			return internalAdd(theSize, value).getElementId();
+			return internalAdd(theSize, value).immutable();
 		}
 	}
 
 	@Override
-	public ElementId addElement(int index, E value) {
+	public CollectionElement<E> addElement(int index, E value) {
 		if (index < 0)
 			throw new IndexOutOfBoundsException("" + index);
 		try (Transaction t = lock(true, null)) {
 			if (index > theSize)
 				throw new IndexOutOfBoundsException(index + " of " + theSize);
-			return internalAdd(index, value).getElementId();
+			return internalAdd(index, value).immutable();
 		}
 	}
 
@@ -1023,16 +995,6 @@ public class CircularArrayList<E> implements BetterList<E> {
 		return this;
 	}
 
-	@Override
-	public MutableElementSpliterator<E> mutableSpliterator(boolean forward) {
-		return new ArraySpliterator(0, theSize, forward ? 0 : theSize, theLocker.subLock());
-	}
-
-	@Override
-	public MutableElementSpliterator<E> mutableSpliterator(int index) {
-		return new ArraySpliterator(0, theSize, index, theLocker.subLock());
-	}
-
 	private void _trimToSize() {
 		int newCap = Math.max(theSize, theMinCapacity);
 		if (newCap != theArray.length) {
@@ -1233,6 +1195,152 @@ public class CircularArrayList<E> implements BetterList<E> {
 		return removed;
 	}
 
+	private class ArrayElementId implements ElementId {
+		final ArrayElement element;
+
+		ArrayElementId(ArrayElement element) {
+			this.element = element;
+		}
+
+		@Override
+		public boolean isPresent() {
+			return element.getIndex() >= 0;
+		}
+
+		@Override
+		public int compareTo(ElementId o) {
+			int diff = element.getIndex() - ((ArrayElementId) o).element.getIndex();
+			if (isPresent()) {
+				if (o.isPresent())
+					return diff;
+				else
+					return diff + 1;
+			} else {
+				if (o.isPresent())
+					return diff - 1;
+				else
+					return diff;
+			}
+		}
+
+		@Override
+		public int hashCode() {
+			return element.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return element == ((ArrayElementId) obj).element;
+		}
+	}
+
+	private class ArrayElement implements MutableCollectionElement<E> {
+		private int index;
+		private final ArrayElementId theElementId;
+		private E theValue;
+
+		ArrayElement(E value, int index) {
+			this.index = index;
+			theElementId = new ArrayElementId(this);
+			theValue = value;
+		}
+
+		ArrayElement check() {
+			if (!isPresent())
+				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+			return this;
+		}
+
+		private boolean isPresent() {
+			return index >= 0;
+		}
+
+		public int getIndex() {
+			int i = index;
+			if (i < 0)
+				i = -i - 1;
+			return translateToCollectionIndex(i);
+		}
+
+		private void setIndex(int index) {
+			this.index = index;
+		}
+
+		@Override
+		public ElementId getElementId() {
+			return theElementId;
+		}
+
+		@Override
+		public E get() {
+			return theValue;
+		}
+
+		@Override
+		public String isEnabled() {
+			if (index < 0)
+				throw new IllegalStateException("This element has been removed");
+			return null;
+		}
+
+		@Override
+		public String isAcceptable(E value) {
+			if (index < 0)
+				throw new IllegalStateException("This element has been removed");
+			if (!belongs(value))
+				return StdMsg.ILLEGAL_ELEMENT;
+			return null;
+		}
+
+		@Override
+		public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
+			if (index < 0)
+				throw new IllegalStateException("This element has been removed");
+			String msg = isAcceptable(value);
+			if (msg != null)
+				throw new IllegalArgumentException(msg);
+			theValue = value;
+		}
+
+		@Override
+		public String canRemove() {
+			return null;
+		}
+
+		@Override
+		public void remove() throws UnsupportedOperationException {
+			try (Transaction t = lock(false, null)) {
+				if (index < 0)
+					throw new IllegalStateException("This element has been removed");
+				internalRemove(getIndex(), index);
+			}
+		}
+
+		void removed() {
+			index = -(index + 1);
+		}
+
+		@Override
+		public String canAdd(E value, boolean before) {
+			if (index < 0)
+				throw new IllegalStateException("This element has been removed");
+			return isAcceptable(value);
+		}
+
+		@Override
+		public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+			if (index < 0)
+				throw new IllegalStateException("This element has been removed");
+			String msg = canAdd(value, before);
+			if (msg != null)
+				throw new IllegalArgumentException(msg);
+			int cIndex = getIndex();
+			if (!before)
+				cIndex++;
+			return CircularArrayList.this.addElement(cIndex, value).getElementId();
+		}
+	}
+
 	private class ArraySpliterator implements MutableElementSpliterator<E> {
 		private int theStart;
 		private int theEnd;
@@ -1339,18 +1447,6 @@ public class CircularArrayList<E> implements BetterList<E> {
 			return split;
 		}
 
-		int getCursor() {
-			return theCursor;
-		}
-
-		int getRelativeCursor() {
-			return theCursor - theStart;
-		}
-
-		void setCursor(int cursor) {
-			theCursor = cursor;
-		}
-
 		@Override
 		public String toString() {
 			return theSubLock.doOptimistically(new StringBuilder(), (str, stamp) -> {
@@ -1394,117 +1490,6 @@ public class CircularArrayList<E> implements BetterList<E> {
 				str.append('>');
 				return str;
 			}).toString();
-		}
-	}
-
-	private class ArrayElement implements MutableCollectionElement<E> {
-		private final int[] index;
-		private final ArrayElementId theElementId;
-		private E theValue;
-
-		ArrayElement(E value, int index) {
-			this.index = new int[] { index };
-			theElementId = new ArrayElementId(this.index);
-			theValue = value;
-		}
-
-		public int getIndex() {
-			return translateToCollectionIndex(index[0]);
-		}
-
-		private void setIndex(int index) {
-			this.index[0] = index;
-		}
-
-		@Override
-		public ElementId getElementId() {
-			return theElementId;
-		}
-
-		@Override
-		public E get() {
-			return theValue;
-		}
-
-		@Override
-		public String isEnabled() {
-			if (index[0] < 0)
-				throw new IllegalStateException("This element has been removed");
-			return null;
-		}
-
-		@Override
-		public String isAcceptable(E value) {
-			if (index[0] < 0)
-				throw new IllegalStateException("This element has been removed");
-			if (!belongs(value))
-				return StdMsg.ILLEGAL_ELEMENT;
-			return null;
-		}
-
-		@Override
-		public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
-			if (index[0] < 0)
-				throw new IllegalStateException("This element has been removed");
-			String msg = isAcceptable(value);
-			if (msg != null)
-				throw new IllegalArgumentException(msg);
-			theValue = value;
-		}
-
-		@Override
-		public String canRemove() {
-			return null;
-		}
-
-		@Override
-		public void remove() throws UnsupportedOperationException {
-			try (Transaction t = lock(false, null)) {
-				if (index[0] < 0)
-					throw new IllegalStateException("This element has been removed");
-				internalRemove(getIndex(), index[0]);
-			}
-		}
-
-		void removed() {
-			index[0] = -1;
-		}
-
-		@Override
-		public String canAdd(E value, boolean before) {
-			if (index[0] < 0)
-				throw new IllegalStateException("This element has been removed");
-			return isAcceptable(value);
-		}
-
-		@Override
-		public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-			if (index[0] < 0)
-				throw new IllegalStateException("This element has been removed");
-			String msg = canAdd(value, before);
-			if (msg != null)
-				throw new IllegalArgumentException(msg);
-			int cIndex = getIndex();
-			if (!before)
-				cIndex++;
-			return CircularArrayList.this.addElement(cIndex, value);
-		}
-	}
-
-	private class ArrayElementId implements ElementId {
-		private final int[] theIndex;
-
-		ArrayElementId(int[] index) {
-			theIndex=index;
-		}
-
-		public int getIndex() {
-			return theIndex[0];
-		}
-
-		@Override
-		public int compareTo(ElementId o) {
-			return theIndex[0] - ((ArrayElementId) o).theIndex[0];
 		}
 	}
 }

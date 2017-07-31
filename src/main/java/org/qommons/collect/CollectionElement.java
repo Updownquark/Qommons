@@ -5,15 +5,13 @@ package org.qommons.collect;
  * constant-time) access to the element's value, CollectionElements may be used to keep a parallel, ordered collection or map of a
  * collection's elements using the {@link #compareTo(Object) compareTo} method or via hashing, as a CollectionElement's {@link #hashCode()}
  * and {@link #equals(Object)} methods are for the element's position in the collection, not the value. The comparison properties of an
- * element are valid as long as the element remains {@link #isPresent() present} in the collection. The hash/equals properties remain valid
- * permanently, though a removed element may not equal anything but itself.
+ * element are valid as long as the element remains {@link ElementId#isPresent() present} in the collection. The hash/equals properties
+ * remain valid permanently, though a removed element may not equal anything but itself.
  * 
  * @param <E> The type of value in the element
  */
 public interface CollectionElement<E> extends Comparable<CollectionElement<E>> {
 	ElementId getElementId();
-
-	boolean isPresent();
 
 	E get();
 
@@ -40,11 +38,6 @@ public interface CollectionElement<E> extends Comparable<CollectionElement<E>> {
 		@Override
 		public ElementId getElementId() {
 			return theWrapped.getElementId().reverse();
-		}
-
-		@Override
-		public boolean isPresent() {
-			return theWrapped.isPresent();
 		}
 
 		@Override

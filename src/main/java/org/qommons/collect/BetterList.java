@@ -1,7 +1,14 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -24,7 +31,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	}
 
 	default MutableElementSpliterator<E> mutableSpliterator(int index) {
-		return mutableSpliterator(getElement(index), true);
+		return mutableSpliterator(getElement(index).getElementId(), true);
 	}
 
 	@Override
@@ -124,7 +131,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 * @return The result of the function
 	 */
 	default <T> T ofMutableElementAt(int index, Function<? super MutableCollectionElement<? extends E>, T> onElement) {
-		return ofMutableElement(getElement(index), onElement);
+		return ofMutableElement(getElement(index).getElementId(), onElement);
 	}
 
 	@Override
@@ -181,7 +188,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			if (index == size())
 				return addElement(element);
 			else
-				return ofMutableElementAt(index, el -> ((MutableCollectionElement<E>) el).add(element, true));
+				return getElement(ofMutableElementAt(index, el -> ((MutableCollectionElement<E>) el).add(element, true)));
 		}
 	}
 
@@ -625,7 +632,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				int index = getElementsBefore(firstMatch.getElementId());
 				if ((first && index >= theEnd) || (!first && index < theStart))
 					return null;
-				ElementSpliterator<E> spliter = theWrapped.spliterator(firstMatch, !first);
+				ElementSpliterator<E> spliter = theWrapped.spliterator(firstMatch.getElementId(), !first);
 				// For !first, we'll switch things just to make the problem easier
 				int firstIdx = first ? theStart : theEnd - 1;
 				int lastIdx = first ? theEnd - 1 : theStart;
@@ -651,13 +658,23 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public <X> X ofMutableElement(CollectionElement<E> element, Function<? super MutableCollectionElement<E>, X> onElement) {
+		public CollectionElement<E> getElement(ElementId id) {
+			try (Transaction t = lock(false, null)) {
+				int index = theWrapped.getElementsBefore(id);
+				if (index < theStart || index >= theEnd)
+					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+				return theWrapped.getElement(id);
+			}
+		}
+
+		@Override
+		public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement) {
 			return theWrapped.ofMutableElement(element, onElement);
 		}
 
 		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(CollectionElement<E> element, boolean asNext) {
-			return new SubSpliterator(theWrapped.mutableSpliterator(element, asNext), getElementsBefore(element.getElementId()));
+		public MutableElementSpliterator<E> mutableSpliterator(ElementId element, boolean asNext) {
+			return new SubSpliterator(theWrapped.mutableSpliterator(element, asNext), getElementsBefore(element));
 		}
 
 		@Override
@@ -725,11 +742,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				}
 
 				@Override
-				public boolean isPresent() {
-					return el.isPresent();
-				}
-
-				@Override
 				public int compareTo(CollectionElement<E> o) {
 					return el.compareTo(o);
 				}
@@ -771,10 +783,10 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				}
 
 				@Override
-				public CollectionElement<E> add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-					CollectionElement<E> newEl = el.add(value, before);
+				public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+					ElementId newId = el.add(value, before);
 					theEnd++;
-					return newEl;
+					return newId;
 				}
 			};
 		}

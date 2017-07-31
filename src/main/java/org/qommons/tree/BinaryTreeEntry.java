@@ -1,8 +1,8 @@
 package org.qommons.tree;
 
-public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<K> {
-	V getValue();
+import org.qommons.collect.MapEntryHandle;
 
+public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<V>, MapEntryHandle<K, V> {
 	@Override
 	BinaryTreeEntry<K, V> getParent();
 
@@ -11,6 +11,9 @@ public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<K> {
 
 	@Override
 	BinaryTreeEntry<K, V> getRight();
+
+	@Override
+	BinaryTreeEntry<K, V> getClosest(boolean left);
 
 	@Override
 	default BinaryTreeEntry<K, V> getRoot() {
@@ -28,11 +31,6 @@ public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<K> {
 	}
 
 	@Override
-	default BinaryTreeEntry<K, V> getClosest(boolean left) {
-		return (BinaryTreeEntry<K, V>) BinaryTreeNode.super.getClosest(left);
-	}
-
-	@Override
 	default BinaryTreeEntry<K, V> get(int index) {
 		return (BinaryTreeEntry<K, V>) BinaryTreeNode.super.get(index);
 	}
@@ -43,16 +41,11 @@ public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<K> {
 	}
 
 	@Override
-	default BinaryTreeEntry<K, V> findClosest(Comparable<BinaryTreeNode<K>> finder, boolean lesser, boolean strictly) {
-		return (BinaryTreeEntry<K, V>) BinaryTreeNode.super.findClosest(finder, lesser, strictly);
-	}
-
-	@Override
-	default BinaryTreeNode<K> reverse() {
+	default BinaryTreeEntry<K, V> reverse() {
 		return new ReversedBinaryTreeEntry<>(this);
 	}
 
-	class ReversedBinaryTreeEntry<K, V> extends ReversedBinaryTreeNode<K> implements BinaryTreeEntry<K, V> {
+	class ReversedBinaryTreeEntry<K, V> extends ReversedBinaryTreeNode<V> implements BinaryTreeEntry<K, V> {
 		public ReversedBinaryTreeEntry(BinaryTreeEntry<K, V> wrap) {
 			super(wrap);
 		}
@@ -63,8 +56,8 @@ public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<K> {
 		}
 
 		@Override
-		public V getValue() {
-			return getWrapped().getValue();
+		public K getKey() {
+			return getWrapped().getKey();
 		}
 
 		@Override
@@ -80,6 +73,16 @@ public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<K> {
 		@Override
 		public BinaryTreeEntry<K, V> getRight() {
 			return (BinaryTreeEntry<K, V>) super.getRight();
+		}
+
+		@Override
+		public BinaryTreeEntry<K, V> getClosest(boolean left) {
+			return (BinaryTreeEntry<K, V>) super.getClosest(left);
+		}
+
+		@Override
+		public BinaryTreeEntry<K, V> reverse() {
+			return getWrapped();
 		}
 	}
 }

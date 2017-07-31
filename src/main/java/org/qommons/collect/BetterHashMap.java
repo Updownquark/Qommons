@@ -57,21 +57,37 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 
 	@Override
 	public BetterSet<K> keySet() {
-		return new BetterKeySet();
+		return new KeySet();
 	}
 
 	@Override
-	public ElementId putEntry(K key, V value) {
+	public MapEntryHandle<K, V> putEntry(K key, V value) {
 		try (Transaction t = theEntries.lock(true, null)) {
-			ElementId[] id = new ElementId[1];
-			if (theEntries.forMutableElement(new SimpleMapEntry<>(key, value), entryEl -> {
+			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(new SimpleMapEntry<>(key, value), true);
+			if (entryEl != null) {
 				entryEl.get().setValue(value);
-				id[0] = entryEl.getElementId();
-			}, true))
-				return id[0];
-			else
-				return theEntries.addElement(new SimpleMapEntry<>(key, value, true));
+			} else
+				entryEl = theEntries.addElement(new SimpleMapEntry<>(key, value, true));
+			return handleFor(entryEl);
 		}
+	}
+
+	@Override
+	public MapEntryHandle<K, V> getEntry(K key) {
+		try (Transaction t = theEntries.lock(false, null)) {
+			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(new SimpleMapEntry<>(key, null), true);
+			return entryEl == null ? null : handleFor(entryEl);
+		}
+	}
+
+	@Override
+	public MapEntryHandle<K, V> getEntry(ElementId entryId) {
+		return handleFor(theEntries.getElement(entryId));
+	}
+
+	@Override
+	public <X> X ofMutableEntry(ElementId entryId, Function<? super MutableMapEntryHandle<K, V>, X> onEntry) {
+		return theEntries.ofMutableElement(entryId, entryEl -> onEntry.apply(mutableHandleFor(entryEl)));
 	}
 
 	protected MapEntryHandle<K, V> handleFor(CollectionElement<? extends Map.Entry<K, V>> entry) {
@@ -147,27 +163,7 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		};
 	}
 
-	@Override
-	public boolean forEntry(K key, Consumer<? super MapEntryHandle<K, V>> onEntry) {
-		return theEntries.forElement(new SimpleMapEntry<>(key, null), entryEl -> onEntry.accept(handleFor(entryEl)), true);
-	}
-
-	@Override
-	public boolean forMutableEntry(K key, Consumer<? super MutableMapEntryHandle<K, V>> onEntry) {
-		return theEntries.forMutableElement(new SimpleMapEntry<>(key, null), entryEl -> onEntry.accept(mutableHandleFor(entryEl)), true);
-	}
-
-	@Override
-	public <X> X ofEntry(ElementId entryId, Function<? super MapEntryHandle<K, V>, X> onEntry) {
-		return theEntries.ofElementAt(entryId, entryEl -> onEntry.apply(handleFor(entryEl)));
-	}
-
-	@Override
-	public <X> X ofMutableEntry(ElementId entryId, Function<? super MutableMapEntryHandle<K, V>, X> onEntry) {
-		return theEntries.ofMutableElementAt(entryId, entryEl -> onEntry.apply(mutableHandleFor(entryEl)));
-	}
-
-	class BetterKeySet implements BetterSet<K> {
+	class KeySet implements BetterSet<K> {
 		@Override
 		public boolean belongs(Object o) {
 			return true;
@@ -268,6 +264,27 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
+		public CollectionElement<K> getElement(K value, boolean first) {
+			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(new SimpleMapEntry<>(value, null), first);
+			return entryEl == null ? null : handleFor(entryEl);
+		}
+
+		@Override
+		public CollectionElement<K> getElement(ElementId id) {
+			return handleFor(theEntries.getElement(id));
+		}
+
+		@Override
+		public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<K>, X> onElement) {
+			return theEntries.ofMutableElement(element, entryEl -> onElement.apply(mutableHandleFor(entryEl)));
+		}
+
+		@Override
+		public MutableElementSpliterator<K> mutableSpliterator(ElementId element, boolean asNext) {
+			return new KeySpliterator(theEntries.mutableSpliterator(element, asNext));
+		}
+
+		@Override
 		public boolean forElement(K value, Consumer<? super CollectionElement<? extends K>> onElement, boolean first) {
 			return theEntries.forElement(new SimpleMapEntry<>(value, null), entryEl -> onElement.accept(handleFor(entryEl)), first);
 		}
@@ -276,16 +293,6 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		public boolean forMutableElement(K value, Consumer<? super MutableCollectionElement<? extends K>> onElement, boolean first) {
 			return theEntries.forMutableElement(new SimpleMapEntry<>(value, null), entryEl -> onElement.accept(mutableHandleFor(entryEl)),
 				first);
-		}
-
-		@Override
-		public <T> T ofElementAt(ElementId elementId, Function<? super CollectionElement<? extends K>, T> onElement) {
-			return theEntries.ofElementAt(elementId, entryEl -> onElement.apply(handleFor(entryEl)));
-		}
-
-		@Override
-		public <T> T ofMutableElementAt(ElementId elementId, Function<? super MutableCollectionElement<? extends K>, T> onElement) {
-			return theEntries.ofMutableElementAt(elementId, entryEl -> onElement.apply(mutableHandleFor(entryEl)));
 		}
 
 		@Override
@@ -299,7 +306,7 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
-		public ElementId addElement(K value) {
+		public CollectionElement<K> addElement(K value) {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
 
@@ -361,5 +368,6 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 				return entrySplit == null ? null : new KeySpliterator(entrySplit);
 			}
 		}
+
 	}
 }

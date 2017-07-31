@@ -4,7 +4,6 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
@@ -37,51 +36,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 	 * @param filter The filter on the result
 	 * @return The result of the search, or null if no such value was found
 	 */
-	default Map.Entry<K, V> relativeEntry(Comparable<? super K> search, SortedSearchFilter filter) {
-		Map.Entry<K, V>[] found = new Map.Entry[1];
-		forEntry(search, entry -> found[0] = new ImmutableMapEntry<>(entry.getKey(), entry.get()), filter);
-		return found[0];
-	}
-
-	/**
-	 * @param value The value to search for
-	 * @param onElement The action to perform on the element containing the given value, if found
-	 * @return Whether such a value was found
-	 */
-	@Override
-	default boolean forEntry(K key, Consumer<? super MapEntryHandle<K, V>> onElement) {
-		return forEntry(keySet().searchFor(key, 0), onElement, SortedSearchFilter.OnlyMatch);
-	}
-
-	/**
-	 * @param value The value to search for
-	 * @param onElement The action to perform on the element containing the given value, if found
-	 * @return Whether such a value was found
-	 */
-	@Override
-	default boolean forMutableEntry(K key, Consumer<? super MutableMapEntryHandle<K, V>> onElement) {
-		return forMutableEntry(keySet().searchFor(key, 0), onElement, SortedSearchFilter.OnlyMatch);
-	}
-
-	/**
-	 * Searches for an entry in this sorted map
-	 * 
-	 * @param search The search to use. Must follow this sorted map's key ordering.
-	 * @param onEntry The action to perform on the closest found entry in the sorted map
-	 * @param filter The filter on the result
-	 * @return Whether an entry matching the filter was found in the map
-	 */
-	boolean forEntry(Comparable<? super K> search, Consumer<? super MapEntryHandle<K, V>> onEntry, SortedSearchFilter filter);
-
-	/**
-	 * Like {@link #forEntry(Comparable, Consumer, SortedSearchFilter)}, but provides a mutable entry
-	 * 
-	 * @param search The search to use. Must follow this sorted set's ordering.
-	 * @param onEntry The action to perform on the closest found entry in the sorted map
-	 * @param filter The filter on the result
-	 * @return Whether an entry matching the filter was found in the map
-	 */
-	boolean forMutableEntry(Comparable<? super K> search, Consumer<? super MutableMapEntryHandle<K, V>> onEntry, SortedSearchFilter filter);
+	MapEntryHandle<K, V> search(Comparable<? super K> search, SortedSearchFilter filter);
 
 	@Override
 	default K firstKey() {
@@ -95,7 +50,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default Map.Entry<K, V> lowerEntry(K key) {
-		return relativeEntry(keySet().searchFor(key, 1), SortedSearchFilter.Less);
+		return search(keySet().searchFor(key, 1), SortedSearchFilter.Less);
 	}
 
 	@Override
@@ -109,7 +64,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default Map.Entry<K, V> floorEntry(K key) {
-		return relativeEntry(keySet().searchFor(key, 0), SortedSearchFilter.Less);
+		return search(keySet().searchFor(key, 0), SortedSearchFilter.Less);
 	}
 
 	@Override
@@ -119,7 +74,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default Map.Entry<K, V> ceilingEntry(K key) {
-		return relativeEntry(keySet().searchFor(key, 0), SortedSearchFilter.Greater);
+		return search(keySet().searchFor(key, 0), SortedSearchFilter.Greater);
 	}
 
 	@Override
@@ -129,7 +84,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default Map.Entry<K, V> higherEntry(K key) {
-		return relativeEntry(keySet().searchFor(key, -1), SortedSearchFilter.Greater);
+		return search(keySet().searchFor(key, -1), SortedSearchFilter.Greater);
 	}
 
 	@Override
@@ -139,32 +94,34 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default Map.Entry<K, V> firstEntry() {
-		return relativeEntry(k -> 1, SortedSearchFilter.PreferGreater);
+		return search(k -> 1, SortedSearchFilter.PreferGreater);
 	}
 
 	@Override
 	default Map.Entry<K, V> lastEntry() {
-		return relativeEntry(k -> -1, SortedSearchFilter.PreferGreater);
+		return search(k -> -1, SortedSearchFilter.PreferGreater);
 	}
 
 	@Override
 	default Map.Entry<K, V> pollFirstEntry() {
-		Map.Entry<K, V>[] result = new Map.Entry[1];
-		forMutableEntry(v -> 1, entry -> {
-			result[0] = new ImmutableMapEntry<>(entry.getKey(), entry.get());
-			entry.remove();
-		}, SortedSearchFilter.PreferLess);
-		return result[0];
+		MapEntryHandle<K, V> handle = search(v -> 1, SortedSearchFilter.PreferLess);
+		if (handle != null) {
+			Map.Entry<K, V> result = new ImmutableMapEntry<>(handle.getKey(), handle.get());
+			forMutableEntry(handle.getElementId(), el -> el.remove());
+			return result;
+		}
+		return null;
 	}
 
 	@Override
 	default Map.Entry<K, V> pollLastEntry() {
-		Map.Entry<K, V>[] result = new Map.Entry[1];
-		forMutableEntry(v -> -1, entry -> {
-			result[0] = new ImmutableMapEntry<>(entry.getKey(), entry.get());
-			entry.remove();
-		}, SortedSearchFilter.PreferGreater);
-		return result[0];
+		MapEntryHandle<K, V> handle = search(v -> -1, SortedSearchFilter.PreferLess);
+		if (handle != null) {
+			Map.Entry<K, V> result = new ImmutableMapEntry<>(handle.getKey(), handle.get());
+			forMutableEntry(handle.getElementId(), el -> el.remove());
+			return result;
+		}
+		return null;
 	}
 
 	@Override
@@ -297,14 +254,8 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		@Override
-		public boolean forEntry(Comparable<? super K> search, Consumer<? super MapEntryHandle<K, V>> onEntry, SortedSearchFilter filter) {
-			return getWrapped().forEntry(v -> -search.compareTo(v), entry -> onEntry.accept(entry.reverse()), filter.opposite());
-		}
-
-		@Override
-		public boolean forMutableEntry(Comparable<? super K> search, Consumer<? super MutableMapEntryHandle<K, V>> onEntry,
-			SortedSearchFilter filter) {
-			return getWrapped().forMutableEntry(v -> -search.compareTo(v), entry -> onEntry.accept(entry.reverse()), filter.opposite());
+		public MapEntryHandle<K, V> search(Comparable<? super K> search, SortedSearchFilter filter) {
+			return getWrapped().search(v -> -search.compareTo(v), filter);
 		}
 	}
 
@@ -329,15 +280,16 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		@Override
-		public <T> T ofElementAt(int index, Function<? super CollectionElement<? extends Map.Entry<K, V>>, T> onElement) {
-			return getMap().keySet().ofElementAt(index,
-				keyEl -> getMap().ofEntry(keyEl.getElementId(), entry -> onElement.apply(handleFor(entry))));
+		public CollectionElement<Map.Entry<K, V>> getElement(int index) {
+			return getElement(getMap().keySet().getElement(index).getElementId());
 		}
 
 		@Override
-		public <T> T ofMutableElementAt(int index, Function<? super MutableCollectionElement<? extends Map.Entry<K, V>>, T> onElement) {
-			return getMap().keySet().ofMutableElementAt(index,
-				keyEl -> getMap().ofMutableEntry(keyEl.getElementId(), entry -> onElement.apply(mutableHandleFor(entry))));
+		public CollectionElement<Map.Entry<K, V>> search(Comparable<? super Entry<K, V>> search, SortedSearchFilter filter) {
+			CollectionElement<K> keyEl = getMap().keySet().search(k -> search.compareTo(new ImmutableMapEntry<>(k, null)), filter);
+			if (keyEl == null)
+				return null;
+			return getElement(keyEl.getElementId());
 		}
 
 		@Override
@@ -350,7 +302,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		@Override
-		public ElementId addIfEmpty(Map.Entry<K, V> value) throws IllegalStateException {
+		public CollectionElement<Map.Entry<K, V>> addIfEmpty(Map.Entry<K, V> value) throws IllegalStateException {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
 
@@ -360,26 +312,8 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		@Override
-		public boolean forElement(Comparable<? super Map.Entry<K, V>> search,
-			Consumer<? super CollectionElement<? extends Map.Entry<K, V>>> onElement, SortedSearchFilter filter) {
-			return getMap().forEntry(keyCompare(search), entry -> onElement.accept(handleFor(entry)), filter);
-		}
-
-		@Override
-		public boolean forMutableElement(Comparable<? super Map.Entry<K, V>> search,
-			Consumer<? super MutableCollectionElement<? extends Map.Entry<K, V>>> onElement, SortedSearchFilter filter) {
-			return getMap().forMutableEntry(keyCompare(search), entry -> onElement.accept(mutableHandleFor(entry)), filter);
-		}
-
-		@Override
 		public MutableElementSpliterator<Map.Entry<K, V>> mutableSpliterator(int index) {
 			return wrap(getMap().keySet().mutableSpliterator(index));
-		}
-
-		@Override
-		public MutableElementSpliterator<Map.Entry<K, V>> mutableSpliterator(Comparable<? super Map.Entry<K, V>> searchForStart,
-			boolean higher) {
-			return wrap(getMap().keySet().mutableSpliterator(keyCompare(searchForStart), higher));
 		}
 	}
 
@@ -404,19 +338,47 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		@Override
-		public ElementId putEntry(K key, V value) {
+		public MapEntryHandle<K, V> putEntry(K key, V value) {
 			if (!theKeySet.belongs(key))
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 			return theWrapped.putEntry(key, value);
 		}
 
 		@Override
-		public <X> X ofEntry(ElementId entryId, Function<? super MapEntryHandle<K, V>, X> onEntry) {
-			return theWrapped.ofEntry(entryId, entry -> {
-				if (!keySet().belongs(entry.getKey()))
-					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-				return onEntry.apply(entry);
-			});
+		public MapEntryHandle<K, V> getEntry(K key) {
+			if (!theKeySet.belongs(key))
+				return null;
+			return theWrapped.getEntry(key);
+		}
+
+		@Override
+		public MapEntryHandle<K, V> getEntry(ElementId entryId) {
+			MapEntryHandle<K, V> entry = theWrapped.getEntry(entryId);
+			if (!theKeySet.belongs(entry.getKey()))
+				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+			return entry;
+		}
+
+		public int isInRange(K value) {
+			if (theLowerBound != null && theLowerBound.compareTo(value) > 0)
+				return -1;
+			if (theUpperBound != null && theUpperBound.compareTo(value) < 0)
+				return 1;
+			return 0;
+		}
+
+		protected Comparable<K> boundSearch(Comparable<? super K> search) {
+			return v -> {
+				int compare = isInRange(v);
+				if (compare == 0)
+					compare = search.compareTo(v);
+				return compare;
+			};
+		}
+
+		@Override
+		public MapEntryHandle<K, V> search(Comparable<? super K> search, SortedSearchFilter filter) {
+			return theWrapped.search(boundSearch(search), filter);
 		}
 
 		@Override
@@ -426,17 +388,6 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 				return onEntry.apply(entry);
 			});
-		}
-
-		@Override
-		public boolean forEntry(Comparable<? super K> search, Consumer<? super MapEntryHandle<K, V>> onEntry, SortedSearchFilter filter) {
-			return theKeySet.forElement(search, keyEl -> theWrapped.forEntry(keyEl.getElementId(), onEntry), filter);
-		}
-
-		@Override
-		public boolean forMutableEntry(Comparable<? super K> search, Consumer<? super MutableMapEntryHandle<K, V>> onEntry,
-			SortedSearchFilter filter) {
-			return theKeySet.forMutableElement(search, keyEl -> theWrapped.forMutableEntry(keyEl.getElementId(), onEntry), filter);
 		}
 	}
 }
