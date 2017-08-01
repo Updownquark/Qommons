@@ -1,14 +1,7 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -252,7 +245,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	}
 
 	@Override
-	default ImmutableIterator<E> iterator() {
+	default Iterator<E> iterator() {
 		return BetterCollection.super.iterator();
 	}
 

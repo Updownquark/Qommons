@@ -1,11 +1,7 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.NavigableSet;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -82,7 +78,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	}
 
 	@Override
-	default ImmutableIterator<E> iterator() {
+	default Iterator<E> iterator() {
 		return BetterList.super.iterator();
 	}
 

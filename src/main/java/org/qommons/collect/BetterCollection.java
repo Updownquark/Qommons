@@ -1,13 +1,6 @@
 package org.qommons.collect;
 
-import java.util.Collection;
-import java.util.Deque;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -362,8 +355,8 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	/** @return An immutable (Iterator#remove()} will always throw an exception) iterator for iterating across this object's data */
 	@Override
-	default ImmutableIterator<E> iterator() {
-		return new ImmutableIterator.SpliteratorImmutableIterator<>(spliterator());
+	default Iterator<E> iterator() {
+		return new SpliteratorIterator<>(this, spliterator());
 	}
 
 	default MutableElementSpliterator<E> mutableSpliterator() {

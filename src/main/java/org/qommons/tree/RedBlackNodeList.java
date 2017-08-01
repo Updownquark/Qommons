@@ -7,13 +7,8 @@ import java.util.function.Function;
 
 import org.qommons.Transactable;
 import org.qommons.Transaction;
-import org.qommons.collect.BetterList;
-import org.qommons.collect.CollectionElement;
-import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.ElementId;
-import org.qommons.collect.MutableCollectionElement;
+import org.qommons.collect.*;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
-import org.qommons.collect.MutableElementSpliterator;
 
 public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	private final CollectionLockingStrategy theLocker;
@@ -119,7 +114,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 	@Override
 	public MutableElementSpliterator<E> mutableSpliterator(boolean fromStart) {
-		return mutableSpliterator(wrap(theRoot == null ? null : theRoot.getTerminal(fromStart)), fromStart);
+		return mutableSpliterator(theRoot == null ? null : wrap(theRoot.getTerminal(fromStart)), fromStart);
 	}
 
 	@Override
@@ -153,6 +148,21 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		theRoot = null;
 	}
 
+	@Override
+	public int hashCode() {
+		return BetterCollection.hashCode(this);
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		return BetterCollection.equals(this, o);
+	}
+
+	@Override
+	public String toString() {
+		return BetterCollection.toString(this);
+	}
+
 	public BinaryTreeNode<E> nodeFor(CollectionElement<E> element) {
 		return wrap(checkNode(element.getElementId()).theNode);
 	}
@@ -171,7 +181,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 	protected MutableElementSpliterator<E> mutableSpliterator(BinaryTreeNode<E> node, boolean next, BinaryTreeNode<E> leftBound,
 		BinaryTreeNode<E> rightBound) {
-		return new MutableNodeSpliterator(checkNode(node.getElementId()).theNode, next,
+		return new MutableNodeSpliterator(node == null ? null : checkNode(node.getElementId()).theNode, next,
 			leftBound == null ? null : checkNode(leftBound.getElementId()).theNode,
 			rightBound == null ? null : checkNode(rightBound.getElementId()).theNode);
 	}
@@ -366,7 +376,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 	protected class MutableNodeSpliterator implements MutableElementSpliterator<E> {
 		private RedBlackNode<E> current;
-		private boolean wasNext;
+		private boolean currentIsNext;
 
 		private RedBlackNode<E> theLeftBound;
 		private RedBlackNode<E> theRightBound;
@@ -381,7 +391,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 		private MutableNodeSpliterator(RedBlackNode<E> node, boolean next, RedBlackNode<E> left, RedBlackNode<E> right) {
 			current = node;
-			wasNext = !next;
+			currentIsNext = next;
 			theLeftBound = left;
 			theRightBound = right;
 		}
@@ -412,22 +422,25 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 			if (current == null) {
 				if (theRoot == null)
 					return false;
-				current = theRoot.getTerminal(!wasNext);
+				current = theRoot.getTerminal(currentIsNext);
 			}
 			// We can tolerate external modification as long as the node that this spliterator is anchored to has not been removed
 			// This situation is easy to detect
-			if (current.getParent() == null && theRoot != current)
+			if (current.getParent() == null && theRoot != current) {
+				if (theRoot == null)
+					return false;
 				throw new ConcurrentModificationException(
 					"The collection has been modified externally such that this spliterator has been orphaned");
-			if (wasNext != left) {
-				RedBlackNode<E> next = current.getClosest(left);
-				if (next != null && isIncluded(next))
-					current = next;
-				else {
-					wasNext = left;
-					return false;
-				}
 			}
+			if (currentIsNext == left) {
+				RedBlackNode<E> next = current.getClosest(left);
+				if (next != null && isIncluded(next)) {
+					current = next;
+					currentIsNext = left;
+				} else
+					return false;
+			} else
+				currentIsNext = !currentIsNext;
 			return true;
 		}
 
@@ -525,7 +538,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 				if (theRoot == null)
 					return null;
 				if (current == null)
-					current = theRoot.getTerminal(!wasNext);
+					current = theRoot.getTerminal(!currentIsNext);
 				RedBlackNode<E> divider;
 				if (theLeftBound == null) {
 					if (theRightBound == null) {
@@ -638,11 +651,11 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 						current = newCurrent;
 					} else {
 						newCurrent = current;
-						newWasNext = wasNext;
+						newWasNext = currentIsNext;
 					}
 					theWrapped.remove();
 					current = newCurrent;
-					wasNext = newWasNext;
+					currentIsNext = newWasNext;
 				}
 			}
 

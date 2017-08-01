@@ -4,7 +4,6 @@ import java.util.Comparator;
 import java.util.Spliterator;
 import java.util.function.Consumer;
 
-import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.value.Settable;
 
 /**
@@ -125,7 +124,7 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 
 		@Override
 		public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
-			return theWrapped.tryAdvanceElement(action);
+			return theWrapped.tryReverseElement(action);
 		}
 
 		@Override

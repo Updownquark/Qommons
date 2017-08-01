@@ -1,6 +1,7 @@
 package org.qommons.collect;
 
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.Set;
 
 /**
@@ -10,7 +11,7 @@ import java.util.Set;
  */
 public interface BetterSet<E> extends BetterCollection<E>, Set<E> {
 	@Override
-	default ImmutableIterator<E> iterator() {
+	default Iterator<E> iterator() {
 		return BetterCollection.super.iterator();
 	}
 

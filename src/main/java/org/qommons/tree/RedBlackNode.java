@@ -76,7 +76,7 @@ public class RedBlackNode<E> {
 	public final void checkValid() {
 		if(theParent != null)
 			throw new IllegalStateException("checkValid() may only be called on the root");
-		if(isRed)
+		if (isRed && (theLeft != null || theRight != null)) // Root may be red if it's solo
 			throw new IllegalStateException("The root is red!");
 
 		checkValid(initValidationProperties());
@@ -461,7 +461,9 @@ public class RedBlackNode<E> {
 		parent.setChild(node, childSide);
 		while (parent != this)
 			fixAfterInsertion(parent);
-		return fixAfterInsertion(this);
+		RedBlackNode<E> newRoot = fixAfterInsertion(this);
+		newRoot.setRed(false); // Root is black
+		return newRoot;
 	}
 
 	/**
@@ -489,6 +491,7 @@ public class RedBlackNode<E> {
 
 		theRemovedIndex = getNodesBefore();
 
+		RedBlackNode<E> newRoot;
 		if(replacement != null) {
 			boolean oldRed = replacement.isRed;
 			if(theParent != null)
@@ -500,17 +503,19 @@ public class RedBlackNode<E> {
 			setChild(null, true);
 			setChild(null, false);
 			if(!isRed)
-				return fixAfterDeletion(replacement);
+				newRoot = fixAfterDeletion(replacement);
 			else
-				return replacement.getRoot();
+				newRoot = replacement.getRoot();
 		} else if(theParent == null)
-			return null;
+			newRoot = null;
 		else {
-			RedBlackNode<E> ret = fixAfterDeletion(this);
+			newRoot = fixAfterDeletion(this);
 			theParent.setChild(null, getSide());
 			setParent(null);
-			return ret;
 		}
+		if (newRoot != null)
+			newRoot.setRed(false); // Root is black
+		return newRoot;
 	}
 
 	private void adjustSize(int diff) {
