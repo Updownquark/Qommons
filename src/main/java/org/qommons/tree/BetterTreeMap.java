@@ -390,10 +390,11 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 			theEntries.clear();
 		}
 
-		private class KeySpliterator implements MutableElementSpliterator<K> {
+		private class KeySpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<K> {
 			private final MutableElementSpliterator<Map.Entry<K, V>> theEntrySpliter;
 
 			KeySpliterator(MutableElementSpliterator<java.util.Map.Entry<K, V>> entrySpliter) {
+				super(theEntries);
 				theEntrySpliter = entrySpliter;
 			}
 
@@ -418,23 +419,13 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 			}
 
 			@Override
-			public boolean tryAdvanceElement(Consumer<? super CollectionElement<K>> action) {
-				return theEntrySpliter.tryAdvanceElement(el -> action.accept(handleFor(el)));
+			protected boolean internalOnElementM(Consumer<? super MutableCollectionElement<K>> action, boolean forward) {
+				return theEntrySpliter.onElementM(el -> action.accept(mutableHandleFor(el)), forward);
 			}
 
 			@Override
-			public boolean tryReverseElement(Consumer<? super CollectionElement<K>> action) {
-				return theEntrySpliter.tryReverseElement(el -> action.accept(handleFor(el)));
-			}
-
-			@Override
-			public boolean tryAdvanceElementM(Consumer<? super MutableCollectionElement<K>> action) {
-				return theEntrySpliter.tryAdvanceElementM(el -> action.accept(mutableHandleFor(el)));
-			}
-
-			@Override
-			public boolean tryReverseElementM(Consumer<? super MutableCollectionElement<K>> action) {
-				return theEntrySpliter.tryReverseElementM(el -> action.accept(mutableHandleFor(el)));
+			protected boolean internalOnElement(Consumer<? super CollectionElement<K>> action, boolean forward) {
+				return theEntrySpliter.onElement(el -> action.accept(handleFor(el)), forward);
 			}
 
 			@Override

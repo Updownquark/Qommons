@@ -3,67 +3,44 @@ package org.qommons.collect;
 import java.util.Spliterator;
 import java.util.function.Consumer;
 
+import org.qommons.Transactable;
+import org.qommons.Transaction;
+
 public interface ElementSpliterator<E> extends Spliterator<E> {
 	/**
-	 * Retrieves the next element available to this ElementSpliterator
+	 * Retrieves the next or previous element available to this ElementSpliterator
 	 * 
-	 * @param action Accepts each element in sequence. Unless a sub-type of ElementSpliterator or a specific supplier of a
-	 *        ElementSpliterator advertises otherwise, the element object may only be treated as valid until the next element is returned
-	 *        and also should not be kept longer than the reference to the ElementSpliterator.
-	 * @return false if no remaining elements existed upon entry to this method, else true.
+	 * @param action Accepts the next or previous element in the sequence. The element may be treated as valid as long as its
+	 *        {@link CollectionElement#getElementId() element ID} remains {@link ElementId#isPresent() present}
+	 * @param forward Whether to get the next or the previous element in the sequence
+	 * @return True if the element was retrieved, or false if no remaining elements exist in the sequence in the given direction
 	 */
-	boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action);
-
-	/**
-	 * Retrieves the previous element available to this ElementSpliterator
-	 * 
-	 * @param action Accepts each element in reverse. Unless a sub-type of ElementSpliterator or a specific supplier of a ElementSpliterator
-	 *        advertises otherwise, the element object may only be treated as valid until the next element is returned and also should not
-	 *        be kept longer than the reference to the ElementSpliterator.
-	 * @return false if no remaining elements existed upon entry to this method, else true.
-	 */
-	boolean tryReverseElement(Consumer<? super CollectionElement<E>> action);
+	boolean onElement(Consumer<? super CollectionElement<E>> action, boolean forward);
 
 	/**
 	 * Operates on each element remaining in this ElementSpliterator
 	 * 
+	 * @param forward Whether to get the next or the previous element in the sequence
 	 * @param action The action to perform on each element
 	 */
-	default void forEachElement(Consumer<? super CollectionElement<E>> action) {
-		while (tryAdvanceElement(action)) {
-		}
-	}
-
-	/**
-	 * Operates on each element remaining in this ElementSpliterator
-	 * 
-	 * @param action The action to perform on each element
-	 */
-	default void forEachElementReverse(Consumer<? super CollectionElement<E>> action) {
-		while (tryReverseElement(action)) {
-		}
-	}
+	void forEachElement(Consumer<? super CollectionElement<E>> action, boolean forward);
 
 	@Override
 	default boolean tryAdvance(Consumer<? super E> action) {
-		return tryAdvanceElement(v -> {
-			action.accept(v.get());
-		});
+		return onElement(v -> action.accept(v.get()), true);
 	}
 
 	default boolean tryReverse(Consumer<? super E> action) {
-		return tryReverseElement(v -> {
-			action.accept(v.get());
-		});
+		return onElement(v -> action.accept(v.get()), false);
 	}
 
 	@Override
 	default void forEachRemaining(Consumer<? super E> action) {
-		forEachElement(el -> action.accept(el.get()));
+		forEachElement(el -> action.accept(el.get()), true);
 	}
 
 	default void forEachReverse(Consumer<? super E> action) {
-		forEachElementReverse(el -> action.accept(el.get()));
+		forEachElement(el -> action.accept(el.get()), false);
 	}
 
 	@Override
@@ -102,13 +79,12 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 		}
 
 		@Override
-		public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
+		public boolean onElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
 			return false;
 		}
 
 		@Override
-		public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
-			return false;
+		public void forEachElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
 		}
 
 		@Override
@@ -118,7 +94,7 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 	}
 
 	/**
-	 * Implements {@link ReversibleElementSpliterator#reverse()}
+	 * Implements {@link ElementSpliterator#reverse()}
 	 * 
 	 * @param <E> The type of the values in this spliterator
 	 */
@@ -169,23 +145,13 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 		}
 
 		@Override
-		public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
-			return theWrapped.tryReverseElement(el -> action.accept(el.reverse()));
+		public boolean onElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+			return theWrapped.onElement(el -> action.accept(el.reverse()), !forward);
 		}
 
 		@Override
-		public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
-			return theWrapped.tryAdvanceElement(el -> action.accept(el.reverse()));
-		}
-
-		@Override
-		public void forEachElement(Consumer<? super CollectionElement<E>> action) {
-			theWrapped.forEachElementReverse(el -> action.accept(el.reverse()));
-		}
-
-		@Override
-		public void forEachElementReverse(Consumer<? super CollectionElement<E>> action) {
-			theWrapped.forEachElement(el -> action.accept(el.reverse()));
+		public void forEachElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+			theWrapped.forEachElement(el -> action.accept(el.reverse()), !forward);
 		}
 
 		@Override
@@ -199,6 +165,31 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 			if (wrapSpit == null)
 				return null;
 			return new ReversedElementSpliterator<>(wrapSpit);
+		}
+	}
+
+	abstract class SimpleSpliterator<E> implements ElementSpliterator<E> {
+		protected final Transactable theLocker;
+
+		public SimpleSpliterator(Transactable locker) {
+			theLocker = locker;
+		}
+
+		protected abstract boolean internalOnElement(Consumer<? super CollectionElement<E>> action, boolean forward);
+
+		@Override
+		public boolean onElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+			try (Transaction t = theLocker == null ? Transaction.NONE : theLocker.lock(false, null)) {
+				return internalOnElement(action, forward);
+			}
+		}
+
+		@Override
+		public void forEachElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+			try (Transaction t = theLocker == null ? Transaction.NONE : theLocker.lock(false, null)) {
+				while (internalOnElement(action, forward)) {
+				}
+			}
 		}
 	}
 }

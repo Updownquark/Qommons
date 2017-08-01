@@ -1,6 +1,13 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Set;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -91,8 +98,8 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default boolean contains(Object o) {
 		if (!belongs(o))
 			return false;
-		return forElement((E) o, el -> {
-		}, true);
+		CollectionElement<E> el = getElement((E) o, true);
+		return el != null;
 	}
 
 	/**
@@ -228,7 +235,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 					el.set(newValue);
 					replaced[0] = true;
 				}
-			});
+			}, true);
 			return replaced[0];
 		}
 	}
@@ -280,14 +287,14 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 */
 	default boolean find(Predicate<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
 		try (Transaction t = lock(false, null)) {
-			ElementSpliterator<E> spliter = first ? spliterator(first) : spliterator(first).reverse();
+			ElementSpliterator<E> spliter = first ? spliterator(first) : spliterator(first);
 			boolean[] found = new boolean[1];
-			while (spliter.tryAdvanceElement(el -> {
+			while (spliter.onElement(el -> {
 				if (search.test(el.get())) {
 					found[0] = true;
 					onElement.accept(el);
 				}
-			})) {
+			}, first)) {
 			}
 			return found[0];
 		}
@@ -304,14 +311,14 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default boolean findMutable(Predicate<? super E> search, Consumer<? super MutableCollectionElement<? extends E>> onElement,
 		boolean first) {
 		try (Transaction t = lock(true, null)) {
-			MutableElementSpliterator<E> spliter = first ? mutableSpliterator(first) : mutableSpliterator(first).reverse();
+			MutableElementSpliterator<E> spliter = first ? mutableSpliterator(first) : mutableSpliterator(first);
 			boolean[] found = new boolean[1];
-			while (spliter.tryAdvanceElementM(el -> {
+			while (spliter.onElementM(el -> {
 				if (search.test(el.get())) {
 					found[0] = true;
 					onElement.accept(el);
 				}
-			})) {
+			}, first)) {
 			}
 			return found[0];
 		}
@@ -326,18 +333,15 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return The number of results found
 	 */
 	default int findAll(Predicate<? super E> search, Consumer<? super MutableCollectionElement<? extends E>> onElement, boolean forward) {
-		try (Transaction t = lock(true, null)) {
-			MutableElementSpliterator<E> spliter = mutableSpliterator();
-			int[] found = new int[1];
-			while (spliter.tryAdvanceElementM(el -> {
-				if (search.test(el.get())) {
-					found[0]++;
-					onElement.accept(el);
-				}
-			})) {
+		int[] found = new int[1];
+		MutableElementSpliterator<E> spliter = forward ? mutableSpliterator() : mutableSpliterator(false);
+		spliter.forEachElementM(el -> {
+			if (search.test(el.get())) {
+				found[0]++;
+				onElement.accept(forward ? el : el.reverse());
 			}
-			return found[0];
-		}
+		}, forward);
+		return found[0];
 	}
 
 	@Override
@@ -383,7 +387,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 				if (!add(e))
 					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 			}
-			if (!mutableSpliterator(true).tryAdvanceElementM(el -> el.add(e, true)))
+			if (!mutableSpliterator(true).onElementM(el -> el.add(e, true), true))
 				throw new IllegalStateException("Could not add element");
 		} catch (UnsupportedOperationException | IllegalArgumentException ex) {
 			throw new IllegalStateException("Could not add element", ex);
@@ -400,7 +404,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 				if (!add(e))
 					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 			}
-			if (!mutableSpliterator(false).tryReverseElementM(el -> el.add(e, false)))
+			if (!mutableSpliterator(false).onElementM(el -> el.add(e, false), false))
 				throw new IllegalStateException("Could not add element");
 		} catch (UnsupportedOperationException | IllegalArgumentException ex) {
 			throw new IllegalStateException("Could not add element", ex);
@@ -416,12 +420,12 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 					return false;
 				return add(e);
 			}
-			if (!mutableSpliterator(true).tryAdvanceElementM(el -> {
+			if (!mutableSpliterator(true).onElementM(el -> {
 				if (el.canAdd(e, true) == null) {
 					el.add(e, true);
 					success[0] = true;
 				}
-			}))
+			}, true))
 				success[0] = add(e);
 		}
 		return success[0];
@@ -436,12 +440,12 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 					return false;
 				return add(e);
 			}
-			if (!mutableSpliterator(false).tryReverseElementM(el -> {
+			if (!mutableSpliterator(false).onElementM(el -> {
 				if (el.canAdd(e, false) == null) {
 					el.add(e, false);
 					success[0] = true;
 				}
-			}))
+			}, false))
 				success[0] = add(e);
 		}
 		return success[0];
@@ -451,10 +455,10 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default E removeFirst() {
 		Object[] value = new Object[1];
 		try (Transaction t = lock(true, null)) {
-			if (!mutableSpliterator(true).tryAdvanceElementM(el -> {
+			if (!mutableSpliterator(true).onElementM(el -> {
 				value[0] = el.get();
 				el.remove();
-			}))
+			}, true))
 				throw new NoSuchElementException("Empty collection");
 		}
 		return (E) value[0];
@@ -464,10 +468,10 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default E removeLast() {
 		Object[] value = new Object[1];
 		try (Transaction t = lock(true, null)) {
-			if (!mutableSpliterator(true).tryAdvanceElementM(el -> {
+			if (!mutableSpliterator(true).onElementM(el -> {
 				value[0] = el.get();
 				el.remove();
-			}))
+			}, false))
 				throw new NoSuchElementException("Empty collection");
 		}
 		return (E) value[0];
@@ -477,11 +481,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default E pollFirst() {
 		Object[] value = new Object[1];
 		try (Transaction t = lock(true, null)) {
-			mutableSpliterator(true).tryAdvanceElementM(el -> {
+			mutableSpliterator(true).onElementM(el -> {
 				value[0] = el.get();
 				el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an
 								// exception
-			});
+			}, true);
 		}
 		return (E) value[0];
 	}
@@ -490,11 +494,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default E pollLast() {
 		Object[] value = new Object[1];
 		try (Transaction t = lock(true, null)) {
-			mutableSpliterator(false).tryReverseElementM(el -> {
+			mutableSpliterator(false).onElementM(el -> {
 				value[0] = el.get();
 				el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an
 								// exception
-			});
+			}, false);
 		}
 		return (E) value[0];
 	}

@@ -207,11 +207,10 @@ public class QommonsTestUtils {
 		assertEquals(100, coll.size());
 		if (check != null)
 			check.accept(coll);
-		assertThat(coll, containsAll(0, 75, 50, 11, 99, 50)); // 50 twice. Test containsAll
-		// 100 not in coll. 50 in list twice. Test removeAll.
-		assertTrue(coll.removeAll(
-				// Easier to debug this way
-				asList(0, 50, 100, 10, 90, 20, 80, 30, 70, 40, 60, 50)));
+		assertThat(coll, //
+			containsAll(0, 75, 50, 11, 99, 50)); // 50 twice. Test containsAll
+		assertTrue(coll.removeAll( // Easier to debug this way
+			asList(0, 50, 100, 10, 90, 20, 80, 30, 70, 40, 60, 50))); // 100 not in coll. 50 in list twice. Test removeAll
 		assertEquals(90, coll.size());
 		if (check != null)
 			check.accept(coll);
@@ -571,13 +570,19 @@ public class QommonsTestUtils {
 				listIter1.hasPrevious());
 			int prev = listIter1.previous();
 			assertThat("On Iteration " + i, prev, equalTo(listIter2.previous()));
-			switch (i % 3) {
+			assertEquals("On Iteration " + i, listIter2.previousIndex(), listIter1.previousIndex());
+			assertEquals("On Iteration " + i, listIter2.nextIndex(), listIter1.nextIndex());
+			switch (i % 4) {
 			case 0:
 				int toAdd = i * 17 + 100;
 				listIter1.add(toAdd);
 				listIter2.add(toAdd);
+				assertEquals("On Iteration " + i, listIter2.previousIndex(), listIter1.previousIndex());
+				assertEquals("On Iteration " + i, listIter2.nextIndex(), listIter1.nextIndex());
 				assertTrue("On Iteration " + i, //
 					listIter1.hasPrevious());
+				assertEquals("On Iteration " + i, listIter2.previousIndex(), listIter1.previousIndex());
+				assertEquals("On Iteration " + i, listIter2.nextIndex(), listIter1.nextIndex());
 				assertThat("On Iteration " + i, //
 					listIter1.previous(), equalTo(toAdd)); // Back up over the added value
 				listIter2.previous();
@@ -591,6 +596,10 @@ public class QommonsTestUtils {
 				listIter2.set(prev + 50);
 				break;
 			}
+			assertEquals("On Iteration " + i, //
+				listIter2.previousIndex(), listIter1.previousIndex());
+			assertEquals("On Iteration " + i, //
+				listIter2.nextIndex(), listIter1.nextIndex());
 			assertThat("On Iteration " + i, list, collectionsEqual(test, true));
 			if (check != null)
 				check.accept(list);
@@ -599,7 +608,7 @@ public class QommonsTestUtils {
 			assertTrue("On Iteration " + i, listIter1.hasNext());
 			int next = listIter1.next();
 			assertThat("On Iteration " + i, next, equalTo(listIter2.next()));
-			switch (i % 3) {
+			switch (i % 4) {
 			case 0:
 				int toAdd = i * 53 + 1000;
 				listIter1.add(toAdd);

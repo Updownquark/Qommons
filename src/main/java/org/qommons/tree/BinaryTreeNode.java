@@ -124,10 +124,10 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 			int compare = finder.compareTo(node);
 			if (compare == 0)
 				return node;
-			boolean matchesLesser = compare < 0 == lesser;
+			boolean matchesLesser = compare > 0 == lesser;
 			if (matchesLesser || (found == null && !strictly))
 				found = node;
-			BinaryTreeNode<E> child = getChild(compare < 0);
+			BinaryTreeNode<E> child = node.getChild(compare < 0);
 			if (child == null)
 				return found;
 			node = child;

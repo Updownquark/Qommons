@@ -4,6 +4,8 @@ import java.util.Comparator;
 import java.util.Spliterator;
 import java.util.function.Consumer;
 
+import org.qommons.Transactable;
+import org.qommons.Transaction;
 import org.qommons.value.Settable;
 
 /**
@@ -23,35 +25,14 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 	 * @param action The action to perform on the element
 	 * @return false if no element was available
 	 */
-	boolean tryAdvanceElementM(Consumer<? super MutableCollectionElement<E>> action);
-
-	/**
-	 * Like {@link #tryReverseElement(Consumer)}, but provides a mutable element handle
-	 * 
-	 * @param action The action to perform on the element
-	 * @return false if no element was available
-	 */
-	boolean tryReverseElementM(Consumer<? super MutableCollectionElement<E>> action);
+	boolean onElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward);
 
 	/**
 	 * Operates on each element remaining in this MutableElementSpliterator
 	 * 
 	 * @param action The action to perform on each element
 	 */
-	default void forEachElementM(Consumer<? super MutableCollectionElement<E>> action) {
-		while (tryAdvanceElementM(action)) {
-		}
-	}
-
-	/**
-	 * Operates on each previous element remaining in this MutableElementSpliterator
-	 * 
-	 * @param action The action to perform on each element
-	 */
-	default void forEachElementReverseM(Consumer<? super MutableCollectionElement<E>> action) {
-		while (tryReverseElementM(action)) {
-		}
-	}
+	void forEachElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward);
 
 	@Override
 	MutableElementSpliterator<E> trySplit();
@@ -85,13 +66,13 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 		}
 
 		@Override
-		public boolean tryAdvanceElementM(Consumer<? super MutableCollectionElement<E>> action) {
-			return getWrapped().tryReverseElementM(el -> action.accept(el.reverse()));
+		public boolean onElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
+			return getWrapped().onElementM(el -> action.accept(el.reverse()), !forward);
 		}
 
 		@Override
-		public boolean tryReverseElementM(Consumer<? super MutableCollectionElement<E>> action) {
-			return getWrapped().tryAdvanceElementM(el -> action.accept(el.reverse()));
+		public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
+			getWrapped().forEachElementM(el -> action.accept(el.reverse()), !forward);
 		}
 
 		@Override
@@ -118,13 +99,13 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 		}
 
 		@Override
-		public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
-			return theWrapped.tryAdvanceElement(action);
+		public boolean onElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+			return theWrapped.onElement(action, forward);
 		}
 
 		@Override
-		public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
-			return theWrapped.tryReverseElement(action);
+		public void forEachElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+			theWrapped.forEachElement(action, forward);
 		}
 
 		@Override
@@ -156,18 +137,45 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 
 	class EmptyMutableSpliterator<E> extends EmptyElementSpliterator<E> implements MutableElementSpliterator<E> {
 		@Override
-		public boolean tryAdvanceElementM(Consumer<? super MutableCollectionElement<E>> action) {
+		public boolean onElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
 			return false;
 		}
 
 		@Override
-		public boolean tryReverseElementM(Consumer<? super MutableCollectionElement<E>> action) {
-			return false;
+		public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
 		}
 
 		@Override
 		public MutableElementSpliterator<E> trySplit() {
 			return null;
+		}
+	}
+
+	abstract class SimpleMutableSpliterator<E> extends SimpleSpliterator<E> implements MutableElementSpliterator<E> {
+		public SimpleMutableSpliterator(Transactable locker) {
+			super(locker);
+		}
+
+		protected abstract boolean internalOnElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward);
+
+		@Override
+		protected boolean internalOnElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+			return internalOnElementM(el -> action.accept(el.immutable()), forward);
+		}
+
+		@Override
+		public boolean onElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
+			try (Transaction t = theLocker == null ? Transaction.NONE : theLocker.lock(true, null)) {
+				return internalOnElementM(action, forward);
+			}
+		}
+
+		@Override
+		public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
+			try (Transaction t = theLocker == null ? Transaction.NONE : theLocker.lock(true, null)) {
+				while (internalOnElementM(action, forward)) {
+				}
+			}
 		}
 	}
 }

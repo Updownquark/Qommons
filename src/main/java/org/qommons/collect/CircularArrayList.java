@@ -257,7 +257,6 @@ public class CircularArrayList<E> implements BetterList<E> {
 	private double theGrowthFactor;
 
 	private int theAdvanced;
-	private int theAdded;
 
 	/** Creates an empty list */
 	public CircularArrayList() {
@@ -740,7 +739,6 @@ public class CircularArrayList<E> implements BetterList<E> {
 		theOffset += theAdvanced;
 		if (theOffset >= theArray.length)
 			theOffset -= theArray.length;
-		theAdded = spaces;
 		theLocker.indexChanged(0); // This value should not matter for the root locker
 		return true;
 	}
@@ -1165,7 +1163,6 @@ public class CircularArrayList<E> implements BetterList<E> {
 		theOffset += theAdvanced;
 		if (theOffset >= theArray.length)
 			theOffset -= theArray.length;
-		theAdded = 1;
 		theLocker.indexChanged(1);
 		return element;
 	}
@@ -1379,38 +1376,94 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 		@Override
 		public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
-			int tIndex = tryElement(action, true);
-			if (tIndex < 0)
-				return false;
-			action.accept(theArray[tIndex].immutable());
-			return true;
+			try (Transaction t = lock(false, null)) {
+				int tIndex = tryElement(action, true);
+				if (tIndex < 0)
+					return false;
+				action.accept(theArray[tIndex].immutable());
+				return true;
+			}
 		}
 
 		@Override
 		public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
-			int tIndex = tryElement(action, false);
-			if (tIndex < 0)
-				return false;
-			action.accept(theArray[tIndex].immutable());
-			return true;
+			try (Transaction t = lock(false, null)) {
+				int tIndex = tryElement(action, false);
+				if (tIndex < 0)
+					return false;
+				action.accept(theArray[tIndex].immutable());
+				return true;
+			}
 		}
 
 		@Override
 		public boolean tryAdvanceElementM(Consumer<? super MutableCollectionElement<E>> action) {
-			int tIndex = tryElement(action, true);
-			if (tIndex < 0)
-				return false;
-			action.accept(theArray[tIndex]);
-			return true;
+			try (Transaction t = lock(true, null)) {
+				int tIndex = tryElement(action, true);
+				if (tIndex < 0)
+					return false;
+				action.accept(theArray[tIndex]);
+				return true;
+			}
 		}
 
 		@Override
 		public boolean tryReverseElementM(Consumer<? super MutableCollectionElement<E>> action) {
-			int tIndex = tryElement(action, false);
-			if (tIndex < 0)
-				return false;
-			action.accept(theArray[tIndex]);
-			return true;
+			try (Transaction t = lock(true, null)) {
+				int tIndex = tryElement(action, false);
+				if (tIndex < 0)
+					return false;
+				action.accept(theArray[tIndex]);
+				return true;
+			}
+		}
+
+		@Override
+		public void forEachElement(Consumer<? super CollectionElement<E>> action) {
+			try (Transaction t = lock(false, null)) {
+				while (true) {
+					int tIndex = tryElement(action, true);
+					if (tIndex < 0)
+						break;
+					action.accept(theArray[tIndex].immutable());
+				}
+			}
+		}
+
+		@Override
+		public void forEachElementReverse(Consumer<? super CollectionElement<E>> action) {
+			try (Transaction t = lock(false, null)) {
+				while (true) {
+					int tIndex = tryElement(action, false);
+					if (tIndex < 0)
+						break;
+					action.accept(theArray[tIndex].immutable());
+				}
+			}
+		}
+
+		@Override
+		public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action) {
+			try (Transaction t = lock(true, null)) {
+				while (true) {
+					int tIndex = tryElement(action, true);
+					if (tIndex < 0)
+						break;
+					action.accept(theArray[tIndex]);
+				}
+			}
+		}
+
+		@Override
+		public void forEachElementReverseM(Consumer<? super MutableCollectionElement<E>> action) {
+			try (Transaction t = lock(true, null)) {
+				while (true) {
+					int tIndex = tryElement(action, false);
+					if (tIndex < 0)
+						break;
+					action.accept(theArray[tIndex]);
+				}
+			}
 		}
 
 		private int tryElement(Consumer<? super MutableCollectionElement<E>> action, boolean advance) {

@@ -1,7 +1,11 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.NavigableSet;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -692,6 +696,22 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 
 			@Override
+			public void forEachElement(Consumer<? super CollectionElement<E>> action) {
+				try (Transaction t = lock(false, null)) {
+					while (tryAdvanceElement(action)) {
+					}
+				}
+			}
+
+			@Override
+			public void forEachElementReverse(Consumer<? super CollectionElement<E>> action) {
+				try (Transaction t = lock(false, null)) {
+					while (tryReverseElement(action)) {
+					}
+				}
+			}
+
+			@Override
 			public ElementSpliterator<E> trySplit() {
 				ElementSpliterator<E> wrapSplit = theWrappedSpliter.trySplit();
 				return wrapSplit == null ? null : new BoundedSpliterator(wrapSplit);
@@ -738,6 +758,22 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 					});
 				}
 				return success[0];
+			}
+
+			@Override
+			public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action) {
+				try (Transaction t = lock(true, null)) {
+					while (tryAdvanceElementM(action)) {
+					}
+				}
+			}
+
+			@Override
+			public void forEachElementReverseM(Consumer<? super MutableCollectionElement<E>> action) {
+				try (Transaction t = lock(true, null)) {
+					while (tryReverseElementM(action)) {
+					}
+				}
 			}
 
 			@Override

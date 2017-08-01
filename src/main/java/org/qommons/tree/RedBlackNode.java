@@ -198,7 +198,7 @@ public class RedBlackNode<E> {
 			boolean left = index < nodeIndex;
 			if (!left)
 				passed = nodeIndex + 1;
-			node = getChild(left);
+			node = node.getChild(left);
 			if (node != null)
 				nodeIndex = passed + sizeOf(node.theLeft);
 		}
@@ -442,10 +442,14 @@ public class RedBlackNode<E> {
 	public RedBlackNode<E> add(RedBlackNode<E> node, boolean left) {
 		// First let's link up the next and previous fields
 		if (left) {
+			if (thePrevious != null)
+				thePrevious.theNext = node;
 			node.thePrevious = thePrevious;
 			thePrevious = node;
 			node.theNext = this;
 		} else {
+			if (theNext != null)
+				theNext.thePrevious = node;
 			node.theNext = theNext;
 			theNext = node;
 			node.thePrevious = this;
@@ -459,11 +463,7 @@ public class RedBlackNode<E> {
 			child = parent.getChild(childSide);
 		}
 		parent.setChild(node, childSide);
-		while (parent != this)
-			fixAfterInsertion(parent);
-		RedBlackNode<E> newRoot = fixAfterInsertion(this);
-		newRoot.setRed(false); // Root is black
-		return newRoot;
+		return fixAfterInsertion(node);
 	}
 
 	/**
@@ -483,6 +483,7 @@ public class RedBlackNode<E> {
 			switchWith(successor);
 			// Now we've switched locations with successor, so we have either 0 or 1 children and can continue with delete
 		}
+		theNext = thePrevious = null;
 		RedBlackNode<E> replacement = null;
 		if(theLeft != null)
 			replacement = theLeft;
@@ -556,7 +557,7 @@ public class RedBlackNode<E> {
 		return str.append(" (").append(isRed() ? "red" : "black").append(", ").append(theSize).append(')').toString();
 	}
 
-	/** This is not used, but here for reference. It is the rebalancing code from {@link java.util.TreeMap}, refactored for RedBlackTree. */
+	/** This is the rebalancing code from {@link java.util.TreeMap}, refactored for RedBlackTree. */
 	private static <E> RedBlackNode<E> fixAfterInsertion(RedBlackNode<E> x) {
 		while(x != null && isRed(x.theParent) && x.getParent().getParent() != null) {
 			boolean parentLeft = x.getParent().getSide();

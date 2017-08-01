@@ -9,6 +9,8 @@ import java.util.function.Function;
 
 import org.qommons.Transactable;
 import org.qommons.Transaction;
+import org.qommons.collect.BetterMap.BetterEntrySet.EntryElement;
+import org.qommons.collect.BetterMap.BetterEntrySet.MutableEntryElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 public interface BetterMap<K, V> extends TransactableMap<K, V> {
@@ -407,6 +409,30 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 					return theKeySpliter.tryReverseElement(
 						keyEl -> theMap.forMutableEntry(keyEl.getElementId(), el -> action.accept(new MutableEntryElement(el))));
 				}
+			}
+
+			@Override
+			public void forEachElement(Consumer<? super CollectionElement<Entry<K, V>>> action) {
+				// TODO Auto-generated method stub
+
+			}
+
+			@Override
+			public void forEachElementReverse(Consumer<? super CollectionElement<Entry<K, V>>> action) {
+				// TODO Auto-generated method stub
+
+			}
+
+			@Override
+			public void forEachElementM(Consumer<? super MutableCollectionElement<Entry<K, V>>> action) {
+				// TODO Auto-generated method stub
+
+			}
+
+			@Override
+			public void forEachElementReverseM(Consumer<? super MutableCollectionElement<Entry<K, V>>> action) {
+				// TODO Auto-generated method stub
+
 			}
 
 			@Override

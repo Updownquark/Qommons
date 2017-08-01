@@ -86,7 +86,7 @@ public class TreeUtilsTest {
 	/** A simple test against {@link RedBlackNode} */
 	@Test
 	public void testTreeBasic() {
-		test(new RedBlackNode<>("a"), alphaBet('q'));
+		test(new RedBlackNode<>("a"), alphaBet('z'));
 	}
 
 	/**
