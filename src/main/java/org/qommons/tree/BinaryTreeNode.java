@@ -89,10 +89,11 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 				node = node.getRight();
 			} else
 				node = node.getLeft();
-			compare = search.compareTo(node);
+			if (node != null)
+				compare = search.compareTo(node);
 		}
 		if (node != null)
-			return passed;
+			return passed + sizeOf(node.getLeft());
 		else
 			return -(passed + 1);
 	}

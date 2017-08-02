@@ -141,12 +141,12 @@ public class QommonsTestUtils {
 			};
 			check = rCheck;
 		}
-		if (coll instanceof List)
-			testList((List<Integer>) coll, (Consumer<? super List<Integer>>) check, depth);
-		else if (coll instanceof NavigableSet)
+		if (coll instanceof NavigableSet)
 			testSortedSet((NavigableSet<Integer>) coll, (Consumer<? super NavigableSet<Integer>>) check);
 		else if (coll instanceof Set)
 			testSet((Set<Integer>) coll, (Consumer<? super Set<Integer>>) check);
+		else if (coll instanceof List)
+			testList((List<Integer>) coll, (Consumer<? super List<Integer>>) check, depth);
 		else
 			testBasicCollection(coll, check);
 
@@ -286,17 +286,18 @@ public class QommonsTestUtils {
 				check.accept(coll);
 		});
 
+		boolean reversed = set.comparator().compare(1, 2) > 0;
 		// Test the special find methods of NavigableSet
 		set.addAll(sequence(30, v -> v * 2, true));
 		assertEquals(30, set.size());
 		if (check != null)
 			check.accept(set);
-		assertEquals((Integer) 0, set.first());
-		assertEquals((Integer) 58, set.last());
-		assertEquals((Integer) 14, set.lower(16));
-		assertEquals((Integer) 18, set.higher(16));
-		assertEquals((Integer) 14, set.floor(15));
-		assertEquals((Integer) 16, set.ceiling(15));
+		assertEquals((Integer) 0, reversed ? set.last() : set.first());
+		assertEquals((Integer) 58, reversed ? set.first() : set.last());
+		assertEquals((Integer) 14, reversed ? set.higher(16) : set.lower(16));
+		assertEquals((Integer) 18, reversed ? set.lower(16) : set.higher(16));
+		assertEquals((Integer) 14, reversed ? set.ceiling(15) : set.floor(15));
+		assertEquals((Integer) 16, reversed ? set.floor(15) : set.ceiling(15));
 		assertEquals((Integer) 16, set.floor(16));
 		assertEquals((Integer) 16, set.ceiling(16));
 		assertEquals((Integer) 0, set.pollFirst());
@@ -357,6 +358,7 @@ public class QommonsTestUtils {
 		copySubSet = (NavigableSet<Integer>) copy.subSet(15, 45);
 		assertThat(subSet, collectionsEqual(copySubSet, true));
 		testSubSet(subSet, 15, true, 45, false, ssListener);
+		set.clear();
 	}
 
 	private static void testSubSet(NavigableSet<Integer> subSet, Integer min, boolean minInclude, Integer max, boolean maxInclude,

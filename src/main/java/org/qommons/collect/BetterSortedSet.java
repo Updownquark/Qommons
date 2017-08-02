@@ -222,7 +222,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 	@Override
 	default E lower(E e) {
-		CollectionElement<E> element = search(searchFor(e, 1), SortedSearchFilter.Less);
+		CollectionElement<E> element = search(searchFor(e, -1), SortedSearchFilter.Less);
 		return element == null ? null : element.get();
 	}
 
@@ -234,7 +234,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 	@Override
 	default E higher(E e) {
-		CollectionElement<E> element = search(searchFor(e, -1), SortedSearchFilter.Greater);
+		CollectionElement<E> element = search(searchFor(e, 1), SortedSearchFilter.Greater);
 		return element == null ? null : element.get();
 	}
 
@@ -255,17 +255,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 	@Override
 	default BetterSortedSet<E> subSet(E fromElement, boolean fromInclusive, E toElement, boolean toInclusive) {
-		return subSet(v -> {
-			int compare = comparator().compare(fromElement, v);
-			if (!fromInclusive && compare == 0)
-				compare = 1;
-			return compare;
-		}, v -> {
-			int compare = comparator().compare(toElement, v);
-			if (!toInclusive && compare == 0)
-				compare = -1;
-			return compare;
-		});
+		return subSet(searchFor(fromElement, fromInclusive ? 0 : 1), searchFor(toElement, toInclusive ? 0 : -1));
 	}
 
 	default BetterSortedSet<E> subSet(Comparable<? super E> from, Comparable<? super E> to) {
@@ -274,22 +264,12 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 	@Override
 	default BetterSortedSet<E> headSet(E toElement, boolean inclusive) {
-		return subSet(null, v -> {
-			int compare = comparator().compare(toElement, v);
-			if (!inclusive && compare == 0)
-				compare = -1;
-			return compare;
-		});
+		return subSet(null, searchFor(toElement, inclusive ? 0 : -1));
 	}
 
 	@Override
 	default BetterSortedSet<E> tailSet(E fromElement, boolean inclusive) {
-		return subSet(v -> {
-			int compare = comparator().compare(fromElement, v);
-			if (!inclusive && compare == 0)
-				compare = 1;
-			return compare;
-		}, null);
+		return subSet(searchFor(fromElement, inclusive ? 0 : 1), null);
 	}
 
 	@Override
@@ -385,12 +365,12 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		/** @return The last index in the wrapped */
 		protected int getMaxIndex() {
 			if (to == null)
-				return size() - 1;
+				return theWrapped.size() - 1;
 			int index = theWrapped.indexFor(to);
 			if (index > 0)
 				return index;
 			else
-				return -index - 1;
+				return -index - 2;
 		}
 
 		@Override

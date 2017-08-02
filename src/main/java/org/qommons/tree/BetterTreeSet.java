@@ -40,13 +40,15 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 			BinaryTreeNode<E> node = getRoot().findClosest(n -> search.compareTo(n.get()), filter.less.withDefault(true), filter.strict);
 			if (node == null)
 				return null;
+			if (filter == SortedSearchFilter.OnlyMatch && search.compareTo(node.get()) != 0)
+				return null;
 			return node;
 		}
 	}
 
 	@Override
 	protected MutableBinaryTreeNode<E> mutableNodeFor(BinaryTreeNode<E> node) {
-		return new SortedMutableTreeNode(super.mutableNodeFor(node));
+		return node == null ? null : new SortedMutableTreeNode(super.mutableNodeFor(node));
 	}
 
 	@Override
@@ -64,8 +66,17 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 	}
 
 	@Override
-	public boolean add(E e) {
-		return BetterSortedSet.super.add(e);
+	public BinaryTreeNode<E> addElement(E value, boolean first) {
+		try (Transaction t = lock(true, null)) {
+			if (isEmpty())
+				return super.addElement(value, first);
+			BinaryTreeNode<E> node = getRoot().findClosest(n -> theCompare.compare(value, n.get()), true, false);
+			int compare = theCompare.compare(value, node.get());
+			if (compare == 0)
+				return null; // Already present
+			else
+				return getElement(super.mutableNodeFor(node).add(value, compare < 0));
+		}
 	}
 
 	private class SortedMutableTreeNode implements MutableBinaryTreeNode<E> {
@@ -148,7 +159,7 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 
 		@Override
 		public String canAdd(E value, boolean before) {
-			int compare = comparator().compare(get(), value);
+			int compare = comparator().compare(value, get());
 			if (compare == 0)
 				return StdMsg.ELEMENT_EXISTS;
 			if (before != (compare < 0))

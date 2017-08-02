@@ -50,7 +50,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default Map.Entry<K, V> lowerEntry(K key) {
-		return search(keySet().searchFor(key, 1), SortedSearchFilter.Less);
+		return search(keySet().searchFor(key, -1), SortedSearchFilter.Less);
 	}
 
 	@Override
@@ -84,7 +84,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default Map.Entry<K, V> higherEntry(K key) {
-		return search(keySet().searchFor(key, -1), SortedSearchFilter.Greater);
+		return search(keySet().searchFor(key, 1), SortedSearchFilter.Greater);
 	}
 
 	@Override
@@ -94,12 +94,12 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default Map.Entry<K, V> firstEntry() {
-		return search(k -> 1, SortedSearchFilter.PreferGreater);
+		return search(k -> -1, SortedSearchFilter.PreferGreater);
 	}
 
 	@Override
 	default Map.Entry<K, V> lastEntry() {
-		return search(k -> -1, SortedSearchFilter.PreferGreater);
+		return search(k -> 1, SortedSearchFilter.PreferGreater);
 	}
 
 	@Override
