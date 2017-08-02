@@ -5,7 +5,6 @@ import java.util.ConcurrentModificationException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterList;
@@ -129,24 +128,20 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public BinaryTreeNode<E> addElement(E value) {
+	public BinaryTreeNode<E> addElement(E value, boolean first) {
 		BinaryTreeNode<E>[] node = new BinaryTreeNode[1];
 		try (Transaction t = lock(true, null)) {
 			if (theRoot == null)
 				node[0] = wrap(theRoot = new RedBlackNode<>(value));
 			else
-				mutableSpliterator(false).forElementM(el -> node[0] = getElement(el.add(value, false)), false);
+				mutableSpliterator(first).forElementM(el -> node[0] = getElement(el.add(value, first)), first);
 		}
 		return node[0];
 	}
 
 	@Override
 	public boolean addAll(Collection<? extends E> c) {
-		try (Transaction t = lock(true, null); Transaction t2 = Transactable.lock(c, false, null)) {
-			for (E value : c)
-				add(value);
-			return !c.isEmpty();
-		}
+		return BetterList.super.addAll(c);
 	}
 
 	@Override

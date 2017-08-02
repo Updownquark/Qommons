@@ -67,13 +67,24 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * {@link #add(Object)}, this method may return null if the collection was not changed as a result of the operation.
 	 * 
 	 * @param value The value to add
+	 * @param first Whether to prefer a lower position over a higher one. This parameter may be ignored if the collection does not support
+	 *        position-indicated addition
 	 * @return The element at which the value was added, or null if the value was not added
 	 */
-	CollectionElement<E> addElement(E value);
+	CollectionElement<E> addElement(E value, boolean first);
 
 	@Override
 	default boolean add(E value) {
-		return addElement(value) != null;
+		return addElement(value, false) != null;
+	}
+
+	@Override
+	default boolean addAll(Collection<? extends E> c) {
+		try (Transaction t = lock(true, null); Transaction ct = Transactable.lock(c, false, null)) {
+			for (E e : c)
+				add(e);
+			return !c.isEmpty();
+		}
 	}
 
 	/**
@@ -334,8 +345,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 */
 	default int findAll(Predicate<? super E> search, Consumer<? super MutableCollectionElement<? extends E>> onElement, boolean forward) {
 		int[] found = new int[1];
-		MutableElementSpliterator<E> spliter = forward ? mutableSpliterator() : mutableSpliterator(false);
-		spliter.forEachElementM(el -> {
+		mutableSpliterator(forward).forEachElementM(el -> {
 			if (search.test(el.get())) {
 				found[0]++;
 				onElement.accept(forward ? el : el.reverse());
@@ -379,76 +389,24 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	@Override
 	default void addFirst(E e) {
-		try (Transaction t = lock(true, null)) {
-			if (isEmpty()) {
-				String msg = canAdd(e);
-				if (msg == null)
-					throw new IllegalArgumentException(msg);
-				if (!add(e))
-					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-			}
-			if (!mutableSpliterator(true).forElementM(el -> el.add(e, true), true))
-				throw new IllegalStateException("Could not add element");
-		} catch (UnsupportedOperationException | IllegalArgumentException ex) {
-			throw new IllegalStateException("Could not add element", ex);
-		}
+		if (addElement(e, true) == null)
+			throw new IllegalStateException("Could not add element");
 	}
 
 	@Override
 	default void addLast(E e) {
-		try (Transaction t = lock(true, null)) {
-			if (isEmpty()) {
-				String msg = canAdd(e);
-				if (msg == null)
-					throw new IllegalArgumentException(msg);
-				if (!add(e))
-					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-			}
-			if (!mutableSpliterator(false).forElementM(el -> el.add(e, false), false))
-				throw new IllegalStateException("Could not add element");
-		} catch (UnsupportedOperationException | IllegalArgumentException ex) {
-			throw new IllegalStateException("Could not add element", ex);
-		}
+		if (addElement(e, false) == null)
+			throw new IllegalStateException("Could not add element");
 	}
 
 	@Override
 	default boolean offerFirst(E e) {
-		boolean[] success = new boolean[1];
-		try (Transaction t = lock(true, null)) {
-			if (isEmpty()) {
-				if (canAdd(e) != null)
-					return false;
-				return add(e);
-			}
-			if (!mutableSpliterator(true).forElementM(el -> {
-				if (el.canAdd(e, true) == null) {
-					el.add(e, true);
-					success[0] = true;
-				}
-			}, true))
-				success[0] = add(e);
-		}
-		return success[0];
+		return addElement(e, true) != null;
 	}
 
 	@Override
 	default boolean offerLast(E e) {
-		boolean[] success = new boolean[1];
-		try (Transaction t = lock(true, null)) {
-			if (isEmpty()) {
-				if (canAdd(e) != null)
-					return false;
-				return add(e);
-			}
-			if (!mutableSpliterator(false).forElementM(el -> {
-				if (el.canAdd(e, false) == null) {
-					el.add(e, false);
-					success[0] = true;
-				}
-			}, false))
-				success[0] = add(e);
-		}
-		return success[0];
+		return addElement(e, false) != null;
 	}
 
 	@Override
@@ -692,7 +650,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 		@Override
 		public CollectionElement<E> getElement(ElementId id) {
-			return getWrapped().getElement(id).reverse();
+			return getWrapped().getElement(id.reverse()).reverse();
 		}
 
 		@Override
@@ -726,13 +684,8 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public CollectionElement<E> addElement(E e) {
-			return getWrapped().addElement(e).reverse();
-		}
-
-		@Override
-		public boolean addAll(Collection<? extends E> c) {
-			return getWrapped().addAll(c);
+		public CollectionElement<E> addElement(E e, boolean first) {
+			return CollectionElement.reverse(getWrapped().addElement(e, !first));
 		}
 
 		@Override
@@ -798,12 +751,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public CollectionElement<E> addElement(E e) {
-			throw new UnsupportedOperationException();
-		}
-
-		@Override
-		public boolean addAll(Collection<? extends E> c) {
+		public CollectionElement<E> addElement(E e, boolean first) {
 			throw new UnsupportedOperationException();
 		}
 

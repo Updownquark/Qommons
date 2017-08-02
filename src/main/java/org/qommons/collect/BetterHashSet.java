@@ -182,7 +182,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public CollectionElement<E> addElement(E value) {
+	public CollectionElement<E> addElement(E value, boolean first) {
 		try (Transaction t = lock(true, null)) {
 			int hashCode = theHasher.applyAsInt(value);
 			HashEntry entry = getEntry(hashCode, value);
@@ -384,7 +384,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		void add(HashEntry entry) {
 			BinaryTreeNode<HashEntry> node = entries.getRoot();
 			if (node == null) {
-				entry.placedAt(entries.mutableNodeFor(entries.addElement(entry)));
+				entry.placedAt(entries.mutableNodeFor(entries.addElement(entry, false)));
 				return;
 			}
 			node = node.findClosest(n -> {

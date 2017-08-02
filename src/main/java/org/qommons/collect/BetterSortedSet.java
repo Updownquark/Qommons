@@ -121,7 +121,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	}
 
 	@Override
-	default CollectionElement<E> addElement(E value) {
+	default CollectionElement<E> addElement(E value, boolean first) {
 		if (!belongs(value))
 			throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 		try (Transaction t = lock(true, null)) {
@@ -477,7 +477,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		public CollectionElement<E> addIfEmpty(E value) throws IllegalStateException {
 			if (!belongs(value))
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			return theWrapped.addElement(value);
+			return theWrapped.addElement(value, true);
 		}
 
 		@Override
@@ -586,10 +586,10 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public boolean add(E value) {
+		public CollectionElement<E> addElement(E value, boolean first) {
 			if (isInRange(value) != 0)
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			return theWrapped.add(value);
+			return theWrapped.addElement(value, first);
 		}
 
 		@Override

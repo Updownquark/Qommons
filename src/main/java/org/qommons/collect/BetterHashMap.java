@@ -67,7 +67,7 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 			if (entryEl != null) {
 				entryEl.get().setValue(value);
 			} else
-				entryEl = theEntries.addElement(new SimpleMapEntry<>(key, value, true));
+				entryEl = theEntries.addElement(new SimpleMapEntry<>(key, value, true), false);
 			return handleFor(entryEl);
 		}
 	}
@@ -306,7 +306,7 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
-		public CollectionElement<K> addElement(K value) {
+		public CollectionElement<K> addElement(K value, boolean first) {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
 

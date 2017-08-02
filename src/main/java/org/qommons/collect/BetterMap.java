@@ -243,7 +243,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public CollectionElement<Map.Entry<K, V>> addElement(Map.Entry<K, V> value) {
+		public CollectionElement<Map.Entry<K, V>> addElement(Map.Entry<K, V> value, boolean first) {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
 
@@ -441,12 +441,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public CollectionElement<V> addElement(V value) {
-			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-		}
-
-		@Override
-		public boolean addAll(Collection<? extends V> c) {
+		public CollectionElement<V> addElement(V value, boolean first) {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
 

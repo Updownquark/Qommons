@@ -677,9 +677,9 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public CollectionElement<E> addElement(E value) {
+	public CollectionElement<E> addElement(E value, boolean first) {
 		try (Transaction t = lock(true, null)) {
-			return internalAdd(theSize, value).immutable();
+			return internalAdd(first ? 0 : theSize, value).immutable();
 		}
 	}
 

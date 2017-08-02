@@ -54,7 +54,7 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 		try (Transaction t = lock(true, null)) {
 			if (getRoot() != null)
 				throw new IllegalStateException("Tree is not empty");
-			return super.addElement(value);
+			return super.addElement(value, true);
 		}
 	}
 
