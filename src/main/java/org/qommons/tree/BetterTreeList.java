@@ -42,7 +42,7 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 		try (Transaction t = lock(false, null)) {
 			CollectionElement<E>[] element = new CollectionElement[1];
 			ElementSpliterator<E> spliter = first ? spliterator(first) : spliterator(first).reverse();
-			while (element[0] == null && spliter.onElement(el -> {
+			while (element[0] == null && spliter.forElement(el -> {
 				if (Objects.equals(el.get(), value))
 					element[0] = first ? el : el.reverse();
 			}, true)) {

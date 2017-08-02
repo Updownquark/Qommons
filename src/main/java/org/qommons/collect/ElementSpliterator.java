@@ -15,7 +15,7 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 	 * @param forward Whether to get the next or the previous element in the sequence
 	 * @return True if the element was retrieved, or false if no remaining elements exist in the sequence in the given direction
 	 */
-	boolean onElement(Consumer<? super CollectionElement<E>> action, boolean forward);
+	boolean forElement(Consumer<? super CollectionElement<E>> action, boolean forward);
 
 	/**
 	 * Operates on each element remaining in this ElementSpliterator
@@ -25,22 +25,30 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 	 */
 	void forEachElement(Consumer<? super CollectionElement<E>> action, boolean forward);
 
+	default boolean forValue(Consumer<? super E> action, boolean forward) {
+		return forElement(el -> action.accept(el.get()), forward);
+	}
+
+	default void forEachValue(Consumer<? super E> action, boolean forward) {
+		forEachElement(el -> action.accept(el.get()), forward);
+	}
+
 	@Override
 	default boolean tryAdvance(Consumer<? super E> action) {
-		return onElement(v -> action.accept(v.get()), true);
+		return forValue(action, true);
 	}
 
 	default boolean tryReverse(Consumer<? super E> action) {
-		return onElement(v -> action.accept(v.get()), false);
+		return forValue(action, false);
 	}
 
 	@Override
 	default void forEachRemaining(Consumer<? super E> action) {
-		forEachElement(el -> action.accept(el.get()), true);
+		forEachValue(action, true);
 	}
 
 	default void forEachReverse(Consumer<? super E> action) {
-		forEachElement(el -> action.accept(el.get()), false);
+		forEachValue(action, false);
 	}
 
 	@Override
@@ -79,7 +87,7 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 		}
 
 		@Override
-		public boolean onElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+		public boolean forElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
 			return false;
 		}
 
@@ -125,28 +133,18 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 		}
 
 		@Override
-		public boolean tryAdvance(Consumer<? super E> action) {
-			return theWrapped.tryReverse(action);
+		public boolean forValue(Consumer<? super E> action, boolean forward) {
+			return theWrapped.forValue(action, !forward);
 		}
 
 		@Override
-		public boolean tryReverse(Consumer<? super E> action) {
-			return theWrapped.tryAdvance(action);
+		public void forEachValue(Consumer<? super E> action, boolean forward) {
+			theWrapped.forEachValue(action, !forward);
 		}
 
 		@Override
-		public void forEachRemaining(Consumer<? super E> action) {
-			theWrapped.forEachReverse(action);
-		}
-
-		@Override
-		public void forEachReverse(Consumer<? super E> action) {
-			theWrapped.forEachRemaining(action);
-		}
-
-		@Override
-		public boolean onElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
-			return theWrapped.onElement(el -> action.accept(el.reverse()), !forward);
+		public boolean forElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+			return theWrapped.forElement(el -> action.accept(el.reverse()), !forward);
 		}
 
 		@Override
@@ -175,19 +173,19 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 			theLocker = locker;
 		}
 
-		protected abstract boolean internalOnElement(Consumer<? super CollectionElement<E>> action, boolean forward);
+		protected abstract boolean internalForElement(Consumer<? super CollectionElement<E>> action, boolean forward);
 
 		@Override
-		public boolean onElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+		public boolean forElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
 			try (Transaction t = theLocker == null ? Transaction.NONE : theLocker.lock(false, null)) {
-				return internalOnElement(action, forward);
+				return internalForElement(action, forward);
 			}
 		}
 
 		@Override
 		public void forEachElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
 			try (Transaction t = theLocker == null ? Transaction.NONE : theLocker.lock(false, null)) {
-				while (internalOnElement(action, forward)) {
+				while (internalForElement(action, forward)) {
 				}
 			}
 		}

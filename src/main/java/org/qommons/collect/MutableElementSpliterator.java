@@ -25,7 +25,7 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 	 * @param action The action to perform on the element
 	 * @return false if no element was available
 	 */
-	boolean onElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward);
+	boolean forElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward);
 
 	/**
 	 * Operates on each element remaining in this MutableElementSpliterator
@@ -66,8 +66,8 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 		}
 
 		@Override
-		public boolean onElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
-			return getWrapped().onElementM(el -> action.accept(el.reverse()), !forward);
+		public boolean forElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
+			return getWrapped().forElementM(el -> action.accept(el.reverse()), !forward);
 		}
 
 		@Override
@@ -99,8 +99,8 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 		}
 
 		@Override
-		public boolean onElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
-			return theWrapped.onElement(action, forward);
+		public boolean forElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+			return theWrapped.forElement(action, forward);
 		}
 
 		@Override
@@ -137,7 +137,7 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 
 	class EmptyMutableSpliterator<E> extends EmptyElementSpliterator<E> implements MutableElementSpliterator<E> {
 		@Override
-		public boolean onElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
+		public boolean forElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
 			return false;
 		}
 
@@ -156,24 +156,24 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 			super(locker);
 		}
 
-		protected abstract boolean internalOnElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward);
+		protected abstract boolean internalForElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward);
 
 		@Override
-		protected boolean internalOnElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
-			return internalOnElementM(el -> action.accept(el.immutable()), forward);
+		protected boolean internalForElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+			return internalForElementM(el -> action.accept(el.immutable()), forward);
 		}
 
 		@Override
-		public boolean onElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
+		public boolean forElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
 			try (Transaction t = theLocker == null ? Transaction.NONE : theLocker.lock(true, null)) {
-				return internalOnElementM(action, forward);
+				return internalForElementM(action, forward);
 			}
 		}
 
 		@Override
 		public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
 			try (Transaction t = theLocker == null ? Transaction.NONE : theLocker.lock(true, null)) {
-				while (internalOnElementM(action, forward)) {
+				while (internalForElementM(action, forward)) {
 				}
 			}
 		}

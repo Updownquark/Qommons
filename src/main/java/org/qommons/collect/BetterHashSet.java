@@ -428,11 +428,12 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		}
 	}
 
-	class MutableHashSpliterator implements MutableElementSpliterator<E> {
+	class MutableHashSpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<E> {
 		private HashEntry current;
 		private boolean wasNext;
 
 		MutableHashSpliterator(HashEntry current, boolean next) {
+			super(BetterHashSet.this);
 			this.current = current;
 			this.wasNext = !next;
 		}
@@ -452,7 +453,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			return SIZED;
 		}
 
-		protected boolean tryElement(boolean left) {
+		protected boolean tryElement(boolean forward) {
 			if (current == null)
 				current = wasNext ? theLast : theFirst;
 			if (current == null)
@@ -462,12 +463,12 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			if (current.next == null && theLast != current)
 				throw new ConcurrentModificationException(
 					"The collection has been modified externally such that this spliterator has been orphaned");
-			if (wasNext != left) {
+			if (wasNext == forward) {
 				HashEntry next = current.previous;
 				if (next != null)
 					current = next;
 				else {
-					wasNext = left;
+					wasNext = !forward;
 					return false;
 				}
 			}
@@ -475,75 +476,19 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		}
 
 		@Override
-		public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
-			try (Transaction t = lock(false, null)) {
-				if (!tryElement(false))
-					return false;
-				action.accept(current.immutable());
-				return true;
-			}
+		protected boolean internalForElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+			if (!tryElement(forward))
+				return false;
+			action.accept(current.immutable());
+			return true;
 		}
 
 		@Override
-		public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
-			try (Transaction t = lock(false, null)) {
-				if (!tryElement(true))
-					return false;
-				action.accept(current.immutable());
-				return true;
-			}
-		}
-
-		@Override
-		public boolean tryAdvanceElementM(Consumer<? super MutableCollectionElement<E>> action) {
-			try (Transaction t = lock(true, null)) {
-				if (!tryElement(false))
-					return false;
-				action.accept(new MutableSpliteratorEntry(current));
-				return true;
-			}
-		}
-
-		@Override
-		public boolean tryReverseElementM(Consumer<? super MutableCollectionElement<E>> action) {
-			try (Transaction t = lock(true, null)) {
-				if (!tryElement(true))
-					return false;
-				action.accept(new MutableSpliteratorEntry(current));
-				return true;
-			}
-		}
-
-		@Override
-		public void forEachElement(Consumer<? super CollectionElement<E>> action) {
-			try (Transaction t = lock(false, null)) {
-				while (tryElement(false))
-					action.accept(current);
-			}
-		}
-
-		@Override
-		public void forEachElementReverse(Consumer<? super CollectionElement<E>> action) {
-			try (Transaction t = lock(false, null)) {
-				while (tryElement(true))
-					action.accept(current);
-			}
-		}
-
-		@Override
-		public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action) {
-			try (Transaction t = lock(true, null)) {
-				while (tryElement(false))
-					action.accept(new MutableSpliteratorEntry(current));
-			}
-		}
-
-		@Override
-		public void forEachElementReverseM(Consumer<? super MutableCollectionElement<E>> action) {
-			try (Transaction t = lock(true, null)) {
-				while (tryElement(true))
-					action.accept(new MutableSpliteratorEntry(current));
-			}
+		protected boolean internalForElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
+			if (!tryElement(forward))
+				return false;
+			action.accept(new MutableSpliteratorEntry(current));
+			return true;
 		}
 
 		@Override

@@ -419,13 +419,13 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 			}
 
 			@Override
-			protected boolean internalOnElementM(Consumer<? super MutableCollectionElement<K>> action, boolean forward) {
-				return theEntrySpliter.onElementM(el -> action.accept(mutableHandleFor(el)), forward);
+			protected boolean internalForElementM(Consumer<? super MutableCollectionElement<K>> action, boolean forward) {
+				return theEntrySpliter.forElementM(el -> action.accept(mutableHandleFor(el)), forward);
 			}
 
 			@Override
-			protected boolean internalOnElement(Consumer<? super CollectionElement<K>> action, boolean forward) {
-				return theEntrySpliter.onElement(el -> action.accept(handleFor(el)), forward);
+			protected boolean internalForElement(Consumer<? super CollectionElement<K>> action, boolean forward) {
+				return theEntrySpliter.forElement(el -> action.accept(handleFor(el)), forward);
 			}
 
 			@Override

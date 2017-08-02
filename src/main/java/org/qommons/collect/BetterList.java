@@ -213,7 +213,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		try (Transaction t = lock(true, null)) {
 			MutableElementSpliterator<E> spliter = mutableSpliterator(fromIndex);
 			for (int i = fromIndex; i < toIndex; i++)
-				spliter.onElementM(el -> el.remove(), true);
+				spliter.forElementM(el -> el.remove(), true);
 		}
 	}
 
@@ -509,7 +509,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		private void getElement(boolean forward) {
-			backing.onElement(el -> element = el, forward);
+			backing.forElement(el -> element = el, forward);
 			theLastElement = element == null ? null : element.getElementId();
 			elementIsNext = forward;
 			isReadyForMod = false;
@@ -525,18 +525,18 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 					throw new ConcurrentModificationException("Element appears to have moved or to have been removed");
 				action.accept(el);
 			};
-			backing.onElementM(elAction, next);
+			backing.forElementM(elAction, next);
 			for (int i = 0; i < backup; i++)
-				backing.onElement(NULL_ACTION, !next);
+				backing.forElement(NULL_ACTION, !next);
 		}
 
 		@Override
 		public int nextIndex() {
 			if (theLastElement == null) {
-				if (!backing.onElement(NULL_ACTION, false))
+				if (!backing.forElement(NULL_ACTION, false))
 					return 0;
 				// Advance back over the element
-				backing.onElement(el -> theLastElement = el.getElementId(), true);
+				backing.forElement(el -> theLastElement = el.getElementId(), true);
 				elementIsNext = true;
 			}
 			int index = theList.getElementsBefore(theLastElement);
@@ -616,7 +616,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				index = first ? theStart : theEnd;
 				int lastIdx = first ? theEnd : theStart;
 				CollectionElement<E>[] found = new CollectionElement[1];
-				while (found[0] == null && index < lastIdx && spliter.onElement(el -> {
+				while (found[0] == null && index < lastIdx && spliter.forElement(el -> {
 					if (Objects.equals(el.get(), value))
 						found[0] = el;
 				}, first)) {
@@ -785,12 +785,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			}
 
 			@Override
-			protected boolean internalOnElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+			protected boolean internalForElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
 				if (forward && spliterIndex >= theEnd)
 					return false;
 				if (!forward && spliterIndex < theStart)
 					return false;
-				if (wrapSpliter.onElement(el -> {
+				if (wrapSpliter.forElement(el -> {
 					action.accept(el);
 				}, forward)) {
 					if (forward)
@@ -803,12 +803,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			}
 
 			@Override
-			protected boolean internalOnElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
+			protected boolean internalForElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
 				if (forward && spliterIndex >= theEnd)
 					return false;
 				if (!forward && spliterIndex < theStart)
 					return false;
-				if (wrapSpliter.onElementM(el -> {
+				if (wrapSpliter.forElementM(el -> {
 					action.accept(wrapElement(el));
 				}, forward)) {
 					if (forward)

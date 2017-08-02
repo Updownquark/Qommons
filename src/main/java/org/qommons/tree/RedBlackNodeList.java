@@ -135,7 +135,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 			if (theRoot == null)
 				node[0] = wrap(theRoot = new RedBlackNode<>(value));
 			else
-				mutableSpliterator(false).onElementM(el -> node[0] = getElement(el.add(value, false)), false);
+				mutableSpliterator(false).forElementM(el -> node[0] = getElement(el.add(value, false)), false);
 		}
 		return node[0];
 	}
@@ -481,7 +481,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		}
 
 		@Override
-		protected boolean internalOnElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+		protected boolean internalForElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
 			if (!tryElement(!forward))
 				return false;
 			action.accept(wrap(current));
@@ -489,7 +489,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		}
 
 		@Override
-		protected boolean internalOnElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
+		protected boolean internalForElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
 			if (!tryElement(!forward))
 				return false;
 			action.accept(new MutableSpliteratorNode(current, wrapMutable(current)));

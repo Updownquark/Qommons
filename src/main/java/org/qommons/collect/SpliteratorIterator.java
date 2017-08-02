@@ -2,15 +2,14 @@ package org.qommons.collect;
 
 import java.util.Iterator;
 
-public class SpliteratorIterator<T> implements Iterator<T> {
-	private final BetterCollection<T> theCollection;
-	private final ElementSpliterator<T> theSpliterator;
+public class SpliteratorIterator<E> implements Iterator<E> {
+	private final MutableElementSpliterator<E> theSpliterator;
 
 	private boolean isNextCached;
-	private CollectionElement<T> cachedNext;
+	private CollectionElement<E> cachedNext;
+	private ElementId theLastElement;
 
-	public SpliteratorIterator(BetterCollection<T> collection, ElementSpliterator<T> spliterator) {
-		theCollection = collection;
+	public SpliteratorIterator(MutableElementSpliterator<E> spliterator) {
 		theSpliterator = spliterator;
 	}
 
@@ -18,24 +17,34 @@ public class SpliteratorIterator<T> implements Iterator<T> {
 	public boolean hasNext() {
 		if (!isNextCached) {
 			cachedNext = null;
-			if (theSpliterator.tryAdvanceElement(el -> cachedNext = el))
+			if (theSpliterator.forElement(el -> cachedNext = el, true)) {
+				theLastElement = cachedNext.getElementId();
 				isNextCached = true;
+			}
 		}
 		return isNextCached;
 	}
 
 	@Override
-	public T next() {
+	public E next() {
 		if (!hasNext())
 			throw new java.util.NoSuchElementException();
 		isNextCached = false;
-		return cachedNext.get();
+		E value = cachedNext.get();
+		cachedNext = null;
+		return value;
 	}
 
 	@Override
 	public void remove() {
-		if (cachedNext == null)
-			throw new IllegalStateException("iterator is finished or has not started");
-		theCollection.forMutableElement(cachedNext.getElementId(), el -> el.remove());
+		if (theLastElement == null)
+			throw new IllegalStateException("iterator is finished, not started, or the element has been removed");
+		if (!theSpliterator.forElementM(el -> {
+			if (!el.getElementId().equals(theLastElement))
+				throw new IllegalStateException("element has been removed");
+			el.remove();
+		}, false))
+			throw new IllegalStateException("element has been removed");
+		theLastElement = null;
 	}
 }

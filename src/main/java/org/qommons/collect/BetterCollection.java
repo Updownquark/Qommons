@@ -289,7 +289,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		try (Transaction t = lock(false, null)) {
 			ElementSpliterator<E> spliter = first ? spliterator(first) : spliterator(first);
 			boolean[] found = new boolean[1];
-			while (spliter.onElement(el -> {
+			while (spliter.forElement(el -> {
 				if (search.test(el.get())) {
 					found[0] = true;
 					onElement.accept(el);
@@ -313,7 +313,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		try (Transaction t = lock(true, null)) {
 			MutableElementSpliterator<E> spliter = first ? mutableSpliterator(first) : mutableSpliterator(first);
 			boolean[] found = new boolean[1];
-			while (spliter.onElementM(el -> {
+			while (spliter.forElementM(el -> {
 				if (search.test(el.get())) {
 					found[0] = true;
 					onElement.accept(el);
@@ -360,7 +360,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	/** @return An immutable (Iterator#remove()} will always throw an exception) iterator for iterating across this object's data */
 	@Override
 	default Iterator<E> iterator() {
-		return new SpliteratorIterator<>(this, spliterator());
+		return new SpliteratorIterator<>(mutableSpliterator());
 	}
 
 	default MutableElementSpliterator<E> mutableSpliterator() {
@@ -387,7 +387,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 				if (!add(e))
 					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 			}
-			if (!mutableSpliterator(true).onElementM(el -> el.add(e, true), true))
+			if (!mutableSpliterator(true).forElementM(el -> el.add(e, true), true))
 				throw new IllegalStateException("Could not add element");
 		} catch (UnsupportedOperationException | IllegalArgumentException ex) {
 			throw new IllegalStateException("Could not add element", ex);
@@ -404,7 +404,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 				if (!add(e))
 					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 			}
-			if (!mutableSpliterator(false).onElementM(el -> el.add(e, false), false))
+			if (!mutableSpliterator(false).forElementM(el -> el.add(e, false), false))
 				throw new IllegalStateException("Could not add element");
 		} catch (UnsupportedOperationException | IllegalArgumentException ex) {
 			throw new IllegalStateException("Could not add element", ex);
@@ -420,7 +420,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 					return false;
 				return add(e);
 			}
-			if (!mutableSpliterator(true).onElementM(el -> {
+			if (!mutableSpliterator(true).forElementM(el -> {
 				if (el.canAdd(e, true) == null) {
 					el.add(e, true);
 					success[0] = true;
@@ -440,7 +440,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 					return false;
 				return add(e);
 			}
-			if (!mutableSpliterator(false).onElementM(el -> {
+			if (!mutableSpliterator(false).forElementM(el -> {
 				if (el.canAdd(e, false) == null) {
 					el.add(e, false);
 					success[0] = true;
@@ -455,7 +455,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default E removeFirst() {
 		Object[] value = new Object[1];
 		try (Transaction t = lock(true, null)) {
-			if (!mutableSpliterator(true).onElementM(el -> {
+			if (!mutableSpliterator(true).forElementM(el -> {
 				value[0] = el.get();
 				el.remove();
 			}, true))
@@ -468,7 +468,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default E removeLast() {
 		Object[] value = new Object[1];
 		try (Transaction t = lock(true, null)) {
-			if (!mutableSpliterator(true).onElementM(el -> {
+			if (!mutableSpliterator(true).forElementM(el -> {
 				value[0] = el.get();
 				el.remove();
 			}, false))
@@ -481,7 +481,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default E pollFirst() {
 		Object[] value = new Object[1];
 		try (Transaction t = lock(true, null)) {
-			mutableSpliterator(true).onElementM(el -> {
+			mutableSpliterator(true).forElementM(el -> {
 				value[0] = el.get();
 				el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an
 								// exception
@@ -494,7 +494,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default E pollLast() {
 		Object[] value = new Object[1];
 		try (Transaction t = lock(true, null)) {
-			mutableSpliterator(false).onElementM(el -> {
+			mutableSpliterator(false).forElementM(el -> {
 				value[0] = el.get();
 				el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an
 								// exception

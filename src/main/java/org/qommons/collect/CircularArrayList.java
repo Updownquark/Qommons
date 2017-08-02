@@ -1338,7 +1338,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		}
 	}
 
-	private class ArraySpliterator implements MutableElementSpliterator<E> {
+	private class ArraySpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<E> {
 		private int theStart;
 		private int theEnd;
 		private int theCursor; // The index of the element that would be given to the consumer for tryAdvance()
@@ -1347,6 +1347,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		private final CollectionLockingStrategy.SubLockingStrategy theSubLock;
 
 		ArraySpliterator(int start, int end, int initIndex, CollectionLockingStrategy.SubLockingStrategy subLock) {
+			super(CircularArrayList.this);
 			int size = theSize;
 			subLock.check();
 			if (end < 0)
@@ -1370,100 +1371,31 @@ public class CircularArrayList<E> implements BetterList<E> {
 		}
 
 		@Override
+		public long getExactSizeIfKnown() {
+			return theEnd - theStart;
+		}
+
+		@Override
 		public int characteristics() {
 			return Spliterator.ORDERED | Spliterator.SIZED | Spliterator.SUBSIZED;
 		}
 
 		@Override
-		public boolean tryAdvanceElement(Consumer<? super CollectionElement<E>> action) {
-			try (Transaction t = lock(false, null)) {
-				int tIndex = tryElement(action, true);
-				if (tIndex < 0)
-					return false;
-				action.accept(theArray[tIndex].immutable());
-				return true;
-			}
+		protected boolean internalForElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+			int tIndex = tryElement(action, forward);
+			if (tIndex < 0)
+				return false;
+			action.accept(theArray[tIndex].immutable());
+			return true;
 		}
 
 		@Override
-		public boolean tryReverseElement(Consumer<? super CollectionElement<E>> action) {
-			try (Transaction t = lock(false, null)) {
-				int tIndex = tryElement(action, false);
-				if (tIndex < 0)
-					return false;
-				action.accept(theArray[tIndex].immutable());
-				return true;
-			}
-		}
-
-		@Override
-		public boolean tryAdvanceElementM(Consumer<? super MutableCollectionElement<E>> action) {
-			try (Transaction t = lock(true, null)) {
-				int tIndex = tryElement(action, true);
-				if (tIndex < 0)
-					return false;
-				action.accept(theArray[tIndex]);
-				return true;
-			}
-		}
-
-		@Override
-		public boolean tryReverseElementM(Consumer<? super MutableCollectionElement<E>> action) {
-			try (Transaction t = lock(true, null)) {
-				int tIndex = tryElement(action, false);
-				if (tIndex < 0)
-					return false;
-				action.accept(theArray[tIndex]);
-				return true;
-			}
-		}
-
-		@Override
-		public void forEachElement(Consumer<? super CollectionElement<E>> action) {
-			try (Transaction t = lock(false, null)) {
-				while (true) {
-					int tIndex = tryElement(action, true);
-					if (tIndex < 0)
-						break;
-					action.accept(theArray[tIndex].immutable());
-				}
-			}
-		}
-
-		@Override
-		public void forEachElementReverse(Consumer<? super CollectionElement<E>> action) {
-			try (Transaction t = lock(false, null)) {
-				while (true) {
-					int tIndex = tryElement(action, false);
-					if (tIndex < 0)
-						break;
-					action.accept(theArray[tIndex].immutable());
-				}
-			}
-		}
-
-		@Override
-		public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action) {
-			try (Transaction t = lock(true, null)) {
-				while (true) {
-					int tIndex = tryElement(action, true);
-					if (tIndex < 0)
-						break;
-					action.accept(theArray[tIndex]);
-				}
-			}
-		}
-
-		@Override
-		public void forEachElementReverseM(Consumer<? super MutableCollectionElement<E>> action) {
-			try (Transaction t = lock(true, null)) {
-				while (true) {
-					int tIndex = tryElement(action, false);
-					if (tIndex < 0)
-						break;
-					action.accept(theArray[tIndex]);
-				}
-			}
+		protected boolean internalForElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
+			int tIndex = tryElement(action, forward);
+			if (tIndex < 0)
+				return false;
+			action.accept(theArray[tIndex]);
+			return true;
 		}
 
 		private int tryElement(Consumer<? super MutableCollectionElement<E>> action, boolean advance) {
