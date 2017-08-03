@@ -1382,7 +1382,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 		@Override
 		protected boolean internalForElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
-			int tIndex = tryElement(action, forward);
+			int tIndex = tryElement(forward);
 			if (tIndex < 0)
 				return false;
 			action.accept(theArray[tIndex].immutable());
@@ -1391,14 +1391,14 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 		@Override
 		protected boolean internalForElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
-			int tIndex = tryElement(action, forward);
+			int tIndex = tryElement(forward);
 			if (tIndex < 0)
 				return false;
-			action.accept(theArray[tIndex]);
+			action.accept(new SpliterWrappingEl(theArray[tIndex], forward));
 			return true;
 		}
 
-		private int tryElement(Consumer<? super MutableCollectionElement<E>> action, boolean advance) {
+		private int tryElement(boolean advance) {
 			theSubLock.check();
 			if (advance) {
 				if (theCursor >= theEnd)
@@ -1430,6 +1430,70 @@ public class CircularArrayList<E> implements BetterList<E> {
 				theStart = mid;
 			}
 			return split;
+		}
+
+		class SpliterWrappingEl implements MutableCollectionElement<E> {
+			private final MutableCollectionElement<E> el;
+			private final boolean isForward;
+
+			SpliterWrappingEl(MutableCollectionElement<E> el, boolean forward) {
+				this.el = el;
+				isForward = forward;
+			}
+
+			@Override
+			public ElementId getElementId() {
+				return el.getElementId();
+			}
+
+			@Override
+			public E get() {
+				return el.get();
+			}
+
+			@Override
+			public String isEnabled() {
+				return el.isEnabled();
+			}
+
+			@Override
+			public String isAcceptable(E value) {
+				return el.isAcceptable(value);
+			}
+
+			@Override
+			public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
+				el.set(value);
+			}
+
+			@Override
+			public String canRemove() {
+				return el.canRemove();
+			}
+
+			@Override
+			public void remove() throws UnsupportedOperationException {
+				el.remove();
+				theSubLock.indexChanged(-1);
+				theEnd--;
+				if (isForward)
+					theCurrentIndex--;
+			}
+
+			@Override
+			public String canAdd(E value, boolean before) {
+				return el.canAdd(value, before);
+			}
+
+			@Override
+			public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+				ElementId newId = el.add(value, before);
+				theSubLock.indexChanged(1);
+				theEnd++;
+				if (before)
+					theCurrentIndex++;
+				return newId;
+			}
 		}
 
 		@Override
