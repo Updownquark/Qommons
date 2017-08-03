@@ -54,7 +54,8 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 				if (compare == 0) {
 					entry.get().setValue(value);
 				} else
-					entry = theEntries.getElement(((MutableBinaryTreeNode<Map.Entry<K, V>>) entry).add(newEntry(key, value), compare < 0));
+					entry = theEntries
+						.getElement(theEntries.ofMutableElement(entry.getElementId(), el -> el.add(newEntry(key, value), compare < 0)));
 				return new TreeEntry<>(entry);
 			} else
 				return new TreeEntry<>(theEntries.addIfEmpty(newEntry(key, value)));
@@ -67,7 +68,7 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 
 	@Override
 	public BinaryTreeEntry<K, V> getEntry(K key) {
-		BinaryTreeNode<Map.Entry<K, V>> entry = theEntries.search(e -> theCompare.compare(key, e.getKey()), SortedSearchFilter.PreferLess);
+		BinaryTreeNode<Map.Entry<K, V>> entry = theEntries.search(e -> theCompare.compare(key, e.getKey()), SortedSearchFilter.OnlyMatch);
 		return entry == null ? null : new TreeEntry<>(entry);
 	}
 
@@ -86,6 +87,11 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 	public <X> X ofMutableEntry(ElementId entryId, Function<? super MutableMapEntryHandle<K, V>, X> onEntry) {
 		return theEntries.ofMutableElement(entryId,
 			entryEl -> onEntry.apply(new MutableTreeEntry<>((MutableBinaryTreeNode<Map.Entry<K, V>>) entryEl)));
+	}
+
+	@Override
+	public String toString() {
+		return theEntries.toString();
 	}
 
 	static class BetterTreeEntrySet<K, V> extends BetterTreeSet<Map.Entry<K, V>> {

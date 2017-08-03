@@ -121,12 +121,16 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 	default BinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly) {
 		BinaryTreeNode<E> node = this;
 		BinaryTreeNode<E> found = null;
+		boolean foundMatches = false;
 		while (true) {
 			int compare = finder.compareTo(node);
 			if (compare == 0)
 				return node;
 			boolean matchesLesser = compare > 0 == lesser;
-			if (matchesLesser || (found == null && !strictly))
+			if (matchesLesser) {
+				found = node;
+				foundMatches = true;
+			} else if (!foundMatches && !strictly)
 				found = node;
 			BinaryTreeNode<E> child = node.getChild(compare < 0);
 			if (child == null)

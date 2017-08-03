@@ -104,7 +104,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default Map.Entry<K, V> pollFirstEntry() {
-		MapEntryHandle<K, V> handle = search(v -> 1, SortedSearchFilter.PreferLess);
+		MapEntryHandle<K, V> handle = search(v -> -1, SortedSearchFilter.PreferLess);
 		if (handle != null) {
 			Map.Entry<K, V> result = new ImmutableMapEntry<>(handle.getKey(), handle.get());
 			forMutableEntry(handle.getElementId(), el -> el.remove());
@@ -115,7 +115,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default Map.Entry<K, V> pollLastEntry() {
-		MapEntryHandle<K, V> handle = search(v -> -1, SortedSearchFilter.PreferLess);
+		MapEntryHandle<K, V> handle = search(v -> 1, SortedSearchFilter.PreferLess);
 		if (handle != null) {
 			Map.Entry<K, V> result = new ImmutableMapEntry<>(handle.getKey(), handle.get());
 			forMutableEntry(handle.getElementId(), el -> el.remove());

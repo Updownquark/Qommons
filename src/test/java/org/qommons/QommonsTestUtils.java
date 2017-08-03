@@ -298,21 +298,21 @@ public class QommonsTestUtils {
 		assertEquals((Integer) 18, reversed ? set.lower(16) : set.higher(16));
 		assertEquals((Integer) 14, reversed ? set.ceiling(15) : set.floor(15));
 		assertEquals((Integer) 16, reversed ? set.floor(15) : set.ceiling(15));
-		assertEquals((Integer) 16, set.floor(16));
-		assertEquals((Integer) 16, set.ceiling(16));
-		assertEquals((Integer) 0, set.pollFirst());
+		assertEquals((Integer) 16, reversed ? set.ceiling(16) : set.floor(16));
+		assertEquals((Integer) 16, reversed ? set.floor(16) : set.ceiling(16));
+		assertEquals((Integer) 0, reversed ? set.pollLast() : set.pollFirst());
 		assertEquals(29, set.size());
 		if (check != null)
 			check.accept(set);
-		assertEquals((Integer) 58, set.pollLast());
+		assertEquals((Integer) 58, reversed ? set.pollFirst() : set.pollLast());
 		assertEquals(28, set.size());
 		if (check != null)
 			check.accept(set);
-		assertEquals((Integer) 2, set.pollFirst());
+		assertEquals((Integer) 2, reversed ? set.pollLast() : set.pollFirst());
 		assertEquals(27, set.size());
 		if (check != null)
 			check.accept(set);
-		assertEquals((Integer) 56, set.pollLast());
+		assertEquals((Integer) 56, reversed ? set.pollFirst() : set.pollLast());
 		assertEquals(26, set.size());
 		if (check != null)
 			check.accept(set);
@@ -331,37 +331,47 @@ public class QommonsTestUtils {
 			if (check != null)
 				check.accept(set);
 		};
-		TreeSet<Integer> copy = new TreeSet<>(set);
+		TreeSet<Integer> copy = new TreeSet<>(set.comparator());
+		copy.addAll(set);
 		NavigableSet<Integer> subSet = (NavigableSet<Integer>) set.headSet(30);
 		NavigableSet<Integer> copySubSet = (NavigableSet<Integer>) copy.headSet(30);
 		assertThat(subSet, collectionsEqual(copySubSet, true));
-		testSubSet(subSet, null, true, 30, false, ssListener);
+		testSubSet(subSet, null, true, 30, false, reversed, ssListener);
 
 		subSet = set.headSet(30, true);
 		copySubSet = copy.headSet(30, true);
 		assertThat(subSet, collectionsEqual(copySubSet, true));
-		testSubSet(subSet, null, true, 30, true, ssListener);
+		testSubSet(subSet, null, true, 30, true, reversed, ssListener);
 
 		subSet = (NavigableSet<Integer>) set.tailSet(30);
 		copySubSet = (NavigableSet<Integer>) copy.tailSet(30);
 		assertThat(subSet, collectionsEqual(copySubSet, true));
-		testSubSet(subSet, 30, true, null, true, ssListener);
+		testSubSet(subSet, 30, true, null, true, reversed, ssListener);
 
 		subSet = set.tailSet(30, false);
 		copySubSet = copy.tailSet(30, false);
 		assertThat(subSet, collectionsEqual(copySubSet, true));
-		testSubSet(set.tailSet(30, false), 30, false, null, true, ssListener);
+		testSubSet(subSet, 30, false, null, true, reversed, ssListener);
 
 		ssListener.accept(set);
 
-		subSet = (NavigableSet<Integer>) set.subSet(15, 45);
-		copySubSet = (NavigableSet<Integer>) copy.subSet(15, 45);
+		if (reversed) {
+			subSet = (NavigableSet<Integer>) set.subSet(45, 15);
+			copySubSet = (NavigableSet<Integer>) copy.subSet(45, 15);
+		} else {
+			subSet = (NavigableSet<Integer>) set.subSet(15, 45);
+			copySubSet = (NavigableSet<Integer>) copy.subSet(15, 45);
+		}
 		assertThat(subSet, collectionsEqual(copySubSet, true));
-		testSubSet(subSet, 15, true, 45, false, ssListener);
+		if (reversed)
+			testSubSet(subSet, 45, true, 15, false, reversed, ssListener);
+		else
+			testSubSet(subSet, 15, true, 45, false, reversed, ssListener);
 		set.clear();
 	}
 
 	private static void testSubSet(NavigableSet<Integer> subSet, Integer min, boolean minInclude, Integer max, boolean maxInclude,
+		boolean reversed,
 			Consumer<? super NavigableSet<Integer>> check) {
 		int startSize = subSet.size();
 		int size = startSize;
@@ -378,14 +388,14 @@ public class QommonsTestUtils {
 			}
 			try {
 				if (minInclude) {
-					subSet.add(min - 1);
+					subSet.add(reversed ? min + 1 : min - 1);
 				} else
 					subSet.add(min);
 				assertTrue("SubSet should have thrown argument exception", false);
 			} catch (IllegalArgumentException e) {
 			}
 		} else {
-			subSet.add(Integer.MIN_VALUE);
+			subSet.add(reversed ? Integer.MAX_VALUE : Integer.MIN_VALUE);
 			size++;
 			assertEquals(size, subSet.size());
 			check.accept(subSet);
@@ -402,14 +412,14 @@ public class QommonsTestUtils {
 			}
 			try {
 				if (maxInclude)
-					subSet.add(max + 1);
+					subSet.add(reversed ? max - 1 : max + 1);
 				else
 					subSet.add(max);
 				assertTrue("SubSet should have thrown argument exception", false);
 			} catch (IllegalArgumentException e) {
 			}
 		} else {
-			subSet.add(Integer.MAX_VALUE);
+			subSet.add(reversed ? Integer.MIN_VALUE : Integer.MAX_VALUE);
 			size++;
 			assertEquals(size, subSet.size());
 			check.accept(subSet);

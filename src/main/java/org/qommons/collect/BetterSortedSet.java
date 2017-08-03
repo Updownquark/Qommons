@@ -557,9 +557,9 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 				else {
 					CollectionElement<E> element = theWrapped.search(to, SortedSearchFilter.PreferLess);
 					if (element == null)
-						wrapSpliter = theWrapped.mutableSpliterator(true);
+						wrapSpliter = theWrapped.mutableSpliterator(false);
 					else
-						wrapSpliter = theWrapped.mutableSpliterator(element.getElementId(), to.compareTo(element.get()) > 0);
+						wrapSpliter = theWrapped.mutableSpliterator(element.getElementId(), !(to.compareTo(element.get()) >= 0));
 				}
 			}
 			return new BoundedMutableSpliterator(wrapSpliter);
@@ -763,7 +763,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 		@Override
 		public int indexFor(Comparable<? super E> search) {
-			int index = getWrapped().indexFor(search);
+			int index = getWrapped().indexFor(reverse(search));
 			if (index >= 0)
 				return size() - index - 1;
 			else {
@@ -784,22 +784,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 		@Override
 		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
-			return getWrapped().search(reverse(search), filter.opposite());
-		}
-
-		@Override
-		public BetterSortedSet<E> subSet(E fromElement, boolean fromInclusive, E toElement, boolean toInclusive) {
-			return getWrapped().subSet(toElement, toInclusive, fromElement, fromInclusive).reverse();
-		}
-
-		@Override
-		public BetterSortedSet<E> headSet(E toElement, boolean inclusive) {
-			return getWrapped().tailSet(toElement, inclusive).reverse();
-		}
-
-		@Override
-		public BetterSortedSet<E> tailSet(E fromElement, boolean inclusive) {
-			return getWrapped().headSet(fromElement, inclusive).reverse();
+			return CollectionElement.reverse(getWrapped().search(reverse(search), filter.opposite()));
 		}
 
 		@Override
