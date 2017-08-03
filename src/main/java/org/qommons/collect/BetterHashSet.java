@@ -191,6 +191,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			ensureCapacity(theSize + 1);
 			entry = new HashEntry(value, hashCode);
 			insert(entry);
+			if (theLast != null)
+				theLast.next = entry;
 			entry.previous = theLast;
 			theLast = entry;
 			if (theFirst == null)
@@ -350,6 +352,10 @@ public class BetterHashSet<E> implements BetterSet<E> {
 					theFirst = next;
 				if (theLast == this)
 					theLast = previous;
+				if (previous != null)
+					previous.next = next;
+				if (next != null)
+					next.previous = previous;
 				next = null;
 				previous = null;
 				theSize--;
@@ -364,6 +370,16 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		@Override
 		public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public int hashCode() {
+			return hashCode;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj == this;
 		}
 
 		@Override
@@ -430,12 +446,12 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 	class MutableHashSpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<E> {
 		private HashEntry current;
-		private boolean wasNext;
+		private boolean currentIsNext;
 
 		MutableHashSpliterator(HashEntry current, boolean next) {
 			super(BetterHashSet.this);
 			this.current = current;
-			this.wasNext = !next;
+			this.currentIsNext = next;
 		}
 
 		@Override
@@ -455,7 +471,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 		protected boolean tryElement(boolean forward) {
 			if (current == null)
-				current = wasNext ? theLast : theFirst;
+				current = currentIsNext ? theFirst : theLast;
 			if (current == null)
 				return false;
 			// We can tolerate external modification as long as the node that this spliterator is anchored to has not been removed
@@ -463,15 +479,16 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			if (current.next == null && theLast != current)
 				throw new ConcurrentModificationException(
 					"The collection has been modified externally such that this spliterator has been orphaned");
-			if (wasNext == forward) {
-				HashEntry next = current.previous;
+			if (currentIsNext != forward) {
+				HashEntry next = forward ? current.next : current.previous;
 				if (next != null)
 					current = next;
 				else {
-					wasNext = !forward;
+					currentIsNext = !forward;
 					return false;
 				}
-			}
+			} else
+				currentIsNext = !forward;
 			return true;
 		}
 
@@ -549,11 +566,11 @@ public class BetterHashSet<E> implements BetterSet<E> {
 						current = newCurrent;
 					} else {
 						newCurrent = current;
-						newWasNext = wasNext;
+						newWasNext = currentIsNext;
 					}
 					theEntry.remove();
 					current = newCurrent;
-					wasNext = newWasNext;
+					currentIsNext = newWasNext;
 				}
 			}
 
