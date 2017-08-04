@@ -1,6 +1,11 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -457,33 +462,29 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	private ArrayElement findElementOptimistic(Object value, boolean first, ArrayElement[] array, int size, int offset, long stamp) {
-		int t = offset;
+		int t = first ? offset : (offset + size - 1) % array.length;
 		for (int i = 0; i < size; i++) {
 			ArrayElement el = array[t];
 			if (!theLocker.check(stamp))
 				return null;
 			if (Objects.equals(el.get(), value))
 				return el;
-			t++;
-			if (t == array.length)
-				t = 0;
+			if (first) {
+				t++;
+				if (t == array.length)
+					t = 0;
+			} else {
+				t--;
+				if (t < 0)
+					t = array.length - 1;
+			}
 		}
 		return null;
 	}
 
 	@Override
 	public CollectionElement<E> getElement(E value, boolean first) {
-		try (Transaction t = lock(false, null)) {
-			int ti = theOffset;
-			for (int i = 0; i < theSize; i++) {
-				if (Objects.equals(theArray[ti].get(), value))
-					return theArray[ti].immutable();
-				ti++;
-				if (ti == theArray.length)
-					ti = 0;
-			}
-			return null;
-		}
+		return getElementOptimistic(value, first);
 	}
 
 	@Override
@@ -512,6 +513,8 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 	@Override
 	public CollectionElement<E> getElement(int index) {
+		if (index < 0)
+			throw new IndexOutOfBoundsException("" + index);
 		return theArray[translateToInternalIndex(index)].immutable();
 	}
 
@@ -730,9 +733,8 @@ public class CircularArrayList<E> implements BetterList<E> {
 		int i;
 		for (i = 0; i < cSize - spaces; i++)
 			iter.next(); // Bleed off items that would be dropped due to capacity
-		i = index;
 		for (; i < cSize; i++) {
-			theArray[ti] = new ArrayElement(iter.next(), i++);
+			theArray[ti] = new ArrayElement(iter.next(), ti);
 			ti++;
 			if (ti == theArray.length)
 				ti = 0;
@@ -794,9 +796,11 @@ public class CircularArrayList<E> implements BetterList<E> {
 				moveContents(theOffset, fromIndex, count);
 				clearEntries(theOffset, count);
 				theOffset = (theOffset + count) % theArray.length;
+				updateIndexes(theOffset, fromIndex);
 			} else {
 				moveContents(theOffset + toIndex, theSize - toIndex, -count);
 				clearEntries(translateToInternalIndex(theSize - count), count);
+				updateIndexes(theOffset + fromIndex, theSize - toIndex);
 			}
 			theSize -= count;
 			theLocker.indexChanged(-count);
@@ -822,8 +826,10 @@ public class CircularArrayList<E> implements BetterList<E> {
 				if (filter.test(value.get())) {
 					removed++;
 				} else {
-					if (removed > 0)
+					if (removed > 0) {
 						theArray[copyTo] = value;
+						theArray[copyTo].setIndex(copyTo);
+					}
 					copyTo++;
 					if (copyTo == cap)
 						copyTo = 0;
@@ -861,7 +867,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		if (index < 0)
 			throw new IndexOutOfBoundsException("" + index);
 		try (Transaction t = lock(true, null)) {
-			return internalRemove(index, translateToInternalIndex(index));
+			return internalRemove(index, translateToInternalIndex(index)).get();
 		}
 	}
 
@@ -1018,8 +1024,8 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 	final int translateToCollectionIndex(int arrayIndex) {
 		int ci = arrayIndex - theOffset;
-		if (ci >= theArray.length)
-			ci -= theArray.length;
+		if (ci < 0)
+			ci += theArray.length;
 		return ci;
 	}
 
@@ -1042,10 +1048,12 @@ public class CircularArrayList<E> implements BetterList<E> {
 				return theMaxCapacity;
 			} else {
 				theAdvanced = theSize + spaces - theMaxCapacity;
-				if (index <= theSize / 2)
+				// TODO Pretty sure this is wrong. Need to update offset for the less than half case, right?
+				if (index <= theSize / 2) {
 					moveContents(theOffset + theAdvanced, index, -spaces);
-				else
+				} else {
 					moveContents(theOffset + index, theSize - index, spaces);
+				}
 				theSize = theMaxCapacity;
 				return spaces;
 			}
@@ -1067,7 +1075,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		if (count == 0)
 			return;
 		int cap = theArray.length;
-		if (sourceStart > cap)
+		if (sourceStart >= cap)
 			sourceStart -= cap;
 		int sourceEnd = sourceStart + count;
 		int destStart = sourceStart + offset;
@@ -1120,13 +1128,15 @@ public class CircularArrayList<E> implements BetterList<E> {
 			// Neither interval is wrapped
 			System.arraycopy(theArray, sourceStart, theArray, destStart, count);
 		}
-
-		// Adjust the elements' indices
-		for (int ti = destStart; ti != destEnd;) {
+	}
+	
+	void updateIndexes(int from, int count){
+		int ti=from;
+		while(ti!=count){
+			if(ti==theArray.length)
+				ti=0;
 			theArray[ti].setIndex(ti);
 			ti++;
-			if (ti == cap)
-				ti = 0;
 		}
 	}
 
@@ -1160,7 +1170,8 @@ public class CircularArrayList<E> implements BetterList<E> {
 	private final ArrayElement internalAdd(int index, E value) {
 		makeRoom(index, 1);
 		ArrayElement element;
-		theArray[translateToInternalIndex(index)] = element = new ArrayElement(value, index);
+		int ti = translateToInternalIndex(index);
+		theArray[ti] = element = new ArrayElement(value, ti);
 		theOffset += theAdvanced;
 		if (theOffset >= theArray.length)
 			theOffset -= theArray.length;
@@ -1168,26 +1179,27 @@ public class CircularArrayList<E> implements BetterList<E> {
 		return element;
 	}
 
-	private final E internalRemove(int listIndex, int translatedIndex) {
-		E removed = (E) theArray[translatedIndex];
+	private final ArrayElement internalRemove(int listIndex, int translatedIndex) {
+		ArrayElement removed = theArray[translatedIndex];
 		// Figure out the optimum way to move array elements
 		if (theSize == 1) {
-			theArray[theOffset].removed();
 			theArray[theOffset] = null; // Remove reference
 			theOffset = theSize = 0;
 		} else if (listIndex < theSize / 2) {
 			moveContents(theOffset, listIndex, 1);
-			theArray[theOffset].removed();
 			theArray[theOffset] = null; // Remove reference
 			theOffset++;
 			if (theOffset == theArray.length)
 				theOffset = 0;
+			updateIndexes(theOffset, listIndex);
 			theSize--;
 		} else {
 			moveContents(translatedIndex + 1, theSize - listIndex - 1, -1);
 			theArray[translateToInternalIndex(theSize - 1)] = null; // Remove reference
+			updateIndexes(translatedIndex, theSize - listIndex - 1);
 			theSize--;
 		}
+		removed.removed();
 		trimIfNeeded();
 		theLocker.indexChanged(-1);
 		return removed;
@@ -1340,7 +1352,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 		@Override
 		public String toString() {
-			return new StringBuilder().append('[').append(index).append("]=").append(theValue).toString();
+			return new StringBuilder().append('[').append(getIndex()).append("]=").append(theValue).toString();
 		}
 	}
 
@@ -1483,7 +1495,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 				theSubLock.indexChanged(-1);
 				theEnd--;
 				if (isForward)
-					theCurrentIndex--;
+					theCursor--;
 			}
 
 			@Override
@@ -1497,7 +1509,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 				theSubLock.indexChanged(1);
 				theEnd++;
 				if (before)
-					theCurrentIndex++;
+					theCursor++;
 				return newId;
 			}
 		}
