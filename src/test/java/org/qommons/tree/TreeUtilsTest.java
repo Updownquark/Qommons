@@ -122,5 +122,24 @@ public class TreeUtilsTest {
 	public void testTreeList() {
 		BetterTreeList<Integer> list = new BetterTreeList<>(false);
 		testCollection(list, l -> list.checkValid(), null);
+
+		// I want the tree list to tolerate appending to the list during iteration.
+		// In particular, I want to make sure that if a value is added to the list on the last value iterated, then the iteration will
+		// continue with the new value. This property is important for the listener list in SimpleObservable
+		testIterationAdd(list);
+		testIterationAdd(new BetterTreeList<>(true));
+	}
+
+	private void testIterationAdd(BetterTreeList<Integer> list) {
+		list.addAll(QommonsTestUtils.sequence(5, v -> v, false));
+		boolean fiveIsNext = false;
+		for (Integer v : list) {
+			if (fiveIsNext)
+				org.junit.Assert.assertEquals((Integer) 5, v);
+			else if (v == 4) {
+				list.add(5);
+				fiveIsNext = true;
+			}
+		}
 	}
 }

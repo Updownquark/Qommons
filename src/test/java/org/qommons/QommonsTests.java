@@ -10,7 +10,6 @@ import org.qommons.tree.TreeUtilsTest;
 @RunWith(Suite.class)
 @SuiteClasses({ //
 	IterableUtilsTest.class, //
-	LinkedQueueTest.class, //
 	TreeUtilsTest.class, //
 	CircularListTest.class, //
 	HashSetTest.class//
