@@ -320,9 +320,9 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default boolean findMutable(Predicate<? super E> search, Consumer<? super MutableCollectionElement<? extends E>> onElement,
 		boolean first) {
 		try (Transaction t = lock(true, null)) {
-			MutableElementSpliterator<E> spliter = first ? mutableSpliterator(first) : mutableSpliterator(first);
+			MutableElementSpliterator<E> spliter = mutableSpliterator(first);
 			boolean[] found = new boolean[1];
-			while (spliter.forElementM(el -> {
+			while (!found[0] && spliter.forElementM(el -> {
 				if (search.test(el.get())) {
 					found[0] = true;
 					onElement.accept(el);
@@ -346,7 +346,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		mutableSpliterator(forward).forEachElementM(el -> {
 			if (search.test(el.get())) {
 				found[0]++;
-				onElement.accept(forward ? el : el.reverse());
+				onElement.accept(el);
 			}
 		}, forward);
 		return found[0];
