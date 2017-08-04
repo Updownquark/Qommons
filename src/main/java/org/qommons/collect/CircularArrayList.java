@@ -1,11 +1,6 @@
 package org.qommons.collect;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -478,11 +473,17 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 	@Override
 	public CollectionElement<E> getElement(E value, boolean first) {
-		for (int i = 0; i < theSize; i++) {
-			if (Objects.equals(theArray[i].get(), value))
-				return theArray[i].immutable();
+		try (Transaction t = lock(false, null)) {
+			int ti = theOffset;
+			for (int i = 0; i < theSize; i++) {
+				if (Objects.equals(theArray[ti].get(), value))
+					return theArray[ti].immutable();
+				ti++;
+				if (ti == theArray.length)
+					ti = 0;
+			}
+			return null;
 		}
-		return null;
 	}
 
 	@Override
@@ -1336,6 +1337,11 @@ public class CircularArrayList<E> implements BetterList<E> {
 				cIndex++;
 			return CircularArrayList.this.addElement(cIndex, value).getElementId();
 		}
+
+		@Override
+		public String toString() {
+			return new StringBuilder().append('[').append(index).append("]=").append(theValue).toString();
+		}
 	}
 
 	private class ArraySpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<E> {
@@ -1406,7 +1412,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 				theCurrentIndex = theCursor;
 				theCursor++;
 			} else {
-				if (theCursor == theStart)
+				if (theCursor <= theStart)
 					return -1;
 				theCursor--;
 				theCurrentIndex = theCursor;
