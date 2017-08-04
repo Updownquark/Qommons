@@ -235,6 +235,7 @@ public class CircularListTest {
 		// Run a basic test with a capacity sufficient to avoid dropping elements
 		QommonsTestUtils.testCollection(list, c -> c.check(), null);
 
+		ArrayList<Integer> check = new ArrayList<>();
 		// Test basic element-dropping
 		list.addAll(QommonsTestUtils.sequence(150, null, false));
 		assertEquals(150, list.size());
@@ -242,17 +243,32 @@ public class CircularListTest {
 		assertEquals(100, list.size());
 		for (int i = 0; i < 100; i++)
 			assertEquals(Integer.valueOf(i + 50), list.get(i));
+		check.addAll(QommonsTestUtils.sequence(100, v -> v + 50, false));
+		Assert.assertThat(list, QommonsTestUtils.collectionsEqual(check, true));
+
 		list.addAll(// Broken up for debugging
 			QommonsTestUtils.sequence(50, i -> i + 150, false));
+		check.removeAll(QommonsTestUtils.sequence(50, i -> i + 50, false));
+		check.addAll(QommonsTestUtils.sequence(50, i -> i + 150, false));
 		assertEquals(100, list.size());
 		for (int i = 0; i < 100; i++)
 			assertEquals(Integer.valueOf(i + 100), list.get(i));
+		Assert.assertThat(list, QommonsTestUtils.collectionsEqual(check, true));
+
 		list.removeIf(i -> i % 2 == 0);
+		check.removeIf(i -> i % 2 == 0);
 		assertEquals(50, list.size());
 		list.addAll(QommonsTestUtils.sequence(100, i -> i * 2, false));
+		for (int i = 50; i >= 0; i++)
+			check.remove(i);
+		check.addAll(QommonsTestUtils.sequence(100, i -> i * 2, false));
 		assertEquals(100, list.size());
 		for (int i = 0; i < 100; i++)
 			assertEquals(Integer.valueOf(i * 2), list.get(i));
+		Assert.assertThat(list, QommonsTestUtils.collectionsEqual(check, true));
+
+		list.addAll(list.size() / 4, QommonsTestUtils.sequence(50, null, false));
+		// TODO What should this look like
 
 		// Test element-dropping as a result of modification of views (sublists and iterators)
 		list.clear();
