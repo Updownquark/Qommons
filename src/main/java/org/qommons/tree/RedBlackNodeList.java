@@ -38,7 +38,8 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		return theRoot == null ? null : wrap(theRoot.getTerminal(start));
 	}
 
-	protected void checkValid() {
+	/** For unit tests. Ensures the integrity of the collection. */
+	public void checkValid() {
 		if (theRoot != null)
 			theRoot.checkValid();
 	}

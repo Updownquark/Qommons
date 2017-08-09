@@ -275,7 +275,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	/** For unit tests. Ensures the integrity of the list. */
-	void check() {
+	public void checkValid() {
 		// Can't have more elements than the capacity
 		Assert.assertTrue(theSize <= theArray.length);
 		// The offset must be a valid index in the array

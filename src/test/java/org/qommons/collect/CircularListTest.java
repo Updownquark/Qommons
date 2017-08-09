@@ -22,7 +22,7 @@ public class CircularListTest {
 	 */
 	@Test
 	public void safeCALTest() {
-		QommonsTestUtils.testCollection(new CircularArrayList<>(), list -> list.check(), null);
+		QommonsTestUtils.testCollection(new CircularArrayList<>(), list -> list.checkValid(), null);
 	}
 
 	/**
@@ -33,7 +33,7 @@ public class CircularListTest {
 	@Test
 	public void unsafeCALTest() {
 		QommonsTestUtils.testCollection(CircularArrayList.build().unsafe().withMinCapacity(20).withMinOccupancy(0.5).build(),
-			list -> list.check(), null);
+			list -> list.checkValid(), null);
 	}
 
 	/** Runs a gauntlet of tests against */
@@ -233,7 +233,7 @@ public class CircularListTest {
 		CircularArrayList<Integer> list = new CircularArrayList<>();
 		list.setMaxCapacity(10000);
 		// Run a basic test with a capacity sufficient to avoid dropping elements
-		QommonsTestUtils.testCollection(list, c -> c.check(), null);
+		QommonsTestUtils.testCollection(list, c -> c.checkValid(), null);
 
 		ArrayList<Integer> check = new ArrayList<>();
 		// Test basic element-dropping
