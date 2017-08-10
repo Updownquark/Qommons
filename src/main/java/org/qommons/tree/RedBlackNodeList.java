@@ -224,10 +224,10 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 				if (id.isPresent())
 					return compare;
 				else
-					return compare - 1;
+					return compare + 1;
 			} else {
 				if (id.isPresent())
-					return compare + 1;
+					return compare - 1;
 				else
 					return compare;
 			}
