@@ -20,23 +20,20 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 	MutableBinaryTreeNode<E> getClosest(boolean left);
 
 	@Override
-	default MutableBinaryTreeNode<E> getRoot() {
-		return (MutableBinaryTreeNode<E>) BinaryTreeNode.super.getRoot();
-	}
+	MutableBinaryTreeNode<E> getRoot();
+
+	@Override
+	MutableBinaryTreeNode<E> getSibling();
+
+	@Override
+	MutableBinaryTreeNode<E> get(int index);
+
+	@Override
+	MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly);
 
 	@Override
 	default MutableBinaryTreeNode<E> getChild(boolean left) {
 		return (MutableBinaryTreeNode<E>) BinaryTreeNode.super.getChild(left);
-	}
-
-	@Override
-	default MutableBinaryTreeNode<E> getSibling() {
-		return (MutableBinaryTreeNode<E>) BinaryTreeNode.super.getSibling();
-	}
-
-	@Override
-	default MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly) {
-		return (MutableBinaryTreeNode<E>) BinaryTreeNode.super.findClosest(finder, lesser, strictly);
 	}
 
 	@Override
@@ -83,6 +80,36 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 		public int size() {
 			return getWrapped().size();
 		}
+
+		@Override
+		public BinaryTreeNode<E> getRoot() {
+			return getWrapped().getRoot().immutable();
+		}
+
+		@Override
+		public boolean getSide() {
+			return getWrapped().getSide();
+		}
+
+		@Override
+		public BinaryTreeNode<E> getSibling() {
+			return MutableBinaryTreeNode.immutable(getWrapped().getSibling());
+		}
+
+		@Override
+		public BinaryTreeNode<E> get(int index) {
+			return getWrapped().get(index).immutable();
+		}
+
+		@Override
+		public int getNodesBefore() {
+			return getWrapped().getNodesBefore();
+		}
+
+		@Override
+		public int getNodesAfter() {
+			return getWrapped().getNodesAfter();
+		}
 	}
 
 	class ReversedMutableTreeNode<E> extends ReversedBinaryTreeNode<E> implements MutableBinaryTreeNode<E> {
@@ -113,6 +140,26 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 		@Override
 		public MutableBinaryTreeNode<E> getClosest(boolean left) {
 			return (MutableBinaryTreeNode<E>) super.getClosest(left);
+		}
+
+		@Override
+		public MutableBinaryTreeNode<E> getRoot() {
+			return (MutableBinaryTreeNode<E>) super.getRoot();
+		}
+
+		@Override
+		public MutableBinaryTreeNode<E> getSibling() {
+			return (MutableBinaryTreeNode<E>) super.getSibling();
+		}
+
+		@Override
+		public MutableBinaryTreeNode<E> get(int index) {
+			return (MutableBinaryTreeNode<E>) super.get(index);
+		}
+
+		@Override
+		public MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly) {
+			return (MutableBinaryTreeNode<E>) super.findClosest(finder, lesser, strictly);
 		}
 
 		@Override

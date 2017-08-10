@@ -26,21 +26,10 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 	}
 
 	/** @return The root of the tree structure that this node exists in */
-	default BinaryTreeNode<E> getRoot() {
-		BinaryTreeNode<E> ret = this;
-		while (ret.getParent() != null)
-			ret = ret.getParent();
-		return ret;
-	}
+	BinaryTreeNode<E> getRoot();
 
 	/** @return Whether this node is on the right (false) or the left (true) of its parent. False for the root. */
-	default boolean getSide() {
-		if (getParent() == null)
-			return false;
-		if (this == getParent().getLeft())
-			return true;
-		return false;
-	}
+	boolean getSide();
 
 	/**
 	 * @param left Whether to get the left or right child
@@ -51,33 +40,9 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 	}
 
 	/** @return The other child of this node's parent. Null if the parent is null. */
-	default BinaryTreeNode<E> getSibling() {
-		if (getParent() == null)
-			return null;
-		else if (getParent().getLeft() == this)
-			return getParent().getRight();
-		else
-			return getParent().getLeft();
-	}
+	BinaryTreeNode<E> getSibling();
 
-	default BinaryTreeNode<E> get(int index) {
-		if (index < 0)
-			throw new IndexOutOfBoundsException("" + index);
-		BinaryTreeNode<E> node = this;
-		int passed = 0;
-		int nodeIndex = sizeOf(getLeft());
-		while (node != null && index != nodeIndex) {
-			boolean left = index < nodeIndex;
-			if (!left)
-				passed = nodeIndex;
-			node = getChild(left);
-			if (node != null)
-				nodeIndex = passed + sizeOf(node.getLeft());
-		}
-		if (node == null)
-			throw new IndexOutOfBoundsException(index + " of " + nodeIndex);
-		return node;
-	}
+	BinaryTreeNode<E> get(int index);
 
 	default int indexFor(Comparable<? super BinaryTreeNode<? extends E>> search) {
 		BinaryTreeNode<E> node = this;
@@ -96,16 +61,6 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 			return passed + sizeOf(node.getLeft());
 		else
 			return -(passed + 1);
-	}
-
-	default BinaryTreeNode<E> getTerminal(boolean left) {
-		BinaryTreeNode<E> parent = this;
-		BinaryTreeNode<E> child = parent.getChild(left);
-		while (child != null) {
-			parent = child;
-			child = parent.getChild(left);
-		}
-		return parent;
 	}
 
 	/**
@@ -140,36 +95,10 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 	}
 
 	/** @return The number of nodes stored before this node in the tree */
-	default int getNodesBefore() {
-		BinaryTreeNode<E> node = this;
-		BinaryTreeNode<E> left = node.getLeft();
-		int ret = sizeOf(left);
-		while (node != null) {
-			BinaryTreeNode<E> parent = node.getParent();
-			if (parent != null && parent.getRight() == node) {
-				left = parent.getLeft();
-				ret += sizeOf(left) + 1;
-			}
-			node = parent;
-		}
-		return ret;
-	}
+	int getNodesBefore();
 
 	/** @return The number of nodes stored after this node in the tree */
-	default int getNodesAfter() {
-		BinaryTreeNode<E> node = this;
-		BinaryTreeNode<E> right = node.getRight();
-		int ret = sizeOf(right);
-		while (node != null) {
-			BinaryTreeNode<E> parent = node.getParent();
-			if (parent != null && parent.getLeft() == node) {
-				right = parent.getRight();
-				ret += sizeOf(right) + 1;
-			}
-			node = parent;
-		}
-		return ret;
-	}
+	int getNodesAfter();
 
 	@Override
 	default BinaryTreeNode<E> reverse() {
@@ -219,6 +148,26 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 		@Override
 		public int getNodesAfter() {
 			return getWrapped().getNodesBefore();
+		}
+
+		@Override
+		public BinaryTreeNode<E> getRoot() {
+			return BinaryTreeNode.reverse(getWrapped().getRoot());
+		}
+
+		@Override
+		public boolean getSide() {
+			return !getWrapped().getSide();
+		}
+
+		@Override
+		public BinaryTreeNode<E> getSibling() {
+			return BinaryTreeNode.reverse(getWrapped().getSibling());
+		}
+
+		@Override
+		public BinaryTreeNode<E> get(int index) {
+			return getWrapped().get(size() - index - 1).reverse();
 		}
 
 		@Override

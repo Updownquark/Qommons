@@ -290,6 +290,36 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		}
 
 		@Override
+		public BinaryTreeNode<E> getRoot() {
+			return wrap(theNode.getRoot());
+		}
+
+		@Override
+		public boolean getSide() {
+			return theNode.getSide();
+		}
+
+		@Override
+		public BinaryTreeNode<E> getSibling() {
+			return wrap(theNode.getSibling());
+		}
+
+		@Override
+		public BinaryTreeNode<E> get(int index) {
+			return wrap(theNode.get(index));
+		}
+
+		@Override
+		public int getNodesBefore() {
+			return theNode.getNodesBefore();
+		}
+
+		@Override
+		public int getNodesAfter() {
+			return theNode.getNodesAfter();
+		}
+
+		@Override
 		public int size() {
 			return theNode.size();
 		}
@@ -333,6 +363,26 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		@Override
 		public MutableBinaryTreeNode<E> getClosest(boolean left) {
 			return (MutableBinaryTreeNode<E>) super.getClosest(left);
+		}
+
+		@Override
+		public MutableBinaryTreeNode<E> getRoot() {
+			return wrapMutable(theNode.getRoot());
+		}
+
+		@Override
+		public MutableBinaryTreeNode<E> getSibling() {
+			return wrapMutable(theNode.getSibling());
+		}
+
+		@Override
+		public MutableBinaryTreeNode<E> get(int index) {
+			return wrapMutable(theNode.get(index));
+		}
+
+		@Override
+		public MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly) {
+			return mutableNodeFor(super.findClosest(finder, lesser, strictly));
 		}
 
 		@Override
@@ -576,6 +626,10 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 			return str.toString();
 		}
 
+		private MutableSpliteratorNode wrapSpliterNode(RedBlackNode<E> node, MutableBinaryTreeNode<E> wrap) {
+			return node == null ? null : new MutableSpliteratorNode(node, wrap == null ? wrapMutable(node) : wrap);
+		}
+
 		private class MutableSpliteratorNode implements MutableBinaryTreeNode<E> {
 			private final RedBlackNode<E> theNode;
 			private final MutableBinaryTreeNode<E> theWrapped;
@@ -592,8 +646,43 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 			@Override
 			public MutableBinaryTreeNode<E> getClosest(boolean left) {
-				RedBlackNode<E> next = theNode.getClosest(left);
-				return next == null ? null : new MutableSpliteratorNode(next, theWrapped.getClosest(left));
+				return wrapSpliterNode(theNode.getClosest(left), null);
+			}
+
+			@Override
+			public boolean getSide() {
+				return theNode.getSide();
+			}
+
+			@Override
+			public int getNodesBefore() {
+				return theNode.getNodesBefore();
+			}
+
+			@Override
+			public int getNodesAfter() {
+				return theNode.getNodesAfter();
+			}
+
+			@Override
+			public MutableBinaryTreeNode<E> getRoot() {
+				return wrapSpliterNode(theNode.getRoot(), null);
+			}
+
+			@Override
+			public MutableBinaryTreeNode<E> getSibling() {
+				return wrapSpliterNode(theNode.getSibling(), null);
+			}
+
+			@Override
+			public MutableBinaryTreeNode<E> get(int index) {
+				return wrapSpliterNode(theNode.get(index), null);
+			}
+
+			@Override
+			public MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly) {
+				MutableBinaryTreeNode<E> found = theWrapped.findClosest(finder, lesser, strictly);
+				return found == null ? null : wrapSpliterNode(((MutableNodeWrapper) found).theNode, found);
 			}
 
 			@Override

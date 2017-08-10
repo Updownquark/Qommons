@@ -103,22 +103,57 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 
 		@Override
 		public MutableBinaryTreeNode<E> getParent() {
-			return new SortedMutableTreeNode(theWrapped.getParent());
+			return mutableNodeFor(theWrapped.getParent());
 		}
 
 		@Override
 		public MutableBinaryTreeNode<E> getLeft() {
-			return new SortedMutableTreeNode(theWrapped.getLeft());
+			return mutableNodeFor(theWrapped.getLeft());
 		}
 
 		@Override
 		public MutableBinaryTreeNode<E> getRight() {
-			return new SortedMutableTreeNode(theWrapped.getRight());
+			return mutableNodeFor(theWrapped.getRight());
 		}
 
 		@Override
 		public MutableBinaryTreeNode<E> getClosest(boolean left) {
-			return new SortedMutableTreeNode(theWrapped.getClosest(left));
+			return mutableNodeFor(theWrapped.getClosest(left));
+		}
+
+		@Override
+		public boolean getSide() {
+			return theWrapped.getSide();
+		}
+
+		@Override
+		public int getNodesBefore() {
+			return theWrapped.getNodesBefore();
+		}
+
+		@Override
+		public int getNodesAfter() {
+			return theWrapped.getNodesAfter();
+		}
+
+		@Override
+		public MutableBinaryTreeNode<E> getRoot() {
+			return new SortedMutableTreeNode(theWrapped.getRoot());
+		}
+
+		@Override
+		public MutableBinaryTreeNode<E> getSibling() {
+			return mutableNodeFor(theWrapped.getSibling());
+		}
+
+		@Override
+		public MutableBinaryTreeNode<E> get(int index) {
+			return new SortedMutableTreeNode(theWrapped.get(index));
+		}
+
+		@Override
+		public MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly) {
+			return mutableNodeFor(theWrapped.findClosest(finder, lesser, strictly));
 		}
 
 		@Override

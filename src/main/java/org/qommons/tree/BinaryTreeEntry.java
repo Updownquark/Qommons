@@ -16,9 +16,7 @@ public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<V>, MapEntryHandle
 	BinaryTreeEntry<K, V> getClosest(boolean left);
 
 	@Override
-	default BinaryTreeEntry<K, V> getRoot() {
-		return (BinaryTreeEntry<K, V>) BinaryTreeNode.super.getRoot();
-	}
+	BinaryTreeEntry<K, V> getRoot();
 
 	@Override
 	default BinaryTreeEntry<K, V> getChild(boolean left) {
@@ -26,19 +24,13 @@ public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<V>, MapEntryHandle
 	}
 
 	@Override
-	default BinaryTreeEntry<K, V> getSibling() {
-		return (BinaryTreeEntry<K, V>) BinaryTreeNode.super.getSibling();
-	}
+	BinaryTreeEntry<K, V> getSibling();
 
 	@Override
-	default BinaryTreeEntry<K, V> get(int index) {
-		return (BinaryTreeEntry<K, V>) BinaryTreeNode.super.get(index);
-	}
+	BinaryTreeEntry<K, V> get(int index);
 
 	@Override
-	default BinaryTreeEntry<K, V> getTerminal(boolean left) {
-		return (BinaryTreeEntry<K, V>) BinaryTreeNode.super.getTerminal(left);
-	}
+	BinaryTreeEntry<K, V> findClosest(Comparable<BinaryTreeNode<V>> finder, boolean lesser, boolean strictly);
 
 	@Override
 	default BinaryTreeEntry<K, V> reverse() {
@@ -78,6 +70,26 @@ public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<V>, MapEntryHandle
 		@Override
 		public BinaryTreeEntry<K, V> getClosest(boolean left) {
 			return (BinaryTreeEntry<K, V>) super.getClosest(left);
+		}
+
+		@Override
+		public BinaryTreeEntry<K, V> getRoot() {
+			return (BinaryTreeEntry<K, V>) super.getRoot();
+		}
+
+		@Override
+		public BinaryTreeEntry<K, V> getSibling() {
+			return (BinaryTreeEntry<K, V>) super.getSibling();
+		}
+
+		@Override
+		public BinaryTreeEntry<K, V> get(int index) {
+			return (BinaryTreeEntry<K, V>) super.get(index);
+		}
+
+		@Override
+		public BinaryTreeEntry<K, V> findClosest(Comparable<BinaryTreeNode<V>> finder, boolean lesser, boolean strictly) {
+			return (BinaryTreeEntry<K, V>) super.findClosest(finder, lesser, strictly);
 		}
 
 		@Override

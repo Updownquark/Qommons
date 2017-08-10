@@ -111,6 +111,10 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 			return theEntryNode;
 		}
 
+		static <K, V> TreeEntry<K, V> wrap(BinaryTreeNode<Map.Entry<K, V>> entryNode) {
+			return entryNode == null ? null : new TreeEntry<>(entryNode);
+		}
+
 		@Override
 		public ElementId getElementId() {
 			return theEntryNode.getElementId();
@@ -156,6 +160,41 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		}
 
 		@Override
+		public boolean getSide() {
+			return theEntryNode.getSide();
+		}
+
+		@Override
+		public int getNodesBefore() {
+			return theEntryNode.getNodesBefore();
+		}
+
+		@Override
+		public int getNodesAfter() {
+			return theEntryNode.getNodesAfter();
+		}
+
+		@Override
+		public BinaryTreeEntry<K, V> getRoot() {
+			return wrap(theEntryNode.getRoot());
+		}
+
+		@Override
+		public BinaryTreeEntry<K, V> getSibling() {
+			return wrap(theEntryNode.getSibling());
+		}
+
+		@Override
+		public BinaryTreeEntry<K, V> get(int index) {
+			return wrap(theEntryNode.get(index));
+		}
+
+		@Override
+		public BinaryTreeEntry<K, V> findClosest(Comparable<BinaryTreeNode<V>> finder, boolean lesser, boolean strictly) {
+			return wrap(theEntryNode.findClosest(n -> finder.compareTo(wrap(n)), lesser, strictly));
+		}
+
+		@Override
 		public int hashCode() {
 			return Objects.hashCode(theEntryNode.get().getKey());
 		}
@@ -176,6 +215,10 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 			super(entryNode);
 		}
 
+		private static <K, V> MutableTreeEntry<K, V> wrap(MutableBinaryTreeNode<Map.Entry<K, V>> entryNode) {
+			return entryNode == null ? null : new MutableTreeEntry<>(entryNode);
+		}
+
 		@Override
 		protected MutableBinaryTreeNode<Map.Entry<K, V>> getEntryNode() {
 			return (MutableBinaryTreeNode<java.util.Map.Entry<K, V>>) super.getEntryNode();
@@ -183,26 +226,42 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 
 		@Override
 		public MutableBinaryTreeEntry<K, V> getParent() {
-			MutableBinaryTreeNode<Map.Entry<K, V>> parent = getEntryNode().getParent();
-			return parent == null ? null : new MutableTreeEntry<>(parent);
+			return wrap(getEntryNode().getParent());
 		}
 
 		@Override
 		public MutableBinaryTreeEntry<K, V> getLeft() {
-			MutableBinaryTreeNode<Map.Entry<K, V>> left = getEntryNode().getLeft();
-			return left == null ? null : new MutableTreeEntry<>(left);
+			return wrap(getEntryNode().getLeft());
 		}
 
 		@Override
 		public MutableBinaryTreeEntry<K, V> getRight() {
-			MutableBinaryTreeNode<Map.Entry<K, V>> right = getEntryNode().getRight();
-			return right == null ? null : new MutableTreeEntry<>(right);
+			return wrap(getEntryNode().getRight());
 		}
 
 		@Override
 		public MutableBinaryTreeEntry<K, V> getClosest(boolean left) {
-			MutableBinaryTreeNode<Map.Entry<K, V>> close = getEntryNode().getClosest(left);
-			return close == null ? null : new MutableTreeEntry<>(close);
+			return wrap(getEntryNode().getClosest(left));
+		}
+
+		@Override
+		public MutableBinaryTreeEntry<K, V> getRoot() {
+			return wrap(getEntryNode().getRoot());
+		}
+
+		@Override
+		public MutableBinaryTreeEntry<K, V> getSibling() {
+			return wrap(getEntryNode().getSibling());
+		}
+
+		@Override
+		public MutableBinaryTreeEntry<K, V> get(int index) {
+			return wrap(getEntryNode().get(index));
+		}
+
+		@Override
+		public MutableBinaryTreeEntry<K, V> findClosest(Comparable<BinaryTreeNode<V>> finder, boolean lesser, boolean strictly) {
+			return wrap(getEntryNode().findClosest(n -> finder.compareTo(TreeEntry.wrap(n)), lesser, strictly));
 		}
 
 		@Override

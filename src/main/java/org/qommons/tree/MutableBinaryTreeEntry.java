@@ -37,19 +37,21 @@ public interface MutableBinaryTreeEntry<K, V> extends BinaryTreeEntry<K, V>, Mut
 	}
 
 	@Override
-	default MutableBinaryTreeEntry<K, V> getRoot() {
-		return (MutableBinaryTreeEntry<K, V>) MutableBinaryTreeNode.super.getRoot();
-	}
+	MutableBinaryTreeEntry<K, V> getRoot();
 
 	@Override
-	default MutableBinaryTreeEntry<K, V> getSibling() {
-		return (MutableBinaryTreeEntry<K, V>) MutableBinaryTreeNode.super.getSibling();
-	}
+	MutableBinaryTreeEntry<K, V> getSibling();
 
 	@Override
 	default MutableBinaryTreeEntry<K, V> getChild(boolean left) {
 		return (MutableBinaryTreeEntry<K, V>) BinaryTreeEntry.super.getChild(left);
 	}
+
+	@Override
+	MutableBinaryTreeEntry<K, V> get(int index);
+
+	@Override
+	MutableBinaryTreeEntry<K, V> findClosest(Comparable<BinaryTreeNode<V>> finder, boolean lesser, boolean strictly);
 
 	class ReversedMutableTreeEntry<K, V> extends ReversedBinaryTreeEntry<K, V> implements MutableBinaryTreeEntry<K, V> {
 		public ReversedMutableTreeEntry(MutableBinaryTreeEntry<K, V> wrap) {
@@ -79,6 +81,26 @@ public interface MutableBinaryTreeEntry<K, V> extends BinaryTreeEntry<K, V>, Mut
 		@Override
 		public MutableBinaryTreeEntry<K, V> getClosest(boolean left) {
 			return (MutableBinaryTreeEntry<K, V>) super.getClosest(left);
+		}
+
+		@Override
+		public MutableBinaryTreeEntry<K, V> getRoot() {
+			return (MutableBinaryTreeEntry<K, V>) super.getRoot();
+		}
+
+		@Override
+		public MutableBinaryTreeEntry<K, V> getSibling() {
+			return (MutableBinaryTreeEntry<K, V>) super.getSibling();
+		}
+
+		@Override
+		public MutableBinaryTreeEntry<K, V> get(int index) {
+			return (MutableBinaryTreeEntry<K, V>) super.get(index);
+		}
+
+		@Override
+		public MutableBinaryTreeEntry<K, V> findClosest(Comparable<BinaryTreeNode<V>> finder, boolean lesser, boolean strictly) {
+			return (MutableBinaryTreeEntry<K, V>) super.findClosest(finder, lesser, strictly);
 		}
 
 		@Override
@@ -155,6 +177,41 @@ public interface MutableBinaryTreeEntry<K, V> extends BinaryTreeEntry<K, V>, Mut
 		@Override
 		public BinaryTreeEntry<K, V> getClosest(boolean left) {
 			return immutable(getWrapped().getClosest(left));
+		}
+
+		@Override
+		public boolean getSide() {
+			return getWrapped().getSide();
+		}
+
+		@Override
+		public int getNodesBefore() {
+			return getWrapped().getNodesBefore();
+		}
+
+		@Override
+		public int getNodesAfter() {
+			return getWrapped().getNodesAfter();
+		}
+
+		@Override
+		public BinaryTreeEntry<K, V> findClosest(Comparable<BinaryTreeNode<V>> finder, boolean lesser, boolean strictly) {
+			return immutable(getWrapped().findClosest(finder, lesser, strictly));
+		}
+
+		@Override
+		public BinaryTreeEntry<K, V> getRoot() {
+			return getWrapped().getRoot().immutable();
+		}
+
+		@Override
+		public BinaryTreeEntry<K, V> getSibling() {
+			return immutable(getWrapped().getSibling());
+		}
+
+		@Override
+		public BinaryTreeEntry<K, V> get(int index) {
+			return immutable(getWrapped().get(index));
 		}
 	}
 
