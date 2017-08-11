@@ -1,10 +1,6 @@
 package org.qommons;
 
-import java.util.Collection;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -110,7 +106,7 @@ public abstract class AbstractCausable implements Causable {
 		}
 
 		void execute(Causable cause) {
-			theAction.finished(cause, theValues);
+			theAction.finished(cause, this);
 		}
 
 		private void init() {
