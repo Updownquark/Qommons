@@ -6,14 +6,8 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.qommons.Transaction;
-import org.qommons.collect.BetterCollection;
-import org.qommons.collect.BetterList;
-import org.qommons.collect.CollectionElement;
-import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.ElementId;
-import org.qommons.collect.MutableCollectionElement;
+import org.qommons.collect.*;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
-import org.qommons.collect.MutableElementSpliterator;
 
 public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	private final CollectionLockingStrategy theLocker;
@@ -223,12 +217,19 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 			if (isPresent()) {
 				if (id.isPresent())
 					return compare;
-				else
-					return compare + 1;
+				else {
+					compare = compare + 1;
+					if (compare == 0)
+						compare = -1;
+					return compare;
+				}
 			} else {
-				if (id.isPresent())
-					return compare - 1;
-				else
+				if (id.isPresent()) {
+					compare = compare - 1;
+					if (compare == 0)
+						compare = 1;
+					return compare;
+				} else
 					return compare;
 			}
 		}
