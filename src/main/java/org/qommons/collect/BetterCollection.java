@@ -33,10 +33,84 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * @param <E> The type of value in the collection
  */
 public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E> {
+	public static final String BACKING_COLLECTION_CHANGED = "This collection view's backing collection has changed from underneath this view.\n"
+		+ "This view is now invalid";
+
 	boolean belongs(Object o);
 
 	@Override
 	abstract boolean isLockSupported();
+
+	@Override
+	default Transaction lock(boolean write, Object cause) {
+		return lock(write, write, cause);
+	}
+
+	/**
+	 * <p>
+	 * Obtains a lock on this collection. The <code>structural</code> boolean allows finer-grained control of the collection with regard to
+	 * updates.
+	 * </p>
+	 * <p>
+	 * There are 2 types of changes to a collection. Addition/removal operations are <b>structural</b> changes and can have repercussions
+	 * for certain types of views into the collection (e.g. {@link #spliterator() spliterators}, {@link #iterator() iterators}, and
+	 * {@link java.util.List#subList(int, int) sub-lists}). Modifications which only affect the content of the elements (or pure update
+	 * operations, set operations with the same reference value which may fire change events but have no effect on the content of the
+	 * collection) are <b>update</b> operations, which intrinsically cannot interfere with other views.
+	 * </p>
+	 * 
+	 * It is sometimes useful to forbid structural changes while permitting updates. The following table details the interplay of the
+	 * read/write and structural/update flags for this method:
+	 * <table>
+	 * <tr>
+	 * <td></td>
+	 * <td><b>read</b></td>
+	 * <td><b>write</b></td>
+	 * </tr>
+	 * <tr>
+	 * <td><b>update</b></td>
+	 * <td>Forbids any type of change to the collection while the lock is held and forbids other threads from obtaining a write lock.</td>
+	 * <td>Allows the current thread to perform updates on the collection, but not structural changes while the lock is held. Other threads
+	 * may obtain read locks on structural changes, but not for updates.</td>
+	 * </tr>
+	 * <tr>
+	 * <td><b>structural</b></td>
+	 * <td>Forbids only structural changes to the collection while the lock is held. Any thread, including the current thread, may still
+	 * perform update operations or obtain an update write lock.</td>
+	 * <td>Allows the current thread to perform any type of change on the collection and forbids any other thread from obtaining any kind of
+	 * lock.</td>
+	 * </tr>
+	 * </table>
+	 * 
+	 * @param write Whether to obtain an exclusive, write-permitting lock or an unexclusive, read-only lock
+	 * @param structural For a <code>write</code> lock, whether to obtain a lock that permits structural (add/remove) operations; for a read
+	 *        lock, whether to obtain a lock that forbids such operations.
+	 * @param cause The cause of changes (for <code>write</code>) that may occur during the transaction
+	 * @return A transaction to {@link Transaction#close() close} to release the lock
+	 */
+	Transaction lock(boolean write, boolean structural, Object cause);
+
+	/**
+	 * <p>
+	 * Obtains a stamp with the current status of modifications to the collection, either structural or all changes. Whenever this
+	 * collection is modified, the stamp changes. Thus 2 stamps can be compared to determine whether a collection has changed in between 2
+	 * calls to this method. For more information on <b>structural</b> changes, see {@link #lock(boolean, boolean, Object)}.
+	 * </p>
+	 * <p>
+	 * The value returned from this method is <b>ONLY</b> for comparison. The value itself is not guaranteed to reveal anything about this
+	 * collection or its history, e.g. the actual times it has been modified. Also, if 2 stamps obtained from this method are different,
+	 * this does not guarantee that the collection was actually changed in any way, only that it might have been. It <b>IS</b> guaranteed
+	 * that if 2 stamps match, then no modification (of the corresponding type) has been made to the collection, and an effort shall be made
+	 * to avoid changing the stamps when no modification is performed, if possible.
+	 * </p>
+	 * <p>
+	 * No relationship is specified between stamps obtained with different parameters (structural/update).
+	 * </p>
+	 * 
+	 * @param structuralOnly Whether to monitor only structural changes or all changes.
+	 * @return The stamp for comparison
+	 */
+	long getStamp(boolean structuralOnly);
 
 	CollectionElement<E> getElement(E value, boolean first);
 
@@ -118,7 +192,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return Whether this collection contains any of the given collection's elements
 	 */
 	default boolean containsAny(Collection<?> c) {
-		try (Transaction t = lock(false, null); Transaction ct = Transactable.lock(c, false, null)) {
+		try (Transaction t = lock(false, false, null); Transaction ct = Transactable.lock(c, false, null)) {
 			if (c.isEmpty())
 				return true;
 			if (c.size() < size()) {
@@ -143,7 +217,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	@Override
 	default boolean containsAll(Collection<?> c) {
-		try (Transaction t = lock(false, null); Transaction ct = Transactable.lock(c, false, null)) {
+		try (Transaction t = lock(false, false, null); Transaction ct = Transactable.lock(c, false, null)) {
 			if (c.isEmpty())
 				return true;
 			if (c.size() < size()) {
@@ -161,7 +235,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	@Override
 	default Object[] toArray() {
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false, true, null)) {
 			Object[] array = new Object[size()];
 			int[] index = new int[1];
 			spliterator().forEachRemaining(v -> array[index[0]++] = v);
@@ -171,7 +245,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	@Override
 	default <T> T[] toArray(T[] a) {
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false, true, null)) {
 			int size = size();
 			if (a.length < size)
 				a = (T[]) java.lang.reflect.Array.newInstance(a.getClass().getComponentType(), size);
@@ -199,6 +273,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default boolean removeAll(Collection<?> c) {
 		if (isEmpty() || c.isEmpty())
 			return false;
+		// TODO Switch to using removeIf when a CircularArrayList bug with this method is fixed
 		return findAll(v -> c.contains(v), el -> el.remove(), true) > 0;
 	}
 
@@ -210,6 +285,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 			clear();
 			return true;
 		}
+		// TODO Switch to using removeIf when a CircularArrayList bug with this method is fixed
 		return findAll(v -> !c.contains(v), el -> el.remove(), true) > 0;
 	}
 
@@ -234,7 +310,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @throws IllegalArgumentException If a mapped value is not acceptable as a replacement
 	 */
 	default boolean replaceAll(Function<? super E, ? extends E> map, boolean soft) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lock(true, false, null)) {
 			boolean[] replaced = new boolean[1];
 			MutableElementSpliterator<E> iter = mutableSpliterator();
 			iter.forEachElementM(el -> {
@@ -267,7 +343,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @param first Whether to find the first or last occurrence of the value
 	 * @return Whether the value was found
 	 */
-	default boolean forElement(E value, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
+	default boolean forElement(E value, Consumer<? super CollectionElement<E>> onElement, boolean first) {
 		CollectionElement<E> el = getElement(value, first);
 		if (el != null)
 			onElement.accept(el);
@@ -279,7 +355,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @param onElement The action to perform on the element containing the given value, if found
 	 * @return Whether such a value was found
 	 */
-	default boolean forMutableElement(E value, Consumer<? super MutableCollectionElement<? extends E>> onElement, boolean first) {
+	default boolean forMutableElement(E value, Consumer<? super MutableCollectionElement<E>> onElement, boolean first) {
 		CollectionElement<E> el = getElement(value, first);
 		if (el != null)
 			forMutableElement(el.getElementId(), onElement);
@@ -294,8 +370,8 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @param onElement The action to perform on the search's result
 	 * @return Whether a result was found
 	 */
-	default boolean find(Predicate<? super E> search, Consumer<? super CollectionElement<? extends E>> onElement, boolean first) {
-		try (Transaction t = lock(false, null)) {
+	default boolean find(Predicate<? super E> search, Consumer<? super CollectionElement<E>> onElement, boolean first) {
+		try (Transaction t = lock(false, true, null)) {
 			ElementSpliterator<E> spliter = first ? spliterator(first) : spliterator(first);
 			boolean[] found = new boolean[1];
 			while (spliter.forElement(el -> {
@@ -317,7 +393,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @param onElement The action to perform on the search's result
 	 * @return Whether a result was found
 	 */
-	default boolean findMutable(Predicate<? super E> search, Consumer<? super MutableCollectionElement<? extends E>> onElement,
+	default boolean findMutable(Predicate<? super E> search, Consumer<? super MutableCollectionElement<E>> onElement,
 		boolean first) {
 		try (Transaction t = lock(true, null)) {
 			MutableElementSpliterator<E> spliter = mutableSpliterator(first);
@@ -341,7 +417,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @param onElement The action to perform on the search's results
 	 * @return The number of results found
 	 */
-	default int findAll(Predicate<? super E> search, Consumer<? super MutableCollectionElement<? extends E>> onElement, boolean forward) {
+	default int findAll(Predicate<? super E> search, Consumer<? super MutableCollectionElement<E>> onElement, boolean forward) {
 		int[] found = new int[1];
 		mutableSpliterator(forward).forEachElementM(el -> {
 			if (search.test(el.get())) {
@@ -436,26 +512,20 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	@Override
 	default E pollFirst() {
 		Object[] value = new Object[1];
-		try (Transaction t = lock(true, null)) {
-			mutableSpliterator(true).forElementM(el -> {
-				value[0] = el.get();
-				el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an
-								// exception
-			}, true);
-		}
+		mutableSpliterator(true).forElementM(el -> {
+			value[0] = el.get();
+			el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an exception
+		}, true);
 		return (E) value[0];
 	}
 
 	@Override
 	default E pollLast() {
 		Object[] value = new Object[1];
-		try (Transaction t = lock(true, null)) {
-			mutableSpliterator(false).forElementM(el -> {
-				value[0] = el.get();
-				el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an
-								// exception
-			}, false);
-		}
+		mutableSpliterator(false).forElementM(el -> {
+			value[0] = el.get();
+			el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an exception
+		}, false);
 		return (E) value[0];
 	}
 
@@ -536,6 +606,15 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	@Override
 	default Iterator<E> descendingIterator() {
 		return reverse().iterator();
+	}
+
+	public static Transaction lock(Collection<?> c, boolean write, boolean structural, Object cause) {
+		if (c instanceof BetterCollection)
+			return ((BetterCollection<?>) c).lock(write, structural, cause);
+		else if (c instanceof Transactable)
+			return ((Transactable) c).lock(write, cause);
+		else
+			return Transaction.NONE;
 	}
 
 	public static int hashCode(Collection<?> c) {
@@ -655,8 +734,13 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theWrapped.lock(write, cause);
+		public Transaction lock(boolean write, boolean structural, Object cause) {
+			return theWrapped.lock(write, structural, cause);
+		}
+
+		@Override
+		public long getStamp(boolean structuralOnly) {
+			return theWrapped.getStamp(structuralOnly);
 		}
 
 		@Override
@@ -761,8 +845,13 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
+		public Transaction lock(boolean write, boolean structural, Object cause) {
 			return Transaction.NONE;
+		}
+
+		@Override
+		public long getStamp(boolean structuralOnly) {
+			return 0;
 		}
 
 		@Override

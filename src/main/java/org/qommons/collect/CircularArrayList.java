@@ -2,6 +2,7 @@ package org.qommons.collect;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -13,6 +14,7 @@ import java.util.function.Predicate;
 import org.junit.Assert;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
+import org.qommons.collect.CollectionLockingStrategy.OptimisticContext;
 
 /**
  * A list/deque that uses an array that is indexed circularly. This allows performance improvements due to not having to move array contents
@@ -416,28 +418,13 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public Transaction lock(boolean write, Object cause) {
-		return theLocker.lock(write, cause);
+	public Transaction lock(boolean write, boolean structural, Object cause) {
+		return theLocker.lock(write, structural, cause);
 	}
 
-	/**
-	 * @return A stamp that can be checked with {@link #check(long)} to determine if this list has been changed since the stamp was
-	 *         obtained. The stamp returned will be zero (and {@link #check(long)} will return false) if this list's
-	 *         {@link #lock(boolean, Object) write lock} is currently held.
-	 */
-	public long getStamp() {
-		return theLocker.getStamp();
-	}
-
-	/**
-	 * @param stamp The stamp returned by {@link #getStamp()} to check
-	 * @return True if this collection has not been modified since the stamp was obtained. False if this list's
-	 *         {@link #lock(boolean, Object) write lock} has been obtained since (or was currently held when) the stamp was obtained. A
-	 *         value of false does not necessarily imply that the collection was actually changed, but a value of true guarantees that it
-	 *         has not been.
-	 */
-	public boolean check(long stamp) {
-		return theLocker.check(stamp);
+	@Override
+	public long getStamp(boolean structuralOnly) {
+		return theLocker.getStatus(structuralOnly);
 	}
 
 	@Override
@@ -458,14 +445,15 @@ public class CircularArrayList<E> implements BetterList<E> {
 	private ArrayElement getElementOptimistic(Object value, boolean first) {
 		return theLocker.doOptimistically(null, (element, stamp) -> {
 			return findElementOptimistic(value, first, theArray, theSize, theOffset, stamp);
-		});
+		}, true);
 	}
 
-	private ArrayElement findElementOptimistic(Object value, boolean first, ArrayElement[] array, int size, int offset, long stamp) {
+	private ArrayElement findElementOptimistic(Object value, boolean first, ArrayElement[] array, int size, int offset,
+		OptimisticContext ctx) {
 		int t = first ? offset : (offset + size - 1) % array.length;
 		for (int i = 0; i < size; i++) {
 			ArrayElement el = array[t];
-			if (!theLocker.check(stamp))
+			if (!ctx.check())
 				return null;
 			if (Objects.equals(el.get(), value))
 				return el;
@@ -501,13 +489,13 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 	@Override
 	public MutableElementSpliterator<E> mutableSpliterator(boolean forward) {
-		return new ArraySpliterator(0, theSize, forward ? 0 : theSize, theLocker.subLock());
+		return new ArraySpliterator(0, theSize, forward ? 0 : theSize, theLocker.getStatus(true));
 	}
 
 	@Override
 	public MutableElementSpliterator<E> mutableSpliterator(ElementId element, boolean asNext) {
 		try (Transaction t = lock(false, null)) {
-			return new ArraySpliterator(0, size(), ((ArrayElementId) element).element.check().getIndex(), theLocker.subLock());
+			return new ArraySpliterator(0, size(), ((ArrayElementId) element).element.check().getIndex(), theLocker.getStatus(true));
 		}
 	}
 
@@ -528,12 +516,12 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 	@Override
 	public int getElementsAfter(ElementId id) {
-		return theLocker.doOptimistically(-1, (value, stamp) -> {
+		return theLocker.doOptimistically(-1, (value, ctx) -> {
 			int index = ((ArrayElementId) id).element.check().getIndex();
 			if (index < 0)
 				throw new IllegalArgumentException("Element has been removed");
 			return theSize - index - 1;
-		});
+		}, true);
 	}
 
 	@Override
@@ -543,29 +531,29 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 	@Override
 	public boolean containsAll(Collection<?> c) {
-		return theLocker.doOptimistically(false, (bool, stamp) -> {
+		return theLocker.doOptimistically(false, (bool, ctx) -> {
 			ArrayElement[] array = theArray;
 			int offset = theOffset;
 			int size = theSize;
 			for (Object o : c)
-				if (findElementOptimistic(o, true, array, size, offset, stamp) == null)
+				if (findElementOptimistic(o, true, array, size, offset, ctx) == null)
 					return false;
 			return true;
-		});
+		}, false);
 	}
 
 	@Override
 	public boolean containsAny(Collection<?> c) {
-		return theLocker.doOptimistically(false, (bool, stamp) -> {
+		return theLocker.doOptimistically(false, (bool, ctx) -> {
 			ArrayElement[] array = theArray;
 			int offset = theOffset;
 			int size = theSize;
 			for (Object o : c) {
-				if (findElementOptimistic(o, true, array, size, offset, stamp) != null)
+				if (findElementOptimistic(o, true, array, size, offset, ctx) != null)
 					return true;
 			}
 			return false;
-		});
+		}, false);
 	}
 
 	@Override
@@ -582,26 +570,26 @@ public class CircularArrayList<E> implements BetterList<E> {
 	public E get(int index) {
 		if (index < 0)
 			throw new IndexOutOfBoundsException("" + index);
-		return theLocker.doOptimistically(null, (v, stamp) -> {
+		return theLocker.doOptimistically(null, (v, ctx) -> {
 			ArrayElement[] array = theArray;
 			int offset = theOffset;
 			int size = theSize;
-			if (!theLocker.check(stamp))
+			if (!ctx.check())
 				return null;
 			ArrayElement el = array[translateToInternalIndex(array, offset, size, index)];
 			if (el == null)
 				return null; // May have been removed by another thread
 			return el.get();
-		});
+		}, true);
 	}
 
 	@Override
 	public E getFirst() {
-		return theLocker.doOptimistically(null, (v, stamp) -> {
+		return theLocker.doOptimistically(null, (v, ctx) -> {
 			ArrayElement[] array = theArray;
 			int offset = theOffset;
 			int size = theSize;
-			if (!theLocker.check(stamp))
+			if (!ctx.check())
 				return null;
 			if (size == 0)
 				throw new NoSuchElementException();
@@ -609,16 +597,16 @@ public class CircularArrayList<E> implements BetterList<E> {
 			if (el == null)
 				return null; // May have been removed by another thread
 			return el.get();
-		});
+		}, true);
 	}
 
 	@Override
 	public E getLast() {
-		return theLocker.doOptimistically(null, (v, stamp) -> {
+		return theLocker.doOptimistically(null, (v, ctx) -> {
 			ArrayElement[] array = theArray;
 			int offset = theOffset;
 			int size = theSize;
-			if (!theLocker.check(stamp))
+			if (!ctx.check())
 				return null;
 			if (size == 0)
 				throw new NoSuchElementException();
@@ -626,53 +614,53 @@ public class CircularArrayList<E> implements BetterList<E> {
 			if (el == null)
 				return null; // May have been removed by another thread
 			return el.get();
-		});
+		}, true);
 	}
 
 	@Override
 	public E peekFirst() {
-		return theLocker.doOptimistically(null, (v, stamp) -> {
+		return theLocker.doOptimistically(null, (v, ctx) -> {
 			ArrayElement[] array = theArray;
 			int offset = theOffset;
 			int size = theSize;
-			if (size == 0 || !theLocker.check(stamp))
+			if (size == 0 || !ctx.check())
 				return null;
 			ArrayElement el = array[offset];
 			if (el == null)
 				return null; // May have been removed by another thread
 			return el.get();
-		});
+		}, true);
 	}
 
 	@Override
 	public E peekLast() {
-		return theLocker.doOptimistically(null, (v, stamp) -> {
+		return theLocker.doOptimistically(null, (v, ctx) -> {
 			ArrayElement[] array = theArray;
 			int offset = theOffset;
 			int size = theSize;
-			if (size == 0 || !theLocker.check(stamp))
+			if (size == 0 || !ctx.check())
 				return null;
 			ArrayElement el = array[translateToInternalIndex(array, offset, size, size - 1)];
 			if (el == null)
 				return null; // May have been removed by another thread
 			return el.get();
-		});
+		}, true);
 	}
 
 	@Override
 	public int indexOf(Object o) {
-		return theLocker.doOptimistically(-1, (idx, stamp) -> {
+		return theLocker.doOptimistically(-1, (idx, ctx) -> {
 			ArrayElement el = getElementOptimistic(o, true);
 			return el == null ? -1 : el.getIndex();
-		});
+		}, true);
 	}
 
 	@Override
 	public int lastIndexOf(Object o) {
-		return theLocker.doOptimistically(-1, (idx, stamp) -> {
+		return theLocker.doOptimistically(-1, (idx, ctx) -> {
 			ArrayElement el = getElementOptimistic(o, false);
 			return el == null ? -1 : el.getIndex();
-		});
+		}, true);
 	}
 
 	@Override
@@ -742,7 +730,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		theOffset += theAdvanced;
 		if (theOffset >= theArray.length)
 			theOffset -= theArray.length;
-		theLocker.indexChanged(0); // This value should not matter for the root locker
+		theLocker.changed(true); // This value should not matter for the root locker
 		return true;
 	}
 
@@ -803,7 +791,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 				updateIndexes(theOffset + fromIndex, theSize - toIndex);
 			}
 			theSize -= count;
-			theLocker.indexChanged(-count);
+			theLocker.changed(true);
 			if (count > 0)
 				trimIfNeeded();
 		}
@@ -842,7 +830,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 			theSize -= removed;
 			if (removed > 0) {
 				trimIfNeeded();
-				theLocker.indexChanged(-removed);
+				theLocker.changed(true);
 			}
 		}
 		return removed > 0;
@@ -858,7 +846,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 			theSize = 0;
 			theOffset = 0;
 			trimIfNeeded();
-			theLocker.indexChanged(-preSize);
+			theLocker.changed(true);
 		}
 	}
 
@@ -873,17 +861,17 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 	@Override
 	public int hashCode() {
-		return theLocker.doOptimistically(0, (h, stamp) -> {
+		return theLocker.doOptimistically(0, (h, ctx) -> {
 			ArrayElement[] array = theArray;
 			int offset = theOffset;
 			int size = theSize;
-			if (!theLocker.check(stamp))
+			if (!ctx.check())
 				return -1;
 			int hash = 0;
 			int t = offset;
 			for (int i = 0; i < size; i++) {
 				ArrayElement el = array[t];
-				if (!theLocker.check(stamp))
+				if (!ctx.check())
 					return -1;
 				hash += el.get() == null ? 0 : el.get().hashCode();
 				t++;
@@ -891,7 +879,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 					t = 0;
 			}
 			return hash;
-		});
+		}, false);
 	}
 
 	@Override
@@ -899,11 +887,11 @@ public class CircularArrayList<E> implements BetterList<E> {
 		if(!(o instanceof Collection))
 			return false;
 		Collection<?> c=(Collection<?>) o;
-		return theLocker.doOptimistically(false, (b, stamp) -> {
+		return theLocker.doOptimistically(false, (b, ctx) -> {
 			ArrayElement[] array = theArray;
 			int offset = theOffset;
 			int size = theSize;
-			if (!theLocker.check(stamp))
+			if (!ctx.check())
 				return false;
 			if (c.size() != size)
 				return false;
@@ -914,7 +902,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 					return false;
 				Object co = iter.next();
 				ArrayElement el = array[t];
-				if (!theLocker.check(stamp))
+				if (!ctx.check())
 					return false;
 				if (!Objects.equals(el.get(), co))
 					return false;
@@ -923,23 +911,23 @@ public class CircularArrayList<E> implements BetterList<E> {
 					t = 0;
 			}
 			return true;
-		});
+		}, false);
 	}
 
 	@Override
 	public String toString() {
-		return theLocker.doOptimistically(new StringBuilder(), (str, stamp) -> {
+		return theLocker.doOptimistically(new StringBuilder(), (str, ctx) -> {
 			ArrayElement[] array = theArray;
 			int offset = theOffset;
 			int size = theSize;
-			if (!theLocker.check(stamp))
+			if (!ctx.check())
 				return str;
 			str.setLength(0);
 			str.append('[');
 			int t = offset;
 			for (int i = 0; i < size; i++) {
 				ArrayElement el = array[t];
-				if (!theLocker.check(stamp))
+				if (!ctx.check())
 					return str;
 				if (i > 0)
 					str.append(", ");
@@ -950,7 +938,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 			}
 			str.append(']');
 			return str;
-		}).toString();
+		}, true).toString();
 	}
 
 	/**
@@ -1175,7 +1163,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		theOffset += theAdvanced;
 		if (theOffset >= theArray.length)
 			theOffset -= theArray.length;
-		theLocker.indexChanged(1);
+		theLocker.changed(true);
 		return element;
 	}
 
@@ -1201,7 +1189,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		}
 		removed.removed();
 		trimIfNeeded();
-		theLocker.indexChanged(-1);
+		theLocker.changed(true);
 		return removed;
 	}
 
@@ -1362,12 +1350,11 @@ public class CircularArrayList<E> implements BetterList<E> {
 		private int theCursor; // The index of the element that would be given to the consumer for tryAdvance()
 		private int theCurrentIndex; // The index of the element last returned by this iterator from tryAdvance or tryReverse()
 		private boolean elementExists;
-		private final CollectionLockingStrategy.SubLockingStrategy theSubLock;
+		private long theStructureStamp;
 
-		ArraySpliterator(int start, int end, int initIndex, CollectionLockingStrategy.SubLockingStrategy subLock) {
+		ArraySpliterator(int start, int end, int initIndex, long structStamp) {
 			super(CircularArrayList.this);
 			int size = theSize;
-			subLock.check();
 			if (end < 0)
 				end = size;
 			if (start < 0)
@@ -1380,7 +1367,13 @@ public class CircularArrayList<E> implements BetterList<E> {
 			theEnd = end;
 			theCursor = initIndex;
 			theCurrentIndex = initIndex; // Just for toString()
-			theSubLock = subLock;
+			theStructureStamp = structStamp;
+			check();
+		}
+
+		private void check() {
+			if (theStructureStamp != CircularArrayList.this.theLocker.getStatus(true))
+				throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
 		}
 
 		@Override
@@ -1417,7 +1410,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		}
 
 		private int tryElement(boolean advance) {
-			theSubLock.check();
+			check();
 			if (advance) {
 				if (theCursor >= theEnd)
 					return -1;
@@ -1441,10 +1434,10 @@ public class CircularArrayList<E> implements BetterList<E> {
 			int mid = (theStart + theEnd) / 2;
 			ArraySpliterator split;
 			if (theCursor <= mid) {
-				split = new ArraySpliterator(mid, theEnd, mid, theSubLock.siblingLock());
+				split = new ArraySpliterator(mid, theEnd, mid, theStructureStamp);
 				theEnd = mid;
 			} else {
-				split = new ArraySpliterator(theStart, mid, mid, theSubLock.siblingLock());
+				split = new ArraySpliterator(theStart, mid, mid, theStructureStamp);
 				theStart = mid;
 			}
 			return split;
@@ -1481,7 +1474,10 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 			@Override
 			public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
-				el.set(value);
+				try (Transaction t = CircularArrayList.this.theLocker.lock(true, false, null)) {
+					el.set(value);
+					CircularArrayList.this.theLocker.changed(false);
+				}
 			}
 
 			@Override
@@ -1491,11 +1487,15 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 			@Override
 			public void remove() throws UnsupportedOperationException {
-				el.remove();
-				theSubLock.indexChanged(-1);
-				theEnd--;
-				if (isForward)
-					theCursor--;
+				try (Transaction t = CircularArrayList.this.theLocker.lock(true, true, null)) {
+					check();
+					el.remove();
+					CircularArrayList.this.theLocker.changed(true);
+					theStructureStamp = CircularArrayList.this.theLocker.getStatus(true);
+					theEnd--;
+					if (isForward)
+						theCursor--;
+				}
 			}
 
 			@Override
@@ -1505,18 +1505,24 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 			@Override
 			public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-				ElementId newId = el.add(value, before);
-				theSubLock.indexChanged(1);
-				theEnd++;
-				if (before)
-					theCursor++;
-				return newId;
+				try (Transaction t = CircularArrayList.this.theLocker.lock(true, true, null)) {
+					check();
+					ElementId newId = el.add(value, before);
+					if (newId == null)
+						return null; // Can't happen currently, but meh
+					CircularArrayList.this.theLocker.changed(true);
+					theStructureStamp = CircularArrayList.this.theLocker.getStatus(true);
+					theEnd++;
+					if (before)
+						theCursor++;
+					return newId;
+				}
 			}
 		}
 
 		@Override
 		public String toString() {
-			return theSubLock.doOptimistically(new StringBuilder(), (str, stamp) -> {
+			return CircularArrayList.this.theLocker.doOptimistically(new StringBuilder(), (str, ctx) -> {
 				ArrayElement[] array = theArray;
 				int offset = theOffset;
 				int size = theSize;
@@ -1524,7 +1530,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 				int end = theEnd;
 				int cursor = theCurrentIndex;
 				boolean ee = elementExists;
-				if (!theSubLock.check(stamp))
+				if (!ctx.check())
 					return str;
 				str.setLength(0);
 				str.append('<');
@@ -1533,7 +1539,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 				boolean first = true;
 				for (; index < end; index++) {
 					ArrayElement el = array[t];
-					if (!theSubLock.check(stamp))
+					if (!ctx.check())
 						return str;
 					if (!first)
 						str.append(", ");
@@ -1556,7 +1562,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 				}
 				str.append('>');
 				return str;
-			}).toString();
+			}, true).toString();
 		}
 	}
 }

@@ -1,6 +1,7 @@
 package org.qommons.tree;
 
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 /**
  * A node in a red/black binary tree structure.
@@ -188,13 +189,13 @@ public class RedBlackNode<E> {
 		return node == null ? 0 : node.theSize;
 	}
 
-	public RedBlackNode<E> get(int index) {
+	public RedBlackNode<E> get(int index, BooleanSupplier cont) {
 		if (index < 0)
 			throw new IndexOutOfBoundsException("" + index);
 		RedBlackNode<E> node = this;
 		int passed = 0;
 		int nodeIndex = sizeOf(theLeft);
-		while (node != null && index != nodeIndex) {
+		while (node != null && index != nodeIndex && cont.getAsBoolean()) {
 			boolean left = index < nodeIndex;
 			if (!left)
 				passed = nodeIndex + 1;
@@ -207,10 +208,10 @@ public class RedBlackNode<E> {
 		return node;
 	}
 
-	public RedBlackNode<E> getTerminal(boolean left) {
+	public RedBlackNode<E> getTerminal(boolean left, BooleanSupplier cont) {
 		RedBlackNode<E> parent = this;
 		RedBlackNode<E> child = parent.getChild(left);
-		while (child != null) {
+		while (child != null && cont.getAsBoolean()) {
 			parent = child;
 			child = parent.getChild(left);
 		}
@@ -218,13 +219,13 @@ public class RedBlackNode<E> {
 	}
 
 	/** @return The number of nodes stored before this node in the tree */
-	public int getNodesBefore() {
+	public int getNodesBefore(BooleanSupplier cont) {
 		if (theRemovedIndex >= 0)
 			return theRemovedIndex;
 		RedBlackNode<E> node = this;
 		RedBlackNode<E> left = node.getLeft();
 		int ret = sizeOf(left);
-		while (node != null) {
+		while (node != null && cont.getAsBoolean()) {
 			RedBlackNode<E> parent = node.getParent();
 			if (parent != null && parent.getRight() == node) {
 				left = parent.getLeft();
@@ -236,11 +237,11 @@ public class RedBlackNode<E> {
 	}
 
 	/** @return The number of nodes stored after this node in the tree */
-	public int getNodesAfter() {
+	public int getNodesAfter(BooleanSupplier cont) {
 		RedBlackNode<E> node = this;
 		RedBlackNode<E> right = node.getRight();
 		int ret = sizeOf(right);
-		while (node != null) {
+		while (node != null && cont.getAsBoolean()) {
 			RedBlackNode<E> parent = node.getParent();
 			if (parent != null && parent.getLeft() == node) {
 				right = parent.getRight();
@@ -311,11 +312,11 @@ public class RedBlackNode<E> {
 	 *        node that obeys it. In other words, if <code>strictly</code> is false, this method will always return a node.
 	 * @return The found node
 	 */
-	public RedBlackNode<E> findClosest(Comparable<RedBlackNode<E>> finder, boolean lesser, boolean strictly) {
+	public RedBlackNode<E> findClosest(Comparable<RedBlackNode<E>> finder, boolean lesser, boolean strictly, BooleanSupplier cont) {
 		RedBlackNode<E> node = this;
 		RedBlackNode<E> found = null;
 		boolean foundMatchesLesser = false;
-		while (true) {
+		while (cont.getAsBoolean()) {
 			int compare = finder.compareTo(node);
 			if (compare == 0)
 				return node;
@@ -329,6 +330,7 @@ public class RedBlackNode<E> {
 				return found;
 			node = child;
 		}
+		return null; // Canceled
 	}
 
 	/**
@@ -490,7 +492,7 @@ public class RedBlackNode<E> {
 		else if(theRight != null)
 			replacement = theRight;
 
-		theRemovedIndex = getNodesBefore();
+		theRemovedIndex = getNodesBefore(() -> true);
 
 		RedBlackNode<E> newRoot;
 		if(replacement != null) {

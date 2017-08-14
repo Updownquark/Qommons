@@ -35,6 +35,14 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		return keySet().lock(write, cause);
 	}
 
+	default Transaction lock(boolean write, boolean structural, Object cause) {
+		return keySet().lock(write, structural, cause);
+	}
+
+	default long getStamp(boolean structuralOnly) {
+		return keySet().getStamp(structuralOnly);
+	}
+
 	MapEntryHandle<K, V> putEntry(K key, V value);
 
 	MapEntryHandle<K, V> getEntry(K key);
@@ -185,8 +193,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theMap.lock(write, cause);
+		public Transaction lock(boolean write, boolean structural, Object cause) {
+			return theMap.lock(write, structural, cause);
+		}
+
+		@Override
+		public long getStamp(boolean structuralOnly) {
+			return theMap.getStamp(structuralOnly);
 		}
 
 		@Override
@@ -416,8 +429,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theMap.lock(write, cause);
+		public Transaction lock(boolean write, boolean structural, Object cause) {
+			return theMap.lock(write, structural, cause);
+		}
+
+		@Override
+		public long getStamp(boolean structuralOnly) {
+			return theMap.getStamp(structuralOnly);
 		}
 
 		@Override

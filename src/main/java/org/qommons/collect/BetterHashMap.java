@@ -175,8 +175,13 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theEntries.lock(write, cause);
+		public Transaction lock(boolean write, boolean structural, Object cause) {
+			return theEntries.lock(write, structural, cause);
+		}
+
+		@Override
+		public long getStamp(boolean structuralOnly) {
+			return theEntries.getStamp(structuralOnly);
 		}
 
 		@Override
@@ -285,12 +290,12 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
-		public boolean forElement(K value, Consumer<? super CollectionElement<? extends K>> onElement, boolean first) {
+		public boolean forElement(K value, Consumer<? super CollectionElement<K>> onElement, boolean first) {
 			return theEntries.forElement(new SimpleMapEntry<>(value, null), entryEl -> onElement.accept(handleFor(entryEl)), first);
 		}
 
 		@Override
-		public boolean forMutableElement(K value, Consumer<? super MutableCollectionElement<? extends K>> onElement, boolean first) {
+		public boolean forMutableElement(K value, Consumer<? super MutableCollectionElement<K>> onElement, boolean first) {
 			return theEntries.forMutableElement(new SimpleMapEntry<>(value, null), entryEl -> onElement.accept(mutableHandleFor(entryEl)),
 				first);
 		}

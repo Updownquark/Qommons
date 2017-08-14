@@ -32,7 +32,7 @@ public class TreeUtilsTest {
 			T value = iter.next();
 			if(PRINT)
 				System.out.println("Adding " + value);
-			tree = tree.getTerminal(false).add(new RedBlackNode<>(value), false);
+			tree = tree.getTerminal(false, () -> true).add(new RedBlackNode<>(value), false);
 			if(PRINT)
 				System.out.println(RedBlackNode.print(tree));
 			tree.checkValid();
@@ -47,7 +47,7 @@ public class TreeUtilsTest {
 			T value = iter.next();
 			if(PRINT)
 				System.out.println("Deleting " + value);
-			tree = tree.getTerminal(true).delete();
+			tree = tree.getTerminal(true, ()->true).delete();
 			if(PRINT)
 				System.out.println(RedBlackNode.print(tree));
 			if(tree != null)

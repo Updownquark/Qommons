@@ -317,8 +317,13 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theWrapped.lock(write, cause);
+		public Transaction lock(boolean write, boolean structural, Object cause) {
+			return theWrapped.lock(write, structural, cause);
+		}
+
+		@Override
+		public long getStamp(boolean structuralOnly) {
+			return theWrapped.getStamp(structuralOnly);
 		}
 
 		public Comparable<? super E> getFrom() {

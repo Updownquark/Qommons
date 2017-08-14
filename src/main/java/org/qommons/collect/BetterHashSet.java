@@ -126,7 +126,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	protected void ensureCapacity(int expectedSize) {
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false, false, null)) {
 			int neededTableSize = (int) Math.ceil(expectedSize / theLoadFactor);
 			if (neededTableSize > theTable.length)
 				rehash(expectedSize);
@@ -152,8 +152,13 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public Transaction lock(boolean write, Object cause) {
-		return theLocker.lock(write, cause);
+	public Transaction lock(boolean write, boolean structural, Object cause) {
+		return theLocker.lock(write, structural, cause);
+	}
+
+	@Override
+	public long getStamp(boolean structuralOnly) {
+		return theLocker.getStatus(structuralOnly);
 	}
 
 	@Override
@@ -183,7 +188,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 	@Override
 	public CollectionElement<E> addElement(E value, boolean first) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lock(true, true, null)) {
 			int hashCode = theHasher.applyAsInt(value);
 			HashEntry entry = getEntry(hashCode, value);
 			if (entry != null)
@@ -198,13 +203,14 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			if (theFirst == null)
 				theFirst = entry;
 			theSize++;
+			theLocker.changed(true);
 			return entry.immutable();
 		}
 	}
 
 	@Override
 	public CollectionElement<E> getElement(E value, boolean first) {
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false, true, null)) {
 			HashEntry entry = getEntry(theHasher.applyAsInt(value), value);
 			return entry == null ? null : entry.immutable();
 		}
@@ -217,7 +223,9 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 	@Override
 	public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement) {
-		return onElement.apply(((HashId) element).entry.check());
+		try (Transaction t = lock(true, true, null)) {
+			return onElement.apply(((HashId) element).entry.check());
+		}
 	}
 
 	@Override
@@ -232,21 +240,23 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 	@Override
 	public boolean addAll(Collection<? extends E> c) {
-		try (Transaction t = lock(true, null); Transaction ct = Transactable.lock(c, false, null)) {
+		try (Transaction t = lock(true, true, null); Transaction ct = Transactable.lock(c, false, null)) {
 			for (E e : c)
 				add(e);
+			theLocker.changed(true);
 			return !c.isEmpty();
 		}
 	}
 
 	@Override
 	public void clear() {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lock(true, true, null)) {
 			for (int i = 0; i < theTable.length; i++)
 				theTable[i] = null;
 			theFirst = null;
 			theLast = null;
 			theSize = 0;
+			theLocker.changed(true);
 		}
 	}
 
@@ -330,11 +340,14 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 		@Override
 		public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
-			if (!isPresent())
-				throw new IllegalStateException("This element has been removed");
-			if (hashCode != theHasher.applyAsInt(value))
-				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			theValue = value;
+			try (Transaction t = lock(true, false, null)) {
+				if (!isPresent())
+					throw new IllegalStateException("This element has been removed");
+				if (hashCode != theHasher.applyAsInt(value))
+					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
+				theValue = value;
+				theLocker.changed(false);
+			}
 		}
 
 		@Override
@@ -359,6 +372,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 				next = null;
 				previous = null;
 				theSize--;
+				theLocker.changed(true);
 			}
 		}
 
