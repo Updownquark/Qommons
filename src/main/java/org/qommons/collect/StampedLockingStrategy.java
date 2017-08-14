@@ -44,10 +44,9 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 
 	@Override
 	public void changed(boolean structural) {
+		theModCount.incrementAndGet();
 		if (structural)
 			theStructureChanges.incrementAndGet();
-		else
-			theModCount.incrementAndGet();
 	}
 
 	static class LockStamp {
