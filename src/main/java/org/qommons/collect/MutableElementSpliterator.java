@@ -6,11 +6,10 @@ import java.util.function.Consumer;
 
 import org.qommons.Transactable;
 import org.qommons.Transaction;
-import org.qommons.value.Settable;
 
 /**
- * A {@link Spliterator} that allows the option of providing its values wrapped in a {@link MutableCollectionElement}, which allows elements in the
- * source collection to be replaced (using {@link Settable#set(Object, Object)}) or {@link MutableCollectionElement#remove() removed} during
+ * A {@link Spliterator} that allows the option of providing its values wrapped in a {@link MutableCollectionElement}, which allows elements
+ * in the source collection to be replaced (using {@link #set(Object, Object)}) or {@link MutableCollectionElement#remove() removed} during
  * iteration.
  * 
  * ElementSpliterators are {@link #trySplit() splittable} just as Spliterators are, though the added functionality (particularly

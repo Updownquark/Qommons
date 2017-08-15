@@ -1,9 +1,7 @@
 package org.qommons.collect;
 
-import org.qommons.value.Settable;
-
 /**
- * Represents an element in a collection that contains a value (retrieved via {@link Settable#get()}) that may {@link #isAcceptable(Object)
+ * Represents an element in a collection that contains a value (retrieved via {@link #get()}) that may {@link #isAcceptable(Object)
  * possibly} be {@link #set(Object) replaced} or (again {@link #canRemove() possibly}) {@link #remove() removed} during iteration.
  * 
  * @param <E> The type of the value in the element
