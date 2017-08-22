@@ -16,7 +16,7 @@ public interface BetterSet<E> extends BetterCollection<E>, Set<E> {
 	}
 
 	@Override
-	default ElementSpliterator<E> spliterator() {
+	default MutableElementSpliterator<E> spliterator() {
 		return BetterCollection.super.spliterator();
 	}
 

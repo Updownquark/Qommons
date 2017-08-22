@@ -1,14 +1,7 @@
 package org.qommons.collect;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.ConcurrentModificationException;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Predicate;
 
 import org.junit.Assert;
@@ -481,19 +474,17 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement) {
-		try (Transaction t = lock(true, null)) {
-			return onElement.apply(((ArrayElementId) element).element.check());
-		}
+	public MutableCollectionElement<E> mutableElement(ElementId id) {
+		return ((ArrayElementId) id).element.check();
 	}
 
 	@Override
-	public MutableElementSpliterator<E> mutableSpliterator(boolean forward) {
+	public MutableElementSpliterator<E> spliterator(boolean forward) {
 		return new ArraySpliterator(0, theSize, forward ? 0 : theSize, theLocker.getStatus(true));
 	}
 
 	@Override
-	public MutableElementSpliterator<E> mutableSpliterator(ElementId element, boolean asNext) {
+	public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
 		try (Transaction t = lock(false, null)) {
 			return new ArraySpliterator(0, size(), ((ArrayElementId) element).element.check().getIndex(), theLocker.getStatus(true));
 		}

@@ -1,13 +1,7 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.Collection;
-import java.util.ConcurrentModificationException;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
@@ -25,21 +19,17 @@ import org.qommons.collect.MutableElementSpliterator.SimpleMutableSpliterator;
 public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> {
 	CollectionElement<E> getElement(int index);
 
-	default ElementSpliterator<E> spliterator(int index) {
-		return mutableSpliterator(index).immutable();
-	}
-
 	/**
 	 * @param index The index of the element to be the next element returned from the spliterator on forward access
 	 * @return The spliterator
 	 */
-	default MutableElementSpliterator<E> mutableSpliterator(int index) {
+	default MutableElementSpliterator<E> spliterator(int index) {
 		if (index == 0)
-			return mutableSpliterator(true);
+			return spliterator(true);
 		try (Transaction t = lock(false, null)) {
 			if (index == size())
-				return mutableSpliterator(false);
-			return mutableSpliterator(getElement(index).getElementId(), true);
+				return spliterator(false);
+			return spliterator(getElement(index).getElementId(), true);
 		}
 	}
 
@@ -222,7 +212,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	@Override
 	default void removeRange(int fromIndex, int toIndex) {
 		try (Transaction t = lock(true, null)) {
-			MutableElementSpliterator<E> spliter = mutableSpliterator(fromIndex);
+			MutableElementSpliterator<E> spliter = spliterator(fromIndex);
 			for (int i = fromIndex; i < toIndex; i++)
 				spliter.forElementM(el -> el.remove(), true);
 		}
@@ -250,7 +240,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	}
 
 	@Override
-	default ElementSpliterator<E> spliterator() {
+	default MutableElementSpliterator<E> spliterator() {
 		return BetterCollection.super.spliterator();
 	}
 
@@ -261,7 +251,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 	@Override
 	default ListIterator<E> listIterator(int index) {
-		return new BetterListIterator<>(this, mutableSpliterator(index));
+		return new BetterListIterator<>(this, spliterator(index));
 	}
 
 	@Override
@@ -559,17 +549,17 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement) {
-			return theWrapped.ofMutableElement(element, el -> onElement.apply(wrapElement(el)));
+		public MutableCollectionElement<E> mutableElement(ElementId id) {
+			return wrapElement(theWrapped.mutableElement(id));
 		}
 
 		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(ElementId element, boolean asNext) {
+		public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
 			try (Transaction t = lock(false, true, null)) {
 				int index = theWrapped.getElementsBefore(element);
 				if (index < theStart || index >= theEnd)
 					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-				return new SubSpliterator(theWrapped.mutableSpliterator(element, asNext), asNext ? index : index + 1);
+				return new SubSpliterator(theWrapped.spliterator(element, asNext), asNext ? index : index + 1);
 			}
 		}
 
@@ -716,9 +706,9 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(boolean fromStart) {
+		public MutableElementSpliterator<E> spliterator(boolean fromStart) {
 			int index = fromStart ? theStart : theEnd;
-			return new SubSpliterator(theWrapped.mutableSpliterator(index), index);
+			return new SubSpliterator(theWrapped.spliterator(index), index);
 		}
 
 		class SubSpliterator extends SimpleMutableSpliterator<E> {

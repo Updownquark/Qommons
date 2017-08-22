@@ -1,13 +1,6 @@
 package org.qommons.collect;
 
-import java.util.Collection;
-import java.util.Deque;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -116,20 +109,18 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	CollectionElement<E> getElement(ElementId id);
 
-	<X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement);
+	MutableCollectionElement<E> mutableElement(ElementId id);
+
+	default <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement) {
+		return onElement.apply(mutableElement(element));
+	}
 
 	default void forMutableElement(ElementId element, Consumer<? super MutableCollectionElement<E>> onElement) {
-		ofMutableElement(element, el -> {
-			onElement.accept(el);
-			return null;
-		});
+		onElement.accept(mutableElement(element));
 	}
 
 	/**
-	 * Tests the compatibility of an object with this collection. This method exposes a "best guess" on whether an element could be added to
-	 * the collection , but does not provide any guarantee. This method should return null for any object for which {@link #add(Object)} is
-	 * successful, but the fact that an object passes this test does not guarantee that it would be removed successfully. E.g. the position
-	 * of the element in the collection may be a factor, but is tested for here.
+	 * Tests the compatibility of an object with this collection.
 	 *
 	 * @param value The value to test compatibility for
 	 * @return Null if given value could possibly be added to this collection, or a message why it can't
@@ -312,7 +303,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default boolean replaceAll(Function<? super E, ? extends E> map, boolean soft) {
 		try (Transaction t = lock(true, false, null)) {
 			boolean[] replaced = new boolean[1];
-			MutableElementSpliterator<E> iter = mutableSpliterator();
+			MutableElementSpliterator<E> iter = spliterator();
 			iter.forEachElementM(el -> {
 				E value = el.get();
 				E newValue = map.apply(value);
@@ -386,30 +377,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	}
 
 	/**
-	 * Finds a value in this collection matching the given search and performs an action on the {@link MutableCollectionElement} for that
-	 * element
-	 * 
-	 * @param search The search function
-	 * @param onElement The action to perform on the search's result
-	 * @return Whether a result was found
-	 */
-	default boolean findMutable(Predicate<? super E> search, Consumer<? super MutableCollectionElement<E>> onElement,
-		boolean first) {
-		try (Transaction t = lock(true, null)) {
-			MutableElementSpliterator<E> spliter = mutableSpliterator(first);
-			boolean[] found = new boolean[1];
-			while (!found[0] && spliter.forElementM(el -> {
-				if (search.test(el.get())) {
-					found[0] = true;
-					onElement.accept(el);
-				}
-			}, first)) {
-			}
-			return found[0];
-		}
-	}
-
-	/**
 	 * Finds all values in this collection matching the given search and performs an action on the {@link MutableCollectionElement} for each
 	 * element
 	 * 
@@ -419,7 +386,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 */
 	default int findAll(Predicate<? super E> search, Consumer<? super MutableCollectionElement<E>> onElement, boolean forward) {
 		int[] found = new int[1];
-		mutableSpliterator(forward).forEachElementM(el -> {
+		spliterator(forward).forEachElementM(el -> {
 			if (search.test(el.get())) {
 				found[0]++;
 				onElement.accept(el);
@@ -429,31 +396,18 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	}
 
 	@Override
-	default ElementSpliterator<E> spliterator() {
+	default MutableElementSpliterator<E> spliterator() {
 		return spliterator(true);
 	}
 
-	default ElementSpliterator<E> spliterator(boolean fromStart) {
-		return mutableSpliterator(fromStart).immutable();
-	}
+	MutableElementSpliterator<E> spliterator(boolean fromStart);
 
-	default ElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
-		return mutableSpliterator(element, asNext).immutable();
-	}
+	MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext);
 
-	/** @return An immutable (Iterator#remove()} will always throw an exception) iterator for iterating across this object's data */
 	@Override
 	default Iterator<E> iterator() {
-		return new SpliteratorIterator<>(mutableSpliterator());
+		return new SpliteratorIterator<>(spliterator());
 	}
-
-	default MutableElementSpliterator<E> mutableSpliterator() {
-		return mutableSpliterator(true);
-	}
-
-	MutableElementSpliterator<E> mutableSpliterator(boolean fromStart);
-
-	MutableElementSpliterator<E> mutableSpliterator(ElementId element, boolean asNext);
 
 	default BetterCollection<E> reverse() {
 		return new ReversedCollection<>(this);
@@ -487,7 +441,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default E removeFirst() {
 		Object[] value = new Object[1];
 		try (Transaction t = lock(true, null)) {
-			if (!mutableSpliterator(true).forElementM(el -> {
+			if (!spliterator(true).forElementM(el -> {
 				value[0] = el.get();
 				el.remove();
 			}, true))
@@ -500,7 +454,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default E removeLast() {
 		Object[] value = new Object[1];
 		try (Transaction t = lock(true, null)) {
-			if (!mutableSpliterator(true).forElementM(el -> {
+			if (!spliterator(true).forElementM(el -> {
 				value[0] = el.get();
 				el.remove();
 			}, false))
@@ -512,7 +466,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	@Override
 	default E pollFirst() {
 		Object[] value = new Object[1];
-		mutableSpliterator(true).forElementM(el -> {
+		spliterator(true).forElementM(el -> {
 			value[0] = el.get();
 			el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an exception
 		}, true);
@@ -522,7 +476,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	@Override
 	default E pollLast() {
 		Object[] value = new Object[1];
-		mutableSpliterator(false).forElementM(el -> {
+		spliterator(false).forElementM(el -> {
 			value[0] = el.get();
 			el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an exception
 		}, false);
@@ -783,23 +737,18 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement) {
-			return getWrapped().ofMutableElement(element.reverse(), el -> onElement.apply(el.reverse()));
+		public MutableCollectionElement<E> mutableElement(ElementId id) {
+			return getWrapped().mutableElement(id.reverse()).reverse();
 		}
 
 		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(ElementId element, boolean asNext) {
-			return getWrapped().mutableSpliterator(element.reverse(), !asNext).reverse();
+		public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
+			return getWrapped().spliterator(element.reverse(), !asNext).reverse();
 		}
 
 		@Override
-		public ElementSpliterator<E> spliterator(boolean fromStart) {
+		public MutableElementSpliterator<E> spliterator(boolean fromStart) {
 			return getWrapped().spliterator(!fromStart).reverse();
-		}
-
-		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(boolean fromStart) {
-			return getWrapped().mutableSpliterator(!fromStart).reverse();
 		}
 
 		@Override
@@ -903,17 +852,17 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement) {
+		public MutableCollectionElement<E> mutableElement(ElementId id) {
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		}
 
 		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(ElementId element, boolean asNext) {
+		public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		}
 
 		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(boolean fromStart) {
+		public MutableElementSpliterator<E> spliterator(boolean fromStart) {
 			return MutableElementSpliterator.empty();
 		}
 

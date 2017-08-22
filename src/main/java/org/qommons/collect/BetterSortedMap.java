@@ -4,7 +4,6 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
-import java.util.function.Function;
 
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -312,8 +311,8 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		@Override
-		public MutableElementSpliterator<Map.Entry<K, V>> mutableSpliterator(int index) {
-			return wrap(getMap().keySet().mutableSpliterator(index));
+		public MutableElementSpliterator<Map.Entry<K, V>> spliterator(int index) {
+			return wrap(getMap().keySet().spliterator(index));
 		}
 	}
 
@@ -382,12 +381,11 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		@Override
-		public <X> X ofMutableEntry(ElementId entryId, Function<? super MutableMapEntryHandle<K, V>, X> onEntry) {
-			return theWrapped.ofMutableEntry(entryId, entry -> {
-				if (!keySet().belongs(entry.getKey()))
-					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-				return onEntry.apply(entry);
-			});
+		public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
+			MutableMapEntryHandle<K, V> entry = theWrapped.mutableEntry(entryId);
+			if (!keySet().belongs(entry.getKey()))
+				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+			return entry;
 		}
 	}
 }

@@ -5,22 +5,11 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 import org.qommons.Transaction;
-import org.qommons.collect.BetterSortedMap;
-import org.qommons.collect.BetterSortedSet;
+import org.qommons.collect.*;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
-import org.qommons.collect.CollectionElement;
-import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.ElementId;
-import org.qommons.collect.FastFailLockingStrategy;
-import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
-import org.qommons.collect.MutableElementSpliterator;
-import org.qommons.collect.MutableMapEntryHandle;
-import org.qommons.collect.SimpleMapEntry;
-import org.qommons.collect.StampedLockingStrategy;
 
 public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 	protected final Comparator<? super K> theCompare;
@@ -84,9 +73,8 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 	}
 
 	@Override
-	public <X> X ofMutableEntry(ElementId entryId, Function<? super MutableMapEntryHandle<K, V>, X> onEntry) {
-		return theEntries.ofMutableElement(entryId,
-			entryEl -> onEntry.apply(new MutableTreeEntry<>((MutableBinaryTreeNode<Map.Entry<K, V>>) entryEl)));
+	public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
+		return new MutableTreeEntry<>(theEntries.mutableElement(entryId));
 	}
 
 	@Override
@@ -362,13 +350,13 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		}
 
 		@Override
-		public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<K>, X> onElement) {
-			return theEntries.ofMutableElement(element, el -> onElement.apply(mutableHandleFor(el)));
+		public MutableCollectionElement<K> mutableElement(ElementId id) {
+			return mutableHandleFor(theEntries.mutableElement(id));
 		}
 
 		@Override
-		public MutableElementSpliterator<K> mutableSpliterator(ElementId element, boolean asNext) {
-			return new KeySpliterator(theEntries.mutableSpliterator(element, asNext));
+		public MutableElementSpliterator<K> spliterator(ElementId element, boolean asNext) {
+			return new KeySpliterator(theEntries.spliterator(element, asNext));
 		}
 
 		@Override
@@ -441,8 +429,8 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		}
 
 		@Override
-		public MutableElementSpliterator<K> mutableSpliterator(boolean fromStart) {
-			return new KeySpliterator(theEntries.mutableSpliterator(fromStart));
+		public MutableElementSpliterator<K> spliterator(boolean fromStart) {
+			return new KeySpliterator(theEntries.spliterator(fromStart));
 		}
 
 		@Override

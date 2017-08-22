@@ -7,7 +7,6 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.ToIntFunction;
 
 import org.qommons.Transactable;
@@ -222,19 +221,17 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement) {
-		try (Transaction t = lock(true, true, null)) {
-			return onElement.apply(((HashId) element).entry.check());
-		}
+	public MutableCollectionElement<E> mutableElement(ElementId id) {
+		return ((HashId) id).entry.check();
 	}
 
 	@Override
-	public MutableElementSpliterator<E> mutableSpliterator(ElementId element, boolean asNext) {
+	public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
 		return new MutableHashSpliterator(((HashId) element).entry.check(), asNext);
 	}
 
 	@Override
-	public MutableElementSpliterator<E> mutableSpliterator(boolean fromStart) {
+	public MutableElementSpliterator<E> spliterator(boolean fromStart) {
 		return new MutableHashSpliterator(fromStart ? theFirst : theLast, fromStart);
 	}
 

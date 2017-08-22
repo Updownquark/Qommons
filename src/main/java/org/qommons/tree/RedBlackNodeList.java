@@ -4,17 +4,10 @@ import java.util.Collection;
 import java.util.ConcurrentModificationException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 import org.qommons.Transaction;
-import org.qommons.collect.BetterCollection;
-import org.qommons.collect.BetterList;
-import org.qommons.collect.CollectionElement;
-import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.ElementId;
-import org.qommons.collect.MutableCollectionElement;
+import org.qommons.collect.*;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
-import org.qommons.collect.MutableElementSpliterator;
 
 public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	private final CollectionLockingStrategy theLocker;
@@ -105,7 +98,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public MutableElementSpliterator<E> mutableSpliterator(ElementId element, boolean asNext) {
+	public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
 		return new MutableNodeSpliterator(checkNode(element).theNode, asNext);
 	}
 
@@ -118,14 +111,12 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public <T> T ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, T> onElement) {
-		try (Transaction t = lock(true, true, null)) {
-			return onElement.apply(mutableNodeFor(element));
-		}
+	public MutableBinaryTreeNode<E> mutableElement(ElementId id) {
+		return mutableNodeFor(id);
 	}
 
 	@Override
-	public MutableElementSpliterator<E> mutableSpliterator(boolean fromStart) {
+	public MutableElementSpliterator<E> spliterator(boolean fromStart) {
 		return mutableSpliterator(getTerminalNode(fromStart), fromStart);
 	}
 
@@ -141,7 +132,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 			if (theRoot == null)
 				node[0] = wrap(theRoot = new RedBlackNode<>(value));
 			else
-				mutableSpliterator(first).forElementM(el -> node[0] = getElement(el.add(value, first)), first);
+				spliterator(first).forElementM(el -> node[0] = getElement(el.add(value, first)), first);
 		}
 		return node[0];
 	}

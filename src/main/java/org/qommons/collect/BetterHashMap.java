@@ -4,7 +4,6 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.ToIntFunction;
 
 import org.qommons.Transaction;
@@ -86,8 +85,8 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	}
 
 	@Override
-	public <X> X ofMutableEntry(ElementId entryId, Function<? super MutableMapEntryHandle<K, V>, X> onEntry) {
-		return theEntries.ofMutableElement(entryId, entryEl -> onEntry.apply(mutableHandleFor(entryEl)));
+	public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
+		return mutableHandleFor(theEntries.mutableElement(entryId));
 	}
 
 	protected MapEntryHandle<K, V> handleFor(CollectionElement<? extends Map.Entry<K, V>> entry) {
@@ -280,13 +279,13 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
-		public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<K>, X> onElement) {
-			return theEntries.ofMutableElement(element, entryEl -> onElement.apply(mutableHandleFor(entryEl)));
+		public MutableCollectionElement<K> mutableElement(ElementId id) {
+			return mutableHandleFor(theEntries.mutableElement(id));
 		}
 
 		@Override
-		public MutableElementSpliterator<K> mutableSpliterator(ElementId element, boolean asNext) {
-			return new KeySpliterator(theEntries.mutableSpliterator(element, asNext));
+		public MutableElementSpliterator<K> spliterator(ElementId element, boolean asNext) {
+			return new KeySpliterator(theEntries.spliterator(element, asNext));
 		}
 
 		@Override
@@ -301,8 +300,8 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
-		public MutableElementSpliterator<K> mutableSpliterator(boolean fromStart) {
-			return new KeySpliterator(theEntries.mutableSpliterator(fromStart));
+		public MutableElementSpliterator<K> spliterator(boolean fromStart) {
+			return new KeySpliterator(theEntries.spliterator(fromStart));
 		}
 
 		@Override

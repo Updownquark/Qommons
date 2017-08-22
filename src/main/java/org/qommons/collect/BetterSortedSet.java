@@ -1,17 +1,11 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.NavigableSet;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 import org.qommons.Ternian;
 import org.qommons.Transaction;
-import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, NavigableSet<E> {
@@ -26,10 +20,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	 * returns zero. For example, if a result strictly less than a search is desired, create a wrapping search that returns 1 for any values
 	 * that the wrapped search returns 0 for.
 	 * 
-	 * @see BetterSortedSet#relative(Comparable, SortedSearchFilter)
-	 * @see BetterSortedSet#forElement(Comparable, Consumer, boolean)
-	 * @see BetterSortedSet#forMutableElement(Comparable, Consumer, boolean)
-	 * @see BetterSortedSet#searchFor(Object, boolean)
+	 * @see BetterSortedSet#search(Comparable, SortedSearchFilter)
 	 */
 	enum SortedSearchFilter {
 		/** Accepts only results for which a search returns &lt;=0 */
@@ -77,7 +68,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	}
 
 	@Override
-	default ElementSpliterator<E> spliterator() {
+	default MutableElementSpliterator<E> spliterator() {
 		return BetterList.super.spliterator();
 	}
 
@@ -516,20 +507,19 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement) {
-			return theWrapped.ofMutableElement(element, el -> {
-				if (isInRange(el.get()) != 0)
-					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-				return onElement.apply(new BoundedMutableElement(el));
-			});
+		public MutableCollectionElement<E> mutableElement(ElementId id) {
+			MutableCollectionElement<E> el = theWrapped.mutableElement(id);
+			if (isInRange(el.get()) != 0)
+				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+			return new BoundedMutableElement(el);
 		}
 
 		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(ElementId element, boolean asNext) {
+		public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
 			try (Transaction t = lock(false, null)) {
 				if (isInRange(theWrapped.getElement(element).get()) != 0)
 					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-				return new BoundedMutableSpliterator(theWrapped.mutableSpliterator(element, asNext));
+				return new BoundedMutableSpliterator(theWrapped.spliterator(element, asNext));
 			}
 		}
 
@@ -544,27 +534,27 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public MutableElementSpliterator<E> mutableSpliterator(boolean fromStart) {
+		public MutableElementSpliterator<E> spliterator(boolean fromStart) {
 			MutableElementSpliterator<E> wrapSpliter;
 			if (fromStart) {
 				if (from == null)
-					wrapSpliter = theWrapped.mutableSpliterator(true);
+					wrapSpliter = theWrapped.spliterator(true);
 				else {
 					CollectionElement<E> element = theWrapped.search(from, SortedSearchFilter.PreferGreater);
 					if (element == null)
-						wrapSpliter = theWrapped.mutableSpliterator(true);
+						wrapSpliter = theWrapped.spliterator(true);
 					else
-						wrapSpliter = theWrapped.mutableSpliterator(element.getElementId(), from.compareTo(element.get()) <= 0);
+						wrapSpliter = theWrapped.spliterator(element.getElementId(), from.compareTo(element.get()) <= 0);
 				}
 			} else {
 				if (to == null)
-					wrapSpliter = theWrapped.mutableSpliterator(false);
+					wrapSpliter = theWrapped.spliterator(false);
 				else {
 					CollectionElement<E> element = theWrapped.search(to, SortedSearchFilter.PreferLess);
 					if (element == null)
-						wrapSpliter = theWrapped.mutableSpliterator(false);
+						wrapSpliter = theWrapped.spliterator(false);
 					else
-						wrapSpliter = theWrapped.mutableSpliterator(element.getElementId(), !(to.compareTo(element.get()) >= 0));
+						wrapSpliter = theWrapped.spliterator(element.getElementId(), !(to.compareTo(element.get()) >= 0));
 				}
 			}
 			return new BoundedMutableSpliterator(wrapSpliter);
@@ -594,7 +584,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 		@Override
 		public void clear() {
-			mutableSpliterator().forEachElementM(el -> el.remove(), true);
+			removeIf(v -> true);
 		}
 
 		@Override

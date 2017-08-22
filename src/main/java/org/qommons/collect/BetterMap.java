@@ -49,14 +49,15 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 	MapEntryHandle<K, V> getEntry(ElementId entryId);
 
+	MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId);
+
 	default void forMutableEntry(ElementId entryId, Consumer<? super MutableMapEntryHandle<K, V>> onEntry) {
-		ofMutableEntry(entryId, el -> {
-			onEntry.accept(el);
-			return null;
-		});
+		onEntry.accept(mutableEntry(entryId));
 	}
 
-	<X> X ofMutableEntry(ElementId entryId, Function<? super MutableMapEntryHandle<K, V>, X> onEntry);
+	default <X> X ofMutableEntry(ElementId entryId, Function<? super MutableMapEntryHandle<K, V>, X> onEntry) {
+		return onEntry.apply(mutableEntry(entryId));
+	}
 
 	default BetterMap<K, V> reverse() {
 		return new ReversedMap<>(this);
@@ -166,8 +167,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public <X> X ofMutableEntry(ElementId entry, Function<? super MutableMapEntryHandle<K, V>, X> onElement) {
-			return theWrapped.ofMutableEntry(entry.reverse(), el -> onElement.apply(el.reverse()));
+		public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
+			return theWrapped.mutableEntry(entryId.reverse()).reverse();
 		}
 	}
 
@@ -236,18 +237,18 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<Entry<K, V>>, X> onElement) {
-			return theMap.ofMutableEntry(element, el -> onElement.apply(new MutableEntryElement(el)));
+		public MutableCollectionElement<Entry<K, V>> mutableElement(ElementId id) {
+			return new MutableEntryElement(theMap.mutableEntry(id));
 		}
 
 		@Override
-		public MutableElementSpliterator<Entry<K, V>> mutableSpliterator(ElementId element, boolean asNext) {
-			return new EntrySpliterator(theMap.keySet().mutableSpliterator(element, asNext));
+		public MutableElementSpliterator<Entry<K, V>> spliterator(ElementId element, boolean asNext) {
+			return new EntrySpliterator(theMap.keySet().spliterator(element, asNext));
 		}
 
 		@Override
-		public MutableElementSpliterator<Map.Entry<K, V>> mutableSpliterator(boolean fromStart) {
-			return wrap(theMap.keySet().mutableSpliterator(fromStart));
+		public MutableElementSpliterator<Map.Entry<K, V>> spliterator(boolean fromStart) {
+			return wrap(theMap.keySet().spliterator(fromStart));
 		}
 
 		@Override
@@ -487,18 +488,18 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<V>, X> onElement) {
-			return theMap.ofMutableEntry(element, onElement);
+		public MutableCollectionElement<V> mutableElement(ElementId id) {
+			return theMap.mutableEntry(id);
 		}
 
 		@Override
-		public MutableElementSpliterator<V> mutableSpliterator(ElementId element, boolean asNext) {
-			return new ValueSpliterator(theMap.keySet().mutableSpliterator(element, asNext));
+		public MutableElementSpliterator<V> spliterator(ElementId element, boolean asNext) {
+			return new ValueSpliterator(theMap.keySet().spliterator(element, asNext));
 		}
 
 		@Override
-		public MutableElementSpliterator<V> mutableSpliterator(boolean fromStart) {
-			return new ValueSpliterator(theMap.keySet().mutableSpliterator(fromStart));
+		public MutableElementSpliterator<V> spliterator(boolean fromStart) {
+			return new ValueSpliterator(theMap.keySet().spliterator(fromStart));
 		}
 
 		class ValueSpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<V> {
