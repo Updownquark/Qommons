@@ -10,9 +10,10 @@ import java.util.function.BooleanSupplier;
  * performance without worrying about balancing.
  * 
  * This class assumes nothing about how it is built. In particular it does not require or care that the values of the nodes be ordered in
- * any particular way. It does not have methods to add values to the structure, but the {@link #findClosest(Comparable, boolean, boolean)
- * findClosest} method allows log(n) searching among nodes and the {@link #add(RedBlackNode, boolean) add} method allows adding a node to
- * the structure. The node is not checked to see if it belongs in the structure at that location. Only rebalancing is handled.
+ * any particular way. It does not have methods to add values to the structure, but the
+ * {@link #findClosest(Comparable, boolean, boolean, BooleanSupplier) findClosest} method allows log(n) searching among nodes and the
+ * {@link #add(RedBlackNode, boolean) add} method allows adding a node to the structure. The node is not checked to see if it belongs in the
+ * structure at that location. Only rebalancing is handled.
  * 
  * This class does not implement {@link BinaryTreeNode} because returning this from an API would be dangerous.
  * 
@@ -24,7 +25,7 @@ public class RedBlackNode<E> {
 	private RedBlackNode<E> theParent;
 	private RedBlackNode<E> theLeft;
 	private RedBlackNode<E> theRight;
-	private RedBlackNode<E> theNext; // TODO Next and Previous not implemented
+	private RedBlackNode<E> theNext;
 	private RedBlackNode<E> thePrevious;
 
 	private int theSize;
