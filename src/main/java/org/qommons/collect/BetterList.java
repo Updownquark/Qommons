@@ -1,7 +1,15 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.ConcurrentModificationException;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
@@ -36,6 +44,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	@Override
 	default Object[] toArray() {
 		return BetterCollection.super.toArray();
+	}
+
+	@Override
+	default <T> T[] toArray(T[] array) {
+		return BetterCollection.super.toArray(array);
 	}
 
 	/**
@@ -186,6 +199,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	}
 
 	@Override
+	default boolean addAll(Collection<? extends E> c) {
+		return BetterCollection.super.addAll(c);
+	}
+
+	@Override
 	default BetterList<E> with(E... values) {
 		BetterCollection.super.with(values);
 		return this;
@@ -314,11 +332,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			return getWrapped().getElementsBefore(id.reverse());
 		}
 
-		@Override
-		public boolean addAll(Collection<? extends E> c) {
-			return super.addAll(c);
-		}
-
 		protected int reflect(int index, boolean terminalInclusive) {
 			int size = getWrapped().size();
 			if (index < 0)
@@ -346,11 +359,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public int getElementsAfter(ElementId id) {
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-		}
-
-		@Override
-		public boolean addAll(Collection<? extends E> c) {
-			return super.addAll(c);
 		}
 	}
 
@@ -947,5 +955,291 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 	}
 
-	class ConstantList<E> implements BetterList<E> {}
+	class ConstantList<E> implements BetterList<E> {
+		private E[] theValues;
+
+		public ConstantList(E[] values) {
+			theValues = values;
+		}
+
+		@Override
+		public boolean belongs(Object o) {
+			return true;
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return true;
+		}
+
+		@Override
+		public Transaction lock(boolean write, boolean structural, Object cause) {
+			return Transaction.NONE;
+		}
+
+		@Override
+		public long getStamp(boolean structuralOnly) {
+			return 0;
+		}
+
+		@Override
+		public int size() {
+			return theValues.length;
+		}
+
+		@Override
+		public boolean isEmpty() {
+			return theValues.length == 0;
+		}
+
+		@Override
+		public int getElementsBefore(ElementId id) {
+			return ((IndexElementId) id).index;
+		}
+
+		@Override
+		public int getElementsAfter(ElementId id) {
+			return theValues.length - ((IndexElementId) id).index - 1;
+		}
+
+		@Override
+		public CollectionElement<E> getElement(int index) {
+			return elementFor(index);
+		}
+
+		private CollectionElement<E> elementFor(int index) {
+			if (index < 0 || index >= theValues.length)
+				throw new IndexOutOfBoundsException(index + " of " + theValues.length);
+			return new CollectionElement<E>() {
+				@Override
+				public ElementId getElementId() {
+					return new IndexElementId(index);
+				}
+
+				@Override
+				public E get() {
+					return theValues[index];
+				}
+			};
+		}
+
+		@Override
+		public CollectionElement<E> getElement(E value, boolean first) {
+			for (int i = 0; i < theValues.length; i++)
+				if (Objects.equals(theValues[i], value))
+					return elementFor(i);
+			return null;
+		}
+
+		@Override
+		public CollectionElement<E> getElement(ElementId id) {
+			return elementFor(((IndexElementId) id).index);
+		}
+
+		@Override
+		public MutableCollectionElement<E> mutableElement(ElementId id) {
+			return mutableElementFor(((IndexElementId) id).index);
+		}
+
+		private MutableCollectionElement<E> mutableElementFor(int index) {
+			if (index < 0 || index >= theValues.length)
+				throw new IndexOutOfBoundsException(index + " of " + theValues.length);
+			return new MutableCollectionElement<E>() {
+				@Override
+				public ElementId getElementId() {
+					return new IndexElementId(index);
+				}
+
+				@Override
+				public E get() {
+					return theValues[index];
+				}
+
+				@Override
+				public String isEnabled() {
+					return StdMsg.UNSUPPORTED_OPERATION;
+				}
+
+				@Override
+				public String isAcceptable(E value) {
+					return StdMsg.UNSUPPORTED_OPERATION;
+				}
+
+				@Override
+				public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
+					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+				}
+
+				@Override
+				public String canRemove() {
+					return StdMsg.UNSUPPORTED_OPERATION;
+				}
+
+				@Override
+				public void remove() throws UnsupportedOperationException {
+					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+				}
+
+				@Override
+				public String canAdd(E value, boolean before) {
+					return StdMsg.UNSUPPORTED_OPERATION;
+				}
+
+				@Override
+				public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+				}
+			};
+		}
+
+		@Override
+		public String canAdd(E value) {
+			return StdMsg.UNSUPPORTED_OPERATION;
+		}
+
+		@Override
+		public CollectionElement<E> addElement(E value, boolean first) {
+			return null;
+		}
+
+		@Override
+		public MutableElementSpliterator<E> spliterator(boolean fromStart) {
+			return mutableSpliterator(fromStart ? 0 : theValues.length, 0, theValues.length);
+		}
+
+		@Override
+		public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
+			int index = ((IndexElementId) element).index;
+			if (!asNext)
+				index++;
+			return mutableSpliterator(index, 0, theValues.length);
+		}
+
+		private MutableElementSpliterator<E> mutableSpliterator(int firstNextIndex, int lowBound, int highBound) {
+			return new MutableElementSpliterator<E>() {
+				private int theLowBound = lowBound;
+				private int theHighBound = highBound;
+				private int theNextIndex = firstNextIndex;
+
+				@Override
+				public long estimateSize() {
+					return theHighBound - theLowBound;
+				}
+
+				@Override
+				public int characteristics() {
+					return Spliterator.IMMUTABLE | Spliterator.ORDERED | Spliterator.SIZED | Spliterator.SUBSIZED;
+				}
+
+				@Override
+				public long getExactSizeIfKnown() {
+					return theHighBound - theLowBound;
+				}
+
+				@Override
+				public Comparator<? super E> getComparator() {
+					return null;
+				}
+
+				@Override
+				public boolean forElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+					int index;
+					if (forward) {
+						if (theNextIndex >= theHighBound)
+							return false;
+						index = theNextIndex;
+						theNextIndex++;
+					} else {
+						if (theNextIndex == theLowBound)
+							return false;
+						theNextIndex--;
+						index = theNextIndex;
+					}
+					action.accept(elementFor(index));
+					return true;
+				}
+
+				@Override
+				public void forEachElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+					if (forward) {
+						while (theNextIndex < theHighBound)
+							action.accept(elementFor(theNextIndex++));
+					} else {
+						while (theNextIndex > theLowBound)
+							action.accept(elementFor(--theNextIndex));
+					}
+				}
+
+				@Override
+				public boolean forElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
+					int index;
+					if (forward) {
+						if (theNextIndex >= theHighBound)
+							return false;
+						index = theNextIndex;
+						theNextIndex++;
+					} else {
+						if (theNextIndex == theLowBound)
+							return false;
+						theNextIndex--;
+						index = theNextIndex;
+					}
+					action.accept(mutableElementFor(index));
+					return true;
+				}
+
+				@Override
+				public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
+					if (forward) {
+						while (theNextIndex < theHighBound)
+							action.accept(mutableElementFor(theNextIndex++));
+					} else {
+						while (theNextIndex > theLowBound)
+							action.accept(mutableElementFor(--theNextIndex));
+					}
+				}
+
+				@Override
+				public MutableElementSpliterator<E> trySplit() {
+					if (theHighBound - theLowBound <= 1)
+						return null;
+					int mid = (theLowBound + theHighBound) / 2;
+					int splitLow, splitHigh, splitFirstNext;
+					if (theNextIndex <= mid) {
+						splitLow = mid;
+						splitHigh = theHighBound;
+						splitFirstNext = mid;
+						theHighBound = mid;
+					} else {
+						splitLow = theLowBound;
+						splitHigh = mid;
+						splitFirstNext = mid;
+						theLowBound = mid;
+					}
+					return mutableSpliterator(splitFirstNext, splitLow, splitHigh);
+				}
+			};
+		}
+
+		@Override
+		public void clear() {}
+
+		private static class IndexElementId implements ElementId {
+			final int index;
+
+			IndexElementId(int index) {
+				this.index = index;
+			}
+
+			@Override
+			public int compareTo(ElementId o) {
+				return index - ((IndexElementId) o).index;
+			}
+
+			@Override
+			public boolean isPresent() {
+				return true;
+			}
+		}
+	}
 }
