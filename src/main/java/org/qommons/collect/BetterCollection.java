@@ -153,6 +153,18 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	}
 
 	/**
+	 * @param values The values to add to the collection
+	 * @return This collection
+	 */
+	default BetterCollection<E> with(E... values) {
+		try (Transaction t = lock(true, null)) {
+			for (E e : values)
+				add(e);
+		}
+		return this;
+	}
+
+	/**
 	 * Tests the removability of an element from this collection. This method exposes a "best guess" on whether an element in the collection
 	 * could be removed, but does not provide any guarantee. This method should return null for any object for which {@link #remove(Object)}
 	 * is successful, but the fact that an object passes this test does not guarantee that it would be removed successfully. E.g. the

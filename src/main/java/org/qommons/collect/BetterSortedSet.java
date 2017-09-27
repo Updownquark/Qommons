@@ -134,6 +134,12 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	CollectionElement<E> addIfEmpty(E value) throws IllegalStateException;
 
 	@Override
+	default BetterSortedSet<E> with(E... values) {
+		BetterSet.super.with(values);
+		return this;
+	}
+
+	@Override
 	default boolean remove(Object c) {
 		return BetterList.super.remove(c);
 	}

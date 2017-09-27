@@ -186,6 +186,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	}
 
 	@Override
+	default BetterList<E> with(E... values) {
+		BetterCollection.super.with(values);
+		return this;
+	}
+
+	@Override
 	default boolean remove(Object o) {
 		return BetterCollection.super.remove(o);
 	}
@@ -265,6 +271,10 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 */
 	public static <E> BetterList<E> empty() {
 		return new EmptyList<>();
+	}
+
+	public static <E> BetterList<E> of(E... values) {
+		return new ConstantList<>(values);
 	}
 
 	/**
@@ -936,4 +946,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			return BetterCollection.toString(this);
 		}
 	}
+
+	class ConstantList<E> implements BetterList<E> {}
 }

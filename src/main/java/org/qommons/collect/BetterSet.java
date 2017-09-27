@@ -41,6 +41,12 @@ public interface BetterSet<E> extends BetterCollection<E>, Set<E> {
 	}
 
 	@Override
+	default BetterSet<E> with(E... values) {
+		BetterCollection.super.with(values);
+		return this;
+	}
+
+	@Override
 	default boolean removeAll(Collection<?> c) {
 		return BetterCollection.super.removeAll(c);
 	}
