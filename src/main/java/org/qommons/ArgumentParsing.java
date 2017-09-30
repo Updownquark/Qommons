@@ -2,22 +2,13 @@ package org.qommons;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
+import java.time.Duration;
+import java.util.*;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
-import org.qommons.ArrayUtils;
 
 /** Parses a set of command-line arguments passed to a program. */
 public class ArgumentParsing {
@@ -94,7 +85,8 @@ public class ArgumentParsing {
          * @return The new argument definition
          */
         BooleanArgumentDef booleanArg(String name);
-        
+
+		DurationArgumentDef durationArg(String name);
         /**
          * Creates a file- or directory-type argument
          * 
@@ -1396,6 +1388,11 @@ public class ArgumentParsing {
         }
 
         @Override
+		public DurationArgumentDef durationArg(String name) {
+			return thePattern.durationArg(name);
+		}
+
+		@Override
         public FileArgumentDef fileArg(String name) {
             return thePattern.fileArg(name);
         }
@@ -1835,11 +1832,7 @@ public class ArgumentParsing {
 
         @Override
         protected Boolean parseValue(String text, Arguments parsed) throws IllegalArgumentException {
-            try {
-                return Boolean.valueOf(text);
-            } catch (NumberFormatException e) {
-                throw new IllegalArgumentException(getName() + " value \"" + text + "\" is not a boolean");
-            }
+			return Boolean.valueOf(text);
         }
 
         @Override
@@ -1848,6 +1841,25 @@ public class ArgumentParsing {
         }
     }
 
+	public static class DurationArgumentDef extends ValuedArgumentDefImpl<Duration, DurationArgumentDef> {
+		public DurationArgumentDef(ArgumentPattern pattern, String name) {
+			super(pattern, name);
+		}
+
+		@Override
+		public Argument createArgument(Matcher matcher, Duration value) {
+			return new ValuedArgument<>(this, matcher, value);
+		}
+
+		@Override
+		protected Duration parseValue(String text, Arguments parsed) throws IllegalArgumentException {
+			try {
+				return QommonsUtils.parseDuration(text);
+			} catch (java.text.ParseException e) {
+				throw new IllegalArgumentException(getName() + " value \"" + text + "\" is not a duration: " + e.getMessage());
+			}
+		}
+	}
     /** The definition of a file- or directory-valued argument */
     public static class FileArgumentDef extends ValuedArgumentDefImpl<File, FileArgumentDef> {
         private boolean isFileOrDirAsserted;
@@ -2877,6 +2889,16 @@ public class ArgumentParsing {
         }
 
         @Override
+		public DurationArgumentDef durationArg(String name) {
+			if (theAcceptedArguments.containsKey(name)) {
+				throw new IllegalArgumentException("Argument " + name + " already defined in this set");
+			}
+			DurationArgumentDef ret = new DurationArgumentDef(this, name);
+			theAcceptedArguments.put(name, ret);
+			return ret;
+		}
+
+		@Override
         public FileArgumentDef fileArg(String name) {
             if (theAcceptedArguments.containsKey(name)) {
                 throw new IllegalArgumentException("Argument " + name + " already defined in this set");
