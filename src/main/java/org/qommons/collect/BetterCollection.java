@@ -263,7 +263,8 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default boolean remove(Object o) {
 		if (!belongs(o))
 			return false;
-		return forMutableElement((E) o, el -> el.remove(), true);
+		return forMutableElement((E) o, //
+			el -> el.remove(), true);
 	}
 
 	default boolean removeLast(Object o) {
@@ -361,7 +362,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default boolean forMutableElement(E value, Consumer<? super MutableCollectionElement<E>> onElement, boolean first) {
 		CollectionElement<E> el = getElement(value, first);
 		if (el != null)
-			forMutableElement(el.getElementId(), onElement);
+			onElement.accept(mutableElement(el.getElementId()));
 		return el != null;
 	}
 

@@ -65,10 +65,10 @@ public class ListenerList<E> {
 
 	/** @param action The action to perform on each listener in this list */
 	public void forEach(Consumer<E> action) {
-		Node node = theFirst;
-		while (node.next != theLast) {
-			node = node.next;
+		Node node = theFirst.next;
+		while (node != theLast) {
 			action.accept(node.theListener);
+			node = node.next;
 		}
 	}
 

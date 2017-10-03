@@ -308,7 +308,42 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 					public V setValue(V value) {
 						throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 					}
+
+					@Override
+					public int hashCode() {
+						return EntryElement.this.hashCode();
+					}
+
+					@Override
+					public boolean equals(Object obj) {
+						return EntryElement.this.equals(obj);
+					}
+
+					@Override
+					public String toString() {
+						return theEntry.toString();
+					}
 				};
+			}
+
+			@Override
+			public int hashCode() {
+				return theEntry.hashCode();
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				if (obj instanceof BetterEntrySet.EntryElement)
+					return theEntry.equals(((EntryElement) obj).theEntry);
+				else if (obj instanceof Map.Entry)
+					return Objects.equals(get().getKey(), ((Map.Entry<?, ?>) obj).getKey());
+				else
+					return false;
+			}
+
+			@Override
+			public String toString() {
+				return theEntry.toString();
 			}
 		}
 
