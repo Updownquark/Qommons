@@ -105,6 +105,21 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 			public V get() {
 				return entry.get().getValue();
 			}
+
+			@Override
+			public int hashCode() {
+				return entry.hashCode();
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return entry.equals(obj);
+			}
+
+			@Override
+			public String toString() {
+				return entry.toString();
+			}
 		};
 	}
 
@@ -158,6 +173,21 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 			@Override
 			public ElementId add(V value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
 				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			}
+
+			@Override
+			public int hashCode() {
+				return entry.hashCode();
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return entry.equals(obj);
+			}
+
+			@Override
+			public String toString() {
+				return entry.toString();
 			}
 		};
 	}
