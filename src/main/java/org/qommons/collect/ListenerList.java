@@ -1,5 +1,6 @@
 package org.qommons.collect;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -15,7 +16,8 @@ import java.util.function.Consumer;
  * from the same thread (e.g. a listener that may remove itself or adds another listener).
  * </p>
  * <p>
- * This class is not thread-safe and must be secured externally if needed.
+ * This class is thread-safe, but if listeners are added or removed by other threads during {@link #forEach(Consumer) iteration}, the added
+ * listeners may or may not be acted upon for that iteration.
  * </p>
  * 
  * @param <E> The type of value that this list can store
@@ -33,11 +35,14 @@ public class ListenerList<E> {
 
 		@Override
 		public void run() {
+			obtainLock();
 			previous.next = next;
 			next.previous = previous;
+			theLock.set(false);
 		}
 	}
 
+	private final AtomicBoolean theLock;
 	private final Node theFirst;
 	private final Node theLast;
 
@@ -47,6 +52,7 @@ public class ListenerList<E> {
 		theLast = new Node(null);
 		theFirst.next = theLast;
 		theLast.previous = theFirst;
+		theLock = new AtomicBoolean();
 	}
 
 	/**
@@ -55,12 +61,24 @@ public class ListenerList<E> {
 	 */
 	public Runnable add(E listener) {
 		Node newNode = new Node(listener);
-		Node oldLast = theLast.previous;
-		oldLast.next = newNode;
-		theLast.previous = newNode;
-		newNode.previous = oldLast;
 		newNode.next = theLast;
+		// The next part affects the list's state, so only one at a time
+		obtainLock();
+		Node oldLast = theLast.previous;
+		newNode.previous = oldLast;
+		theLast.previous = newNode;
+		oldLast.next = newNode;
+		theLock.set(false);
 		return newNode;
+	}
+
+	void obtainLock() {
+		while (theLock.getAndSet(true)) {
+			// Lock is already held. Try again later.
+			try {
+				Thread.sleep(10);
+			} catch (InterruptedException e) {}
+		}
 	}
 
 	/** @param action The action to perform on each listener in this list */
@@ -74,12 +92,29 @@ public class ListenerList<E> {
 
 	/** Removes all listeners in this list */
 	public void clear() {
+		obtainLock();
 		theFirst.next = theLast;
 		theLast.previous = theFirst;
+		theLock.set(false);
 	}
 
 	/** @return Whether this list has no listeners in it */
 	public boolean isEmtpy() {
 		return theFirst.next == theLast;
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder str = new StringBuilder();
+		str.append('[');
+		boolean[] first = new boolean[] { true };
+		forEach(listener -> {
+			if (!first[0])
+				str.append(", ");
+			first[0] = false;
+			str.append(listener);
+		});
+		str.append(']');
+		return str.toString();
 	}
 }
