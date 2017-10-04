@@ -483,9 +483,9 @@ public final class ArrayUtils {
 			mid = (min + max) >>> 1;
 			comp = search.compareTo(list.get(mid));
 			if (comp > 0)
-				max = mid - 1;
-			else if (comp < 0)
 				min = mid + 1;
+			else if (comp < 0)
+				max = mid - 1;
 			else
 				return mid;
 		}
