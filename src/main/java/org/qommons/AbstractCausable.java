@@ -1,6 +1,10 @@
 package org.qommons;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -80,6 +84,16 @@ public abstract class AbstractCausable implements Causable {
 			((AbstractCausable) event).finish();
 		}
 		return event;
+	}
+
+	/**
+	 * Although it is preferable to finish causes via {@link #doWith(AbstractCausable, Consumer)}, this is here for when this is not
+	 * possible
+	 * 
+	 * @param causable The causable to finish
+	 */
+	public static void finish(AbstractCausable causable) {
+		causable.finish();
 	}
 
 	private static Causable wrapCausable(Object cause) {
