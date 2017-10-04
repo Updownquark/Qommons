@@ -1,5 +1,7 @@
 package org.qommons;
 
+import java.text.ParseException;
+import java.time.Duration;
 import java.util.Calendar;
 
 /** Even more general utilities that I can't think where else to put */
@@ -296,6 +298,134 @@ public class QommonsUtils {
 		if(neg)
 			scalar = -scalar;
 		return Math.round((double) scalar * mult);
+	}
+
+	public static Duration parseDuration(CharSequence text) throws ParseException {
+		Duration duration=Duration.ZERO;
+		int c = 0;
+		if (c < text.length() && Character.isWhitespace(text.charAt(c)))
+			c++;
+		boolean neg = c < text.length() && text.charAt(c) == '-';
+		if (neg)
+			c++;
+		StringBuilder unit=new StringBuilder();
+		for (; c < text.length(); c++) {
+			if (c < text.length() && Character.isWhitespace(text.charAt(c)))
+				c++;
+			int valueStart=c;
+			long value = 0;
+			while (c < text.length() && text.charAt(c) >= '0' && text.charAt(c) <= '9') {
+				if (c - valueStart > 19)
+					throw new ParseException("Too many digits in value", c);
+				value=value*10+(text.charAt(c)-'0');
+				c++;
+			}
+			if (c < text.length() && Character.isWhitespace(text.charAt(c)))
+				c++;
+			int decimalStart = c;
+			double decimal = Double.NaN;
+			if (c < text.length() && text.charAt(c) == '.') {
+				decimal=0;
+				c++;
+				double place = 0.1;
+				while (c < text.length() && text.charAt(c) >= '0' && text.charAt(c) <= '9') {
+					if (c - decimalStart < 9) {
+						// Only ns precision is supported. Ignore remaining digits.
+						decimal = decimal + (text.charAt(c) - '0') * place;
+						place /= 10;
+					}
+					c++;
+				}
+			}
+			if (c == decimalStart) {
+				if(duration.isZero())
+					throw new ParseException("Unrecognized duration", 0);
+				else
+					throw new ParseException("Numerical value expected", valueStart);
+			}
+			if (c < text.length() && Character.isWhitespace(text.charAt(c)))
+				c++;
+			
+			int unitStart=c;
+			unit.setLength(0);
+			while (c < text.length() && Character.isAlphabetic(text.charAt(c))) {
+				unit.append(text.charAt(c));
+				c++;
+			}
+			if (unit.length() == 0)
+				throw new ParseException("Unit expected", unitStart);
+			if (unit.length() > 2 && unit.charAt(unit.length() - 1) == 's')
+				unit.deleteCharAt(unit.length() - 1); // Remove the plural
+			String unitStr = unit.toString().toLowerCase();
+			if (!Double.isNaN(decimal)) {
+				switch (unitStr) {
+				case "s":
+				case "sec":
+				case "second":
+				case "ms":
+				case "milli":
+				case "millisecond":
+					break;
+				default:
+					throw new ParseException("Decimal values are only permitted for unit 'second' and 'millisecond'", decimalStart);
+				}
+			}
+			switch(unit.toString()){
+			case "y":
+			case "yr":
+			case "year":
+				duration = duration.plus(Duration.ofSeconds((long) (value * 365.25 * 24 * 60 * 60)));
+				break;
+			case "mo":
+			case "month":
+				duration = duration.plus(Duration.ofSeconds(value * 30 * 24 * 60 * 60));
+				break;
+			case "w":
+			case "wk":
+			case "week":
+				duration = duration.plus(Duration.ofSeconds(value * 7 * 24 * 60 * 60));
+				break;
+			case "d":
+			case "dy":
+			case "day":
+				duration = duration.plus(Duration.ofSeconds(value * 24 * 60 * 60));
+				break;
+			case "h":
+			case "hr":
+			case "hour":
+				duration = duration.plus(Duration.ofSeconds(value * 60 * 60));
+				break;
+			case "m":
+			case "min":
+			case "minute":
+				duration = duration.plus(Duration.ofSeconds(value * 60));
+				break;
+			case "s":
+			case "sec":
+			case "second":
+				if (value > 0)
+					duration = duration.plus(Duration.ofSeconds(value));
+				if (!Double.isNaN(decimal))
+					duration = duration.plus(Duration.ofNanos((long) (decimal * 1000000000)));
+				break;
+			case "ms":
+			case "milli":
+			case "millisecond":
+				if (value > 0)
+					duration = duration.plus(Duration.ofNanos(value * 1000000));
+				if (!Double.isNaN(decimal))
+					duration = duration.plus(Duration.ofNanos((long) (decimal * 1000000)));
+				break;
+			case "ns":
+			case "nano":
+			case "nanosecond":
+				duration = duration.plus(Duration.ofNanos(value));
+				break;
+			}
+		}
+		if (neg)
+			duration = duration.negated();
+		return duration;
 	}
 
 	/**
@@ -613,5 +743,4 @@ public class QommonsUtils {
 		System.arraycopy(outerTrace, 0, ret, i + 1, outerTrace.length);
 		return ret;
 	}
-
 }
