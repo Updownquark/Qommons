@@ -3,7 +3,15 @@ package org.qommons;
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -532,7 +540,7 @@ public class ArgumentParsing {
          * @return Whether this constraint's argument is present (potentially with a valid value) in the argument set
          */
         public boolean isArgumentConstraintSatisfied(Arguments args){
-            return !args.getArguments(theArgument.getName()).isEmpty();
+			return args.getArguments(theArgument.getName()).stream().anyMatch(arg -> arg.isSpecified());
         }
 
         /**
@@ -2031,10 +2039,13 @@ public class ArgumentParsing {
          */
         ArgumentDef<?> getDefinition();
 
-        /**
-         * @return The matcher for the argument pattern that parsed this argument. This will be null for arguments that were not parsed from
-         *         a string, e.g. default values or unmatched arguments.
-         */
+		/** @return Whether this argument has been specified in the arguments (as opposed to just a default value) */
+		boolean isSpecified();
+
+		/**
+		 * @return The matcher for the argument pattern that parsed this argument. This will be null for arguments that were not parsed from
+		 *         a string, e.g. default values or unmatched arguments.
+		 */
         Matcher getMatcher();
 
         /** @return The name of the argument */
@@ -2056,6 +2067,11 @@ public class ArgumentParsing {
         }
         
         @Override
+		public boolean isSpecified() {
+			return theMatcher != null;
+		}
+
+		@Override
         public Matcher getMatcher() {
             return theMatcher;
         }
