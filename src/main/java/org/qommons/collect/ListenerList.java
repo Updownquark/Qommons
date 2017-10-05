@@ -28,6 +28,7 @@ public class ListenerList<E> {
 
 		private Node next;
 		private Node previous;
+		private boolean skipOne;
 
 		Node(E listener) {
 			theListener = listener;
@@ -42,26 +43,32 @@ public class ListenerList<E> {
 		}
 	}
 
+	private final ThreadLocal<Boolean> isFiring;
 	private final AtomicBoolean theLock;
 	private final Node theFirst;
 	private final Node theLast;
+	private final String theReentrancyError;
 
 	/** Creates the listener list */
-	public ListenerList() {
+	public ListenerList(String reentrancyError) {
 		theFirst = new Node(null);
 		theLast = new Node(null);
 		theFirst.next = theLast;
 		theLast.previous = theFirst;
 		theLock = new AtomicBoolean();
+		isFiring = new ThreadLocal<>();
+		theReentrancyError = reentrancyError;
 	}
 
 	/**
 	 * @param listener The listener to add
 	 * @return The action to invoke (i.e. {@link Runnable#run()}) to remove this listener
 	 */
-	public Runnable add(E listener) {
+	public Runnable add(E listener, boolean skipCurrent) {
 		Node newNode = new Node(listener);
 		newNode.next = theLast;
+		if (skipCurrent && isFiring.get() != null)
+			newNode.skipOne = true;
 		// The next part affects the list's state, so only one at a time
 		obtainLock();
 		Node oldLast = theLast.previous;
@@ -83,14 +90,21 @@ public class ListenerList<E> {
 
 	/** @param action The action to perform on each listener in this list */
 	public void forEach(Consumer<E> action) {
+		if (theReentrancyError != null && isFiring.get() != null)
+			throw new IllegalStateException(theReentrancyError);
+		isFiring.set(Boolean.TRUE);
 		Node node = theFirst.next;
 		while (node != theLast) {
-			action.accept(node.theListener);
+			if (node.skipOne)
+				node.skipOne = false;
+			else
+				action.accept(node.theListener);
 			node = node.next;
 		}
+		isFiring.remove();
 	}
 
-	/** Removes all listeners in this list */
+	/** Removes all listeners in this list. Will have no effect on any current {@link #forEach(Consumer) iterations} */
 	public void clear() {
 		obtainLock();
 		theFirst.next = theLast;
