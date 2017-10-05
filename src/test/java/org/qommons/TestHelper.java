@@ -1,6 +1,7 @@
 package org.qommons;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.time.Duration;
 import java.util.Random;
 import java.util.function.Consumer;
@@ -8,6 +9,7 @@ import java.util.regex.Pattern;
 
 import org.qommons.ArgumentParsing.ArgumentParser;
 import org.qommons.ArgumentParsing.Arguments;
+import org.qommons.io.Format;
 
 /**
  * <p>
@@ -89,54 +91,99 @@ public class TestHelper {
 	private final long theSeed;
 	private final Random theRandomness;
 	private long theBytes;
+	private long theBreak;
 
 	public TestHelper(){
-		this(Double.doubleToLongBits(Math.random()), 0);
+		this(Double.doubleToLongBits(Math.random()), 0, -1);
 	}
 
-	public TestHelper(long seed, long bytes) {
+	public TestHelper(long seed, long bytes, long breakPoint) {
 		theSeed=seed;
 		theRandomness=new Random(seed);
 		while (theBytes < bytes - 7)
 			getAnyLong();
 		while (theBytes < bytes)
-			getByte();
+			getBoolean();
+		theBreak = breakPoint < 0 ? Long.MAX_VALUE : breakPoint;
 	}
 
-	public TestHelper fork() {}
+	private void getBytes(int bytes) {
+		boolean postBreak = theBytes >= theBreak;
+		theBytes += bytes;
+		if (!postBreak && theBytes >= theBreak)
+			BreakpointHere.breakpoint();
+	}
 
-	public void placemark() {}
+	public long getSeed() {
+		return theSeed;
+	}
 
-	public TestHelper tolerate(Duration timeout) {}
+	public long getPosition() {
+		return theBytes;
+	}
 
-	public int getAnyInt() {}
+	public TestHelper fork() {
+		long forkSeed = getAnyLong();
+		return new TestHelper(forkSeed, 0, -1);
+	}
 
-	public int getInt(int min, int max) {}
+	public void placemark() {
+		getBytes(1);
+	}
 
-	public long getAnyLong() {}
+	public TestHelper tolerate(Duration timeout) {
+		return this;
+	}
 
-	public long getLong(long min, long max) {}
+	public int getAnyInt() {
+		getBytes(4);
+		return theRandomness.nextInt();
+	}
 
-	public double getDouble() {}
+	public int getInt(int min, int max) {
+		return min + Math.abs(getAnyInt() % (max - min));
+	}
 
-	public double getGaussian() {}
+	public long getAnyLong() {
+		getBytes(8);
+		return theRandomness.nextLong();
+	}
 
-	public double getAnyDouble() {}
+	public long getLong(long min, long max) {
+		return min + Math.abs(getAnyLong() % (max - min));
+	}
 
-	public double getDouble(double min, double max) {}
+	public double getDouble() {
+		getBytes(8);
+		return theRandomness.nextDouble();
+	}
 
-	public boolean getBoolean() {}
+	public double getGaussian() {
+		getBytes(8);
+		return theRandomness.nextGaussian();
+	}
 
-	public byte getByte() {}
+	public double getAnyDouble() {
+		return Double.longBitsToDouble(getAnyLong());
+	}
+
+	public double getDouble(double min, double max) {
+		return min + getDouble() * (max - min);
+	}
+
+	public boolean getBoolean() {
+		getBytes(1);
+		return theRandomness.nextBoolean();
+	}
 
 	public static void main(String[] args) {
 		ArgumentParser parser = new ArgumentParser()//
 			.forDefaultFlagPattern()//
-			/**/.flagArg("random").requiredIfNot("reproduce")//
-			/**/.flagArg("reproduce").requiredIfNot("random")//
+			/**/.flagArg("random").requiredIfNot("reproduce").requiresNot("reproduce")//
+			/**/.flagArg("reproduce").requiredIfNot("random").requiresNot("random")//
 			/**/.flagArg("debug").requires("reproduce")//
 			/**/
-			.forDefaultValuePattern()//
+			.forDefaultPattern()//
 			/**/.stringArg("test-class").required()//
 			/**/.durationArg("hold-time").defValue(Duration.ofSeconds(60))//
 			/**/.intArg("max-cases").requires("random").atLeast(1)//
@@ -154,6 +201,9 @@ public class TestHelper {
 		} catch (ClassNotFoundException e) {
 			System.err.println("Test class " + parsed.getString("test-class") + " not found");
 			e.printStackTrace();
+			return;
+		} catch (ClassCastException e) {
+			System.err.println("Test class " + parsed.getString("test-class") + " is not " + Testable.class.getName());
 			return;
 		}
 		Constructor<? extends Testable> creator;
@@ -183,5 +233,38 @@ public class TestHelper {
 		 * put the file in there, named fully.qualified.ClassName.test.xml.
 		 *
 		 */
+		if (parsed.hasFlag("random")) {
+			int maxTries = (int) parsed.getInt("max-cases", Integer.MAX_VALUE);
+			for (int i = 0; i < maxTries && doTest(creator, new TestHelper(), -1); i++) {}
+		} else {
+			long debugAt = parsed.get("debug-at") != null ? parsed.getLong("debug-at") : -1;
+			for (String hash : parsed.getAll("hash", String.class))
+				doTest(creator, new TestHelper(Long.parseLong(hash, 16), 0, debugAt), debugAt);
+		}
+	}
+
+	private static boolean doTest(Constructor<? extends Testable> creator, TestHelper testHelper, long debugAt) {
+		Testable tester;
+		try {
+			tester = creator.newInstance();
+		} catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+			throw new IllegalStateException("Could not instantiate tester " + creator.getDeclaringClass().getName(), e);
+		}
+		System.out.print(Long.toHexString(testHelper.getSeed()).toUpperCase() + ": ");
+		System.out.flush();
+		long start = System.nanoTime();
+		try {
+			tester.accept(testHelper);
+			System.out.println("SUCCESS in " + Format.durationFormat().format(Duration.ofNanos(System.nanoTime() - start)));
+			return true;
+		} catch (AssertionError e) {
+			System.err.println("FAILURE@" + testHelper.getPosition() + " in "
+				+ Format.durationFormat().format(Duration.ofNanos(System.nanoTime() - start)));
+			e.printStackTrace();
+			return false;
+		} catch (Throwable e) {
+			e.printStackTrace();
+			return false;
+		}
 	}
 }
