@@ -475,6 +475,8 @@ public class RedBlackNode<E> {
 	 * @return The new root of this node's structure
 	 */
 	public RedBlackNode<E> delete() {
+		theRemovedIndex = getNodesBefore(() -> true);
+
 		// First let's link up the next and previous fields
 		if (theNext != null)
 			theNext.thePrevious = thePrevious;
@@ -492,8 +494,6 @@ public class RedBlackNode<E> {
 			replacement = theLeft;
 		else if(theRight != null)
 			replacement = theRight;
-
-		theRemovedIndex = getNodesBefore(() -> true);
 
 		RedBlackNode<E> newRoot;
 		if(replacement != null) {

@@ -1,7 +1,11 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.NavigableSet;
+import java.util.Objects;
 import java.util.function.Consumer;
 
 import org.qommons.Ternian;
@@ -65,6 +69,11 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 					return ssf;
 			throw new IllegalArgumentException("No such filter exists");
 		}
+	}
+
+	@Override
+	default boolean isContentControlled() {
+		return true;
 	}
 
 	@Override

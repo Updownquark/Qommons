@@ -1,6 +1,12 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.ConcurrentModificationException;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -418,6 +424,11 @@ public class CircularArrayList<E> implements BetterList<E> {
 	@Override
 	public long getStamp(boolean structuralOnly) {
 		return theLocker.getStatus(structuralOnly);
+	}
+
+	@Override
+	public boolean isContentControlled() {
+		return false;
 	}
 
 	@Override

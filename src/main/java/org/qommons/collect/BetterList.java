@@ -52,6 +52,15 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	}
 
 	/**
+	 * Although the contract of {@link List} states that the user (dev) has complete control over the content and placement of elements in a
+	 * list, a BetterList may, in fact, only be index-accessible. BetterCollection implementations can implement BetterList if their
+	 * elements are stored in such a way as to be index-accessible efficiently, even if they do not allow List-style complete control
+	 * 
+	 * @return Whether this list has constraints on its content or placement
+	 */
+	boolean isContentControlled();
+
+	/**
 	 * @param id The element
 	 * @return The number of elements in this collection positioned before the given element
 	 */
@@ -316,6 +325,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
+		public boolean isContentControlled() {
+			return getWrapped().isContentControlled();
+		}
+
+		@Override
 		public CollectionElement<E> getElement(int index) {
 			try (Transaction t = lock(false, null)) {
 				return getWrapped().getElement(reflect(index, false)).reverse();
@@ -346,6 +360,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	}
 
 	class EmptyList<E> extends EmptyCollection<E> implements BetterList<E> {
+		@Override
+		public boolean isContentControlled() {
+			return true;
+		}
+
 		@Override
 		public CollectionElement<E> getElement(int index) {
 			throw new IndexOutOfBoundsException(index + " of 0");
@@ -531,6 +550,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			if (structuralOnly && theStructureStamp != stamp)
 				throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
 			return stamp;
+		}
+
+		@Override
+		public boolean isContentControlled() {
+			return theWrapped.isContentControlled();
 		}
 
 		@Override
@@ -980,6 +1004,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public long getStamp(boolean structuralOnly) {
 			return 0;
+		}
+
+		@Override
+		public boolean isContentControlled() {
+			return true;
 		}
 
 		@Override

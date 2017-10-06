@@ -9,6 +9,7 @@ import java.util.Map;
 
 import org.junit.Test;
 import org.qommons.QommonsTestUtils;
+import org.qommons.TestHelper;
 
 /** Runs tests on the red-black tree structures behind the ObServe tree collections */
 public class TreeUtilsTest {
@@ -96,7 +97,9 @@ public class TreeUtilsTest {
 	@Test
 	public void testTreeSet() {
 		BetterTreeSet<Integer> set = new BetterTreeSet<>(false, Integer::compareTo);
-		testCollection(set, s -> s.checkValid(), null);
+		TestHelper.testSingle(//
+			helper -> testCollection(set, s -> s.checkValid(), null, helper), //
+			1, -1);
 	}
 
 	/**
@@ -121,13 +124,15 @@ public class TreeUtilsTest {
 	@Test
 	public void testTreeList() {
 		BetterTreeList<Integer> list = new BetterTreeList<>(false);
-		testCollection(list, l -> list.checkValid(), null);
+		TestHelper.testSingle(helper -> {
+			testCollection(list, l -> list.checkValid(), null, helper);
 
-		// I want the tree list to tolerate appending to the list during iteration.
-		// In particular, I want to make sure that if a value is added to the list on the last value iterated, then the iteration will
-		// continue with the new value. This property is important for the listener list in SimpleObservable
-		testIterationAdd(list);
-		testIterationAdd(new BetterTreeList<>(true));
+			// I want the tree list to tolerate appending to the list during iteration.
+			// In particular, I want to make sure that if a value is added to the list on the last value iterated, then the iteration will
+			// continue with the new value. This property is important for the listener list in SimpleObservable
+			testIterationAdd(list);
+			testIterationAdd(new BetterTreeList<>(true));
+		}, 1, -1);
 	}
 
 	private void testIterationAdd(BetterTreeList<Integer> list) {

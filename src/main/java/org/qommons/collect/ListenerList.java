@@ -90,9 +90,11 @@ public class ListenerList<E> {
 
 	/** @param action The action to perform on each listener in this list */
 	public void forEach(Consumer<E> action) {
-		if (theReentrancyError != null && isFiring.get() != null)
+		boolean isReentrant = isFiring.get() != null;
+		if (theReentrancyError != null && isReentrant)
 			throw new IllegalStateException(theReentrancyError);
-		isFiring.set(Boolean.TRUE);
+		if (!isReentrant)
+			isFiring.set(Boolean.TRUE);
 		Node node = theFirst.next;
 		while (node != theLast) {
 			if (node.skipOne)
@@ -101,7 +103,8 @@ public class ListenerList<E> {
 				action.accept(node.theListener);
 			node = node.next;
 		}
-		isFiring.remove();
+		if (!isReentrant)
+			isFiring.remove();
 	}
 
 	/** Removes all listeners in this list. Will have no effect on any current {@link #forEach(Consumer) iterations} */

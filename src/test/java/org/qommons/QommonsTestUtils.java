@@ -29,6 +29,7 @@ import java.util.function.Function;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.qommons.collect.BetterCollection;
+import org.qommons.collect.BetterList;
 import org.qommons.collect.ElementSpliterator;
 
 /** Testing utilities */
@@ -43,10 +44,11 @@ public class QommonsTestUtils {
 	 * @param coll The collection to test
 	 * @param check An optional check to run against the collection after every modification
 	 * @param checkGenerator Generates additional checks against collections
+	 * @param helper The test helper to assist in debugging
 	 */
 	public static <T extends Collection<Integer>> void testCollection(T coll, Consumer<? super T> check,
-			Function<? super T, Consumer<? super T>> checkGenerator) {
-		testCollection(coll, check, checkGenerator, 0);
+		Function<? super T, Consumer<? super T>> checkGenerator, TestHelper helper) {
+		testCollection(coll, check, checkGenerator, 0, helper);
 	}
 
 	/**
@@ -57,9 +59,10 @@ public class QommonsTestUtils {
 	 * @param check An optional check to run against the collection after every modification
 	 * @param checkGenerator Generates additional checks against collections
 	 * @param depth The current recursive testing depth
+	 * @param helper The test helper to assist in debugging
 	 */
 	public static <T extends Collection<Integer>> void testCollection(T coll, Consumer<? super T> check,
-			Function<? super T, Consumer<? super T>> checkGenerator, int depth) {
+		Function<? super T, Consumer<? super T>> checkGenerator, int depth, TestHelper helper) {
 		if (depth > COLLECTION_TEST_DEPTH)
 			return;
 		if (checkGenerator != null) {
@@ -142,17 +145,17 @@ public class QommonsTestUtils {
 			check = rCheck;
 		}
 		if (coll instanceof NavigableSet)
-			testSortedSet((NavigableSet<Integer>) coll, (Consumer<? super NavigableSet<Integer>>) check);
+			testSortedSet((NavigableSet<Integer>) coll, (Consumer<? super NavigableSet<Integer>>) check, helper);
 		else if (coll instanceof Set)
-			testSet((Set<Integer>) coll, (Consumer<? super Set<Integer>>) check);
-		else if (coll instanceof List)
-			testList((List<Integer>) coll, (Consumer<? super List<Integer>>) check, depth);
+			testSet((Set<Integer>) coll, (Consumer<? super Set<Integer>>) check, helper);
+		else if (coll instanceof List && (!(coll instanceof BetterList) || !((BetterList<?>) coll).isContentControlled()))
+			testList((List<Integer>) coll, (Consumer<? super List<Integer>>) check, depth, helper);
 		else
-			testBasicCollection(coll, check);
+			testBasicCollection(coll, check, helper);
 
 		Consumer<? super T> fCheck = check;
 		for (Collection<Integer> d : derived) {
-			testCollection(d, c -> fCheck.accept(coll), null, depth + 1);
+			testCollection(d, c -> fCheck.accept(coll), null, depth + 1, helper);
 		}
 	}
 
@@ -164,9 +167,10 @@ public class QommonsTestUtils {
 	 * @param check An optional function to apply after each collection modification to ensure the structure of the collection is correct
 	 *        and potentially assert other side effects of collection modification
 	 */
-	private static <T extends Collection<Integer>> void testBasicCollection(T coll, Consumer<? super T> check) {
+	private static <T extends Collection<Integer>> void testBasicCollection(T coll, Consumer<? super T> check, TestHelper helper) {
 		// Most basic functionality, with iterator
 		assertEquals(0, coll.size()); // Start with empty list
+		helper.placemark();
 		assertTrue(coll.add(0)); // Test add
 		assertEquals(1, coll.size()); // Test size
 		if (check != null)
@@ -178,6 +182,7 @@ public class QommonsTestUtils {
 		iter = coll.iterator();
 		assertEquals(true, iter.hasNext());
 		assertEquals(0, (int) iter.next());
+		helper.placemark();
 		iter.remove(); // Test iterator remove
 		assertEquals(0, coll.size());
 		if (check != null)
@@ -185,12 +190,14 @@ public class QommonsTestUtils {
 		assertEquals(false, iter.hasNext());
 		iter = coll.iterator();
 		assertEquals(false, iter.hasNext());
+		helper.placemark();
 		assertTrue(coll.add(0));
 		assertEquals(1, coll.size());
 		assertFalse(coll.isEmpty());
 		if (check != null)
 			check.accept(coll);
 		assertThat(coll, contains(0)); // Test contains
+		helper.placemark();
 		assertTrue(coll.remove(0)); // Test remove
 		assertFalse(coll.remove(0));
 		assertTrue(coll.isEmpty()); // Test isEmpty
@@ -199,6 +206,7 @@ public class QommonsTestUtils {
 		assertThat(coll, not(contains(0)));
 
 		ArrayList<Integer> toAdd = new ArrayList<>();
+		helper.placemark();
 		for (int i = 0; i < 50; i++)
 			toAdd.add(i);
 		for (int i = 99; i >= 50; i--)
@@ -209,6 +217,7 @@ public class QommonsTestUtils {
 			check.accept(coll);
 		assertThat(coll, //
 			containsAll(0, 75, 50, 11, 99, 50)); // 50 twice. Test containsAll
+		helper.placemark();
 		assertTrue(coll.removeAll( // Easier to debug this way
 			asList(0, 50, 100, 10, 90, 20, 80, 30, 70, 40, 60, 50))); // 100 not in coll. 50 in list twice. Test removeAll
 		assertEquals(90, coll.size());
@@ -232,6 +241,7 @@ public class QommonsTestUtils {
 		assertThat(copy, collectionsEqual(coll, coll instanceof List));
 
 		assertThat(coll, containsAll(1, 2, 11, 99));
+		helper.placemark();
 		coll.retainAll(
 				// Easier to debug this way
 				asList(1, 51, 101, 11, 91, 21, 81, 31, 71, 41, 61, 51)); // 101 not in coll. 51 in list twice. Test retainAll.
@@ -239,6 +249,7 @@ public class QommonsTestUtils {
 		if (check != null)
 			check.accept(coll);
 		assertThat(coll, not(containsAll(1, 2, 11, 99)));
+		helper.placemark();
 		coll.clear(); // Test clear
 		assertEquals(0, coll.size());
 		if (check != null)
@@ -247,32 +258,37 @@ public class QommonsTestUtils {
 		// Leave the collection empty
 	}
 
-	private static <T extends Set<Integer>> void testSet(T set, Consumer<? super T> check) {
-		testBasicCollection(set, check);
+	private static <T extends Set<Integer>> void testSet(T set, Consumer<? super T> check, TestHelper helper) {
+		testBasicCollection(set, check, helper);
 
+		helper.placemark();
 		assertTrue(set.add(0));
 		assertEquals(1, set.size());
 		if (check != null)
 			check.accept(set);
+		helper.placemark();
 		assertTrue(set.add(1));
 		assertEquals(2, set.size());
 		if (check != null)
 			check.accept(set);
+		helper.placemark();
 		assertFalse(set.add(0)); // Test uniqueness
 		assertEquals(2, set.size());
 		if (check != null)
 			check.accept(set);
+		helper.placemark();
 		assertTrue(set.remove(0));
 		assertEquals(1, set.size());
 		if (check != null)
 			check.accept(set);
+		helper.placemark();
 		set.clear();
 		assertEquals(0, set.size());
 		if (check != null)
 			check.accept(set);
 	}
 
-	private static <T extends NavigableSet<Integer>> void testSortedSet(T set, Consumer<? super T> check) {
+	private static <T extends NavigableSet<Integer>> void testSortedSet(T set, Consumer<? super T> check, TestHelper helper) {
 		testSet(set, coll -> {
 			Comparator<? super Integer> comp = set.comparator();
 			Integer last = null;
@@ -284,10 +300,11 @@ public class QommonsTestUtils {
 
 			if (check != null)
 				check.accept(coll);
-		});
+		}, helper);
 
 		boolean reversed = set.comparator().compare(1, 2) > 0;
 		// Test the special find methods of NavigableSet
+		helper.placemark();
 		set.addAll(sequence(30, v -> v * 2, true));
 		assertEquals(30, set.size());
 		if (check != null)
@@ -300,18 +317,22 @@ public class QommonsTestUtils {
 		assertEquals((Integer) 16, reversed ? set.floor(15) : set.ceiling(15));
 		assertEquals((Integer) 16, reversed ? set.ceiling(16) : set.floor(16));
 		assertEquals((Integer) 16, reversed ? set.floor(16) : set.ceiling(16));
+		helper.placemark();
 		assertEquals((Integer) 0, reversed ? set.pollLast() : set.pollFirst());
 		assertEquals(29, set.size());
 		if (check != null)
 			check.accept(set);
+		helper.placemark();
 		assertEquals((Integer) 58, reversed ? set.pollFirst() : set.pollLast());
 		assertEquals(28, set.size());
 		if (check != null)
 			check.accept(set);
+		helper.placemark();
 		assertEquals((Integer) 2, reversed ? set.pollLast() : set.pollFirst());
 		assertEquals(27, set.size());
 		if (check != null)
 			check.accept(set);
+		helper.placemark();
 		assertEquals((Integer) 56, reversed ? set.pollFirst() : set.pollLast());
 		assertEquals(26, set.size());
 		if (check != null)
@@ -336,22 +357,22 @@ public class QommonsTestUtils {
 		NavigableSet<Integer> subSet = (NavigableSet<Integer>) set.headSet(30);
 		NavigableSet<Integer> copySubSet = (NavigableSet<Integer>) copy.headSet(30);
 		assertThat(subSet, collectionsEqual(copySubSet, true));
-		testSubSet(subSet, null, true, 30, false, reversed, ssListener);
+		testSubSet(subSet, null, true, 30, false, reversed, ssListener, helper);
 
 		subSet = set.headSet(30, true);
 		copySubSet = copy.headSet(30, true);
 		assertThat(subSet, collectionsEqual(copySubSet, true));
-		testSubSet(subSet, null, true, 30, true, reversed, ssListener);
+		testSubSet(subSet, null, true, 30, true, reversed, ssListener, helper);
 
 		subSet = (NavigableSet<Integer>) set.tailSet(30);
 		copySubSet = (NavigableSet<Integer>) copy.tailSet(30);
 		assertThat(subSet, collectionsEqual(copySubSet, true));
-		testSubSet(subSet, 30, true, null, true, reversed, ssListener);
+		testSubSet(subSet, 30, true, null, true, reversed, ssListener, helper);
 
 		subSet = set.tailSet(30, false);
 		copySubSet = copy.tailSet(30, false);
 		assertThat(subSet, collectionsEqual(copySubSet, true));
-		testSubSet(subSet, 30, false, null, true, reversed, ssListener);
+		testSubSet(subSet, 30, false, null, true, reversed, ssListener, helper);
 
 		ssListener.accept(set);
 
@@ -364,18 +385,18 @@ public class QommonsTestUtils {
 		}
 		assertThat(subSet, collectionsEqual(copySubSet, true));
 		if (reversed)
-			testSubSet(subSet, 45, true, 15, false, reversed, ssListener);
+			testSubSet(subSet, 45, true, 15, false, reversed, ssListener, helper);
 		else
-			testSubSet(subSet, 15, true, 45, false, reversed, ssListener);
+			testSubSet(subSet, 15, true, 45, false, reversed, ssListener, helper);
 		set.clear();
 	}
 
 	private static void testSubSet(NavigableSet<Integer> subSet, Integer min, boolean minInclude, Integer max, boolean maxInclude,
-		boolean reversed,
-			Consumer<? super NavigableSet<Integer>> check) {
+		boolean reversed, Consumer<? super NavigableSet<Integer>> check, TestHelper helper) {
 		int startSize = subSet.size();
 		int size = startSize;
 		ArrayList<Integer> remove = new ArrayList<>();
+		helper.placemark();
 		if (min != null) {
 			if (minInclude) {
 				if (!subSet.contains(min)) {
@@ -400,6 +421,7 @@ public class QommonsTestUtils {
 			assertEquals(size, subSet.size());
 			check.accept(subSet);
 		}
+		helper.placemark();
 		if (max != null) {
 			if (maxInclude) {
 				if (!subSet.contains(max)) {
@@ -426,34 +448,40 @@ public class QommonsTestUtils {
 		}
 		remove.add(Integer.MIN_VALUE);
 		remove.add(Integer.MAX_VALUE);
+		helper.placemark();
 		subSet.removeAll(remove);
 		assertEquals(startSize, subSet.size());
 		check.accept(subSet);
 	}
 
-	private static <T extends List<Integer>> void testList(T list, Consumer<? super T> check, int depth) {
-		testBasicCollection(list, check);
+	private static <T extends List<Integer>> void testList(T list, Consumer<? super T> check, int depth, TestHelper helper) {
+		testBasicCollection(list, check, helper);
 
+		helper.placemark();
 		assertTrue(list.addAll(
 				// Easier to debug this way
 				sequence(10, null, false)));
 		assertEquals(10, list.size());
 		if (check != null)
 			check.accept(list);
+		helper.placemark();
 		assertTrue(list.add(0)); // Test non-uniqueness
 		assertEquals(11, list.size());
 		if (check != null)
 			check.accept(list);
+		helper.placemark();
 		assertEquals((Integer) 0, list.remove(10));
 		assertEquals(10, list.size());
 		if (check != null)
 			check.accept(list);
+		helper.placemark();
 		assertTrue(list.addAll(
 				// Easier to debug this way
 				sequence(10, v -> v + 20, false)));
 		assertEquals(20, list.size());
 		if (check != null)
 			check.accept(list);
+		helper.placemark();
 		assertTrue(list.addAll(10,
 				// Easier to debug this way
 				sequence(10, v -> v + 10, false))); // Test addAll at index
@@ -464,6 +492,7 @@ public class QommonsTestUtils {
 			assertEquals((Integer) i, list.get(i)); // Test get
 
 		// Test range checks
+		helper.placemark();
 		try {
 			list.remove(-1);
 			assertTrue("List should have thrown out of bounds exception", false);
@@ -497,12 +526,14 @@ public class QommonsTestUtils {
 
 		for (int i = 0; i < 30; i++)
 			assertEquals(i, list.indexOf(i)); // Test indexOf
+		helper.placemark();
 		list.add(0);
 		list.add(1);
 		if (check != null)
 			check.accept(list);
 		assertEquals(0, list.indexOf(0)); // Test indexOf with duplicate values
 		assertEquals(30, list.lastIndexOf(0)); // Test lastIndexOf
+		helper.placemark();
 		list.remove(31);
 		list.remove(30);
 		for (int i = 0; i < 30; i++) {
@@ -515,15 +546,18 @@ public class QommonsTestUtils {
 			assertEquals(30 - i - 1, list.indexOf(i));
 		if (check != null)
 			check.accept(list);
+		helper.placemark();
 		for (int i = 0; i < 30; i++) {
 			assertEquals((Integer) (30 - i - 1), list.set(i, 30 - i - 1));
 			if (check != null)
 				check.accept(list);
 		}
+		helper.placemark();
 		assertTrue(list.remove((Integer) 10));
 		assertEquals(29, list.size());
 		if (check != null)
 			check.accept(list);
+		helper.placemark();
 		list.add(10, 10); // Test add at index
 		assertEquals(30, list.size());
 		if (check != null)
@@ -586,6 +620,7 @@ public class QommonsTestUtils {
 			assertEquals("On Iteration " + i, listIter2.nextIndex(), listIter1.nextIndex());
 			switch (i % 4) {
 			case 0:
+				helper.placemark();
 				int toAdd = i * 17 + 100;
 				listIter1.add(toAdd);
 				listIter2.add(toAdd);
@@ -600,12 +635,16 @@ public class QommonsTestUtils {
 				listIter2.previous();
 				break;
 			case 1:
+				helper.placemark();
 				listIter1.remove();
 				listIter2.remove();
 				break;
 			case 2:
+				helper.placemark();
 				listIter1.set(prev + 50);
 				listIter2.set(prev + 50);
+				break;
+			case 3: // Do nothing for this case
 				break;
 			}
 			assertEquals("On Iteration " + i, //
@@ -622,6 +661,7 @@ public class QommonsTestUtils {
 			assertThat("On Iteration " + i, next, equalTo(listIter2.next()));
 			switch (i % 4) {
 			case 0:
+				helper.placemark();
 				int toAdd = i * 53 + 1000;
 				listIter1.add(toAdd);
 				listIter2.add(toAdd);
@@ -630,12 +670,16 @@ public class QommonsTestUtils {
 				listIter1.next();
 				break;
 			case 1:
+				helper.placemark();
 				listIter1.remove();
 				listIter2.remove();
 				break;
 			case 2:
+				helper.placemark();
 				listIter1.set(next + 1000);
 				listIter2.set(next + 1000);
+				break;
+			case 3: // Do nothing for this case
 				break;
 			}
 			assertThat("On Iteration " + i, list, equalTo(test));
@@ -643,11 +687,13 @@ public class QommonsTestUtils {
 				check.accept(list);
 		}
 
+		helper.placemark();
 		list.clear();
 		if (check != null)
 			check.accept(list);
 		if (depth + 1 < COLLECTION_TEST_DEPTH) {
 			// Test subList
+			helper.placemark();
 			list.addAll(sequence(30, null, false));
 			if (check != null)
 				check.accept(list);
@@ -659,15 +705,18 @@ public class QommonsTestUtils {
 			i = 0;
 			for (Integer el : subList)
 				assertEquals((Integer) (subIndex + i++), el);
+			helper.placemark();
 			subList.remove(0);
 			assertEquals(4, subList.size());
 			assertThat(list, not(contains(subIndex)));
 			if (check != null)
 				check.accept(list);
+			helper.placemark();
 			subList.add(0, subIndex);
 			assertThat(list, contains(subIndex));
 			if (check != null)
 				check.accept(list);
+			helper.placemark();
 			try {
 				subList.remove(-1);
 				assertTrue("SubList should have thrown out of bounds exception", false);
@@ -680,6 +729,7 @@ public class QommonsTestUtils {
 			}
 			assertEquals(30, list.size());
 			assertEquals(5, subList.size());
+			helper.placemark();
 			subList.clear();
 			assertEquals(25, list.size());
 			assertEquals(0, subList.size());
@@ -698,8 +748,9 @@ public class QommonsTestUtils {
 				}
 				if (check != null)
 					check.accept(list);
-			} , null, depth + 1);
+			}, null, depth + 1, helper);
 		}
+		helper.placemark();
 		list.clear();
 		assertEquals(0, list.size());
 		if (check != null)

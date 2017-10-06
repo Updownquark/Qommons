@@ -2471,10 +2471,18 @@ public class ArgumentParsing {
         }
 
         /**
-         * @param argName
-         *            The name of the argument to get
-         * @return The value of the first argument with the given name
-         */
+		 * @param argName The name of the argument to get
+		 * @param def The value to return if no such argument exists in this set
+		 * @return The value of the first argument with the given name, as a floating-point number
+		 */
+		public Duration getDuration(String argName, Duration def) {
+			return get(argName, def);
+		}
+
+		/**
+		 * @param argName The name of the argument to get
+		 * @return The value of the first argument with the given name
+		 */
         public File getFile(String argName) {
             return (File) get(argName);
         }

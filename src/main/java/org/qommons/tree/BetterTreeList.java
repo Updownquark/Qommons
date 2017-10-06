@@ -20,6 +20,11 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 		super(locking);
 	}
 
+	@Override
+	public boolean isContentControlled() {
+		return false;
+	}
+
 	// The structure doesn't mean anything except order, so if someone wants to mess with it, they can go right ahead
 
 	@Override

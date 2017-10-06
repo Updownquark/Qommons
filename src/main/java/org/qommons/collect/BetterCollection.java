@@ -153,9 +153,10 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	@Override
 	default boolean addAll(Collection<? extends E> c) {
 		try (Transaction t = lock(true, null); Transaction ct = Transactable.lock(c, false, null)) {
+			boolean changed = false;
 			for (E e : c)
-				add(e);
-			return !c.isEmpty();
+				changed |= add(e);
+			return changed;
 		}
 	}
 

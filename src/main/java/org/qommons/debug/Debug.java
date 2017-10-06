@@ -191,6 +191,11 @@ public class Debug {
 		return this;
 	}
 
+	public void debugIf(boolean condition) {
+		if (condition)
+			BreakpointHere.breakpoint();
+	}
+
 	@Override
 	public String toString() {
 		return "Debug Singleton";

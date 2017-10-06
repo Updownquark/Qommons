@@ -1,5 +1,8 @@
 package org.qommons;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Scanner;
 import java.util.Set;
 
@@ -12,6 +15,14 @@ public class BreakpointHere {
 	private static boolean IGNORE_ALL;
 	private static final Set<String> IGNORING_CLASSES = new java.util.LinkedHashSet<>();
 	private static final Set<StackTraceElement> IGNORING_LOCATIONS = new java.util.LinkedHashSet<>();
+	private static final Map<String, IgnoreType> CLI_IGNORE;
+	static {
+		Map<String, IgnoreType> cliIgnore = new LinkedHashMap<>();
+		cliIgnore.put("l", IgnoreType.LOCAL);
+		cliIgnore.put("c", IgnoreType.CLASS);
+		cliIgnore.put("a", IgnoreType.ALL);
+		CLI_IGNORE = Collections.unmodifiableMap(cliIgnore);
+	}
 
 	private static enum IgnoreType {
 		/** Does nothing */
@@ -55,6 +66,7 @@ public class BreakpointHere {
 		IgnoreType ignore = null;
 		do {
 			long pre = System.nanoTime();
+			ignore = IgnoreType.NONE;
 
 
 
@@ -72,8 +84,7 @@ public class BreakpointHere {
 			/*         /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ */
 			// Good. If you're here, press step return now.
 
-			// Or you can choose to ignore this breakpoint or others like it in the future by changing the value of this variable
-			ignore = IgnoreType.NONE;
+			// Or you can choose to ignore this breakpoint or others like it in the future by changing the value the ignore variable
 
 
 
@@ -89,11 +100,11 @@ public class BreakpointHere {
 					System.err.println("No break point is set at this location. You may:");
 					System.err.println(" 1) Install a breakpoint at " + stackTop + ". We'll wait for you.");
 					System.err.println(" 2) Press ENTER to skip the breakpoint and return control to the application this time.");
-					System.err.println(" 3) Type \"ignore local\" and press ENTER to ignore this particular break point (" + source
+					System.err.println(" 3) Type \"L\" and press ENTER to ignore this particular break point (" + source
 						+ ") for this session.");
-					System.err.println(" 4) Type \"ignore class\" and press ENTER to ignore all break points"
+					System.err.println(" 4) Type \"C\" and press ENTER to ignore all break points"
 						+ " from the class that is requesting this break (" + source.getClassName() + ") for this session.");
-					System.err.println(" 5) Type \"ignore all\" and press ENTER to ignore all break points for this session.");
+					System.err.println(" 5) Type \"A\" and press ENTER to ignore all break points for this session.");
 
 					scanner = new Scanner(System.in);
 				}
@@ -110,15 +121,9 @@ public class BreakpointHere {
 					String userEntry = scanner.nextLine().trim();
 					if(userEntry.length()==0)
 						break;
-					if(!userEntry.startsWith("ignore ")) {
-						System.err.println("Type \"ignore local\", \"ignore class\", \"ignore all\", or just press ENTER");
-						continue;
-					}
-					userEntry = userEntry.substring("ignore ".length());
-					try {
-						ignore = IgnoreType.valueOf(userEntry.toUpperCase());
-					} catch(IllegalArgumentException e) {
-						System.err.println("Type \"ignore local\", \"ignore class\", \"ignore all\", or just press ENTER");
+					ignore = CLI_IGNORE.get(userEntry.toLowerCase());
+					if (ignore == null) {
+						System.err.println("Type \"L\", \"C\", \"A\", or just press ENTER");
 						continue;
 					}
 					break;

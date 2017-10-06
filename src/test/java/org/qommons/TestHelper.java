@@ -3,6 +3,7 @@ package org.qommons;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Random;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
@@ -94,11 +95,11 @@ public class TestHelper {
 	private long theLastPlacemark;
 	private long theBreak;
 
-	public TestHelper(){
+	private TestHelper() {
 		this(Double.doubleToLongBits(Math.random()), 0, -1);
 	}
 
-	public TestHelper(long seed, long bytes, long breakPoint) {
+	private TestHelper(long seed, long bytes, long breakPoint) {
 		theSeed=seed;
 		theRandomness=new Random(seed);
 		while (theBytes < bytes - 7)
@@ -134,7 +135,7 @@ public class TestHelper {
 	}
 
 	public void placemark() {
-		getAnyInt();
+		getBoolean();
 		theLastPlacemark = theBytes;
 	}
 
@@ -180,7 +181,9 @@ public class TestHelper {
 
 	public boolean getBoolean() {
 		getBytes(1);
-		return theRandomness.nextBoolean();
+		byte[] bytes = new byte[1];
+		theRandomness.nextBytes(bytes);
+		return bytes[0] >= 0;
 	}
 
 	public static void main(String[] args) {
@@ -197,7 +200,7 @@ public class TestHelper {
 			/**/.durationArg("max-time").requires("random")//
 			/**/.intArg("max-failures").requires("random").atLeast(1)//
 			/**/.booleanArg("only-new").requires("random").defValue(true)//
-			/**/.intArg("debug-at").atLeast(0)//
+			/**/.intArg("debug-at").requires("random").atLeast(0)//
 			.forDefaultMultiValuePattern()//
 			/**/.patternArg("hash", Pattern.compile("[0-9a-fA-F]{16}"))//
 			.getParser();
@@ -213,7 +216,78 @@ public class TestHelper {
 			System.err.println("Test class " + parsed.getString("test-class") + " is not " + Testable.class.getName());
 			return;
 		}
-		Constructor<? extends Testable> creator;
+		Constructor<? extends Testable> creator = getCreator(testable);
+
+		/* TODO Append broken test cases to a file. Remove fixed test cases.
+		 * Attempt to co-locate this file with the class being tested.
+		 * If co-located, the file should be the simple name of the class.broken.
+		 * Otherwise make a sub-dir called testhelper under the current working dir and
+		 * put the file in there, named fully.qualified.ClassName.broken. */
+		if (parsed.hasFlag("random")) {
+			testRandom(testable, //
+				(int) parsed.getInt("max-cases", Integer.MAX_VALUE), //
+				(int) parsed.getInt("max-failures", Integer.MAX_VALUE), //
+				parsed.getDuration("max-time", null), true, true, false);
+		} else {
+			long debugAt = parsed.get("debug-at") != null ? parsed.getLong("debug-at") : -1;
+			int i = 0;
+			for (String hash : parsed.getAll("hash", String.class))
+				doTest(creator, new TestHelper(Long.parseLong(hash, 16), 0, debugAt), ++i, true, true);
+		}
+	}
+
+	public static int testRandom(Class<? extends Testable> testable, int maxCases, int maxFailures, Duration maxTime, boolean printProgress,
+		boolean printFalures, boolean throwOnFailure) throws AssertionError {
+		Constructor<? extends Testable> creator = getCreator(testable);
+		if (maxCases <= 0)
+			maxCases = Integer.MAX_VALUE;
+		if (maxFailures <= 0)
+			maxFailures = Integer.MAX_VALUE;
+		Instant termination = maxTime == null ? Instant.MAX : Instant.now().plus(maxTime);
+		int failures = 0;
+		Throwable firstError = null;
+		for (int i = 0; i < maxCases && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
+			Throwable err = doTest(creator, new TestHelper(), i + 1, printProgress, printFalures);
+			if (err != null) {
+				if (firstError == null)
+					firstError = err;
+				failures++;
+			}
+		}
+		if (throwOnFailure && failures > 0) {
+			if (firstError instanceof AssertionError)
+				throw (AssertionError) firstError;
+			throw new AssertionError(firstError.getMessage(), firstError);
+		}
+		return failures;
+	}
+
+	public static Throwable testReproduce(Class<? extends Testable> testable, String hash, long debugAt, boolean printProgress,
+		boolean printFailures, boolean throwOnFailure) throws AssertionError {
+		Throwable err = doTest(getCreator(testable), new TestHelper(Long.parseLong(hash, 16), 0, debugAt), -1, printProgress,
+			printFailures);
+		if (throwOnFailure && err != null) {
+			if (err instanceof AssertionError)
+				throw (AssertionError) err;
+			throw new AssertionError(err.getMessage(), err);
+		}
+		return err;
+	}
+
+	public static void testSingle(Testable testable, long hash, long debugAt) throws AssertionError {
+		TestHelper helper = new TestHelper(hash, 0, debugAt);
+		Throwable err = doTest(testable, helper, -1, false, false);
+		if (err != null) {
+			StringBuilder msg = new StringBuilder(Long.toHexString(hash)).append('@').append(helper.getPosition());
+			if (helper.getLastPlacemark() >= 0)
+				msg.append("(placemark@").append(helper.getLastPlacemark()).append(") ");
+			msg.append(err.getMessage());
+			throw new AssertionError(msg.toString(), err);
+		}
+	}
+
+	private static <T extends Testable> Constructor<T> getCreator(Class<T> testable) {
+		Constructor<T> creator;
 		try {
 			try {
 				creator = testable.getConstructor();
@@ -221,63 +295,59 @@ public class TestHelper {
 				creator = testable.getDeclaredConstructor();
 			}
 		} catch (NoSuchMethodException | SecurityException e) {
-			System.err.println("Test class " + testable.getName() + " does not have a no-argument constructor");
-			e.printStackTrace();
-			return;
+			throw new IllegalStateException("Test class " + testable.getName() + " does not have a no-argument constructor", e);
 		}
 		if (!creator.isAccessible()) {
 			try {
 				creator.setAccessible(true);
 			} catch (SecurityException e) {
-				System.err
-				.println("No-argument constructor for test class " + testable.getName() + " is not accessible (try making it public)");
-				e.printStackTrace();
-				return;
+				throw new IllegalStateException(
+					"No-argument constructor for test class " + testable.getName() + " is not accessible (try making it public)", e);
 			}
 		}
-		/* Write test case history to an XML file.  Attempt to co-locate this file with the class being tested.  If co-located, the file
-		 * should be the simple name of the class.test.xml.  Otherwise make a sub-dir called testhelper under the current working dir and
-		 * put the file in there, named fully.qualified.ClassName.test.xml.
-		 *
-		 */
-		if (parsed.hasFlag("random")) {
-			int maxTries = (int) parsed.getInt("max-cases", Integer.MAX_VALUE);
-			for (int i = 0; i < maxTries && doTest(creator, new TestHelper(), -1, i); i++) {}
-		} else {
-			long debugAt = parsed.get("debug-at") != null ? parsed.getLong("debug-at") : -1;
-			int i = 0;
-			for (String hash : parsed.getAll("hash", String.class))
-				doTest(creator, new TestHelper(Long.parseLong(hash, 16), 0, debugAt), debugAt, i++);
-		}
+		return creator;
 	}
 
-	private static boolean doTest(Constructor<? extends Testable> creator, TestHelper testHelper, long debugAt, int caseNumber) {
+	private static Throwable doTest(Constructor<? extends Testable> creator, TestHelper testHelper, int caseNumber,
+		boolean printProgress, boolean printFailures) {
 		Testable tester;
 		try {
 			tester = creator.newInstance();
 		} catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
 			throw new IllegalStateException("Could not instantiate tester " + creator.getDeclaringClass().getName(), e);
 		}
-		System.out.print("[" + caseNumber + "] " + Long.toHexString(testHelper.getSeed()).toUpperCase() + ": ");
-		System.out.flush();
+		return doTest(tester, testHelper, caseNumber, printProgress, printFailures);
+	}
+
+	private static Throwable doTest(Testable tester, TestHelper testHelper, int caseNumber, boolean printProgress, boolean printFailures) {
+		String caseLabel = "";
+		if (caseNumber > 0)
+			caseLabel += "[" + caseNumber + "] ";
+		caseLabel += Long.toHexString(testHelper.getSeed()).toUpperCase() + ": ";
+		if (printProgress) {
+			System.out.print(caseLabel);
+			System.out.flush();
+		}
 		long start = System.nanoTime();
 		try {
 			tester.accept(testHelper);
-			System.out.println("SUCCESS in " + Format.durationFormat().format(Duration.ofNanos(System.nanoTime() - start)));
-			return true;
-		} catch (AssertionError e) {
-			StringBuilder msg = new StringBuilder();
-			msg.append("FAILURE@").append(testHelper.getPosition()).append(" in ");
-			Format.durationFormat().append(msg, Duration.ofNanos(System.nanoTime() - start));
-			long placemark = testHelper.getLastPlacemark();
-			if (placemark >= 0)
-				msg.append("\nPlacemark@").append(placemark);
-			System.err.println(msg);
-			e.printStackTrace();
-			return false;
+			if (printProgress)
+				System.out.println("SUCCESS in " + Format.durationFormat().format(Duration.ofNanos(System.nanoTime() - start)));
+			return null;
 		} catch (Throwable e) {
-			e.printStackTrace();
-			return false;
+			if (printProgress || printFailures) {
+				if (!printProgress)
+					System.err.print(caseLabel);
+				StringBuilder msg = new StringBuilder();
+				msg.append("FAILURE@").append(testHelper.getPosition()).append(" in ");
+				Format.durationFormat().append(msg, Duration.ofNanos(System.nanoTime() - start));
+				long placemark = testHelper.getLastPlacemark();
+				if (placemark >= 0)
+					msg.append("\nPlacemark@").append(placemark);
+				System.err.println(msg);
+				e.printStackTrace();
+			}
+			return e;
 		}
 	}
 }
