@@ -1,6 +1,8 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.ConcurrentModificationException;
@@ -301,7 +303,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	}
 
 	public static <E> BetterList<E> of(E... values) {
-		return new ConstantList<>(values);
+		return new ConstantList<>(Arrays.asList(values));
+	}
+
+	public static <E> BetterList<E> of(Collection<? extends E> values) {
+		return new ConstantList<>(values instanceof List ? (List<? extends E>) values : new ArrayList<>(values));
 	}
 
 	/**
@@ -980,9 +986,9 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	}
 
 	class ConstantList<E> implements BetterList<E> {
-		private E[] theValues;
+		private final List<? extends E> theValues;
 
-		public ConstantList(E[] values) {
+		public ConstantList(List<? extends E> values) {
 			theValues = values;
 		}
 
@@ -1013,12 +1019,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public int size() {
-			return theValues.length;
+			return theValues.size();
 		}
 
 		@Override
 		public boolean isEmpty() {
-			return theValues.length == 0;
+			return theValues.isEmpty();
 		}
 
 		@Override
@@ -1028,7 +1034,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public int getElementsAfter(ElementId id) {
-			return theValues.length - ((IndexElementId) id).index - 1;
+			return theValues.size() - ((IndexElementId) id).index - 1;
 		}
 
 		@Override
@@ -1037,8 +1043,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		private CollectionElement<E> elementFor(int index) {
-			if (index < 0 || index >= theValues.length)
-				throw new IndexOutOfBoundsException(index + " of " + theValues.length);
+			if (index < 0 || index >= theValues.size())
+				throw new IndexOutOfBoundsException(index + " of " + theValues.size());
 			return new CollectionElement<E>() {
 				@Override
 				public ElementId getElementId() {
@@ -1047,15 +1053,15 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 				@Override
 				public E get() {
-					return theValues[index];
+					return theValues.get(index);
 				}
 			};
 		}
 
 		@Override
 		public CollectionElement<E> getElement(E value, boolean first) {
-			for (int i = 0; i < theValues.length; i++)
-				if (Objects.equals(theValues[i], value))
+			for (int i = 0; i < theValues.size(); i++)
+				if (Objects.equals(theValues.get(i), value))
 					return elementFor(i);
 			return null;
 		}
@@ -1071,8 +1077,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		private MutableCollectionElement<E> mutableElementFor(int index) {
-			if (index < 0 || index >= theValues.length)
-				throw new IndexOutOfBoundsException(index + " of " + theValues.length);
+			if (index < 0 || index >= theValues.size())
+				throw new IndexOutOfBoundsException(index + " of " + theValues.size());
 			return new MutableCollectionElement<E>() {
 				@Override
 				public ElementId getElementId() {
@@ -1081,7 +1087,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 				@Override
 				public E get() {
-					return theValues[index];
+					return theValues.get(index);
 				}
 
 				@Override
@@ -1133,7 +1139,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public MutableElementSpliterator<E> spliterator(boolean fromStart) {
-			return mutableSpliterator(fromStart ? 0 : theValues.length, 0, theValues.length);
+			return mutableSpliterator(fromStart ? 0 : theValues.size(), 0, theValues.size());
 		}
 
 		@Override
@@ -1141,7 +1147,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			int index = ((IndexElementId) element).index;
 			if (!asNext)
 				index++;
-			return mutableSpliterator(index, 0, theValues.length);
+			return mutableSpliterator(index, 0, theValues.size());
 		}
 
 		private MutableElementSpliterator<E> mutableSpliterator(int firstNextIndex, int lowBound, int highBound) {
