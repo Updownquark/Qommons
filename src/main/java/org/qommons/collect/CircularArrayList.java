@@ -27,8 +27,10 @@ import org.qommons.collect.CollectionLockingStrategy.OptimisticContext;
  * <li>{@link BetterList Reversibility}</li>
  * </ul>
  * 
+ * @deprecated Not really deprecated, but rather not ready yet. This class is broken and will be "deprecated" until I fix it.
  * @param <E> The type of elements in the list
  */
+@Deprecated
 public class CircularArrayList<E> implements BetterList<E> {
 	/**
 	 * The maximum size of array to allocate. Some VMs reserve some header words in an array. Attempts to allocate larger arrays may result
@@ -49,6 +51,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		private boolean isThreadSafe;
 
 		private Builder() {
+			System.err.println(CircularArrayList.class.getSimpleName() + " is not working yet.  Don't use it!");
 			theInitCapacity = 0;
 			theMaxCapacity = MAX_ARRAY_SIZE;
 			theGrowthFactor = DEFAULT_GROWTH_FACTOR;
