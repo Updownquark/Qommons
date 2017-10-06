@@ -91,6 +91,7 @@ public class TestHelper {
 	private final long theSeed;
 	private final Random theRandomness;
 	private long theBytes;
+	private long theLastPlacemark;
 	private long theBreak;
 
 	public TestHelper(){
@@ -104,6 +105,7 @@ public class TestHelper {
 			getAnyLong();
 		while (theBytes < bytes)
 			getBoolean();
+		theLastPlacemark = -1;
 		theBreak = breakPoint < 0 ? Long.MAX_VALUE : breakPoint;
 	}
 
@@ -122,13 +124,18 @@ public class TestHelper {
 		return theBytes;
 	}
 
+	public long getLastPlacemark() {
+		return theLastPlacemark;
+	}
+
 	public TestHelper fork() {
 		long forkSeed = getAnyLong();
 		return new TestHelper(forkSeed, 0, -1);
 	}
 
 	public void placemark() {
-		getBytes(1);
+		getAnyInt();
+		theLastPlacemark = theBytes;
 	}
 
 	public TestHelper tolerate(Duration timeout) {
@@ -235,22 +242,23 @@ public class TestHelper {
 		 */
 		if (parsed.hasFlag("random")) {
 			int maxTries = (int) parsed.getInt("max-cases", Integer.MAX_VALUE);
-			for (int i = 0; i < maxTries && doTest(creator, new TestHelper(), -1); i++) {}
+			for (int i = 0; i < maxTries && doTest(creator, new TestHelper(), -1, i); i++) {}
 		} else {
 			long debugAt = parsed.get("debug-at") != null ? parsed.getLong("debug-at") : -1;
+			int i = 0;
 			for (String hash : parsed.getAll("hash", String.class))
-				doTest(creator, new TestHelper(Long.parseLong(hash, 16), 0, debugAt), debugAt);
+				doTest(creator, new TestHelper(Long.parseLong(hash, 16), 0, debugAt), debugAt, i++);
 		}
 	}
 
-	private static boolean doTest(Constructor<? extends Testable> creator, TestHelper testHelper, long debugAt) {
+	private static boolean doTest(Constructor<? extends Testable> creator, TestHelper testHelper, long debugAt, int caseNumber) {
 		Testable tester;
 		try {
 			tester = creator.newInstance();
 		} catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
 			throw new IllegalStateException("Could not instantiate tester " + creator.getDeclaringClass().getName(), e);
 		}
-		System.out.print(Long.toHexString(testHelper.getSeed()).toUpperCase() + ": ");
+		System.out.print("[" + caseNumber + "] " + Long.toHexString(testHelper.getSeed()).toUpperCase() + ": ");
 		System.out.flush();
 		long start = System.nanoTime();
 		try {
@@ -258,8 +266,13 @@ public class TestHelper {
 			System.out.println("SUCCESS in " + Format.durationFormat().format(Duration.ofNanos(System.nanoTime() - start)));
 			return true;
 		} catch (AssertionError e) {
-			System.err.println("FAILURE@" + testHelper.getPosition() + " in "
-				+ Format.durationFormat().format(Duration.ofNanos(System.nanoTime() - start)));
+			StringBuilder msg = new StringBuilder();
+			msg.append("FAILURE@").append(testHelper.getPosition()).append(" in ");
+			Format.durationFormat().append(msg, Duration.ofNanos(System.nanoTime() - start));
+			long placemark = testHelper.getLastPlacemark();
+			if (placemark >= 0)
+				msg.append("\nPlacemark@").append(placemark);
+			System.err.println(msg);
 			e.printStackTrace();
 			return false;
 		} catch (Throwable e) {
