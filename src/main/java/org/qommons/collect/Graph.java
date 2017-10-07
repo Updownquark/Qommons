@@ -2,7 +2,6 @@ package org.qommons.collect;
 
 import java.util.*;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * A set of nodes, interconnected by a set of edges, each of which may or may not be directed. Each node and each edge in the graph may have
@@ -23,17 +22,13 @@ public interface Graph<N, E> {
 		Collection<? extends Edge<N, E>> getEdges();
 
 		/** @return The value associated with this node */
-		N getValue();
+		N get();
 
 		/** @return The collection of edges going outward from this node */
-		default Collection<? extends Edge<N, E>> getOutward() {
-			return getEdges().stream().filter(edge -> edge.getStart() == Node.this).collect(Collectors.toList());
-		}
+		Collection<? extends Edge<N, E>> getOutward();
 
 		/** @return The collection of edges going inward toward this node */
-		default Collection<? extends Edge<N, E>> getInward() {
-			return getEdges().stream().filter(edge -> edge.getEnd() == Node.this).collect(Collectors.toList());
-		}
+		Collection<? extends Edge<N, E>> getInward();
 	}
 
 	/**
@@ -71,7 +66,7 @@ public interface Graph<N, E> {
 		boolean isDirected();
 
 		/** @return The value associated with this edge */
-		E getValue();
+		E get();
 	}
 
 	/**
@@ -92,6 +87,9 @@ public interface Graph<N, E> {
 
 	/** @return An observable collection containing all nodes stored in this graph */
 	Collection<? extends Node<N, E>> getNodes();
+
+	/** @return The {@link Node#get() values} of each node in this graph */
+	Collection<? extends N> getNodeValues();
 
 	/** @return An observable collection containing all edges stored in this graph */
 	Collection<? extends Edge<N, E>> getEdges();
@@ -145,19 +143,19 @@ public interface Graph<N, E> {
 
 			SubGraphBuilder(MutableGraph<N, E> subGraph, Node<? extends N, ? extends E> node) {
 				theSubGraph = subGraph;
-				lastNode = subGraph.addNode(node.getValue());
+				lastNode = subGraph.addNode(node.get());
 			}
 
 			@Override
 			public boolean step(Node<? extends N, ? extends E> from, Graph.Edge<? extends N, ? extends E> path,
 				Node<? extends N, ? extends E> to) {
-				Node<N, E> fromNode = lastNode.getValue() == from.getValue() ? lastNode : theSubGraph.nodeFor(from.getValue());
+				Node<N, E> fromNode = lastNode.get() == from.get() ? lastNode : theSubGraph.nodeFor(from.get());
 				if (fromNode == null)
 					return false;
-				Node<N, E> toNode = theSubGraph.nodeFor(to.getValue());
+				Node<N, E> toNode = theSubGraph.nodeFor(to.get());
 				if (toNode == null)
-					toNode = theSubGraph.addNode(to.getValue());
-				theSubGraph.addEdge(fromNode, toNode, false, path.getValue());
+					toNode = theSubGraph.addNode(to.get());
+				theSubGraph.addEdge(fromNode, toNode, false, path.get());
 				lastNode = toNode;
 				return true;
 			}
@@ -181,7 +179,7 @@ public interface Graph<N, E> {
 			private SubGraphBuilder createNewSubGraph(Node<? extends N, ? extends E> from) {
 				MutableGraph<N, E> newGraph = subGraphSupplier.apply(from);
 				subGraphs.add(newGraph);
-				return new SubGraphBuilder(newGraph, newGraph.addNode(from.getValue()));
+				return new SubGraphBuilder(newGraph, newGraph.addNode(from.get()));
 			}
 		};
 		walker[0] = new Walker<>(outerListener);

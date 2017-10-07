@@ -11,7 +11,9 @@ import org.qommons.Transaction;
  */
 public interface TransactableGraph<N, E> extends Graph<N, E>, Transactable {
 	@Override
-	abstract boolean isLockSupported();
+	default boolean isLockSupported() {
+		return getNodes().isLockSupported();
+	}
 
 	@Override
 	default Transaction lock(boolean write, Object cause) {

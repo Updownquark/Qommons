@@ -1,6 +1,7 @@
 package org.qommons.collect;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 	private final Collection<DefaultNode<N, E>> theNodes;
@@ -17,6 +18,11 @@ public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 	}
 
 	@Override
+	public Collection<? extends N> getNodeValues() {
+		return theNodes.stream().map(n -> n.get()).collect(Collectors.toList());
+	}
+
+	@Override
 	public Collection<DefaultEdge<N, E>> getEdges() {
 		return Collections.unmodifiableCollection(theEdges);
 	}
@@ -24,7 +30,7 @@ public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 	@Override
 	public Node<N, E> nodeFor(N value) {
 		for (Node<N, E> node : theNodes)
-			if (Objects.equals(node.getValue(), value))
+			if (Objects.equals(node.get(), value))
 				return node;
 		return null;
 	}
@@ -109,10 +115,10 @@ public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 			DefaultEdge<N, E> newEdge;
 			ListIterator<DefaultEdge<N, E>> edgeIter;
 			if (oldEdge.getStart() == defNode) {
-				newEdge = new DefaultEdge<>(this, newNode, oldEdge.getEnd(), oldEdge.getValue(), oldEdge.isDirected);
+				newEdge = new DefaultEdge<>(this, newNode, oldEdge.getEnd(), oldEdge.get(), oldEdge.isDirected);
 				edgeIter = oldEdge.getEnd().theEdges.listIterator();
 			} else {
-				newEdge = new DefaultEdge<>(this, oldEdge.getStart(), newNode, oldEdge.getValue(), oldEdge.isDirected);
+				newEdge = new DefaultEdge<>(this, oldEdge.getStart(), newNode, oldEdge.get(), oldEdge.isDirected);
 				edgeIter = oldEdge.getStart().theEdges.listIterator();
 			}
 			while (edgeIter.hasNext()) {
@@ -155,12 +161,22 @@ public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 		}
 
 		@Override
+		public Collection<? extends Edge<N, E>> getOutward() {
+			return theEdges.stream().filter(e -> e.getStart() == this).collect(Collectors.toList());
+		}
+
+		@Override
+		public Collection<? extends Edge<N, E>> getInward() {
+			return theEdges.stream().filter(e -> e.getEnd() == this).collect(Collectors.toList());
+		}
+
+		@Override
 		public Collection<DefaultEdge<N, E>> getEdges() {
 			return Collections.unmodifiableCollection(theEdges);
 		}
 
 		@Override
-		public N getValue() {
+		public N get() {
 			return theValue;
 		}
 	}
@@ -197,7 +213,7 @@ public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 		}
 
 		@Override
-		public E getValue() {
+		public E get() {
 			return theValue;
 		}
 	}
