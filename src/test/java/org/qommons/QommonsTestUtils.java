@@ -8,21 +8,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.NavigableSet;
-import java.util.Objects;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -1098,7 +1084,7 @@ public class QommonsTestUtils {
 	 * @param ordered Whether to test the equality of the collections as if order matters
 	 * @return A matcher that matches a collection c if c is equivalent to the given collection, in an ordered way if specified
 	 */
-	public static <T> Matcher<Collection<T>> collectionsEqual(Collection<T> values, boolean ordered) {
+	public static <T> Matcher<Collection<T>> collectionsEqual(Collection<? extends T> values, boolean ordered) {
 		return new org.hamcrest.BaseMatcher<Collection<T>>() {
 			@Override
 			public boolean matches(Object arg0) {
@@ -1107,7 +1093,7 @@ public class QommonsTestUtils {
 					return false;
 				if (ordered) {
 					// Must be equivalent
-					Iterator<T> vIter = values.iterator();
+					Iterator<? extends T> vIter = values.iterator();
 					Iterator<T> aIter = arg.iterator();
 					while (vIter.hasNext() && aIter.hasNext())
 						if (!Objects.equals(vIter.next(), aIter.next()))
