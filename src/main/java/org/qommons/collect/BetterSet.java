@@ -9,7 +9,7 @@ import java.util.Set;
  * 
  * @param <E> The type of values in the set
  */
-public interface BetterSet<E> extends BetterCollection<E>, Set<E> {
+public interface BetterSet<E> extends BetterCollection<E>, TransactableSet<E> {
 	@Override
 	default Iterator<E> iterator() {
 		return BetterCollection.super.iterator();
