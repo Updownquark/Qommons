@@ -1,6 +1,7 @@
 package org.qommons.collect;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -57,6 +58,10 @@ public interface MultiMap<K, V> {
 	 * @return Whether this map was changed as a result of the call
 	 */
 	boolean addAll(K key, Collection<? extends V> values);
+
+	boolean putAll(Map<? extends K, ? extends V> values);
+
+	boolean putAll(MultiMap<? extends K, ? extends V> values);
 
 	/**
 	 * Removes a value associated with a key
