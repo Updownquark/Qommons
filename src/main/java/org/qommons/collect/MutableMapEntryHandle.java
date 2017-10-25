@@ -92,4 +92,8 @@ public interface MutableMapEntryHandle<K, V> extends MapEntryHandle<K, V>, Mutab
 			return getKey() + "=" + get();
 		}
 	}
+
+	static <K, V> MutableMapEntryHandle<K, V> reverse(MutableMapEntryHandle<K, V> entry) {
+		return entry == null ? null : entry.reverse();
+	}
 }
