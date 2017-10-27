@@ -9,9 +9,6 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V> {
 	BetterSet<K> keySet();
 
 	@Override
-	BetterCollection<V> values();
-
-	@Override
 	BetterSet<? extends MultiEntry<K, V>> entrySet();
 
 	@Override
@@ -32,21 +29,21 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V> {
 
 	long getStamp(boolean structuralOnly);
 
-	default MapEntryHandle<K, ? extends BetterCollection<V>> getEntry(K key) {
+	default MultiEntryHandle<K, V> getEntry(K key) {
 		try (Transaction t = lock(false, null)) {
 			CollectionElement<K> keyElement = keySet().getElement(key, true);
 			return keyElement == null ? null : getEntry(keyElement.getElementId());
 		}
 	}
 
-	MapEntryHandle<K, ? extends BetterCollection<V>> getEntry(ElementId keyId);
+	MultiEntryHandle<K, V> getEntry(ElementId keyId);
 
 	default MultiMapEntryHandle<K, V> getElement(K key, V value, boolean first) {
 		try (Transaction t = lock(false, null)) {
-			MapEntryHandle<K, ? extends BetterCollection<V>> keyElement = getEntry(key);
+			MultiEntryHandle<K, V> keyElement = getEntry(key);
 			if (keyElement == null)
 				return null;
-			CollectionElement<V> valueElement = keyElement.get().getElement(value, first);
+			CollectionElement<V> valueElement = keyElement.getValues().getElement(value, first);
 			if (valueElement == null)
 				return null;
 			return getElement(keyElement.getElementId(), valueElement.getElementId());
@@ -54,8 +51,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V> {
 	}
 
 	default MultiMapEntryHandle<K, V> getElement(ElementId keyId, ElementId valueId) {
-		MapEntryHandle<K, ? extends BetterCollection<V>> keyElement = getEntry(keyId);
-		CollectionElement<V> valueElement = keyElement.get().getElement(valueId);
+		MultiEntryHandle<K, V> keyElement = getEntry(keyId);
+		CollectionElement<V> valueElement = keyElement.getValues().getElement(valueId);
 		return new MultiMapEntryHandle<K, V>() {
 			@Override
 			public ElementId getKeyId() {
@@ -80,8 +77,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V> {
 	}
 
 	default MutableMultiMapHandle<K, V> mutableElement(ElementId keyId, ElementId valueId) {
-		MapEntryHandle<K, ? extends BetterCollection<V>> keyElement = getEntry(keyId);
-		MutableCollectionElement<V> valueElement = keyElement.get().mutableElement(valueId);
+		MultiEntryHandle<K, V> keyElement = getEntry(keyId);
+		MutableCollectionElement<V> valueElement = keyElement.getValues().mutableElement(valueId);
 		return new MutableMultiMapHandle<K, V>() {
 			@Override
 			public ElementId getKeyId() {
@@ -199,11 +196,6 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V> {
 		}
 
 		@Override
-		public BetterCollection<V> values() {
-			return theSource.values().reverse();
-		}
-
-		@Override
 		public BetterSet<? extends MultiEntry<K, V>> entrySet() {
 			return theSource.entrySet().reverse();
 		}
@@ -214,26 +206,18 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V> {
 		}
 
 		@Override
-		public MapEntryHandle<K, ? extends BetterCollection<V>> getEntry(ElementId keyId) {
-			MapEntryHandle<K, ? extends BetterCollection<V>> srcEl = theSource.getEntry(keyId);
-			if (srcEl == null)
-				return null;
-			class ReversedKeyHandle extends MapEntryHandle.ReversedMapEntryHandle<K, BetterCollection<V>> {
-				public ReversedKeyHandle() {
-					super((MapEntryHandle<K, BetterCollection<V>>) srcEl);
-				}
-
-				@Override
-				public BetterCollection<V> getValue() {
-					return super.getValue().reverse();
-				}
-			}
-			return new ReversedKeyHandle();
+		public MultiEntryHandle<K, V> getEntry(ElementId keyId) {
+			return theSource.getEntry(keyId.reverse()).reverse();
 		}
 
 		@Override
 		public MultiMapEntryHandle<K, V> putEntry(K key, V value, boolean first) {
 			return MultiMapEntryHandle.reverse(theSource.putEntry(key, value, !first));
+		}
+
+		@Override
+		public BetterMultiMap<K, V> reverse() {
+			return theSource;
 		}
 	}
 }

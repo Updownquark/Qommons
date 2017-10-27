@@ -29,9 +29,6 @@ public interface MultiMap<K, V> {
 	/** @return The keys that have least one value in this map */
 	Set<K> keySet();
 
-	/** @return All values stored in this map under any key */
-	Collection<V> values();
-
 	/** @return All key-value collection entries in this multi-map */
 	Set<? extends MultiEntry<K, V>> entrySet();
 

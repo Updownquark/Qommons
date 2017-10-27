@@ -10,7 +10,7 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, V> {
 	@Override
-	abstract BetterSortedSet<K> keySet();
+	BetterSortedSet<K> keySet();
 
 	@Override
 	default BetterSortedSet<Map.Entry<K, V>> entrySet() {
@@ -254,7 +254,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 		@Override
 		public MapEntryHandle<K, V> search(Comparable<? super K> search, SortedSearchFilter filter) {
-			return getWrapped().search(v -> -search.compareTo(v), filter);
+			return getWrapped().search(v -> -search.compareTo(v), filter.opposite());
 		}
 	}
 
