@@ -317,18 +317,30 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 	}
 
 	class BetterSubMap<K, V> implements BetterSortedMap<K, V> {
-		private final BetterSortedMap<K, V> theWrapped;
+		private final BetterSortedMap<K, V> theSource;
 		private final Comparable<? super K> theLowerBound;
 		private final Comparable<? super K> theUpperBound;
 
 		private final BetterSortedSet<K> theKeySet;
 
-		public BetterSubMap(BetterSortedMap<K, V> wrapped, Comparable<? super K> lowerBound, Comparable<? super K> upperBound) {
-			theWrapped = wrapped;
+		public BetterSubMap(BetterSortedMap<K, V> source, Comparable<? super K> lowerBound, Comparable<? super K> upperBound) {
+			theSource = source;
 			theLowerBound = lowerBound;
 			theUpperBound = upperBound;
 
-			theKeySet = wrapped.keySet().subSet(theLowerBound, theUpperBound);
+			theKeySet = source.keySet().subSet(theLowerBound, theUpperBound);
+		}
+
+		protected BetterSortedMap<K, V> getSource() {
+			return theSource;
+		}
+
+		protected Comparable<? super K> getLowerBound() {
+			return theLowerBound;
+		}
+
+		protected Comparable<? super K> getUpperBound() {
+			return theUpperBound;
 		}
 
 		@Override
@@ -340,19 +352,19 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		public MapEntryHandle<K, V> putEntry(K key, V value) {
 			if (!theKeySet.belongs(key))
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			return theWrapped.putEntry(key, value);
+			return theSource.putEntry(key, value);
 		}
 
 		@Override
 		public MapEntryHandle<K, V> getEntry(K key) {
 			if (!theKeySet.belongs(key))
 				return null;
-			return theWrapped.getEntry(key);
+			return theSource.getEntry(key);
 		}
 
 		@Override
 		public MapEntryHandle<K, V> getEntry(ElementId entryId) {
-			MapEntryHandle<K, V> entry = theWrapped.getEntry(entryId);
+			MapEntryHandle<K, V> entry = theSource.getEntry(entryId);
 			if (!theKeySet.belongs(entry.getKey()))
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 			return entry;
@@ -377,12 +389,12 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 		@Override
 		public MapEntryHandle<K, V> search(Comparable<? super K> search, SortedSearchFilter filter) {
-			return theWrapped.search(boundSearch(search), filter);
+			return theSource.search(boundSearch(search), filter);
 		}
 
 		@Override
 		public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
-			MutableMapEntryHandle<K, V> entry = theWrapped.mutableEntry(entryId);
+			MutableMapEntryHandle<K, V> entry = theSource.mutableEntry(entryId);
 			if (!keySet().belongs(entry.getKey()))
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 			return entry;
