@@ -186,6 +186,10 @@ public class TestHelper {
 		return bytes[0] >= 0;
 	}
 
+	public boolean getBoolean(double odds) {
+		return getDouble() < odds;
+	}
+
 	public static void main(String[] args) {
 		ArgumentParser parser = new ArgumentParser()//
 			.forDefaultFlagPattern()//
