@@ -1,6 +1,13 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Set;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -9,6 +16,7 @@ import java.util.function.UnaryOperator;
 import org.qommons.ArrayUtils;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
+import org.qommons.ValueHolder;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
@@ -401,77 +409,77 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	@Override
 	default E removeFirst() {
-		Object[] value = new Object[1];
+		ValueHolder<E> value = new ValueHolder<>();
 		try (Transaction t = lock(true, null)) {
 			if (!spliterator(true).forElementM(el -> {
-				value[0] = el.get();
+				value.accept(el.get());
 				el.remove();
 			}, true))
 				throw new NoSuchElementException("Empty collection");
 		}
-		return (E) value[0];
+		return value.get();
 	}
 
 	@Override
 	default E removeLast() {
-		Object[] value = new Object[1];
+		ValueHolder<E> value = new ValueHolder<>();
 		try (Transaction t = lock(true, null)) {
 			if (!spliterator(true).forElementM(el -> {
-				value[0] = el.get();
+				value.accept(el.get());
 				el.remove();
 			}, false))
 				throw new NoSuchElementException("Empty collection");
 		}
-		return (E) value[0];
+		return value.get();
 	}
 
 	@Override
 	default E pollFirst() {
-		Object[] value = new Object[1];
+		ValueHolder<E> value = new ValueHolder<>();
 		spliterator(true).forElementM(el -> {
-			value[0] = el.get();
+			value.accept(el.get());
 			el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an exception
 		}, true);
-		return (E) value[0];
+		return value.get();
 	}
 
 	@Override
 	default E pollLast() {
-		Object[] value = new Object[1];
+		ValueHolder<E> value = new ValueHolder<>();
 		spliterator(false).forElementM(el -> {
-			value[0] = el.get();
+			value.accept(el.get());
 			el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an exception
 		}, false);
-		return (E) value[0];
+		return value.get();
 	}
 
 	@Override
 	default E getFirst() {
-		Object[] value = new Object[1];
-		if (!spliterator(true).tryAdvance(v -> value[0] = v))
+		ValueHolder<E> value = new ValueHolder<>();
+		if (!spliterator(true).tryAdvance(value))
 			throw new NoSuchElementException("Empty collection");
-		return (E) value[0];
+		return value.get();
 	}
 
 	@Override
 	default E getLast() {
-		Object[] value = new Object[1];
-		spliterator(false).tryReverse(v -> value[0] = v);
-		return (E) value[0];
+		ValueHolder<E> value = new ValueHolder<>();
+		spliterator(false).tryReverse(value);
+		return value.get();
 	}
 
 	@Override
 	default E peekFirst() {
-		Object[] value = new Object[1];
-		spliterator(true).tryAdvance(v -> value[0] = v);
-		return (E) value[0];
+		ValueHolder<E> value = new ValueHolder<>();
+		spliterator(true).tryAdvance(value);
+		return value.get();
 	}
 
 	@Override
 	default E peekLast() {
-		Object[] value = new Object[1];
-		spliterator(false).tryReverse(v -> value[0] = v);
-		return (E) value[0];
+		ValueHolder<E> value = new ValueHolder<>();
+		spliterator(false).tryReverse(value);
+		return value.get();
 	}
 
 	@Override
