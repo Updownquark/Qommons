@@ -101,10 +101,17 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	@Override
 	default boolean addAll(Collection<? extends E> c) {
-		try (Transaction t = lock(true, null); Transaction ct = Transactable.lock(c, false, null)) {
+		if (c.isEmpty())
+			return false;
+		SimpleCause cause = new SimpleCause();
+		try (Transaction cst = SimpleCause.use(cause);
+			Transaction t = lock(true, cause);
+			Transaction ct = Transactable.lock(c, false, cause)) {
 			boolean changed = false;
-			for (E e : c)
-				changed |= add(e);
+			for (E e : c) {
+				if (canAdd(e) == null)
+					changed |= add(e);
+			}
 			return changed;
 		}
 	}
@@ -114,9 +121,12 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return This collection
 	 */
 	default BetterCollection<E> with(E... values) {
-		try (Transaction t = lock(true, null)) {
-			for (E e : values)
-				add(e);
+		SimpleCause cause = new SimpleCause();
+		try (Transaction cst = SimpleCause.use(cause); Transaction t = lock(true, cause)) {
+			for (E e : values) {
+				if (canAdd(e) == null)
+					add(e);
+			}
 		}
 		return this;
 	}
@@ -232,10 +242,9 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	@Override
 	default boolean removeAll(Collection<?> c) {
-		if (isEmpty() || c.isEmpty())
+		if (c.isEmpty())
 			return false;
-		// TODO Switch to using removeIf when a CircularArrayList bug with this method is fixed
-		return findAll(v -> c.contains(v), el -> el.remove(), true) > 0;
+		return removeIf(c::contains);
 	}
 
 	@Override
@@ -246,12 +255,14 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 			clear();
 			return true;
 		}
-		// TODO Switch to using removeIf when a CircularArrayList bug with this method is fixed
-		return findAll(v -> !c.contains(v), el -> el.remove(), true) > 0;
+		return removeIf(//
+			o -> !c.contains(o));
 	}
 
 	@Override
 	default boolean removeIf(Predicate<? super E> filter) {
+		if (isEmpty())
+			return false;
 		boolean[] removed = new boolean[1];
 		findAll(filter, el -> {
 			el.remove();

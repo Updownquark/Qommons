@@ -171,7 +171,9 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 
 		@Override
 		public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
-			try (Transaction t = theLocker == null ? Transaction.NONE : theLocker.lock(true, null)) {
+			SimpleCause cause = new SimpleCause();
+			try (Transaction ct = SimpleCause.use(cause);
+				Transaction t = theLocker == null ? Transaction.NONE : theLocker.lock(true, cause)) {
 				while (internalForElementM(action, forward)) {
 				}
 			}
