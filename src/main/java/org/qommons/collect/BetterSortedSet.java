@@ -144,6 +144,31 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	CollectionElement<E> addIfEmpty(E value) throws IllegalStateException;
 
 	@Override
+	default boolean addAll(int index, Collection<? extends E> c) {
+		if (c.isEmpty())
+			return false;
+		try (Transaction t = lock(true, null); Transaction t2 = Transactable.lock(c, false, null)) {
+			if (isEmpty())
+				return addAll(c);
+			if (index < 0)
+				throw new IndexOutOfBoundsException("" + index);
+			int size = size();
+			if (index > size)
+				throw new IndexOutOfBoundsException(index + " of " + size);
+			E low, high;
+			if (index == 0) {
+				low = null;
+				high = get(0);
+			} else {
+				CollectionElement<E> lowEl = getElement(index);
+				low = lowEl.get();
+				high = index == size ? null : getAdjacentElement(lowEl.getElementId(), true).get();
+			}
+			return subSet(low, false, high, false).addAll(c);
+		}
+	}
+
+	@Override
 	default BetterSortedSet<E> with(E... values) {
 		BetterSet.super.with(values);
 		return this;
