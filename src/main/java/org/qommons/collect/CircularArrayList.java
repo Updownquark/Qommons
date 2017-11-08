@@ -488,6 +488,17 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
+	public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
+		try (Transaction t = lock(false, null)) {
+			int index = ((ArrayElementId) elementId).element.index;
+			index += next ? 1 : -1;
+			if (index < 0 || index >= size())
+				return null;
+			return getElement(index);
+		}
+	}
+
+	@Override
 	public MutableCollectionElement<E> mutableElement(ElementId id) {
 		return ((ArrayElementId) id).element.check();
 	}

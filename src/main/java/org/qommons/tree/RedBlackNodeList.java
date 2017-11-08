@@ -6,8 +6,14 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import org.qommons.Transaction;
-import org.qommons.collect.*;
+import org.qommons.collect.BetterCollection;
+import org.qommons.collect.BetterList;
+import org.qommons.collect.CollectionElement;
+import org.qommons.collect.CollectionLockingStrategy;
+import org.qommons.collect.ElementId;
+import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
+import org.qommons.collect.MutableElementSpliterator;
 
 public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	private final CollectionLockingStrategy theLocker;
@@ -71,6 +77,11 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	@Override
 	public int getElementsAfter(ElementId id) {
 		return theLocker.doOptimistically(0, (init, ctx) -> ((NodeId) id).theNode.getNodesAfter(ctx), true);
+	}
+
+	@Override
+	public BinaryTreeNode<E> getAdjacentElement(ElementId elementId, boolean next) {
+		return wrap(checkNode(elementId).theNode).getClosest(!next);
 	}
 
 	@Override

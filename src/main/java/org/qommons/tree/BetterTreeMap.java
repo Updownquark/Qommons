@@ -7,9 +7,19 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 import org.qommons.Transaction;
-import org.qommons.collect.*;
+import org.qommons.collect.BetterSortedMap;
+import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
+import org.qommons.collect.CollectionElement;
+import org.qommons.collect.CollectionLockingStrategy;
+import org.qommons.collect.ElementId;
+import org.qommons.collect.FastFailLockingStrategy;
+import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
+import org.qommons.collect.MutableElementSpliterator;
+import org.qommons.collect.MutableMapEntryHandle;
+import org.qommons.collect.SimpleMapEntry;
+import org.qommons.collect.StampedLockingStrategy;
 
 public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 	protected final Comparator<? super K> theCompare;
@@ -347,6 +357,12 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		@Override
 		public CollectionElement<K> getElement(ElementId id) {
 			return handleFor(theEntries.getElement(id));
+		}
+
+		@Override
+		public CollectionElement<K> getAdjacentElement(ElementId elementId, boolean next) {
+			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getAdjacentElement(elementId, next);
+			return entryEl == null ? null : handleFor(entryEl);
 		}
 
 		@Override

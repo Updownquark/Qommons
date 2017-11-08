@@ -284,6 +284,11 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		@Override
+		public CollectionElement<Entry<K, V>> getAdjacentElement(ElementId elementId, boolean next) {
+			return getElement(getMap().keySet().getAdjacentElement(elementId, next).getElementId());
+		}
+
+		@Override
 		public CollectionElement<Map.Entry<K, V>> search(Comparable<? super Entry<K, V>> search, SortedSearchFilter filter) {
 			CollectionElement<K> keyEl = getMap().keySet().search(k -> search.compareTo(new ImmutableMapEntry<>(k, null)), filter);
 			if (keyEl == null)

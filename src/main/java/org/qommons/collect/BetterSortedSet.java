@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 import org.qommons.Ternian;
+import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
@@ -518,6 +519,14 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			CollectionElement<E> el = theWrapped.getElement(id);
 			if (isInRange(el.get()) != 0)
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+			return el;
+		}
+
+		@Override
+		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
+			CollectionElement<E> el = theWrapped.getAdjacentElement(elementId, next);
+			if (isInRange(el.get()) != 0)
+				return null;
 			return el;
 		}
 

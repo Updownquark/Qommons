@@ -74,6 +74,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 */
 	int getElementsAfter(ElementId id);
 
+	CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next);
+
 	/**
 	 * @param value The value to get the index of in this collection
 	 * @return The index of the first position in this collection occupied by the given value, or &lt; 0 if the element does not exist in
@@ -174,15 +176,18 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 	@Override
 	default boolean addAll(int index, Collection<? extends E> c) {
+		if (c.isEmpty())
+			return false;
 		try (Transaction t = lock(true, null); Transaction t2 = Transactable.lock(c, false, null)) {
-			if (c.isEmpty())
-				return false;
 			if (index == size()) {
 				addAll(c);
 				return true;
 			}
 			forMutableElementAt(index, el -> {
-				c.spliterator().forEachRemaining(v -> el.add(v, true));
+				c.spliterator().forEachRemaining(v -> {
+					if (el.canAdd(v, true) == null)
+						el.add(v, true);
+				});
 			});
 			return true;
 		}
@@ -343,6 +348,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
+		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
+			return CollectionElement.reverse(getWrapped().getAdjacentElement(elementId.reverse(), !next));
+		}
+
+		@Override
 		public int getElementsBefore(ElementId id) {
 			return getWrapped().getElementsAfter(id.reverse());
 		}
@@ -377,13 +387,18 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
+		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
+			throw new NoSuchElementException();
+		}
+
+		@Override
 		public int getElementsBefore(ElementId id) {
-			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+			throw new NoSuchElementException();
 		}
 
 		@Override
 		public int getElementsAfter(ElementId id) {
-			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+			throw new NoSuchElementException();
 		}
 	}
 
@@ -594,6 +609,15 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 				return theWrapped.getElement(id);
 			}
+		}
+
+		@Override
+		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
+			CollectionElement<E> adj = theWrapped.getAdjacentElement(elementId, next);
+			int index = theWrapped.getElementsBefore(adj.getElementId());
+			if (index < theStart || index >= theEnd)
+				return null;
+			return adj;
 		}
 
 		@Override
@@ -1069,6 +1093,15 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public CollectionElement<E> getElement(ElementId id) {
 			return elementFor(((IndexElementId) id).index);
+		}
+
+		@Override
+		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
+			int index = ((IndexElementId) elementId).index;
+			index += next ? 1 : -1;
+			if (index < 0 || index >= theValues.size())
+				return null;
+			return getElement(index);
 		}
 
 		@Override
