@@ -1,10 +1,6 @@
 package org.qommons;
 
-import java.util.Collection;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /** An efficient abstract implementation of Causable */
 public abstract class AbstractCausable implements Causable {
@@ -17,7 +13,14 @@ public abstract class AbstractCausable implements Causable {
 	/** @param cause The cause of this causable */
 	public AbstractCausable(Object cause) {
 		theCause = wrapCausable(cause);
-		theRootCausable = theCause == null ? this : ((Causable) theCause).getRootCausable();
+		if (cause == null)
+			theRootCausable = this;
+		else if (cause instanceof AbstractCausable)
+			theRootCausable = ((AbstractCausable) cause).theRootCausable;
+		else if (cause instanceof Causable)
+			theRootCausable = ((Causable) cause).getRootCausable();
+		else
+			theRootCausable = this;
 	}
 
 	private AbstractCausable(Object cause, Void root) {
@@ -37,12 +40,16 @@ public abstract class AbstractCausable implements Causable {
 
 	@Override
 	public Map<Object, Object> onFinish(Object key, TerminalAction action) {
+		if (!isStarted)
+			throw new IllegalStateException("Not started!  Use AbstractCausable.use(AbstractCausable)");
 		if (theActions == null)
 			theActions = new IdentityHashMap<>();
 		return theActions.computeIfAbsent(key, k -> new TerminalActionHolder(action));
 	}
 
 	private void finish() {
+		if (!isStarted)
+			throw new IllegalStateException("Not started!  Use AbstractCausable.use(AbstractCausable)");
 		if (isFinished)
 			throw new IllegalStateException("A cause may only be finished once");
 		isFinished = true;
