@@ -80,7 +80,7 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	}
 
 	@Override
-	public MapEntryHandle<K, V> getEntry(ElementId entryId) {
+	public MapEntryHandle<K, V> getEntryById(ElementId entryId) {
 		return handleFor(theEntries.getElement(entryId));
 	}
 

@@ -65,6 +65,12 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	CollectionElement<E> getElement(ElementId id);
 
+	default CollectionElement<E> getTerminalElement(boolean first) {
+		ValueHolder<CollectionElement<E>> holder = new ValueHolder<>();
+		spliterator(first).forElement(holder, first);
+		return holder.get();
+	}
+
 	MutableCollectionElement<E> mutableElement(ElementId id);
 
 	default <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement) {

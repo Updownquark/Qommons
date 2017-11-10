@@ -47,7 +47,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 	MapEntryHandle<K, V> getEntry(K key);
 
-	MapEntryHandle<K, V> getEntry(ElementId entryId);
+	MapEntryHandle<K, V> getEntryById(ElementId entryId);
 
 	MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId);
 
@@ -162,8 +162,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public MapEntryHandle<K, V> getEntry(ElementId entryId) {
-			return theWrapped.getEntry(entryId.reverse()).reverse();
+		public MapEntryHandle<K, V> getEntryById(ElementId entryId) {
+			return theWrapped.getEntryById(entryId.reverse()).reverse();
 		}
 
 		@Override
@@ -233,7 +233,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 		@Override
 		public CollectionElement<Entry<K, V>> getElement(ElementId id) {
-			return new EntryElement(theMap.getEntry(id));
+			return new EntryElement(theMap.getEntryById(id));
 		}
 
 		@Override
@@ -437,7 +437,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 			@Override
 			protected boolean internalForElement(Consumer<? super CollectionElement<Entry<K, V>>> action, boolean forward) {
-				return theKeySpliter.forElement(keyEl -> action.accept(new EntryElement(theMap.getEntry(keyEl.getElementId()))), forward);
+				return theKeySpliter.forElement(keyEl -> action.accept(new EntryElement(theMap.getEntryById(keyEl.getElementId()))), forward);
 			}
 
 			@Override
@@ -519,7 +519,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 		@Override
 		public CollectionElement<V> getElement(ElementId id) {
-			return theMap.getEntry(id);
+			return theMap.getEntryById(id);
 		}
 
 		@Override
@@ -562,7 +562,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 			@Override
 			protected boolean internalForElement(Consumer<? super CollectionElement<V>> action, boolean forward) {
-				return theKeySpliter.forElement(keyEl -> action.accept(theMap.getEntry(keyEl.getElementId())), forward);
+				return theKeySpliter.forElement(keyEl -> action.accept(theMap.getEntryById(keyEl.getElementId())), forward);
 			}
 
 			@Override

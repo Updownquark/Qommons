@@ -72,7 +72,7 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 	}
 
 	@Override
-	public BinaryTreeEntry<K, V> getEntry(ElementId entryId) {
+	public BinaryTreeEntry<K, V> getEntryById(ElementId entryId) {
 		return new TreeEntry<>(theEntries.getElement(entryId));
 	}
 

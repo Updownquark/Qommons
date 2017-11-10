@@ -368,8 +368,8 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		@Override
-		public MapEntryHandle<K, V> getEntry(ElementId entryId) {
-			MapEntryHandle<K, V> entry = theSource.getEntry(entryId);
+		public MapEntryHandle<K, V> getEntryById(ElementId entryId) {
+			MapEntryHandle<K, V> entry = theSource.getEntryById(entryId);
 			if (!theKeySet.belongs(entry.getKey()))
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 			return entry;
