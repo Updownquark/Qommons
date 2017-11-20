@@ -117,7 +117,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	private void insert(HashEntry entry) {
-		int tableIndex = entry.hashCode() % theTable.length;
+		int tableIndex = getTableIndex(entry.hashCode());
 		HashTableEntry tableEntry = theTable[tableIndex];
 		if (tableEntry == null)
 			tableEntry = theTable[tableIndex] = new HashTableEntry(tableIndex);
@@ -132,8 +132,13 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		}
 	}
 
+	private int getTableIndex(int hashCode) {
+		int h = hashCode ^ (hashCode >>> 16);
+		return (theTable.length - 1) & h;
+	}
+
 	private HashEntry getEntry(int hashCode, E value) {
-		int tableIndex = hashCode % theTable.length;
+		int tableIndex = getTableIndex(hashCode);
 		HashTableEntry tableEntry = theTable[tableIndex];
 		if (tableEntry == null)
 			return null;
