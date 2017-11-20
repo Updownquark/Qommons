@@ -1,9 +1,13 @@
 package org.qommons;
 
+import java.io.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.net.URL;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.function.Consumer;
@@ -92,11 +96,25 @@ public class TestHelper {
 
 	public static class TestFailure {
 		public final long seed;
+		public final long bytes;
 		public final long placemark;
 
-		public TestFailure(long seed, long placemark) {
+		public TestFailure(long seed, long bytes, long placemark) {
 			this.seed = seed;
+			this.bytes = bytes;
 			this.placemark = placemark;
+		}
+
+		public long getPlacemarkOrBytes() {
+			return placemark >= 0 ? placemark : bytes;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (!(obj instanceof TestFailure))
+				return false;
+			TestFailure other = (TestFailure) obj;
+			return seed == other.seed && bytes == other.bytes && placemark == other.placemark;
 		}
 	}
 
@@ -203,6 +221,150 @@ public class TestHelper {
 		return getDouble() < odds;
 	}
 
+	public static class Testing {
+		private final Class<? extends Testable> theTestable;
+		private final Constructor<? extends Testable> theCreator;
+		private boolean isRevisitingKnownFailures = true;
+		private List<TestFailure> theSpecifiedCases = new ArrayList<>();
+		private boolean isDebugging = false;
+		private int theMaxRandomCases = 0;
+		private int theMaxFailures = 1;
+		private Duration theMaxTotalDuration;
+		private Duration theMaxCaseDuration;
+		private boolean isPrintingProgress = true;
+		private boolean isPrintingFailures = true;
+		private boolean isThrowingOnFailure = true;
+		private boolean isPersistingFailures = true;
+		private File theFailureDir = null;
+
+		private Testing(Class<? extends Testable> testable) {
+			theTestable = testable;
+			theCreator = getCreator(testable);
+		}
+
+		public Testing revisitKnownFailures(boolean b) {
+			isRevisitingKnownFailures = b;
+			return this;
+		}
+
+		public Testing withDebug(boolean debug) {
+			isDebugging = debug;
+			return this;
+		}
+
+		public Testing withCase(long hash, long breakPoint) {
+			theSpecifiedCases.add(new TestFailure(hash, 0, breakPoint));
+			return this;
+		}
+
+		public Testing withRandomCases(int cases) {
+			theMaxRandomCases = cases;
+			return this;
+		}
+
+		public Testing withMaxFailures(int failures) {
+			theMaxFailures = failures;
+			return this;
+		}
+
+		public Testing withMaxTotalDuration(Duration duration) {
+			theMaxTotalDuration = duration;
+			return this;
+		}
+
+		public Testing withMaxCaseDuration(Duration duration) {
+			theMaxCaseDuration = duration;
+			return this;
+		}
+
+		public Testing withPrinting(boolean onProgress, boolean onFailure) {
+			isPrintingProgress = onProgress;
+			isPrintingFailures = onFailure;
+			return this;
+		}
+
+		public Testing throwOnFailure(boolean doThrow) {
+			isThrowingOnFailure = doThrow;
+			return this;
+		}
+
+		public Testing withFailurePersistence(boolean persist) {
+			isPersistingFailures = persist;
+			return this;
+		}
+
+		public Testing withPersistenceDir(File dir) {
+			if (dir != null)
+				isPersistingFailures = true;
+			theFailureDir = dir;
+			return this;
+		}
+
+		public int execute() throws AssertionError {
+			int maxCases = theMaxRandomCases;
+			int maxFailures = theMaxFailures;
+			if (maxCases < 0)
+				maxCases = Integer.MAX_VALUE;
+			if (maxFailures <= 0)
+				maxFailures = Integer.MAX_VALUE;
+			Instant termination = theMaxTotalDuration == null ? Instant.MAX : Instant.now().plus(theMaxTotalDuration);
+			int failures = 0;
+			Throwable firstError = null;
+			List<TestFailure> knownFailures;
+			if (isRevisitingKnownFailures || isPersistingFailures)
+				knownFailures = getKnownFailures(theFailureDir, theTestable);
+			else
+				knownFailures = null;
+			if (isRevisitingKnownFailures) {
+				if (knownFailures != null && !knownFailures.isEmpty()) {
+					for (int i = 0; i < knownFailures.size() && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
+						TestFailure failure = knownFailures.get(i);
+						TestHelper helper = new TestHelper(failure.seed, 0, failure.getPlacemarkOrBytes());
+						Throwable err = doTest(theCreator, helper, i + 1, isPrintingProgress, isPrintingFailures);
+						if (err != null) {
+							TestFailure newFailure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.getLastPlacemark());
+							if (!newFailure.equals(failure)) {
+								knownFailures.set(i, failure);
+								writeTestFailures(theFailureDir, theTestable, knownFailures);
+							}
+							if (firstError == null)
+								firstError = err;
+							failures++;
+						} else {
+							knownFailures.remove(i);
+							i--;
+							writeTestFailures(theFailureDir, theTestable, knownFailures);
+						}
+					}
+				}
+			}
+			for (int i = 0; i < maxCases && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
+				TestHelper helper = new TestHelper();
+				Throwable err = doTest(theCreator, helper, i + 1, isPrintingProgress, isPrintingFailures);
+				if (err != null) {
+					if (isPersistingFailures) {
+						TestFailure failure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.getLastPlacemark());
+						knownFailures.add(failure);
+						writeTestFailures(theFailureDir, theTestable, knownFailures);
+					}
+					if (firstError == null)
+						firstError = err;
+					failures++;
+				}
+			}
+			if (isThrowingOnFailure && failures > 0) {
+				if (firstError instanceof AssertionError)
+					throw (AssertionError) firstError;
+				throw new AssertionError(firstError.getMessage(), firstError);
+			}
+			return failures;
+		}
+	}
+
+	public static Testing createTester(Class<? extends Testable> testable) {
+		return new Testing(testable);
+	}
+
 	public static void main(String[] args) {
 		ArgumentParser parser = new ArgumentParser()//
 			.forDefaultFlagPattern()//
@@ -253,64 +415,85 @@ public class TestHelper {
 		}
 	}
 
-	public static int testRandom(Class<? extends Testable> testable, boolean knownFailuresFirst, int maxCases, int maxFailures,
-		Duration maxTime, boolean printProgress, boolean printFalures, boolean throwOnFailure) throws AssertionError {
-		Constructor<? extends Testable> creator = getCreator(testable);
-		if (maxCases <= 0)
-			maxCases = Integer.MAX_VALUE;
-		if (maxFailures <= 0)
-			maxFailures = Integer.MAX_VALUE;
-		Instant termination = maxTime == null ? Instant.MAX : Instant.now().plus(maxTime);
-		int failures = 0;
-		Throwable firstError = null;
-		if (knownFailuresFirst) {
-			List<TestFailure> knownFailures = getKnownFailures(testable);
-			if (knownFailures != null && !knownFailures.isEmpty()) {
+	private static List<TestFailure> getKnownFailures(File failureDir, Class<? extends Testable> testable) {
+		File testFile = getFailureFile(failureDir, testable, false);
+		if (testFile == null || !testFile.exists())
+			return Collections.emptyList();
 
+		try (BufferedReader reader = new BufferedReader(new FileReader(testFile))) {
+			List<TestFailure> failures = new ArrayList<>();
+			String line = reader.readLine();
+			if (line != null) // Header row
+				line = reader.readLine();
+			while (line != null) {
+				String[] split = line.split(",");
+				if (split.length == 3)
+					failures.add(new TestFailure(Long.parseLong(split[0], 16), Long.parseLong(split[1]),
+						split[2].length() == 0 ? -1 : Long.parseLong(split[2])));
+				else
+					throw new IllegalStateException("Need 3 columns");
+				line = reader.readLine();
+			}
+			return failures;
+		} catch (IOException e) {
+			e.printStackTrace();
+			return Collections.emptyList();
+		}
+	}
+
+	private static File getFailureFile(File failureDir, Class<? extends Testable> testable, boolean create) {
+		File testFile = null;
+		if (failureDir != null)
+			return new File(failureDir, testable.getName() + ".broken");
+
+		if (failureDir == null) {
+			// Attempt to co-locate the failure file with the class file
+			String classFileName = testable.getName();
+			classFileName = classFileName.replaceAll("\\.", "/") + ".class";
+			URL classLoc = testable.getClassLoader().getResource(classFileName);
+			if (classLoc != null && classLoc.getProtocol().equals("file")) {
+				File classFile = new File(classLoc.getPath());
+				testFile = new File(classFile.getParent(), testable.getSimpleName() + ".broken");
+				if (testFile.exists())
+					return testFile;
+				try {
+					if (create && testFile.createNewFile())
+						return testFile;
+				} catch (IOException e) {
+					System.err.println(
+						"Could not create failure file " + testFile.getAbsolutePath() + " for class " + testable.getName() + ": " + e);
+				}
 			}
 		}
-		for (int i = 0; i < maxCases && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
-			Throwable err = doTest(creator, new TestHelper(), i + 1, printProgress, printFalures);
-			if (err != null) {
-				if (firstError == null)
-					firstError = err;
-				failures++;
+		if (testFile == null) {
+			File currentDir = new File(System.getProperty("user.dir"));
+			testFile = new File(currentDir, testable.getName() + ".broken");
+			if (testFile.exists())
+				return testFile;
+			try {
+				if (create && testFile.createNewFile())
+					return testFile;
+			} catch (IOException e) {
+				System.err
+					.println("Could not create failure file " + testFile.getAbsolutePath() + " for class " + testable.getName() + ": " + e);
 			}
 		}
-		if (throwOnFailure && failures > 0) {
-			if (firstError instanceof AssertionError)
-				throw (AssertionError) firstError;
-			throw new AssertionError(firstError.getMessage(), firstError);
-		}
-		return failures;
+		return testFile;
 	}
 
-	public static Throwable testReproduce(Class<? extends Testable> testable, String hash, long debugAt, boolean printProgress,
-		boolean printFailures, boolean throwOnFailure) throws AssertionError {
-		Throwable err = doTest(getCreator(testable), new TestHelper(Long.parseLong(hash, 16), 0, debugAt), -1, printProgress,
-			printFailures);
-		if (throwOnFailure && err != null) {
-			if (err instanceof AssertionError)
-				throw (AssertionError) err;
-			throw new AssertionError(err.getMessage(), err);
+	private static void writeTestFailures(File failureDir, Class<? extends Testable> testable, List<TestFailure> failures) {
+		File testFile=getFailureFile(failureDir, testable, true);
+		if (testFile == null)
+			return;
+		try (BufferedWriter writer = new BufferedWriter(new java.io.FileWriter(testFile))) {
+			for (TestFailure failure : failures)
+				writer.write(
+					(Long.toHexString(failure.seed) + "," + failure.bytes + "," + (failure.placemark < 0 ? "" : "" + failure.placemark))
+						.toCharArray());
+		} catch (IOException e) {
+			System.err.println("Could not write to failure file " + testFile.getAbsolutePath() + " for class " + testable.getName());
+			e.printStackTrace();
 		}
-		return err;
-	}
-
-	public static void testSingle(Testable testable, long hash, long debugAt) throws AssertionError {
-		TestHelper helper = new TestHelper(hash, 0, debugAt);
-		Throwable err = doTest(testable, helper, -1, false, false);
-		if (err != null) {
-			StringBuilder msg = new StringBuilder(Long.toHexString(hash)).append('@').append(helper.getPosition());
-			if (helper.getLastPlacemark() >= 0)
-				msg.append("(placemark@").append(helper.getLastPlacemark()).append(") ");
-			msg.append(err.getMessage());
-			throw new AssertionError(msg.toString(), err);
-		}
-	}
-
-	private static List<TestFailure> getKnownFailures(Class<? extends Testable> testable) {
-		// TODO
 	}
 
 	private static <T extends Testable> Constructor<T> getCreator(Class<T> testable) {
