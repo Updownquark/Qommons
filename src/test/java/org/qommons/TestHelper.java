@@ -7,7 +7,6 @@ import java.net.URL;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.function.Consumer;
@@ -316,10 +315,10 @@ public class TestHelper {
 			else
 				knownFailures = null;
 			if (isRevisitingKnownFailures) {
-				if (knownFailures != null && !knownFailures.isEmpty()) {
+				if (!knownFailures.isEmpty()) {
 					for (int i = 0; i < knownFailures.size() && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
 						TestFailure failure = knownFailures.get(i);
-						TestHelper helper = new TestHelper(failure.seed, 0, failure.getPlacemarkOrBytes());
+						TestHelper helper = new TestHelper(failure.seed, 0, isDebugging ? failure.getPlacemarkOrBytes() : -1);
 						Throwable err = doTest(theCreator, helper, i + 1, isPrintingProgress, isPrintingFailures);
 						if (err != null) {
 							TestFailure newFailure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.getLastPlacemark());
@@ -331,6 +330,7 @@ public class TestHelper {
 								firstError = err;
 							failures++;
 						} else {
+							System.out.println("Test failure fixed");
 							knownFailures.remove(i);
 							i--;
 							writeTestFailures(theFailureDir, theTestable, knownFailures);
@@ -418,7 +418,7 @@ public class TestHelper {
 	private static List<TestFailure> getKnownFailures(File failureDir, Class<? extends Testable> testable) {
 		File testFile = getFailureFile(failureDir, testable, false);
 		if (testFile == null || !testFile.exists())
-			return Collections.emptyList();
+			return new ArrayList<>();
 
 		try (BufferedReader reader = new BufferedReader(new FileReader(testFile))) {
 			List<TestFailure> failures = new ArrayList<>();
@@ -437,7 +437,7 @@ public class TestHelper {
 			return failures;
 		} catch (IOException e) {
 			e.printStackTrace();
-			return Collections.emptyList();
+			return new ArrayList<>();
 		}
 	}
 
@@ -457,8 +457,11 @@ public class TestHelper {
 				if (testFile.exists())
 					return testFile;
 				try {
-					if (create && testFile.createNewFile())
+					if (testFile.createNewFile()) {
+						if (!create)
+							testFile.delete();
 						return testFile;
+					}
 				} catch (IOException e) {
 					System.err.println(
 						"Could not create failure file " + testFile.getAbsolutePath() + " for class " + testable.getName() + ": " + e);
@@ -471,8 +474,11 @@ public class TestHelper {
 			if (testFile.exists())
 				return testFile;
 			try {
-				if (create && testFile.createNewFile())
+				if (testFile.createNewFile()) {
+					if (!create)
+						testFile.delete();
 					return testFile;
+				}
 			} catch (IOException e) {
 				System.err
 					.println("Could not create failure file " + testFile.getAbsolutePath() + " for class " + testable.getName() + ": " + e);
@@ -486,10 +492,11 @@ public class TestHelper {
 		if (testFile == null)
 			return;
 		try (BufferedWriter writer = new BufferedWriter(new java.io.FileWriter(testFile))) {
-			for (TestFailure failure : failures)
-				writer.write(
-					(Long.toHexString(failure.seed) + "," + failure.bytes + "," + (failure.placemark < 0 ? "" : "" + failure.placemark))
-						.toCharArray());
+			for (TestFailure failure : failures) {
+				String csvLine = Long.toHexString(failure.seed) + "," + failure.bytes + ","
+					+ (failure.placemark < 0 ? "" : "" + failure.placemark);
+				writer.write((csvLine + "\n").toCharArray());
+			}
 		} catch (IOException e) {
 			System.err.println("Could not write to failure file " + testFile.getAbsolutePath() + " for class " + testable.getName());
 			e.printStackTrace();
