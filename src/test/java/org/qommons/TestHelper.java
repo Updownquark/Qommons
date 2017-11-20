@@ -4,6 +4,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Random;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
@@ -89,6 +90,16 @@ import org.qommons.io.Format;
 public class TestHelper {
 	public static interface Testable extends Consumer<TestHelper> {}
 
+	public static class TestFailure {
+		public final long seed;
+		public final long placemark;
+
+		public TestFailure(long seed, long placemark) {
+			this.seed = seed;
+			this.placemark = placemark;
+		}
+	}
+
 	private final long theSeed;
 	private final Random theRandomness;
 	private long theBytes;
@@ -149,6 +160,8 @@ public class TestHelper {
 	}
 
 	public int getInt(int min, int max) {
+		if (min == max)
+			return min;
 		return min + Math.abs(getAnyInt() % (max - min));
 	}
 
@@ -228,7 +241,7 @@ public class TestHelper {
 		 * Otherwise make a sub-dir called testhelper under the current working dir and
 		 * put the file in there, named fully.qualified.ClassName.broken. */
 		if (parsed.hasFlag("random")) {
-			testRandom(testable, //
+			testRandom(testable, false, //
 				(int) parsed.getInt("max-cases", Integer.MAX_VALUE), //
 				(int) parsed.getInt("max-failures", Integer.MAX_VALUE), //
 				parsed.getDuration("max-time", null), true, true, false);
@@ -240,8 +253,8 @@ public class TestHelper {
 		}
 	}
 
-	public static int testRandom(Class<? extends Testable> testable, int maxCases, int maxFailures, Duration maxTime, boolean printProgress,
-		boolean printFalures, boolean throwOnFailure) throws AssertionError {
+	public static int testRandom(Class<? extends Testable> testable, boolean knownFailuresFirst, int maxCases, int maxFailures,
+		Duration maxTime, boolean printProgress, boolean printFalures, boolean throwOnFailure) throws AssertionError {
 		Constructor<? extends Testable> creator = getCreator(testable);
 		if (maxCases <= 0)
 			maxCases = Integer.MAX_VALUE;
@@ -250,6 +263,12 @@ public class TestHelper {
 		Instant termination = maxTime == null ? Instant.MAX : Instant.now().plus(maxTime);
 		int failures = 0;
 		Throwable firstError = null;
+		if (knownFailuresFirst) {
+			List<TestFailure> knownFailures = getKnownFailures(testable);
+			if (knownFailures != null && !knownFailures.isEmpty()) {
+
+			}
+		}
 		for (int i = 0; i < maxCases && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
 			Throwable err = doTest(creator, new TestHelper(), i + 1, printProgress, printFalures);
 			if (err != null) {
@@ -288,6 +307,10 @@ public class TestHelper {
 			msg.append(err.getMessage());
 			throw new AssertionError(msg.toString(), err);
 		}
+	}
+
+	private static List<TestFailure> getKnownFailures(Class<? extends Testable> testable) {
+		// TODO
 	}
 
 	private static <T extends Testable> Constructor<T> getCreator(Class<T> testable) {
