@@ -115,6 +115,11 @@ public class TestHelper {
 			TestFailure other = (TestFailure) obj;
 			return seed == other.seed && bytes == other.bytes && placemark == other.placemark;
 		}
+
+		@Override
+		public String toString() {
+			return Long.toHexString(seed) + "@" + bytes + (placemark >= 0 ? "(placemark " + placemark + ")" : "");
+		}
 	}
 
 	private final long theSeed;
@@ -235,6 +240,7 @@ public class TestHelper {
 		private boolean isThrowingOnFailure = true;
 		private boolean isPersistingFailures = true;
 		private File theFailureDir = null;
+		private boolean isFailureFileQualified = true;
 
 		private Testing(Class<? extends Testable> testable) {
 			theTestable = testable;
@@ -292,10 +298,11 @@ public class TestHelper {
 			return this;
 		}
 
-		public Testing withPersistenceDir(File dir) {
+		public Testing withPersistenceDir(File dir, boolean qualifiedName) {
 			if (dir != null)
 				isPersistingFailures = true;
 			theFailureDir = dir;
+			isFailureFileQualified = qualifiedName;
 			return this;
 		}
 
@@ -311,7 +318,7 @@ public class TestHelper {
 			Throwable firstError = null;
 			List<TestFailure> knownFailures;
 			if (isRevisitingKnownFailures || isPersistingFailures)
-				knownFailures = getKnownFailures(theFailureDir, theTestable);
+				knownFailures = getKnownFailures(theFailureDir, theTestable, isFailureFileQualified);
 			else
 				knownFailures = null;
 			if (isRevisitingKnownFailures) {
@@ -324,7 +331,7 @@ public class TestHelper {
 							TestFailure newFailure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.getLastPlacemark());
 							if (!newFailure.equals(failure)) {
 								knownFailures.set(i, failure);
-								writeTestFailures(theFailureDir, theTestable, knownFailures);
+								writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, knownFailures);
 							}
 							if (firstError == null)
 								firstError = err;
@@ -333,7 +340,7 @@ public class TestHelper {
 							System.out.println("Test failure fixed");
 							knownFailures.remove(i);
 							i--;
-							writeTestFailures(theFailureDir, theTestable, knownFailures);
+							writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, knownFailures);
 						}
 					}
 				}
@@ -345,7 +352,7 @@ public class TestHelper {
 					if (isPersistingFailures) {
 						TestFailure failure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.getLastPlacemark());
 						knownFailures.add(failure);
-						writeTestFailures(theFailureDir, theTestable, knownFailures);
+						writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, knownFailures);
 					}
 					if (firstError == null)
 						firstError = err;
@@ -415,8 +422,8 @@ public class TestHelper {
 		}
 	}
 
-	private static List<TestFailure> getKnownFailures(File failureDir, Class<? extends Testable> testable) {
-		File testFile = getFailureFile(failureDir, testable, false);
+	private static List<TestFailure> getKnownFailures(File failureDir, Class<? extends Testable> testable, boolean qualifiedName) {
+		File testFile = getFailureFile(failureDir, testable, qualifiedName, false);
 		if (testFile == null || !testFile.exists())
 			return new ArrayList<>();
 
@@ -441,10 +448,10 @@ public class TestHelper {
 		}
 	}
 
-	private static File getFailureFile(File failureDir, Class<? extends Testable> testable, boolean create) {
+	private static File getFailureFile(File failureDir, Class<? extends Testable> testable, boolean qualifiedName, boolean create) {
 		File testFile = null;
 		if (failureDir != null)
-			return new File(failureDir, testable.getName() + ".broken");
+			return new File(failureDir, (qualifiedName ? testable.getName() : testable.getSimpleName()) + ".broken");
 
 		if (failureDir == null) {
 			// Attempt to co-locate the failure file with the class file
@@ -487,11 +494,13 @@ public class TestHelper {
 		return testFile;
 	}
 
-	private static void writeTestFailures(File failureDir, Class<? extends Testable> testable, List<TestFailure> failures) {
-		File testFile=getFailureFile(failureDir, testable, true);
+	private static void writeTestFailures(File failureDir, Class<? extends Testable> testable, boolean qualifiedName,
+		List<TestFailure> failures) {
+		File testFile = getFailureFile(failureDir, testable, qualifiedName, true);
 		if (testFile == null)
 			return;
 		try (BufferedWriter writer = new BufferedWriter(new java.io.FileWriter(testFile))) {
+			writer.write("Seed,Position,Placemark\n");
 			for (TestFailure failure : failures) {
 				String csvLine = Long.toHexString(failure.seed) + "," + failure.bytes + ","
 					+ (failure.placemark < 0 ? "" : "" + failure.placemark);
