@@ -1,17 +1,7 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.ConcurrentModificationException;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
@@ -180,8 +170,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			return false;
 		try (Transaction t = lock(true, null); Transaction t2 = Transactable.lock(c, false, null)) {
 			if (index == size()) {
-				addAll(c);
-				return true;
+				return addAll(c);
 			}
 			forMutableElementAt(index, el -> {
 				c.spliterator().forEachRemaining(v -> {
