@@ -1,13 +1,6 @@
 package org.qommons.collect;
 
-import java.util.Collection;
-import java.util.Deque;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -271,8 +264,10 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 			return false;
 		boolean[] removed = new boolean[1];
 		findAll(filter, el -> {
-			el.remove();
-			removed[0] = true;
+			if (el.canRemove() == null) {
+				el.remove();
+				removed[0] = true;
+			}
 		}, true);
 		return removed[0];
 	}
