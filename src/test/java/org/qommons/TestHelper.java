@@ -326,11 +326,11 @@ public class TestHelper {
 					for (int i = 0; i < knownFailures.size() && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
 						TestFailure failure = knownFailures.get(i);
 						TestHelper helper = new TestHelper(failure.seed, 0, isDebugging ? failure.getPlacemarkOrBytes() : -1);
-						Throwable err = doTest(theCreator, helper, i + 1, isPrintingProgress, isPrintingFailures);
+						Throwable err = doTest(theCreator, helper, i + 1, isPrintingProgress, isPrintingFailures, true);
 						if (err != null) {
 							TestFailure newFailure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.getLastPlacemark());
 							if (!newFailure.equals(failure)) {
-								knownFailures.set(i, failure);
+								knownFailures.set(i, newFailure);
 								writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, knownFailures);
 							}
 							if (firstError == null)
@@ -347,7 +347,7 @@ public class TestHelper {
 			}
 			for (int i = 0; i < maxCases && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
 				TestHelper helper = new TestHelper();
-				Throwable err = doTest(theCreator, helper, i + 1, isPrintingProgress, isPrintingFailures);
+				Throwable err = doTest(theCreator, helper, i + 1, isPrintingProgress, isPrintingFailures, false);
 				if (err != null) {
 					if (isPersistingFailures) {
 						TestFailure failure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.getLastPlacemark());
@@ -413,12 +413,12 @@ public class TestHelper {
 			testRandom(testable, false, //
 				(int) parsed.getInt("max-cases", Integer.MAX_VALUE), //
 				(int) parsed.getInt("max-failures", Integer.MAX_VALUE), //
-				parsed.getDuration("max-time", null), true, true, false);
+				parsed.getDuration("max-time", null), true, true, false, false);
 		} else {
 			long debugAt = parsed.get("debug-at") != null ? parsed.getLong("debug-at") : -1;
 			int i = 0;
 			for (String hash : parsed.getAll("hash", String.class))
-				doTest(creator, new TestHelper(Long.parseLong(hash, 16), 0, debugAt), ++i, true, true);
+				doTest(creator, new TestHelper(Long.parseLong(hash, 16), 0, debugAt), ++i, true, true, true);
 		}
 	}
 
@@ -535,22 +535,25 @@ public class TestHelper {
 	}
 
 	private static Throwable doTest(Constructor<? extends Testable> creator, TestHelper testHelper, int caseNumber,
-		boolean printProgress, boolean printFailures) {
+		boolean printProgress, boolean printFailures, boolean reproduction) {
 		Testable tester;
 		try {
 			tester = creator.newInstance();
 		} catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
 			throw new IllegalStateException("Could not instantiate tester " + creator.getDeclaringClass().getName(), e);
 		}
-		return doTest(tester, testHelper, caseNumber, printProgress, printFailures);
+		return doTest(tester, testHelper, caseNumber, printProgress, printFailures, reproduction);
 	}
 
-	private static Throwable doTest(Testable tester, TestHelper testHelper, int caseNumber, boolean printProgress, boolean printFailures) {
+	private static Throwable doTest(Testable tester, TestHelper testHelper, int caseNumber, boolean printProgress, boolean printFailures,
+		boolean reproduction) {
 		String caseLabel = "";
 		if (caseNumber > 0)
 			caseLabel += "[" + caseNumber + "] ";
 		caseLabel += Long.toHexString(testHelper.getSeed()).toUpperCase() + ": ";
 		if (printProgress) {
+			if (reproduction)
+				System.out.print("Reproducing ");
 			System.out.print(caseLabel);
 			System.out.flush();
 		}
