@@ -1,10 +1,7 @@
 package org.qommons;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Scanner;
-import java.util.Set;
+import java.lang.management.ManagementFactory;
+import java.util.*;
 
 /**
  * The BreakpointHere class enables applications to transfer control to the java debugger, where this is VM-enabled. Users should always
@@ -50,7 +47,7 @@ public class BreakpointHere {
 			stack = thread.getStackTrace();
 			if(stack == null || stack.length == 0) {
 				IGNORE_ALL = true;
-				System.err.println("WARNING! Application is attempting to catch a breakpoint, but debugging seems to be disabled");
+				System.err.println("WARNING! Application is attempting to catch a breakpoint, but line numbers seem to not be included");
 				return;
 			}
 			source = stack[2];
@@ -94,6 +91,12 @@ public class BreakpointHere {
 				StackTraceElement stackTop = stack[1];
 
 				if(!alerted) {
+					String debugArg = isDebugEnabled();
+					if (debugArg == null) {
+						System.err.println("WARNING! Application is attempting to catch a breakpoint, but debugging seems to be disabled");
+						IGNORE_ALL = true;
+						return;
+					}
 					alerted = true;
 
 					System.err.println("ATTENTION! " + source.getClassName() + " is attempting to catch a breakpoint at " + stackTop);
@@ -154,6 +157,27 @@ public class BreakpointHere {
 				break;
 			}
 		}
+	}
+
+	/** The set of known Java VM arguments that indicate that debugger attachment is possible */
+	public static Set<String> DEBUG_ARGS = Collections.unmodifiableSet(new LinkedHashSet<>(Arrays.asList(//
+		"-Xdebug", "-agentlib:jdwp")));
+
+	private static Optional<String> DEBUG_ARG;
+
+	/** @return The Java VM argument enabling debugger attachment in this VM, or null if debugging is disabled */
+	public static String isDebugEnabled() {
+		if (DEBUG_ARG == null) {
+			List<String> vmArgs = ManagementFactory.getRuntimeMXBean().getInputArguments();
+			for (String arg : vmArgs) {
+				for (String debugArg : DEBUG_ARGS)
+					if (arg.startsWith(debugArg))
+						DEBUG_ARG = Optional.of(arg);
+			}
+			if (DEBUG_ARG == null)
+				DEBUG_ARG = Optional.empty();
+		}
+		return DEBUG_ARG.orElse(null);
 	}
 
 	/**
