@@ -330,9 +330,12 @@ public class TestHelper {
 						if (err != null) {
 							TestFailure newFailure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.getLastPlacemark());
 							if (!newFailure.equals(failure)) {
+								System.err.println("Test failed "//
+									+ (newFailure.bytes > failure.bytes ? "later" : "earlier") + " than before");
 								knownFailures.set(i, newFailure);
 								writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, knownFailures);
-							}
+							} else
+								System.err.println("Test failure reproduced");
 							if (firstError == null)
 								firstError = err;
 							failures++;
