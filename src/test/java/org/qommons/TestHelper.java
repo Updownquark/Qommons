@@ -6,9 +6,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
@@ -96,16 +94,22 @@ public class TestHelper {
 	public static class TestFailure {
 		public final long seed;
 		public final long bytes;
-		public final long placemark;
+		public final NavigableMap<String, Long> placemarks;
 
-		public TestFailure(long seed, long bytes, long placemark) {
+		public TestFailure(long seed, long bytes, NavigableMap<String, Long> placemarks) {
 			this.seed = seed;
 			this.bytes = bytes;
-			this.placemark = placemark;
+			TreeMap<String, Long> ps = new TreeMap<>();
+			placemarks.entrySet().stream().filter(e -> e.getValue() != null && e.getValue() >= 0)
+				.forEach(e -> ps.put(e.getKey(), e.getValue()));
+			this.placemarks = Collections.unmodifiableNavigableMap(ps);
 		}
 
-		public long getPlacemarkOrBytes() {
-			return placemark >= 0 ? placemark : bytes;
+		public NavigableSet<Long> getBreakpoints() {
+			if (placemarks.isEmpty())
+				return new TreeSet<>(Arrays.asList(bytes));
+			else
+				return new TreeSet<>(placemarks.values());
 		}
 
 		@Override
@@ -113,41 +117,53 @@ public class TestHelper {
 			if (!(obj instanceof TestFailure))
 				return false;
 			TestFailure other = (TestFailure) obj;
-			return seed == other.seed && bytes == other.bytes && placemark == other.placemark;
+			return seed == other.seed && bytes == other.bytes && placemarks.equals(other.placemarks);
 		}
 
 		@Override
 		public String toString() {
-			return Long.toHexString(seed) + "@" + bytes + (placemark >= 0 ? "(placemark " + placemark + ")" : "");
+			StringBuilder s = new StringBuilder();
+			s.append(Long.toHexString(seed)).append('@').append(bytes);
+			for (Map.Entry<String, Long> entry : placemarks.entrySet())
+				s.append(' ').append(entry.getKey()).append(": ").append(entry.getValue());
+			return s.toString();
 		}
 	}
 
 	private final long theSeed;
 	private final Random theRandomness;
 	private long theBytes;
-	private long theLastPlacemark;
-	private long theBreak;
+	private final NavigableSet<String> thePlacemarkNames;
+	private final NavigableMap<String, Long> thePlacemarks;
+	private final NavigableSet<Long> theBreakpoints;
+	private long theNextBreak;
 
-	private TestHelper() {
-		this(Double.doubleToLongBits(Math.random()), 0, -1);
+	private TestHelper(Set<String> placemarkNames) {
+		this(Double.doubleToLongBits(Math.random()), 0, Collections.emptyNavigableSet(), placemarkNames);
 	}
 
-	private TestHelper(long seed, long bytes, long breakPoint) {
+	private TestHelper(long seed, long bytes, NavigableSet<Long> breakPoints, Set<String> placemarkNames) {
 		theSeed=seed;
 		theRandomness=new Random(seed);
 		while (theBytes < bytes - 7)
 			getAnyLong();
 		while (theBytes < bytes)
 			getBoolean();
-		theLastPlacemark = -1;
-		theBreak = breakPoint < 0 ? Long.MAX_VALUE : breakPoint;
+		TreeSet<String> pns = new TreeSet<>(placemarkNames);
+		pns.add("Placemark");
+		thePlacemarkNames = Collections.unmodifiableNavigableSet(pns);
+		thePlacemarks = new TreeMap<>();
+		theBreakpoints = Collections.unmodifiableNavigableSet(new TreeSet<>(breakPoints));
+		theNextBreak = theBreakpoints.isEmpty() ? Long.MAX_VALUE : theBreakpoints.first();
 	}
 
 	private void getBytes(int bytes) {
-		boolean postBreak = theBytes >= theBreak;
 		theBytes += bytes;
-		if (!postBreak && theBytes >= theBreak)
+		if (theBytes >= theNextBreak) {
 			BreakpointHere.breakpoint();
+			Long next = theBreakpoints.higher(theBytes);
+			theNextBreak = next == null ? Long.MAX_VALUE : next;
+		}
 	}
 
 	public long getSeed() {
@@ -158,18 +174,29 @@ public class TestHelper {
 		return theBytes;
 	}
 
-	public long getLastPlacemark() {
-		return theLastPlacemark;
+	public NavigableSet<String> getPlacemarkNames() {
+		return thePlacemarkNames;
+	}
+
+	public long getLastPlacemark(String name) {
+		Long placemark = thePlacemarks.get(name);
+		return placemark == null ? -1 : placemark.longValue();
 	}
 
 	public TestHelper fork() {
 		long forkSeed = getAnyLong();
-		return new TestHelper(forkSeed, 0, -1);
+		return new TestHelper(forkSeed, 0, theBreakpoints, thePlacemarkNames);
 	}
 
 	public void placemark() {
+		placemark("Placemark");
+	}
+
+	public void placemark(String name) {
+		if (!thePlacemarkNames.contains(name))
+			throw new IllegalArgumentException("Unrecognized placemark name: " + name);
 		getBoolean();
-		theLastPlacemark = theBytes;
+		thePlacemarks.put(name, theBytes);
 	}
 
 	public TestHelper tolerate(Duration timeout) {
@@ -230,6 +257,7 @@ public class TestHelper {
 		private final Constructor<? extends Testable> theCreator;
 		private boolean isRevisitingKnownFailures = true;
 		private List<TestFailure> theSpecifiedCases = new ArrayList<>();
+		private final NavigableSet<String> thePlacemarkNames;
 		private boolean isDebugging = false;
 		private int theMaxRandomCases = 0;
 		private int theMaxFailures = 1;
@@ -245,6 +273,7 @@ public class TestHelper {
 		private Testing(Class<? extends Testable> testable) {
 			theTestable = testable;
 			theCreator = getCreator(testable);
+			thePlacemarkNames = new TreeSet<>();
 		}
 
 		public Testing revisitKnownFailures(boolean b) {
@@ -257,8 +286,8 @@ public class TestHelper {
 			return this;
 		}
 
-		public Testing withCase(long hash, long breakPoint) {
-			theSpecifiedCases.add(new TestFailure(hash, 0, breakPoint));
+		public Testing withCase(long hash, NavigableMap<String, Long> placemarks) {
+			theSpecifiedCases.add(new TestFailure(hash, 0, placemarks));
 			return this;
 		}
 
@@ -279,6 +308,12 @@ public class TestHelper {
 
 		public Testing withMaxCaseDuration(Duration duration) {
 			theMaxCaseDuration = duration;
+			return this;
+		}
+
+		public Testing withPlacemarks(String... names) {
+			for (String name : names)
+				thePlacemarkNames.add(name);
 			return this;
 		}
 
@@ -318,22 +353,26 @@ public class TestHelper {
 			Throwable firstError = null;
 			List<TestFailure> knownFailures;
 			if (isRevisitingKnownFailures || isPersistingFailures)
-				knownFailures = getKnownFailures(theFailureDir, theTestable, isFailureFileQualified);
+				knownFailures = getKnownFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames);
 			else
 				knownFailures = null;
 			if (isRevisitingKnownFailures) {
 				if (!knownFailures.isEmpty()) {
 					for (int i = 0; i < knownFailures.size() && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
 						TestFailure failure = knownFailures.get(i);
-						TestHelper helper = new TestHelper(failure.seed, 0, isDebugging ? failure.getPlacemarkOrBytes() : -1);
+						TestHelper helper = new TestHelper(failure.seed, 0,
+							isDebugging ? failure.getBreakpoints() : Collections.emptyNavigableSet(), thePlacemarkNames);
 						Throwable err = doTest(theCreator, helper, i + 1, isPrintingProgress, isPrintingFailures, true);
 						if (err != null) {
-							TestFailure newFailure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.getLastPlacemark());
+							TestFailure newFailure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.thePlacemarks);
 							if (!newFailure.equals(failure)) {
-								System.err.println("Test failed "//
-									+ (newFailure.bytes > failure.bytes ? "later" : "earlier") + " than before");
+								if (newFailure.bytes != failure.bytes)
+									System.err.println("Test failed "//
+										+ (newFailure.bytes > failure.bytes ? "later" : "earlier") + " than before");
+								else
+									System.err.println("Test failure reproduced");
 								knownFailures.set(i, newFailure);
-								writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, knownFailures);
+								writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames, knownFailures);
 							} else
 								System.err.println("Test failure reproduced");
 							if (firstError == null)
@@ -343,19 +382,19 @@ public class TestHelper {
 							System.out.println("Test failure fixed");
 							knownFailures.remove(i);
 							i--;
-							writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, knownFailures);
+							writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames, knownFailures);
 						}
 					}
 				}
 			}
 			for (int i = 0; i < maxCases && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
-				TestHelper helper = new TestHelper();
+				TestHelper helper = new TestHelper(thePlacemarkNames);
 				Throwable err = doTest(theCreator, helper, i + 1, isPrintingProgress, isPrintingFailures, false);
 				if (err != null) {
 					if (isPersistingFailures) {
-						TestFailure failure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.getLastPlacemark());
+						TestFailure failure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.thePlacemarks);
 						knownFailures.add(failure);
-						writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, knownFailures);
+						writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames, knownFailures);
 					}
 					if (firstError == null)
 						firstError = err;
@@ -425,7 +464,8 @@ public class TestHelper {
 		}
 	}
 
-	private static List<TestFailure> getKnownFailures(File failureDir, Class<? extends Testable> testable, boolean qualifiedName) {
+	private static List<TestFailure> getKnownFailures(File failureDir, Class<? extends Testable> testable, boolean qualifiedName,
+		NavigableSet<String> placemarkNames) {
 		File testFile = getFailureFile(failureDir, testable, qualifiedName, false);
 		if (testFile == null || !testFile.exists())
 			return new ArrayList<>();
@@ -433,15 +473,29 @@ public class TestHelper {
 		try (BufferedReader reader = new BufferedReader(new FileReader(testFile))) {
 			List<TestFailure> failures = new ArrayList<>();
 			String line = reader.readLine();
-			if (line != null) // Header row
-				line = reader.readLine();
+			if (line == null)
+				return failures;
+			String[] split = line.split(",");
+			List<String> filePlacemarks = new ArrayList<>(split.length - 2);
+			for (int i = 2; i < split.length; i++)
+				filePlacemarks.add(split[i]);
+			line = reader.readLine();
+			NavigableMap<String, Long> placemarks = new TreeMap<>();
 			while (line != null) {
-				String[] split = line.split(",");
-				if (split.length == 3)
-					failures.add(new TestFailure(Long.parseLong(split[0], 16), Long.parseLong(split[1]),
-						split[2].length() == 0 ? -1 : Long.parseLong(split[2])));
-				else
-					throw new IllegalStateException("Need 3 columns");
+				placemarks.clear();
+				split = line.split(",");
+				if (split.length != filePlacemarks.size() + 2)
+					throw new IllegalStateException("Need " + (filePlacemarks.size() + 2) + " columns");
+				long seed = Long.parseLong(split[0], 16);
+				long bytes = Long.parseLong(split[1]);
+				for (int i = 2; i < split.length; i++) {
+					if (split[i].length() == 0)
+						continue;
+					String pn = filePlacemarks.get(i - 2);
+					if (placemarkNames.contains(pn))
+						placemarks.put(pn, Long.parseLong(split[i]));
+				}
+				failures.add(new TestFailure(seed, bytes, placemarks));
 				line = reader.readLine();
 			}
 			return failures;
@@ -498,15 +552,25 @@ public class TestHelper {
 	}
 
 	private static void writeTestFailures(File failureDir, Class<? extends Testable> testable, boolean qualifiedName,
-		List<TestFailure> failures) {
+		NavigableSet<String> placemarkNames, List<TestFailure> failures) {
 		File testFile = getFailureFile(failureDir, testable, qualifiedName, true);
 		if (testFile == null)
 			return;
 		try (BufferedWriter writer = new BufferedWriter(new java.io.FileWriter(testFile))) {
-			writer.write("Seed,Position,Placemark\n");
+			writer.write("Seed,Position");
+			for (String pn : placemarkNames)
+				writer.write("," + pn);
+			writer.write("\n");
+			StringBuilder csvLine = new StringBuilder();
 			for (TestFailure failure : failures) {
-				String csvLine = Long.toHexString(failure.seed) + "," + failure.bytes + ","
-					+ (failure.placemark < 0 ? "" : "" + failure.placemark);
+				csvLine.setLength(0);
+				csvLine.append(Long.toHexString(failure.seed)).append(',').append(failure.bytes);
+				for (String pn : placemarkNames) {
+					csvLine.append(',');
+					Long placemark = failure.placemarks.get(pn);
+					if (placemark != null)
+						csvLine.append(placemark);
+				}
 				writer.write((csvLine + "\n").toCharArray());
 			}
 		} catch (IOException e) {
@@ -573,9 +637,11 @@ public class TestHelper {
 				StringBuilder msg = new StringBuilder();
 				msg.append("FAILURE@").append(testHelper.getPosition()).append(" in ");
 				Format.durationFormat().append(msg, Duration.ofNanos(System.nanoTime() - start));
-				long placemark = testHelper.getLastPlacemark();
-				if (placemark >= 0)
-					msg.append("\nPlacemark@").append(placemark);
+				for (String pn : testHelper.getPlacemarkNames()) {
+					long placemark = testHelper.getLastPlacemark(pn);
+					if (placemark >= 0)
+						msg.append("\n\t" + pn + "@").append(placemark);
+				}
 				System.err.println(msg);
 				e.printStackTrace();
 			}
