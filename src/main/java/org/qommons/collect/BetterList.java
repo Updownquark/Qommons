@@ -172,13 +172,16 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			if (index == size()) {
 				return addAll(c);
 			}
+			boolean[] modified = new boolean[1];
 			forMutableElementAt(index, el -> {
 				c.spliterator().forEachRemaining(v -> {
-					if (el.canAdd(v, true) == null)
+					if (el.canAdd(v, true) == null) {
 						el.add(v, true);
+						modified[0] = true;
+					}
 				});
 			});
-			return true;
+			return modified[0];
 		}
 	}
 
