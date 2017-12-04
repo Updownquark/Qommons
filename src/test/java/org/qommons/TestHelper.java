@@ -8,10 +8,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.regex.Pattern;
 
-import org.qommons.ArgumentParsing.ArgumentParser;
-import org.qommons.ArgumentParsing.Arguments;
 import org.qommons.io.Format;
 
 /**
@@ -453,57 +450,6 @@ public class TestHelper {
 	public static Testing createTester(Class<? extends Testable> testable) {
 		return new Testing(testable);
 	}
-
-	public static void main(String[] args) {
-		ArgumentParser parser = new ArgumentParser()//
-			.forDefaultFlagPattern()//
-			/**/.flagArg("random").requiredIfNot("reproduce").requiresNot("reproduce")//
-			/**/.flagArg("reproduce").requiredIfNot("random").requiresNot("random")//
-			/**/.flagArg("debug").requires("reproduce")//
-			/**/
-			.forDefaultPattern()//
-			/**/.stringArg("test-class").required()//
-			/**/.durationArg("hold-time").defValue(Duration.ofSeconds(60))//
-			/**/.intArg("max-cases").requires("random").atLeast(1)//
-			/**/.durationArg("max-time").requires("random")//
-			/**/.intArg("max-failures").requires("random").atLeast(1)//
-			/**/.booleanArg("only-new").requires("random").defValue(true)//
-			/**/.intArg("debug-at").requires("random").atLeast(0)//
-			.forDefaultMultiValuePattern()//
-			/**/.patternArg("hash", Pattern.compile("[0-9a-fA-F]{16}"))//
-			.getParser();
-		Arguments parsed = parser.parse(args);
-		Class<? extends Testable> testable;
-		try {
-			testable = Class.forName(parsed.getString("test-class")).asSubclass(Testable.class);
-		} catch (ClassNotFoundException e) {
-			System.err.println("Test class " + parsed.getString("test-class") + " not found");
-			e.printStackTrace();
-			return;
-		} catch (ClassCastException e) {
-			System.err.println("Test class " + parsed.getString("test-class") + " is not " + Testable.class.getName());
-			return;
-		}
-		Constructor<? extends Testable> creator = getCreator(testable);
-
-		/* TODO Append broken test cases to a file. Remove fixed test cases.
-		 * Attempt to co-locate this file with the class being tested.
-		 * If co-located, the file should be the simple name of the class.broken.
-		 * Otherwise make a sub-dir called testhelper under the current working dir and
-		 * put the file in there, named fully.qualified.ClassName.broken. */
-		if (parsed.hasFlag("random")) {
-			testRandom(testable, false, //
-				(int) parsed.getInt("max-cases", Integer.MAX_VALUE), //
-				(int) parsed.getInt("max-failures", Integer.MAX_VALUE), //
-				parsed.getDuration("max-time", null), true, true, false, false);
-		} else {
-			long debugAt = parsed.get("debug-at") != null ? parsed.getLong("debug-at") : -1;
-			int i = 0;
-			for (String hash : parsed.getAll("hash", String.class))
-				doTest(creator, new TestHelper(Long.parseLong(hash, 16), 0, debugAt), ++i, true, true, true);
-		}
-	}
-
 	private static List<TestFailure> getKnownFailures(File failureDir, Class<? extends Testable> testable, boolean qualifiedName,
 		NavigableSet<String> placemarkNames) {
 		File testFile = getFailureFile(failureDir, testable, qualifiedName, false);

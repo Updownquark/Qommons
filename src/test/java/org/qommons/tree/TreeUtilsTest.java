@@ -90,16 +90,21 @@ public class TreeUtilsTest {
 		test(new RedBlackNode<>("a"), alphaBet('z'));
 	}
 
+	static class TreeSetTester implements TestHelper.Testable {
+		@Override
+		public void accept(TestHelper helper) {
+			BetterTreeSet<Integer> set = new BetterTreeSet<>(false, Integer::compareTo);
+			testCollection(set, s -> s.checkValid(), null, helper);
+		}
+	}
+
 	/**
 	 * Runs the {@link QommonsTestUtils#testCollection(java.util.Collection, java.util.function.Consumer, java.util.function.Function)}
 	 * tests against {@link BetterTreeSet}
 	 */
 	@Test
 	public void testTreeSet() {
-		BetterTreeSet<Integer> set = new BetterTreeSet<>(false, Integer::compareTo);
-		TestHelper.testSingle(//
-			helper -> testCollection(set, s -> s.checkValid(), null, helper), //
-			1, -1);
+		TestHelper.createTester(TreeSetTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute();
 	}
 
 	/**
@@ -117,14 +122,10 @@ public class TreeUtilsTest {
 		testMap(map, s -> s.checkValid(), null);
 	}
 
-	/**
-	 * Runs the {@link QommonsTestUtils#testCollection(java.util.Collection, java.util.function.Consumer, java.util.function.Function)}
-	 * tests against {@link BetterTreeList}
-	 */
-	@Test
-	public void testTreeList() {
-		BetterTreeList<Integer> list = new BetterTreeList<>(false);
-		TestHelper.testSingle(helper -> {
+	static class TreeListTester implements TestHelper.Testable {
+		@Override
+		public void accept(TestHelper helper) {
+			BetterTreeList<Integer> list = new BetterTreeList<>(false);
 			testCollection(list, l -> list.checkValid(), null, helper);
 
 			// I want the tree list to tolerate appending to the list during iteration.
@@ -132,10 +133,19 @@ public class TreeUtilsTest {
 			// continue with the new value. This property is important for the listener list in SimpleObservable
 			testIterationAdd(list);
 			testIterationAdd(new BetterTreeList<>(true));
-		}, 1, -1);
+		}
 	}
 
-	private void testIterationAdd(BetterTreeList<Integer> list) {
+	/**
+	 * Runs the {@link QommonsTestUtils#testCollection(java.util.Collection, java.util.function.Consumer, java.util.function.Function)}
+	 * tests against {@link BetterTreeList}
+	 */
+	@Test
+	public void testTreeList() {
+		TestHelper.createTester(TreeListTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute();
+	}
+
+	private static void testIterationAdd(BetterTreeList<Integer> list) {
 		list.addAll(QommonsTestUtils.sequence(5, v -> v, false));
 		boolean fiveIsNext = false;
 		for (Integer v : list) {

@@ -6,12 +6,17 @@ import org.qommons.TestHelper;
 
 /** Tests {@link BetterHashSet} and {@link BetterHashMap} */
 public class HashSetTest {
+	static class HashSetTester implements TestHelper.Testable {
+		@Override
+		public void accept(TestHelper helper) {
+			QommonsTestUtils.testCollection(BetterHashSet.build().unsafe().buildSet(), null, null, helper);
+		}
+	}
+
 	/** Tests {@link BetterHashSet} */
 	@Test
 	public void testHashSet() {
-		TestHelper.testSingle(//
-			helper -> QommonsTestUtils.testCollection(BetterHashSet.build().unsafe().buildSet(), null, null, helper), //
-			1, -1);
+		TestHelper.createTester(HashSetTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute();
 	}
 
 	/** Tests {@link BetterHashMap} */

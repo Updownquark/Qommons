@@ -16,6 +16,13 @@ public class CircularListTest {
 	private static boolean WITH_PROGRESS = false;
 	private static final DecimalFormat PC_FMT = new DecimalFormat("0%");
 
+	static class SafeCALTester implements TestHelper.Testable {
+		@Override
+		public void accept(TestHelper helper) {
+			QommonsTestUtils.testCollection(new CircularArrayList<>(), list -> list.checkValid(), null, helper);
+		}
+	}
+
 	/**
 	 * Runs the basic
 	 * {@link QommonsTestUtils#testCollection(java.util.Collection, java.util.function.Consumer, java.util.function.Function)} collection
@@ -23,9 +30,15 @@ public class CircularListTest {
 	 */
 	@Test
 	public void safeCALTest() {
-		TestHelper.testSingle(//
-			helper -> QommonsTestUtils.testCollection(new CircularArrayList<>(), list -> list.checkValid(), null, helper), //
-			1, -1);
+		TestHelper.createTester(SafeCALTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute();
+	}
+
+	static class UnsafeCALTester implements TestHelper.Testable {
+		@Override
+		public void accept(TestHelper helper) {
+			QommonsTestUtils.testCollection(CircularArrayList.build().unsafe().withMinCapacity(20).withMinOccupancy(0.5).build(),
+				list -> list.checkValid(), null, helper);
+		}
 	}
 
 	/**
@@ -35,16 +48,12 @@ public class CircularListTest {
 	 */
 	@Test
 	public void unsafeCALTest() {
-		TestHelper.testSingle(//
-			helper -> QommonsTestUtils.testCollection(CircularArrayList.build().unsafe().withMinCapacity(20).withMinOccupancy(0.5).build(),
-				list -> list.checkValid(), null, helper), //
-			1, -1);
+		TestHelper.createTester(UnsafeCALTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute();
 	}
 
-	/** Runs a gauntlet of tests against */
-	//@Test
-	public void testPerformance() {
-		TestHelper.testSingle(helper -> {
+	static class PerformanceTester implements TestHelper.Testable {
+		@Override
+		public void accept(TestHelper helper) {
 			ArrayList<Integer> java = new ArrayList<>();
 			CircularArrayList<Integer> unsafe = CircularArrayList.build().unsafe().build();
 			// CircularArrayList<Integer> safe = new CircularArrayList<>();
@@ -82,7 +91,13 @@ public class CircularListTest {
 			System.out.println(
 				"Java: " + printTime(javaTime) + ", unsafe: " + printTime(unsafeTime) + ": " + PC_FMT.format(unsafeTime * 1.0 / javaTime));
 			// System.out.println("Safe: " + org.qommons.QommonsUtils.printTimeLength(safeTime / 1000000));
-		}, 1, -1);
+		}
+	}
+
+	/** Runs a gauntlet of tests against {@link CircularArrayList} */
+	// @Test
+	public void testPerformance() {
+		TestHelper.createTester(PerformanceTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute();
 	}
 
 	/**
@@ -234,10 +249,9 @@ public class CircularListTest {
 		return testing <= standard * tolerance;
 	}
 
-	/** Tests {@link CircularArrayList}'s {@link CircularArrayList#setMaxCapacity(int) max capacity} capability */
-	@Test
-	public void maxCapTest() {
-		TestHelper.testSingle(helper -> {
+	static class MaxCapTester implements TestHelper.Testable {
+		@Override
+		public void accept(TestHelper helper) {
 			CircularArrayList<Integer> list = new CircularArrayList<>();
 			list.setMaxCapacity(10000);
 			// Run a basic test with a capacity sufficient to avoid dropping elements
@@ -302,7 +316,13 @@ public class CircularListTest {
 				} else
 					assertEquals(Integer.valueOf(i), list.get(i));
 			}
-		}, 1, -1);
+		}
+	}
+
+	/** Tests {@link CircularArrayList}'s {@link CircularArrayList#setMaxCapacity(int) max capacity} capability */
+	@Test
+	public void maxCapTest() {
+		TestHelper.createTester(MaxCapTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute();
 	}
 
 	/* TODO Test:
