@@ -241,6 +241,18 @@ public class TestHelper {
 		return min + getDouble() * (max - min);
 	}
 
+	public double getDouble(double min, double avg, double max) {
+		if (avg <= min || avg >= max)
+			throw new IllegalArgumentException("min=" + min + ", avg=" + avg + ", max=" + max);
+		double random = getDouble();
+		double skew = (avg - min) * 2 / (max - min);
+		random = Math.pow(random, 1 / skew);
+		if (random <= 0.5)
+			return min + random * (avg - min);
+		else
+			return avg + random * (max - avg);
+	}
+
 	public boolean getBoolean() {
 		getBytes(1);
 		byte[] bytes = new byte[1];
@@ -250,6 +262,34 @@ public class TestHelper {
 
 	public boolean getBoolean(double odds) {
 		return getDouble() < odds;
+	}
+
+	public RandomAction doAction(double relativeProability, Runnable action) {
+		return new RandomAction(this).or(relativeProability, action);
+	}
+
+	public static class RandomAction {
+		private final TestHelper theHelper;
+		private final TreeMap<Double, Runnable> theActions = new TreeMap<>();
+		private double theTotalProbability;
+
+		private RandomAction(TestHelper helper) {
+			theHelper = helper;
+		}
+
+		public RandomAction or(double relativeProability, Runnable action) {
+			if (relativeProability <= 0 || Double.isNaN(relativeProability) || Double.isInfinite(relativeProability))
+				throw new IllegalArgumentException("Illegal probability: " + relativeProability);
+			theActions.put(theTotalProbability, action);
+			theTotalProbability += relativeProability;
+			return this;
+		}
+
+		public void execute() {
+			double random = theHelper.getDouble();
+			random *= theTotalProbability;
+			theActions.floorEntry(random).getValue().run();
+		}
 	}
 
 	public static class Testing {
@@ -472,6 +512,7 @@ public class TestHelper {
 
 		try (BufferedReader reader = new BufferedReader(new FileReader(testFile))) {
 			List<TestFailure> failures = new ArrayList<>();
+			// Read the header
 			String line = reader.readLine();
 			if (line == null)
 				return failures;
@@ -483,17 +524,27 @@ public class TestHelper {
 			NavigableMap<String, Long> placemarks = new TreeMap<>();
 			while (line != null) {
 				placemarks.clear();
-				split = line.split(",");
-				if (split.length != filePlacemarks.size() + 2)
-					throw new IllegalStateException("Need " + (filePlacemarks.size() + 2) + " columns");
+				String splitLine = line;
+				int column = 0;
+				int comma = splitLine.indexOf(',');
+				while (comma >= 0) {
+					split[column++] = splitLine.substring(0, comma);
+					splitLine = splitLine.substring(comma + 1);
+					comma = splitLine.indexOf(',');
+				}
+				split[column++] = splitLine;
+				if (column != filePlacemarks.size() + 2)
+					throw new IllegalStateException("Need " + (filePlacemarks.size() + 2) + " columns, not " + column);
 				long seed = Long.parseLong(split[0], 16);
 				long bytes = Long.parseLong(split[1]);
 				for (int i = 2; i < split.length; i++) {
 					if (split[i].length() == 0)
 						continue;
 					String pn = filePlacemarks.get(i - 2);
-					if (placemarkNames.contains(pn))
-						placemarks.put(pn, Long.parseLong(split[i]));
+					if (placemarkNames.contains(pn)) {
+						if (split[i].length() > 0)
+							placemarks.put(pn, Long.parseLong(split[i]));
+					}
 				}
 				failures.add(new TestFailure(seed, bytes, placemarks));
 				line = reader.readLine();
