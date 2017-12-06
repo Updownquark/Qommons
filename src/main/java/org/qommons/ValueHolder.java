@@ -4,6 +4,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public class ValueHolder<T> implements Consumer<T>, Supplier<T> {
+	private boolean isSet;
 	private T theValue;
 
 	public ValueHolder() {}
@@ -19,6 +20,15 @@ public class ValueHolder<T> implements Consumer<T>, Supplier<T> {
 
 	@Override
 	public void accept(T t) {
+		isSet = true;
 		theValue = t;
+	}
+
+	@Override
+	public String toString() {
+		if (!isSet)
+			return "(empty)";
+		else
+			return String.valueOf(theValue);
 	}
 }
