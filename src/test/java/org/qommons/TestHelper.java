@@ -285,7 +285,8 @@ public class TestHelper {
 		public void execute() {
 			double random = theHelper.getDouble();
 			random *= theTotalProbability;
-			theActions.floorEntry(random).getValue().run();
+			Runnable action = theActions.floorEntry(random).getValue();
+			action.run();
 		}
 	}
 
