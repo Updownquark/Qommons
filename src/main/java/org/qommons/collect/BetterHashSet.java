@@ -380,12 +380,40 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 		@Override
 		public String canAdd(E value, boolean before) {
-			return StdMsg.UNSUPPORTED_OPERATION;
+			return BetterHashSet.this.canAdd(value);
 		}
 
 		@Override
 		public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			try (Transaction t = lock(true, true, null)) {
+				int valueHashCode = theHasher.applyAsInt(value);
+				HashEntry entry = getEntry(valueHashCode, value);
+				if (entry != null)
+					throw new IllegalArgumentException(StdMsg.ELEMENT_EXISTS);
+				ensureCapacity(theSize + 1);
+				entry = new HashEntry(value, valueHashCode);
+				insert(entry);
+				if (before) {
+					if (previous != null)
+						previous.next = entry;
+					entry.previous = previous;
+					entry.next = this;
+					previous = entry;
+					if (theFirst == this)
+						theFirst = entry;
+				} else {
+					if (next != null)
+						next.previous = entry;
+					entry.next = next;
+					entry.previous = this;
+					next = entry;
+					if (theLast == this)
+						theLast = entry;
+				}
+				theSize++;
+				theLocker.changed(true);
+				return entry.getElementId();
+			}
 		}
 
 		@Override
