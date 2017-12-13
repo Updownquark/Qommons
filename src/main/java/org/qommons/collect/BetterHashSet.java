@@ -84,7 +84,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	private final CollectionLockingStrategy theLocker;
 	private final ToIntFunction<Object> theHasher;
 	private final BiFunction<Object, Object, Boolean> theEquals;
-	private final AtomicLong theIdCreator;
+	private final AtomicLong theFirstIdCreator;
+	private final AtomicLong theLastIdCreator;
 
 	private double theLoadFactor;
 
@@ -98,7 +99,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		theLocker = locker;
 		theHasher = hasher;
 		theEquals = equals;
-		theIdCreator = new AtomicLong();
+		theFirstIdCreator = new AtomicLong(-1);
+		theLastIdCreator = new AtomicLong(0);
 
 		if (loadFactor < MIN_LOAD_FACTOR || loadFactor > MAX_LOAD_FACTOR)
 			throw new IllegalArgumentException("Load factor must be between " + MIN_LOAD_FACTOR + " and " + MAX_LOAD_FACTOR);
@@ -198,14 +200,23 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			if (entry != null)
 				return null;
 			ensureCapacity(theSize + 1);
-			entry = new HashEntry(value, hashCode);
+			entry = new HashEntry(value, hashCode, first);
 			insert(entry);
-			if (theLast != null)
-				theLast.next = entry;
-			entry.previous = theLast;
-			theLast = entry;
-			if (theFirst == null)
+			if (first) {
+				if (theFirst != null)
+					theFirst.previous = entry;
+				entry.next = theFirst;
 				theFirst = entry;
+				if (theLast == null)
+					theLast = entry;
+			} else {
+				if (theLast != null)
+					theLast.next = entry;
+				entry.previous = theLast;
+				theLast = entry;
+				if (theFirst == null)
+					theFirst = entry;
+			}
 			theSize++;
 			theLocker.changed(true);
 			return entry.immutable();
@@ -262,6 +273,11 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		}
 	}
 
+	@Override
+	public String toString() {
+		return BetterCollection.toString(this);
+	}
+
 	private class HashId implements ElementId {
 		final HashEntry entry;
 
@@ -298,8 +314,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		HashEntry next;
 		HashEntry previous;
 
-		HashEntry(E value, int hashCode) {
-			theId = theIdCreator.getAndIncrement();
+		HashEntry(E value, int hashCode, boolean first) {
+			theId = first ? theFirstIdCreator.getAndDecrement() : theLastIdCreator.getAndIncrement();
 			theValue = value;
 			this.hashCode = hashCode;
 		}
@@ -380,7 +396,18 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 		@Override
 		public String canAdd(E value, boolean before) {
-			return BetterHashSet.this.canAdd(value);
+			String msg = BetterHashSet.this.canAdd(value);
+			// Support this for the terminal nodes
+			if (msg == null) {
+				if (before) {
+					if (theFirst != this)
+						return StdMsg.UNSUPPORTED_OPERATION;
+				} else {
+					if (theLast != this)
+						return StdMsg.UNSUPPORTED_OPERATION;
+				}
+			}
+			return msg;
 		}
 
 		@Override
@@ -390,8 +417,15 @@ public class BetterHashSet<E> implements BetterSet<E> {
 				HashEntry entry = getEntry(valueHashCode, value);
 				if (entry != null)
 					throw new IllegalArgumentException(StdMsg.ELEMENT_EXISTS);
+				if (before) {
+					if (theFirst != this)
+						throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+				} else {
+					if (theLast != this)
+						throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+				}
 				ensureCapacity(theSize + 1);
-				entry = new HashEntry(value, valueHashCode);
+				entry = new HashEntry(value, valueHashCode, before);
 				insert(entry);
 				if (before) {
 					if (previous != null)
