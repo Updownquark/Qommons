@@ -7,19 +7,9 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 import org.qommons.Transaction;
-import org.qommons.collect.BetterSortedMap;
-import org.qommons.collect.BetterSortedSet;
+import org.qommons.collect.*;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
-import org.qommons.collect.CollectionElement;
-import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.ElementId;
-import org.qommons.collect.FastFailLockingStrategy;
-import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
-import org.qommons.collect.MutableElementSpliterator;
-import org.qommons.collect.MutableMapEntryHandle;
-import org.qommons.collect.SimpleMapEntry;
-import org.qommons.collect.StampedLockingStrategy;
 
 public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 	protected final Comparator<? super K> theCompare;
@@ -44,7 +34,7 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 	}
 
 	@Override
-	public BinaryTreeEntry<K, V> putEntry(K key, V value) {
+	public BinaryTreeEntry<K, V> putEntry(K key, V value, boolean first) {
 		try (Transaction t = theEntries.lock(true, null)) {
 			BinaryTreeNode<Map.Entry<K, V>> entry = theEntries.search(e -> theCompare.compare(key, e.getKey()),
 				SortedSearchFilter.PreferLess);

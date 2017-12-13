@@ -60,13 +60,13 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	}
 
 	@Override
-	public MapEntryHandle<K, V> putEntry(K key, V value) {
+	public MapEntryHandle<K, V> putEntry(K key, V value, boolean first) {
 		try (Transaction t = theEntries.lock(true, null)) {
 			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(new SimpleMapEntry<>(key, value), true);
 			if (entryEl != null) {
 				entryEl.get().setValue(value);
 			} else
-				entryEl = theEntries.addElement(new SimpleMapEntry<>(key, value, true), false);
+				entryEl = theEntries.addElement(new SimpleMapEntry<>(key, value, true), first);
 			return handleFor(entryEl);
 		}
 	}
@@ -190,6 +190,11 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 				return entry.toString();
 			}
 		};
+	}
+
+	@Override
+	public String toString() {
+		return entrySet().toString();
 	}
 
 	class KeySet implements BetterSet<K> {

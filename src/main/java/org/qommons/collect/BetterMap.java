@@ -35,6 +35,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		return keySet().lock(write, cause);
 	}
 
+	@Override
 	default Transaction lock(boolean write, boolean structural, Object cause) {
 		return keySet().lock(write, structural, cause);
 	}
@@ -43,7 +44,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		return keySet().getStamp(structuralOnly);
 	}
 
-	MapEntryHandle<K, V> putEntry(K key, V value);
+	MapEntryHandle<K, V> putEntry(K key, V value, boolean first);
 
 	MapEntryHandle<K, V> getEntry(K key);
 
@@ -116,7 +117,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 					return old;
 				});
 			else {
-				putEntry(key, value);
+				putEntry(key, value, false);
 				return null;
 			}
 		}
@@ -152,8 +153,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public MapEntryHandle<K, V> putEntry(K key, V value) {
-			return theWrapped.putEntry(key, value).reverse();
+		public MapEntryHandle<K, V> putEntry(K key, V value, boolean first) {
+			return theWrapped.putEntry(key, value, !first).reverse();
 		}
 
 		@Override
@@ -273,6 +274,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 		protected MutableElementSpliterator<Map.Entry<K, V>> wrap(MutableElementSpliterator<K> keySpliter) {
 			return new EntrySpliterator(keySpliter);
+		}
+
+		@Override
+		public String toString() {
+			return BetterCollection.toString(this);
 		}
 
 		class EntryElement implements CollectionElement<Map.Entry<K, V>> {
