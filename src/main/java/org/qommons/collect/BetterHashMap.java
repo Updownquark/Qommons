@@ -1,13 +1,11 @@
 package org.qommons.collect;
 
-import java.util.Collection;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.ToIntFunction;
 
 import org.qommons.Transaction;
-import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	public static class HashMapBuilder extends BetterHashSet.HashSetBuilder {
@@ -296,8 +294,7 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 
 				@Override
 				public ElementId add(K value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-					return ((MutableCollectionElement<Map.Entry<K, V>>) entryEl).add(new SimpleMapEntry<>(value, entryEl.get().getValue()),
-						before);
+					return ((MutableCollectionElement<Map.Entry<K, V>>) entryEl).add(new SimpleMapEntry<>(value, null, true), before);
 				}
 			};
 		}
@@ -341,17 +338,12 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 
 		@Override
 		public String canAdd(K value) {
-			return StdMsg.UNSUPPORTED_OPERATION;
+			return theEntries.canAdd(new SimpleMapEntry<>(value, null, true));
 		}
 
 		@Override
 		public CollectionElement<K> addElement(K value, boolean first) {
-			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-		}
-
-		@Override
-		public boolean addAll(Collection<? extends K> c) {
-			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			return handleFor(theEntries.addElement(new SimpleMapEntry<>(value, null, true), first));
 		}
 
 		@Override

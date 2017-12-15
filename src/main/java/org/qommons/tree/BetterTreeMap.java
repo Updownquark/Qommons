@@ -1,6 +1,5 @@
 package org.qommons.tree;
 
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
@@ -9,7 +8,6 @@ import java.util.function.Consumer;
 import org.qommons.Transaction;
 import org.qommons.collect.*;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
-import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 	protected final Comparator<? super K> theCompare;
@@ -399,17 +397,18 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 
 				@Override
 				public String isEnabled() {
-					return StdMsg.UNSUPPORTED_OPERATION;
+					return null;
 				}
 
 				@Override
 				public String isAcceptable(K value) {
-					return StdMsg.UNSUPPORTED_OPERATION;
+					return ((MutableCollectionElement<SimpleMapEntry<K, V>>) entryHandle).isAcceptable(new SimpleMapEntry<>(value, null));
 				}
 
 				@Override
 				public void set(K value) throws UnsupportedOperationException, IllegalArgumentException {
-					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+					((MutableCollectionElement<SimpleMapEntry<K, V>>) entryHandle)
+						.set(new SimpleMapEntry<>(value, entryHandle.get().getValue(), true));
 				}
 
 				@Override
@@ -424,12 +423,13 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 
 				@Override
 				public String canAdd(K value, boolean before) {
-					return StdMsg.UNSUPPORTED_OPERATION;
+					return ((MutableCollectionElement<SimpleMapEntry<K, V>>) entryHandle).canAdd(new SimpleMapEntry<>(value, null), before);
 				}
 
 				@Override
 				public ElementId add(K value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+					return ((MutableCollectionElement<SimpleMapEntry<K, V>>) entryHandle).add(new SimpleMapEntry<>(value, null, true),
+						before);
 				}
 			};
 		}
@@ -440,13 +440,8 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		}
 
 		@Override
-		public boolean addAll(Collection<? extends K> c) {
-			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-		}
-
-		@Override
 		public CollectionElement<K> addIfEmpty(K value) throws IllegalStateException {
-			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			return handleFor(theEntries.addIfEmpty(new SimpleMapEntry<>(value, null)));
 		}
 
 		@Override
