@@ -904,34 +904,73 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			if (!belongs(value))
 				return StdMsg.ILLEGAL_ELEMENT;
 			try (Transaction t = lock(true, false, null)) {
-				if (theWrapped.isEmpty()) {
+				int wrapSize = theWrapped.size();
+				if (wrapSize == 0) {
 					if (theStart != 0)
 						return StdMsg.UNSUPPORTED_OPERATION;
 					else
 						return theWrapped.canAdd(value);
-				} else
-					return theWrapped.ofMutableElementAt(Math.min(theWrapped.size(), theEnd), el -> el.canAdd(value, false));
-			}
-		}
-
-		@Override
-		public boolean add(E e) {
-			try (Transaction t = lock(true, true, null)) {
-				theWrapped.add(theEnd, e);
-				theStructureStamp = theWrapped.getStamp(true);
-				theEnd++;
-				return true;
+				} else if (theStart == 0 && theEnd == wrapSize)
+					return theWrapped.canAdd(value);
+				else {
+					// Can't just add it generically, since it might end up in a position outside this sublist
+					// We also can't check each element to see if it can be added anywhere because that would have terrible performance
+					// We'll compromise and try each end
+					MutableCollectionElement<E> terminal = theWrapped
+						.mutableElement(theWrapped.getElement(Math.min(wrapSize, theEnd - 1)).getElementId());
+					String msg = terminal.canAdd(value, false);
+					if (msg == null)
+						return null;
+					terminal = theWrapped.mutableElement(theWrapped.getElement(theStart).getElementId());
+					if (terminal.canAdd(value, true) == null)
+						return null;
+					return msg;
+				}
 			}
 		}
 
 		@Override
 		public CollectionElement<E> addElement(E e, boolean first) {
-			try (Transaction t = lock(true, true, null)) {
-				CollectionElement<E> newEl = theWrapped.addElement(first ? theStart : theEnd, e);
-				theStructureStamp = theWrapped.getStamp(true);
-				if (newEl != null)
+			if (!belongs(e))
+				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
+			try (Transaction t = lock(true, false, null)) {
+				CollectionElement<E> added;
+				int wrapSize = theWrapped.size();
+				if (wrapSize == 0) {
+					if (theStart != 0)
+						throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+					else
+						added = theWrapped.addElement(e, first);
+				} else if (theStart == 0 && theEnd == wrapSize)
+					added = theWrapped.addElement(e, first);
+				else {
+					// Remembering that the first boolean is just a suggestion, we can't content ourselves with just trying to add the
+					// element to the specified end of the list, since it might be allowed somewhere else in the sublist but not there
+					// But we can't just add it generically, since it might end up in a position outside this sublist
+					// We also can't check each element to see if it can be added anywhere because that would have terrible performance
+					// We'll compromise and try each end
+					MutableCollectionElement<E> terminal = first ? //
+						theWrapped.mutableElement(theWrapped.getElement(theStart).getElementId()) : //
+						theWrapped.mutableElement(theWrapped.getElement(Math.min(wrapSize, theEnd - 1)).getElementId());
+					if (terminal.canAdd(e, first) == null)
+						added = theWrapped.getElement(terminal.add(e, first));
+					else {
+						MutableCollectionElement<E> otherTerminal = first ? //
+							theWrapped.mutableElement(theWrapped.getElement(Math.min(wrapSize, theEnd - 1)).getElementId()) : //
+							theWrapped.mutableElement(theWrapped.getElement(theStart).getElementId());
+						if (otherTerminal.canAdd(e, !first) == null)
+							added = theWrapped.getElement(otherTerminal.add(e, !first));
+						else {
+							// Let the specified element throw the exception
+							added = theWrapped.getElement(terminal.add(e, first));
+						}
+					}
+				}
+				if (added != null) {
+					theStructureStamp = theWrapped.getStamp(true);
 					theEnd++;
-				return newEl;
+				}
+				return added;
 			}
 		}
 
@@ -939,22 +978,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		public CollectionElement<E> addElement(int index, E element) {
 			try (Transaction t = lock(true, true, null)) {
 				CollectionElement<E> newEl = theWrapped.addElement(theStart + checkIndex(index, true), element);
-				theStructureStamp = theWrapped.getStamp(true);
-				if (newEl != null)
+				if (newEl != null) {
+					theStructureStamp = theWrapped.getStamp(true);
 					theEnd++;
+				}
 				return newEl;
-			}
-		}
-
-		@Override
-		public boolean addAll(Collection<? extends E> c) {
-			try (Transaction t = lock(true, true, null)) {
-				int preSize = theWrapped.size();
-				if (!theWrapped.addAll(theEnd, c))
-					return false;
-				theStructureStamp = theWrapped.getStamp(true);
-				theEnd += theWrapped.size() - preSize;
-				return true;
 			}
 		}
 
