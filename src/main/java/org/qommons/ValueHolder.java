@@ -13,6 +13,10 @@ public class ValueHolder<T> implements Consumer<T>, Supplier<T> {
 		theValue = value;
 	}
 
+	public boolean isPresent() {
+		return isSet;
+	}
+
 	@Override
 	public T get() {
 		return theValue;
