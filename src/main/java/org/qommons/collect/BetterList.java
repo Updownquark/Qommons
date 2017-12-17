@@ -169,9 +169,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		if (c.isEmpty())
 			return false;
 		try (Transaction t = lock(true, null); Transaction t2 = Transactable.lock(c, false, null)) {
-			if (index == size()) {
-				return addAll(c);
-			}
 			boolean[] modified = new boolean[1];
 			forMutableElementAt(index, el -> {
 				c.spliterator().forEachRemaining(v -> {
