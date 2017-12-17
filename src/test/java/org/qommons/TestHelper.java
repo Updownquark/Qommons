@@ -406,7 +406,8 @@ public class TestHelper {
 							if (!newFailure.equals(failure)) {
 								if (newFailure.bytes != failure.bytes)
 									System.err.println("Test failed "//
-										+ (newFailure.bytes > failure.bytes ? "later" : "earlier") + " than before");
+										+ (newFailure.bytes > failure.bytes ? "later" : "earlier") + " than before: " + newFailure.bytes
+										+ " instead of " + failure.bytes);
 								else
 									System.err.println("Test failure reproduced");
 								knownFailures.set(i, newFailure);
