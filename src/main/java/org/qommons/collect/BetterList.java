@@ -6,7 +6,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
-import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.MutableElementSpliterator.SimpleMutableSpliterator;
@@ -166,20 +165,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 	@Override
 	default boolean addAll(int index, Collection<? extends E> c) {
-		if (c.isEmpty())
-			return false;
-		try (Transaction t = lock(true, null); Transaction t2 = Transactable.lock(c, false, null)) {
-			boolean[] modified = new boolean[1];
-			forMutableElementAt(index, el -> {
-				c.spliterator().forEachRemaining(v -> {
-					if (el.canAdd(v, true) == null) {
-						el.add(v, true);
-						modified[0] = true;
-					}
-				});
-			});
-			return modified[0];
-		}
+		// This allows the new values to be inserted in any order, as long as they're inserted between index-1 and index
+		return subList(index, index).addAll(c);
 	}
 
 	@Override
@@ -913,14 +900,16 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 					// Can't just add it generically, since it might end up in a position outside this sublist
 					// We also can't check each element to see if it can be added anywhere because that would have terrible performance
 					// We'll compromise and try each end
-					MutableCollectionElement<E> terminal = theWrapped
-						.mutableElement(theWrapped.getElement(Math.min(wrapSize, theEnd - 1)).getElementId());
-					String msg = terminal.canAdd(value, false);
-					if (msg == null)
-						return null;
+					MutableCollectionElement<E> terminal;
+					String msg = null;
+					if (theEnd > theStart) {
+						terminal = theWrapped.mutableElement(theWrapped.getElement(Math.min(wrapSize, theEnd - 1)).getElementId());
+						msg = terminal.canAdd(value, false);
+						if (msg == null)
+							return null;
+					}
 					terminal = theWrapped.mutableElement(theWrapped.getElement(theStart).getElementId());
-					if (terminal.canAdd(value, true) == null)
-						return null;
+					msg = terminal.canAdd(value, true);
 					return msg;
 				}
 			}
@@ -942,22 +931,36 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 					added = theWrapped.addElement(e, first);
 				else {
 					// Remembering that the first boolean is just a suggestion, we can't content ourselves with just trying to add the
-					// element to the specified end of the list, since it might be allowed somewhere else in the sublist but not there
-					// But we can't just add it generically, since it might end up in a position outside this sublist
-					// We also can't check each element to see if it can be added anywhere because that would have terrible performance
-					// We'll compromise and try each end
-					MutableCollectionElement<E> terminal = first ? //
-						theWrapped.mutableElement(theWrapped.getElement(theStart).getElementId()) : //
-						theWrapped.mutableElement(theWrapped.getElement(Math.min(wrapSize, theEnd - 1)).getElementId());
-					if (terminal.canAdd(e, first) == null)
-						added = theWrapped.getElement(terminal.add(e, first));
-					else {
-						MutableCollectionElement<E> otherTerminal = first ? //
-							theWrapped.mutableElement(theWrapped.getElement(Math.min(wrapSize, theEnd - 1)).getElementId()) : //
-							theWrapped.mutableElement(theWrapped.getElement(theStart).getElementId());
-						if (otherTerminal.canAdd(e, !first) == null)
-							added = theWrapped.getElement(otherTerminal.add(e, !first));
-						else {
+					// element to the specified end of the list, since it might be allowed somewhere else in the sublist but not there.
+					// But we can't just add it generically, since it might end up in a position outside this sublist.
+					// We also can't check each element to see if it can be added anywhere because that would have terrible performance.
+					// We'll compromise and try each end.
+					int terminalIndex = first ? theStart : Math.min(wrapSize, theEnd - 1);
+					MutableCollectionElement<E> terminal = null;
+					if (terminalIndex >= 0) {
+						terminal = theWrapped.mutableElement(theWrapped.getElement(terminalIndex).getElementId());
+						if (terminal.canAdd(e, first) == null)
+							added = theWrapped.getElement(terminal.add(e, first));
+						else
+							added = null;
+					} else
+						added = null;
+					if (added == null) {
+						terminalIndex = first ? Math.min(wrapSize, theEnd - 1) : theStart;
+						if (terminalIndex >= 0) {
+							MutableCollectionElement<E> otherTerminal = theWrapped
+								.mutableElement(theWrapped.getElement(terminalIndex).getElementId());
+							if (otherTerminal.canAdd(e, !first) == null)
+								added = theWrapped.getElement(otherTerminal.add(e, !first));
+							else {
+								// Let the specified element throw the exception
+								if (terminal != null)
+									added = theWrapped.getElement(terminal.add(e, first));
+								else
+									added = theWrapped.getElement(otherTerminal.add(e, !first));
+							}
+						}
+						if (added == null) {
 							// Let the specified element throw the exception
 							added = theWrapped.getElement(terminal.add(e, first));
 						}
