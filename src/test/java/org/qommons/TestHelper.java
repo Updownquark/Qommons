@@ -282,10 +282,12 @@ public class TestHelper {
 			return this;
 		}
 
-		public void execute() {
+		public void execute(String placemark) {
 			double random = theHelper.getDouble();
 			random *= theTotalProbability;
 			Runnable action = theActions.floorEntry(random).getValue();
+			if (placemark != null)
+				theHelper.placemark(placemark);
 			action.run();
 		}
 	}
