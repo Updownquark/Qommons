@@ -902,14 +902,16 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 					// We'll compromise and try each end
 					MutableCollectionElement<E> terminal;
 					String msg = null;
-					if (theEnd > theStart) {
+					if (theEnd > theStart || theStart == wrapSize) {
 						terminal = theWrapped.mutableElement(theWrapped.getElement(Math.min(wrapSize, theEnd - 1)).getElementId());
 						msg = terminal.canAdd(value, false);
 						if (msg == null)
 							return null;
 					}
-					terminal = theWrapped.mutableElement(theWrapped.getElement(theStart).getElementId());
-					msg = terminal.canAdd(value, true);
+					if (theStart < wrapSize) {
+						terminal = theWrapped.mutableElement(theWrapped.getElement(theStart).getElementId());
+						msg = terminal.canAdd(value, true);
+					}
 					return msg;
 				}
 			}
