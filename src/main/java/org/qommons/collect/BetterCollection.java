@@ -251,8 +251,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		if (isEmpty())
 			return false;
 		if (c.isEmpty()) {
-			clear();
-			return true;
+			try (Transaction t = lock(true, null)) {
+				int preSize = size();
+				clear();
+				return size() < preSize;
+			}
 		}
 		return removeIf(//
 			o -> !c.contains(o));
