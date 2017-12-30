@@ -302,7 +302,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 		@Override
 		public boolean equals(Object obj) {
-			return entry == ((HashId) obj).entry;
+			return obj instanceof BetterHashSet.HashId && entry == ((HashId) obj).entry;
 		}
 	}
 
