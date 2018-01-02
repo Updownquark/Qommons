@@ -396,18 +396,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 		@Override
 		public String canAdd(E value, boolean before) {
-			String msg = BetterHashSet.this.canAdd(value);
-			// Support this for the terminal nodes
-			if (msg == null) {
-				if (before) {
-					if (theFirst != this)
-						return StdMsg.UNSUPPORTED_OPERATION;
-				} else {
-					if (theLast != this)
-						return StdMsg.UNSUPPORTED_OPERATION;
-				}
-			}
-			return msg;
+			return BetterHashSet.this.canAdd(value);
 		}
 
 		@Override
