@@ -200,7 +200,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			if (entry != null)
 				return null;
 			ensureCapacity(theSize + 1);
-			entry = new HashEntry(value, hashCode, first);
+			entry = new HashEntry(first ? theFirstIdCreator.getAndDecrement() : theLastIdCreator.getAndIncrement(), value, hashCode);
 			insert(entry);
 			if (first) {
 				if (theFirst != null)
@@ -292,7 +292,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 		@Override
 		public int compareTo(ElementId o) {
-			return Long.compare(entry.theId, ((HashId) o).entry.theId);
+			return Long.compare(entry.theOrder, ((HashId) o).entry.theOrder);
 		}
 
 		@Override
@@ -307,15 +307,15 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	private class HashEntry implements MutableCollectionElement<E> {
-		private final long theId;
+		private long theOrder;
 		private final int hashCode;
 		private MutableBinaryTreeNode<HashEntry> theTreeNode;
 		private E theValue;
 		HashEntry next;
 		HashEntry previous;
 
-		HashEntry(E value, int hashCode, boolean first) {
-			theId = first ? theFirstIdCreator.getAndDecrement() : theLastIdCreator.getAndIncrement();
+		HashEntry(long order, E value, int hashCode) {
+			theOrder = order;
 			theValue = value;
 			this.hashCode = hashCode;
 		}
@@ -412,20 +412,38 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 		@Override
 		public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+			// Ordered insert is O(n), but we'll support it
 			try (Transaction t = lock(true, true, null)) {
 				int valueHashCode = theHasher.applyAsInt(value);
 				HashEntry entry = getEntry(valueHashCode, value);
 				if (entry != null)
 					throw new IllegalArgumentException(StdMsg.ELEMENT_EXISTS);
-				if (before) {
-					if (theFirst != this)
-						throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-				} else {
-					if (theLast != this)
-						throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-				}
 				ensureCapacity(theSize + 1);
-				entry = new HashEntry(value, valueHashCode, before);
+				long order;
+				if (before) {
+					order = theOrder - 1;
+					HashEntry prev = previous;
+					long prevOrder = order;
+					while (prev != null && prev.theOrder == prevOrder) {
+						prev.theOrder--;
+						prevOrder--;
+						prev = prev.previous;
+					}
+					if (prevOrder == theFirstIdCreator.get())
+						theFirstIdCreator.getAndDecrement();
+				} else {
+					order = theOrder + 1;
+					HashEntry nxt = next;
+					long nextOrder = order;
+					while (nxt != null && nxt.theOrder == nextOrder) {
+						nxt.theOrder++;
+						nextOrder++;
+						nxt = nxt.next;
+					}
+					if (nextOrder == theLastIdCreator.get())
+						theLastIdCreator.getAndIncrement();
+				}
+				entry = new HashEntry(order, value, valueHashCode);
 				insert(entry);
 				if (before) {
 					if (previous != null)
