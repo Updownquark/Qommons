@@ -138,8 +138,13 @@ public class QommonsUtils {
 	 * @param abbrev Whether to shorten the string intelligibly as much as possible
 	 */
 	public static void printTimeLength(long length, StringBuilder sb, boolean abbrev) {
-		if(length == 0)
+		if (length == 0) {
 			sb.append("no time");
+			return;
+		} else if (length < 0) {
+			length = -length;
+			sb.append('-');
+		}
 		int days, hrs, mins, secs, millis;
 		millis = (int) (length % 1000);
 		length /= 1000;
@@ -204,9 +209,7 @@ public class QommonsUtils {
 			else
 				sb.append(" milli");
 		}
-		if(sb.length() == 0)
-			sb.append("no time");
-		else if(sb.charAt(sb.length() - 1) == ' ')
+		if (sb.charAt(sb.length() - 1) == ' ')
 			sb.deleteCharAt(sb.length() - 1);
 	}
 
