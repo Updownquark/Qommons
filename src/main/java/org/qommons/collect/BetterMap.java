@@ -259,6 +259,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 		@Override
 		public CollectionElement<Map.Entry<K, V>> addElement(Map.Entry<K, V> value, boolean first) {
+
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
 
@@ -312,7 +313,12 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 					@Override
 					public V setValue(V value) {
-						throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+						// Since the Map interface expects entries in the entrySet to support setValue, we'll allow this type of mutability
+						try (Transaction t = lock(true, false, null)) {
+							V current=theEntry.get();
+							theMap.mutableEntry(getEntry().getElementId()).setValue(value);
+							return current;
+						}
 					}
 
 					@Override
@@ -370,15 +376,19 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 			@Override
 			public String isAcceptable(Map.Entry<K, V> value) {
-				if (value == null || !Objects.equals(getEntry().getKey(), value.getKey()))
+				if (value == null)
 					return StdMsg.ILLEGAL_ELEMENT;
+				String msg = theMap.keySet().mutableElement(getEntry().getElementId()).isAcceptable(value.getKey());
+				if (msg != null)
+					return msg;
 				return getEntry().isAcceptable(value.getValue());
 			}
 
 			@Override
 			public void set(Map.Entry<K, V> value) throws UnsupportedOperationException, IllegalArgumentException {
-				if (value == null || !Objects.equals(getEntry().getKey(), value.getKey()))
+				if (value == null)
 					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
+				theMap.keySet().mutableElement(getEntry().getElementId()).set(value.getKey());
 				getEntry().set(value.getValue());
 			}
 
@@ -394,13 +404,15 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 			@Override
 			public String canAdd(java.util.Map.Entry<K, V> value, boolean before) {
-				return StdMsg.UNSUPPORTED_OPERATION;
+				return theMap.keySet().mutableElement(getEntry().getElementId()).canAdd(value.getKey(), before);
 			}
 
 			@Override
 			public ElementId add(java.util.Map.Entry<K, V> value, boolean before)
 				throws UnsupportedOperationException, IllegalArgumentException {
-				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+				ElementId id = theMap.keySet().mutableElement(getEntry().getElementId()).add(value.getKey(), before);
+				theMap.mutableEntry(id).set(value.getValue());
+				return id;
 			}
 		}
 
