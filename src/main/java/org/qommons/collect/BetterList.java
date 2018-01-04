@@ -181,10 +181,13 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 	default CollectionElement<E> addElement(int index, E element) {
 		try (Transaction t = lock(true, null)) {
-			if (index == 0)
-				return addElement(element, true);
-			else if (index == size())
+			int sz = size();
+			if (index < 0 || index > sz)
+				throw new IndexOutOfBoundsException(index + " of " + sz);
+			if (isEmpty())
 				return addElement(element, false);
+			else if (index == sz)
+				return getElement(ofMutableElementAt(index - 1, el -> el.add(element, false)));
 			else
 				return getElement(ofMutableElementAt(index, el -> el.add(element, true)));
 		}
