@@ -308,7 +308,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 	private class HashEntry implements MutableCollectionElement<E> {
 		private long theOrder;
-		private final int hashCode;
+		private int hashCode;
 		private MutableBinaryTreeNode<HashEntry> theTreeNode;
 		private E theValue;
 		HashEntry next;
@@ -351,8 +351,14 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 		@Override
 		public String isAcceptable(E value) {
-			if (hashCode != theHasher.applyAsInt(value))
-				return StdMsg.ILLEGAL_ELEMENT;
+			try (Transaction t = lock(false, null)) {
+				if (!isPresent())
+					throw new IllegalStateException("This element has been removed");
+				if (theEquals.apply(theValue, value))
+					return null;
+				if (getEntry(theHasher.applyAsInt(value), value) != null)
+					return StdMsg.ELEMENT_EXISTS;
+			}
 			return null;
 		}
 
@@ -361,9 +367,15 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			try (Transaction t = lock(true, false, null)) {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
-				if (hashCode != theHasher.applyAsInt(value))
-					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
+				if (!theEquals.apply(theValue, value) && getEntry(theHasher.applyAsInt(value), value) != null)
+					throw new IllegalArgumentException(StdMsg.ELEMENT_EXISTS);
+				int newHash = theHasher.applyAsInt(value);
 				theValue = value;
+				if (hashCode != newHash) {
+					theTreeNode.remove();
+					hashCode = newHash;
+					insert(this);
+				}
 				theLocker.changed(false);
 			}
 		}
