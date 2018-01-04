@@ -1,12 +1,26 @@
 package org.qommons;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.NavigableMap;
+import java.util.NavigableSet;
+import java.util.Random;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 
 import org.qommons.io.Format;
@@ -305,7 +319,6 @@ public class TestHelper {
 		private Duration theMaxCaseDuration;
 		private boolean isPrintingProgress = true;
 		private boolean isPrintingFailures = true;
-		private boolean isThrowingOnFailure = true;
 		private boolean isPersistingFailures = true;
 		private File theFailureDir = null;
 		private boolean isFailureFileQualified = true;
@@ -363,11 +376,6 @@ public class TestHelper {
 			return this;
 		}
 
-		public Testing throwOnFailure(boolean doThrow) {
-			isThrowingOnFailure = doThrow;
-			return this;
-		}
-
 		public Testing withFailurePersistence(boolean persist) {
 			isPersistingFailures = persist;
 			return this;
@@ -381,15 +389,17 @@ public class TestHelper {
 			return this;
 		}
 
-		public int execute() throws AssertionError {
+		public TestSummary execute() throws AssertionError {
 			int maxCases = theMaxRandomCases;
 			int maxFailures = theMaxFailures;
 			if (maxCases < 0)
 				maxCases = Integer.MAX_VALUE;
 			if (maxFailures <= 0)
 				maxFailures = Integer.MAX_VALUE;
+			Instant start = Instant.now();
 			Instant termination = theMaxTotalDuration == null ? Instant.MAX : Instant.now().plus(theMaxTotalDuration);
 			int failures = 0;
+			int successes = 0;
 			Throwable firstError = null;
 			List<TestFailure> knownFailures;
 			if (isRevisitingKnownFailures || isPersistingFailures)
@@ -421,6 +431,7 @@ public class TestHelper {
 							failures++;
 						} else {
 							System.out.println("Test failure fixed");
+							successes++;
 							knownFailures.remove(i);
 							i--;
 							writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames, knownFailures);
@@ -440,14 +451,63 @@ public class TestHelper {
 					if (firstError == null)
 						firstError = err;
 					failures++;
-				}
+				} else
+					successes++;
 			}
-			if (isThrowingOnFailure && failures > 0) {
-				if (firstError instanceof AssertionError)
-					throw (AssertionError) firstError;
-				throw new AssertionError(firstError.getMessage(), firstError);
+			Duration testDuration = Duration.between(start, Instant.now());
+			return new TestSummary(successes, failures, testDuration, firstError);
+		}
+	}
+
+	public static class TestSummary {
+		private final int theSuccesses;
+		private final int theFailures;
+		private final Duration theDuration;
+		private final Throwable theFirstError;
+
+		public TestSummary(int successes, int failures, Duration duration, Throwable firstError) {
+			theSuccesses = successes;
+			theFailures = failures;
+			theDuration = duration;
+			theFirstError = firstError;
+		}
+
+		public int getSuccesses() {
+			return theSuccesses;
+		}
+
+		public int getFailures() {
+			return theFailures;
+		}
+
+		public Duration getDuration() {
+			return theDuration;
+		}
+
+		public Throwable getFirstError() {
+			return theFirstError;
+		}
+
+		public void throwErrorIfFailed() throws AssertionError {
+			if (theFirstError instanceof AssertionError)
+				throw (AssertionError) theFirstError;
+			else if (theFirstError != null)
+				throw new AssertionError(theFirstError.getMessage(), theFirstError);
+		}
+
+		@Override
+		public String toString() {
+			StringBuilder summary = new StringBuilder();
+			if (theSuccesses > 0)
+				summary.append(theSuccesses).append(" successful case").append(theSuccesses > 1 ? "s" : "");
+			if (theFailures > 0) {
+				if (theSuccesses > 0)
+					summary.append(", ");
+				summary.append(theFailures).append(" failed case").append(theFailures > 1 ? "s" : "");
 			}
-			return failures;
+			summary.append(" in ");
+			QommonsUtils.printTimeLength(theDuration.toMillis(), summary, false);
+			return summary.toString();
 		}
 	}
 
