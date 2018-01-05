@@ -423,7 +423,8 @@ public class TestHelper {
 								else
 									System.err.println("Test failure reproduced");
 								knownFailures.set(i, newFailure);
-								writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames, knownFailures);
+								if (isPersistingFailures)
+									writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames, knownFailures);
 							} else
 								System.err.println("Test failure reproduced");
 							if (firstError == null)
@@ -434,7 +435,8 @@ public class TestHelper {
 							successes++;
 							knownFailures.remove(i);
 							i--;
-							writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames, knownFailures);
+							if (isPersistingFailures)
+								writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames, knownFailures);
 						}
 					}
 				}
