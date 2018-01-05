@@ -288,11 +288,15 @@ public class TestHelper {
 			theHelper = helper;
 		}
 
-		public RandomAction or(double relativeProability, Runnable action) {
-			if (relativeProability <= 0 || Double.isNaN(relativeProability) || Double.isInfinite(relativeProability))
-				throw new IllegalArgumentException("Illegal probability: " + relativeProability);
+		public TestHelper getHelper() {
+			return theHelper;
+		}
+
+		public RandomAction or(double relativeProbability, Runnable action) {
+			if (relativeProbability <= 0 || Double.isNaN(relativeProbability) || Double.isInfinite(relativeProbability))
+				throw new IllegalArgumentException("Illegal probability: " + relativeProbability);
 			theActions.put(theTotalProbability, action);
-			theTotalProbability += relativeProability;
+			theTotalProbability += relativeProbability;
 			return this;
 		}
 
