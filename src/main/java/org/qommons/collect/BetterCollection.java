@@ -6,10 +6,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
-import org.qommons.ArrayUtils;
-import org.qommons.Transactable;
-import org.qommons.Transaction;
-import org.qommons.ValueHolder;
+import org.qommons.*;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
@@ -102,8 +99,8 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default boolean addAll(Collection<? extends E> c) {
 		if (c.isEmpty())
 			return false;
-		SimpleCause cause = new SimpleCause();
-		try (Transaction cst = SimpleCause.use(cause);
+		Causable cause = Causable.simpleCause(null);
+		try (Transaction cst = Causable.use(cause);
 			Transaction t = lock(true, cause);
 			Transaction ct = Transactable.lock(c, false, cause)) {
 			boolean changed = false;
@@ -120,8 +117,8 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return This collection
 	 */
 	default BetterCollection<E> with(E... values) {
-		SimpleCause cause = new SimpleCause();
-		try (Transaction cst = SimpleCause.use(cause); Transaction t = lock(true, cause)) {
+		Causable cause = Causable.simpleCause(null);
+		try (Transaction cst = Causable.use(cause); Transaction t = lock(true, cause)) {
 			for (E e : values) {
 				if (canAdd(e) == null)
 					add(e);

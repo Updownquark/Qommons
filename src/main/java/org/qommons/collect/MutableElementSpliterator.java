@@ -4,6 +4,7 @@ import java.util.Comparator;
 import java.util.Spliterator;
 import java.util.function.Consumer;
 
+import org.qommons.Causable;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 
@@ -171,8 +172,8 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 
 		@Override
 		public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
-			SimpleCause cause = new SimpleCause();
-			try (Transaction ct = SimpleCause.use(cause);
+			Causable cause = Causable.simpleCause(null);
+			try (Transaction cst = Causable.use(cause);
 				Transaction t = theLocker == null ? Transaction.NONE : theLocker.lock(true, cause)) {
 				while (internalForElementM(action, forward)) {
 				}
