@@ -141,6 +141,7 @@ public class TestHelper {
 		}
 	}
 
+	private final boolean isReproducing;
 	private final long theSeed;
 	private final Random theRandomness;
 	private long theBytes;
@@ -150,10 +151,11 @@ public class TestHelper {
 	private long theNextBreak;
 
 	private TestHelper(Set<String> placemarkNames) {
-		this(Double.doubleToLongBits(Math.random()), 0, Collections.emptyNavigableSet(), placemarkNames);
+		this(false, Double.doubleToLongBits(Math.random()), 0, Collections.emptyNavigableSet(), placemarkNames);
 	}
 
-	private TestHelper(long seed, long bytes, NavigableSet<Long> breakPoints, Set<String> placemarkNames) {
+	private TestHelper(boolean reproducing, long seed, long bytes, NavigableSet<Long> breakPoints, Set<String> placemarkNames) {
+		isReproducing = reproducing;
 		theSeed=seed;
 		theRandomness=new Random(seed);
 		while (theBytes < bytes - 7)
@@ -177,6 +179,10 @@ public class TestHelper {
 		}
 	}
 
+	public boolean isReproducing() {
+		return isReproducing;
+	}
+
 	public long getSeed() {
 		return theSeed;
 	}
@@ -196,7 +202,7 @@ public class TestHelper {
 
 	public TestHelper fork() {
 		long forkSeed = getAnyLong();
-		return new TestHelper(forkSeed, 0, theBreakpoints, thePlacemarkNames);
+		return new TestHelper(isReproducing, forkSeed, 0, theBreakpoints, thePlacemarkNames);
 	}
 
 	public void placemark() {
@@ -414,7 +420,7 @@ public class TestHelper {
 				if (!knownFailures.isEmpty()) {
 					for (int i = 0; i < knownFailures.size() && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
 						TestFailure failure = knownFailures.get(i);
-						TestHelper helper = new TestHelper(failure.seed, 0,
+						TestHelper helper = new TestHelper(true, failure.seed, 0,
 							isDebugging ? failure.getBreakpoints() : Collections.emptyNavigableSet(), thePlacemarkNames);
 						Throwable err = doTest(theCreator, helper, i + 1, isPrintingProgress, isPrintingFailures, true);
 						if (err != null) {
