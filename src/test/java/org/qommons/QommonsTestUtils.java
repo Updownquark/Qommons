@@ -8,7 +8,21 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Map;
+import java.util.NavigableMap;
+import java.util.NavigableSet;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -1086,6 +1100,8 @@ public class QommonsTestUtils {
 	 */
 	public static <T> Matcher<Collection<T>> collectionsEqual(Collection<? extends T> values, boolean ordered) {
 		return new org.hamcrest.BaseMatcher<Collection<T>>() {
+			private boolean wasUnorderedEqual;
+
 			@Override
 			public boolean matches(Object arg0) {
 				Collection<T> arg = (Collection<T>) arg0;
@@ -1093,14 +1109,24 @@ public class QommonsTestUtils {
 					return false;
 				if (ordered) {
 					// Must be equivalent
+					Map<T, Integer> vValueCounts = new HashMap<>();
+					Map<T, Integer> aValueCounts = new HashMap<>();
 					Iterator<? extends T> vIter = values.iterator();
 					Iterator<T> aIter = arg.iterator();
-					while (vIter.hasNext() && aIter.hasNext())
-						if (!Objects.equals(vIter.next(), aIter.next()))
-							return false;
-					if (vIter.hasNext() || aIter.hasNext())
-						return false;
-					return true;
+					boolean equal = true;
+					while (vIter.hasNext() && aIter.hasNext()) {
+						T vValue = vIter.next();
+						T aValue = aIter.next();
+						vValueCounts.compute(vValue, (v, i) -> i == null ? 1 : i + 1);
+						aValueCounts.compute(aValue, (v, i) -> i == null ? 1 : i + 1);
+						if (!Objects.equals(vValue, aValue))
+							equal = false;
+					}
+					if (equal && (vIter.hasNext() || aIter.hasNext()))
+						equal = false;
+					if (!equal)
+						wasUnorderedEqual = vValueCounts.equals(aValueCounts);
+					return equal;
 				} else {
 					// Split out here for debugging
 					if (values.containsAll(arg))
@@ -1113,6 +1139,18 @@ public class QommonsTestUtils {
 			@Override
 			public void describeTo(Description arg0) {
 				arg0.appendText("collection equivalent to ").appendValue(values);
+			}
+
+			@Override
+			public void describeMismatch(Object item, Description description) {
+				boolean matches = matches(item);
+				if (matches)
+					return;
+				if (wasUnorderedEqual)
+					description.appendText("        was (disordered) ");
+				else
+					description.appendText("                     was ");
+				description.appendValue(item);
 			}
 		};
 	}
