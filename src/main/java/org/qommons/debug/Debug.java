@@ -3,6 +3,7 @@ package org.qommons.debug;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.NavigableSet;
@@ -14,6 +15,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import org.qommons.BreakpointHere;
 import org.qommons.Transaction;
@@ -42,6 +44,7 @@ public class Debug {
 
 	// private final ThreadLocal<Debug> theThreads;
 	private final ListenerList<Runnable> theChecks;
+	private final ListenerList<Consumer<DebugData>> theWatchers;
 	private final Map<String, DebugData> theData;
 	private final Map<Object, DebugData> theDataByValue;
 	private final ReentrantLock theLock;
@@ -49,6 +52,7 @@ public class Debug {
 
 	private Debug(boolean active) {
 		theChecks = new ListenerList<>(null);
+		theWatchers = new ListenerList<>(null);
 		theData = new TreeMap<>();
 		theDataByValue = new IdentityHashMap<>();
 		theLock = new ReentrantLock();
@@ -75,6 +79,24 @@ public class Debug {
 
 	public DebugData get(String path, boolean create) {
 		return with(path, create, d -> {});
+	}
+
+	public DebugData add(String path) {
+		if (!isActive())
+			return INACTIVE;
+		try (Transaction t = lock(true)) {
+			StringBuilder indexed = new StringBuilder(path).append('[');
+			for (int i = 0; true; i++) {
+				int preLength = indexed.length();
+				indexed.append(i).append(']');
+				String indexedStr = indexed.toString();
+				DebugData data = get(indexedStr);
+				if (data == null) {
+					return get(indexedStr, true);
+				}
+				indexed.setLength(preLength);
+			}
+		}
 	}
 
 	public DebugData set(String path, Object value) {
@@ -121,7 +143,7 @@ public class Debug {
 			throw new IllegalArgumentException("Empty path or empty path elements not allowed: " + path);
 		DebugData d;
 		if (create && isActive())
-			d = theData.computeIfAbsent(rootName, n -> new DebugData(this).addRootName(rootName));
+			d = theData.computeIfAbsent(rootName, n -> created(new DebugData(this).addRootName(rootName)));
 		else
 			d = theData.get(rootName);
 		if (create && d == null)
@@ -147,7 +169,7 @@ public class Debug {
 	private DebugData _debug(Object value, boolean create) {
 		DebugData d;
 		if (create && isActive())
-			d = theDataByValue.computeIfAbsent(value, n -> new DebugData(this).setValue(value));
+			d = theDataByValue.computeIfAbsent(value, n -> created(new DebugData(this).setValue(value)));
 		else
 			d = theDataByValue.get(value);
 		if (create && d == null)
@@ -176,6 +198,17 @@ public class Debug {
 				data.remove();
 			return data;
 		}
+	}
+
+	public Debug watchFor(Consumer<DebugData> watcher) {
+		theWatchers.add(watcher, true);
+		return this;
+	}
+
+	private DebugData created(DebugData data) {
+		theWatchers.forEach(//
+			w -> w.accept(data));
+		return data;
 	}
 
 	public Runnable addCheck(Runnable check) {
@@ -210,7 +243,8 @@ public class Debug {
 		private final Map<String, DebugData> theRefs;
 		private final Map<String, Set<DebugData>> theReverseRefs;
 		private final Map<String, Object> theFields;
-		private final ListenerList<Predicate<? super DebugData>> theBreakpoints;
+		private final ListenerList<Consumer<? super DebugData>> theChecks;
+		private final ListenerList<Consumer<? super DebugAction>> theActionListeners;
 		private final Runnable theCheckRemove;
 
 		private DebugData(Debug debug) {
@@ -220,14 +254,16 @@ public class Debug {
 				theRefs = new TreeMap<>();
 				theReverseRefs = new TreeMap<>();
 				theFields = new TreeMap<>();
-				theBreakpoints = new ListenerList<>(null);
+				theChecks = new ListenerList<>(null);
+				theActionListeners = new ListenerList<>(null);
 				theCheckRemove = debug.addCheck(() -> check());
 			} else {
 				theRootNames = null;
 				theRefs = null;
 				theReverseRefs = null;
 				theFields = null;
-				theBreakpoints = null;
+				theChecks = null;
+				theActionListeners = null;
 				theCheckRemove = null;
 			}
 		}
@@ -245,7 +281,8 @@ public class Debug {
 					return d;
 				});
 			}
-			other.theBreakpoints.forEach(bp -> theBreakpoints.add(bp, true));
+			other.theChecks.forEach(bp -> theChecks.add(bp, true));
+			other.theActionListeners.forEach(bp -> theActionListeners.add(bp, true));
 		}
 
 		private DebugData addRootName(String name) {
@@ -268,15 +305,28 @@ public class Debug {
 			return this;
 		}
 
-		public DebugData breakOn(Predicate<? super DebugData> breakpoint) {
+		public DebugData debugIf(boolean condition) {
+			if (condition)
+				return this;
+			else
+				return INACTIVE;
+		}
+
+		public DebugData addCheck(Consumer<? super DebugData> check) {
 			if (theDebug != null)
-				theBreakpoints.add(breakpoint, false);
+				theChecks.add(check, true);
 			return this;
 		}
 
-		public DebugData breakIf(Predicate<? super DebugData> breakpoint) {
-			if (theDebug != null && breakpoint.test(this))
+		public DebugData breakpoint() {
+			if (theDebug != null)
 				BreakpointHere.breakpoint();
+			return this;
+		}
+
+		public DebugData print(Supplier<CharSequence> str) {
+			if (theDebug != null)
+				System.out.println(str.get().toString());
 			return this;
 		}
 
@@ -326,6 +376,20 @@ public class Debug {
 					return data.getField(subPath);
 				}
 			}
+		}
+
+		public <T> T getField(String fieldPath, Class<T> type) {
+			return type.cast(getField(fieldPath));
+		}
+
+		public boolean is(String fieldPath) {
+			Object fieldValue = getField(fieldPath);
+			if (fieldValue == null)
+				return false;
+			else if (fieldValue instanceof Boolean)
+				return ((Boolean) fieldValue).booleanValue();
+			else
+				return true;
 		}
 
 		public DebugData setField(String fieldPath, Object value) {
@@ -383,6 +447,21 @@ public class Debug {
 			}
 		}
 
+		public DebugAction act(String action) {
+			return new DebugAction(this, action, theDebug != null);
+		}
+
+		DebugData execAction(DebugAction action) {
+			theActionListeners.forEach(//
+				listener -> listener.accept(action));
+			return this;
+		}
+
+		public DebugData onAction(Consumer<DebugAction> onAction) {
+			theActionListeners.add(onAction, true);
+			return this;
+		}
+
 		private DebugData _with(String path, boolean create, Consumer<DebugData> action) {
 			if (theDebug == null)
 				return create ? this : null;
@@ -399,7 +478,7 @@ public class Debug {
 				throw new IllegalArgumentException("Empty path or empty path elements not allowed: " + path);
 			DebugData d;
 			if (create)
-				d = theRefs.computeIfAbsent(fieldName, n -> new DebugData(theDebug).addReverseRef(fieldName, this));
+				d = theRefs.computeIfAbsent(fieldName, n -> theDebug.created(new DebugData(theDebug).addReverseRef(fieldName, this)));
 			else
 				d = theRefs.get(fieldName);
 			if (d != null && subPath != null) {
@@ -429,7 +508,7 @@ public class Debug {
 					if (value == null)
 						return null;
 					else
-						return new DebugData(theDebug).addReverseRef(fieldName, this)._setReference(subPath, value);
+						return theDebug.created(new DebugData(theDebug).addReverseRef(fieldName, this)._setReference(subPath, value));
 				});
 			else {
 				DebugData fieldDebug = value == null ? null : theDebug._debug(value, true);
@@ -462,11 +541,8 @@ public class Debug {
 		}
 
 		private void check() {
-			theBreakpoints.forEach(//
-				bp -> {
-					if (bp.test(this))
-						BreakpointHere.breakpoint();
-				});
+			theChecks.forEach(//
+				bp -> bp.accept(this));
 		}
 
 		private void remove() {
@@ -610,6 +686,68 @@ public class Debug {
 		@Override
 		public String toString() {
 			return getIdentity();
+		}
+	}
+
+	public static class DebugAction {
+		private final DebugData theData;
+		private final String theName;
+		private final boolean isActive;
+		private final Map<String, Object> theParameters;
+		private boolean isExecuted;
+
+		DebugAction(DebugData data, String name, boolean active) {
+			theData = data;
+			theName = name;
+			isActive = active;
+			theParameters = active ? new LinkedHashMap<>() : Collections.emptyMap();
+		}
+
+		public String getName() {
+			return theName;
+		}
+
+		public Map<String, Object> getParameters() {
+			return Collections.unmodifiableMap(theParameters);
+		}
+
+		public DebugAction param(String paramName, Object paramValue) {
+			if (isExecuted)
+				throw new IllegalStateException("A debug action cannot be modified after it has begun executing");
+			if (isActive)
+				theParameters.put(paramName, paramValue);
+			return this;
+		}
+
+		public DebugAction param(String paramName, Supplier<?> paramGetter) {
+			if (isExecuted)
+				throw new IllegalStateException("A debug action cannot be modified after it has begun executing");
+			if (isActive)
+				theParameters.put(paramName, paramGetter.get());
+			return this;
+		}
+
+		public DebugData exec() {
+			if (!isActive)
+				return theData;
+			isExecuted = true;
+			return theData.execAction(this);
+		}
+
+		@Override
+		public String toString() {
+			if (!isActive)
+				return "null()";
+			StringBuilder str = new StringBuilder(theName).append('(');
+			boolean first = true;
+			for (Map.Entry<String, Object> param : theParameters.entrySet()) {
+				if (!first)
+					str.append(", ");
+				first = false;
+				str.append(param.getKey()).append('=').append(param.getValue());
+			}
+			str.append(')');
+			return str.toString();
 		}
 	}
 }
