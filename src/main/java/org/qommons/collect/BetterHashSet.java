@@ -304,6 +304,11 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		public boolean equals(Object obj) {
 			return obj instanceof BetterHashSet.HashId && entry == ((HashId) obj).entry;
 		}
+
+		@Override
+		public String toString() {
+			return entry.toString();
+		}
 	}
 
 	private class HashEntry implements MutableCollectionElement<E> {

@@ -1100,6 +1100,9 @@ public class QommonsTestUtils {
 	 */
 	public static <T> Matcher<Collection<T>> collectionsEqual(Collection<? extends T> values, boolean ordered) {
 		return new org.hamcrest.BaseMatcher<Collection<T>>() {
+			private final String DESCRIP = "collection equivalent to ";
+			private final int MAX_SIZE_LENGTH = 5;
+			private int theFirstMiss = -1;
 			private boolean wasUnorderedEqual;
 
 			@Override
@@ -1113,20 +1116,20 @@ public class QommonsTestUtils {
 					Map<T, Integer> aValueCounts = new HashMap<>();
 					Iterator<? extends T> vIter = values.iterator();
 					Iterator<T> aIter = arg.iterator();
-					boolean equal = true;
-					while (vIter.hasNext() && aIter.hasNext()) {
+					int i;
+					for (i = 0; vIter.hasNext() && aIter.hasNext(); i++) {
 						T vValue = vIter.next();
 						T aValue = aIter.next();
-						vValueCounts.compute(vValue, (v, i) -> i == null ? 1 : i + 1);
-						aValueCounts.compute(aValue, (v, i) -> i == null ? 1 : i + 1);
-						if (!Objects.equals(vValue, aValue))
-							equal = false;
+						vValueCounts.compute(vValue, (v, count) -> count == null ? 1 : count + 1);
+						aValueCounts.compute(aValue, (v, count) -> count == null ? 1 : count + 1);
+						if (theFirstMiss < 0 && !Objects.equals(vValue, aValue))
+							theFirstMiss = i;
 					}
-					if (equal && (vIter.hasNext() || aIter.hasNext()))
-						equal = false;
-					if (!equal)
+					if (theFirstMiss < 0 && (vIter.hasNext() || aIter.hasNext()))
+						theFirstMiss = i;
+					if (theFirstMiss >= 0)
 						wasUnorderedEqual = vValueCounts.equals(aValueCounts);
-					return equal;
+					return theFirstMiss < 0;
 				} else {
 					// Split out here for debugging
 					if (values.containsAll(arg))
@@ -1138,7 +1141,9 @@ public class QommonsTestUtils {
 
 			@Override
 			public void describeTo(Description arg0) {
-				arg0.appendText("collection equivalent to ").appendValue(values);
+				arg0.appendText(DESCRIP);
+				appendSize(values.size(), arg0);
+				arg0.appendValue(values);
 			}
 
 			@Override
@@ -1146,11 +1151,26 @@ public class QommonsTestUtils {
 				boolean matches = matches(item);
 				if (matches)
 					return;
+				StringBuilder str = new StringBuilder().append('@').append(theFirstMiss).append(' ');
 				if (wasUnorderedEqual)
-					description.appendText("        was (disordered) ");
-				else
-					description.appendText("                     was ");
+					str.insert(0, "(disordered) ");
+				str.insert(0, "was ");
+				int spaces = DESCRIP.length() - str.length();
+				for (int i = 0; i < spaces; i++)
+					str.insert(i, ' ');
+				description.appendText(str.toString());
+				appendSize(((Collection<?>) item).size(), description);
 				description.appendValue(item);
+			}
+
+			private void appendSize(int size, Description description) {
+				int ss = 10;
+				for (int i = 1; i < MAX_SIZE_LENGTH; i++) {
+					if (size < ss)
+						description.appendText(" ");
+					ss *= 10;
+				}
+				description.appendText("" + size);
 			}
 		};
 	}

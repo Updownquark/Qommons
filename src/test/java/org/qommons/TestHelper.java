@@ -23,6 +23,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Consumer;
 
+import org.qommons.debug.Debug;
 import org.qommons.io.Format;
 
 /**
@@ -173,6 +174,7 @@ public class TestHelper {
 	private void getBytes(int bytes) {
 		theBytes += bytes;
 		if (theBytes >= theNextBreak) {
+			Debug.d().debug(this, true).setField("break", true);
 			BreakpointHere.breakpoint();
 			Long next = theBreakpoints.higher(theBytes);
 			theNextBreak = next == null ? Long.MAX_VALUE : next;
