@@ -52,6 +52,11 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 	}
 
 	@Override
+	protected MutableBinaryTreeNode<E> mutableNodeFor(ElementId node) {
+		return new SortedMutableTreeNode(super.mutableNodeFor(node));
+	}
+
+	@Override
 	public BinaryTreeNode<E> addIfEmpty(E value) throws IllegalStateException {
 		try (Transaction t = lock(true, null)) {
 			if (getRoot() != null)
@@ -138,7 +143,7 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 
 		@Override
 		public MutableBinaryTreeNode<E> getRoot() {
-			return new SortedMutableTreeNode(theWrapped.getRoot());
+			return mutableNodeFor(theWrapped.getRoot());
 		}
 
 		@Override
@@ -148,7 +153,7 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 
 		@Override
 		public MutableBinaryTreeNode<E> get(int index) {
-			return new SortedMutableTreeNode(theWrapped.get(index));
+			return mutableNodeFor(theWrapped.get(index));
 		}
 
 		@Override
@@ -198,23 +203,33 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 			if (compare == 0)
 				return StdMsg.ELEMENT_EXISTS;
 			if (before != (compare < 0))
-				return StdMsg.UNSUPPORTED_OPERATION;
+				return StdMsg.ILLEGAL_ELEMENT_POSITION;
 			BinaryTreeNode<E> side = getClosest(before);
 			if (side != null) {
 				compare = comparator().compare(side.get(), value);
 				if (compare == 0)
 					return StdMsg.ELEMENT_EXISTS;
 				if (before != (compare > 0))
-					return StdMsg.UNSUPPORTED_OPERATION;
+					return StdMsg.ILLEGAL_ELEMENT_POSITION;
 			}
-			return null;
+			return theWrapped.canAdd(value, before);
 		}
 
 		@Override
 		public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-			String msg = canAdd(value, before);
-			if (msg != null)
-				throw new IllegalArgumentException(msg);
+			int compare = comparator().compare(value, get());
+			if (compare == 0)
+				throw new IllegalArgumentException(StdMsg.ELEMENT_EXISTS);
+			if (before != (compare < 0))
+				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
+			BinaryTreeNode<E> side = getClosest(before);
+			if (side != null) {
+				compare = comparator().compare(side.get(), value);
+				if (compare == 0)
+					throw new IllegalArgumentException(StdMsg.ELEMENT_EXISTS);
+				if (before != (compare < 0))
+					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
+			}
 			return theWrapped.add(value, before);
 		}
 
@@ -226,6 +241,11 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 		@Override
 		public boolean equals(Object obj) {
 			return obj instanceof BetterTreeSet.SortedMutableTreeNode && theWrapped.equals(((SortedMutableTreeNode) obj).theWrapped);
+		}
+
+		@Override
+		public String toString() {
+			return theWrapped.toString();
 		}
 	}
 }

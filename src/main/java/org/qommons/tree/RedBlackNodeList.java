@@ -365,22 +365,22 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 		@Override
 		public MutableBinaryTreeNode<E> getParent() {
-			return (MutableBinaryTreeNode<E>) super.getParent();
+			return wrapMutable(theNode.getParent());
 		}
 
 		@Override
 		public MutableBinaryTreeNode<E> getLeft() {
-			return (MutableBinaryTreeNode<E>) super.getLeft();
+			return wrapMutable(theNode.getLeft());
 		}
 
 		@Override
 		public MutableBinaryTreeNode<E> getRight() {
-			return (MutableBinaryTreeNode<E>) super.getRight();
+			return wrapMutable(theNode.getRight());
 		}
 
 		@Override
 		public MutableBinaryTreeNode<E> getClosest(boolean left) {
-			return (MutableBinaryTreeNode<E>) super.getClosest(left);
+			return wrapMutable(theNode.getClosest(left));
 		}
 
 		@Override

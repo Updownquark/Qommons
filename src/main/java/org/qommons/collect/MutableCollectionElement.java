@@ -13,6 +13,7 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 		static String UNSUPPORTED_OPERATION = "Unsupported Operation";
 		static String NULL_DISALLOWED = "Null is not allowed";
 		static String ELEMENT_EXISTS = "Element already exists";
+		static String ILLEGAL_ELEMENT_POSITION = "Element is not allowed there";
 		static String GROUP_EXISTS = "Group already exists";
 		static String WRONG_GROUP = "Item does not belong to this group";
 		static String NOT_FOUND = "No such item found";
