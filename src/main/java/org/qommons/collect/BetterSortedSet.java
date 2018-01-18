@@ -103,10 +103,24 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	}
 
 	@Override
-	default String canAdd(E value) {
+	default String canAdd(E value, ElementId after, ElementId before) {
 		if (!belongs(value))
 			return StdMsg.ILLEGAL_ELEMENT;
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lock(false, true, null)) {
+			if (after != null) {
+				int comp = comparator().compare(getElement(after).get(), value);
+				if (comp == 0)
+					return StdMsg.ELEMENT_EXISTS;
+				else if (comp > 0)
+					return StdMsg.ILLEGAL_ELEMENT_POSITION;
+			}
+			if (before != null) {
+				int comp = comparator().compare(value, getElement(before).get());
+				if (comp == 0)
+					return StdMsg.ELEMENT_EXISTS;
+				else if (comp > 0)
+					return StdMsg.ILLEGAL_ELEMENT_POSITION;
+			}
 			CollectionElement<E> found = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
 			if (found != null) {
 				return ofMutableElement(found.getElementId(), el -> {
@@ -122,10 +136,25 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	}
 
 	@Override
-	default CollectionElement<E> addElement(E value, boolean first) {
+	default CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+		throws UnsupportedOperationException, IllegalArgumentException {
 		if (!belongs(value))
 			throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lock(true, true, null)) {
+			if (after != null) {
+				int comp = comparator().compare(getElement(after).get(), value);
+				if (comp == 0)
+					return null;
+				else if (comp > 0)
+					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
+			}
+			if (before != null) {
+				int comp = comparator().compare(value, getElement(before).get());
+				if (comp == 0)
+					return null;
+				else if (comp > 0)
+					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
+			}
 			CollectionElement<E> found = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
 			if (found != null) {
 				ElementId id = ofMutableElement(found.getElementId(), el -> {

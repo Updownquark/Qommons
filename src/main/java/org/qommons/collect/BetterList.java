@@ -897,95 +897,32 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public String canAdd(E value) {
-			if (!belongs(value))
-				return StdMsg.ILLEGAL_ELEMENT;
-			try (Transaction t = lock(true, false, null)) {
+		public String canAdd(E value, ElementId after, ElementId before) {
+			try (Transaction t = lock(false, true, null)) {
+				if (after == null && theStart > 0)
+					after = theWrapped.getElement(theStart - 1).getElementId();
 				int wrapSize = theWrapped.size();
-				if (wrapSize == 0) {
-					if (theStart != 0)
-						return StdMsg.UNSUPPORTED_OPERATION;
-					else
-						return theWrapped.canAdd(value);
-				} else if (theStart == 0 && theEnd == wrapSize)
-					return theWrapped.canAdd(value);
-				else {
-					// Can't just add it generically, since it might end up in a position outside this sublist
-					// We also can't check each element to see if it can be added anywhere because that would have terrible performance
-					// We'll compromise and try each end
-					MutableCollectionElement<E> terminal;
-					String msg = null;
-					if (theEnd > theStart || theStart == wrapSize) {
-						terminal = theWrapped.mutableElement(theWrapped.getElement(Math.min(wrapSize, theEnd - 1)).getElementId());
-						msg = terminal.canAdd(value, false);
-						if (msg == null)
-							return null;
-					}
-					if (theStart < wrapSize) {
-						terminal = theWrapped.mutableElement(theWrapped.getElement(theStart).getElementId());
-						msg = terminal.canAdd(value, true);
-					}
-					return msg;
-				}
+				if (before == null && theEnd < wrapSize)
+					before = theWrapped.getElement(theEnd).getElementId();
+				return theWrapped.canAdd(value, after, before);
 			}
 		}
 
 		@Override
-		public CollectionElement<E> addElement(E e, boolean first) {
-			if (!belongs(e))
-				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			try (Transaction t = lock(true, false, null)) {
-				CollectionElement<E> added;
+		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			try (Transaction t = lock(true, true, null)) {
+				if (after == null && theStart > 0)
+					after = theWrapped.getElement(theStart - 1).getElementId();
 				int wrapSize = theWrapped.size();
-				if (wrapSize == 0) {
-					if (theStart != 0)
-						throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-					else
-						added = theWrapped.addElement(e, first);
-				} else if (theStart == 0 && theEnd == wrapSize)
-					added = theWrapped.addElement(e, first);
-				else {
-					// Remembering that the first boolean is just a suggestion, we can't content ourselves with just trying to add the
-					// element to the specified end of the list, since it might be allowed somewhere else in the sublist but not there.
-					// But we can't just add it generically, since it might end up in a position outside this sublist.
-					// We also can't check each element to see if it can be added anywhere because that would have terrible performance.
-					// We'll compromise and try each end.
-					int terminalIndex = first ? theStart : Math.min(wrapSize, theEnd - 1);
-					MutableCollectionElement<E> terminal = null;
-					if (terminalIndex >= 0) {
-						terminal = theWrapped.mutableElement(theWrapped.getElement(terminalIndex).getElementId());
-						if (terminal.canAdd(e, first) == null)
-							added = theWrapped.getElement(terminal.add(e, first));
-						else
-							added = null;
-					} else
-						added = null;
-					if (added == null) {
-						terminalIndex = first ? Math.min(wrapSize, theEnd - 1) : theStart;
-						if (terminalIndex >= 0) {
-							MutableCollectionElement<E> otherTerminal = theWrapped
-								.mutableElement(theWrapped.getElement(terminalIndex).getElementId());
-							if (otherTerminal.canAdd(e, !first) == null)
-								added = theWrapped.getElement(otherTerminal.add(e, !first));
-							else {
-								// Let the specified element throw the exception
-								if (terminal != null)
-									added = theWrapped.getElement(terminal.add(e, first));
-								else
-									added = theWrapped.getElement(otherTerminal.add(e, !first));
-							}
-						}
-						if (added == null) {
-							// Let the specified element throw the exception
-							added = theWrapped.getElement(terminal.add(e, first));
-						}
-					}
-				}
-				if (added != null) {
+				if (before == null && theEnd < wrapSize)
+					before = theWrapped.getElement(theEnd).getElementId();
+				CollectionElement<E> newEl = theWrapped.addElement(value, after, before, first);
+				if (newEl != null) {
 					theStructureStamp = theWrapped.getStamp(true);
 					theEnd++;
 				}
-				return added;
+				return newEl;
 			}
 		}
 
@@ -1196,12 +1133,13 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public String canAdd(E value) {
+		public String canAdd(E value, ElementId after, ElementId before) {
 			return StdMsg.UNSUPPORTED_OPERATION;
 		}
 
 		@Override
-		public CollectionElement<E> addElement(E value, boolean first) {
+		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
 			return null;
 		}
 

@@ -44,7 +44,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		return keySet().getStamp(structuralOnly);
 	}
 
-	MapEntryHandle<K, V> putEntry(K key, V value, boolean first);
+	default MapEntryHandle<K, V> putEntry(K key, V value, boolean first){
+		return putEntry(key, value, null, null, first);
+	}
+
+	MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first);
 
 	MapEntryHandle<K, V> getEntry(K key);
 
@@ -153,8 +157,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public MapEntryHandle<K, V> putEntry(K key, V value, boolean first) {
-			return theWrapped.putEntry(key, value, !first).reverse();
+		public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
+			return MapEntryHandle.reverse(theWrapped.putEntry(key, value, ElementId.reverse(before), ElementId.reverse(after), !first));
 		}
 
 		@Override
@@ -253,13 +257,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public String canAdd(Map.Entry<K, V> value) {
+		public String canAdd(Entry<K, V> value, ElementId after, ElementId before) {
 			return StdMsg.UNSUPPORTED_OPERATION;
 		}
 
 		@Override
-		public CollectionElement<Map.Entry<K, V>> addElement(Map.Entry<K, V> value, boolean first) {
-
+		public CollectionElement<Entry<K, V>> addElement(Entry<K, V> value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
 
@@ -508,12 +512,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public String canAdd(V value) {
+		public String canAdd(V value, ElementId after, ElementId before) {
 			return StdMsg.UNSUPPORTED_OPERATION;
 		}
 
 		@Override
-		public CollectionElement<V> addElement(V value, boolean first) {
+		public CollectionElement<V> addElement(V value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
 

@@ -195,10 +195,10 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public MultiMapEntryHandle<K, V> putEntry(K key, V value, boolean first) {
+		public MultiMapEntryHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first) {
 			if (!theKeySet.belongs(key))
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			return theWrapped.putEntry(key, value, first);
+			return theWrapped.putEntry(key, value, afterKey, beforeKey, first);
 		}
 
 		@Override

@@ -354,10 +354,10 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		@Override
-		public MapEntryHandle<K, V> putEntry(K key, V value, boolean first) {
+		public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
 			if (!theKeySet.belongs(key))
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			return theSource.putEntry(key, value, first);
+			return theSource.putEntry(key, value, after, before, first);
 		}
 
 		@Override

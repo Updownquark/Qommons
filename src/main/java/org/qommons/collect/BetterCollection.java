@@ -1,12 +1,23 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Set;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
-import org.qommons.*;
+import org.qommons.ArrayUtils;
+import org.qommons.Causable;
+import org.qommons.Transactable;
+import org.qommons.Transaction;
+import org.qommons.ValueHolder;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
@@ -77,18 +88,61 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @param value The value to test compatibility for
 	 * @return Null if given value could possibly be added to this collection, or a message why it can't
 	 */
-	String canAdd(E value);
+	default String canAdd(E value) {
+		return canAdd(value, null, null);
+	}
 
 	/**
 	 * Similar to {@link #add(Object)}, but returns the element ID for the new element at which the value was added. Similarly to
 	 * {@link #add(Object)}, this method may return null if the collection was not changed as a result of the operation.
 	 * 
 	 * @param value The value to add
-	 * @param first Whether to prefer a lower position over a higher one. This parameter may be ignored if the collection does not support
-	 *        position-indicated addition
-	 * @return The element at which the value was added, or null if the value was not added
+	 * @param first Whether to prefer a lower position over a higher one. This parameter may be:
+	 *        <ul>
+	 *        <li>Strictly obeyed, in which the value will be added at the beginning (true) or end (false) of the collection</li>
+	 *        <li>Ignored if the collection does not support position-indicated addition</li>
+	 *        <li>Used as a suggestion, where the insertion will be closer to the beginning (true) or end (false) of the collection as
+	 *        indicated by the parameter</li></li>
+	 * @return The element at which the value was added, or null if the value was not added due to a non-erroring condition
+	 * @throws UnsupportedOperationException If such an operation is not supported by this collection in general
+	 * @throws IllegalArgumentException If something about the value prevents this operation
 	 */
-	CollectionElement<E> addElement(E value, boolean first);
+	default CollectionElement<E> addElement(E value, boolean first) throws UnsupportedOperationException, IllegalArgumentException {
+		return addElement(value, null, null, first);
+	}
+
+	/**
+	 * Tests the ability to add an object into this collection within a given position range
+	 * 
+	 * @param value The value to test addability for
+	 * @param after The element currently occupying the position after which (exclusive) the value's insertion is desirable, or null if the
+	 *        element may be added at the beginning of the collection
+	 * @param before The element currently occupying the position before which (exclusive) the value's insertion is desirable, or null if
+	 *        the element may be added at the end of the collection
+	 * @return Null if given value could possibly be added to this collection within the given position range, or a message why it can't
+	 */
+	String canAdd(E value, ElementId after, ElementId before);
+
+	/**
+	 * Adds an element to this collection within a specified position range
+	 * 
+	 * @param value The value to add
+	 * @param after The element currently occupying the position after which (exclusive) the value's insertion is desirable, or null if the
+	 *        element may be added at the beginning of the collection
+	 * @param before The element currently occupying the position before which (exclusive) the value's insertion is desirable, or null if
+	 *        the element may be added at the end of the collection
+	 * @param first Whether to prefer a lower position over a higher one. This parameter may be:
+	 *        <ul>
+	 *        <li>Strictly obeyed, in which the value will be added at the beginning (true) or end (false) of the collection</li>
+	 *        <li>Ignored if the collection does not support position-indicated addition</li>
+	 *        <li>Used as a suggestion, where the insertion will be closer to the beginning (true) or end (false) of the collection as
+	 *        indicated by the parameter</li></li>
+	 * @return The element at which the value was added, or null if the value was not added due to a non-erroring condition
+	 * @throws UnsupportedOperationException If such an operation is not supported by this collection in general
+	 * @throws IllegalArgumentException If something about the value prevents this operation
+	 */
+	CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+		throws UnsupportedOperationException, IllegalArgumentException;
 
 	@Override
 	default boolean add(E value) {
@@ -739,13 +793,15 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public String canAdd(E value) {
-			return getWrapped().canAdd(value);
+		public String canAdd(E value, ElementId after, ElementId before) {
+			return getWrapped().canAdd(value, ElementId.reverse(before), ElementId.reverse(after));
 		}
 
 		@Override
-		public CollectionElement<E> addElement(E e, boolean first) {
-			return CollectionElement.reverse(getWrapped().addElement(e, !first));
+		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return CollectionElement
+				.reverse(getWrapped().addElement(value, ElementId.reverse(before), ElementId.reverse(after), !first));
 		}
 
 		@Override
@@ -811,13 +867,14 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public String canAdd(E value) {
+		public String canAdd(E value, ElementId after, ElementId before) {
 			return StdMsg.UNSUPPORTED_OPERATION;
 		}
 
 		@Override
-		public CollectionElement<E> addElement(E e, boolean first) {
-			throw new UnsupportedOperationException();
+		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return null;
 		}
 
 		@Override

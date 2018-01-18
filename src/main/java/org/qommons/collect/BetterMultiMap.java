@@ -137,7 +137,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V> {
 		};
 	}
 
-	MultiMapEntryHandle<K, V> putEntry(K key, V value, boolean first);
+	default MultiMapEntryHandle<K, V> putEntry(K key, V value, boolean first) {
+		return putEntry(key, value, null, null, first);
+	}
+
+	MultiMapEntryHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first);
 
 	@Override
 	default boolean add(K key, V value) {
@@ -211,8 +215,9 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V> {
 		}
 
 		@Override
-		public MultiMapEntryHandle<K, V> putEntry(K key, V value, boolean first) {
-			return MultiMapEntryHandle.reverse(theSource.putEntry(key, value, !first));
+		public MultiMapEntryHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first) {
+			return MultiMapEntryHandle
+				.reverse(theSource.putEntry(key, value, ElementId.reverse(beforeKey), ElementId.reverse(afterKey), !first));
 		}
 
 		@Override

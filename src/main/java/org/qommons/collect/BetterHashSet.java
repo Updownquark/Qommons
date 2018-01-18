@@ -11,6 +11,7 @@ import java.util.function.ToIntFunction;
 
 import org.qommons.Transactable;
 import org.qommons.Transaction;
+import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.tree.BetterTreeList;
 import org.qommons.tree.BinaryTreeNode;
 import org.qommons.tree.MutableBinaryTreeNode;
@@ -188,13 +189,19 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public String canAdd(E value) {
-		return null;
+	public String canAdd(E value, ElementId after, ElementId before) {
+		return getEntry(theHasher.applyAsInt(value), value) == null ? null : StdMsg.ELEMENT_EXISTS;
 	}
 
 	@Override
-	public CollectionElement<E> addElement(E value, boolean first) {
-		try (Transaction t = lock(true, true, null)) {
+	public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+		throws UnsupportedOperationException, IllegalArgumentException {
+		ElementId added;
+		if (first && after != null)
+			added = mutableElement(after).add(value, false);
+		else if (!first && before != null)
+			added = mutableElement(before).add(value, true);
+		else {
 			int hashCode = theHasher.applyAsInt(value);
 			HashEntry entry = getEntry(hashCode, value);
 			if (entry != null)
@@ -221,6 +228,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			theLocker.changed(true);
 			return entry.immutable();
 		}
+		return getElement(added);
 	}
 
 	@Override

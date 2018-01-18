@@ -132,20 +132,34 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public String canAdd(E value) {
+	public String canAdd(E value, ElementId after, ElementId before) {
 		return null;
 	}
 
 	@Override
 	public BinaryTreeNode<E> addElement(E value, boolean first) {
-		BinaryTreeNode<E>[] node = new BinaryTreeNode[1];
-		try (Transaction t = lock(true, true, null)) {
-			if (theRoot == null)
-				node[0] = wrap(theRoot = new RedBlackNode<>(value));
-			else
-				spliterator(first).forElementM(el -> node[0] = getElement(el.add(value, first)), first);
+		return addElement(value, null, null, first);
+	}
+
+	@Override
+	public BinaryTreeNode<E> addElement(E value, ElementId after, ElementId before, boolean first)
+		throws UnsupportedOperationException, IllegalArgumentException {
+		ElementId added;
+		if (first && after != null)
+			added = mutableElement(after).add(value, false);
+		else if (!first && before != null)
+			added = mutableElement(before).add(value, true);
+		else {
+			BinaryTreeNode<E>[] node = new BinaryTreeNode[1];
+			try (Transaction t = lock(true, true, null)) {
+				if (theRoot == null)
+					node[0] = wrap(theRoot = new RedBlackNode<>(value));
+				else
+					spliterator(first).forElementM(el -> node[0] = getElement(el.add(value, first)), first);
+			}
+			return node[0];
 		}
-		return node[0];
+		return getElement(added);
 	}
 
 	@Override

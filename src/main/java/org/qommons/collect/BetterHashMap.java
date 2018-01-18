@@ -70,6 +70,18 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	}
 
 	@Override
+	public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
+		try (Transaction t = theEntries.lock(true, null)) {
+			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(new SimpleMapEntry<>(key, value), true);
+			if (entryEl != null) {
+				entryEl.get().setValue(value);
+			} else
+				entryEl = theEntries.addElement(new SimpleMapEntry<>(key, value, true), after, before, first);
+			return handleFor(entryEl);
+		}
+	}
+
+	@Override
 	public MapEntryHandle<K, V> getEntry(K key) {
 		try (Transaction t = theEntries.lock(false, null)) {
 			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(new SimpleMapEntry<>(key, null), true);
@@ -337,13 +349,14 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
-		public String canAdd(K value) {
-			return theEntries.canAdd(new SimpleMapEntry<>(value, null, true));
+		public String canAdd(K value, ElementId after, ElementId before) {
+			return theEntries.canAdd(new SimpleMapEntry<>(value, null, true), after, before);
 		}
 
 		@Override
-		public CollectionElement<K> addElement(K value, boolean first) {
-			return handleFor(theEntries.addElement(new SimpleMapEntry<>(value, null, true), first));
+		public CollectionElement<K> addElement(K value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return handleFor(theEntries.addElement(new SimpleMapEntry<>(value, null, true), after, before, first));
 		}
 
 		@Override

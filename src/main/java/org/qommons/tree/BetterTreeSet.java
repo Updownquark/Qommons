@@ -61,27 +61,19 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 		try (Transaction t = lock(true, null)) {
 			if (getRoot() != null)
 				throw new IllegalStateException("Tree is not empty");
-			return super.addElement(value, true);
+			return super.addElement(value, null, null, true);
 		}
 	}
 
 	@Override
-	public String canAdd(E value) {
-		return BetterSortedSet.super.canAdd(value);
+	public String canAdd(E value, ElementId after, ElementId before) {
+		return BetterSortedSet.super.canAdd(value, after, before);
 	}
 
 	@Override
-	public BinaryTreeNode<E> addElement(E value, boolean first) {
-		try (Transaction t = lock(true, null)) {
-			if (isEmpty())
-				return super.addElement(value, first);
-			BinaryTreeNode<E> node = getRoot().findClosest(n -> theCompare.compare(value, n.get()), true, false);
-			int compare = theCompare.compare(value, node.get());
-			if (compare == 0)
-				return null; // Already present
-			else
-				return getElement(super.mutableNodeFor(node).add(value, compare < 0));
-		}
+	public BinaryTreeNode<E> addElement(E value, ElementId after, ElementId before, boolean first)
+		throws UnsupportedOperationException, IllegalArgumentException {
+		return (BinaryTreeNode<E>) BetterSortedSet.super.addElement(value, after, before, first);
 	}
 
 	private class SortedMutableTreeNode implements MutableBinaryTreeNode<E> {

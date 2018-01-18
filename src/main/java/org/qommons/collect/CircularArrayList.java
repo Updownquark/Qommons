@@ -680,15 +680,26 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public String canAdd(E value) {
+	public String canAdd(E value, ElementId after, ElementId before) {
 		return null;
 	}
 
 	@Override
-	public CollectionElement<E> addElement(E value, boolean first) {
-		try (Transaction t = lock(true, null)) {
-			return internalAdd(first ? 0 : theSize, value).immutable();
+	public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+		throws UnsupportedOperationException, IllegalArgumentException {
+		ElementId added;
+		if (first) {
+			if (after == null)
+				return internalAdd(first ? 0 : theSize, value).immutable();
+			else
+				added = mutableElement(after).add(value, false);
+		} else {
+			if (before == null)
+				return internalAdd(first ? 0 : theSize, value).immutable();
+			else
+				added = mutableElement(before).add(value, true);
 		}
+		return internalAdd(first ? 0 : theSize, value).immutable();
 	}
 
 	@Override
