@@ -320,6 +320,15 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	}
 
 	@Override
+	default BetterSortedSet<E> subList(int fromIndex, int toIndex) {
+		try (Transaction t = lock(false, true, null)) {
+			Comparable<? super E> from = fromIndex == 0 ? null : searchFor(get(fromIndex), 0);
+			Comparable<? super E> to = toIndex == size() ? null : searchFor(get(toIndex), 1);
+			return subSet(from, to);
+		}
+	}
+
+	@Override
 	void clear();
 
 	/**
