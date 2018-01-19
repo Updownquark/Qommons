@@ -3,6 +3,7 @@ package org.qommons.tree;
 import java.util.Comparator;
 
 import org.qommons.Transaction;
+import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
@@ -84,6 +85,11 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 		}
 
 		@Override
+		public BetterCollection<E> getCollection() {
+			return BetterTreeSet.this;
+		}
+
+		@Override
 		public ElementId getElementId() {
 			return theWrapped.getElementId();
 		}
@@ -162,11 +168,11 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 		public String isAcceptable(E value) {
 			if (!belongs(value))
 				return StdMsg.ILLEGAL_ELEMENT;
-			BinaryTreeNode<E> left = getLeft();
-			BinaryTreeNode<E> right = getRight();
-			if (left != null && comparator().compare(left.get(), value) >= 0)
+			BinaryTreeNode<E> previous = getClosest(true);
+			BinaryTreeNode<E> next = getClosest(false);
+			if (previous != null && comparator().compare(previous.get(), value) >= 0)
 				return StdMsg.UNSUPPORTED_OPERATION;
-			if (right != null && comparator().compare(value, right.get()) >= 0)
+			if (next != null && comparator().compare(value, next.get()) >= 0)
 				return StdMsg.UNSUPPORTED_OPERATION;
 			return null;
 		}
@@ -198,7 +204,7 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 				return StdMsg.ILLEGAL_ELEMENT_POSITION;
 			BinaryTreeNode<E> side = getClosest(before);
 			if (side != null) {
-				compare = comparator().compare(side.get(), value);
+				compare = comparator().compare(value, side.get());
 				if (compare == 0)
 					return StdMsg.ELEMENT_EXISTS;
 				if (before != (compare > 0))

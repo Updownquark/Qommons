@@ -6,6 +6,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 import org.qommons.Transaction;
+import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterSortedMap;
 import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
@@ -102,7 +103,7 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 
 	@Override
 	public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
-		return new MutableTreeEntry<>(theEntries.mutableElement(entryId));
+		return new MutableTreeEntry<>(this, theEntries.mutableElement(entryId));
 	}
 
 	@Override
@@ -227,17 +228,25 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 	}
 
 	static class MutableTreeEntry<K, V> extends TreeEntry<K, V> implements MutableBinaryTreeEntry<K, V> {
-		public MutableTreeEntry(MutableBinaryTreeNode<Map.Entry<K, V>> entryNode) {
+		private final BetterTreeMap<K, V> theMap;
+
+		public MutableTreeEntry(BetterTreeMap<K, V> map, MutableBinaryTreeNode<Map.Entry<K, V>> entryNode) {
 			super(entryNode);
+			theMap = map;
 		}
 
-		private static <K, V> MutableTreeEntry<K, V> wrap(MutableBinaryTreeNode<Map.Entry<K, V>> entryNode) {
-			return entryNode == null ? null : new MutableTreeEntry<>(entryNode);
+		private MutableTreeEntry<K, V> wrap(MutableBinaryTreeNode<Map.Entry<K, V>> entryNode) {
+			return entryNode == null ? null : new MutableTreeEntry<>(theMap, entryNode);
 		}
 
 		@Override
 		protected MutableBinaryTreeNode<Map.Entry<K, V>> getEntryNode() {
 			return (MutableBinaryTreeNode<java.util.Map.Entry<K, V>>) super.getEntryNode();
+		}
+
+		@Override
+		public BetterCollection<V> getCollection() {
+			return theMap.values();
 		}
 
 		@Override
@@ -378,6 +387,12 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		}
 
 		@Override
+		public CollectionElement<K> getTerminalElement(boolean first) {
+			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getTerminalElement(first);
+			return entryEl == null ? null : handleFor(entryEl);
+		}
+
+		@Override
 		public CollectionElement<K> getAdjacentElement(ElementId elementId, boolean next) {
 			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getAdjacentElement(elementId, next);
 			return entryEl == null ? null : handleFor(entryEl);
@@ -410,11 +425,21 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 				public K get() {
 					return entryHandle.get().getKey();
 				}
+
+				@Override
+				public String toString() {
+					return "keyOf(" + entryHandle + ")";
+				}
 			};
 		}
 
 		protected MutableCollectionElement<K> mutableHandleFor(MutableCollectionElement<? extends Map.Entry<K, V>> entryHandle) {
 			return new MutableCollectionElement<K>() {
+				@Override
+				public BetterCollection<K> getCollection() {
+					return KeySet.this;
+				}
+
 				@Override
 				public ElementId getElementId() {
 					return entryHandle.getElementId();
@@ -477,6 +502,21 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		@Override
 		public void clear() {
 			theEntries.clear();
+		}
+
+		@Override
+		public int hashCode() {
+			return BetterCollection.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterCollection.equals(this, obj);
+		}
+
+		@Override
+		public String toString() {
+			return BetterCollection.toString(this);
 		}
 
 		private class KeySpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<K> {

@@ -66,11 +66,9 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	CollectionElement<E> getElement(ElementId id);
 
-	default CollectionElement<E> getTerminalElement(boolean first) {
-		ValueHolder<CollectionElement<E>> holder = new ValueHolder<>();
-		spliterator(first).forElement(holder, first);
-		return holder.get();
-	}
+	CollectionElement<E> getTerminalElement(boolean first);
+
+	CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next);
 
 	MutableCollectionElement<E> mutableElement(ElementId id);
 
@@ -763,6 +761,16 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
+		public CollectionElement<E> getTerminalElement(boolean first) {
+			return CollectionElement.reverse(theWrapped.getTerminalElement(!first));
+		}
+
+		@Override
+		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
+			return CollectionElement.reverse(theWrapped.getAdjacentElement(elementId.reverse(), !next));
+		}
+
+		@Override
 		public CollectionElement<E> getElement(E value, boolean first) {
 			return CollectionElement.reverse(getWrapped().getElement(value, !first));
 		}
@@ -879,6 +887,16 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 		@Override
 		public void clear() {}
+
+		@Override
+		public CollectionElement<E> getTerminalElement(boolean first) {
+			return null;
+		}
+
+		@Override
+		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
+			return null;
+		}
 
 		@Override
 		public CollectionElement<E> getElement(E value, boolean first) {

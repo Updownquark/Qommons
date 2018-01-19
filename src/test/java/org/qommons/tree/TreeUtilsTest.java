@@ -14,29 +14,30 @@ import org.qommons.TestHelper;
 /** Runs tests on the red-black tree structures behind the ObServe tree collections */
 public class TreeUtilsTest {
 	private static boolean PRINT = false;
+	
 	/**
 	 * A testing method. Adds sequential nodes into a tree and removes them, checking validity of the tree at each step.
 	 *
 	 * @param <T> The type of values to put in the tree
-	 * @param tree The initial tree node
+	 * @param node The initial tree node
 	 * @param nodes The sequence of nodes to add to the tree. Must repeat.
 	 */
-	public static <T> void test(RedBlackNode<T> tree, Iterable<T> nodes) {
+	public static <T> void test(RedBlackTree<T> tree, Iterable<T> nodes) {
 		RedBlackNode.DEBUG_PRINT = PRINT;
 		Iterator<T> iter = nodes.iterator();
 		iter.next(); // Skip the first value, assuming that's what's in the tree
 		if(PRINT) {
-			System.out.println(RedBlackNode.print(tree));
+			System.out.println(RedBlackNode.print(tree.getRoot()));
 			System.out.println(" ---- ");
 		}
 		while(iter.hasNext()) {
 			T value = iter.next();
 			if(PRINT)
 				System.out.println("Adding " + value);
-			tree = tree.getTerminal(false, () -> true).add(new RedBlackNode<>(value), false);
+			tree.getRoot().getTerminal(false, () -> true).add(new RedBlackNode<>(tree, value), false);
 			if(PRINT)
-				System.out.println(RedBlackNode.print(tree));
-			tree.checkValid();
+				System.out.println(RedBlackNode.print(tree.getRoot()));
+			tree.getRoot().checkValid();
 			if(PRINT)
 				System.out.println(" ---- ");
 		}
@@ -48,11 +49,11 @@ public class TreeUtilsTest {
 			T value = iter.next();
 			if(PRINT)
 				System.out.println("Deleting " + value);
-			tree = tree.getTerminal(true, ()->true).delete();
+			tree.getRoot().getTerminal(true, () -> true).delete();
 			if(PRINT)
-				System.out.println(RedBlackNode.print(tree));
-			if(tree != null)
-				tree.checkValid();
+				System.out.println(RedBlackNode.print(tree.getRoot()));
+			if (tree.getRoot() != null)
+				tree.getRoot().checkValid();
 			if(PRINT)
 				System.out.println(" ---- ");
 		}
@@ -87,7 +88,9 @@ public class TreeUtilsTest {
 	/** A simple test against {@link RedBlackNode} */
 	@Test
 	public void testTreeBasic() {
-		test(new RedBlackNode<>("a"), alphaBet('z'));
+		RedBlackTree<String> tree = new RedBlackTree<>();
+		tree.setRoot(new RedBlackNode<>(tree, "a"));
+		test(tree, alphaBet('z'));
 	}
 
 	static class TreeSetTester implements TestHelper.Testable {

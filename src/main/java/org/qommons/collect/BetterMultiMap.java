@@ -91,6 +91,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V> {
 			}
 
 			@Override
+			public BetterCollection<V> getCollection() {
+				return keyElement.getValues();
+			}
+
+			@Override
 			public ElementId getElementId() {
 				return valueElement.getElementId();
 			}

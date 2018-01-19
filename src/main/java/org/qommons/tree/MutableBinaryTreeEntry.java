@@ -1,5 +1,6 @@
 package org.qommons.tree;
 
+import org.qommons.collect.BetterCollection;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.MutableMapEntryHandle;
 
@@ -61,6 +62,11 @@ public interface MutableBinaryTreeEntry<K, V> extends BinaryTreeEntry<K, V>, Mut
 		@Override
 		protected MutableBinaryTreeEntry<K, V> getWrapped() {
 			return (MutableBinaryTreeEntry<K, V>) super.getWrapped();
+		}
+
+		@Override
+		public BetterCollection<V> getCollection() {
+			return getWrapped().getCollection().reverse();
 		}
 
 		@Override

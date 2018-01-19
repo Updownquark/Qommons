@@ -20,6 +20,7 @@ import java.util.function.BooleanSupplier;
  * @param <E> The type of value that the node holds
  */
 public class RedBlackNode<E> {
+	private final RedBlackTree<E> theTree;
 	private boolean isRed;
 
 	private RedBlackNode<E> theParent;
@@ -29,6 +30,8 @@ public class RedBlackNode<E> {
 	private RedBlackNode<E> thePrevious;
 
 	private int theSize;
+	private int theCachedIndex;
+	private int theCachedStamp;
 	/** Records the node's position when it was removed */
 	private int theRemovedIndex;
 
@@ -37,13 +40,22 @@ public class RedBlackNode<E> {
 
 	private E theValue;
 
-	/** @param value The value for this node */
-	public RedBlackNode(E value) {
+	/**
+	 * @param tree The tree structure that this node shall belong to
+	 * @param value The value for this node
+	 */
+	public RedBlackNode(RedBlackTree<E> tree, E value) {
+		theTree = tree;
 		isRed = true;
 		theSize = 1;
 		theRemovedIndex = -1;
 
 		theValue = value;
+	}
+
+	/** @return The tree structure that this node belongs (or used to belong) to */
+	public RedBlackTree<E> getTree() {
+		return theTree;
 	}
 
 	/** @return This node's value */
@@ -72,6 +84,11 @@ public class RedBlackNode<E> {
 		while (root.theParent != null)
 			root = root.theParent;
 		return root;
+	}
+
+	/** Whether this node is still to be found in the tree */
+	public boolean isPresent() {
+		return theParent != null || theTree.getRoot() == this;
 	}
 
 	/** Runs debugging checks on this tree structure to assure that all internal constraints are currently met. */
@@ -436,13 +453,12 @@ public class RedBlackNode<E> {
 	static boolean DEBUG_PRINT = false;
 
 	/**
-	 * Adds a new node into this structure, adjacent to this node in the structure's order, rebalancing if necessary
+	 * Adds a new node into the tree, adjacent to this node in the structure's order, rebalancing if necessary
 	 *
 	 * @param node The node to add
 	 * @param left The side on which to place the node
-	 * @return The new root for the tree structure
 	 */
-	public RedBlackNode<E> add(RedBlackNode<E> node, boolean left) {
+	public void add(RedBlackNode<E> node, boolean left) {
 		// First let's link up the next and previous fields
 		if (left) {
 			if (thePrevious != null)
@@ -466,15 +482,11 @@ public class RedBlackNode<E> {
 			child = parent.getChild(childSide);
 		}
 		parent.setChild(node, childSide);
-		return fixAfterInsertion(node);
+		theTree.setRoot(fixAfterInsertion(node));
 	}
 
-	/**
-	 * Removes this node (but not its children) from its structure, rebalancing if necessary
-	 *
-	 * @return The new root of this node's structure
-	 */
-	public RedBlackNode<E> delete() {
+	/** Removes this node (but not its children) from the tree, rebalancing if necessary */
+	public void delete() {
 		theRemovedIndex = getNodesBefore(() -> true);
 
 		// First let's link up the next and previous fields
@@ -519,7 +531,7 @@ public class RedBlackNode<E> {
 		}
 		if (newRoot != null)
 			newRoot.setRed(false); // Root is black
-		return newRoot;
+		theTree.setRoot(newRoot);
 	}
 
 	private void adjustSize(int diff) {

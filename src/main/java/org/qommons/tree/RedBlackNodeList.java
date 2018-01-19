@@ -16,32 +16,28 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.MutableElementSpliterator;
 
 public abstract class RedBlackNodeList<E> implements BetterList<E> {
+	private final RedBlackTree<E> theTree;
 	private final CollectionLockingStrategy theLocker;
-
-	private RedBlackNode<E> theRoot;
 
 	public RedBlackNodeList(CollectionLockingStrategy locker) {
 		theLocker = locker;
+		theTree = new RedBlackTree<>();
 	}
 
 	public BinaryTreeNode<E> getRoot() {
-		return wrap(theRoot);
+		return wrap(theTree.getRoot());
 	}
 
 	public BinaryTreeNode<E> getNode(int index) {
-		if (theRoot == null)
+		if (theTree.getRoot() == null)
 			throw new IndexOutOfBoundsException(index + " of 0");
-		return theLocker.doOptimistically(null, (init, ctx) -> wrap(theRoot.get(index, ctx)), true);
-	}
-
-	public BinaryTreeNode<E> getTerminalNode(boolean start) {
-		return theRoot == null ? null : theLocker.doOptimistically(null, (init, ctx) -> wrap(theRoot.getTerminal(start, ctx)), true);
+		return theLocker.doOptimistically(null, (init, ctx) -> wrap(theTree.getRoot().get(index, ctx)), true);
 	}
 
 	/** For unit tests. Ensures the integrity of the collection. */
 	public void checkValid() {
-		if (theRoot != null)
-			theRoot.checkValid();
+		if (theTree.getRoot() != null)
+			theTree.getRoot().checkValid();
 	}
 
 	@Override
@@ -61,12 +57,12 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 	@Override
 	public int size() {
-		return RedBlackNode.sizeOf(theRoot);
+		return theTree.size();
 	}
 
 	@Override
 	public boolean isEmpty() {
-		return theRoot == null;
+		return theTree.getRoot() == null;
 	}
 
 	@Override
@@ -77,6 +73,11 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	@Override
 	public int getElementsAfter(ElementId id) {
 		return theLocker.doOptimistically(0, (init, ctx) -> ((NodeId) id).theNode.getNodesAfter(ctx), true);
+	}
+
+	@Override
+	public BinaryTreeNode<E> getTerminalElement(boolean first) {
+		return wrap(theTree.getTerminal(first));
 	}
 
 	@Override
@@ -115,7 +116,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 	@Override
 	public BinaryTreeNode<E> getElement(int index) {
-		RedBlackNode<E> root = theRoot;
+		RedBlackNode<E> root = theTree.getRoot();
 		if (root == null)
 			throw new IndexOutOfBoundsException(index + " of 0");
 		return theLocker.doOptimistically(null, (init, ctx) -> wrap(root.get(index, ctx)), true);
@@ -128,7 +129,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 	@Override
 	public MutableElementSpliterator<E> spliterator(boolean fromStart) {
-		return mutableSpliterator(getTerminalNode(fromStart), fromStart);
+		return mutableSpliterator(getTerminalElement(fromStart), fromStart);
 	}
 
 	@Override
@@ -144,22 +145,21 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	@Override
 	public BinaryTreeNode<E> addElement(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException {
-		ElementId added;
-		if (first && after != null)
-			added = mutableElement(after).add(value, false);
-		else if (!first && before != null)
-			added = mutableElement(before).add(value, true);
-		else {
-			BinaryTreeNode<E>[] node = new BinaryTreeNode[1];
-			try (Transaction t = lock(true, true, null)) {
-				if (theRoot == null)
-					node[0] = wrap(theRoot = new RedBlackNode<>(value));
-				else
-					spliterator(first).forElementM(el -> node[0] = getElement(el.add(value, first)), first);
-			}
-			return node[0];
-		}
-		return getElement(added);
+		RedBlackNode<E> newNode = new RedBlackNode<>(theTree, value);
+		if (first && after != null) {
+			if (!((NodeId) after).theNode.isPresent())
+				throw new IllegalArgumentException("Unrecognized element");
+			((NodeId) after).theNode.add(newNode, false);
+		} else if (!first && before != null) {
+			if (!((NodeId) before).theNode.isPresent())
+				throw new IllegalArgumentException("Unrecognized element");
+			((NodeId) before).theNode.add(newNode, true);
+		} else if (theTree.getRoot() == null)
+			theTree.setRoot(newNode);
+		else
+			theTree.getTerminal(first).add(newNode, first);
+		theLocker.changed(true);
+		return wrap(newNode);
 	}
 
 	@Override
@@ -169,7 +169,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 	@Override
 	public void clear() {
-		theRoot = null;
+		theTree.setRoot(null);
 	}
 
 	@Override
@@ -236,7 +236,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 		@Override
 		public boolean isPresent() {
-			return theNode.getParent() != null || theRoot == theNode;
+			return theNode.isPresent();
 		}
 
 		@Override
@@ -378,6 +378,11 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		}
 
 		@Override
+		public BetterCollection<E> getCollection() {
+			return RedBlackNodeList.this;
+		}
+
+		@Override
 		public MutableBinaryTreeNode<E> getParent() {
 			return wrapMutable(theNode.getParent());
 		}
@@ -428,7 +433,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		}
 
 		private boolean isPresent() {
-			return theNode.getParent() != null || theRoot == theNode;
+			return theNode.isPresent();
 		}
 
 		@Override
@@ -451,7 +456,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 			try (Transaction t = lock(true, null)) {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
-				theRoot = theNode.delete();
+				theNode.delete();
 				theLocker.changed(true);
 			}
 		}
@@ -466,8 +471,8 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 			try (Transaction t = lock(true, null)) {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
-				RedBlackNode<E> newNode = new RedBlackNode<>(value);
-				theRoot = theNode.add(newNode, onLeft);
+				RedBlackNode<E> newNode = new RedBlackNode<>(theTree, value);
+				theNode.add(newNode, onLeft);
 				theLocker.changed(true);
 				return new NodeId(newNode);
 			}
@@ -522,17 +527,17 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		}
 
 		protected boolean tryElement(boolean left) {
-			if (theRoot == null) {
+			if (theTree.getRoot() == null) {
 				current = null;
 				return false;
 			}
 			if (current == null) {
-				current = theRoot.getTerminal(!currentIsNext, () -> true);
+				current = theTree.getTerminal(!currentIsNext);
 				currentIsNext = !left;
 			}
 			// We can tolerate external modification as long as the node that this spliterator is anchored to has not been removed
 			// This situation is easy to detect
-			if (current.getParent() == null && theRoot != current)
+			if (!current.isPresent())
 				throw new ConcurrentModificationException(
 					"The collection has been modified externally such that this spliterator has been orphaned");
 			if (currentIsNext == left) {
@@ -583,16 +588,16 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		public MutableElementSpliterator<E> trySplit() {
 			try (Transaction t = lock(false, true, null)) {
 				BooleanSupplier cont = () -> true;
-				if (theRoot == null)
+				if (theTree.getRoot() == null)
 					return null;
 				if (current == null)
-					current = theRoot.getTerminal(!currentIsNext, cont);
+					current = theTree.getTerminal(!currentIsNext);
 				RedBlackNode<E> divider;
 				if (theLeftBound == null) {
 					if (theRightBound == null) {
 						if (size() <= 1)
 							return null;
-						divider = theRoot;
+						divider = theTree.getRoot();
 					} else
 						divider = step(theRightBound, true);
 				} else if (theRightBound == null)
@@ -602,7 +607,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 					int rightIdx = theRightBound.getNodesBefore(cont);
 					if (rightIdx - leftIdx <= 1)
 						return null;
-					divider = theRoot.get((leftIdx + rightIdx) / 2, cont);
+					divider = theTree.getRoot().get((leftIdx + rightIdx) / 2, cont);
 				}
 
 				if (divider == null)
@@ -610,12 +615,12 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 				MutableNodeSpliterator split;
 				if (current.getNodesBefore(() -> true) < divider.getNodesBefore(cont)) { // We're on the left of the divider
-					RedBlackNode<E> right = theRightBound == null ? theRoot.getTerminal(false, cont) : theRightBound;
+					RedBlackNode<E> right = theRightBound == null ? theTree.getTerminal(false) : theRightBound;
 					RedBlackNode<E> start = current == divider ? right : divider;
 					split = new MutableNodeSpliterator(start, true, divider, right);
 					theRightBound = divider;
 				} else {
-					RedBlackNode<E> left = theLeftBound == null ? theRoot.getTerminal(true, cont) : theLeftBound;
+					RedBlackNode<E> left = theLeftBound == null ? theTree.getTerminal(true) : theLeftBound;
 					RedBlackNode<E> start = current == divider ? left : divider;
 					split = new MutableNodeSpliterator(start, true, left, divider);
 					theLeftBound = divider;
@@ -637,7 +642,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		public String toString() {
 			return RedBlackNodeList.this.theLocker.doOptimistically(new StringBuilder(), (init, ctx) -> {
 				init.setLength(0);
-				RedBlackNode<E> node = theRoot == null ? null : theRoot.getTerminal(true, ctx);
+				RedBlackNode<E> node = theTree.getTerminal(true);
 				if (theLeftBound == null && theRightBound != null)
 					init.append('<');
 				while (node != null) {
@@ -677,6 +682,11 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 			MutableSpliteratorNode(RedBlackNode<E> node, MutableBinaryTreeNode<E> wrap) {
 				theNode = node;
 				theWrapped = wrap;
+			}
+
+			@Override
+			public BetterCollection<E> getCollection() {
+				return RedBlackNodeList.this;
 			}
 
 			@Override
@@ -772,16 +782,6 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 					current = newCurrent;
 					currentIsNext = newNext;
 				}
-			}
-
-			@Override
-			public String canAdd(E value, boolean before) {
-				return theWrapped.canAdd(value, before);
-			}
-
-			@Override
-			public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-				return theWrapped.add(value, before);
 			}
 
 			@Override

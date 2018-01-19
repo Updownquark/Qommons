@@ -73,8 +73,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 */
 	int getElementsAfter(ElementId id);
 
-	CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next);
-
 	/**
 	 * @param value The value to get the index of in this collection
 	 * @return The index of the first position in this collection occupied by the given value, or &lt; 0 if the element does not exist in
@@ -568,6 +566,25 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
+		public CollectionElement<E> getTerminalElement(boolean first) {
+			if (theEnd == theStart)
+				return null;
+			if (first) {
+				if (theStart == 0)
+					return theWrapped.getTerminalElement(first);
+				else if (theStart < theWrapped.size())
+					return theWrapped.getElement(theStart);
+				else
+					return null;
+			} else {
+				if (theEnd == theWrapped.size())
+					return theWrapped.getTerminalElement(first);
+				else
+					return theWrapped.getElement(theEnd - 1);
+			}
+		}
+
+		@Override
 		public CollectionElement<E> getElement(E value, boolean first) {
 			try (Transaction t = lock(false, true, null)) {
 				CollectionElement<E> firstMatch = theWrapped.getElement(value, first);
@@ -603,6 +620,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
 			CollectionElement<E> adj = theWrapped.getAdjacentElement(elementId, next);
+			if (adj == null)
+				return null;
 			int index = theWrapped.getElementsBefore(adj.getElementId());
 			if (index < theStart || index >= theEnd)
 				return null;
@@ -707,6 +726,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			}
 
 			@Override
+			public BetterCollection<E> getCollection() {
+				return SubList.this;
+			}
+
+			@Override
 			public ElementId getElementId() {
 				return theWrappedEl.getElementId();
 			}
@@ -748,11 +772,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 					theEnd--;
 					theStructureStamp = theWrapped.getStamp(true);
 				}
-			}
-
-			@Override
-			public String canAdd(E value, boolean before) {
-				return theWrappedEl.canAdd(value, before);
 			}
 
 			@Override
@@ -1024,6 +1043,13 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
+		public CollectionElement<E> getTerminalElement(boolean first) {
+			if (theValues.isEmpty())
+				return null;
+			return elementFor(first ? 0 : theValues.size() - 1);
+		}
+
+		@Override
 		public int getElementsBefore(ElementId id) {
 			return ((IndexElementId) id).index;
 		}
@@ -1086,6 +1112,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				throw new IndexOutOfBoundsException(index + " of " + theValues.size());
 			return new MutableCollectionElement<E>() {
 				@Override
+				public BetterCollection<E> getCollection() {
+					return ConstantList.this;
+				}
+
+				@Override
 				public ElementId getElementId() {
 					return new IndexElementId(index);
 				}
@@ -1123,11 +1154,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				@Override
 				public String canAdd(E value, boolean before) {
 					return StdMsg.UNSUPPORTED_OPERATION;
-				}
-
-				@Override
-				public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 				}
 			};
 		}

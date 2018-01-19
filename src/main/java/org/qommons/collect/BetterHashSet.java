@@ -189,6 +189,17 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
+	public CollectionElement<E> getTerminalElement(boolean first) {
+		return MutableCollectionElement.immutable(first ? theFirst : theLast);
+	}
+
+	@Override
+	public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
+		HashEntry entry = ((HashId) elementId).entry;
+		return MutableCollectionElement.immutable(next ? entry.next : entry.previous);
+	}
+
+	@Override
 	public String canAdd(E value, ElementId after, ElementId before) {
 		return getEntry(theHasher.applyAsInt(value), value) == null ? null : StdMsg.ELEMENT_EXISTS;
 	}
@@ -196,39 +207,73 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	@Override
 	public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException {
-		ElementId added;
-		if (first && after != null)
-			added = mutableElement(after).add(value, false);
-		else if (!first && before != null)
-			added = mutableElement(before).add(value, true);
-		else {
-			int hashCode = theHasher.applyAsInt(value);
-			HashEntry entry = getEntry(hashCode, value);
+		// Ordered insert is O(n), but we'll support it
+		try (Transaction t = lock(true, true, null)) {
+			int valueHashCode = theHasher.applyAsInt(value);
+			HashEntry entry = getEntry(valueHashCode, value);
 			if (entry != null)
 				return null;
 			ensureCapacity(theSize + 1);
-			entry = new HashEntry(first ? theFirstIdCreator.getAndDecrement() : theLastIdCreator.getAndIncrement(), value, hashCode);
-			insert(entry);
 			if (first) {
-				if (theFirst != null)
-					theFirst.previous = entry;
-				entry.next = theFirst;
-				theFirst = entry;
-				if (theLast == null)
-					theLast = entry;
-			} else {
-				if (theLast != null)
-					theLast.next = entry;
-				entry.previous = theLast;
-				theLast = entry;
-				if (theFirst == null)
+				if (after != null) {
+					HashEntry afterEntry = ((HashId) after).entry;
+					afterEntry.check();
+					entry = new HashEntry(afterEntry.theOrder, value, valueHashCode);
+					entry.previous = afterEntry;
+					entry.next = afterEntry.next;
+					if (afterEntry.next != null)
+						afterEntry.next.previous = entry;
+					else
+						theLast = entry;
+					afterEntry.next = entry;
+					while (afterEntry != null) {
+						afterEntry.theOrder--;
+						afterEntry = afterEntry.previous;
+					}
+					if (theFirst.theOrder == theFirstIdCreator.get())
+						theFirstIdCreator.getAndDecrement();
+				} else {
+					entry = new HashEntry(theFirstIdCreator.getAndDecrement(), value, valueHashCode);
+					entry.next = theFirst;
+					if (theFirst != null)
+						theFirst.previous = entry;
 					theFirst = entry;
+					if (theLast == null)
+						theLast = entry;
+				}
+			} else {
+				if (before != null) {
+					HashEntry beforeEntry = ((HashId) before).entry;
+					beforeEntry.check();
+					entry = new HashEntry(beforeEntry.theOrder, value, valueHashCode);
+					entry.next = beforeEntry;
+					entry.previous = beforeEntry.previous;
+					if (beforeEntry.previous != null)
+						beforeEntry.previous.next = entry;
+					else
+						theFirst = entry;
+					beforeEntry.previous = entry;
+					while (beforeEntry != null) {
+						beforeEntry.theOrder++;
+						beforeEntry = beforeEntry.next;
+					}
+					if (theLast.theOrder == theLastIdCreator.get())
+						theLastIdCreator.getAndIncrement();
+				} else {
+					entry = new HashEntry(theLastIdCreator.getAndIncrement(), value, valueHashCode);
+					if (theLast != null)
+						theLast.next = entry;
+					entry.previous = theLast;
+					theLast = entry;
+					if (theFirst == null)
+						theFirst = entry;
+				}
 			}
+			insert(entry);
 			theSize++;
 			theLocker.changed(true);
 			return entry.immutable();
 		}
-		return getElement(added);
 	}
 
 	@Override
@@ -348,6 +393,11 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		}
 
 		@Override
+		public BetterCollection<E> getCollection() {
+			return BetterHashSet.this;
+		}
+
+		@Override
 		public ElementId getElementId() {
 			return new HashId(this);
 		}
@@ -416,69 +466,6 @@ public class BetterHashSet<E> implements BetterSet<E> {
 				previous = null;
 				theSize--;
 				theLocker.changed(true);
-			}
-		}
-
-		@Override
-		public String canAdd(E value, boolean before) {
-			return BetterHashSet.this.canAdd(value);
-		}
-
-		@Override
-		public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-			// Ordered insert is O(n), but we'll support it
-			try (Transaction t = lock(true, true, null)) {
-				int valueHashCode = theHasher.applyAsInt(value);
-				HashEntry entry = getEntry(valueHashCode, value);
-				if (entry != null)
-					throw new IllegalArgumentException(StdMsg.ELEMENT_EXISTS);
-				ensureCapacity(theSize + 1);
-				long order;
-				if (before) {
-					order = theOrder - 1;
-					HashEntry prev = previous;
-					long prevOrder = order;
-					while (prev != null && prev.theOrder == prevOrder) {
-						prev.theOrder--;
-						prevOrder--;
-						prev = prev.previous;
-					}
-					if (prevOrder == theFirstIdCreator.get())
-						theFirstIdCreator.getAndDecrement();
-				} else {
-					order = theOrder + 1;
-					HashEntry nxt = next;
-					long nextOrder = order;
-					while (nxt != null && nxt.theOrder == nextOrder) {
-						nxt.theOrder++;
-						nextOrder++;
-						nxt = nxt.next;
-					}
-					if (nextOrder == theLastIdCreator.get())
-						theLastIdCreator.getAndIncrement();
-				}
-				entry = new HashEntry(order, value, valueHashCode);
-				insert(entry);
-				if (before) {
-					if (previous != null)
-						previous.next = entry;
-					entry.previous = previous;
-					entry.next = this;
-					previous = entry;
-					if (theFirst == this)
-						theFirst = entry;
-				} else {
-					if (next != null)
-						next.previous = entry;
-					entry.next = next;
-					entry.previous = this;
-					next = entry;
-					if (theLast == this)
-						theLast = entry;
-				}
-				theSize++;
-				theLocker.changed(true);
-				return entry.getElementId();
 			}
 		}
 
@@ -631,6 +618,11 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			}
 
 			@Override
+			public BetterCollection<E> getCollection() {
+				return BetterHashSet.this;
+			}
+
+			@Override
 			public ElementId getElementId() {
 				return theEntry.getElementId();
 			}
@@ -682,16 +674,6 @@ public class BetterHashSet<E> implements BetterSet<E> {
 					current = newCurrent;
 					currentIsNext = newWasNext;
 				}
-			}
-
-			@Override
-			public String canAdd(E value, boolean before) {
-				return theEntry.canAdd(value, before);
-			}
-
-			@Override
-			public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-				return theEntry.add(value, before);
 			}
 		}
 	}

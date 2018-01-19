@@ -64,4 +64,8 @@ public interface CollectionElement<E> extends Comparable<CollectionElement<E>> {
 	static <E> CollectionElement<E> reverse(CollectionElement<E> element) {
 		return element == null ? null : element.reverse();
 	}
+
+	static ElementId getElementId(CollectionElement<?> element) {
+		return element == null ? null : element.getElementId();
+	}
 }

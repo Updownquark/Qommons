@@ -424,7 +424,7 @@ public class TestHelper {
 						TestFailure failure = knownFailures.get(i);
 						TestHelper helper = new TestHelper(true, failure.seed, 0,
 							isDebugging ? failure.getBreakpoints() : Collections.emptyNavigableSet(), thePlacemarkNames);
-						Throwable err = doTest(theCreator, helper, i + 1, isPrintingProgress, isPrintingFailures, true);
+						Throwable err = doTest(theCreator, helper, i + 1, isPrintingProgress, isPrintingFailures, true, start);
 						if (err != null) {
 							TestFailure newFailure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.thePlacemarks);
 							if (!newFailure.equals(failure)) {
@@ -455,7 +455,7 @@ public class TestHelper {
 			}
 			for (int i = 0; i < maxCases && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
 				TestHelper helper = new TestHelper(thePlacemarkNames);
-				Throwable err = doTest(theCreator, helper, i + 1, isPrintingProgress, isPrintingFailures, false);
+				Throwable err = doTest(theCreator, helper, i + 1, isPrintingProgress, isPrintingFailures, false, start);
 				if (err != null) {
 					if (isPersistingFailures) {
 						TestFailure failure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.thePlacemarks);
@@ -677,18 +677,18 @@ public class TestHelper {
 	}
 
 	private static Throwable doTest(Constructor<? extends Testable> creator, TestHelper testHelper, int caseNumber,
-		boolean printProgress, boolean printFailures, boolean reproduction) {
+		boolean printProgress, boolean printFailures, boolean reproduction, Instant originalStart) {
 		Testable tester;
 		try {
 			tester = creator.newInstance();
 		} catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
 			throw new IllegalStateException("Could not instantiate tester " + creator.getDeclaringClass().getName(), e);
 		}
-		return doTest(tester, testHelper, caseNumber, printProgress, printFailures, reproduction);
+		return doTest(tester, testHelper, caseNumber, printProgress, printFailures, reproduction, originalStart);
 	}
 
 	private static Throwable doTest(Testable tester, TestHelper testHelper, int caseNumber, boolean printProgress, boolean printFailures,
-		boolean reproduction) {
+		boolean reproduction, Instant originalStart) {
 		String caseLabel = "";
 		if (caseNumber > 0)
 			caseLabel += "[" + caseNumber + "] ";
@@ -699,19 +699,29 @@ public class TestHelper {
 			System.out.print(caseLabel);
 			System.out.flush();
 		}
-		long start = System.nanoTime();
+		Instant start = Instant.now();
 		try {
 			tester.accept(testHelper);
-			if (printProgress)
-				System.out.println("SUCCESS in " + Format.durationFormat().format(Duration.ofNanos(System.nanoTime() - start)));
+			if (printProgress) {
+				Instant end = Instant.now();
+				StringBuilder msg = new StringBuilder().append("SUCCESS in ");
+				Format.durationFormat().append(msg, Duration.between(start, end));
+				if (caseNumber > 1) {
+					msg.append(" (");
+					Format.durationFormat().append(msg, Duration.between(originalStart, end));
+					msg.append(" total)");
+				}
+				System.out.println(msg);
+			}
 			return null;
 		} catch (Throwable e) {
 			if (printProgress || printFailures) {
+				Instant end = Instant.now();
 				if (!printProgress)
 					System.err.print(caseLabel);
 				StringBuilder msg = new StringBuilder();
 				msg.append("FAILURE@").append(testHelper.getPosition()).append(" in ");
-				Format.durationFormat().append(msg, Duration.ofNanos(System.nanoTime() - start));
+				Format.durationFormat().append(msg, Duration.between(start, end));
 				for (String pn : testHelper.getPlacemarkNames()) {
 					long placemark = testHelper.getLastPlacemark(pn);
 					if (placemark >= 0)

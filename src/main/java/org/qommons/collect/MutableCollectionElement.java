@@ -20,6 +20,8 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 		static String ILLEGAL_ELEMENT = "Element is not allowed";
 	}
 
+	BetterCollection<E> getCollection();
+
 	String isEnabled();
 
 	String isAcceptable(E value);
@@ -37,9 +39,32 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 	 */
 	void remove() throws UnsupportedOperationException;
 
-	String canAdd(E value, boolean before);
+	default String canAdd(E value, boolean before) {
+		BetterCollection<E> coll = getCollection();
+		ElementId id = getElementId();
+		return coll.canAdd(value, //
+			before ? CollectionElement.getElementId(coll.getAdjacentElement(id, false)) : id,
+			before ? id : CollectionElement.getElementId(coll.getAdjacentElement(id, true)));
+	}
 
-	ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException;
+	default ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+		BetterCollection<E> coll = getCollection();
+		ElementId id = getElementId();
+		CollectionElement<E> added = coll.addElement(value, //
+			before ? CollectionElement.getElementId(coll.getAdjacentElement(id, false)) : id,
+			before ? id : CollectionElement.getElementId(coll.getAdjacentElement(id, true)), !before);
+		if (added != null)
+			return added.getElementId();
+		String msg = coll.canAdd(value, //
+			before ? CollectionElement.getElementId(coll.getAdjacentElement(id, false)) : id,
+			before ? id : CollectionElement.getElementId(coll.getAdjacentElement(id, true)));
+		if (msg == null)
+			throw new UnsupportedOperationException();
+		else if (msg.equals(StdMsg.UNSUPPORTED_OPERATION))
+			throw new UnsupportedOperationException(msg);
+		else
+			throw new IllegalArgumentException(msg);
+	}
 
 	/** @return An immutable observable element backed by this mutable element's data */
 	default CollectionElement<E> immutable() {
@@ -110,6 +135,11 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 		}
 
 		@Override
+		public BetterCollection<E> getCollection() {
+			return getWrapped().getCollection().reverse();
+		}
+
+		@Override
 		public String isEnabled() {
 			return getWrapped().isEnabled();
 		}
@@ -152,5 +182,9 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 
 	static <E> MutableCollectionElement<E> reverse(MutableCollectionElement<E> element) {
 		return element == null ? null : element.reverse();
+	}
+
+	static <E> CollectionElement<E> immutable(MutableCollectionElement<E> element) {
+		return element == null ? null : element.immutable();
 	}
 }

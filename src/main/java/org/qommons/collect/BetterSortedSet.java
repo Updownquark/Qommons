@@ -586,6 +586,31 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
+		public CollectionElement<E> getTerminalElement(boolean first) {
+			if (first) {
+				if (from == null)
+					return theWrapped.getTerminalElement(true);
+				else {
+					CollectionElement<E> element = theWrapped.search(from, SortedSearchFilter.PreferGreater);
+					if (element == null || from.compareTo(element.get()) > 0)
+						return null;
+					else
+						return element;
+				}
+			} else {
+				if (to == null)
+					return theWrapped.getTerminalElement(false);
+				else {
+					CollectionElement<E> element = theWrapped.search(to, SortedSearchFilter.PreferLess);
+					if (element == null || to.compareTo(element.get()) < 0)
+						return null;
+					else
+						return element;
+				}
+			}
+		}
+
+		@Override
 		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
 			CollectionElement<E> el = theWrapped.getAdjacentElement(elementId, next);
 			if (isInRange(el.get()) != 0)
@@ -645,21 +670,6 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 				}
 			}
 			return new BoundedMutableSpliterator(wrapSpliter);
-		}
-
-		@Override
-		public CollectionElement<E> addElement(E value, boolean first) {
-			if (isInRange(value) != 0)
-				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			return theWrapped.addElement(value, first);
-		}
-
-		@Override
-		public boolean addAll(Collection<? extends E> values) {
-			for (E value : values)
-				if (isInRange(value) != 0)
-					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			return theWrapped.addAll(values);
 		}
 
 		@Override
@@ -764,6 +774,11 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 
 			@Override
+			public BetterCollection<E> getCollection() {
+				return BetterSubSet.this;
+			}
+
+			@Override
 			public ElementId getElementId() {
 				return theWrappedEl.getElementId();
 			}
@@ -800,20 +815,6 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			@Override
 			public void remove() throws UnsupportedOperationException {
 				theWrappedEl.remove();
-			}
-
-			@Override
-			public String canAdd(E value, boolean before) {
-				if (isInRange(value) != 0)
-					return StdMsg.ILLEGAL_ELEMENT;
-				return theWrappedEl.canAdd(value, before);
-			}
-
-			@Override
-			public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-				if (isInRange(value) != 0)
-					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-				return theWrappedEl.add(value, before);
 			}
 
 			@Override

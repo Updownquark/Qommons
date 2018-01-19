@@ -1,6 +1,5 @@
 package org.qommons.collect;
 
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
@@ -229,6 +228,18 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
+		public CollectionElement<Entry<K, V>> getTerminalElement(boolean first) {
+			CollectionElement<K> keyEl = theMap.keySet().getTerminalElement(first);
+			return keyEl == null ? null : new EntryElement(theMap.getEntryById(keyEl.getElementId()));
+		}
+
+		@Override
+		public CollectionElement<Entry<K, V>> getAdjacentElement(ElementId elementId, boolean next) {
+			CollectionElement<K> keyEl = theMap.keySet().getAdjacentElement(elementId, next);
+			return keyEl == null ? null : new EntryElement(theMap.getEntryById(keyEl.getElementId()));
+		}
+
+		@Override
 		public CollectionElement<Entry<K, V>> getElement(Entry<K, V> value, boolean first) {
 			if (value == null)
 				return null;
@@ -258,18 +269,18 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 		@Override
 		public String canAdd(Entry<K, V> value, ElementId after, ElementId before) {
-			return StdMsg.UNSUPPORTED_OPERATION;
+			return theMap.keySet().canAdd(value.getKey(), after, before);
 		}
 
 		@Override
 		public CollectionElement<Entry<K, V>> addElement(Entry<K, V> value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-		}
-
-		@Override
-		public boolean addAll(Collection<? extends java.util.Map.Entry<K, V>> c) {
-			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			CollectionElement<K> keyEl = theMap.keySet().addElement(value.getKey(), after, before, first);
+			if (keyEl == null)
+				return null;
+			MutableMapEntryHandle<K, V> mapEntry = theMap.mutableEntry(keyEl.getElementId());
+			mapEntry.setValue(value.getValue());
+			return new EntryElement(mapEntry);
 		}
 
 		@Override
@@ -374,6 +385,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			}
 
 			@Override
+			public BetterCollection<Entry<K, V>> getCollection() {
+				return BetterEntrySet.this;
+			}
+
+			@Override
 			public String isEnabled() {
 				return getEntry().isEnabled();
 			}
@@ -404,19 +420,6 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			@Override
 			public void remove() throws UnsupportedOperationException {
 				getEntry().remove();
-			}
-
-			@Override
-			public String canAdd(java.util.Map.Entry<K, V> value, boolean before) {
-				return theMap.keySet().mutableElement(getEntry().getElementId()).canAdd(value.getKey(), before);
-			}
-
-			@Override
-			public ElementId add(java.util.Map.Entry<K, V> value, boolean before)
-				throws UnsupportedOperationException, IllegalArgumentException {
-				ElementId id = theMap.keySet().mutableElement(getEntry().getElementId()).add(value.getKey(), before);
-				theMap.mutableEntry(id).set(value.getValue());
-				return id;
 			}
 		}
 
@@ -509,6 +512,18 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		@Override
 		public boolean isEmpty() {
 			return theMap.isEmpty();
+		}
+
+		@Override
+		public CollectionElement<V> getTerminalElement(boolean first) {
+			CollectionElement<K> keyEl = theMap.keySet().getTerminalElement(first);
+			return keyEl == null ? null : theMap.getEntryById(keyEl.getElementId());
+		}
+
+		@Override
+		public CollectionElement<V> getAdjacentElement(ElementId elementId, boolean next) {
+			CollectionElement<K> keyEl = theMap.keySet().getAdjacentElement(elementId, next);
+			return keyEl == null ? null : theMap.getEntryById(keyEl.getElementId());
 		}
 
 		@Override

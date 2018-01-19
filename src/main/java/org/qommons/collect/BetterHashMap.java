@@ -136,6 +136,11 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	protected MutableMapEntryHandle<K, V> mutableHandleFor(MutableCollectionElement<? extends Map.Entry<K, V>> entry) {
 		return new MutableMapEntryHandle<K, V>() {
 			@Override
+			public BetterCollection<V> getCollection() {
+				return values();
+			}
+
+			@Override
 			public ElementId getElementId() {
 				return entry.getElementId();
 			}
@@ -249,6 +254,8 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		protected CollectionElement<K> handleFor(CollectionElement<? extends Map.Entry<K, V>> entryEl) {
+			if (entryEl == null)
+				return null;
 			return new CollectionElement<K>() {
 				@Override
 				public ElementId getElementId() {
@@ -264,6 +271,11 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 
 		protected MutableCollectionElement<K> mutableHandleFor(MutableCollectionElement<? extends Map.Entry<K, V>> entryEl) {
 			return new MutableCollectionElement<K>() {
+				@Override
+				public BetterCollection<K> getCollection() {
+					return KeySet.this;
+				}
+
 				@Override
 				public ElementId getElementId() {
 					return entryEl.getElementId();
@@ -298,17 +310,17 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 				public void remove() throws UnsupportedOperationException {
 					entryEl.remove();
 				}
-
-				@Override
-				public String canAdd(K value, boolean before) {
-					return ((MutableCollectionElement<Map.Entry<K, V>>) entryEl).canAdd(new SimpleMapEntry<>(value, null), before);
-				}
-
-				@Override
-				public ElementId add(K value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-					return ((MutableCollectionElement<Map.Entry<K, V>>) entryEl).add(new SimpleMapEntry<>(value, null, true), before);
-				}
 			};
+		}
+
+		@Override
+		public CollectionElement<K> getTerminalElement(boolean first) {
+			return handleFor(theEntries.getTerminalElement(first));
+		}
+
+		@Override
+		public CollectionElement<K> getAdjacentElement(ElementId elementId, boolean next) {
+			return handleFor(theEntries.getAdjacentElement(elementId, next));
 		}
 
 		@Override

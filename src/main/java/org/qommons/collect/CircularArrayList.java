@@ -488,6 +488,15 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
+	public CollectionElement<E> getTerminalElement(boolean first) {
+		try (Transaction t = lock(false, null)) {
+			if (isEmpty())
+				return null;
+			return getElement(first ? 0 : size() - 1);
+		}
+	}
+
+	@Override
 	public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
 		try (Transaction t = lock(false, null)) {
 			int index = ((ArrayElementId) elementId).element.index;
@@ -1292,6 +1301,11 @@ public class CircularArrayList<E> implements BetterList<E> {
 		}
 
 		@Override
+		public BetterCollection<E> getCollection() {
+			return CircularArrayList.this;
+		}
+
+		@Override
 		public ElementId getElementId() {
 			return theElementId;
 		}
@@ -1477,6 +1491,11 @@ public class CircularArrayList<E> implements BetterList<E> {
 			SpliterWrappingEl(MutableCollectionElement<E> el, boolean forward) {
 				this.el = el;
 				isForward = forward;
+			}
+
+			@Override
+			public BetterCollection<E> getCollection() {
+				return CircularArrayList.this;
 			}
 
 			@Override

@@ -1,5 +1,6 @@
 package org.qommons.tree;
 
+import org.qommons.collect.BetterCollection;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.MutableCollectionElement;
 
@@ -120,6 +121,11 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 		@Override
 		protected MutableBinaryTreeNode<E> getWrapped() {
 			return (MutableBinaryTreeNode<E>) super.getWrapped();
+		}
+
+		@Override
+		public BetterCollection<E> getCollection() {
+			return getWrapped().getCollection().reverse();
 		}
 
 		@Override
