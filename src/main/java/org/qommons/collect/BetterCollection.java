@@ -144,7 +144,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	@Override
 	default boolean add(E value) {
-		return addElement(value, false) != null;
+		return addElement(value, null, null, false) != null;
 	}
 
 	@Override

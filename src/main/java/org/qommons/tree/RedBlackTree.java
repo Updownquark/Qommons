@@ -45,4 +45,9 @@ public class RedBlackTree<E> {
 		// return first ? theFirst : theLast;
 		return theRoot == null ? null : theRoot.getTerminal(first, () -> true);
 	}
+
+	@Override
+	public String toString() {
+		return RedBlackNode.print(theRoot);
+	}
 }

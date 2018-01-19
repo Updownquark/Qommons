@@ -187,11 +187,14 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			E low, high;
 			if (index == 0) {
 				low = null;
-				high = get(0);
+				high = first();
+			} else if (index == size()) {
+				low = last();
+				high = null;
 			} else {
 				CollectionElement<E> lowEl = getElement(index);
 				low = lowEl.get();
-				high = index == size ? null : getAdjacentElement(lowEl.getElementId(), true).get();
+				high = index == size - 1 ? null : getAdjacentElement(lowEl.getElementId(), true).get();
 			}
 			return subSet(low, false, high, false).addAll(c);
 		}
@@ -352,7 +355,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	default BetterSortedSet<E> subList(int fromIndex, int toIndex) {
 		try (Transaction t = lock(false, true, null)) {
 			Comparable<? super E> from = fromIndex == 0 ? null : searchFor(get(fromIndex), 0);
-			Comparable<? super E> to = toIndex == size() ? null : searchFor(get(toIndex), 1);
+			Comparable<? super E> to = toIndex == size() ? null : searchFor(get(toIndex), -1);
 			return subSet(from, to);
 		}
 	}
@@ -508,17 +511,13 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			return array;
 		}
 
-		@Override
-		public boolean addAll(int index, Collection<? extends E> c) {
-			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-		}
-
 		private int checkIndex(int index, boolean includeTerminus) {
 			if (index < 0)
 				throw new IndexOutOfBoundsException("" + index);
 			int min = getMinIndex();
 			int max = getMaxIndex();
-			if (index > max - min || (index == max - min && !includeTerminus))
+			int wrapIndex = min + index;
+			if (wrapIndex > max + 1 || (wrapIndex == max + 1 && !includeTerminus))
 				throw new IndexOutOfBoundsException(index + " of " + (max - min));
 			return min + index;
 		}
@@ -637,7 +636,13 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 		@Override
 		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
-			return theWrapped.search(boundSearch(search), filter);
+			CollectionElement<E> wrapResult = theWrapped.search(boundSearch(search), filter);
+			if (wrapResult == null)
+				return null;
+			int range = isInRange(wrapResult.get());
+			if (range == 0)
+				return wrapResult;
+			return getTerminalElement(range < 0);
 		}
 
 		@Override
