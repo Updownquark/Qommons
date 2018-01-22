@@ -242,6 +242,31 @@ public class TestHelper {
 		return min + Math.abs(getAnyLong() % (max - min));
 	}
 
+	public float getFloat() {
+		getBytes(4);
+		return theRandomness.nextFloat();
+	}
+
+	public float getAnyFloat() {
+		return Float.intBitsToFloat(getAnyInt());
+	}
+
+	public float getFloat(float min, float max) {
+		return min + getFloat() * (max - min);
+	}
+
+	public float getFloat(float min, float avg, float max) {
+		if (avg <= min || avg >= max)
+			throw new IllegalArgumentException("min=" + min + ", avg=" + avg + ", max=" + max);
+		float random = getFloat();
+		float skew = (avg - min) * 2 / (max - min);
+		random = (float) Math.pow(random, 1 / skew);
+		if (random <= 0.5)
+			return min + random * (avg - min);
+		else
+			return avg + random * (max - avg);
+	}
+
 	public double getDouble() {
 		getBytes(8);
 		return theRandomness.nextDouble();
