@@ -16,7 +16,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
-import org.qommons.BreakpointHere;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -207,8 +206,16 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			int sz = size();
 			if (index < 0 || index > sz)
 				throw new IndexOutOfBoundsException(index + " of " + sz);
-			ElementId after = index == 0 ? null : getElement(index - 1).getElementId();
-			ElementId before = index == sz ? null : getElement(index).getElementId();
+			ElementId after;
+			CollectionElement<E> beforeEl;
+			if (index == 0) {
+				after = null;
+				beforeEl = getTerminalElement(true);
+			} else {
+				after = getElement(index - 1).getElementId();
+				beforeEl = getAdjacentElement(after, true);
+			}
+			ElementId before = beforeEl == null ? null : beforeEl.getElementId();
 			return addElement(element, after, before, false);
 		}
 	}
