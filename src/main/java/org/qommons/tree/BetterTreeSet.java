@@ -8,6 +8,7 @@ import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
+import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.StampedLockingStrategy;
 
 public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSortedSet<E> {
@@ -58,23 +59,55 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 	}
 
 	@Override
-	public BinaryTreeNode<E> addIfEmpty(E value) throws IllegalStateException {
-		try (Transaction t = lock(true, null)) {
-			if (getRoot() != null)
-				throw new IllegalStateException("Tree is not empty");
-			return super.addElement(value, null, null, true);
-		}
-	}
-
-	@Override
 	public String canAdd(E value, ElementId after, ElementId before) {
-		return BetterSortedSet.super.canAdd(value, after, before);
+		if (after != null) {
+			int compare = theCompare.compare(getElement(after).get(), value);
+			if (compare == 0)
+				return StdMsg.ELEMENT_EXISTS;
+			else if (compare > 0)
+				return StdMsg.ILLEGAL_ELEMENT_POSITION;
+		}
+		if (before != null) {
+			int compare = theCompare.compare(getElement(before).get(), value);
+			if (compare == 0)
+				return StdMsg.ELEMENT_EXISTS;
+			else if (compare < 0)
+				return StdMsg.ILLEGAL_ELEMENT_POSITION;
+		}
+		if (search(searchFor(value, 0), SortedSearchFilter.OnlyMatch) != null)
+			return StdMsg.ELEMENT_EXISTS;
+		return super.canAdd(value, after, before);
 	}
 
 	@Override
 	public BinaryTreeNode<E> addElement(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException {
-		return (BinaryTreeNode<E>) BetterSortedSet.super.addElement(value, after, before, first);
+		try (Transaction t = lock(true, true, null)) {
+			if (after != null) {
+				int compare = theCompare.compare(getElement(after).get(), value);
+				if (compare == 0)
+					return null;
+				else if (compare > 0)
+					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
+			}
+			if (before != null) {
+				int compare = theCompare.compare(getElement(before).get(), value);
+				if (compare == 0)
+					return null;
+				else if (compare < 0)
+					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
+			}
+			BinaryTreeNode<E> result = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
+			if (result == null)
+				return super.addElement(value, after, before, first);
+			int compare = theCompare.compare(result.get(), value);
+			if (compare == 0)
+				return null;
+			else if (compare < 0)
+				return super.addElement(value, result.getElementId(), null, true);
+			else
+				return super.addElement(value, null, result.getElementId(), false);
+		}
 	}
 
 	private class SortedMutableTreeNode implements MutableBinaryTreeNode<E> {
@@ -193,42 +226,6 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 		@Override
 		public void remove() throws UnsupportedOperationException {
 			theWrapped.remove();
-		}
-
-		@Override
-		public String canAdd(E value, boolean before) {
-			int compare = comparator().compare(value, get());
-			if (compare == 0)
-				return StdMsg.ELEMENT_EXISTS;
-			if (before != (compare < 0))
-				return StdMsg.ILLEGAL_ELEMENT_POSITION;
-			BinaryTreeNode<E> side = getClosest(before);
-			if (side != null) {
-				compare = comparator().compare(value, side.get());
-				if (compare == 0)
-					return StdMsg.ELEMENT_EXISTS;
-				if (before != (compare > 0))
-					return StdMsg.ILLEGAL_ELEMENT_POSITION;
-			}
-			return theWrapped.canAdd(value, before);
-		}
-
-		@Override
-		public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-			int compare = comparator().compare(value, get());
-			if (compare == 0)
-				throw new IllegalArgumentException(StdMsg.ELEMENT_EXISTS);
-			if (before != (compare < 0))
-				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
-			BinaryTreeNode<E> side = getClosest(before);
-			if (side != null) {
-				compare = comparator().compare(side.get(), value);
-				if (compare == 0)
-					throw new IllegalArgumentException(StdMsg.ELEMENT_EXISTS);
-				if (before != (compare < 0))
-					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
-			}
-			return theWrapped.add(value, before);
 		}
 
 		@Override

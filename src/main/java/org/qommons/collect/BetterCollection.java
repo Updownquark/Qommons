@@ -292,7 +292,8 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default boolean removeAll(Collection<?> c) {
 		if (c.isEmpty())
 			return false;
-		return removeIf(c::contains);
+		return removeIf(//
+			c::contains);
 	}
 
 	@Override

@@ -9,7 +9,6 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 import org.qommons.Ternian;
-import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
@@ -102,7 +101,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		return BetterList.super.toArray();
 	}
 
-	@Override
+	/*@Override
 	default String canAdd(E value, ElementId after, ElementId before) {
 		if (!belongs(value))
 			return StdMsg.ILLEGAL_ELEMENT;
@@ -134,7 +133,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 				return null;
 		}
 	}
-
+	
 	@Override
 	default CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException {
@@ -156,6 +155,10 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
 			}
 			CollectionElement<E> found = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
+			// if (value.equals(766) && found.get().equals(777)) {
+			// BreakpointHere.breakpoint();
+			// found = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
+			// }
 			if (found != null) {
 				ElementId id = ofMutableElement(found.getElementId(), el -> {
 					int compare = comparator().compare(value, el.get());
@@ -168,37 +171,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			} else
 				return addIfEmpty(value);
 		}
-	}
-
-	CollectionElement<E> addIfEmpty(E value) throws IllegalStateException;
-
-	@Override
-	default boolean addAll(int index, Collection<? extends E> c) {
-		if (c.isEmpty())
-			return false;
-		try (Transaction t = lock(true, null); Transaction t2 = Transactable.lock(c, false, null)) {
-			if (isEmpty())
-				return addAll(c);
-			if (index < 0)
-				throw new IndexOutOfBoundsException("" + index);
-			int size = size();
-			if (index > size)
-				throw new IndexOutOfBoundsException(index + " of " + size);
-			E low, high;
-			if (index == 0) {
-				low = null;
-				high = first();
-			} else if (index == size()) {
-				low = last();
-				high = null;
-			} else {
-				CollectionElement<E> lowEl = getElement(index);
-				low = lowEl.get();
-				high = index == size - 1 ? null : getAdjacentElement(lowEl.getElementId(), true).get();
-			}
-			return subSet(low, false, high, false).addAll(c);
-		}
-	}
+	}*/
 
 	@Override
 	default BetterSortedSet<E> with(E... values) {
@@ -222,12 +195,44 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	}
 
 	default Comparable<? super E> searchFor(E value, int onExact) {
-		return v -> {
-			int compare = comparator().compare(value, v);
-			if (compare == 0)
-				compare = onExact;
-			return compare;
-		};
+		class ValueSearch<V> implements Comparable<V> {
+			private final Comparator<? super V> theCompare;
+			private final V theValue;
+			private final int theOnExact;
+
+			ValueSearch(Comparator<? super V> compare, V val, int _onExact) {
+				theCompare = compare;
+				theValue = val;
+				theOnExact = _onExact;
+			}
+
+			@Override
+			public int compareTo(V v) {
+				int compare = theCompare.compare(theValue, v);
+				if (compare == 0)
+					compare = theOnExact;
+				return compare;
+			}
+
+			@Override
+			public boolean equals(Object o) {
+				if (!(o instanceof ValueSearch))
+					return false;
+				ValueSearch<?> other = (ValueSearch<?>) o;
+				return theCompare.equals(other.theCompare) && Objects.equals(theValue, other.theValue) && theOnExact == other.theOnExact;
+			}
+
+			@Override
+			public String toString() {
+				if (theOnExact < 0)
+					return "<" + theValue;
+				else if (theOnExact == 0)
+					return String.valueOf(theValue);
+				else
+					return ">" + theValue;
+			}
+		}
+		return new ValueSearch<>(comparator(), value, onExact);
 	}
 
 	int indexFor(Comparable<? super E> search);
@@ -354,7 +359,8 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	@Override
 	default BetterSortedSet<E> subList(int fromIndex, int toIndex) {
 		try (Transaction t = lock(false, true, null)) {
-			Comparable<? super E> from = fromIndex == 0 ? null : searchFor(get(fromIndex), 0);
+			// Be inclusive so that adds succeed as often as possible
+			Comparable<? super E> from = fromIndex == 0 ? null : searchFor(get(fromIndex - 1), 1);
 			Comparable<? super E> to = toIndex == size() ? null : searchFor(get(toIndex), -1);
 			return subSet(from, to);
 		}
@@ -416,12 +422,29 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		protected Comparable<E> boundSearch(Comparable<? super E> search) {
-			return v -> {
-				int compare = isInRange(v);
-				if (compare == 0)
-					compare = search.compareTo(v);
-				return compare;
-			};
+			class BoundedSearch<V> implements Comparable<V> {
+				private final BetterSubSet<V> theSubSet;
+				private final Comparable<? super V> theSearch;
+
+				BoundedSearch(BetterSubSet<V> subSet, Comparable<? super V> srch) {
+					theSubSet = subSet;
+					theSearch = srch;
+				}
+
+				@Override
+				public int compareTo(V v) {
+					int compare = -theSubSet.isInRange(v);
+					if (compare == 0)
+						compare = theSearch.compareTo(v);
+					return compare;
+				}
+
+				@Override
+				public String toString() {
+					return "bounded(" + search + ")";
+				}
+			}
+			return new BoundedSearch<>(this, search);
 		}
 
 		@Override
@@ -479,7 +502,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			int minIdx = getMinIndex();
 			if (wIndex < minIdx)
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			if (wIndex >= getMaxIndex())
+			if (wIndex > getMaxIndex())
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 			return wIndex - minIdx;
 		}
@@ -488,7 +511,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		public int getElementsAfter(ElementId id) {
 			int wIndex = theWrapped.getElementsBefore(id);
 			int maxIdx = getMaxIndex();
-			if (wIndex >= maxIdx)
+			if (wIndex > maxIdx)
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 			if (wIndex < getMinIndex())
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
@@ -528,26 +551,28 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public CollectionElement<E> addIfEmpty(E value) throws IllegalStateException {
-			if (!belongs(value))
-				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			return theWrapped.addElement(value, true);
-		}
-
-		@Override
 		public E set(int index, E element) {
 			if (!belongs(element))
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lock(true, false, null)) {
 				return theWrapped.set(checkIndex(index, false), element);
 			}
 		}
 
 		@Override
-		public String canAdd(E value) {
+		public String canAdd(E value, ElementId after, ElementId before) {
 			if (!belongs(value))
 				return StdMsg.ILLEGAL_ELEMENT;
-			return theWrapped.canAdd(value);
+			return theWrapped.canAdd(value, after, before);
+		}
+
+		@Override
+		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			if (!belongs(value))
+				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
+			else
+				return theWrapped.addElement(value, after, before, first);
 		}
 
 		@Override
@@ -586,33 +611,32 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 		@Override
 		public CollectionElement<E> getTerminalElement(boolean first) {
+			CollectionElement<E> wrapTerminal;
 			if (first) {
 				if (from == null)
-					return theWrapped.getTerminalElement(true);
-				else {
-					CollectionElement<E> element = theWrapped.search(from, SortedSearchFilter.PreferGreater);
-					if (element == null || from.compareTo(element.get()) > 0)
-						return null;
-					else
-						return element;
-				}
+					wrapTerminal = theWrapped.getTerminalElement(true);
+				else
+					wrapTerminal = theWrapped.search(from, SortedSearchFilter.PreferGreater);
 			} else {
 				if (to == null)
-					return theWrapped.getTerminalElement(false);
-				else {
-					CollectionElement<E> element = theWrapped.search(to, SortedSearchFilter.PreferLess);
-					if (element == null || to.compareTo(element.get()) < 0)
-						return null;
-					else
-						return element;
-				}
+					wrapTerminal = theWrapped.getTerminalElement(false);
+				else
+					wrapTerminal = theWrapped.search(to, SortedSearchFilter.PreferLess);
 			}
+			if (wrapTerminal == null)
+				return null;
+			else if (from != null && from.compareTo(wrapTerminal.get()) > 0)
+				return null;
+			else if (to != null && to.compareTo(wrapTerminal.get()) < 0)
+				return null;
+			else
+				return wrapTerminal;
 		}
 
 		@Override
 		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
 			CollectionElement<E> el = theWrapped.getAdjacentElement(elementId, next);
-			if (isInRange(el.get()) != 0)
+			if (el == null || isInRange(el.get()) != 0)
 				return null;
 			return el;
 		}
@@ -861,11 +885,6 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 		}
 
-		@Override
-		public CollectionElement<E> addIfEmpty(E value) throws IllegalStateException {
-			return CollectionElement.reverse(getWrapped().addIfEmpty(value));
-		}
-
 		private static <X> Comparable<X> reverse(Comparable<X> compare) {
 			return v -> -compare.compareTo(v);
 		}
@@ -878,6 +897,21 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		@Override
 		public BetterSortedSet<E> reverse() {
 			return getWrapped();
+		}
+
+		@Override
+		public String toString() {
+			StringBuilder ret = new StringBuilder("{");
+			boolean first = true;
+			for (Object value : this) {
+				if (!first) {
+					ret.append(", ");
+				} else
+					first = false;
+				ret.append(value);
+			}
+			ret.append('}');
+			return ret.toString();
 		}
 	}
 }

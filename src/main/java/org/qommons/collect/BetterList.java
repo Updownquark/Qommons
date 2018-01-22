@@ -16,6 +16,8 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
+import org.qommons.BreakpointHere;
+import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.MutableElementSpliterator.SimpleMutableSpliterator;
@@ -173,8 +175,21 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 	@Override
 	default boolean addAll(int index, Collection<? extends E> c) {
-		// This allows the new values to be inserted in any order, as long as they're inserted between index-1 and index
-		return subList(index, index).addAll(c);
+		try (Transaction t = lock(true, null); Transaction ct = Transactable.lock(c, false, null)) {
+			int sz = size();
+			if (index < 0 || index > sz)
+				throw new IndexOutOfBoundsException(index + " of " + sz);
+			ElementId after = index == 0 ? null : getElement(index - 1).getElementId();
+			ElementId before = index == sz ? null : getElement(index).getElementId();
+			boolean modified = false;
+			for (E v : c) {
+				if (canAdd(v, after, before) == null) {
+					addElement(v, after, before, false);
+					modified = true;
+				}
+			}
+			return modified;
+		}
 	}
 
 	@Override
@@ -192,12 +207,9 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			int sz = size();
 			if (index < 0 || index > sz)
 				throw new IndexOutOfBoundsException(index + " of " + sz);
-			if (isEmpty())
-				return addElement(element, false);
-			else if (index == sz)
-				return getElement(ofMutableElementAt(index - 1, el -> el.add(element, false)));
-			else
-				return getElement(ofMutableElementAt(index, el -> el.add(element, true)));
+			ElementId after = index == 0 ? null : getElement(index - 1).getElementId();
+			ElementId before = index == sz ? null : getElement(index).getElementId();
+			return addElement(element, after, before, false);
 		}
 	}
 

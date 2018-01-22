@@ -15,7 +15,6 @@ import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement;
-import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.MutableMapEntryHandle;
 import org.qommons.collect.SimpleMapEntry;
@@ -50,34 +49,8 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 
 	@Override
 	public BinaryTreeEntry<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
-		try (Transaction t = theEntries.lock(true, null)) {
-			if (after != null) {
-				int comp = comparator().compare(getEntryById(after).getKey(), key);
-				if (comp == 0)
-					return null;
-				else if (comp > 0)
-					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
-			}
-			if (before != null) {
-				int comp = comparator().compare(key, getEntryById(before).getKey());
-				if (comp == 0)
-					return null;
-				else if (comp > 0)
-					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
-			}
-			BinaryTreeNode<Map.Entry<K, V>> entry = theEntries.search(e -> theCompare.compare(key, e.getKey()),
-				SortedSearchFilter.PreferLess);
-			if (entry != null) {
-				int compare = comparator().compare(key, entry.get().getKey());
-				if (compare == 0) {
-					entry.get().setValue(value);
-				} else
-					entry = theEntries
-						.getElement(theEntries.ofMutableElement(entry.getElementId(), el -> el.add(newEntry(key, value), compare < 0)));
-				return new TreeEntry<>(entry);
-			} else
-				return new TreeEntry<>(theEntries.addIfEmpty(newEntry(key, value)));
-		}
+		BinaryTreeNode<Map.Entry<K, V>> entry = theEntries.addElement(newEntry(key, value), after, before, first);
+		return entry == null ? null : new TreeEntry<>(entry);
 	}
 
 	protected Map.Entry<K, V> newEntry(K key, V value) {
@@ -495,8 +468,15 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		}
 
 		@Override
-		public CollectionElement<K> addIfEmpty(K value) throws IllegalStateException {
-			return handleFor(theEntries.addIfEmpty(new SimpleMapEntry<>(value, null)));
+		public String canAdd(K value, ElementId after, ElementId before) {
+			return theEntries.canAdd(new SimpleMapEntry<>(value, null), after, before);
+		}
+
+		@Override
+		public CollectionElement<K> addElement(K value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			CollectionElement<Map.Entry<K, V>> entry = theEntries.addElement(new SimpleMapEntry<>(value, null, true), after, before, first);
+			return entry == null ? null : handleFor(entry);
 		}
 
 		@Override

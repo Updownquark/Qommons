@@ -4,6 +4,8 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.Set;
 
+import org.qommons.Transaction;
+
 /**
  * A {@link Set} that is also a {@link BetterCollection}
  * 
@@ -61,6 +63,28 @@ public interface BetterSet<E> extends BetterCollection<E>, TransactableSet<E> {
 		return new ReversedBetterSet<>(this);
 	}
 
+	/**
+	 * A default toString() method for set implementations to use
+	 *
+	 * @param set The set to print
+	 * @return The string representation of the set
+	 */
+	public static String toString(BetterSet<?> set) {
+		StringBuilder ret = new StringBuilder("{");
+		boolean first = true;
+		try (Transaction t = set.lock(false, null)) {
+			for (Object value : set) {
+				if (!first) {
+					ret.append(", ");
+				} else
+					first = false;
+				ret.append(value);
+			}
+		}
+		ret.append('}');
+		return ret.toString();
+	}
+
 	class ReversedBetterSet<E> extends ReversedCollection<E> implements BetterSet<E> {
 		public ReversedBetterSet(BetterSet<E> wrap) {
 			super(wrap);
@@ -74,6 +98,11 @@ public interface BetterSet<E> extends BetterCollection<E>, TransactableSet<E> {
 		@Override
 		public BetterSet<E> reverse() {
 			return getWrapped();
+		}
+
+		@Override
+		public String toString() {
+			return BetterSet.toString(this);
 		}
 	}
 }

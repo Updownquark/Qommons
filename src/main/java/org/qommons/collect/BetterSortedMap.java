@@ -306,11 +306,6 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		@Override
-		public CollectionElement<Map.Entry<K, V>> addIfEmpty(Map.Entry<K, V> value) throws IllegalStateException {
-			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-		}
-
-		@Override
 		public int indexFor(Comparable<? super Map.Entry<K, V>> search) {
 			return getMap().keySet().indexFor(keyCompare(search));
 		}
