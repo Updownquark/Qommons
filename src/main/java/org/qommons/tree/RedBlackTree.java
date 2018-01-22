@@ -4,7 +4,7 @@ public class RedBlackTree<E> {
 	private RedBlackNode<E> theRoot;
 	private RedBlackNode<E> theFirst;
 	private RedBlackNode<E> theLast;
-	private long theStructureStamp;
+	long theStructureStamp;
 
 	public RedBlackTree() {}
 
@@ -17,6 +17,7 @@ public class RedBlackTree<E> {
 	}
 
 	public RedBlackNode<E> setRoot(RedBlackNode root) {
+		theStructureStamp++;
 		return theRoot = root;
 	}
 	public RedBlackNode<E> getFirst() {
@@ -25,10 +26,6 @@ public class RedBlackTree<E> {
 
 	public RedBlackNode<E> getLast() {
 		return theLast;
-	}
-
-	long getStructureStamp() {
-		return theStructureStamp;
 	}
 
 	void updateFirst(RedBlackNode<E> currentFirst, RedBlackNode<E> newFirst) {

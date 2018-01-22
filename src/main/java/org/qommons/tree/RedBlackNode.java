@@ -31,7 +31,7 @@ public class RedBlackNode<E> {
 
 	private int theSize;
 	private int theCachedIndex;
-	private int theCachedStamp;
+	private long theCachedStamp = -1;
 	/** Records the node's position when it was removed */
 	private int theRemovedIndex;
 
@@ -240,34 +240,27 @@ public class RedBlackNode<E> {
 	public int getNodesBefore(BooleanSupplier cont) {
 		if (theRemovedIndex >= 0)
 			return theRemovedIndex;
+		else if (theCachedStamp == theTree.theStructureStamp)
+			return theCachedIndex;
 		RedBlackNode<E> node = this;
 		RedBlackNode<E> left = node.getLeft();
 		int ret = sizeOf(left);
 		while (node != null && cont.getAsBoolean()) {
 			RedBlackNode<E> parent = node.getParent();
 			if (parent != null && parent.getRight() == node) {
-				left = parent.getLeft();
-				ret += sizeOf(left) + 1;
+				ret += parent.getNodesBefore(cont) + 1;
+				break;
 			}
 			node = parent;
 		}
+		theCachedIndex = ret;
+		theCachedStamp = theTree.theStructureStamp;
 		return ret;
 	}
 
 	/** @return The number of nodes stored after this node in the tree */
 	public int getNodesAfter(BooleanSupplier cont) {
-		RedBlackNode<E> node = this;
-		RedBlackNode<E> right = node.getRight();
-		int ret = sizeOf(right);
-		while (node != null && cont.getAsBoolean()) {
-			RedBlackNode<E> parent = node.getParent();
-			if (parent != null && parent.getLeft() == node) {
-				right = parent.getRight();
-				ret += sizeOf(right) + 1;
-			}
-			node = parent;
-		}
-		return ret;
+		return theTree.size() - getNodesBefore(cont) - 1;
 	}
 
 	/**
@@ -367,6 +360,14 @@ public class RedBlackNode<E> {
 			boolean thisRed = isRed;
 			setRed(node.isRed);
 			node.setRed(thisRed);
+			if (theCachedStamp == theTree.theStructureStamp || node.theCachedStamp == theTree.theStructureStamp) {
+				int cacheIndex = theCachedIndex;
+				theCachedIndex = node.theCachedIndex;
+				node.theCachedIndex = cacheIndex;
+				long cacheStamp = theCachedStamp;
+				theCachedStamp = node.theCachedStamp;
+				node.theCachedStamp = cacheStamp;
+			}
 
 			if (theParent == node) {
 				boolean thisSide = getSide();
