@@ -1103,13 +1103,12 @@ public class QommonsTestUtils {
 			private final String DESCRIP = "collection equivalent to ";
 			private final int MAX_SIZE_LENGTH = 5;
 			private int theFirstMiss = -1;
+			private boolean isSizeMismatched;
 			private boolean wasUnorderedEqual;
 
 			@Override
 			public boolean matches(Object arg0) {
 				Collection<T> arg = (Collection<T>) arg0;
-				if (arg.size() != values.size())
-					return false;
 				if (ordered) {
 					// Must be equivalent
 					Map<T, Integer> vValueCounts = new HashMap<>();
@@ -1127,6 +1126,8 @@ public class QommonsTestUtils {
 					}
 					if (theFirstMiss < 0 && (vIter.hasNext() || aIter.hasNext()))
 						theFirstMiss = i;
+					if (theFirstMiss < 0)
+						isSizeMismatched = arg.size() != values.size();
 					if (theFirstMiss >= 0)
 						wasUnorderedEqual = vValueCounts.equals(aValueCounts);
 					return theFirstMiss < 0;
@@ -1151,7 +1152,11 @@ public class QommonsTestUtils {
 				boolean matches = matches(item);
 				if (matches)
 					return;
-				StringBuilder str = new StringBuilder().append('@').append(theFirstMiss).append(' ');
+				StringBuilder str = new StringBuilder();
+				if (isSizeMismatched)
+					str.append("(size only) ");
+				else
+					str.append('@').append(theFirstMiss).append(' ');
 				if (wasUnorderedEqual)
 					str.insert(0, "(disordered) ");
 				str.insert(0, "was ");
