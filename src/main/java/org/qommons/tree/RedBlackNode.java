@@ -240,27 +240,34 @@ public class RedBlackNode<E> {
 	public int getNodesBefore(BooleanSupplier cont) {
 		if (theRemovedIndex >= 0)
 			return theRemovedIndex;
-		else if (theCachedStamp == theTree.theStructureStamp)
+		long treeStamp = theTree.theStructureStamp;
+		if (theCachedStamp == treeStamp)
 			return theCachedIndex;
-		RedBlackNode<E> node = this;
-		RedBlackNode<E> left = node.getLeft();
-		int ret = sizeOf(left);
-		while (node != null && cont.getAsBoolean()) {
-			RedBlackNode<E> parent = node.getParent();
-			if (parent != null && parent.getRight() == node) {
-				ret += parent.getNodesBefore(cont) + 1;
-				break;
-			}
-			node = parent;
+		else if (cont != null && !cont.getAsBoolean())
+			return -1;
+		RedBlackNode<E> left = theLeft;
+		RedBlackNode<E> right = theRight;
+		RedBlackNode<E> parent = theParent;
+		int ret;
+		if (parent == null)
+			ret = sizeOf(left);
+		else if (parent.theRight == this)
+			ret = parent.getNodesBefore(cont) + sizeOf(left) + 1;
+		else
+			ret = parent.getNodesBefore(cont) - sizeOf(right) - 1;
+		if (theTree.theStructureStamp == treeStamp) {
+			theCachedIndex = ret;
+			theCachedStamp = theTree.theStructureStamp;
 		}
-		theCachedIndex = ret;
-		theCachedStamp = theTree.theStructureStamp;
 		return ret;
 	}
 
 	/** @return The number of nodes stored after this node in the tree */
 	public int getNodesAfter(BooleanSupplier cont) {
-		return theTree.size() - getNodesBefore(cont) - 1;
+		int after = theTree.size() - getNodesBefore(cont);
+		if (theRemovedIndex < 0)
+			after--;
+		return after;
 	}
 
 	/**

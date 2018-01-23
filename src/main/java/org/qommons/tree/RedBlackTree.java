@@ -4,7 +4,7 @@ public class RedBlackTree<E> {
 	private RedBlackNode<E> theRoot;
 	RedBlackNode<E> theFirst;
 	RedBlackNode<E> theLast;
-	long theStructureStamp;
+	volatile long theStructureStamp;
 
 	public RedBlackTree() {}
 
