@@ -1124,12 +1124,14 @@ public class QommonsTestUtils {
 						if (theFirstMiss < 0 && !Objects.equals(vValue, aValue))
 							theFirstMiss = i;
 					}
-					if (theFirstMiss < 0 && (vIter.hasNext() || aIter.hasNext()))
-						theFirstMiss = i;
-					if (theFirstMiss < 0)
-						isSizeMismatched = arg.size() != values.size();
-					if (theFirstMiss >= 0)
-						wasUnorderedEqual = vValueCounts.equals(aValueCounts);
+					boolean bothDone = !(vIter.hasNext() || aIter.hasNext());
+					if (theFirstMiss < 0) {
+						if (!bothDone)
+							theFirstMiss = i;
+						else
+							isSizeMismatched = arg.size() != values.size();
+					} else
+						wasUnorderedEqual = bothDone && vValueCounts.equals(aValueCounts);
 					return theFirstMiss < 0;
 				} else {
 					// Split out here for debugging
