@@ -505,7 +505,12 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 		@Override
 		public int indexFor(Comparable<? super E> search) {
-			return theWrapped.indexFor(boundSearch(search));
+			int wrapIdx = theWrapped.indexFor(boundSearch(search));
+			if (wrapIdx < 0) {
+				wrapIdx = -wrapIdx - 1 - getMinIndex();
+				return -wrapIdx - 1;
+			} else
+				return wrapIdx - getMinIndex();
 		}
 
 		@Override
