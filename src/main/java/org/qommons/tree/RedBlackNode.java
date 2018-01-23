@@ -86,7 +86,7 @@ public class RedBlackNode<E> {
 		return root;
 	}
 
-	/** Whether this node is still to be found in the tree */
+	/** @return Whether this node is still to be found in the tree */
 	public boolean isPresent() {
 		return theParent != null || theTree.getRoot() == this;
 	}
@@ -464,12 +464,16 @@ public class RedBlackNode<E> {
 		if (left) {
 			if (thePrevious != null)
 				thePrevious.theNext = node;
+			else
+				theTree.theFirst = node;
 			node.thePrevious = thePrevious;
 			thePrevious = node;
 			node.theNext = this;
 		} else {
 			if (theNext != null)
 				theNext.thePrevious = node;
+			else
+				theTree.theLast = node;
 			node.theNext = theNext;
 			theNext = node;
 			node.thePrevious = this;
@@ -493,8 +497,12 @@ public class RedBlackNode<E> {
 		// First let's link up the next and previous fields
 		if (theNext != null)
 			theNext.thePrevious = thePrevious;
+		else
+			theTree.theLast = thePrevious;
 		if (thePrevious != null)
 			thePrevious.theNext = theNext;
+		else
+			theTree.theFirst = theNext;
 
 		if(theLeft != null && theRight != null) {
 			RedBlackNode<E> successor = getClosest(false);

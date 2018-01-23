@@ -2,8 +2,8 @@ package org.qommons.tree;
 
 public class RedBlackTree<E> {
 	private RedBlackNode<E> theRoot;
-	private RedBlackNode<E> theFirst;
-	private RedBlackNode<E> theLast;
+	RedBlackNode<E> theFirst;
+	RedBlackNode<E> theLast;
 	long theStructureStamp;
 
 	public RedBlackTree() {}
@@ -18,8 +18,13 @@ public class RedBlackTree<E> {
 
 	public RedBlackNode<E> setRoot(RedBlackNode root) {
 		theStructureStamp++;
+		if (root == null)
+			theFirst = theLast = null;
+		else if (root.size() == 1)
+			theFirst = theLast = root;
 		return theRoot = root;
 	}
+
 	public RedBlackNode<E> getFirst() {
 		return theFirst;
 	}
@@ -28,19 +33,9 @@ public class RedBlackTree<E> {
 		return theLast;
 	}
 
-	void updateFirst(RedBlackNode<E> currentFirst, RedBlackNode<E> newFirst) {
-		if (theFirst == currentFirst)
-			theFirst = newFirst;
-	}
-
-	void updateLast(RedBlackNode<E> currentLast, RedBlackNode<E> newLast) {
-		if (theLast == currentLast)
-			theLast = newLast;
-	}
-
 	public RedBlackNode<E> getTerminal(boolean first) {
-		// return first ? theFirst : theLast;
-		return theRoot == null ? null : theRoot.getTerminal(first, () -> true);
+		return first ? theFirst : theLast;
+		// return theRoot == null ? null : theRoot.getTerminal(first, () -> true);
 	}
 
 	@Override
