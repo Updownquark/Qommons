@@ -441,7 +441,13 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 				@Override
 				public String toString() {
-					return "bounded(" + search + ")";
+					StringBuilder str = new StringBuilder("bounded(").append(search);
+					if (theSubSet.from != null)
+						str.append(", " + theSubSet.from);
+					if (theSubSet.to != null)
+						str.append(", " + theSubSet.to);
+					str.append(')');
+					return str.toString();
 				}
 			}
 			return new BoundedSearch<>(this, search);
@@ -482,13 +488,19 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		@Override
 		public int size() {
 			int minIndex = getMinIndex();
+			if (minIndex < 0)
+				return 0;
 			int maxIndex = getMaxIndex();
 			return maxIndex - minIndex + 1; // Both minIndex and maxIndex are included here
 		}
 
 		@Override
 		public boolean isEmpty() {
-			return getMinIndex() > getMaxIndex(); // Both minIndex and maxIndex are included here
+			int minIndex = getMinIndex();
+			if (minIndex < 0)
+				return true;
+			int maxIndex = getMaxIndex();
+			return minIndex > maxIndex; // Both minIndex and maxIndex are included here
 		}
 
 		@Override
@@ -671,7 +683,32 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 		@Override
 		public BetterSortedSet<E> subSet(Comparable<? super E> innerFrom, Comparable<? super E> innerTo) {
-			return new BetterSubSet<>(theWrapped, boundSearch(innerFrom), boundSearch(innerTo));
+			return new BetterSubSet<>(theWrapped, and(innerFrom, true), and(innerTo, false));
+		}
+
+		protected Comparable<? super E> and(Comparable<? super E> c2, boolean low) {
+			Comparable<? super E> c1 = low ? from : to;
+			if (c1 == null)
+				return c2;
+			else if (c2 == null)
+				return c1;
+			class AndCompare implements Comparable<E> {
+				@Override
+				public int compareTo(E v) {
+					int comp = c1.compareTo(v);
+					if (low && comp <= 0)
+						comp = c2.compareTo(v);
+					else if (!low && comp >= 0)
+						comp = c2.compareTo(v);
+					return comp;
+				}
+
+				@Override
+				public String toString() {
+					return c1 + " and " + c2;
+				}
+			}
+			return new AndCompare();
 		}
 
 		@Override
