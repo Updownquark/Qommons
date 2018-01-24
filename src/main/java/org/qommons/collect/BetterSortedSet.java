@@ -491,7 +491,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			if (minIndex < 0)
 				return 0;
 			int maxIndex = getMaxIndex();
-			return maxIndex - minIndex + 1; // Both minIndex and maxIndex are included here
+			return Math.max(0, maxIndex - minIndex + 1); // Both minIndex and maxIndex are included here
 		}
 
 		@Override
@@ -505,12 +505,16 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 		@Override
 		public int indexFor(Comparable<? super E> search) {
+			int minIndex = getMinIndex();
+			int maxIndex = getMaxIndex();
+			if (minIndex > maxIndex)
+				return -1;
 			int wrapIdx = theWrapped.indexFor(boundSearch(search));
 			if (wrapIdx < 0) {
-				wrapIdx = -wrapIdx - 1 - getMinIndex();
+				wrapIdx = -wrapIdx - 1 - minIndex;
 				return -wrapIdx - 1;
 			} else
-				return wrapIdx - getMinIndex();
+				return wrapIdx - minIndex;
 		}
 
 		@Override
@@ -558,7 +562,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			int max = getMaxIndex();
 			int wrapIndex = min + index;
 			if (wrapIndex > max + 1 || (wrapIndex == max + 1 && !includeTerminus))
-				throw new IndexOutOfBoundsException(index + " of " + (max - min));
+				throw new IndexOutOfBoundsException(index + " of " + Math.max(0, max - min + 1));
 			return min + index;
 		}
 
