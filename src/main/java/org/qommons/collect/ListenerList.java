@@ -125,12 +125,15 @@ public class ListenerList<E> {
 		StringBuilder str = new StringBuilder();
 		str.append('[');
 		boolean[] first = new boolean[] { true };
-		forEach(listener -> {
+		// Don't use forEach, since toString might be useful for debugging during event firing
+		Node node = theFirst.next;
+		while (node != theLast) {
 			if (!first[0])
 				str.append(", ");
 			first[0] = false;
-			str.append(listener);
-		});
+			str.append(node.theListener);
+			node = node.next;
+		}
 		str.append(']');
 		return str.toString();
 	}
