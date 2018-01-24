@@ -1,5 +1,6 @@
 package org.qommons;
 
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -27,6 +28,11 @@ public abstract class Causable {
 			theValues = new LinkedHashMap<>();
 			theCauseCount = new AtomicInteger();
 			theAction = action;
+		}
+
+		/** @return This cause key's current value data, unmodifiable */
+		public Map<Object, Object> getData() {
+			return Collections.unmodifiableMap(theValues);
 		}
 
 		Transaction use(Causable cause) {
@@ -131,26 +137,11 @@ public abstract class Causable {
 	 * @return A map of key-values that may be modified to keep track of information from multiple sub-causes of this cause
 	 */
 	public Map<Object, Object> onFinish(CausableKey key) {
-		return onFinish(key, false);
-	}
-
-	/**
-	 * @param key The key to get or add the action for. An action will only be added once to a causable for a given key.
-	 * @param onlyIfPresent If true, this method will only return the values for the key if the key has already been registered for this
-	 *        causable's finish
-	 * @return A map of key-values that may be modified to keep track of information from multiple sub-causes of this cause
-	 */
-	public Map<Object, Object> onFinish(CausableKey key, boolean onlyIfPresent) {
 		if (!isStarted)
 			throw new IllegalStateException("Not started!  Use Causable.use(Causable)");
-		if (theUsedKeys == null) {
-			if (onlyIfPresent)
-				return null;
+		if (theUsedKeys == null)
 			theUsedKeys = new IdentityHashMap<>();
-		}
-		Transaction t = theUsedKeys.computeIfAbsent(key, k -> (onlyIfPresent ? null : k.use(this)));
-		if (t == null)
-			return null;
+		theUsedKeys.computeIfAbsent(key, k -> k.use(this));
 		return key.theValues;
 	}
 
@@ -165,12 +156,11 @@ public abstract class Causable {
 		// These events may trigger onRootFinish calls, which add more actions to this causable
 		// Though this cycle is allowed, care must be taken by callers to ensure it does not become infinite
 		Map<CausableKey, Transaction> keys = theUsedKeys;
-		theUsedKeys = null;
 		while (keys != null) {
+			theUsedKeys = null;
 			for (Transaction t : keys.values())
 				t.close();
 			keys = theUsedKeys;
-			theUsedKeys = null;
 		}
 	}
 
