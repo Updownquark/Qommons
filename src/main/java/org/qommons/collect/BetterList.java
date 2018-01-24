@@ -250,7 +250,10 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		try (Transaction t = lock(true, null)) {
 			MutableElementSpliterator<E> spliter = spliterator(fromIndex);
 			for (int i = fromIndex; i < toIndex; i++)
-				spliter.forElementM(el -> el.remove(), true);
+				spliter.forElementM(el -> {
+					if (el.canRemove() == null)
+						el.remove();
+				}, true);
 		}
 	}
 
@@ -1017,9 +1020,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				int end = theEnd;
 				if (sz < end)
 					end = sz;
+				if (theStart == 0 && end == sz)
+					theWrapped.clear();
 				theWrapped.removeRange(theStart, end);
 				theStructureStamp = theWrapped.getStamp(true);
-				theEnd = theStart;
+				theEnd -= sz - theWrapped.size();
 			}
 		}
 
