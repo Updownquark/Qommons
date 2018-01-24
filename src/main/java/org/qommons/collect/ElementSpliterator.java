@@ -6,6 +6,11 @@ import java.util.function.Consumer;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 
+/**
+ * A {@link Spliterator} that also provides iteration by element for a {@link BetterCollection}
+ * 
+ * @param <E> The type of the elements
+ */
 public interface ElementSpliterator<E> extends Spliterator<E> {
 	/**
 	 * Retrieves the next or previous element available to this ElementSpliterator
@@ -25,10 +30,19 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 	 */
 	void forEachElement(Consumer<? super CollectionElement<E>> action, boolean forward);
 
+	/**
+	 * @param action The action to perform on the next or previous value
+	 * @param forward Whether to supply the next or previous value
+	 * @return Whether there was, in fact, a next or previous value
+	 */
 	default boolean forValue(Consumer<? super E> action, boolean forward) {
 		return forElement(el -> action.accept(el.get()), forward);
 	}
 
+	/**
+	 * @param action The action to perform on all values after or before the current position
+	 * @param forward Whether to perform the action on values after or before the current position
+	 */
 	default void forEachValue(Consumer<? super E> action, boolean forward) {
 		forEachElement(el -> action.accept(el.get()), forward);
 	}
@@ -38,6 +52,12 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 		return forValue(action, true);
 	}
 
+	/**
+	 * Performs an action on the previous value
+	 * 
+	 * @param action The action to perform on the value
+	 * @return Whether there was a previous value
+	 */
 	default boolean tryReverse(Consumer<? super E> action) {
 		return forValue(action, false);
 	}
@@ -47,6 +67,11 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 		forEachValue(action, true);
 	}
 
+	/**
+	 * Performs an action on all values before the current position
+	 * 
+	 * @param action The action to perform
+	 */
 	default void forEachReverse(Consumer<? super E> action) {
 		forEachValue(action, false);
 	}
@@ -70,6 +95,11 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 		return new EmptyElementSpliterator<>();
 	}
 
+	/**
+	 * An empty spliterator
+	 * 
+	 * @param <E> The type of the spliterator
+	 */
 	class EmptyElementSpliterator<E> implements ElementSpliterator<E> {
 		@Override
 		public long estimateSize() {
@@ -166,6 +196,11 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 		}
 	}
 
+	/**
+	 * A partial {@link ElementSpliterator} implementation
+	 * 
+	 * @param <E> The type of the spliterator
+	 */
 	abstract class SimpleSpliterator<E> implements ElementSpliterator<E> {
 		protected final Transactable theLocker;
 

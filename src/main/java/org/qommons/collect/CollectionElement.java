@@ -11,8 +11,10 @@ package org.qommons.collect;
  * @param <E> The type of value in the element
  */
 public interface CollectionElement<E> extends Comparable<CollectionElement<E>> {
+	/** @return The ID of this element */
 	ElementId getElementId();
 
+	/** @return The current value of this element */
 	E get();
 
 	@Override
@@ -20,10 +22,16 @@ public interface CollectionElement<E> extends Comparable<CollectionElement<E>> {
 		return getElementId().compareTo(other.getElementId());
 	}
 
+	/** @return An element identical to this, but whose {@link #getElementId() ID} is {@link ElementId#reverse() reversed} */
 	default CollectionElement<E> reverse() {
 		return new ReversedCollectionElement<>(this);
 	}
 
+	/**
+	 * Implements {@link CollectionElement#reverse()}
+	 * 
+	 * @param <E> The type of the element
+	 */
 	class ReversedCollectionElement<E> implements CollectionElement<E> {
 		private final CollectionElement<E> theWrapped;
 
@@ -61,10 +69,18 @@ public interface CollectionElement<E> extends Comparable<CollectionElement<E>> {
 		}
 	}
 
+	/**
+	 * @param element The element to reverse
+	 * @return The given element, {@link CollectionElement#reverse() reversed}, or null if the given element is null
+	 */
 	static <E> CollectionElement<E> reverse(CollectionElement<E> element) {
 		return element == null ? null : element.reverse();
 	}
 
+	/**
+	 * @param element The element to get the ID for
+	 * @return The given element's {@link #getElementId() ID}, or null if the element is null
+	 */
 	static ElementId getElementId(CollectionElement<?> element) {
 		return element == null ? null : element.getElementId();
 	}

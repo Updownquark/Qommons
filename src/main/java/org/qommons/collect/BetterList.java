@@ -27,7 +27,33 @@ import org.qommons.collect.MutableElementSpliterator.SimpleMutableSpliterator;
  * @param <E> The type of value in the list
  */
 public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> {
+	/**
+	 * @param index The index to get the element for
+	 * @return The element in this list at the given index
+	 */
 	CollectionElement<E> getElement(int index);
+
+	/**
+	 * Although the contract of {@link List} states that the user (dev) has complete control over the content and placement of elements in a
+	 * list, a BetterList may, in fact, only be index-accessible, not supporting addition or update of values at arbitrary positions.
+	 * BetterCollection implementations can implement BetterList if their elements are stored in such a way as to be index-accessible
+	 * efficiently, even if they do not allow List-style complete control.
+	 * 
+	 * @return Whether this list has constraints on its content or placement
+	 */
+	boolean isContentControlled();
+
+	/**
+	 * @param id The element
+	 * @return The number of elements in this collection positioned before the given element
+	 */
+	int getElementsBefore(ElementId id);
+
+	/**
+	 * @param id The element
+	 * @return The number of elements in this collection positioned after the given element
+	 */
+	int getElementsAfter(ElementId id);
 
 	/**
 	 * @param index The index of the element to be the next element returned from the spliterator on forward access
@@ -52,27 +78,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	default <T> T[] toArray(T[] array) {
 		return BetterCollection.super.toArray(array);
 	}
-
-	/**
-	 * Although the contract of {@link List} states that the user (dev) has complete control over the content and placement of elements in a
-	 * list, a BetterList may, in fact, only be index-accessible. BetterCollection implementations can implement BetterList if their
-	 * elements are stored in such a way as to be index-accessible efficiently, even if they do not allow List-style complete control
-	 * 
-	 * @return Whether this list has constraints on its content or placement
-	 */
-	boolean isContentControlled();
-
-	/**
-	 * @param id The element
-	 * @return The number of elements in this collection positioned before the given element
-	 */
-	int getElementsBefore(ElementId id);
-
-	/**
-	 * @param id The element
-	 * @return The number of elements in this collection positioned after the given element
-	 */
-	int getElementsAfter(ElementId id);
 
 	/**
 	 * @param value The value to get the index of in this collection
@@ -123,19 +128,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	}
 
 	/**
-	 * Addresses an element by index
-	 *
-	 * @param index The index of the element to get
-	 * @param onElement The listener to be called on the mutable element
-	 */
-	default void forMutableElementAt(int index, Consumer<? super MutableCollectionElement<E>> onElement) {
-		ofMutableElementAt(index, el -> {
-			onElement.accept(el);
-			return null;
-		});
-	}
-
-	/**
 	 * Calls a function on an element by index
 	 *
 	 * @param index The index of the element to call the function on
@@ -144,17 +136,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 */
 	default <T> T ofElementAt(int index, Function<? super CollectionElement<E>, T> onElement) {
 		return onElement.apply(getElement(index));
-	}
-
-	/**
-	 * Calls a function on an element by index
-	 *
-	 * @param index The index of the element to call the function on
-	 * @param onElement The function to be called on the mutable element
-	 * @return The result of the function
-	 */
-	default <T> T ofMutableElementAt(int index, Function<? super MutableCollectionElement<E>, T> onElement) {
-		return ofMutableElement(getElement(index).getElementId(), onElement);
 	}
 
 	@Override
@@ -201,6 +182,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		addElement(index, element);
 	}
 
+	/**
+	 * @param index The index at which to add the element
+	 * @param element The new value to add
+	 * @return The element at which the value was added
+	 */
 	default CollectionElement<E> addElement(int index, E element) {
 		try (Transaction t = lock(true, null)) {
 			int sz = size();
@@ -248,11 +234,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 	@Override
 	default E remove(int index) {
-		return ofMutableElementAt(index, el -> {
-			E old = el.get();
-			el.remove();
-			return old;
-		});
+		try (Transaction t = lock(true, true, null)) {
+			CollectionElement<E> el = getElement(index);
+			E value = el.get();
+			mutableElement(el.getElementId()).remove();
+			return value;
+		}
 	}
 
 	@Override
@@ -273,11 +260,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	default E set(int index, E element) {
 		if (!belongs(element))
 			throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-		return ofMutableElementAt(index, el -> {
-			E old = el.get();
-			el.set(element);
-			return old;
-		});
+		try (Transaction t = lock(true, true, null)) {
+			CollectionElement<E> el = getElement(index);
+			E value = el.get();
+			mutableElement(el.getElementId()).set(element);
+			return value;
+		}
 	}
 
 	@Override
@@ -313,10 +301,20 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		return new EmptyList<>();
 	}
 
+	/**
+	 * @param <E> The type for the list
+	 * @param values The values for the list
+	 * @return An immutable list containing the given values
+	 */
 	public static <E> BetterList<E> of(E... values) {
 		return new ConstantList<>(Arrays.asList(values));
 	}
 
+	/**
+	 * @param <E> The type for the list
+	 * @param values The values for the list
+	 * @return An immutable list containing the given values
+	 */
 	public static <E> BetterList<E> of(Collection<? extends E> values) {
 		return new ConstantList<>(values instanceof List ? (List<? extends E>) values : new ArrayList<>(values));
 	}
@@ -381,6 +379,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 	}
 
+	/**
+	 * An immutable {@link BetterList} that has no content
+	 * 
+	 * @param <E> The type of the list
+	 */
 	class EmptyList<E> extends EmptyCollection<E> implements BetterList<E> {
 		@Override
 		public boolean isContentControlled() {
@@ -408,6 +411,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 	}
 
+	/**
+	 * Implements {@link BetterList#listIterator(int)}
+	 * 
+	 * @param <E> The type of the list
+	 */
 	public static class BetterListIterator<E> implements ListIterator<E> {
 		private static final Consumer<CollectionElement<?>> NULL_ACTION = el -> {
 		};
@@ -424,6 +432,10 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		private ElementId theLastElement;
 		private boolean isReadyForMod;
 
+		/**
+		 * @param list The list to iterate
+		 * @param backing The element spliterator from the list, positioned at the desired position for this iterator
+		 */
 		public BetterListIterator(BetterList<E> list, MutableElementSpliterator<E> backing) {
 			theList = list;
 			this.backing = backing;
@@ -530,6 +542,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 	}
 
+	/**
+	 * Implements {@link BetterList#subList(int, int)}
+	 * 
+	 * @param <E> The type of values in the list
+	 */
 	class SubList<E> implements BetterList<E> {
 		private final BetterList<E> theWrapped;
 		private int theStart;
@@ -1019,6 +1036,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 	}
 
+	/**
+	 * An immutable {@link BetterList}
+	 * 
+	 * @param <E> The type of values in the list
+	 */
 	class ConstantList<E> implements BetterList<E> {
 		private final List<? extends E> theValues;
 

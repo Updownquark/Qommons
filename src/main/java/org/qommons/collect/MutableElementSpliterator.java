@@ -10,8 +10,8 @@ import org.qommons.Transaction;
 
 /**
  * A {@link Spliterator} that allows the option of providing its values wrapped in a {@link MutableCollectionElement}, which allows elements
- * in the source collection to be replaced (using {@link #set(Object, Object)}) or {@link MutableCollectionElement#remove() removed} during
- * iteration.
+ * in the source collection to be replaced (using {@link MutableCollectionElement#set(Object)}) or {@link MutableCollectionElement#remove()
+ * removed} during iteration.
  * 
  * ElementSpliterators are {@link #trySplit() splittable} just as Spliterators are, though the added functionality (particularly
  * {@link MutableCollectionElement#remove()}) may be disabled for split spliterators.
@@ -20,9 +20,10 @@ import org.qommons.Transaction;
  */
 public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 	/**
-	 * Like {@link #tryAdvanceElement(Consumer)}, but provides a mutable element handle
+	 * Like {@link #forElement(Consumer, boolean)}, but provides a mutable element
 	 * 
 	 * @param action The action to perform on the element
+	 * @param forward Whether to get the next or previous element
 	 * @return false if no element was available
 	 */
 	boolean forElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward);
@@ -30,6 +31,7 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 	/**
 	 * Operates on each element remaining in this MutableElementSpliterator
 	 * 
+	 * @param forward Whether to get the next or previous element
 	 * @param action The action to perform on each element
 	 */
 	void forEachElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward);
@@ -55,6 +57,11 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 		return new EmptyMutableSpliterator<>();
 	}
 
+	/**
+	 * Implements {@link MutableElementSpliterator#reverse()}
+	 * 
+	 * @param <E> The type of the spliterator
+	 */
 	class ReversedMutableSpliterator<E> extends ReversedElementSpliterator<E> implements MutableElementSpliterator<E> {
 		public ReversedMutableSpliterator(ElementSpliterator<E> wrap) {
 			super(wrap);
@@ -87,6 +94,11 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 		}
 	}
 
+	/**
+	 * Implements {@link MutableElementSpliterator#immutable()}
+	 * 
+	 * @param <E> The type of the spliterator
+	 */
 	class ImmutableElementSpliterator<E> implements ElementSpliterator<E> {
 		private final MutableElementSpliterator<E> theWrapped;
 
@@ -135,6 +147,11 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 		}
 	}
 
+	/**
+	 * An empty spliterator
+	 * 
+	 * @param <E> The type of the spliterator
+	 */
 	class EmptyMutableSpliterator<E> extends EmptyElementSpliterator<E> implements MutableElementSpliterator<E> {
 		@Override
 		public boolean forElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
@@ -151,6 +168,11 @@ public interface MutableElementSpliterator<E> extends ElementSpliterator<E> {
 		}
 	}
 
+	/**
+	 * A partial {@link MutableCollectionElement} implementation
+	 * 
+	 * @param <E> The type of the spliterator
+	 */
 	abstract class SimpleMutableSpliterator<E> extends SimpleSpliterator<E> implements MutableElementSpliterator<E> {
 		public SimpleMutableSpliterator(Transactable locker) {
 			super(locker);

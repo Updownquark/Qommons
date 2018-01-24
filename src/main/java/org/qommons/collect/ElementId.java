@@ -14,6 +14,7 @@ package org.qommons.collect;
  * @see CollectionElement#getElementId()
  */
 public interface ElementId extends Comparable<ElementId> {
+	/** @return Whether the element with this ID is still present in the collection */
 	boolean isPresent();
 
 	/** @return An element ID that behaves like this one, but orders in reverse */
@@ -58,6 +59,10 @@ public interface ElementId extends Comparable<ElementId> {
 		return new ReversedElementId(this);
 	}
 
+	/**
+	 * @param id The element ID to reverse
+	 * @return The {@link #reverse() reversed} element ID, or null if the given ID was null
+	 */
 	static ElementId reverse(ElementId id) {
 		return id == null ? null : id.reverse();
 	}

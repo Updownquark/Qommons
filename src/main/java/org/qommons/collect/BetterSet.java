@@ -85,6 +85,11 @@ public interface BetterSet<E> extends BetterCollection<E>, TransactableSet<E> {
 		return ret.toString();
 	}
 
+	/**
+	 * Implements {@link BetterSet#reverse()}
+	 * 
+	 * @param <E> The type of the set
+	 */
 	class ReversedBetterSet<E> extends ReversedCollection<E> implements BetterSet<E> {
 		public ReversedBetterSet(BetterSet<E> wrap) {
 			super(wrap);

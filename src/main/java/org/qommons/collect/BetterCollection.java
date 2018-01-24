@@ -21,13 +21,14 @@ import org.qommons.ValueHolder;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
- * BetterCollection is an ordered {@link Collection} (also a {@link Deque}) that provides a great deal of extra functionality.
+ * BetterCollection is an ordered {@link Collection} (also a {@link Deque}) that provides a great deal of extra capability.
  * 
- * Fundamentally, each value in a BetterCollection is stored in an element, each of which has an {@link ElementId}. The ID of an element is
- * like an address. It is immutable until that element is removed from the collection, so it can be used to access elements even if the
- * properties used to store the elements may have changed, e.g. the hash code of an item in a hash set or the name of an item in a sorted
- * set ordered by name. Since it is a direct link to the placeholder of the element, access or modification to the element by its ID may be
- * significantly faster than access by value.
+ * Fundamentally, each value in a BetterCollection is stored in an element, each of which has an {@link ElementId ID}. The ID of an element
+ * is like an address, which can be {@link ElementId#compareTo(ElementId) compared} to other elements. It is immutable until that element is
+ * removed from the collection, so it can be used to access elements even if the properties used to store the elements may have changed,
+ * e.g. the hash code of an item in a hash set or the name of an item in a sorted set ordered by name. Since it is a direct link to the
+ * placeholder of the element, access or modification to the element by its ID may be significantly faster than access by value. Access and
+ * update by ID are typically constant time.
  * 
  * A BetterCollection must provide access to its elements by ID and value; and iteration from a BetterCollection is by element and not value
  * only. BetterCollection itself provides more functionality on top of this and implements most of the {@link Collection} API as well.
@@ -35,9 +36,18 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * @param <E> The type of value in the collection
  */
 public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E> {
+	/** A message for an exception thrown when a view detects that it is invalid due to external modification of the underlying data */
 	public static final String BACKING_COLLECTION_CHANGED = "This collection view's backing collection has changed from underneath this view.\n"
 		+ "This view is now invalid";
 
+	/**
+	 * Determines whether a value could belong to the collection. This is not the same as whether the value is {@link #canAdd(Object)
+	 * addable} to the collection. This may return true for unmodifiable collections as long as the value's type or immutable properties are
+	 * valid for this collection.
+	 * 
+	 * @param o The value to check
+	 * @return Whether the given value might in any situation belong to this collection
+	 */
 	boolean belongs(Object o);
 
 	/**
@@ -62,23 +72,38 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 */
 	long getStamp(boolean structuralOnly);
 
+	/**
+	 * @param value The value to get the element for
+	 * @param first Whether to search for the first equivalent element or the last in this collection
+	 * @return The first or last equivalent element in this collection whose value is equivalent to the given value, or null if there was no
+	 *         such value in this collection
+	 */
 	CollectionElement<E> getElement(E value, boolean first);
 
+	/**
+	 * @param id The ID of the element to get
+	 * @return The element in this collection with the given ID
+	 */
 	CollectionElement<E> getElement(ElementId id);
 
+	/**
+	 * @param first Whether to get the first or the last element in this collection
+	 * @return The first or last element in this collection
+	 */
 	CollectionElement<E> getTerminalElement(boolean first);
 
+	/**
+	 * @param elementId The ID of the element to get the element adjacent to
+	 * @param next Whether to get the element after (true) or before (false) the given element
+	 * @return The element adjacent to the given element, or null if the given element is terminal in that direction
+	 */
 	CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next);
 
+	/**
+	 * @param id The ID of the element to get
+	 * @return A mutable element for the given element
+	 */
 	MutableCollectionElement<E> mutableElement(ElementId id);
-
-	default <X> X ofMutableElement(ElementId element, Function<? super MutableCollectionElement<E>, X> onElement) {
-		return onElement.apply(mutableElement(element));
-	}
-
-	default void forMutableElement(ElementId element, Consumer<? super MutableCollectionElement<E>> onElement) {
-		onElement.accept(mutableElement(element));
-	}
 
 	/**
 	 * Tests the compatibility of an object with this collection.
@@ -141,6 +166,20 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 */
 	CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException;
+
+	/**
+	 * @param fromStart Whether the returned spliterator should be initially positioned at the beginning of this collection or its end
+	 * @return The spliterator
+	 */
+	MutableElementSpliterator<E> spliterator(boolean fromStart);
+
+	/**
+	 * @param element The ID of the element at which to position the spliterator initially
+	 * @param asNext Whether the given element should be the first element returned from the spliterator's
+	 *        {@link MutableElementSpliterator#forElement(Consumer, boolean) forElement} method with a true or a false parameter
+	 * @return The spliterator
+	 */
+	MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext);
 
 	@Override
 	default boolean add(E value) {
@@ -282,6 +321,12 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 			el -> el.remove(), true);
 	}
 
+	/**
+	 * Removes the last element matching the given value from this collection
+	 * 
+	 * @param o The value to remove
+	 * @return Whether the value was found and removed
+	 */
 	default boolean removeLast(Object o) {
 		if (!belongs(o))
 			return false;
@@ -379,6 +424,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	/**
 	 * @param value The value to search for
 	 * @param onElement The action to perform on the element containing the given value, if found
+	 * @param first Whether to search for the first equivalent element or the last one
 	 * @return Whether such a value was found
 	 */
 	default boolean forMutableElement(E value, Consumer<? super MutableCollectionElement<E>> onElement, boolean first) {
@@ -394,6 +440,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * 
 	 * @param search The search function
 	 * @param onElement The action to perform on the search's result
+	 * @param first Whether to search for the first matching element or the last one
 	 * @return Whether a result was found
 	 */
 	default boolean find(Predicate<? super E> search, Consumer<? super CollectionElement<E>> onElement, boolean first) {
@@ -417,6 +464,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * 
 	 * @param search The search function
 	 * @param onElement The action to perform on the search's results
+	 * @param forward Whether to search beginning-to-end or end-to-beginning
 	 * @return The number of results found
 	 */
 	default int findAll(Predicate<? super E> search, Consumer<? super MutableCollectionElement<E>> onElement, boolean forward) {
@@ -435,15 +483,12 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		return spliterator(true);
 	}
 
-	MutableElementSpliterator<E> spliterator(boolean fromStart);
-
-	MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext);
-
 	@Override
 	default Iterator<E> iterator() {
 		return new SpliteratorIterator<>(spliterator());
 	}
 
+	/** @return A collection with the same content as this one, but whose order is reversed */
 	default BetterCollection<E> reverse() {
 		return new ReversedCollection<>(this);
 	}
@@ -597,15 +642,32 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		return reverse().iterator();
 	}
 
+	/**
+	 * Locks the given collection as specified if it is {@link Transactable}, using
+	 * {@link TransactableCollection#lock(boolean, boolean, Object)} for a {@link TransactableCollection},
+	 * 
+	 * @param c The collection to lock
+	 * @param write Whether to lock for write or read-only
+	 * @param structural Whether to lock structurally or update
+	 * @param cause The cause of the transaction
+	 * @return The transaction to close to unlock the collection
+	 * @see TransactableCollection#lock(boolean, boolean, Object)
+	 */
 	public static Transaction lock(Collection<?> c, boolean write, boolean structural, Object cause) {
-		if (c instanceof BetterCollection)
-			return ((BetterCollection<?>) c).lock(write, structural, cause);
+		if (c instanceof TransactableCollection)
+			return ((TransactableCollection<?>) c).lock(write, structural, cause);
 		else if (c instanceof Transactable)
 			return ((Transactable) c).lock(write, cause);
 		else
 			return Transaction.NONE;
 	}
 
+	/**
+	 * A static utility method to be used by {@link BetterCollection#hashCode()} implementations
+	 * 
+	 * @param c The collection
+	 * @return The hash code for the collection's content
+	 */
 	public static int hashCode(Collection<?> c) {
 		try (Transaction t = Transactable.lock(c, false, null)) {
 			int hash = 0;
@@ -615,6 +677,13 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 	}
 
+	/**
+	 * A static utility method to be used by {@link BetterCollection#equals(Object)} implementations
+	 * 
+	 * @param c The collection
+	 * @param o The object to compare with the collection
+	 * @return Whether <code>o</code> is a collection whose content matches that of <code>c</code>
+	 */
 	public static boolean equals(Collection<?> c, Object o) {
 		try (Transaction t = Transactable.lock(c, false, null); Transaction t2 = Transactable.lock(o, false, null)) {
 			if (!(o instanceof Collection))
@@ -634,6 +703,12 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 	}
 
+	/**
+	 * A static utility method to be used by {@link BetterCollection#toString()} implementations
+	 * 
+	 * @param c The collection
+	 * @return A string represenation of the collection's content
+	 */
 	public static String toString(Collection<?> c) {
 		try (Transaction t = Transactable.lock(c, false, null)) {
 			StringBuilder str = new StringBuilder();
@@ -650,10 +725,19 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 	}
 
+	/**
+	 * @param <E> The type of the collection
+	 * @return An empty {@link BetterCollection}
+	 */
 	public static <E> BetterCollection<E> empty() {
 		return new EmptyCollection<>();
 	}
 
+	/**
+	 * An {@link Iterator} based on a {@link Spliterator}
+	 * 
+	 * @param <E> The type of values to iterate over
+	 */
 	class SpliteratorIterator<E> implements Iterator<E> {
 		private final MutableElementSpliterator<E> theSpliterator;
 
@@ -834,6 +918,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 	}
 
+	/**
+	 * An immutable, empty {@link BetterCollection}
+	 * 
+	 * @param <E> The type of the collection
+	 */
 	class EmptyCollection<E> implements BetterCollection<E> {
 		@Override
 		public boolean isLockSupported() {

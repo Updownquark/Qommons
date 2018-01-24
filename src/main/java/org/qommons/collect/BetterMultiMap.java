@@ -4,6 +4,12 @@ import java.util.Collection;
 
 import org.qommons.Transaction;
 
+/**
+ * An {@link CollectionElement element}-accessible structure of many values per key
+ * 
+ * @param <K> The type of keys in the map
+ * @param <V> The type of values in the map
+ */
 public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V> {
 	@Override
 	BetterSet<K> keySet();

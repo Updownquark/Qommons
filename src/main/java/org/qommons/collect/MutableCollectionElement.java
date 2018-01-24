@@ -20,12 +20,27 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 		static String ILLEGAL_ELEMENT = "Element is not allowed";
 	}
 
+	/** @return The collection that this element belongs to */
 	BetterCollection<E> getCollection();
 
+	/** @return null if {@link #set(Object)} may succeed for some values, or a message describing why it is unsupported */
 	String isEnabled();
 
+	/**
+	 * Tests whether a given value could replace this element's current value in the collection
+	 * 
+	 * @param value The value to check
+	 * @return null if {@link #set(Object)} would succeed for the given value, or a message describing why it would fail
+	 */
 	String isAcceptable(E value);
 
+	/**
+	 * Replaces this element's value with the given value
+	 * 
+	 * @param value The value to replace this element's value with
+	 * @throws UnsupportedOperationException If the operation is unsupported, independent of the argument
+	 * @throws IllegalArgumentException If some property of the argument prevents it being a replacement for this element's value
+	 */
 	void set(E value) throws UnsupportedOperationException, IllegalArgumentException;
 
 	/** @return null if this element can be removed. Non-null indicates a message describing why removal is prevented. */
@@ -39,6 +54,13 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 	 */
 	void remove() throws UnsupportedOperationException;
 
+	/**
+	 * Tests whether the given value could be added adjacent to this element
+	 * 
+	 * @param value The value to test
+	 * @param before Whether to add the element before or after this element in the collection
+	 * @return null If the addition would succeed, or a message describing why it would fail
+	 */
 	default String canAdd(E value, boolean before) {
 		BetterCollection<E> coll = getCollection();
 		ElementId id = getElementId();
@@ -47,6 +69,15 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 			before ? id : CollectionElement.getElementId(coll.getAdjacentElement(id, true)));
 	}
 
+	/**
+	 * Adds an element adjacent to this element
+	 * 
+	 * @param value The value to add
+	 * @param before Whether to add the element before or after this element in the collection
+	 * @return The {@link CollectionElement#getElementId() ID} of the new element
+	 * @throws UnsupportedOperationException If the operation is unsupported, independent of the argument
+	 * @throws IllegalArgumentException If some property of the value prevents it being added at the specified position
+	 */
 	default ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
 		BetterCollection<E> coll = getCollection();
 		ElementId id = getElementId();
@@ -76,6 +107,11 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 		return new ReversedMutableElement<>(this);
 	}
 
+	/**
+	 * Implements {@link MutableCollectionElement#immutable()}
+	 * 
+	 * @param <E> The type of the element
+	 */
 	class ImmutableCollectionElement<E> implements CollectionElement<E>{
 		private final MutableCollectionElement<E> theWrapped;
 
@@ -124,6 +160,11 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 		}
 	}
 
+	/**
+	 * Implements {@link MutableCollectionElement#reverse()}
+	 * 
+	 * @param <E> The type of the element
+	 */
 	class ReversedMutableElement<E> extends CollectionElement.ReversedCollectionElement<E> implements MutableCollectionElement<E> {
 		public ReversedMutableElement(MutableCollectionElement<E> wrapped) {
 			super(wrapped);
@@ -180,10 +221,18 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 		}
 	}
 
+	/**
+	 * @param element The element to reverse
+	 * @return The given element, {@link MutableCollectionElement#reverse() reversed}, or null if the given element is null
+	 */
 	static <E> MutableCollectionElement<E> reverse(MutableCollectionElement<E> element) {
 		return element == null ? null : element.reverse();
 	}
 
+	/**
+	 * @param element The element to get an immutable copy of
+	 * @return An {@link MutableCollectionElement#immutable() immutable} copy of the given element, or null if the given element is null
+	 */
 	static <E> CollectionElement<E> immutable(MutableCollectionElement<E> element) {
 		return element == null ? null : element.immutable();
 	}

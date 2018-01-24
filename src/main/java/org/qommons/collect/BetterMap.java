@@ -10,6 +10,12 @@ import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
+/**
+ * A {@link Map} that provides access to its entries by ID
+ * 
+ * @param <K> The type of keys stored in the map
+ * @param <V> The type of values stored in the map
+ */
 public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	@Override
 	BetterSet<K> keySet();
