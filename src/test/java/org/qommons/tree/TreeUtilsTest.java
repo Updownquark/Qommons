@@ -19,7 +19,7 @@ public class TreeUtilsTest {
 	 * A testing method. Adds sequential nodes into a tree and removes them, checking validity of the tree at each step.
 	 *
 	 * @param <T> The type of values to put in the tree
-	 * @param node The initial tree node
+	 * @param tree The tree
 	 * @param nodes The sequence of nodes to add to the tree. Must repeat.
 	 */
 	public static <T> void test(RedBlackTree<T> tree, Iterable<T> nodes) {
@@ -102,12 +102,14 @@ public class TreeUtilsTest {
 	}
 
 	/**
-	 * Runs the {@link QommonsTestUtils#testCollection(java.util.Collection, java.util.function.Consumer, java.util.function.Function)}
+	 * Runs the
+	 * {@link QommonsTestUtils#testCollection(java.util.Collection, java.util.function.Consumer, java.util.function.Function, TestHelper)}
 	 * tests against {@link BetterTreeSet}
 	 */
 	@Test
 	public void testTreeSet() {
-		TestHelper.createTester(TreeSetTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute();
+		TestHelper.createTester(TreeSetTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute()
+			.throwErrorIfFailed();
 	}
 
 	/**
@@ -140,12 +142,14 @@ public class TreeUtilsTest {
 	}
 
 	/**
-	 * Runs the {@link QommonsTestUtils#testCollection(java.util.Collection, java.util.function.Consumer, java.util.function.Function)}
+	 * Runs the
+	 * {@link QommonsTestUtils#testCollection(java.util.Collection, java.util.function.Consumer, java.util.function.Function, TestHelper)}
 	 * tests against {@link BetterTreeList}
 	 */
 	@Test
 	public void testTreeList() {
-		TestHelper.createTester(TreeListTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute();
+		TestHelper.createTester(TreeListTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute()
+			.throwErrorIfFailed();
 	}
 
 	private static void testIterationAdd(BetterTreeList<Integer> list) {

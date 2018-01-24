@@ -25,12 +25,13 @@ public class CircularListTest {
 
 	/**
 	 * Runs the basic
-	 * {@link QommonsTestUtils#testCollection(java.util.Collection, java.util.function.Consumer, java.util.function.Function)} collection
-	 * test suite against a basic {@link CircularArrayList}.
+	 * {@link QommonsTestUtils#testCollection(java.util.Collection, java.util.function.Consumer, java.util.function.Function, TestHelper)}
+	 * collection test suite against a basic {@link CircularArrayList}.
 	 */
 	@Test
 	public void safeCALTest() {
-		TestHelper.createTester(SafeCALTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute();
+		TestHelper.createTester(SafeCALTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute()
+			.throwErrorIfFailed();
 	}
 
 	static class UnsafeCALTester implements TestHelper.Testable {
@@ -43,12 +44,13 @@ public class CircularListTest {
 
 	/**
 	 * Runs the basic
-	 * {@link QommonsTestUtils#testCollection(java.util.Collection, java.util.function.Consumer, java.util.function.Function)} collection
-	 * test suite against a basic {@link CircularArrayList}.
+	 * {@link QommonsTestUtils#testCollection(java.util.Collection, java.util.function.Consumer, java.util.function.Function, TestHelper)}
+	 * collection test suite against a basic {@link CircularArrayList}.
 	 */
 	@Test
 	public void unsafeCALTest() {
-		TestHelper.createTester(UnsafeCALTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute();
+		TestHelper.createTester(UnsafeCALTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute()
+			.throwErrorIfFailed();
 	}
 
 	static class PerformanceTester implements TestHelper.Testable {
@@ -97,7 +99,8 @@ public class CircularListTest {
 	/** Runs a gauntlet of tests against {@link CircularArrayList} */
 	// @Test
 	public void testPerformance() {
-		TestHelper.createTester(PerformanceTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute();
+		TestHelper.createTester(PerformanceTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute()
+			.throwErrorIfFailed();
 	}
 
 	/**
@@ -322,7 +325,8 @@ public class CircularListTest {
 	/** Tests {@link CircularArrayList}'s {@link CircularArrayList#setMaxCapacity(int) max capacity} capability */
 	@Test
 	public void maxCapTest() {
-		TestHelper.createTester(MaxCapTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute();
+		TestHelper.createTester(MaxCapTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute()
+			.throwErrorIfFailed();
 	}
 
 	/* TODO Test:

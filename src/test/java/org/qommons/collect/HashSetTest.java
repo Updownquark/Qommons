@@ -16,7 +16,8 @@ public class HashSetTest {
 	/** Tests {@link BetterHashSet} */
 	@Test
 	public void testHashSet() {
-		TestHelper.createTester(HashSetTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute();
+		TestHelper.createTester(HashSetTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute()
+			.throwErrorIfFailed();
 	}
 
 	/** Tests {@link BetterHashMap} */
