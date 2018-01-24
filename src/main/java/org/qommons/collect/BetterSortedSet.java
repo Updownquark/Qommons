@@ -690,6 +690,8 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			int range = isInRange(wrapResult.get());
 			if (range == 0)
 				return wrapResult;
+			if (filter.strict)
+				return null;
 			return getTerminalElement(range < 0);
 		}
 
