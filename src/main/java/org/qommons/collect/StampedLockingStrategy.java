@@ -92,11 +92,18 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 		}
 
 		Transaction obtain(boolean write, boolean structural) {
-			boolean withStructLock = structural || !write;
-			boolean withUpdateLock = !structural || write;
-
-			Transaction structTrans = withStructLock ? structureStamp.lock(theStructureLocker, write) : Transaction.NONE;
-			Transaction updateTrans = withUpdateLock ? updateStamp.lock(theUpdateLocker, write) : Transaction.NONE;
+			Transaction structTrans = structureStamp.lock(theStructureLocker, write && structural);
+			Transaction updateTrans;
+			try {
+				if (structural && !write)
+					updateTrans = Transaction.NONE;// Allow update operations concurrent with the read
+				else
+					updateTrans = updateStamp.lock(theUpdateLocker, write);
+			} catch (RuntimeException e) {
+				// If the update lock fails, leave the lock in the state it was in previous to this method call
+				structTrans.close();
+				throw e;
+			}
 			return () -> {
 				updateTrans.close();
 				structTrans.close();
