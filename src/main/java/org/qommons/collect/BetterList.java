@@ -55,6 +55,9 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 */
 	int getElementsAfter(ElementId id);
 
+	@Override
+	void clear();
+
 	/**
 	 * @param index The index of the element to be the next element returned from the spliterator on forward access
 	 * @return The spliterator

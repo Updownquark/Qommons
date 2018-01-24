@@ -106,35 +106,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	MutableCollectionElement<E> mutableElement(ElementId id);
 
 	/**
-	 * Tests the compatibility of an object with this collection.
-	 *
-	 * @param value The value to test compatibility for
-	 * @return Null if given value could possibly be added to this collection, or a message why it can't
-	 */
-	default String canAdd(E value) {
-		return canAdd(value, null, null);
-	}
-
-	/**
-	 * Similar to {@link #add(Object)}, but returns the element ID for the new element at which the value was added. Similarly to
-	 * {@link #add(Object)}, this method may return null if the collection was not changed as a result of the operation.
-	 * 
-	 * @param value The value to add
-	 * @param first Whether to prefer a lower position over a higher one. This parameter may be:
-	 *        <ul>
-	 *        <li>Strictly obeyed, in which the value will be added at the beginning (true) or end (false) of the collection</li>
-	 *        <li>Ignored if the collection does not support position-indicated addition</li>
-	 *        <li>Used as a suggestion, where the insertion will be closer to the beginning (true) or end (false) of the collection as
-	 *        indicated by the parameter</li></li>
-	 * @return The element at which the value was added, or null if the value was not added due to a non-erroring condition
-	 * @throws UnsupportedOperationException If such an operation is not supported by this collection in general
-	 * @throws IllegalArgumentException If something about the value prevents this operation
-	 */
-	default CollectionElement<E> addElement(E value, boolean first) throws UnsupportedOperationException, IllegalArgumentException {
-		return addElement(value, null, null, first);
-	}
-
-	/**
 	 * Tests the ability to add an object into this collection within a given position range
 	 * 
 	 * @param value The value to test addability for
@@ -167,6 +138,10 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException;
 
+	/** Removes all {@link MutableCollectionElement#canRemove() removable} values from this collection */
+	@Override
+	void clear();
+
 	/**
 	 * @param fromStart Whether the returned spliterator should be initially positioned at the beginning of this collection or its end
 	 * @return The spliterator
@@ -180,6 +155,35 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return The spliterator
 	 */
 	MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext);
+
+	/**
+	 * Tests the compatibility of an object with this collection.
+	 *
+	 * @param value The value to test compatibility for
+	 * @return Null if given value could possibly be added to this collection, or a message why it can't
+	 */
+	default String canAdd(E value) {
+		return canAdd(value, null, null);
+	}
+
+	/**
+	 * Similar to {@link #add(Object)}, but returns the element ID for the new element at which the value was added. Similarly to
+	 * {@link #add(Object)}, this method may return null if the collection was not changed as a result of the operation.
+	 * 
+	 * @param value The value to add
+	 * @param first Whether to prefer a lower position over a higher one. This parameter may be:
+	 *        <ul>
+	 *        <li>Strictly obeyed, in which the value will be added at the beginning (true) or end (false) of the collection</li>
+	 *        <li>Ignored if the collection does not support position-indicated addition</li>
+	 *        <li>Used as a suggestion, where the insertion will be closer to the beginning (true) or end (false) of the collection as
+	 *        indicated by the parameter</li></li>
+	 * @return The element at which the value was added, or null if the value was not added due to a non-erroring condition
+	 * @throws UnsupportedOperationException If such an operation is not supported by this collection in general
+	 * @throws IllegalArgumentException If something about the value prevents this operation
+	 */
+	default CollectionElement<E> addElement(E value, boolean first) throws UnsupportedOperationException, IllegalArgumentException {
+		return addElement(value, null, null, first);
+	}
 
 	@Override
 	default boolean add(E value) {
