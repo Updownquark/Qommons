@@ -466,7 +466,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			if (from == null)
 				return 0;
 			int index = theWrapped.indexFor(from);
-			if (index > 0)
+			if (index >= 0)
 				return index;
 			else
 				return -index - 1;
@@ -477,7 +477,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			if (to == null)
 				return theWrapped.size() - 1;
 			int index = theWrapped.indexFor(to);
-			if (index > 0)
+			if (index >= 0)
 				return index;
 			else
 				return -index - 2;
@@ -773,7 +773,13 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 		@Override
 		public void clear() {
-			removeIf(v -> true);
+			CollectionElement<E> bound = from == null ? null : theWrapped.search(from, SortedSearchFilter.Less);
+			if (bound == null)
+				bound = to == null ? null : theWrapped.search(to, SortedSearchFilter.Greater);
+			if (bound == null) // This sub set contains all of the super set's elements
+				theWrapped.clear();
+			else
+				removeIf(v -> true);
 		}
 
 		@Override
