@@ -587,6 +587,10 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		public String canAdd(E value, ElementId after, ElementId before) {
 			if (!belongs(value))
 				return StdMsg.ILLEGAL_ELEMENT;
+			if (after == null && from != null)
+				after = CollectionElement.getElementId(theWrapped.search(from, SortedSearchFilter.Less));
+			if (before == null && to != null)
+				before = CollectionElement.getElementId(theWrapped.search(to, SortedSearchFilter.Greater));
 			return theWrapped.canAdd(value, after, before);
 		}
 
@@ -595,8 +599,11 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			throws UnsupportedOperationException, IllegalArgumentException {
 			if (!belongs(value))
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			else
-				return theWrapped.addElement(value, after, before, first);
+			if (after == null && from != null)
+				after = CollectionElement.getElementId(theWrapped.search(from, SortedSearchFilter.Less));
+			if (before == null && to != null)
+				before = CollectionElement.getElementId(theWrapped.search(to, SortedSearchFilter.Greater));
+			return theWrapped.addElement(value, after, before, first);
 		}
 
 		@Override
