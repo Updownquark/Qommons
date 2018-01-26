@@ -308,6 +308,10 @@ public class TestHelper {
 		return getDouble() < odds;
 	}
 
+	public RandomAction createAction() {
+		return new RandomAction(this);
+	}
+
 	public RandomAction doAction(double relativeProability, Runnable action) {
 		return new RandomAction(this).or(relativeProability, action);
 	}
