@@ -5,8 +5,7 @@ import org.qommons.collect.ElementId;
 import org.qommons.collect.MutableCollectionElement;
 
 /**
- * A {@link BinaryTreeNode} with the ability to {@link #set(Object) set}, {@link #remove() remove}, or {@link #add(Object, boolean) add}
- * nodes in the tree structure
+ * A {@link MutableCollectionElement} for a tree-based {@link BetterCollection}
  * 
  * @param <E> The type of value the nodes hold
  */
@@ -47,6 +46,11 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 		return new ReversedMutableTreeNode<>(this);
 	}
 
+	/**
+	 * An immutable copy of a {@link MutableBinaryTreeNode}
+	 * 
+	 * @param <E> The type of the element
+	 */
 	class ImmutableTreeNode<E> extends ImmutableCollectionElement<E> implements BinaryTreeNode<E> {
 		public ImmutableTreeNode(MutableBinaryTreeNode<E> wrapped) {
 			super(wrapped);
@@ -113,6 +117,11 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 		}
 	}
 
+	/**
+	 * A {@link MutableBinaryTreeNode} that is reversed
+	 * 
+	 * @param <E> The type of the element
+	 */
 	class ReversedMutableTreeNode<E> extends ReversedBinaryTreeNode<E> implements MutableBinaryTreeNode<E> {
 		public ReversedMutableTreeNode(MutableBinaryTreeNode<E> wrap) {
 			super(wrap);
@@ -209,10 +218,18 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 		}
 	}
 
+	/**
+	 * @param node The node to get the immutable copy of
+	 * @return The immutable copy of the given node, or null if node was null
+	 */
 	static <E> BinaryTreeNode<E> immutable(MutableBinaryTreeNode<E> node) {
 		return node == null ? null : node.immutable();
 	}
 
+	/**
+	 * @param node The node to reverse
+	 * @return The reversed node, or null if node was null
+	 */
 	static <E> MutableBinaryTreeNode<E> reverse(MutableBinaryTreeNode<E> node) {
 		return node == null ? null : node.reverse();
 	}

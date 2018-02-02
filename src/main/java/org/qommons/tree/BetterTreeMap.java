@@ -20,19 +20,35 @@ import org.qommons.collect.MutableMapEntryHandle;
 import org.qommons.collect.SimpleMapEntry;
 import org.qommons.collect.StampedLockingStrategy;
 
+/**
+ * A tree-based implementation of {@link BetterSortedMap}
+ * 
+ * @param <K> The type of keys in the map
+ * @param <V> The type of values in the map
+ */
 public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
+	/** The key comparator for the map */
 	protected final Comparator<? super K> theCompare;
 	private final BetterTreeEntrySet<K, V> theEntries;
 
+	/**
+	 * @param threadSafe Whether to secure this collection for thread-safety
+	 * @param compare The comparator to use to sort the keys
+	 */
 	public BetterTreeMap(boolean threadSafe, Comparator<? super K> compare) {
 		this(threadSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), compare);
 	}
 
-	public BetterTreeMap(CollectionLockingStrategy locking, Comparator<? super K> compare) {
+	/**
+	 * @param locker The locking strategy for the collection
+	 * @param compare The comparator to use to sort the keys
+	 */
+	public BetterTreeMap(CollectionLockingStrategy locker, Comparator<? super K> compare) {
 		theCompare = compare;
-		theEntries = new BetterTreeEntrySet<>(locking, compare);
+		theEntries = new BetterTreeEntrySet<>(locker, compare);
 	}
 
+	/** Checks this map's structure for errors */
 	protected void checkValid() {
 		theEntries.checkValid();
 	}
@@ -53,6 +69,11 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		return entry == null ? null : new TreeEntry<>(entry);
 	}
 
+	/**
+	 * @param key The key for the entry
+	 * @param value The initial value for the entry
+	 * @return The map entry for the key to use in this map
+	 */
 	protected Map.Entry<K, V> newEntry(K key, V value) {
 		return new SimpleMapEntry<>(key, value, true);
 	}
@@ -435,8 +456,7 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 
 				@Override
 				public void set(K value) throws UnsupportedOperationException, IllegalArgumentException {
-					((MutableCollectionElement<SimpleMapEntry<K, V>>) entryHandle)
-						.set(new SimpleMapEntry<>(value, entryHandle.get().getValue(), true));
+					((MutableCollectionElement<Map.Entry<K, V>>) entryHandle).set(newEntry(value, entryHandle.get().getValue()));
 				}
 
 				@Override
@@ -456,7 +476,7 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 
 				@Override
 				public ElementId add(K value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-					return ((MutableCollectionElement<SimpleMapEntry<K, V>>) entryHandle).add(new SimpleMapEntry<>(value, null, true),
+					return ((MutableCollectionElement<Map.Entry<K, V>>) entryHandle).add(newEntry(value, null),
 						before);
 				}
 			};
@@ -475,7 +495,7 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		@Override
 		public CollectionElement<K> addElement(K value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			CollectionElement<Map.Entry<K, V>> entry = theEntries.addElement(new SimpleMapEntry<>(value, null, true), after, before, first);
+			CollectionElement<Map.Entry<K, V>> entry = theEntries.addElement(newEntry(value, null), after, before, first);
 			return entry == null ? null : handleFor(entry);
 		}
 

@@ -11,13 +11,26 @@ import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.StampedLockingStrategy;
 
+/**
+ * A {@link BetterSortedSet} backed by a tree structure
+ * 
+ * @param <E> The type of values in the tree
+ */
 public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSortedSet<E> {
 	private final Comparator<? super E> theCompare;
 
+	/**
+	 * @param safe Whether to secure this collection for thread-safety
+	 * @param compare The comparator to use to sort the values
+	 */
 	public BetterTreeSet(boolean safe, Comparator<? super E> compare) {
 		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), compare);
 	}
 
+	/**
+	 * @param locker The locking strategy for the collection
+	 * @param compare The comparator to use to sort the values
+	 */
 	public BetterTreeSet(CollectionLockingStrategy locker, Comparator<? super E> compare) {
 		super(locker);
 		theCompare = compare;

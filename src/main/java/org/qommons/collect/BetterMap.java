@@ -4,7 +4,6 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 import org.qommons.Transactable;
 import org.qommons.Transaction;
@@ -45,30 +44,61 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		return keySet().lock(write, structural, cause);
 	}
 
+	/**
+	 * @param structuralOnly Whether to obtain the structural modification stamp, or to include updates
+	 * @return The stamp of the given type
+	 */
 	default long getStamp(boolean structuralOnly) {
 		return keySet().getStamp(structuralOnly);
 	}
 
-	default MapEntryHandle<K, V> putEntry(K key, V value, boolean first){
+	/**
+	 * @param key The key for the entry
+	 * @param value The value for the entry
+	 * @param first Whether to prefer inserting the key toward the beginning or end of the key set (if supported)
+	 * @return The handle for the new or updated entry
+	 */
+	default MapEntryHandle<K, V> putEntry(K key, V value, boolean first) {
 		return putEntry(key, value, null, null, first);
 	}
 
+	/**
+	 * @param key The key for the entry
+	 * @param value The value for the entry
+	 * @param after The ID of the key element to be the lower bound for the new entry's insertion in the key set
+	 * @param before The ID of the key element to be the upper bound for the new entry's insertion in the key set
+	 * @param first Whether to prefer inserting the key toward the beginning or end of the key set (if supported)
+	 * @return The handle for the new or updated entry
+	 */
 	MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first);
 
+	/**
+	 * @param key The key to get the handle for
+	 * @return The handle for the entry in this map with the given key, or null if the key does not exist in this map's key set
+	 */
 	MapEntryHandle<K, V> getEntry(K key);
 
+	/**
+	 * @param entryId The element ID to get the handle for
+	 * @return The handle for the entry in this map with the given ID
+	 */
 	MapEntryHandle<K, V> getEntryById(ElementId entryId);
 
+	/**
+	 * @param entryId The element ID to get the handle for
+	 * @return The mutable handle for the entry in this map with the given ID
+	 */
 	MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId);
 
+	/**
+	 * @param entryId The ID of the entry to operate on
+	 * @param onEntry The action to perform on the mutable entry with the given ID
+	 */
 	default void forMutableEntry(ElementId entryId, Consumer<? super MutableMapEntryHandle<K, V>> onEntry) {
 		onEntry.accept(mutableEntry(entryId));
 	}
 
-	default <X> X ofMutableEntry(ElementId entryId, Function<? super MutableMapEntryHandle<K, V>, X> onEntry) {
-		return onEntry.apply(mutableEntry(entryId));
-	}
-
+	/** @return A {@link BetterMap} with this map's entries, reversed */
 	default BetterMap<K, V> reverse() {
 		return new ReversedMap<>(this);
 	}
@@ -105,27 +135,28 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	default V remove(Object key) {
 		if (!keySet().belongs(key))
 			return null;
-		MapEntryHandle<K, V> entry = getEntry((K) key);
-		if (entry == null)
-			return null;
-		return ofMutableEntry(entry.getElementId(), el -> {
-			V old = el.get();
-			el.remove();
+		try (Transaction t = lock(true, null)) {
+			MapEntryHandle<K, V> entry = getEntry((K) key);
+			if (entry == null)
+				return null;
+			MutableMapEntryHandle<K, V> mutableEntry = mutableEntry(entry.getElementId());
+			V old = mutableEntry.get();
+			mutableEntry.remove();
 			return old;
-		});
+		}
 	}
 
 	@Override
 	default V put(K key, V value) {
 		try (Transaction t = lock(true, null)) {
 			MapEntryHandle<K, V> entry = getEntry(key);
-			if (entry != null)
-				return ofMutableEntry(entry.getElementId(), el -> {
-					V old = el.get();
-					el.set(value);
-					return old;
-				});
-			else {
+			if (entry != null) {
+				// Get the mutable entry in case the immutable one doesn't support Entry.setValue(Object)
+				MutableMapEntryHandle<K, V> mutableEntry = mutableEntry(entry.getElementId());
+				V old = mutableEntry.get();
+				mutableEntry.set(value);
+				return old;
+			} else {
 				putEntry(key, value, false);
 				return null;
 			}
@@ -145,6 +176,12 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		keySet().clear();
 	}
 
+	/**
+	 * Implements {@link BetterMap#reverse()}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	class ReversedMap<K, V> implements BetterMap<K, V> {
 		private final BetterMap<K, V> theWrapped;
 
@@ -182,6 +219,12 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 	}
 
+	/**
+	 * A default entry set for a {@link BetterMap}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	class BetterEntrySet<K, V> implements BetterSet<Map.Entry<K, V>> {
 		private final BetterMap<K, V> theMap;
 
@@ -336,7 +379,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 					public V setValue(V value) {
 						// Since the Map interface expects entries in the entrySet to support setValue, we'll allow this type of mutability
 						try (Transaction t = lock(true, false, null)) {
-							V current=theEntry.get();
+							V current = theEntry.get();
 							theMap.mutableEntry(getEntry().getElementId()).setValue(value);
 							return current;
 						}
@@ -468,7 +511,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 			@Override
 			protected boolean internalForElement(Consumer<? super CollectionElement<Entry<K, V>>> action, boolean forward) {
-				return theKeySpliter.forElement(keyEl -> action.accept(new EntryElement(theMap.getEntryById(keyEl.getElementId()))), forward);
+				return theKeySpliter.forElement(keyEl -> action.accept(new EntryElement(theMap.getEntryById(keyEl.getElementId()))),
+					forward);
 			}
 
 			@Override
@@ -479,6 +523,12 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 	}
 
+	/**
+	 * A default value collection implementation for a {@link BetterMap}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	class BetterMapValueCollection<K, V> implements BetterCollection<V> {
 		private final BetterMap<K, V> theMap;
 
@@ -555,8 +605,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 				while (element[0] == null && spliterator(first).forElement(el -> {
 					if (Objects.equals(el.get(), value))
 						element[0] = el;
-				}, first)) {
-				}
+				}, first)) {}
 				return element[0];
 			}
 		}
