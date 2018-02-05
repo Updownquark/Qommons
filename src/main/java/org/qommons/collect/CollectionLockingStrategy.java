@@ -55,12 +55,14 @@ public interface CollectionLockingStrategy extends Transactable {
 		T res = init;
 		long status = getStatus(allowUpdate);
 		if (status != 0) {
-			res = operation.apply(res, () -> status == getStatus(allowUpdate));
+			res = operation.apply(res, //
+				() -> status == getStatus(allowUpdate));
 			if (status == getStatus(allowUpdate))
 				return res;
 		} // else Write lock is taken. Wait for readability and do this reliably.
 		try (Transaction t = lock(false, allowUpdate, null)) {
-			return operation.apply(res, () -> true);
+			return operation.apply(res, //
+				() -> true);
 		}
 	}
 }

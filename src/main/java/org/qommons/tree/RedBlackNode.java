@@ -20,6 +20,15 @@ import java.util.function.BooleanSupplier;
  * @param <E> The type of value that the node holds
  */
 public class RedBlackNode<E> {
+	private static class CachedIndex {
+		private final int index;
+		private final long stamp;
+
+		CachedIndex(int index, long stamp) {
+			this.index = index;
+			this.stamp = stamp;
+		}
+	}
 	private final RedBlackTree<E> theTree;
 	private boolean isRed;
 
@@ -30,8 +39,7 @@ public class RedBlackNode<E> {
 	private RedBlackNode<E> thePrevious;
 
 	private int theSize;
-	private int theCachedIndex;
-	private long theCachedStamp = -1;
+	private CachedIndex theCachedIndex;
 
 	// Some bookkeeping to make size-tracking efficient
 	private boolean isModifying;
@@ -259,15 +267,16 @@ public class RedBlackNode<E> {
 	 * @return The number of nodes stored before this node in the tree
 	 */
 	public int getNodesBefore(BooleanSupplier cont) {
+		CachedIndex ci = theCachedIndex;
 		if (!isPresent()) {
 			// This method can be called immediately after the node has been removed, but not if the tree has since been changed
-			if (theTree.theStructureStamp != theCachedStamp)
+			if (theTree.theStructureStamp != ci.stamp)
 				throw new IllegalStateException("Elements cannot be used if the collection has been changed since the element was removed");
-			return theCachedIndex;
+			return ci.index;
 		}
 		long treeStamp = theTree.theStructureStamp;
-		if (theCachedStamp == treeStamp)
-			return theCachedIndex;
+		if (ci != null && ci.stamp == treeStamp)
+			return ci.index;
 		else if (cont != null && !cont.getAsBoolean())
 			return -1;
 		RedBlackNode<E> left = theLeft;
@@ -283,12 +292,10 @@ public class RedBlackNode<E> {
 		} else {
 			ret = parent.getNodesBefore(cont);
 			if (ret >= 0) // Will be -1 if cont returned false
-				ret -= sizeOf(right) - 1;
+				ret -= sizeOf(right) + 1;
 		}
-		if (ret >= 0 && theTree.theStructureStamp == treeStamp) {
-			theCachedIndex = ret;
-			theCachedStamp = theTree.theStructureStamp;
-		}
+		if (ret >= 0 && cont.getAsBoolean())
+			theCachedIndex = new CachedIndex(ret, treeStamp);
 		return ret;
 	}
 
@@ -406,14 +413,9 @@ public class RedBlackNode<E> {
 			boolean thisRed = isRed;
 			setRed(node.isRed);
 			node.setRed(thisRed);
-			if (theCachedStamp == theTree.theStructureStamp || node.theCachedStamp == theTree.theStructureStamp) {
-				int cacheIndex = theCachedIndex;
-				theCachedIndex = node.theCachedIndex;
-				node.theCachedIndex = cacheIndex;
-				long cacheStamp = theCachedStamp;
-				theCachedStamp = node.theCachedStamp;
-				node.theCachedStamp = cacheStamp;
-			}
+			CachedIndex tempIndex = theCachedIndex;
+			theCachedIndex = node.theCachedIndex;
+			node.theCachedIndex = tempIndex;
 
 			if (theParent == node) {
 				boolean thisSide = getSide();
@@ -540,7 +542,7 @@ public class RedBlackNode<E> {
 
 	/** Removes this node (but not its children) from the tree, rebalancing if necessary */
 	public void delete() {
-		theCachedIndex = getNodesBefore(() -> true);
+		int preDeleteIndex = getNodesBefore(() -> true);
 
 		// First let's link up the next and previous fields
 		if (theNext != null)
@@ -589,7 +591,9 @@ public class RedBlackNode<E> {
 		if (newRoot != null)
 			newRoot.setRed(false); // Root is black
 		theTree.setRoot(newRoot);
-		theCachedStamp = theTree.theStructureStamp;
+		theCachedIndex = new CachedIndex(preDeleteIndex, theTree.theStructureStamp);
+		if (theCachedIndex.index > theTree.size())
+			throw new IllegalStateException("BUG!!!"); // TODO DELETE ME
 	}
 
 	private void adjustSize(int diff) {

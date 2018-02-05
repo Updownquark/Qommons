@@ -82,12 +82,14 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 	@Override
 	public int getElementsBefore(ElementId id) {
-		return theLocker.doOptimistically(0, (init, ctx) -> ((NodeId) id).theNode.getNodesBefore(ctx), true);
+		return theLocker.doOptimistically(0, //
+			(init, ctx) -> ((NodeId) id).theNode.getNodesBefore(ctx), true);
 	}
 
 	@Override
 	public int getElementsAfter(ElementId id) {
-		return theLocker.doOptimistically(0, (init, ctx) -> ((NodeId) id).theNode.getNodesAfter(ctx), true);
+		return theLocker.doOptimistically(0, //
+			(init, ctx) -> ((NodeId) id).theNode.getNodesAfter(ctx), true);
 	}
 
 	@Override
@@ -277,7 +279,9 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 				throw new IllegalArgumentException("Cannot compare nodes from different trees");
 			return theLocker.doOptimistically(0, (init, ctx) -> {
 				int compare = theNode.getNodesBefore(ctx) - nodeId.theNode.getNodesBefore(ctx);
-				if (isPresent()) {
+				if (theNode == nodeId.theNode)
+					return 0;
+				else if (isPresent()) {
 					if (id.isPresent())
 						return compare;
 					else {
@@ -306,7 +310,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 		@Override
 		public boolean equals(Object o) {
-			return o instanceof RedBlackNodeList.NodeId && theNode.equals(((NodeId) o).theNode);
+			return o instanceof RedBlackNodeList.NodeId && theNode == ((NodeId) o).theNode;
 		}
 
 		@Override
@@ -373,17 +377,20 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 		@Override
 		public BinaryTreeNode<E> get(int index) {
-			return theLocker.doOptimistically(null, (init, ctx) -> wrap(theNode.get(index, ctx)), true);
+			return theLocker.doOptimistically(null, //
+				(init, ctx) -> wrap(theNode.get(index, ctx)), true);
 		}
 
 		@Override
 		public int getNodesBefore() {
-			return theLocker.doOptimistically(0, (init, ctx) -> theNode.getNodesBefore(ctx), true);
+			return theLocker.doOptimistically(0, //
+				(init, ctx) -> theNode.getNodesBefore(ctx), true);
 		}
 
 		@Override
 		public int getNodesAfter() {
-			return theLocker.doOptimistically(0, (init, ctx) -> theNode.getNodesAfter(ctx), true);
+			return theLocker.doOptimistically(0, //
+				(init, ctx) -> theNode.getNodesAfter(ctx), true);
 		}
 
 		@Override
