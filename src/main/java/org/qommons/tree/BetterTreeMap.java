@@ -80,7 +80,8 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 
 	@Override
 	public BinaryTreeEntry<K, V> getEntry(K key) {
-		BinaryTreeNode<Map.Entry<K, V>> entry = theEntries.search(e -> theCompare.compare(key, e.getKey()), SortedSearchFilter.OnlyMatch);
+		BinaryTreeNode<Map.Entry<K, V>> entry = theEntries.search(//
+			e -> theCompare.compare(key, e.getKey()), SortedSearchFilter.OnlyMatch);
 		return entry == null ? null : new TreeEntry<>(entry);
 	}
 
@@ -90,8 +91,8 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 	}
 
 	@Override
-	public BinaryTreeEntry<K, V> search(Comparable<? super K> search, SortedSearchFilter filter) {
-		BinaryTreeNode<Map.Entry<K, V>> entry = theEntries.search(e -> search.compareTo(e.getKey()), filter);
+	public BinaryTreeEntry<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter) {
+		BinaryTreeNode<Map.Entry<K, V>> entry = theEntries.search(search, filter);
 		return entry == null ? null : new TreeEntry<>(entry);
 	}
 

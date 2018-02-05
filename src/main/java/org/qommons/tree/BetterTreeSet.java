@@ -52,7 +52,8 @@ public class BetterTreeSet<E> extends RedBlackNodeList<E> implements BetterSorte
 		try (Transaction t = lock(false, null)) {
 			if (isEmpty())
 				return null;
-			BinaryTreeNode<E> node = getRoot().findClosest(n -> search.compareTo(n.get()), filter.less.withDefault(true), filter.strict);
+			BinaryTreeNode<E> node = getRoot().findClosest(//
+				n -> search.compareTo(n.get()), filter.less.withDefault(true), filter.strict);
 			if (node == null)
 				return null;
 			if (filter == SortedSearchFilter.OnlyMatch && search.compareTo(node.get()) != 0)
