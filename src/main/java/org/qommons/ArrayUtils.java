@@ -474,14 +474,42 @@ public final class ArrayUtils {
 	 *         into the sorted list
 	 */
 	public static <T> int binarySearch(List<? extends T> list, Comparable<? super T> search) {
-		if (list.isEmpty())
+		return binarySearch(0, list.size() - 1, index -> search.compareTo(list.get(index)));
+	}
+
+	/** A binary index searcher for {@link ArrayUtils#binarySearch(int, int, IntComparable)} */
+	@FunctionalInterface
+	public interface IntComparable {
+		/**
+		 * @param index The index to compare
+		 * @return
+		 *         <ul>
+		 *         <li>-1 if the search is searching for an element less than that at the given index</li>
+		 *         <li>0 if the given index matches the search perfectly</li>
+		 *         <li>1 if the search is searching for an element greater than that at the given index</li>
+		 *         </ul>
+		 */
+		int compareTo(int index);
+	}
+
+	/**
+	 * An abstract binary search method that can search through anything by index
+	 * 
+	 * @param min The lowest index in the search domain
+	 * @param max The highest index in the search domain
+	 * @param search The indexed search function
+	 * @return The <code>index</code> in the search domain for which
+	 *         <code>search.{@link IntComparable#compareTo(int) compareTo}(index)==0</code> if such an index exists; otherwise
+	 *         <code>-(index+1)</code>, where <code>index</code> is the index where such an index would be inserted into the search domain
+	 */
+	public static int binarySearch(int min, int max, IntComparable search) {
+		if (min > max)
 			return -1;
-		int min = 0, max = list.size() - 1;
 		int mid = -1;
 		int comp = 0;
 		while (min < max) {
 			mid = (min + max) >>> 1;
-			comp = search.compareTo(list.get(mid));
+			comp = search.compareTo(mid);
 			if (comp > 0)
 				min = mid + 1;
 			else if (comp < 0)
@@ -490,7 +518,7 @@ public final class ArrayUtils {
 				return mid;
 		}
 		if (mid != min)
-			comp = search.compareTo(list.get(min));
+			comp = search.compareTo(min);
 		if (comp == 0)
 			return min;
 		else if (comp > 0)
