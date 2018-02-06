@@ -3,6 +3,7 @@ package org.qommons.collect;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 import org.qommons.Transactable;
@@ -174,6 +175,98 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	@Override
 	default void clear() {
 		keySet().clear();
+	}
+
+	@Override
+	default V getOrDefault(Object key, V defaultValue) {
+		if (!keySet().belongs(key))
+			return defaultValue;
+		MapEntryHandle<K, V> handle = getEntry((K) key);
+		return handle == null ? defaultValue : handle.get();
+	}
+
+	@Override
+	default boolean remove(Object key, Object value) {
+		if (!keySet().belongs(key))
+			return false;
+		MapEntryHandle<K, V> handle = getEntry((K) key);
+		if (handle != null && Objects.equals(handle.get(), value)) {
+			mutableEntry(handle.getElementId()).remove();
+			return true;
+		} else
+			return false;
+	}
+
+	@Override
+	default boolean replace(K key, V oldValue, V newValue) {
+		MapEntryHandle<K, V> handle = getEntry(key);
+		if (handle != null && Objects.equals(handle.get(), oldValue)) {
+			mutableEntry(handle.getElementId()).set(newValue);
+			return true;
+		} else
+			return false;
+	}
+
+	@Override
+	default V replace(K key, V value) {
+		MapEntryHandle<K, V> handle = getEntry(key);
+		if (handle != null) {
+			V oldValue = handle.getValue();
+			mutableEntry(handle.getElementId()).set(value);
+			return oldValue;
+		} else
+			return null;
+	}
+
+	@Override
+	default V computeIfPresent(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
+		MapEntryHandle<K, V> handle = getEntry(key);
+		if (handle != null && handle.getValue() != null) {
+			V value = remappingFunction.apply(key, handle.getValue());
+			if (value == null)
+				mutableEntry(handle.getElementId()).remove();
+			else
+				mutableEntry(handle.getElementId()).set(value);
+			return value;
+		} else
+			return null;
+	}
+
+	@Override
+	default V compute(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
+		MapEntryHandle<K, V> handle = getEntry(key);
+		V value;
+		if (handle != null && handle.getValue() != null) {
+			value = remappingFunction.apply(key, handle.getValue());
+			if (value == null)
+				mutableEntry(handle.getElementId()).remove();
+			else
+				mutableEntry(handle.getElementId()).set(value);
+		} else {
+			value = remappingFunction.apply(key, null);
+			if (value != null)
+				put(key, value);
+		}
+		return value;
+	}
+
+	@Override
+	default V merge(K key, V value, BiFunction<? super V, ? super V, ? extends V> remappingFunction) {
+		MapEntryHandle<K, V> handle = getEntry(key);
+		if (handle != null) {
+			V oldValue = handle.getValue();
+			if (oldValue == null)
+				mutableEntry(handle.getElementId()).set(value);
+			else {
+				value = remappingFunction.apply(oldValue, value);
+				if (value == null)
+					mutableEntry(handle.getElementId()).remove();
+				else
+					mutableEntry(handle.getElementId()).set(value);
+			}
+		} else
+			put(key, value);
+		return value;
 	}
 
 	/**
