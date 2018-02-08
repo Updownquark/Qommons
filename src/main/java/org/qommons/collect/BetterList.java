@@ -22,7 +22,9 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.MutableElementSpliterator.SimpleMutableSpliterator;
 
 /**
- * A {@link List} that is also a {@link BetterCollection}
+ * A {@link List} that is also a {@link BetterCollection}.
+ * 
+ * See <a href="https://github.com/Updownquark/Qommons/wiki/BetterCollection-API#betterList">the wiki</a> for more detail.
  * 
  * @param <E> The type of value in the list
  */
@@ -34,10 +36,17 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	CollectionElement<E> getElement(int index);
 
 	/**
+	 * <p>
 	 * Although the contract of {@link List} states that the user (dev) has complete control over the content and placement of elements in a
 	 * list, a BetterList may, in fact, only be index-accessible, not supporting addition or update of values at arbitrary positions.
 	 * BetterCollection implementations can implement BetterList if their elements are stored in such a way as to be index-accessible
 	 * efficiently, even if they do not allow List-style complete control.
+	 * </p>
+	 * 
+	 * <p>
+	 * This method allows BetterList implementations to expose whether or not they also follow the expressed intent of the List API,
+	 * allowing value placement at arbitrary positions.
+	 * </p>
 	 * 
 	 * @return Whether this list has constraints on its content or placement
 	 */

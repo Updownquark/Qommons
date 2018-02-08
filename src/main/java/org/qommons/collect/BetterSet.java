@@ -7,7 +7,9 @@ import java.util.Set;
 import org.qommons.Transaction;
 
 /**
- * A {@link Set} that is also a {@link BetterCollection}
+ * A {@link Set} that is also a {@link BetterCollection}.
+ * 
+ * See <a href="https://github.com/Updownquark/Qommons/wiki/BetterCollection-API#betterset">the wiki</a> for more detail.
  * 
  * @param <E> The type of values in the set
  */

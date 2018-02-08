@@ -137,7 +137,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	private final AtomicLong theFirstIdCreator;
 	private final AtomicLong theLastIdCreator;
 
-	private double theLoadFactor;
+	private final double theLoadFactor;
 
 	private HashTableEntry[] theTable;
 	private HashEntry theFirst;

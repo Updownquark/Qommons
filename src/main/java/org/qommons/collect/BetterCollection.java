@@ -33,6 +33,8 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * A BetterCollection must provide access to its elements by ID and value; and iteration from a BetterCollection is by element and not value
  * only. BetterCollection itself provides more functionality on top of this and implements most of the {@link Collection} API as well.
  * 
+ * See <a href="https://github.com/Updownquark/Qommons/wiki/BetterCollection-API">the wiki</a> for more detail.
+ * 
  * @param <E> The type of value in the collection
  */
 public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E> {
