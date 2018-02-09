@@ -175,6 +175,12 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	}
 
 	@Override
+	default BetterSortedSet<E> withAll(Collection<? extends E> values) {
+		BetterSet.super.withAll(values);
+		return this;
+	}
+
+	@Override
 	default boolean remove(Object c) {
 		return BetterList.super.remove(c);
 	}

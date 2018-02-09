@@ -230,6 +230,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	}
 
 	@Override
+	default BetterList<E> withAll(Collection<? extends E> values) {
+		BetterCollection.super.withAll(values);
+		return this;
+	}
+
+	@Override
 	default boolean remove(Object o) {
 		return BetterCollection.super.remove(o);
 	}
