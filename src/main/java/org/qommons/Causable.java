@@ -7,7 +7,18 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
-/** An event or something that may have a cause */
+/**
+ * An event or something that may have a cause.
+ * 
+ * Each causable may itself have a cause, so cause chains can be created.
+ * 
+ * Causables have the ability to allow code to keep track of the effects of a cause, then perform an action when they finish that is the
+ * cumulative result of the cause.
+ * 
+ * The typical use case is to grab the root causable and call {@link #onFinish(CausableKey)} with a key. The map returned is updated with
+ * some effects of the cause. Then the terminal action of the key is called when the root cause finishes and the data in the map used to
+ * cause the correct effects.
+ */
 public abstract class Causable {
 	/** An action to be fired when a causable finishes */
 	@FunctionalInterface
