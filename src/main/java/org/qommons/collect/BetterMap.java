@@ -11,7 +11,9 @@ import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
- * A {@link Map} that provides access to its entries by ID
+ * A {@link Map} that provides access to its entries by ID.
+ * 
+ * See <a href="https://github.com/Updownquark/Qommons/wiki/BetterMap-API">the wiki</a> for more detail.
  * 
  * @param <K> The type of keys stored in the map
  * @param <V> The type of values stored in the map
