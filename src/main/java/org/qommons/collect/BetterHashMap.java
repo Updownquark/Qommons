@@ -418,6 +418,21 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 			theEntries.clear();
 		}
 
+		@Override
+		public int hashCode() {
+			return BetterCollection.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterCollection.equals(this, obj);
+		}
+
+		@Override
+		public String toString() {
+			return BetterSet.toString(this);
+		}
+
 		private class KeySpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<K> {
 			private final MutableElementSpliterator<Map.Entry<K, V>> theEntrySpliter;
 
