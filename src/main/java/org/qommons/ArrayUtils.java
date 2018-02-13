@@ -1802,11 +1802,11 @@ public final class ArrayUtils {
 	}
 
 	/**
-	 * Sorts an array, allowing for complex operations during the sort, such as sorting arrays in parallel.
+	 * Sorts an array, allowing for complex operations during the sort, such as sorting related arrays simultaneously.
 	 *
 	 * This is an implementation of selection sort. Selection sort is used because although it may perform many more comparison operations
-	 * than other methods, there is no other method that performs fewer swaps. It is anticipated that this algorithm will be used most often
-	 * in the case that multiple operations must take place during a swap, while comparison should be fairly quick.
+	 * than other algorithms, there is no other sorting algorithm that performs fewer swaps. It is anticipated that this method will be used
+	 * most often in the case that multiple operations must take place during a swap, while comparison should be relatively quick.
 	 *
 	 * @param <T> The type of the array to sort
 	 * @param array The array to sort
