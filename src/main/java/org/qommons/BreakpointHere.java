@@ -1,7 +1,15 @@
 package org.qommons;
 
 import java.lang.management.ManagementFactory;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Scanner;
+import java.util.Set;
 
 /**
  * The BreakpointHere class enables applications to transfer control to the java debugger, where this is VM-enabled. Users should always
@@ -13,6 +21,7 @@ public class BreakpointHere {
 	private static final Set<String> IGNORING_CLASSES = new java.util.LinkedHashSet<>();
 	private static final Set<StackTraceElement> IGNORING_LOCATIONS = new java.util.LinkedHashSet<>();
 	private static final Map<String, IgnoreType> CLI_IGNORE;
+	private static boolean HAS_PRINTED_INPUT_UNRESPONSIVE = false;
 	static {
 		Map<String, IgnoreType> cliIgnore = new LinkedHashMap<>();
 		cliIgnore.put("l", IgnoreType.LOCAL);
@@ -59,7 +68,7 @@ public class BreakpointHere {
 
 		boolean breakpointCaught = false;
 		boolean alerted = false;
-		Scanner scanner = null;
+		AsyncInputReader reader = null;
 		IgnoreType ignore = null;
 		do {
 			long pre = System.nanoTime();
@@ -99,46 +108,42 @@ public class BreakpointHere {
 					}
 					alerted = true;
 
-					System.err.println("ATTENTION! " + source.getClassName() + " is attempting to catch a breakpoint at " + stackTop);
-					System.err.println("No break point is set at this location. You may:");
-					System.err.println(" 1) Install a breakpoint at " + stackTop + ". We'll wait for you.");
-					System.err.println(" 2) Press ENTER to skip the breakpoint and return control to the application this time.");
-					System.err.println(" 3) Type \"L\" and press ENTER to ignore this particular break point (" + source
-						+ ") for this session.");
-					System.err.println(" 4) Type \"C\" and press ENTER to ignore all break points"
-						+ " from the class that is requesting this break (" + source.getClassName() + ") for this session.");
-					System.err.println(" 5) Type \"A\" and press ENTER to ignore all break points for this session.");
+					StringBuilder msg = new StringBuilder();
+					msg.append("ATTENTION! ").append(source.getClassName()).append(" is attempting to catch a breakpoint at ")
+						.append(stackTop).append(" on thread ").append(thread.getName()).append(" (").append(thread.getId()).append(')');
+					msg.append("\nNo break point is set at this location. You may:");
+					msg.append("\n 1) Install a breakpoint at ").append(stackTop).append(". We'll wait for you.");
+					msg.append("\n 2) Press ENTER to skip the breakpoint and return control to the application this time.");
+					msg.append("\n 3) Type \"L\" and press ENTER to ignore this particular break point (").append(source)
+						.append(") for this session.");
+					msg.append("\n 4) Type \"C\" and press ENTER to ignore all break points from the class that is requesting this break (")
+						.append(source.getClassName()).append(") for this session.");
+					msg.append("\n 5) Type \"A\" and press ENTER to ignore all break points for this session.");
+					System.err.println(msg);
 
-					scanner = new Scanner(System.in);
+					reader = new AsyncInputReader();
 				}
-
-				int available;
 				try {
-					available = System.in.available();
-				} catch(java.io.IOException e) {
-					System.err.println("Could not read from System.in: " + e);
-					available = 0;
-				}
+					Thread.sleep(100);
+				} catch (InterruptedException e) {}
 
-				if(available > 0) {
-					String userEntry = scanner.nextLine().trim();
-					if(userEntry.length()==0)
+				String command = reader.getCommand();
+				if (command != null) {
+					if (command.length() == 0)
 						break;
-					ignore = CLI_IGNORE.get(userEntry.toLowerCase());
+					ignore = CLI_IGNORE.get(command.toLowerCase());
 					if (ignore == null) {
 						System.err.println("Type \"L\", \"C\", \"A\", or just press ENTER");
 						continue;
 					}
 					break;
 				}
-
-				try {
-					Thread.sleep(100);
-				} catch(InterruptedException e) {}
 			} else
 				breakpointCaught = true;
 		} while(!breakpointCaught);
 
+		if (reader != null)
+			reader.close();
 		if(ignore!=null){
 			switch(ignore){
 			case NONE:
@@ -189,5 +194,50 @@ public class BreakpointHere {
 		if (stack == null || stack.length < 2)
 			return null;
 		return stack[1];
+	}
+
+	private static class AsyncInputReader {
+		private final Scanner theScanner;
+		private final Thread theReaderThread;
+		private volatile boolean keepReading;
+		private volatile String theCommand;
+		private volatile boolean isResponsive;
+
+		AsyncInputReader() {
+			theScanner = new Scanner(System.in);
+			keepReading = true;
+			theReaderThread = new Thread(() -> {
+				while (keepReading) {
+					try {
+						if (System.in.available() > 0)
+							theCommand = theScanner.nextLine().trim();
+						isResponsive = true;
+					} catch (java.io.IOException e) {
+						System.err.println("Could not read from System.in" + e);
+						theCommand = "";
+						break;
+					}
+				}
+			}, BreakpointHere.class.getSimpleName() + " Input Reader");
+			theReaderThread.start();
+		}
+
+		String getCommand() {
+			if (!isResponsive) {
+				if (!HAS_PRINTED_INPUT_UNRESPONSIVE) {
+					HAS_PRINTED_INPUT_UNRESPONSIVE = true;
+					StringBuilder msg = new StringBuilder();
+					msg.append("Unable to read from System.in due to monitor hold on System.in.");
+					msg.append("\nPlace the requested breakpoint before breakpoint() invocation to use this utility.");
+					System.err.println(msg);
+				}
+				return ""; // Causes the wait loop to be terminated with no message.
+			}
+			return theCommand;
+		}
+
+		void close() {
+			keepReading = false;
+		}
 	}
 }
