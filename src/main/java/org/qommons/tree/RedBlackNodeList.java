@@ -315,7 +315,12 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 		@Override
 		public String toString() {
-			int index = theLocker.doOptimistically(0, (init, ctx) -> theNode.getNodesBefore(ctx), true);
+			String index = theLocker.doOptimistically("", (init, ctx) -> {
+				if (theNode.isPresent())
+					return "" + theNode.getNodesBefore(ctx);
+				else
+					return "removed";
+			}, true);
 			return new StringBuilder().append('[').append(index).append("]: ").append(theNode.getValue()).toString();
 		}
 	}
