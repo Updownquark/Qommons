@@ -382,12 +382,13 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		if (isEmpty())
 			return false;
 		boolean[] removed = new boolean[1];
-		findAll(filter, el -> {
-			if (el.canRemove() == null) {
-				el.remove();
-				removed[0] = true;
-			}
-		}, true);
+		findAll(filter, //
+			el -> {
+				if (el.canRemove() == null) {
+					el.remove();
+					removed[0] = true;
+				}
+			}, true);
 		return removed[0];
 	}
 
@@ -490,12 +491,13 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 */
 	default int findAll(Predicate<? super E> search, Consumer<? super MutableCollectionElement<E>> onElement, boolean forward) {
 		int[] found = new int[1];
-		spliterator(forward).forEachElementM(el -> {
-			if (search.test(el.get())) {
-				found[0]++;
-				onElement.accept(el);
-			}
-		}, forward);
+		spliterator(forward).forEachElementM(//
+			el -> {
+				if (search.test(el.get())) {
+					found[0]++;
+					onElement.accept(el);
+				}
+			}, forward);
 		return found[0];
 	}
 
