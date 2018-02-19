@@ -840,6 +840,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 					return newId;
 				}
 			}
+
+			@Override
+			public String toString() {
+				return theWrappedEl.toString();
+			}
 		}
 
 		@Override
