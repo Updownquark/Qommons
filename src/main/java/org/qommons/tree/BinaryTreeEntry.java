@@ -1,7 +1,14 @@
 package org.qommons.tree;
 
+import org.qommons.collect.BetterMap;
 import org.qommons.collect.MapEntryHandle;
 
+/**
+ * A {@link BinaryTreeNode} for a tree-based {@link BetterMap}
+ * 
+ * @param <K> The key type of the map
+ * @param <V> The value type of the map
+ */
 public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<V>, MapEntryHandle<K, V> {
 	@Override
 	BinaryTreeEntry<K, V> getParent();
@@ -37,6 +44,12 @@ public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<V>, MapEntryHandle
 		return new ReversedBinaryTreeEntry<>(this);
 	}
 
+	/**
+	 * A {@link BinaryTreeEntry} that is reversed
+	 * 
+	 * @param <K> The key type of the entry
+	 * @param <V> The value type fo the entry
+	 */
 	class ReversedBinaryTreeEntry<K, V> extends ReversedBinaryTreeNode<V> implements BinaryTreeEntry<K, V> {
 		public ReversedBinaryTreeEntry(BinaryTreeEntry<K, V> wrap) {
 			super(wrap);

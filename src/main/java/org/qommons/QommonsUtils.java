@@ -303,6 +303,26 @@ public class QommonsUtils {
 		return Math.round((double) scalar * mult);
 	}
 
+	/**
+	 * Parses number/unit pairs either adjacent or separated by whitespace and adds them together. Units recognized are:
+	 * <ul>
+	 * <li>year/yr/y (interpreted as 365.25 days)</li>
+	 * <li>month/mo (interpreted as 30 days)</li>
+	 * <li>week/wk/w</li>
+	 * <li>day/dy/d</li>
+	 * <li>hour/hr/h</li>
+	 * <li>minute/min/m</li>
+	 * <li>second/sec/s</li>
+	 * <li>millisecond/milli/ms</li>
+	 * <li>nanosecond/nano/ns</li>
+	 * </ul>
+	 * 
+	 * The plural 's' is accepted on any units > 1 character
+	 * 
+	 * @param text The text to parse
+	 * @return The duration specified in the text
+	 * @throws ParseException If the specified text is unrecognized as a duration
+	 */
 	public static Duration parseDuration(CharSequence text) throws ParseException {
 		Duration duration=Duration.ZERO;
 		int c = 0;

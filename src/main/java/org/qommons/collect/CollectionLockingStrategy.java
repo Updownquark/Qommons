@@ -48,18 +48,21 @@ public interface CollectionLockingStrategy extends Transactable {
 	 * @param <T> The type of value produced by the operation
 	 * @param init The initial value to feed to the operation
 	 * @param operation The operation to perform
+	 * @param allowUpdate Whether to allow updates within the operation
 	 * @return The result of the operation
 	 */
 	default <T> T doOptimistically(T init, OptimisticOperation<T> operation, boolean allowUpdate) {
 		T res = init;
 		long status = getStatus(allowUpdate);
 		if (status != 0) {
-			res = operation.apply(res, () -> status == getStatus(allowUpdate));
+			res = operation.apply(res, //
+				() -> status == getStatus(allowUpdate));
 			if (status == getStatus(allowUpdate))
 				return res;
 		} // else Write lock is taken. Wait for readability and do this reliably.
 		try (Transaction t = lock(false, allowUpdate, null)) {
-			return operation.apply(res, () -> true);
+			return operation.apply(res, //
+				() -> true);
 		}
 	}
 }

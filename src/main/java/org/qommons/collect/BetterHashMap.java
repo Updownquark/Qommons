@@ -7,7 +7,14 @@ import java.util.function.ToIntFunction;
 
 import org.qommons.Transaction;
 
+/**
+ * A hash-based implementation of {@link BetterMap}
+ * 
+ * @param <K> The type of keys for the map
+ * @param <V> The type of values for the map
+ */
 public class BetterHashMap<K, V> implements BetterMap<K, V> {
+	/** Builds a {@link BetterHashMap} */
 	public static class HashMapBuilder extends BetterHashSet.HashSetBuilder {
 		@Override
 		public HashMapBuilder unsafe() {
@@ -37,11 +44,29 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 			return (HashMapBuilder) super.withInitialCapacity(initExpectedSize);
 		}
 
+		/**
+		 * @param <K> The key type for the map
+		 * @param <V> The value type for the map
+		 * @return The new map
+		 */
 		public <K, V> BetterHashMap<K, V> buildMap() {
 			return new BetterHashMap<>(buildSet());
 		}
+
+		/**
+		 * @param <K> The key type for the map
+		 * @param <V> The value type for the map
+		 * @param values The initial key-value pairs to insert into the map
+		 * @return A {@link BetterHashMap} built according to this builder's settings, with the given initial content
+		 */
+		public <K, V> BetterHashMap<K, V> buildMap(Map<? extends K, ? extends V> values) {
+			BetterHashMap<K, V> map = new BetterHashMap<>(buildSet());
+			map.putAll(values);
+			return map;
+		}
 	}
 
+	/** @return A builder to create a new {@link BetterHashMap} */
 	public static HashMapBuilder build() {
 		return new HashMapBuilder();
 	}
@@ -57,6 +82,15 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		return new KeySet();
 	}
 
+	/**
+	 * @param key The key for the entry
+	 * @param value The initial value for the entry
+	 * @return The map entry for the key to use in this map
+	 */
+	public Map.Entry<K, V> newEntry(K key, V value) {
+		return new SimpleMapEntry<>(key, value, true);
+	}
+
 	@Override
 	public MapEntryHandle<K, V> putEntry(K key, V value, boolean first) {
 		try (Transaction t = theEntries.lock(true, null)) {
@@ -64,7 +98,7 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 			if (entryEl != null) {
 				entryEl.get().setValue(value);
 			} else
-				entryEl = theEntries.addElement(new SimpleMapEntry<>(key, value, true), first);
+				entryEl = theEntries.addElement(newEntry(key, value), first);
 			return handleFor(entryEl);
 		}
 	}
@@ -76,7 +110,7 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 			if (entryEl != null) {
 				entryEl.get().setValue(value);
 			} else
-				entryEl = theEntries.addElement(new SimpleMapEntry<>(key, value, true), after, before, first);
+				entryEl = theEntries.addElement(newEntry(key, value), after, before, first);
 			return handleFor(entryEl);
 		}
 	}
@@ -99,6 +133,10 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		return mutableHandleFor(theEntries.mutableElement(entryId));
 	}
 
+	/**
+	 * @param entry The element in the entry set
+	 * @return The map handle for the entry
+	 */
 	protected MapEntryHandle<K, V> handleFor(CollectionElement<? extends Map.Entry<K, V>> entry) {
 		return new MapEntryHandle<K, V>() {
 			@Override
@@ -133,6 +171,10 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		};
 	}
 
+	/**
+	 * @param entry The mutable element in the entry set
+	 * @return The mutable map handle for the entry
+	 */
 	protected MutableMapEntryHandle<K, V> mutableHandleFor(MutableCollectionElement<? extends Map.Entry<K, V>> entry) {
 		return new MutableMapEntryHandle<K, V>() {
 			@Override
@@ -362,18 +404,33 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 
 		@Override
 		public String canAdd(K value, ElementId after, ElementId before) {
-			return theEntries.canAdd(new SimpleMapEntry<>(value, null, true), after, before);
+			return theEntries.canAdd(newEntry(value, null), after, before);
 		}
 
 		@Override
 		public CollectionElement<K> addElement(K value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			return handleFor(theEntries.addElement(new SimpleMapEntry<>(value, null, true), after, before, first));
+			return handleFor(theEntries.addElement(newEntry(value, null), after, before, first));
 		}
 
 		@Override
 		public void clear() {
 			theEntries.clear();
+		}
+
+		@Override
+		public int hashCode() {
+			return BetterCollection.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterCollection.equals(this, obj);
+		}
+
+		@Override
+		public String toString() {
+			return BetterSet.toString(this);
 		}
 
 		private class KeySpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<K> {

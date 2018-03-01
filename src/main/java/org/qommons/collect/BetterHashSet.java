@@ -16,10 +16,18 @@ import org.qommons.tree.BetterTreeList;
 import org.qommons.tree.BinaryTreeNode;
 import org.qommons.tree.MutableBinaryTreeNode;
 
+/**
+ * A hash-based implementation of {@link BetterSet}
+ * 
+ * @param <E> The type of values in the set
+ */
 public class BetterHashSet<E> implements BetterSet<E> {
+	/** The minimum allowed {@link HashSetBuilder#withLoadFactor(double) load factor} for maps of this type */
 	public static final double MIN_LOAD_FACTOR = 0.2;
+	/** The maximum allowed {@link HashSetBuilder#withLoadFactor(double) load factor} for maps of this type */
 	public static final double MAX_LOAD_FACTOR = 0.9;
 
+	/** A builder to use to create {@link BetterHashSet}s */
 	public static class HashSetBuilder {
 		private boolean isSafe;
 		private ToIntFunction<Object> theHasher;
@@ -27,6 +35,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		private int theInitExpectedSize;
 		private double theLoadFactor;
 
+		/** Creates the builder */
 		protected HashSetBuilder() {
 			isSafe = true;
 			theHasher = Objects::hashCode;
@@ -35,21 +44,42 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			theLoadFactor = .75;
 		}
 
+		/**
+		 * Causes this builder to build a set that is not internally thread-safe
+		 * 
+		 * @return This builder
+		 */
 		public HashSetBuilder unsafe() {
 			isSafe = false;
 			return this;
 		}
 
+		/**
+		 * Causes this builder to build a set whose hash and comparison are defined externally
+		 * 
+		 * @param hasher The has function for values in the set
+		 * @param equals The equivalence check for values in the set
+		 * @return This builder
+		 */
 		public HashSetBuilder withEquivalence(ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals) {
 			theHasher = hasher;
 			theEquals = equals;
 			return this;
 		}
 
+		/**
+		 * Causes this builder to build a set whose values are stored by identity, instead of notional equivalence
+		 * 
+		 * @return This builder
+		 */
 		public HashSetBuilder identity() {
 			return withEquivalence(System::identityHashCode, (o1, o2) -> o1 == o2);
 		}
 
+		/**
+		 * @param loadFactor The load factor for the set that this builder creates
+		 * @return This builder
+		 */
 		public HashSetBuilder withLoadFactor(double loadFactor) {
 			if (loadFactor < MIN_LOAD_FACTOR || loadFactor > MAX_LOAD_FACTOR)
 				throw new IllegalArgumentException("Load factor must be between " + MIN_LOAD_FACTOR + " and " + MAX_LOAD_FACTOR);
@@ -57,20 +87,38 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			return this;
 		}
 
+		/**
+		 * @param initExpectedSize The number of values that the set created by this builder should accommodate without re-hashing the table
+		 * @return This builder
+		 */
 		public HashSetBuilder withInitialCapacity(int initExpectedSize) {
 			theInitExpectedSize = initExpectedSize;
 			return this;
 		}
 
+		/**
+		 * @param <E> The value type for the set
+		 * @return An empty {@link BetterHashSet} built according to this builder's settings
+		 */
 		public <E> BetterHashSet<E> buildSet() {
 			return new BetterHashSet<>(isSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), theHasher, theEquals,
 				theInitExpectedSize, theLoadFactor);
 		}
 
+		/**
+		 * @param <E> The value type for the set
+		 * @param values The initial values to insert into the set
+		 * @return A {@link BetterHashSet} built according to this builder's settings, with the given initial content
+		 */
 		public <E> BetterHashSet<E> buildSet(E... values) {
 			return buildSet(Arrays.asList(values));
 		}
 
+		/**
+		 * @param <E> The value type for the set
+		 * @param values The initial values to insert into the set
+		 * @return A {@link BetterHashSet} built according to this builder's settings, with the given initial content
+		 */
 		public <E> BetterHashSet<E> buildSet(Collection<? extends E> values) {
 			BetterHashSet<E> set = buildSet();
 			set.addAll(values);
@@ -78,6 +126,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		}
 	}
 
+	/** @return A builder to create a {@link BetterHashSet} */
 	public static HashSetBuilder build() {
 		return new HashSetBuilder();
 	}
@@ -88,7 +137,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	private final AtomicLong theFirstIdCreator;
 	private final AtomicLong theLastIdCreator;
 
-	private double theLoadFactor;
+	private final double theLoadFactor;
 
 	private HashTableEntry[] theTable;
 	private HashEntry theFirst;
@@ -127,6 +176,11 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		tableEntry.add(entry);
 	}
 
+	/**
+	 * Ensures that this set's load factor will be satisfied if the collection grows to the given size
+	 * 
+	 * @param expectedSize The capacity to check for
+	 */
 	protected void ensureCapacity(int expectedSize) {
 		try (Transaction t = lock(false, false, null)) {
 			int neededTableSize = (int) Math.ceil(expectedSize / theLoadFactor);
