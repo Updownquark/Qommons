@@ -66,7 +66,7 @@ public interface TransactableCollection<E> extends Collection<E>, Transactable {
 	 * 
 	 * @param write Whether to obtain an exclusive, write-permitting lock or an unexclusive, read-only lock
 	 * @param structural For a <code>write</code> lock, whether to obtain a lock that permits structural (add/remove) operations; for a read
-	 *        lock, whether to obtain a lock that forbids such operations.
+	 *        lock, whether to obtain a lock that forbids such operations externally.
 	 * @param cause The cause of changes (for <code>write</code>) that may occur during the transaction
 	 * @return A transaction to {@link Transaction#close() close} to release the lock
 	 */
