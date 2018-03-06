@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import org.qommons.Transactable;
 import org.qommons.Transaction;
@@ -207,6 +208,23 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			return true;
 		} else
 			return false;
+	}
+
+	/**
+	 * Like {@link #computeIfAbsent(Object, Function)}, but returns the element-addressed entry
+	 * 
+	 * @param key The key to get or put the value for
+	 * @param value The function to create the value if the key does not yet exist in the map
+	 * @param first Whether to perfer low or high insertion into the map
+	 * @return The non-null handle of the entry for the given key
+	 */
+	default MapEntryHandle<K, V> computeEntryIfAbsent(K key, Function<? super K, ? extends V> value, boolean first) {
+		try (Transaction t = lock(true, null)) {
+			MapEntryHandle<K, V> entry = getEntry(key);
+			if (entry == null)
+				entry = putEntry(key, value.apply(key), first);
+			return entry;
+		}
 	}
 
 	@Override
