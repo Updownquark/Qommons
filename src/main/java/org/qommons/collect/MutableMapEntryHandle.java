@@ -1,5 +1,11 @@
 package org.qommons.collect;
 
+/**
+ * A {@link MutableCollectionElement} for a {@link BetterMap}
+ * 
+ * @param <K> The key type of the entry
+ * @param <V> The value type of the entry
+ */
 public interface MutableMapEntryHandle<K, V> extends MapEntryHandle<K, V>, MutableCollectionElement<V> {
 	@Override
 	default V getValue() {
@@ -23,6 +29,12 @@ public interface MutableMapEntryHandle<K, V> extends MapEntryHandle<K, V>, Mutab
 		return new ImmutableMapEntryHandle<>(this);
 	}
 
+	/**
+	 * A {@link MutableMapEntryHandle} that is reversed
+	 * 
+	 * @param <K> The key type of the entry
+	 * @param <V> The value type of the entry
+	 */
 	class ReversedMutableMapEntryHandle<K, V> extends ReversedMutableElement<V> implements MutableMapEntryHandle<K, V> {
 		public ReversedMutableMapEntryHandle(MutableMapEntryHandle<K, V> wrapped) {
 			super(wrapped);
@@ -49,6 +61,12 @@ public interface MutableMapEntryHandle<K, V> extends MapEntryHandle<K, V>, Mutab
 		}
 	}
 
+	/**
+	 * An immutable copy of a {@link MutableMapEntryHandle}
+	 * 
+	 * @param <K> The key type of the entry
+	 * @param <V> The value type of the entry
+	 */
 	class ImmutableMapEntryHandle<K, V> implements MapEntryHandle<K, V> {
 		private final MutableMapEntryHandle<K, V> theWrapped;
 
@@ -93,6 +111,10 @@ public interface MutableMapEntryHandle<K, V> extends MapEntryHandle<K, V>, Mutab
 		}
 	}
 
+	/**
+	 * @param entry The entry to reverse
+	 * @return The reversed entry, or null if entry was null
+	 */
 	static <K, V> MutableMapEntryHandle<K, V> reverse(MutableMapEntryHandle<K, V> entry) {
 		return entry == null ? null : entry.reverse();
 	}

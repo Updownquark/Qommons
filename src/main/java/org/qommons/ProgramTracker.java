@@ -233,6 +233,9 @@ public class ProgramTracker implements Cloneable {
 		/** The number of executions aggregated in this node */
 		int count;
 
+		/** The number of times this node has begun execution since its parent last began execution */
+		int latestCount;
+
 		/** The first time this task was executed */
 		long startTime;
 
@@ -299,6 +302,7 @@ public class ProgramTracker implements Cloneable {
 
 		void start() {
 			count++;
+			latestCount++;
 			startTime = System.currentTimeMillis();
 			latestStartTime = startTime;
 			latestStartCPU = getCpuNow();
@@ -648,6 +652,7 @@ public class ProgramTracker implements Cloneable {
 			JSONObject ret = new JSONObject();
 			ret.put("name", name);
 			ret.put("count", Integer.valueOf(count));
+			ret.put("latestCount", Integer.valueOf(latestCount));
 			ret.put("startTime", Long.valueOf(startTime));
 			ret.put("latestStartTime", Long.valueOf(latestStartTime));
 			ret.put("latestStartNanos", Long.valueOf(latestStartNanos));
@@ -899,6 +904,8 @@ public class ProgramTracker implements Cloneable {
 			theCurrentNode.endTime = time;
 			theCurrentNode = theCurrentNode.parent;
 		}
+		for (TrackNode child : routine.children)
+			child.latestCount = 0;
 	}
 
 	/** @return The node representing the task that is currently executing */

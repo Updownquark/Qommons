@@ -15,19 +15,34 @@ import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.MutableElementSpliterator;
 
+/**
+ * An abstract implementation of a tree-backed collection. Since fast indexing is supported, BetterList is implemented.
+ * 
+ * @param <E> The type of values in the list
+ */
 public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	private final RedBlackTree<E> theTree;
 	private final CollectionLockingStrategy theLocker;
 
+	/**
+	 * Creates a list
+	 * 
+	 * @param locker The locking strategy to use
+	 */
 	public RedBlackNodeList(CollectionLockingStrategy locker) {
 		theLocker = locker;
 		theTree = new RedBlackTree<>();
 	}
 
+	/** @return The root of this list's backing tree structure */
 	public BinaryTreeNode<E> getRoot() {
 		return wrap(theTree.getRoot());
 	}
 
+	/**
+	 * @param index The index of the node to get
+	 * @return The tree node in this list's backing tree structure at the given index
+	 */
 	public BinaryTreeNode<E> getNode(int index) {
 		if (theTree.getRoot() == null)
 			throw new IndexOutOfBoundsException(index + " of 0");
@@ -67,12 +82,14 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 	@Override
 	public int getElementsBefore(ElementId id) {
-		return theLocker.doOptimistically(0, (init, ctx) -> ((NodeId) id).theNode.getNodesBefore(ctx), true);
+		return theLocker.doOptimistically(0, //
+			(init, ctx) -> ((NodeId) id).theNode.getNodesBefore(ctx), true);
 	}
 
 	@Override
 	public int getElementsAfter(ElementId id) {
-		return theLocker.doOptimistically(0, (init, ctx) -> ((NodeId) id).theNode.getNodesAfter(ctx), true);
+		return theLocker.doOptimistically(0, //
+			(init, ctx) -> ((NodeId) id).theNode.getNodesAfter(ctx), true);
 	}
 
 	@Override
@@ -187,22 +204,38 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		return BetterCollection.toString(this);
 	}
 
-	public BinaryTreeNode<E> nodeFor(CollectionElement<E> element) {
-		return wrap(checkNode(element.getElementId()).theNode);
+	/**
+	 * @param element The element ID supplied by this collection
+	 * @return A {@link MutableBinaryTreeNode} for the element with the given ID
+	 */
+	protected MutableBinaryTreeNode<E> mutableNodeFor(ElementId element) {
+		return wrapMutable(checkNode(element).theNode);
 	}
 
-	protected MutableBinaryTreeNode<E> mutableNodeFor(ElementId node) {
-		return wrapMutable(checkNode(node).theNode);
-	}
-
+	/**
+	 * @param node The node representing an element supplied by this collection
+	 * @return A {@link MutableBinaryTreeNode} for the element with the given ID
+	 */
 	protected MutableBinaryTreeNode<E> mutableNodeFor(BinaryTreeNode<E> node) {
 		return wrapMutable(checkNode(node.getElementId()).theNode);
 	}
 
+	/**
+	 * @param node The node to position the spliterator at
+	 * @param next Whether the given node should be the next or previous node for the spliterator
+	 * @return The spliterator
+	 */
 	protected MutableElementSpliterator<E> mutableSpliterator(BinaryTreeNode<E> node, boolean next) {
 		return mutableSpliterator(node, next, null, null);
 	}
 
+	/**
+	 * @param node The node to position the spliterator at
+	 * @param next Whether the given node should be the next or previous node for the spliterator
+	 * @param leftBound The node in this tree to be the lower bound (inclusive) of the spliterator's domain
+	 * @param rightBound The node in this tree to be the upper bound (exclusive) of the spliterator's domain
+	 * @return The spliterator
+	 */
 	protected MutableElementSpliterator<E> mutableSpliterator(BinaryTreeNode<E> node, boolean next, BinaryTreeNode<E> leftBound,
 		BinaryTreeNode<E> rightBound) {
 		return new MutableNodeSpliterator(node == null ? null : checkNode(node.getElementId()).theNode, next,
@@ -241,9 +274,14 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 		@Override
 		public int compareTo(ElementId id) {
+			NodeId nodeId = (NodeId) id;
+			if (theTree != nodeId.theNode.getTree())
+				throw new IllegalArgumentException("Cannot compare nodes from different trees");
 			return theLocker.doOptimistically(0, (init, ctx) -> {
-				int compare = theNode.getNodesBefore(ctx) - ((NodeId) id).theNode.getNodesBefore(ctx);
-				if (isPresent()) {
+				int compare = theNode.getNodesBefore(ctx) - nodeId.theNode.getNodesBefore(ctx);
+				if (theNode == nodeId.theNode)
+					return 0;
+				else if (isPresent()) {
 					if (id.isPresent())
 						return compare;
 					else {
@@ -253,13 +291,14 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 						return compare;
 					}
 				} else {
-					if (id.isPresent()) {
-						compare = compare - 1;
-						if (compare == 0)
-							compare = 1;
-						return compare;
-					} else
-						return compare;
+					// We can assume the other ID is present, because tree nodes cannot be compared
+					// if the tree has been changed since the node was removed.
+					// So if one node has been removed and then another one has been removed, this call is invalid
+					// and one of the getNodesBefore calls above should have thrown an exception
+					compare = compare - 1;
+					if (compare == 0)
+						compare = 1;
+					return compare;
 				}
 			}, true);
 		}
@@ -271,12 +310,17 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 		@Override
 		public boolean equals(Object o) {
-			return o instanceof RedBlackNodeList.NodeId && theNode.equals(((NodeId) o).theNode);
+			return o instanceof RedBlackNodeList.NodeId && theNode == ((NodeId) o).theNode;
 		}
 
 		@Override
 		public String toString() {
-			int index = theLocker.doOptimistically(0, (init, ctx) -> theNode.getNodesBefore(ctx), true);
+			String index = theLocker.doOptimistically("", (init, ctx) -> {
+				if (theNode.isPresent())
+					return "" + theNode.getNodesBefore(ctx);
+				else
+					return "removed";
+			}, true);
 			return new StringBuilder().append('[').append(index).append("]: ").append(theNode.getValue()).toString();
 		}
 	}
@@ -338,17 +382,20 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 		@Override
 		public BinaryTreeNode<E> get(int index) {
-			return theLocker.doOptimistically(null, (init, ctx) -> wrap(theNode.get(index, ctx)), true);
+			return theLocker.doOptimistically(null, //
+				(init, ctx) -> wrap(theNode.get(index, ctx)), true);
 		}
 
 		@Override
 		public int getNodesBefore() {
-			return theLocker.doOptimistically(0, (init, ctx) -> theNode.getNodesBefore(ctx), true);
+			return theLocker.doOptimistically(0, //
+				(init, ctx) -> theNode.getNodesBefore(ctx), true);
 		}
 
 		@Override
 		public int getNodesAfter() {
-			return theLocker.doOptimistically(0, (init, ctx) -> theNode.getNodesAfter(ctx), true);
+			return theLocker.doOptimistically(0, //
+				(init, ctx) -> theNode.getNodesAfter(ctx), true);
 		}
 
 		@Override
@@ -479,6 +526,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		}
 	}
 
+	/** A spliterator for a {@link RedBlackNodeList} */
 	protected class MutableNodeSpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<E> {
 		private RedBlackNode<E> current;
 		private boolean currentIsNext;
@@ -526,6 +574,13 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 			return SIZED;
 		}
 
+		/**
+		 * Moves this spliterator's cursor one element to the left or right, if possible
+		 * 
+		 * @param left Whether to move the spliterator left or right in the collection
+		 * @return True if the move was successful, false if the spliterator is as far left/right as it can go within its bounds and the
+		 *         collection
+		 */
 		protected boolean tryElement(boolean left) {
 			if (theTree.getRoot() == null) {
 				current = null;
@@ -552,6 +607,12 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 			return true;
 		}
 
+		/**
+		 * @param node The node to check
+		 * @param cont The continue boolean to terminate the operation in an optimistic context. This method returns false immediately if
+		 *        this ever supplies false
+		 * @return Whether the given node is included in this spliterator
+		 */
 		protected boolean isIncluded(RedBlackNode<E> node, BooleanSupplier cont) {
 			if (theLeftBound != null) {
 				if (node == theLeftBound)

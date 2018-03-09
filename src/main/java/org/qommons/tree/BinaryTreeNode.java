@@ -1,11 +1,21 @@
 package org.qommons.tree;
 
+import org.qommons.collect.BetterCollection;
 import org.qommons.collect.CollectionElement;
 
+/**
+ * A CollectionElement in a tree-based {@link BetterCollection}
+ * 
+ * @param <E> The type of values in the collection
+ */
 public interface BinaryTreeNode<E> extends CollectionElement<E> {
+	/** @return The node that is this node's parent in the tree structure */
 	BinaryTreeNode<E> getParent();
 
+	/** @return This node's left child in the tree structure */
 	BinaryTreeNode<E> getLeft();
+
+	/** @return This node's right child in the tree structure */
 	BinaryTreeNode<E> getRight();
 
 	/**
@@ -42,8 +52,22 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 	/** @return The other child of this node's parent. Null if the parent is null. */
 	BinaryTreeNode<E> getSibling();
 
+	/**
+	 * @param index The index of the node to get
+	 * @return The node at the given index in this sub-tree
+	 */
 	BinaryTreeNode<E> get(int index);
 
+	/**
+	 * @param search The search for nodes in this sub-tree
+	 * @return Either:
+	 *         <ul>
+	 *         <li>The index of the node in this sub-tree matching the search
+	 *         (<code>search.{@link Comparable#compareTo(Object) compareTo}(node)==0</code>)</li>
+	 *         <li>or <code>-(index+1)</code> where <code>index</code> is the index in this sub-tree where a node matching the given search
+	 *         would be inserted</li>
+	 *         </ul>
+	 */
 	default int indexFor(Comparable<? super BinaryTreeNode<? extends E>> search) {
 		BinaryTreeNode<E> node = this;
 		int passed = 0;
@@ -105,6 +129,11 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 		return new ReversedBinaryTreeNode<>(this);
 	}
 
+	/**
+	 * A {@link BinaryTreeNode} that is reversed
+	 * 
+	 * @param <E> The type of the node
+	 */
 	class ReversedBinaryTreeNode<E> extends ReversedCollectionElement<E> implements BinaryTreeNode<E> {
 		public ReversedBinaryTreeNode(BinaryTreeNode<E> wrap) {
 			super(wrap);
@@ -176,6 +205,10 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 		}
 	}
 
+	/**
+	 * @param node The node to reverse
+	 * @return The reversed node, or null if node is null
+	 */
 	static <E> BinaryTreeNode<E> reverse(BinaryTreeNode<E> node) {
 		return node == null ? node : node.reverse();
 	}

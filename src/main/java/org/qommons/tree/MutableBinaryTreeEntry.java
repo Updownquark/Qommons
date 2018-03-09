@@ -1,9 +1,16 @@
 package org.qommons.tree;
 
 import org.qommons.collect.BetterCollection;
+import org.qommons.collect.BetterMap;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.MutableMapEntryHandle;
 
+/**
+ * A {@link MutableMapEntryHandle} for a tree-based {@link BetterMap}
+ * 
+ * @param <K> The key type of the map
+ * @param <V> The value type of the map
+ */
 public interface MutableBinaryTreeEntry<K, V> extends BinaryTreeEntry<K, V>, MutableBinaryTreeNode<V>, MutableMapEntryHandle<K, V> {
 	@Override
 	MutableBinaryTreeEntry<K, V> getParent();
@@ -54,6 +61,12 @@ public interface MutableBinaryTreeEntry<K, V> extends BinaryTreeEntry<K, V>, Mut
 	@Override
 	MutableBinaryTreeEntry<K, V> findClosest(Comparable<BinaryTreeNode<V>> finder, boolean lesser, boolean strictly);
 
+	/**
+	 * A {@link MutableBinaryTreeEntry} that is reversed
+	 * 
+	 * @param <K> The key type of the entry
+	 * @param <V> The value type of the entry
+	 */
 	class ReversedMutableTreeEntry<K, V> extends ReversedBinaryTreeEntry<K, V> implements MutableBinaryTreeEntry<K, V> {
 		public ReversedMutableTreeEntry(MutableBinaryTreeEntry<K, V> wrap) {
 			super(wrap);
@@ -150,6 +163,12 @@ public interface MutableBinaryTreeEntry<K, V> extends BinaryTreeEntry<K, V>, Mut
 		}
 	}
 
+	/**
+	 * An immutable {@link BinaryTreeEntry} wrapping a {@link MutableBinaryTreeEntry}
+	 * 
+	 * @param <K> The key type of the entry
+	 * @param <V> The value type of the entry
+	 */
 	class ImmutableTreeEntry<K, V> extends ImmutableMapEntryHandle<K, V> implements BinaryTreeEntry<K, V> {
 		public ImmutableTreeEntry(MutableBinaryTreeEntry<K, V> wrapped) {
 			super(wrapped);
@@ -221,6 +240,10 @@ public interface MutableBinaryTreeEntry<K, V> extends BinaryTreeEntry<K, V>, Mut
 		}
 	}
 
+	/**
+	 * @param entry The entry to get an immutable copy of
+	 * @return The immutable copy of the given entry, or null if entry was null
+	 */
 	static <K, V> BinaryTreeEntry<K, V> immutable(MutableBinaryTreeEntry<K, V> entry) {
 		return entry == null ? null : entry.immutable();
 	}
