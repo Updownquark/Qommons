@@ -6,7 +6,10 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.NavigableSet;
 import java.util.Objects;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 import org.qommons.Ternian;
 import org.qommons.Transaction;
@@ -282,6 +285,65 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	default E higher(E e) {
 		CollectionElement<E> element = search(searchFor(e, 1), SortedSearchFilter.Greater);
 		return element == null ? null : element.get();
+	}
+
+	/**
+	 * Given a value/search, returns an interpolated value within this set's contents
+	 * 
+	 * @param <T> The type of value to return
+	 * @param search The search to search for a position within this set's values
+	 * @param onMatchOrTerminal Provides the result in the case that:
+	 *        <ul>
+	 *        <li>A value in this set matches the search exactly</li>
+	 *        <li>The first value in this set is greater than the search</li>
+	 *        <li>The last value in this set is less than the search</li>
+	 *        </ul>
+	 * @param interpolate Provides the result in the case that there are two adjacent values in this set, <code>v1</code> and
+	 *        <code>v2</code>, such that <code>v1&lt;search && v2&gt;search</code>
+	 * @param onEmpty Provides the result in the case that this set is empty
+	 * @return The value supplied by the appropriate function
+	 */
+	default <T> T between(Comparable<? super E> search, Function<? super E, ? extends T> onMatchOrTerminal,
+		BiFunction<? super E, ? super E, ? extends T> interpolate, Supplier<? extends T> onEmpty) {
+		return betweenElements(search, //
+			el -> onMatchOrTerminal.apply(el.get()), (el1, el2) -> interpolate.apply(el1.get(), el2.get()), onEmpty);
+	}
+
+	/**
+	 * Same as {@link #between(Comparable, Function, BiFunction, Supplier)}, but supplies the {@link CollectionElement element}s to the
+	 * value functions
+	 * 
+	 * @param <T> The type of value to return
+	 * @param search The search to search for a position within this set's values
+	 * @param onMatchOrTerminal Provides the result in the case that:
+	 *        <ul>
+	 *        <li>An element in this set matches the search exactly</li>
+	 *        <li>The first element in this set is greater than the search</li>
+	 *        <li>The last element in this set is less than the search</li>
+	 *        </ul>
+	 * @param interpolate Provides the result in the case that there are two adjacent elements in this set whose values, <code>v1</code> and
+	 *        <code>v2</code> are such that <code>v1&lt;search && v2&gt;search</code>
+	 * @param onEmpty Provides the result in the case that this set is empty
+	 * @return The value supplied by the appropriate function
+	 */
+	default <T> T betweenElements(Comparable<? super E> search, Function<? super CollectionElement<E>, ? extends T> onMatchOrTerminal,
+		BiFunction<? super CollectionElement<E>, ? super CollectionElement<E>, ? extends T> interpolate, Supplier<? extends T> onEmpty) {
+		CollectionElement<E> found = search(search, SortedSearchFilter.Less);
+		if (found == null) { // No element <= search
+			found = getTerminalElement(true);
+			if (found == null)
+				return onEmpty.get();
+			else
+				return onMatchOrTerminal.apply(found);
+		} else if (search.compareTo(found.get()) == 0)
+			return onMatchOrTerminal.apply(found);
+		else {
+			CollectionElement<E> next = getAdjacentElement(found.getElementId(), true);
+			if (next == null)
+				return onMatchOrTerminal.apply(found);
+			else
+				return interpolate.apply(found, next);
+		}
 	}
 
 	@Override
