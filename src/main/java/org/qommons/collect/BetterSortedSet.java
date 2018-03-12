@@ -20,6 +20,8 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * BetterSortedSets are searchable by {@link Comparable} instead of only by value, so developers can take advantage of optimized
  * searchability based on attributes of values in the set without needing to synthesize an actual value.
  * 
+ * See <a href="https://github.com/Updownquark/Qommons/wiki/BetterCollection-API#bettersortedset">the wiki</a> for more detail.
+ * 
  * @param <E> The type of values in the set
  */
 public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, NavigableSet<E> {
@@ -37,15 +39,26 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	 * @see BetterSortedSet#search(Comparable, SortedSearchFilter)
 	 */
 	enum SortedSearchFilter {
-		/** Accepts only results for which a search returns &lt;=0 */
+		/**
+		 * Accepts only results less than or equal to a search (i.e. <code>search.{@link Comparable#compareTo compareTo}(value)&gt;=0</code>
+		 */
 		Less(Ternian.TRUE, true),
-		/** Prefers results for which a search returns &lt;=0, but accepts a greater result if no lesser result exists */
+		/**
+		 * Prefers results less than or equal to a search (i.e. <code>search.{@link Comparable#compareTo compareTo}(value)&gt;=0</code>, but
+		 * accepts a greater result if no lesser result exists
+		 */
 		PreferLess(Ternian.TRUE, false),
 		/** Accepts only results for which a search returns 0 */
 		OnlyMatch(Ternian.NONE, true),
-		/** Prefers results for which a search returns &gt;=0, but accepts a lesser result if no greater result exists */
+		/**
+		 * Prefers results greater than or equal to a search (i.e. <code>search.{@link Comparable#compareTo compareTo}(value)&lt;=0</code>,
+		 * but accepts a lesser result if no greater result exists
+		 */
 		PreferGreater(Ternian.FALSE, false),
-		/** Accepts only results for which a search returns &gt;=0 */
+		/**
+		 * Accepts only results greater than or equal to a search (i.e.
+		 * <code>search.{@link Comparable#compareTo compareTo}(value)&lt;=0</code>
+		 */
 		Greater(Ternian.FALSE, true);
 
 		/** Whether this search prefers values less than an exact match, or {@link Ternian#NONE} for {@link #OnlyMatch} */
@@ -158,6 +171,12 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	@Override
 	default BetterSortedSet<E> with(E... values) {
 		BetterSet.super.with(values);
+		return this;
+	}
+
+	@Override
+	default BetterSortedSet<E> withAll(Collection<? extends E> values) {
+		BetterSet.super.withAll(values);
 		return this;
 	}
 

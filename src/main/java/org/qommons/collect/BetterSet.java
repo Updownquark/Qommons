@@ -7,7 +7,9 @@ import java.util.Set;
 import org.qommons.Transaction;
 
 /**
- * A {@link Set} that is also a {@link BetterCollection}
+ * A {@link Set} that is also a {@link BetterCollection}.
+ * 
+ * See <a href="https://github.com/Updownquark/Qommons/wiki/BetterCollection-API#betterset">the wiki</a> for more detail.
  * 
  * @param <E> The type of values in the set
  */
@@ -45,6 +47,12 @@ public interface BetterSet<E> extends BetterCollection<E>, TransactableSet<E> {
 	@Override
 	default BetterSet<E> with(E... values) {
 		BetterCollection.super.with(values);
+		return this;
+	}
+
+	@Override
+	default BetterSet<E> withAll(Collection<? extends E> values) {
+		BetterCollection.super.withAll(values);
 		return this;
 	}
 

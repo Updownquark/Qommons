@@ -3,7 +3,7 @@ package org.qommons.tree;
 import java.util.Objects;
 
 import org.qommons.Transaction;
-import org.qommons.collect.BetterList;
+import org.qommons.ValueHolder;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
@@ -53,14 +53,13 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 	@Override
 	public CollectionElement<E> getElement(E value, boolean first) {
 		try (Transaction t = lock(false, null)) {
-			CollectionElement<E>[] element = new CollectionElement[1];
+			ValueHolder<CollectionElement<E>> element = new ValueHolder<>();
 			ElementSpliterator<E> spliter = first ? spliterator(first) : spliterator(first).reverse();
-			while (element[0] == null && spliter.forElement(el -> {
+			while (!element.isPresent() && spliter.forElement(el -> {
 				if (Objects.equals(el.get(), value))
-					element[0] = first ? el : el.reverse();
-			}, true)) {
-			}
-			return element[0];
+					element.accept(first ? el : el.reverse());
+			}, true)) {}
+			return element.get();
 		}
 	}
 }

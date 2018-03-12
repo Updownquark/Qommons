@@ -9,9 +9,11 @@ import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
- * A {@link NavigableMap} that provides access to its entries by ID
+ * A {@link NavigableMap} that provides access to its entries by ID.
  * 
- * {@link BetterSortedSet} also provides enhanced searchability over {@link NavigableMap}, similarly to {@link BetterSortedSet}
+ * {@link BetterSortedSet} also provides enhanced searchability over {@link NavigableMap}, similarly to {@link BetterSortedSet}.
+ * 
+ * See <a href="https://github.com/Updownquark/Qommons/wiki/BetterMap-API#bettersortedmap">the wiki</a> for more detail.
  * 
  * @param <K> The key type for the map
  * @param <V> The value type for the map

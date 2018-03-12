@@ -7,7 +7,30 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
-/** An event or something that may have a cause */
+/**
+ * <p>
+ * An event or something that may have a cause.
+ * </p>
+ * 
+ * <p>
+ * Each causable may itself have a cause (which itself may or may not be a Causable), so cause chains can be created.
+ * </p>
+ * 
+ * <p>
+ * Causables have the ability to allow code to keep track of the effects of a cause, then perform an action when they finish that is the
+ * cumulative result of the cause.
+ * </p>
+ * 
+ * <p>
+ * The typical use case is to grab the root causable and call {@link #onFinish(CausableKey)} with a key. The map returned may be updated
+ * with the effects of the current cause. Then the terminal action of the key is called when the root cause finishes and the data in the map
+ * may be used used to cause the correct effects.
+ * </p>
+ * 
+ * <p>
+ * Use {@link Causable#simpleCause(Object)} to create a simple cause, or create an extension of this class
+ * </p>
+ */
 public abstract class Causable {
 	/** An action to be fired when a causable finishes */
 	@FunctionalInterface
@@ -19,6 +42,15 @@ public abstract class Causable {
 		void finished(Causable cause, Map<Object, Object> values);
 	}
 
+	/**
+	 * <p>
+	 * A key to use with {@link Causable#onFinish(CausableKey)} to keep track of the effects of a cause or set of causes and effect them
+	 * when the cause chain finishes.
+	 * </p>
+	 * <p>
+	 * Use {@link Causable#key(TerminalAction)} to create a key
+	 * </p>
+	 */
 	public static class CausableKey {
 		private final Map<Object, Object> theValues;
 		private final AtomicInteger theCauseCount;
@@ -52,19 +84,25 @@ public abstract class Causable {
 	}
 
 	private static class SimpleCause extends Causable {
-		public SimpleCause() {
-			this(null);
-		}
-
-		public SimpleCause(Object cause) {
+		SimpleCause(Object cause) {
 			super(cause);
 		}
 	}
 
+	/**
+	 * @param action The action to take when a causable finishes
+	 * @return The key to use with {@link Causable#onFinish(CausableKey)}
+	 */
 	public static CausableKey key(TerminalAction action) {
 		return new CausableKey(action);
 	}
 
+	/**
+	 * Creates a causable
+	 * 
+	 * @param cause The cause of the new causable. May be null.
+	 * @return A new causable
+	 */
 	public static Causable simpleCause(Object cause) {
 		return new SimpleCause(cause);
 	}

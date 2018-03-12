@@ -28,6 +28,11 @@ public class RedBlackNode<E> {
 			this.index = index;
 			this.stamp = stamp;
 		}
+
+		@Override
+		public String toString() {
+			return String.valueOf(index);
+		}
 	}
 	private final RedBlackTree<E> theTree;
 	private boolean isRed;

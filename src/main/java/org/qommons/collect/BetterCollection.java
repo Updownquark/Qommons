@@ -33,6 +33,8 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * A BetterCollection must provide access to its elements by ID and value; and iteration from a BetterCollection is by element and not value
  * only. BetterCollection itself provides more functionality on top of this and implements most of the {@link Collection} API as well.
  * 
+ * See <a href="https://github.com/Updownquark/Qommons/wiki/BetterCollection-API">the wiki</a> for more detail.
+ * 
  * @param <E> The type of value in the collection
  */
 public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E> {
@@ -223,6 +225,21 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	}
 
 	/**
+	 * @param values The values to add to the collection
+	 * @return This collection
+	 */
+	default BetterCollection<E> withAll(Collection<? extends E> values) {
+		Causable cause = Causable.simpleCause(null);
+		try (Transaction cst = Causable.use(cause); Transaction t = lock(true, cause)) {
+			for (E e : values) {
+				if (canAdd(e) == null)
+					add(e);
+			}
+		}
+		return this;
+	}
+
+	/**
 	 * Tests the removability of an element from this collection. This method exposes a "best guess" on whether an element in the collection
 	 * could be removed, but does not provide any guarantee. This method should return null for any object for which {@link #remove(Object)}
 	 * is successful, but the fact that an object passes this test does not guarantee that it would be removed successfully. E.g. the
@@ -365,12 +382,13 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		if (isEmpty())
 			return false;
 		boolean[] removed = new boolean[1];
-		findAll(filter, el -> {
-			if (el.canRemove() == null) {
-				el.remove();
-				removed[0] = true;
-			}
-		}, true);
+		findAll(filter, //
+			el -> {
+				if (el.canRemove() == null) {
+					el.remove();
+					removed[0] = true;
+				}
+			}, true);
 		return removed[0];
 	}
 
@@ -473,12 +491,13 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 */
 	default int findAll(Predicate<? super E> search, Consumer<? super MutableCollectionElement<E>> onElement, boolean forward) {
 		int[] found = new int[1];
-		spliterator(forward).forEachElementM(el -> {
-			if (search.test(el.get())) {
-				found[0]++;
-				onElement.accept(el);
-			}
-		}, forward);
+		spliterator(forward).forEachElementM(//
+			el -> {
+				if (search.test(el.get())) {
+					found[0]++;
+					onElement.accept(el);
+				}
+			}, forward);
 		return found[0];
 	}
 
