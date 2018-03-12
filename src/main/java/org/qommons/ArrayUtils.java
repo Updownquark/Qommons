@@ -503,27 +503,41 @@ public final class ArrayUtils {
 	 *         <code>-(index+1)</code>, where <code>index</code> is the index where such an index would be inserted into the search domain
 	 */
 	public static int binarySearch(int min, int max, IntComparable search) {
-		if (min > max)
+		return binarySearch(new int[] { min, max }, search);
+	}
+
+	/**
+	 * An abstract binary search method that can search through anything by index and makes its context public.
+	 * 
+	 * @param minMax A 2-element array containing the current lowest index in the search domain and the current highest index in the search
+	 *        domain
+	 * @param search The indexed search function
+	 * @return The <code>index</code> in the search domain for which
+	 *         <code>search.{@link IntComparable#compareTo(int) compareTo}(index)==0</code> if such an index exists; otherwise
+	 *         <code>-(index+1)</code>, where <code>index</code> is the index where such an index would be inserted into the search domain
+	 */
+	public static int binarySearch(int[] minMax, IntComparable search) {
+		if (minMax[0] > minMax[1])
 			return -1;
 		int mid = -1;
 		int comp = 0;
-		while (min < max) {
-			mid = (min + max) >>> 1;
+		while (minMax[0] < minMax[1]) {
+			mid = (minMax[0] + minMax[1]) >>> 1;
 			comp = search.compareTo(mid);
 			if (comp > 0)
-				min = mid + 1;
+				minMax[0] = mid + 1;
 			else if (comp < 0)
-				max = mid - 1;
+				minMax[1] = mid - 1;
 			else
 				return mid;
 		}
-		if (mid != min)
-			comp = search.compareTo(min);
+		if (mid != minMax[0])
+			comp = search.compareTo(minMax[0]);
 		if (comp == 0)
-			return min;
+			return minMax[0];
 		else if (comp > 0)
-			min++;
-		return -(min + 1);
+			minMax[0]++;
+		return -(minMax[0] + 1);
 	}
 
 	/**
