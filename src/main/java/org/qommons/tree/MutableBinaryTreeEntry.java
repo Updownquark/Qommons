@@ -241,6 +241,8 @@ public interface MutableBinaryTreeEntry<K, V> extends BinaryTreeEntry<K, V>, Mut
 	}
 
 	/**
+	 * @param <K> The key type of the entry
+	 * @param <V> The value type of the entry
 	 * @param entry The entry to get an immutable copy of
 	 * @return The immutable copy of the given entry, or null if entry was null
 	 */

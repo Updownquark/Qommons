@@ -4,16 +4,22 @@ import java.util.Objects;
 
 import org.qommons.Transaction;
 import org.qommons.ValueHolder;
-import org.qommons.collect.CollectionElement;
-import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.ElementId;
-import org.qommons.collect.ElementSpliterator;
-import org.qommons.collect.FastFailLockingStrategy;
-import org.qommons.collect.MutableElementSpliterator;
-import org.qommons.collect.StampedLockingStrategy;
+import org.qommons.collect.*;
 
 /**
- * A {@link BetterList} implementation backed by a tree structure
+ * <p>
+ * A {@link org.qommons.collect.BetterList} implementation backed by a tree structure.
+ * </p>
+ * 
+ * <p>
+ * This class follows the contract of {@link java.util.List}, allowing values in arbitrary order, managed entirely by the caller.
+ * </p>
+ * 
+ * <p>
+ * The performace characteristics of this class are that of a binary tree, namely O(log(n)) for {@link #add(Object) additions},
+ * {@link #add(int, Object) inserts}, {@link #remove(int) removals}, and {@link #get(int) seeks}. Since this list lacks order, normal
+ * {@link #indexOf(Object) searches} are linear time.
+ * </p>
  * 
  * @param <E> The type of values in the list
  */

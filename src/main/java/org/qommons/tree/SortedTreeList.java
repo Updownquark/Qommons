@@ -6,30 +6,38 @@ import java.util.Objects;
 
 import org.qommons.Transaction;
 import org.qommons.ValueHolder;
-import org.qommons.collect.BetterCollection;
+import org.qommons.collect.*;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
-import org.qommons.collect.CollectionElement;
-import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.ElementId;
-import org.qommons.collect.ElementSpliterator;
-import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
-import org.qommons.collect.StampedLockingStrategy;
 
+/**
+ * A {@link org.qommons.collect.BetterList} backed by a tree structure that sorts its values, with duplicates allowed
+ * 
+ * @param <E> The type of value in the list
+ */
 public class SortedTreeList<E> extends RedBlackNodeList<E> {
 	private final Comparator<? super E> theCompare;
 	private final boolean isDistinct;
 
+	/**
+	 * @param safe Whether the list should be thread-safe or fail-fast
+	 * @param compare The comparator to order the values
+	 */
 	public SortedTreeList(boolean safe, Comparator<? super E> compare) {
 		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), compare);
 	}
 
+	/**
+	 * @param locker The locking strategy for the list
+	 * @param compare The comparator to order the values
+	 */
 	public SortedTreeList(CollectionLockingStrategy locker, Comparator<? super E> compare) {
 		super(locker);
 		theCompare = compare;
 		isDistinct = this instanceof NavigableSet;
 	}
 
+	/** @return The comparator that orders this list's values */
 	public Comparator<? super E> comparator() {
 		return theCompare;
 	}
@@ -39,11 +47,30 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> {
 		return true;
 	}
 
+	/**
+	 * @param search The comparable to use to search this list's values
+	 * @return Either:
+	 *         <ul>
+	 *         <li>The index of some value <code>v</code> in this list for which <code>search.compareTo(v)==0</code> if such a value
+	 *         exists</li>
+	 *         <li>or <code>-(i-1)</code> where <code>i</code> is the index at which such a value would be inserted in this list</li>
+	 *         </ul>
+	 */
 	public int indexFor(Comparable<? super E> search) {
 		BinaryTreeNode<E> root = getRoot();
 		return root == null ? -1 : root.indexFor(node -> search.compareTo(node.get()));
 	}
 
+	/**
+	 * Searches this sorted list for an element
+	 *
+	 * @param search The search to navigate through this list for the target value. The search must follow this set's {@link #comparator()
+	 *        order}.
+	 * @param filter The filter on the result
+	 * @return The element that is the best found result of the search, or null if this list is empty or does not contain any element
+	 *         matching the given filter
+	 * @see SortedSearchFilter
+	 */
 	public BinaryTreeNode<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
 		try (Transaction t = lock(false, null)) {
 			if (isEmpty())
@@ -102,21 +129,29 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> {
 		return super.canAdd(value, after, before);
 	}
 
+	/**
+	 * Creates a {@link Comparable} to use in searching this sorted list from a value compatible with the list's comparator
+	 * 
+	 * @param value The comparable value
+	 * @param onExact The value to return when the comparator matches. For example, to search for values strictly less than
+	 *        <code>value</code>, an integer &lt;0 should be specified.
+	 * @return The search to use with {@link #search(Comparable, SortedSearchFilter)}
+	 */
 	public Comparable<? super E> searchFor(E value, int onExact) {
 		class ValueSearch<V> implements Comparable<V> {
-			private final Comparator<? super V> theCompare;
+			private final Comparator<? super V> theValueCompare;
 			private final V theValue;
 			private final int theOnExact;
 
 			ValueSearch(Comparator<? super V> compare, V val, int _onExact) {
-				theCompare = compare;
+				theValueCompare = compare;
 				theValue = val;
 				theOnExact = _onExact;
 			}
 
 			@Override
 			public int compareTo(V v) {
-				int compare = theCompare.compare(theValue, v);
+				int compare = theValueCompare.compare(theValue, v);
 				if (compare == 0)
 					compare = theOnExact;
 				return compare;
@@ -127,7 +162,8 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> {
 				if (!(o instanceof ValueSearch))
 					return false;
 				ValueSearch<?> other = (ValueSearch<?>) o;
-				return theCompare.equals(other.theCompare) && Objects.equals(theValue, other.theValue) && theOnExact == other.theOnExact;
+				return theValueCompare.equals(other.theValueCompare) && Objects.equals(theValue, other.theValue)
+					&& theOnExact == other.theOnExact;
 			}
 
 			@Override

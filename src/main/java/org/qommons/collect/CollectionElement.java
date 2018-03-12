@@ -70,6 +70,7 @@ public interface CollectionElement<E> extends Comparable<CollectionElement<E>> {
 	}
 
 	/**
+	 * @param <E> The type of the element
 	 * @param element The element to reverse
 	 * @return The given element, {@link CollectionElement#reverse() reversed}, or null if the given element is null
 	 */

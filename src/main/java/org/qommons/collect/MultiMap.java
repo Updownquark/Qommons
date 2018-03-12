@@ -56,8 +56,16 @@ public interface MultiMap<K, V> {
 	 */
 	boolean addAll(K key, Collection<? extends V> values);
 
+	/**
+	 * @param values The map whose key-value pairs to add into this map
+	 * @return Whether any entries were added to this map
+	 */
 	boolean putAll(Map<? extends K, ? extends V> values);
 
+	/**
+	 * @param values The multi-map whose key-value pairs to add into this map
+	 * @return Whether any entries were added to this map
+	 */
 	boolean putAll(MultiMap<? extends K, ? extends V> values);
 
 	/**

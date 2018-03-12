@@ -222,6 +222,7 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 	}
 
 	/**
+	 * @param <E> The type of the element
 	 * @param element The element to reverse
 	 * @return The given element, {@link MutableCollectionElement#reverse() reversed}, or null if the given element is null
 	 */
@@ -230,6 +231,7 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 	}
 
 	/**
+	 * @param <E> The type of the element
 	 * @param element The element to get an immutable copy of
 	 * @return An {@link MutableCollectionElement#immutable() immutable} copy of the given element, or null if the given element is null
 	 */

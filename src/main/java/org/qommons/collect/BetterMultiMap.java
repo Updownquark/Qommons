@@ -33,6 +33,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V> {
 	@Override
 	Transaction lock(boolean write, boolean structural, Object cause);
 
+	/**
+	 * @param structuralOnly Whether to monitor only structural changes or all changes
+	 * @return The stamp for comparison
+	 * @see BetterCollection#getStamp(boolean)
+	 */
 	long getStamp(boolean structuralOnly);
 
 	default MultiEntryHandle<K, V> getEntry(K key) {
