@@ -1,6 +1,7 @@
 package org.qommons.tree;
 
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -99,6 +100,33 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 	@Override
 	public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
 		return new MutableTreeEntry<>(this, theEntries.mutableElement(entryId));
+	}
+
+	@Override
+	public int hashCode() {
+		int h = 0;
+		for (Map.Entry<K, V> entry : entrySet())
+			h = h * 7 + entry.getKey().hashCode() * 3 + entry.getValue().hashCode();
+		return h;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (obj == this)
+			return true;
+		else if (!(obj instanceof Map))
+			return false;
+		Iterator<Map.Entry<K, V>> iter = entrySet().iterator();
+		Iterator<? extends Map.Entry<?, ?>> otherIter = ((Map<?, ?>) obj).entrySet().iterator();
+		while (iter.hasNext()) {
+			if (!otherIter.hasNext())
+				return false;
+			if (!iter.next().equals(otherIter.next()))
+				return false;
+		}
+		if (otherIter.hasNext())
+			return false;
+		return true;
 	}
 
 	@Override
