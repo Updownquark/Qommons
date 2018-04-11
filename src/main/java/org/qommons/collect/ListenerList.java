@@ -40,7 +40,12 @@ public class ListenerList<E> {
 			obtainLock();
 			previous.next = next;
 			next.previous = previous;
-			theLock.set(false);
+			try {
+				if ((--theSize) == 0 && theInUseListener != null)
+					theInUseListener.accept(false);
+			} finally {
+				theLock.set(false);
+			}
 		}
 	}
 
@@ -48,6 +53,9 @@ public class ListenerList<E> {
 	private final AtomicBoolean theLock;
 	private final Node theTerminal;
 	private final String theReentrancyError;
+	private final Consumer<Boolean> theInUseListener;
+
+	private volatile int theSize;
 
 	/**
 	 * Creates the listener list
@@ -57,6 +65,20 @@ public class ListenerList<E> {
 	 *        reentrancy is to be allowed.
 	 */
 	public ListenerList(String reentrancyError) {
+		this(reentrancyError, null);
+	}
+
+	/**
+	 * Creates the listener list
+	 * 
+	 * @param reentrancyError The message to throw in an {@link IllegalStateException} from {@link #forEach(Consumer)} if the method is
+	 *        called as a result of the action being invoked from a higher {@link #forEach(Consumer) forEach} call. Or null if such
+	 *        reentrancy is to be allowed.
+	 * @param inUseListener A listener to be notified when this list goes in (true) and out (false) of use (i.e. just before a listener is
+	 *        added to the empty list or just after the last listener is removed, respectively). This listener MAY NOT add listeners itself.
+	 *        Such an attempt will result in deadlock.
+	 */
+	public ListenerList(String reentrancyError, Consumer<Boolean> inUseListener) {
 		// The code is simpler if all the real listeners can know that there's a non-null node before and after them.
 		// The first node's previous pointer and the last node's next pointer would always be null,
 		// so there's no need to have different nodes for first and last.
@@ -65,6 +87,7 @@ public class ListenerList<E> {
 		theLock = new AtomicBoolean();
 		isFiring = new ThreadLocal<>();
 		theReentrancyError = reentrancyError;
+		theInUseListener = inUseListener;
 	}
 
 	/**
@@ -80,11 +103,16 @@ public class ListenerList<E> {
 			newNode.skipOne = isFiring.get(); // Thread safe because isFiring is a ThreadLocal
 		// The next part affects the list's state, so only one at a time
 		obtainLock();
-		Node oldLast = theTerminal.previous;
-		newNode.previous = oldLast;
-		theTerminal.previous = newNode;
-		oldLast.next = newNode;
-		theLock.set(false);
+		try {
+			if ((theSize++) == 0 && theInUseListener != null)
+				theInUseListener.accept(true);
+			Node oldLast = theTerminal.previous;
+			newNode.previous = oldLast;
+			theTerminal.previous = newNode;
+			oldLast.next = newNode;
+		} finally {
+			theLock.set(false);
+		}
 		return newNode;
 	}
 
@@ -124,13 +152,27 @@ public class ListenerList<E> {
 	 */
 	public void clear() {
 		obtainLock();
-		theTerminal.next = theTerminal.previous = theTerminal;
-		theLock.set(false);
+		if (theSize != 0) {
+			theTerminal.next = theTerminal.previous = theTerminal;
+			theSize = 0;
+			try {
+				if (theInUseListener != null)
+					theInUseListener.accept(false);
+			} finally {
+				theLock.set(false);
+			}
+		} else
+			theLock.set(false);
 	}
 
 	/** @return Whether this list has no listeners in it */
 	public boolean isEmtpy() {
 		return theTerminal.next == theTerminal;
+	}
+
+	/** @return The number of listeners in this list */
+	public int size() {
+		return theSize;
 	}
 
 	@Override
