@@ -127,6 +127,20 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter);
 
 	/**
+	 * Same as {@link #search(Comparable, SortedSearchFilter)} but flattens to a value
+	 * 
+	 * @param search The search to navigate through this set for the target value. The search must follow this set's {@link #comparator()
+	 *        order}.
+	 * @param filter The filter on the result
+	 * @return The value that is the best found result of the search, or null if this set is empty or does not contain any element matching
+	 *         the given filter
+	 */
+	default E searchValue(Comparable<? super E> search, SortedSearchFilter filter) {
+		CollectionElement<E> el = search(search, filter);
+		return el == null ? null : el.get();
+	}
+
+	/**
 	 * @param search The search to use
 	 * @return Either:
 	 *         <ul>
