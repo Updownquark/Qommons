@@ -336,7 +336,8 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 		@Override
 		public CollectionElement<Entry<K, V>> getAdjacentElement(ElementId elementId, boolean next) {
-			return getElement(getMap().keySet().getAdjacentElement(elementId, next).getElementId());
+			CollectionElement<K> keyEl = getMap().keySet().getAdjacentElement(elementId, next);
+			return keyEl == null ? null : getElement(keyEl.getElementId());
 		}
 
 		@Override
