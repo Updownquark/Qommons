@@ -457,5 +457,24 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 			return entry;
 		}
+
+		@Override
+		public int hashCode() {
+			return BetterCollection.hashCode(entrySet());
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (obj == this)
+				return true;
+			else if (!(obj instanceof Map))
+				return false;
+			return BetterCollection.equals(entrySet(), ((Map<?, ?>) obj).entrySet());
+		}
+
+		@Override
+		public String toString() {
+			return entrySet().toString();
+		}
 	}
 }

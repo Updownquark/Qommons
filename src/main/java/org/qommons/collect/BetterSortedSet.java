@@ -66,7 +66,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 		/** Whether this search prefers values less than an exact match, or {@link Ternian#NONE} for {@link #OnlyMatch} */
 		public final Ternian less;
-		/** Whether this search allows matches that */
+		/** Whether this search allows matches that do not match the #less value */
 		public final boolean strict;
 
 		private SortedSearchFilter(Ternian less, boolean strict) {
@@ -443,6 +443,15 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			Comparable<? super E> to = toIndex == size() ? null : searchFor(get(toIndex), -1);
 			return subSet(from, to);
 		}
+	}
+
+	/**
+	 * @param <E> The type of the set
+	 * @param compare The comparator for the set
+	 * @return An immutable, empty sorted set
+	 */
+	public static <E> BetterSortedSet<E> empty(Comparator<? super E> compare) {
+		return new EmptySortedSet<>(compare);
 	}
 
 	/**
@@ -1077,6 +1086,34 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 			ret.append('}');
 			return ret.toString();
+		}
+	}
+
+	/**
+	 * Implements {@link BetterSortedSet#empty(Comparator)}
+	 * 
+	 * @param <E> The type of the set
+	 */
+	public static class EmptySortedSet<E> extends BetterList.EmptyList<E> implements BetterSortedSet<E> {
+		private final Comparator<? super E> theCompare;
+
+		EmptySortedSet(Comparator<? super E> compare) {
+			theCompare = compare;
+		}
+
+		@Override
+		public Comparator<? super E> comparator() {
+			return theCompare;
+		}
+
+		@Override
+		public int indexFor(Comparable<? super E> search) {
+			return -1;
+		}
+
+		@Override
+		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+			return null;
 		}
 	}
 }

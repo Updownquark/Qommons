@@ -94,6 +94,14 @@ public interface BetterSet<E> extends BetterCollection<E>, TransactableSet<E> {
 	}
 
 	/**
+	 * @param <E> The type of the set
+	 * @return An immutable, empty set
+	 */
+	public static <E> BetterSet<E> empty() {
+		return new EmptySet<>();
+	}
+
+	/**
 	 * Implements {@link BetterSet#reverse()}
 	 * 
 	 * @param <E> The type of the set
@@ -118,4 +126,11 @@ public interface BetterSet<E> extends BetterCollection<E>, TransactableSet<E> {
 			return BetterSet.toString(this);
 		}
 	}
+
+	/**
+	 * Implements {@link BetterSet#empty()}
+	 * 
+	 * @param <E> The type of the set
+	 */
+	class EmptySet<E> extends BetterCollection.EmptyCollection<E> implements BetterSet<E> {}
 }
