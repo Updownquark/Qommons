@@ -268,7 +268,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> {
 			BinaryTreeNode<E> previous = getClosest(true);
 			BinaryTreeNode<E> next = getClosest(false);
 			if (previous != null) {
-				int compare = comparator().compare(previous.get(), value);
+				int compare = comparator().compare(value, previous.get());
 				if (isDistinct && compare == 0)
 					return StdMsg.ELEMENT_EXISTS;
 				else if (compare < 0)
