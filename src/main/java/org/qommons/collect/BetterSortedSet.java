@@ -241,6 +241,11 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 
 			@Override
+			public int hashCode() {
+				return Objects.hash(theCompare, theValue, theOnExact);
+			}
+
+			@Override
 			public boolean equals(Object o) {
 				if (!(o instanceof ValueSearch))
 					return false;
@@ -884,6 +889,16 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 				theWrapped.clear();
 			else
 				removeIf(v -> true);
+		}
+
+		@Override
+		public int hashCode() {
+			return BetterCollection.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterCollection.equals(this, obj);
 		}
 
 		@Override
