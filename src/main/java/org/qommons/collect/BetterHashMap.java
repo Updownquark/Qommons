@@ -419,6 +419,39 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
+		public CollectionElement<K> searchWithConsistencyDetection(K value, boolean[] invalid) {
+			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.searchWithConsistencyDetection(new SimpleMapEntry<>(value, null),
+				invalid);
+			return entryEl == null ? null : handleFor(entryEl);
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return theEntries.checkConsistency();
+		}
+
+		@Override
+		public <X> boolean repair(RepairListener<K, X> listener) {
+			RepairListener<Map.Entry<K, V>, X> entryListener = listener == null ? null : new RepairListener<Map.Entry<K, V>, X>() {
+				@Override
+				public void removed(CollectionElement<Map.Entry<K, V>> element) {
+					listener.removed(handleFor(element));
+				}
+
+				@Override
+				public X preTransfer(CollectionElement<Map.Entry<K, V>> element) {
+					return listener.preTransfer(handleFor(element));
+				}
+
+				@Override
+				public void postTransfer(CollectionElement<Map.Entry<K, V>> element, X data) {
+					listener.postTransfer(handleFor(element), data);
+				}
+			};
+			return theEntries.repair(entryListener);
+		}
+
+		@Override
 		public int hashCode() {
 			return BetterCollection.hashCode(this);
 		}

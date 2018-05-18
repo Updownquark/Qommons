@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 
 import org.qommons.Transactable;
 import org.qommons.Transaction;
+import org.qommons.collect.BetterSet.RepairListener;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
@@ -179,6 +180,84 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		keySet().clear();
 	}
 
+	/**
+	 * A search method that works to detect inconsistencies in the map's key storage structure during the search. See
+	 * {@link BetterSet#searchWithConsistencyDetection(Object, boolean[])} for more information.
+	 * 
+	 * @param key The key to search for
+	 * @param invalid The invalid flag to set to true if inconsistency is detected
+	 * @return The entry element, or null if inconsistency is detected or no such element is found in the map
+	 */
+	default MapEntryHandle<K, V> searchWithConsistencyDetection(K key, boolean[] invalid) {
+		CollectionElement<K> keyEl = keySet().searchWithConsistencyDetection(key, invalid);
+		return keyEl == null ? null : getEntryById(keyEl.getElementId());
+	}
+
+	/**
+	 * Searches for any inconsistencies in the map's key storage structure. This typically takes linear time. See
+	 * {@link BetterSet#checkConsistency()} for more information.
+	 * 
+	 * @return Whether any inconsistency was found in the map
+	 */
+	default boolean checkConsistency() {
+		return keySet().checkConsistency();
+	}
+
+	/**
+	 * An interface to monitor #repair on a set.
+	 * 
+	 * @param <K> The type of keys in the map
+	 * @param <V> The type of values in the set
+	 * @param <X> The type of the custom data to keep track of transfer operations
+	 */
+	interface MapRepairListener<K, V, X> {
+		/** @param element The element removed due to a collision */
+		void removed(MapEntryHandle<K, V> element);
+
+		/**
+		 * @param element The element, having just been removed, which will immediately be transferred to another position in the set, with
+		 *        a corresponding call to {@link #postTransfer(MapEntryHandle, Object)}
+		 * @return A piece of data which will be given as the second argument to {@link #postTransfer(MapEntryHandle, Object)} as a means of
+		 *         tracking
+		 */
+		X preTransfer(MapEntryHandle<K, V> element);
+
+		/**
+		 * @param element The element previously removed (with a corresponding call to {@link #preTransfer(MapEntryHandle)}) and now
+		 *        re-added in a different position within the set
+		 * @param data The data returned from the {@link #preTransfer(MapEntryHandle)} call
+		 */
+		void postTransfer(MapEntryHandle<K, V> element, X data);
+	}
+
+	/**
+	 * Searches for and fixes any inconsistencies in the set's storage structure. See {@link BetterSet#repair(RepairListener)} for more
+	 * information.
+	 * 
+	 * @param <X> The type of the data transferred for the listener
+	 * @param listener The listener to monitor repairs. May be null.
+	 * @return Whether any inconsistencies were found
+	 */
+	default <X> boolean repair(MapRepairListener<K, V, X> listener) {
+		RepairListener<K, X> keyListener = listener == null ? null : new RepairListener<K, X>() {
+			@Override
+			public void removed(CollectionElement<K> element) {
+				listener.removed(getEntryById(element.getElementId()));
+			}
+
+			@Override
+			public X preTransfer(CollectionElement<K> element) {
+				return listener.preTransfer(getEntryById(element.getElementId()));
+			}
+
+			@Override
+			public void postTransfer(CollectionElement<K> element, X data) {
+				listener.postTransfer(getEntryById(element.getElementId()), data);
+			}
+		};
+		return keySet().repair(keyListener);
+	}
+
 	@Override
 	default V getOrDefault(Object key, V defaultValue) {
 		if (!keySet().belongs(key))
@@ -312,6 +391,37 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
 			return theWrapped.mutableEntry(entryId.reverse()).reverse();
 		}
+
+		@Override
+		public MapEntryHandle<K, V> searchWithConsistencyDetection(K key, boolean[] invalid) {
+			return MapEntryHandle.reverse(getWrapped().searchWithConsistencyDetection(key, invalid));
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return getWrapped().checkConsistency();
+		}
+
+		@Override
+		public <X> boolean repair(MapRepairListener<K, V, X> listener) {
+			MapRepairListener<K, V, X> reversedListener = listener == null ? null : new MapRepairListener<K, V, X>() {
+				@Override
+				public void removed(MapEntryHandle<K, V> element) {
+					listener.removed(element.reverse());
+				}
+
+				@Override
+				public X preTransfer(MapEntryHandle<K, V> element) {
+					return listener.preTransfer(element.reverse());
+				}
+
+				@Override
+				public void postTransfer(MapEntryHandle<K, V> element, X data) {
+					listener.postTransfer(element.reverse(), data);
+				}
+			};
+			return getWrapped().repair(reversedListener);
+		}
 	}
 
 	/**
@@ -430,6 +540,38 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		@Override
 		public void clear() {
 			theMap.clear();
+		}
+
+		@Override
+		public CollectionElement<Entry<K, V>> searchWithConsistencyDetection(Entry<K, V> value, boolean[] invalid) {
+			MapEntryHandle<K, V> entryEl = theMap.searchWithConsistencyDetection(value.getKey(), invalid);
+			return entryEl == null ? null : new EntryElement(entryEl);
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return theMap.checkConsistency();
+		}
+
+		@Override
+		public <X> boolean repair(RepairListener<Entry<K, V>, X> listener) {
+			MapRepairListener<K, V, X> mapListener = listener == null ? null : new MapRepairListener<K, V, X>() {
+				@Override
+				public void removed(MapEntryHandle<K, V> element) {
+					listener.removed(new EntryElement(element));
+				}
+
+				@Override
+				public X preTransfer(MapEntryHandle<K, V> element) {
+					return listener.preTransfer(new EntryElement(element));
+				}
+
+				@Override
+				public void postTransfer(MapEntryHandle<K, V> element, X data) {
+					listener.postTransfer(new EntryElement(element), data);
+				}
+			};
+			return theMap.repair(mapListener);
 		}
 
 		protected MutableElementSpliterator<Map.Entry<K, V>> wrap(MutableElementSpliterator<K> keySpliter) {
