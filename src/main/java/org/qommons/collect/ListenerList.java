@@ -37,6 +37,8 @@ public class ListenerList<E> {
 
 		@Override
 		public void run() {
+			if (next == this)
+				return; // Already removed
 			obtainLock();
 			previous.next = next;
 			next.previous = previous;
@@ -46,6 +48,7 @@ public class ListenerList<E> {
 			} finally {
 				theLock.set(false);
 			}
+			next = this; //Mark this node as removed
 		}
 	}
 
@@ -133,6 +136,7 @@ public class ListenerList<E> {
 			throw new IllegalStateException(theReentrancyError);
 		Object iterId = new Object();
 		isFiring.set(iterId);
+		try {
 		while (node != theTerminal) {
 			if (node.skipOne == iterId)
 				node.skipOne = null;
@@ -140,10 +144,12 @@ public class ListenerList<E> {
 				action.accept(node.theListener);
 			node = node.next;
 		}
-		if (reentrant == null)
-			isFiring.remove();
-		else
-			isFiring.set(reentrant);
+		} finally {
+			if (reentrant == null)
+				isFiring.remove();
+			else
+				isFiring.set(reentrant);
+		}
 	}
 
 	/**
@@ -166,7 +172,7 @@ public class ListenerList<E> {
 	}
 
 	/** @return Whether this list has no listeners in it */
-	public boolean isEmtpy() {
+	public boolean isEmpty() {
 		return theTerminal.next == theTerminal;
 	}
 
