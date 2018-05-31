@@ -451,6 +451,37 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	}
 
 	/**
+	 * @param <E> The type of value to compare
+	 * @param c1 The first search
+	 * @param c2 The other search
+	 * @param low Whether the other search is for the lower or upper bound of a new sorted set
+	 * @return A lower or upper bound for both the given search and this sub set's lower or upper bound
+	 */
+	public static <E> Comparable<? super E> and(Comparable<? super E> c1, Comparable<? super E> c2, boolean low) {
+		if (c1 == null)
+			return c2;
+		else if (c2 == null)
+			return c1;
+		class AndCompare implements Comparable<E> {
+			@Override
+			public int compareTo(E v) {
+				int comp = c1.compareTo(v);
+				if (low && comp <= 0)
+					comp = c2.compareTo(v);
+				else if (!low && comp >= 0)
+					comp = c2.compareTo(v);
+				return comp;
+			}
+
+			@Override
+			public String toString() {
+				return c1 + " and " + c2;
+			}
+		}
+		return new AndCompare();
+	}
+
+	/**
 	 * @param <E> The type of the set
 	 * @param compare The comparator for the set
 	 * @return An immutable, empty sorted set
@@ -813,37 +844,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 		@Override
 		public BetterSortedSet<E> subSet(Comparable<? super E> innerFrom, Comparable<? super E> innerTo) {
-			return new BetterSubSet<>(theWrapped, and(innerFrom, true), and(innerTo, false));
-		}
-
-		/**
-		 * @param c2 The other search
-		 * @param low Whether the other search is for the lower or upper bound of a new sorted set
-		 * @return A lower or upper bound for both the given search and this sub set's lower or upper bound
-		 */
-		protected Comparable<? super E> and(Comparable<? super E> c2, boolean low) {
-			Comparable<? super E> c1 = low ? from : to;
-			if (c1 == null)
-				return c2;
-			else if (c2 == null)
-				return c1;
-			class AndCompare implements Comparable<E> {
-				@Override
-				public int compareTo(E v) {
-					int comp = c1.compareTo(v);
-					if (low && comp <= 0)
-						comp = c2.compareTo(v);
-					else if (!low && comp >= 0)
-						comp = c2.compareTo(v);
-					return comp;
-				}
-
-				@Override
-				public String toString() {
-					return c1 + " and " + c2;
-				}
-			}
-			return new AndCompare();
+			return new BetterSubSet<>(theWrapped, and(from, innerFrom, true), and(to, innerTo, false));
 		}
 
 		@Override
