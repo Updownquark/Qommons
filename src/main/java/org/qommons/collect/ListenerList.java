@@ -137,13 +137,14 @@ public class ListenerList<E> {
 		Object iterId = new Object();
 		isFiring.set(iterId);
 		try {
-		while (node != theTerminal) {
-			if (node.skipOne == iterId)
-				node.skipOne = null;
-			else
-				action.accept(node.theListener);
-			node = node.next;
-		}
+			while (node != theTerminal) {
+				Node nextNode = node.next; // Get the next node before calling the listener, since the listener might remove itself
+				if (node.skipOne == iterId)
+					node.skipOne = null;
+				else
+					action.accept(node.theListener);
+				node = nextNode;
+			}
 		} finally {
 			if (reentrant == null)
 				isFiring.remove();
