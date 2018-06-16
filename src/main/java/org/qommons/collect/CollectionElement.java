@@ -85,4 +85,13 @@ public interface CollectionElement<E> extends Comparable<CollectionElement<E>> {
 	static ElementId getElementId(CollectionElement<?> element) {
 		return element == null ? null : element.getElementId();
 	}
+
+	/**
+	 * @param <E> The type of the element
+	 * @param element The element to get the value of
+	 * @return The element's {@link #get() value}, or null if the element is null
+	 */
+	static <E> E get(CollectionElement<E> element) {
+		return element == null ? null : element.get();
+	}
 }

@@ -34,12 +34,21 @@ import java.util.function.Function;
 public abstract class Causable {
 	/** An action to be fired when a causable finishes */
 	@FunctionalInterface
-	public static interface TerminalAction {
+	public interface TerminalAction {
 		/**
 		 * @param cause The causable that has finished
 		 * @param values The values added to the causable for this action
 		 */
 		void finished(Causable cause, Map<Object, Object> values);
+	}
+
+	/**
+	 * This interface is so causability can be traced back to causes that spawn Causables across threads, or for other reasons where it is
+	 * desired that a cause-effect relationship be traced without affecting the {@link Causable#getRootCausable() root cause}.
+	 */
+	public interface ChainBreak {
+		/** @return The wrapped cause */
+		Object getCause();
 	}
 
 	/**
@@ -162,9 +171,12 @@ public abstract class Causable {
 			if (value != null)
 				return value;
 		}
-		while (cause instanceof Causable && value == null) {
-			root = (Causable) cause;
-			cause = root.getCause();
+		while ((cause instanceof Causable || cause instanceof ChainBreak) && value == null) {
+			if (cause instanceof Causable) {
+				root = (Causable) cause;
+				cause = root.getCause();
+			} else
+				cause = ((ChainBreak) cause).getCause();
 			value = test.apply(cause);
 		}
 		return value;

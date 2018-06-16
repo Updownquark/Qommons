@@ -336,7 +336,8 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 		@Override
 		public CollectionElement<Entry<K, V>> getAdjacentElement(ElementId elementId, boolean next) {
-			return getElement(getMap().keySet().getAdjacentElement(elementId, next).getElementId());
+			CollectionElement<K> keyEl = getMap().keySet().getAdjacentElement(elementId, next);
+			return keyEl == null ? null : getElement(keyEl.getElementId());
 		}
 
 		@Override
@@ -455,6 +456,25 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 			if (!keySet().belongs(entry.getKey()))
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 			return entry;
+		}
+
+		@Override
+		public int hashCode() {
+			return BetterCollection.hashCode(entrySet());
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (obj == this)
+				return true;
+			else if (!(obj instanceof Map))
+				return false;
+			return BetterCollection.equals(entrySet(), ((Map<?, ?>) obj).entrySet());
+		}
+
+		@Override
+		public String toString() {
+			return entrySet().toString();
 		}
 	}
 }

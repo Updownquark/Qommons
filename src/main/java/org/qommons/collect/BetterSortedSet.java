@@ -66,7 +66,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 		/** Whether this search prefers values less than an exact match, or {@link Ternian#NONE} for {@link #OnlyMatch} */
 		public final Ternian less;
-		/** Whether this search allows matches that */
+		/** Whether this search allows matches that do not match the #less value */
 		public final boolean strict;
 
 		private SortedSearchFilter(Ternian less, boolean strict) {
@@ -125,6 +125,20 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	 *         matching the given filter
 	 */
 	CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter);
+
+	/**
+	 * Same as {@link #search(Comparable, SortedSearchFilter)} but flattens to a value
+	 * 
+	 * @param search The search to navigate through this set for the target value. The search must follow this set's {@link #comparator()
+	 *        order}.
+	 * @param filter The filter on the result
+	 * @return The value that is the best found result of the search, or null if this set is empty or does not contain any element matching
+	 *         the given filter
+	 */
+	default E searchValue(Comparable<? super E> search, SortedSearchFilter filter) {
+		CollectionElement<E> el = search(search, filter);
+		return el == null ? null : el.get();
+	}
 
 	/**
 	 * @param search The search to use
@@ -224,6 +238,11 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 				if (compare == 0)
 					compare = theOnExact;
 				return compare;
+			}
+
+			@Override
+			public int hashCode() {
+				return Objects.hash(theCompare, theValue, theOnExact);
 			}
 
 			@Override
@@ -429,6 +448,46 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			Comparable<? super E> to = toIndex == size() ? null : searchFor(get(toIndex), -1);
 			return subSet(from, to);
 		}
+	}
+
+	/**
+	 * @param <E> The type of value to compare
+	 * @param c1 The first search
+	 * @param c2 The other search
+	 * @param low Whether the other search is for the lower or upper bound of a new sorted set
+	 * @return A lower or upper bound for both the given search and this sub set's lower or upper bound
+	 */
+	public static <E> Comparable<? super E> and(Comparable<? super E> c1, Comparable<? super E> c2, boolean low) {
+		if (c1 == null)
+			return c2;
+		else if (c2 == null)
+			return c1;
+		class AndCompare implements Comparable<E> {
+			@Override
+			public int compareTo(E v) {
+				int comp = c1.compareTo(v);
+				if (low && comp <= 0)
+					comp = c2.compareTo(v);
+				else if (!low && comp >= 0)
+					comp = c2.compareTo(v);
+				return comp;
+			}
+
+			@Override
+			public String toString() {
+				return c1 + " and " + c2;
+			}
+		}
+		return new AndCompare();
+	}
+
+	/**
+	 * @param <E> The type of the set
+	 * @param compare The comparator for the set
+	 * @return An immutable, empty sorted set
+	 */
+	public static <E> BetterSortedSet<E> empty(Comparator<? super E> compare) {
+		return new EmptySortedSet<>(compare);
 	}
 
 	/**
@@ -785,37 +844,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 		@Override
 		public BetterSortedSet<E> subSet(Comparable<? super E> innerFrom, Comparable<? super E> innerTo) {
-			return new BetterSubSet<>(theWrapped, and(innerFrom, true), and(innerTo, false));
-		}
-
-		/**
-		 * @param c2 The other search
-		 * @param low Whether the other search is for the lower or upper bound of a new sorted set
-		 * @return A lower or upper bound for both the given search and this sub set's lower or upper bound
-		 */
-		protected Comparable<? super E> and(Comparable<? super E> c2, boolean low) {
-			Comparable<? super E> c1 = low ? from : to;
-			if (c1 == null)
-				return c2;
-			else if (c2 == null)
-				return c1;
-			class AndCompare implements Comparable<E> {
-				@Override
-				public int compareTo(E v) {
-					int comp = c1.compareTo(v);
-					if (low && comp <= 0)
-						comp = c2.compareTo(v);
-					else if (!low && comp >= 0)
-						comp = c2.compareTo(v);
-					return comp;
-				}
-
-				@Override
-				public String toString() {
-					return c1 + " and " + c2;
-				}
-			}
-			return new AndCompare();
+			return new BetterSubSet<>(theWrapped, and(from, innerFrom, true), and(to, innerTo, false));
 		}
 
 		@Override
@@ -861,6 +890,16 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 				theWrapped.clear();
 			else
 				removeIf(v -> true);
+		}
+
+		@Override
+		public int hashCode() {
+			return BetterCollection.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterCollection.equals(this, obj);
 		}
 
 		@Override
@@ -1063,6 +1102,34 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 			ret.append('}');
 			return ret.toString();
+		}
+	}
+
+	/**
+	 * Implements {@link BetterSortedSet#empty(Comparator)}
+	 * 
+	 * @param <E> The type of the set
+	 */
+	public static class EmptySortedSet<E> extends BetterList.EmptyList<E> implements BetterSortedSet<E> {
+		private final Comparator<? super E> theCompare;
+
+		EmptySortedSet(Comparator<? super E> compare) {
+			theCompare = compare;
+		}
+
+		@Override
+		public Comparator<? super E> comparator() {
+			return theCompare;
+		}
+
+		@Override
+		public int indexFor(Comparable<? super E> search) {
+			return -1;
+		}
+
+		@Override
+		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+			return null;
 		}
 	}
 }
