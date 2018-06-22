@@ -620,7 +620,13 @@ public abstract class QommonsConfig implements Cloneable {
 		return "classpath://" + clazz.getName().replaceAll("\\.", "/") + ".class";
 	}
 
-	private static String resolve(String location, String... relative) throws java.io.IOException {
+	/**
+	 * @param location The path of the resource to find
+	 * @param relative The list of paths that the location is relative to
+	 * @return The path that the given resource should be located ad
+	 * @throws java.io.IOException If any of the given paths cannot be interpreted
+	 */
+	public static String resolve(String location, String... relative) throws java.io.IOException {
 		if(location.contains(":/"))
 			return location;
 		else if(relative.length > 0) {
