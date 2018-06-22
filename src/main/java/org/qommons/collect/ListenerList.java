@@ -48,7 +48,6 @@ public class ListenerList<E> {
 			} finally {
 				theLock.set(false);
 			}
-			next = this; //Mark this node as removed
 		}
 	}
 
