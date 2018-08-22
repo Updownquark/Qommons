@@ -42,7 +42,7 @@ public class Debug {
 		return singleton;
 	}
 
-	// private final ThreadLocal<Debug> theThreads;
+	private final ThreadLocal<DebugData> theThreads;
 	private final ListenerList<Runnable> theChecks;
 	private final ListenerList<Consumer<DebugData>> theWatchers;
 	private final Map<String, DebugData> theData;
@@ -51,6 +51,13 @@ public class Debug {
 	private AtomicLong isActive;
 
 	private Debug(boolean active) {
+		theThreads = new ThreadLocal<DebugData>() {
+			@Override
+			protected DebugData initialValue() {
+				Thread thread = Thread.currentThread();
+				return debug(thread, true);
+			}
+		};
 		theChecks = new ListenerList<>(null);
 		theWatchers = new ListenerList<>(null);
 		theData = new TreeMap<>();
@@ -154,6 +161,10 @@ public class Debug {
 		if (d != null && subPath == null && action != null)
 			action.accept(d);
 		return d;
+	}
+
+	public DebugData threadDebug() {
+		return theThreads.get();
 	}
 
 	public DebugData debug(Object value) {

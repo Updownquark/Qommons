@@ -12,9 +12,18 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 	private final StampedLock theUpdateLocker;
 	private final AtomicLong theModCount;
 	private final AtomicLong theStructureChanges;
+	private int optimisticTries;
 
 	/** Creates the locking strategy */
 	public StampedLockingStrategy() {
+		this(1);
+	}
+
+	public StampedLockingStrategy(int optimisticTries) {
+		this(new StampedLock(), optimisticTries);
+	}
+
+	public StampedLockingStrategy(StampedLock lock, int optimisticTries) {
 		theStampCollection = new ThreadLocal<ThreadState>() {
 			@Override
 			protected ThreadState initialValue() {
@@ -25,6 +34,7 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 		theUpdateLocker = new StampedLock();
 		theModCount = new AtomicLong(0);
 		theStructureChanges = new AtomicLong(0);
+		this.optimisticTries = optimisticTries;
 	}
 
 	@Override
@@ -38,15 +48,72 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 	}
 
 	@Override
-	public long getStatus(boolean structural) {
+	public long getStamp(boolean structural) {
 		return structural ? theStructureChanges.get() : theModCount.get();
 	}
 
 	@Override
-	public void changed(boolean structural) {
-		theModCount.incrementAndGet();
-		if (structural)
-			theStructureChanges.incrementAndGet();
+	public <T> T doOptimistically(T init, OptimisticOperation<T> operation, boolean allowUpdate) {
+		if (optimisticTries == 0)
+			try (Transaction t = lock(false, allowUpdate, null)) {
+				return operation.apply(init, OptimisticContext.TRUE);
+			}
+		T res = init;
+		long[] structStamp = new long[] { theStructureLocker.tryOptimisticRead() };
+		long[] updateStamp = allowUpdate ? null : new long[] { theUpdateLocker.tryOptimisticRead() };
+		boolean[] keepTrying = new boolean[] { true };
+		for (int i = 0; keepTrying[0] && structStamp[0] != 0 && (allowUpdate || updateStamp[0] != 0) && i < optimisticTries; i++) {
+			keepTrying[0] = false;
+			res = operation.apply(res, //
+				() -> {
+					if (!theStructureLocker.validate(structStamp[0]) || (!allowUpdate && !theUpdateLocker.validate(updateStamp[0]))) {
+						keepTrying[0] = true;
+						structStamp[0] = theStructureLocker.tryOptimisticRead();
+						if (allowUpdate)
+							updateStamp[0] = theUpdateLocker.tryOptimisticRead();
+						return false;
+					}
+					return true;
+				});
+		}
+		if (keepTrying[0]) {
+			try (Transaction t = lock(false, allowUpdate, null)) {
+				res = operation.apply(init, OptimisticContext.TRUE);
+			}
+		}
+		return res;
+	}
+
+	@Override
+	public int doOptimistically(int init, OptimisticIntOperation operation, boolean allowUpdate) {
+		if (optimisticTries == 0)
+			try (Transaction t = lock(false, allowUpdate, null)) {
+				return operation.apply(init, OptimisticContext.TRUE);
+			}
+		int res = init;
+		long[] structStamp = new long[] { theStructureLocker.tryOptimisticRead() };
+		long[] updateStamp = allowUpdate ? null : new long[] { theUpdateLocker.tryOptimisticRead() };
+		boolean[] keepTrying = new boolean[] { true };
+		for (int i = 0; keepTrying[0] && structStamp[0] != 0 && (allowUpdate || updateStamp[0] != 0) && i < optimisticTries; i++) {
+			keepTrying[0] = false;
+			res = operation.apply(res, //
+				() -> {
+					if (!theStructureLocker.validate(structStamp[0]) || (!allowUpdate && !theUpdateLocker.validate(updateStamp[0]))) {
+						keepTrying[0] = true;
+						structStamp[0] = theStructureLocker.tryOptimisticRead();
+						if (allowUpdate)
+							updateStamp[0] = theUpdateLocker.tryOptimisticRead();
+						return false;
+					}
+					return true;
+				});
+		}
+		if (keepTrying[0]) {
+			try (Transaction t = lock(false, allowUpdate, null)) {
+				res = operation.apply(init, OptimisticContext.TRUE);
+			}
+		}
+		return res;
 	}
 
 	static class LockStamp {
@@ -92,6 +159,13 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 		}
 
 		Transaction obtain(boolean write, boolean structural) {
+			if (write) {
+				if (structural && structureStamp.stamp == 0) {
+					theStructureChanges.getAndIncrement();
+					theModCount.getAndIncrement();
+				} else if (updateStamp.stamp == 0)
+					theModCount.getAndIncrement();
+			}
 			Transaction structTrans = structureStamp.lock(theStructureLocker, write && structural);
 			Transaction updateTrans;
 			try {

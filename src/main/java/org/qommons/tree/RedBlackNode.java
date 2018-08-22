@@ -51,6 +51,7 @@ public class RedBlackNode<E> {
 	private int theSizeAdjustment;
 
 	private E theValue;
+	Object wrapper;
 
 	/**
 	 * @param tree The tree structure that this node shall belong to
@@ -541,8 +542,17 @@ public class RedBlackNode<E> {
 			parent = child;
 			child = parent.getChild(childSide);
 		}
+		CachedIndex ci = theCachedIndex;
+		if (ci != null && ci.stamp != theTree.theStructureStamp)
+			ci = null;
 		parent.setChild(node, childSide);
 		theTree.setRoot(fixAfterInsertion(node));
+		if (ci != null) {
+			// We can keep the new child's and this node's cached index up-to-date easily
+			long newStamp = theTree.theStructureStamp;
+			theCachedIndex = new CachedIndex(left ? ci.index + 1 : ci.index, newStamp);
+			node.theCachedIndex = new CachedIndex(left ? ci.index : ci.index + 1, newStamp);
+		}
 	}
 
 	/** Removes this node (but not its children) from the tree, rebalancing if necessary */

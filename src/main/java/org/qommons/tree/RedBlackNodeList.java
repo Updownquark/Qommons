@@ -14,6 +14,7 @@ import org.qommons.collect.ElementId;
 import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.MutableElementSpliterator;
+import org.qommons.collect.OptimisticContext;
 
 /**
  * An abstract implementation of a tree-backed collection. Since fast indexing is supported, BetterList is implemented.
@@ -32,6 +33,11 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	public RedBlackNodeList(CollectionLockingStrategy locker) {
 		theLocker = locker;
 		theTree = new RedBlackTree<>();
+	}
+
+	/** @return This collection's locking strategy */
+	protected CollectionLockingStrategy getLocker() {
+		return theLocker;
 	}
 
 	/** @return The root of this list's backing tree structure */
@@ -67,7 +73,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 	@Override
 	public long getStamp(boolean structuralOnly) {
-		return theLocker.getStatus(structuralOnly);
+		return theLocker.getStamp(structuralOnly);
 	}
 
 	@Override
@@ -104,16 +110,12 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 	@Override
 	public Object[] toArray() {
-		try (Transaction t = lock(false, true, null)) {
-			return BetterList.super.toArray();
-		}
+		return BetterList.super.toArray();
 	}
 
 	@Override
 	public <T> T[] toArray(T[] a) {
-		try (Transaction t = lock(false, true, null)) {
-			return BetterList.super.toArray(a);
-		}
+		return BetterList.super.toArray(a);
 	}
 
 	@Override
@@ -163,19 +165,20 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	public BinaryTreeNode<E> addElement(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException {
 		RedBlackNode<E> newNode = new RedBlackNode<>(theTree, value);
-		if (first && after != null) {
-			if (!((NodeId) after).theNode.isPresent())
-				throw new IllegalArgumentException("Unrecognized element");
-			((NodeId) after).theNode.add(newNode, false);
-		} else if (!first && before != null) {
-			if (!((NodeId) before).theNode.isPresent())
-				throw new IllegalArgumentException("Unrecognized element");
-			((NodeId) before).theNode.add(newNode, true);
-		} else if (theTree.getRoot() == null)
-			theTree.setRoot(newNode);
-		else
-			theTree.getTerminal(first).add(newNode, first);
-		theLocker.changed(true);
+		try (Transaction t = theLocker.lock(true, true, null)) {
+			if (first && after != null) {
+				if (!((NodeId) after).theNode.isPresent())
+					throw new IllegalArgumentException("Unrecognized element");
+				((NodeId) after).theNode.add(newNode, false);
+			} else if (!first && before != null) {
+				if (!((NodeId) before).theNode.isPresent())
+					throw new IllegalArgumentException("Unrecognized element");
+				((NodeId) before).theNode.add(newNode, true);
+			} else if (theTree.getRoot() == null)
+				theTree.setRoot(newNode);
+			else
+				theTree.getTerminal(first).add(newNode, first);
+		}
 		return wrap(newNode);
 	}
 
@@ -253,7 +256,11 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	}
 
 	private NodeWrapper wrap(RedBlackNode<E> node) {
-		return node == null ? null : new NodeWrapper(node);
+		if (node == null)
+			return null;
+		if (node.wrapper == null)
+			node.wrapper = new NodeWrapper(node);
+		return (NodeWrapper) node.wrapper;
 	}
 
 	private MutableNodeWrapper wrapMutable(RedBlackNode<E> node) {
@@ -381,9 +388,9 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		}
 
 		@Override
-		public BinaryTreeNode<E> get(int index) {
+		public BinaryTreeNode<E> get(int index, OptimisticContext ctx) {
 			return theLocker.doOptimistically(null, //
-				(init, ctx) -> wrap(theNode.get(index, ctx)), true);
+				(init, ctx2) -> wrap(theNode.get(index, OptimisticContext.and(ctx, ctx2))), true);
 		}
 
 		@Override
@@ -460,13 +467,16 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		}
 
 		@Override
-		public MutableBinaryTreeNode<E> get(int index) {
-			return theLocker.doOptimistically(null, (init, ctx) -> wrapMutable(theNode.get(index, ctx)), true);
+		public MutableBinaryTreeNode<E> get(int index, OptimisticContext ctx) {
+			return theLocker.doOptimistically(null, (init, ctx2) -> wrapMutable(theNode.get(index, OptimisticContext.and(ctx, ctx2))),
+				true);
 		}
 
 		@Override
-		public MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly) {
-			return mutableNodeFor(super.findClosest(finder, lesser, strictly));
+		public MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly,
+			OptimisticContext ctx) {
+			return theLocker.doOptimistically(null,
+				(init, ctx2) -> mutableNodeFor(super.findClosest(finder, lesser, strictly, OptimisticContext.and(ctx, ctx2))), true);
 		}
 
 		@Override
@@ -489,7 +499,6 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
 				theNode.setValue(value);
-				theLocker.changed(false);
 			}
 		}
 
@@ -504,7 +513,6 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
 				theNode.delete();
-				theLocker.changed(true);
 			}
 		}
 
@@ -520,7 +528,6 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 					throw new IllegalStateException("This element has been removed");
 				RedBlackNode<E> newNode = new RedBlackNode<>(theTree, value);
 				theNode.add(newNode, onLeft);
-				theLocker.changed(true);
 				return new NodeId(newNode);
 			}
 		}
@@ -641,7 +648,8 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		protected boolean internalForElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
 			if (!tryElement(!forward))
 				return false;
-			action.accept(new MutableSpliteratorNode(current, wrapMutable(current)));
+			action.accept(//
+				new MutableSpliteratorNode(current, wrapMutable(current)));
 			return true;
 		}
 
@@ -786,15 +794,20 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 			}
 
 			@Override
-			public MutableBinaryTreeNode<E> get(int index) {
-				return wrapSpliterNode(RedBlackNodeList.this.theLocker.doOptimistically(null, (init, ctx) -> theNode.get(index, ctx), true),
+			public MutableBinaryTreeNode<E> get(int index, OptimisticContext ctx) {
+				return wrapSpliterNode(RedBlackNodeList.this.theLocker.doOptimistically(null,
+					(init, ctx2) -> theNode.get(index, OptimisticContext.and(ctx, ctx2)), true),
 					null);
 			}
 
 			@Override
-			public MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly) {
-				MutableBinaryTreeNode<E> found = theWrapped.findClosest(finder, lesser, strictly);
-				return found == null ? null : wrapSpliterNode(((MutableNodeWrapper) found).theNode, found);
+			public MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly,
+				OptimisticContext ctx) {
+				return RedBlackNodeList.this.theLocker.doOptimistically(null, //
+					(init, ctx2) -> {
+						MutableBinaryTreeNode<E> found = theWrapped.findClosest(finder, lesser, strictly, OptimisticContext.and(ctx, ctx2));
+						return found == null ? null : wrapSpliterNode(((MutableNodeWrapper) found).theNode, found);
+					}, true);
 			}
 
 			@Override

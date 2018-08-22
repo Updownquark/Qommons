@@ -3,6 +3,7 @@ package org.qommons.collect;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.ToIntFunction;
 
 import org.qommons.Transaction;
@@ -24,8 +25,17 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		@Override
 		public HashMapBuilder withEquivalence(ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals) {
 			return (HashMapBuilder) super.withEquivalence(//
-				entry -> hasher.applyAsInt(((Map.Entry<?, ?>) entry).getKey()), //
-				(entry1, entry2) -> equals.apply(((Map.Entry<?, ?>) entry1).getKey(), ((Map.Entry<?, ?>) entry2).getKey())//
+				entry -> {
+					if (entry instanceof Map.Entry)
+						return hasher.applyAsInt(((Map.Entry<?, ?>) entry).getKey());
+					else
+						return hasher.applyAsInt(entry);
+				}, (entry1, entry2) -> {
+					if (entry1 instanceof Map.Entry && entry2 instanceof Map.Entry)
+						return equals.apply(((Map.Entry<?, ?>) entry1).getKey(), ((Map.Entry<?, ?>) entry2).getKey());
+					else
+						return equals.apply(entry1, entry2);
+				}
 			);
 		}
 
@@ -72,14 +82,32 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	}
 
 	private final BetterHashSet<Map.Entry<K, V>> theEntries;
+	private final KeySet theKeySet;
 
 	private BetterHashMap(BetterHashSet<Map.Entry<K, V>> entries) {
 		theEntries = entries;
+		theKeySet = new KeySet();
+	}
+
+	/**
+	 * @param capacity The minimum capacity for this map
+	 * @return Whether the map was rebuilt
+	 */
+	public boolean ensureCapacity(int capacity) {
+		return theEntries.ensureCapacity(capacity);
+	}
+
+	/**
+	 * @return The efficiency of this hash map
+	 * @see BetterHashSet#getEfficiency()
+	 */
+	public double getEfficiency() {
+		return theEntries.getEfficiency();
 	}
 
 	@Override
 	public BetterSet<K> keySet() {
-		return new KeySet();
+		return theKeySet;
 	}
 
 	/**
@@ -88,17 +116,20 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	 * @return The map entry for the key to use in this map
 	 */
 	public Map.Entry<K, V> newEntry(K key, V value) {
-		return new SimpleMapEntry<>(key, value, true);
+		return new Entry(key, value);
 	}
 
 	@Override
 	public MapEntryHandle<K, V> putEntry(K key, V value, boolean first) {
 		try (Transaction t = theEntries.lock(true, null)) {
-			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(new SimpleMapEntry<>(key, value), true);
+			Entry newEntry = (Entry) newEntry(key, value);
+			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(newEntry, true);
 			if (entryEl != null) {
 				entryEl.get().setValue(value);
-			} else
-				entryEl = theEntries.addElement(newEntry(key, value), first);
+			} else {
+				entryEl = theEntries.addElement(newEntry, first);
+				((Entry) entryEl.get()).setId(entryEl.getElementId());
+			}
 			return handleFor(entryEl);
 		}
 	}
@@ -106,21 +137,33 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	@Override
 	public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
 		try (Transaction t = theEntries.lock(true, null)) {
-			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(new SimpleMapEntry<>(key, value), true);
+			Entry newEntry = (Entry) newEntry(key, value);
+			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.addElement(newEntry, true);
 			if (entryEl != null) {
 				entryEl.get().setValue(value);
-			} else
-				entryEl = theEntries.addElement(newEntry(key, value), after, before, first);
+			} else {
+				entryEl = theEntries.addElement(newEntry, after, before, first);
+				((Entry) entryEl.get()).setId(entryEl.getElementId());
+			}
 			return handleFor(entryEl);
 		}
 	}
 
 	@Override
 	public MapEntryHandle<K, V> getEntry(K key) {
-		try (Transaction t = theEntries.lock(false, null)) {
-			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(new SimpleMapEntry<>(key, null), true);
-			return entryEl == null ? null : handleFor(entryEl);
-		}
+		CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(theEntries.getHasher().applyAsInt(key),
+			entry -> theEntries.getEquals().apply(entry.getKey(), key));
+		return entryEl == null ? null : handleFor(entryEl);
+	}
+
+	@Override
+	public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, boolean first, Runnable added) {
+		CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getOrAdd(//
+			theEntries.getHasher().applyAsInt(key), entry -> theEntries.getEquals().apply(entry.getKey(), key), //
+			() -> newEntry(key, value.apply(key)), null, null, first, added);
+		if (entryEl == null)
+			return null;
+		return handleFor(entryEl);
 	}
 
 	@Override
@@ -133,42 +176,20 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		return mutableHandleFor(theEntries.mutableElement(entryId));
 	}
 
+	public boolean isValid(ElementId elementId) {
+		return theEntries.isValid(elementId);
+	}
+
 	/**
 	 * @param entry The element in the entry set
 	 * @return The map handle for the entry
 	 */
 	protected MapEntryHandle<K, V> handleFor(CollectionElement<? extends Map.Entry<K, V>> entry) {
-		return new MapEntryHandle<K, V>() {
-			@Override
-			public ElementId getElementId() {
-				return entry.getElementId();
-			}
-
-			@Override
-			public K getKey() {
-				return entry.get().getKey();
-			}
-
-			@Override
-			public V get() {
-				return entry.get().getValue();
-			}
-
-			@Override
-			public int hashCode() {
-				return entry.hashCode();
-			}
-
-			@Override
-			public boolean equals(Object obj) {
-				return entry.equals(obj);
-			}
-
-			@Override
-			public String toString() {
-				return entry.toString();
-			}
-		};
+		if (entry == null)
+			return null;
+		Entry e = (Entry) entry.get();
+		e.setId(entry.getElementId());
+		return e;
 	}
 
 	/**
@@ -176,82 +197,35 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	 * @return The mutable map handle for the entry
 	 */
 	protected MutableMapEntryHandle<K, V> mutableHandleFor(MutableCollectionElement<? extends Map.Entry<K, V>> entry) {
-		return new MutableMapEntryHandle<K, V>() {
-			@Override
-			public BetterCollection<V> getCollection() {
-				return values();
-			}
-
-			@Override
-			public ElementId getElementId() {
-				return entry.getElementId();
-			}
-
-			@Override
-			public K getKey() {
-				return entry.get().getKey();
-			}
-
-			@Override
-			public V get() {
-				return entry.get().getValue();
-			}
-
-			@Override
-			public String isEnabled() {
-				return null;
-			}
-
-			@Override
-			public String isAcceptable(V value) {
-				return null;
-			}
-
-			@Override
-			public void set(V value) throws UnsupportedOperationException, IllegalArgumentException {
-				((Map.Entry<K, V>) entry.get()).setValue(value);
-			}
-
-			@Override
-			public String canRemove() {
-				return entry.canRemove();
-			}
-
-			@Override
-			public void remove() throws UnsupportedOperationException {
-				entry.remove();
-			}
-
-			@Override
-			public String canAdd(V value, boolean before) {
-				return StdMsg.UNSUPPORTED_OPERATION;
-			}
-
-			@Override
-			public ElementId add(V value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-			}
-
-			@Override
-			public int hashCode() {
-				return entry.hashCode();
-			}
-
-			@Override
-			public boolean equals(Object obj) {
-				return entry.equals(obj);
-			}
-
-			@Override
-			public String toString() {
-				return entry.toString();
-			}
-		};
+		return entry == null ? null : ((Entry) entry.get()).mutable();
 	}
 
 	@Override
 	public String toString() {
 		return entrySet().toString();
+	}
+
+	class Entry extends BetterMapEntryImpl<K, V> {
+		Entry(K key, V value) {
+			super(key, value);
+		}
+
+		void setId(ElementId id) {
+			theId = id;
+		}
+
+		MutableMapEntryHandle<K, V> mutable() {
+			return super.mutable(theEntries, BetterHashMap.this::values);
+		}
+
+		@Override
+		protected CollectionElement<K> keyHandle() {
+			return super.keyHandle();
+		}
+
+		MutableCollectionElement<K> mutableKeyHandle() {
+			return mutableKeyHandle(theEntries, BetterHashMap.this::keySet);
+		}
 	}
 
 	class KeySet implements BetterSet<K> {
@@ -296,63 +270,11 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		protected CollectionElement<K> handleFor(CollectionElement<? extends Map.Entry<K, V>> entryEl) {
-			if (entryEl == null)
-				return null;
-			return new CollectionElement<K>() {
-				@Override
-				public ElementId getElementId() {
-					return entryEl.getElementId();
-				}
-
-				@Override
-				public K get() {
-					return entryEl.get().getKey();
-				}
-			};
+			return entryEl == null ? null : ((Entry) entryEl.get()).keyHandle();
 		}
 
 		protected MutableCollectionElement<K> mutableHandleFor(MutableCollectionElement<? extends Map.Entry<K, V>> entryEl) {
-			return new MutableCollectionElement<K>() {
-				@Override
-				public BetterCollection<K> getCollection() {
-					return KeySet.this;
-				}
-
-				@Override
-				public ElementId getElementId() {
-					return entryEl.getElementId();
-				}
-
-				@Override
-				public K get() {
-					return entryEl.get().getKey();
-				}
-
-				@Override
-				public String isEnabled() {
-					return entryEl.isEnabled();
-				}
-
-				@Override
-				public String isAcceptable(K value) {
-					return ((MutableCollectionElement<Map.Entry<K, V>>) entryEl).isAcceptable(new SimpleMapEntry<>(value, null));
-				}
-
-				@Override
-				public void set(K value) throws UnsupportedOperationException, IllegalArgumentException {
-					((MutableCollectionElement<Map.Entry<K, V>>) entryEl).set(new SimpleMapEntry<>(value, entryEl.get().getValue()));
-				}
-
-				@Override
-				public String canRemove() {
-					return entryEl.canRemove();
-				}
-
-				@Override
-				public void remove() throws UnsupportedOperationException {
-					entryEl.remove();
-				}
-			};
+			return entryEl == null ? null : ((Entry) entryEl.get()).mutableKeyHandle();
 		}
 
 		@Override
@@ -374,6 +296,12 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		@Override
 		public CollectionElement<K> getElement(ElementId id) {
 			return handleFor(theEntries.getElement(id));
+		}
+
+		@Override
+		public CollectionElement<K> getOrAdd(K value, boolean first, Runnable added) {
+			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getOrAdd(newEntry(value, null), first, added);
+			return entryEl == null ? null : handleFor(entryEl);
 		}
 
 		@Override
@@ -464,6 +392,58 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 			@Override
 			protected boolean internalForElementM(Consumer<? super MutableCollectionElement<K>> action, boolean forward) {
 				return theEntrySpliter.forElementM(el -> action.accept(mutableHandleFor(el)), forward);
+			}
+
+			MutableCollectionElement<K> mutableHandleFor(MutableCollectionElement<Map.Entry<K, V>> el) {
+				return new KeySpliterEl(el);
+			}
+
+			class KeySpliterEl implements MutableCollectionElement<K> {
+				private final MutableCollectionElement<Map.Entry<K, V>> theWrappedEl;
+
+				KeySpliterEl(MutableCollectionElement<java.util.Map.Entry<K, V>> wrappedEl) {
+					theWrappedEl = wrappedEl;
+				}
+
+				@Override
+				public ElementId getElementId() {
+					return theWrappedEl.getElementId();
+				}
+
+				@Override
+				public K get() {
+					return theWrappedEl.get().getKey();
+				}
+
+				@Override
+				public BetterCollection<K> getCollection() {
+					return KeySet.this;
+				}
+
+				@Override
+				public String isEnabled() {
+					return theWrappedEl.isEnabled();
+				}
+
+				@Override
+				public String isAcceptable(K value) {
+					return theWrappedEl.isAcceptable(new SimpleMapEntry<>(value, null));
+				}
+
+				@Override
+				public void set(K value) throws UnsupportedOperationException, IllegalArgumentException {
+					((Entry) theWrappedEl.get()).mutableKeyHandle().set(value);
+				}
+
+				@Override
+				public String canRemove() {
+					return theWrappedEl.canRemove();
+				}
+
+				@Override
+				public void remove() throws UnsupportedOperationException {
+					theWrappedEl.remove();
+				}
 			}
 
 			@Override

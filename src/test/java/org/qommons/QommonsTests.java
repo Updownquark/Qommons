@@ -3,7 +3,6 @@ package org.qommons;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 import org.junit.runners.Suite.SuiteClasses;
-import org.qommons.collect.CircularListTest;
 import org.qommons.collect.HashSetTest;
 import org.qommons.tree.TreeUtilsTest;
 
@@ -11,7 +10,7 @@ import org.qommons.tree.TreeUtilsTest;
 @SuiteClasses({ //
 	IterableUtilsTest.class, //
 	TreeUtilsTest.class, //
-	CircularListTest.class, //
+	// CircularListTest.class, // TODO This class is currently deprecated. Uncomment this when it's operational.
 	HashSetTest.class//
 })
 public class QommonsTests {

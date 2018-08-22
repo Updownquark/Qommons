@@ -1,6 +1,7 @@
 package org.qommons.collect;
 
 import java.util.Collection;
+import java.util.ConcurrentModificationException;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -508,7 +509,12 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	@Override
 	default Iterator<E> iterator() {
-		return new SpliteratorIterator<>(spliterator());
+		return new BetterCollectionIterator<>(this);
+	}
+
+	/** @return An iterable over this collection's elements */
+	default Iterable<CollectionElement<E>> elements() {
+		return () -> new CollectionElementIterator<>(this);
 	}
 
 	/** @return A collection with the same content as this one, but whose order is reversed */
@@ -761,50 +767,93 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * 
 	 * @param <E> The type of values to iterate over
 	 */
-	class SpliteratorIterator<E> implements Iterator<E> {
-		private final MutableElementSpliterator<E> theSpliterator;
-
-		private boolean isNextCached;
-		private CollectionElement<E> cachedNext;
+	class BetterCollectionIterator<E> implements Iterator<E> {
+		private final BetterCollection<E> theCollection;
+		private CollectionElement<E> next;
 		private ElementId theLastElement;
 
-		public SpliteratorIterator(MutableElementSpliterator<E> spliterator) {
-			theSpliterator = spliterator;
+		public BetterCollectionIterator(BetterCollection<E> collection) {
+			theCollection = collection;
 		}
 
 		@Override
 		public boolean hasNext() {
-			if (!isNextCached) {
-				cachedNext = null;
-				if (theSpliterator.forElement(el -> cachedNext = el, true)) {
-					theLastElement = cachedNext.getElementId();
-					isNextCached = true;
-				}
+			if (next != null)
+				return true;
+			else {
+				if (theLastElement == null)
+					next = theCollection.getTerminalElement(true);
+				else if (theLastElement.isPresent())
+					next = theCollection.getAdjacentElement(theLastElement, true);
+				return next != null;
 			}
-			return isNextCached;
 		}
 
 		@Override
 		public E next() {
 			if (!hasNext())
-				throw new java.util.NoSuchElementException();
-			isNextCached = false;
-			E value = cachedNext.get();
-			cachedNext = null;
+				throw new NoSuchElementException();
+			theLastElement = next.getElementId();
+			if (!theLastElement.isPresent())
+				throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
+			E value = next.get();
+			next = null;
 			return value;
 		}
 
 		@Override
 		public void remove() {
 			if (theLastElement == null)
-				throw new IllegalStateException("iterator is finished, not started, or the element has been removed");
-			if (!theSpliterator.forElementM(el -> {
-				if (!el.getElementId().equals(theLastElement))
-					throw new IllegalStateException("element has been removed");
-				el.remove();
-			}, false))
-				throw new IllegalStateException("element has been removed");
-			theLastElement = null;
+				throw new IllegalStateException("Iterator is not started or there were no elements");
+			else if (!theLastElement.isPresent())
+				throw new IllegalStateException("Element has already been removed");
+			hasNext(); // Since last element will be removed after this, need to grab the next element (if there is one) before removing it
+			theCollection.mutableElement(theLastElement).remove();
+		}
+	}
+
+	class CollectionElementIterator<E> implements Iterator<CollectionElement<E>> {
+		private final BetterCollection<E> theCollection;
+		private CollectionElement<E> next;
+		private ElementId theLastElement;
+
+		public CollectionElementIterator(BetterCollection<E> collection) {
+			theCollection = collection;
+		}
+
+		@Override
+		public boolean hasNext() {
+			if (next != null)
+				return true;
+			else {
+				if (theLastElement == null)
+					next = theCollection.getTerminalElement(true);
+				else if (theLastElement.isPresent())
+					next = theCollection.getAdjacentElement(theLastElement, true);
+				return next != null;
+			}
+		}
+
+		@Override
+		public CollectionElement<E> next() {
+			if (!hasNext())
+				throw new NoSuchElementException();
+			theLastElement = next.getElementId();
+			if (!theLastElement.isPresent())
+				throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
+			CollectionElement<E> element = next;
+			next = null;
+			return element;
+		}
+
+		@Override
+		public void remove() {
+			if (theLastElement == null)
+				throw new IllegalStateException("Iterator is not started or there were no elements");
+			else if (!theLastElement.isPresent())
+				throw new IllegalStateException("Element has already been removed");
+			hasNext(); // Since last element will be removed after this, need to grab the next element (if there is one) before removing it
+			theCollection.mutableElement(theLastElement).remove();
 		}
 	}
 

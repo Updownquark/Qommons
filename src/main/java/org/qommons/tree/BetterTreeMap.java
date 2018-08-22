@@ -3,11 +3,13 @@ package org.qommons.tree;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import org.qommons.Transaction;
 import org.qommons.collect.BetterCollection;
+import org.qommons.collect.BetterMapEntryImpl;
+import org.qommons.collect.BetterSet;
 import org.qommons.collect.BetterSortedMap;
 import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
@@ -18,6 +20,7 @@ import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.MutableMapEntryHandle;
+import org.qommons.collect.OptimisticContext;
 import org.qommons.collect.SimpleMapEntry;
 import org.qommons.collect.StampedLockingStrategy;
 
@@ -31,6 +34,7 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 	/** The key comparator for the map */
 	protected final Comparator<? super K> theCompare;
 	private final BetterTreeEntrySet<K, V> theEntries;
+	private final KeySet theKeySet;
 
 	/**
 	 * @param threadSafe Whether to secure this collection for thread-safety
@@ -47,6 +51,7 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 	public BetterTreeMap(CollectionLockingStrategy locker, Comparator<? super K> compare) {
 		theCompare = compare;
 		theEntries = new BetterTreeEntrySet<>(locker, compare);
+		theKeySet = new KeySet();
 	}
 
 	/** Checks this map's structure for errors */
@@ -56,7 +61,7 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 
 	@Override
 	public BetterSortedSet<K> keySet() {
-		return new KeySet();
+		return theKeySet;
 	}
 
 	@Override
@@ -66,8 +71,7 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 
 	@Override
 	public BinaryTreeEntry<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
-		BinaryTreeNode<Map.Entry<K, V>> entry = theEntries.addElement(newEntry(key, value), after, before, first);
-		return entry == null ? null : new TreeEntry<>(entry);
+		return wrap(theEntries.addElement(newEntry(key, value), after, before, first));
 	}
 
 	/**
@@ -76,30 +80,28 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 	 * @return The map entry for the key to use in this map
 	 */
 	protected Map.Entry<K, V> newEntry(K key, V value) {
-		return new SimpleMapEntry<>(key, value, true);
+		return new TreeEntry(key, value);
 	}
 
 	@Override
 	public BinaryTreeEntry<K, V> getEntry(K key) {
-		BinaryTreeNode<Map.Entry<K, V>> entry = theEntries.search(//
-			e -> theCompare.compare(key, e.getKey()), SortedSearchFilter.OnlyMatch);
-		return entry == null ? null : new TreeEntry<>(entry);
+		return wrap(theEntries.search(//
+			e -> theCompare.compare(key, e.getKey()), SortedSearchFilter.OnlyMatch));
 	}
 
 	@Override
 	public BinaryTreeEntry<K, V> getEntryById(ElementId entryId) {
-		return new TreeEntry<>(theEntries.getElement(entryId));
+		return wrap(theEntries.getElement(entryId));
 	}
 
 	@Override
 	public BinaryTreeEntry<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter) {
-		BinaryTreeNode<Map.Entry<K, V>> entry = theEntries.search(search, filter);
-		return entry == null ? null : new TreeEntry<>(entry);
+		return wrap(theEntries.search(search, filter));
 	}
 
 	@Override
 	public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
-		return new MutableTreeEntry<>(this, theEntries.mutableElement(entryId));
+		return wrapMutable((TreeEntry) theEntries.getElement(entryId).get());
 	}
 
 	@Override
@@ -134,40 +136,29 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		return theEntries.toString();
 	}
 
-	static class BetterTreeEntrySet<K, V> extends BetterTreeSet<Map.Entry<K, V>> {
-		BetterTreeEntrySet(CollectionLockingStrategy locker, Comparator<? super K> compare) {
-			super(locker, (e1, e2) -> compare.compare(e1.getKey(), e2.getKey()));
-		}
+	TreeEntry wrap(BinaryTreeNode<Map.Entry<K, V>> entryNode) {
+		if (entryNode == null)
+			return null;
+		TreeEntry entry = (TreeEntry) entryNode.get();
+		if (entry.theEntryNode == null)
+			entry.setNode(entryNode);
+		return entry;
 	}
 
-	static class TreeEntry<K, V> implements BinaryTreeEntry<K, V> {
-		private final BinaryTreeNode<Map.Entry<K, V>> theEntryNode;
+	class TreeEntry extends BetterMapEntryImpl<K, V> implements BinaryTreeEntry<K, V> {
+		BinaryTreeNode<Map.Entry<K, V>> theEntryNode;
 
-		public TreeEntry(BinaryTreeNode<Map.Entry<K, V>> entryNode) {
-			theEntryNode = entryNode;
+		TreeEntry(K key, V value) {
+			super(key, value);
+		}
+
+		void setNode(BinaryTreeNode<Map.Entry<K, V>> node) {
+			theEntryNode = node;
+			theId = node.getElementId();
 		}
 
 		protected BinaryTreeNode<Map.Entry<K, V>> getEntryNode() {
 			return theEntryNode;
-		}
-
-		static <K, V> TreeEntry<K, V> wrap(BinaryTreeNode<Map.Entry<K, V>> entryNode) {
-			return entryNode == null ? null : new TreeEntry<>(entryNode);
-		}
-
-		@Override
-		public ElementId getElementId() {
-			return theEntryNode.getElementId();
-		}
-
-		@Override
-		public K getKey() {
-			return theEntryNode.get().getKey();
-		}
-
-		@Override
-		public V get() {
-			return theEntryNode.get().getValue();
 		}
 
 		@Override
@@ -176,27 +167,23 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		}
 
 		@Override
-		public BinaryTreeEntry<K, V> getParent() {
-			BinaryTreeNode<Map.Entry<K, V>> parent = theEntryNode.getParent();
-			return parent == null ? null : new TreeEntry<>(parent);
+		public TreeEntry getParent() {
+			return wrap(theEntryNode.getParent());
 		}
 
 		@Override
-		public BinaryTreeEntry<K, V> getLeft() {
-			BinaryTreeNode<Map.Entry<K, V>> left = theEntryNode.getLeft();
-			return left == null ? null : new TreeEntry<>(left);
+		public TreeEntry getLeft() {
+			return wrap(theEntryNode.getLeft());
 		}
 
 		@Override
-		public BinaryTreeEntry<K, V> getRight() {
-			BinaryTreeNode<Map.Entry<K, V>> right = theEntryNode.getRight();
-			return right == null ? null : new TreeEntry<>(right);
+		public TreeEntry getRight() {
+			return wrap(theEntryNode.getRight());
 		}
 
 		@Override
-		public BinaryTreeEntry<K, V> getClosest(boolean left) {
-			BinaryTreeNode<Map.Entry<K, V>> close = theEntryNode.getClosest(left);
-			return close == null ? null : new TreeEntry<>(close);
+		public TreeEntry getClosest(boolean left) {
+			return wrap(theEntryNode.getClosest(left));
 		}
 
 		@Override
@@ -215,126 +202,143 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		}
 
 		@Override
-		public BinaryTreeEntry<K, V> getRoot() {
+		public TreeEntry getRoot() {
 			return wrap(theEntryNode.getRoot());
 		}
 
 		@Override
-		public BinaryTreeEntry<K, V> getSibling() {
+		public TreeEntry getSibling() {
 			return wrap(theEntryNode.getSibling());
 		}
 
 		@Override
-		public BinaryTreeEntry<K, V> get(int index) {
-			return wrap(theEntryNode.get(index));
+		public TreeEntry get(int index, OptimisticContext ctx) {
+			return theEntries.getLocker().doOptimistically(null, //
+				(init, ctx2) -> wrap(theEntryNode.get(index, OptimisticContext.and(ctx, ctx2))), true);
 		}
 
 		@Override
-		public BinaryTreeEntry<K, V> findClosest(Comparable<BinaryTreeNode<V>> finder, boolean lesser, boolean strictly) {
-			return wrap(theEntryNode.findClosest(n -> finder.compareTo(wrap(n)), lesser, strictly));
+		public TreeEntry findClosest(Comparable<BinaryTreeNode<V>> finder, boolean lesser, boolean strictly, OptimisticContext ctx) {
+			return theEntries.getLocker()
+				.doOptimistically(null, //
+					(init, ctx2) -> wrap(
+						theEntryNode.findClosest(n -> finder.compareTo(wrap(n)), lesser, strictly, OptimisticContext.and(ctx, ctx2))),
+					true);
+		}
+
+		MutableTreeEntry mutable() {
+			return (BetterTreeMap<K, V>.MutableTreeEntry) mutable(theEntries, BetterTreeMap.this::values);
 		}
 
 		@Override
-		public int hashCode() {
-			return Objects.hashCode(theEntryNode.get().getKey());
+		protected MutableMapEntryHandle<K, V> createMutableHandle(BetterSet<Entry<K, V>> entrySet, Supplier<BetterCollection<V>> values) {
+			return new MutableTreeEntry(this);
 		}
 
 		@Override
-		public boolean equals(Object obj) {
-			return obj instanceof Map.Entry && Objects.equals(theEntryNode.get().getKey(), ((Map.Entry<?, ?>) obj).getKey());
+		protected CollectionElement<K> keyHandle() {
+			return super.keyHandle();
 		}
 
-		@Override
-		public String toString() {
-			return theEntryNode.toString();
+		MutableCollectionElement<K> mutableKeyHandle() {
+			return mutableKeyHandle(theEntries, BetterTreeMap.this::keySet);
 		}
 	}
 
-	static class MutableTreeEntry<K, V> extends TreeEntry<K, V> implements MutableBinaryTreeEntry<K, V> {
-		private final BetterTreeMap<K, V> theMap;
-
-		public MutableTreeEntry(BetterTreeMap<K, V> map, MutableBinaryTreeNode<Map.Entry<K, V>> entryNode) {
-			super(entryNode);
-			theMap = map;
+	static class BetterTreeEntrySet<K, V> extends BetterTreeSet<Map.Entry<K, V>> {
+		BetterTreeEntrySet(CollectionLockingStrategy locker, Comparator<? super K> compare) {
+			super(locker, (e1, e2) -> compare.compare(e1.getKey(), e2.getKey()));
 		}
+	}
 
-		private MutableTreeEntry<K, V> wrap(MutableBinaryTreeNode<Map.Entry<K, V>> entryNode) {
-			return entryNode == null ? null : new MutableTreeEntry<>(theMap, entryNode);
+	MutableTreeEntry wrapMutable(TreeEntry entry) {
+		return entry == null ? null : entry.mutable();
+	}
+
+	class MutableTreeEntry extends BetterMapEntryImpl.BetterMapMutableEntryHandleImpl<K, V> implements MutableBinaryTreeEntry<K, V> {
+		public MutableTreeEntry(TreeEntry entry) {
+			super(entry, theEntries, BetterTreeMap.this::values);
 		}
 
 		@Override
-		protected MutableBinaryTreeNode<Map.Entry<K, V>> getEntryNode() {
-			return (MutableBinaryTreeNode<java.util.Map.Entry<K, V>>) super.getEntryNode();
+		protected TreeEntry getEntry() {
+			return (BetterTreeMap<K, V>.TreeEntry) super.getEntry();
 		}
 
 		@Override
-		public BetterCollection<V> getCollection() {
-			return theMap.values();
+		public int size() {
+			return getEntry().size();
+		}
+
+		@Override
+		public boolean getSide() {
+			return getEntry().getSide();
+		}
+
+		@Override
+		public int getNodesBefore() {
+			return getEntry().getNodesBefore();
+		}
+
+		@Override
+		public int getNodesAfter() {
+			return getEntry().getNodesAfter();
 		}
 
 		@Override
 		public MutableBinaryTreeEntry<K, V> getParent() {
-			return wrap(getEntryNode().getParent());
+			return wrapMutable(getEntry().getParent());
 		}
 
 		@Override
 		public MutableBinaryTreeEntry<K, V> getLeft() {
-			return wrap(getEntryNode().getLeft());
+			return wrapMutable(getEntry().getLeft());
 		}
 
 		@Override
 		public MutableBinaryTreeEntry<K, V> getRight() {
-			return wrap(getEntryNode().getRight());
+			return wrapMutable(getEntry().getRight());
 		}
 
 		@Override
 		public MutableBinaryTreeEntry<K, V> getClosest(boolean left) {
-			return wrap(getEntryNode().getClosest(left));
+			return wrapMutable(getEntry().getClosest(left));
 		}
 
 		@Override
 		public MutableBinaryTreeEntry<K, V> getRoot() {
-			return wrap(getEntryNode().getRoot());
+			return wrapMutable(getEntry().getRoot());
 		}
 
 		@Override
 		public MutableBinaryTreeEntry<K, V> getSibling() {
-			return wrap(getEntryNode().getSibling());
+			return wrapMutable(getEntry().getSibling());
 		}
 
 		@Override
-		public MutableBinaryTreeEntry<K, V> get(int index) {
-			return wrap(getEntryNode().get(index));
+		public MutableBinaryTreeEntry<K, V> get(int index, OptimisticContext ctx) {
+			return theEntries.getLocker().doOptimistically(null, //
+				(init, ctx2) -> wrapMutable(getEntry().get(index, OptimisticContext.and(ctx, ctx2))), true);
 		}
 
 		@Override
-		public MutableBinaryTreeEntry<K, V> findClosest(Comparable<BinaryTreeNode<V>> finder, boolean lesser, boolean strictly) {
-			return wrap(getEntryNode().findClosest(n -> finder.compareTo(TreeEntry.wrap(n)), lesser, strictly));
-		}
-
-		@Override
-		public String isEnabled() {
-			return null;
-		}
-
-		@Override
-		public String isAcceptable(V value) {
-			return null;
-		}
-
-		@Override
-		public void set(V value) throws UnsupportedOperationException, IllegalArgumentException {
-			getEntryNode().get().setValue(value);
-		}
-
-		@Override
-		public String canRemove() {
-			return getEntryNode().canRemove();
+		public MutableBinaryTreeEntry<K, V> findClosest(Comparable<BinaryTreeNode<V>> finder, boolean lesser, boolean strictly,
+			OptimisticContext ctx) {
+			return theEntries.getLocker().doOptimistically(null, //
+				(init, ctx2) -> wrapMutable(
+					getEntry().findClosest(n -> finder.compareTo(n), lesser, strictly, OptimisticContext.and(ctx, ctx2))),
+				true);
 		}
 
 		@Override
 		public void remove() throws UnsupportedOperationException {
-			getEntryNode().remove();
+			// TODO Auto-generated method stub
+			super.remove();
+		}
+
+		@Override
+		public TreeEntry immutable() {
+			return getEntry();
 		}
 	}
 
@@ -438,77 +442,11 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		}
 
 		protected CollectionElement<K> handleFor(CollectionElement<? extends Map.Entry<K, V>> entryHandle) {
-			return new CollectionElement<K>() {
-				@Override
-				public ElementId getElementId() {
-					return entryHandle.getElementId();
-				}
-
-				@Override
-				public K get() {
-					return entryHandle.get().getKey();
-				}
-
-				@Override
-				public String toString() {
-					return "keyOf(" + entryHandle + ")";
-				}
-			};
+			return entryHandle == null ? null : ((TreeEntry) entryHandle.get()).keyHandle();
 		}
 
 		protected MutableCollectionElement<K> mutableHandleFor(MutableCollectionElement<? extends Map.Entry<K, V>> entryHandle) {
-			return new MutableCollectionElement<K>() {
-				@Override
-				public BetterCollection<K> getCollection() {
-					return KeySet.this;
-				}
-
-				@Override
-				public ElementId getElementId() {
-					return entryHandle.getElementId();
-				}
-
-				@Override
-				public K get() {
-					return entryHandle.get().getKey();
-				}
-
-				@Override
-				public String isEnabled() {
-					return null;
-				}
-
-				@Override
-				public String isAcceptable(K value) {
-					return ((MutableCollectionElement<SimpleMapEntry<K, V>>) entryHandle).isAcceptable(new SimpleMapEntry<>(value, null));
-				}
-
-				@Override
-				public void set(K value) throws UnsupportedOperationException, IllegalArgumentException {
-					((MutableCollectionElement<Map.Entry<K, V>>) entryHandle).set(newEntry(value, entryHandle.get().getValue()));
-				}
-
-				@Override
-				public String canRemove() {
-					return entryHandle.canRemove();
-				}
-
-				@Override
-				public void remove() throws UnsupportedOperationException {
-					entryHandle.remove();
-				}
-
-				@Override
-				public String canAdd(K value, boolean before) {
-					return ((MutableCollectionElement<SimpleMapEntry<K, V>>) entryHandle).canAdd(new SimpleMapEntry<>(value, null), before);
-				}
-
-				@Override
-				public ElementId add(K value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-					return ((MutableCollectionElement<Map.Entry<K, V>>) entryHandle).add(newEntry(value, null),
-						before);
-				}
-			};
+			return entryHandle == null ? null : ((TreeEntry) entryHandle.get()).mutableKeyHandle();
 		}
 
 		@Override
@@ -590,6 +528,61 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 			public MutableElementSpliterator<K> trySplit() {
 				MutableElementSpliterator<Map.Entry<K, V>> entrySplit = theEntrySpliter.trySplit();
 				return entrySplit == null ? null : new KeySpliterator(entrySplit);
+			}
+
+			protected MutableCollectionElement<K> mutableHandleFor(MutableCollectionElement<? extends Map.Entry<K, V>> entryHandle) {
+				return new MutableCollectionElement<K>() {
+					@Override
+					public BetterCollection<K> getCollection() {
+						return KeySet.this;
+					}
+
+					@Override
+					public ElementId getElementId() {
+						return entryHandle.getElementId();
+					}
+
+					@Override
+					public K get() {
+						return entryHandle.get().getKey();
+					}
+
+					@Override
+					public String isEnabled() {
+						return null;
+					}
+
+					@Override
+					public String isAcceptable(K value) {
+						return ((MutableCollectionElement<SimpleMapEntry<K, V>>) entryHandle).isAcceptable(new SimpleMapEntry<>(value, null));
+					}
+
+					@Override
+					public void set(K value) throws UnsupportedOperationException, IllegalArgumentException {
+						((MutableCollectionElement<Map.Entry<K, V>>) entryHandle).set(newEntry(value, entryHandle.get().getValue()));
+					}
+
+					@Override
+					public String canRemove() {
+						return entryHandle.canRemove();
+					}
+
+					@Override
+					public void remove() throws UnsupportedOperationException {
+						entryHandle.remove();
+					}
+
+					@Override
+					public String canAdd(K value, boolean before) {
+						return ((MutableCollectionElement<SimpleMapEntry<K, V>>) entryHandle).canAdd(new SimpleMapEntry<>(value, null), before);
+					}
+
+					@Override
+					public ElementId add(K value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+						return ((MutableCollectionElement<Map.Entry<K, V>>) entryHandle).add(newEntry(value, null),
+							before);
+					}
+				};
 			}
 		}
 	}

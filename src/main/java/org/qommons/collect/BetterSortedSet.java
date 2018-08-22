@@ -140,6 +140,26 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		return el == null ? null : el.get();
 	}
 
+	@Override
+	default CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
+		CollectionElement<E> found = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
+		if (found == null) {
+			found = addElement(value, first);
+			if (found != null && added != null)
+				added.run();
+			return found;
+		}
+		int compare = comparator().compare(value, found.get());
+		if (compare == 0)
+			return found;
+		ElementId addedId = mutableElement(found.getElementId()).add(value, compare < 0);
+		if (addedId == null)
+			return null;
+		if (added != null)
+			added.run();
+		return getElement(addedId);
+	}
+
 	/**
 	 * @param search The search to use
 	 * @return Either:

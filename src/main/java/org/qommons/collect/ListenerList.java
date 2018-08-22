@@ -1,11 +1,14 @@
 package org.qommons.collect;
 
+import java.util.Collection;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
  * <p>
- * A very simple, fast, flexible, thread-safe list intended for listeners registered to an event source that allows 4 different operations:
+ * A very simple, fast, flexible, thread-safe list intended for listeners registered to an event source that provides a subset of collection
+ * operations, including:
  * <ul>
  * <li>{@link #add(Object, boolean) Adding} a value to the end of the list</li>
  * <li>Removing that value via executing the {@link Runnable} returned from the {@link #add(Object, boolean) add} operation</li>
@@ -17,16 +20,102 @@ import java.util.function.Consumer;
  * or adds another listener).
  * </p>
  * <p>
- * This class is thread-safe, but if listeners are added or removed by other threads during {@link #forEach(Consumer) iteration}, the added
- * or removed listeners may or may not be acted upon for that iteration.
+ * This class is thread-safe (unless {@link #threadSafe(boolean) threadSafe(false)} is called), but if listeners are added or removed by
+ * other threads during {@link #forEach(Consumer) iteration}, the added or removed listeners may or may not be acted upon for that
+ * iteration, regardless of the <code>skipCurrent</code> argument to {@link #add(Object, boolean)}.
  * </p>
  * 
  * @param <E> The type of value that this list can store
  */
 public class ListenerList<E> {
+	/** A listener to be invoked when a listener is added to an empty list or a solitary listener is removed from a {@link ListenerList} */
+	public interface InUseListener {
+		/** @param inUse Whether list just went in to (true) or out of (false) use */
+		void inUseChanged(boolean inUse);
+	}
+
+	/** Builds a ListenerList with customizable options */
+	public static class Builder {
+		private String theReentrancyError;
+		private boolean isForEachSafe;
+		private InUseListener theInUseListener;
+		private boolean fastSize;
+
+		Builder() {
+			// Initialize with defaults, which mostly lean toward safety and functionality, away from performance
+			theReentrancyError = "Reentrancy not allowed";
+			isForEachSafe = true;
+			fastSize = true;
+		}
+
+		/**
+		 * Configures the list to be built to allow listeners to invoke {@link ListenerList#forEach(Consumer)}, directly or indirectly
+		 * 
+		 * @return This builder
+		 */
+		public Builder allowReentrant() {
+			return reentrancyError(null);
+		}
+
+		/**
+		 * @param error The message in the exception that will be thrown if {@link ListenerList#forEach(Consumer)} is invoked by a listener
+		 *        of the list, directly or indirectly. If null, this method is the same as {@link #allowReentrant()}.
+		 * @return This builder
+		 */
+		public Builder reentrancyError(String error) {
+			theReentrancyError = error;
+			return this;
+		}
+
+		/**
+		 * 
+		 * @param safe Whether to ensure thread safety for the reentrancy-prevention and <code>skipCurrent</code> (for
+		 *        {@link ListenerList#add(Object, boolean)}) features of {@link ListenerList#forEach(Consumer)}. If false, the list will be
+		 *        lighter and a bit more performant, but the above-mentioned features will be error-prone if {@link #forEachSafe(boolean)}
+		 *        is ever called by multiple threads concurrently.
+		 * @return This builder
+		 */
+		public Builder forEachSafe(boolean safe) {
+			isForEachSafe = safe;
+			return this;
+		}
+
+		/**
+		 * @param listener The listener to be notified when a listener is added to the empty list or a solitary listener removed from it.
+		 * @return This builder
+		 */
+		public Builder withInUse(InUseListener listener) {
+			theInUseListener = listener;
+			return this;
+		}
+
+		/**
+		 * @param fast Whether this list should maintain an {@link AtomicInteger} with its current size, so that {@link ListenerList#size()}
+		 *        is constant time. If false, this list is a bit lighter, but the {@link ListenerList#size()} operation is linear time. This
+		 *        option is ignored (effectively true) if the {@link #withInUse(InUseListener) in-use listener} is set.
+		 * @return This builder
+		 */
+		public Builder withFastSize(boolean fast) {
+			fastSize = fast;
+			return this;
+		}
+
+		/**
+		 * @param <E> The type of the list to build
+		 * @return The new list
+		 */
+		public <E> ListenerList<E> build() {
+			return new ListenerList<>(theReentrancyError, isForEachSafe, theInUseListener, fastSize);
+		}
+	}
+
+	/** @return A builder to build a {@link ListenerList} by option */
+	public static Builder build() {
+		return new Builder();
+	}
+
 	private class Node implements Runnable {
 		final E theListener;
-
 		Node next;
 		private Node previous;
 		Object skipOne;
@@ -37,27 +126,29 @@ public class ListenerList<E> {
 
 		@Override
 		public void run() {
-			if (next == this)
-				return; // Already removed
-			obtainLock();
-			previous.next = next;
-			next.previous = previous;
+			AtomicBoolean lock = acquireLock();
 			try {
-				if ((--theSize) == 0 && theInUseListener != null)
-					theInUseListener.accept(false);
+				if (previous.next != this)
+					return; // Already removed
+				previous.next = next;
+				next.previous = previous;
+				previous = this; // Mark as removed
+				listenerRemoved();
 			} finally {
-				theLock.set(false);
+				if (lock != null)
+					lock.set(false);
 			}
 		}
 	}
 
 	private final ThreadLocal<Object> isFiring;
-	private final AtomicBoolean theLock;
+	private AtomicBoolean theLock;
 	private final Node theTerminal;
 	private final String theReentrancyError;
-	private final Consumer<Boolean> theInUseListener;
+	private final InUseListener theInUseListener;
 
-	private volatile int theSize;
+	private final AtomicInteger theSize;
+	private volatile Object unsafeIterId;
 
 	/**
 	 * Creates the listener list
@@ -67,7 +158,7 @@ public class ListenerList<E> {
 	 *        reentrancy is to be allowed.
 	 */
 	public ListenerList(String reentrancyError) {
-		this(reentrancyError, null);
+		this(reentrancyError, true, null);
 	}
 
 	/**
@@ -76,20 +167,53 @@ public class ListenerList<E> {
 	 * @param reentrancyError The message to throw in an {@link IllegalStateException} from {@link #forEach(Consumer)} if the method is
 	 *        called as a result of the action being invoked from a higher {@link #forEach(Consumer) forEach} call. Or null if such
 	 *        reentrancy is to be allowed.
+	 * @param safeForEach If the reentrancy and {@link #add(Object, boolean) skipCurrent} features are not thread-safe, this class can
+	 *        perform much better. This is safe if the {@link #forEach(Consumer)} method is never called from multiple threads
+	 *        simultaneously OR if reentrancy is enabled AND the skipCurrent feature need not be reliable.
 	 * @param inUseListener A listener to be notified when this list goes in (true) and out (false) of use (i.e. just before a listener is
 	 *        added to the empty list or just after the last listener is removed, respectively). This listener MAY NOT add listeners itself.
 	 *        Such an attempt will result in deadlock.
 	 */
-	public ListenerList(String reentrancyError, Consumer<Boolean> inUseListener) {
+	public ListenerList(String reentrancyError, boolean safeForEach, InUseListener inUseListener) {
+		this(reentrancyError, safeForEach, inUseListener, true);
+	}
+
+	ListenerList(String reentrancyError, boolean safeForEach, InUseListener inUseListener, boolean fastSize) {
 		// The code is simpler if all the real listeners can know that there's a non-null node before and after them.
 		// The first node's previous pointer and the last node's next pointer would always be null,
 		// so there's no need to have different nodes for first and last.
 		theTerminal = new Node(null);
 		theTerminal.next = theTerminal.previous = theTerminal;
+
 		theLock = new AtomicBoolean();
-		isFiring = new ThreadLocal<>();
+		isFiring = safeForEach ? new ThreadLocal<>() : null;
 		theReentrancyError = reentrancyError;
 		theInUseListener = inUseListener;
+		if (inUseListener != null)
+			fastSize = true;
+		theSize = fastSize ? new AtomicInteger() : null;
+	}
+
+	/**
+	 * @param safe Whether this list should be thread-safe. An unsafe list is slightly faster for adding and removing listeners, but not for
+	 *        {@link #forEach(Consumer)} calls.
+	 * @return This list
+	 */
+	public ListenerList<E> threadSafe(boolean safe) {
+		AtomicBoolean lock = acquireLock();
+		try {
+			boolean currentlySafe = theLock != null;
+			if (safe == currentlySafe)
+				return this;
+			else if (safe)
+				theLock = new AtomicBoolean();
+			else
+				theLock = null;
+			return this;
+		} finally {
+			if (lock != null)
+				lock.set(false);
+		}
 	}
 
 	/**
@@ -101,40 +225,60 @@ public class ListenerList<E> {
 	public Runnable add(E listener, boolean skipCurrent) {
 		Node newNode = new Node(listener);
 		newNode.next = theTerminal;// We know we'll be adding this node as the last node (excluding the terminal)
-		if (skipCurrent)
-			newNode.skipOne = isFiring.get(); // Thread safe because isFiring is a ThreadLocal
+		if (skipCurrent) {
+			if (isFiring != null)
+				newNode.skipOne = isFiring.get(); // Thread safe because isFiring is a ThreadLocal
+			else
+				newNode.skipOne = unsafeIterId;
+		}
 		// The next part affects the list's state, so only one at a time
-		obtainLock();
+		AtomicBoolean lock = acquireLock();
 		try {
-			if ((theSize++) == 0 && theInUseListener != null)
-				theInUseListener.accept(true);
+			if (theSize != null && theSize.getAndIncrement() == 0 && theInUseListener != null)
+				theInUseListener.inUseChanged(true);
 			Node oldLast = theTerminal.previous;
 			newNode.previous = oldLast;
 			theTerminal.previous = newNode;
 			oldLast.next = newNode;
 		} finally {
-			theLock.set(false);
+			if (lock != null)
+				lock.set(false);
 		}
 		return newNode;
 	}
 
-	private void obtainLock() {
-		while (theLock.getAndSet(true)) {
-			// Lock is already held. Try again later.
-			try {
-				Thread.sleep(10);
-			} catch (InterruptedException e) {}
+	void listenerRemoved() {
+		if (theSize != null && theSize.decrementAndGet() == 0 && theInUseListener != null)
+			theInUseListener.inUseChanged(false);
+	}
+
+	AtomicBoolean acquireLock() {
+		AtomicBoolean lock = theLock;
+		if (lock != null) {
+			while (!lock.compareAndSet(false, true)) {
+				// Lock is already held. Try again later.
+				try {
+					Thread.sleep(0, 500000); // Half a millisecond
+				} catch (InterruptedException e) {}
+			}
 		}
+		return lock;
 	}
 
 	/** @param action The action to perform on each listener in this list */
 	public void forEach(Consumer<E> action) {
 		Node node = theTerminal.next;
-		Object reentrant = isFiring.get();
-		if (reentrant != null && theReentrancyError != null)
-			throw new IllegalStateException(theReentrancyError);
 		Object iterId = new Object();
-		isFiring.set(iterId);
+		Object reentrant;
+		if (isFiring != null) {
+			reentrant = isFiring.get();
+			if (reentrant != null && theReentrancyError != null)
+				throw new IllegalStateException(theReentrancyError);
+			isFiring.set(iterId);
+		} else {
+			reentrant = unsafeIterId;
+			unsafeIterId = iterId;
+		}
 		try {
 			while (node != theTerminal) {
 				Node nextNode = node.next; // Get the next node before calling the listener, since the listener might remove itself
@@ -145,30 +289,38 @@ public class ListenerList<E> {
 				node = nextNode;
 			}
 		} finally {
-			if (reentrant == null)
-				isFiring.remove();
-			else
-				isFiring.set(reentrant);
+			if (isFiring != null) {
+				if (reentrant == null)
+					isFiring.remove();
+				else
+					isFiring.set(reentrant);
+			} else {
+				unsafeIterId = reentrant;
+			}
 		}
 	}
 
-	/**
-	 * Removes all listeners in this list. Will have no effect on any current {@link #forEach(Consumer) iterations}, except that listeners
-	 * added during the iteration will not appear at the end of the iteration.
-	 */
+	/** Removes all listeners in this list */
 	public void clear() {
-		obtainLock();
-		if (theSize != 0) {
-			theTerminal.next = theTerminal.previous = theTerminal;
-			theSize = 0;
-			try {
-				if (theInUseListener != null)
-					theInUseListener.accept(false);
-			} finally {
-				theLock.set(false);
+		AtomicBoolean lock = acquireLock();
+		try {
+			Node node = theTerminal;
+			Node nextNode = node.next;
+			boolean wasInUse = nextNode != theTerminal;
+			while (nextNode != theTerminal) {
+				node.previous = node;
+				node.next = theTerminal;
+				node = nextNode;
+				nextNode = node.next;
 			}
-		} else
-			theLock.set(false);
+			if (theSize != null)
+				theSize.set(0);
+			if (wasInUse && theInUseListener != null)
+				theInUseListener.inUseChanged(false);
+		} finally {
+			if (lock != null)
+				lock.set(false);
+		}
 	}
 
 	/** @return Whether this list has no listeners in it */
@@ -178,7 +330,30 @@ public class ListenerList<E> {
 
 	/** @return The number of listeners in this list */
 	public int size() {
-		return theSize;
+		if (theSize != null)
+			return theSize.get();
+		Node node = theTerminal.next;
+		int sz = 0;
+		while (node != theTerminal) {
+			sz++;
+			node = node.next;
+		}
+		return sz;
+	}
+
+	/**
+	 * @param <C> The type of the collection
+	 * @param collection The collection to put all of this list's listeners into
+	 * @return The collection
+	 */
+	public <C extends Collection<? super E>> C dumpInto(C collection) {
+		// Don't use forEach, since this might be useful for debugging during event firing and reentrancy may not be allowed
+		Node node = theTerminal.next;
+		while (node != theTerminal) {
+			collection.add(node.theListener);
+			node = node.next;
+		}
+		return collection;
 	}
 
 	@Override

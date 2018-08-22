@@ -1,9 +1,12 @@
 package org.qommons.collect;
 
 import java.util.Comparator;
+import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import org.qommons.Transaction;
+import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 public class BetterCollections {
@@ -23,6 +26,23 @@ public class BetterCollections {
 
 	public static <E> BetterSortedSet<E> unmodifiableSortedSet(BetterSortedSet<? extends E> sortedSet) {
 		return new UnmodifiableBetterSortedSet<>(sortedSet);
+	}
+
+	public static <K, V> BetterMap<K, V> unmodifiableMap(BetterMap<? extends K, ? extends V> map) {
+		return new UnmodifiableBetterMap<>(map);
+	}
+
+	public static <K, V> BetterSortedMap<K, V> unmodifiableSortedMap(BetterSortedMap<? extends K, ? extends V> map) {
+		return new UnmodifiableBetterSortedMap<>(map);
+	}
+
+	protected static <K, V> MapEntryHandle<K, V> unmodifiableEntry(MapEntryHandle<? extends K, ? extends V> entry) {
+		return entry == null ? null : new UnmodifiableEntry<>(entry);
+	}
+
+	protected static <K, V> MutableMapEntryHandle<K, V> unmodifiableMutableEntry(BetterCollection<? extends V> values,
+		MapEntryHandle<? extends K, ? extends V> entry) {
+		return entry == null ? null : new UnmodifiableMutableEntry<>(values, entry);
 	}
 
 	static class UnmodifiableBetterCollection<E> implements BetterCollection<E> {
@@ -274,6 +294,11 @@ public class BetterCollections {
 		}
 
 		@Override
+		public CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
+			return getElement(value, first);
+		}
+
+		@Override
 		public <T> T[] toArray(T[] a) {
 			return super.toArray(a);
 		}
@@ -333,6 +358,138 @@ public class BetterCollections {
 		@Override
 		public int indexFor(Comparable<? super E> search) {
 			return getWrapped().indexFor(search);
+		}
+
+		@Override
+		public CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
+			return getElement(value, first);
+		}
+	}
+
+	static class UnmodifiableBetterMap<K, V> implements BetterMap<K, V> {
+		private final BetterMap<? extends K, ? extends V> theWrapped;
+
+		UnmodifiableBetterMap(BetterMap<? extends K, ? extends V> wrapped) {
+			theWrapped = wrapped;
+		}
+
+		protected BetterMap<? extends K, ? extends V> getWrapped() {
+			return theWrapped;
+		}
+
+		@Override
+		public BetterSet<K> keySet() {
+			return unmodifiableSet(theWrapped.keySet());
+		}
+
+		@Override
+		public MapEntryHandle<K, V> getEntry(K key) {
+			if (!theWrapped.keySet().belongs(key))
+				return null;
+			return unmodifiableEntry(((BetterMap<K, V>) theWrapped).getEntry(key));
+		}
+
+		@Override
+		public MapEntryHandle<K, V> getEntryById(ElementId entryId) {
+			return unmodifiableEntry(theWrapped.getEntryById(entryId));
+		}
+
+		@Override
+		public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, boolean first, Runnable added) {
+			return getEntry(key);
+		}
+
+		@Override
+		public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
+			return unmodifiableMutableEntry(theWrapped.values(), theWrapped.getEntryById(entryId));
+		}
+
+		@Override
+		public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+	}
+
+	static class UnmodifiableBetterSortedMap<K, V> extends UnmodifiableBetterMap<K, V> implements BetterSortedMap<K, V> {
+		UnmodifiableBetterSortedMap(BetterSortedMap<? extends K, ? extends V> wrapped) {
+			super(wrapped);
+		}
+
+		@Override
+		protected BetterSortedMap<? extends K, ? extends V> getWrapped() {
+			return (BetterSortedMap<? extends K, ? extends V>) super.getWrapped();
+		}
+
+		@Override
+		public BetterSortedSet<K> keySet() {
+			return unmodifiableSortedSet(getWrapped().keySet());
+		}
+
+		@Override
+		public MapEntryHandle<K, V> searchEntries(Comparable<? super Entry<K, V>> search, SortedSearchFilter filter) {
+			return unmodifiableEntry(getWrapped().searchEntries(entry -> search.compareTo((Map.Entry<K, V>) entry), filter));
+		}
+	}
+
+	static class UnmodifiableEntry<K, V> implements MapEntryHandle<K, V> {
+		private final MapEntryHandle<? extends K, ? extends V> theWrapped;
+
+		UnmodifiableEntry(MapEntryHandle<? extends K, ? extends V> wrapped) {
+			theWrapped = wrapped;
+		}
+
+		@Override
+		public ElementId getElementId() {
+			return theWrapped.getElementId();
+		}
+
+		@Override
+		public V get() {
+			return theWrapped.get();
+		}
+
+		@Override
+		public K getKey() {
+			return theWrapped.getKey();
+		}
+	}
+
+	static class UnmodifiableMutableEntry<K, V> extends UnmodifiableEntry<K, V> implements MutableMapEntryHandle<K, V> {
+		private final BetterCollection<? extends V> theValues;
+
+		UnmodifiableMutableEntry(BetterCollection<? extends V> values, MapEntryHandle<? extends K, ? extends V> wrapped) {
+			super(wrapped);
+			theValues = values;
+		}
+
+		@Override
+		public BetterCollection<V> getCollection() {
+			return unmodifiableCollection(theValues);
+		}
+
+		@Override
+		public String isEnabled() {
+			return StdMsg.UNSUPPORTED_OPERATION;
+		}
+
+		@Override
+		public String isAcceptable(V value) {
+			return StdMsg.UNSUPPORTED_OPERATION;
+		}
+
+		@Override
+		public void set(V value) throws UnsupportedOperationException, IllegalArgumentException {
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public String canRemove() {
+			return StdMsg.UNSUPPORTED_OPERATION;
+		}
+
+		@Override
+		public void remove() throws UnsupportedOperationException {
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
 	}
 }

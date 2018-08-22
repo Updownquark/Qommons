@@ -1495,6 +1495,22 @@ public final class ArrayUtils {
 		return adjuster.adjust();
 	}
 
+	/**
+	 * @param <T1> The type of the original array
+	 * @param <T2> The type of the modifying array
+	 * @param <E> The type of exception that may be thrown
+	 * @param original The original array
+	 * @param modifier The modifying array
+	 * @param dl The listener to determine how to deal with differences between the two arrays
+	 * @throws E If the {@link DifferenceListenerE} throws an exception
+	 * @see #adjust(Object[], Object[], DifferenceListenerE)
+	 */
+	public static <T1, T2, E extends Throwable> void adjustNoCreate(T1[] original, T2[] modifier, DifferenceListenerE<T1, T2, E> dl)
+		throws E {
+		ArrayAdjuster<T1, T2, E> adjuster = new ArrayAdjuster<>(original, modifier, dl);
+		adjuster.noCreate().adjust();
+	}
+
 	static final Object NULL = new Object();
 
 	/**
@@ -1525,6 +1541,7 @@ public final class ArrayUtils {
 		private int maxLength;
 
 		private boolean isNullElement;
+		private boolean createArray;
 
 		/**
 		 * Creates an adjuster that can adjust one array by another
@@ -1542,6 +1559,12 @@ public final class ArrayUtils {
 			mMappings = new int[m.length];
 			entriesSet = new boolean[m.length];
 			dl = listener;
+			createArray = true;
+		}
+
+		public ArrayAdjuster<T1, T2, E> noCreate() {
+			createArray = false;
+			return this;
 		}
 
 		private void init() throws E {
@@ -1615,9 +1638,12 @@ public final class ArrayUtils {
 			for(int i = 0; i < r; i++)
 				if(ret[i] == NULL)
 					ret[i] = null;
-			T1 [] actualRet = (T1 []) Array.newInstance(original.getClass().getComponentType(), r);
-			System.arraycopy(ret, 0, actualRet, 0, r);
-			return actualRet;
+			if (createArray) {
+				T1[] actualRet = (T1[]) Array.newInstance(original.getClass().getComponentType(), r);
+				System.arraycopy(ret, 0, actualRet, 0, r);
+				return actualRet;
+			} else
+				return null;
 		}
 
 		/**
@@ -1781,7 +1807,7 @@ public final class ArrayUtils {
 					return replaceValue;
 				}
 			});
-		adjuster.adjust();
+		adjuster.noCreate().adjust();
 	}
 
 	/**
