@@ -48,6 +48,11 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 	}
 
 	@Override
+	public Transaction tryLock(boolean write, boolean structural, Object cause) {
+		return theStampCollection.get().tryObtain(write, structural);
+	}
+
+	@Override
 	public long getStamp(boolean structural) {
 		return structural ? theStructureChanges.get() : theModCount.get();
 	}
@@ -147,6 +152,36 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 				};
 			}
 		}
+
+		Transaction tryLock(StampedLock locker, boolean forWrite) {
+			if (stamp > 0) {
+				if (forWrite && !this.write) {
+					// Alright, I'll try
+					long newStamp = locker.tryConvertToWriteLock(stamp);
+					if (newStamp == 0)
+						return null;
+					// Got lucky
+					stamp = newStamp;
+					return () -> {
+						stamp = locker.tryConvertToReadLock(stamp);
+						this.write = false;
+					};
+				} else
+					return Transaction.NONE;
+			} else {
+				stamp = forWrite ? locker.tryWriteLock() : locker.tryReadLock();
+				if (stamp == 0)
+					return null;
+				this.write = forWrite;
+				return () -> {
+					if (forWrite)
+						locker.unlockWrite(stamp);
+					else
+						locker.unlockRead(stamp);
+					stamp = 0;
+				};
+			}
+		}
 	}
 
 	class ThreadState {
@@ -178,10 +213,37 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 				structTrans.close();
 				throw e;
 			}
-			return () -> {
-				updateTrans.close();
+			return Transaction.and(structTrans, updateTrans);
+		}
+
+		Transaction tryObtain(boolean write, boolean structural) {
+			Transaction structTrans = structureStamp.tryLock(theStructureLocker, write && structural);
+			if (structTrans == null)
+				return null;
+			Transaction updateTrans;
+			try {
+				if (structural && !write)
+					updateTrans = Transaction.NONE;// Allow update operations concurrent with the read
+				else {
+					updateTrans = updateStamp.tryLock(theUpdateLocker, write);
+					if (updateTrans == null) {
+						structTrans.close();
+						return null;
+					}
+				}
+			} catch (RuntimeException e) {
+				// If the update lock fails, leave the lock in the state it was in previous to this method call
 				structTrans.close();
-			};
+				throw e;
+			}
+			if (write) {
+				if (structural && structureStamp.stamp == 0) {
+					theStructureChanges.getAndIncrement();
+					theModCount.getAndIncrement();
+				} else if (updateStamp.stamp == 0)
+					theModCount.getAndIncrement();
+			}
+			return Transaction.and(structTrans, updateTrans);
 		}
 	}
 }

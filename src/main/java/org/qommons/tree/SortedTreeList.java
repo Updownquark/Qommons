@@ -10,6 +10,7 @@ import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
+import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.OptimisticContext;
 import org.qommons.collect.StampedLockingStrategy;
@@ -170,6 +171,33 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> {
 				return super.addElement(value, result.getElementId(), null, true);
 			else
 				return super.addElement(value, null, result.getElementId(), false);
+		}
+	}
+
+	public BinaryTreeNode<E> getOrAdd(E value, boolean first, Runnable added) {
+		while (true) {
+			BinaryTreeNode<E> found = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
+			if (found == null) {
+				found = addElement(value, first);
+				if (found != null && added != null)
+					added.run();
+				return found;
+			}
+			int compare = comparator().compare(value, found.get());
+			if (compare == 0)
+				return found;
+			try (Transaction t = lock(true, true, null)) {
+				MutableCollectionElement<E> mutableElement;
+				try {
+					mutableElement = mutableElement(found.getElementId());
+				} catch (IllegalArgumentException e) {
+					continue; // Possible it may have been removed already
+				}
+				ElementId addedId = mutableElement.add(value, compare < 0);
+				if (added != null)
+					added.run();
+				return getElement(addedId);
+			}
 		}
 	}
 

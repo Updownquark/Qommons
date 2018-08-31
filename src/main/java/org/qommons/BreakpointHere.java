@@ -41,10 +41,14 @@ public class BreakpointHere {
 		ALL;
 	}
 
-	/** Invoked to transfer control to the debugger. Debugging environments should set a breakpoint on the indicated line in this method. */
-	public static void breakpoint() {
+	/**
+	 * Invoked to transfer control to the debugger. Debugging environments should set a breakpoint on the indicated line in this method.
+	 * 
+	 * @return Whether the breakpoint was actually caught
+	 */
+	public static boolean breakpoint() {
 		if(IGNORE_ALL)
-			return;
+			return false;
 		Thread thread=Thread.currentThread();
 		StackTraceElement [] stack;
 		StackTraceElement source;
@@ -57,13 +61,13 @@ public class BreakpointHere {
 			if(stack == null || stack.length == 0) {
 				IGNORE_ALL = true;
 				System.err.println("WARNING! Application is attempting to catch a breakpoint, but line numbers seem to not be included");
-				return;
+				return false;
 			}
 			source = stack[2];
 			if(IGNORING_CLASSES.contains(source.getClassName()))
-				return;
+				return false;
 			if(IGNORING_LOCATIONS.contains(source))
-				return;
+				return false;
 		}
 
 		boolean breakpointCaught = false;
@@ -104,7 +108,7 @@ public class BreakpointHere {
 					if (debugArg == null) {
 						System.err.println("WARNING! Application is attempting to catch a breakpoint, but debugging seems to be disabled");
 						IGNORE_ALL = true;
-						return;
+						return false;
 					}
 					alerted = true;
 
@@ -162,6 +166,7 @@ public class BreakpointHere {
 				break;
 			}
 		}
+		return breakpointCaught;
 	}
 
 	/** The set of known Java VM arguments that indicate that debugger attachment is possible */

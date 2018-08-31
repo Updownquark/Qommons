@@ -359,6 +359,11 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 		}
 
 		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return theEntries.tryLock(write, structural, cause);
+		}
+
+		@Override
 		public long getStamp(boolean structuralOnly) {
 			return theEntries.getStamp(structuralOnly);
 		}

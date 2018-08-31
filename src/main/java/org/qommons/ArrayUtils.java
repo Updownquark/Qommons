@@ -1571,16 +1571,19 @@ public final class ArrayUtils {
 			int o, m, r = original.length + modifier.length;
 			for(m = 0; m < modifier.length; m++)
 				mMappings[m] = -1;
+			int minM = 0;
 			for(o = 0; o < original.length; o++) {
 				oIdxAdj[o] = o;
 				oMappings[o] = -1;
-				for(m = 0; m < modifier.length; m++) {
+				for (m = minM; m < modifier.length; m++) {
 					if(mMappings[m] >= 0)
 						continue;
 					if(dl.identity(original[o], modifier[m])) {
 						oMappings[o] = m;
 						mMappings[m] = o;
 						r--;
+						if (m == minM)
+							minM++;
 						break;
 					}
 				}

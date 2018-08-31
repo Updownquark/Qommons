@@ -142,22 +142,30 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 	@Override
 	default CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
-		CollectionElement<E> found = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
-		if (found == null) {
-			found = addElement(value, first);
-			if (found != null && added != null)
-				added.run();
-			return found;
+		while (true) {
+			CollectionElement<E> found = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
+			if (found == null) {
+				found = addElement(value, first);
+				if (found != null && added != null)
+					added.run();
+				return found;
+			}
+			int compare = comparator().compare(value, found.get());
+			if (compare == 0)
+				return found;
+			try (Transaction t = lock(true, true, null)) {
+				MutableCollectionElement<E> mutableElement;
+				try {
+					mutableElement = mutableElement(found.getElementId());
+				} catch (IllegalArgumentException e) {
+					continue; // Possible it may have been removed already
+				}
+				ElementId addedId = mutableElement.add(value, compare < 0);
+				if (added != null)
+					added.run();
+				return getElement(addedId);
+			}
 		}
-		int compare = comparator().compare(value, found.get());
-		if (compare == 0)
-			return found;
-		ElementId addedId = mutableElement(found.getElementId()).add(value, compare < 0);
-		if (addedId == null)
-			return null;
-		if (added != null)
-			added.run();
-		return getElement(addedId);
 	}
 
 	/**
@@ -545,6 +553,11 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		@Override
 		public Transaction lock(boolean write, boolean structural, Object cause) {
 			return theWrapped.lock(write, structural, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return theWrapped.tryLock(write, structural, cause);
 		}
 
 		@Override

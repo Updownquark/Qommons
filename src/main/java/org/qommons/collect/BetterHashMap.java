@@ -160,7 +160,10 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, boolean first, Runnable added) {
 		CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getOrAdd(//
 			theEntries.getHasher().applyAsInt(key), entry -> theEntries.getEquals().apply(entry.getKey(), key), //
-			() -> newEntry(key, value.apply(key)), null, null, first, added);
+			() -> {
+				V newValue = value.apply(key);
+				return newValue == null ? null : newEntry(key, newValue);
+			}, null, null, first, added);
 		if (entryEl == null)
 			return null;
 		return handleFor(entryEl);
@@ -242,6 +245,11 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		@Override
 		public Transaction lock(boolean write, boolean structural, Object cause) {
 			return theEntries.lock(write, structural, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return theEntries.tryLock(write, structural, cause);
 		}
 
 		@Override

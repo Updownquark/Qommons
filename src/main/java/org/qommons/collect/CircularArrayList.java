@@ -424,6 +424,11 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
+	public Transaction tryLock(boolean write, boolean structural, Object cause) {
+		return theLocker.tryLock(write, structural, cause);
+	}
+
+	@Override
 	public long getStamp(boolean structuralOnly) {
 		return theLocker.getStamp(structuralOnly);
 	}

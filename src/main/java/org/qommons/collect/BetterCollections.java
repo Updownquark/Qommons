@@ -67,6 +67,11 @@ public class BetterCollections {
 		}
 
 		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return theWrapped.tryLock(false, !write || structural, cause);
+		}
+
+		@Override
 		public int size() {
 			return theWrapped.size();
 		}

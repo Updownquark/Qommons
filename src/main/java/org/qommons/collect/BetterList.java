@@ -604,6 +604,22 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				return t;
 		}
 
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			check();
+			Transaction t = theWrapped.tryLock(write, structural, cause);
+			if (t == null)
+				return null;
+			if (write && structural) {
+				updated();
+				return () -> {
+					updated();
+					t.close();
+				};
+			} else
+				return t;
+		}
+
 		void check() {
 			if (theWrapped.getStamp(true) != theStructureStamp)
 				throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
@@ -1109,6 +1125,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public Transaction lock(boolean write, boolean structural, Object cause) {
+			return Transaction.NONE;
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
 			return Transaction.NONE;
 		}
 

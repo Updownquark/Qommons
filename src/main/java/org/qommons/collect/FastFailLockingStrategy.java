@@ -26,6 +26,11 @@ public class FastFailLockingStrategy implements CollectionLockingStrategy {
 	}
 
 	@Override
+	public Transaction tryLock(boolean write, boolean structural, Object cause) {
+		return lock(write, structural, cause);
+	}
+
+	@Override
 	public long getStamp(boolean structural) {
 		return structural ? theStuctureChanges : theModCount;
 	}

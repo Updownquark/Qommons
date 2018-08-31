@@ -884,6 +884,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return theWrapped.tryLock(write, structural, cause);
+		}
+
+		@Override
 		public long getStamp(boolean structuralOnly) {
 			return theWrapped.getStamp(structuralOnly);
 		}
@@ -1003,6 +1008,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 		@Override
 		public Transaction lock(boolean write, boolean structural, Object cause) {
+			return Transaction.NONE;
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
 			return Transaction.NONE;
 		}
 

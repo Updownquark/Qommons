@@ -1,7 +1,6 @@
 package org.qommons.collect;
 
 import java.util.Collection;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
@@ -20,14 +19,39 @@ import java.util.function.Consumer;
  * or adds another listener).
  * </p>
  * <p>
- * This class is thread-safe (unless {@link #threadSafe(boolean) threadSafe(false)} is called), but if listeners are added or removed by
- * other threads during {@link #forEach(Consumer) iteration}, the added or removed listeners may or may not be acted upon for that
- * iteration, regardless of the <code>skipCurrent</code> argument to {@link #add(Object, boolean)}.
+ * This class is thread-safe, but if listeners are added or removed by * other threads during {@link #forEach(Consumer) iteration}, the
+ * added or removed listeners may or may not be acted upon for that * iteration, regardless of the <code>skipCurrent</code> argument to
+ * {@link #add(Object, boolean)}.
  * </p>
  * 
  * @param <E> The type of value that this list can store
  */
 public class ListenerList<E> {
+	/**
+	 * An element containing a value in a {@link ListenerList}
+	 * 
+	 * @param <E> The type of the value that this node holds
+	 */
+	public interface Element<E> extends Runnable {
+		/**
+		 * Removes this node from the list
+		 * 
+		 * @return True if the node was removed as a result of this call, false if it had been removed already
+		 */
+		boolean remove();
+
+		/** @return The value that this node contains in the list */
+		E get();
+
+		/** @param newValue The new value for this node */
+		void set(E newValue);
+
+		@Override
+		default void run() {
+			remove();
+		}
+	}
+
 	/** A listener to be invoked when a listener is added to an empty list or a solitary listener is removed from a {@link ListenerList} */
 	public interface InUseListener {
 		/** @param inUse Whether list just went in to (true) or out of (false) use */
@@ -40,12 +64,14 @@ public class ListenerList<E> {
 		private boolean isForEachSafe;
 		private InUseListener theInUseListener;
 		private boolean fastSize;
+		private SynchronizationType theSynchronizationType;
 
 		Builder() {
 			// Initialize with defaults, which mostly lean toward safety and functionality, away from performance
 			theReentrancyError = "Reentrancy not allowed";
 			isForEachSafe = true;
 			fastSize = true;
+			theSynchronizationType = SynchronizationType.ELEMENT;
 		}
 
 		/**
@@ -101,12 +127,50 @@ public class ListenerList<E> {
 		}
 
 		/**
+		 * @param type The synchronization type to use to thread-secure the list
+		 * @return This builder
+		 * @see SynchronizationType#NONE
+		 * @see SynchronizationType#LIST
+		 * @see SynchronizationType#ELEMENT
+		 */
+		public Builder withSyncType(SynchronizationType type) {
+			theSynchronizationType = type;
+			return this;
+		}
+
+		/**
 		 * @param <E> The type of the list to build
 		 * @return The new list
 		 */
 		public <E> ListenerList<E> build() {
-			return new ListenerList<>(theReentrancyError, isForEachSafe, theInUseListener, fastSize);
+			return new ListenerList<>(theReentrancyError, isForEachSafe, theInUseListener, fastSize, theSynchronizationType);
 		}
+	}
+
+	/** Several different synchronization types that can be used to thread-secure this class */
+	public enum SynchronizationType {
+		/** With this synchronization type, the list will be more performant, but not thread-safe */
+		NONE,
+		/**
+		 * <p>
+		 * With this synchronization type, all add/remove operations will synchronize on the whole list, allowing only a single such
+		 * operation at a time.
+		 * </p>
+		 * <p>
+		 * This type of synchronization may perform better than {@link #ELEMENT}-level synchronization for very small lists.
+		 * </p>
+		 */
+		LIST,
+		/**
+		 * <p>
+		 * With this synchronization type, add/remove operations occur within 2 monitor holds, representing the link before and after the
+		 * node.
+		 * </p>
+		 * <p>
+		 * This type of synchronization may perform better than {@link #LIST} for lists that have more than 2 elements.
+		 * </p>
+		 */
+		ELEMENT;
 	}
 
 	/** @return A builder to build a {@link ListenerList} by option */
@@ -114,38 +178,87 @@ public class ListenerList<E> {
 		return new Builder();
 	}
 
-	private class Node implements Runnable {
-		final E theListener;
-		Node next;
-		private Node previous;
-		Object skipOne;
+	private class Node implements Element<E> {
+		E theListener;
+		volatile Node next;
+		volatile Node previous;
 
 		Node(E listener) {
 			theListener = listener;
 		}
 
+		boolean skipOne(Object firing) {
+			return false;
+		}
+
+		@Override
+		public E get() {
+			return theListener;
+		}
+
+		@Override
+		public void set(E newValue) {
+			theListener = newValue;
+		}
+
 		@Override
 		public void run() {
-			AtomicBoolean lock = acquireLock();
-			try {
-				if (previous.next != this)
-					return; // Already removed
-				previous.next = next;
-				next.previous = previous;
-				previous = this; // Mark as removed
-				listenerRemoved();
-			} finally {
-				if (lock != null)
-					lock.set(false);
+			remove();
+		}
+
+		@Override
+		public boolean remove() {
+			if (previous.next != this)
+				return false;
+
+			switch (theSyncType) {
+			case NONE:
+				return _remove();
+			case LIST:
+				synchronized (theTerminal) {
+					return _remove();
+				}
+			case ELEMENT:
+				synchronized (this) {
+					synchronized (this.next) { // End sync method 2
+						return _remove();
+					}
+				}
 			}
+			throw new IllegalStateException("Unrecognized sync type " + theSyncType);
+		}
+
+		private boolean _remove() {
+			if (previous.next != this)
+				return false;
+			removeListener(this);
+			return true;
+		}
+	}
+
+	private class SkipOneNode extends Node {
+		private Object skipOne;
+
+		public SkipOneNode(E listener, Object skipOne) {
+			super(listener);
+			this.skipOne = skipOne;
+		}
+
+		@Override
+		boolean skipOne(Object firing) {
+			if (firing == skipOne) {
+				skipOne = null;
+				return true;
+			}
+			return false;
 		}
 	}
 
 	private final ThreadLocal<Object> isFiring;
-	private AtomicBoolean theLock;
-	private final Node theTerminal;
+	final Node theTerminal;
 	private final String theReentrancyError;
 	private final InUseListener theInUseListener;
+	final SynchronizationType theSyncType;
 
 	private final AtomicInteger theSize;
 	private volatile Object unsafeIterId;
@@ -175,45 +288,24 @@ public class ListenerList<E> {
 	 *        Such an attempt will result in deadlock.
 	 */
 	public ListenerList(String reentrancyError, boolean safeForEach, InUseListener inUseListener) {
-		this(reentrancyError, safeForEach, inUseListener, true);
+		this(reentrancyError, safeForEach, inUseListener, true, SynchronizationType.ELEMENT);
 	}
 
-	ListenerList(String reentrancyError, boolean safeForEach, InUseListener inUseListener, boolean fastSize) {
+	ListenerList(String reentrancyError, boolean safeForEach, InUseListener inUseListener, boolean fastSize,
+		SynchronizationType synchronizationType) {
 		// The code is simpler if all the real listeners can know that there's a non-null node before and after them.
 		// The first node's previous pointer and the last node's next pointer would always be null,
 		// so there's no need to have different nodes for first and last.
 		theTerminal = new Node(null);
 		theTerminal.next = theTerminal.previous = theTerminal;
 
-		theLock = new AtomicBoolean();
 		isFiring = safeForEach ? new ThreadLocal<>() : null;
 		theReentrancyError = reentrancyError;
 		theInUseListener = inUseListener;
 		if (inUseListener != null)
 			fastSize = true;
 		theSize = fastSize ? new AtomicInteger() : null;
-	}
-
-	/**
-	 * @param safe Whether this list should be thread-safe. An unsafe list is slightly faster for adding and removing listeners, but not for
-	 *        {@link #forEach(Consumer)} calls.
-	 * @return This list
-	 */
-	public ListenerList<E> threadSafe(boolean safe) {
-		AtomicBoolean lock = acquireLock();
-		try {
-			boolean currentlySafe = theLock != null;
-			if (safe == currentlySafe)
-				return this;
-			else if (safe)
-				theLock = new AtomicBoolean();
-			else
-				theLock = null;
-			return this;
-		} finally {
-			if (lock != null)
-				lock.set(false);
-		}
+		theSyncType = synchronizationType;
 	}
 
 	/**
@@ -222,47 +314,85 @@ public class ListenerList<E> {
 	 *        a {@link #forEach(Consumer)} call
 	 * @return The action to invoke (i.e. {@link Runnable#run()}) to remove this listener
 	 */
-	public Runnable add(E listener, boolean skipCurrent) {
-		Node newNode = new Node(listener);
-		newNode.next = theTerminal;// We know we'll be adding this node as the last node (excluding the terminal)
+	public Element<E> add(E listener, boolean skipCurrent) {
+		Object firing;
 		if (skipCurrent) {
 			if (isFiring != null)
-				newNode.skipOne = isFiring.get(); // Thread safe because isFiring is a ThreadLocal
+				firing = isFiring.get(); // Thread safe because isFiring is a ThreadLocal
 			else
-				newNode.skipOne = unsafeIterId;
-		}
+				firing = unsafeIterId;
+		} else
+			firing = null;
+		Node newNode = firing == null ? new Node(listener) : new SkipOneNode(listener, firing);
+		newNode.next = theTerminal;// We know we'll be adding this node as the last node (excluding the terminal)
 		// The next part affects the list's state, so only one at a time
-		AtomicBoolean lock = acquireLock();
-		try {
-			if (theSize != null && theSize.getAndIncrement() == 0 && theInUseListener != null)
-				theInUseListener.inUseChanged(true);
-			Node oldLast = theTerminal.previous;
-			newNode.previous = oldLast;
-			theTerminal.previous = newNode;
-			oldLast.next = newNode;
-		} finally {
-			if (lock != null)
-				lock.set(false);
+		switch (theSyncType) {
+		case NONE:
+			_add(newNode);
+			break;
+		case LIST:
+			synchronized (theTerminal) {
+				_add(newNode);
+			}
+			break;
+		case ELEMENT:
+			synchronized (newNode) {
+				synchronized (theTerminal) {
+					_add(newNode);
+				}
+			}
 		}
 		return newNode;
 	}
 
-	void listenerRemoved() {
-		if (theSize != null && theSize.decrementAndGet() == 0 && theInUseListener != null)
+	private void _add(Node newNode) {
+		boolean newInUse = theSize != null && theSize.getAndIncrement() == 0;
+		if (newInUse && theInUseListener != null)
+			theInUseListener.inUseChanged(true);
+		Node oldLast = theTerminal.previous;
+		newNode.previous = oldLast;
+		theTerminal.previous = newNode;
+		oldLast.next = newNode;
+	}
+
+	void removeListener(Node node) {
+		Node prev = node.previous;
+		Node next = node.next;
+		prev.next = next;
+		next.previous = prev;
+		boolean newNotInUse = theSize != null && theSize.decrementAndGet() == 0;
+		if (newNotInUse && theInUseListener != null)
 			theInUseListener.inUseChanged(false);
 	}
 
-	AtomicBoolean acquireLock() {
-		AtomicBoolean lock = theLock;
-		if (lock != null) {
-			while (!lock.compareAndSet(false, true)) {
-				// Lock is already held. Try again later.
+	/**
+	 * Removes and returns the first element (the head) of this list, if the list is not empty
+	 * 
+	 * @param waitTime If &gt;0, how long to wait in this method until a value is available
+	 * @return The removed node, or null if the list was empty
+	 */
+	public Element<E> poll(long waitTime) {
+		boolean wait = waitTime > 0;
+		boolean timeChecking = wait && waitTime < Long.MAX_VALUE;
+		long start = timeChecking ? System.currentTimeMillis() : 0;
+		int waited = 0;
+		do {
+			Node remove = theTerminal.next;
+			if (remove != theTerminal) {
+				if (remove.remove())
+					return remove;
+			} else if (wait) {
 				try {
-					Thread.sleep(0, 500000); // Half a millisecond
+					Thread.sleep(0, 100_000);
 				} catch (InterruptedException e) {}
+				if (timeChecking && ++waited == 10) {
+					waited = 0;
+					if (System.currentTimeMillis() > start + waitTime)
+						return null;
+				}
 			}
-		}
-		return lock;
+		} while (wait);
+		return null;
 	}
 
 	/** @param action The action to perform on each listener in this list */
@@ -282,9 +412,7 @@ public class ListenerList<E> {
 		try {
 			while (node != theTerminal) {
 				Node nextNode = node.next; // Get the next node before calling the listener, since the listener might remove itself
-				if (node.skipOne == iterId)
-					node.skipOne = null;
-				else
+				if (!node.skipOne(iterId))
 					action.accept(node.theListener);
 				node = nextNode;
 			}
@@ -302,8 +430,7 @@ public class ListenerList<E> {
 
 	/** Removes all listeners in this list */
 	public void clear() {
-		AtomicBoolean lock = acquireLock();
-		try {
+		synchronized (theTerminal) {
 			Node node = theTerminal;
 			Node nextNode = node.next;
 			boolean wasInUse = nextNode != theTerminal;
@@ -317,9 +444,6 @@ public class ListenerList<E> {
 				theSize.set(0);
 			if (wasInUse && theInUseListener != null)
 				theInUseListener.inUseChanged(false);
-		} finally {
-			if (lock != null)
-				lock.set(false);
 		}
 	}
 
@@ -342,6 +466,8 @@ public class ListenerList<E> {
 	}
 
 	/**
+	 * Adds all of this list's content into the given collection (without removing it from this one)
+	 * 
 	 * @param <C> The type of the collection
 	 * @param collection The collection to put all of this list's listeners into
 	 * @return The collection
