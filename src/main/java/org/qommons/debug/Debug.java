@@ -80,6 +80,12 @@ public class Debug {
 		return this;
 	}
 
+	/**
+	 * Gets the current data associated with a path
+	 * 
+	 * @param path The path of the debug data to get
+	 * @return The data at the given path, or null if data is not set for the path
+	 */
 	public DebugData get(String path) {
 		return get(path, false);
 	}
@@ -462,6 +468,16 @@ public class Debug {
 			return new DebugAction(this, action, theDebug != null);
 		}
 
+		public DebugAction actWithMinInterval(String action, long interval) {
+			boolean active;
+			if (theDebug != null) {
+				long now = System.currentTimeMillis();
+				active = updateField(action, old -> (old.longValue() + interval) <= now ? now : old, now).longValue() == now;
+			} else
+				active = false;
+			return new DebugAction(this, action, active);
+		}
+
 		DebugData execAction(DebugAction action) {
 			theActionListeners.forEach(//
 				listener -> listener.accept(action));
@@ -469,7 +485,8 @@ public class Debug {
 		}
 
 		public DebugData onAction(Consumer<DebugAction> onAction) {
-			theActionListeners.add(onAction, true);
+			if (theActionListeners != null)
+				theActionListeners.add(onAction, true);
 			return this;
 		}
 
