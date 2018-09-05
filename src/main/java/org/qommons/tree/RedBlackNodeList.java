@@ -5,6 +5,7 @@ import java.util.ConcurrentModificationException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
+import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterList;
@@ -33,6 +34,28 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	public RedBlackNodeList(CollectionLockingStrategy locker) {
 		theLocker = locker;
 		theTree = new RedBlackTree<>();
+	}
+
+	/**
+	 * Initializes this tree with the contents of the given iterable. No calls are made to {@link #add(Object)} or any other method in this
+	 * list, so no filtering is possible.
+	 * 
+	 * @param values The values to initialize this list with
+	 * @return Whether the list now has values
+	 */
+	protected boolean initialize(Iterable<? extends E> values) {
+		if (theTree.getRoot() != null)
+			throw new IllegalStateException("Cannot initialize a non-empty list");
+		try (Transaction t = Transactable.lock(values, false, null)) {
+			if (values instanceof RedBlackNodeList) {
+				RedBlackNodeList<E> rbnl = (RedBlackNodeList<E>) values;
+				if (rbnl.theTree.getRoot() == null)
+					return false;
+				theTree.setRoot(rbnl.theTree.getRoot().deepCopy(theTree));
+			} else
+				RedBlackNode.build(theTree, values);
+			return theTree.getRoot() != null;
+		}
 	}
 
 	/** @return This collection's locking strategy */
@@ -189,7 +212,18 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 	@Override
 	public boolean addAll(Collection<? extends E> c) {
-		return BetterList.super.addAll(c);
+		try (Transaction t = lock(true, null)) {
+			if (theTree.getRoot() == null && !isContentControlled()) {
+				return initialize(c);
+			} else
+				return BetterList.super.addAll(c);
+		}
+	}
+
+	@Override
+	public BetterList<E> withAll(Collection<? extends E> values) {
+		addAll(values);
+		return this;
 	}
 
 	@Override

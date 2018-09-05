@@ -1,9 +1,11 @@
 package org.qommons.tree;
 
+import java.util.Collection;
 import java.util.Objects;
 
 import org.qommons.Transaction;
 import org.qommons.ValueHolder;
+import org.qommons.collect.BetterList;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
@@ -61,5 +63,11 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 			}, true)) {}
 			return element.get();
 		}
+	}
+
+	@Override
+	public BetterTreeList<E> withAll(Collection<? extends E> values) {
+		super.withAll(values);
+		return this;
 	}
 }

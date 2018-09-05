@@ -6,6 +6,8 @@ import static org.qommons.QommonsTestUtils.testMap;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -170,6 +172,84 @@ public class TreeUtilsTest {
 				}
 			}
 		}
+	}
+
+	@Test
+	public void testTreeCopy() {
+		RedBlackTree<Integer> tree = new RedBlackTree<>();
+		for (int i = 0; i < 100000; i++) {
+			if (tree.getRoot() == null)
+				tree.setRoot(new RedBlackNode<>(tree, i));
+			else
+				tree.getTerminal(false).add(new RedBlackNode<>(tree, i), false);
+		}
+		checkIntegrity(tree);
+
+		RedBlackTree<Integer> copy = tree.copy();
+		checkIntegrity(copy);
+	}
+
+	@Test
+	public void testTreeCopyFromJavaTree() {
+		TreeSet<Integer> tree = new TreeSet<>();
+		for (int i = 0; i < 100000; i++) {
+			tree.add(i);
+		}
+
+		RedBlackTree<Integer> copy = new RedBlackTree<>();
+		Assert.assertTrue(RedBlackNode.build(copy, tree));
+		checkIntegrity(copy);
+
+		TreeMap<Integer, Integer> map = new TreeMap<>();
+		for (int i = 0; i < 100000; i++) {
+			map.put(i, i);
+		}
+
+		RedBlackTree<Integer> mapCopy = new RedBlackTree<>();
+		Assert.assertTrue(RedBlackNode.build(mapCopy, map, (k, v) -> k));
+		checkIntegrity(mapCopy);
+	}
+
+	private void checkIntegrity(RedBlackTree<Integer> tree) {
+		checkIntegrity(tree.getRoot());
+		RedBlackNode<Integer> node = tree.getFirst();
+		Assert.assertEquals(Integer.valueOf(0), node.getValue());
+		RedBlackNode<Integer> next = node.getClosest(false);
+		int count = 1;
+		while (next != null) {
+			Assert.assertEquals("[" + count + "]", node.getValue() + 1, next.getValue().intValue());
+			node = next;
+			count++;
+			next = node.getClosest(false);
+		}
+		Assert.assertEquals(tree.size(), count);
+		Assert.assertEquals(tree.getLast().getValue(), node.getValue());
+
+		count = 1;
+		RedBlackNode<Integer> prev = node.getClosest(true);
+		while (prev != null) {
+			Assert.assertEquals("[" + count + "]", node.getValue() - 1, prev.getValue().intValue());
+			node = prev;
+			count++;
+			prev = node.getClosest(true);
+		}
+		Assert.assertEquals(tree.size(), count);
+		Assert.assertEquals(tree.getFirst().getValue(), node.getValue());
+	}
+
+	private void checkIntegrity(RedBlackNode<?> node) {
+		int size = 1;
+		if (node.getLeft() != null) {
+			checkIntegrity(node.getLeft());
+			Assert.assertEquals(node, node.getLeft().getParent());
+			size += node.getLeft().size();
+		}
+		if (node.getRight() != null) {
+			checkIntegrity(node.getRight());
+			Assert.assertEquals(node, node.getRight().getParent());
+			size += node.getRight().size();
+		}
+		Assert.assertEquals(size, node.size());
 	}
 
 	static class TreeSetTester implements TestHelper.Testable {

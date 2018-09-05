@@ -230,7 +230,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 	@Override
 	default BetterList<E> withAll(Collection<? extends E> values) {
-		BetterCollection.super.withAll(values);
+		addAll(values);
 		return this;
 	}
 

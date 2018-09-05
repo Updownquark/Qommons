@@ -1,8 +1,10 @@
 package org.qommons.tree;
 
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.NavigableSet;
 import java.util.Objects;
+import java.util.SortedSet;
 
 import org.qommons.Transaction;
 import org.qommons.collect.BetterCollection;
@@ -27,6 +29,28 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> {
 		super(locker);
 		theCompare = compare;
 		isDistinct = this instanceof NavigableSet;
+	}
+
+	public SortedTreeList(boolean safe, SortedSet<E> values) {
+		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), values);
+	}
+
+	public SortedTreeList(CollectionLockingStrategy locker, SortedSet<E> values) {
+		super(locker);
+		theCompare = values.comparator();
+		isDistinct = this instanceof NavigableSet;
+		initialize(values);
+	}
+
+	public SortedTreeList(boolean safe, SortedTreeList<E> values) {
+		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), values);
+	}
+
+	public SortedTreeList(CollectionLockingStrategy locker, SortedTreeList<E> values) {
+		super(locker);
+		theCompare = values.comparator();
+		isDistinct = this instanceof NavigableSet;
+		initialize(values);
 	}
 
 	public Comparator<? super E> comparator() {
@@ -199,6 +223,12 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> {
 				return getElement(addedId);
 			}
 		}
+	}
+
+	@Override
+	public SortedTreeList<E> withAll(Collection<? extends E> values) {
+		super.withAll(values);
+		return this;
 	}
 
 	private class SortedMutableTreeNode implements MutableBinaryTreeNode<E> {

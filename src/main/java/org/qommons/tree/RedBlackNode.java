@@ -1,6 +1,13 @@
 package org.qommons.tree;
 
+import java.lang.reflect.Field;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.NavigableMap;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 
 /**
@@ -782,6 +789,57 @@ public class RedBlackNode<E> {
 		return left ? thePrevious : theNext;
 	}
 
+	public RedBlackNode<E> deepCopy(RedBlackTree<E> tree) {
+		RedBlackNode<E> copy = _deepCopy(tree, null, true, true);
+		// The only thing the private method leaves undone is hooking up the next/previous links
+		copy._hookUpAdjacentLinks(new RedBlackNode[2]);
+		return copy;
+	}
+
+	private RedBlackNode<E> _deepCopy(RedBlackTree<E> tree, RedBlackNode<E> parent, boolean mayBeFirst, boolean mayBeLast) {
+		RedBlackNode<E> copy = new RedBlackNode<>(tree, theValue);
+		copy.theParent = parent;
+		if (theLeft != null) {
+			copy.theLeft = theLeft._deepCopy(tree, copy, mayBeFirst, false);
+		} else if (mayBeFirst)
+			tree.theFirst = copy;
+		if (theRight != null)
+			copy.theRight = theRight._deepCopy(tree, copy, false, mayBeLast);
+		else if (mayBeLast)
+			tree.theLast = copy;
+
+		copy.isRed = isRed;
+		copy.theSize = theSize;
+		copy.theCachedIndex = theCachedIndex;
+		return copy;
+	}
+
+	private void _hookUpAdjacentLinks(RedBlackNode<E>[] bounds) {
+		RedBlackNode<E> leftBound = bounds[0];
+		RedBlackNode<E> rightBound = bounds[1];
+		if (theLeft != null) {
+			bounds[1] = this;
+			theLeft._hookUpAdjacentLinks(bounds);
+			thePrevious = bounds[1];
+			leftBound = bounds[0];
+		} else {
+			thePrevious = leftBound;
+			leftBound = this;
+		}
+		if (theRight != null) {
+			bounds[0] = this;
+			bounds[1] = rightBound;
+			theRight._hookUpAdjacentLinks(bounds);
+			theNext = bounds[0];
+			rightBound = bounds[1];
+		} else {
+			theNext = rightBound;
+			rightBound = this;
+		}
+		bounds[0] = leftBound;
+		bounds[1] = rightBound;
+	}
+
 	@Override
 	public String toString() {
 		StringBuilder str = new StringBuilder().append(theValue);
@@ -898,5 +956,169 @@ public class RedBlackNode<E> {
 		RedBlackNode<?> left = tree.getLeft();
 		if(left != null)
 			print(left, str, indent + 1);
+	}
+
+	private interface TreeMapRootAccess {
+		TreeMap<?, ?> getMap(Object o);
+	}
+
+	private static final Field JAVA_TREE_ROOT;
+	private static final Field JAVA_TREE_ENTRY_LEFT;
+	private static final Field JAVA_TREE_ENTRY_RIGHT;
+	private static final Field JAVA_TREE_ENTRY_COLOR;
+	private static final Field JAVA_TREE_ENTRY_KEY;
+	private static final Field JAVA_TREE_ENTRY_VALUE;
+	private static final Map<Class<?>, TreeMapRootAccess> JAVA_TREE_ROOT_GETTERS;
+
+	static {
+		// TODO Set up java tree node reflection
+		Field left = null, right = null, color = null, key = null, value = null, treeMapRoot = null;
+		Map<Class<?>, TreeMapRootAccess> rootGetters = new HashMap<>();
+		try {
+			Class<?> javaTreeEntryType = Class.forName(TreeMap.class.getName() + "$Entry");
+			left = javaTreeEntryType.getDeclaredField("left");
+			left.setAccessible(true);
+			right = javaTreeEntryType.getDeclaredField("right");
+			right.setAccessible(true);
+			color = javaTreeEntryType.getDeclaredField("color");
+			color.setAccessible(true);
+			key = javaTreeEntryType.getDeclaredField("key");
+			key.setAccessible(true);
+			value = javaTreeEntryType.getDeclaredField("value");
+			value.setAccessible(true);
+
+			treeMapRoot = TreeMap.class.getDeclaredField("root");
+			treeMapRoot.setAccessible(true);
+			rootGetters.put(TreeMap.class, new TreeMapRootAccess() {
+				@Override
+				public TreeMap<?, ?> getMap(Object o) {
+					return (TreeMap<?, ?>) o;
+				}
+			});
+			Field treeSetNavMap = TreeSet.class.getDeclaredField("m");
+			treeSetNavMap.setAccessible(true);
+			rootGetters.put(TreeSet.class, new TreeMapRootAccess() {
+				@Override
+				public TreeMap<?, ?> getMap(Object o) {
+					NavigableMap<?, ?> m;
+					try {
+						m = (NavigableMap<?, ?>) treeSetNavMap.get(o);
+					} catch (IllegalArgumentException | IllegalAccessException e) {
+						throw new IllegalStateException(e);
+					}
+					return m instanceof TreeMap ? (TreeMap<?, ?>) m : null;
+				}
+			});
+		} catch (Exception e) {
+			System.out.println("Could not initialize java tree copy optimization");
+			e.printStackTrace(System.out);
+		}
+		JAVA_TREE_ROOT = treeMapRoot;
+		JAVA_TREE_ENTRY_LEFT = left;
+		JAVA_TREE_ENTRY_RIGHT = right;
+		JAVA_TREE_ENTRY_COLOR = color;
+		JAVA_TREE_ENTRY_KEY = key;
+		JAVA_TREE_ENTRY_VALUE = value;
+		JAVA_TREE_ROOT_GETTERS = Collections.unmodifiableMap(rootGetters);
+	}
+
+	public static <E> boolean build(RedBlackTree<E> tree, Iterable<? extends E> values) {
+		Class<?> type = values.getClass();
+		TreeMapRootAccess rootGetter = JAVA_TREE_ROOT_GETTERS.get(type);
+		if (rootGetter != null) {
+			TreeMap<?, ?> map = rootGetter.getMap(values);
+			if (map != null) {
+				Object root;
+				try {
+					root = JAVA_TREE_ROOT.get(map);
+				} catch (IllegalArgumentException | IllegalAccessException e) {
+					throw new IllegalStateException(e);
+				}
+				if (root != null) {
+					tree.setRoot(buildNode(tree, null, root, (k, v) -> (E) k));
+					RedBlackNode<E>[] bounds = new RedBlackNode[2];
+					tree.getRoot()._hookUpAdjacentLinks(bounds);
+					tree.theFirst = bounds[0];
+					tree.theLast = bounds[1];
+				}
+				return true;
+			}
+		}
+		for (E value : values) {
+			if (tree.getRoot() == null)
+				tree.setRoot(new RedBlackNode<>(tree, value));
+			else
+				tree.getTerminal(false).add(new RedBlackNode<>(tree, value), false);
+		}
+		return false;
+	}
+
+	public static <E, K, V> boolean build(RedBlackTree<E> tree, Map<? extends K, ? extends V> map,
+		BiFunction<? super K, ? super V, E> producer) {
+		Class<?> type = map.getClass();
+		TreeMapRootAccess rootGetter = JAVA_TREE_ROOT_GETTERS.get(type);
+		if (rootGetter != null) {
+			TreeMap<?, ?> treeMap = rootGetter.getMap(map);
+			if (treeMap != null) {
+				Object root;
+				try {
+					root = JAVA_TREE_ROOT.get(treeMap);
+				} catch (IllegalArgumentException | IllegalAccessException e) {
+					throw new IllegalStateException(e);
+				}
+				if (root != null) {
+					tree.setRoot(buildNode(tree, null, root, (k, v) -> (E) k));
+					RedBlackNode<E>[] bounds = new RedBlackNode[2];
+					tree.getRoot()._hookUpAdjacentLinks(bounds);
+					tree.theFirst = bounds[0];
+					tree.theLast = bounds[1];
+				}
+				return true;
+			}
+		}
+		for (Map.Entry<? extends K, ? extends V> entry : map.entrySet()) {
+			E value = producer.apply(entry.getKey(), entry.getValue());
+			if (tree.getRoot() == null)
+				tree.setRoot(new RedBlackNode<>(tree, value));
+			else
+				tree.getTerminal(false).add(new RedBlackNode<>(tree, value), false);
+		}
+		return false;
+	}
+
+	private static <E> RedBlackNode<E> buildNode(RedBlackTree<E> tree, RedBlackNode<E> parent, Object javaTreeNode,
+		BiFunction<Object, Object, E> producer) {
+		Object key, value;
+		try {
+			key = JAVA_TREE_ENTRY_KEY.get(javaTreeNode);
+			value = JAVA_TREE_ENTRY_VALUE.get(javaTreeNode);
+		} catch (IllegalArgumentException | IllegalAccessException e) {
+			throw new IllegalStateException(e);
+		}
+		RedBlackNode<E> node = new RedBlackNode<>(tree, producer.apply(key, value));
+		node.theParent = parent;
+		try {
+			node.isRed = !((Boolean) JAVA_TREE_ENTRY_COLOR.get(javaTreeNode)).booleanValue();
+		} catch (IllegalArgumentException | IllegalAccessException e) {
+			throw new IllegalStateException(e);
+		}
+		Object left, right;
+		try {
+			left = JAVA_TREE_ENTRY_LEFT.get(javaTreeNode);
+			right = JAVA_TREE_ENTRY_RIGHT.get(javaTreeNode);
+		} catch (IllegalArgumentException | IllegalAccessException e) {
+			throw new IllegalStateException(e);
+		}
+		int size = 1;
+		if (left != null) {
+			node.theLeft = buildNode(tree, node, left, producer);
+			size += node.theLeft.theSize;
+		}
+		if (right != null) {
+			node.theRight = buildNode(tree, node, right, producer);
+			size += node.theRight.theSize;
+		}
+		node.theSize = size;
+		return node;
 	}
 }
