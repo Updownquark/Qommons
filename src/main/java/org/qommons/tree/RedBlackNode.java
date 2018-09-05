@@ -21,8 +21,8 @@ import java.util.function.BooleanSupplier;
  */
 public class RedBlackNode<E> {
 	private static class CachedIndex {
-		private final int index;
-		private final long stamp;
+		final int index;
+		final long stamp;
 
 		CachedIndex(int index, long stamp) {
 			this.index = index;
@@ -317,6 +317,145 @@ public class RedBlackNode<E> {
 		if (isPresent())
 			after--;
 		return after;
+	}
+
+	/**
+	 * Optimally compares two nodes for their order within the tree
+	 * 
+	 * @param a The first node
+	 * @param b The second node
+	 * @param cont An optional context which allows termination of the operation (if it returns false). If canceled, the return value is
+	 *        garbage.
+	 * @return
+	 *         <ul>
+	 *         <li><b>-1</b> if a occurs before b in the tree</li>
+	 *         <li><b>1</b> if b occurs before a in the tree</li>
+	 *         <li><b>0</b> if <code>a==b</code></li>
+	 *         </ul>
+	 * @throws IllegalArgumentException If the two nodes are not present in the same tree
+	 */
+	public static int compare(RedBlackNode<?> a, RedBlackNode<?> b, BooleanSupplier cont) {
+		if (a == null || b == null)
+			throw new NullPointerException((a == null && b == null) ? "Both null" : (a == null ? "a is null" : "b is null"));
+		if (a.theTree != b.theTree)
+			throw new IllegalArgumentException("Nodes are not from the same tree");
+		/* The easy way to compare two tree nodes is to just find the indexes of both in the tree and compare them.
+		 * If both nodes have this information cached, this is constant time, so use it. */
+		CachedIndex aIdx = a.theCachedIndex;
+		if (aIdx != null) {
+			CachedIndex bIdx = b.theCachedIndex;
+			if (bIdx != null && aIdx.stamp == bIdx.stamp && aIdx.stamp == a.theTree.theStructureStamp) {
+				return aIdx.index - bIdx.index;
+			}
+		}
+		/* Finding the index of both requires complete ascension of the tree from both nodes.
+		 * But if the common ancestor of the nodes is not the root, we can avoid ascending all the way by using the size field.
+		 *
+		 * For any nodes a and b, if(a.theSize<=b.theSize), then b cannot be a descendant of a,
+		 * because if a was a parent of b, then a.theSize would be at least b.theSize+1.
+		 * We can use this fact to ascend the tree from each node only until we find the common ancestor,
+		 * keeping track along the way of the last side that was ascended for both nodes.
+		 * 
+		 * When we find the common ancestor, we use the last ascended side variables to return the order.
+		 */
+		int aSide = 0, bSide = 0;
+		while (a != b && (cont == null || cont.getAsBoolean())) {
+			boolean ascendA = a.theSize <= b.theSize;
+			boolean ascendB = b.theSize <= a.theSize;
+			if (ascendA) {
+				RedBlackNode<?> p = a.theParent;
+				if (p == null)
+					return 0; // Concurrent modification, probably
+				aSide = (p.theLeft == a) ? -1 : 1;
+				a = p;
+			}
+			if (ascendB) {
+				RedBlackNode<?> p = b.theParent;
+				if (p == null)
+					return 0; // Concurrent modification, probably
+				bSide = (p.theLeft == b) ? -1 : 1;
+				b = p;
+			}
+		}
+		// Found the common ancestor
+		if (aSide != 0)
+			return aSide; // a was not the ancestor
+		else
+			return -bSide; // Either b was not the ancestor or the node parameters were identical
+	}
+
+	public static <E> RedBlackNode<E> splitBetween(RedBlackNode<E> a, RedBlackNode<E> b, BooleanSupplier cont) {
+		if (a == null || b == null)
+			throw new NullPointerException((a == null && b == null) ? "Both null" : (a == null ? "a is null" : "b is null"));
+		if (a.theTree != b.theTree)
+			throw new IllegalArgumentException("Nodes are not from the same tree");
+
+		RedBlackNode<E> origA = a, origB = b;
+		RedBlackNode<E> lastALeft = null, lastARight = null, lastBLeft = null, lastBRight = null;
+		int aSide = 0, bSide = 0;
+		while (a != b && (cont == null || cont.getAsBoolean())) {
+			boolean ascendA = a.theSize <= b.theSize;
+			boolean ascendB = b.theSize <= a.theSize;
+			if (ascendA) {
+				RedBlackNode<E> p = a.theParent;
+				if (p == null)
+					return null; // Concurrent modification, probably
+				if (p.theLeft == a) {
+					aSide = -1;
+					if (p != b)
+						lastARight = p;
+				} else {
+					aSide = 1;
+					if (p != b)
+						lastALeft = p;
+				}
+				a = p;
+			}
+			if (ascendB) {
+				RedBlackNode<E> p = b.theParent;
+				if (p == null)
+					return null; // Concurrent modification, probably
+				if (p.theLeft == b) {
+					bSide = -1;
+					if (p != a)
+						lastBRight = p;
+				} else {
+					bSide = 1;
+					if (p != a)
+						lastBLeft = p;
+				}
+				b = p;
+			}
+		}
+		// Found the common ancestor
+		if (aSide == 0) {
+			if (bSide == 0) {
+				return null; // Same node
+			} else if (bSide < 0) {
+				if (lastBRight != null)
+					return lastBRight;
+				else
+					return origB.theRight;
+			} else {
+				if (lastBLeft != null)
+					return lastBLeft;
+				else
+					return origB.theLeft;
+			}
+		} else if (bSide == 0) {
+			if (aSide < 0) {
+				if (lastARight != null)
+					return lastARight;
+				else
+					return origA.theRight;
+			} else {
+				if (lastALeft != null)
+					return lastALeft;
+				else
+					return origA.theLeft;
+			}
+		} else
+			return a; // The common ancestor
 	}
 
 	/**

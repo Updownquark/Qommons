@@ -7,6 +7,7 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
 
+import org.junit.Assert;
 import org.junit.Test;
 import org.qommons.QommonsTestUtils;
 import org.qommons.TestHelper;
@@ -91,6 +92,84 @@ public class TreeUtilsTest {
 		RedBlackTree<String> tree = new RedBlackTree<>();
 		tree.setRoot(new RedBlackNode<>(tree, "a"));
 		test(tree, alphaBet('z'));
+	}
+
+	/** Tests {@link RedBlackNode#compare(RedBlackNode, RedBlackNode, java.util.function.BooleanSupplier)} */
+	@Test
+	public void testTreeNodeCompare() {
+		TestHelper.createTester(NodeCompareTester.class).withRandomCases(1)//
+			.withDebug(false)//
+			.withFailurePersistence(false)//
+			.execute().throwErrorIfFailed();
+	}
+
+	static class NodeCompareTester implements TestHelper.Testable {
+		@Override
+		public void accept(TestHelper helper) {
+			RedBlackTree<String> tree = new RedBlackTree<>();
+			// Build up a-z
+			for (String s : alphaBet('z')) {
+				if (tree.getRoot() == null)
+					tree.setRoot(new RedBlackNode<>(tree, s));
+				else
+					tree.getTerminal(false).add(new RedBlackNode<>(tree, s), false);
+			}
+
+			for (int i = 0; i < 100000; i++) {
+				int idx1 = helper.getInt(0, 26);
+				int idx2 = helper.getInt(0, 26);
+				int idxCompare = idx1 - idx2;
+				if (idxCompare < 0)
+					idxCompare = -1;
+				else if (idxCompare > 0)
+					idxCompare = 1;
+				RedBlackNode<String> node1 = tree.getRoot().get(idx1, () -> true);
+				RedBlackNode<String> node2 = tree.getRoot().get(idx2, () -> true);
+				int nodeCompare = RedBlackNode.compare(node1, node2, null);
+				if (nodeCompare < 0)
+					nodeCompare = -1;
+				else if (nodeCompare > 0)
+					nodeCompare = 1;
+				Assert.assertEquals(idxCompare, nodeCompare);
+			}
+		}
+	}
+
+	@Test
+	public void testTreeNodeSplit() {
+		TestHelper.createTester(TreeSplitTester.class).withRandomCases(1)//
+			.withDebug(true)//
+			.withFailurePersistence(true)//
+			.execute().throwErrorIfFailed();
+	}
+
+	static class TreeSplitTester implements TestHelper.Testable {
+		@Override
+		public void accept(TestHelper helper) {
+			RedBlackTree<String> tree = new RedBlackTree<>();
+			// Build up a-z
+			for (String s : alphaBet('z')) {
+				if (tree.getRoot() == null)
+					tree.setRoot(new RedBlackNode<>(tree, s));
+				else
+					tree.getTerminal(false).add(new RedBlackNode<>(tree, s), false);
+			}
+
+			for (int i = 0; i < 100000; i++) {
+				int idx1 = helper.getInt(0, 26);
+				int idx2 = helper.getInt(0, 26);
+				RedBlackNode<String> node1 = tree.getRoot().get(idx1, () -> true);
+				RedBlackNode<String> node2 = tree.getRoot().get(idx2, () -> true);
+				int nodeCompare = RedBlackNode.compare(node1, node2, null);
+				RedBlackNode<String> split = RedBlackNode.splitBetween(node1, node2, null);
+				if (split == null) {
+					Assert.assertTrue(idx2 <= idx1 + 1);
+				} else {
+					Assert.assertEquals(nodeCompare, RedBlackNode.compare(node1, split, null));
+					Assert.assertEquals(nodeCompare, RedBlackNode.compare(split, node2, null));
+				}
+			}
+		}
 	}
 
 	static class TreeSetTester implements TestHelper.Testable {

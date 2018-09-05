@@ -290,19 +290,20 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 			if (theTree != nodeId.theNode.getTree())
 				throw new IllegalArgumentException("Cannot compare nodes from different trees");
 			return theLocker.doOptimistically(0, (init, ctx) -> {
-				int compare = theNode.getNodesBefore(ctx) - nodeId.theNode.getNodesBefore(ctx);
 				if (theNode == nodeId.theNode)
 					return 0;
 				else if (isPresent()) {
-					if (id.isPresent())
-						return compare;
-					else {
+					if (id.isPresent()) {
+						return RedBlackNode.compare(theNode, nodeId.theNode, ctx);
+					} else {
+						int compare = theNode.getNodesBefore(ctx) - nodeId.theNode.getNodesBefore(ctx);
 						compare = compare + 1;
 						if (compare == 0)
 							compare = -1;
 						return compare;
 					}
 				} else {
+					int compare = theNode.getNodesBefore(ctx) - nodeId.theNode.getNodesBefore(ctx);
 					// We can assume the other ID is present, because tree nodes cannot be compared
 					// if the tree has been changed since the node was removed.
 					// So if one node has been removed and then another one has been removed, this call is invalid
@@ -626,18 +627,10 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		 * @return Whether the given node is included in this spliterator
 		 */
 		protected boolean isIncluded(RedBlackNode<E> node, BooleanSupplier cont) {
-			if (theLeftBound != null) {
-				if (node == theLeftBound)
-					return true; // Left bound is included
-				if (node.getNodesBefore(cont) < theLeftBound.getNodesBefore(cont))
-					return false;
-			}
-			if (theRightBound != null) {
-				if (node == theRightBound)
-					return false; // Right bound is excluded
-				if (node.getNodesBefore(cont) > theRightBound.getNodesBefore(cont))
-					return false;
-			}
+			if (theLeftBound != null && RedBlackNode.compare(node, theLeftBound, cont) < 0)
+				return false;
+			if (theRightBound != null && RedBlackNode.compare(node, theRightBound, cont) >= 0)
+				return false;
 			return true;
 		}
 
@@ -661,55 +654,27 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 		@Override
 		public MutableElementSpliterator<E> trySplit() {
 			try (Transaction t = lock(false, true, null)) {
-				BooleanSupplier cont = () -> true;
-				if (theTree.getRoot() == null)
+				RedBlackNode<E> left = theLeftBound == null ? theTree.getTerminal(true) : theLeftBound;
+				RedBlackNode<E> right = theRightBound == null ? theTree.getTerminal(false) : theRightBound;
+				if (left == null || right == null)
 					return null;
-				if (current == null)
-					current = theTree.getTerminal(!currentIsNext);
-				RedBlackNode<E> divider;
-				if (theLeftBound == null) {
-					if (theRightBound == null) {
-						if (size() <= 1)
-							return null;
-						divider = theTree.getRoot();
-					} else
-						divider = step(theRightBound, true);
-				} else if (theRightBound == null)
-					divider = step(theLeftBound, false);
-				else {
-					int leftIdx = theLeftBound.getNodesBefore(cont);
-					int rightIdx = theRightBound.getNodesBefore(cont);
-					if (rightIdx - leftIdx <= 1)
-						return null;
-					divider = theTree.getRoot().get((leftIdx + rightIdx) / 2, cont);
-				}
-
+				BooleanSupplier cont = () -> true;
+				RedBlackNode<E> divider = RedBlackNode.splitBetween(left, right, cont);
 				if (divider == null)
 					return null;
 
 				MutableNodeSpliterator split;
-				if (current.getNodesBefore(() -> true) < divider.getNodesBefore(cont)) { // We're on the left of the divider
-					RedBlackNode<E> right = theRightBound == null ? theTree.getTerminal(false) : theRightBound;
+				if (RedBlackNode.compare(current, divider, cont) < 0) { // We're on the left of the divider
 					RedBlackNode<E> start = current == divider ? right : divider;
 					split = new MutableNodeSpliterator(start, true, divider, right);
 					theRightBound = divider;
 				} else {
-					RedBlackNode<E> left = theLeftBound == null ? theTree.getTerminal(true) : theLeftBound;
 					RedBlackNode<E> start = current == divider ? left : divider;
 					split = new MutableNodeSpliterator(start, true, left, divider);
 					theLeftBound = divider;
 				}
 				return split;
 			}
-		}
-
-		private RedBlackNode<E> step(RedBlackNode<E> node, boolean left) {
-			if (node.getSide() != left) {
-				RedBlackNode<E> parent = node.getParent();
-				if (parent != null)
-					return parent;
-			}
-			return node.getChild(left);
 		}
 
 		@Override
