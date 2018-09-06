@@ -4,6 +4,9 @@ import org.qommons.collect.BetterList;
 import org.qommons.collect.ElementId;
 
 public interface TreeBasedList<E> extends BetterList<E> {
+	/** @return The root of this list's backing tree structure */
+	BinaryTreeNode<E> getRoot();
+
 	@Override
 	BinaryTreeNode<E> getElement(E value, boolean first);
 

@@ -592,6 +592,11 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 
 		@Override
+		public BinaryTreeNode<K> getRoot() {
+			return handleFor(theEntries.getRoot());
+		}
+
+		@Override
 		public BinaryTreeNode<K> getElement(int index) {
 			return handleFor(theEntries.getElement(index));
 		}
@@ -788,6 +793,12 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	class EntrySet extends BetterSortedMap.BetterSortedEntrySet<K, V> implements TreeBasedSet<Map.Entry<K, V>> {
 		EntrySet(BetterSortedMap<K, V> map) {
 			super(map);
+		}
+
+		@Override
+		public BinaryTreeNode<Entry<K, V>> getRoot() {
+			BinaryTreeNode<?> root = theEntries.getRoot();
+			return root == null ? null : getElement(root.getElementId());
 		}
 
 		@Override

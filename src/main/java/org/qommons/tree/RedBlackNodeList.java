@@ -64,7 +64,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 		return theLocker;
 	}
 
-	/** @return The root of this list's backing tree structure */
+	@Override
 	public BinaryTreeNode<E> getRoot() {
 		return wrap(theTree.getRoot());
 	}
