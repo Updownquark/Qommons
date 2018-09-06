@@ -197,7 +197,7 @@ public class TreeUtilsTest {
 		}
 
 		RedBlackTree<Integer> copy = new RedBlackTree<>();
-		Assert.assertTrue(RedBlackNode.build(copy, tree));
+		Assert.assertTrue(RedBlackNode.build(copy, tree, v -> v));
 		checkIntegrity(copy);
 
 		TreeMap<Integer, Integer> map = new TreeMap<>();
@@ -206,7 +206,19 @@ public class TreeUtilsTest {
 		}
 
 		RedBlackTree<Integer> mapCopy = new RedBlackTree<>();
-		Assert.assertTrue(RedBlackNode.build(mapCopy, map, (k, v) -> k));
+		Assert.assertTrue(RedBlackNode.build(mapCopy, map.keySet(), v -> v));
+		checkIntegrity(mapCopy);
+
+		mapCopy = new RedBlackTree<>();
+		Assert.assertTrue(RedBlackNode.build(mapCopy, map.entrySet(), e -> e.getKey()));
+		checkIntegrity(mapCopy);
+
+		mapCopy = new RedBlackTree<>();
+		Assert.assertTrue(RedBlackNode.build(mapCopy, map.values(), v -> v));
+		checkIntegrity(mapCopy);
+
+		mapCopy = new RedBlackTree<>();
+		Assert.assertTrue(RedBlackNode.build(mapCopy, new TreeSet<>(map.keySet()), v -> v));
 		checkIntegrity(mapCopy);
 	}
 

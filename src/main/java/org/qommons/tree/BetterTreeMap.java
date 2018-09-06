@@ -3,6 +3,9 @@ package org.qommons.tree;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -51,6 +54,16 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 	public BetterTreeMap(CollectionLockingStrategy locker, Comparator<? super K> compare) {
 		theCompare = compare;
 		theEntries = new BetterTreeEntrySet<>(locker, compare);
+		theKeySet = new KeySet();
+	}
+
+	public BetterTreeMap(boolean threadSafe, SortedMap<K, ? extends V> map) {
+		this(threadSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), map);
+	}
+
+	public BetterTreeMap(CollectionLockingStrategy locker, SortedMap<K, ? extends V> map) {
+		theCompare = map.comparator();
+		theEntries = new BetterTreeEntrySet<>(locker, map, this::newEntry);
 		theKeySet = new KeySet();
 	}
 
@@ -248,6 +261,11 @@ public class BetterTreeMap<K, V> implements BetterSortedMap<K, V> {
 	static class BetterTreeEntrySet<K, V> extends BetterTreeSet<Map.Entry<K, V>> {
 		BetterTreeEntrySet(CollectionLockingStrategy locker, Comparator<? super K> compare) {
 			super(locker, (e1, e2) -> compare.compare(e1.getKey(), e2.getKey()));
+		}
+
+		BetterTreeEntrySet(CollectionLockingStrategy locker, SortedMap<K, ? extends V> map, BiFunction<K, V, Map.Entry<K, V>> creator) {
+			this(locker, map.comparator());
+			initialize((Set<? extends Map.Entry<K, V>>) map.entrySet(), entry -> creator.apply(entry.getKey(), entry.getValue()));
 		}
 	}
 

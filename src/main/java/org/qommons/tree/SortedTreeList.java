@@ -39,7 +39,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> {
 		super(locker);
 		theCompare = values.comparator();
 		isDistinct = this instanceof NavigableSet;
-		initialize(values);
+		initialize(values, v -> v);
 	}
 
 	public SortedTreeList(boolean safe, SortedTreeList<E> values) {
@@ -50,7 +50,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> {
 		super(locker);
 		theCompare = values.comparator();
 		isDistinct = this instanceof NavigableSet;
-		initialize(values);
+		initialize(values, v -> v);
 	}
 
 	public Comparator<? super E> comparator() {

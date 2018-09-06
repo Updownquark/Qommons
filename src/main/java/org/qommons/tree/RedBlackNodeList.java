@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.ConcurrentModificationException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import org.qommons.Transactable;
 import org.qommons.Transaction;
@@ -43,17 +44,17 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	 * @param values The values to initialize this list with
 	 * @return Whether the list now has values
 	 */
-	protected boolean initialize(Iterable<? extends E> values) {
+	protected <E2 extends E> boolean initialize(Iterable<E2> values, Function<? super E2, ? extends E> map) {
 		if (theTree.getRoot() != null)
 			throw new IllegalStateException("Cannot initialize a non-empty list");
 		try (Transaction t = Transactable.lock(values, false, null)) {
 			if (values instanceof RedBlackNodeList) {
-				RedBlackNodeList<E> rbnl = (RedBlackNodeList<E>) values;
+				RedBlackNodeList<E2> rbnl = (RedBlackNodeList<E2>) values;
 				if (rbnl.theTree.getRoot() == null)
 					return false;
-				theTree.setRoot(rbnl.theTree.getRoot().deepCopy(theTree));
+				theTree.setRoot(RedBlackNode.deepCopy(rbnl.theTree.getRoot(), theTree, map));
 			} else
-				RedBlackNode.build(theTree, values);
+				RedBlackNode.build(theTree, values, map);
 			return theTree.getRoot() != null;
 		}
 	}
@@ -214,7 +215,7 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	public boolean addAll(Collection<? extends E> c) {
 		try (Transaction t = lock(true, null)) {
 			if (theTree.getRoot() == null && !isContentControlled()) {
-				return initialize(c);
+				return initialize(c, e -> e);
 			} else
 				return BetterList.super.addAll(c);
 		}

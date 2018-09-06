@@ -41,7 +41,7 @@ public class RedBlackTree<E> {
 	public RedBlackTree<E> copy() {
 		RedBlackTree<E> copy = new RedBlackTree<>();
 		if (theRoot != null)
-			copy.theRoot = theRoot.deepCopy(copy);
+			copy.theRoot = RedBlackNode.deepCopy(theRoot, copy, v -> v);
 		copy.theStructureStamp = theStructureStamp;
 		return copy;
 	}

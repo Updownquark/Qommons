@@ -7,8 +7,8 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
+import java.util.function.Function;
 
 /**
  * A node in a red/black binary tree structure.
@@ -789,28 +789,30 @@ public class RedBlackNode<E> {
 		return left ? thePrevious : theNext;
 	}
 
-	public RedBlackNode<E> deepCopy(RedBlackTree<E> tree) {
-		RedBlackNode<E> copy = _deepCopy(tree, null, true, true);
+	public static <T, E extends T> RedBlackNode<T> deepCopy(RedBlackNode<E> root, RedBlackTree<T> tree,
+		Function<? super E, ? extends T> map) {
+		RedBlackNode<T> copy = _deepCopy(root, tree, null, true, true, map);
 		// The only thing the private method leaves undone is hooking up the next/previous links
 		copy._hookUpAdjacentLinks(new RedBlackNode[2]);
 		return copy;
 	}
 
-	private RedBlackNode<E> _deepCopy(RedBlackTree<E> tree, RedBlackNode<E> parent, boolean mayBeFirst, boolean mayBeLast) {
-		RedBlackNode<E> copy = new RedBlackNode<>(tree, theValue);
+	private static <T, E extends T> RedBlackNode<T> _deepCopy(RedBlackNode<E> node, RedBlackTree<T> tree, RedBlackNode<T> parent,
+		boolean mayBeFirst, boolean mayBeLast, Function<? super E, ? extends T> map) {
+		RedBlackNode<T> copy = new RedBlackNode<>(tree, map.apply(node.theValue));
 		copy.theParent = parent;
-		if (theLeft != null) {
-			copy.theLeft = theLeft._deepCopy(tree, copy, mayBeFirst, false);
+		if (node.theLeft != null) {
+			copy.theLeft = _deepCopy(node.theLeft, tree, copy, mayBeFirst, false, map);
 		} else if (mayBeFirst)
 			tree.theFirst = copy;
-		if (theRight != null)
-			copy.theRight = theRight._deepCopy(tree, copy, false, mayBeLast);
+		if (node.theRight != null)
+			copy.theRight = _deepCopy(node.theRight, tree, copy, false, mayBeLast, map);
 		else if (mayBeLast)
 			tree.theLast = copy;
 
-		copy.isRed = isRed;
-		copy.theSize = theSize;
-		copy.theCachedIndex = theCachedIndex;
+		copy.isRed = node.isRed;
+		copy.theSize = node.theSize;
+		copy.theCachedIndex = node.theCachedIndex;
 		return copy;
 	}
 
@@ -960,19 +962,19 @@ public class RedBlackNode<E> {
 
 	private interface TreeMapRootAccess {
 		TreeMap<?, ?> getMap(Object o);
+
+		<T, E> T makeValue(Map.Entry<?, ?> entry, Function<? super E, ? extends T> mapFn);
 	}
 
 	private static final Field JAVA_TREE_ROOT;
 	private static final Field JAVA_TREE_ENTRY_LEFT;
 	private static final Field JAVA_TREE_ENTRY_RIGHT;
 	private static final Field JAVA_TREE_ENTRY_COLOR;
-	private static final Field JAVA_TREE_ENTRY_KEY;
-	private static final Field JAVA_TREE_ENTRY_VALUE;
 	private static final Map<Class<?>, TreeMapRootAccess> JAVA_TREE_ROOT_GETTERS;
 
 	static {
 		// TODO Set up java tree node reflection
-		Field left = null, right = null, color = null, key = null, value = null, treeMapRoot = null;
+		Field left = null, right = null, color = null, treeMapRoot = null;
 		Map<Class<?>, TreeMapRootAccess> rootGetters = new HashMap<>();
 		try {
 			Class<?> javaTreeEntryType = Class.forName(TreeMap.class.getName() + "$Entry");
@@ -982,19 +984,11 @@ public class RedBlackNode<E> {
 			right.setAccessible(true);
 			color = javaTreeEntryType.getDeclaredField("color");
 			color.setAccessible(true);
-			key = javaTreeEntryType.getDeclaredField("key");
-			key.setAccessible(true);
-			value = javaTreeEntryType.getDeclaredField("value");
-			value.setAccessible(true);
 
 			treeMapRoot = TreeMap.class.getDeclaredField("root");
 			treeMapRoot.setAccessible(true);
-			rootGetters.put(TreeMap.class, new TreeMapRootAccess() {
-				@Override
-				public TreeMap<?, ?> getMap(Object o) {
-					return (TreeMap<?, ?>) o;
-				}
-			});
+
+			// java.util.TreeSet
 			Field treeSetNavMap = TreeSet.class.getDeclaredField("m");
 			treeSetNavMap.setAccessible(true);
 			rootGetters.put(TreeSet.class, new TreeMapRootAccess() {
@@ -1008,6 +1002,71 @@ public class RedBlackNode<E> {
 					}
 					return m instanceof TreeMap ? (TreeMap<?, ?>) m : null;
 				}
+
+				@Override
+				public <T, E> T makeValue(Map.Entry<?, ?> entry, Function<? super E, ? extends T> mapFn) {
+					return mapFn.apply((E) entry.getKey());
+				}
+			});
+
+			// java.util.TreeMap's entrySet()
+			Class<?> javaTreeEntrySetType = Class.forName(TreeMap.class.getName() + "$EntrySet");
+			Field entrySetMapField = javaTreeEntrySetType.getDeclaredField("this$0");
+			entrySetMapField.setAccessible(true);
+			rootGetters.put(javaTreeEntrySetType, new TreeMapRootAccess() {
+				@Override
+				public TreeMap<?, ?> getMap(Object o) {
+					try {
+						return (TreeMap<?, ?>) entrySetMapField.get(o);
+					} catch (IllegalArgumentException | IllegalAccessException e) {
+						throw new IllegalStateException(e);
+					}
+				}
+
+				@Override
+				public <T, E> T makeValue(Map.Entry<?, ?> entry, Function<? super E, ? extends T> mapFn) {
+					return mapFn.apply((E) entry);
+				}
+			});
+			// java.util.TreeMap's keySet()
+			Class<?> javaTreeKeySetType = Class.forName(TreeMap.class.getName() + "$KeySet");
+			Field treeKeySetNavMap = javaTreeKeySetType.getDeclaredField("m");
+			treeKeySetNavMap.setAccessible(true);
+			rootGetters.put(javaTreeKeySetType, new TreeMapRootAccess() {
+				@Override
+				public TreeMap<?, ?> getMap(Object o) {
+					NavigableMap<?, ?> m;
+					try {
+						m = (NavigableMap<?, ?>) treeKeySetNavMap.get(o);
+					} catch (IllegalArgumentException | IllegalAccessException e) {
+						throw new IllegalStateException(e);
+					}
+					return m instanceof TreeMap ? (TreeMap<?, ?>) m : null;
+				}
+
+				@Override
+				public <T, E> T makeValue(Map.Entry<?, ?> entry, Function<? super E, ? extends T> mapFn) {
+					return mapFn.apply((E) entry.getKey());
+				}
+			});
+			// java.util.TreeMap's values()
+			Class<?> javaTreeValuesType = Class.forName(TreeMap.class.getName() + "$Values");
+			Field valuesMapField = javaTreeValuesType.getDeclaredField("this$0");
+			valuesMapField.setAccessible(true);
+			rootGetters.put(javaTreeValuesType, new TreeMapRootAccess() {
+				@Override
+				public TreeMap<?, ?> getMap(Object o) {
+					try {
+						return (TreeMap<?, ?>) valuesMapField.get(o);
+					} catch (IllegalArgumentException | IllegalAccessException e) {
+						throw new IllegalStateException(e);
+					}
+				}
+
+				@Override
+				public <T, E> T makeValue(Map.Entry<?, ?> entry, Function<? super E, ? extends T> mapFn) {
+					return mapFn.apply((E) entry.getValue());
+				}
 			});
 		} catch (Exception e) {
 			System.out.println("Could not initialize java tree copy optimization");
@@ -1017,26 +1076,28 @@ public class RedBlackNode<E> {
 		JAVA_TREE_ENTRY_LEFT = left;
 		JAVA_TREE_ENTRY_RIGHT = right;
 		JAVA_TREE_ENTRY_COLOR = color;
-		JAVA_TREE_ENTRY_KEY = key;
-		JAVA_TREE_ENTRY_VALUE = value;
 		JAVA_TREE_ROOT_GETTERS = Collections.unmodifiableMap(rootGetters);
 	}
 
-	public static <E> boolean build(RedBlackTree<E> tree, Iterable<? extends E> values) {
+	public static <T, E> boolean build(RedBlackTree<T> tree, Iterable<E> values, Function<? super E, ? extends T> mapFn) {
 		Class<?> type = values.getClass();
-		TreeMapRootAccess rootGetter = JAVA_TREE_ROOT_GETTERS.get(type);
+		TreeMapRootAccess rootGetter;
+		if (values instanceof TreeSet)
+			rootGetter = JAVA_TREE_ROOT_GETTERS.get(TreeSet.class);
+		else
+			rootGetter = JAVA_TREE_ROOT_GETTERS.get(type);
 		if (rootGetter != null) {
 			TreeMap<?, ?> map = rootGetter.getMap(values);
 			if (map != null) {
-				Object root;
+				Map.Entry<?, ?> root;
 				try {
-					root = JAVA_TREE_ROOT.get(map);
+					root = (Map.Entry<?, ?>) JAVA_TREE_ROOT.get(map);
 				} catch (IllegalArgumentException | IllegalAccessException e) {
 					throw new IllegalStateException(e);
 				}
 				if (root != null) {
-					tree.setRoot(buildNode(tree, null, root, (k, v) -> (E) k));
-					RedBlackNode<E>[] bounds = new RedBlackNode[2];
+					tree.setRoot(buildNode(tree, null, root, entry -> rootGetter.makeValue(entry, mapFn)));
+					RedBlackNode<T>[] bounds = new RedBlackNode[2];
 					tree.getRoot()._hookUpAdjacentLinks(bounds);
 					tree.theFirst = bounds[0];
 					tree.theLast = bounds[1];
@@ -1046,66 +1107,26 @@ public class RedBlackNode<E> {
 		}
 		for (E value : values) {
 			if (tree.getRoot() == null)
-				tree.setRoot(new RedBlackNode<>(tree, value));
+				tree.setRoot(new RedBlackNode<>(tree, mapFn.apply(value)));
 			else
-				tree.getTerminal(false).add(new RedBlackNode<>(tree, value), false);
+				tree.getTerminal(false).add(new RedBlackNode<>(tree, mapFn.apply(value)), false);
 		}
 		return false;
 	}
 
-	public static <E, K, V> boolean build(RedBlackTree<E> tree, Map<? extends K, ? extends V> map,
-		BiFunction<? super K, ? super V, E> producer) {
-		Class<?> type = map.getClass();
-		TreeMapRootAccess rootGetter = JAVA_TREE_ROOT_GETTERS.get(type);
-		if (rootGetter != null) {
-			TreeMap<?, ?> treeMap = rootGetter.getMap(map);
-			if (treeMap != null) {
-				Object root;
-				try {
-					root = JAVA_TREE_ROOT.get(treeMap);
-				} catch (IllegalArgumentException | IllegalAccessException e) {
-					throw new IllegalStateException(e);
-				}
-				if (root != null) {
-					tree.setRoot(buildNode(tree, null, root, (k, v) -> (E) k));
-					RedBlackNode<E>[] bounds = new RedBlackNode[2];
-					tree.getRoot()._hookUpAdjacentLinks(bounds);
-					tree.theFirst = bounds[0];
-					tree.theLast = bounds[1];
-				}
-				return true;
-			}
-		}
-		for (Map.Entry<? extends K, ? extends V> entry : map.entrySet()) {
-			E value = producer.apply(entry.getKey(), entry.getValue());
-			if (tree.getRoot() == null)
-				tree.setRoot(new RedBlackNode<>(tree, value));
-			else
-				tree.getTerminal(false).add(new RedBlackNode<>(tree, value), false);
-		}
-		return false;
-	}
-
-	private static <E> RedBlackNode<E> buildNode(RedBlackTree<E> tree, RedBlackNode<E> parent, Object javaTreeNode,
-		BiFunction<Object, Object, E> producer) {
-		Object key, value;
-		try {
-			key = JAVA_TREE_ENTRY_KEY.get(javaTreeNode);
-			value = JAVA_TREE_ENTRY_VALUE.get(javaTreeNode);
-		} catch (IllegalArgumentException | IllegalAccessException e) {
-			throw new IllegalStateException(e);
-		}
-		RedBlackNode<E> node = new RedBlackNode<>(tree, producer.apply(key, value));
+	private static <E> RedBlackNode<E> buildNode(RedBlackTree<E> tree, RedBlackNode<E> parent, Map.Entry<?, ?> javaTreeNode,
+		Function<Map.Entry<?, ?>, E> producer) {
+		RedBlackNode<E> node = new RedBlackNode<>(tree, producer.apply(javaTreeNode));
 		node.theParent = parent;
 		try {
 			node.isRed = !((Boolean) JAVA_TREE_ENTRY_COLOR.get(javaTreeNode)).booleanValue();
 		} catch (IllegalArgumentException | IllegalAccessException e) {
 			throw new IllegalStateException(e);
 		}
-		Object left, right;
+		Map.Entry<?, ?> left, right;
 		try {
-			left = JAVA_TREE_ENTRY_LEFT.get(javaTreeNode);
-			right = JAVA_TREE_ENTRY_RIGHT.get(javaTreeNode);
+			left = (Map.Entry<?, ?>) JAVA_TREE_ENTRY_LEFT.get(javaTreeNode);
+			right = (Map.Entry<?, ?>) JAVA_TREE_ENTRY_RIGHT.get(javaTreeNode);
 		} catch (IllegalArgumentException | IllegalAccessException e) {
 			throw new IllegalStateException(e);
 		}
