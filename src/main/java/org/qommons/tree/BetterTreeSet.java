@@ -4,10 +4,9 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.SortedSet;
 
-import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.CollectionLockingStrategy;
 
-public class BetterTreeSet<E> extends SortedTreeList<E> implements BetterSortedSet<E> {
+public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<E> {
 	public BetterTreeSet(boolean safe, Comparator<? super E> compare) {
 		super(safe, compare);
 	}

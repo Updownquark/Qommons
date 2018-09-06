@@ -23,7 +23,7 @@ import org.qommons.collect.OptimisticContext;
  * 
  * @param <E> The type of values in the list
  */
-public abstract class RedBlackNodeList<E> implements BetterList<E> {
+public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	private final RedBlackTree<E> theTree;
 	private final CollectionLockingStrategy theLocker;
 
@@ -139,12 +139,12 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 
 	@Override
 	public Object[] toArray() {
-		return BetterList.super.toArray();
+		return TreeBasedList.super.toArray();
 	}
 
 	@Override
 	public <T> T[] toArray(T[] a) {
-		return BetterList.super.toArray(a);
+		return TreeBasedList.super.toArray(a);
 	}
 
 	@Override
@@ -212,12 +212,18 @@ public abstract class RedBlackNodeList<E> implements BetterList<E> {
 	}
 
 	@Override
+	public BinaryTreeNode<E> splitBetween(ElementId element1, ElementId element2) {
+		return theLocker.doOptimistically(null,
+			(init, ctx) -> wrap(RedBlackNode.splitBetween(((NodeId) element1).theNode, ((NodeId) element2).theNode, ctx)), true);
+	}
+
+	@Override
 	public boolean addAll(Collection<? extends E> c) {
 		try (Transaction t = lock(true, null)) {
 			if (theTree.getRoot() == null && !isContentControlled()) {
 				return initialize(c, e -> e);
 			} else
-				return BetterList.super.addAll(c);
+				return TreeBasedList.super.addAll(c);
 		}
 	}
 

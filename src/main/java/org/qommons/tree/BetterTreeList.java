@@ -53,7 +53,7 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 	}
 
 	@Override
-	public CollectionElement<E> getElement(E value, boolean first) {
+	public BinaryTreeNode<E> getElement(E value, boolean first) {
 		try (Transaction t = lock(false, null)) {
 			ValueHolder<CollectionElement<E>> element = new ValueHolder<>();
 			ElementSpliterator<E> spliter = first ? spliterator(first) : spliterator(first).reverse();
@@ -61,7 +61,7 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 				if (Objects.equals(el.get(), value))
 					element.accept(first ? el : el.reverse());
 			}, true)) {}
-			return element.get();
+			return (BinaryTreeNode<E>) element.get();
 		}
 	}
 

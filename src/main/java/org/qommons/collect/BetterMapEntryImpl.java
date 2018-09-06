@@ -58,76 +58,98 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 
 	protected CollectionElement<K> keyHandle() {
 		if (keyHandle == null) {
-			keyHandle = new CollectionElement<K>() {
-				@Override
-				public ElementId getElementId() {
-					return theId;
-				}
-
-				@Override
-				public K get() {
-					return theKey;
-				}
-			};
+			keyHandle = makeKeyHandle();
 		}
 		return keyHandle;
 	}
 
+	protected CollectionElement<K> makeKeyHandle() {
+		return new BetterMapEntryKeyHandle<>(this);
+	}
+
 	protected MutableCollectionElement<K> mutableKeyHandle(BetterSet<Map.Entry<K, V>> entrySet, Supplier<BetterSet<K>> keySet) {
 		if (mutableKeyHandle == null) {
-			MutableCollectionElement<Map.Entry<K, V>> mutableEntryEl = entrySet.mutableElement(theId);
-			mutableKeyHandle = new MutableCollectionElement<K>() {
-				@Override
-				public BetterCollection<K> getCollection() {
-					return keySet.get();
-				}
-
-				@Override
-				public ElementId getElementId() {
-					return theId;
-				}
-
-				@Override
-				public K get() {
-					return theKey;
-				}
-
-				@Override
-				public String isEnabled() {
-					return mutableEntryEl.isEnabled();
-				}
-
-				@Override
-				public String isAcceptable(K value) {
-					return mutableEntryEl.isAcceptable(new SimpleMapEntry<>(value, null));
-				}
-
-				@Override
-				public void set(K value) throws UnsupportedOperationException, IllegalArgumentException {
-					theKey = value;
-				}
-
-				@Override
-				public String canRemove() {
-					return mutableEntryEl.canRemove();
-				}
-
-				@Override
-				public void remove() throws UnsupportedOperationException {
-					mutableEntryEl.remove();
-				}
-
-				@Override
-				public CollectionElement<K> immutable() {
-					return keyHandle();
-				}
-			};
+			mutableKeyHandle = createMutableKeyHandle(entrySet, keySet);
 		}
 		return mutableKeyHandle;
 	}
 
+	protected MutableCollectionElement<K> createMutableKeyHandle(BetterSet<Entry<K, V>> entrySet, Supplier<BetterSet<K>> keySet) {
+		MutableCollectionElement<Map.Entry<K, V>> mutableEntryEl = entrySet.mutableElement(theId);
+		return new BetterMapEntryMutableKeyHandle<>(this, mutableEntryEl, keySet);
+	}
+
 	protected MutableMapEntryHandle<K, V> createMutableHandle(BetterSet<Entry<K, V>> entrySet, Supplier<BetterCollection<V>> values) {
 		return new BetterMapMutableEntryHandleImpl<>(this, entrySet, values);
+	}
+
+	public static class BetterMapEntryKeyHandle<K> implements CollectionElement<K> {
+		private final BetterMapEntryImpl<K, ?> theEntry;
+
+		public BetterMapEntryKeyHandle(BetterMapEntryImpl<K, ?> entry) {
+			theEntry = entry;
+		}
+
+		protected BetterMapEntryImpl<K, ?> getEntry() {
+			return theEntry;
+		}
+
+		@Override
+		public ElementId getElementId() {
+			return theEntry.theId;
+		}
+
+		@Override
+		public K get() {
+			return theEntry.theKey;
+		}
+	}
+
+	public static class BetterMapEntryMutableKeyHandle<K> extends BetterMapEntryKeyHandle<K> implements MutableCollectionElement<K> {
+		private final MutableCollectionElement<Entry<K, ?>> mutableEntryEl;
+		private final Supplier<BetterSet<K>> keySet;
+
+		public BetterMapEntryMutableKeyHandle(BetterMapEntryImpl<K, ?> entry,
+			MutableCollectionElement<? extends Map.Entry<K, ?>> mutableEntryEl, Supplier<BetterSet<K>> keySet) {
+			super(entry);
+			this.mutableEntryEl = (MutableCollectionElement<Entry<K, ?>>) mutableEntryEl;
+			this.keySet = keySet;
+		}
+
+		@Override
+		public BetterCollection<K> getCollection() {
+			return keySet.get();
+		}
+
+		@Override
+		public String isEnabled() {
+			return mutableEntryEl.isEnabled();
+		}
+
+		@Override
+		public String isAcceptable(K value) {
+			return mutableEntryEl.isAcceptable(new SimpleMapEntry<>(value, null));
+		}
+
+		@Override
+		public void set(K value) throws UnsupportedOperationException, IllegalArgumentException {
+			getEntry().theKey = value;
+		}
+
+		@Override
+		public String canRemove() {
+			return mutableEntryEl.canRemove();
+		}
+
+		@Override
+		public void remove() throws UnsupportedOperationException {
+			mutableEntryEl.remove();
+		}
+
+		@Override
+		public CollectionElement<K> immutable() {
+			return getEntry().keyHandle();
+		}
 	}
 
 	public static class BetterMapMutableEntryHandleImpl<K, V> implements MutableMapEntryHandle<K, V> {

@@ -152,17 +152,17 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 
 		@Override
 		public BinaryTreeNode<E> getParent() {
-			return getWrapped().getParent().reverse();
+			return BinaryTreeNode.reverse(getWrapped().getParent());
 		}
 
 		@Override
 		public BinaryTreeNode<E> getLeft() {
-			return getWrapped().getRight().reverse();
+			return BinaryTreeNode.reverse(getWrapped().getRight());
 		}
 
 		@Override
 		public BinaryTreeNode<E> getRight() {
-			return getWrapped().getLeft().reverse();
+			return BinaryTreeNode.reverse(getWrapped().getLeft());
 		}
 
 		@Override
