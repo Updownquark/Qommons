@@ -14,6 +14,10 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 	private final AtomicLong theStructureChanges;
 	private int optimisticTries;
 
+	public static boolean STORE_WRITERS = false; // A debug setting
+	private volatile Thread structWriteLocker;
+	private volatile Thread updateWriteLocker;
+
 	/** Creates the locking strategy */
 	public StampedLockingStrategy() {
 		this(1);
@@ -121,11 +125,11 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 		return res;
 	}
 
-	static class LockStamp {
+	class LockStamp {
 		long stamp;
 		boolean write;
 
-		Transaction lock(StampedLock locker, boolean forWrite) {
+		Transaction lock(StampedLock locker, boolean structural, boolean forWrite) {
 			if (stamp > 0) {
 				if (forWrite && !this.write) {
 					// Alright, I'll try
@@ -133,8 +137,10 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 					if (newStamp == 0)
 						throw new IllegalStateException("Could not upgrade to write lock");
 					// Got lucky
+					lockedWrite(structural);
 					stamp = newStamp;
 					return () -> {
+						unlockedWrite(structural);
 						stamp = locker.tryConvertToReadLock(stamp);
 						this.write = false;
 					};
@@ -142,18 +148,21 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 					return Transaction.NONE;
 			} else {
 				stamp = forWrite ? locker.writeLock() : locker.readLock();
+				if (forWrite)
+					lockedWrite(structural);
 				this.write = forWrite;
 				return () -> {
-					if (forWrite)
+					if (forWrite) {
+						unlockedWrite(structural);
 						locker.unlockWrite(stamp);
-					else
+					} else
 						locker.unlockRead(stamp);
 					stamp = 0;
 				};
 			}
 		}
 
-		Transaction tryLock(StampedLock locker, boolean forWrite) {
+		Transaction tryLock(StampedLock locker, boolean structural, boolean forWrite) {
 			if (stamp > 0) {
 				if (forWrite && !this.write) {
 					// Alright, I'll try
@@ -161,6 +170,7 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 					if (newStamp == 0)
 						return null;
 					// Got lucky
+					lockedWrite(structural);
 					stamp = newStamp;
 					return () -> {
 						stamp = locker.tryConvertToReadLock(stamp);
@@ -172,15 +182,32 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 				stamp = forWrite ? locker.tryWriteLock() : locker.tryReadLock();
 				if (stamp == 0)
 					return null;
+				if (forWrite)
+					lockedWrite(structural);
 				this.write = forWrite;
 				return () -> {
-					if (forWrite)
+					if (forWrite) {
+						unlockedWrite(structural);
 						locker.unlockWrite(stamp);
-					else
+					} else
 						locker.unlockRead(stamp);
 					stamp = 0;
 				};
 			}
+		}
+
+		private void lockedWrite(boolean structural) {
+			if (!STORE_WRITERS) {} else if (structural)
+				structWriteLocker = Thread.currentThread();
+			else
+				updateWriteLocker = Thread.currentThread();
+		}
+
+		private void unlockedWrite(boolean structural) {
+			if (!STORE_WRITERS) {} else if (structural)
+				structWriteLocker = null;
+			else
+				updateWriteLocker = null;
 		}
 	}
 
@@ -201,13 +228,13 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 				} else if (updateStamp.stamp == 0)
 					theModCount.getAndIncrement();
 			}
-			Transaction structTrans = structureStamp.lock(theStructureLocker, write && structural);
+			Transaction structTrans = structureStamp.lock(theStructureLocker, true, write && structural);
 			Transaction updateTrans;
 			try {
 				if (structural && !write)
 					updateTrans = Transaction.NONE;// Allow update operations concurrent with the read
 				else
-					updateTrans = updateStamp.lock(theUpdateLocker, write);
+					updateTrans = updateStamp.lock(theUpdateLocker, false, write);
 			} catch (RuntimeException e) {
 				// If the update lock fails, leave the lock in the state it was in previous to this method call
 				structTrans.close();
@@ -217,7 +244,7 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 		}
 
 		Transaction tryObtain(boolean write, boolean structural) {
-			Transaction structTrans = structureStamp.tryLock(theStructureLocker, write && structural);
+			Transaction structTrans = structureStamp.tryLock(theStructureLocker, true, write && structural);
 			if (structTrans == null)
 				return null;
 			Transaction updateTrans;
@@ -225,7 +252,7 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 				if (structural && !write)
 					updateTrans = Transaction.NONE;// Allow update operations concurrent with the read
 				else {
-					updateTrans = updateStamp.tryLock(theUpdateLocker, write);
+					updateTrans = updateStamp.tryLock(theUpdateLocker, false, write);
 					if (updateTrans == null) {
 						structTrans.close();
 						return null;

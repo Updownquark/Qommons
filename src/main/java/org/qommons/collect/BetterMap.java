@@ -446,13 +446,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		@Override
 		public CollectionElement<Entry<K, V>> getTerminalElement(boolean first) {
 			CollectionElement<K> keyEl = theMap.keySet().getTerminalElement(first);
-			return keyEl == null ? null : new EntryElement(theMap.getEntryById(keyEl.getElementId()));
+			return keyEl == null ? null : getElement(keyEl.getElementId());
 		}
 
 		@Override
 		public CollectionElement<Entry<K, V>> getAdjacentElement(ElementId elementId, boolean next) {
 			CollectionElement<K> keyEl = theMap.keySet().getAdjacentElement(elementId, next);
-			return keyEl == null ? null : new EntryElement(theMap.getEntryById(keyEl.getElementId()));
+			return keyEl == null ? null : getElement(keyEl.getElementId());
 		}
 
 		@Override
@@ -460,7 +460,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			if (value == null)
 				return null;
 			MapEntryHandle<K, V> entry = theMap.getEntry(value.getKey());
-			return entry == null ? null : new EntryElement(entry);
+			return entry == null ? null : getElement(entry.getElementId());
 		}
 
 		@Override
@@ -471,7 +471,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		@Override
 		public CollectionElement<Entry<K, V>> getOrAdd(Entry<K, V> value, boolean first, Runnable added) {
 			MapEntryHandle<K, V> entry = theMap.getOrPutEntry(value.getKey(), k -> value.getValue(), first, added);
-			return entry == null ? null : new EntryElement(entry);
+			return entry == null ? null : getElement(entry.getElementId());
 		}
 
 		@Override

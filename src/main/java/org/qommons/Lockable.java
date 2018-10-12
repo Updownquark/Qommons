@@ -23,11 +23,11 @@ public interface Lockable {
 	}
 
 	static Lockable lockable(StructuredTransactable transactable) {
-		return new STLockable(transactable);
+		return transactable == null ? null : new STLockable(transactable);
 	}
 
 	static Lockable lockable(StructuredTransactable transactable, boolean write, boolean structural, Object cause) {
-		return new STLockable2(transactable, write, structural, cause);
+		return transactable == null ? null : new STLockable2(transactable, write, structural, cause);
 	}
 
 	static Transaction lock(Lockable lockable) {

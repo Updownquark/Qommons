@@ -4,6 +4,7 @@ import java.util.AbstractMap;
 import java.util.AbstractSet;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -22,6 +23,20 @@ import org.qommons.ArrayUtils;
 public final class ParameterSet extends AbstractSet<String> implements Comparable<ParameterSet> {
 	public static final ParameterSet EMPTY = new ParameterSet(new String[0]);
 	private static final int MAX_CACHED_MAPS = 100;
+
+	public static ParameterSet of(String... keys) {
+		if (keys.length == 0)
+			return EMPTY;
+		else
+			return new ParameterSet(keys);
+	}
+
+	public static ParameterSet of(Collection<String> keys) {
+		if (keys.isEmpty())
+			return EMPTY;
+		else
+			return new ParameterSet(keys);
+	}
 
 	// Package private here means no synthetic accessors
 	final String[] theKeys;
@@ -130,6 +145,10 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			}
 		}
 		return new ParameterMapImpl<>(this, valueProducer);
+	}
+
+	public <V> ParameterMap<V> createDynamicMap(IntFunction<V> valueProducer) {
+		return new DynamicParameterMapImpl<>(this, valueProducer);
 	}
 
 	private static volatile int RELEASE_COUNT;
@@ -437,7 +456,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			if (!(key instanceof String)) {
 				return null;
 			}
-			int index = theMap.keyIndex((String) key);
+			int index = theMap.keySet().indexOf((String) key);
 			if (index < 0 || theKeySet.theReverseCustomOrder[index] < 0) {
 				return null;
 			}
@@ -446,7 +465,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 
 		@Override
 		public V put(String key, V value) {
-			int index = theMap.keyIndex(key);
+			int index = theMap.keySet().indexOf(key);
 			if (index < 0 || theKeySet.theReverseCustomOrder[index] < 0) {
 				return null;
 			}
@@ -769,7 +788,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 
 	static final class ParameterMapImpl<V> implements ParameterMap<V> {
 		private final ParameterSet theKeys;
-		private final Object[] theValues;
+		private Object[] theValues;
 		private IntFunction<V> theValueFunction;
 		private UnmodifiableParameterMap<V> unmodifiable;
 
@@ -777,7 +796,6 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 
 		ParameterMapImpl(ParameterSet keys, IntFunction<V> valueProducer) {
 			theKeys = keys;
-			theValues = new Object[keys.size()];
 			theValueFunction = valueProducer;
 
 			hashCode = -1;
@@ -785,7 +803,8 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 
 		void init(IntFunction<V> valueProducer) {
 			theValueFunction = valueProducer;
-			Arrays.fill(theValues, null);
+			if (theValues != null)
+				Arrays.fill(theValues, null);
 		}
 
 		@Override
@@ -795,6 +814,8 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 
 		@Override
 		public int valueCount() {
+			if (theValues == null)
+				return 0;
 			int sz = 0;
 			for (int i = 0; i < theValues.length; i++) {
 				if (theValues[i] != null) {
@@ -806,6 +827,13 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 
 		@Override
 		public V get(int index) {
+			if (theValues == null) {
+				if (theValueFunction == null) {
+					theKeys.get(index); // Let the key set throw an out of bounds exception if needed
+					return null;
+				} else
+					theValues = new Object[theKeys.size()];
+			}
 			V value = (V) theValues[index];
 			if (value == null && theValueFunction != null) {
 				theValues[index] = value = theValueFunction.apply(index);
@@ -818,6 +846,8 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 
 		@Override
 		public V put(int index, V value) {
+			if (theValues == null)
+				theValues = new Object[theKeys.size()];
 			V old = (V) theValues[index];
 			theValues[index] = value;
 			hashCode = -1;
@@ -826,6 +856,8 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 
 		@Override
 		public V computeIfAbsent(int index, Function<String, V> valueProducer) {
+			if (theValues == null)
+				theValues = new Object[theKeys.size()];
 			V value = (V) theValues[index];
 			if (value == null) {
 				theValues[index] = value = valueProducer.apply(theKeys.get(index));
@@ -839,16 +871,21 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		@Override
 		public void clear() {
 			hashCode = -1;
-			Arrays.fill(theValues, null);
+			if (theValues != null)
+				Arrays.fill(theValues, null);
 		}
 
 		@Override
 		public Iterable<V> allValues() {
+			if (theValues == null)
+				theValues = new Object[theKeys.size()];
 			return new ParamMapValueIterable<>(theValues, theValueFunction, true);
 		}
 
 		@Override
 		public Iterable<V> values() {
+			if (theValues == null)
+				return Collections.emptyList();
 			return new ParamMapValueIterable<>(theValues, theValueFunction, false);
 		}
 
@@ -869,8 +906,10 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		public int hashCode() {
 			if (hashCode == -1) {
 				int hc = theKeys.hashCode();
-				for (int i = 0; i < theValues.length; i++) {
-					hc = hc * 31 + Objects.hashCode(get(i));
+				if (theValues != null) {
+					for (int i = 0; i < theValues.length; i++) {
+						hc = hc * 31 + Objects.hashCode(get(i));
+					}
 				}
 				hashCode = hc;
 			}
@@ -888,6 +927,8 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			if (!theKeys.equals(other.keySet())) {
 				return false;
 			}
+			if (theValues == null)
+				theValues = new Object[theKeys.size()];
 			for (int i = 0; i < theValues.length; i++) {
 				if (!Objects.equals(get(i), other.get(i))) {
 					return false;
@@ -901,6 +942,8 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			StringBuilder str = new StringBuilder();
 			str.append('{');
 			boolean first = true;
+			if (theValues == null)
+				theValues = new Object[theKeys.size()];
 			for (int i = 0; i < theValues.length; i++) {
 				if (!first) {
 					str.append(", ");
@@ -912,6 +955,168 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 				} else {
 					str.append(theValues[i]);
 				}
+			}
+			str.append('}');
+			return str.toString();
+		}
+	}
+
+	static final class DynamicParameterMapImpl<V> implements ParameterMap<V> {
+		private final ParameterSet theKeys;
+		private final IntFunction<? extends V> theValues;
+		private UnmodifiableParameterMap<V> unmodifiable;
+
+		DynamicParameterMapImpl(ParameterSet keySet, IntFunction<? extends V> values) {
+			theKeys = keySet;
+			theValues = values;
+		}
+
+		@Override
+		public ParameterSet keySet() {
+			return theKeys;
+		}
+
+		@Override
+		public int valueCount() {
+			int vc = 0;
+			for (int i = 0; i < theKeys.size(); i++)
+				if (theValues.apply(i) != null)
+					vc++;
+			return vc;
+		}
+
+		@Override
+		public V get(int index) {
+			if (index < 0 || index >= theKeys.size())
+				throw new IndexOutOfBoundsException(index + " of " + theKeys.size());
+			return theValues.apply(index);
+		}
+
+		@Override
+		public V put(int index, V value) {
+			throw new UnsupportedOperationException("This view is not modifiable");
+		}
+
+		@Override
+		public V computeIfAbsent(int index, Function<String, V> valueProducer) {
+			return get(index);
+		}
+
+		@Override
+		public void clear() {
+			throw new UnsupportedOperationException("This view is not modifiable");
+		}
+
+		@Override
+		public Iterable<V> allValues() {
+			return new Iterable<V>() {
+				@Override
+				public Iterator<V> iterator() {
+					return new Iterator<V>() {
+						private int theIndex;
+
+						@Override
+						public boolean hasNext() {
+							return theIndex < theKeys.size();
+						}
+
+						@Override
+						public V next() {
+							if (theIndex == theKeys.size())
+								throw new NoSuchElementException();
+							return theValues.apply(theIndex++);
+						}
+					};
+				}
+			};
+		}
+
+		@Override
+		public Iterable<V> values() {
+			return new Iterable<V>() {
+				@Override
+				public Iterator<V> iterator() {
+					return new Iterator<V>() {
+						private int theIndex;
+						private boolean hasNext;
+						private V theNext;
+
+						@Override
+						public boolean hasNext() {
+							while (!hasNext && theIndex < theKeys.size()) {
+								theNext = theValues.apply(theIndex++);
+								hasNext = theNext != null;
+							}
+							return hasNext;
+						}
+
+						@Override
+						public V next() {
+							if (!hasNext())
+								throw new NoSuchElementException();
+							hasNext = false;
+							V value = theNext;
+							theNext = null;
+							return value;
+						}
+					};
+				}
+			};
+		}
+
+		@Override
+		public ParameterMap<V> unmodifiable() {
+			if (unmodifiable == null) {
+				unmodifiable = new UnmodifiableParameterMap<>(this);
+			}
+			return unmodifiable;
+		}
+
+		@Override
+		public void release() {}
+
+		@Override
+		public int hashCode() {
+			int hc = theKeys.hashCode();
+			if (theValues != null) {
+				for (int i = 0; i < theKeys.size(); i++) {
+					hc = hc * 31 + Objects.hashCode(get(i));
+				}
+			}
+			return hc;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj) {
+				return true;
+			} else if (!(obj instanceof ParameterMap)) {
+				return false;
+			}
+			ParameterMap<?> other = (ParameterMap<?>) obj;
+			if (!theKeys.equals(other.keySet())) {
+				return false;
+			}
+			for (int i = 0; i < theKeys.size(); i++) {
+				if (!Objects.equals(get(i), other.get(i))) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		@Override
+		public String toString() {
+			StringBuilder str = new StringBuilder();
+			str.append('{');
+			boolean first = true;
+			for (int i = 0; i < theKeys.size(); i++) {
+				if (!first) {
+					str.append(", ");
+				}
+				first = false;
+				str.append(theKeys.get(i)).append('=');
+				str.append(get(i));
 			}
 			str.append('}');
 			return str.toString();
