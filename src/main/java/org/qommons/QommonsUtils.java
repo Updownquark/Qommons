@@ -130,6 +130,12 @@ public class QommonsUtils {
 		return sb.toString();
 	}
 
+	public static String printTimeLength(long seconds, int nanos) {
+		StringBuilder sb = new StringBuilder();
+		printTimeLength(seconds, nanos, sb, false);
+		return sb.toString();
+	}
+
 	/**
 	 * Prints a time length to a string builder
 	 *
@@ -138,23 +144,28 @@ public class QommonsUtils {
 	 * @param abbrev Whether to shorten the string intelligibly as much as possible
 	 */
 	public static void printTimeLength(long length, StringBuilder sb, boolean abbrev) {
-		if (length == 0) {
+		printTimeLength(length / 1000, ((int) (length % 1000)) * 1000000);
+	}
+
+	public static void printTimeLength(long seconds, int nanos, StringBuilder sb, boolean abbrev) {
+		if (seconds == 0 && nanos == 0) {
 			sb.append("no time");
 			return;
-		} else if (length < 0) {
-			length = -length;
+		} else if (seconds < 0) {
+			seconds = -seconds;
+			nanos = -nanos;
 			sb.append('-');
 		}
 		int days, hrs, mins, secs, millis;
-		millis = (int) (length % 1000);
-		length /= 1000;
-		secs = (int) (length % 60);
-		length /= 60;
-		mins = (int) (length % 60);
-		length /= 60;
-		hrs = (int) (length % 24);
-		length /= 24;
-		days = (int) length;
+		millis = nanos / 1000000;
+		nanos %= 1000000;
+		secs = (int) (seconds % 60);
+		seconds /= 60;
+		mins = (int) (seconds % 60);
+		seconds /= 60;
+		hrs = (int) (seconds % 24);
+		seconds /= 24;
+		days = (int) seconds;
 		if(days > 0) {
 			sb.append(days);
 			if(abbrev)
@@ -203,11 +214,20 @@ public class QommonsUtils {
 		if(millis > 0) {
 			sb.append(millis);
 			if(abbrev)
-				sb.append("mil ");
+				sb.append("ms ");
 			else if(millis > 1)
 				sb.append(" millis");
 			else
 				sb.append(" milli");
+		}
+		if (nanos > 0) {
+			sb.append(nanos);
+			if (abbrev)
+				sb.append("ns ");
+			else if (millis > 1)
+				sb.append(" nanos");
+			else
+				sb.append(" nano");
 		}
 		if (sb.charAt(sb.length() - 1) == ' ')
 			sb.deleteCharAt(sb.length() - 1);
