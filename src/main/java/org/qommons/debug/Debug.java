@@ -42,6 +42,11 @@ public class Debug {
 		return singleton;
 	}
 
+	/** @return An inactive debug data */
+	public static DebugData inactive() {
+		return INACTIVE;
+	}
+
 	private final ThreadLocal<DebugData> theThreads;
 	private final ListenerList<Runnable> theChecks;
 	private final ListenerList<Consumer<DebugData>> theWatchers;
@@ -94,24 +99,6 @@ public class Debug {
 		return with(path, create, d -> {});
 	}
 
-	public DebugData add(String path) {
-		if (!isActive())
-			return INACTIVE;
-		try (Transaction t = lock(true)) {
-			StringBuilder indexed = new StringBuilder(path).append('[');
-			for (int i = 0; true; i++) {
-				int preLength = indexed.length();
-				indexed.append(i).append(']');
-				String indexedStr = indexed.toString();
-				DebugData data = get(indexedStr);
-				if (data == null) {
-					return get(indexedStr, true);
-				}
-				indexed.setLength(preLength);
-			}
-		}
-	}
-
 	public DebugData set(String path, Object value) {
 		if (!isActive())
 			return INACTIVE;
@@ -159,7 +146,7 @@ public class Debug {
 			d = theData.computeIfAbsent(rootName, n -> created(new DebugData(this).addRootName(rootName)));
 		else
 			d = theData.get(rootName);
-		if (create && d == null)
+		if (d == null)
 			return INACTIVE;
 		if (d != null && subPath != null) {
 			d = d.with(subPath, create, action);
@@ -189,7 +176,7 @@ public class Debug {
 			d = theDataByValue.computeIfAbsent(value, n -> created(new DebugData(this).setValue(value)));
 		else
 			d = theDataByValue.get(value);
-		if (create && d == null)
+		if (d == null)
 			return INACTIVE;
 		return d;
 	}
@@ -197,7 +184,7 @@ public class Debug {
 	public DebugData debug(Object value, boolean create, Consumer<DebugData> action) {
 		try (Transaction t = lock(true)) {
 			DebugData d = _debug(value, create);
-			if (d != null)
+			if (d.theDebug != null)
 				action.accept(d);
 			return d;
 		}
@@ -329,6 +316,13 @@ public class Debug {
 				return INACTIVE;
 		}
 
+		public DebugData debugIf(Predicate<DebugData> condition) {
+			if (condition.test(this))
+				return this;
+			else
+				return INACTIVE;
+		}
+
 		public DebugData addCheck(Consumer<? super DebugData> check) {
 			if (theDebug != null)
 				theChecks.add(check, true);
@@ -353,6 +347,24 @@ public class Debug {
 
 		public DebugData get(String path, boolean create) {
 			return with(path, create, d -> {});
+		}
+
+		public DebugData add(String path) {
+			if (theDebug == null)
+				return this;
+			try (Transaction t = theDebug.lock(true)) {
+				StringBuilder indexed = new StringBuilder(path).append('[');
+				for (int i = 0; true; i++) {
+					int preLength = indexed.length();
+					indexed.append(i).append(']');
+					String indexedStr = indexed.toString();
+					DebugData data = get(indexedStr);
+					if (data == null) {
+						return get(indexedStr, true);
+					}
+					indexed.setLength(preLength);
+				}
+			}
 		}
 
 		public DebugData with(String path, boolean create, Consumer<DebugData> action) {
@@ -487,6 +499,12 @@ public class Debug {
 		public DebugData onAction(Consumer<DebugAction> onAction) {
 			if (theActionListeners != null)
 				theActionListeners.add(onAction, true);
+			return this;
+		}
+
+		public DebugData doNow(Consumer<DebugData> action) {
+			if (theDebug != null)
+				action.accept(this);
 			return this;
 		}
 
