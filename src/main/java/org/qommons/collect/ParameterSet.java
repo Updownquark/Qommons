@@ -22,6 +22,7 @@ import org.qommons.ArrayUtils;
 /** A sorted set of strings that is optimized for indexOf operations on small sets */
 public final class ParameterSet extends AbstractSet<String> implements Comparable<ParameterSet> {
 	public static final ParameterSet EMPTY = new ParameterSet(new String[0]);
+	private static final ParameterMap<?> EMPTY_MAP = new EmptyParameterMap<>();
 	private static final int MAX_CACHED_MAPS = 100;
 
 	public static ParameterSet of(String... keys) {
@@ -126,6 +127,8 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 	}
 
 	public <V> ParameterMap<V> createMap() {
+		if (theKeys.length == 0)
+			return (ParameterMap<V>) EMPTY_MAP;
 		if (theMapCache != null) {
 			ParameterMapImpl<?> map = theMapCache.poll();
 			if (map != null) {
@@ -304,6 +307,8 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 
 		default ParameterMap<V> copy() {
+			if (keySet().isEmpty())
+				return this;
 			ParameterMap<V> copy = keySet().createMap();
 			for (int i = 0; i < keySet().size(); i++) {
 				copy.put(i, get(i));
@@ -319,6 +324,54 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 
 		/** If supported, allows this map to be released and re-used later */
 		void release();
+	}
+
+	private static final class EmptyParameterMap<T> implements ParameterMap<T> {
+		@Override
+		public ParameterSet keySet() {
+			return EMPTY;
+		}
+
+		@Override
+		public int valueCount() {
+			return 0;
+		}
+
+		@Override
+		public T get(int index) {
+			throw new IndexOutOfBoundsException(index + " of 0");
+		}
+
+		@Override
+		public T put(int index, T value) {
+			throw new IndexOutOfBoundsException(index + " of 0");
+		}
+
+		@Override
+		public T computeIfAbsent(int index, Function<String, T> valueProducer) {
+			throw new IndexOutOfBoundsException(index + " of 0");
+		}
+
+		@Override
+		public void clear() {}
+
+		@Override
+		public Iterable<T> allValues() {
+			return Collections.emptyList();
+		}
+
+		@Override
+		public Iterable<T> values() {
+			return Collections.emptyList();
+		}
+
+		@Override
+		public ParameterMap<T> unmodifiable() {
+			return this;
+		}
+
+		@Override
+		public void release() {}
 	}
 
 	public static final class CustomOrderedParameterSet extends AbstractSet<String> {
