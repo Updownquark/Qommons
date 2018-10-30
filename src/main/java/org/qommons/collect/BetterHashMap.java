@@ -125,7 +125,7 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 			Entry newEntry = (Entry) newEntry(key, value);
 			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(newEntry, true);
 			if (entryEl != null) {
-				entryEl.get().setValue(value);
+				((Entry) entryEl.get()).mutable().setValue(value);
 			} else {
 				entryEl = theEntries.addElement(newEntry, first);
 				((Entry) entryEl.get()).setId(entryEl.getElementId());
@@ -138,9 +138,9 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
 		try (Transaction t = theEntries.lock(true, null)) {
 			Entry newEntry = (Entry) newEntry(key, value);
-			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.addElement(newEntry, true);
+			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(newEntry, true);
 			if (entryEl != null) {
-				entryEl.get().setValue(value);
+				((Entry) entryEl.get()).mutable().setValue(value);
 			} else {
 				entryEl = theEntries.addElement(newEntry, after, before, first);
 				((Entry) entryEl.get()).setId(entryEl.getElementId());
