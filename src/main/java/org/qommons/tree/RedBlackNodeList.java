@@ -1,6 +1,7 @@
 package org.qommons.tree;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.ConcurrentModificationException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -17,6 +18,7 @@ import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.OptimisticContext;
+import org.qommons.collect.ValueStoredCollection;
 
 /**
  * An abstract implementation of a tree-backed collection. Since fast indexing is supported, BetterList is implemented.
@@ -236,6 +238,27 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	@Override
 	public void clear() {
 		theTree.setRoot(null);
+	}
+
+	protected <X> boolean repair(Comparator<? super E> compare, boolean distinct, ValueStoredCollection.RepairListener<E, X> listener) {
+		try (Transaction t = lock(true, null)) {
+			return theTree.repair(compare, distinct, new RedBlackTree.RepairListener<E, X>() {
+				@Override
+				public void removed(RedBlackNode<E> node) {
+					listener.removed(wrap(node));
+				}
+
+				@Override
+				public X preTransfer(RedBlackNode<E> node) {
+					return listener.preTransfer(wrap(node));
+				}
+
+				@Override
+				public void postTransfer(RedBlackNode<E> node, X data) {
+					listener.postTransfer(wrap(node), data);
+				}
+			});
+		}
 	}
 
 	@Override

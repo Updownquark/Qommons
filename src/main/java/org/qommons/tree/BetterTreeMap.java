@@ -675,6 +675,36 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 
 		@Override
+		public CollectionElement<K> searchWithConsistencyDetection(K value, boolean[] invalid) {
+			return handleFor(theEntries.searchWithConsistencyDetection(newEntry(value, null), invalid));
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return theEntries.checkConsistency();
+		}
+
+		@Override
+		public <X> boolean repair(RepairListener<K, X> listener) {
+			return theEntries.repair(new RepairListener<Map.Entry<K, V>, X>() {
+				@Override
+				public void removed(CollectionElement<Map.Entry<K, V>> element) {
+					listener.removed(handleFor(element));
+				}
+
+				@Override
+				public X preTransfer(CollectionElement<Map.Entry<K, V>> element) {
+					return listener.preTransfer(handleFor(element));
+				}
+
+				@Override
+				public void postTransfer(CollectionElement<Map.Entry<K, V>> element, X data) {
+					listener.postTransfer(handleFor(element), data);
+				}
+			});
+		}
+
+		@Override
 		public int hashCode() {
 			return BetterCollection.hashCode(this);
 		}

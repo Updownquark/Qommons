@@ -9,9 +9,9 @@ import java.util.function.Function;
 
 import org.qommons.Transactable;
 import org.qommons.Transaction;
-import org.qommons.collect.BetterSet.RepairListener;
 import org.qommons.ValueHolder;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
+import org.qommons.collect.ValueStoredCollection.RepairListener;
 
 /**
  * A {@link Map} that provides access to its entries by ID.

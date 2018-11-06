@@ -300,7 +300,27 @@ public class BetterCollections {
 
 		@Override
 		public CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
+			if (!getWrapped().belongs(value))
+				return null;
 			return getElement(value, first);
+		}
+
+		@Override
+		public CollectionElement<E> searchWithConsistencyDetection(E value, boolean[] invalid) {
+			if (!getWrapped().belongs(value))
+				return null;
+			return ((BetterSet<E>) getWrapped()).searchWithConsistencyDetection(value, invalid);
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return getWrapped().checkConsistency();
+		}
+
+		@Override
+		public <X> boolean repair(RepairListener<E, X> listener) {
+			// Kinda weird here since this involves modification, but the caller itself isn't doing the modification
+			return ((BetterSet<E>) getWrapped()).repair(listener);
 		}
 
 		@Override
@@ -368,6 +388,24 @@ public class BetterCollections {
 		@Override
 		public CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
 			return getElement(value, first);
+		}
+
+		@Override
+		public CollectionElement<E> searchWithConsistencyDetection(E value, boolean[] invalid) {
+			if (!getWrapped().belongs(value))
+				return null;
+			return ((BetterSet<E>) getWrapped()).searchWithConsistencyDetection(value, invalid);
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return getWrapped().checkConsistency();
+		}
+
+		@Override
+		public <X> boolean repair(RepairListener<E, X> listener) {
+			// Kinda weird here since this involves modification, but the caller itself isn't doing the modification
+			return ((BetterSet<E>) getWrapped()).repair(listener);
 		}
 	}
 
