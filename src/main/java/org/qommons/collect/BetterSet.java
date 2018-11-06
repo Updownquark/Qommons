@@ -44,6 +44,18 @@ public interface BetterSet<E> extends BetterCollection<E>, TransactableSet<E> {
 		return BetterCollection.super.remove(o);
 	}
 
+	/**
+	 * Retrieves the element in this set equivalent to the given value, if present. Otherwise, the value is added, the <code>added</code>
+	 * runnable is invoked (if supplied), and the new element returned.
+	 * 
+	 * @param value The value to get or add
+	 * @param first Whether (if not present) to prefer to add the value to the beginning or end of the set
+	 * @param added The runnable which, if not null will be {@link Runnable#run() invoked} if the value is added to the set in this
+	 *        operation
+	 * @return The element containing the value, or null if the element was not present AND could not be added for any reason
+	 */
+	CollectionElement<E> getOrAdd(E value, boolean first, Runnable added);
+
 	@Override
 	default BetterSet<E> with(E... values) {
 		BetterCollection.super.with(values);
@@ -227,6 +239,11 @@ public interface BetterSet<E> extends BetterCollection<E>, TransactableSet<E> {
 		}
 
 		@Override
+		public CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
+			return CollectionElement.reverse(getWrapped().getOrAdd(value, !first, added));
+		}
+
+		@Override
 		public CollectionElement<E> searchWithConsistencyDetection(E value, boolean[] invalid) {
 			return CollectionElement.reverse(getWrapped().searchWithConsistencyDetection(value, invalid));
 		}
@@ -274,6 +291,10 @@ public interface BetterSet<E> extends BetterCollection<E>, TransactableSet<E> {
 	 * @param <E> The type of the set
 	 */
 	class EmptySet<E> extends BetterCollection.EmptyCollection<E> implements BetterSet<E> {
+		@Override
+		public CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
+			return null;
+		}
 		@Override
 		public CollectionElement<E> searchWithConsistencyDetection(E value, boolean[] invalid) {
 			return null;

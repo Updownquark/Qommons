@@ -140,6 +140,34 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		return el == null ? null : el.get();
 	}
 
+	@Override
+	default CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
+		while (true) {
+			CollectionElement<E> found = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
+			if (found == null) {
+				found = addElement(value, first);
+				if (found != null && added != null)
+					added.run();
+				return found;
+			}
+			int compare = comparator().compare(value, found.get());
+			if (compare == 0)
+				return found;
+			try (Transaction t = lock(true, true, null)) {
+				MutableCollectionElement<E> mutableElement;
+				try {
+					mutableElement = mutableElement(found.getElementId());
+				} catch (IllegalArgumentException e) {
+					continue; // Possible it may have been removed already
+				}
+				ElementId addedId = mutableElement.add(value, compare < 0);
+				if (added != null)
+					added.run();
+				return getElement(addedId);
+			}
+		}
+	}
+
 	/**
 	 * @param search The search to use
 	 * @return Either:
@@ -238,6 +266,11 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 				if (compare == 0)
 					compare = theOnExact;
 				return compare;
+			}
+
+			@Override
+			public int hashCode() {
+				return Objects.hash(theCompare, theValue, theOnExact);
 			}
 
 			@Override
@@ -446,6 +479,37 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	}
 
 	/**
+	 * @param <E> The type of value to compare
+	 * @param c1 The first search
+	 * @param c2 The other search
+	 * @param low Whether the other search is for the lower or upper bound of a new sorted set
+	 * @return A lower or upper bound for both the given search and this sub set's lower or upper bound
+	 */
+	public static <E> Comparable<? super E> and(Comparable<? super E> c1, Comparable<? super E> c2, boolean low) {
+		if (c1 == null)
+			return c2;
+		else if (c2 == null)
+			return c1;
+		class AndCompare implements Comparable<E> {
+			@Override
+			public int compareTo(E v) {
+				int comp = c1.compareTo(v);
+				if (low && comp <= 0)
+					comp = c2.compareTo(v);
+				else if (!low && comp >= 0)
+					comp = c2.compareTo(v);
+				return comp;
+			}
+
+			@Override
+			public String toString() {
+				return c1 + " and " + c2;
+			}
+		}
+		return new AndCompare();
+	}
+
+	/**
 	 * @param <E> The type of the set
 	 * @param compare The comparator for the set
 	 * @return An immutable, empty sorted set
@@ -489,6 +553,11 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		@Override
 		public Transaction lock(boolean write, boolean structural, Object cause) {
 			return theWrapped.lock(write, structural, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return theWrapped.tryLock(write, structural, cause);
 		}
 
 		@Override
@@ -808,40 +877,10 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 		@Override
 		public BetterSortedSet<E> subSet(Comparable<? super E> innerFrom, Comparable<? super E> innerTo) {
-			return new BetterSubSet<>(theWrapped, and(innerFrom, true), and(innerTo, false));
+			return new BetterSubSet<>(theWrapped, and(from, innerFrom, true), and(to, innerTo, false));
 		}
 
-		/**
-		 * @param c2 The other search
-		 * @param low Whether the other search is for the lower or upper bound of a new sorted set
-		 * @return A lower or upper bound for both the given search and this sub set's lower or upper bound
-		 */
-		protected Comparable<? super E> and(Comparable<? super E> c2, boolean low) {
-			Comparable<? super E> c1 = low ? from : to;
-			if (c1 == null)
-				return c2;
-			else if (c2 == null)
-				return c1;
-			class AndCompare implements Comparable<E> {
 				@Override
-				public int compareTo(E v) {
-					int comp = c1.compareTo(v);
-					if (low && comp <= 0)
-						comp = c2.compareTo(v);
-					else if (!low && comp >= 0)
-						comp = c2.compareTo(v);
-					return comp;
-				}
-
-				@Override
-				public String toString() {
-					return c1 + " and " + c2;
-				}
-			}
-			return new AndCompare();
-		}
-
-		@Override
 		public MutableElementSpliterator<E> spliterator(boolean fromStart) {
 			MutableElementSpliterator<E> wrapSpliter;
 			if (fromStart) {
@@ -935,6 +974,16 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 				}
 			};
 			return theWrapped.repair(subListener);
+		}
+
+		@Override
+		public int hashCode() {
+			return BetterCollection.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterCollection.equals(this, obj);
 		}
 
 		@Override

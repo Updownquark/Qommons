@@ -7,6 +7,8 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 
 import org.qommons.Transactable;
@@ -26,6 +28,11 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	public static final double MIN_LOAD_FACTOR = 0.2;
 	/** The maximum allowed {@link HashSetBuilder#withLoadFactor(double) load factor} for maps of this type */
 	public static final double MAX_LOAD_FACTOR = 0.9;
+	/**
+	 * The maximum capacity, used if a higher value is implicitly specified by either of the constructors with arguments. MUST be a power of
+	 * two <= 1<<30.
+	 */
+	static final int MAXIMUM_CAPACITY = 1 << 30;
 
 	/** A builder to use to create {@link BetterHashSet}s */
 	public static class HashSetBuilder {
@@ -158,48 +165,109 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		rehash(initExpectedSize);
 	}
 
-	private void rehash(int expectedSize) {
-		int tableSize = (int) Math.ceil(expectedSize / theLoadFactor);
-		theTable = new BetterHashSet.HashTableEntry[tableSize];
-		HashEntry entry = theFirst;
-		while (entry != null) {
-			insert(entry);
-			entry = entry.next;
-		}
+	/** @return The function producing hash codes for this set's values */
+	public ToIntFunction<Object> getHasher() {
+		return theHasher;
 	}
 
-	private void insert(HashEntry entry) {
-		int tableIndex = getTableIndex(entry.hashCode());
-		HashTableEntry tableEntry = theTable[tableIndex];
+	/** @return The test this set uses to determine whether two potential set elements are equivalent */
+	public BiFunction<Object, Object, Boolean> getEquals() {
+		return theEquals;
+	}
+
+	/**
+	 * Like a bunch of the actual hashing guts in this class, this is copied from {@link java.util.HashMap}.
+	 * 
+	 * Returns a power of two size for the given target capacity.
+	 */
+	static final int tableSizeFor(int cap) {
+		int n = cap - 1;
+		n |= n >>> 1;
+		n |= n >>> 2;
+		n |= n >>> 4;
+		n |= n >>> 8;
+		n |= n >>> 16;
+		return (n < 0) ? 1 : (n >= MAXIMUM_CAPACITY) ? MAXIMUM_CAPACITY : n + 1;
+	}
+
+	private void rehash(int expectedSize) {
+		int tableSize = tableSizeFor((int) Math.ceil(expectedSize / theLoadFactor));
+		HashTableEntry[] table = new BetterHashSet.HashTableEntry[tableSize];
+		HashEntry entry = theFirst;
+		while (entry != null) {
+			insert(table, entry, -1, null);
+			entry = entry.next;
+		}
+		theTable = table;
+	}
+
+	private void insert(HashTableEntry[] table, HashEntry entry, int tableIndex, HashEntry adjacentEntry) {
+		if (tableIndex < 0)
+			tableIndex = getTableIndex(table.length, entry.hashCode());
+		HashTableEntry tableEntry = table[tableIndex];
 		if (tableEntry == null)
-			tableEntry = theTable[tableIndex] = new HashTableEntry(tableIndex);
-		tableEntry.add(entry);
+			tableEntry = table[tableIndex] = new HashTableEntry(tableIndex);
+		tableEntry.add(entry, adjacentEntry);
 	}
 
 	/**
 	 * Ensures that this set's load factor will be satisfied if the collection grows to the given size
 	 * 
 	 * @param expectedSize The capacity to check for
+	 * @return Whether this table was rebuilt
 	 */
-	protected void ensureCapacity(int expectedSize) {
-		try (Transaction t = lock(false, false, null)) {
+	public boolean ensureCapacity(int expectedSize) {
+		try (Transaction t = lock(true, true, null)) {
 			int neededTableSize = (int) Math.ceil(expectedSize / theLoadFactor);
-			if (neededTableSize > theTable.length)
-				rehash(expectedSize);
+			if (neededTableSize > theTable.length) {
+				// Do this so we don't rehash as often when growing
+				rehash((int) (expectedSize * 1.5));
+				return true;
+			}
+			return false;
 		}
 	}
 
-	private int getTableIndex(int hashCode) {
-		int h = hashCode ^ (hashCode >>> 16);
-		return (theTable.length - 1) & h;
+	/**
+	 * <p>
+	 * This is a very expensive (linear) call that checks this hash table for efficiency. The result is (size-numDuplicates)/size where
+	 * numDuplicates is the sum of (loading-1) for each table entry.
+	 * </p>
+	 * <p>
+	 * A value of 1.0 means that each value in this table is in its own table entry, which is perfectly efficient (for access time, though
+	 * perhaps not for memory).
+	 * </p>
+	 * <p>
+	 * A value of close to zero means that most values in the table are sharing a table entry with many other values, which will result in
+	 * terrible efficiency.
+	 * </p>
+	 * 
+	 * @return The efficiency of this table
+	 */
+	public double getEfficiency() {
+		try (Transaction t = lock(false, true, null)) {
+			int sharing = 0;
+			for (HashTableEntry tableEntry : theTable) {
+				if (tableEntry == null || tableEntry.entries.size() <= 1)
+					continue;
+				sharing += tableEntry.entries.size() - 1;
+			}
+			return (theSize - sharing) * 1.0 / theSize;
+		}
 	}
 
-	private HashEntry getEntry(int hashCode, E value) {
-		int tableIndex = getTableIndex(hashCode);
-		HashTableEntry tableEntry = theTable[tableIndex];
+	private static int getTableIndex(int tableSize, int hashCode) {
+		int h = hashCode ^ (hashCode >>> 16);
+		return (tableSize - 1) & h;
+	}
+
+	private HashEntry getEntry(int hashCode, Predicate<? super E> equals) {
+		HashTableEntry[] table = theTable;
+		int tableIndex = getTableIndex(table.length, hashCode);
+		HashTableEntry tableEntry = table[tableIndex];
 		if (tableEntry == null)
 			return null;
-		return tableEntry.find(hashCode, value);
+		return tableEntry.find(hashCode, equals, OptimisticContext.TRUE);
 	}
 
 	@Override
@@ -218,8 +286,13 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
+	public Transaction tryLock(boolean write, boolean structural, Object cause) {
+		return theLocker.tryLock(write, structural, cause);
+	}
+
+	@Override
 	public long getStamp(boolean structuralOnly) {
-		return theLocker.getStatus(structuralOnly);
+		return theLocker.getStamp(structuralOnly);
 	}
 
 	@Override
@@ -255,24 +328,36 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 	@Override
 	public String canAdd(E value, ElementId after, ElementId before) {
-		return getEntry(theHasher.applyAsInt(value), value) == null ? null : StdMsg.ELEMENT_EXISTS;
+		return getEntry(theHasher.applyAsInt(value), equalsTest(value)) == null ? null : StdMsg.ELEMENT_EXISTS;
 	}
 
-	@Override
-	public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
-		throws UnsupportedOperationException, IllegalArgumentException {
+	public CollectionElement<E> getOrAdd(int hashCode, Predicate<? super E> equals, Supplier<? extends E> value, ElementId after,
+		ElementId before, boolean first, Runnable added) {
+		HashTableEntry[] table = theTable;
+		int tableIndex = getTableIndex(table.length, hashCode);
+		HashTableEntry tableEntry = table[tableIndex];
+		HashEntry entry = tableEntry == null ? null : tableEntry.findForInsert(hashCode, equals, OptimisticContext.TRUE);
+		if (entry != null && entry.hashCode == hashCode && equals.test(entry.theValue))
+			return entry;
+
 		// Ordered insert is O(n), but we'll support it
 		try (Transaction t = lock(true, true, null)) {
-			int valueHashCode = theHasher.applyAsInt(value);
-			HashEntry entry = getEntry(valueHashCode, value);
-			if (entry != null)
-				return null;
 			ensureCapacity(theSize + 1);
+			if (theTable != table) {
+				// Table rebuilt, need to get the insertion information again
+				table = theTable;
+				tableIndex = getTableIndex(table.length, hashCode);
+			}
+			tableEntry = theTable[tableIndex];
+			entry = tableEntry == null ? null : tableEntry.findForInsert(hashCode, equals, OptimisticContext.TRUE);
+			if (entry != null && entry.hashCode == hashCode && equals.test(entry.theValue))
+				return entry;
+			HashEntry adjacent = entry;
 			if (first) {
 				if (after != null) {
 					HashEntry afterEntry = ((HashId) after).entry;
 					afterEntry.check();
-					entry = new HashEntry(afterEntry.theOrder, value, valueHashCode);
+					entry = new HashEntry(afterEntry.theOrder, value.get(), hashCode);
 					entry.previous = afterEntry;
 					entry.next = afterEntry.next;
 					if (afterEntry.next != null)
@@ -287,7 +372,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 					if (theFirst.theOrder == theFirstIdCreator.get())
 						theFirstIdCreator.getAndDecrement();
 				} else {
-					entry = new HashEntry(theFirstIdCreator.getAndDecrement(), value, valueHashCode);
+					entry = new HashEntry(theFirstIdCreator.getAndDecrement(), value.get(), hashCode);
 					entry.next = theFirst;
 					if (theFirst != null)
 						theFirst.previous = entry;
@@ -299,7 +384,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 				if (before != null) {
 					HashEntry beforeEntry = ((HashId) before).entry;
 					beforeEntry.check();
-					entry = new HashEntry(beforeEntry.theOrder, value, valueHashCode);
+					entry = new HashEntry(beforeEntry.theOrder, value.get(), hashCode);
 					entry.next = beforeEntry;
 					entry.previous = beforeEntry.previous;
 					if (beforeEntry.previous != null)
@@ -314,7 +399,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 					if (theLast.theOrder == theLastIdCreator.get())
 						theLastIdCreator.getAndIncrement();
 				} else {
-					entry = new HashEntry(theLastIdCreator.getAndIncrement(), value, valueHashCode);
+					entry = new HashEntry(theLastIdCreator.getAndIncrement(), value.get(), hashCode);
 					if (theLast != null)
 						theLast.next = entry;
 					entry.previous = theLast;
@@ -323,19 +408,41 @@ public class BetterHashSet<E> implements BetterSet<E> {
 						theFirst = entry;
 				}
 			}
-			insert(entry);
+			insert(table, entry, tableIndex, adjacent);
 			theSize++;
-			theLocker.changed(true);
+			if (added != null)
+				added.run();
 			return entry.immutable();
 		}
 	}
 
 	@Override
+	public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+		throws UnsupportedOperationException, IllegalArgumentException {
+		boolean[] added = new boolean[1];
+		CollectionElement<E> element = getOrAdd(theHasher.applyAsInt(value), equalsTest(value), () -> value, after, before, first,
+			() -> added[0] = true);
+		return added[0] ? element : null;
+	}
+
+	public Predicate<E> equalsTest(E value) {
+		return v -> theEquals.apply(v, value);
+	}
+
+	@Override
 	public CollectionElement<E> getElement(E value, boolean first) {
-		try (Transaction t = lock(false, true, null)) {
-			HashEntry entry = getEntry(theHasher.applyAsInt(value), value);
-			return entry == null ? null : entry.immutable();
-		}
+		HashEntry entry = getEntry(theHasher.applyAsInt(value), equalsTest(value));
+		return entry == null ? null : entry.immutable();
+	}
+
+	public CollectionElement<E> getElement(int hashCode, Predicate<? super E> equals) {
+		HashEntry entry = getEntry(hashCode, equals);
+		return entry == null ? null : entry.immutable();
+	}
+
+	@Override
+	public CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
+		return getOrAdd(theHasher.applyAsInt(value), equalsTest(value), () -> value, null, null, first, added);
 	}
 
 	@Override
@@ -346,6 +453,11 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	@Override
 	public MutableCollectionElement<E> mutableElement(ElementId id) {
 		return ((HashId) id).entry.check();
+	}
+
+	public boolean isValid(ElementId elementId){
+		HashEntry entry=((HashId) elementId).entry.check();
+		return entry.isValid();
 	}
 
 	@Override
@@ -363,20 +475,20 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		try (Transaction t = lock(true, true, null); Transaction ct = Transactable.lock(c, false, null)) {
 			for (E e : c)
 				add(e);
-			theLocker.changed(true);
 			return !c.isEmpty();
 		}
 	}
 
 	@Override
 	public void clear() {
+		if (isEmpty())
+			return;
 		try (Transaction t = lock(true, true, null)) {
 			for (int i = 0; i < theTable.length; i++)
 				theTable[i] = null;
 			theFirst = null;
 			theLast = null;
 			theSize = 0;
-			theLocker.changed(true);
 		}
 	}
 
@@ -418,13 +530,14 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		}
 	}
 
-	private class HashEntry implements MutableCollectionElement<E> {
+	protected class HashEntry implements MutableCollectionElement<E> {
 		private long theOrder;
-		private int hashCode;
+		int hashCode;
 		private MutableBinaryTreeNode<HashEntry> theTreeNode;
 		private E theValue;
 		HashEntry next;
 		HashEntry previous;
+		private CollectionElement<E> wrapper;
 
 		HashEntry(long order, E value, int hashCode) {
 			theOrder = order;
@@ -457,8 +570,20 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		}
 
 		@Override
+		public CollectionElement<E> immutable() {
+			if (wrapper == null)
+				wrapper = MutableCollectionElement.super.immutable();
+			return wrapper;
+		}
+
+		@Override
 		public E get() {
 			return theValue;
+		}
+
+		boolean isValid() {
+			int newHash = theHasher.applyAsInt(theValue);
+			return newHash == hashCode;
 		}
 
 		@Override
@@ -473,7 +598,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 					throw new IllegalStateException("This element has been removed");
 				if (theEquals.apply(theValue, value))
 					return null;
-				if (getEntry(theHasher.applyAsInt(value), value) != null)
+				if (getEntry(theHasher.applyAsInt(value), equalsTest(value)) != null)
 					return StdMsg.ELEMENT_EXISTS;
 			}
 			return null;
@@ -484,16 +609,15 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			try (Transaction t = lock(true, false, null)) {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
-				if (!theEquals.apply(theValue, value) && getEntry(theHasher.applyAsInt(value), value) != null)
-					throw new IllegalArgumentException(StdMsg.ELEMENT_EXISTS);
 				int newHash = theHasher.applyAsInt(value);
+				if (!theEquals.apply(theValue, value) && getEntry(newHash, equalsTest(value)) != null)
+					throw new IllegalArgumentException(StdMsg.ELEMENT_EXISTS);
 				theValue = value;
 				if (hashCode != newHash) {
 					theTreeNode.remove();
 					hashCode = newHash;
-					insert(this);
+					insert(theTable, this, -1, null);
 				}
-				theLocker.changed(false);
 			}
 		}
 
@@ -519,8 +643,16 @@ public class BetterHashSet<E> implements BetterSet<E> {
 				next = null;
 				previous = null;
 				theSize--;
-				theLocker.changed(true);
 			}
+		}
+
+		int compareToNode(BinaryTreeNode<HashEntry> node) {
+			if (hashCode < node.get().hashCode())
+				return -1;
+			else if (hashCode > node.get().hashCode())
+				return 1;
+			else
+				return 0;
 		}
 
 		@Override
@@ -548,24 +680,22 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			entries = new BetterTreeList<>(false);
 		}
 
-		void add(HashEntry entry) {
+		void add(HashEntry entry, HashEntry adjacentEntry) {
+			if (adjacentEntry != null) {
+				ElementId id = adjacentEntry.theTreeNode.add(entry, entry.hashCode < adjacentEntry.hashCode);
+				entry.placedAt(entries.mutableElement(id));
+				return;
+			}
 			BinaryTreeNode<HashEntry> node = entries.getRoot();
 			if (node == null) {
 				entry.placedAt(entries.mutableNodeFor(entries.addElement(entry, false)));
 				return;
 			}
-			node = node.findClosest(n -> {
-				if (entry.hashCode() < n.get().hashCode())
-					return -1;
-				else if (entry.hashCode > n.get().hashCode())
-					return 1;
-				else
-					return 0;
-			}, true, false);
+			node = node.findClosest(entry::compareToNode, true, false, null);
 			entry.placedAt(entries.mutableNodeFor(entries.mutableNodeFor(node).add(entry, entry.hashCode() < node.get().hashCode())));
 		}
 
-		HashEntry find(int hashCode, E value) {
+		HashEntry findForInsert(int hashCode, Predicate<? super E> equals, OptimisticContext ctx) {
 			BinaryTreeNode<HashEntry> node = entries.getRoot();
 			if (node == null)
 				return null;
@@ -576,22 +706,31 @@ public class BetterHashSet<E> implements BetterSet<E> {
 					return 1;
 				else
 					return 0;
-			}, true, true);
-			if (node == null || node.get().hashCode() != hashCode)
+			}, true, false, ctx);
+			if (!ctx.check() || node == null || node.get().hashCode() != hashCode)
 				return null;
 			BinaryTreeNode<HashEntry> node2 = node;
-			while (node2 != null && node2.get().hashCode() == hashCode) {
-				if (theEquals.apply(node2.get().get(), value))
+			while (ctx.check() && node2 != null && node2.get().hashCode() == hashCode) {
+				if (equals.test(node2.get().get()))
 					return node2.get();
 				node2 = node2.getClosest(true);
 			}
+			if (!ctx.check())
+				return null;
 			node2 = node.getClosest(false);
-			while (node2 != null && node2.get().hashCode() == hashCode) {
-				if (theEquals.apply(node2.get().get(), value))
+			while (ctx.check() && node2 != null && node2.get().hashCode() == hashCode) {
+				if (equals.test(node2.get().get()))
 					return node2.get();
 				node2 = node2.getClosest(false);
 			}
-			return null;
+			return node2 == null ? null : node2.get();
+		}
+
+		HashEntry find(int hashCode, Predicate<? super E> equals, OptimisticContext ctx) {
+			HashEntry found = findForInsert(hashCode, equals, ctx);
+			if (found != null && (found.hashCode != hashCode || !equals.test(found.theValue)))
+				found = null;
+			return found;
 		}
 	}
 

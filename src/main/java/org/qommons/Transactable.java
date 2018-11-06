@@ -1,5 +1,8 @@
 package org.qommons;
 
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
 /**
  * Represents a mutable object whose modifications may possibly be batched for increased efficiency.
  * 
@@ -35,5 +38,32 @@ public interface Transactable {
 			return ((Transactable) lockable).lock(write, cause);
 		else
 			return Transaction.NONE;
+	}
+
+	static Transaction lock(Lock lock) {
+		if (lock == null)
+			return Transaction.NONE;
+		lock.lock();
+		return lock::unlock;
+	}
+
+	static Transaction tryLock(Lock lock) {
+		if (lock == null)
+			return Transaction.NONE;
+		if (lock.tryLock())
+			return lock::unlock;
+		return null;
+	}
+
+	static Transaction lock(ReentrantReadWriteLock lock, boolean write) {
+		if (lock == null)
+			return Transaction.NONE;
+		return lock(write ? lock.writeLock() : lock.readLock());
+	}
+
+	static Transaction tryLock(ReentrantReadWriteLock lock, boolean write) {
+		if (lock == null)
+			return Transaction.NONE;
+		return tryLock(write ? lock.writeLock() : lock.readLock());
 	}
 }

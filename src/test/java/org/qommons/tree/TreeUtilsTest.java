@@ -6,7 +6,10 @@ import static org.qommons.QommonsTestUtils.testMap;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
+import org.junit.Assert;
 import org.junit.Test;
 import org.qommons.QommonsTestUtils;
 import org.qommons.TestHelper;
@@ -91,6 +94,174 @@ public class TreeUtilsTest {
 		RedBlackTree<String> tree = new RedBlackTree<>();
 		tree.setRoot(new RedBlackNode<>(tree, "a"));
 		test(tree, alphaBet('z'));
+	}
+
+	/** Tests {@link RedBlackNode#compare(RedBlackNode, RedBlackNode, java.util.function.BooleanSupplier)} */
+	@Test
+	public void testTreeNodeCompare() {
+		TestHelper.createTester(NodeCompareTester.class).withRandomCases(1)//
+			.withDebug(false)//
+			.withFailurePersistence(false)//
+			.execute().throwErrorIfFailed();
+	}
+
+	static class NodeCompareTester implements TestHelper.Testable {
+		@Override
+		public void accept(TestHelper helper) {
+			RedBlackTree<String> tree = new RedBlackTree<>();
+			// Build up a-z
+			for (String s : alphaBet('z')) {
+				if (tree.getRoot() == null)
+					tree.setRoot(new RedBlackNode<>(tree, s));
+				else
+					tree.getTerminal(false).add(new RedBlackNode<>(tree, s), false);
+			}
+
+			for (int i = 0; i < 100000; i++) {
+				int idx1 = helper.getInt(0, 26);
+				int idx2 = helper.getInt(0, 26);
+				int idxCompare = idx1 - idx2;
+				if (idxCompare < 0)
+					idxCompare = -1;
+				else if (idxCompare > 0)
+					idxCompare = 1;
+				RedBlackNode<String> node1 = tree.getRoot().get(idx1, () -> true);
+				RedBlackNode<String> node2 = tree.getRoot().get(idx2, () -> true);
+				int nodeCompare = RedBlackNode.compare(node1, node2, null);
+				if (nodeCompare < 0)
+					nodeCompare = -1;
+				else if (nodeCompare > 0)
+					nodeCompare = 1;
+				Assert.assertEquals(idxCompare, nodeCompare);
+			}
+		}
+	}
+
+	@Test
+	public void testTreeNodeSplit() {
+		TestHelper.createTester(TreeSplitTester.class).withRandomCases(1)//
+			.withDebug(true)//
+			.withFailurePersistence(true)//
+			.execute().throwErrorIfFailed();
+	}
+
+	static class TreeSplitTester implements TestHelper.Testable {
+		@Override
+		public void accept(TestHelper helper) {
+			RedBlackTree<String> tree = new RedBlackTree<>();
+			// Build up a-z
+			for (String s : alphaBet('z')) {
+				if (tree.getRoot() == null)
+					tree.setRoot(new RedBlackNode<>(tree, s));
+				else
+					tree.getTerminal(false).add(new RedBlackNode<>(tree, s), false);
+			}
+
+			for (int i = 0; i < 100000; i++) {
+				int idx1 = helper.getInt(0, 26);
+				int idx2 = helper.getInt(0, 26);
+				RedBlackNode<String> node1 = tree.getRoot().get(idx1, () -> true);
+				RedBlackNode<String> node2 = tree.getRoot().get(idx2, () -> true);
+				int nodeCompare = RedBlackNode.compare(node1, node2, null);
+				RedBlackNode<String> split = RedBlackNode.splitBetween(node1, node2, null);
+				if (split == null) {
+					Assert.assertTrue(idx2 <= idx1 + 1);
+				} else {
+					Assert.assertEquals(nodeCompare, RedBlackNode.compare(node1, split, null));
+					Assert.assertEquals(nodeCompare, RedBlackNode.compare(split, node2, null));
+				}
+			}
+		}
+	}
+
+	@Test
+	public void testTreeCopy() {
+		RedBlackTree<Integer> tree = new RedBlackTree<>();
+		for (int i = 0; i < 100000; i++) {
+			if (tree.getRoot() == null)
+				tree.setRoot(new RedBlackNode<>(tree, i));
+			else
+				tree.getTerminal(false).add(new RedBlackNode<>(tree, i), false);
+		}
+		checkIntegrity(tree);
+
+		RedBlackTree<Integer> copy = tree.copy();
+		checkIntegrity(copy);
+	}
+
+	@Test
+	public void testTreeCopyFromJavaTree() {
+		TreeSet<Integer> tree = new TreeSet<>();
+		for (int i = 0; i < 100000; i++) {
+			tree.add(i);
+		}
+
+		RedBlackTree<Integer> copy = new RedBlackTree<>();
+		Assert.assertTrue(RedBlackNode.build(copy, tree, v -> v));
+		checkIntegrity(copy);
+
+		TreeMap<Integer, Integer> map = new TreeMap<>();
+		for (int i = 0; i < 100000; i++) {
+			map.put(i, i);
+		}
+
+		RedBlackTree<Integer> mapCopy = new RedBlackTree<>();
+		Assert.assertTrue(RedBlackNode.build(mapCopy, map.keySet(), v -> v));
+		checkIntegrity(mapCopy);
+
+		mapCopy = new RedBlackTree<>();
+		Assert.assertTrue(RedBlackNode.build(mapCopy, map.entrySet(), e -> e.getKey()));
+		checkIntegrity(mapCopy);
+
+		mapCopy = new RedBlackTree<>();
+		Assert.assertTrue(RedBlackNode.build(mapCopy, map.values(), v -> v));
+		checkIntegrity(mapCopy);
+
+		mapCopy = new RedBlackTree<>();
+		Assert.assertTrue(RedBlackNode.build(mapCopy, new TreeSet<>(map.keySet()), v -> v));
+		checkIntegrity(mapCopy);
+	}
+
+	private void checkIntegrity(RedBlackTree<Integer> tree) {
+		checkIntegrity(tree.getRoot());
+		RedBlackNode<Integer> node = tree.getFirst();
+		Assert.assertEquals(Integer.valueOf(0), node.getValue());
+		RedBlackNode<Integer> next = node.getClosest(false);
+		int count = 1;
+		while (next != null) {
+			Assert.assertEquals("[" + count + "]", node.getValue() + 1, next.getValue().intValue());
+			node = next;
+			count++;
+			next = node.getClosest(false);
+		}
+		Assert.assertEquals(tree.size(), count);
+		Assert.assertEquals(tree.getLast().getValue(), node.getValue());
+
+		count = 1;
+		RedBlackNode<Integer> prev = node.getClosest(true);
+		while (prev != null) {
+			Assert.assertEquals("[" + count + "]", node.getValue() - 1, prev.getValue().intValue());
+			node = prev;
+			count++;
+			prev = node.getClosest(true);
+		}
+		Assert.assertEquals(tree.size(), count);
+		Assert.assertEquals(tree.getFirst().getValue(), node.getValue());
+	}
+
+	private void checkIntegrity(RedBlackNode<?> node) {
+		int size = 1;
+		if (node.getLeft() != null) {
+			checkIntegrity(node.getLeft());
+			Assert.assertEquals(node, node.getLeft().getParent());
+			size += node.getLeft().size();
+		}
+		if (node.getRight() != null) {
+			checkIntegrity(node.getRight());
+			Assert.assertEquals(node, node.getRight().getParent());
+			size += node.getRight().size();
+		}
+		Assert.assertEquals(size, node.size());
 	}
 
 	static class TreeSetTester implements TestHelper.Testable {

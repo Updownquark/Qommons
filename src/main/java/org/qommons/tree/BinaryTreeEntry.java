@@ -2,6 +2,7 @@ package org.qommons.tree;
 
 import org.qommons.collect.BetterMap;
 import org.qommons.collect.MapEntryHandle;
+import org.qommons.collect.OptimisticContext;
 
 /**
  * A {@link BinaryTreeNode} for a tree-based {@link BetterMap}
@@ -34,10 +35,10 @@ public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<V>, MapEntryHandle
 	BinaryTreeEntry<K, V> getSibling();
 
 	@Override
-	BinaryTreeEntry<K, V> get(int index);
+	BinaryTreeEntry<K, V> get(int index, OptimisticContext ctx);
 
 	@Override
-	BinaryTreeEntry<K, V> findClosest(Comparable<BinaryTreeNode<V>> finder, boolean lesser, boolean strictly);
+	BinaryTreeEntry<K, V> findClosest(Comparable<BinaryTreeNode<V>> finder, boolean lesser, boolean strictly, OptimisticContext ctx);
 
 	@Override
 	default BinaryTreeEntry<K, V> reverse() {
@@ -72,12 +73,12 @@ public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<V>, MapEntryHandle
 
 		@Override
 		public BinaryTreeEntry<K, V> getLeft() {
-			return (BinaryTreeEntry<K, V>) super.getLeft();
+			return (BinaryTreeEntry<K, V>) super.getRight();
 		}
 
 		@Override
 		public BinaryTreeEntry<K, V> getRight() {
-			return (BinaryTreeEntry<K, V>) super.getRight();
+			return (BinaryTreeEntry<K, V>) super.getLeft();
 		}
 
 		@Override
@@ -96,18 +97,23 @@ public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<V>, MapEntryHandle
 		}
 
 		@Override
-		public BinaryTreeEntry<K, V> get(int index) {
-			return (BinaryTreeEntry<K, V>) super.get(index);
+		public BinaryTreeEntry<K, V> get(int index, OptimisticContext ctx) {
+			return (BinaryTreeEntry<K, V>) super.get(index, ctx);
 		}
 
 		@Override
-		public BinaryTreeEntry<K, V> findClosest(Comparable<BinaryTreeNode<V>> finder, boolean lesser, boolean strictly) {
-			return (BinaryTreeEntry<K, V>) super.findClosest(finder, lesser, strictly);
+		public BinaryTreeEntry<K, V> findClosest(Comparable<BinaryTreeNode<V>> finder, boolean lesser, boolean strictly,
+			OptimisticContext ctx) {
+			return (BinaryTreeEntry<K, V>) super.findClosest(finder, lesser, strictly, ctx);
 		}
 
 		@Override
 		public BinaryTreeEntry<K, V> reverse() {
 			return getWrapped();
 		}
+	}
+
+	public static <K, V> BinaryTreeEntry<K, V> reverse(BinaryTreeEntry<K, V> entry) {
+		return entry == null ? null : entry.reverse();
 	}
 }

@@ -38,6 +38,14 @@ public class RedBlackTree<E> {
 		// return theRoot == null ? null : theRoot.getTerminal(first, () -> true);
 	}
 
+	public RedBlackTree<E> copy() {
+		RedBlackTree<E> copy = new RedBlackTree<>();
+		if (theRoot != null)
+			copy.theRoot = RedBlackNode.deepCopy(theRoot, copy, v -> v);
+		copy.theStructureStamp = theStructureStamp;
+		return copy;
+	}
+
 	@Override
 	public String toString() {
 		return RedBlackNode.print(theRoot);

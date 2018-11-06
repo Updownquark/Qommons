@@ -2,6 +2,7 @@ package org.qommons.tree;
 
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.CollectionElement;
+import org.qommons.collect.OptimisticContext;
 
 /**
  * A CollectionElement in a tree-based {@link BetterCollection}
@@ -54,12 +55,14 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 
 	/**
 	 * @param index The index of the node to get
+	 * @param ctx The optimistic context which, if provided and returns false, will terminate the operation
 	 * @return The node at the given index in this sub-tree
 	 */
-	BinaryTreeNode<E> get(int index);
+	BinaryTreeNode<E> get(int index, OptimisticContext ctx);
 
 	/**
 	 * @param search The search for nodes in this sub-tree
+	 * @param ctx The optimistic context which, if provided and returns false, will terminate the operation
 	 * @return Either:
 	 *         <ul>
 	 *         <li>The index of the node in this sub-tree matching the search
@@ -68,11 +71,12 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 	 *         would be inserted</li>
 	 *         </ul>
 	 */
-	default int indexFor(Comparable<? super BinaryTreeNode<? extends E>> search) {
+	default int indexFor(Comparable<? super BinaryTreeNode<? extends E>> search, OptimisticContext ctx) {
 		BinaryTreeNode<E> node = this;
 		int passed = 0;
 		int compare = search.compareTo(node);
-		while (node != null && compare != 0) {
+		while (node != null && compare != 0//
+			&& (ctx == null || ctx.check())) {
 			if (compare > 0) {
 				passed += sizeOf(node.getLeft()) + 1;
 				node = node.getRight();
@@ -95,13 +99,14 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 	 *        exact match ({@link Comparable#compareTo(Object) finder.compareTo(node)}==0) is not found
 	 * @param strictly If false, this method will return a node that does not obey the <code>lesser</code> parameter if there is no such
 	 *        node that obeys it. In other words, if <code>strictly</code> is false, this method will always return a node.
+	 * @param ctx The optimistic context which, if provided and returns false, will terminate the operation
 	 * @return The found node
 	 */
-	default BinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly) {
+	default BinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly, OptimisticContext ctx) {
 		BinaryTreeNode<E> node = this;
 		BinaryTreeNode<E> found = null;
 		boolean foundMatches = false;
-		while (true) {
+		while (ctx == null || ctx.check()) {
 			int compare = finder.compareTo(node);
 			if (compare == 0)
 				return node;
@@ -116,6 +121,7 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 				return found;
 			node = child;
 		}
+		return null;
 	}
 
 	/** @return The number of nodes stored before this node in the tree */
@@ -146,17 +152,17 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 
 		@Override
 		public BinaryTreeNode<E> getParent() {
-			return getWrapped().getParent().reverse();
+			return BinaryTreeNode.reverse(getWrapped().getParent());
 		}
 
 		@Override
 		public BinaryTreeNode<E> getLeft() {
-			return getWrapped().getRight().reverse();
+			return BinaryTreeNode.reverse(getWrapped().getRight());
 		}
 
 		@Override
 		public BinaryTreeNode<E> getRight() {
-			return getWrapped().getLeft().reverse();
+			return BinaryTreeNode.reverse(getWrapped().getLeft());
 		}
 
 		@Override
@@ -195,8 +201,8 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 		}
 
 		@Override
-		public BinaryTreeNode<E> get(int index) {
-			return getWrapped().get(size() - index - 1).reverse();
+		public BinaryTreeNode<E> get(int index, OptimisticContext ctx) {
+			return BinaryTreeNode.reverse(getWrapped().get(size() - index - 1, ctx));
 		}
 
 		@Override

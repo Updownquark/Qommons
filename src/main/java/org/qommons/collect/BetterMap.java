@@ -5,10 +5,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterSet.RepairListener;
+import org.qommons.ValueHolder;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
@@ -39,13 +41,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	}
 
 	@Override
-	default Transaction lock(boolean write, Object cause) {
-		return keySet().lock(write, cause);
+	default Transaction lock(boolean write, boolean structural, Object cause) {
+		return keySet().lock(write, structural, cause);
 	}
 
 	@Override
-	default Transaction lock(boolean write, boolean structural, Object cause) {
-		return keySet().lock(write, structural, cause);
+	default Transaction tryLock(boolean write, boolean structural, Object cause) {
+		return keySet().tryLock(write, structural, cause);
 	}
 
 	/**
@@ -81,6 +83,17 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	 * @return The handle for the entry in this map with the given key, or null if the key does not exist in this map's key set
 	 */
 	MapEntryHandle<K, V> getEntry(K key);
+
+	/**
+	 * Same as {@link #computeIfAbsent(Object, Function)}, but returns the entry of the affected element
+	 * 
+	 * @param key The key to retrieve or insert the value for
+	 * @param value The function to produce the value for the added entry, if not present
+	 * @param first Whether to prefer adding the new entry early or late in the key/entry set
+	 * @param added The runnable that will be invoked if the entry is added
+	 * @return The entry of the element if retrieved or added; may be null if key/value pair is not permitted in the map
+	 */
+	MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, boolean first, Runnable added);
 
 	/**
 	 * @param entryId The element ID to get the handle for
@@ -152,20 +165,24 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 	@Override
 	default V put(K key, V value) {
-		try (Transaction t = lock(true, null)) {
-			MapEntryHandle<K, V> entry = getEntry(key);
-			if (entry != null) {
+		while (true) {
+			boolean[] added = new boolean[1];
+			MapEntryHandle<K, V> entry = getOrPutEntry(key, k -> value, false, () -> added[0] = true);
+			if (entry != null && !added[0]) {
 				// Get the mutable entry in case the immutable one doesn't support Entry.setValue(Object)
-				MutableMapEntryHandle<K, V> mutableEntry = mutableEntry(entry.getElementId());
+				MutableMapEntryHandle<K, V> mutableEntry;
+				try {
+					mutableEntry = mutableEntry(entry.getElementId());
+				} catch (IllegalArgumentException e) {
+					continue;
+				}
 				V old = mutableEntry.get();
 				mutableEntry.set(value);
 				return old;
-			} else {
-				putEntry(key, value, false);
+			} else
 				return null;
 			}
 		}
-	}
 
 	@Override
 	default void putAll(Map<? extends K, ? extends V> m) {
@@ -178,6 +195,25 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	@Override
 	default void clear() {
 		keySet().clear();
+	}
+
+	/**
+	 * @param key The key for the entry to add
+	 * @param value The value to add for the key
+	 * @return This map
+	 */
+	default BetterMap<K, V> with(K key, V value) {
+		put(key, value);
+		return this;
+	}
+
+	/**
+	 * @param values The map whose entries to add to this map
+	 * @return This map
+	 */
+	default BetterMap<K, V> withAll(Map<? extends K, ? extends V> values) {
+		putAll(values);
+		return this;
 	}
 
 	/**
@@ -300,55 +336,81 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	}
 
 	@Override
+	default V computeIfAbsent(K key, Function<? super K, ? extends V> mappingFunction) {
+		MapEntryHandle<K, V> entry = getOrPutEntry(key, mappingFunction, false, null);
+		return entry == null ? null : entry.getValue();
+	}
+
+	@Override
 	default V computeIfPresent(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
+		while (true) {
 		MapEntryHandle<K, V> handle = getEntry(key);
-		if (handle != null && handle.getValue() != null) {
-			V value = remappingFunction.apply(key, handle.getValue());
-			if (value == null)
-				mutableEntry(handle.getElementId()).remove();
-			else
-				mutableEntry(handle.getElementId()).set(value);
-			return value;
+			if (handle != null) {
+				MutableMapEntryHandle<K, V> mutableEntry;
+				try {
+					mutableEntry = mutableEntry(handle.getElementId());
+				} catch (IllegalArgumentException e) {
+					continue;
+				}
+				V oldValue = mutableEntry.get();
+				V newValue = remappingFunction.apply(key, oldValue);
+				if (newValue != null) {
+					do {
+						if (mutableEntry.compareAndSet(oldValue, newValue))
+							return newValue;
+					} while (mutableEntry.getElementId().isPresent());
+				} else {
+					try {
+						mutableEntry.remove();
+						return null;
+					} catch (IllegalStateException e) {
+						continue;
+					}
+				}
 		} else
 			return null;
+	}
 	}
 
 	@Override
 	default V compute(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
-		MapEntryHandle<K, V> handle = getEntry(key);
-		V value;
-		if (handle != null && handle.getValue() != null) {
-			value = remappingFunction.apply(key, handle.getValue());
-			if (value == null)
-				mutableEntry(handle.getElementId()).remove();
-			else
-				mutableEntry(handle.getElementId()).set(value);
+		while (true) {
+			ValueHolder<V> value = new ValueHolder<>();
+			MapEntryHandle<K, V> entry = getOrPutEntry(key, k -> {
+				V newValue = remappingFunction.apply(k, null);
+				value.accept(newValue);
+				return newValue;
+			}, false, null);
+			if (value.isPresent())
+				return value.get();// Added
+			MutableMapEntryHandle<K, V> mutableEntry;
+			try {
+				mutableEntry = mutableEntry(entry.getElementId());
+			} catch (IllegalArgumentException e) {
+				continue;
+			}
+			V oldValue = mutableEntry.get();
+			V newValue = remappingFunction.apply(key, oldValue);
+			if (newValue != null) {
+				do {
+					if (mutableEntry.compareAndSet(oldValue, newValue))
+						return newValue;
+				} while (mutableEntry.getElementId().isPresent());
 		} else {
-			value = remappingFunction.apply(key, null);
-			if (value != null)
-				put(key, value);
+				try {
+					mutableEntry.remove();
+					return null;
+				} catch (IllegalStateException e) {
+					continue;
 		}
-		return value;
+	}
+		}
 	}
 
 	@Override
 	default V merge(K key, V value, BiFunction<? super V, ? super V, ? extends V> remappingFunction) {
-		MapEntryHandle<K, V> handle = getEntry(key);
-		if (handle != null) {
-			V oldValue = handle.getValue();
-			if (oldValue == null)
-				mutableEntry(handle.getElementId()).set(value);
-			else {
-				value = remappingFunction.apply(oldValue, value);
-				if (value == null)
-					mutableEntry(handle.getElementId()).remove();
-				else
-					mutableEntry(handle.getElementId()).set(value);
+		return compute(key, (k, v) -> v == null ? value : remappingFunction.apply(v, value));
 			}
-		} else
-			put(key, value);
-		return value;
-	}
 
 	/**
 	 * Implements {@link BetterMap#reverse()}
@@ -375,6 +437,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		@Override
 		public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
 			return MapEntryHandle.reverse(theWrapped.putEntry(key, value, ElementId.reverse(before), ElementId.reverse(after), !first));
+		}
+
+		@Override
+		public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, boolean first, Runnable added) {
+			return MapEntryHandle.reverse(theWrapped.getOrPutEntry(key, value, !first, added));
 		}
 
 		@Override
@@ -457,6 +524,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return theMap.tryLock(write, structural, cause);
+		}
+
+		@Override
 		public long getStamp(boolean structuralOnly) {
 			return theMap.getStamp(structuralOnly);
 		}
@@ -484,13 +556,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		@Override
 		public CollectionElement<Entry<K, V>> getTerminalElement(boolean first) {
 			CollectionElement<K> keyEl = theMap.keySet().getTerminalElement(first);
-			return keyEl == null ? null : new EntryElement(theMap.getEntryById(keyEl.getElementId()));
+			return keyEl == null ? null : getElement(keyEl.getElementId());
 		}
 
 		@Override
 		public CollectionElement<Entry<K, V>> getAdjacentElement(ElementId elementId, boolean next) {
 			CollectionElement<K> keyEl = theMap.keySet().getAdjacentElement(elementId, next);
-			return keyEl == null ? null : new EntryElement(theMap.getEntryById(keyEl.getElementId()));
+			return keyEl == null ? null : getElement(keyEl.getElementId());
 		}
 
 		@Override
@@ -498,12 +570,18 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			if (value == null)
 				return null;
 			MapEntryHandle<K, V> entry = theMap.getEntry(value.getKey());
-			return entry == null ? null : new EntryElement(entry);
+			return entry == null ? null : getElement(entry.getElementId());
 		}
 
 		@Override
 		public CollectionElement<Entry<K, V>> getElement(ElementId id) {
 			return new EntryElement(theMap.getEntryById(id));
+		}
+
+		@Override
+		public CollectionElement<Entry<K, V>> getOrAdd(Entry<K, V> value, boolean first, Runnable added) {
+			MapEntryHandle<K, V> entry = theMap.getOrPutEntry(value.getKey(), k -> value.getValue(), first, added);
+			return entry == null ? null : getElement(entry.getElementId());
 		}
 
 		@Override
@@ -785,6 +863,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		@Override
 		public Transaction lock(boolean write, boolean structural, Object cause) {
 			return theMap.lock(write, structural, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return theMap.tryLock(write, structural, cause);
 		}
 
 		@Override

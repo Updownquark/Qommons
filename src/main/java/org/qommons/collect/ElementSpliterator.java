@@ -208,6 +208,10 @@ public interface ElementSpliterator<E> extends Spliterator<E> {
 			theLocker = locker;
 		}
 
+		protected Transactable getLocker() {
+			return theLocker;
+		}
+
 		protected abstract boolean internalForElement(Consumer<? super CollectionElement<E>> action, boolean forward);
 
 		@Override

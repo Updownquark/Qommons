@@ -13,7 +13,6 @@ import java.util.function.Predicate;
 import org.junit.Assert;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
-import org.qommons.collect.CollectionLockingStrategy.OptimisticContext;
 
 /**
  * A list/deque that uses an array that is indexed circularly. This allows performance improvements due to not having to move array contents
@@ -425,8 +424,13 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
+	public Transaction tryLock(boolean write, boolean structural, Object cause) {
+		return theLocker.tryLock(write, structural, cause);
+	}
+
+	@Override
 	public long getStamp(boolean structuralOnly) {
-		return theLocker.getStatus(structuralOnly);
+		return theLocker.getStamp(structuralOnly);
 	}
 
 	@Override
@@ -514,13 +518,13 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 	@Override
 	public MutableElementSpliterator<E> spliterator(boolean forward) {
-		return new ArraySpliterator(0, theSize, forward ? 0 : theSize, theLocker.getStatus(true));
+		return new ArraySpliterator(0, theSize, forward ? 0 : theSize, theLocker.getStamp(true));
 	}
 
 	@Override
 	public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
 		try (Transaction t = lock(false, null)) {
-			return new ArraySpliterator(0, size(), ((ArrayElementId) element).element.check().getIndex(), theLocker.getStatus(true));
+			return new ArraySpliterator(0, size(), ((ArrayElementId) element).element.check().getIndex(), theLocker.getStamp(true));
 		}
 	}
 
@@ -766,7 +770,6 @@ public class CircularArrayList<E> implements BetterList<E> {
 		theOffset += theAdvanced;
 		if (theOffset >= theArray.length)
 			theOffset -= theArray.length;
-		theLocker.changed(true); // This value should not matter for the root locker
 		return true;
 	}
 
@@ -827,7 +830,6 @@ public class CircularArrayList<E> implements BetterList<E> {
 				updateIndexes(theOffset + fromIndex, theSize - toIndex);
 			}
 			theSize -= count;
-			theLocker.changed(true);
 			if (count > 0)
 				trimIfNeeded();
 		}
@@ -866,7 +868,6 @@ public class CircularArrayList<E> implements BetterList<E> {
 			theSize -= removed;
 			if (removed > 0) {
 				trimIfNeeded();
-				theLocker.changed(true);
 			}
 		}
 		return removed > 0;
@@ -882,7 +883,6 @@ public class CircularArrayList<E> implements BetterList<E> {
 			theSize = 0;
 			theOffset = 0;
 			trimIfNeeded();
-			theLocker.changed(true);
 		}
 	}
 
@@ -1199,7 +1199,6 @@ public class CircularArrayList<E> implements BetterList<E> {
 		theOffset += theAdvanced;
 		if (theOffset >= theArray.length)
 			theOffset -= theArray.length;
-		theLocker.changed(true);
 		return element;
 	}
 
@@ -1225,7 +1224,6 @@ public class CircularArrayList<E> implements BetterList<E> {
 		}
 		removed.removed();
 		trimIfNeeded();
-		theLocker.changed(true);
 		return removed;
 	}
 
@@ -1413,7 +1411,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		}
 
 		private void check() {
-			if (theStructureStamp != CircularArrayList.this.theLocker.getStatus(true))
+			if (theStructureStamp != CircularArrayList.this.theLocker.getStamp(true))
 				throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
 		}
 
@@ -1522,7 +1520,6 @@ public class CircularArrayList<E> implements BetterList<E> {
 			public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
 				try (Transaction t = CircularArrayList.this.theLocker.lock(true, false, null)) {
 					el.set(value);
-					CircularArrayList.this.theLocker.changed(false);
 				}
 			}
 
@@ -1536,8 +1533,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 				try (Transaction t = CircularArrayList.this.theLocker.lock(true, true, null)) {
 					check();
 					el.remove();
-					CircularArrayList.this.theLocker.changed(true);
-					theStructureStamp = CircularArrayList.this.theLocker.getStatus(true);
+					theStructureStamp = CircularArrayList.this.theLocker.getStamp(true);
 					theEnd--;
 					if (isForward)
 						theCursor--;
@@ -1556,8 +1552,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 					ElementId newId = el.add(value, before);
 					if (newId == null)
 						return null; // Can't happen currently, but meh
-					CircularArrayList.this.theLocker.changed(true);
-					theStructureStamp = CircularArrayList.this.theLocker.getStatus(true);
+					theStructureStamp = CircularArrayList.this.theLocker.getStamp(true);
 					theEnd++;
 					if (before)
 						theCursor++;

@@ -1,5 +1,10 @@
 package org.qommons.collect;
 
+import java.util.Objects;
+import java.util.function.Function;
+
+import org.qommons.Transaction;
+
 /**
  * Represents an element in a collection that contains a value (retrieved via {@link #get()}) that may {@link #isAcceptable(Object)
  * possibly} be {@link #set(Object) replaced} or (again {@link #canRemove() possibly}) {@link #remove() removed} during iteration.
@@ -42,6 +47,42 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 	 * @throws IllegalArgumentException If some property of the argument prevents it being a replacement for this element's value
 	 */
 	void set(E value) throws UnsupportedOperationException, IllegalArgumentException;
+
+	/**
+	 * @param map The function to apply to this element's current value
+	 * @return The previous value of this element
+	 * @throws UnsupportedOperationException If the operation is unsupported, independent of the argument
+	 * @throws IllegalArgumentException If some property of the result prevents it being a replacement for this element's value
+	 */
+	default E transform(Function<? super E, ? extends E> map) throws UnsupportedOperationException, IllegalArgumentException {
+		try (Transaction t = getCollection().lock(true, false, null)) {
+			E oldValue = get();
+			E newValue = map.apply(oldValue);
+			if (newValue != oldValue)
+				set(newValue);
+			return oldValue;
+		}
+	}
+
+	/**
+	 * Replaces this element's value with the given value (second argument) if the current value equals the first argument
+	 * 
+	 * @param expected The value to check against this element's current value
+	 * @param value The value to replace this element's value with
+	 * @return Whether the operation succeeded
+	 * @throws UnsupportedOperationException If the operation is unsupported, independent of the argument
+	 * @throws IllegalArgumentException If some property of the argument prevents it being a replacement for this element's value
+	 */
+	default boolean compareAndSet(E expected, E value) throws UnsupportedOperationException, IllegalArgumentException {
+		try (Transaction t = getCollection().lock(true, false, null)) {
+			E oldValue = get();
+			if (Objects.equals(oldValue, expected)) {
+				set(value);
+				return true;
+			} else
+				return false;
+		}
+	}
 
 	/** @return null if this element can be removed. Non-null indicates a message describing why removal is prevented. */
 	String canRemove();
@@ -222,6 +263,7 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 	}
 
 	/**
+	 * @param <E> The type fo the element
 	 * @param element The element to reverse
 	 * @return The given element, {@link MutableCollectionElement#reverse() reversed}, or null if the given element is null
 	 */
@@ -230,6 +272,7 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 	}
 
 	/**
+	 * @param <E> The type fo the element
 	 * @param element The element to get an immutable copy of
 	 * @return An {@link MutableCollectionElement#immutable() immutable} copy of the given element, or null if the given element is null
 	 */

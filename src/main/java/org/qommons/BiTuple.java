@@ -1,5 +1,7 @@
 package org.qommons;
 
+import java.util.Objects;
+
 /**
  * A tuple with two typed values
  *
@@ -10,6 +12,8 @@ public class BiTuple<V1, V2> {
 	private final V1 theValue1;
 	private final V2 theValue2;
 
+	private int hashCode;
+
 	/**
 	 * @param v1 The first value
 	 * @param v2 The second value
@@ -17,6 +21,8 @@ public class BiTuple<V1, V2> {
 	public BiTuple(V1 v1, V2 v2) {
 		theValue1 = v1;
 		theValue2 = v2;
+
+		hashCode = -1;
 	}
 
 	/** @return The first Value */
@@ -46,12 +52,18 @@ public class BiTuple<V1, V2> {
 		if (!(o instanceof BiTuple))
 			return false;
 		BiTuple<?, ?> tuple = (BiTuple<?, ?>) o;
-		return java.util.Objects.equals(theValue1, tuple.theValue1) && java.util.Objects.equals(theValue2, tuple.theValue2);
+		// Don't compile the hashCode, but if we already know it, we can use it
+		if (hashCode != -1 && tuple.hashCode != -1 && hashCode != tuple.hashCode)
+			return false;
+		return Objects.equals(theValue1, tuple.theValue1) && Objects.equals(theValue2, tuple.theValue2);
 	}
 
 	@Override
 	public int hashCode() {
-		return java.util.Objects.hash(theValue1, theValue2);
+		if (hashCode == -1) {
+			hashCode = Objects.hashCode(theValue1) + Objects.hashCode(theValue2);
+		}
+		return hashCode;
 	}
 
 	@Override

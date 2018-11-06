@@ -1,5 +1,8 @@
 package org.qommons.config;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -574,8 +577,13 @@ public abstract class QommonsConfig implements Cloneable {
 			return configURL;
 		} else if(s.contains(":/"))
 			return new java.net.URL(s); // Absolute resource
-		else
+		else {
+			// See if it's a file path
+			File file = new File(s);
+			if (file.isAbsolute())
+				return file.toURI().toURL();
 			throw new java.io.IOException("Location " + s + " is invalid");
+		}
 	}
 
 	/**
@@ -591,6 +599,23 @@ public abstract class QommonsConfig implements Cloneable {
 			configEl = new org.jdom2.input.SAXBuilder().build(url).getRootElement();
 		} catch(org.jdom2.JDOMException e) {
 			throw new java.io.IOException("Could not read XML file " + url, e);
+		}
+		return configEl;
+	}
+
+	/**
+	 * Parses the root element from an XML file
+	 *
+	 * @param stream The input stream of the XML resource to parse
+	 * @return The root element of the XML
+	 * @throws java.io.IOException If the XML could not be read or parsed
+	 */
+	public static Element getRootElement(InputStream stream) throws IOException {
+		Element configEl;
+		try {
+			configEl = new org.jdom2.input.SAXBuilder().build(stream).getRootElement();
+		} catch (org.jdom2.JDOMException e) {
+			throw new java.io.IOException("Could not read XML file " + stream, e);
 		}
 		return configEl;
 	}
@@ -620,7 +645,13 @@ public abstract class QommonsConfig implements Cloneable {
 		return "classpath://" + clazz.getName().replaceAll("\\.", "/") + ".class";
 	}
 
-	private static String resolve(String location, String... relative) throws java.io.IOException {
+	/**
+	 * @param location The path of the resource to find
+	 * @param relative The list of paths that the location is relative to
+	 * @return The path that the given resource should be located ad
+	 * @throws java.io.IOException If any of the given paths cannot be interpreted
+	 */
+	public static String resolve(String location, String... relative) throws java.io.IOException {
 		if(location.contains(":/"))
 			return location;
 		else if(relative.length > 0) {

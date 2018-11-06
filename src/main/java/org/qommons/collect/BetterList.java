@@ -19,7 +19,6 @@ import java.util.function.UnaryOperator;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
-import org.qommons.collect.MutableElementSpliterator.SimpleMutableSpliterator;
 
 /**
  * A {@link List} that is also a {@link BetterCollection}.
@@ -231,7 +230,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 	@Override
 	default BetterList<E> withAll(Collection<? extends E> values) {
-		BetterCollection.super.withAll(values);
+		addAll(values);
 		return this;
 	}
 
@@ -438,8 +437,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 * @param <E> The type of the list
 	 */
 	public static class BetterListIterator<E> implements ListIterator<E> {
-		private static final Consumer<CollectionElement<?>> NULL_ACTION = el -> {
-		};
+		private static final Consumer<CollectionElement<?>> NULL_ACTION = el -> {};
 
 		private final BetterList<E> theList;
 		private final MutableElementSpliterator<E> backing;
@@ -587,11 +585,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			theStructureStamp = wrapped.getStamp(true);
 		}
 
-		private void check() {
-			if (theWrapped.getStamp(true) != theStructureStamp)
-				throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
-		}
-
 		@Override
 		public boolean isLockSupported() {
 			return theWrapped.isLockSupported();
@@ -599,14 +592,41 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public Transaction lock(boolean write, boolean structural, Object cause) {
+			check();
 			Transaction t = theWrapped.lock(write, structural, cause);
-			try {
-				check();
+			if (write && structural) {
+				updated();
+				return () -> {
+					updated();
+					t.close();
+				};
+			} else
 				return t;
-			} catch (RuntimeException | Error e) {
-				t.close();
-				throw e;
-			}
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			check();
+			Transaction t = theWrapped.tryLock(write, structural, cause);
+			if (t == null)
+				return null;
+			if (write && structural) {
+				updated();
+				return () -> {
+					updated();
+					t.close();
+				};
+			} else
+				return t;
+		}
+
+		void check() {
+			if (theWrapped.getStamp(true) != theStructureStamp)
+				throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
+		}
+
+		void updated() {
+			theStructureStamp = theWrapped.getStamp(true);
 		}
 
 		@Override
@@ -658,8 +678,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				while (found[0] == null && spliter.forElement(el -> {
 					if (Objects.equals(el.get(), value))
 						found[0] = el;
-				}, first)) {
-				}
+				}, first)) {}
 				return found[0];
 			}
 		}
@@ -748,7 +767,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public Object[] toArray() {
 			try (Transaction t = lock(false, true, null)) {
-				check();
 				Object[] array = new Object[size()];
 				for (int i = 0; i < array.length; i++)
 					array[i] = get(i);
@@ -759,7 +777,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public <T> T[] toArray(T[] a) {
 			try (Transaction t = lock(false, true, null)) {
-				check();
 				T[] array = a.length >= size() ? a : (T[]) Array.newInstance(a.getClass().getComponentType(), size());
 				for (int i = 0; i < array.length; i++)
 					array[i] = (T) get(i);
@@ -772,7 +789,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		protected class SubListElement implements MutableCollectionElement<E> {
-			private final MutableCollectionElement<E> theWrappedEl;
+			protected final MutableCollectionElement<E> theWrappedEl;
 
 			protected SubListElement(MutableCollectionElement<E> wrappedEl) {
 				this.theWrappedEl = wrappedEl;
@@ -827,7 +844,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				try (Transaction t = lock(true, true, null)) {
 					theWrappedEl.remove();
 					theEnd--;
-					theStructureStamp = theWrapped.getStamp(true);
 				}
 			}
 
@@ -836,7 +852,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				try (Transaction t = lock(true, true, null)) {
 					ElementId newId = theWrappedEl.add(value, before);
 					theEnd++;
-					theStructureStamp = theWrapped.getStamp(true);
 					return newId;
 				}
 			}
@@ -853,15 +868,25 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			return new SubSpliterator(theWrapped.spliterator(index), index);
 		}
 
-		class SubSpliterator extends SimpleMutableSpliterator<E> {
+		class SubSpliterator implements MutableElementSpliterator<E> {
 			private final MutableElementSpliterator<E> wrapSpliter;
+			long theSpliterStructureStamp;
 			private int nextIndex;
-			private long theSpliterStructureStamp;
 
 			SubSpliterator(MutableElementSpliterator<E> spliter, int position) {
-				super(SubList.this);
 				wrapSpliter = spliter;
 				nextIndex = position;
+				theSpliterStructureStamp = theStructureStamp;
+			}
+
+			void check() {
+				SubList.this.check();
+				if (theSpliterStructureStamp != theStructureStamp)
+					throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
+			}
+
+			private void updated() {
+				SubList.this.updated();
 				theSpliterStructureStamp = theStructureStamp;
 			}
 
@@ -880,14 +905,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				return wrapSpliter.characteristics();
 			}
 
-			private void check() {
-				if (theSpliterStructureStamp != theStructureStamp)
-					throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
-				SubList.this.check();
-			}
-
 			@Override
-			protected boolean internalForElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+			public boolean forElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
 				check();
 				if (forward && nextIndex >= theEnd)
 					return false;
@@ -904,13 +923,30 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			}
 
 			@Override
-			protected boolean internalForElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
+			public void forEachElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
+				check();
+				if (forward) {
+					while (nextIndex < theEnd && wrapSpliter.forElement(action, forward)) {
+						nextIndex++;
+					}
+				} else {
+					while (nextIndex > theStart && wrapSpliter.forElement(action, forward)) {
+						nextIndex--;
+					}
+				}
+			}
+
+			@Override
+			public boolean forElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
 				check();
 				if (forward && nextIndex >= theEnd)
 					return false;
 				if (!forward && nextIndex <= theStart)
 					return false;
-				if (wrapSpliter.forElementM(el -> action.accept(wrapSpliterElement(el, forward)), forward)) {
+				if (wrapSpliter.forElementM(el -> {
+					updated();
+					action.accept(wrapSpliterElement(el, forward));
+				}, forward)) {
 					if (forward)
 						nextIndex++;
 					else
@@ -918,6 +954,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 					return true;
 				}
 				return false;
+			}
+
+			@Override
+			public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
+				while (forElementM(action, forward)) {}
 			}
 
 			private MutableCollectionElement<E> wrapSpliterElement(MutableCollectionElement<E> el, boolean forward) {
@@ -934,25 +975,25 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 				@Override
 				public void remove() throws UnsupportedOperationException {
-					try (Transaction t = theWrapped.lock(true, true, null)) {
-						check();
-						super.remove();
-						theSpliterStructureStamp = theStructureStamp = theWrapped.getStamp(true);
-						if (isForward)
-							nextIndex--;
-					}
+					check();
+					// Don't make it lock
+					theWrappedEl.remove();
+					theEnd--;
+					updated();
+					if (isForward)
+						nextIndex--;
 				}
 
 				@Override
 				public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-					try (Transaction t = theWrapped.lock(true, true, null)) {
-						check();
-						ElementId newId = super.add(value, before);
-						theSpliterStructureStamp = theStructureStamp = theWrapped.getStamp(true);
-						if (before)
-							nextIndex++;
-						return newId;
-					}
+					check();
+					// Don't make it lock
+					ElementId newId = theWrappedEl.add(value, before);
+					theEnd++;
+					updated();
+					if (before)
+						nextIndex++;
+					return newId;
 				}
 			}
 
@@ -1000,7 +1041,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 					before = theWrapped.getElement(theEnd).getElementId();
 				CollectionElement<E> newEl = theWrapped.addElement(value, after, before, first);
 				if (newEl != null) {
-					theStructureStamp = theWrapped.getStamp(true);
 					theEnd++;
 				}
 				return newEl;
@@ -1012,7 +1052,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			try (Transaction t = lock(true, true, null)) {
 				CollectionElement<E> newEl = theWrapped.addElement(theStart + checkIndex(index, true), element);
 				if (newEl != null) {
-					theStructureStamp = theWrapped.getStamp(true);
 					theEnd++;
 				}
 				return newEl;
@@ -1025,7 +1064,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				int preSize = theWrapped.size();
 				if (!theWrapped.addAll(theStart + checkIndex(index, true), c))
 					return false;
-				theStructureStamp = theWrapped.getStamp(true);
 				theEnd += theWrapped.size() - preSize;
 				return true;
 			}
@@ -1043,7 +1081,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				if (theStart == 0 && end == sz)
 					theWrapped.clear();
 				theWrapped.removeRange(theStart, end);
-				theStructureStamp = theWrapped.getStamp(true);
 				theEnd -= sz - theWrapped.size();
 			}
 		}
@@ -1088,6 +1125,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public Transaction lock(boolean write, boolean structural, Object cause) {
+			return Transaction.NONE;
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
 			return Transaction.NONE;
 		}
 

@@ -3,6 +3,7 @@ package org.qommons.tree;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.MutableCollectionElement;
+import org.qommons.collect.OptimisticContext;
 
 /**
  * A {@link MutableCollectionElement} for a tree-based {@link BetterCollection}
@@ -26,10 +27,10 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 	MutableBinaryTreeNode<E> getSibling();
 
 	@Override
-	MutableBinaryTreeNode<E> get(int index);
+	MutableBinaryTreeNode<E> get(int index, OptimisticContext ctx);
 
 	@Override
-	MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly);
+	MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly, OptimisticContext ctx);
 
 	@Override
 	default MutableBinaryTreeNode<E> getChild(boolean left) {
@@ -102,8 +103,8 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 		}
 
 		@Override
-		public BinaryTreeNode<E> get(int index) {
-			return getWrapped().get(index).immutable();
+		public BinaryTreeNode<E> get(int index, OptimisticContext ctx) {
+			return immutable(getWrapped().get(index, ctx));
 		}
 
 		@Override
@@ -139,42 +140,43 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 
 		@Override
 		public MutableBinaryTreeNode<E> getParent() {
-			return (MutableBinaryTreeNode<E>) super.getParent();
+			return MutableBinaryTreeNode.reverse((MutableBinaryTreeNode<E>) super.getParent());
 		}
 
 		@Override
 		public MutableBinaryTreeNode<E> getLeft() {
-			return (MutableBinaryTreeNode<E>) super.getLeft();
+			return MutableBinaryTreeNode.reverse((MutableBinaryTreeNode<E>) super.getLeft());
 		}
 
 		@Override
 		public MutableBinaryTreeNode<E> getRight() {
-			return (MutableBinaryTreeNode<E>) super.getRight();
+			return MutableBinaryTreeNode.reverse((MutableBinaryTreeNode<E>) super.getRight());
 		}
 
 		@Override
 		public MutableBinaryTreeNode<E> getClosest(boolean left) {
-			return (MutableBinaryTreeNode<E>) super.getClosest(left);
+			return MutableBinaryTreeNode.reverse((MutableBinaryTreeNode<E>) super.getClosest(!left));
 		}
 
 		@Override
 		public MutableBinaryTreeNode<E> getRoot() {
-			return (MutableBinaryTreeNode<E>) super.getRoot();
+			return MutableBinaryTreeNode.reverse((MutableBinaryTreeNode<E>) super.getRoot());
 		}
 
 		@Override
 		public MutableBinaryTreeNode<E> getSibling() {
-			return (MutableBinaryTreeNode<E>) super.getSibling();
+			return MutableBinaryTreeNode.reverse((MutableBinaryTreeNode<E>) super.getSibling());
 		}
 
 		@Override
-		public MutableBinaryTreeNode<E> get(int index) {
-			return (MutableBinaryTreeNode<E>) super.get(index);
+		public MutableBinaryTreeNode<E> get(int index, OptimisticContext ctx) {
+			return MutableBinaryTreeNode.reverse((MutableBinaryTreeNode<E>) super.get(index, ctx));
 		}
 
 		@Override
-		public MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly) {
-			return (MutableBinaryTreeNode<E>) super.findClosest(finder, lesser, strictly);
+		public MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly,
+			OptimisticContext ctx) {
+			return MutableBinaryTreeNode.reverse((MutableBinaryTreeNode<E>) super.findClosest(finder, lesser, strictly, ctx));
 		}
 
 		@Override
