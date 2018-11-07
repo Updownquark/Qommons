@@ -1,5 +1,11 @@
 package org.qommons.collect;
 
+/**
+ * Represents an entry in a {@link BetterMultiMap} containing a collection of values with a common key
+ * 
+ * @param <K> The type of the key
+ * @param <V> The type of the value
+ */
 public interface MultiEntryHandle<K, V> extends MultiMap.MultiEntry<K, V>, CollectionElement<K> {
 	@Override
 	default K get() {
