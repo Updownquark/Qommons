@@ -240,6 +240,16 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 		theTree.setRoot(null);
 	}
 
+	/**
+	 * Searches for and fixes any inconsistencies in the collection's storage structure.
+	 * 
+	 * @param <X> The type of the data transferred for the listener
+	 * @param compare The comparator by which this collection is ordered
+	 * @param distinct Whether this collection prevents duplicates
+	 * @param listener The listener to monitor repairs. May be null.
+	 * @return Whether any inconsistencies were found
+	 * @see ValueStoredCollection#repair(org.qommons.collect.ValueStoredCollection.RepairListener)
+	 */
 	protected <X> boolean repair(Comparator<? super E> compare, boolean distinct, ValueStoredCollection.RepairListener<E, X> listener) {
 		try (Transaction t = lock(true, null)) {
 			return theTree.repair(compare, distinct, new RedBlackTree.RepairListener<E, X>() {
