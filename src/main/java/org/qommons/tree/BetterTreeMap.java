@@ -675,8 +675,13 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 
 		@Override
-		public CollectionElement<K> searchWithConsistencyDetection(K value, boolean[] invalid) {
-			return handleFor(theEntries.searchWithConsistencyDetection(newEntry(value, null), invalid));
+		public boolean isConsistent(ElementId element) {
+			return theEntries.isConsistent(element);
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, RepairListener<K, X> listener) {
+			return theEntries.repair(element, listener == null ? null : new EntryRepairListener<>(listener));
 		}
 
 		@Override
@@ -686,22 +691,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 
 		@Override
 		public <X> boolean repair(RepairListener<K, X> listener) {
-			return theEntries.repair(new RepairListener<Map.Entry<K, V>, X>() {
-				@Override
-				public void removed(CollectionElement<Map.Entry<K, V>> element) {
-					listener.removed(handleFor(element));
-				}
-
-				@Override
-				public X preTransfer(CollectionElement<Map.Entry<K, V>> element) {
-					return listener.preTransfer(handleFor(element));
-				}
-
-				@Override
-				public void postTransfer(CollectionElement<Map.Entry<K, V>> element, X data) {
-					listener.postTransfer(handleFor(element), data);
-				}
-			});
+			return theEntries.repair(listener == null ? null : new EntryRepairListener<>(listener));
 		}
 
 		@Override
@@ -816,6 +806,29 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 							before);
 					}
 				};
+			}
+		}
+
+		private class EntryRepairListener<X> implements RepairListener<Map.Entry<K, V>, X> {
+			private final RepairListener<K, X> theKeyListener;
+
+			EntryRepairListener(RepairListener<K, X> keyListener) {
+				theKeyListener = keyListener;
+			}
+
+			@Override
+			public void removed(CollectionElement<Map.Entry<K, V>> element) {
+				theKeyListener.removed(handleFor(element));
+			}
+
+			@Override
+			public X preTransfer(CollectionElement<Map.Entry<K, V>> element) {
+				return theKeyListener.preTransfer(handleFor(element));
+			}
+
+			@Override
+			public void postTransfer(CollectionElement<Map.Entry<K, V>> element, X data) {
+				theKeyListener.postTransfer(handleFor(element), data);
 			}
 		}
 	}

@@ -2,6 +2,7 @@ package org.qommons.collect;
 
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.NoSuchElementException;
 import java.util.Set;
 
 import org.qommons.Transaction;
@@ -122,8 +123,14 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 		}
 
 		@Override
-		public CollectionElement<E> searchWithConsistencyDetection(E value, boolean[] invalid) {
-			return CollectionElement.reverse(getWrapped().searchWithConsistencyDetection(value, invalid));
+		public boolean isConsistent(ElementId element) {
+			return getWrapped().isConsistent(element.reverse());
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+			RepairListener<E, X> reversedListener = listener == null ? null : new ReversedRepairListener<>(listener);
+			return getWrapped().repair(element, reversedListener);
 		}
 
 		@Override
@@ -133,22 +140,7 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 
 		@Override
 		public <X> boolean repair(RepairListener<E, X> listener) {
-			RepairListener<E, X> reversedListener = listener == null ? null : new RepairListener<E, X>() {
-				@Override
-				public void removed(CollectionElement<E> element) {
-					listener.removed(element.reverse());
-				}
-
-				@Override
-				public X preTransfer(CollectionElement<E> element) {
-					return listener.preTransfer(element.reverse());
-				}
-
-				@Override
-				public void postTransfer(CollectionElement<E> element, X data) {
-					listener.postTransfer(element.reverse(), data);
-				}
-			};
+			RepairListener<E, X> reversedListener = listener == null ? null : new ReversedRepairListener<>(listener);
 			return getWrapped().repair(reversedListener);
 		}
 
@@ -160,6 +152,29 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 		@Override
 		public String toString() {
 			return BetterSet.toString(this);
+		}
+
+		public static class ReversedRepairListener<E, X> implements RepairListener<E, X> {
+			private final RepairListener<E, X> theWrapped;
+
+			public ReversedRepairListener(org.qommons.collect.ValueStoredCollection.RepairListener<E, X> wrapped) {
+				theWrapped = wrapped;
+			}
+
+			@Override
+			public void removed(CollectionElement<E> element) {
+				theWrapped.removed(element.reverse());
+			}
+
+			@Override
+			public X preTransfer(CollectionElement<E> element) {
+				return theWrapped.preTransfer(element.reverse());
+			}
+
+			@Override
+			public void postTransfer(CollectionElement<E> element, X data) {
+				theWrapped.postTransfer(element.reverse(), data);
+			}
 		}
 	}
 
@@ -173,9 +188,15 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 		public CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
 			return null;
 		}
+
 		@Override
-		public CollectionElement<E> searchWithConsistencyDetection(E value, boolean[] invalid) {
-			return null;
+		public boolean isConsistent(ElementId element) {
+			throw new NoSuchElementException();
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+			throw new NoSuchElementException();
 		}
 
 		@Override

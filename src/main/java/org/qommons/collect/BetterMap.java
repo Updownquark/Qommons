@@ -217,16 +217,14 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	}
 
 	/**
-	 * A search method that works to detect inconsistencies in the map's key storage structure during the search. See
-	 * {@link BetterSet#searchWithConsistencyDetection(Object, boolean[])} for more information.
+	 * Checks the map's storage structure for consistency at the given entry.See {@link BetterSet#isConsistent(ElementId)} for more
+	 * information.
 	 * 
-	 * @param key The key to search for
-	 * @param invalid The invalid flag to set to true if inconsistency is detected
-	 * @return The entry element, or null if inconsistency is detected or no such element is found in the map
+	 * @param entry The entry to check the structure's consistency at
+	 * @return Whether the map's storage appears to be consistent at the given element
 	 */
-	default MapEntryHandle<K, V> searchWithConsistencyDetection(K key, boolean[] invalid) {
-		CollectionElement<K> keyEl = keySet().searchWithConsistencyDetection(key, invalid);
-		return keyEl == null ? null : getEntryById(keyEl.getElementId());
+	default boolean isConsistent(ElementId entry) {
+		return keySet().isConsistent(entry);
 	}
 
 	/**
@@ -267,6 +265,28 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	}
 
 	/**
+	 * <p>
+	 * Fixes any inconsistencies in the map's storage structure at the given entry. Nothing is specified about how limited the scope of the
+	 * repair will be. Depending on the nature of any inconsistency(ies) found, more than one entry may need to be moved. See
+	 * {@link BetterSet#repair(ElementId, RepairListener)} for more information.
+	 * 
+	 * </p>
+	 * <p>
+	 * See {@link #isConsistent(ElementId)} and
+	 * <a href="https://github.com/Updownquark/Qommons/wiki/BetterCollection-API#features-2">BetterSet Features</a>
+	 * </p>
+	 * 
+	 * @param <X> The type of the data transferred for the listener
+	 * @param entry The entry to repair the structure's consistency at
+	 * @param listener The listener to monitor repairs. May be null.
+	 * @return Whether any inconsistencies were found
+	 */
+	default <X> boolean repair(ElementId entry, MapRepairListener<K, V, X> listener) {
+		RepairListener<K, X> keyListener = listener == null ? null : new KeySetRepairListener<>(this, listener);
+		return keySet().repair(entry, keyListener);
+	}
+
+	/**
 	 * Searches for and fixes any inconsistencies in the set's storage structure. See {@link BetterSet#repair(RepairListener)} for more
 	 * information.
 	 * 
@@ -275,23 +295,40 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	 * @return Whether any inconsistencies were found
 	 */
 	default <X> boolean repair(MapRepairListener<K, V, X> listener) {
-		RepairListener<K, X> keyListener = listener == null ? null : new RepairListener<K, X>() {
-			@Override
-			public void removed(CollectionElement<K> element) {
-				listener.removed(getEntryById(element.getElementId()));
-			}
-
-			@Override
-			public X preTransfer(CollectionElement<K> element) {
-				return listener.preTransfer(getEntryById(element.getElementId()));
-			}
-
-			@Override
-			public void postTransfer(CollectionElement<K> element, X data) {
-				listener.postTransfer(getEntryById(element.getElementId()), data);
-			}
-		};
+		RepairListener<K, X> keyListener = listener == null ? null : new KeySetRepairListener<>(this, listener);
 		return keySet().repair(keyListener);
+	}
+
+	/**
+	 * A repair listener for a BetterMap's key set
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param <X> The transfer data type for the listener
+	 */
+	class KeySetRepairListener<K, V, X> implements RepairListener<K, X> {
+		private final BetterMap<K, V> theMap;
+		private final MapRepairListener<K, V, X> theMapRepairListener;
+
+		KeySetRepairListener(BetterMap<K, V> map, MapRepairListener<K, V, X> mapRepairListener) {
+			theMap = map;
+			theMapRepairListener = mapRepairListener;
+		}
+
+		@Override
+		public void removed(CollectionElement<K> element) {
+			theMapRepairListener.removed(theMap.getEntryById(element.getElementId()));
+		}
+
+		@Override
+		public X preTransfer(CollectionElement<K> element) {
+			return theMapRepairListener.preTransfer(theMap.getEntryById(element.getElementId()));
+		}
+
+		@Override
+		public void postTransfer(CollectionElement<K> element, X data) {
+			theMapRepairListener.postTransfer(theMap.getEntryById(element.getElementId()), data);
+		}
 	}
 
 	@Override
@@ -460,11 +497,6 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public MapEntryHandle<K, V> searchWithConsistencyDetection(K key, boolean[] invalid) {
-			return MapEntryHandle.reverse(getWrapped().searchWithConsistencyDetection(key, invalid));
-		}
-
-		@Override
 		public boolean checkConsistency() {
 			return getWrapped().checkConsistency();
 		}
@@ -621,9 +653,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public CollectionElement<Entry<K, V>> searchWithConsistencyDetection(Entry<K, V> value, boolean[] invalid) {
-			MapEntryHandle<K, V> entryEl = theMap.searchWithConsistencyDetection(value.getKey(), invalid);
-			return entryEl == null ? null : new EntryElement(entryEl);
+		public boolean isConsistent(ElementId element) {
+			return theMap.isConsistent(element);
 		}
 
 		@Override
@@ -632,23 +663,14 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
+		public <X> boolean repair(ElementId element, RepairListener<Entry<K, V>, X> listener) {
+			MapRepairListener<K, V, X> mapListener = listener == null ? null : new EntryRepairListener<>(listener);
+			return theMap.repair(element, mapListener);
+		}
+
+		@Override
 		public <X> boolean repair(RepairListener<Entry<K, V>, X> listener) {
-			MapRepairListener<K, V, X> mapListener = listener == null ? null : new MapRepairListener<K, V, X>() {
-				@Override
-				public void removed(MapEntryHandle<K, V> element) {
-					listener.removed(new EntryElement(element));
-				}
-
-				@Override
-				public X preTransfer(MapEntryHandle<K, V> element) {
-					return listener.preTransfer(new EntryElement(element));
-				}
-
-				@Override
-				public void postTransfer(MapEntryHandle<K, V> element, X data) {
-					listener.postTransfer(new EntryElement(element), data);
-				}
-			};
+			MapRepairListener<K, V, X> mapListener = listener == null ? null : new EntryRepairListener<>(listener);
 			return theMap.repair(mapListener);
 		}
 
@@ -834,6 +856,29 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			public MutableElementSpliterator<Map.Entry<K, V>> trySplit() {
 				MutableElementSpliterator<K> keySplit = theKeySpliter.trySplit();
 				return keySplit == null ? null : new EntrySpliterator(keySplit);
+			}
+		}
+
+		class EntryRepairListener<X> implements MapRepairListener<K, V, X> {
+			private final RepairListener<Map.Entry<K, V>, X> theWrapped;
+
+			EntryRepairListener(RepairListener<Map.Entry<K, V>, X> wrapped) {
+				theWrapped = wrapped;
+			}
+
+			@Override
+			public void removed(MapEntryHandle<K, V> element) {
+				theWrapped.removed(new EntryElement(element));
+			}
+
+			@Override
+			public X preTransfer(MapEntryHandle<K, V> element) {
+				return theWrapped.preTransfer(new EntryElement(element));
+			}
+
+			@Override
+			public void postTransfer(MapEntryHandle<K, V> element, X data) {
+				theWrapped.postTransfer(new EntryElement(element), data);
 			}
 		}
 	}

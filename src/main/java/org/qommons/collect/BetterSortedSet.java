@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.NavigableSet;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -926,11 +927,8 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public CollectionElement<E> searchWithConsistencyDetection(E value, boolean[] invalid) {
-			CollectionElement<E> found = theWrapped.searchWithConsistencyDetection(value, invalid);
-			if (found == null || isInRange(found.get()) != 0)
-				return null;
-			return found;
+		public boolean isConsistent(ElementId element) {
+			return theWrapped.isConsistent(element);
 		}
 
 		@Override
@@ -939,40 +937,14 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
+		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+			RepairListener<E, X> subListener = listener == null ? null : new BoundedRepairListener<>(listener);
+			return theWrapped.repair(element, subListener);
+		}
+
+		@Override
 		public <X> boolean repair(RepairListener<E, X> listener) {
-			RepairListener<E, X> subListener = new RepairListener<E, X>() {
-				@Override
-				public void removed(CollectionElement<E> element) {
-					// As the repair method may be called after any number of changes to the set's values,
-					// we cannot assume anything about the previous state of the element, e.g. whether it was previously present in this
-					// sub-set.
-					// It is for this reason that the repair API specifies that this method may be called even for elements that were not
-					// present in the set.
-					listener.removed(element);
-				}
-
-				@Override
-				public X preTransfer(CollectionElement<E> element) {
-					// As the repair method may be called after any number of changes to the set's values,
-					// we cannot assume anything about the previous state of the element, e.g. whether it was previously present in this
-					// sub-set.
-					// It is for this reason that the repair API specifies that this method may be called even for elements that were not
-					// present in the set.
-					// Therefore, we need to inform the listener about the element by one of the 2 methods
-					if (isInRange(element.get()) == 0)
-						return listener.preTransfer(element);
-					else {
-						listener.removed(element);
-						return null;
-					}
-				}
-
-				@Override
-				public void postTransfer(CollectionElement<E> element, X data) {
-					if (isInRange(element.get()) == 0)
-						listener.postTransfer(element, data);
-				}
-			};
+			RepairListener<E, X> subListener = listener == null ? null : new BoundedRepairListener<>(listener);
 			return theWrapped.repair(subListener);
 		}
 
@@ -1124,6 +1096,46 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 				return theWrappedEl.toString();
 			}
 		}
+
+		private class BoundedRepairListener<X> implements RepairListener<E, X> {
+			private final RepairListener<E, X> theWrappedListener;
+
+			BoundedRepairListener(RepairListener<E, X> wrapped) {
+				theWrappedListener = wrapped;
+			}
+
+			@Override
+			public void removed(CollectionElement<E> element) {
+				// As the repair method may be called after any number of changes to the set's values,
+				// we cannot assume anything about the previous state of the element, e.g. whether it was previously present in this
+				// sub-set.
+				// It is for this reason that the repair API specifies that this method may be called even for elements that were not
+				// present in the set.
+				theWrappedListener.removed(element);
+			}
+
+			@Override
+			public X preTransfer(CollectionElement<E> element) {
+				// As the repair method may be called after any number of changes to the set's values,
+				// we cannot assume anything about the previous state of the element, e.g. whether it was previously present in this
+				// sub-set.
+				// It is for this reason that the repair API specifies that this method may be called even for elements that were not
+				// present in the set.
+				// Therefore, we need to inform the listener about the element by one of the 2 methods
+				if (isInRange(element.get()) == 0)
+					return theWrappedListener.preTransfer(element);
+				else {
+					theWrappedListener.removed(element);
+					return null;
+				}
+			}
+
+			@Override
+			public void postTransfer(CollectionElement<E> element, X data) {
+				if (isInRange(element.get()) == 0)
+					theWrappedListener.postTransfer(element, data);
+			}
+		}
 	}
 
 	/**
@@ -1174,8 +1186,8 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public CollectionElement<E> searchWithConsistencyDetection(E value, boolean[] invalid) {
-			return CollectionElement.reverse(getWrapped().searchWithConsistencyDetection(value, invalid));
+		public boolean isConsistent(ElementId element) {
+			return getWrapped().isConsistent(element.reverse());
 		}
 
 		@Override
@@ -1184,23 +1196,14 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
+		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+			RepairListener<E, X> reversedListener = listener == null ? null : new BetterSet.ReversedBetterSet.ReversedRepairListener<>(listener);
+			return getWrapped().repair(element, reversedListener);
+		}
+
+		@Override
 		public <X> boolean repair(RepairListener<E, X> listener) {
-			RepairListener<E, X> reversedListener = listener == null ? null : new RepairListener<E, X>() {
-				@Override
-				public void removed(CollectionElement<E> element) {
-					listener.removed(element.reverse());
-				}
-
-				@Override
-				public X preTransfer(CollectionElement<E> element) {
-					return listener.preTransfer(element.reverse());
-				}
-
-				@Override
-				public void postTransfer(CollectionElement<E> element, X data) {
-					listener.postTransfer(element.reverse(), data);
-				}
-			};
+			RepairListener<E, X> reversedListener = listener == null ? null : new BetterSet.ReversedBetterSet.ReversedRepairListener<>(listener);
 			return getWrapped().repair(reversedListener);
 		}
 
@@ -1248,13 +1251,18 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public CollectionElement<E> searchWithConsistencyDetection(E value, boolean[] invalid) {
-			return null;
+		public boolean isConsistent(ElementId element) {
+			throw new NoSuchElementException();
 		}
 
 		@Override
 		public boolean checkConsistency() {
 			return false;
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+			throw new NoSuchElementException();
 		}
 
 		@Override

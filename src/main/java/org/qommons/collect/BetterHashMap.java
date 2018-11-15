@@ -355,10 +355,8 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
-		public CollectionElement<K> searchWithConsistencyDetection(K value, boolean[] invalid) {
-			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.searchWithConsistencyDetection(new SimpleMapEntry<>(value, null),
-				invalid);
-			return entryEl == null ? null : handleFor(entryEl);
+		public boolean isConsistent(ElementId element) {
+			return theEntries.isConsistent(element);
 		}
 
 		@Override
@@ -367,23 +365,14 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
+		public <X> boolean repair(ElementId element, RepairListener<K, X> listener) {
+			RepairListener<Map.Entry<K, V>, X> entryListener = listener == null ? null : new EntryRepairListener<>(listener);
+			return theEntries.repair(element, entryListener);
+		}
+
+		@Override
 		public <X> boolean repair(RepairListener<K, X> listener) {
-			RepairListener<Map.Entry<K, V>, X> entryListener = listener == null ? null : new RepairListener<Map.Entry<K, V>, X>() {
-				@Override
-				public void removed(CollectionElement<Map.Entry<K, V>> element) {
-					listener.removed(handleFor(element));
-				}
-
-				@Override
-				public X preTransfer(CollectionElement<Map.Entry<K, V>> element) {
-					return listener.preTransfer(handleFor(element));
-				}
-
-				@Override
-				public void postTransfer(CollectionElement<Map.Entry<K, V>> element, X data) {
-					listener.postTransfer(handleFor(element), data);
-				}
-			};
+			RepairListener<Map.Entry<K, V>, X> entryListener = listener == null ? null : new EntryRepairListener<>(listener);
 			return theEntries.repair(entryListener);
 		}
 
@@ -491,6 +480,29 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 			public MutableElementSpliterator<K> trySplit() {
 				MutableElementSpliterator<Map.Entry<K, V>> entrySplit = theEntrySpliter.trySplit();
 				return entrySplit == null ? null : new KeySpliterator(entrySplit);
+			}
+		}
+
+		private class EntryRepairListener<X> implements RepairListener<Map.Entry<K, V>, X> {
+			private final RepairListener<K, X> theKeyListener;
+
+			EntryRepairListener(org.qommons.collect.ValueStoredCollection.RepairListener<K, X> keyListener) {
+				theKeyListener = keyListener;
+			}
+
+			@Override
+			public void removed(CollectionElement<Map.Entry<K, V>> element) {
+				theKeyListener.removed(handleFor(element));
+			}
+
+			@Override
+			public X preTransfer(CollectionElement<Map.Entry<K, V>> element) {
+				return theKeyListener.preTransfer(handleFor(element));
+			}
+
+			@Override
+			public void postTransfer(CollectionElement<Map.Entry<K, V>> element, X data) {
+				theKeyListener.postTransfer(handleFor(element), data);
 			}
 		}
 	}

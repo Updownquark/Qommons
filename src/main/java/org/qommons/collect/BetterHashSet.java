@@ -493,10 +493,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public CollectionElement<E> searchWithConsistencyDetection(E value, boolean[] invalid) {
-		// Since the hash code is stored independent of the value in the HashEntry, this set's internal structure is never inconsistent.
-		// If an objects hash code has changed, it will not be found using this method. So there's really nothing useful to do here.
-		return getElement(value, true);
+	public boolean isConsistent(ElementId element) {
+		return ((HashId) element).entry.isValid();
 	}
 
 	@Override
@@ -509,6 +507,13 @@ public class BetterHashSet<E> implements BetterSet<E> {
 				entry = entry.next;
 			}
 			return false;
+		}
+	}
+
+	@Override
+	public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+		try (Transaction t = lock(true, null)) {
+			return ((HashId) element).entry.repair(listener);
 		}
 	}
 

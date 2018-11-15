@@ -229,36 +229,26 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 	}
 
 	@Override
-	public CollectionElement<E> searchWithConsistencyDetection(E value, boolean[] invalid) {
-		if (isEmpty())
-			return null;
-		return getLocker().doOptimistically(null, //
-			(init, ctx) -> {
-				BinaryTreeNode<E> root = getRoot();
-				if (root == null)
-					return null;
-				invalid[0] = false;
-				Object[] bounds = new Object[2];
-				boolean[] hasBounds = new boolean[2];
-				BinaryTreeNode<E> node = root.findClosest(n -> {
-					if (hasBounds[0])
-						invalid[0] = theCompare.compare(n.get(), (E) bounds[0]) > 0;
-					if (!invalid[0] && hasBounds[1])
-						invalid[0] = theCompare.compare(n.get(), (E) bounds[1]) < 0;
-					int comp = theCompare.compare(value, n.get());
-					if (comp < 0) {
-						hasBounds[1] = true;
-						bounds[1] = n.get();
-					} else if (comp > 0) {
-						hasBounds[0] = true;
-						bounds[0] = n.get();
-					}
-					return comp;
-				}, true, true, OptimisticContext.and(ctx, () -> invalid[0]));
-				if (node != null && theCompare.compare(value, node.get()) != 0)
-					node = null;
-				return node;
-			}, true);
+	public boolean isConsistent(ElementId element) {
+		CollectionElement<E> el = getElement(element);
+		CollectionElement<E> adj = getAdjacentElement(element, false);
+		if (adj != null) {
+			int comp = theCompare.compare(adj.get(), el.get());
+			if (comp > 0 || (isDistinct && comp == 0))
+				return false;
+		}
+		adj = getAdjacentElement(element, true);
+		if (adj != null) {
+			int comp = theCompare.compare(adj.get(), el.get());
+			if (comp < 0 || (isDistinct && comp == 0))
+				return false;
+		}
+		return true;
+	}
+
+	@Override
+	public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+		return super.repair(element, theCompare, isDistinct, listener);
 	}
 
 	@Override

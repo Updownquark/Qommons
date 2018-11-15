@@ -20,32 +20,16 @@ public interface ValueStoredCollection<E> extends BetterCollection<E> {
 	CollectionElement<E> getOrAdd(E value, boolean first, Runnable added);
 
 	/**
-	 * <p>
-	 * A search method that may work to detect inconsistencies in the collection's storage structure during the search.
-	 * </p>
-	 * <p>
-	 * See {@link #checkConsistency()} and <a href="https://github.com/Updownquark/Qommons/wiki/BetterCollection-API#features-2">BetterSet
-	 * Features</a>
-	 * </p>
-	 * <p>
-	 * If any inconsistency is found, the invalid flag will be set to true and null will be returned. Otherwise, this method functions
-	 * exactly as {@link #getElement(Object, boolean)} (the <code>first</code> flat is irrelevant for a set).
-	 * </p>
-	 * <p>
-	 * This method only checks for inconsistencies as needed to search for the given value. A null result with no inconsistencies detected
-	 * is NOT a guarantee that the value is not present in the collection. Values can be orphaned in the set in ways that are not detectable
-	 * without a complete search. For a complete consistency search, use {@link #checkConsistency()}.
-	 * </p>
+	 * Checks the collection's storage structure for consistency at the given element
 	 * 
-	 * @param value The value to search for
-	 * @param invalid The invalid flag to set to true if inconsistency is detected
-	 * @return The element, or null if inconsistency is detected or no such element is found in the collection
+	 * @param element The element to check the structure's consistency at
+	 * @return Whether the collection's storage appears to be consistent at the given element
 	 */
-	CollectionElement<E> searchWithConsistencyDetection(E value, boolean[] invalid);
+	boolean isConsistent(ElementId element);
 
 	/**
 	 * <p>
-	 * Searches for any inconsistencies in the collection's storage structure. This typically takes linear time.
+	 * Searches for any inconsistencies in the entire collection's storage structure. This typically takes linear time.
 	 * </p>
 	 * <p>
 	 * Such inconsistencies typically arise from changes to the properties of a stored value that this collection uses to store by. For
@@ -114,6 +98,24 @@ public interface ValueStoredCollection<E> extends BetterCollection<E> {
 		 */
 		void postTransfer(CollectionElement<E> element, X data);
 	}
+
+	/**
+	 * <p>
+	 * Fixes any inconsistencies in the collection's storage structure at the given element. Nothing is specified about how limited the
+	 * scope of the repair will be. Depending on the nature of any inconsistency(ies) found, more than one element may need to be moved.
+	 * 
+	 * </p>
+	 * <p>
+	 * See {@link #isConsistent(ElementId)} and
+	 * <a href="https://github.com/Updownquark/Qommons/wiki/BetterCollection-API#features-2">BetterSet Features</a>
+	 * </p>
+	 * 
+	 * @param <X> The type of the data transferred for the listener
+	 * @param element The element to repair the structure's consistency at
+	 * @param listener The listener to monitor repairs. May be null.
+	 * @return Whether any inconsistencies were found
+	 */
+	<X> boolean repair(ElementId element, RepairListener<E, X> listener);
 
 	/**
 	 * <p>

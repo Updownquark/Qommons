@@ -1,6 +1,11 @@
 package org.qommons.tree;
 
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.List;
 
 public class RedBlackTree<E> {
 	private RedBlackNode<E> theRoot;
@@ -97,7 +102,29 @@ public class RedBlackTree<E> {
 
 	/**
 	 * <p>
-	 * Searches for and fixes any inconsistencies in the tree's storage structure.
+	 * Searches for and fixes any inconsistencies in the tree's storage structure at the given node.
+	 * </p>
+	 * 
+	 * @param <X> The type of the data transferred for the listener
+	 * @param node The node at which to repair the structure
+	 * @param compare The ordering of the values in the tree
+	 * @param distinct Whether the values in the tree should be distinct
+	 * @param listener The listener to monitor repairs. May be null.
+	 * @return Whether any inconsistencies were found
+	 */
+	public <X> boolean repair(RedBlackNode<E> node, Comparator<? super E> compare, boolean distinct, RepairListener<E, X> listener) {
+		if (node == theRoot)
+			return repair(compare, distinct, listener);
+		boolean valid = check(node, compare, distinct);
+		if (!valid) {
+			int todo = todo;// TODO
+		}
+		return valid;
+	}
+
+	/**
+	 * <p>
+	 * Searches for and fixes any inconsistencies in the entire tree's storage structure.
 	 * </p>
 	 * 
 	 * @param <X> The type of the data transferred for the listener
@@ -107,7 +134,69 @@ public class RedBlackTree<E> {
 	 * @return Whether any inconsistencies were found
 	 */
 	public <X> boolean repair(Comparator<? super E> compare, boolean distinct, RepairListener<E, X> listener) {
+		RedBlackNode<E> root = theRoot;
+		if (root == null)
+			return false;
+		List<RedBlackNode<E>> subTreesToRepair = new ArrayList<>();
+		LinkedList<RedBlackNode<E>> toCheck = new LinkedList<>();
+		RedBlackNode<E> child = root.getLeft();
+		if (child != null)
+			toCheck.add(child);
+		child = root.getRight();
+		if (child != null)
+			toCheck.add(child);
+		while (!toCheck.isEmpty()) {
+			RedBlackNode<E> node = toCheck.removeFirst();
+			if (check(node, compare, distinct)) {
+				child = node.getLeft();
+				if (child != null)
+					toCheck.add(child);
+				child = node.getRight();
+				if (child != null)
+					toCheck.add(child);
+			} else
+				subTreesToRepair.add(node);
+		}
+		// Flatten the sub trees so we can operate on each node without recursion
+		for (int i = 0; i < subTreesToRepair.size(); i++) {
+			RedBlackNode<E> node = subTreesToRepair.get(i);
+			child = node.getLeft();
+			if (child != null)
+				subTreesToRepair.add(child);
+			child = node.getRight();
+			if (child != null)
+				subTreesToRepair.add(child);
+		}
+		LinkedHashSet<RedBlackNode<E>> nodesToRepair = new LinkedHashSet<>(subTreesToRepair);
+		Iterator<RedBlackNode<E>> nodeIter = nodesToRepair.iterator();
+		while (nodeIter.hasNext()) {
+			RedBlackNode<E> node = nodeIter.next();
+			nodeIter.remove();
+			X datum = listener == null ? null : listener.preTransfer(node);
+			node.delete();
+			// TODO Re-insert the node, but not under any invalid sub-trees
+			// This is a problem, because any tree operations may cause rotations that mix up the sub trees
+		}
 		// TODO
+	}
+
+	private boolean check(RedBlackNode<E> node, Comparator<? super E> compare, boolean distinct) {
+		boolean valid = true;
+		RedBlackNode<E> adj = node.getClosest(true);
+		if (adj != null) {
+			int comp = compare.compare(adj.getValue(), node.getValue());
+			if (comp > 0 || (distinct && comp == 0))
+				valid = false;
+		}
+		if (valid) {
+			adj = node.getClosest(true);
+			if (adj != null) {
+				int comp = compare.compare(adj.getValue(), node.getValue());
+				if (comp < 0 || (distinct && comp == 0))
+					valid = false;
+			}
+		}
+		return valid;
 	}
 
 	@Override
