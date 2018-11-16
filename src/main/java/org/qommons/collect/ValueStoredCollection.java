@@ -55,6 +55,29 @@ public interface ValueStoredCollection<E> extends BetterCollection<E> {
 	interface RepairListener<E, X> {
 		/**
 		 * <p>
+		 * Called immediately after an element is removed from a collection, before its value <b>may</b> transferred to a new position in
+		 * the collection. This call will be followed (but not necessarily immediately) by a call to either:
+		 * <ul>
+		 * <li>{@link #transferred(CollectionElement, Object)} with a new element with the same value, or</li>
+		 * <li>{@link #disposed(Object, Object)}</li>
+		 * </ul>
+		 * depending on what the collection decided to do with the element after it was removed. When this method is called, the collection
+		 * may not even know what the ultimate fate of the node will be.
+		 * </p>
+		 * <p>
+		 * For some derived collections, e.g. sub-sets, it is not possible for the view to determine whether an element previously belonged
+		 * to the collection. So this method may be called for elements that were not present previously, but are now.
+		 * </p>
+		 * 
+		 * @param element The element, having just been removed, which may or may not be transferred to another position in the collection,
+		 *        with a corresponding call to {@link #transferred(CollectionElement, Object)} or {@link #disposed(Object, Object)}
+		 * @return A piece of data which will be given as the second argument to {@link #transferred(CollectionElement, Object)} or
+		 *         {@link #disposed(Object, Object)} as a means of tracking
+		 */
+		X removed(CollectionElement<E> element);
+
+		/**
+		 * <p>
 		 * Called after an element is removed from the collection due to a collision with a different element. It will also be called if the
 		 * element is no longer compatible with this collection (e.g. a sub-set).
 		 * </p>
@@ -63,40 +86,25 @@ public interface ValueStoredCollection<E> extends BetterCollection<E> {
 		 * the set. So this method may be called for elements that were not present.
 		 * </p>
 		 * 
-		 * @param element The element removed due to a collision or due to the element no longer being compatible with this collection (i.e.
-		 *        a sub-set)
+		 * @param value The value removed due to a collision or due to the element no longer being compatible with this collection (i.e. a
+		 *        sub-set)
+		 * @param data The data returned from the {@link #removed(CollectionElement)} call, or null if the pre-transferred element was not a
+		 *        member of this collection
 		 */
-		void removed(CollectionElement<E> element);
+		void disposed(E value, X data);
 
 		/**
-		 * <p>
-		 * Called after an element is removed, before its value is transferred to a new position in the collection. This will be immediately
-		 * followed by a call to {@link #postTransfer(CollectionElement, Object)} with a new element with the same value.
-		 * </p>
-		 * <p>
-		 * For some collection, especially sub-sets, it is not possible for the view to determine whether an element previously belonged to
-		 * the set. So this method may be called for elements that were not present previously, but are now.
-		 * </p>
+		 * Called after an element is transferred to a new position in the collection. Typically, this will be after a corresponding call to
+		 * {@link #removed(CollectionElement)}, but if it can be determined that the element was previously not present in this collection,
+		 * but now is as a result of the change, {@link #removed(CollectionElement)} may not be called first and <code>data</code> will be
+		 * null.
 		 * 
-		 * @param element The element, having just been removed, which will immediately be transferred to another position in the
-		 *        collection, with a corresponding call to {@link #postTransfer(CollectionElement, Object)}
-		 * @return A piece of data which will be given as the second argument to {@link #postTransfer(CollectionElement, Object)} as a means
-		 *         of tracking
+		 * @param element The element previously removed (most likely, with a corresponding call to {@link #removed(CollectionElement)}) and
+		 *        now re-added in a different position within the collection
+		 * @param data The data returned from the {@link #removed(CollectionElement)} call, or null if it is known that the pre-transferred
+		 *        element was not a member of this collection
 		 */
-		X preTransfer(CollectionElement<E> element);
-
-		/**
-		 * Called after an element is transferred to a new position in the collection. Typically, this will be immediately after a
-		 * corresponding call to {@link #preTransfer(CollectionElement)}, but if it can be determined that the element was previously not
-		 * present in this collection, but now is as a result of the transfer, {@link #preTransfer(CollectionElement)} may not be called
-		 * first and <code>data</code> will be null.
-		 * 
-		 * @param element The element previously removed (with a corresponding call to {@link #preTransfer(CollectionElement)}) and now
-		 *        re-added in a different position within the collection
-		 * @param data The data returned from the {@link #preTransfer(CollectionElement)} call, or null if the pre-transferred element was
-		 *        not a member of this collection
-		 */
-		void postTransfer(CollectionElement<E> element, X data);
+		void transferred(CollectionElement<E> element, X data);
 	}
 
 	/**

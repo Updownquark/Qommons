@@ -162,13 +162,13 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 			}
 
 			@Override
-			public void removed(CollectionElement<E> element) {
-				theWrapped.removed(element.reverse());
+			public X preRemove(CollectionElement<E> element) {
+				return theWrapped.preRemove(element.reverse());
 			}
 
 			@Override
-			public X preTransfer(CollectionElement<E> element) {
-				return theWrapped.preTransfer(element.reverse());
+			public void removed(E value, X data) {
+				theWrapped.removed(value, data);
 			}
 
 			@Override
