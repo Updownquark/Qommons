@@ -817,18 +817,18 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 			}
 
 			@Override
-			public void removed(CollectionElement<Map.Entry<K, V>> element) {
-				theKeyListener.removed(handleFor(element));
+			public X removed(CollectionElement<Map.Entry<K, V>> element) {
+				return theKeyListener.removed(handleFor(element));
 			}
 
 			@Override
-			public X preTransfer(CollectionElement<Map.Entry<K, V>> element) {
-				return theKeyListener.preTransfer(handleFor(element));
+			public void disposed(Entry<K, V> value, X data) {
+				theKeyListener.disposed(value.getKey(), data);
 			}
 
 			@Override
-			public void postTransfer(CollectionElement<Map.Entry<K, V>> element, X data) {
-				theKeyListener.postTransfer(handleFor(element), data);
+			public void transferred(CollectionElement<Entry<K, V>> element, X data) {
+				theKeyListener.transferred(handleFor(element), data);
 			}
 		}
 	}

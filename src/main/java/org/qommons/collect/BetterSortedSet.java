@@ -1105,35 +1105,30 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 
 			@Override
-			public void removed(CollectionElement<E> element) {
+			public X removed(CollectionElement<E> element) {
 				// As the repair method may be called after any number of changes to the set's values,
 				// we cannot assume anything about the previous state of the element, e.g. whether it was previously present in this
 				// sub-set.
 				// It is for this reason that the repair API specifies that this method may be called even for elements that were not
 				// present in the set.
-				theWrappedListener.removed(element);
+				return theWrappedListener.removed(element);
 			}
 
 			@Override
-			public X preTransfer(CollectionElement<E> element) {
+			public void disposed(E value, X data) {
 				// As the repair method may be called after any number of changes to the set's values,
 				// we cannot assume anything about the previous state of the element, e.g. whether it was previously present in this
 				// sub-set.
 				// It is for this reason that the repair API specifies that this method may be called even for elements that were not
 				// present in the set.
 				// Therefore, we need to inform the listener about the element by one of the 2 methods
-				if (isInRange(element.get()) == 0)
-					return theWrappedListener.preTransfer(element);
-				else {
-					theWrappedListener.removed(element);
-					return null;
-				}
+				theWrappedListener.disposed(value, data);
 			}
 
 			@Override
-			public void postTransfer(CollectionElement<E> element, X data) {
+			public void transferred(CollectionElement<E> element, X data) {
 				if (isInRange(element.get()) == 0)
-					theWrappedListener.postTransfer(element, data);
+					theWrappedListener.transferred(element, data);
 			}
 		}
 	}

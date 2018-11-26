@@ -68,50 +68,17 @@ public class RedBlackTree<E> {
 	}
 
 	public interface RepairListener<E, X> {
-		/**
-		 * <p>
-		 * Called after an node is removed from the collection due to a collision with a different node. It will also be called if the node
-		 * is no longer compatible with this collection (e.g. a sub-set).
-		 * </p>
-		 * <p>
-		 * For some collection, especially sub-sets, it is not possible for the view to determine whether an node previously belonged to the
-		 * set. So this method may be called for nodes that were not present.
-		 * </p>
-		 * 
-		 * @param node The node removed due to a collision or due to the node no longer being compatible with this collection (i.e. a
-		 *        sub-set)
-		 */
-		void removed(RedBlackNode<E> node);
+		/** @see org.qommons.collect.ValueStoredCollection.RepairListener#removed(org.qommons.collect.CollectionElement) */
+		@SuppressWarnings("javadoc")
+		X removed(RedBlackNode<E> node);
 
-		/**
-		 * <p>
-		 * Called after an node is removed, before its value is transferred to a new position in the collection. This will be immediately
-		 * followed by a call to {@link #postTransfer(RedBlackNode, Object)} with a new node with the same value.
-		 * </p>
-		 * <p>
-		 * For some collection, especially sub-sets, it is not possible for the view to determine whether an node previously belonged to the
-		 * set. So this method may be called for nodes that were not present previously, but are now.
-		 * </p>
-		 * 
-		 * @param node The node, having just been removed, which will immediately be transferred to another position in the collection, with
-		 *        a corresponding call to {@link #postTransfer(RedBlackNode, Object)}
-		 * @return A piece of data which will be given as the second argument to {@link #postTransfer(RedBlackNode, Object)} as a means of
-		 *         tracking
-		 */
-		X preTransfer(RedBlackNode<E> node);
+		/** @see org.qommons.collect.ValueStoredCollection.RepairListener#disposed(org.qommons.collect.CollectionElement) */
+		@SuppressWarnings("javadoc")
+		void disposed(RedBlackNode<E> node, X data);
 
-		/**
-		 * Called after an node is transferred to a new position in the collection. Typically, this will be immediately after a
-		 * corresponding call to {@link #preTransfer(RedBlackNode)}, but if it can be determined that the node was previously not present in
-		 * this collection, but now is as a result of the transfer, {@link #preTransfer(RedBlackNode)} may not be called first and
-		 * <code>data</code> will be null.
-		 * 
-		 * @param node The node previously removed (with a corresponding call to {@link #preTransfer(RedBlackNode)}) and now re-added in a
-		 *        different position within the collection
-		 * @param data The data returned from the {@link #preTransfer(RedBlackNode)} call, or null if the pre-transferred node was not a
-		 *        member of this collection
-		 */
-		void postTransfer(RedBlackNode<E> node, X data);
+		/** @see org.qommons.collect.ValueStoredCollection.RepairListener#transferred(org.qommons.collect.CollectionElement) */
+		@SuppressWarnings("javadoc")
+		void transferred(RedBlackNode<E> node, X data);
 	}
 
 	/**
@@ -130,11 +97,15 @@ public class RedBlackTree<E> {
 		if (node.size() == 1) {
 			boolean valid = check(node, compare, distinct);
 			if (!valid) {
-				X datum = listener == null ? null : listener.preTransfer(node);
+				X datum = listener == null ? null : listener.removed(node);
 				node.delete();
 				node = insert(node.getValue(), compare, distinct);
-				if (listener != null)
-					listener.postTransfer(node, datum);
+				if (listener != null) {
+					if (node != null)
+						listener.transferred(node, datum);
+					else
+						listener.disposed(node, datum);
+				}
 			}
 			return valid;
 		}
@@ -216,15 +187,6 @@ public class RedBlackTree<E> {
 		} else if (removeFromSubTree == 0)
 			return false; // All nodes are fine where they are
 
-		int todo = todo; // There are still problems here.
-		// For one, there may now be duplicate elements. This code currently only does moves and assumes that insertion will return a
-		// non-null node, but if there is a duplicate, the operation should actually be a removal.
-		// Determining whether a node has a duplicate in the corrupt tree, however, may not be trivial.
-		// For another thing, since this operation operates on subtrees, it's possible that when addressing one problem point in the tree
-		// while another unaddressed corruption point still exists, the first repair operation will re-add nodes at the wrong place, but
-		// due to rebalancing after addition, these new nodes will not be under the subtree of the second problem node
-		// and the problem created when repairing the first problem will go uncorrected.
-
 		// The bit set now contains true for every node we will need to move
 		// Remove all the necessary nodes, storing the listener-specific data for later insertion
 		// Just to note, this operation may cause rebalancing, so no further logic may reason on the node's parent-child subtree structure
@@ -237,8 +199,9 @@ public class RedBlackTree<E> {
 			RedBlackNode<E> next = n.getClosest(false); // Grab next first, since we may be about to remove n
 			if (toMove.get(index)) {
 				if (listener != null)
-					listenerData.add(listener.preTransfer(n));
+					listenerData.add(listener.removed(n));
 				toReAdd.add(n.getValue());
+				n.delete();
 			}
 			if (n == rightMost)
 				break;
@@ -257,8 +220,12 @@ public class RedBlackTree<E> {
 		// Now we re-add the removed nodes to the tree
 		for (int i = 0; i < toReAdd.size(); i++) {
 			n = insert(toReAdd.get(i), compare, distinct);
-			if (listener != null)
-				listener.postTransfer(n, listenerData.get(i));
+			if (listener != null) {
+				if (n != null)
+					listener.transferred(n, listenerData.get(i));
+				else
+					listener.disposed(n, listenerData.get(i));
+			}
 		}
 		return true; // If we made it this far, that means we actually did to repair work
 	}

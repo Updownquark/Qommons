@@ -251,7 +251,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 		/** @see ValueStoredCollection.RepairListener#disposed(Object, Object) */
 		@SuppressWarnings("javadoc")
-		void disposed(Map.Entry<K, V> entry, X data);
+		void disposed(K key, V value, X data);
 
 		/** @see ValueStoredCollection.RepairListener#transferred(CollectionElement, Object) */
 		@SuppressWarnings("javadoc")
@@ -291,6 +291,33 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		return keySet().repair(listener == null ? null : new KeySetRepairListener<>(this, listener));
 	}
 
+	class EntryRepairTracker<K, V, X> implements Map.Entry<K, V> {
+		public final K key;
+		public final V value;
+		public final X outerData;
+
+		public EntryRepairTracker(K key, V value, X outerData) {
+			this.key = key;
+			this.value = value;
+			this.outerData = outerData;
+		}
+
+		@Override
+		public K getKey() {
+			return key;
+		}
+
+		@Override
+		public V getValue() {
+			return value;
+		}
+
+		@Override
+		public V setValue(V value) {
+			throw new UnsupportedOperationException();
+		}
+	}
+
 	/**
 	 * A repair listener for a BetterMap's key set
 	 * 
@@ -298,7 +325,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	 * @param <V> The value type of the map
 	 * @param <X> The transfer data type for the listener
 	 */
-	class KeySetRepairListener<K, V, X> implements RepairListener<K, KeySetRepairListener.EntryRepairTracker<K, V, X>> {
+	class KeySetRepairListener<K, V, X> implements RepairListener<K, EntryRepairTracker<K, V, X>> {
 		private final BetterMap<K, V> theMap;
 		private final MapRepairListener<K, V, X> theMapRepairListener;
 
@@ -309,13 +336,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 		@Override
 		public EntryRepairTracker<K, V, X> removed(CollectionElement<K> element) {
-			return new EntryRepairTracker<>(theMap.entrySet().getElement(element.getElementId()).get(), //
-				theMapRepairListener.removed(theMap.getEntryById(element.getElementId())));
+			MapEntryHandle<K, V> entry = theMap.getEntryById(element.getElementId());
+			return new EntryRepairTracker<>(entry.getKey(), entry.getValue(), theMapRepairListener.removed(entry));
 		}
 
 		@Override
 		public void disposed(K key, EntryRepairTracker<K, V, X> data) {
-			theMapRepairListener.disposed(data.entry, data.outerData);
+			theMapRepairListener.disposed(data.key, data.value, data.outerData);
 		}
 
 		@Override
@@ -323,15 +350,6 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			theMapRepairListener.transferred(theMap.getEntryById(element.getElementId()), data.outerData);
 		}
 
-		static class EntryRepairTracker<K, V, X> {
-			final Map.Entry<K, V> entry;
-			final X outerData;
-
-			EntryRepairTracker(Map.Entry<K, V> entry, X outerData) {
-				this.entry = entry;
-				this.outerData = outerData;
-			}
-		}
 	}
 
 	@Override
@@ -384,7 +402,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	@Override
 	default V computeIfPresent(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
 		while (true) {
-		MapEntryHandle<K, V> handle = getEntry(key);
+			MapEntryHandle<K, V> handle = getEntry(key);
 			if (handle != null) {
 				MutableMapEntryHandle<K, V> mutableEntry;
 				try {
@@ -407,9 +425,9 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 						continue;
 					}
 				}
-		} else
-			return null;
-	}
+			} else
+				return null;
+		}
 	}
 
 	@Override
@@ -436,21 +454,21 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 					if (mutableEntry.compareAndSet(oldValue, newValue))
 						return newValue;
 				} while (mutableEntry.getElementId().isPresent());
-		} else {
+			} else {
 				try {
 					mutableEntry.remove();
 					return null;
 				} catch (IllegalStateException e) {
 					continue;
-		}
-	}
+				}
+			}
 		}
 	}
 
 	@Override
 	default V merge(K key, V value, BiFunction<? super V, ? super V, ? extends V> remappingFunction) {
 		return compute(key, (k, v) -> v == null ? value : remappingFunction.apply(v, value));
-			}
+	}
 
 	/**
 	 * Implements {@link BetterMap#reverse()}
@@ -513,8 +531,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 				}
 
 				@Override
-				public void disposed(Map.Entry<K, V> entry, X data) {
-					listener.disposed(entry, data);
+				public void disposed(K key, V value, X data) {
+					listener.disposed(key, value, data);
 				}
 
 				@Override
@@ -667,13 +685,15 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 		@Override
 		public <X> boolean repair(ElementId element, RepairListener<Entry<K, V>, X> listener) {
-			MapRepairListener<K, V, X> mapListener = listener == null ? null : new EntryRepairListener<>(listener);
+			MapRepairListener<K, V, EntryRepairTracker<K, V, X>> mapListener = listener == null ? null
+				: new EntryRepairListener<>(listener);
 			return theMap.repair(element, mapListener);
 		}
 
 		@Override
 		public <X> boolean repair(RepairListener<Entry<K, V>, X> listener) {
-			MapRepairListener<K, V, X> mapListener = listener == null ? null : new EntryRepairListener<>(listener);
+			MapRepairListener<K, V, EntryRepairTracker<K, V, X>> mapListener = listener == null ? null
+				: new EntryRepairListener<>(listener);
 			return theMap.repair(mapListener);
 		}
 
@@ -862,7 +882,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			}
 		}
 
-		class EntryRepairListener<X> implements MapRepairListener<K, V, X> {
+		class EntryRepairListener<X> implements MapRepairListener<K, V, EntryRepairTracker<K, V, X>> {
 			private final RepairListener<Map.Entry<K, V>, X> theWrapped;
 
 			EntryRepairListener(RepairListener<Map.Entry<K, V>, X> wrapped) {
@@ -870,48 +890,19 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			}
 
 			@Override
-			public X removed(MapEntryHandle<K, V> element) {
-				return new EntryRepairTracker<>(element.
-				// TODO Auto-generated method stub
-				return null;
+			public EntryRepairTracker<K, V, X> removed(MapEntryHandle<K, V> element) {
+				return new EntryRepairTracker<>(element.getKey(), element.getValue(), theWrapped.removed(new EntryElement(element)));
 			}
 
 			@Override
-			public void disposed(java.util.Map.Entry<K, V> entry, X data) {
-				// TODO Auto-generated method stub
-
+			public void disposed(K key, V value, EntryRepairTracker<K, V, X> data) {
+				theWrapped.disposed(data, data.outerData);
 			}
 
 			@Override
-			public void transferred(MapEntryHandle<K, V> element, X data) {
-				// TODO Auto-generated method stub
-
+			public void transferred(MapEntryHandle<K, V> element, EntryRepairTracker<K, V, X> data) {
+				theWrapped.transferred(new EntryElement(element), data.outerData);
 			}
-
-			static class EntryRepairTracker<K, V, X> {
-				final Map.Entry<K, V> entry;
-				final X outerData;
-
-				EntryRepairTracker(java.util.Map.Entry<K, V> entry, X outerData) {
-					this.entry = entry;
-					this.outerData = outerData;
-				}
-			}
-
-			// @Override
-			// public void removed(MapEntryHandle<K, V> element) {
-			// theWrapped.removed(new EntryElement(element));
-			// }
-			//
-			// @Override
-			// public X removed(MapEntryHandle<K, V> element) {
-			// return theWrapped.preTransfer(new EntryElement(element));
-			// }
-			//
-			// @Override
-			// public void transferred(MapEntryHandle<K, V> element, X data) {
-			// theWrapped.postTransfer(new EntryElement(element), data);
-			// }
 		}
 	}
 

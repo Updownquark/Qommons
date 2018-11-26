@@ -19,6 +19,7 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.OptimisticContext;
 import org.qommons.collect.ValueStoredCollection;
+import org.qommons.collect.ValueStoredCollection.RepairListener;
 
 /**
  * An abstract implementation of a tree-backed collection. Since fast indexing is supported, BetterList is implemented.
@@ -254,22 +255,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	protected <X> boolean repair(ElementId element, Comparator<? super E> compare, boolean distinct,
 		ValueStoredCollection.RepairListener<E, X> listener) {
 		try (Transaction t = lock(true, null)) {
-			return theTree.repair(checkNode(element).theNode, compare, distinct, new RedBlackTree.RepairListener<E, X>() {
-				@Override
-				public void removed(RedBlackNode<E> node) {
-					listener.removed(wrap(node));
-				}
-
-				@Override
-				public X preTransfer(RedBlackNode<E> node) {
-					return listener.preTransfer(wrap(node));
-				}
-
-				@Override
-				public void postTransfer(RedBlackNode<E> node, X data) {
-					listener.postTransfer(wrap(node), data);
-				}
-			});
+			return theTree.repair(checkNode(element).theNode, compare, distinct, new TreeRepairListener<>(listener));
 		}
 	}
 
@@ -285,22 +271,32 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	 */
 	protected <X> boolean repair(Comparator<? super E> compare, boolean distinct, ValueStoredCollection.RepairListener<E, X> listener) {
 		try (Transaction t = lock(true, null)) {
-			return theTree.repair(compare, distinct, new RedBlackTree.RepairListener<E, X>() {
-				@Override
-				public void removed(RedBlackNode<E> node) {
-					listener.removed(wrap(node));
-				}
+			return theTree.repair(compare, distinct, new TreeRepairListener<>(listener));
+		}
+	}
 
-				@Override
-				public X preTransfer(RedBlackNode<E> node) {
-					return listener.preTransfer(wrap(node));
-				}
+	private class TreeRepairListener<X> implements RedBlackTree.RepairListener<E, X> {
+		private final ValueStoredCollection.RepairListener<E, X> theWrapped;
 
-				@Override
-				public void postTransfer(RedBlackNode<E> node, X data) {
-					listener.postTransfer(wrap(node), data);
-				}
-			});
+		TreeRepairListener(RepairListener<E, X> wrapped) {
+			theWrapped = wrapped;
+		}
+
+		@Override
+		public X removed(RedBlackNode<E> node) {
+			return theWrapped == null ? null : theWrapped.removed(wrap(node));
+		}
+
+		@Override
+		public void disposed(RedBlackNode<E> node, X data) {
+			if (theWrapped != null)
+				theWrapped.disposed(node.getValue(), data);
+		}
+
+		@Override
+		public void transferred(RedBlackNode<E> node, X data) {
+			if (theWrapped != null)
+				theWrapped.transferred(wrap(node), data);
 		}
 	}
 
