@@ -118,7 +118,7 @@ public class TestHelper {
 		}
 
 		public NavigableSet<Long> getBreakpoints() {
-			if (placemarks.isEmpty())
+			if (placemarks.isEmpty() && bytes > 0)
 				return new TreeSet<>(Arrays.asList(bytes));
 			else
 				return new TreeSet<>(placemarks.values());
@@ -482,7 +482,24 @@ public class TestHelper {
 					}
 				}
 			}
-			for (int i = 0; i < maxCases && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
+			int i = 0;
+			for (TestFailure test : theSpecifiedCases) {
+				TestHelper helper = new TestHelper(true, test.seed, test.bytes, test.getBreakpoints(), test.placemarks.keySet());
+				Throwable err = doTest(theCreator, helper, i + 1, isPrintingProgress, isPrintingFailures, false, start);
+				if (err != null) {
+					if (isPersistingFailures) {
+						TestFailure failure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.thePlacemarks);
+						knownFailures.add(failure);
+						writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames, knownFailures);
+					}
+					if (firstError == null)
+						firstError = err;
+					failures++;
+				} else
+					successes++;
+				i++;
+			}
+			for (; i < maxCases && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
 				TestHelper helper = new TestHelper(thePlacemarkNames);
 				Throwable err = doTest(theCreator, helper, i + 1, isPrintingProgress, isPrintingFailures, false, start);
 				if (err != null) {
