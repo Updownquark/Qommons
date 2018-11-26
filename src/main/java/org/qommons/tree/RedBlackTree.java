@@ -199,7 +199,7 @@ public class RedBlackTree<E> {
 			RedBlackNode<E> next = n.getClosest(false); // Grab next first, since we may be about to remove n
 			if (toMove.get(index)) {
 				if (listener != null)
-					listenerData.add(listener.removed(n));
+					listenerData.add(listener.removed(n)); // Should this be done AFTER the remove?
 				toReAdd.add(n.getValue());
 				n.delete();
 			}
