@@ -535,11 +535,11 @@ public final class RedBlackNode<E> {
 			if (compare == 0)
 				return node;
 			boolean matchesLesser = compare > 0 == lesser;
-			if (found == null || (!foundMatchesLesser && matchesLesser)) {
+			if (found == null || matchesLesser || !foundMatchesLesser) {
 				found = node;
 				foundMatchesLesser = matchesLesser;
 			}
-			RedBlackNode<E> child = getChild(compare < 0);
+			RedBlackNode<E> child = node.getChild(compare < 0);
 			if (child == null)
 				return found;
 			node = child;

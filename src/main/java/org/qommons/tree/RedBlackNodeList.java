@@ -288,9 +288,9 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 		}
 
 		@Override
-		public void disposed(RedBlackNode<E> node, X data) {
+		public void disposed(E value, X data) {
 			if (theWrapped != null)
-				theWrapped.disposed(node.getValue(), data);
+				theWrapped.disposed(value, data);
 		}
 
 		@Override

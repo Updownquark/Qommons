@@ -74,7 +74,7 @@ public class RedBlackTree<E> {
 
 		/** @see org.qommons.collect.ValueStoredCollection.RepairListener#disposed(org.qommons.collect.CollectionElement) */
 		@SuppressWarnings("javadoc")
-		void disposed(RedBlackNode<E> node, X data);
+		void disposed(E value, X data);
 
 		/** @see org.qommons.collect.ValueStoredCollection.RepairListener#transferred(org.qommons.collect.CollectionElement) */
 		@SuppressWarnings("javadoc")
@@ -99,12 +99,12 @@ public class RedBlackTree<E> {
 			if (!valid) {
 				X datum = listener == null ? null : listener.removed(node);
 				node.delete();
-				node = insert(node.getValue(), compare, distinct);
+				RedBlackNode<E> newNode = insert(node.getValue(), compare, distinct);
 				if (listener != null) {
-					if (node != null)
-						listener.transferred(node, datum);
+					if (newNode != null)
+						listener.transferred(newNode, datum);
 					else
-						listener.disposed(node, datum);
+						listener.disposed(node.getValue(), datum);
 				}
 			}
 			return valid;
@@ -140,6 +140,8 @@ public class RedBlackTree<E> {
 			} else if (hasInnerLeftBound) {
 				if (!check(innerLeftBound, n.getValue(), compare, distinct))
 					moveWithinSubTree++;
+				else
+					innerLeftBound = n.getValue();
 			} else {
 				hasInnerLeftBound = true;
 				innerLeftBound = n.getValue();
@@ -170,6 +172,8 @@ public class RedBlackTree<E> {
 				} else if (hasInnerLeftBound) {
 					if (!check(innerLeftBound, n.getValue(), compare, distinct))
 						toMove.set(index);
+					else
+						innerLeftBound = n.getValue();
 				} else if (movePrimary) {
 					// First subtree-valid node, which we've decided to move
 					movePrimary = false; // Use the next subtree-valid node as the left bound
@@ -219,12 +223,13 @@ public class RedBlackTree<E> {
 
 		// Now we re-add the removed nodes to the tree
 		for (int i = 0; i < toReAdd.size(); i++) {
-			n = insert(toReAdd.get(i), compare, distinct);
+			E value = toReAdd.get(i);
+			n = insert(value, compare, distinct);
 			if (listener != null) {
 				if (n != null)
 					listener.transferred(n, listenerData.get(i));
 				else
-					listener.disposed(n, listenerData.get(i));
+					listener.disposed(value, listenerData.get(i));
 			}
 		}
 		return true; // If we made it this far, that means we actually did to repair work

@@ -3,8 +3,8 @@ package org.qommons.tree;
 import static org.qommons.QommonsTestUtils.testCollection;
 import static org.qommons.QommonsTestUtils.testMap;
 
+import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
@@ -274,65 +274,101 @@ public class TreeUtilsTest {
 		@Override
 		public void accept(TestHelper t) {
 			// Build a random tree set
-			BetterTreeSet<int[]> set = new BetterTreeSet<>(false, (i1, i2) -> Integer.compare(i1[0], i2[0]));
-			int length = t.getInt(2, 10000);
+			BetterTreeSet<IntHolder> set = new BetterTreeSet<>(false, IntHolder::compareTo);
+			int length = t.getInt(2, 10);
+			// int length = t.getInt(2, 10000);
 			for (int i = 0; i < length; i++)
-				set.add(new int[] { t.getAnyInt() });
+				set.add(new IntHolder(t.getInt(-100, 100)));
 			List<Integer> copy = new ArrayList<>(set.size());
-			for (int[] v : set)
-				copy.add(v[0]);
+			for (IntHolder v : set)
+				copy.add(v.value);
 
 			// Update some elements with random values, storing the element IDs updated
-			int updates = t.getInt(1, Math.min(length - 1, 100));
+			int updates = t.getInt(1, Math.min(length - 1, 2));
+			// int updates = t.getInt(1, length);
 			List<ElementId> toUpdate = new ArrayList<>(updates);
 			for (int i = 0; i < updates; i++) {
 				int index = t.getInt(0, set.size());
-				int newValue = t.getAnyInt();
+				int newValue = t.getInt(-100, 100);
 				ElementId el = set.getElement(index).getElementId();
-				set.getElement(el).get()[0] = newValue;
+				set.getElement(el).get().value = newValue;
 				copy.set(index, newValue);
 				toUpdate.add(el);
 			}
 
 			// Inform the set that the updated elements have changed and allow it to fix itself
 			// Fix the copy in tandem
-			for (ElementId el : toUpdate)
-				set.repair(el, new ValueStoredCollection.RepairListener<int[], Void>() {
+			for (ElementId el : toUpdate) {
+				t.placemark();
+				// The element may have been removed due to previous operations
+				if (!el.isPresent())
+					continue;
+				set.repair(el, new ValueStoredCollection.RepairListener<IntHolder, Void>() {
 					@Override
-					public Void removed(CollectionElement<int[]> element) {
+					public Void removed(CollectionElement<IntHolder> element) {
 						copy.remove(set.getElementsBefore(element.getElementId()));
 						return null;
 					}
 
 					@Override
-					public void disposed(int[] value, Void data) {}
+					public void disposed(IntHolder value, Void data) {}
 
 					@Override
-					public void transferred(CollectionElement<int[]> element, Void data) {
-						copy.add(set.getElementsBefore(element.getElementId()), element.get()[0]);
+					public void transferred(CollectionElement<IntHolder> element, Void data) {
+						copy.add(set.getElementsBefore(element.getElementId()), element.get().value);
 					}
 				});
+			}
 
+			t.placemark();
 			// Verify that the copy and the set have the same values and that they are sorted
 			Assert.assertEquals(set.size(), copy.size());
 			int i = 0;
 			int prev = 0;
-			for (int[] v : set) {
+			for (IntHolder v : set) {
 				if (i > 0)
-					Assert.assertTrue(v[0] > prev);
-				prev = v[0];
-				Assert.assertEquals(v[0], copy.get(i++).intValue());
+					Assert.assertTrue(v.value > prev);
+				prev = v.value;
+				Assert.assertEquals(v.value, copy.get(i++).intValue());
+			}
+		}
+
+		static class IntHolder implements Comparable<IntHolder> {
+			int value;
+
+			IntHolder(int value) {
+				this.value = value;
+			}
+
+			@Override
+			public int compareTo(IntHolder o) {
+				return Integer.compare(value, o.value);
+			}
+
+			@Override
+			public int hashCode() {
+				return Integer.hashCode(value);
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return obj instanceof IntHolder && ((IntHolder) obj).value == value;
+			}
+
+			@Override
+			public String toString() {
+				return String.valueOf(value);
 			}
 		}
 	}
 
+	/** Tests the {@link ValueStoredCollection} repair API */
 	@Test
 	public void testTreeRepair() {
 		TestHelper.createTester(TreeRepairTester.class).withDebug(true)
-			.withCase(Long.parseLong("3FEA3F6CC157528C", 16), Collections.emptyNavigableMap())//
-			.execute();
-		TestHelper.createTester(TreeRepairTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1000).execute()
-			.throwErrorIfFailed();
+			.withPersistenceDir(new File("src/test/java/org/qommons/tree"), false).revisitKnownFailures(true)//
+			.withRandomCases(100000).withMaxFailures(10)//
+			.execute().throwErrorIfFailed();
 	}
 
 	static class TreeSetTester implements TestHelper.Testable {
