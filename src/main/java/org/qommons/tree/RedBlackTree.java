@@ -97,8 +97,8 @@ public class RedBlackTree<E> {
 		if (node.size() == 1) {
 			boolean valid = check(node, compare, distinct);
 			if (!valid) {
-				X datum = listener == null ? null : listener.removed(node);
 				node.delete();
+				X datum = listener == null ? null : listener.removed(node);
 				RedBlackNode<E> newNode = insert(node.getValue(), compare, distinct);
 				if (listener != null) {
 					if (newNode != null)
@@ -202,10 +202,10 @@ public class RedBlackTree<E> {
 		while (true) {
 			RedBlackNode<E> next = n.getClosest(false); // Grab next first, since we may be about to remove n
 			if (toMove.get(index)) {
-				if (listener != null)
-					listenerData.add(listener.removed(n)); // Should this be done AFTER the remove?
-				toReAdd.add(n.getValue());
 				n.delete();
+				if (listener != null)
+					listenerData.add(listener.removed(n));
+				toReAdd.add(n.getValue());
 			}
 			if (n == rightMost)
 				break;
