@@ -51,9 +51,9 @@ public class CsvParser {
 	public String[] parseNextLine() throws IOException, TextParseException {
 		List<String> columns = new ArrayList<>();
 		String value = theParseState.parseColumn();
-		while (theParseState.getLastTerminal() == CsvValueTerminal.LINE_END)
+		while (value.length() == 0 && theParseState.getLastTerminal() == CsvValueTerminal.LINE_END)
 			value = theParseState.parseColumn(); // Move past any initial blank lines
-		if (theParseState.getLastTerminal() == CsvValueTerminal.FILE_END)
+		if (value.length() == 0 && theParseState.getLastTerminal() == CsvValueTerminal.FILE_END)
 			return null;
 
 		columns.add(value);
@@ -119,8 +119,6 @@ public class CsvParser {
 					doNothing = true; // Just here so one can step through each character as it's parsed
 				}
 			}
-			if (theValue.length() == 0 && theLastTerminal == CsvValueTerminal.FILE_END)
-				return null;
 			String column = theValue.toString();
 			theValue.setLength(0);
 			return column;
