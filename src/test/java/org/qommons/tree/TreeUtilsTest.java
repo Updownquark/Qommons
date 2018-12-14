@@ -3,8 +3,11 @@ package org.qommons.tree;
 import static org.qommons.QommonsTestUtils.testCollection;
 import static org.qommons.QommonsTestUtils.testMap;
 
+import java.io.File;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -13,6 +16,9 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.qommons.QommonsTestUtils;
 import org.qommons.TestHelper;
+import org.qommons.collect.CollectionElement;
+import org.qommons.collect.ElementId;
+import org.qommons.collect.ValueStoredCollection;
 
 /** Runs tests on the red-black tree structures behind the ObServe tree collections */
 public class TreeUtilsTest {
@@ -262,6 +268,107 @@ public class TreeUtilsTest {
 			size += node.getRight().size();
 		}
 		Assert.assertEquals(size, node.size());
+	}
+
+	static class TreeRepairTester implements TestHelper.Testable {
+		@Override
+		public void accept(TestHelper t) {
+			// Build a random tree set
+			BetterTreeSet<IntHolder> set = new BetterTreeSet<>(false, IntHolder::compareTo);
+			int length = t.getInt(2, 10);
+			// int length = t.getInt(2, 10000);
+			for (int i = 0; i < length; i++)
+				set.add(new IntHolder(t.getInt(-100, 100)));
+			List<Integer> copy = new ArrayList<>(set.size());
+			for (IntHolder v : set)
+				copy.add(v.value);
+
+			// Update some elements with random values, storing the element IDs updated
+			int updates = t.getInt(1, Math.min(length - 1, 2));
+			// int updates = t.getInt(1, length);
+			List<ElementId> toUpdate = new ArrayList<>(updates);
+			for (int i = 0; i < updates; i++) {
+				int index = t.getInt(0, set.size());
+				int newValue = t.getInt(-100, 100);
+				ElementId el = set.getElement(index).getElementId();
+				set.getElement(el).get().value = newValue;
+				copy.set(index, newValue);
+				toUpdate.add(el);
+			}
+
+			// Inform the set that the updated elements have changed and allow it to fix itself
+			// Fix the copy in tandem
+			for (ElementId el : toUpdate) {
+				t.placemark();
+				// The element may have been removed due to previous operations
+				if (!el.isPresent())
+					continue;
+				set.repair(el, new ValueStoredCollection.RepairListener<IntHolder, Void>() {
+					@Override
+					public Void removed(CollectionElement<IntHolder> element) {
+						copy.remove(set.getElementsBefore(element.getElementId()));
+						return null;
+					}
+
+					@Override
+					public void disposed(IntHolder value, Void data) {}
+
+					@Override
+					public void transferred(CollectionElement<IntHolder> element, Void data) {
+						copy.add(set.getElementsBefore(element.getElementId()), element.get().value);
+					}
+				});
+			}
+
+			t.placemark();
+			// Verify that the copy and the set have the same values and that they are sorted
+			Assert.assertEquals(set.size(), copy.size());
+			int i = 0;
+			int prev = 0;
+			for (IntHolder v : set) {
+				if (i > 0)
+					Assert.assertTrue(v.value > prev);
+				prev = v.value;
+				Assert.assertEquals(v.value, copy.get(i++).intValue());
+			}
+		}
+
+		static class IntHolder implements Comparable<IntHolder> {
+			int value;
+
+			IntHolder(int value) {
+				this.value = value;
+			}
+
+			@Override
+			public int compareTo(IntHolder o) {
+				return Integer.compare(value, o.value);
+			}
+
+			@Override
+			public int hashCode() {
+				return Integer.hashCode(value);
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return obj instanceof IntHolder && ((IntHolder) obj).value == value;
+			}
+
+			@Override
+			public String toString() {
+				return String.valueOf(value);
+			}
+		}
+	}
+
+	/** Tests the {@link ValueStoredCollection} repair API */
+	@Test
+	public void testTreeRepair() {
+		TestHelper.createTester(TreeRepairTester.class).withDebug(true)
+			.withPersistenceDir(new File("src/test/java/org/qommons/tree"), false).revisitKnownFailures(true)//
+			.withRandomCases(100000).withMaxFailures(10)//
+			.execute().throwErrorIfFailed();
 	}
 
 	static class TreeSetTester implements TestHelper.Testable {

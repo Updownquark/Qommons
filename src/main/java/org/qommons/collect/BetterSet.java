@@ -2,6 +2,7 @@ package org.qommons.collect;
 
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.NoSuchElementException;
 import java.util.Set;
 
 import org.qommons.Transaction;
@@ -13,69 +14,57 @@ import org.qommons.Transaction;
  * 
  * @param <E> The type of values in the set
  */
-public interface BetterSet<E> extends BetterCollection<E>, TransactableSet<E> {
+public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<E> {
 	@Override
 	default Iterator<E> iterator() {
-		return BetterCollection.super.iterator();
+		return ValueStoredCollection.super.iterator();
 	}
 
 	@Override
 	default MutableElementSpliterator<E> spliterator() {
-		return BetterCollection.super.spliterator();
+		return ValueStoredCollection.super.spliterator();
 	}
 
 	@Override
 	default Object[] toArray() {
-		return BetterCollection.super.toArray();
+		return ValueStoredCollection.super.toArray();
 	}
 
 	@Override
 	default boolean contains(Object o) {
-		return BetterCollection.super.contains(o);
+		return ValueStoredCollection.super.contains(o);
 	}
 
 	@Override
 	default boolean containsAll(Collection<?> c) {
-		return BetterCollection.super.containsAll(c);
+		return ValueStoredCollection.super.containsAll(c);
 	}
 
 	@Override
 	default boolean remove(Object o) {
-		return BetterCollection.super.remove(o);
+		return ValueStoredCollection.super.remove(o);
 	}
-
-	/**
-	 * Retrieves the element in this set equivalent to the given value, if present. Otherwise, the value is added, the <code>added</code>
-	 * runnable is invoked (if supplied), and the new element returned.
-	 * 
-	 * @param value The value to get or add
-	 * @param first Whether (if not present) to prefer to add the value to the beginning or end of the set
-	 * @param added The runnable which, if not null will be {@link Runnable#run() invoked} if the value is added to the set in this
-	 *        operation
-	 * @return The element containing the value, or null if the element was not present AND could not be added for any reason
-	 */
-	CollectionElement<E> getOrAdd(E value, boolean first, Runnable added);
 
 	@Override
 	default BetterSet<E> with(E... values) {
-		BetterCollection.super.with(values);
+		ValueStoredCollection.super.with(values);
 		return this;
 	}
 
 	@Override
 	default BetterSet<E> withAll(Collection<? extends E> values) {
-		BetterCollection.super.withAll(values);
+		ValueStoredCollection.super.withAll(values);
 		return this;
 	}
 
 	@Override
 	default boolean removeAll(Collection<?> c) {
-		return BetterCollection.super.removeAll(c);
+		return ValueStoredCollection.super.removeAll(c);
 	}
 
 	@Override
 	default boolean retainAll(Collection<?> c) {
-		return BetterCollection.super.retainAll(c);
+		return ValueStoredCollection.super.retainAll(c);
 	}
 
 	@Override
@@ -134,6 +123,28 @@ public interface BetterSet<E> extends BetterCollection<E>, TransactableSet<E> {
 		}
 
 		@Override
+		public boolean isConsistent(ElementId element) {
+			return getWrapped().isConsistent(element.reverse());
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+			RepairListener<E, X> reversedListener = listener == null ? null : new ReversedRepairListener<>(listener);
+			return getWrapped().repair(element, reversedListener);
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return getWrapped().checkConsistency();
+		}
+
+		@Override
+		public <X> boolean repair(RepairListener<E, X> listener) {
+			RepairListener<E, X> reversedListener = listener == null ? null : new ReversedRepairListener<>(listener);
+			return getWrapped().repair(reversedListener);
+		}
+
+		@Override
 		public BetterSet<E> reverse() {
 			return getWrapped();
 		}
@@ -141,6 +152,29 @@ public interface BetterSet<E> extends BetterCollection<E>, TransactableSet<E> {
 		@Override
 		public String toString() {
 			return BetterSet.toString(this);
+		}
+
+		public static class ReversedRepairListener<E, X> implements RepairListener<E, X> {
+			private final RepairListener<E, X> theWrapped;
+
+			public ReversedRepairListener(org.qommons.collect.ValueStoredCollection.RepairListener<E, X> wrapped) {
+				theWrapped = wrapped;
+			}
+
+			@Override
+			public X removed(CollectionElement<E> element) {
+				return theWrapped.removed(element.reverse());
+			}
+
+			@Override
+			public void disposed(E value, X data) {
+				theWrapped.disposed(value, data);
+			}
+
+			@Override
+			public void transferred(CollectionElement<E> element, X data) {
+				theWrapped.transferred(element.reverse(), data);
+			}
 		}
 	}
 
@@ -153,6 +187,26 @@ public interface BetterSet<E> extends BetterCollection<E>, TransactableSet<E> {
 		@Override
 		public CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
 			return null;
+		}
+
+		@Override
+		public boolean isConsistent(ElementId element) {
+			throw new NoSuchElementException();
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+			throw new NoSuchElementException();
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return false;
+		}
+
+		@Override
+		public <X> boolean repair(org.qommons.collect.BetterSet.RepairListener<E, X> listener) {
+			return false;
 		}
 	}
 }

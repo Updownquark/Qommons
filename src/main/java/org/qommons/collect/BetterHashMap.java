@@ -355,6 +355,28 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
+		public boolean isConsistent(ElementId element) {
+			return theEntries.isConsistent(element);
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return theEntries.checkConsistency();
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, RepairListener<K, X> listener) {
+			RepairListener<Map.Entry<K, V>, X> entryListener = listener == null ? null : new EntryRepairListener<>(listener);
+			return theEntries.repair(element, entryListener);
+		}
+
+		@Override
+		public <X> boolean repair(RepairListener<K, X> listener) {
+			RepairListener<Map.Entry<K, V>, X> entryListener = listener == null ? null : new EntryRepairListener<>(listener);
+			return theEntries.repair(entryListener);
+		}
+
+		@Override
 		public int hashCode() {
 			return BetterCollection.hashCode(this);
 		}
@@ -458,6 +480,29 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 			public MutableElementSpliterator<K> trySplit() {
 				MutableElementSpliterator<Map.Entry<K, V>> entrySplit = theEntrySpliter.trySplit();
 				return entrySplit == null ? null : new KeySpliterator(entrySplit);
+			}
+		}
+
+		private class EntryRepairListener<X> implements RepairListener<Map.Entry<K, V>, X> {
+			private final RepairListener<K, X> theKeyListener;
+
+			EntryRepairListener(org.qommons.collect.ValueStoredCollection.RepairListener<K, X> keyListener) {
+				theKeyListener = keyListener;
+			}
+
+			@Override
+			public X removed(CollectionElement<Map.Entry<K, V>> element) {
+				return theKeyListener.removed(handleFor(element));
+			}
+
+			@Override
+			public void disposed(Map.Entry<K, V> value, X data) {
+				theKeyListener.disposed(value.getKey(), data);
+			}
+
+			@Override
+			public void transferred(CollectionElement<Map.Entry<K, V>> element, X data) {
+				theKeyListener.transferred(handleFor(element), data);
 			}
 		}
 	}

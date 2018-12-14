@@ -26,7 +26,7 @@ import java.util.function.Function;
  * 
  * @param <E> The type of value that the node holds
  */
-public class RedBlackNode<E> {
+public final class RedBlackNode<E> {
 	private static class CachedIndex {
 		final int index;
 		final long stamp;
@@ -535,11 +535,11 @@ public class RedBlackNode<E> {
 			if (compare == 0)
 				return node;
 			boolean matchesLesser = compare > 0 == lesser;
-			if (found == null || (!foundMatchesLesser && matchesLesser)) {
+			if (found == null || matchesLesser || !foundMatchesLesser) {
 				found = node;
 				foundMatchesLesser = matchesLesser;
 			}
-			RedBlackNode<E> child = getChild(compare < 0);
+			RedBlackNode<E> child = node.getChild(compare < 0);
 			if (child == null)
 				return found;
 			node = child;
@@ -755,6 +755,10 @@ public class RedBlackNode<E> {
 		theCachedIndex = new CachedIndex(preDeleteIndex, theTree.theStructureStamp);
 		if (theCachedIndex.index > theTree.size())
 			throw new IllegalStateException("BUG!!!"); // TODO DELETE ME
+	}
+
+	void markDeleted() {
+		setParent(null);
 	}
 
 	private void adjustSize(int diff) {

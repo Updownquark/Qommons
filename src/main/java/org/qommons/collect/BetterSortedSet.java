@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.NavigableSet;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -880,7 +881,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			return new BetterSubSet<>(theWrapped, and(from, innerFrom, true), and(to, innerTo, false));
 		}
 
-		@Override
+				@Override
 		public MutableElementSpliterator<E> spliterator(boolean fromStart) {
 			MutableElementSpliterator<E> wrapSpliter;
 			if (fromStart) {
@@ -923,6 +924,28 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 				theWrapped.clear();
 			else
 				removeIf(v -> true);
+		}
+
+		@Override
+		public boolean isConsistent(ElementId element) {
+			return theWrapped.isConsistent(element);
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return theWrapped.checkConsistency();
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+			RepairListener<E, X> subListener = listener == null ? null : new BoundedRepairListener<>(listener);
+			return theWrapped.repair(element, subListener);
+		}
+
+		@Override
+		public <X> boolean repair(RepairListener<E, X> listener) {
+			RepairListener<E, X> subListener = listener == null ? null : new BoundedRepairListener<>(listener);
+			return theWrapped.repair(subListener);
 		}
 
 		@Override
@@ -1073,6 +1096,41 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 				return theWrappedEl.toString();
 			}
 		}
+
+		private class BoundedRepairListener<X> implements RepairListener<E, X> {
+			private final RepairListener<E, X> theWrappedListener;
+
+			BoundedRepairListener(RepairListener<E, X> wrapped) {
+				theWrappedListener = wrapped;
+			}
+
+			@Override
+			public X removed(CollectionElement<E> element) {
+				// As the repair method may be called after any number of changes to the set's values,
+				// we cannot assume anything about the previous state of the element, e.g. whether it was previously present in this
+				// sub-set.
+				// It is for this reason that the repair API specifies that this method may be called even for elements that were not
+				// present in the set.
+				return theWrappedListener.removed(element);
+			}
+
+			@Override
+			public void disposed(E value, X data) {
+				// As the repair method may be called after any number of changes to the set's values,
+				// we cannot assume anything about the previous state of the element, e.g. whether it was previously present in this
+				// sub-set.
+				// It is for this reason that the repair API specifies that this method may be called even for elements that were not
+				// present in the set.
+				// Therefore, we need to inform the listener about the element by one of the 2 methods
+				theWrappedListener.disposed(value, data);
+			}
+
+			@Override
+			public void transferred(CollectionElement<E> element, X data) {
+				if (isInRange(element.get()) == 0)
+					theWrappedListener.transferred(element, data);
+			}
+		}
 	}
 
 	/**
@@ -1123,6 +1181,28 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
+		public boolean isConsistent(ElementId element) {
+			return getWrapped().isConsistent(element.reverse());
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return getWrapped().checkConsistency();
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+			RepairListener<E, X> reversedListener = listener == null ? null : new BetterSet.ReversedBetterSet.ReversedRepairListener<>(listener);
+			return getWrapped().repair(element, reversedListener);
+		}
+
+		@Override
+		public <X> boolean repair(RepairListener<E, X> listener) {
+			RepairListener<E, X> reversedListener = listener == null ? null : new BetterSet.ReversedBetterSet.ReversedRepairListener<>(listener);
+			return getWrapped().repair(reversedListener);
+		}
+
+		@Override
 		public String toString() {
 			StringBuilder ret = new StringBuilder("{");
 			boolean first = true;
@@ -1163,6 +1243,26 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		@Override
 		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
 			return null;
+		}
+
+		@Override
+		public boolean isConsistent(ElementId element) {
+			throw new NoSuchElementException();
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return false;
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+			throw new NoSuchElementException();
+		}
+
+		@Override
+		public <X> boolean repair(org.qommons.collect.BetterSet.RepairListener<E, X> listener) {
+			return false;
 		}
 	}
 }

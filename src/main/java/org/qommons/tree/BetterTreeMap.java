@@ -675,6 +675,26 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 
 		@Override
+		public boolean isConsistent(ElementId element) {
+			return theEntries.isConsistent(element);
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, RepairListener<K, X> listener) {
+			return theEntries.repair(element, listener == null ? null : new EntryRepairListener<>(listener));
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return theEntries.checkConsistency();
+		}
+
+		@Override
+		public <X> boolean repair(RepairListener<K, X> listener) {
+			return theEntries.repair(listener == null ? null : new EntryRepairListener<>(listener));
+		}
+
+		@Override
 		public int hashCode() {
 			return BetterCollection.hashCode(this);
 		}
@@ -786,6 +806,29 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 							before);
 					}
 				};
+			}
+		}
+
+		private class EntryRepairListener<X> implements RepairListener<Map.Entry<K, V>, X> {
+			private final RepairListener<K, X> theKeyListener;
+
+			EntryRepairListener(RepairListener<K, X> keyListener) {
+				theKeyListener = keyListener;
+			}
+
+			@Override
+			public X removed(CollectionElement<Map.Entry<K, V>> element) {
+				return theKeyListener.removed(handleFor(element));
+			}
+
+			@Override
+			public void disposed(Entry<K, V> value, X data) {
+				theKeyListener.disposed(value.getKey(), data);
+			}
+
+			@Override
+			public void transferred(CollectionElement<Entry<K, V>> element, X data) {
+				theKeyListener.transferred(handleFor(element), data);
 			}
 		}
 	}

@@ -493,6 +493,44 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
+	public boolean isConsistent(ElementId element) {
+		return ((HashId) element).entry.isValid();
+	}
+
+	@Override
+	public boolean checkConsistency() {
+		try (Transaction t = lock(false, null)) {
+			HashEntry entry = theFirst;
+			while (entry != null) {
+				if (!entry.isValid())
+					return true;
+				entry = entry.next;
+			}
+			return false;
+		}
+	}
+
+	@Override
+	public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+		try (Transaction t = lock(true, null)) {
+			return ((HashId) element).entry.repair(listener);
+		}
+	}
+
+	@Override
+	public <X> boolean repair(RepairListener<E, X> listener) {
+		try (Transaction t = lock(true, null)) {
+			boolean repaired = false;
+			HashEntry entry = theFirst;
+			while (entry != null) {
+				repaired |= entry.repair(listener);
+				entry = entry.next;
+			}
+			return repaired;
+		}
+	}
+
+	@Override
 	public String toString() {
 		return BetterCollection.toString(this);
 	}
@@ -584,6 +622,18 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		boolean isValid() {
 			int newHash = theHasher.applyAsInt(theValue);
 			return newHash == hashCode;
+		}
+
+		boolean repair(RepairListener<E, ?> listener) {
+			int newHash = theHasher.applyAsInt(theValue);
+			if (newHash == hashCode)
+				return false;
+			theTreeNode.remove();
+			if (getEntry(newHash, equalsTest(theValue)) != null)
+				listener.removed(immutable());
+			else
+				insert(theTable, this, -1, null);
+			return true;
 		}
 
 		@Override

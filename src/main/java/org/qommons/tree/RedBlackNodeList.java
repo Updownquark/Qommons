@@ -1,6 +1,7 @@
 package org.qommons.tree;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.ConcurrentModificationException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -17,6 +18,8 @@ import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.OptimisticContext;
+import org.qommons.collect.ValueStoredCollection;
+import org.qommons.collect.ValueStoredCollection.RepairListener;
 
 /**
  * An abstract implementation of a tree-backed collection. Since fast indexing is supported, BetterList is implemented.
@@ -236,6 +239,65 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	@Override
 	public void clear() {
 		theTree.setRoot(null);
+	}
+
+	/**
+	 * Searches for and fixes any inconsistencies in the collection's storage structure at the given element.
+	 * 
+	 * @param <X> The type of the data transferred for the listener
+	 * @param element The element at which to check and repair the collection
+	 * @param compare The comparator by which this collection is ordered
+	 * @param distinct Whether this collection prevents duplicates
+	 * @param listener The listener to monitor repairs. May be null.
+	 * @return Whether any inconsistencies were found
+	 * @see ValueStoredCollection#repair(org.qommons.collect.ValueStoredCollection.RepairListener)
+	 */
+	protected <X> boolean repair(ElementId element, Comparator<? super E> compare, boolean distinct,
+		ValueStoredCollection.RepairListener<E, X> listener) {
+		try (Transaction t = lock(true, null)) {
+			return theTree.repair(checkNode(element).theNode, compare, distinct, new TreeRepairListener<>(listener));
+		}
+	}
+
+	/**
+	 * Searches for and fixes any inconsistencies in the collection's storage structure.
+	 * 
+	 * @param <X> The type of the data transferred for the listener
+	 * @param compare The comparator by which this collection is ordered
+	 * @param distinct Whether this collection prevents duplicates
+	 * @param listener The listener to monitor repairs. May be null.
+	 * @return Whether any inconsistencies were found
+	 * @see ValueStoredCollection#repair(org.qommons.collect.ValueStoredCollection.RepairListener)
+	 */
+	protected <X> boolean repair(Comparator<? super E> compare, boolean distinct, ValueStoredCollection.RepairListener<E, X> listener) {
+		try (Transaction t = lock(true, null)) {
+			return theTree.repair(compare, distinct, new TreeRepairListener<>(listener));
+		}
+	}
+
+	private class TreeRepairListener<X> implements RedBlackTree.RepairListener<E, X> {
+		private final ValueStoredCollection.RepairListener<E, X> theWrapped;
+
+		TreeRepairListener(RepairListener<E, X> wrapped) {
+			theWrapped = wrapped;
+		}
+
+		@Override
+		public X removed(RedBlackNode<E> node) {
+			return theWrapped == null ? null : theWrapped.removed(wrap(node));
+		}
+
+		@Override
+		public void disposed(E value, X data) {
+			if (theWrapped != null)
+				theWrapped.disposed(value, data);
+		}
+
+		@Override
+		public void transferred(RedBlackNode<E> node, X data) {
+			if (theWrapped != null)
+				theWrapped.transferred(wrap(node), data);
+		}
 	}
 
 	@Override
