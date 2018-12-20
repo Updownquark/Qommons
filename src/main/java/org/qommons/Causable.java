@@ -80,10 +80,15 @@ public abstract class Causable {
 					return null;
 				if (theAction != null)
 					theAction.finished(cause, theValues);
-				theValues.clear();
-				if (theAfterAction == null)
+				if (theAfterAction == null) {
+					theValues.clear();
 					return null;
-				return () -> theAfterAction.finished(cause, theValues);
+				} else {
+					return () -> {
+						theAfterAction.finished(cause, theValues);
+						theValues.clear();
+					};
+				}
 			};
 		}
 	}
