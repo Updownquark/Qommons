@@ -97,8 +97,8 @@ public class ListenerList<E> {
 		 * 
 		 * @param safe Whether to ensure thread safety for the reentrancy-prevention and <code>skipCurrent</code> (for
 		 *        {@link ListenerList#add(Object, boolean)}) features of {@link ListenerList#forEach(Consumer)}. If false, the list will be
-		 *        lighter and a bit more performant, but the above-mentioned features will be error-prone if {@link #forEachSafe(boolean)}
-		 *        is ever called by multiple threads concurrently.
+		 *        lighter and a bit more performant, but the above-mentioned features will be error-prone if
+		 *        {@link ListenerList#forEach(Consumer)} is ever called by multiple threads concurrently.
 		 * @return This builder
 		 */
 		public Builder forEachSafe(boolean safe) {
