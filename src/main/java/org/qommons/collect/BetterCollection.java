@@ -1,24 +1,12 @@
 package org.qommons.collect;
 
-import java.util.Collection;
-import java.util.ConcurrentModificationException;
-import java.util.Deque;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
-import org.qommons.ArrayUtils;
-import org.qommons.Causable;
-import org.qommons.Transactable;
-import org.qommons.Transaction;
-import org.qommons.ValueHolder;
+import org.qommons.*;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
@@ -149,7 +137,9 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @param fromStart Whether the returned spliterator should be initially positioned at the beginning of this collection or its end
 	 * @return The spliterator
 	 */
-	MutableElementSpliterator<E> spliterator(boolean fromStart);
+	default MutableElementSpliterator<E> spliterator(boolean fromStart) {
+		return new DefaultBetterSpliterator<>(this, null, 0, null, fromStart);
+	}
 
 	/**
 	 * @param element The ID of the element at which to position the spliterator initially
@@ -157,7 +147,9 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 *        {@link MutableElementSpliterator#forElement(Consumer, boolean) forElement} method with a true or a false parameter
 	 * @return The spliterator
 	 */
-	MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext);
+	default MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
+		return new DefaultBetterSpliterator<>(this, null, 0, getElement(element), asNext);
+	}
 
 	/**
 	 * Tests the compatibility of an object with this collection.
