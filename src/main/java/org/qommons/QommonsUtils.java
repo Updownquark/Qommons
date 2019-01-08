@@ -143,14 +143,14 @@ public class QommonsUtils {
 	 * @param sb The StringBuilder to write the representation of the time length into
 	 * @param abbrev Whether to shorten the string intelligibly as much as possible
 	 */
-	public static void printTimeLength(long length, StringBuilder sb, boolean abbrev) {
-		printTimeLength(length / 1000, ((int) (length % 1000)) * 1000000);
+	public static StringBuilder printTimeLength(long length, StringBuilder sb, boolean abbrev) {
+		return printTimeLength(length / 1000, ((int) (length % 1000)) * 1000000, sb, abbrev);
 	}
 
-	public static void printTimeLength(long seconds, int nanos, StringBuilder sb, boolean abbrev) {
+	public static StringBuilder printTimeLength(long seconds, int nanos, StringBuilder sb, boolean abbrev) {
 		if (seconds == 0 && nanos == 0) {
 			sb.append("no time");
-			return;
+			return sb;
 		} else if (seconds < 0) {
 			seconds = -seconds;
 			nanos = -nanos;
@@ -231,6 +231,7 @@ public class QommonsUtils {
 		}
 		if (sb.charAt(sb.length() - 1) == ' ')
 			sb.deleteCharAt(sb.length() - 1);
+		return sb;
 	}
 
 	/**
