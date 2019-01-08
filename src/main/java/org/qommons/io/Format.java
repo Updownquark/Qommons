@@ -2,6 +2,7 @@ package org.qommons.io;
 
 import java.text.DecimalFormat;
 import java.text.ParseException;
+import java.text.ParsePosition;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
@@ -238,7 +239,10 @@ public interface Format<T> {
 
 			@Override
 			public Double parse(CharSequence text) throws ParseException {
-				Number n = format.parse(text.toString());
+				ParsePosition pos = new ParsePosition(0);
+				Number n = format.parse(text.toString(), pos);
+				if (pos.getIndex() < text.length())
+					throw new ParseException("Invalid number", pos.getIndex());
 				if (n instanceof Double)
 					return (Double) n;
 				else
