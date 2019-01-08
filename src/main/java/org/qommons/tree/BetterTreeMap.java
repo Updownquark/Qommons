@@ -6,7 +6,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.function.BiFunction;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import org.qommons.Transaction;
@@ -20,7 +19,6 @@ import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement;
-import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.OptimisticContext;
 import org.qommons.collect.SimpleMapEntry;
 import org.qommons.collect.StampedLockingStrategy;
@@ -624,11 +622,6 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 
 		@Override
-		public MutableElementSpliterator<K> spliterator(ElementId element, boolean asNext) {
-			return new KeySpliterator(theEntries.spliterator(element, asNext));
-		}
-
-		@Override
 		public BinaryTreeNode<K> search(Comparable<? super K> search, SortedSearchFilter filter) {
 			return handleFor(theEntries.search(e -> search.compareTo(e.getKey()), filter));
 		}
@@ -644,11 +637,6 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 
 		protected MutableBinaryTreeNode<K> mutableHandleFor(MutableCollectionElement<? extends Map.Entry<K, V>> entryHandle) {
 			return entryHandle == null ? null : ((TreeEntry) entryHandle.get()).mutableKeyHandle();
-		}
-
-		@Override
-		public MutableElementSpliterator<K> spliterator(boolean fromStart) {
-			return new KeySpliterator(theEntries.spliterator(fromStart));
 		}
 
 		@Override
@@ -707,106 +695,6 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		@Override
 		public String toString() {
 			return BetterCollection.toString(this);
-		}
-
-		private class KeySpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<K> {
-			private final MutableElementSpliterator<Map.Entry<K, V>> theEntrySpliter;
-
-			KeySpliterator(MutableElementSpliterator<Map.Entry<K, V>> entrySpliter) {
-				super(theEntries);
-				theEntrySpliter = entrySpliter;
-			}
-
-			@Override
-			public long estimateSize() {
-				return theEntrySpliter.estimateSize();
-			}
-
-			@Override
-			public long getExactSizeIfKnown() {
-				return theEntrySpliter.getExactSizeIfKnown();
-			}
-
-			@Override
-			public int characteristics() {
-				return theEntrySpliter.characteristics();
-			}
-
-			@Override
-			public Comparator<? super K> getComparator() {
-				return theCompare;
-			}
-
-			@Override
-			protected boolean internalForElementM(Consumer<? super MutableCollectionElement<K>> action, boolean forward) {
-				return theEntrySpliter.forElementM(el -> action.accept(mutableHandleFor(el)), forward);
-			}
-
-			@Override
-			protected boolean internalForElement(Consumer<? super CollectionElement<K>> action, boolean forward) {
-				return theEntrySpliter.forElement(el -> action.accept(handleFor(el)), forward);
-			}
-
-			@Override
-			public MutableElementSpliterator<K> trySplit() {
-				MutableElementSpliterator<Map.Entry<K, V>> entrySplit = theEntrySpliter.trySplit();
-				return entrySplit == null ? null : new KeySpliterator(entrySplit);
-			}
-
-			protected MutableCollectionElement<K> mutableHandleFor(MutableCollectionElement<? extends Map.Entry<K, V>> entryHandle) {
-				return new MutableCollectionElement<K>() {
-					@Override
-					public BetterCollection<K> getCollection() {
-						return KeySet.this;
-					}
-
-					@Override
-					public ElementId getElementId() {
-						return entryHandle.getElementId();
-					}
-
-					@Override
-					public K get() {
-						return entryHandle.get().getKey();
-					}
-
-					@Override
-					public String isEnabled() {
-						return null;
-					}
-
-					@Override
-					public String isAcceptable(K value) {
-						return ((MutableCollectionElement<SimpleMapEntry<K, V>>) entryHandle).isAcceptable(new SimpleMapEntry<>(value, null));
-					}
-
-					@Override
-					public void set(K value) throws UnsupportedOperationException, IllegalArgumentException {
-						((MutableCollectionElement<Map.Entry<K, V>>) entryHandle).set(newEntry(value, entryHandle.get().getValue()));
-					}
-
-					@Override
-					public String canRemove() {
-						return entryHandle.canRemove();
-					}
-
-					@Override
-					public void remove() throws UnsupportedOperationException {
-						entryHandle.remove();
-					}
-
-					@Override
-					public String canAdd(K value, boolean before) {
-						return ((MutableCollectionElement<SimpleMapEntry<K, V>>) entryHandle).canAdd(new SimpleMapEntry<>(value, null), before);
-					}
-
-					@Override
-					public ElementId add(K value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-						return ((MutableCollectionElement<Map.Entry<K, V>>) entryHandle).add(newEntry(value, null),
-							before);
-					}
-				};
-			}
 		}
 
 		private class EntryRepairListener<X> implements RepairListener<Map.Entry<K, V>, X> {

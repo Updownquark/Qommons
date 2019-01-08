@@ -2,7 +2,6 @@ package org.qommons.collect;
 
 import java.util.Comparator;
 import java.util.Map;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.qommons.Transaction;
@@ -137,16 +136,6 @@ public class BetterCollections {
 		}
 
 		@Override
-		public MutableElementSpliterator<E> spliterator(boolean fromStart) {
-			return new UnmodifiableWrappingSpliterator<>(this, theWrapped.spliterator(fromStart));
-		}
-
-		@Override
-		public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
-			return new UnmodifiableWrappingSpliterator<>(this, theWrapped.spliterator(element, asNext));
-		}
-
-		@Override
 		public int hashCode() {
 			return theWrapped.hashCode();
 		}
@@ -224,67 +213,6 @@ public class BetterCollections {
 		@Override
 		public String toString() {
 			return theWrapped.toString();
-		}
-	}
-
-	static class UnmodifiableWrappingSpliterator<E> implements MutableElementSpliterator<E> {
-		private final UnmodifiableBetterCollection<E> theCollection;
-		private final MutableElementSpliterator<? extends E> theWrapped;
-
-		UnmodifiableWrappingSpliterator(UnmodifiableBetterCollection<E> collection,
-			MutableElementSpliterator<? extends E> wrapped) {
-			theCollection = collection;
-			theWrapped = wrapped;
-		}
-
-		@Override
-		public long estimateSize() {
-			return theWrapped.estimateSize();
-		}
-
-		@Override
-		public int characteristics() {
-			return theWrapped.characteristics();
-		}
-
-		@Override
-		public long getExactSizeIfKnown() {
-			return theWrapped.getExactSizeIfKnown();
-		}
-
-		@Override
-		public Comparator<? super E> getComparator() {
-			return (Comparator<? super E>) theWrapped.getComparator();
-		}
-
-		@Override
-		public boolean forElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
-			return theWrapped.forElement(//
-				el -> action.accept((CollectionElement<E>) el), forward);
-		}
-
-		@Override
-		public void forEachElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
-			theWrapped.forEachElement(//
-				el -> action.accept((CollectionElement<E>) el), forward);
-		}
-
-		@Override
-		public boolean forElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
-			return theWrapped.forElement(//
-				el -> action.accept(new UnmodifiableElementWrapper<>(theCollection, el)), forward);
-		}
-
-		@Override
-		public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
-			theWrapped.forEachElementM(//
-				el -> action.accept(new UnmodifiableElementWrapper<>(theCollection, el)), forward);
-		}
-
-		@Override
-		public MutableElementSpliterator<E> trySplit() {
-			MutableElementSpliterator<? extends E> wrapSplit = theWrapped.trySplit();
-			return wrapSplit == null ? null : new UnmodifiableWrappingSpliterator<>(theCollection, wrapSplit);
 		}
 	}
 

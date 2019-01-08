@@ -1,6 +1,5 @@
 package org.qommons.collect;
 
-import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiFunction;
@@ -643,16 +642,6 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public MutableElementSpliterator<Entry<K, V>> spliterator(ElementId element, boolean asNext) {
-			return new EntrySpliterator(theMap.keySet().spliterator(element, asNext));
-		}
-
-		@Override
-		public MutableElementSpliterator<Map.Entry<K, V>> spliterator(boolean fromStart) {
-			return wrap(theMap.keySet().spliterator(fromStart));
-		}
-
-		@Override
 		public String canAdd(Entry<K, V> value, ElementId after, ElementId before) {
 			return theMap.keySet().canAdd(value.getKey(), after, before);
 		}
@@ -695,10 +684,6 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			MapRepairListener<K, V, EntryRepairTracker<K, V, X>> mapListener = listener == null ? null
 				: new EntryRepairListener<>(listener);
 			return theMap.repair(mapListener);
-		}
-
-		protected MutableElementSpliterator<Map.Entry<K, V>> wrap(MutableElementSpliterator<K> keySpliter) {
-			return new EntrySpliterator(keySpliter);
 		}
 
 		@Override
@@ -832,56 +817,6 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			}
 		}
 
-		class EntrySpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<Map.Entry<K, V>> {
-			private final MutableElementSpliterator<K> theKeySpliter;
-
-			EntrySpliterator(MutableElementSpliterator<K> keySpliter) {
-				super(BetterEntrySet.this);
-				theKeySpliter = keySpliter;
-			}
-
-			@Override
-			public long estimateSize() {
-				return theKeySpliter.estimateSize();
-			}
-
-			@Override
-			public long getExactSizeIfKnown() {
-				return theKeySpliter.getExactSizeIfKnown();
-			}
-
-			@Override
-			public Comparator<? super Entry<K, V>> getComparator() {
-				Comparator<? super K> keyCompare = theKeySpliter.getComparator();
-				if (keyCompare == null)
-					return null;
-				return (entry1, entry2) -> keyCompare.compare(entry1.getKey(), entry2.getKey());
-			}
-
-			@Override
-			public int characteristics() {
-				return theKeySpliter.characteristics();
-			}
-
-			@Override
-			protected boolean internalForElementM(Consumer<? super MutableCollectionElement<Entry<K, V>>> action, boolean forward) {
-				return theKeySpliter.forElementM(
-					keyEl -> theMap.forMutableEntry(keyEl.getElementId(), el -> action.accept(new MutableEntryElement(el))), forward);
-			}
-
-			@Override
-			protected boolean internalForElement(Consumer<? super CollectionElement<Entry<K, V>>> action, boolean forward) {
-				return theKeySpliter.forElement(keyEl -> action.accept(new EntryElement(theMap.getEntryById(keyEl.getElementId()))),
-					forward);
-			}
-
-			@Override
-			public MutableElementSpliterator<Map.Entry<K, V>> trySplit() {
-				MutableElementSpliterator<K> keySplit = theKeySpliter.trySplit();
-				return keySplit == null ? null : new EntrySpliterator(keySplit);
-			}
-		}
-
 		class EntryRepairListener<X> implements MapRepairListener<K, V, EntryRepairTracker<K, V, X>> {
 			private final RepairListener<Map.Entry<K, V>, X> theWrapped;
 
@@ -1006,56 +941,6 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		@Override
 		public MutableCollectionElement<V> mutableElement(ElementId id) {
 			return theMap.mutableEntry(id);
-		}
-
-		@Override
-		public MutableElementSpliterator<V> spliterator(ElementId element, boolean asNext) {
-			return new ValueSpliterator(theMap.keySet().spliterator(element, asNext));
-		}
-
-		@Override
-		public MutableElementSpliterator<V> spliterator(boolean fromStart) {
-			return new ValueSpliterator(theMap.keySet().spliterator(fromStart));
-		}
-
-		class ValueSpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<V> {
-			private final MutableElementSpliterator<K> theKeySpliter;
-
-			ValueSpliterator(MutableElementSpliterator<K> keySpliter) {
-				super(BetterMapValueCollection.this);
-				theKeySpliter = keySpliter;
-			}
-
-			@Override
-			public long estimateSize() {
-				return theKeySpliter.estimateSize();
-			}
-
-			@Override
-			public long getExactSizeIfKnown() {
-				return theKeySpliter.getExactSizeIfKnown();
-			}
-
-			@Override
-			public int characteristics() {
-				return theKeySpliter.characteristics() & (~SORTED);
-			}
-
-			@Override
-			protected boolean internalForElement(Consumer<? super CollectionElement<V>> action, boolean forward) {
-				return theKeySpliter.forElement(keyEl -> action.accept(theMap.getEntryById(keyEl.getElementId())), forward);
-			}
-
-			@Override
-			protected boolean internalForElementM(Consumer<? super MutableCollectionElement<V>> action, boolean forward) {
-				return theKeySpliter.forElement(keyEl -> theMap.forMutableEntry(keyEl.getElementId(), action), forward);
-			}
-
-			@Override
-			public MutableElementSpliterator<V> trySplit() {
-				MutableElementSpliterator<K> keySplit = theKeySpliter.trySplit();
-				return keySplit == null ? null : new ValueSpliterator(keySplit);
-			}
 		}
 	}
 }

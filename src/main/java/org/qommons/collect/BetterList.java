@@ -4,14 +4,12 @@ import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
@@ -585,6 +583,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			theStructureStamp = wrapped.getStamp(true);
 		}
 
+		/** @return The BetterList that this is a sub-list of */
+		protected BetterList<E> getWrapped() {
+			return theWrapped;
+		}
+
 		@Override
 		public boolean isLockSupported() {
 			return theWrapped.isLockSupported();
@@ -707,16 +710,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public MutableCollectionElement<E> mutableElement(ElementId id) {
 			return wrapElement(theWrapped.mutableElement(id));
-		}
-
-		@Override
-		public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
-			try (Transaction t = lock(false, true, null)) {
-				int index = theWrapped.getElementsBefore(element);
-				if (index < theStart || index >= theEnd)
-					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-				return new SubSpliterator(theWrapped.spliterator(element, asNext), asNext ? index : index + 1);
-			}
 		}
 
 		@Override
@@ -859,147 +852,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			@Override
 			public String toString() {
 				return theWrappedEl.toString();
-			}
-		}
-
-		@Override
-		public MutableElementSpliterator<E> spliterator(boolean fromStart) {
-			int index = fromStart ? theStart : theEnd;
-			return new SubSpliterator(theWrapped.spliterator(index), index);
-		}
-
-		class SubSpliterator implements MutableElementSpliterator<E> {
-			private final MutableElementSpliterator<E> wrapSpliter;
-			long theSpliterStructureStamp;
-			private int nextIndex;
-
-			SubSpliterator(MutableElementSpliterator<E> spliter, int position) {
-				wrapSpliter = spliter;
-				nextIndex = position;
-				theSpliterStructureStamp = theStructureStamp;
-			}
-
-			void check() {
-				SubList.this.check();
-				if (theSpliterStructureStamp != theStructureStamp)
-					throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
-			}
-
-			private void updated() {
-				SubList.this.updated();
-				theSpliterStructureStamp = theStructureStamp;
-			}
-
-			@Override
-			public long estimateSize() {
-				return size();
-			}
-
-			@Override
-			public long getExactSizeIfKnown() {
-				return size();
-			}
-
-			@Override
-			public int characteristics() {
-				return wrapSpliter.characteristics();
-			}
-
-			@Override
-			public boolean forElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
-				check();
-				if (forward && nextIndex >= theEnd)
-					return false;
-				if (!forward && nextIndex <= theStart)
-					return false;
-				if (wrapSpliter.forElement(action, forward)) {
-					if (forward)
-						nextIndex++;
-					else
-						nextIndex--;
-					return true;
-				}
-				return false;
-			}
-
-			@Override
-			public void forEachElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
-				check();
-				if (forward) {
-					while (nextIndex < theEnd && wrapSpliter.forElement(action, forward)) {
-						nextIndex++;
-					}
-				} else {
-					while (nextIndex > theStart && wrapSpliter.forElement(action, forward)) {
-						nextIndex--;
-					}
-				}
-			}
-
-			@Override
-			public boolean forElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
-				check();
-				if (forward && nextIndex >= theEnd)
-					return false;
-				if (!forward && nextIndex <= theStart)
-					return false;
-				if (wrapSpliter.forElementM(el -> {
-					updated();
-					action.accept(wrapSpliterElement(el, forward));
-				}, forward)) {
-					if (forward)
-						nextIndex++;
-					else
-						nextIndex--;
-					return true;
-				}
-				return false;
-			}
-
-			@Override
-			public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
-				while (forElementM(action, forward)) {}
-			}
-
-			private MutableCollectionElement<E> wrapSpliterElement(MutableCollectionElement<E> el, boolean forward) {
-				return new SubSpliterElement(el, forward);
-			}
-
-			protected class SubSpliterElement extends SubListElement {
-				private final boolean isForward;
-
-				SubSpliterElement(MutableCollectionElement<E> wrappedEl, boolean forward) {
-					super(wrappedEl);
-					isForward = forward;
-				}
-
-				@Override
-				public void remove() throws UnsupportedOperationException {
-					check();
-					// Don't make it lock
-					theWrappedEl.remove();
-					theEnd--;
-					updated();
-					if (isForward)
-						nextIndex--;
-				}
-
-				@Override
-				public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-					check();
-					// Don't make it lock
-					ElementId newId = theWrappedEl.add(value, before);
-					theEnd++;
-					updated();
-					if (before)
-						nextIndex++;
-					return newId;
-				}
-			}
-
-			@Override
-			public MutableElementSpliterator<E> trySplit() {
-				return null;
 			}
 		}
 
@@ -1278,125 +1130,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			return null;
-		}
-
-		@Override
-		public MutableElementSpliterator<E> spliterator(boolean fromStart) {
-			return mutableSpliterator(fromStart ? 0 : theValues.size(), 0, theValues.size());
-		}
-
-		@Override
-		public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
-			int index = ((IndexElementId) element).index;
-			if (!asNext)
-				index++;
-			return mutableSpliterator(index, 0, theValues.size());
-		}
-
-		private MutableElementSpliterator<E> mutableSpliterator(int firstNextIndex, int lowBound, int highBound) {
-			return new MutableElementSpliterator<E>() {
-				private int theLowBound = lowBound;
-				private int theHighBound = highBound;
-				private int theNextIndex = firstNextIndex;
-
-				@Override
-				public long estimateSize() {
-					return theHighBound - theLowBound;
-				}
-
-				@Override
-				public int characteristics() {
-					return Spliterator.IMMUTABLE | Spliterator.ORDERED | Spliterator.SIZED | Spliterator.SUBSIZED;
-				}
-
-				@Override
-				public long getExactSizeIfKnown() {
-					return theHighBound - theLowBound;
-				}
-
-				@Override
-				public Comparator<? super E> getComparator() {
-					return null;
-				}
-
-				@Override
-				public boolean forElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
-					int index;
-					if (forward) {
-						if (theNextIndex >= theHighBound)
-							return false;
-						index = theNextIndex;
-						theNextIndex++;
-					} else {
-						if (theNextIndex == theLowBound)
-							return false;
-						theNextIndex--;
-						index = theNextIndex;
-					}
-					action.accept(elementFor(index));
-					return true;
-				}
-
-				@Override
-				public void forEachElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
-					if (forward) {
-						while (theNextIndex < theHighBound)
-							action.accept(elementFor(theNextIndex++));
-					} else {
-						while (theNextIndex > theLowBound)
-							action.accept(elementFor(--theNextIndex));
-					}
-				}
-
-				@Override
-				public boolean forElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
-					int index;
-					if (forward) {
-						if (theNextIndex >= theHighBound)
-							return false;
-						index = theNextIndex;
-						theNextIndex++;
-					} else {
-						if (theNextIndex == theLowBound)
-							return false;
-						theNextIndex--;
-						index = theNextIndex;
-					}
-					action.accept(mutableElementFor(index));
-					return true;
-				}
-
-				@Override
-				public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
-					if (forward) {
-						while (theNextIndex < theHighBound)
-							action.accept(mutableElementFor(theNextIndex++));
-					} else {
-						while (theNextIndex > theLowBound)
-							action.accept(mutableElementFor(--theNextIndex));
-					}
-				}
-
-				@Override
-				public MutableElementSpliterator<E> trySplit() {
-					if (theHighBound - theLowBound <= 1)
-						return null;
-					int mid = (theLowBound + theHighBound) / 2;
-					int splitLow, splitHigh, splitFirstNext;
-					if (theNextIndex <= mid) {
-						splitLow = mid;
-						splitHigh = theHighBound;
-						splitFirstNext = mid;
-						theHighBound = mid;
-					} else {
-						splitLow = theLowBound;
-						splitHigh = mid;
-						splitFirstNext = mid;
-						theLowBound = mid;
-					}
-					return mutableSpliterator(splitFirstNext, splitLow, splitHigh);
-				}
-			};
 		}
 
 		@Override

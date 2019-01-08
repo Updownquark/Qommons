@@ -751,10 +751,10 @@ public class TestHelper {
 			if (printProgress) {
 				Instant end = Instant.now();
 				StringBuilder msg = new StringBuilder().append("SUCCESS in ");
-				Format.durationFormat().append(msg, Duration.between(start, end));
+				Format.DURATION.append(msg, Duration.between(start, end));
 				if (caseNumber > 1) {
 					msg.append(" (");
-					Format.durationFormat().append(msg, Duration.between(originalStart, end));
+					Format.DURATION.append(msg, Duration.between(originalStart, end));
 					msg.append(" total)");
 				}
 				System.out.println(msg);
@@ -767,7 +767,7 @@ public class TestHelper {
 					System.err.print(caseLabel);
 				StringBuilder msg = new StringBuilder();
 				msg.append("FAILURE@").append(testHelper.getPosition()).append(" in ");
-				Format.durationFormat().append(msg, Duration.between(start, end));
+				Format.DURATION.append(msg, Duration.between(start, end));
 				for (String pn : testHelper.getPlacemarkNames()) {
 					long placemark = testHelper.getLastPlacemark(pn);
 					if (placemark >= 0)

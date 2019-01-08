@@ -11,7 +11,6 @@ import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.ElementSpliterator;
 import org.qommons.collect.FastFailLockingStrategy;
-import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.StampedLockingStrategy;
 
 /**
@@ -45,11 +44,6 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 	@Override
 	public MutableBinaryTreeNode<E> mutableNodeFor(BinaryTreeNode<E> node) {
 		return super.mutableNodeFor(node);
-	}
-
-	@Override
-	public MutableElementSpliterator<E> mutableSpliterator(BinaryTreeNode<E> node, boolean next) {
-		return super.mutableSpliterator(node, next);
 	}
 
 	@Override

@@ -2,11 +2,9 @@ package org.qommons.collect;
 
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.ConcurrentModificationException;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
-import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
@@ -461,16 +459,6 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
-		return new MutableHashSpliterator(((HashId) element).entry.check(), asNext);
-	}
-
-	@Override
-	public MutableElementSpliterator<E> spliterator(boolean fromStart) {
-		return new MutableHashSpliterator(fromStart ? theFirst : theLast, fromStart);
-	}
-
-	@Override
 	public boolean addAll(Collection<? extends E> c) {
 		try (Transaction t = lock(true, true, null); Transaction ct = Transactable.lock(c, false, null)) {
 			for (E e : c)
@@ -781,143 +769,6 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			if (found != null && (found.hashCode != hashCode || !equals.test(found.theValue)))
 				found = null;
 			return found;
-		}
-	}
-
-	class MutableHashSpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<E> {
-		private HashEntry current;
-		private boolean currentIsNext;
-
-		MutableHashSpliterator(HashEntry current, boolean next) {
-			super(BetterHashSet.this);
-			this.current = current;
-			this.currentIsNext = next;
-		}
-
-		@Override
-		public long estimateSize() {
-			return BetterHashSet.this.size();
-		}
-
-		@Override
-		public long getExactSizeIfKnown() {
-			return estimateSize();
-		}
-
-		@Override
-		public int characteristics() {
-			return SIZED;
-		}
-
-		protected boolean tryElement(boolean forward) {
-			if (current == null)
-				current = currentIsNext ? theFirst : theLast;
-			if (current == null)
-				return false;
-			// We can tolerate external modification as long as the node that this spliterator is anchored to has not been removed
-			// This situation is easy to detect
-			if (current.next == null && theLast != current)
-				throw new ConcurrentModificationException(
-					"The collection has been modified externally such that this spliterator has been orphaned");
-			if (currentIsNext != forward) {
-				HashEntry next = forward ? current.next : current.previous;
-				if (next != null)
-					current = next;
-				else {
-					currentIsNext = !forward;
-					return false;
-				}
-			} else
-				currentIsNext = !forward;
-			return true;
-		}
-
-		@Override
-		protected boolean internalForElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
-			if (!tryElement(forward))
-				return false;
-			action.accept(current.immutable());
-			return true;
-		}
-
-		@Override
-		protected boolean internalForElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
-			if (!tryElement(forward))
-				return false;
-			action.accept(new MutableSpliteratorEntry(current));
-			return true;
-		}
-
-		@Override
-		public MutableElementSpliterator<E> trySplit() {
-			return null; // No real good way to do this
-		}
-
-		class MutableSpliteratorEntry implements MutableCollectionElement<E> {
-			private final HashEntry theEntry;
-
-			MutableSpliteratorEntry(HashEntry entry) {
-				theEntry = entry;
-			}
-
-			@Override
-			public BetterCollection<E> getCollection() {
-				return BetterHashSet.this;
-			}
-
-			@Override
-			public ElementId getElementId() {
-				return theEntry.getElementId();
-			}
-
-			@Override
-			public E get() {
-				return theEntry.get();
-			}
-
-			@Override
-			public String isEnabled() {
-				return theEntry.isEnabled();
-			}
-
-			@Override
-			public String isAcceptable(E value) {
-				return theEntry.isAcceptable(value);
-			}
-
-			@Override
-			public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
-				theEntry.set(value);
-			}
-
-			@Override
-			public String canRemove() {
-				return theEntry.canRemove();
-			}
-
-			@Override
-			public void remove() throws UnsupportedOperationException {
-				try (Transaction t = lock(true, null)) {
-					HashEntry newCurrent;
-					boolean newWasNext;
-					if (theEntry == current) {
-						newCurrent = current.previous;
-						if (newCurrent != null)
-							newWasNext = false;
-						else {
-							newCurrent = current.next;
-							newWasNext = true;
-						}
-						current = newCurrent;
-					} else {
-						newCurrent = current;
-						newWasNext = currentIsNext;
-					}
-					theEntry.remove();
-					current = newCurrent;
-					currentIsNext = newWasNext;
-				}
-			}
 		}
 	}
 }

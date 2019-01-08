@@ -1,11 +1,11 @@
 package org.qommons.tree;
 
-import org.qommons.collect.BetterSortedSet;
+import org.qommons.collect.SplitSpliterable;
 
-public interface TreeBasedSet<E> extends TreeBasedSortedList<E>, BetterSortedSet<E> {
+public interface TreeBasedSet<E> extends TreeBasedSortedList<E>, SplitSpliterable.SortedSetSplitSpliterable<E> {
 	@Override
 	default BinaryTreeNode<E> getElement(E value, boolean first) {
-		return (BinaryTreeNode<E>) BetterSortedSet.super.getElement(value, first);
+		return (BinaryTreeNode<E>) SortedSetSplitSpliterable.super.getElement(value, first);
 	}
 
 	@Override

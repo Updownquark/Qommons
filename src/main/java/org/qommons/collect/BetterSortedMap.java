@@ -439,11 +439,6 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		public int indexFor(Comparable<? super Map.Entry<K, V>> search) {
 			return getMap().keySet().indexFor(keyCompare(search));
 		}
-
-		@Override
-		public MutableElementSpliterator<Map.Entry<K, V>> spliterator(int index) {
-			return wrap(getMap().keySet().spliterator(index));
-		}
 	}
 
 	/**

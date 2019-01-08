@@ -855,15 +855,6 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
-			try (Transaction t = lock(false, null)) {
-				if (isInRange(theWrapped.getElement(element).get()) != 0)
-					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-				return new BoundedMutableSpliterator(theWrapped.spliterator(element, asNext));
-			}
-		}
-
-		@Override
 		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
 			CollectionElement<E> wrapResult = theWrapped.search(boundSearch(search), filter);
 			if (wrapResult == null)
@@ -882,33 +873,6 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 				@Override
-		public MutableElementSpliterator<E> spliterator(boolean fromStart) {
-			MutableElementSpliterator<E> wrapSpliter;
-			if (fromStart) {
-				if (from == null)
-					wrapSpliter = theWrapped.spliterator(true);
-				else {
-					CollectionElement<E> element = theWrapped.search(from, SortedSearchFilter.PreferGreater);
-					if (element == null)
-						wrapSpliter = theWrapped.spliterator(true);
-					else
-						wrapSpliter = theWrapped.spliterator(element.getElementId(), from.compareTo(element.get()) <= 0);
-				}
-			} else {
-				if (to == null)
-					wrapSpliter = theWrapped.spliterator(false);
-				else {
-					CollectionElement<E> element = theWrapped.search(to, SortedSearchFilter.PreferLess);
-					if (element == null)
-						wrapSpliter = theWrapped.spliterator(false);
-					else
-						wrapSpliter = theWrapped.spliterator(element.getElementId(), !(to.compareTo(element.get()) >= 0));
-				}
-			}
-			return new BoundedMutableSpliterator(wrapSpliter);
-		}
-
-		@Override
 		public boolean removeLast(Object o) {
 			if ((o != null && !theWrapped.belongs(o)) || isInRange((E) o) != 0)
 				return false;
@@ -971,73 +935,6 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			}
 			ret.append('}');
 			return ret.toString();
-		}
-
-		private class BoundedMutableSpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<E> {
-			private final MutableElementSpliterator<E> theWrappedSpliter;
-
-			BoundedMutableSpliterator(MutableElementSpliterator<E> wrappedSpliter) {
-				super(BetterSubSet.this);
-				theWrappedSpliter = wrappedSpliter;
-			}
-
-			@Override
-			public long estimateSize() {
-				return theWrappedSpliter.estimateSize();
-			}
-
-			@Override
-			public long getExactSizeIfKnown() {
-				return theWrappedSpliter.getExactSizeIfKnown();
-			}
-
-			@Override
-			public int characteristics() {
-				return DISTINCT | ORDERED | SORTED;
-			}
-
-			@Override
-			public Comparator<? super E> getComparator() {
-				return theWrappedSpliter.getComparator();
-			}
-
-			@Override
-			protected boolean internalForElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
-				boolean[] success = new boolean[1];
-				if (theWrappedSpliter.forElementM(el -> {
-					if (isInRange(el.get()) == 0) {
-						success[0] = true;
-						action.accept(new BoundedMutableElement(el));
-					}
-				}, forward) && !success[0]) {
-					// If there was a super-set element that was not in range, need to back up back to the last in-range element
-					theWrappedSpliter.forElement(v -> {
-					}, !forward);
-				}
-				return success[0];
-			}
-
-			@Override
-			protected boolean internalForElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
-				boolean[] success = new boolean[1];
-				if (theWrappedSpliter.forElement(el -> {
-					if (isInRange(el.get()) == 0) {
-						success[0] = true;
-						action.accept(el);
-					}
-				}, forward) && !success[0]) {
-					// If there was a super-set element that was not in range, need to back up back to the last in-range element
-					theWrappedSpliter.forElement(v -> {
-					}, !forward);
-				}
-				return success[0];
-			}
-
-			@Override
-			public MutableElementSpliterator<E> trySplit() {
-				MutableElementSpliterator<E> wrapSplit = theWrappedSpliter.trySplit();
-				return wrapSplit == null ? null : new BoundedMutableSpliterator(wrapSplit);
-			}
 		}
 
 		class BoundedMutableElement implements MutableCollectionElement<E> {
