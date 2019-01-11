@@ -117,7 +117,8 @@ public class DefaultBetterSpliterator<E> implements MutableElementSpliterator<E>
 	public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
 		try (Transaction t = theCollection.lock(true, null)) {
 			while (tryElement(forward))
-				action.accept(wrap(theCollection.mutableElement(theCurrent.getElementId())));
+				action.accept(//
+					wrap(theCollection.mutableElement(theCurrent.getElementId())));
 		}
 	}
 
@@ -130,14 +131,16 @@ public class DefaultBetterSpliterator<E> implements MutableElementSpliterator<E>
 	public String toString() {
 		StringBuilder str = new StringBuilder();
 		CollectionElement<E> node = theCollection.getTerminalElement(true);
+		if (theCurrent == null && currentIsNext)
+			str.append('^');
 		while (node != null) {
-			if (node.getElementId().equals(theCurrent.getElementId())) {
+			if (theCurrent != null && node.getElementId().equals(theCurrent.getElementId())) {
 				if (currentIsNext)
 					str.append('^');
 				str.append('[');
 			}
 			str.append(node.get());
-			if (node.getElementId().equals(theCurrent.getElementId())) {
+			if (theCurrent != null && node.getElementId().equals(theCurrent.getElementId())) {
 				str.append(']');
 				if (!currentIsNext)
 					str.append('^');
@@ -146,6 +149,8 @@ public class DefaultBetterSpliterator<E> implements MutableElementSpliterator<E>
 			if (node != null)
 				str.append(", ");
 		}
+		if (theCurrent == null && !currentIsNext)
+			str.append('^');
 		return str.toString();
 	}
 
@@ -192,7 +197,7 @@ public class DefaultBetterSpliterator<E> implements MutableElementSpliterator<E>
 				boolean newNext;
 				if (element.getElementId().equals(theCurrent.getElementId())) {
 					newCurrent = theCollection.getAdjacentElement(theCurrent.getElementId(), true);
-					newNext = true;
+					newNext = newCurrent != null;
 				} else {
 					newCurrent = theCurrent;
 					newNext = currentIsNext;

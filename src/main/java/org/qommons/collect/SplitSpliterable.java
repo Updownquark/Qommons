@@ -112,16 +112,18 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 			CollectionElement<E> node = getCollection().getTerminalElement(true);
 			if (theLeftBound == null && theRightBound != null)
 				str.append('<');
+			if (getCurrent() == null && isCurrentNext())
+				str.append('^');
 			while (node != null) {
 				if (theLeftBound != null && node.getElementId().equals(theLeftBound.getElementId()))
 					str.append('<');
-				if (node.getElementId().equals(getCurrent().getElementId())) {
+				if (getCurrent() != null && node.getElementId().equals(getCurrent().getElementId())) {
 					if (isCurrentNext())
 						str.append('^');
 					str.append('[');
 				}
 				str.append(node.get());
-				if (node.getElementId().equals(getCurrent().getElementId())) {
+				if (getCurrent() != null && node.getElementId().equals(getCurrent().getElementId())) {
 					str.append(']');
 					if (!isCurrentNext())
 						str.append('^');
@@ -132,6 +134,8 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 				if (node != null)
 					str.append(", ");
 			}
+			if (getCurrent() == null && !isCurrentNext())
+				str.append('^');
 			if (theRightBound == null && theLeftBound != null)
 				str.append('>');
 			return str.toString();
