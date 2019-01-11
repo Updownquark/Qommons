@@ -231,21 +231,25 @@ public abstract class Causable {
 		// These events may trigger onRootFinish calls, which add more actions to this causable
 		// Though this cycle is allowed, care must be taken by callers to ensure it does not become infinite
 		if (theKeys != null) {
-			LinkedList<Transaction> postActions = null;
 			while (!theKeys.isEmpty()) {
-				Iterator<Supplier<Transaction>> keyActionIter = theKeys.values().iterator();
-				Supplier<Transaction> keyAction = keyActionIter.next();
-				keyActionIter.remove();
-				Transaction postAction = keyAction.get();
-				if (postAction != null) {
-					if (postActions == null)
-						postActions = new LinkedList<>();
-					postActions.addFirst(postAction);
+				LinkedList<Transaction> postActions = null;
+				while (!theKeys.isEmpty()) {
+					Iterator<Supplier<Transaction>> keyActionIter = theKeys.values().iterator();
+					Supplier<Transaction> keyAction = keyActionIter.next();
+					keyActionIter.remove();
+					Transaction postAction = keyAction.get();
+					if (postAction != null) {
+						if (postActions == null)
+							postActions = new LinkedList<>();
+						postActions.addFirst(postAction);
+					}
+				}
+				if (postActions != null) {
+					for (Transaction key : postActions)
+						key.close();
+					postActions.clear();
 				}
 			}
-			if (postActions != null)
-				for (Transaction key : postActions)
-					key.close();
 		}
 	}
 
