@@ -824,7 +824,9 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 			@Override
 			public void set(E value) throws IllegalArgumentException, UnsupportedOperationException {
-				theWrappedEl.set(value);
+				try (Transaction t = lock(true, true, null)) {
+					theWrappedEl.set(value);
+				}
 			}
 
 			@Override
