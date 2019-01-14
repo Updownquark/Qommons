@@ -44,10 +44,10 @@ public class BetterCollections {
 		return entry == null ? null : new UnmodifiableMutableEntry<>(values, entry);
 	}
 
-	static class UnmodifiableBetterCollection<E> implements BetterCollection<E> {
+	public static class UnmodifiableBetterCollection<E> implements BetterCollection<E> {
 		private final BetterCollection<? extends E> theWrapped;
 
-		UnmodifiableBetterCollection(BetterCollection<? extends E> wrapped) {
+		protected UnmodifiableBetterCollection(BetterCollection<? extends E> wrapped) {
 			theWrapped = wrapped;
 		}
 
@@ -151,11 +151,11 @@ public class BetterCollections {
 		}
 	}
 
-	static class UnmodifiableElementWrapper<E> implements MutableCollectionElement<E> {
+	public static class UnmodifiableElementWrapper<E> implements MutableCollectionElement<E> {
 		private final UnmodifiableBetterCollection<E> theCollection;
 		private final CollectionElement<? extends E> theWrapped;
 
-		UnmodifiableElementWrapper(UnmodifiableBetterCollection<E> collection, CollectionElement<? extends E> wrapped) {
+		protected UnmodifiableElementWrapper(UnmodifiableBetterCollection<E> collection, CollectionElement<? extends E> wrapped) {
 			theCollection = collection;
 			theWrapped = wrapped;
 		}
@@ -216,8 +216,8 @@ public class BetterCollections {
 		}
 	}
 
-	static class UnmodifiableBetterSet<E> extends UnmodifiableBetterCollection<E> implements BetterSet<E> {
-		UnmodifiableBetterSet(BetterSet<? extends E> wrapped) {
+	public static class UnmodifiableBetterSet<E> extends UnmodifiableBetterCollection<E> implements BetterSet<E> {
+		protected UnmodifiableBetterSet(BetterSet<? extends E> wrapped) {
 			super(wrapped);
 		}
 
@@ -261,8 +261,8 @@ public class BetterCollections {
 		}
 	}
 
-	static class UnmodifiableBetterList<E> extends UnmodifiableBetterCollection<E> implements BetterList<E> {
-		UnmodifiableBetterList(BetterList<? extends E> wrapped) {
+	public static class UnmodifiableBetterList<E> extends UnmodifiableBetterCollection<E> implements BetterList<E> {
+		protected UnmodifiableBetterList(BetterList<? extends E> wrapped) {
 			super(wrapped);
 		}
 
@@ -292,8 +292,8 @@ public class BetterCollections {
 		}
 	}
 
-	static class UnmodifiableBetterSortedSet<E> extends UnmodifiableBetterList<E> implements BetterSortedSet<E> {
-		UnmodifiableBetterSortedSet(BetterSortedSet<? extends E> wrapped) {
+	public static class UnmodifiableBetterSortedSet<E> extends UnmodifiableBetterList<E> implements BetterSortedSet<E> {
+		protected UnmodifiableBetterSortedSet(BetterSortedSet<? extends E> wrapped) {
 			super(wrapped);
 		}
 
@@ -345,10 +345,10 @@ public class BetterCollections {
 		}
 	}
 
-	static class UnmodifiableBetterMap<K, V> implements BetterMap<K, V> {
+	public static class UnmodifiableBetterMap<K, V> implements BetterMap<K, V> {
 		private final BetterMap<? extends K, ? extends V> theWrapped;
 
-		UnmodifiableBetterMap(BetterMap<? extends K, ? extends V> wrapped) {
+		protected UnmodifiableBetterMap(BetterMap<? extends K, ? extends V> wrapped) {
 			theWrapped = wrapped;
 		}
 
@@ -389,8 +389,8 @@ public class BetterCollections {
 		}
 	}
 
-	static class UnmodifiableBetterSortedMap<K, V> extends UnmodifiableBetterMap<K, V> implements BetterSortedMap<K, V> {
-		UnmodifiableBetterSortedMap(BetterSortedMap<? extends K, ? extends V> wrapped) {
+	public static class UnmodifiableBetterSortedMap<K, V> extends UnmodifiableBetterMap<K, V> implements BetterSortedMap<K, V> {
+		protected UnmodifiableBetterSortedMap(BetterSortedMap<? extends K, ? extends V> wrapped) {
 			super(wrapped);
 		}
 
@@ -410,10 +410,10 @@ public class BetterCollections {
 		}
 	}
 
-	static class UnmodifiableEntry<K, V> implements MapEntryHandle<K, V> {
+	public static class UnmodifiableEntry<K, V> implements MapEntryHandle<K, V> {
 		private final MapEntryHandle<? extends K, ? extends V> theWrapped;
 
-		UnmodifiableEntry(MapEntryHandle<? extends K, ? extends V> wrapped) {
+		protected UnmodifiableEntry(MapEntryHandle<? extends K, ? extends V> wrapped) {
 			theWrapped = wrapped;
 		}
 
@@ -433,10 +433,10 @@ public class BetterCollections {
 		}
 	}
 
-	static class UnmodifiableMutableEntry<K, V> extends UnmodifiableEntry<K, V> implements MutableMapEntryHandle<K, V> {
+	public static class UnmodifiableMutableEntry<K, V> extends UnmodifiableEntry<K, V> implements MutableMapEntryHandle<K, V> {
 		private final BetterCollection<? extends V> theValues;
 
-		UnmodifiableMutableEntry(BetterCollection<? extends V> values, MapEntryHandle<? extends K, ? extends V> wrapped) {
+		protected UnmodifiableMutableEntry(BetterCollection<? extends V> values, MapEntryHandle<? extends K, ? extends V> wrapped) {
 			super(wrapped);
 			theValues = values;
 		}
