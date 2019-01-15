@@ -39,6 +39,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		private BiFunction<Object, Object, Boolean> theEquals;
 		private int theInitExpectedSize;
 		private double theLoadFactor;
+		private CollectionLockingStrategy theLocker;
 
 		/** Creates the builder */
 		protected HashSetBuilder() {
@@ -56,6 +57,11 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		 */
 		public HashSetBuilder unsafe() {
 			isSafe = false;
+			return this;
+		}
+
+		public HashSetBuilder withLocking(CollectionLockingStrategy locker) {
+			theLocker = locker;
 			return this;
 		}
 
@@ -106,8 +112,10 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		 * @return An empty {@link BetterHashSet} built according to this builder's settings
 		 */
 		public <E> BetterHashSet<E> buildSet() {
-			return new BetterHashSet<>(isSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), theHasher, theEquals,
-				theInitExpectedSize, theLoadFactor);
+			CollectionLockingStrategy locking = theLocker;
+			if (locking == null)
+				locking = isSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy();
+			return new BetterHashSet<>(locking, theHasher, theEquals, theInitExpectedSize, theLoadFactor);
 		}
 
 		/**
