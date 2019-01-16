@@ -1,5 +1,8 @@
 package org.qommons;
 
+import static org.qommons.Lockable.lockAll;
+import static org.qommons.Lockable.tryLockAll;
+
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.concurrent.locks.Lock;
@@ -30,6 +33,14 @@ public interface Lockable {
 		return transactable == null ? null : new STLockable2(transactable, write, structural, cause);
 	}
 
+	static Lockable collapse(Collection<? extends Lockable> locks) {
+		return new CollapsedLockable(null, () -> locks);
+	}
+
+	static Lockable collapse(Lockable first, Supplier<? extends Collection<? extends Lockable>> locks) {
+		return new CollapsedLockable(first, locks);
+	}
+
 	static Transaction lock(Lockable lockable) {
 		return lockable == null ? Transaction.NONE : lockable.lock();
 	}
@@ -49,6 +60,15 @@ public interface Lockable {
 		return true;
 	}
 
+	static boolean isLockSupported(Lockable first, Collection<? extends Lockable> lockables) {
+		if (first != null && !first.isLockSupported())
+			return false;
+		for (Lockable lockable : lockables)
+			if (lockable != null && !lockable.isLockSupported())
+				return false;
+		return true;
+	}
+
 	static Transaction lockAll(Lockable... lockables) {
 		return lockAll(Arrays.asList(lockables));
 	}
@@ -58,25 +78,30 @@ public interface Lockable {
 	}
 
 	static Transaction lockAll(Lockable outer, Collection<? extends Lockable> lockables) {
-		return lockAll(outer, lockables, l -> l);
+		return lockAll(outer, () -> lockables, l -> l);
 	}
 
-	static <X> Transaction lockAll(Lockable outer, Collection<? extends X> lockables, Function<? super X, ? extends Lockable> map) {
-		if (outer == null && lockables.isEmpty())
-			return Transaction.NONE;
-		Transaction[] locks = new Transaction[lockables.size() + (outer == null ? 0 : 1)];
+	static <X> Transaction lockAll(Lockable outer, Supplier<? extends Collection<? extends X>> lockables,
+		Function<? super X, ? extends Lockable> map) {
 		reattempt: while (true) {
+			Transaction outerLock = null;
 			boolean hasLock = false;
 			if (outer != null) {
 				hasLock = true;
-				locks[0] = outer.lock();
+				outerLock = outer.lock();
 			}
-			int i = 0;
-			for (X value : lockables) {
+			Collection<? extends X> coll = lockables.get();
+			if (coll == null || coll.isEmpty())
+				return outerLock == null ? Transaction.NONE : outerLock;
+			Transaction[] locks = new Transaction[coll.size() + (outer == null ? 0 : 1)];
+			if (outerLock != null)
+				locks[0] = outerLock;
+			int i = outerLock == null ? 0 : 1;
+			for (X value : lockables.get()) {
 				Lockable lockable = map.apply(value);
 				if (lockable == null) {} else if (!hasLock) {
 					hasLock = true;
-					locks[i + (outer == null ? 0 : 1)] = lockable.lock();
+					locks[i] = lockable.lock();
 				} else {
 					Transaction lock = lockable.tryLock();
 					if (lock == null) {
@@ -87,7 +112,7 @@ public interface Lockable {
 						} catch (InterruptedException e) {}
 						continue reattempt;
 					}
-					locks[i + (outer == null ? 0 : 1)] = lock;
+					locks[i] = lock;
 				}
 				i++;
 			}
@@ -104,15 +129,30 @@ public interface Lockable {
 	}
 
 	static Transaction tryLockAll(Lockable outer, Collection<? extends Lockable> lockables) {
+		return tryLockAll(outer, () -> lockables);
+	}
+
+	static Transaction tryLockAll(Lockable outer, Supplier<? extends Collection<? extends Lockable>> lockables) {
 		return tryLockAll(outer, lockables, l -> l);
 	}
 
-	static <X> Transaction tryLockAll(Lockable outer, Collection<? extends X> lockables, Function<? super X, ? extends Lockable> map) {
-		if (outer == null && lockables.isEmpty())
-			return Transaction.NONE;
-		Transaction[] locks = new Transaction[lockables.size()];
-		int i = 0;
-		for (X value : lockables) {
+	static <X> Transaction tryLockAll(Lockable outer, Supplier<? extends Collection<? extends X>> lockables,
+		Function<? super X, ? extends Lockable> map) {
+		Transaction outerLock;
+		if (outer != null) {
+			outerLock = outer.tryLock();
+			if (outerLock == null)
+				return null;
+		} else
+			outerLock = null;
+		Collection<? extends X> coll = lockables.get();
+		if (coll == null || coll.isEmpty())
+			return outerLock == null ? Transaction.NONE : outerLock;
+		Transaction[] locks = new Transaction[(outerLock == null ? 0 : 1) + coll.size()];
+		if (outerLock != null)
+			locks[0] = outerLock;
+		int i = outerLock == null ? 0 : 1;
+		for (X value : coll) {
 			Lockable lockable = map.apply(value);
 			locks[i] = Lockable.tryLock(lockable);
 			if (locks[i] == null) {
@@ -278,6 +318,31 @@ public interface Lockable {
 		@Override
 		public String toString() {
 			return theTransactable.toString();
+		}
+	}
+
+	static class CollapsedLockable implements Lockable {
+		private final Lockable theFirst;
+		private final Supplier<? extends Collection<? extends Lockable>> theLocks;
+
+		public CollapsedLockable(Lockable first, Supplier<? extends Collection<? extends Lockable>> locks) {
+			theFirst = first;
+			theLocks = locks;
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return Lockable.isLockSupported(theFirst, theLocks.get());
+		}
+
+		@Override
+		public Transaction lock() {
+			return lockAll(theFirst, theLocks, l -> l);
+		}
+
+		@Override
+		public Transaction tryLock() {
+			return tryLockAll(theFirst, theLocks, l -> l);
 		}
 	}
 }
