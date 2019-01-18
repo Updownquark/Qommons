@@ -472,16 +472,15 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 */
 	default boolean find(Predicate<? super E> search, Consumer<? super CollectionElement<E>> onElement, boolean first) {
 		try (Transaction t = lock(false, true, null)) {
-			ElementSpliterator<E> spliter = spliterator(first);
-			boolean[] found = new boolean[1];
-			while (!found[0] && spliter.forElement(el -> {
+			CollectionElement<E> el = getTerminalElement(first);
+			while (el != null) {
 				if (search.test(el.get())) {
-					found[0] = true;
 					onElement.accept(el);
+					return true;
 				}
-			}, first)) {
+				el = getAdjacentElement(el.getElementId(), first);
 			}
-			return found[0];
+			return false;
 		}
 	}
 
