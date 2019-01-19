@@ -1,24 +1,11 @@
 package org.qommons.tree;
 
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.NavigableSet;
-import java.util.Objects;
-import java.util.SortedSet;
+import java.util.*;
 
 import org.qommons.Transaction;
-import org.qommons.collect.BetterCollection;
+import org.qommons.collect.*;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
-import org.qommons.collect.CollectionElement;
-import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.ElementId;
-import org.qommons.collect.FastFailLockingStrategy;
-import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
-import org.qommons.collect.MutableElementSpliterator;
-import org.qommons.collect.OptimisticContext;
-import org.qommons.collect.StampedLockingStrategy;
-import org.qommons.collect.ValueStoredCollection;
 
 public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStoredCollection<E> {
 	private final Comparator<? super E> theCompare;
@@ -87,8 +74,19 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 					return null;
 				BinaryTreeNode<E> node = root.findClosest(//
 					n -> search.compareTo(n.get()), filter.less.withDefault(true), filter.strict, ctx);
-				if (node != null && filter == SortedSearchFilter.OnlyMatch && search.compareTo(node.get()) != 0)
-					node = null;
+				if (node != null){
+					if(search.compareTo(node.get())==0){
+						if(filter.strict){
+							 //Interpret this to mean that the caller is interested in the first or last node matching the search
+							BinaryTreeNode<E> adj=getAdjacentElement(node.getElementId(), filter==SortedSearchFilter.Greater);
+							while(adj!=null && search.compareTo(adj.get())==0){
+								node=adj;
+								adj=getAdjacentElement(node.getElementId(), filter==SortedSearchFilter.Greater);
+							}
+						}
+					} else if(filter == SortedSearchFilter.OnlyMatch)
+						node = null;
+				}
 				return node;
 			}, true);
 	}
