@@ -79,6 +79,7 @@ public interface Format<T> {
 					value = value * 10 + (c - '0');
 				else
 					throw new ParseException("'" + c + "' is not valid for integer text", i);
+				i++;
 			}
 			if (value < 0)
 				throw new ParseException("Integer value is too large", 0);
