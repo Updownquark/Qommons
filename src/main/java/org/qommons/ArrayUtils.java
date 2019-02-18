@@ -508,7 +508,7 @@ public final class ArrayUtils {
 		int mid = -1;
 		int comp = 0;
 		while (min < max) {
-			mid = (min + max) >>> 1;
+			mid = (min + max) / 2;
 			comp = search.compareTo(mid);
 			if (comp > 0)
 				min = mid + 1;
