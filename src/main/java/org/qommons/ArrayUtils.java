@@ -523,7 +523,10 @@ public final class ArrayUtils {
 			return min;
 		else if (comp > 0)
 			min++;
-		return -(min + 1);
+		if (min < 0) // We'll tolerate negative indexes, but the information that an exact match wasn't found can't be conveyed in this case
+			return min;
+		else
+			return -(min + 1);
 	}
 
 	/**
