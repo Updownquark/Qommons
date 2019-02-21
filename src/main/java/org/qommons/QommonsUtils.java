@@ -3,6 +3,7 @@ package org.qommons;
 import java.text.ParseException;
 import java.time.Duration;
 import java.util.Calendar;
+import java.util.Comparator;
 
 /** Even more general utilities that I can't think where else to put */
 public class QommonsUtils {
@@ -567,6 +568,12 @@ public class QommonsUtils {
 		}
 		return ret.toString();
 	}
+
+	/**
+	 * A comparator that returns the result of {@link #compareNumberTolerant(String, String, boolean, boolean)
+	 * compareNumberTolerant}<code>(s1, s2, true, true)</code>
+	 */
+	public static final Comparator<String> DISTINCT_NUMBER_TOLERANT = (s1, s2) -> compareNumberTolerant(s1, s2, true, true);
 
 	/**
 	 * Compares two strings in such a way that strings with embedded multi-digit numbers in the same position are sorted intuitively.
