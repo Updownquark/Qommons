@@ -580,9 +580,9 @@ public abstract class QommonsConfig implements Cloneable {
 		else {
 			// See if it's a file path
 			File file = new File(s);
-			if (file.isAbsolute() || file.exists())
+			if (file.exists())
 				return file.toURI().toURL();
-			throw new java.io.IOException("Location " + s + " is invalid");
+			throw new java.io.IOException("Location " + s + " is invalid (" + file.getCanonicalPath() + ")");
 		}
 	}
 

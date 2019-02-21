@@ -508,7 +508,7 @@ public final class ArrayUtils {
 		int mid = -1;
 		int comp = 0;
 		while (min < max) {
-			mid = (min + max) >>> 1;
+			mid = (min + max) / 2;
 			comp = search.compareTo(mid);
 			if (comp > 0)
 				min = mid + 1;
@@ -523,7 +523,10 @@ public final class ArrayUtils {
 			return min;
 		else if (comp > 0)
 			min++;
-		return -(min + 1);
+		if (min < 0) // We'll tolerate negative indexes, but the information that an exact match wasn't found can't be conveyed in this case
+			return min;
+		else
+			return -(min + 1);
 	}
 
 	/**
