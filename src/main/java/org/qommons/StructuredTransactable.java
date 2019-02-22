@@ -12,6 +12,11 @@ public interface StructuredTransactable extends Transactable {
 		return lock(write, write, cause);
 	}
 
+	@Override
+	default Transaction tryLock(boolean write, Object cause) {
+		return tryLock(write, write, cause);
+	}
+
 	/**
 	 * <p>
 	 * Obtains a reentrant lock on this structure. The <code>structural</code> boolean allows finer-grained control of the structure with

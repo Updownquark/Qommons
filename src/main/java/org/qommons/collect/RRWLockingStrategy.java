@@ -1,12 +1,12 @@
 package org.qommons.collect;
 
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import org.qommons.Transactable;
 import org.qommons.Transaction;
 
 public class RRWLockingStrategy implements CollectionLockingStrategy {
-	private final ReentrantReadWriteLock theLock;
+	private final Transactable theLock;
 	private volatile long theStamp;
 
 	public RRWLockingStrategy() {
@@ -14,6 +14,10 @@ public class RRWLockingStrategy implements CollectionLockingStrategy {
 	}
 
 	public RRWLockingStrategy(ReentrantReadWriteLock lock) {
+		this(Transactable.transactable(lock));
+	}
+
+	public RRWLockingStrategy(Transactable lock) {
 		theLock = lock;
 	}
 
@@ -24,20 +28,17 @@ public class RRWLockingStrategy implements CollectionLockingStrategy {
 
 	@Override
 	public Transaction lock(boolean write, boolean structural, Object cause) {
-		Lock lock = write ? theLock.writeLock() : theLock.readLock();
-		lock.lock();
+		Transaction lock = theLock.lock(write, cause);
 		theStamp++;
-		return lock::unlock;
+		return lock;
 	}
 
 	@Override
 	public Transaction tryLock(boolean write, boolean structural, Object cause) {
-		Lock lock = write ? theLock.writeLock() : theLock.readLock();
-		if (lock.tryLock()) {
+		Transaction lock = theLock.tryLock(write, cause);
+		if (lock != null)
 			theStamp++;
-			return lock::unlock;
-		} else
-			return null;
+		return lock;
 	}
 
 	@Override
