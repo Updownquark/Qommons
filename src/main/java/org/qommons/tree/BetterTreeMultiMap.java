@@ -2,8 +2,8 @@ package org.qommons.tree;
 
 import java.util.Comparator;
 import java.util.Objects;
-import java.util.function.Consumer;
 
+import org.qommons.Lockable;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterList;
@@ -16,7 +16,6 @@ import org.qommons.collect.MultiEntryHandle;
 import org.qommons.collect.MultiMapEntryHandle;
 import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
-import org.qommons.collect.MutableElementSpliterator;
 
 public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 	private final BetterTreeSet<MultiEntryImpl> theEntries;
@@ -45,6 +44,12 @@ public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 			valueT.close();
 			entryT.close();
 		};
+	}
+
+	@Override
+	public Transaction tryLock(boolean write, boolean structural, Object cause) {
+		return Lockable.lockAll(Lockable.lockable(theEntries, write, structural, cause),
+			Lockable.lockable(theValues, write, structural, cause));
 	}
 
 	@Override
@@ -210,6 +215,11 @@ public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 		}
 
 		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return BetterTreeMultiMap.this.tryLock(write, structural, cause);
+		}
+
+		@Override
 		public boolean isEmpty() {
 			return theEntries.isEmpty();
 		}
@@ -366,6 +376,11 @@ public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 		@Override
 		public Transaction lock(boolean write, boolean structural, Object cause) {
 			return BetterTreeMultiMap.this.lock(write, structural, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return BetterTreeMultiMap.this.tryLock(write, structural, cause);
 		}
 
 		@Override
@@ -532,6 +547,11 @@ public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 		@Override
 		public Transaction lock(boolean write, boolean structural, Object cause) {
 			return theValues.lock(write, structural, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return theValues.tryLock(write, structural, cause);
 		}
 
 		protected boolean acquireEntry() {

@@ -10,6 +10,38 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * Such implementations should return a {@link Transaction#NONE none} transaction or some such non-null transaction.
  */
 public interface Transactable {
+	static Transactable NONE = new Transactable() {
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return Transaction.NONE;
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, Object cause) {
+			return Transaction.NONE;
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return false;
+		}
+
+		@Override
+		public int hashCode() {
+			return 0;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj == NONE;
+		}
+
+		@Override
+		public String toString() {
+			return "NONE";
+		}
+	};
+
 	/**
 	 * Begins a transaction in which inspections and/or modifications to this object may be batched and combined for increased efficiency.
 	 *
@@ -19,6 +51,8 @@ public interface Transactable {
 	 * @return The transaction to close when calling code is finished accessing or modifying this object
 	 */
 	Transaction lock(boolean write, Object cause);
+
+	Transaction tryLock(boolean write, Object cause);
 
 	/** @return Whether this object actually support locking */
 	default boolean isLockSupported() {
@@ -55,6 +89,10 @@ public interface Transactable {
 		return null;
 	}
 
+	static Transactable transactable(ReentrantReadWriteLock lock) {
+		return new RRWLTransactable(lock);
+	}
+
 	static Transaction lock(ReentrantReadWriteLock lock, boolean write) {
 		if (lock == null)
 			return Transaction.NONE;
@@ -65,5 +103,23 @@ public interface Transactable {
 		if (lock == null)
 			return Transaction.NONE;
 		return tryLock(write ? lock.writeLock() : lock.readLock());
+	}
+
+	static class RRWLTransactable implements Transactable {
+		private final ReentrantReadWriteLock theLock;
+
+		RRWLTransactable(ReentrantReadWriteLock lock) {
+			theLock = lock;
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return Transactable.lock(theLock, write);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, Object cause) {
+			return Transactable.tryLock(theLock, write);
+		}
 	}
 }

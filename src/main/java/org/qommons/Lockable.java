@@ -25,6 +25,10 @@ public interface Lockable {
 		return lockable(write ? lock.writeLock() : lock.readLock());
 	}
 
+	static Lockable lockable(Transactable lock, boolean write, Object cause) {
+		return new TransactableLockable(lock, write, cause);
+	}
+
 	static Lockable lockable(StructuredTransactable transactable) {
 		return transactable == null ? null : new STLockable(transactable);
 	}
@@ -236,6 +240,38 @@ public interface Lockable {
 		@Override
 		public String toString() {
 			return theLock.toString();
+		}
+	}
+
+	static class TransactableLockable implements Lockable {
+		private final Transactable theTransactable;
+		private final boolean isWrite;
+		private final Object theCause;
+
+		public TransactableLockable(Transactable transactable, boolean write, Object cause) {
+			theTransactable = transactable;
+			isWrite = write;
+			theCause = cause;
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return theTransactable != null && theTransactable.isLockSupported();
+		}
+
+		@Override
+		public Transaction lock() {
+			return theTransactable == null ? Transaction.NONE : theTransactable.lock(isWrite, theCause);
+		}
+
+		@Override
+		public Transaction tryLock() {
+			return theTransactable == null ? Transaction.NONE : theTransactable.tryLock(isWrite, theCause);
+		}
+
+		@Override
+		public String toString() {
+			return String.valueOf(theTransactable);
 		}
 	}
 
