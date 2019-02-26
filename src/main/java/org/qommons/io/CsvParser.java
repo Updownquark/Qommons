@@ -12,7 +12,7 @@ import java.util.List;
  * <li>The delimiter character is configurable</li>
  * <li>Carriage returns (\r, ASCII code 13) are not required at the end of lines. Newline characters (\n, ASCII code 10) are required.</li>
  * <li>Blank lines are allowed and ignored anywhere in the file (the {@link #getPassedBlankLines()} method may be used to detect when this
- * happens)</li>
+ * happens) except within quoted columns, in which case they appear as part of the column value</li>
  * <li>Un-quoted columns may include any character that is not the delimiter or the newline character</li>
  * <li>Quoted columns may include any character at all (double-quote characters (") must, of course, be escaped by using a double
  * double-quote (""))</li>
