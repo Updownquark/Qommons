@@ -242,7 +242,7 @@ public interface Format<T> {
 			public Double parse(CharSequence text) throws ParseException {
 				ParsePosition pos = new ParsePosition(0);
 				Number n = format.parse(text.toString(), pos);
-				if (pos.getIndex() < text.length())
+				if (pos.getErrorIndex() >= 0 || pos.getIndex() < text.length())
 					throw new ParseException("Invalid number", pos.getIndex());
 				if (n instanceof Double)
 					return (Double) n;
