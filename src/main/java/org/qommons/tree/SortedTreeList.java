@@ -1,11 +1,24 @@
 package org.qommons.tree;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.NavigableSet;
+import java.util.Objects;
+import java.util.SortedSet;
 
 import org.qommons.Transaction;
-import org.qommons.collect.*;
+import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
+import org.qommons.collect.CollectionElement;
+import org.qommons.collect.CollectionLockingStrategy;
+import org.qommons.collect.ElementId;
+import org.qommons.collect.FastFailLockingStrategy;
+import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
+import org.qommons.collect.MutableElementSpliterator;
+import org.qommons.collect.OptimisticContext;
+import org.qommons.collect.StampedLockingStrategy;
+import org.qommons.collect.ValueStoredCollection;
 
 public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStoredCollection<E> {
 	private final Comparator<? super E> theCompare;
@@ -186,13 +199,13 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 				else if (compare < 0)
 					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
 			}
-			BinaryTreeNode<E> result = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
+			BinaryTreeNode<E> result = search(searchFor(value, 0), SortedSearchFilter.of(first, false));
 			if (result == null)
 				return super.addElement(value, after, before, first);
 			int compare = theCompare.compare(result.get(), value);
 			if (isDistinct && compare == 0)
 				return null;
-			else if (compare < 0)
+			else if (compare < 0 || (compare == 0 && !first))
 				return super.addElement(value, result.getElementId(), null, true);
 			else
 				return super.addElement(value, null, result.getElementId(), false);
