@@ -106,7 +106,22 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 
 	@Override
 	public BinaryTreeNode<E> getElement(E value, boolean first) {
-		return search(searchFor(value, 0), SortedSearchFilter.OnlyMatch);
+		BinaryTreeNode<E> found = search(searchFor(value, 0), SortedSearchFilter.OnlyMatch);
+		if (found == null)
+			return null;
+		else if (isDistinct || Objects.equals(found.get(), value))
+			return found;
+		for (BinaryTreeNode<E> left = found.getClosest(true); left != null
+			&& theCompare.compare(left.get(), value) == 0; left = left.getClosest(true)) {
+			if (Objects.equals(left.get(), value))
+				return left;
+		}
+		for (BinaryTreeNode<E> right = found.getClosest(false); right != null
+			&& theCompare.compare(right.get(), value) == 0; right = right.getClosest(false)) {
+			if (Objects.equals(right.get(), value))
+				return right;
+		}
+		return null;
 	}
 
 	@Override
