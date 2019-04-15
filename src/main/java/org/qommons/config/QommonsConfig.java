@@ -3,6 +3,7 @@ package org.qommons.config;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -450,6 +451,14 @@ public abstract class QommonsConfig implements Cloneable {
 			return (Class<? extends T>) ret;
 		else
 			return ret.asSubclass(superClass);
+	}
+
+	@Override
+	public int hashCode() {
+		String value = getValue();
+		if (value == null)
+			value = getValueUntrimmed();
+		return Objects.hash(getName(), value, subConfigs());
 	}
 
 	@Override
