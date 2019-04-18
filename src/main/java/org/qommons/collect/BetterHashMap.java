@@ -166,7 +166,7 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 			theEntries.getHasher().applyAsInt(key), entry -> theEntries.getEquals().apply(entry.getKey(), key), //
 			() -> {
 				V newValue = value.apply(key);
-				return newValue == null ? null : newEntry(key, newValue);
+				return newEntry(key, newValue);
 			}, null, null, first, added);
 		if (entryEl == null)
 			return null;
