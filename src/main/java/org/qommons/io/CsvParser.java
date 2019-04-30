@@ -35,6 +35,8 @@ public class CsvParser {
 	int theTabColumnOffset;
 	private final CsvParseState theParseState;
 	private int thePassedBlankLines;
+	private int theLastLineNumber;
+	private int theLastLineOffset;
 
 	/**
 	 * @param reader The reader to parse CSV data from
@@ -77,6 +79,8 @@ public class CsvParser {
 			thePassedBlankLines++;
 			value = theParseState.parseColumn(); // Move past any blank lines
 		}
+		theLastLineNumber = theParseState.theLineNumber;
+		theLastLineOffset = theParseState.theOffset;
 		if (value.length() == 0 && theParseState.getLastTerminal() == CsvValueTerminal.FILE_END)
 			return null;
 
@@ -103,6 +107,8 @@ public class CsvParser {
 			thePassedBlankLines++;
 			value = theParseState.parseColumn(); // Move past any blank lines
 		}
+		theLastLineNumber = theParseState.theLineNumber;
+		theLastLineOffset = theParseState.theOffset;
 		if (value.length() == 0 && theParseState.getLastTerminal() == CsvValueTerminal.FILE_END)
 			return false;
 
@@ -121,6 +127,29 @@ public class CsvParser {
 	/** @return The number of blank lines that were ignored prior to the most recently-parsed line of the file */
 	public int getPassedBlankLines() {
 		return thePassedBlankLines;
+	}
+
+	/** @return The line number that was most recently parsed */
+	public int getLastLineNumber() {
+		return theLastLineNumber;
+	}
+
+	/** @return The overall character offset of the start of the line that was most recently parsed */
+	public int getLastLineOffset() {
+		return theLastLineOffset;
+	}
+
+	/** @return The line number of the line about to be parsed (or the last line parsed if there are no more lines) */
+	public int getCurrentLineNumber() {
+		return theParseState.theLineNumber;
+	}
+
+	/**
+	 * @return The overall character offset of the start of the line about to be parsed (or of the end of the file if there are no more
+	 *         lines)
+	 */
+	public int getCurrentOffset() {
+		return theParseState.theOffset;
 	}
 
 	static enum CsvValueTerminal {
