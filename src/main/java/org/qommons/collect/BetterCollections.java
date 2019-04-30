@@ -431,6 +431,21 @@ public class BetterCollections {
 		public K getKey() {
 			return theWrapped.getKey();
 		}
+
+		@Override
+		public int hashCode() {
+			return theWrapped.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return theWrapped.equals(obj);
+		}
+
+		@Override
+		public String toString() {
+			return theWrapped.toString();
+		}
 	}
 
 	public static class UnmodifiableMutableEntry<K, V> extends UnmodifiableEntry<K, V> implements MutableMapEntryHandle<K, V> {

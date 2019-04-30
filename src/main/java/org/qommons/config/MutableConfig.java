@@ -27,6 +27,8 @@ public class MutableConfig extends QommonsConfig {
 
 	private String theValue;
 
+	private String theUntrimmedValue;
+
 	private MutableConfig [] theSubConfigs;
 
 	private ConfigListener [] theListeners;
@@ -81,6 +83,7 @@ public class MutableConfig extends QommonsConfig {
 		theParent = parent;
 		theName = config.getName();
 		theValue = config.getValue();
+		theUntrimmedValue = config.getValueUntrimmed();
 		theListeners = new ConfigListener[0];
 		QommonsConfig [] subs = config.subConfigs();
 		theSubConfigs = createConfigArray(subs.length);
@@ -135,6 +138,11 @@ public class MutableConfig extends QommonsConfig {
 		return theValue;
 	}
 
+	@Override
+	public String getValueUntrimmed() {
+		return theUntrimmedValue;
+	}
+
 	/**
 	 * @param key The name of the sub-configuration to store the value in
 	 * @param value The value to store for the given sub-configuration
@@ -153,7 +161,8 @@ public class MutableConfig extends QommonsConfig {
 	 */
 	public MutableConfig setValue(String value) {
 		String preValue = theValue;
-		theValue = value;
+		theValue = value == null ? null : value.trim();
+		theUntrimmedValue = value;
 		configChanged(this, preValue);
 		return this;
 	}
