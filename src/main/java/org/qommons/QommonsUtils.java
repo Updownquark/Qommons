@@ -846,6 +846,41 @@ public class QommonsUtils {
 		return ret;
 	}
 
+	public static String getPluralSuffix(String str) {
+		if (str.endsWith("ies"))
+			return "ies";
+		else if (str.endsWith("es"))
+			return "es";
+		else if (str.endsWith("s"))
+			return "s";
+		else
+			return null;
+	}
+
+	public static String pluralize(String string) {
+		if (string.endsWith("y"))
+			return string.substring(0, string.length() - 1) + "ies";
+		else if (string.endsWith("s"))
+			return string + "es";
+		else
+			return string + "s";
+	}
+
+	public static String singularize(String string) {
+		String suffix = getPluralSuffix(string);
+		if (suffix != null) {
+			switch (suffix) {
+			case "ies":
+				return string.substring(0, string.length() - 3) + "y";
+			case "es":
+				return string.substring(0, string.length() - 2);
+			case "s":
+				return string.substring(0, string.length() - 1);
+			}
+		}
+		return string;
+	}
+
 	/**
 	 * A quick function to write a properties map--intended for the PrismsEvent constructor
 	 *
