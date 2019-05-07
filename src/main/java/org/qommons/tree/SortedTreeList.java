@@ -150,7 +150,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 			else if (compare < 0)
 				return StdMsg.ILLEGAL_ELEMENT_POSITION;
 		}
-		if (search(searchFor(value, 0), SortedSearchFilter.OnlyMatch) != null)
+		if (isDistinct && search(searchFor(value, 0), SortedSearchFilter.OnlyMatch) != null)
 			return StdMsg.ELEMENT_EXISTS;
 		return super.canAdd(value, after, before);
 	}
@@ -214,13 +214,31 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 				else if (compare < 0)
 					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
 			}
+			if (!isDistinct) {
+				// If this list is not distinct, and therefore the positioning may be flexible,
+				// try to put the value in the appropriate position relative to the after or before elements
+				// Also more efficient this way if the caller has gone to the trouble of figuring out where to put the element
+				if ((first && after != null) || (!first && before != null))
+					return super.addElement(value, after, null, true);
+			}
 			BinaryTreeNode<E> result = search(searchFor(value, 0), SortedSearchFilter.of(first, false));
 			if (result == null)
 				return super.addElement(value, after, before, first);
 			int compare = theCompare.compare(result.get(), value);
-			if (isDistinct && compare == 0)
-				return null;
-			else if (compare < 0 || (compare == 0 && !first))
+			if (isDistinct) {
+				if (compare == 0)
+					return null;
+			} else {
+				while (compare == 0) {
+					BinaryTreeNode<E> adj = getAdjacentElement(result.getElementId(), !first);
+					if (adj != null) {
+						result = adj;
+						compare = theCompare.compare(result.get(), value);
+					} else
+						break;
+				}
+			}
+			if (compare < 0 || (compare == 0 && !first))
 				return super.addElement(value, result.getElementId(), null, true);
 			else
 				return super.addElement(value, null, result.getElementId(), false);
