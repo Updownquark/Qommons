@@ -1,16 +1,6 @@
 package org.qommons.collect;
 
-import java.util.AbstractMap;
-import java.util.AbstractSet;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
-import java.util.Spliterators;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -278,6 +268,13 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		default V get(String key) {
 			return get(//
 					keyIndex(key));
+		}
+
+		default V getIfPresent(String key) {
+			int keyIndex = keyIndex(key);
+			if (keyIndex < 0)
+				return null;
+			return get(keyIndex);
 		}
 
 		default V put(String key, V value) {
