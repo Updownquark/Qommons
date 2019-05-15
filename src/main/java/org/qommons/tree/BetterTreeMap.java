@@ -647,7 +647,8 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		@Override
 		public BinaryTreeNode<K> addElement(K value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			CollectionElement<Map.Entry<K, V>> entry = theEntries.addElement(newEntry(value, null), after, before, first);
+			BinaryTreeNode<Map.Entry<K, V>> entry = theEntries.addElement(newEntry(value, null), after, before, first);
+			wrap(entry); // Initialize the element
 			return entry == null ? null : handleFor(entry);
 		}
 
