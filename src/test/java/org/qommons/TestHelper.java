@@ -368,7 +368,7 @@ public class TestHelper {
 		private int theMaxFailures = 1;
 		private Duration theMaxTotalDuration;
 		private Duration theMaxCaseDuration;
-		private Duration theMaxCheckInDuration;
+		private Duration theMaxProgressInterval;
 		private boolean isPrintingProgress = true;
 		private boolean isPrintingFailures = true;
 		private boolean isPersistingFailures = true;
@@ -416,8 +416,8 @@ public class TestHelper {
 			return this;
 		}
 
-		public Testing withMaxCheckInDuration(Duration duration) {
-			theMaxCheckInDuration = duration;
+		public Testing withMaxProgressInterval(Duration duration) {
+			theMaxProgressInterval = duration;
 			return this;
 		}
 
@@ -463,13 +463,13 @@ public class TestHelper {
 			else
 				knownFailures = null;
 			try (TestSetExecution exec = new TestSetExecution(theCreator, isPrintingProgress, isPrintingFailures, Instant.now(),
-				theMaxTotalDuration, theMaxCaseDuration, theMaxCheckInDuration)) {
+				theMaxTotalDuration, theMaxCaseDuration, theMaxProgressInterval)) {
 				if (isRevisitingKnownFailures) {
 					if (!knownFailures.isEmpty()) {
 						for (int i = 0; i < knownFailures.size() && failures < maxFailures
 							&& Instant.now().compareTo(termination) < 0; i++) {
 							TestFailure failure = knownFailures.get(i);
-							TestHelper helper = new TestHelper(true, theMaxCheckInDuration != null, failure.seed, 0,
+							TestHelper helper = new TestHelper(true, theMaxProgressInterval != null, failure.seed, 0,
 								isDebugging ? failure.getBreakpoints() : Collections.emptyNavigableSet(), thePlacemarkNames);
 							Throwable err = exec.executeTestCase(i + 1, helper, true);
 							if (err != null) {
@@ -503,7 +503,7 @@ public class TestHelper {
 				}
 				int i = 0;
 				for (TestFailure test : theSpecifiedCases) {
-					TestHelper helper = new TestHelper(true, theMaxCheckInDuration != null, test.seed, test.bytes, test.getBreakpoints(),
+					TestHelper helper = new TestHelper(true, theMaxProgressInterval != null, test.seed, test.bytes, test.getBreakpoints(),
 						test.placemarks.keySet());
 					Throwable err = exec.executeTestCase(i + 1, helper, false);
 					if (err != null) {
@@ -520,7 +520,7 @@ public class TestHelper {
 					i++;
 				}
 				for (; i < maxCases && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
-					TestHelper helper = new TestHelper(false, theMaxCheckInDuration != null, Double.doubleToLongBits(Math.random()), 0,
+					TestHelper helper = new TestHelper(false, theMaxProgressInterval != null, Double.doubleToLongBits(Math.random()), 0,
 						Collections.emptyNavigableSet(), thePlacemarkNames);
 					Throwable err = exec.executeTestCase(i + 1, helper, false);
 					if (err != null) {
@@ -548,7 +548,7 @@ public class TestHelper {
 		private final Instant theOriginalStart;
 		private final Duration theMaxTotalDuration;
 		private final Duration theMaxCaseDuration;
-		private final Duration theMaxCheckinDuration;
+		private final Duration theMaxProgressInterval;
 		private final long theDebugHitCount;
 
 		private final Thread theTestSetExecThread;
@@ -559,14 +559,14 @@ public class TestHelper {
 		private boolean isTestSetDone;
 
 		TestSetExecution(Constructor<? extends Testable> creator, boolean isPrintingProgress, boolean isPrintingFailures,
-			Instant originalStart, Duration maxTotalDuration, Duration maxCaseDuration, Duration maxCheckinDuration) {
+			Instant originalStart, Duration maxTotalDuration, Duration maxCaseDuration, Duration maxProgressInterval) {
 			theCreator = creator;
 			this.isPrintingProgress = isPrintingProgress;
 			this.isPrintingFailures = isPrintingFailures;
 			theOriginalStart = originalStart;
 			theMaxTotalDuration = maxTotalDuration;
 			theMaxCaseDuration = maxCaseDuration;
-			theMaxCheckinDuration = maxCheckinDuration;
+			theMaxProgressInterval = maxProgressInterval;
 			theDebugHitCount = BreakpointHere.getBreakpointCatchCount();
 
 			theTestSetExecThread = Thread.currentThread();
@@ -623,8 +623,8 @@ public class TestHelper {
 			theTestExecThread.interrupt(); // Start test execution
 			Instant totalMax = theMaxTotalDuration == null ? null : theOriginalStart.plus(theMaxTotalDuration);
 			Instant caseMax = theMaxCaseDuration == null ? null : caseStart.plus(theMaxCaseDuration);
-			Instant checkInMax = theMaxCheckinDuration == null ? null : caseStart.plus(theMaxCheckinDuration);
-			Instant checkInMin = theMaxCheckinDuration == null ? null : caseStart;
+			Instant checkInMax = theMaxProgressInterval == null ? null : caseStart.plus(theMaxProgressInterval);
+			Instant checkInMin = theMaxProgressInterval == null ? null : caseStart;
 			Duration sleep = Duration.ofDays(1);
 			if (totalMax != null && caseStart.plus(sleep).compareTo(totalMax) > 0)
 				sleep = Duration.between(caseStart, totalMax);
@@ -655,12 +655,12 @@ public class TestHelper {
 					} else if (checkInMax != null && now.compareTo(checkInMax) > 0) {
 						Instant checkIn = helper.getLastCheckIn();
 						if (checkIn == null || checkIn.compareTo(checkInMin) < 0) {
-							theTestCaseError = new IllegalStateException("Timeout: No check-ins in longer than "
-								+ QommonsUtils.printTimeLength(theMaxCheckinDuration.getSeconds(), theMaxCheckinDuration.getNano()));
+							theTestCaseError = new IllegalStateException("Timeout: No progress in longer than "
+								+ QommonsUtils.printTimeLength(theMaxProgressInterval.getSeconds(), theMaxProgressInterval.getNano()));
 							theTestCaseError.setStackTrace(theTestExecThread.getStackTrace());
 							break;
 						}
-						checkInMax = checkIn.plus(theMaxCheckinDuration);
+						checkInMax = checkIn.plus(theMaxProgressInterval);
 						checkInMin = checkIn.plusNanos(1);
 						sleep = Duration.between(now, checkInMax);
 						if (totalMax != null && now.plus(sleep).compareTo(totalMax) > 0)
@@ -837,26 +837,24 @@ public class TestHelper {
 		if (failureDir != null)
 			return new File(failureDir, (qualifiedName ? testable.getName() : testable.getSimpleName()) + ".broken");
 
-		if (failureDir == null) {
-			// Attempt to co-locate the failure file with the class file
-			String classFileName = testable.getName();
-			classFileName = classFileName.replaceAll("\\.", "/") + ".class";
-			URL classLoc = testable.getClassLoader().getResource(classFileName);
-			if (classLoc != null && classLoc.getProtocol().equals("file")) {
-				File classFile = new File(classLoc.getPath());
-				testFile = new File(classFile.getParent(), testable.getSimpleName() + ".broken");
-				if (testFile.exists())
+		// Attempt to co-locate the failure file with the class file
+		String classFileName = testable.getName();
+		classFileName = classFileName.replaceAll("\\.", "/") + ".class";
+		URL classLoc = testable.getClassLoader().getResource(classFileName);
+		if (classLoc != null && classLoc.getProtocol().equals("file")) {
+			File classFile = new File(classLoc.getPath());
+			testFile = new File(classFile.getParent(), testable.getSimpleName() + ".broken");
+			if (testFile.exists())
+				return testFile;
+			try {
+				if (testFile.createNewFile()) {
+					if (!create)
+						testFile.delete();
 					return testFile;
-				try {
-					if (testFile.createNewFile()) {
-						if (!create)
-							testFile.delete();
-						return testFile;
-					}
-				} catch (IOException e) {
-					System.err.println(
-						"Could not create failure file " + testFile.getAbsolutePath() + " for class " + testable.getName() + ": " + e);
 				}
+			} catch (IOException e) {
+				System.err
+					.println("Could not create failure file " + testFile.getAbsolutePath() + " for class " + testable.getName() + ": " + e);
 			}
 		}
 		if (testFile == null) {
@@ -926,63 +924,5 @@ public class TestHelper {
 			}
 		}
 		return creator;
-	}
-
-	private static Throwable doTest(Constructor<? extends Testable> creator, TestHelper testHelper, int caseNumber, boolean printProgress,
-		boolean printFailures, boolean reproduction, Instant originalStart, Runnable[] task) {
-		Testable tester;
-		try {
-			tester = creator.newInstance();
-		} catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-			throw new IllegalStateException("Could not instantiate tester " + creator.getDeclaringClass().getName(), e);
-		}
-		return doTest(tester, testHelper, caseNumber, printProgress, printFailures, reproduction, originalStart, task);
-	}
-
-	private static Throwable doTest(Testable tester, TestHelper testHelper, int caseNumber, boolean printProgress, boolean printFailures,
-		boolean reproduction, Instant originalStart, Runnable[] task) {
-		String caseLabel = "";
-		if (caseNumber > 0)
-			caseLabel += "[" + caseNumber + "] ";
-		caseLabel += Long.toHexString(testHelper.getSeed()).toUpperCase() + ": ";
-		if (printProgress) {
-			if (reproduction)
-				System.out.print("Reproducing ");
-			System.out.print(caseLabel);
-			System.out.flush();
-		}
-		Instant start = Instant.now();
-		try {
-			tester.accept(testHelper);
-			if (printProgress) {
-				Instant end = Instant.now();
-				StringBuilder msg = new StringBuilder().append("SUCCESS in ");
-				Format.DURATION.append(msg, Duration.between(start, end));
-				if (caseNumber > 1) {
-					msg.append(" (");
-					Format.DURATION.append(msg, Duration.between(originalStart, end));
-					msg.append(" total)");
-				}
-				System.out.println(msg);
-			}
-			return null;
-		} catch (Throwable e) {
-			if (printProgress || printFailures) {
-				Instant end = Instant.now();
-				if (!printProgress)
-					System.err.print(caseLabel);
-				StringBuilder msg = new StringBuilder();
-				msg.append("FAILURE@").append(testHelper.getPosition()).append(" in ");
-				Format.DURATION.append(msg, Duration.between(start, end));
-				for (String pn : testHelper.getPlacemarkNames()) {
-					long placemark = testHelper.getLastPlacemark(pn);
-					if (placemark >= 0)
-						msg.append("\n\t" + pn + "@").append(placemark);
-				}
-				System.err.println(msg);
-				e.printStackTrace();
-			}
-			return e;
-		}
 	}
 }
