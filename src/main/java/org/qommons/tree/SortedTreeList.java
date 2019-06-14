@@ -422,6 +422,8 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 
 		@Override
 		public String isAcceptable(E value) {
+			if (value == get())
+				return null;
 			if (!belongs(value))
 				return StdMsg.ILLEGAL_ELEMENT;
 			BinaryTreeNode<E> previous = getClosest(true);
