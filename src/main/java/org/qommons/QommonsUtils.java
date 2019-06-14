@@ -1,9 +1,14 @@
 package org.qommons;
 
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.Calendar;
 import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.TimeZone;
 
 /** Even more general utilities that I can't think where else to put */
 public class QommonsUtils {
@@ -471,6 +476,90 @@ public class QommonsUtils {
 		if (neg)
 			duration = duration.negated();
 		return duration;
+	}
+
+	private static final long MINUTE_LENGTH = 60000;
+	private static final long HOUR_LENGTH = 60 * MINUTE_LENGTH;
+	private static final long DAY_LENGTH = HOUR_LENGTH * 24;
+	private static final long YEAR_LENGTH = DAY_LENGTH * 365;
+
+	static enum TimeDifferenceClass {
+		HOUR, DAY, YEAR;
+
+		static TimeDifferenceClass of(long millisDiff) {
+			if (millisDiff < DAY_LENGTH - HOUR_LENGTH)
+				return HOUR;
+			else if (millisDiff < YEAR_LENGTH - DAY_LENGTH)
+				return DAY;
+			else
+				return YEAR;
+		}
+	}
+
+	private static final ThreadLocal<Map<BiTuple<TimePrecision, TimeDifferenceClass>, SimpleDateFormat>> REL_TIME_FORMATS = new ThreadLocal<Map<BiTuple<TimePrecision, TimeDifferenceClass>, SimpleDateFormat>>() {
+		@Override
+		protected Map<BiTuple<TimePrecision, TimeDifferenceClass>, SimpleDateFormat> initialValue() {
+			return new HashMap<>();
+		}
+	};
+
+	private static SimpleDateFormat getDifferenceFormat(TimePrecision precision, TimeDifferenceClass diffClass) {
+		StringBuilder format = new StringBuilder();
+		if (diffClass.compareTo(TimeDifferenceClass.DAY) >= 0) {
+			format.append("ddMMM");
+			if (diffClass.compareTo(TimeDifferenceClass.YEAR) >= 0)
+				format.append("yyyy");
+		}
+		if (format.length() > 0)
+			format.append(' ');
+		if (precision.compareTo(TimePrecision.MINUTES) >= 0)
+			format.append(" HH:mm");
+		if (precision.compareTo(TimePrecision.SECONDS) >= 0)
+			format.append(":ss");
+		if (precision.compareTo(TimePrecision.MILLIS) >= 0)
+			format.append(".SSS");
+		return new SimpleDateFormat(format.toString());
+	}
+
+	public static String printRelativeTime(long time, long referenceTime, TimePrecision precision, TimeZone timeZone, long justNowThreshold,
+		String justNow) {
+		long diff = time - referenceTime;
+		if (diff < 0)
+			diff = -diff;
+		else if (diff <= justNowThreshold && justNow != null)
+			return justNow;
+
+		TimeDifferenceClass diffClass = TimeDifferenceClass.of(diff);
+		if (diffClass == TimeDifferenceClass.HOUR) {
+			switch (precision) {
+			case DAYS:
+				if (justNow != null)
+					return justNow;
+				else
+					precision = TimePrecision.MINUTES;
+				break;
+			case MINUTES:
+				if (justNow != null && diff < MINUTE_LENGTH)
+					return justNow;
+				break;
+			case SECONDS:
+				if (justNow != null && diff < 1000)
+					return justNow;
+				break;
+			case MILLIS:
+				break;
+			}
+			if (precision == TimePrecision.DAYS) {
+				if (justNow != null)
+					return justNow;
+				else
+					precision = TimePrecision.MINUTES;
+			}
+		}
+		SimpleDateFormat format = REL_TIME_FORMATS.get().computeIfAbsent(new BiTuple<>(precision, diffClass),
+			t -> getDifferenceFormat(t.getValue1(), t.getValue2()));
+		format.setTimeZone(timeZone);
+		return format.format(new Date(time));
 	}
 
 	/**
