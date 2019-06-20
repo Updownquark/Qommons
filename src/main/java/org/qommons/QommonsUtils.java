@@ -153,6 +153,14 @@ public class QommonsUtils {
 		return printTimeLength(length / 1000, ((int) (length % 1000)) * 1000000, sb, abbrev);
 	}
 
+	public static String printDuration(Duration d, boolean abbrev) {
+		return printDuration(d, new StringBuilder(), abbrev).toString();
+	}
+
+	public static StringBuilder printDuration(Duration d, StringBuilder sb, boolean abbrev) {
+		return printTimeLength(d.getSeconds(), d.getNano(), sb, abbrev);
+	}
+
 	public static StringBuilder printTimeLength(long seconds, int nanos, StringBuilder sb, boolean abbrev) {
 		if (seconds == 0 && nanos == 0) {
 			sb.append("no time");
