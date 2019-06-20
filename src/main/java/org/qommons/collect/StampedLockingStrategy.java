@@ -78,7 +78,7 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 					if (!theStructureLocker.validate(structStamp[0]) || (!allowUpdate && !theUpdateLocker.validate(updateStamp[0]))) {
 						keepTrying[0] = true;
 						structStamp[0] = theStructureLocker.tryOptimisticRead();
-						if (allowUpdate)
+						if (!allowUpdate)
 							updateStamp[0] = theUpdateLocker.tryOptimisticRead();
 						return false;
 					}
