@@ -285,6 +285,15 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			return computeIfAbsent(keyIndex(key), valueProducer);
 		}
 
+		default ParameterMap<V> withAll(Map<String, ? extends V> values) {
+			for (Map.Entry<String, ? extends V> entry : values.entrySet()) {
+				int idx = keySet().indexOf(entry.getKey());
+				if (idx >= 0)
+					put(idx, entry.getValue());
+			}
+			return this;
+		}
+
 		void clear();
 
 		Iterable<V> allValues();
@@ -321,6 +330,10 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 
 		/** If supported, allows this map to be released and re-used later */
 		void release();
+
+		static <V> ParameterMap<V> of(Map<String, V> values) {
+			return ParameterSet.of(values.keySet()).<V> createMap().withAll(values);
+		}
 	}
 
 	private static final class EmptyParameterMap<T> implements ParameterMap<T> {
