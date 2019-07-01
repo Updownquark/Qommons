@@ -6,7 +6,7 @@ import java.util.function.Function;
 public class StringUtils {
 	public static <T> StringBuilder print(CharSequence delimiter, Iterable<? extends T> values,
 		Function<? super T, ? extends CharSequence> format) {
-		return print(new StringBuilder(), delimiter, values, (v, str) -> str.append(format.apply(v)));
+		return print(new StringBuilder(), delimiter, values, (v, str) -> str.append(format == null ? String.valueOf(v) : format.apply(v)));
 	}
 
 	public static <T> StringBuilder print(StringBuilder into, CharSequence delimiter, Iterable<? extends T> values,

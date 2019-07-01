@@ -88,18 +88,19 @@ public class IntList implements Iterable<Integer>, Sealable, Cloneable
 	}
 
 	/**
-	 * Sets whether this list should keep itself sorted or not. If set to true, this method will
-	 * sort the current value set.
+	 * Sets whether this list should keep itself sorted or not. If set to true, this method will sort the current value set.
 	 *
 	 * @param sorted Whether the elements in this list should be sorted or not
+	 * @return This list
 	 */
-	public void setSorted(boolean sorted)
+	public IntList setSorted(boolean sorted)
 	{
 		if(isSealed)
 			throw new IllegalStateException("This list has been sealed and cannot be modified");
 		if(sorted && !isSorted)
 			java.util.Arrays.sort(theValue, 0, theSize);
 		isSorted = sorted;
+		return this;
 	}
 
 	/**
@@ -129,8 +130,9 @@ public class IntList implements Iterable<Integer>, Sealable, Cloneable
 	 * eliminate duplicate values that may exist in the current set.
 	 *
 	 * @param unique Whether this list should eliminate duplicate values
+	 * @return This list
 	 */
-	public void setUnique(boolean unique)
+	public IntList setUnique(boolean unique)
 	{
 		if(isSealed)
 			throw new IllegalStateException("This list has been sealed and cannot be modified");
@@ -152,6 +154,7 @@ public class IntList implements Iterable<Integer>, Sealable, Cloneable
 				}
 		}
 		isUnique = unique;
+		return this;
 	}
 
 	/**
