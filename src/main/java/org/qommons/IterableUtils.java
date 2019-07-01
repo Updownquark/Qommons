@@ -500,18 +500,22 @@ public class IterableUtils {
 
 			@Override
 			public boolean hasNext() {
-				while ((!hasNext || !filter.test(theNext)) && backing.hasNext()) {
-					hasNext = true;
+				while (!hasNext && backing.hasNext()) {
 					theNext = backing.next();
+					hasNext = filter.test(theNext);
 				}
-				return hasNext && filter.test(theNext);
+
+				return hasNext;
 			}
 
 			@Override
 			public T next() {
-				if ((!hasNext || !filter.test(theNext)) && !hasNext())
+				if (!hasNext && !hasNext())
 					throw new NoSuchElementException();
-				return theNext;
+				T next = theNext;
+				theNext = null;
+				hasNext = false;
+				return next;
 			}
 
 			@Override

@@ -170,6 +170,15 @@ public class QommonsUtils {
 			nanos = -nanos;
 			sb.append('-');
 		}
+		if (nanos < 0) {
+			if (seconds == 0) {
+				nanos = -nanos;
+				sb.append('-');
+			} else {
+				seconds--;
+				nanos += 1_000_000_000;
+			}
+		}
 		int days, hrs, mins, secs, millis;
 		millis = nanos / 1000000;
 		nanos %= 1000000;
@@ -230,18 +239,18 @@ public class QommonsUtils {
 			if(abbrev)
 				sb.append("ms ");
 			else if(millis > 1)
-				sb.append(" millis");
+				sb.append(" millis ");
 			else
-				sb.append(" milli");
+				sb.append(" milli ");
 		}
 		if (nanos > 0) {
 			sb.append(nanos);
 			if (abbrev)
-				sb.append("ns ");
+				sb.append(" ns ");
 			else if (millis > 1)
-				sb.append(" nanos");
+				sb.append(" nanos ");
 			else
-				sb.append(" nano");
+				sb.append(" nano ");
 		}
 		if (sb.charAt(sb.length() - 1) == ' ')
 			sb.deleteCharAt(sb.length() - 1);
