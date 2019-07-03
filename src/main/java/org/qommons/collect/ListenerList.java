@@ -139,6 +139,15 @@ public class ListenerList<E> {
 		}
 
 		/**
+		 * Optimizes the list for performance, discarding all thread safety mechanisms
+		 * 
+		 * @return This builder
+		 */
+		public Builder unsafe() {
+			return allowReentrant().forEachSafe(false).withFastSize(false).withSyncType(SynchronizationType.NONE);
+		}
+
+		/**
 		 * @param <E> The type of the list to build
 		 * @return The new list
 		 */
