@@ -11,7 +11,9 @@ import org.qommons.tree.TreeUtilsTest;
 	IterableUtilsTest.class, //
 	TreeUtilsTest.class, //
 	// CircularListTest.class, // TODO This class is currently deprecated. Uncomment this when it's operational.
-	HashSetTest.class//
+	HashSetTest.class, //
+	CsvParserTest.class, //
+	StringUtilsTest.class
 })
 public class QommonsTests {
 }
