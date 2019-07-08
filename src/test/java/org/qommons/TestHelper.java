@@ -451,6 +451,8 @@ public class TestHelper {
 			int maxFailures = theMaxFailures;
 			if (maxCases < 0)
 				maxCases = Integer.MAX_VALUE;
+			else if (maxCases == 0 && theMaxTotalDuration != null)
+				maxCases = Integer.MAX_VALUE;
 			if (maxFailures <= 0)
 				maxFailures = Integer.MAX_VALUE;
 			Instant termination = theMaxTotalDuration == null ? Instant.MAX : Instant.now().plus(theMaxTotalDuration);
@@ -770,6 +772,8 @@ public class TestHelper {
 					summary.append(", ");
 				summary.append(theFailures).append(" failed case").append(theFailures > 1 ? "s" : "");
 			}
+			if (theSuccesses == 0 && theFailures == 0)
+				summary.append("No cases");
 			summary.append(" in ");
 			QommonsUtils.printTimeLength(theDuration.toMillis(), summary, false);
 			return summary.toString();
