@@ -81,8 +81,17 @@ public class CsvParser {
 		}
 		theLastLineNumber = theParseState.theLineNumber;
 		theLastLineOffset = theParseState.theOffset;
-		if (value.length() == 0 && theParseState.getLastTerminal() == CsvValueTerminal.FILE_END)
-			return null;
+		switch (theParseState.getLastTerminal()) {
+		case COLUMN_END:
+			break;
+		case LINE_END:
+			return new String[] { value };
+		case FILE_END:
+			if (value.length() == 0)
+				return null;
+			else
+				return new String[] { value };
+		}
 
 		columns.add(value);
 		do {
