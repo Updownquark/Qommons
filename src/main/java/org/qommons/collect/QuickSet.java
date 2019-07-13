@@ -9,47 +9,75 @@ import java.util.stream.StreamSupport;
 
 import org.qommons.ArrayUtils;
 
-/** A sorted set of strings that is optimized for indexOf operations on small sets */
-public final class ParameterSet extends AbstractSet<String> implements Comparable<ParameterSet> {
-	public static final ParameterSet EMPTY = new ParameterSet(new String[0]);
-	private static final ParameterMap<?> EMPTY_MAP = new EmptyParameterMap<>();
+/**
+ * A sorted set of strings that is optimized for indexOf operations on small sets
+ * 
+ * @param <E> The type of value in the set
+ */
+public final class QuickSet<E> extends AbstractSet<E> implements Comparable<QuickSet<E>> {
+	private static final QuickSet<?> EMPTY = new QuickSet<>(null, new Object[0]);
+	private static final QuickMap<?, ?> EMPTY_MAP = new EmptyQuickMap<>();
 	private static final int MAX_CACHED_MAPS = 100;
 
-	public static ParameterSet of(String... keys) {
-		if (keys.length == 0)
-			return EMPTY;
-		else
-			return new ParameterSet(keys);
+	public static <K> QuickSet<K> empty() {
+		return (QuickSet<K>) EMPTY;
 	}
 
-	public static ParameterSet of(Collection<String> keys) {
-		if (keys.isEmpty())
-			return EMPTY;
+	public static <E extends Comparable<E>> QuickSet<E> of(E... keys) {
+		if (keys.length == 0)
+			return (QuickSet<E>) EMPTY;
 		else
-			return new ParameterSet(keys);
+			return new QuickSet<>(Comparable::compareTo, keys);
+	}
+
+	public static <E extends Comparable<E>> QuickSet<E> of(Collection<? extends E> keys) {
+		if (keys.isEmpty())
+			return (QuickSet<E>) EMPTY;
+		else
+			return new QuickSet<>(Comparable::compareTo, keys);
+	}
+
+	public static <E extends Comparable<E>> QuickSet<E> ofSorted(SortedSet<E> keys) {
+		if (keys.isEmpty())
+			return (QuickSet<E>) EMPTY;
+		else
+			return new QuickSet<>(keys.comparator(), keys);
+	}
+
+	public static <E> QuickSet<E> of(Comparator<? super E> compare, E... keys) {
+		if (keys.length == 0)
+			return (QuickSet<E>) EMPTY;
+		else
+			return new QuickSet<>(compare, keys);
+	}
+
+	public static <E> QuickSet<E> of(Comparator<? super E> compare, Collection<? extends E> keys) {
+		if (keys.isEmpty())
+			return (QuickSet<E>) EMPTY;
+		else
+			return new QuickSet<>(compare, keys);
 	}
 
 	// Package private here means no synthetic accessors
-	final String[] theKeys;
+	final Comparator<? super E> compare;
+	final Object[] theKeys;
 	private final boolean small;
 	private boolean hashed;
 	private int hashCode;
-	private ConcurrentLinkedQueue<ParameterMapImpl<?>> theMapCache;
+	private ConcurrentLinkedQueue<QuickMapImpl<?, ?>> theMapCache;
 
-	public ParameterSet(String... keys) {
+	public QuickSet(Comparator<? super E> compare, E... keys) {
+		this.compare = compare;
 		theKeys = keys;
-		Arrays.sort(theKeys, (s1, s2) -> {
-			int lenDiff = s1.length() - s2.length();
-			if (lenDiff != 0) {
-				return lenDiff;
-			}
-			return s1.compareTo(s2);
-		});
+		Arrays.sort(theKeys, (o1, o2) -> compare.compare((E) o1, (E) o2));
 		small = keys.length <= 10;
 	}
 
-	public ParameterSet(Collection<String> keys) {
-		this(keys.toArray(new String[keys.size()]));
+	public QuickSet(Comparator<? super E> compare, Collection<? extends E> keys) {
+		this.compare = compare;
+		theKeys = keys.toArray();
+		Arrays.sort(theKeys, (o1, o2) -> compare.compare((E) o1, (E) o2));
+		small = theKeys.length <= 10;
 	}
 	
 	@Override
@@ -57,21 +85,21 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		return theKeys.length;
 	}
 
-	public String get(int index) {
-		return theKeys[index];
+	public E get(int index) {
+		return (E) theKeys[index];
 	}
 
 	@Override
-	public Iterator<String> iterator() {
-		return Arrays.asList(theKeys).iterator();
+	public Iterator<E> iterator() {
+		return ((List<E>) Arrays.asList(theKeys)).iterator();
 	}
 
 	@Override
-	public String[] toArray() {
+	public Object[] toArray() {
 		return theKeys.clone();
 	}
 
-	public int indexOf(String key) {
+	public int indexOf(E key) {
 		if (small) {
 			for (int i = 0; i < theKeys.length; i++) {
 				if (theKeys[i] == key) {
@@ -90,64 +118,60 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		});
 	}
 
-	int compare(int keyIndex, String test) {
-		String key = theKeys[keyIndex];
-		int testLen = test.length();
-		int lenDiff = testLen - key.length();
-		if (lenDiff != 0) {
-			return lenDiff;
+	int compare(int keyIndex, E test) {
+		E key = (E) theKeys[keyIndex];
+		return compare.compare(test, key);
+	}
+
+	public int indexOfTolerant(Object key) {
+		try {
+			return indexOf((E) key);
+		} catch (ClassCastException e) {
+			return -1;
 		}
-		for (int c = 0; c < testLen; c++) {
-			char c1 = test.charAt(c);
-			char c2 = key.charAt(c);
-			if (c1 != c2) {
-				return c1 - c2;
-			}
-		}
-		return 0;
 	}
 
 	@Override
 	public boolean contains(Object o) {
-		return o instanceof String && contains((String) o);
+		try {
+			return indexOf((E) o) >= 0;
+		} catch (ClassCastException e) {
+			return false;
+		}
 	}
 
-	public boolean contains(String key) {
-		return indexOf(key) >= 0;
-	}
-
-	public <V> ParameterMap<V> createMap() {
+	public <V> QuickMap<E, V> createMap() {
 		if (theKeys.length == 0)
-			return (ParameterMap<V>) EMPTY_MAP;
+			return (QuickMap<E, V>) EMPTY_MAP;
 		if (theMapCache != null) {
-			ParameterMapImpl<?> map = theMapCache.poll();
+			QuickMapImpl<?, ?> map = theMapCache.poll();
 			if (map != null) {
 				map.init(null);
-				return (ParameterMap<V>) map;
+				return (QuickMap<E, V>) map;
 			}
 		}
-		return new ParameterMapImpl<>(this, null);
+		return new QuickMapImpl<>(this, null);
 	}
 
-	public <V> ParameterMap<V> createMap(IntFunction<V> valueProducer) {
+	public <V> QuickMap<E, V> createMap(IntFunction<V> valueProducer) {
 		if (theMapCache != null) {
-			ParameterMapImpl<?> map = theMapCache.poll();
+			QuickMapImpl<?, ?> map = theMapCache.poll();
 			if (map != null) {
-				((ParameterMapImpl<V>) map).init(valueProducer);
-				return (ParameterMap<V>) map;
+				((QuickMapImpl<?, V>) map).init(valueProducer);
+				return (QuickMap<E, V>) map;
 			}
 		}
-		return new ParameterMapImpl<>(this, valueProducer);
+		return new QuickMapImpl<>(this, valueProducer);
 	}
 
-	public <V> ParameterMap<V> createDynamicMap(IntFunction<V> valueProducer) {
-		return new DynamicParameterMapImpl<>(this, valueProducer);
+	public <V> QuickMap<E, V> createDynamicMap(IntFunction<V> valueProducer) {
+		return new DynamicQuickMapImpl<>(this, valueProducer);
 	}
 
 	private static volatile int RELEASE_COUNT;
 	private static volatile boolean IS_CACHING_MAPS;
 
-	void released(ParameterMapImpl<?> map) {
+	void released(QuickMapImpl<?, ?> map) {
 		int maxCached = MAX_CACHED_MAPS;
 		if (maxCached == 0) {
 			return;
@@ -169,7 +193,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 	}
 
 	@Override
-	public int compareTo(ParameterSet o) {
+	public int compareTo(QuickSet<E> o) {
 		int comp = theKeys.length - o.theKeys.length;
 		if (comp != 0) {
 			return comp;
@@ -178,7 +202,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			if (theKeys[k] == o.theKeys[k]) {
 				continue;
 			}
-			comp = compare(k, o.theKeys[k]);
+			comp = compare(k, (E) o.theKeys[k]);
 			if (comp != 0) {
 				return comp;
 			}
@@ -190,7 +214,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 	public int hashCode() {
 		if (!hashed) {
 			int hash = 0;
-			for (String key : theKeys) {
+			for (Object key : theKeys) {
 				hash += key.hashCode();
 			}
 			hashCode = hash;
@@ -203,10 +227,10 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 	public boolean equals(Object obj) {
 		if (obj == this) {
 			return true;
-		} else if (!(obj instanceof ParameterSet)) {
+		} else if (!(obj instanceof QuickSet)) {
 			return false;
 		}
-		ParameterSet other = (ParameterSet) obj;
+		QuickSet<?> other = (QuickSet<?>) obj;
 		// Hash code is likely to be more expensive than equals
 		// Don't compute the hash code if it's not already, but if we have it, use it
 		if (hashed && other.hashed && hashCode != other.hashCode) {
@@ -220,20 +244,18 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 				continue;
 			}
 			allIdentical = false;
-			if (theKeys[i].length() != other.theKeys[i].length()) {
-				return false;
-			}
 		}
 		if (allIdentical) {
 			return true;
 		}
 		// We already checked the length
-		for (int i = 0; i < theKeys.length; i++) {
-			for (int c = 0; c < theKeys[i].length(); c++) {
-				if (theKeys[i].charAt(c) != other.theKeys[i].charAt(c)) {
+		try {
+			for (int i = 0; i < theKeys.length; i++) {
+				if (compare.compare((E) theKeys[i], (E) other.theKeys[i]) != 0)
 					return false;
-				}
 			}
+		} catch (ClassCastException e) {
+			return false;
 		}
 		return true;
 	}
@@ -245,11 +267,24 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 
 	// This interface does not extend Map<String, V> because its functionality differs a bit
 	// It throws exceptions when a value is requested for a key that does not exist in the key set
-	public interface ParameterMap<V> {
-		ParameterSet keySet();
+	public interface QuickMap<K, V> {
+		QuickSet<K> keySet();
 
-		default int keyIndex(String key) {
+		default int keyIndex(K key) {
 			int index = keySet().indexOf(key);
+			if (index < 0) {
+				throw new IllegalArgumentException("Key is not present: " + key);
+			}
+			return index;
+		}
+
+		default int keyIndexTolerant(Object key) {
+			int index;
+			try {
+				index = keySet().indexOf((K) key);
+			} catch (ClassCastException e) {
+				return -1;
+			}
 			if (index < 0) {
 				throw new IllegalArgumentException("Key is not present: " + key);
 			}
@@ -263,30 +298,30 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 
 		V put(int index, V value);
 
-		V computeIfAbsent(int index, Function<String, V> valueProducer);
+		V computeIfAbsent(int index, Function<? super K, ? extends V> valueProducer);
 
-		default V get(String key) {
+		default V get(K key) {
 			return get(//
 					keyIndex(key));
 		}
 
-		default V getIfPresent(String key) {
+		default V getIfPresent(K key) {
 			int keyIndex = keyIndex(key);
 			if (keyIndex < 0)
 				return null;
 			return get(keyIndex);
 		}
 
-		default V put(String key, V value) {
+		default V put(K key, V value) {
 			return put(keyIndex(key), value);
 		}
 
-		default V computeIfAbsent(String key, Function<String, V> valueProducer) {
+		default V computeIfAbsent(K key, Function<? super K, ? extends V> valueProducer) {
 			return computeIfAbsent(keyIndex(key), valueProducer);
 		}
 
-		default ParameterMap<V> withAll(Map<String, ? extends V> values) {
-			for (Map.Entry<String, ? extends V> entry : values.entrySet()) {
+		default QuickMap<K, V> withAll(Map<? extends K, ? extends V> values) {
+			for (Map.Entry<? extends K, ? extends V> entry : values.entrySet()) {
 				int idx = keySet().indexOf(entry.getKey());
 				if (idx >= 0)
 					put(idx, entry.getValue());
@@ -304,42 +339,42 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			return StreamSupport.stream(Spliterators.spliterator(values().iterator(), valueCount(), 0), false);
 		}
 
-		default Map.Entry<String, V>[] toEntryArray() {
-			Map.Entry<String, V>[] array = new Map.Entry[keySet().size()];
+		default Map.Entry<K, V>[] toEntryArray() {
+			Map.Entry<K, V>[] array = new Map.Entry[keySet().size()];
 			for (int i = 0; i < array.length; i++) {
 				array[i] = new SimpleMapEntry<>(keySet().get(i), get(i));
 			}
 			return array;
 		}
 
-		default ParameterMap<V> copy() {
+		default QuickMap<K, V> copy() {
 			if (keySet().isEmpty())
 				return this;
-			ParameterMap<V> copy = keySet().createMap();
+			QuickMap<K, V> copy = keySet().createMap();
 			for (int i = 0; i < keySet().size(); i++) {
 				copy.put(i, get(i));
 			}
 			return copy;
 		}
 
-		ParameterMap<V> unmodifiable();
+		QuickMap<K, V> unmodifiable();
 
-		default Map<String, V> asJavaMap() {
+		default Map<K, V> asJavaMap() {
 			return new ParamMapAsMap<>(this);
 		}
 
 		/** If supported, allows this map to be released and re-used later */
 		void release();
 
-		static <V> ParameterMap<V> of(Map<String, V> values) {
-			return ParameterSet.of(values.keySet()).<V> createMap().withAll(values);
+		static <K, V> QuickMap<K, V> of(Map<K, V> values, Comparator<? super K> keyCompare) {
+			return QuickSet.of(keyCompare, values.keySet()).<V> createMap().withAll(values);
 		}
 	}
 
-	private static final class EmptyParameterMap<T> implements ParameterMap<T> {
+	private static final class EmptyQuickMap<K, T> implements QuickMap<K, T> {
 		@Override
-		public ParameterSet keySet() {
-			return EMPTY;
+		public QuickSet<K> keySet() {
+			return (QuickSet<K>) EMPTY;
 		}
 
 		@Override
@@ -358,7 +393,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 
 		@Override
-		public T computeIfAbsent(int index, Function<String, T> valueProducer) {
+		public T computeIfAbsent(int index, Function<? super K, ? extends T> valueProducer) {
 			throw new IndexOutOfBoundsException(index + " of 0");
 		}
 
@@ -376,7 +411,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 
 		@Override
-		public ParameterMap<T> unmodifiable() {
+		public QuickMap<K, T> unmodifiable() {
 			return this;
 		}
 
@@ -384,19 +419,19 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		public void release() {}
 	}
 
-	public static final class CustomOrderedParameterSet extends AbstractSet<String> {
-		final ParameterSet theSet;
+	public static final class CustomOrderedQuickSet<E> extends AbstractSet<E> {
+		final QuickSet<E> theSet;
 		final int theSize;
 		final int[] theCustomOrder;
 		final int[] theReverseCustomOrder;
 
-		public CustomOrderedParameterSet(ParameterSet set, Set<String> order) {
+		public CustomOrderedQuickSet(QuickSet<E> set, Set<E> order) {
 			theSet = set;
 			theCustomOrder = new int[set.size()];
 			theReverseCustomOrder = new int[set.size()];
 			Arrays.fill(theReverseCustomOrder, -1);
 			int i = 0;
-			for (String s : order) {
+			for (E s : order) {
 				int keyIndex = set.indexOf(s);
 				theCustomOrder[i] = keyIndex;
 				theReverseCustomOrder[keyIndex] = i;
@@ -405,7 +440,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			theSize = i;
 		}
 
-		public ParameterSet getStringSet() {
+		public QuickSet<E> getQuickSet() {
 			return theSet;
 		}
 
@@ -424,7 +459,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			if (!(o instanceof String)) {
 				return false;
 			}
-			int keyIndex = theSet.indexOf((String) o);
+			int keyIndex = theSet.indexOfTolerant(o);
 			if (keyIndex < 0) {
 				return false;
 			}
@@ -432,13 +467,13 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 
 		@Override
-		public Iterator<String> iterator() {
+		public Iterator<E> iterator() {
 			return new COSSSSIterator();
 		}
 
 		@Override
 		public Object[] toArray() {
-			String[] array = new String[theSize];
+			Object[] array = new String[theSize];
 			for (int i = 0; i < theSize; i++) {
 				array[i] = theSet.get(theCustomOrder[i]);
 			}
@@ -447,9 +482,6 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 
 		@Override
 		public <T> T[] toArray(T[] a) {
-			if (!(a instanceof String[]) && a.getClass() != Object[].class) {
-				throw new ClassCastException("Strings cannot be cast to " + a.getClass().getComponentType().getName());
-			}
 			if (a.length < theSize) {
 				if (a instanceof String[]) {
 					a = (T[]) new String[theSize];
@@ -463,7 +495,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			return a;
 		}
 
-		private class COSSSSIterator implements Iterator<String> {
+		private class COSSSSIterator implements Iterator<E> {
 			private int index;
 
 			@Override
@@ -472,35 +504,35 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			}
 
 			@Override
-			public String next() {
+			public E next() {
 				if (index == theSize) {
 					throw new NoSuchElementException();
 				}
-				String s = theSet.get(theCustomOrder[index]);
+				Object s = theSet.get(theCustomOrder[index]);
 				index++;
-				return s;
+				return (E) s;
 			}
 		}
 	}
 
-	public static final class CustomOrderedParameterMap<V> extends AbstractMap<String, V> {
-		final ParameterMap<V> theMap;
-		final CustomOrderedParameterSet theKeySet;
+	public static final class CustomOrderedQuickMap<K, V> extends AbstractMap<K, V> {
+		final QuickMap<K, V> theMap;
+		final CustomOrderedQuickSet<K> theKeySet;
 
-		public CustomOrderedParameterMap(ParameterMap<V> map, Set<String> order) {
+		public CustomOrderedQuickMap(QuickMap<K, V> map, Set<K> order) {
 			theMap = map;
-			if (order instanceof CustomOrderedParameterSet) {
-				theKeySet = (CustomOrderedParameterSet) order;
+			if (order instanceof CustomOrderedQuickSet) {
+				theKeySet = (CustomOrderedQuickSet<K>) order;
 			} else {
-				theKeySet = new CustomOrderedParameterSet(theMap.keySet(), order);
+				theKeySet = new CustomOrderedQuickSet<>(theMap.keySet(), order);
 			}
 		}
 
-		public ParameterMap<V> getMap() {
+		public QuickMap<K, V> getMap() {
 			return theMap;
 		}
 
-		public CustomOrderedParameterSet getKeySet() {
+		public CustomOrderedQuickSet<K> getKeySet() {
 			return theKeySet;
 		}
 
@@ -519,7 +551,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			if (!(key instanceof String)) {
 				return null;
 			}
-			int index = theMap.keySet().indexOf((String) key);
+			int index = theMap.keySet().indexOfTolerant(key);
 			if (index < 0 || theKeySet.theReverseCustomOrder[index] < 0) {
 				return null;
 			}
@@ -527,8 +559,8 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 
 		@Override
-		public V put(String key, V value) {
-			int index = theMap.keySet().indexOf(key);
+		public V put(K key, V value) {
+			int index = theMap.keyIndexTolerant(key);
 			if (index < 0 || theKeySet.theReverseCustomOrder[index] < 0) {
 				return null;
 			}
@@ -537,10 +569,10 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 
 		@Override
 		public V remove(Object key) {
-			if (!(key instanceof String)) {
+			int index = theMap.keyIndexTolerant(key);
+			if (index < 0)
 				return null;
-			}
-			return put((String) key, null);
+			return theMap.put(index, null);
 		}
 
 		@Override
@@ -551,12 +583,12 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 
 		@Override
-		public Set<String> keySet() {
+		public Set<K> keySet() {
 			return theKeySet;
 		}
 
 		@Override
-		public Set<Map.Entry<String, V>> entrySet() {
+		public Set<Map.Entry<K, V>> entrySet() {
 			return new EntrySet();
 		}
 
@@ -569,8 +601,8 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			if (theKeySet.theSize != other.size()) {
 				return false;
 			}
-			if (other instanceof CustomOrderedParameterMap) {
-				CustomOrderedParameterMap<?> otherSSMap = (CustomOrderedParameterMap<?>) other;
+			if (other instanceof CustomOrderedQuickMap) {
+				CustomOrderedQuickMap<?, ?> otherSSMap = (CustomOrderedQuickMap<?, ?>) other;
 				if (theMap.keySet().equals(otherSSMap.theMap.keySet())
 						&& Arrays.equals(theKeySet.theCustomOrder, otherSSMap.theKeySet.theCustomOrder)) {
 					if (theMap == otherSSMap.theMap) {
@@ -595,7 +627,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			return true;
 		}
 
-		private class EntrySet extends AbstractSet<Map.Entry<String, V>> {
+		private class EntrySet extends AbstractSet<Map.Entry<K, V>> {
 			@Override
 			public int size() {
 				return theKeySet.theSize;
@@ -608,16 +640,16 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 
 			@Override
 			public boolean contains(Object o) {
-				return CustomOrderedParameterMap.this.containsKey(o);
+				return CustomOrderedQuickMap.this.containsKey(o);
 			}
 
 			@Override
-			public Iterator<Map.Entry<String, V>> iterator() {
+			public Iterator<Map.Entry<K, V>> iterator() {
 				return new EntryIterator();
 			}
 		}
 
-		private class EntryIterator implements Iterator<Map.Entry<String, V>> {
+		private class EntryIterator implements Iterator<Map.Entry<K, V>> {
 			private int index;
 
 			@Override
@@ -626,7 +658,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			}
 
 			@Override
-			public Map.Entry<String, V> next() {
+			public Map.Entry<K, V> next() {
 				if (index == theKeySet.theSize) {
 					throw new NoSuchElementException();
 				}
@@ -636,7 +668,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			}
 		}
 
-		private class Entry implements Map.Entry<String, V> {
+		private class Entry implements Map.Entry<K, V> {
 			private final int index;
 
 			Entry(int index) {
@@ -644,7 +676,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			}
 
 			@Override
-			public String getKey() {
+			public K getKey() {
 				return theMap.keySet().get(index);
 			}
 
@@ -660,10 +692,10 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 	}
 
-	static final class ParamMapAsMap<V> extends AbstractMap<String, V> {
-		private final ParameterMap<V> theMap;
+	static final class ParamMapAsMap<K, V> extends AbstractMap<K, V> {
+		private final QuickMap<K, V> theMap;
 
-		ParamMapAsMap(ParameterMap<V> map) {
+		ParamMapAsMap(QuickMap<K, V> map) {
 			theMap = map;
 		}
 
@@ -697,7 +729,12 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			if (!(key instanceof String)) {
 				return null;
 			}
-			int index = theMap.keyIndex((String) key);
+			int index;
+			try {
+				index = theMap.keySet().indexOf((K) key);
+			} catch (ClassCastException e) {
+				return null;
+			}
 			if (index < 0) {
 				return null;
 			}
@@ -705,7 +742,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 
 		@Override
-		public V put(String key, V value) {
+		public V put(K key, V value) {
 			return theMap.put(key, value);
 		}
 
@@ -714,7 +751,12 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			if (!(key instanceof String)) {
 				return null;
 			}
-			int index = theMap.keyIndex((String) key);
+			int index;
+			try {
+				index = theMap.keySet().indexOf((K) key);
+			} catch (ClassCastException e) {
+				return null;
+			}
 			if (index < 0) {
 				return null;
 			}
@@ -727,18 +769,18 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 
 		@Override
-		public Set<String> keySet() {
+		public Set<K> keySet() {
 			return theMap.keySet();
 		}
 
 		@Override
-		public Set<Map.Entry<String, V>> entrySet() {
+		public Set<Map.Entry<K, V>> entrySet() {
 			return new EntrySet();
 		}
 
-		private class EntrySet extends AbstractSet<Map.Entry<String, V>> {
+		private class EntrySet extends AbstractSet<Map.Entry<K, V>> {
 			@Override
-			public Iterator<Map.Entry<String, V>> iterator() {
+			public Iterator<Map.Entry<K, V>> iterator() {
 				return new SSSEntryIterator();
 			}
 
@@ -748,7 +790,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			}
 		}
 
-		private class SSSEntryIterator implements Iterator<Map.Entry<String, V>> {
+		private class SSSEntryIterator implements Iterator<Map.Entry<K, V>> {
 			private int index;
 
 			@Override
@@ -757,14 +799,14 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			}
 
 			@Override
-			public Map.Entry<String, V> next() {
+			public Map.Entry<K, V> next() {
 				SSSEntry entry = new SSSEntry(index);
 				index++;
 				return entry;
 			}
 		}
 
-		private class SSSEntry implements Map.Entry<String, V> {
+		private class SSSEntry implements Map.Entry<K, V> {
 			private final int index;
 
 			SSSEntry(int index) {
@@ -772,7 +814,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 			}
 
 			@Override
-			public String getKey() {
+			public K getKey() {
 				return theMap.keySet().get(index);
 			}
 
@@ -849,15 +891,15 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 	}
 
-	static final class ParameterMapImpl<V> implements ParameterMap<V> {
-		private final ParameterSet theKeys;
+	static final class QuickMapImpl<K, V> implements QuickMap<K, V> {
+		private final QuickSet<K> theKeys;
 		private Object[] theValues;
 		private IntFunction<V> theValueFunction;
-		private UnmodifiableParameterMap<V> unmodifiable;
+		private UnmodifiableQuickMap<K, V> unmodifiable;
 
 		private int hashCode;
 
-		ParameterMapImpl(ParameterSet keys, IntFunction<V> valueProducer) {
+		QuickMapImpl(QuickSet<K> keys, IntFunction<V> valueProducer) {
 			theKeys = keys;
 			theValueFunction = valueProducer;
 
@@ -871,7 +913,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 
 		@Override
-		public ParameterSet keySet() {
+		public QuickSet<K> keySet() {
 			return theKeys;
 		}
 
@@ -918,7 +960,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 
 		@Override
-		public V computeIfAbsent(int index, Function<String, V> valueProducer) {
+		public V computeIfAbsent(int index, Function<? super K, ? extends V> valueProducer) {
 			if (theValues == null)
 				theValues = new Object[theKeys.size()];
 			V value = (V) theValues[index];
@@ -953,9 +995,9 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 
 		@Override
-		public ParameterMap<V> unmodifiable() {
+		public QuickMap<K, V> unmodifiable() {
 			if (unmodifiable == null) {
-				unmodifiable = new UnmodifiableParameterMap<>(this);
+				unmodifiable = new UnmodifiableQuickMap<>(this);
 			}
 			return unmodifiable;
 		}
@@ -983,10 +1025,10 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		public boolean equals(Object obj) {
 			if(this==obj) {
 				return true;
-			} else if(!(obj instanceof ParameterMap)) {
+			} else if (!(obj instanceof QuickMap)) {
 				return false;
 			}
-			ParameterMap<?> other=(ParameterMap<?>) obj;
+			QuickMap<?, ?> other = (QuickMap<?, ?>) obj;
 			if (!theKeys.equals(other.keySet())) {
 				return false;
 			}
@@ -1024,18 +1066,18 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 	}
 
-	static final class DynamicParameterMapImpl<V> implements ParameterMap<V> {
-		private final ParameterSet theKeys;
+	static final class DynamicQuickMapImpl<K, V> implements QuickMap<K, V> {
+		private final QuickSet<K> theKeys;
 		private final IntFunction<? extends V> theValues;
-		private UnmodifiableParameterMap<V> unmodifiable;
+		private UnmodifiableQuickMap<K, V> unmodifiable;
 
-		DynamicParameterMapImpl(ParameterSet keySet, IntFunction<? extends V> values) {
+		DynamicQuickMapImpl(QuickSet<K> keySet, IntFunction<? extends V> values) {
 			theKeys = keySet;
 			theValues = values;
 		}
 
 		@Override
-		public ParameterSet keySet() {
+		public QuickSet<K> keySet() {
 			return theKeys;
 		}
 
@@ -1061,7 +1103,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 
 		@Override
-		public V computeIfAbsent(int index, Function<String, V> valueProducer) {
+		public V computeIfAbsent(int index, Function<? super K, ? extends V> valueProducer) {
 			return get(index);
 		}
 
@@ -1128,9 +1170,9 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 
 		@Override
-		public ParameterMap<V> unmodifiable() {
+		public QuickMap<K, V> unmodifiable() {
 			if (unmodifiable == null) {
-				unmodifiable = new UnmodifiableParameterMap<>(this);
+				unmodifiable = new UnmodifiableQuickMap<>(this);
 			}
 			return unmodifiable;
 		}
@@ -1153,10 +1195,10 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		public boolean equals(Object obj) {
 			if (this == obj) {
 				return true;
-			} else if (!(obj instanceof ParameterMap)) {
+			} else if (!(obj instanceof QuickMap)) {
 				return false;
 			}
-			ParameterMap<?> other = (ParameterMap<?>) obj;
+			QuickMap<?, ?> other = (QuickMap<?, ?>) obj;
 			if (!theKeys.equals(other.keySet())) {
 				return false;
 			}
@@ -1186,15 +1228,15 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 	}
 
-	static final class UnmodifiableParameterMap<V> implements ParameterMap<V> {
-		private final ParameterMap<V> theWrapped;
+	static final class UnmodifiableQuickMap<K, V> implements QuickMap<K, V> {
+		private final QuickMap<K, V> theWrapped;
 
-		UnmodifiableParameterMap(ParameterMap<V> wrapped) {
+		UnmodifiableQuickMap(QuickMap<K, V> wrapped) {
 			theWrapped = wrapped;
 		}
 
 		@Override
-		public ParameterSet keySet() {
+		public QuickSet<K> keySet() {
 			return theWrapped.keySet();
 		}
 
@@ -1214,7 +1256,7 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		}
 
 		@Override
-		public V computeIfAbsent(int index, Function<String, V> valueProducer) {
+		public V computeIfAbsent(int index, Function<? super K, ? extends V> valueProducer) {
 			throw new UnsupportedOperationException("This map supplies its own values");
 		}
 
@@ -1236,17 +1278,17 @@ public final class ParameterSet extends AbstractSet<String> implements Comparabl
 		// Non-modifying default methods overridden for performance
 
 		@Override
-		public int keyIndex(String key) {
+		public int keyIndex(K key) {
 			return theWrapped.keyIndex(key);
 		}
 
 		@Override
-		public V get(String key) {
+		public V get(K key) {
 			return theWrapped.get(key);
 		}
 
 		@Override
-		public ParameterMap<V> unmodifiable() {
+		public QuickMap<K, V> unmodifiable() {
 			return this;
 		}
 
