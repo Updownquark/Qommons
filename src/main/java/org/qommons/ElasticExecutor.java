@@ -2,6 +2,7 @@ package org.qommons;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -14,18 +15,21 @@ public class ElasticExecutor<T> {
 	public static final int MAX_POSSIBLE_QUEUE_SIZE = 1_000_000_000;
 
 	/**
-	 * Executes tasks on a single thread for an {@link ElasticExecutor}
+	 * Executes tasks on a single thread for an {@link ElasticExecutor}. The {@link AutoCloseable#close()} method will be called when this
+	 * class is no longer needed.
 	 * 
 	 * @param <T> The type of task to execute
 	 */
-	public interface TaskExecutor<T> {
+	public interface TaskExecutor<T> extends AutoCloseable {
 		/**
 		 * Executes a task
 		 * 
 		 * @param task The task to execute
-		 * @return The result of the task (currently unused)
 		 */
-		int execute(T task);
+		void execute(T task);
+
+		@Override
+		default void close() throws Exception {}
 	}
 
 	/** An interface to facilitate custom handling of threads for an {@link ElasticExecutor} */
@@ -49,6 +53,7 @@ public class ElasticExecutor<T> {
 	private final AtomicInteger theQueueSize;
 	private volatile Runner theRunner;
 	private final AtomicInteger theThreadCount;
+	private final AtomicInteger theActiveThreads;
 	private volatile ConcurrentLinkedQueue<TaskExecutor<? super T>> theCachedWorkers;
 
 	/**
@@ -70,6 +75,7 @@ public class ElasticExecutor<T> {
 		theQueueSize = new AtomicInteger();
 		theRunner = new DefaultRunner();
 		theThreadCount = new AtomicInteger();
+		theActiveThreads = new AtomicInteger();
 	}
 
 	/**
@@ -203,15 +209,26 @@ public class ElasticExecutor<T> {
 
 	/**
 	 * @param cacheWorkers Whether this executor should, when threads are released due to being no longer needed, cache workers created by
-	 *        its task executor for re-use when more threads are needed later
+	 *        its task executor for re-use when more threads are needed later. If false and this executor currently has workers cached, they
+	 *        will be {@link TaskExecutor#close() closed}.
 	 * @return This executor
 	 */
 	public synchronized ElasticExecutor<T> cacheWorkers(boolean cacheWorkers) {
 		if ((theCachedWorkers != null) != cacheWorkers) {
 			if (cacheWorkers)
 				theCachedWorkers = new ConcurrentLinkedQueue<>();
-			else
+			else {
+				TaskExecutor<? super T> worker = theCachedWorkers.poll();
+				while (worker != null) {
+					try {
+						worker.close();
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+					worker = theCachedWorkers.poll();
+				}
 				theCachedWorkers = null;
+			}
 		}
 		return this;
 	}
@@ -247,6 +264,68 @@ public class ElasticExecutor<T> {
 	/** @return The current number of threads being used to execute tasks */
 	public int getThreadCount() {
 		return theThreadCount.get();
+	}
+
+	/** @return The number of threads actively working on tasks for this executor */
+	public int getActiveThreads() {
+		return theActiveThreads.get();
+	}
+
+	/**
+	 * Causes this thread to block until this executor has finished all its tasks, or until the given timeout expires
+	 * 
+	 * @param timeout The maximum amount of time to wait for the queue to empty, or &lt;=0 to wait forever
+	 * @return True if the method exits because the queue is empty; false if it exits due to the timeout parameter
+	 */
+	public boolean waitWhileActive(long timeout) {
+		long endTime = timeout <= 0 ? 0 : System.currentTimeMillis() + timeout;
+		while (theActiveThreads.get() > 0 || theQueueSize.get() > 0) {
+			long sleepTime;
+			if (timeout >= 0) {
+				long now = System.currentTimeMillis();
+				if (now >= endTime)
+					return false;
+				else
+					sleepTime = Math.min(endTime - now, 10);
+			} else
+				sleepTime = 10;
+			try {
+				Thread.sleep(sleepTime);
+			} catch (InterruptedException e) {
+				// Just wake up normally
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * <p>
+	 * Clears all <i>waiting</i> tasks in the execution queue, calling the parameter's {@link Consumer#accept(Object) accept} method for
+	 * each item in the queue that will no longer be {@link TaskExecutor#execute(Object) executed} as a result of this call. This action
+	 * runs on the thread it is called from. If a task is {@link #execute(Object) scheduled} to be executed (either by the
+	 * <code>onEachCleared</code> action or from another thread) while this call is running, such tasks may or may not be cleared by this
+	 * call.
+	 * </p>
+	 * <p>
+	 * This method does not attempt to stop the execution of tasks that are currently being executed or are just about to be executed. Such
+	 * functionality must be implemented by the {@link TaskExecutor#execute(Object) execute} method of the implementation.
+	 * </p>
+	 * 
+	 * @param onEachCleared An action to perform on each cleared task. May be null.
+	 * @return The number of tasks that were {@link #execute(Object) scheduled} to be {@link TaskExecutor#execute(Object) executed} in this
+	 *         executor that will not be executed as a result of this call
+	 */
+	public int clear(Consumer<? super T> onEachCleared) {
+		int cleared = 0;
+		T task = theQueue.poll();
+		while (task != null) {
+			cleared++;
+			theQueueSize.decrementAndGet();
+			if (onEachCleared != null)
+				onEachCleared.accept(task);
+			task = theQueue.poll();
+		}
+		return cleared;
 	}
 
 	private boolean startThread(int threadNumber) {
@@ -285,7 +364,8 @@ public class ElasticExecutor<T> {
 			while (true) {
 				T task = theQueue.poll();
 				if (task != null) {
-					while (task != null) {
+					theActiveThreads.getAndIncrement();
+					do {
 						if (theQueueSize.decrementAndGet() >= thePreferredQueueSize) {
 							// Think about allocating a new writer
 							int newId = theThreadCount.incrementAndGet();
@@ -295,19 +375,16 @@ public class ElasticExecutor<T> {
 								theThreadCount.decrementAndGet();
 							}
 						}
-						@SuppressWarnings("unused")
-						int result;
 						try {
-							result = theTaskExecutor.execute(task);
+							theTaskExecutor.execute(task);
 						} catch (RuntimeException | Error e) {
 							e.printStackTrace();
-							result = -1;
 						}
-						// TODO Perhaps accumulate the result for reporting somehow?
 						task = theQueue.poll();
 						now = System.currentTimeMillis();
 						lastUsed = now;
-					}
+					} while (task != null);
+					theActiveThreads.decrementAndGet();
 				} else {
 					try {
 						Thread.sleep(5);
@@ -324,6 +401,11 @@ public class ElasticExecutor<T> {
 						cache.add(theTaskExecutor);
 					break;
 				}
+			}
+			try {
+				((AutoCloseable) theTaskExecutor).close();
+			} catch (Exception e) {
+				e.printStackTrace();
 			}
 			theThreadCount.decrementAndGet();
 		}
