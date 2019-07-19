@@ -89,6 +89,25 @@ public interface Format<T> {
 		}
 	};
 
+	/** Formats a boolean value to "true" or "false" (or "null") */
+	public static final Format<Boolean> BOOLEAN = new Format<Boolean>() {
+		@Override
+		public void append(StringBuilder text, Boolean value) {
+			text.append(value);
+		}
+
+		@Override
+		public Boolean parse(CharSequence text) throws ParseException {
+			String str = text.toString().toLowerCase();
+			if (str.equals("true"))
+				return Boolean.TRUE;
+			else if (str.equals("null"))
+				return null;
+			else
+				return Boolean.FALSE;
+		}
+	};
+
 	public static final Format<Duration> DURATION = new Format<Duration>() {
 		@Override
 		public void append(StringBuilder text, Duration value) {
