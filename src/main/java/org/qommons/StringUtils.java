@@ -8,6 +8,8 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -87,6 +89,103 @@ public class StringUtils {
 				format.accept(value, into);
 			}
 		};
+	}
+
+	public static class Name {
+		private final String[] theComponents;
+
+		public Name(String[] components) {
+			theComponents = components;
+		}
+
+		public String[] getComponents() {
+			return theComponents;
+		}
+
+		public StringBuilder toCaseScheme(StringBuilder str, boolean initialCapital, boolean intermediateCapital, CharSequence delimiter) {
+			for (int i = 0; i < theComponents.length; i++) {
+				if (i == 0) {
+					if (initialCapital) {
+						str.append(Character.toUpperCase(theComponents[i].charAt(0)));
+						str.append(theComponents[i], 1, theComponents[i].length());
+					} else
+						str.append(theComponents[i]);
+				} else {
+					if (delimiter != null)
+						str.append(delimiter);
+					if (intermediateCapital) {
+						str.append(Character.toUpperCase(theComponents[i].charAt(0)));
+						str.append(theComponents[i], 1, theComponents[i].length());
+					} else
+						str.append(theComponents[i]);
+				}
+			}
+			return str;
+		}
+
+		public String toCaseScheme(boolean initialCapital, boolean intermediateCapital, CharSequence delimiter) {
+			return toCaseScheme(new StringBuilder(), initialCapital, intermediateCapital, delimiter).toString();
+		}
+
+		public String toPascalCase() {
+			return toPascalCase(new StringBuilder()).toString();
+		}
+
+		public StringBuilder toPascalCase(StringBuilder str) {
+			return toCaseScheme(str, true, true, null);
+		}
+
+		public String toCamelCase() {
+			return toCamelCase(new StringBuilder()).toString();
+		}
+
+		public StringBuilder toCamelCase(StringBuilder str) {
+			return toCaseScheme(str, false, true, null);
+		}
+
+		public String toKebabCase() {
+			return toKebabCase(new StringBuilder()).toString();
+		}
+
+		public StringBuilder toKebabCase(StringBuilder str) {
+			return toCaseScheme(str, false, false, "-");
+		}
+	}
+
+	public static Name parseByCase(String name) {
+		if (name.length() == 0)
+			return new Name(new String[0]);
+		List<String> components = new LinkedList<>();
+		StringBuilder comp = new StringBuilder();
+		boolean hadLower = false;
+		for (int c = 0; c < name.length(); c++) {
+			if (Character.isUpperCase(name.charAt(c))) {
+				if (hadLower) {
+					components.add(comp.toString());
+					comp.setLength(0);
+					hadLower = false;
+				}
+				comp.append(Character.toLowerCase(name.charAt(c)));
+			} else {
+				comp.append(name.charAt(c));
+				hadLower = true;
+			}
+		}
+		components.add(comp.toString());
+		return new Name(components.toArray(new String[components.size()]));
+	}
+
+	public static Name split(String str, char delimiter) {
+		List<String> components = new LinkedList<>();
+		int start = 0;
+		for (int c = 0; c < str.length(); c++) {
+			if (str.charAt(c) == delimiter) {
+				components.add(str.substring(start, c));
+				start = c;
+			}
+		}
+		components.add(str.substring(start));
+		return new Name(components.toArray(new String[components.size()]));
 	}
 
 	public static final String HEX_CHARS = "0123456789ABCDEF";
