@@ -188,6 +188,36 @@ public class StringUtils {
 		return new Name(components.toArray(new String[components.size()]));
 	}
 
+	/**
+	 * @param name The singular name
+	 * @return The plural of the given name
+	 */
+	public static String pluralize(String name) {
+		if (name.endsWith("y")) {
+			name = name.substring(0, name.length() - 1) + "ie";
+		} else if (name.endsWith("s")) {
+			name += "e";
+		}
+		name += "s";
+		return name;
+	}
+
+	/**
+	 * @param name The plural name
+	 * @return The singular of the given name
+	 */
+	public static String singularize(String name) {
+		if (name.endsWith("ies")) {
+			return name.substring(0, name.length() - 3) + "y";
+		} else if (name.endsWith("ses")) {
+			return name.substring(0, name.length() - 2);
+		} else if (name.endsWith("s")) {
+			return name.substring(0, name.length() - 1);
+		} else {
+			return name;
+		}
+	}
+
 	public static final String HEX_CHARS = "0123456789ABCDEF";
 
 	public interface ByteIterator {
