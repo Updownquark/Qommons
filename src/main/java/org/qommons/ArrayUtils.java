@@ -1808,8 +1808,12 @@ public final class ArrayUtils {
 					T1 replaceValue = dl.set(o1, idx1, incMod, o2, idx2, retIdx);
 					if(replaceValue == null)
 						original.remove(incMod);
-					else
+					else if (incMod == retIdx)
 						original.set(incMod, replaceValue);
+					else {
+						original.remove(incMod);
+						original.add(retIdx, replaceValue);
+					}
 					return replaceValue;
 				}
 			});
