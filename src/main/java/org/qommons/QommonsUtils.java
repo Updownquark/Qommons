@@ -379,9 +379,13 @@ public class QommonsUtils {
 		if (neg)
 			c++;
 		StringBuilder unit = new StringBuilder();
+		boolean hadContent = false;
 		for (; c < text.length(); c++) {
 			if (c < text.length() && Character.isWhitespace(text.charAt(c)))
 				c++;
+			if (c == text.length())
+				break;
+			hadContent = true;
 			int valueStart = c;
 			long value = 0;
 			while (c < text.length() && text.charAt(c) >= '0' && text.charAt(c) <= '9') {
@@ -406,14 +410,10 @@ public class QommonsUtils {
 					}
 					c++;
 				}
-			}
-			if (c == decimalStart) {
-				if (duration.isZero())
+				if (c == decimalStart)
 					throw new ParseException("Unrecognized duration", 0);
-				else
-					throw new ParseException("Numerical value expected", valueStart);
 			}
-			if (c < text.length() && Character.isWhitespace(text.charAt(c)))
+			while (c < text.length() && Character.isWhitespace(text.charAt(c)))
 				c++;
 
 			int unitStart = c;
@@ -493,6 +493,8 @@ public class QommonsUtils {
 				break;
 			}
 		}
+		if (!hadContent)
+			throw new ParseException("No content to parse", c);
 		if (neg)
 			duration = duration.negated();
 		return duration;
