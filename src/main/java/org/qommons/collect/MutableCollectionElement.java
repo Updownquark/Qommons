@@ -23,6 +23,7 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 		static String WRONG_GROUP = "Item does not belong to this group";
 		static String NOT_FOUND = "No such item found";
 		static String ILLEGAL_ELEMENT = "Element is not allowed";
+		static String ELEMENT_REMOVED = "Element has been removed";
 	}
 
 	/** @return The collection that this element belongs to */

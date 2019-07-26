@@ -786,7 +786,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 			else {
 				if (theLastElement == null)
 					next = theCollection.getTerminalElement(true);
-				else if (theLastElement.isPresent())
+				else if (theLastElement != null)
 					next = theCollection.getAdjacentElement(theLastElement, true);
 				return next != null;
 			}

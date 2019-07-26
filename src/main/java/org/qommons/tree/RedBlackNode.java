@@ -720,7 +720,11 @@ public final class RedBlackNode<E> {
 			switchWith(successor);
 			// Now we've switched locations with successor, so we have either 0 or 1 children and can continue with delete
 		}
-		theNext = thePrevious = null;
+		// Commenting this out so that getClosest(boolean) can be used on a node that has been removed.
+		// This has the nice benefit of preserving iterator continuity if the last returned element is removed
+		// even outside of the iterator's knowledge
+		// This shouldn't cause any memory problems because a deleted node will most often be GC'd quickly
+		// theNext = thePrevious = null;
 		RedBlackNode<E> replacement = null;
 		if(theLeft != null)
 			replacement = theLeft;
@@ -790,6 +794,12 @@ public final class RedBlackNode<E> {
 	 * @return The closest (in value) node to this node on one side or the other
 	 */
 	public RedBlackNode<E> getClosest(boolean left) {
+		if (!isPresent()) {
+			CachedIndex ci = theCachedIndex;
+			// This method can be called immediately after the node has been removed, but not if the tree has since been changed
+			if (theTree.theStructureStamp != ci.stamp)
+				throw new IllegalStateException("Elements cannot be used if the collection has been changed since the element was removed");
+		}
 		return left ? thePrevious : theNext;
 	}
 

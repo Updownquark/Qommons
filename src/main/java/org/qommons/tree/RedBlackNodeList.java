@@ -2,21 +2,15 @@ package org.qommons.tree;
 
 import java.util.Collection;
 import java.util.Comparator;
-import java.util.ConcurrentModificationException;
-import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterList;
-import org.qommons.collect.CollectionElement;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
-import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
-import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.OptimisticContext;
 import org.qommons.collect.ValueStoredCollection;
 import org.qommons.collect.ValueStoredCollection.RepairListener;
@@ -137,7 +131,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 
 	@Override
 	public BinaryTreeNode<E> getAdjacentElement(ElementId elementId, boolean next) {
-		return wrap(checkNode(elementId).theNode).getClosest(!next);
+		return wrap(checkNode(elementId, false).theNode).getClosest(!next);
 	}
 
 	@Override
@@ -157,7 +151,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 
 	@Override
 	public BinaryTreeNode<E> getElement(ElementId id) {
-		return wrap(checkNode(id).theNode);
+		return wrap(checkNode(id, true).theNode);
 	}
 
 	@Override
@@ -245,7 +239,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	protected <X> boolean repair(ElementId element, Comparator<? super E> compare, boolean distinct,
 		ValueStoredCollection.RepairListener<E, X> listener) {
 		try (Transaction t = lock(true, null)) {
-			return theTree.repair(checkNode(element).theNode, compare, distinct, new TreeRepairListener<>(listener));
+			return theTree.repair(checkNode(element, true).theNode, compare, distinct, new TreeRepairListener<>(listener));
 		}
 	}
 
@@ -310,7 +304,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	 * @return A {@link MutableBinaryTreeNode} for the element with the given ID
 	 */
 	protected MutableBinaryTreeNode<E> mutableNodeFor(ElementId element) {
-		return wrapMutable(checkNode(element).theNode);
+		return wrapMutable(checkNode(element, true).theNode);
 	}
 
 	/**
@@ -318,15 +312,17 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	 * @return A {@link MutableBinaryTreeNode} for the element with the given ID
 	 */
 	protected MutableBinaryTreeNode<E> mutableNodeFor(BinaryTreeNode<E> node) {
-		return wrapMutable(checkNode(node.getElementId()).theNode);
+		return wrapMutable(checkNode(node.getElementId(), true).theNode);
 	}
 
-	private NodeId checkNode(ElementId id) {
+	private NodeId checkNode(ElementId id, boolean requirePresent) {
 		if (!(id instanceof RedBlackNodeList.NodeId))
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		NodeId nodeId = (NodeId) id;
-		if (!nodeId.isPresent())
+		if (nodeId.theNode.getTree() != theTree)
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+		if (requirePresent && !nodeId.isPresent())
+			throw new IllegalArgumentException(StdMsg.ELEMENT_REMOVED);
 		return nodeId;
 	}
 
