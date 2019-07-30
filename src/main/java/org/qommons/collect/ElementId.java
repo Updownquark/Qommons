@@ -17,6 +17,12 @@ public interface ElementId extends Comparable<ElementId> {
 	/** @return Whether the element with this ID is still present in the collection */
 	boolean isPresent();
 
+	/**
+	 * @param other The element that may be a source of this element
+	 * @return Whether this element is derived from the other
+	 */
+	boolean isDerivedFrom(ElementId other);
+
 	/** @return An element ID that behaves like this one, but orders in reverse */
 	default ElementId reverse() {
 		class ReversedElementId implements ElementId {
@@ -29,6 +35,11 @@ public interface ElementId extends Comparable<ElementId> {
 			@Override
 			public boolean isPresent() {
 				return theWrapped.isPresent();
+			}
+
+			@Override
+			public boolean isDerivedFrom(ElementId other) {
+				return theWrapped.isDerivedFrom(other);
 			}
 
 			@Override

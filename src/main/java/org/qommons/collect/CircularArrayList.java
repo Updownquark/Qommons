@@ -1,12 +1,6 @@
 package org.qommons.collect;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.ConcurrentModificationException;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -1237,6 +1231,11 @@ public class CircularArrayList<E> implements BetterList<E> {
 		@Override
 		public boolean isPresent() {
 			return element.getIndex() >= 0;
+		}
+
+		@Override
+		public boolean isDerivedFrom(ElementId other) {
+			return equals(other);
 		}
 
 		@Override
