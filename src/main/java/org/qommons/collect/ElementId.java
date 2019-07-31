@@ -25,49 +25,51 @@ public interface ElementId extends Comparable<ElementId> {
 
 	/** @return An element ID that behaves like this one, but orders in reverse */
 	default ElementId reverse() {
-		class ReversedElementId implements ElementId {
-			private final ElementId theWrapped;
-
-			ReversedElementId(ElementId wrap) {
-				theWrapped = wrap;
-			}
-
-			@Override
-			public boolean isPresent() {
-				return theWrapped.isPresent();
-			}
-
-			@Override
-			public boolean isDerivedFrom(ElementId other) {
-				return theWrapped.isDerivedFrom(other);
-			}
-
-			@Override
-			public int compareTo(ElementId o) {
-				return -theWrapped.compareTo(((ReversedElementId) o).theWrapped);
-			}
-
-			@Override
-			public ElementId reverse() {
-				return theWrapped;
-			}
-
-			@Override
-			public int hashCode() {
-				return theWrapped.hashCode();
-			}
-
-			@Override
-			public boolean equals(Object obj) {
-				return obj instanceof ReversedElementId && theWrapped.equals(((ReversedElementId) obj).theWrapped);
-			}
-
-			@Override
-			public String toString() {
-				return theWrapped.toString();
-			}
-		}
 		return new ReversedElementId(this);
+	}
+
+	/** Implements {@link ElementId#reverse()} */
+	class ReversedElementId implements ElementId {
+		private final ElementId theWrapped;
+
+		ReversedElementId(ElementId wrap) {
+			theWrapped = wrap;
+		}
+
+		@Override
+		public boolean isPresent() {
+			return theWrapped.isPresent();
+		}
+
+		@Override
+		public boolean isDerivedFrom(ElementId other) {
+			return theWrapped.isDerivedFrom(other);
+		}
+
+		@Override
+		public int compareTo(ElementId o) {
+			return -theWrapped.compareTo(((ReversedElementId) o).theWrapped);
+		}
+
+		@Override
+		public ElementId reverse() {
+			return theWrapped;
+		}
+
+		@Override
+		public int hashCode() {
+			return theWrapped.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof ReversedElementId && theWrapped.equals(((ReversedElementId) obj).theWrapped);
+		}
+
+		@Override
+		public String toString() {
+			return theWrapped.toString();
+		}
 	}
 
 	/**
