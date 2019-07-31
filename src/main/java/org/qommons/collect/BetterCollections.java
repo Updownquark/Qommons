@@ -118,6 +118,11 @@ public class BetterCollections {
 		}
 
 		@Override
+		public CollectionElement<E> getElementBySource(ElementId sourceEl) {
+			return (CollectionElement<E>) theWrapped.getElementBySource(sourceEl);
+		}
+
+		@Override
 		public String canAdd(E value, ElementId after, ElementId before) {
 			return StdMsg.UNSUPPORTED_OPERATION;
 		}

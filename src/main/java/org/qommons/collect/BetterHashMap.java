@@ -322,6 +322,11 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
+		public CollectionElement<K> getElementBySource(ElementId sourceEl) {
+			return handleFor(theEntries.getElementBySource(sourceEl));
+		}
+
+		@Override
 		public String canAdd(K value, ElementId after, ElementId before) {
 			return theEntries.canAdd(newEntry(value, null), after, before);
 		}

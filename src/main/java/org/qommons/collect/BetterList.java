@@ -1,9 +1,16 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.ConcurrentModificationException;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import org.qommons.Transactable;
@@ -112,31 +119,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 */
 	@Override
 	default E get(int index) {
-		return ofElementAt(index, el -> el.get());
-	}
-
-	/**
-	 * Addresses an element by index
-	 *
-	 * @param index The index of the element to get
-	 * @param onElement The listener to be called on the element
-	 */
-	default void forElementAt(int index, Consumer<? super CollectionElement<E>> onElement) {
-		ofElementAt(index, el -> {
-			onElement.accept(el);
-			return null;
-		});
-	}
-
-	/**
-	 * Calls a function on an element by index
-	 *
-	 * @param index The index of the element to call the function on
-	 * @param onElement The function to be called on the element
-	 * @return The result of the function
-	 */
-	default <T> T ofElementAt(int index, Function<? super CollectionElement<E>, T> onElement) {
-		return onElement.apply(getElement(index));
+		CollectionElement<E> el = getElement(index);
+		return el == null ? null : el.get();
 	}
 
 	@Override
@@ -732,6 +716,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
+		public CollectionElement<E> getElementBySource(ElementId sourceEl) {
+			return theWrapped.getElementBySource(sourceEl);
+		}
+
+		@Override
 		public boolean belongs(Object o) {
 			return theWrapped.belongs(o);
 		}
@@ -1116,6 +1105,13 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
+		public CollectionElement<E> getElementBySource(ElementId sourceEl) {
+			if (sourceEl instanceof ConstantList.IndexElementId && ((IndexElementId) sourceEl).getList() == this)
+				return getElement(sourceEl);
+			return null;
+		}
+
+		@Override
 		public String canAdd(E value, ElementId after, ElementId before) {
 			return StdMsg.UNSUPPORTED_OPERATION;
 		}
@@ -1129,11 +1125,15 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public void clear() {}
 
-		private static class IndexElementId implements ElementId {
+		private class IndexElementId implements ElementId {
 			final int index;
 
 			IndexElementId(int index) {
 				this.index = index;
+			}
+
+			ConstantList<E> getList() {
+				return ConstantList.this;
 			}
 
 			@Override

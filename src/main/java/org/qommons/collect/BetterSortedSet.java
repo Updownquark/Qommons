@@ -8,7 +8,6 @@ import java.util.NavigableSet;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.BiFunction;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -811,6 +810,14 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			CollectionElement<E> el = theWrapped.getElement(id);
 			if (isInRange(el.get()) != 0)
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+			return el;
+		}
+
+		@Override
+		public CollectionElement<E> getElementBySource(ElementId sourceEl) {
+			CollectionElement<E> el = theWrapped.getElementBySource(sourceEl);
+			if (el != null && isInRange(el.get()) != 0)
+				return null;
 			return el;
 		}
 

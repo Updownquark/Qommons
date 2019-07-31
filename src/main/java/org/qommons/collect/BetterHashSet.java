@@ -461,6 +461,13 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		return ((HashId) id).entry.check();
 	}
 
+	@Override
+	public CollectionElement<E> getElementBySource(ElementId sourceEl) {
+		if (sourceEl instanceof BetterHashSet.HashId && ((HashId) sourceEl).getSet() == this)
+			return getElement(sourceEl);
+		return null;
+	}
+
 	public boolean isValid(ElementId elementId){
 		HashEntry entry=((HashId) elementId).entry.check();
 		return entry.isValid();
@@ -536,6 +543,10 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 		HashId(HashEntry entry) {
 			this.entry = entry;
+		}
+
+		BetterHashSet<E> getSet() {
+			return BetterHashSet.this;
 		}
 
 		@Override

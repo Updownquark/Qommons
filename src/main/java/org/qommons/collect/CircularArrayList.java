@@ -1,6 +1,12 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.ConcurrentModificationException;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -508,6 +514,13 @@ public class CircularArrayList<E> implements BetterList<E> {
 	@Override
 	public MutableCollectionElement<E> mutableElement(ElementId id) {
 		return ((ArrayElementId) id).element.check();
+	}
+
+	@Override
+	public CollectionElement<E> getElementBySource(ElementId sourceEl) {
+		if (sourceEl instanceof CircularArrayList.ArrayElementId && ((ArrayElementId) sourceEl).getList() == this)
+			return getElement(sourceEl);
+		return null;
 	}
 
 	@Override
@@ -1228,6 +1241,10 @@ public class CircularArrayList<E> implements BetterList<E> {
 			this.element = element;
 		}
 
+		CircularArrayList<E> getList() {
+			return CircularArrayList.this;
+		}
+
 		@Override
 		public boolean isPresent() {
 			return element.getIndex() >= 0;
@@ -1261,7 +1278,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 		@Override
 		public boolean equals(Object obj) {
-			return element == ((ArrayElementId) obj).element;
+			return obj instanceof CircularArrayList.ArrayElementId && element == ((ArrayElementId) obj).element;
 		}
 	}
 

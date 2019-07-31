@@ -109,6 +109,16 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	MutableCollectionElement<E> mutableElement(ElementId id);
 
 	/**
+	 * @param sourceEl The source element to get derived values from
+	 * @return An element in this collection that is derived from the source element, or null if:
+	 *         <ul>
+	 *         <li>the element belongs to a collection that is not a source for this collection,</li>
+	 *         <li>or the given element belongs to a source of this collection but is not a source of any element in this collection</li>
+	 *         </ul>
+	 */
+	CollectionElement<E> getElementBySource(ElementId sourceEl);
+
+	/**
 	 * Tests the ability to add an object into this collection within a given position range
 	 * 
 	 * @param value The value to test addability for
@@ -766,7 +776,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	}
 
 	/**
-	 * An {@link Iterator} based on a {@link Spliterator}
+	 * An {@link Iterator} based on a {@link BetterCollection}'s elements
 	 * 
 	 * @param <E> The type of values to iterate over
 	 */
@@ -815,6 +825,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 	}
 
+	/**
+	 * Iterates over a BetterCollection's {@link BetterCollection#elements() elements}
+	 * 
+	 * @param <E> The type of elements to iterate over
+	 */
 	class CollectionElementIterator<E> implements Iterator<CollectionElement<E>> {
 		private final BetterCollection<E> theCollection;
 		private CollectionElement<E> next;
@@ -951,6 +966,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
+		public CollectionElement<E> getElementBySource(ElementId sourceEl) {
+			return CollectionElement.reverse(theWrapped.getElementBySource(sourceEl));
+		}
+
+		@Override
 		public BetterCollection<E> reverse() {
 			return getWrapped();
 		}
@@ -1075,6 +1095,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 		@Override
 		public MutableCollectionElement<E> mutableElement(ElementId id) {
+			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+		}
+
+		@Override
+		public CollectionElement<E> getElementBySource(ElementId sourceEl) {
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		}
 
