@@ -394,8 +394,6 @@ public class QommonsUtils {
 				value = value * 10 + (text.charAt(c) - '0');
 				c++;
 			}
-			if (c < text.length() && Character.isWhitespace(text.charAt(c)))
-				c++;
 			int decimalStart = c;
 			double decimal = Double.NaN;
 			if (c < text.length() && text.charAt(c) == '.') {
