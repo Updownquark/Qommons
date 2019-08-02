@@ -289,6 +289,10 @@ public interface Format<T> {
 		};
 	}
 
+	public static Format<Instant> date(String dateFormat) {
+		return date(new SimpleDateFormat(dateFormat));
+	}
+
 	public static Format<Instant> date(SimpleDateFormat dateFormat) {
 		return new Format<Instant>() {
 			@Override
