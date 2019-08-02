@@ -1,4 +1,4 @@
-package org.qommons;
+package org.qommons.threading;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -361,8 +361,9 @@ public class ElasticExecutor<T> {
 		public void run() {
 			long now = System.currentTimeMillis();
 			long lastUsed = now;
-			while (true) {
-				T task = theQueue.poll();
+			T task = theQueue.poll();
+			boolean die = false;
+			while (!die) {
 				if (task != null) {
 					theActiveThreads.getAndIncrement();
 					do {
@@ -390,24 +391,40 @@ public class ElasticExecutor<T> {
 						Thread.sleep(5);
 					} catch (InterruptedException e) {}
 					now = System.currentTimeMillis();
+					task = theQueue.poll();
 				}
-				if (theId <= theMinThreadCount) {
-					// We stay alive forever
-				} else if (theId > theMaxThreadCount)
-					break;
-				else if ((now - lastUsed) >= theUnusedThreadLifetime) {
-					ConcurrentLinkedQueue<TaskExecutor<? super T>> cache = theCachedWorkers;
-					if (cache != null)
-						cache.add(theTaskExecutor);
-					break;
+				if (task != null)
+					die = false;
+				if (theId <= theMinThreadCount)
+					die = false;// We stay alive forever
+				else if (theId > theMaxThreadCount)
+					die = true;
+				else if ((now - lastUsed) >= theUnusedThreadLifetime)
+					die = true;
+				else
+					die = false;
+				if (die) {
+					if (theThreadCount.decrementAndGet() == 0 && theQueueSize.get() > 0) {
+						// Make sure we don't orphan any just-queued tasks
+						if (theThreadCount.incrementAndGet() > theMaxThreadCount)
+							theThreadCount.decrementAndGet();
+						else {
+							die = false;
+							now = System.currentTimeMillis();
+						}
+					}
 				}
 			}
-			try {
-				((AutoCloseable) theTaskExecutor).close();
-			} catch (Exception e) {
-				e.printStackTrace();
+			ConcurrentLinkedQueue<TaskExecutor<? super T>> cache = theCachedWorkers;
+			if (cache != null)
+				cache.add(theTaskExecutor);
+			else {
+				try {
+					theTaskExecutor.close();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
 			}
-			theThreadCount.decrementAndGet();
 		}
 	}
 
