@@ -75,15 +75,14 @@ public class ArgumentParsing {
          * @return The new argument definition
          */
         FloatArgumentDef floatArg(String name);
-        /**
-         * Creates an enum-type argument
-         * 
-         * @param name
-         *            The name of the argument
-         * @param type
-         *            The enum type for the argument
-         * @return The new argument definition
-         */
+		/**
+		 * Creates an enum-type argument
+		 * 
+		 * @param <E> The type of the enum
+		 * @param name The name of the argument
+		 * @param type The enum type for the argument
+		 * @return The new argument definition
+		 */
         <E extends Enum<E>> EnumArgumentDef<E> enumArg(String name, Class<E> type);
         /**
          * Creates a boolean-type argument
@@ -93,7 +92,12 @@ public class ArgumentParsing {
          * @return The new argument definition
          */
         BooleanArgumentDef booleanArg(String name);
-
+		/**
+		 * Creates a duration-type argument
+		 * 
+		 * @param name The name of the argument
+		 * @return The new argument definition
+		 */
 		DurationArgumentDef durationArg(String name);
         /**
          * Creates a file- or directory-type argument
@@ -1849,7 +1853,12 @@ public class ArgumentParsing {
         }
     }
 
+	/** The definition of a duration-valued argument */
 	public static class DurationArgumentDef extends ValuedArgumentDefImpl<Duration, DurationArgumentDef> {
+		/**
+		 * @param pattern The argument pattern that this argument is for
+		 * @param name This argument's name
+		 */
 		public DurationArgumentDef(ArgumentPattern pattern, String name) {
 			super(pattern, name);
 		}
@@ -2359,12 +2368,11 @@ public class ArgumentParsing {
         }
 
         /**
-         * @param name
-         *            The name of the arguments to get
-         * @param type
-         *            The type of the arguments
-         * @return The values of all arguments with the given name
-         */
+		 * @param <T> The type of the arguments to get
+		 * @param name The name of the arguments to get
+		 * @param type The type of the arguments
+		 * @return The values of all arguments with the given name
+		 */
         public <T> List<T> getAll(String name, Class<T> type) {
             return getArguments(name).stream().map(arg -> ((ValuedArgument<Object>) arg).getValue()).map(type::cast)
                     .collect(Collectors.toList());
@@ -2395,12 +2403,11 @@ public class ArgumentParsing {
         }
 
         /**
-         * @param argName
-         *            The name of the argument to get
-         * @param def
-         *            The value to return if no such argument exists in this set
-         * @return The value of the first argument with the given name, or def if no such argument exists in this set
-         */
+		 * @param <T> The type of the argument to get
+		 * @param argName The name of the argument to get
+		 * @param def The value to return if no such argument exists in this set
+		 * @return The value of the first argument with the given name, or def if no such argument exists in this set
+		 */
         public <T> T get(String argName, T def) {
             Argument argument = getArgument(argName);
             if (argument == null) {
@@ -3336,6 +3343,11 @@ public class ArgumentParsing {
             return ret.toString();
         }
     }
+
+	/** @return A blank argument parser to configure */
+	public static ArgumentParser create() {
+		return new ArgumentParser();
+	}
 
     /**
      * Tests this class
