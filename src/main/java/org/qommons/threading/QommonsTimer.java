@@ -465,6 +465,11 @@ public class QommonsTimer {
 		isSleeping = new AtomicBoolean();
 	}
 
+	/** @return The clock driving this timer */
+	public TimerClock getClock() {
+		return theClock;
+	}
+
 	/**
 	 * Begins periodic execution of a new task
 	 * 
