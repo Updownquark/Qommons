@@ -8,6 +8,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import org.qommons.ArgumentParsing;
+import org.qommons.ArgumentParsing.Argument;
+import org.qommons.ArgumentParsing.ArgumentParser;
+import org.qommons.ArgumentParsing.Arguments;
+import org.qommons.ArgumentParsing.ValuedArgument;
 import org.qommons.QommonsUtils;
 import org.qommons.TimeUtils;
 import org.qommons.collect.ListenerList;
@@ -32,11 +37,11 @@ public class QommonsTimer {
 		@Override
 		public Instant now() {
 			long millis = System.currentTimeMillis();
-			long nanos = System.nanoTime() % 1000000000;
-				if (nanos < 0)
-					nanos += 1000000000;
-				nanos += millis * 1000000L;
-			return Instant.ofEpochSecond(millis, nanos);
+			int nanos = (int) (System.nanoTime() % 1_000_000);
+			if (nanos < 0)
+				nanos += 1_000_000;
+			nanos += (millis % 1000) * 1_000_000L;
+			return Instant.ofEpochSecond(millis / 1000, nanos);
 		}
 	}
 
@@ -58,7 +63,7 @@ public class QommonsTimer {
 
 		private volatile long theRemainingExecCount;
 		private volatile Instant theLastRun;
-		private volatile boolean runAfterLast;
+		private volatile boolean shouldRunAfterLast;
 
 		private volatile boolean isExecuting;
 		private volatile boolean isWaiting;
@@ -74,10 +79,6 @@ public class QommonsTimer {
 
 		public QommonsTimer getTimer() {
 			return QommonsTimer.this;
-		}
-
-		public long getExecCount() {
-			return theExecCount;
 		}
 
 		public boolean isExecuting() {
@@ -130,6 +131,7 @@ public class QommonsTimer {
 
 		public TaskHandle runNextAt(Instant time) {
 			theNextRun = time;
+			interruptScheduler();
 			return this;
 		}
 
@@ -153,6 +155,7 @@ public class QommonsTimer {
 		 */
 		public TaskHandle setFrequency(Duration frequency, boolean consistent) {
 			theFrequency = frequency;
+			isConsistent = consistent;
 			if (frequency != null && isActive.get()) {
 				Instant nextRun2 = theClock.now().plus(frequency);
 				Instant nextRun = theNextRun;
@@ -162,6 +165,12 @@ public class QommonsTimer {
 			return this;
 		}
 
+		/**
+		 * Causes this task to {@link #setActive(boolean) deactivate} itself after a certain number of executions
+		 * 
+		 * @param times The number of times to execute this task before shutting down. If &lt;=0, this task will run indefinitely.
+		 * @return This task
+		 */
 		public TaskHandle times(long times) {
 			theRemainingExecCount = times;
 			return null;
@@ -170,16 +179,31 @@ public class QommonsTimer {
 		/**
 		 * Controls when this task will shut itself down
 		 * 
-		 * @param until
-		 * @param runAfterLast
-		 * @return
+		 * @param until The time at which this task will {@link #setActive(boolean) deactivate} itself
+		 * @param runAfterLast Whether to run the task one last time at or after the given moment
+		 * @return This task
 		 */
 		public TaskHandle until(Instant until, boolean runAfterLast) {
 			theLastRun = until;
-			this.runAfterLast = runAfterLast;
+			this.shouldRunAfterLast = runAfterLast;
 			return this;
 		}
 
+		/**
+		 * Controls when this task will shut itself down
+		 * 
+		 * @param duration The duration for which this task will be {@link #setActive(boolean) active}
+		 * @param runAfterEnd Whether to run the task one last time at or after the given moment
+		 * @return This task
+		 */
+		public TaskHandle endIn(Duration duration, boolean runAfterEnd) {
+			return until(theClock.now().plus(duration), runAfterEnd);
+		}
+
+		/**
+		 * @param threading The threading scheme for this task
+		 * @return This task
+		 */
 		public TaskHandle withThreading(TaskThreading threading) {
 			if (threading == null)
 				throw new NullPointerException();
@@ -216,6 +240,11 @@ public class QommonsTimer {
 			return withThreading(TaskThreading.Any);
 		}
 
+		/**
+		 * Sets this task's {@link #getExecutionCount() execution count} to zero
+		 * 
+		 * @return This task
+		 */
 		public TaskHandle resetExecutionCount() {
 			theExecCount = 0;
 			return this;
@@ -253,8 +282,10 @@ public class QommonsTimer {
 			Instant nextRun = theNextRun;
 			boolean execute = now.compareTo(nextRun) >= 0;
 			Instant lastRun = theLastRun;
-			if (lastRun != null && !runAfterLast && now.compareTo(lastRun) > 0) {
+			boolean terminate = false;
+			if (lastRun != null && !shouldRunAfterLast && now.compareTo(lastRun) > 0) {
 				execute = false;
+				terminate = true;
 				nextRun = null;
 			} else if (execute) {
 				if (isConsistent) {
@@ -268,21 +299,24 @@ public class QommonsTimer {
 						if (now.compareTo(nextRun) > 0)
 							nextRun = nextRun.plus(freq);
 					}
+					theNextRun = nextRun;
 				} else
-					nextRun = null;
+					theNextRun = nextRun = null;
 				long rem = theRemainingExecCount;
 				if (rem > 0) {
 					rem--;
 					theRemainingExecCount = rem;
-					if (rem == 0)
+					if (rem == 0) {
+						terminate = true;
 						nextRun = null;
+					}
 				}
 				isWaiting = true;
 			}
 			if (nextRun != null) {
 				if (minNextRun[0] == null || nextRun.compareTo(minNextRun[0]) < 0)
 					minNextRun[0] = nextRun;
-			} else
+			} else if (terminate)
 				setActive(false);
 			return execute;
 		}
@@ -298,24 +332,27 @@ public class QommonsTimer {
 				}
 				theExecCount++;
 				Instant nextRun;
-				if (theRemainingExecCount == 0)
-					nextRun = null;
-				else if (theNextRun == null && theFrequency != null)
+				boolean terminate = false;
+				boolean interrupt = false;
+				if (theNextRun == null && theFrequency != null) {
+					interrupt = true;
 					nextRun = thePreviousRun.plus(theFrequency);
-				else
+				} else
 					nextRun = theNextRun;
 				Instant lastRun = theLastRun;
 				if (nextRun != null && lastRun != null) {
 					if (thePreviousRun.compareTo(lastRun) >= 0)
-						nextRun = null;
-					else if (!runAfterLast && nextRun.compareTo(lastRun) > 0)
-						nextRun = null;
+						terminate = true;
+					else if (!shouldRunAfterLast && nextRun.compareTo(lastRun) > 0)
+						terminate = true;
+					if (terminate)
+						theLastRun = null;
 				}
 				theNextRun = nextRun;
-				if (nextRun != null)
-					interruptScheduler();
-				else
+				if (terminate)
 					setActive(false);
+				else if (interrupt)
+					interruptScheduler();
 				isExecuting = false;
 			}
 			isWaiting = false;
@@ -326,7 +363,6 @@ public class QommonsTimer {
 	private final Consumer<Runnable> theMainRunner;
 	final Function<Runnable, Boolean> theAccessoryRunner;
 	private final ListenerList<TaskHandle> theTaskQueue;
-	private volatile boolean shouldRun;
 	private volatile boolean isRunning;
 	private volatile Thread theSchedulerThread;
 	private final AtomicBoolean isSleeping;
@@ -336,9 +372,13 @@ public class QommonsTimer {
 		theMainRunner = mainRunner;
 		theAccessoryRunner = accessoryRunner;
 		theTaskQueue = ListenerList.build().allowReentrant().withFastSize(false).withInUse(inUse -> {
-			shouldRun = inUse;
-			if (inUse)
-				start();
+			if (inUse) {
+				synchronized (this) {
+					if (!isRunning)
+						start();
+				}
+			} else
+				interruptScheduler();
 		}).build();
 		isSleeping = new AtomicBoolean();
 	}
@@ -396,6 +436,7 @@ public class QommonsTimer {
 	}
 
 	private void start() {
+		isRunning = true;
 		theMainRunner.accept(this::execute);
 	}
 
@@ -408,16 +449,11 @@ public class QommonsTimer {
 	}
 
 	void execute() {
-		while (isRunning) {
-			try {
-				Thread.sleep(1);
-			} catch (InterruptedException e) {}
-		}
 		Instant[] minNextRun = new Instant[1];
 		Instant now = theClock.now();
 		theSchedulerThread = Thread.currentThread();
 		isSleeping.set(false);
-		while (shouldRun) {
+		while (true) {
 			minNextRun[0] = null;
 			Instant fNow = now;
 			theTaskQueue.forEach(handle -> {
@@ -447,12 +483,20 @@ public class QommonsTimer {
 							Thread.sleep(sleepTime.getNano() / 1_000_000, sleepTime.getNano() % 1_000_000);
 					} catch (InterruptedException e) {
 					}
+					now = theClock.now();
 				}
 			}
 			isSleeping.set(false);
+			if (theTaskQueue.isEmpty()) {
+				synchronized (this) {
+					if (theTaskQueue.isEmpty()) {
+						theSchedulerThread = null;
+						isRunning = false;
+						break;
+					}
+				}
+			}
 		}
-		theSchedulerThread = null;
-		isRunning = false;
 	}
 
 	/**
@@ -480,19 +524,61 @@ public class QommonsTimer {
 			System.out.println("Set frequency to 2 seconds");
 			handle.setFrequency(Duration.ofSeconds(2), false);
 
+			ArgumentParser argParser = ArgumentParsing.create().forPattern("(.+)=(.+)")//
+				.booleanArg("active")//
+				.durationArg("end")//
+				.durationArg("next")//
+				.durationArg("freq")//
+				.intArg("times").between(0, 100)//
+				.getParser().forDefaultFlagPattern()//
+				.flagArg("now")//
+				.flagArg("nextRun")//
+				.getParser();
+
 			while (true) {
 				String line = scanner.nextLine();
-				if ("stop".equals(line)) {
-					handle.setActive(false);
-					break;
+				if (line.length() == 0) {
+					System.err.println(argParser);
+					continue;
 				}
-				TaskThreading nextThreading = nextThreading(handle.getThreading());
-				System.out.println("Run immediately, threading=" + nextThreading);
-				handle.setFrequency(Duration.ofSeconds(1), true).withThreading(nextThreading);
-				prev[0] = System.currentTimeMillis();
-				handle.runImmediately();
+				Arguments lineArgs;
+				try {
+					lineArgs = argParser.parse(line.split(" "));
+				} catch (IllegalArgumentException e) {
+					System.err.println(e.getMessage());
+					continue;
+				}
+				for(Argument arg : lineArgs.getArguments()){
+					switch(arg.getName()){
+					case "active":
+						prev[0] = System.currentTimeMillis();
+						handle.setActive(((ValuedArgument<Boolean>) arg).getValue());
+						break;
+					case "end":
+						handle.endIn(((ValuedArgument<Duration>) arg).getValue(), true);
+						break;
+					case "next":
+						prev[0] = System.currentTimeMillis();
+						handle.runNextIn(((ValuedArgument<Duration>) arg).getValue());
+						break;
+					case "freq":
+						handle.setFrequency(((ValuedArgument<Duration>) arg).getValue(), true);
+						break;
+					case "times":
+						handle.times(((ValuedArgument<Number>) arg).getValue().intValue());
+						break;
+					case "now":
+						prev[0] = System.currentTimeMillis();
+						handle.runImmediately();
+						break;
+					case "nextRun":
+						System.out.println(QommonsUtils.printDuration(handle.getTimeUntilNextRun(), false));
+						break;
+					default:
+						System.err.println("Unrecognized arg: "+arg.getName());
+					}
+				}
 			}
-			scanner.nextLine();
 		}
 	}
 
