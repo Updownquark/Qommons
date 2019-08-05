@@ -29,10 +29,22 @@ public class QommonsTimer {
 		return COMMON_INSTANCE;
 	}
 
+	/**
+	 * A simple clock interface to drive a timer. Use of this interface allows timers to be created for simulated time, in-game time, or any
+	 * other time scheme.
+	 */
 	public interface TimerClock {
+		/** @return The current time */
 		Instant now();
+
+		/**
+		 * @param sleepTime The amount of time to wait for
+		 * @throws InterruptedException If the sleeping thread is {@link Thread#interrupt() interrupted}
+		 */
+		void sleep(Duration sleepTime) throws InterruptedException;
 	}
 
+	/** The default clock implementation based on system time */
 	public static class SystemClock implements TimerClock {
 		@Override
 		public Instant now() {
@@ -43,13 +55,35 @@ public class QommonsTimer {
 			nanos += (millis % 1000) * 1_000_000L;
 			return Instant.ofEpochSecond(millis / 1000, nanos);
 		}
+
+		@Override
+		public void sleep(Duration sleepTime) throws InterruptedException {
+			if (sleepTime.getSeconds() != 0 || sleepTime.getNano() >= 5_000_000)
+				Thread.sleep(sleepTime.toMillis());
+			else
+				Thread.sleep(sleepTime.getNano() / 1_000_000, sleepTime.getNano() % 1_000_000);
+		}
 	}
 
+	/** Different threading schemes that tasks can use to run */
 	public enum TaskThreading {
-		Timer, EDT, Any;
+		/**
+		 * Specifies that a task should be run on the main timer thread. This scheme is only appropriate for very short tasks. Long-running
+		 * tasks run on the timer thread risk delaying the execution other tasks.
+		 */
+		Timer,
+		/**
+		 * Specifies that a task should be run on the AWT/Swing Event Dispatch Thread (EDT)
+		 */
+		EDT,
+		/**
+		 * Specifies that a task may be run on any thread. This is the default. Tasks of this type will be offloaded to a separate thread
+		 * pool to prevent any possibility of interfering with the scheduling or execution of other tasks.
+		 */
+		Any;
 	}
 
-	/** A handle on a scheduled task that allows */
+	/** A handle on a scheduled task that allows for control of the task's execution */
 	public class TaskHandle {
 		private final Runnable theTask;
 		private final AtomicBoolean isActive;
@@ -70,29 +104,34 @@ public class QommonsTimer {
 		private volatile long theExecCount;
 		private volatile TaskThreading theThreading;
 
-		TaskHandle(Runnable task) {
+		TaskHandle(Runnable task, Duration frequency, boolean consistent) {
 			theTask = task;
 			isActive = new AtomicBoolean();
 			theThreading = TaskThreading.Any;
-			theRemainingExecCount = -1;
+			setFrequency(frequency, consistent);
 		}
 
+		/** @return The timer that created this task */
 		public QommonsTimer getTimer() {
 			return QommonsTimer.this;
 		}
 
+		/** @return Whether the task is currently executing */
 		public boolean isExecuting() {
 			return isExecuting;
 		}
 
+		/** @return True if the timer has determined that this task's execution conditions are met and scheduled it for execution */
 		public boolean isWaitingOrExecuting() {
 			return isWaiting;
 		}
 
+		/** @return Whether this task is currently scheduled for one-time or periodic execution */
 		public boolean isActive() {
 			return isActive.get();
 		}
 
+		/** @return The time between now and when this task will next be run */
 		public Duration getTimeUntilNextRun() {
 			if (!isActive.get())
 				return null;
@@ -100,22 +139,30 @@ public class QommonsTimer {
 			return nextRun == null ? null : TimeUtils.between(theClock.now(), nextRun);
 		}
 
+		/** @return The number of times this task has run since being created (or {@link #resetExecutionCount() reset}) */
 		public long getExecutionCount() {
 			return theExecCount;
 		}
 
+		/**
+		 * @return The number of times this task has left to be executed before shutting itself down (or &lt;=0 if this task has no
+		 *         remaining counter)
+		 */
 		public long getRemainingExecutionCount() {
 			return theRemainingExecCount;
 		}
 
+		/** @return The time after which this task will shut itself down */
 		public Instant getLastRun() {
 			return theLastRun;
 		}
 
+		/** @return The last time this task was executed */
 		public Instant getPreviousExecution() {
 			return thePreviousRun;
 		}
 
+		/** @return The frequency at which this task executes */
 		public Duration getFrequency() {
 			return theFrequency;
 		}
@@ -125,16 +172,43 @@ public class QommonsTimer {
 			return theThreading;
 		}
 
+		/**
+		 * Causes this task to execute as quickly as the scheduler can get to it.
+		 * 
+		 * If this task is not currently active, it will activate itself with a {@link #times(long) remaining execution count} of 1.
+		 * 
+		 * @return This task
+		 */
 		public TaskHandle runImmediately() {
-			return runNextAt(theClock.now());
+			return runNextAt(Instant.MIN);
 		}
 
+		/**
+		 * Sets the next execution time for this task. This time will be respected regardless of its {@link #getFrequency() frequency}.
+		 * 
+		 * If this task is not currently active, it will activate itself with a {@link #times(long) remaining execution count} of 1.
+		 * 
+		 * @param time The next scheduled execution time for this task
+		 * @return This task
+		 */
 		public TaskHandle runNextAt(Instant time) {
+			Instant nextRun = theNextRun;
 			theNextRun = time;
-			interruptScheduler();
+			if (!isActive())
+				times(1).setActive(true);
+			else if (nextRun == null || time.compareTo(nextRun) < 0)
+				interruptScheduler();
 			return this;
 		}
 
+		/**
+		 * Sets the next execution time for this task (relative to {@link TimerClock#now() now}).
+		 * 
+		 * If this task is not currently active, it will activate itself with a {@link #times(long) remaining execution count} of 1.
+		 * 
+		 * @param interval The duration until the next scheduled execution time for this task
+		 * @return This task
+		 */
 		public TaskHandle runNextIn(Duration interval) {
 			if (interval == null || interval.isNegative() || interval.isZero())
 				return runImmediately();
@@ -213,9 +287,10 @@ public class QommonsTimer {
 
 		/**
 		 * Specifies that this task should be run on the main timer thread. This scheme is only appropriate for very short tasks.
-		 * Long-running tasks * run on the timer thread risk delaying the execution other tasks.
+		 * Long-running tasks run on the timer thread risk delaying the execution other tasks.
 		 * 
 		 * @return This handle
+		 * @see TaskThreading#Timer
 		 */
 		public TaskHandle onTimer() {
 			return withThreading(TaskThreading.Timer);
@@ -225,6 +300,7 @@ public class QommonsTimer {
 		 * Specifies that this task should be run on the AWT/Swing Event Dispatch Thread (EDT)
 		 * 
 		 * @return This handle
+		 * @see TaskThreading#EDT
 		 */
 		public TaskHandle onEDT() {
 			return withThreading(TaskThreading.EDT);
@@ -235,6 +311,7 @@ public class QommonsTimer {
 		 * pool to prevent any possibility of interfering with the scheduling or execution of other tasks.
 		 * 
 		 * @return This handle
+		 * @see TaskThreading#Any
 		 */
 		public TaskHandle onAnyThread() {
 			return withThreading(TaskThreading.Any);
@@ -261,9 +338,9 @@ public class QommonsTimer {
 				synchronized (this) {
 					if (isActive.get() != active)
 						return this;
-					if (active)
+					if (active) {
 						theRemove = schedule(this);
-					else {
+					} else {
 						theRemove.run();
 						theRemove = null;
 					}
@@ -367,6 +444,11 @@ public class QommonsTimer {
 	private volatile Thread theSchedulerThread;
 	private final AtomicBoolean isSleeping;
 
+	/**
+	 * @param clock The clock implementation to use for scheduling
+	 * @param mainRunner Runs the scheduler for this timer
+	 * @param accessoryRunner Runs offloaded tasks for this timer (see {@link TaskHandle#onAnyThread()})
+	 */
 	public QommonsTimer(TimerClock clock, Consumer<Runnable> mainRunner, Function<Runnable, Boolean> accessoryRunner) {
 		theClock = clock;
 		theMainRunner = mainRunner;
@@ -413,17 +495,23 @@ public class QommonsTimer {
 	 * @return The task handle to use to control or stop the task's execution
 	 */
 	public TaskHandle execute(Runnable task, Duration initialDelay, Duration frequency, boolean consistent) {
-		return build(task).setFrequency(frequency, consistent).runNextIn(frequency).setActive(true);
+		return build(task, frequency, consistent).runNextIn(frequency).setActive(true);
 	}
 
 	/**
 	 * Creates a handle for a task, relying on the caller to begin its execution with {@link TaskHandle#setActive(boolean) setActive(true)}
 	 * 
 	 * @param task The task to execute periodically
+	 * @param frequency The frequency at which to execute the task
+	 * @param consistent Whether the task should be run on a strict interval. If true, an attempt will be made to start the task at the
+	 *        beginning of the interval so that an execution happens precisely as often as described. If one execution is delayed, the next
+	 *        may happen slightly earlier to make up the time and restore the rhythm to the interval. If false, the task will run no more
+	 *        often than the given interval, i.e. the duration between the end of one execution and the beginning of another will be the
+	 *        given frequency interval or slightly longer.
 	 * @return The task handle to use to control or stop the task's execution
 	 */
-	public TaskHandle build(Runnable task) {
-		return new TaskHandle(task);
+	public TaskHandle build(Runnable task, Duration frequency, boolean consistent) {
+		return new TaskHandle(task, frequency, consistent);
 	}
 
 	Runnable schedule(TaskHandle task) {
@@ -477,10 +565,7 @@ public class QommonsTimer {
 				Duration sleepTime = TimeUtils.between(now, minNextRun[0]);
 				if (isSleeping.compareAndSet(false, true)) {
 					try {
-						if (sleepTime.getSeconds() != 0 || sleepTime.getNano() >= 5_000_000)
-							Thread.sleep(sleepTime.toMillis());
-						else
-							Thread.sleep(sleepTime.getNano() / 1_000_000, sleepTime.getNano() % 1_000_000);
+						theClock.sleep(sleepTime);
 					} catch (InterruptedException e) {
 					}
 					now = theClock.now();
@@ -580,10 +665,5 @@ public class QommonsTimer {
 				}
 			}
 		}
-	}
-
-	private static TaskThreading nextThreading(TaskThreading threading) {
-		int idx = threading.ordinal() + 1;
-		return TaskThreading.values()[idx < TaskThreading.values().length ? idx : 0];
 	}
 }
