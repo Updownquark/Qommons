@@ -283,6 +283,11 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 	public interface QuickMap<K, V> {
 		QuickSet<K> keySet();
 
+		/** @return The number of keys in this map */
+		default int keySize() {
+			return keySet().size();
+		}
+
 		default int keyIndex(K key) {
 			int index = keySet().indexOf(key);
 			if (index < 0) {
