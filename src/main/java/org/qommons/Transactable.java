@@ -74,6 +74,13 @@ public interface Transactable {
 			return Transaction.NONE;
 	}
 
+	static Transactable asTransactable(Object lockable) {
+		if (lockable instanceof Transactable)
+			return (Transactable) lockable;
+		else
+			return NONE;
+	}
+
 	static Transaction lock(Lock lock) {
 		if (lock == null)
 			return Transaction.NONE;
