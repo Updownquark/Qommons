@@ -2,8 +2,10 @@ package org.qommons.io;
 
 import java.io.IOException;
 import java.io.Reader;
-import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
+
+import org.qommons.IntList;
 
 /**
  * A simple CSV parser. Attempts to be as tolerant and flexible as possible, while adhering closely to the RFC 4180 standard. Some
@@ -37,6 +39,7 @@ public class CsvParser {
 	private int thePassedBlankLines;
 	private int theLastLineNumber;
 	private int theLastLineOffset;
+	private final IntList theLastLineColumnOffsets;
 
 	/**
 	 * @param reader The reader to parse CSV data from
@@ -47,6 +50,7 @@ public class CsvParser {
 		theDelimiter = delimiter;
 		theTabColumnOffset = 1;
 		theParseState = new CsvParseState();
+		theLastLineColumnOffsets = new IntList();
 	}
 
 	/** @return The delimiter character used to parse CSV */
@@ -72,31 +76,10 @@ public class CsvParser {
 	 * @throws TextParseException If there is an error on the next line the CSV file
 	 */
 	public String[] parseNextLine() throws IOException, TextParseException {
-		thePassedBlankLines = 0;
-		List<String> columns = new ArrayList<>();
-		String value = theParseState.parseColumn();
-		while (value.length() == 0 && theParseState.getLastTerminal() == CsvValueTerminal.LINE_END) {
-			thePassedBlankLines++;
-			value = theParseState.parseColumn(); // Move past any blank lines
-		}
-		theLastLineNumber = theParseState.theLineNumber;
-		theLastLineOffset = theParseState.theOffset;
-		switch (theParseState.getLastTerminal()) {
-		case COLUMN_END:
-			break;
-		case LINE_END:
-			return new String[] { value };
-		case FILE_END:
-			if (value.length() == 0)
-				return null;
-			else
-				return new String[] { value };
-		}
-
-		columns.add(value);
-		do {
-			columns.add(theParseState.parseColumn());
-		} while (theParseState.getLastTerminal() == CsvValueTerminal.COLUMN_END);
+		List<String> columns = new LinkedList<>();
+		int count = parseNextLine(columns::add);
+		if (count == 0)
+			return null;
 		return columns.toArray(new String[columns.size()]);
 	}
 
@@ -110,27 +93,61 @@ public class CsvParser {
 	 *         than <code>columns.length</code>
 	 */
 	public boolean parseNextLine(String[] columns) throws IOException, TextParseException {
+		class ArrayColumnConsumer implements ColumnAccepter {
+			int index = 0;
+
+			@Override
+			public void accept(String column) throws TextParseException {
+				if (index == columns.length)
+					theParseState.throwParseException("More than the expected " + columns.length + " columns encountered");
+				columns[index] = column;
+				index++;
+			}
+		}
+		ArrayColumnConsumer onColumn = new ArrayColumnConsumer();
+		parseNextLine(onColumn);
+		if (onColumn.index == 0)
+			return false;
+		else if (onColumn.index < columns.length)
+			theParseState.throwParseException(columns.length + " columns expected, but only " + onColumn.index + " encountered");
+		return true;
+	}
+
+	private interface ColumnAccepter {
+		void accept(String column) throws TextParseException;
+	}
+
+	private int parseNextLine(ColumnAccepter onColumn) throws IOException, TextParseException {
 		thePassedBlankLines = 0;
+		theLastLineColumnOffsets.clear();
+		theLastLineNumber = theParseState.theLineNumber;
+		theLastLineOffset = theParseState.theOffset;
 		String value = theParseState.parseColumn();
 		while (value.length() == 0 && theParseState.getLastTerminal() == CsvValueTerminal.LINE_END) {
 			thePassedBlankLines++;
+			theLastLineNumber = theParseState.theLineNumber;
+			theLastLineOffset = theParseState.theOffset;
 			value = theParseState.parseColumn(); // Move past any blank lines
 		}
-		theLastLineNumber = theParseState.theLineNumber;
-		theLastLineOffset = theParseState.theOffset;
-		if (value.length() == 0 && theParseState.getLastTerminal() == CsvValueTerminal.FILE_END)
-			return false;
+		switch (theParseState.getLastTerminal()) {
+		case COLUMN_END:
+			break;
+		case LINE_END:
+			onColumn.accept(value);
+			return 1;
+		case FILE_END:
+			return 0;
+		}
 
-		columns[0] = value;
-		int c = 1;
+		int count = 1;
+		onColumn.accept(value);
+		theLastLineColumnOffsets.add(theParseState.getValueOffset());
 		do {
-			columns[c++] = theParseState.parseColumn();
-		} while (c < columns.length && theParseState.getLastTerminal() == CsvValueTerminal.COLUMN_END);
-		if (c < columns.length)
-			theParseState.throwParseException(columns.length + " columns expected, but only " + c + " encountered");
-		else if (theParseState.getLastTerminal() == CsvValueTerminal.COLUMN_END)
-			theParseState.throwParseException("More than the expected " + columns.length + " columns encountered");
-		return true;
+			onColumn.accept(theParseState.parseColumn());
+			count++;
+			theLastLineColumnOffsets.add(theParseState.getValueOffset());
+		} while (theParseState.getLastTerminal() == CsvValueTerminal.COLUMN_END);
+		return count;
 	}
 
 	/** @return The number of blank lines that were ignored prior to the most recently-parsed line of the file */
@@ -161,6 +178,28 @@ public class CsvParser {
 		return theParseState.theOffset;
 	}
 
+	/**
+	 * @param columnIndex The index of the column in the last line parsed
+	 * @return The offset of the specified column of the previous line from the beginning of the file
+	 */
+	public int getColumnOffset(int columnIndex) {
+		return theLastLineColumnOffsets.get(columnIndex) - theLastLineOffset;
+	}
+
+	/**
+	 * Throws a {@link TextParseException} pointing to the given column of the previously-parsed line in the file. Never called internally,
+	 * this method is useful for when the actual CSV was correctly parsed, but a column's data is malformed for the use of the calling
+	 * application.
+	 * 
+	 * @param columnIndex The index of the column with bad data
+	 * @param message The message for the exception
+	 * @throws TextParseException always
+	 */
+	public void throwParseException(int columnIndex, String message) throws TextParseException {
+		int colOffset = getColumnOffset(columnIndex);
+		throw new TextParseException(message, colOffset, theLastLineNumber, columnIndex);
+	}
+
 	static enum CsvValueTerminal {
 		COLUMN_END, LINE_END, FILE_END;
 	}
@@ -168,6 +207,7 @@ public class CsvParser {
 	class CsvParseState {
 		private final StringBuilder theValue;
 		private int[] isQuoted;
+		private int theValueOffset;
 		private int theOffset;
 		private int theLineNumber;
 		private int theColumnNumber; // Char columns, not CSV columns here
@@ -185,9 +225,14 @@ public class CsvParser {
 			return theLastTerminal;
 		}
 
+		int getValueOffset() {
+			return theValueOffset;
+		}
+
 		String parseColumn() throws IOException, TextParseException {
 			isQuoted = null;
 			theLastTerminal = null;
+			theValueOffset = theOffset;
 			int c = readContentChar(true);
 			while (c >= 0) {
 				theValue.append((char) c);
@@ -214,6 +259,7 @@ public class CsvParser {
 			if (c == '"') {
 				if (columnStart) { // Begin quote
 					isQuoted = new int[] { theOffset, theLineNumber, theColumnNumber };
+					theValueOffset++;
 					return readContentChar(false);
 				} else if (isQuoted != null) {
 					c = readStreamChar();
