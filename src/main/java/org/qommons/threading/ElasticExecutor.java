@@ -395,7 +395,7 @@ public class ElasticExecutor<T> {
 				}
 				if (task != null)
 					die = false;
-				if (theId <= theMinThreadCount)
+				else if (theId <= theMinThreadCount)
 					die = false;// We stay alive forever
 				else if (theId > theMaxThreadCount)
 					die = true;
