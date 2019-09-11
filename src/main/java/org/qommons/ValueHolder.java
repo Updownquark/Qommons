@@ -11,6 +11,7 @@ public class ValueHolder<T> implements Consumer<T>, Supplier<T> {
 
 	public ValueHolder(T value) {
 		theValue = value;
+		isSet = true;
 	}
 
 	public boolean isPresent() {
