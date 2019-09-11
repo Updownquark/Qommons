@@ -682,7 +682,7 @@ public class QommonsUtils {
 	 * A comparator that returns the result of {@link #compareNumberTolerant(String, String, boolean, boolean)
 	 * compareNumberTolerant}<code>(s1, s2, true, true)</code>
 	 */
-	public static final Comparator<String> DISTINCT_NUMBER_TOLERANT = (s1, s2) -> compareNumberTolerant(s1, s2, true, true);
+	public static final Comparator<String> DISTINCT_NUMBER_TOLERANT = StringUtils.DISTINCT_NUMBER_TOLERANT;
 
 	/**
 	 * Compares two strings in such a way that strings with embedded multi-digit numbers in the same position are sorted intuitively.
@@ -701,94 +701,7 @@ public class QommonsUtils {
 	 *         </ul>
 	 */
 	public static int compareNumberTolerant(String s1, String s2, boolean ignoreCase, boolean onlyZeroIfEqual) {
-		if (s1 == s2) {
-			return 0;
-		}
-		int i1, i2;
-		int intolerantResult = 0;
-		for (i1 = 0, i2 = 0; i1 < s1.length() && i2 < s2.length(); i1++, i2++) {
-			char ch1 = s1.charAt(i1);
-			char ch2 = s2.charAt(i2);
-			if (onlyZeroIfEqual && intolerantResult == 0)
-				intolerantResult = ch2 - ch1;
-			boolean firstIsDigit = ch1 >= '0' && ch1 <= '9';
-			boolean secondIsDigit = ch2 >= '0' && ch2 <= '9';
-			if (firstIsDigit && secondIsDigit) {
-				// We're only number tolerant when BOTH strings contain a number starting at the same place
-				// First, ignore leading zeros
-				while (ch1 == '0') {
-					i1++;
-					if (i1 == s1.length()) {
-						firstIsDigit = false;
-						break;
-					}
-					ch1 = s1.charAt(i1);
-					firstIsDigit = ch1 >= '0' && ch1 <= '9';
-				}
-				while (ch2 == '0') {
-					i2++;
-					if (i2 == s2.length()) {
-						secondIsDigit = false;
-						break;
-					}
-					ch2 = s2.charAt(i2);
-					secondIsDigit = ch2 >= '0' && ch2 <= '9';
-				}
-				boolean firstGreater = false;
-				boolean secondGreater = false;
-				while (firstIsDigit && secondIsDigit) {
-					if (!firstGreater && !secondGreater) {
-						int comp = ch1 - ch2;
-						if (comp < 0)
-							secondGreater = true;
-						else if (comp > 0)
-							firstGreater = true;
-					}
-					i1++;
-					if (i1 < s1.length()) {
-						ch1 = s1.charAt(i1);
-						firstIsDigit = ch1 >= '0' && ch1 <= '9';
-					} else
-						firstIsDigit = false;
-					i2++;
-					if (i2 < s2.length()) {
-						ch2 = s2.charAt(i2);
-						secondIsDigit = ch2 >= '0' && ch2 <= '9';
-					} else
-						secondIsDigit = false;
-				}
-				if (firstIsDigit)
-					return 1; // The number in o1 has more digits and is therefore larger
-				else if (secondIsDigit)
-					return -1; // The number in o2 has more digits and is therefore larger
-				else if (firstGreater)
-					return 1;
-				else if (secondGreater)
-					return -1;
-				if (i1 == s1.length() || i2 == s2.length())
-					break; // We've advanced past the number (which was the same in both strings) now and ch1 and ch2 are now
-			}
-			if (ignoreCase) {
-				boolean upper1 = Character.isUpperCase(ch1);
-				boolean upper2 = Character.isUpperCase(ch2);
-				if (upper1 != upper2) {
-					if (upper1)
-						ch1 = Character.toLowerCase(ch1);
-					else
-						ch2 = Character.toLowerCase(ch2);
-				}
-			}
-			int diff = ch1 - ch2;
-			if (diff < 0)
-				return -1;
-			else if (diff > 0)
-				return 1;
-		}
-		if (i1 < s1.length())
-			return 1;
-		else if (i2 < s2.length())
-			return -1;
-		return intolerantResult;
+		return StringUtils.compareNumberTolerant(s1, s2, ignoreCase, onlyZeroIfEqual);
 	}
 
 	/**
