@@ -39,7 +39,9 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	 * Initializes this tree with the contents of the given iterable. No calls are made to {@link #add(Object)} or any other method in this
 	 * list, so no filtering is possible.
 	 * 
+	 * @param <E2> The type of values to initialize the collection with
 	 * @param values The values to initialize this list with
+	 * @param map The map to apply to the values before insertion
 	 * @return Whether the list now has values
 	 */
 	protected <E2 extends E> boolean initialize(Iterable<E2> values, Function<? super E2, ? extends E> map) {
@@ -324,6 +326,8 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	}
 
 	private NodeId checkNode(ElementId id, boolean requirePresent) {
+		if (id == null)
+			throw new NullPointerException();
 		if (!(id instanceof RedBlackNodeList.NodeId))
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		NodeId nodeId = (NodeId) id;
