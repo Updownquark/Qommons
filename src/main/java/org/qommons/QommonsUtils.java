@@ -3,12 +3,16 @@ package org.qommons;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.function.Function;
 
 /** Even more general utilities that I can't think where else to put */
 public class QommonsUtils {
@@ -676,6 +680,42 @@ public class QommonsUtils {
 			return print(end);
 		}
 		return ret.toString();
+	}
+
+	/**
+	 * @param <T> The type of values in the list
+	 * @param values The values to include
+	 * @return An unmodifiable copy of the given list
+	 */
+	public static <T> List<T> unmodifiableCopy(List<? extends T> values) {
+		if (values.isEmpty())
+			return Collections.emptyList();
+		ArrayList<T> list = new ArrayList<>(values.size());
+		list.addAll(values);
+		return Collections.unmodifiableList(list);
+	}
+
+	/**
+	 * @param <T> The type of values in the list
+	 * @param values The values to include
+	 * @return An unmodifiable copy of the given list
+	 */
+	public static <T> List<T> unmodifiableCopy(T... values) {
+		if (values.length == 0)
+			return Collections.emptyList();
+		ArrayList<T> list = new ArrayList<>(values.length);
+		for (T v : values)
+			list.add(v);
+		return Collections.unmodifiableList(list);
+	}
+
+	public static <T, V> List<V> map(List<? extends T> values, Function<? super T, ? extends V> map, boolean unmodifiable) {
+		if (values.isEmpty())
+			return unmodifiable ? Collections.emptyList() : new ArrayList<>(5);
+		ArrayList<V> list = new ArrayList<>(values.size());
+		for (T value : values)
+			list.add(map.apply(value));
+		return unmodifiable ? Collections.unmodifiableList(list) : list;
 	}
 
 	/**
