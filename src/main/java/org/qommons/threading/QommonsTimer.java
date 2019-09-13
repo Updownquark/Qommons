@@ -4,6 +4,7 @@ import java.awt.EventQueue;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Scanner;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -195,7 +196,7 @@ public class QommonsTimer {
 			Instant nextRun = theNextRun;
 			theNextRun = time;
 			if (!isActive())
-				times(1).setActive(true);
+				setActive(true);
 			else if (nextRun == null || time.compareTo(nextRun) < 0)
 				interruptScheduler();
 			return this;
@@ -247,7 +248,7 @@ public class QommonsTimer {
 		 */
 		public TaskHandle times(long times) {
 			theRemainingExecCount = times;
-			return null;
+			return this;
 		}
 
 		/**
@@ -379,15 +380,6 @@ public class QommonsTimer {
 					theNextRun = nextRun;
 				} else
 					theNextRun = nextRun = null;
-				long rem = theRemainingExecCount;
-				if (rem > 0) {
-					rem--;
-					theRemainingExecCount = rem;
-					if (rem == 0) {
-						terminate = true;
-						nextRun = null;
-					}
-				}
 				isWaiting = true;
 			}
 			if (nextRun != null) {
@@ -425,6 +417,15 @@ public class QommonsTimer {
 					if (terminate)
 						theLastRun = null;
 				}
+				long rem = theRemainingExecCount;
+				if (rem > 0) {
+					rem--;
+					theRemainingExecCount = rem;
+					if (rem == 0) {
+						terminate = true;
+						nextRun = null;
+					}
+				}
 				theNextRun = nextRun;
 				if (terminate)
 					setActive(false);
@@ -443,6 +444,7 @@ public class QommonsTimer {
 	private volatile boolean isRunning;
 	private volatile Thread theSchedulerThread;
 	private final AtomicBoolean isSleeping;
+	private final ConcurrentHashMap<Object, TaskHandle> theInactityTasks;
 
 	/**
 	 * @param clock The clock implementation to use for scheduling
@@ -453,6 +455,7 @@ public class QommonsTimer {
 		theClock = clock;
 		theMainRunner = mainRunner;
 		theAccessoryRunner = accessoryRunner;
+		theInactityTasks = new ConcurrentHashMap<>();
 		theTaskQueue = ListenerList.build().allowReentrant().withFastSize(false).withInUse(inUse -> {
 			if (inUse) {
 				synchronized (this) {
@@ -517,6 +520,44 @@ public class QommonsTimer {
 	 */
 	public TaskHandle build(Runnable task, Duration frequency, boolean consistent) {
 		return new TaskHandle(task, frequency, consistent);
+	}
+
+	public TaskHandle doAfterInactivity(Object taskKey, Runnable task, long inactiveTime) {
+		return doAfterInactivity(taskKey, task, Duration.ofMillis(inactiveTime));
+	}
+
+	/**
+	 * <p>
+	 * Performs a task after this method has not been called (with the same key) after a certain time period.
+	 * </p>
+	 * <p>
+	 * This method is good for performing cleanup tasks after a resources has not been used for a while. This eliminates the need to close
+	 * and re-create the resource each time it is needed, while ensuring that the resource is cleaned up eventually.
+	 * </p>
+	 * 
+	 * @param taskKey A unique (by {@link Object#equals(Object)}) key used to prolong the task's execution as long as this method keeps
+	 *        being called periodically (faster than <code>inactiveTime</code>).
+	 * @param task The task to execute
+	 * @param inactiveTime The inactive time after which to perform the task
+	 * @return The task handle for the task
+	 */
+	public TaskHandle doAfterInactivity(Object taskKey, Runnable task, Duration inactiveTime) {
+		return theInactityTasks.compute(taskKey, (k, existing) -> {
+			if (existing == null) {
+				TaskHandle[] handle = new TaskHandle[1];
+				return handle[0] = build(() -> {
+					try {
+						task.run();
+					} finally {
+						if (!handle[0].isActive())
+							theInactityTasks.remove(taskKey);
+					}
+				}, Duration.ofSeconds(1_000_000_000), false).runNextIn(inactiveTime).times(1).setActive(true);
+			} else {
+				existing.times(1).runNextIn(inactiveTime).setActive(true);
+				return existing;
+			}
+		});
 	}
 
 	Runnable schedule(TaskHandle task) {
@@ -623,6 +664,7 @@ public class QommonsTimer {
 				.getParser().forDefaultFlagPattern()//
 				.flagArg("now")//
 				.flagArg("nextRun")//
+				.flagArg("i")//
 				.getParser();
 
 			while (true) {
@@ -640,6 +682,9 @@ public class QommonsTimer {
 				}
 				for(Argument arg : lineArgs.getArguments()){
 					switch(arg.getName()){
+					case "i":
+						getCommonInstance().doAfterInactivity("test", () -> System.out.println("inactive"), 2000);
+						break;
 					case "active":
 						prev[0] = System.currentTimeMillis();
 						handle.setActive(((ValuedArgument<Boolean>) arg).getValue());
