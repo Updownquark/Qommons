@@ -1,17 +1,8 @@
 package org.qommons;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.Reader;
-import java.io.Writer;
+import java.io.*;
 import java.nio.ByteBuffer;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.NoSuchElementException;
+import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.LongConsumer;
@@ -172,8 +163,16 @@ public class StringUtils {
 			return into;
 		}
 
+		default <T> StringBuilder print(StringBuilder into, T[] values, BiConsumer<? super T, ? super StringBuilder> format) {
+			return print(into, Arrays.asList(values), format);
+		}
+
 		default <T> StringBuilder print(Iterable<? extends T> values, BiConsumer<? super T, ? super StringBuilder> format) {
 			return print(new StringBuilder(), values, format);
+		}
+
+		default <T> StringBuilder print(T[] values, BiConsumer<? super T, ? super StringBuilder> format) {
+			return print(Arrays.asList(values), format);
 		}
 	}
 
