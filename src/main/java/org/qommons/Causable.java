@@ -136,15 +136,19 @@ public abstract class Causable {
 	private LinkedHashMap<IdentityKey<CausableKey>, Supplier<Transaction>> theKeys;
 	private boolean isStarted;
 	private boolean isFinished;
+	private boolean isTerminated;
 
 	/** @param cause The cause of this causable */
 	public Causable(Object cause) {
 		theCause = cause;
 		if (cause == null)
 			theRootCausable = this;
-		else if (cause instanceof Causable)
-			theRootCausable = ((Causable) cause).theRootCausable;
-		else
+		else if (cause instanceof Causable) {
+			Causable c = (Causable) cause;
+			theRootCausable = c.theRootCausable;
+			if (c.isTerminated || theRootCausable.isTerminated)
+				throw new IllegalStateException("Cannot use a finished Causable as a cause");
+		} else
 			theRootCausable = this;
 	}
 
@@ -214,6 +218,8 @@ public abstract class Causable {
 	public Map<Object, Object> onFinish(CausableKey key) {
 		if (!isStarted)
 			throw new IllegalStateException("Not started!  Use Causable.use(Causable)");
+		else if (isTerminated)
+			throw new IllegalStateException("This cause has already terminated");
 		if (theKeys == null)
 			theKeys = new LinkedHashMap<>();
 		theKeys.computeIfAbsent(new IdentityKey<>(key), k -> k.value.use(this));
@@ -230,26 +236,30 @@ public abstract class Causable {
 		// The finish actions may use this causable as a cause for events they fire.
 		// These events may trigger onRootFinish calls, which add more actions to this causable
 		// Though this cycle is allowed, care must be taken by callers to ensure it does not become infinite
-		if (theKeys != null) {
-			while (!theKeys.isEmpty()) {
-				LinkedList<Transaction> postActions = null;
+		try {
+			if (theKeys != null) {
 				while (!theKeys.isEmpty()) {
-					Iterator<Supplier<Transaction>> keyActionIter = theKeys.values().iterator();
-					Supplier<Transaction> keyAction = keyActionIter.next();
-					keyActionIter.remove();
-					Transaction postAction = keyAction.get();
-					if (postAction != null) {
-						if (postActions == null)
-							postActions = new LinkedList<>();
-						postActions.addFirst(postAction);
+					LinkedList<Transaction> postActions = null;
+					while (!theKeys.isEmpty()) {
+						Iterator<Supplier<Transaction>> keyActionIter = theKeys.values().iterator();
+						Supplier<Transaction> keyAction = keyActionIter.next();
+						keyActionIter.remove();
+						Transaction postAction = keyAction.get();
+						if (postAction != null) {
+							if (postActions == null)
+								postActions = new LinkedList<>();
+							postActions.addFirst(postAction);
+						}
+					}
+					if (postActions != null) {
+						for (Transaction key : postActions)
+							key.close();
+						postActions.clear();
 					}
 				}
-				if (postActions != null) {
-					for (Transaction key : postActions)
-						key.close();
-					postActions.clear();
-				}
 			}
+		} finally {
+			isTerminated = true;
 		}
 	}
 
