@@ -1,8 +1,18 @@
 package org.qommons;
 
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.Reader;
+import java.io.Writer;
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.LongConsumer;
@@ -240,10 +250,21 @@ public class StringUtils {
 			return toCaseScheme(new StringBuilder(), initialCapital, intermediateCapital, delimiter).toString();
 		}
 
+		/**
+		 * Converts this name to pacal case, the same as camel-case, but with an initial capital
+		 * 
+		 * @return The pascal-cased name
+		 */
 		public String toPascalCase() {
 			return toPascalCase(new StringBuilder()).toString();
 		}
 
+		/**
+		 * Converts this name to pacal case, the same as camel-case, but with an initial capital
+		 * 
+		 * @param str The StringBuilder to append into
+		 * @return The pascal-cased name
+		 */
 		public StringBuilder toPascalCase(StringBuilder str) {
 			return toCaseScheme(str, true, true, null);
 		}
@@ -308,7 +329,7 @@ public class StringUtils {
 	public static String pluralize(String name) {
 		if (name.endsWith("y")) {
 			name = name.substring(0, name.length() - 1) + "ie";
-		} else if (name.endsWith("s")) {
+		} else if (name.endsWith("s") || name.endsWith("x") || name.endsWith("ch")) {
 			name += "e";
 		}
 		name += "s";
@@ -320,15 +341,16 @@ public class StringUtils {
 	 * @return The singular of the given name
 	 */
 	public static String singularize(String name) {
-		if (name.endsWith("ies")) {
-			return name.substring(0, name.length() - 3) + "y";
-		} else if (name.endsWith("ses")) {
-			return name.substring(0, name.length() - 2);
-		} else if (name.endsWith("s")) {
-			return name.substring(0, name.length() - 1);
-		} else {
+		if (name.endsWith("eries")) // Don't singularize "series" to "sery"
 			return name;
-		}
+		else if (name.endsWith("ies"))
+			return name.substring(0, name.length() - 3) + "y";
+		else if (name.endsWith("ses"))
+			return name.substring(0, name.length() - 2);
+		else if (name.endsWith("s"))
+			return name.substring(0, name.length() - 1);
+		else
+			return name;
 	}
 
 	public static final String HEX_CHARS = "0123456789ABCDEF";
