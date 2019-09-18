@@ -259,8 +259,15 @@ public interface Format<T> {
 
 			@Override
 			public Double parse(CharSequence text) throws ParseException {
+				String str = text.toString();
+				if ("NaN".equals(str))
+					return Double.NaN;
+				else if ("-Inf".equals(str) || "-Infinity".equals(str))
+					return Double.NEGATIVE_INFINITY;
+				else if ("Inf".equals(str) || "Infinity".equals(str))
+					return Double.POSITIVE_INFINITY;
 				ParsePosition pos = new ParsePosition(0);
-				Number n = format.parse(text.toString(), pos);
+				Number n = format.parse(str, pos);
 				if (pos.getErrorIndex() >= 0 || pos.getIndex() < text.length())
 					throw new ParseException("Invalid number", pos.getIndex());
 				if (n instanceof Double)
