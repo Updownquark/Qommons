@@ -946,7 +946,7 @@ public class QommonsUtils {
 		return string;
 	}
 
-	private static final long SIGN_MASK = 1 << 63;
+	private static final long SIGN_MASK = 1L << 63;
 	private static final long UNSIGNED_MASK = ~SIGN_MASK;
 
 	/**
@@ -983,9 +983,9 @@ public class QommonsUtils {
 			return 1;
 
 		if (d1Bits < d2Bits)
-			return -1;
+			return d1Neg ? 1 : -1;
 		else if (d1Bits > d2Bits)
-			return 1;
+			return d1Neg ? -1 : 1;
 		else
 			return 0;
 	}
