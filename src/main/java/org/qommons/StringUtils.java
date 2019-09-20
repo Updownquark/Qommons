@@ -286,7 +286,13 @@ public class StringUtils {
 		}
 	}
 
-	public static Name parseByCase(String name) {
+	/**
+	 * @param name The name to parse by its capitalization
+	 * @param ignoreRepeatCapitals Whether to treat adjacent capitals as part of the same name component or not. This often results in
+	 *        prettier names, but also destroys information that cannot be re-created when parsing the formatted name.
+	 * @return The name object to be formatted in a different way
+	 */
+	public static Name parseByCase(String name, boolean ignoreRepeatCapitals) {
 		if (name.length() == 0)
 			return new Name(new String[0]);
 		List<String> components = new LinkedList<>();
@@ -294,7 +300,8 @@ public class StringUtils {
 		boolean hadLower = false;
 		for (int c = 0; c < name.length(); c++) {
 			if (Character.isUpperCase(name.charAt(c))) {
-				if (hadLower) {
+				boolean newComponent = c > 0 && (hadLower || !ignoreRepeatCapitals);
+				if (newComponent) {
 					components.add(comp.toString());
 					comp.setLength(0);
 					hadLower = false;
@@ -315,7 +322,7 @@ public class StringUtils {
 		for (int c = 0; c < str.length(); c++) {
 			if (str.charAt(c) == delimiter) {
 				components.add(str.substring(start, c));
-				start = c;
+				start = c + 1; // Skip the delimiter
 			}
 		}
 		components.add(str.substring(start));
