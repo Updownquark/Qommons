@@ -1,9 +1,19 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.ConcurrentModificationException;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.qommons.QommonsUtils;
 import org.qommons.Transactable;
@@ -307,6 +317,18 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 */
 	public static <E> BetterList<E> of(Collection<? extends E> values) {
 		return new ConstantList<>(values instanceof List ? (List<? extends E>) values : new ArrayList<>(values));
+	}
+
+	/**
+	 * @param <E> The type for the list
+	 * @param values The stream to supply values for the list
+	 * @return An immutable list containing the values from the given stream
+	 */
+	public static <E> BetterList<E> of(Stream<? extends E> values) {
+		ArrayList<E> list = new ArrayList<>();
+		values.collect(Collectors.toCollection(() -> list));
+		list.trimToSize();
+		return new ConstantList<>(list);
 	}
 
 	/**
