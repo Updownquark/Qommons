@@ -1,18 +1,11 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.ConcurrentModificationException;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
+import org.qommons.QommonsUtils;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -287,12 +280,15 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		return new SubList<>(this, fromIndex, toIndex);
 	}
 
+	/** An empty list */
+	public static final EmptyList<Object> EMPTY = new EmptyList<>();
+
 	/**
 	 * @param <E> The type of the list
 	 * @return An empty reversible list
 	 */
 	public static <E> BetterList<E> empty() {
-		return new EmptyList<>();
+		return (BetterList<E>) (BetterList<?>) EMPTY;
 	}
 
 	/**
@@ -370,6 +366,21 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			if (!terminalInclusive)
 				reflected--;
 			return reflected;
+		}
+
+		@Override
+		public int hashCode() {
+			return BetterCollection.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterCollection.equals(this, obj);
+		}
+
+		@Override
+		public String toString() {
+			return BetterCollection.toString(this);
 		}
 	}
 
@@ -716,8 +727,18 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public CollectionElement<E> getElementBySource(ElementId sourceEl) {
-			return theWrapped.getElementBySource(sourceEl);
+		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
+			return QommonsUtils.filterMap(theWrapped.getElementsBySource(sourceEl), el -> {
+				int index = theWrapped.getElementsBefore(el.getElementId());
+				return index >= theStart && index < theEnd;
+			}, el -> el);
+		}
+
+		@Override
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			if (this == sourceCollection)
+				return BetterList.of(localElement);
+			return theWrapped.getSourceElements(localElement, sourceCollection);
 		}
 
 		@Override
@@ -756,6 +777,21 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 					array[i] = (T) get(i);
 				return array;
 			}
+		}
+
+		@Override
+		public int hashCode() {
+			return BetterCollection.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterCollection.equals(this, obj);
+		}
+
+		@Override
+		public String toString() {
+			return BetterCollection.toString(this);
 		}
 
 		protected MutableCollectionElement<E> wrapElement(MutableCollectionElement<E> el) {
@@ -918,21 +954,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				theWrapped.removeRange(theStart, end);
 				theEnd -= sz - theWrapped.size();
 			}
-		}
-
-		@Override
-		public int hashCode() {
-			return BetterCollection.hashCode(this);
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			return BetterCollection.equals(this, obj);
-		}
-
-		@Override
-		public String toString() {
-			return BetterCollection.toString(this);
 		}
 	}
 
@@ -1105,10 +1126,21 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public CollectionElement<E> getElementBySource(ElementId sourceEl) {
+		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
 			if (sourceEl instanceof ConstantList.IndexElementId && ((IndexElementId) sourceEl).getList() == this)
-				return getElement(sourceEl);
+				return BetterList.of(getElement(sourceEl));
 			return null;
+		}
+
+		@Override
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this) {
+				if (!(localElement instanceof ConstantList.IndexElementId)
+					|| ((ConstantList.IndexElementId) localElement).getList() != this)
+					throw new IllegalArgumentException(localElement + " is not an element of this list");
+				return BetterList.of(localElement);
+			}
+			return BetterList.empty();
 		}
 
 		@Override
@@ -1124,6 +1156,21 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public void clear() {}
+
+		@Override
+		public int hashCode() {
+			return BetterCollection.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterCollection.equals(this, obj);
+		}
+
+		@Override
+		public String toString() {
+			return BetterCollection.toString(this);
+		}
 
 		private class IndexElementId implements ElementId {
 			final int index;

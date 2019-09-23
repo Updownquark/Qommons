@@ -6,6 +6,7 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import org.qommons.QommonsUtils;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.ValueHolder;
@@ -631,9 +632,16 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public CollectionElement<Entry<K, V>> getElementBySource(ElementId sourceEl) {
-			CollectionElement<K> keyEl = theMap.keySet().getElementBySource(sourceEl);
-			return keyEl == null ? null : getElement(keyEl.getElementId());
+		public BetterList<CollectionElement<Entry<K, V>>> getElementsBySource(ElementId sourceEl) {
+			return QommonsUtils.map2(theMap.keySet().getElementsBySource(sourceEl), keyEl -> getElement(keyEl.getElementId()));
+		}
+
+		@Override
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			BetterSet<K> keySet = theMap.keySet();
+			if (sourceCollection == this)
+				return keySet.getSourceElements(localElement, keySet); // Validate element
+			return keySet.getSourceElements(localElement, sourceCollection);
 		}
 
 		@Override
@@ -950,9 +958,16 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public CollectionElement<V> getElementBySource(ElementId sourceEl) {
-			CollectionElement<K> keyEl = theMap.keySet().getElementBySource(sourceEl);
-			return keyEl == null ? null : theMap.getEntryById(keyEl.getElementId());
+		public BetterList<CollectionElement<V>> getElementsBySource(ElementId sourceEl) {
+			return QommonsUtils.map2(theMap.keySet().getElementsBySource(sourceEl), keyEl -> theMap.getEntryById(keyEl.getElementId()));
+		}
+
+		@Override
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			BetterSet<K> keySet = theMap.keySet();
+			if (sourceCollection == this)
+				return keySet.getSourceElements(localElement, keySet); // Validate element
+			return keySet.getSourceElements(localElement, sourceCollection);
 		}
 	}
 }

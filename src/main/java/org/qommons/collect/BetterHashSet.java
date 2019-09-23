@@ -462,10 +462,20 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public CollectionElement<E> getElementBySource(ElementId sourceEl) {
+	public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
 		if (sourceEl instanceof BetterHashSet.HashId && ((HashId) sourceEl).getSet() == this)
-			return getElement(sourceEl);
-		return null;
+			return BetterList.of(getElement(sourceEl));
+		return BetterList.empty();
+	}
+
+	@Override
+	public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+		if (sourceCollection == this) {
+			if (!(localElement instanceof BetterHashSet.HashId) || ((HashId) localElement).getSet() != this)
+				throw new IllegalArgumentException(localElement + " does not belong to this set");
+			return BetterList.of(localElement);
+		}
+		return BetterList.empty();
 	}
 
 	public boolean isValid(ElementId elementId){

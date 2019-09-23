@@ -1,27 +1,13 @@
 package org.qommons.tree;
 
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
-import java.util.SortedMap;
+import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
+import org.qommons.QommonsUtils;
 import org.qommons.Transaction;
-import org.qommons.collect.BetterCollection;
-import org.qommons.collect.BetterMapEntryImpl;
-import org.qommons.collect.BetterSet;
-import org.qommons.collect.BetterSortedMap;
+import org.qommons.collect.*;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
-import org.qommons.collect.CollectionElement;
-import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.ElementId;
-import org.qommons.collect.FastFailLockingStrategy;
-import org.qommons.collect.MutableCollectionElement;
-import org.qommons.collect.OptimisticContext;
-import org.qommons.collect.SimpleMapEntry;
-import org.qommons.collect.StampedLockingStrategy;
 
 /**
  * A tree-based implementation of {@link BetterSortedMap}
@@ -622,9 +608,15 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 
 		@Override
-		public CollectionElement<K> getElementBySource(ElementId sourceEl) {
-			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElementBySource(sourceEl);
-			return entryEl == null ? null : handleFor(entryEl);
+		public BetterList<CollectionElement<K>> getElementsBySource(ElementId sourceEl) {
+			return QommonsUtils.map2(theEntries.getElementsBySource(sourceEl), this::handleFor);
+		}
+
+		@Override
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return theEntries.getSourceElements(localElement, theEntries); // Validate element
+			return theEntries.getSourceElements(localElement, sourceCollection);
 		}
 
 		@Override
