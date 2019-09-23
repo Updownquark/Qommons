@@ -1,26 +1,12 @@
 package org.qommons;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.NavigableSet;
-import java.util.Random;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.function.Consumer;
 
 import org.qommons.debug.Debug;
@@ -623,7 +609,7 @@ public class TestHelper {
 				tester.accept(helper);
 			};
 			theTestExecThread.interrupt(); // Start test execution
-			Instant totalMax = theMaxTotalDuration == null ? null : theOriginalStart.plus(theMaxTotalDuration);
+			Instant totalMax = theMaxTotalDuration == null ? null : caseStart.plus(theMaxTotalDuration);
 			Instant caseMax = theMaxCaseDuration == null ? null : caseStart.plus(theMaxCaseDuration);
 			Instant checkInMax = theMaxProgressInterval == null ? null : caseStart.plus(theMaxProgressInterval);
 			Instant checkInMin = theMaxProgressInterval == null ? null : caseStart;
