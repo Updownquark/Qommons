@@ -1,12 +1,6 @@
 package org.qommons.collect;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.ConcurrentModificationException;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -517,10 +511,20 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public CollectionElement<E> getElementBySource(ElementId sourceEl) {
+	public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
 		if (sourceEl instanceof CircularArrayList.ArrayElementId && ((ArrayElementId) sourceEl).getList() == this)
-			return getElement(sourceEl);
-		return null;
+			return BetterList.of(getElement(sourceEl));
+		return BetterList.empty();
+	}
+
+	@Override
+	public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+		if (sourceCollection == this) {
+			if (!(localElement instanceof CircularArrayList.ArrayElementId) || ((ArrayElementId) localElement).getList() != this)
+				throw new IllegalArgumentException(localElement + " does not belong to this list");
+			return BetterList.of(localElement);
+		}
+		return BetterList.empty();
 	}
 
 	@Override
