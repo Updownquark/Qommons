@@ -3,16 +3,11 @@ package org.qommons;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.TimeZone;
+import java.util.*;
 import java.util.function.Function;
+import java.util.function.Predicate;
+
+import org.qommons.collect.BetterList;
 
 /** Even more general utilities that I can't think where else to put */
 public class QommonsUtils {
@@ -716,6 +711,28 @@ public class QommonsUtils {
 		for (T value : values)
 			list.add(map.apply(value));
 		return unmodifiable ? Collections.unmodifiableList(list) : list;
+	}
+
+	public static <T, V> BetterList<V> map2(List<? extends T> values, Function<? super T, ? extends V> map) {
+		if (values.isEmpty())
+			return BetterList.empty();
+		ArrayList<V> list = new ArrayList<>(values.size());
+		for (T value : values)
+			list.add(map.apply(value));
+		return BetterList.of(list);
+	}
+
+	public static <T, V> BetterList<V> filterMap(List<? extends T> values, Predicate<? super T> filter,
+		Function<? super T, ? extends V> map) {
+		if (values.isEmpty())
+			return BetterList.empty();
+		ArrayList<V> list = new ArrayList<>(values.size());
+		for (T value : values) {
+			if (filter.test(value))
+				list.add(map.apply(value));
+		}
+		list.trimToSize();
+		return BetterList.of(list);
 	}
 
 	/**
