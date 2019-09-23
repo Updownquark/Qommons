@@ -257,7 +257,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	default E set(int index, E element) {
 		if (!belongs(element))
 			throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-		try (Transaction t = lock(true, true, null)) {
+		try (Transaction t = lock(true, false, null)) {
 			CollectionElement<E> el = getElement(index);
 			E value = el.get();
 			mutableElement(el.getElementId()).set(element);
