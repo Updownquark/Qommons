@@ -1,18 +1,8 @@
 package org.qommons;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.Reader;
-import java.io.Writer;
+import java.io.*;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.NoSuchElementException;
+import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.LongConsumer;
@@ -155,10 +145,10 @@ public class StringUtils {
 	}
 
 	public interface SequencePrinter {
-		<T> void printValue(StringBuilder into, T value, BiConsumer<? super T, ? super StringBuilder> format, int before, boolean last);
+		<T> void printValue(StringBuilder into, T value, BiConsumer<? super StringBuilder, ? super T> format, int before, boolean last);
 
 		default <T> StringBuilder print(StringBuilder into, Iterable<? extends T> values,
-			BiConsumer<? super T, ? super StringBuilder> format) {
+			BiConsumer<? super StringBuilder, ? super T> format) {
 			if (into == null)
 				into = new StringBuilder();
 			Iterator<? extends T> iter = values.iterator();
@@ -173,15 +163,15 @@ public class StringUtils {
 			return into;
 		}
 
-		default <T> StringBuilder print(StringBuilder into, T[] values, BiConsumer<? super T, ? super StringBuilder> format) {
+		default <T> StringBuilder print(StringBuilder into, T[] values, BiConsumer<? super StringBuilder, ? super T> format) {
 			return print(into, Arrays.asList(values), format);
 		}
 
-		default <T> StringBuilder print(Iterable<? extends T> values, BiConsumer<? super T, ? super StringBuilder> format) {
+		default <T> StringBuilder print(Iterable<? extends T> values, BiConsumer<? super StringBuilder, ? super T> format) {
 			return print(new StringBuilder(), values, format);
 		}
 
-		default <T> StringBuilder print(T[] values, BiConsumer<? super T, ? super StringBuilder> format) {
+		default <T> StringBuilder print(T[] values, BiConsumer<? super StringBuilder, ? super T> format) {
 			return print(Arrays.asList(values), format);
 		}
 	}
@@ -198,7 +188,7 @@ public class StringUtils {
 	public static SequencePrinter conversational(CharSequence delimiter, CharSequence preTerminal) {
 		return new SequencePrinter() {
 			@Override
-			public <T> void printValue(StringBuilder into, T value, BiConsumer<? super T, ? super StringBuilder> format, int before,
+			public <T> void printValue(StringBuilder into, T value, BiConsumer<? super StringBuilder, ? super T> format, int before,
 				boolean last) {
 				boolean first = before == 0;
 				boolean delimit = delimiter != null && !first && (!last || before > 1);
@@ -209,7 +199,7 @@ public class StringUtils {
 						into.deleteCharAt(into.length() - 1); // No double-space
 					into.append(preTerminal);
 				}
-				format.accept(value, into);
+				format.accept(into, value);
 			}
 		};
 	}
