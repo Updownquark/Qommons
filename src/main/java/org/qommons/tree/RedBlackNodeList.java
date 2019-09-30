@@ -7,7 +7,11 @@ import java.util.function.Function;
 import org.qommons.Identifiable;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
-import org.qommons.collect.*;
+import org.qommons.collect.BetterCollection;
+import org.qommons.collect.BetterList;
+import org.qommons.collect.CollectionElement;
+import org.qommons.collect.CollectionLockingStrategy;
+import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.OptimisticContext;
@@ -55,21 +59,13 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 		}
 
 		/**
-		 * Ensures the new list will be thread-safe
+		 * Specifies the thread safety of the list
 		 * 
+		 * @param safe Whether the list should be thread-safe
 		 * @return This builder
 		 */
-		public RBNLBuilder<E, L> safe() {
-			return withLocker(new StampedLockingStrategy());
-		}
-
-		/**
-		 * Ensures the new list will be more performant, but thread-unsafe
-		 * 
-		 * @return This builder
-		 */
-		public RBNLBuilder<E, L> unsafe() {
-			return withLocker(new FastFailLockingStrategy());
+		public RBNLBuilder<E, L> safe(boolean safe) {
+			return withLocker(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy());
 		}
 
 		/**

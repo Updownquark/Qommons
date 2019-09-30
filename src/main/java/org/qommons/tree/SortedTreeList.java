@@ -7,7 +7,7 @@ import java.util.Objects;
 import java.util.SortedSet;
 
 import org.qommons.Transaction;
-import org.qommons.collect.*;
+import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.CollectionLockingStrategy;
@@ -53,14 +53,8 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 		}
 
 		@Override
-		public Builder<E, L> safe() {
-			super.safe();
-			return this;
-		}
-
-		@Override
-		public Builder<E, L> unsafe() {
-			super.unsafe();
+		public Builder<E, L> safe(boolean safe) {
+			super.safe(safe);
 			return this;
 		}
 

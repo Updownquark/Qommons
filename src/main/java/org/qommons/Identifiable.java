@@ -140,7 +140,12 @@ public interface Identifiable {
 			if (!(obj instanceof WrappingIdentity))
 				return false;
 			WrappingIdentity other = (WrappingIdentity) obj;
-			return theWrappedId.equals(other.theWrappedId) && theOp.equals(other.theOp);
+			if (!theWrappedId.equals(other.theWrappedId) || !theOp.equals(other.theOp) || theParams.length != other.theParams.length)
+				return false;
+			for (int i = 0; i < theParams.length; i++)
+				if (!Objects.equals(theParams[i], other.theParams[i]))
+					return false;
+			return true;
 		}
 
 		@Override

@@ -2,6 +2,8 @@ package org.qommons.collect;
 
 import java.util.Collection;
 
+import org.qommons.Identifiable;
+import org.qommons.StructuredStamped;
 import org.qommons.Transaction;
 
 /**
@@ -10,7 +12,7 @@ import org.qommons.Transaction;
  * @param <K> The type of keys in the map
  * @param <V> The type of values in the map
  */
-public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V> {
+public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, StructuredStamped, Identifiable {
 	@Override
 	BetterSet<K> keySet();
 
@@ -19,13 +21,6 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V> {
 
 	@Override
 	BetterCollection<V> get(Object key);
-
-	/**
-	 * @param structuralOnly Whether to monitor only structural changes or all changes
-	 * @return The stamp for comparison
-	 * @see BetterCollection#getStamp(boolean)
-	 */
-	long getStamp(boolean structuralOnly);
 
 	default MultiEntryHandle<K, V> getEntry(K key) {
 		try (Transaction t = lock(false, null)) {
@@ -178,6 +173,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V> {
 
 	class ReversedMultiMap<K, V> implements BetterMultiMap<K, V> {
 		private final BetterMultiMap<K, V> theSource;
+		private Object theIdentity;
 
 		public ReversedMultiMap(BetterMultiMap<K, V> source) {
 			theSource = source;
@@ -185,6 +181,13 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V> {
 
 		protected BetterMultiMap<K, V> getSource() {
 			return theSource;
+		}
+
+		@Override
+		public Object getIdentity() {
+			if (theIdentity == null)
+				theIdentity = Identifiable.wrap(theSource.getIdentity(), "reverse");
+			return theIdentity;
 		}
 
 		@Override

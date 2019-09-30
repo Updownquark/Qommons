@@ -5,7 +5,6 @@ import java.util.Objects;
 
 import org.qommons.Transaction;
 import org.qommons.ValueHolder;
-import org.qommons.collect.BetterList;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
@@ -46,14 +45,8 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 		}
 
 		@Override
-		public Builder<E> safe() {
-			super.safe();
-			return this;
-		}
-
-		@Override
-		public Builder<E> unsafe() {
-			super.unsafe();
+		public Builder<E> safe(boolean safe) {
+			super.safe(safe);
 			return this;
 		}
 

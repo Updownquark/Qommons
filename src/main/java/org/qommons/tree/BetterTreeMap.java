@@ -1,14 +1,30 @@
 package org.qommons.tree;
 
-import java.util.*;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+import java.util.SortedMap;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 import org.qommons.Identifiable;
 import org.qommons.QommonsUtils;
 import org.qommons.Transaction;
-import org.qommons.collect.*;
+import org.qommons.collect.BetterCollection;
+import org.qommons.collect.BetterList;
+import org.qommons.collect.BetterMapEntryImpl;
+import org.qommons.collect.BetterSet;
+import org.qommons.collect.BetterSortedMap;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
+import org.qommons.collect.CollectionElement;
+import org.qommons.collect.CollectionLockingStrategy;
+import org.qommons.collect.ElementId;
+import org.qommons.collect.FastFailLockingStrategy;
+import org.qommons.collect.MutableCollectionElement;
+import org.qommons.collect.OptimisticContext;
+import org.qommons.collect.SimpleMapEntry;
+import org.qommons.collect.StampedLockingStrategy;
 
 /**
  * A tree-based implementation of {@link BetterSortedMap}
@@ -32,14 +48,8 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 
 		@Override
-		public Builder<K> safe() {
-			super.safe();
-			return this;
-		}
-
-		@Override
-		public Builder<K> unsafe() {
-			super.unsafe();
+		public Builder<K> safe(boolean safe) {
+			super.safe(safe);
 			return this;
 		}
 

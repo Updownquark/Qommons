@@ -99,6 +99,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 */
 	BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl);
 
+	/**
+	 * @param localElement The element in this collection to get the source(s) for
+	 * @param sourceCollection The collection, potentially a source parent or ancestor of this collection, for which to get the elements
+	 * @return All elements of the source collection that affect the value of the given element in this collection
+	 */
 	BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection);
 
 	/**

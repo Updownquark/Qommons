@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.SortedSet;
 
+import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.StampedLockingStrategy;
@@ -34,14 +35,8 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 		}
 
 		@Override
-		public Builder<E, L> safe() {
-			super.safe();
-			return this;
-		}
-
-		@Override
-		public Builder<E, L> unsafe() {
-			super.unsafe();
+		public Builder<E, L> safe(boolean safe) {
+			super.safe(safe);
 			return this;
 		}
 

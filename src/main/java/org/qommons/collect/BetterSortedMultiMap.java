@@ -2,6 +2,7 @@ package org.qommons.collect;
 
 import java.util.Comparator;
 
+import org.qommons.Identifiable;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -144,6 +145,7 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		private final Comparable<? super K> theUpperBound;
 
 		private final BetterSortedSet<K> theKeySet;
+		private Object theIdentity;
 
 		public BetterSubMultiMap(BetterSortedMultiMap<K, V> wrapped, Comparable<? super K> lowerBound, Comparable<? super K> upperBound) {
 			theWrapped = wrapped;
@@ -163,6 +165,13 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 
 		protected Comparable<? super K> getUpperBound() {
 			return theUpperBound;
+		}
+
+		@Override
+		public Object getIdentity() {
+			if (theIdentity == null)
+				theIdentity = Identifiable.wrap(theWrapped.getIdentity(), "subMap", theLowerBound, theUpperBound);
+			return theIdentity;
 		}
 
 		@Override
