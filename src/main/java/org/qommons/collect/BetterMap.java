@@ -1,15 +1,17 @@
 package org.qommons.collect;
 
-import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import org.qommons.QommonsUtils;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
+import org.qommons.ValueHolder;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
+import org.qommons.collect.ValueStoredCollection.RepairListener;
 
 /**
  * A {@link Map} that provides access to its entries by ID.
@@ -39,13 +41,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	}
 
 	@Override
-	default Transaction lock(boolean write, Object cause) {
-		return keySet().lock(write, cause);
+	default Transaction lock(boolean write, boolean structural, Object cause) {
+		return keySet().lock(write, structural, cause);
 	}
 
 	@Override
-	default Transaction lock(boolean write, boolean structural, Object cause) {
-		return keySet().lock(write, structural, cause);
+	default Transaction tryLock(boolean write, boolean structural, Object cause) {
+		return keySet().tryLock(write, structural, cause);
 	}
 
 	/**
@@ -81,6 +83,17 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	 * @return The handle for the entry in this map with the given key, or null if the key does not exist in this map's key set
 	 */
 	MapEntryHandle<K, V> getEntry(K key);
+
+	/**
+	 * Same as {@link #computeIfAbsent(Object, Function)}, but returns the entry of the affected element
+	 * 
+	 * @param key The key to retrieve or insert the value for
+	 * @param value The function to produce the value for the added entry, if not present
+	 * @param first Whether to prefer adding the new entry early or late in the key/entry set
+	 * @param added The runnable that will be invoked if the entry is added
+	 * @return The entry of the element if retrieved or added; may be null if key/value pair is not permitted in the map
+	 */
+	MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, boolean first, Runnable added);
 
 	/**
 	 * @param entryId The element ID to get the handle for
@@ -152,20 +165,24 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 	@Override
 	default V put(K key, V value) {
-		try (Transaction t = lock(true, null)) {
-			MapEntryHandle<K, V> entry = getEntry(key);
-			if (entry != null) {
+		while (true) {
+			boolean[] added = new boolean[1];
+			MapEntryHandle<K, V> entry = getOrPutEntry(key, k -> value, false, () -> added[0] = true);
+			if (entry != null && !added[0]) {
 				// Get the mutable entry in case the immutable one doesn't support Entry.setValue(Object)
-				MutableMapEntryHandle<K, V> mutableEntry = mutableEntry(entry.getElementId());
+				MutableMapEntryHandle<K, V> mutableEntry;
+				try {
+					mutableEntry = mutableEntry(entry.getElementId());
+				} catch (IllegalArgumentException e) {
+					continue;
+				}
 				V old = mutableEntry.get();
 				mutableEntry.set(value);
 				return old;
-			} else {
-				putEntry(key, value, false);
+			} else
 				return null;
 			}
 		}
-	}
 
 	@Override
 	default void putAll(Map<? extends K, ? extends V> m) {
@@ -178,6 +195,161 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	@Override
 	default void clear() {
 		keySet().clear();
+	}
+
+	/**
+	 * @param key The key for the entry to add
+	 * @param value The value to add for the key
+	 * @return This map
+	 */
+	default BetterMap<K, V> with(K key, V value) {
+		put(key, value);
+		return this;
+	}
+
+	/**
+	 * @param values The map whose entries to add to this map
+	 * @return This map
+	 */
+	default BetterMap<K, V> withAll(Map<? extends K, ? extends V> values) {
+		putAll(values);
+		return this;
+	}
+
+	/**
+	 * Checks the map's storage structure for consistency at the given entry.See {@link BetterSet#isConsistent(ElementId)} for more
+	 * information.
+	 * 
+	 * @param entry The entry to check the structure's consistency at
+	 * @return Whether the map's storage appears to be consistent at the given element
+	 */
+	default boolean isConsistent(ElementId entry) {
+		return keySet().isConsistent(entry);
+	}
+
+	/**
+	 * Searches for any inconsistencies in the map's key storage structure. This typically takes linear time. See
+	 * {@link BetterSet#checkConsistency()} for more information.
+	 * 
+	 * @return Whether any inconsistency was found in the map
+	 */
+	default boolean checkConsistency() {
+		return keySet().checkConsistency();
+	}
+
+	/**
+	 * An interface to monitor #repair on a set.
+	 * 
+	 * @param <K> The type of keys in the map
+	 * @param <V> The type of values in the set
+	 * @param <X> The type of the custom data to keep track of transfer operations
+	 */
+	interface MapRepairListener<K, V, X> {
+		/** @see ValueStoredCollection.RepairListener#removed(CollectionElement) */
+		@SuppressWarnings("javadoc")
+		X removed(MapEntryHandle<K, V> element);
+
+		/** @see ValueStoredCollection.RepairListener#disposed(Object, Object) */
+		@SuppressWarnings("javadoc")
+		void disposed(K key, V value, X data);
+
+		/** @see ValueStoredCollection.RepairListener#transferred(CollectionElement, Object) */
+		@SuppressWarnings("javadoc")
+		void transferred(MapEntryHandle<K, V> element, X data);
+	}
+
+	/**
+	 * <p>
+	 * Fixes any inconsistencies in the map's storage structure at the given entry. Nothing is specified about how limited the scope of the
+	 * repair will be. Depending on the nature of any inconsistency(ies) found, more than one entry may need to be moved. See
+	 * {@link BetterSet#repair(ElementId, RepairListener)} for more information.
+	 * 
+	 * </p>
+	 * <p>
+	 * See {@link #isConsistent(ElementId)} and
+	 * <a href="https://github.com/Updownquark/Qommons/wiki/BetterCollection-API#features-2">BetterSet Features</a>
+	 * </p>
+	 * 
+	 * @param <X> The type of the data transferred for the listener
+	 * @param entry The entry to repair the structure's consistency at
+	 * @param listener The listener to monitor repairs. May be null.
+	 * @return Whether any inconsistencies were found
+	 */
+	default <X> boolean repair(ElementId entry, MapRepairListener<K, V, X> listener) {
+		return keySet().repair(entry, listener == null ? null : new KeySetRepairListener<>(this, listener));
+	}
+
+	/**
+	 * Searches for and fixes any inconsistencies in the set's storage structure. See {@link BetterSet#repair(RepairListener)} for more
+	 * information.
+	 * 
+	 * @param <X> The type of the data transferred for the listener
+	 * @param listener The listener to monitor repairs. May be null.
+	 * @return Whether any inconsistencies were found
+	 */
+	default <X> boolean repair(MapRepairListener<K, V, X> listener) {
+		return keySet().repair(listener == null ? null : new KeySetRepairListener<>(this, listener));
+	}
+
+	class EntryRepairTracker<K, V, X> implements Map.Entry<K, V> {
+		public final K key;
+		public final V value;
+		public final X outerData;
+
+		public EntryRepairTracker(K key, V value, X outerData) {
+			this.key = key;
+			this.value = value;
+			this.outerData = outerData;
+		}
+
+		@Override
+		public K getKey() {
+			return key;
+		}
+
+		@Override
+		public V getValue() {
+			return value;
+		}
+
+		@Override
+		public V setValue(V value) {
+			throw new UnsupportedOperationException();
+		}
+	}
+
+	/**
+	 * A repair listener for a BetterMap's key set
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param <X> The transfer data type for the listener
+	 */
+	class KeySetRepairListener<K, V, X> implements RepairListener<K, EntryRepairTracker<K, V, X>> {
+		private final BetterMap<K, V> theMap;
+		private final MapRepairListener<K, V, X> theMapRepairListener;
+
+		KeySetRepairListener(BetterMap<K, V> map, MapRepairListener<K, V, X> mapRepairListener) {
+			theMap = map;
+			theMapRepairListener = mapRepairListener;
+		}
+
+		@Override
+		public EntryRepairTracker<K, V, X> removed(CollectionElement<K> element) {
+			MapEntryHandle<K, V> entry = theMap.getEntryById(element.getElementId());
+			return new EntryRepairTracker<>(entry.getKey(), entry.getValue(), theMapRepairListener.removed(entry));
+		}
+
+		@Override
+		public void disposed(K key, EntryRepairTracker<K, V, X> data) {
+			theMapRepairListener.disposed(data.key, data.value, data.outerData);
+		}
+
+		@Override
+		public void transferred(CollectionElement<K> element, EntryRepairTracker<K, V, X> data) {
+			theMapRepairListener.transferred(theMap.getEntryById(element.getElementId()), data.outerData);
+		}
+
 	}
 
 	@Override
@@ -239,54 +411,80 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	}
 
 	@Override
+	default V computeIfAbsent(K key, Function<? super K, ? extends V> mappingFunction) {
+		MapEntryHandle<K, V> entry = getOrPutEntry(key, mappingFunction, false, null);
+		return entry == null ? null : entry.getValue();
+	}
+
+	@Override
 	default V computeIfPresent(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
-		MapEntryHandle<K, V> handle = getEntry(key);
-		if (handle != null && handle.getValue() != null) {
-			V value = remappingFunction.apply(key, handle.getValue());
-			if (value == null)
-				mutableEntry(handle.getElementId()).remove();
-			else
-				mutableEntry(handle.getElementId()).set(value);
-			return value;
-		} else
-			return null;
+		while (true) {
+			MapEntryHandle<K, V> handle = getEntry(key);
+			if (handle != null) {
+				MutableMapEntryHandle<K, V> mutableEntry;
+				try {
+					mutableEntry = mutableEntry(handle.getElementId());
+				} catch (IllegalArgumentException e) {
+					continue;
+				}
+				V oldValue = mutableEntry.get();
+				V newValue = remappingFunction.apply(key, oldValue);
+				if (newValue != null) {
+					do {
+						if (mutableEntry.compareAndSet(oldValue, newValue))
+							return newValue;
+					} while (mutableEntry.getElementId().isPresent());
+				} else {
+					try {
+						mutableEntry.remove();
+						return null;
+					} catch (IllegalStateException e) {
+						continue;
+					}
+				}
+			} else
+				return null;
+		}
 	}
 
 	@Override
 	default V compute(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
-		MapEntryHandle<K, V> handle = getEntry(key);
-		V value;
-		if (handle != null && handle.getValue() != null) {
-			value = remappingFunction.apply(key, handle.getValue());
-			if (value == null)
-				mutableEntry(handle.getElementId()).remove();
-			else
-				mutableEntry(handle.getElementId()).set(value);
-		} else {
-			value = remappingFunction.apply(key, null);
-			if (value != null)
-				put(key, value);
+		while (true) {
+			ValueHolder<V> value = new ValueHolder<>();
+			MapEntryHandle<K, V> entry = getOrPutEntry(key, k -> {
+				V newValue = remappingFunction.apply(k, null);
+				value.accept(newValue);
+				return newValue;
+			}, false, null);
+			if (value.isPresent())
+				return value.get();// Added
+			MutableMapEntryHandle<K, V> mutableEntry;
+			try {
+				mutableEntry = mutableEntry(entry.getElementId());
+			} catch (IllegalArgumentException e) {
+				continue;
+			}
+			V oldValue = mutableEntry.get();
+			V newValue = remappingFunction.apply(key, oldValue);
+			if (newValue != null) {
+				do {
+					if (mutableEntry.compareAndSet(oldValue, newValue))
+						return newValue;
+				} while (mutableEntry.getElementId().isPresent());
+			} else {
+				try {
+					mutableEntry.remove();
+					return null;
+				} catch (IllegalStateException e) {
+					continue;
+				}
+			}
 		}
-		return value;
 	}
 
 	@Override
 	default V merge(K key, V value, BiFunction<? super V, ? super V, ? extends V> remappingFunction) {
-		MapEntryHandle<K, V> handle = getEntry(key);
-		if (handle != null) {
-			V oldValue = handle.getValue();
-			if (oldValue == null)
-				mutableEntry(handle.getElementId()).set(value);
-			else {
-				value = remappingFunction.apply(oldValue, value);
-				if (value == null)
-					mutableEntry(handle.getElementId()).remove();
-				else
-					mutableEntry(handle.getElementId()).set(value);
-			}
-		} else
-			put(key, value);
-		return value;
+		return compute(key, (k, v) -> v == null ? value : remappingFunction.apply(v, value));
 	}
 
 	/**
@@ -317,6 +515,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
+		public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, boolean first, Runnable added) {
+			return MapEntryHandle.reverse(theWrapped.getOrPutEntry(key, value, !first, added));
+		}
+
+		@Override
 		public MapEntryHandle<K, V> getEntry(K key) {
 			return MapEntryHandle.reverse(theWrapped.getEntry(key));
 		}
@@ -329,6 +532,32 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		@Override
 		public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
 			return theWrapped.mutableEntry(entryId.reverse()).reverse();
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return getWrapped().checkConsistency();
+		}
+
+		@Override
+		public <X> boolean repair(MapRepairListener<K, V, X> listener) {
+			MapRepairListener<K, V, X> reversedListener = listener == null ? null : new MapRepairListener<K, V, X>() {
+				@Override
+				public X removed(MapEntryHandle<K, V> element) {
+					return listener.removed(element.reverse());
+				}
+
+				@Override
+				public void disposed(K key, V value, X data) {
+					listener.disposed(key, value, data);
+				}
+
+				@Override
+				public void transferred(MapEntryHandle<K, V> element, X data) {
+					listener.transferred(element.reverse(), data);
+				}
+			};
+			return getWrapped().repair(reversedListener);
 		}
 	}
 
@@ -365,6 +594,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return theMap.tryLock(write, structural, cause);
+		}
+
+		@Override
 		public long getStamp(boolean structuralOnly) {
 			return theMap.getStamp(structuralOnly);
 		}
@@ -392,13 +626,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		@Override
 		public CollectionElement<Entry<K, V>> getTerminalElement(boolean first) {
 			CollectionElement<K> keyEl = theMap.keySet().getTerminalElement(first);
-			return keyEl == null ? null : new EntryElement(theMap.getEntryById(keyEl.getElementId()));
+			return keyEl == null ? null : getElement(keyEl.getElementId());
 		}
 
 		@Override
 		public CollectionElement<Entry<K, V>> getAdjacentElement(ElementId elementId, boolean next) {
 			CollectionElement<K> keyEl = theMap.keySet().getAdjacentElement(elementId, next);
-			return keyEl == null ? null : new EntryElement(theMap.getEntryById(keyEl.getElementId()));
+			return keyEl == null ? null : getElement(keyEl.getElementId());
 		}
 
 		@Override
@@ -406,7 +640,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			if (value == null)
 				return null;
 			MapEntryHandle<K, V> entry = theMap.getEntry(value.getKey());
-			return entry == null ? null : new EntryElement(entry);
+			return entry == null ? null : getElement(entry.getElementId());
 		}
 
 		@Override
@@ -415,18 +649,27 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
+		public BetterList<CollectionElement<Entry<K, V>>> getElementsBySource(ElementId sourceEl) {
+			return QommonsUtils.map2(theMap.keySet().getElementsBySource(sourceEl), keyEl -> getElement(keyEl.getElementId()));
+		}
+
+		@Override
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			BetterSet<K> keySet = theMap.keySet();
+			if (sourceCollection == this)
+				return keySet.getSourceElements(localElement, keySet); // Validate element
+			return keySet.getSourceElements(localElement, sourceCollection);
+		}
+
+		@Override
+		public CollectionElement<Entry<K, V>> getOrAdd(Entry<K, V> value, boolean first, Runnable added) {
+			MapEntryHandle<K, V> entry = theMap.getOrPutEntry(value.getKey(), k -> value.getValue(), first, added);
+			return entry == null ? null : getElement(entry.getElementId());
+		}
+
+		@Override
 		public MutableCollectionElement<Entry<K, V>> mutableElement(ElementId id) {
 			return new MutableEntryElement(theMap.mutableEntry(id));
-		}
-
-		@Override
-		public MutableElementSpliterator<Entry<K, V>> spliterator(ElementId element, boolean asNext) {
-			return new EntrySpliterator(theMap.keySet().spliterator(element, asNext));
-		}
-
-		@Override
-		public MutableElementSpliterator<Map.Entry<K, V>> spliterator(boolean fromStart) {
-			return wrap(theMap.keySet().spliterator(fromStart));
 		}
 
 		@Override
@@ -450,8 +693,28 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			theMap.clear();
 		}
 
-		protected MutableElementSpliterator<Map.Entry<K, V>> wrap(MutableElementSpliterator<K> keySpliter) {
-			return new EntrySpliterator(keySpliter);
+		@Override
+		public boolean isConsistent(ElementId element) {
+			return theMap.isConsistent(element);
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return theMap.checkConsistency();
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, RepairListener<Entry<K, V>, X> listener) {
+			MapRepairListener<K, V, EntryRepairTracker<K, V, X>> mapListener = listener == null ? null
+				: new EntryRepairListener<>(listener);
+			return theMap.repair(element, mapListener);
+		}
+
+		@Override
+		public <X> boolean repair(RepairListener<Entry<K, V>, X> listener) {
+			MapRepairListener<K, V, EntryRepairTracker<K, V, X>> mapListener = listener == null ? null
+				: new EntryRepairListener<>(listener);
+			return theMap.repair(mapListener);
 		}
 
 		@Override
@@ -585,53 +848,26 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			}
 		}
 
-		class EntrySpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<Map.Entry<K, V>> {
-			private final MutableElementSpliterator<K> theKeySpliter;
+		class EntryRepairListener<X> implements MapRepairListener<K, V, EntryRepairTracker<K, V, X>> {
+			private final RepairListener<Map.Entry<K, V>, X> theWrapped;
 
-			EntrySpliterator(MutableElementSpliterator<K> keySpliter) {
-				super(BetterEntrySet.this);
-				theKeySpliter = keySpliter;
+			EntryRepairListener(RepairListener<Map.Entry<K, V>, X> wrapped) {
+				theWrapped = wrapped;
 			}
 
 			@Override
-			public long estimateSize() {
-				return theKeySpliter.estimateSize();
+			public EntryRepairTracker<K, V, X> removed(MapEntryHandle<K, V> element) {
+				return new EntryRepairTracker<>(element.getKey(), element.getValue(), theWrapped.removed(new EntryElement(element)));
 			}
 
 			@Override
-			public long getExactSizeIfKnown() {
-				return theKeySpliter.getExactSizeIfKnown();
+			public void disposed(K key, V value, EntryRepairTracker<K, V, X> data) {
+				theWrapped.disposed(data, data.outerData);
 			}
 
 			@Override
-			public Comparator<? super Entry<K, V>> getComparator() {
-				Comparator<? super K> keyCompare = theKeySpliter.getComparator();
-				if (keyCompare == null)
-					return null;
-				return (entry1, entry2) -> keyCompare.compare(entry1.getKey(), entry2.getKey());
-			}
-
-			@Override
-			public int characteristics() {
-				return theKeySpliter.characteristics();
-			}
-
-			@Override
-			protected boolean internalForElementM(Consumer<? super MutableCollectionElement<Entry<K, V>>> action, boolean forward) {
-				return theKeySpliter.forElementM(
-					keyEl -> theMap.forMutableEntry(keyEl.getElementId(), el -> action.accept(new MutableEntryElement(el))), forward);
-			}
-
-			@Override
-			protected boolean internalForElement(Consumer<? super CollectionElement<Entry<K, V>>> action, boolean forward) {
-				return theKeySpliter.forElement(keyEl -> action.accept(new EntryElement(theMap.getEntryById(keyEl.getElementId()))),
-					forward);
-			}
-
-			@Override
-			public MutableElementSpliterator<Map.Entry<K, V>> trySplit() {
-				MutableElementSpliterator<K> keySplit = theKeySpliter.trySplit();
-				return keySplit == null ? null : new EntrySpliterator(keySplit);
+			public void transferred(MapEntryHandle<K, V> element, EntryRepairTracker<K, V, X> data) {
+				theWrapped.transferred(new EntryElement(element), data.outerData);
 			}
 		}
 	}
@@ -661,6 +897,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		@Override
 		public Transaction lock(boolean write, boolean structural, Object cause) {
 			return theMap.lock(write, structural, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return theMap.tryLock(write, structural, cause);
 		}
 
 		@Override
@@ -734,53 +975,16 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 		}
 
 		@Override
-		public MutableElementSpliterator<V> spliterator(ElementId element, boolean asNext) {
-			return new ValueSpliterator(theMap.keySet().spliterator(element, asNext));
+		public BetterList<CollectionElement<V>> getElementsBySource(ElementId sourceEl) {
+			return QommonsUtils.map2(theMap.keySet().getElementsBySource(sourceEl), keyEl -> theMap.getEntryById(keyEl.getElementId()));
 		}
 
 		@Override
-		public MutableElementSpliterator<V> spliterator(boolean fromStart) {
-			return new ValueSpliterator(theMap.keySet().spliterator(fromStart));
-		}
-
-		class ValueSpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<V> {
-			private final MutableElementSpliterator<K> theKeySpliter;
-
-			ValueSpliterator(MutableElementSpliterator<K> keySpliter) {
-				super(BetterMapValueCollection.this);
-				theKeySpliter = keySpliter;
-			}
-
-			@Override
-			public long estimateSize() {
-				return theKeySpliter.estimateSize();
-			}
-
-			@Override
-			public long getExactSizeIfKnown() {
-				return theKeySpliter.getExactSizeIfKnown();
-			}
-
-			@Override
-			public int characteristics() {
-				return theKeySpliter.characteristics() & (~SORTED);
-			}
-
-			@Override
-			protected boolean internalForElement(Consumer<? super CollectionElement<V>> action, boolean forward) {
-				return theKeySpliter.forElement(keyEl -> action.accept(theMap.getEntryById(keyEl.getElementId())), forward);
-			}
-
-			@Override
-			protected boolean internalForElementM(Consumer<? super MutableCollectionElement<V>> action, boolean forward) {
-				return theKeySpliter.forElement(keyEl -> theMap.forMutableEntry(keyEl.getElementId(), action), forward);
-			}
-
-			@Override
-			public MutableElementSpliterator<V> trySplit() {
-				MutableElementSpliterator<K> keySplit = theKeySpliter.trySplit();
-				return keySplit == null ? null : new ValueSpliterator(keySplit);
-			}
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			BetterSet<K> keySet = theMap.keySet();
+			if (sourceCollection == this)
+				return keySet.getSourceElements(localElement, keySet); // Validate element
+			return keySet.getSourceElements(localElement, sourceCollection);
 		}
 	}
 }

@@ -8,15 +8,24 @@ package org.qommons;
 public class IdentityKey<T> {
 	/** The wrapped value */
 	public final T value;
+	private final boolean useIdHash;
 
 	/** @param val The value to wrap */
 	public IdentityKey(T val) {
+		this(val, true);
+	}
+
+	public IdentityKey(T val, boolean useIdHash) {
 		value = val;
+		this.useIdHash = useIdHash;
 	}
 
 	@Override
 	public int hashCode() {
-		return System.identityHashCode(value);
+		if (useIdHash)
+			return System.identityHashCode(value);
+		else
+			return value == null ? 0 : value.hashCode();
 	}
 
 	@Override

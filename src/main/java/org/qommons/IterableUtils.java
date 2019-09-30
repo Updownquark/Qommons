@@ -1,6 +1,11 @@
 package org.qommons;
 
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Queue;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -495,18 +500,22 @@ public class IterableUtils {
 
 			@Override
 			public boolean hasNext() {
-				while ((!hasNext || !filter.test(theNext)) && backing.hasNext()) {
-					hasNext = true;
+				while (!hasNext && backing.hasNext()) {
 					theNext = backing.next();
+					hasNext = filter.test(theNext);
 				}
-				return hasNext && filter.test(theNext);
+
+				return hasNext;
 			}
 
 			@Override
 			public T next() {
-				if ((!hasNext || !filter.test(theNext)) && !hasNext())
+				if (!hasNext && !hasNext())
 					throw new NoSuchElementException();
-				return theNext;
+				T next = theNext;
+				theNext = null;
+				hasNext = false;
+				return next;
 			}
 
 			@Override
@@ -514,6 +523,16 @@ public class IterableUtils {
 				backing.remove();
 			}
 		};
+	}
+
+	public interface SortedAdjuster<T, X> {
+		int compare(T v1, X v2);
+
+		void added(X newValue, T after, T before);
+
+		boolean removed(T oldValue, X after, X before);
+
+		void found(T v1, X v2);
 	}
 
 	/**
@@ -529,5 +548,78 @@ public class IterableUtils {
 			.map(elIter -> ExIterable.fromIterable(elIter));
 		ExIterable<List<T>, RuntimeException> exRes = ExIterable.combine(exArg);
 		return exRes.unsafe();
+	}
+
+	public static <T, X> void compare(Iterable<? extends T> v1, Iterable<? extends X> v2, SortedAdjuster<T, X> adjuster) {
+		compare(v1.iterator(), v2.iterator(), adjuster);
+	}
+
+	/**
+	 * Compares two related sorted sequences
+	 * 
+	 * @param <T> The type of the first iterator
+	 * @param <X> The type of the second iterator
+	 * @param iter1 The first iterator
+	 * @param iter2 The second iterator
+	 * @param adjuster The adjuster to compare the iterator values and act upon differences
+	 */
+	public static <T, X> void compare(Iterator<? extends T> iter1, Iterator<? extends X> iter2, SortedAdjuster<T, X> adjuster) {
+		class LookAheadIterator<V> {
+			final Iterator<? extends V> iterator;
+			V previous;
+			V current;
+
+			boolean hasCurrent;
+
+			LookAheadIterator(Iterator<? extends V> iter) {
+				iterator = iter;
+				hasCurrent = iter.hasNext();
+				if (hasCurrent) {
+					current = iter.next();
+				}
+			}
+
+			void proceed() {
+				previous = current;
+				hasCurrent = hasCurrent && iterator.hasNext();
+				current = hasCurrent ? iterator.next() : null;
+			}
+		}
+
+		LookAheadIterator<T> laIter1 = new LookAheadIterator<>(iter1);
+		LookAheadIterator<X> laIter2 = new LookAheadIterator<>(iter2);
+		while (laIter1.hasCurrent && laIter2.hasCurrent) {
+			int comp = adjuster.compare(laIter1.current, laIter2.current);
+			if (comp < 0) {
+				// v1 was not found in iter2
+				if (adjuster.removed(laIter1.current, laIter2.previous, laIter2.current))
+					laIter1.iterator.remove();
+
+				laIter1.proceed();
+			} else if (comp > 0) {
+				// v2 was not found in iter1
+				adjuster.added(laIter2.current, laIter1.previous, laIter1.current);
+
+				laIter2.proceed();
+			} else {
+				adjuster.found(laIter1.current, laIter2.current);
+
+				laIter1.proceed();
+				laIter2.proceed();
+			}
+		}
+		while (laIter1.hasCurrent) {
+			// v1 was not found in iter2
+			if (adjuster.removed(laIter1.current, laIter2.previous, laIter2.current))
+				laIter1.iterator.remove();
+
+			laIter1.proceed();
+		}
+		while (laIter2.hasCurrent) {
+			// v2 was not found in iter1
+			adjuster.added(laIter2.current, laIter1.previous, null);
+
+			laIter2.proceed();
+		}
 	}
 }

@@ -1,11 +1,14 @@
 package org.qommons;
 
 import java.util.Collections;
-import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 /**
  * <p>
@@ -64,11 +67,13 @@ public abstract class Causable {
 		private final Map<Object, Object> theValues;
 		private final AtomicInteger theCauseCount;
 		private final TerminalAction theAction;
+		private final TerminalAction theAfterAction;
 
-		private CausableKey(TerminalAction action) {
+		private CausableKey(TerminalAction action, TerminalAction afterAction) {
 			theValues = new LinkedHashMap<>();
 			theCauseCount = new AtomicInteger();
 			theAction = action;
+			theAfterAction = afterAction;
 		}
 
 		/** @return This cause key's current value data, unmodifiable */
@@ -76,17 +81,26 @@ public abstract class Causable {
 			return Collections.unmodifiableMap(theValues);
 		}
 
-		Transaction use(Causable cause) {
+		Supplier<Transaction> use(Causable cause) {
 			theCauseCount.getAndIncrement();
 			boolean[] closed = new boolean[1];
 			return () -> {
 				if (closed[0])
-					return;
+					return null;
 				closed[0] = true;
 				int remaining = theCauseCount.decrementAndGet();
-				if (remaining == 0) {
+				if (remaining > 0)
+					return null;
+				if (theAction != null)
 					theAction.finished(cause, theValues);
+				if (theAfterAction == null) {
 					theValues.clear();
+					return null;
+				} else {
+					return () -> {
+						theAfterAction.finished(cause, theValues);
+						theValues.clear();
+					};
 				}
 			};
 		}
@@ -99,18 +113,32 @@ public abstract class Causable {
 	}
 
 	/**
-	 * @param action The action to take when a causable finishes
-	 * @return The key to use with {@link Causable#onFinish(CausableKey)}
+	 * Creates a CausableKey to use with {@link Causable#onFinish(CausableKey)}. The key is not re-usable or thread-safe; a new one for each
+	 * use.
+	 * 
+	 * @param action The action for the key to perform on its accumulated data when the cause(s) it is registered for finish.
+	 * @return The cause key to use to perform actions from Causables
 	 */
 	public static CausableKey key(TerminalAction action) {
-		return new CausableKey(action);
+		return key(action, null);
 	}
 
 	/**
-	 * Creates a causable
+	 * Creates a CausableKey to use with {@link Causable#onFinish(CausableKey)}. The key is not re-usable or thread-safe; a new one for each
+	 * use.
 	 * 
-	 * @param cause The cause of the new causable. May be null.
-	 * @return A new causable
+	 * @param action The action for the key to perform on its accumulated data when the cause(s) it is registered for finish.
+	 * @param afterAction The action to perform after all other terminal actions (except afterActions from keys that are registered after
+	 *        this one
+	 * @return The cause key to use to perform actions from Causables
+	 */
+	public static CausableKey key(TerminalAction action, TerminalAction afterAction) {
+		return new CausableKey(action, afterAction);
+	}
+
+	/**
+	 * @param cause The cause of the causable
+	 * @return A simple Causable
 	 */
 	public static Causable simpleCause(Object cause) {
 		return new SimpleCause(cause);
@@ -118,18 +146,22 @@ public abstract class Causable {
 
 	private final Object theCause;
 	private final Causable theRootCausable;
-	private IdentityHashMap<CausableKey, Transaction> theUsedKeys;
+	private LinkedHashMap<IdentityKey<CausableKey>, Supplier<Transaction>> theKeys;
 	private boolean isStarted;
 	private boolean isFinished;
+	private boolean isTerminated;
 
 	/** @param cause The cause of this causable */
 	public Causable(Object cause) {
 		theCause = cause;
 		if (cause == null)
 			theRootCausable = this;
-		else if (cause instanceof Causable)
-			theRootCausable = ((Causable) cause).theRootCausable;
-		else
+		else if (cause instanceof Causable) {
+			Causable c = (Causable) cause;
+			theRootCausable = c.theRootCausable;
+			if (c.isTerminated || theRootCausable.isTerminated)
+				throw new IllegalStateException("Cannot use a finished Causable as a cause");
+		} else
 			theRootCausable = this;
 	}
 
@@ -150,6 +182,16 @@ public abstract class Causable {
 			return root.getCause();
 		else
 			return root;
+	}
+
+	/**
+	 * Finds a cause to this event's cause chain that passes the given test
+	 * 
+	 * @param test The test to apply
+	 * @return The most immediate cause of this causable that passes the given test, or null if none exists
+	 */
+	public Object hasCauseLike(Predicate<Object> test) {
+		return getCauseLike(c -> test.test(c) ? c : null);
 	}
 
 	/**
@@ -189,9 +231,11 @@ public abstract class Causable {
 	public Map<Object, Object> onFinish(CausableKey key) {
 		if (!isStarted)
 			throw new IllegalStateException("Not started!  Use Causable.use(Causable)");
-		if (theUsedKeys == null)
-			theUsedKeys = new IdentityHashMap<>();
-		theUsedKeys.computeIfAbsent(key, k -> k.use(this));
+		else if (isTerminated)
+			throw new IllegalStateException("This cause has already terminated");
+		if (theKeys == null)
+			theKeys = new LinkedHashMap<>();
+		theKeys.computeIfAbsent(new IdentityKey<>(key), k -> k.value.use(this));
 		return key.theValues;
 	}
 
@@ -205,12 +249,30 @@ public abstract class Causable {
 		// The finish actions may use this causable as a cause for events they fire.
 		// These events may trigger onRootFinish calls, which add more actions to this causable
 		// Though this cycle is allowed, care must be taken by callers to ensure it does not become infinite
-		Map<CausableKey, Transaction> keys = theUsedKeys;
-		while (keys != null) {
-			theUsedKeys = null;
-			for (Transaction t : keys.values())
-				t.close();
-			keys = theUsedKeys;
+		try {
+			if (theKeys != null) {
+				while (!theKeys.isEmpty()) {
+					LinkedList<Transaction> postActions = null;
+					while (!theKeys.isEmpty()) {
+						Iterator<Supplier<Transaction>> keyActionIter = theKeys.values().iterator();
+						Supplier<Transaction> keyAction = keyActionIter.next();
+						keyActionIter.remove();
+						Transaction postAction = keyAction.get();
+						if (postAction != null) {
+							if (postActions == null)
+								postActions = new LinkedList<>();
+							postActions.addFirst(postAction);
+		}
+	}
+					if (postActions != null) {
+						for (Transaction key : postActions)
+							key.close();
+						postActions.clear();
+					}
+				}
+			}
+		} finally {
+			isTerminated = true;
 		}
 	}
 

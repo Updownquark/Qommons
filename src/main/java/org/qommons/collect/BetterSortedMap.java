@@ -4,7 +4,9 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
+import java.util.function.Function;
 
+import org.qommons.Transaction;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
@@ -59,6 +61,72 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 	 * @return The result of the search, or null if no such value was found
 	 */
 	MapEntryHandle<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter);
+
+	@Override
+	default MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, boolean first, Runnable added) {
+		// Don't lock initially. If we can find it optimistically, we'll do that.
+		MapEntryHandle<K, V> found = search(keySet().searchFor(key, 0), SortedSearchFilter.PreferLess);
+		int compare = 0;
+		if (found != null) {
+			compare = comparator().compare(key, found.getKey());
+			if (compare == 0)
+				return found;
+		}
+		// Key is not present
+		boolean newEntry = false;
+		try (Transaction t = lock(true, null)) {
+			if (found != null && found.getElementId().isPresent()) {
+				// Get the comparison again in case the element's value was replaced
+				compare = comparator().compare(key, found.getKey());
+				if (compare != 0) {
+					CollectionElement<K> adjacent = keySet().getAdjacentElement(found.getElementId(), compare < 0);
+					if (adjacent == null) {
+						found = putEntry(key, value.apply(key), //
+							compare < 0 ? null : found.getElementId(), //
+							compare < 0 ? found.getElementId() : null, //
+							compare > 0);
+						newEntry = true;
+					} else {
+						int adjCompare = comparator().compare(key, adjacent.get());
+						if (adjCompare == 0) {
+							found = getEntryById(adjacent.getElementId());
+							compare = 0;
+						} else if ((adjCompare < 0) == (compare < 0)) {
+							// Multiple elements have been added since we got the lock. Do the search again.
+							found = search(keySet().searchFor(key, 0), SortedSearchFilter.PreferLess);
+							compare = comparator().compare(key, found.getKey());
+						} else {
+							found = putEntry(key, value.apply(key), //
+								compare < 0 ? adjacent.getElementId() : found.getElementId(), //
+								compare < 0 ? found.getElementId() : adjacent.getElementId(), //
+								compare > 0);
+							newEntry = true;
+						}
+					}
+				}
+			} else {
+				// The map was null (see if it still is) or the found element was removed (do the search again).
+				found = search(keySet().searchFor(key, 0), SortedSearchFilter.PreferLess);
+				if (found == null) {
+					// The map is still null. Add the first entry.
+					found = putEntry(key, value.apply(key), first);
+					newEntry = true;
+				} else {
+					compare = comparator().compare(key, found.getKey());
+				}
+			}
+			if (!newEntry && compare != 0) {
+				found = putEntry(key, value.apply(key), //
+					compare < 0 ? null : found.getElementId(), //
+					compare < 0 ? found.getElementId() : null, //
+					false);
+				newEntry = true;
+			}
+			if (found != null && newEntry && added != null)
+				added.run();
+			return found;
+		}
+	}
 
 	@Override
 	default K firstKey() {
@@ -230,6 +298,16 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		return tailMap(fromKey, true);
 	}
 
+	@Override
+	default BetterSortedMap<K, V> with(K key, V value) {
+		return (BetterSortedMap<K, V>) BetterMap.super.with(key, value);
+	}
+
+	@Override
+	default BetterSortedMap<K, V> withAll(Map<? extends K, ? extends V> values) {
+		return (BetterSortedMap<K, V>) BetterMap.super.withAll(values);
+	}
+
 	/**
 	 * A map entry whose {@link java.util.Map.Entry#setValue(Object) setValue} method is disabled
 	 * 
@@ -360,11 +438,6 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		@Override
 		public int indexFor(Comparable<? super Map.Entry<K, V>> search) {
 			return getMap().keySet().indexFor(keyCompare(search));
-		}
-
-		@Override
-		public MutableElementSpliterator<Map.Entry<K, V>> spliterator(int index) {
-			return wrap(getMap().keySet().spliterator(index));
 		}
 	}
 

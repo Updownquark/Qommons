@@ -9,4 +9,14 @@ public interface Transaction extends AutoCloseable {
 
 	@Override
 	void close();
+
+	static Transaction and(Transaction... ts) {
+		return () -> {
+			for (int i = ts.length - 1; i >= 0; i--) {
+				Transaction t = ts[i];
+				if (t != null)
+					t.close();
+			}
+		};
+	}
 }

@@ -20,19 +20,6 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V> {
 	@Override
 	BetterCollection<V> get(Object key);
 
-	@Override
-	default boolean isLockSupported() {
-		return keySet().isLockSupported();
-	}
-
-	@Override
-	default Transaction lock(boolean write, Object cause) {
-		return keySet().lock(write, cause);
-	}
-
-	@Override
-	Transaction lock(boolean write, boolean structural, Object cause);
-
 	/**
 	 * @param structuralOnly Whether to monitor only structural changes or all changes
 	 * @return The stamp for comparison
@@ -203,6 +190,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V> {
 		@Override
 		public Transaction lock(boolean write, boolean structural, Object cause) {
 			return theSource.lock(write, structural, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return theSource.tryLock(write, structural, cause);
 		}
 
 		@Override

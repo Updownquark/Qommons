@@ -537,7 +537,9 @@ public class QommonsTestUtils {
 		list.remove(31);
 		list.remove(30);
 		for (int i = 0; i < 30; i++) {
-			assertEquals("i=" + i, (Integer) i, list.set(i, 30 - i - 1)); // Test set
+			assertEquals("i=" + i, (Integer) i, //
+				list.set(i, //
+					30 - i - 1)); // Test set
 			if (check != null)
 				check.accept(list);
 		}

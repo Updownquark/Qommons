@@ -1,6 +1,7 @@
 package org.qommons.collect;
 
 import java.util.Collection;
+import java.util.ConcurrentModificationException;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -15,6 +16,8 @@ import java.util.function.UnaryOperator;
 
 import org.qommons.ArrayUtils;
 import org.qommons.Causable;
+import org.qommons.QommonsUtils;
+import org.qommons.StructuredStamped;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.ValueHolder;
@@ -37,7 +40,7 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * 
  * @param <E> The type of value in the collection
  */
-public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E> {
+public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>, StructuredStamped {
 	/** A message for an exception thrown when a view detects that it is invalid due to external modification of the underlying data */
 	public static final String BACKING_COLLECTION_CHANGED = "This collection view's backing collection has changed from underneath this view.\n"
 		+ "This view is now invalid";
@@ -51,28 +54,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return Whether the given value might in any situation belong to this collection
 	 */
 	boolean belongs(Object o);
-
-	/**
-	 * <p>
-	 * Obtains a stamp with the current status of modifications to the collection, either structural or all changes. Whenever this
-	 * collection is modified, the stamp changes. Thus 2 stamps can be compared to determine whether a collection has changed in between 2
-	 * calls to this method. For more information on <b>structural</b> changes, see {@link #lock(boolean, boolean, Object)}.
-	 * </p>
-	 * <p>
-	 * The value returned from this method is <b>ONLY</b> for comparison. The value itself is not guaranteed to reveal anything about this
-	 * collection or its history, e.g. the actual times it has been modified. Also, if 2 stamps obtained from this method are different,
-	 * this does not guarantee that the collection was actually changed in any way, only that it might have been. It <b>IS</b> guaranteed
-	 * that if 2 stamps match, then no modification (of the corresponding type) has been made to the collection, and an effort shall be made
-	 * to avoid changing the stamps when no modification is performed, if possible.
-	 * </p>
-	 * <p>
-	 * No relationship is specified between stamps obtained with different parameters (structural/update).
-	 * </p>
-	 * 
-	 * @param structuralOnly Whether to monitor only structural changes or all changes.
-	 * @return The stamp for comparison
-	 */
-	long getStamp(boolean structuralOnly);
 
 	/**
 	 * @param value The value to get the element for
@@ -106,6 +87,18 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return A mutable element for the given element
 	 */
 	MutableCollectionElement<E> mutableElement(ElementId id);
+
+	/**
+	 * @param sourceEl The source element to get derived values from
+	 * @return All element in this collection that are derived from the source element. Will be empty if:
+	 *         <ul>
+	 *         <li>the element belongs to a collection that is not a source for this collection,</li>
+	 *         <li>or the given element belongs to a source of this collection but is not a source of any element in this collection</li>
+	 *         </ul>
+	 */
+	BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl);
+
+	BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection);
 
 	/**
 	 * Tests the ability to add an object into this collection within a given position range
@@ -148,7 +141,9 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @param fromStart Whether the returned spliterator should be initially positioned at the beginning of this collection or its end
 	 * @return The spliterator
 	 */
-	MutableElementSpliterator<E> spliterator(boolean fromStart);
+	default MutableElementSpliterator<E> spliterator(boolean fromStart) {
+		return new DefaultBetterSpliterator<>(this, null, 0, null, fromStart);
+	}
 
 	/**
 	 * @param element The ID of the element at which to position the spliterator initially
@@ -156,7 +151,9 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 *        {@link MutableElementSpliterator#forElement(Consumer, boolean) forElement} method with a true or a false parameter
 	 * @return The spliterator
 	 */
-	MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext);
+	default MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
+		return new DefaultBetterSpliterator<>(this, null, 0, getElement(element), asNext);
+	}
 
 	/**
 	 * Tests the compatibility of an object with this collection.
@@ -467,16 +464,15 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 */
 	default boolean find(Predicate<? super E> search, Consumer<? super CollectionElement<E>> onElement, boolean first) {
 		try (Transaction t = lock(false, true, null)) {
-			ElementSpliterator<E> spliter = spliterator(first);
-			boolean[] found = new boolean[1];
-			while (!found[0] && spliter.forElement(el -> {
+			CollectionElement<E> el = getTerminalElement(first);
+			while (el != null) {
 				if (search.test(el.get())) {
-					found[0] = true;
 					onElement.accept(el);
+					return true;
 				}
-			}, first)) {
+				el = getAdjacentElement(el.getElementId(), first);
 			}
-			return found[0];
+			return false;
 		}
 	}
 
@@ -508,7 +504,12 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	@Override
 	default Iterator<E> iterator() {
-		return new SpliteratorIterator<>(spliterator());
+		return new BetterCollectionIterator<>(this);
+	}
+
+	/** @return An iterable over this collection's elements */
+	default Iterable<CollectionElement<E>> elements() {
+		return () -> new CollectionElementIterator<>(this);
 	}
 
 	/** @return A collection with the same content as this one, but whose order is reversed */
@@ -666,6 +667,69 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	}
 
 	/**
+	 * A typical hashCode implementation for collections
+	 *
+	 * @param coll The collection to hash
+	 * @return The hash code of the collection's contents
+	 */
+	static int hashCode(BetterCollection<?> coll) {
+		try (Transaction t = coll.lock(false, null)) {
+			int hashCode = 1;
+			for (Object e : coll)
+				hashCode += e.hashCode();
+			return hashCode;
+		}
+	}
+
+	/**
+	 * A typical equals implementation for collections
+	 * 
+	 * @param <E> The type of the other collection
+	 * @param coll The collection to test
+	 * @param o The object to test the collection against
+	 * @return Whether the two objects are equal
+	 */
+	static <E> boolean equals(BetterCollection<E> coll, Object o) {
+		if (!(o instanceof Collection))
+			return false;
+		Collection<?> c = (Collection<?>) o;
+
+		try (Transaction t1 = coll.lock(false, null); Transaction t2 = Transactable.lock(c, false, null)) {
+			Iterator<E> e1 = coll.iterator();
+			Iterator<?> e2 = c.iterator();
+			while (e1.hasNext() && e2.hasNext()) {
+				E o1 = e1.next();
+				Object o2 = e2.next();
+				if (!Objects.equals(o1, o2))
+					return false;
+			}
+			return !(e1.hasNext() || e2.hasNext());
+		}
+	}
+
+	/**
+	 * A simple toString implementation for collections
+	 *
+	 * @param coll The collection to print
+	 * @return The string representation of the collection's contents
+	 */
+	static String toString(BetterCollection<?> coll) {
+		StringBuilder ret = new StringBuilder("[");
+		boolean first = true;
+		try (Transaction t = coll.lock(false, null)) {
+			for (Object value : coll) {
+				if (!first) {
+					ret.append(", ");
+				} else
+					first = false;
+				ret.append(value);
+			}
+		}
+		ret.append(']');
+		return ret.toString();
+	}
+
+	/**
 	 * Locks the given collection as specified if it is {@link Transactable}, using
 	 * {@link TransactableCollection#lock(boolean, boolean, Object)} for a {@link TransactableCollection},
 	 * 
@@ -757,54 +821,102 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	}
 
 	/**
-	 * An {@link Iterator} based on a {@link Spliterator}
+	 * An {@link Iterator} based on a {@link BetterCollection}'s elements
 	 * 
 	 * @param <E> The type of values to iterate over
 	 */
-	class SpliteratorIterator<E> implements Iterator<E> {
-		private final MutableElementSpliterator<E> theSpliterator;
-
-		private boolean isNextCached;
-		private CollectionElement<E> cachedNext;
+	class BetterCollectionIterator<E> implements Iterator<E> {
+		private final BetterCollection<E> theCollection;
+		private CollectionElement<E> next;
 		private ElementId theLastElement;
 
-		public SpliteratorIterator(MutableElementSpliterator<E> spliterator) {
-			theSpliterator = spliterator;
+		public BetterCollectionIterator(BetterCollection<E> collection) {
+			theCollection = collection;
 		}
 
 		@Override
 		public boolean hasNext() {
-			if (!isNextCached) {
-				cachedNext = null;
-				if (theSpliterator.forElement(el -> cachedNext = el, true)) {
-					theLastElement = cachedNext.getElementId();
-					isNextCached = true;
-				}
+			if (next != null)
+				return true;
+			else {
+				if (theLastElement == null)
+					next = theCollection.getTerminalElement(true);
+				else if (theLastElement != null)
+					next = theCollection.getAdjacentElement(theLastElement, true);
+				return next != null;
 			}
-			return isNextCached;
 		}
 
 		@Override
 		public E next() {
 			if (!hasNext())
-				throw new java.util.NoSuchElementException();
-			isNextCached = false;
-			E value = cachedNext.get();
-			cachedNext = null;
+				throw new NoSuchElementException();
+			theLastElement = next.getElementId();
+			if (!theLastElement.isPresent())
+				throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
+			E value = next.get();
+			next = null;
 			return value;
 		}
 
 		@Override
 		public void remove() {
 			if (theLastElement == null)
-				throw new IllegalStateException("iterator is finished, not started, or the element has been removed");
-			if (!theSpliterator.forElementM(el -> {
-				if (!el.getElementId().equals(theLastElement))
-					throw new IllegalStateException("element has been removed");
-				el.remove();
-			}, false))
-				throw new IllegalStateException("element has been removed");
-			theLastElement = null;
+				throw new IllegalStateException("Iterator is not started or there were no elements");
+			else if (!theLastElement.isPresent())
+				throw new IllegalStateException("Element has already been removed");
+			hasNext(); // Since last element will be removed after this, need to grab the next element (if there is one) before removing it
+			theCollection.mutableElement(theLastElement).remove();
+		}
+	}
+
+	/**
+	 * Iterates over a BetterCollection's {@link BetterCollection#elements() elements}
+	 * 
+	 * @param <E> The type of elements to iterate over
+	 */
+	class CollectionElementIterator<E> implements Iterator<CollectionElement<E>> {
+		private final BetterCollection<E> theCollection;
+		private CollectionElement<E> next;
+		private ElementId theLastElement;
+
+		public CollectionElementIterator(BetterCollection<E> collection) {
+			theCollection = collection;
+		}
+
+		@Override
+		public boolean hasNext() {
+			if (next != null)
+				return true;
+			else {
+				if (theLastElement == null)
+					next = theCollection.getTerminalElement(true);
+				else if (theLastElement.isPresent())
+					next = theCollection.getAdjacentElement(theLastElement, true);
+				return next != null;
+			}
+		}
+
+		@Override
+		public CollectionElement<E> next() {
+			if (!hasNext())
+				throw new NoSuchElementException();
+			theLastElement = next.getElementId();
+			if (!theLastElement.isPresent())
+				throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
+			CollectionElement<E> element = next;
+			next = null;
+			return element;
+		}
+
+		@Override
+		public void remove() {
+			if (theLastElement == null)
+				throw new IllegalStateException("Iterator is not started or there were no elements");
+			else if (!theLastElement.isPresent())
+				throw new IllegalStateException("Element has already been removed");
+			hasNext(); // Since last element will be removed after this, need to grab the next element (if there is one) before removing it
+			theCollection.mutableElement(theLastElement).remove();
 		}
 	}
 
@@ -832,6 +944,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		@Override
 		public Transaction lock(boolean write, boolean structural, Object cause) {
 			return theWrapped.lock(write, structural, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return theWrapped.tryLock(write, structural, cause);
 		}
 
 		@Override
@@ -894,13 +1011,15 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
-			return getWrapped().spliterator(element.reverse(), !asNext).reverse();
+		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
+			return QommonsUtils.map2(theWrapped.getElementsBySource(sourceEl), el -> el.reverse());
 		}
 
 		@Override
-		public MutableElementSpliterator<E> spliterator(boolean fromStart) {
-			return getWrapped().spliterator(!fromStart).reverse();
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return BetterList.of(localElement);
+			return theWrapped.getSourceElements(localElement.reverse(), sourceCollection);
 		}
 
 		@Override
@@ -954,6 +1073,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 		@Override
 		public Transaction lock(boolean write, boolean structural, Object cause) {
+			return Transaction.NONE;
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
 			return Transaction.NONE;
 		}
 
@@ -1027,13 +1151,13 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
-			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
+			return BetterList.empty();
 		}
 
 		@Override
-		public MutableElementSpliterator<E> spliterator(boolean fromStart) {
-			return MutableElementSpliterator.empty();
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		}
 
 		@Override

@@ -1,21 +1,31 @@
 package org.qommons.tree;
 
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.NavigableSet;
 import java.util.Objects;
+import java.util.SortedSet;
 
 import org.qommons.Transaction;
-import org.qommons.ValueHolder;
 import org.qommons.collect.*;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
+import org.qommons.collect.CollectionElement;
+import org.qommons.collect.CollectionLockingStrategy;
+import org.qommons.collect.ElementId;
+import org.qommons.collect.FastFailLockingStrategy;
+import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
+import org.qommons.collect.MutableElementSpliterator;
+import org.qommons.collect.OptimisticContext;
+import org.qommons.collect.StampedLockingStrategy;
+import org.qommons.collect.ValueStoredCollection;
 
 /**
  * A {@link org.qommons.collect.BetterList} backed by a tree structure that sorts its values, with duplicates allowed
  * 
  * @param <E> The type of value in the list
  */
-public class SortedTreeList<E> extends RedBlackNodeList<E> {
+public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStoredCollection<E> {
 	private final Comparator<? super E> theCompare;
 	private final boolean isDistinct;
 
@@ -35,6 +45,28 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> {
 		super(locker);
 		theCompare = compare;
 		isDistinct = this instanceof NavigableSet;
+	}
+
+	public SortedTreeList(boolean safe, SortedSet<E> values) {
+		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), values);
+	}
+
+	public SortedTreeList(CollectionLockingStrategy locker, SortedSet<E> values) {
+		super(locker);
+		theCompare = values.comparator();
+		isDistinct = this instanceof NavigableSet;
+		initialize(values, v -> v);
+	}
+
+	public SortedTreeList(boolean safe, SortedTreeList<E> values) {
+		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), values);
+	}
+
+	public SortedTreeList(CollectionLockingStrategy locker, SortedTreeList<E> values) {
+		super(locker);
+		theCompare = values.comparator();
+		isDistinct = this instanceof NavigableSet;
+		initialize(values, v -> v);
 	}
 
 	/** @return The comparator that orders this list's values */
@@ -57,35 +89,62 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> {
 	 *         </ul>
 	 */
 	public int indexFor(Comparable<? super E> search) {
+		if (isEmpty())
+			return -1;
+		return getLocker().doOptimistically(-1, //
+			(init, ctx) -> {
 		BinaryTreeNode<E> root = getRoot();
-		return root == null ? -1 : root.indexFor(node -> search.compareTo(node.get()));
+				if (root == null)
+					return -1;
+				return root.indexFor(node -> search.compareTo(node.get()), ctx);
+			}, true);
 	}
 
 	public BinaryTreeNode<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
-		try (Transaction t = lock(false, null)) {
 			if (isEmpty())
 				return null;
-			BinaryTreeNode<E> node = getRoot().findClosest(//
-				n -> search.compareTo(n.get()), filter.less.withDefault(true), filter.strict);
-			if (node == null)
+		return getLocker().doOptimistically(null, //
+			(init, ctx) -> {
+				BinaryTreeNode<E> root = getRoot();
+				if (root == null)
 				return null;
-			if (filter == SortedSearchFilter.OnlyMatch && search.compareTo(node.get()) != 0)
-				return null;
+				BinaryTreeNode<E> node = root.findClosest(//
+					n -> search.compareTo(n.get()), filter.less.withDefault(true), filter.strict, ctx);
+				if (node != null){
+					if(search.compareTo(node.get())==0){
+						if(filter.strict){
+							 //Interpret this to mean that the caller is interested in the first or last node matching the search
+							BinaryTreeNode<E> adj=getAdjacentElement(node.getElementId(), filter==SortedSearchFilter.Greater);
+							while(adj!=null && search.compareTo(adj.get())==0){
+								node=adj;
+								adj=getAdjacentElement(node.getElementId(), filter==SortedSearchFilter.Greater);
+							}
+						}
+					} else if(filter == SortedSearchFilter.OnlyMatch)
+						node = null;
+				}
 			return node;
+			}, true);
 		}
-	}
 
 	@Override
-	public CollectionElement<E> getElement(E value, boolean first) {
-		try (Transaction t = lock(false, null)) {
-			ValueHolder<CollectionElement<E>> element = new ValueHolder<>();
-			ElementSpliterator<E> spliter = first ? spliterator(first) : spliterator(first).reverse();
-			while (!element.isPresent() && spliter.forElement(el -> {
-				if (Objects.equals(el.get(), value))
-					element.accept(first ? el : el.reverse());
-			}, true)) {}
-			return element.get();
+	public BinaryTreeNode<E> getElement(E value, boolean first) {
+		BinaryTreeNode<E> found = search(searchFor(value, 0), SortedSearchFilter.OnlyMatch);
+		if (found == null)
+			return null;
+		else if (isDistinct || Objects.equals(found.get(), value))
+			return found;
+		for (BinaryTreeNode<E> left = found.getClosest(true); left != null
+			&& theCompare.compare(left.get(), value) == 0; left = left.getClosest(true)) {
+			if (Objects.equals(left.get(), value))
+				return left;
 		}
+		for (BinaryTreeNode<E> right = found.getClosest(false); right != null
+			&& theCompare.compare(right.get(), value) == 0; right = right.getClosest(false)) {
+			if (Objects.equals(right.get(), value))
+				return right;
+	}
+		return null;
 	}
 
 	@Override
@@ -114,7 +173,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> {
 			else if (compare < 0)
 				return StdMsg.ILLEGAL_ELEMENT_POSITION;
 		}
-		if (search(searchFor(value, 0), SortedSearchFilter.OnlyMatch) != null)
+		if (isDistinct && search(searchFor(value, 0), SortedSearchFilter.OnlyMatch) != null)
 			return StdMsg.ELEMENT_EXISTS;
 		return super.canAdd(value, after, before);
 	}
@@ -187,17 +246,120 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> {
 				else if (compare < 0)
 					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
 			}
-			BinaryTreeNode<E> result = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
+			if (!isDistinct) {
+				// If this list is not distinct, and therefore the positioning may be flexible,
+				// try to put the value in the appropriate position relative to the after or before elements
+				// Also more efficient this way if the caller has gone to the trouble of figuring out where to put the element
+				if ((first && after != null) || (!first && before != null))
+					return super.addElement(value, after, null, true);
+			}
+			BinaryTreeNode<E> result = search(searchFor(value, 0), SortedSearchFilter.of(first, false));
 			if (result == null)
 				return super.addElement(value, after, before, first);
 			int compare = theCompare.compare(result.get(), value);
-			if (isDistinct && compare == 0)
+			if (isDistinct) {
+				if (compare == 0)
 				return null;
-			else if (compare < 0)
+			} else {
+				while (compare == 0) {
+					BinaryTreeNode<E> adj = getAdjacentElement(result.getElementId(), !first);
+					if (adj != null) {
+						result = adj;
+						compare = theCompare.compare(result.get(), value);
+					} else
+						break;
+				}
+			}
+			if (compare < 0 || (compare == 0 && !first))
 				return super.addElement(value, result.getElementId(), null, true);
 			else
 				return super.addElement(value, null, result.getElementId(), false);
 		}
+	}
+
+	@Override
+	public BinaryTreeNode<E> getOrAdd(E value, boolean first, Runnable added) {
+		while (true) {
+			BinaryTreeNode<E> found = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
+			if (found == null) {
+				found = addElement(value, first);
+				if (found != null && added != null)
+					added.run();
+				return found;
+			}
+			int compare = comparator().compare(value, found.get());
+			if (compare == 0)
+				return found;
+			try (Transaction t = lock(true, true, null)) {
+				MutableCollectionElement<E> mutableElement;
+				try {
+					mutableElement = mutableElement(found.getElementId());
+				} catch (IllegalArgumentException e) {
+					continue; // Possible it may have been removed already
+				}
+				ElementId addedId = mutableElement.add(value, compare < 0);
+				if (added != null)
+					added.run();
+				return getElement(addedId);
+			}
+		}
+	}
+
+	@Override
+	public boolean isConsistent(ElementId element) {
+		CollectionElement<E> el = getElement(element);
+		CollectionElement<E> adj = getAdjacentElement(element, false);
+		if (adj != null) {
+			int comp = theCompare.compare(adj.get(), el.get());
+			if (comp > 0 || (isDistinct && comp == 0))
+				return false;
+		}
+		adj = getAdjacentElement(element, true);
+		if (adj != null) {
+			int comp = theCompare.compare(adj.get(), el.get());
+			if (comp < 0 || (isDistinct && comp == 0))
+				return false;
+		}
+		return true;
+	}
+
+	@Override
+	public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+		return super.repair(element, theCompare, isDistinct, listener);
+	}
+
+	@Override
+	public boolean checkConsistency() {
+		try (Transaction t = lock(false, null)) {
+			E previous = null;
+			boolean hasPrevious = false;
+			for (E value : this) {
+				if (hasPrevious && theCompare.compare(value, previous) <= 0)
+					return true;
+			}
+			return false;
+		}
+	}
+
+	@Override
+	public <X> boolean repair(RepairListener<E, X> listener) {
+		return super.repair(theCompare, isDistinct, listener);
+	}
+
+	@Override
+	public SortedTreeList<E> withAll(Collection<? extends E> values) {
+		super.withAll(values);
+		return this;
+	}
+
+	@Override
+	public MutableElementSpliterator<E> spliterator(boolean fromStart) {
+		return new DefaultSplittableSpliterator<>(this, comparator(), 0, null, fromStart, null, null);
+	}
+
+	@Override
+	public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
+		return new DefaultSplittableSpliterator<>(this, comparator(), 0, getElement(element), asNext, null, null);
 	}
 
 	private class SortedMutableTreeNode implements MutableBinaryTreeNode<E> {
@@ -273,13 +435,16 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> {
 		}
 
 		@Override
-		public MutableBinaryTreeNode<E> get(int index) {
-			return mutableNodeFor(theWrapped.get(index));
+		public MutableBinaryTreeNode<E> get(int index, OptimisticContext ctx) {
+			return getLocker().doOptimistically(null, //
+				(init, ctx2) -> mutableNodeFor(theWrapped.get(index, OptimisticContext.and(ctx, ctx2))), true);
 		}
 
 		@Override
-		public MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly) {
-			return mutableNodeFor(theWrapped.findClosest(finder, lesser, strictly));
+		public MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly,
+			OptimisticContext ctx) {
+			return getLocker().doOptimistically(null, //
+				(init, ctx2) -> mutableNodeFor(theWrapped.findClosest(finder, lesser, strictly, OptimisticContext.and(ctx, ctx2))), true);
 		}
 
 		@Override
@@ -289,6 +454,8 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> {
 
 		@Override
 		public String isAcceptable(E value) {
+			if (value == get())
+				return null;
 			if (!belongs(value))
 				return StdMsg.ILLEGAL_ELEMENT;
 			BinaryTreeNode<E> previous = getClosest(true);

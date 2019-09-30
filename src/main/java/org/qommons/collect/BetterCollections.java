@@ -1,9 +1,11 @@
 package org.qommons.collect;
 
 import java.util.Comparator;
-import java.util.function.Consumer;
+import java.util.Map;
+import java.util.function.Function;
 
 import org.qommons.Transaction;
+import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 public class BetterCollections {
@@ -25,10 +27,27 @@ public class BetterCollections {
 		return new UnmodifiableBetterSortedSet<>(sortedSet);
 	}
 
-	static class UnmodifiableBetterCollection<E> implements BetterCollection<E> {
+	public static <K, V> BetterMap<K, V> unmodifiableMap(BetterMap<? extends K, ? extends V> map) {
+		return new UnmodifiableBetterMap<>(map);
+	}
+
+	public static <K, V> BetterSortedMap<K, V> unmodifiableSortedMap(BetterSortedMap<? extends K, ? extends V> map) {
+		return new UnmodifiableBetterSortedMap<>(map);
+	}
+
+	protected static <K, V> MapEntryHandle<K, V> unmodifiableEntry(MapEntryHandle<? extends K, ? extends V> entry) {
+		return entry == null ? null : new UnmodifiableEntry<>(entry);
+	}
+
+	protected static <K, V> MutableMapEntryHandle<K, V> unmodifiableMutableEntry(BetterCollection<? extends V> values,
+		MapEntryHandle<? extends K, ? extends V> entry) {
+		return entry == null ? null : new UnmodifiableMutableEntry<>(values, entry);
+	}
+
+	public static class UnmodifiableBetterCollection<E> implements BetterCollection<E> {
 		private final BetterCollection<? extends E> theWrapped;
 
-		UnmodifiableBetterCollection(BetterCollection<? extends E> wrapped) {
+		protected UnmodifiableBetterCollection(BetterCollection<? extends E> wrapped) {
 			theWrapped = wrapped;
 		}
 
@@ -44,6 +63,11 @@ public class BetterCollections {
 		@Override
 		public Transaction lock(boolean write, boolean structural, Object cause) {
 			return theWrapped.lock(false, !write || structural, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return theWrapped.tryLock(false, !write || structural, cause);
 		}
 
 		@Override
@@ -94,6 +118,18 @@ public class BetterCollections {
 		}
 
 		@Override
+		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
+			return (BetterList<CollectionElement<E>>) (BetterList<?>) theWrapped.getElementsBySource(sourceEl);
+		}
+
+		@Override
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return theWrapped.getSourceElements(localElement, theWrapped); // For element validation
+			return theWrapped.getSourceElements(localElement, sourceCollection);
+		}
+
+		@Override
 		public String canAdd(E value, ElementId after, ElementId before) {
 			return StdMsg.UNSUPPORTED_OPERATION;
 		}
@@ -112,16 +148,6 @@ public class BetterCollections {
 		}
 
 		@Override
-		public MutableElementSpliterator<E> spliterator(boolean fromStart) {
-			return new UnmodifiableWrappingSpliterator<>(this, theWrapped.spliterator(fromStart));
-		}
-
-		@Override
-		public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
-			return new UnmodifiableWrappingSpliterator<>(this, theWrapped.spliterator(element, asNext));
-		}
-
-		@Override
 		public int hashCode() {
 			return theWrapped.hashCode();
 		}
@@ -137,11 +163,11 @@ public class BetterCollections {
 		}
 	}
 
-	static class UnmodifiableElementWrapper<E> implements MutableCollectionElement<E> {
+	public static class UnmodifiableElementWrapper<E> implements MutableCollectionElement<E> {
 		private final UnmodifiableBetterCollection<E> theCollection;
 		private final CollectionElement<? extends E> theWrapped;
 
-		UnmodifiableElementWrapper(UnmodifiableBetterCollection<E> collection, CollectionElement<? extends E> wrapped) {
+		protected UnmodifiableElementWrapper(UnmodifiableBetterCollection<E> collection, CollectionElement<? extends E> wrapped) {
 			theCollection = collection;
 			theWrapped = wrapped;
 		}
@@ -202,69 +228,8 @@ public class BetterCollections {
 		}
 	}
 
-	static class UnmodifiableWrappingSpliterator<E> implements MutableElementSpliterator<E> {
-		private final UnmodifiableBetterCollection<E> theCollection;
-		private final MutableElementSpliterator<? extends E> theWrapped;
-
-		UnmodifiableWrappingSpliterator(UnmodifiableBetterCollection<E> collection,
-			MutableElementSpliterator<? extends E> wrapped) {
-			theCollection = collection;
-			theWrapped = wrapped;
-		}
-
-		@Override
-		public long estimateSize() {
-			return theWrapped.estimateSize();
-		}
-
-		@Override
-		public int characteristics() {
-			return theWrapped.characteristics();
-		}
-
-		@Override
-		public long getExactSizeIfKnown() {
-			return theWrapped.getExactSizeIfKnown();
-		}
-
-		@Override
-		public Comparator<? super E> getComparator() {
-			return (Comparator<? super E>) theWrapped.getComparator();
-		}
-
-		@Override
-		public boolean forElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
-			return theWrapped.forElement(//
-				el -> action.accept((CollectionElement<E>) el), forward);
-		}
-
-		@Override
-		public void forEachElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
-			theWrapped.forEachElement(//
-				el -> action.accept((CollectionElement<E>) el), forward);
-		}
-
-		@Override
-		public boolean forElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
-			return theWrapped.forElement(//
-				el -> action.accept(new UnmodifiableElementWrapper<>(theCollection, el)), forward);
-		}
-
-		@Override
-		public void forEachElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
-			theWrapped.forEachElementM(//
-				el -> action.accept(new UnmodifiableElementWrapper<>(theCollection, el)), forward);
-		}
-
-		@Override
-		public MutableElementSpliterator<E> trySplit() {
-			MutableElementSpliterator<? extends E> wrapSplit = theWrapped.trySplit();
-			return wrapSplit == null ? null : new UnmodifiableWrappingSpliterator<>(theCollection, wrapSplit);
-		}
-	}
-
-	static class UnmodifiableBetterSet<E> extends UnmodifiableBetterCollection<E> implements BetterSet<E> {
-		UnmodifiableBetterSet(BetterSet<? extends E> wrapped) {
+	public static class UnmodifiableBetterSet<E> extends UnmodifiableBetterCollection<E> implements BetterSet<E> {
+		protected UnmodifiableBetterSet(BetterSet<? extends E> wrapped) {
 			super(wrapped);
 		}
 
@@ -274,13 +239,42 @@ public class BetterCollections {
 		}
 
 		@Override
+		public CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
+			if (!getWrapped().belongs(value))
+				return null;
+			return getElement(value, first);
+		}
+
+		@Override
+		public boolean isConsistent(ElementId element) {
+			return getWrapped().isConsistent(element);
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return getWrapped().checkConsistency();
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+			// Kinda weird here since this involves modification, but the caller itself isn't doing the modification
+			return ((BetterSet<E>) getWrapped()).repair(element, listener);
+		}
+
+		@Override
+		public <X> boolean repair(RepairListener<E, X> listener) {
+			// Kinda weird here since this involves modification, but the caller itself isn't doing the modification
+			return ((BetterSet<E>) getWrapped()).repair(listener);
+		}
+
+		@Override
 		public <T> T[] toArray(T[] a) {
 			return super.toArray(a);
 		}
 	}
 
-	static class UnmodifiableBetterList<E> extends UnmodifiableBetterCollection<E> implements BetterList<E> {
-		UnmodifiableBetterList(BetterList<? extends E> wrapped) {
+	public static class UnmodifiableBetterList<E> extends UnmodifiableBetterCollection<E> implements BetterList<E> {
+		protected UnmodifiableBetterList(BetterList<? extends E> wrapped) {
 			super(wrapped);
 		}
 
@@ -310,8 +304,8 @@ public class BetterCollections {
 		}
 	}
 
-	static class UnmodifiableBetterSortedSet<E> extends UnmodifiableBetterList<E> implements BetterSortedSet<E> {
-		UnmodifiableBetterSortedSet(BetterSortedSet<? extends E> wrapped) {
+	public static class UnmodifiableBetterSortedSet<E> extends UnmodifiableBetterList<E> implements BetterSortedSet<E> {
+		protected UnmodifiableBetterSortedSet(BetterSortedSet<? extends E> wrapped) {
 			super(wrapped);
 		}
 
@@ -333,6 +327,175 @@ public class BetterCollections {
 		@Override
 		public int indexFor(Comparable<? super E> search) {
 			return getWrapped().indexFor(search);
+		}
+
+		@Override
+		public CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
+			return getElement(value, first);
+		}
+
+		@Override
+		public boolean isConsistent(ElementId element) {
+			return getWrapped().isConsistent(element);
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return getWrapped().checkConsistency();
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+			// Kinda weird here since this involves modification, but the caller itself isn't doing the modification
+			return ((BetterSet<E>) getWrapped()).repair(element, listener);
+		}
+
+		@Override
+		public <X> boolean repair(RepairListener<E, X> listener) {
+			// Kinda weird here since this involves modification, but the caller itself isn't doing the modification
+			return ((BetterSet<E>) getWrapped()).repair(listener);
+		}
+	}
+
+	public static class UnmodifiableBetterMap<K, V> implements BetterMap<K, V> {
+		private final BetterMap<? extends K, ? extends V> theWrapped;
+
+		protected UnmodifiableBetterMap(BetterMap<? extends K, ? extends V> wrapped) {
+			theWrapped = wrapped;
+		}
+
+		protected BetterMap<? extends K, ? extends V> getWrapped() {
+			return theWrapped;
+		}
+
+		@Override
+		public BetterSet<K> keySet() {
+			return unmodifiableSet(theWrapped.keySet());
+		}
+
+		@Override
+		public MapEntryHandle<K, V> getEntry(K key) {
+			if (!theWrapped.keySet().belongs(key))
+				return null;
+			return unmodifiableEntry(((BetterMap<K, V>) theWrapped).getEntry(key));
+		}
+
+		@Override
+		public MapEntryHandle<K, V> getEntryById(ElementId entryId) {
+			return unmodifiableEntry(theWrapped.getEntryById(entryId));
+		}
+
+		@Override
+		public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, boolean first, Runnable added) {
+			return getEntry(key);
+		}
+
+		@Override
+		public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
+			return unmodifiableMutableEntry(theWrapped.values(), theWrapped.getEntryById(entryId));
+		}
+
+		@Override
+		public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+	}
+
+	public static class UnmodifiableBetterSortedMap<K, V> extends UnmodifiableBetterMap<K, V> implements BetterSortedMap<K, V> {
+		protected UnmodifiableBetterSortedMap(BetterSortedMap<? extends K, ? extends V> wrapped) {
+			super(wrapped);
+		}
+
+		@Override
+		protected BetterSortedMap<? extends K, ? extends V> getWrapped() {
+			return (BetterSortedMap<? extends K, ? extends V>) super.getWrapped();
+		}
+
+		@Override
+		public BetterSortedSet<K> keySet() {
+			return unmodifiableSortedSet(getWrapped().keySet());
+		}
+
+		@Override
+		public MapEntryHandle<K, V> searchEntries(Comparable<? super Entry<K, V>> search, SortedSearchFilter filter) {
+			return unmodifiableEntry(getWrapped().searchEntries(entry -> search.compareTo((Map.Entry<K, V>) entry), filter));
+		}
+	}
+
+	public static class UnmodifiableEntry<K, V> implements MapEntryHandle<K, V> {
+		private final MapEntryHandle<? extends K, ? extends V> theWrapped;
+
+		protected UnmodifiableEntry(MapEntryHandle<? extends K, ? extends V> wrapped) {
+			theWrapped = wrapped;
+		}
+
+		@Override
+		public ElementId getElementId() {
+			return theWrapped.getElementId();
+		}
+
+		@Override
+		public V get() {
+			return theWrapped.get();
+		}
+
+		@Override
+		public K getKey() {
+			return theWrapped.getKey();
+		}
+
+		@Override
+		public int hashCode() {
+			return theWrapped.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return theWrapped.equals(obj);
+		}
+
+		@Override
+		public String toString() {
+			return theWrapped.toString();
+		}
+	}
+
+	public static class UnmodifiableMutableEntry<K, V> extends UnmodifiableEntry<K, V> implements MutableMapEntryHandle<K, V> {
+		private final BetterCollection<? extends V> theValues;
+
+		protected UnmodifiableMutableEntry(BetterCollection<? extends V> values, MapEntryHandle<? extends K, ? extends V> wrapped) {
+			super(wrapped);
+			theValues = values;
+		}
+
+		@Override
+		public BetterCollection<V> getCollection() {
+			return unmodifiableCollection(theValues);
+		}
+
+		@Override
+		public String isEnabled() {
+			return StdMsg.UNSUPPORTED_OPERATION;
+		}
+
+		@Override
+		public String isAcceptable(V value) {
+			return StdMsg.UNSUPPORTED_OPERATION;
+		}
+
+		@Override
+		public void set(V value) throws UnsupportedOperationException, IllegalArgumentException {
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public String canRemove() {
+			return StdMsg.UNSUPPORTED_OPERATION;
+		}
+
+		@Override
+		public void remove() throws UnsupportedOperationException {
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
 	}
 }

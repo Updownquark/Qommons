@@ -1,10 +1,17 @@
 package org.qommons.tree;
 
+import java.util.Collection;
 import java.util.Objects;
 
 import org.qommons.Transaction;
 import org.qommons.ValueHolder;
-import org.qommons.collect.*;
+import org.qommons.collect.BetterList;
+import org.qommons.collect.CollectionElement;
+import org.qommons.collect.CollectionLockingStrategy;
+import org.qommons.collect.ElementId;
+import org.qommons.collect.ElementSpliterator;
+import org.qommons.collect.FastFailLockingStrategy;
+import org.qommons.collect.StampedLockingStrategy;
 
 /**
  * <p>
@@ -52,12 +59,7 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 	}
 
 	@Override
-	public MutableElementSpliterator<E> mutableSpliterator(BinaryTreeNode<E> node, boolean next) {
-		return super.mutableSpliterator(node, next);
-	}
-
-	@Override
-	public CollectionElement<E> getElement(E value, boolean first) {
+	public BinaryTreeNode<E> getElement(E value, boolean first) {
 		try (Transaction t = lock(false, null)) {
 			ValueHolder<CollectionElement<E>> element = new ValueHolder<>();
 			ElementSpliterator<E> spliter = first ? spliterator(first) : spliterator(first).reverse();
@@ -65,7 +67,13 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 				if (Objects.equals(el.get(), value))
 					element.accept(first ? el : el.reverse());
 			}, true)) {}
-			return element.get();
+			return (BinaryTreeNode<E>) element.get();
 		}
+	}
+
+	@Override
+	public BetterTreeList<E> withAll(Collection<? extends E> values) {
+		super.withAll(values);
+		return this;
 	}
 }

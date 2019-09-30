@@ -503,41 +503,30 @@ public final class ArrayUtils {
 	 *         <code>-(index+1)</code>, where <code>index</code> is the index where such an index would be inserted into the search domain
 	 */
 	public static int binarySearch(int min, int max, IntComparable search) {
-		return binarySearch(new int[] { min, max }, search);
-	}
-
-	/**
-	 * An abstract binary search method that can search through anything by index and makes its context public.
-	 * 
-	 * @param minMax A 2-element array containing the current lowest index in the search domain and the current highest index in the search
-	 *        domain
-	 * @param search The indexed search function
-	 * @return The <code>index</code> in the search domain for which
-	 *         <code>search.{@link IntComparable#compareTo(int) compareTo}(index)==0</code> if such an index exists; otherwise
-	 *         <code>-(index+1)</code>, where <code>index</code> is the index where such an index would be inserted into the search domain
-	 */
-	public static int binarySearch(int[] minMax, IntComparable search) {
-		if (minMax[0] > minMax[1])
+		if (min > max)
 			return -1;
 		int mid = -1;
 		int comp = 0;
-		while (minMax[0] < minMax[1]) {
-			mid = (minMax[0] + minMax[1]) >>> 1;
+		while (min < max) {
+			mid = (min + max) / 2;
 			comp = search.compareTo(mid);
 			if (comp > 0)
-				minMax[0] = mid + 1;
+				min = mid + 1;
 			else if (comp < 0)
-				minMax[1] = mid - 1;
+				max = mid - 1;
 			else
 				return mid;
 		}
-		if (mid != minMax[0])
-			comp = search.compareTo(minMax[0]);
+		if (mid != min)
+			comp = search.compareTo(min);
 		if (comp == 0)
-			return minMax[0];
+			return min;
 		else if (comp > 0)
-			minMax[0]++;
-		return -(minMax[0] + 1);
+			min++;
+		if (min < 0) // We'll tolerate negative indexes, but the information that an exact match wasn't found can't be conveyed in this case
+			return min;
+		else
+			return -(min + 1);
 	}
 
 	/**
@@ -1509,6 +1498,22 @@ public final class ArrayUtils {
 		return adjuster.adjust();
 	}
 
+	/**
+	 * @param <T1> The type of the original array
+	 * @param <T2> The type of the modifying array
+	 * @param <E> The type of exception that may be thrown
+	 * @param original The original array
+	 * @param modifier The modifying array
+	 * @param dl The listener to determine how to deal with differences between the two arrays
+	 * @throws E If the {@link DifferenceListenerE} throws an exception
+	 * @see #adjust(Object[], Object[], DifferenceListenerE)
+	 */
+	public static <T1, T2, E extends Throwable> void adjustNoCreate(T1[] original, T2[] modifier, DifferenceListenerE<T1, T2, E> dl)
+		throws E {
+		ArrayAdjuster<T1, T2, E> adjuster = new ArrayAdjuster<>(original, modifier, dl);
+		adjuster.noCreate().adjust();
+	}
+
 	static final Object NULL = new Object();
 
 	/**
@@ -1539,6 +1544,7 @@ public final class ArrayUtils {
 		private int maxLength;
 
 		private boolean isNullElement;
+		private boolean createArray;
 
 		/**
 		 * Creates an adjuster that can adjust one array by another
@@ -1556,22 +1562,31 @@ public final class ArrayUtils {
 			mMappings = new int[m.length];
 			entriesSet = new boolean[m.length];
 			dl = listener;
+			createArray = true;
+		}
+
+		public ArrayAdjuster<T1, T2, E> noCreate() {
+			createArray = false;
+			return this;
 		}
 
 		private void init() throws E {
 			int o, m, r = original.length + modifier.length;
 			for(m = 0; m < modifier.length; m++)
 				mMappings[m] = -1;
+			int minM = 0;
 			for(o = 0; o < original.length; o++) {
 				oIdxAdj[o] = o;
 				oMappings[o] = -1;
-				for(m = 0; m < modifier.length; m++) {
+				for (m = minM; m < modifier.length; m++) {
 					if(mMappings[m] >= 0)
 						continue;
 					if(dl.identity(original[o], modifier[m])) {
 						oMappings[o] = m;
 						mMappings[m] = o;
 						r--;
+						if (m == minM)
+							minM++;
 						break;
 					}
 				}
@@ -1629,9 +1644,12 @@ public final class ArrayUtils {
 			for(int i = 0; i < r; i++)
 				if(ret[i] == NULL)
 					ret[i] = null;
-			T1 [] actualRet = (T1 []) Array.newInstance(original.getClass().getComponentType(), r);
+			if (createArray) {
+				T1[] actualRet = (T1[]) Array.newInstance(original.getClass().getComponentType(), r);
 			System.arraycopy(ret, 0, actualRet, 0, r);
 			return actualRet;
+			} else
+				return null;
 		}
 
 		/**
@@ -1790,12 +1808,16 @@ public final class ArrayUtils {
 					T1 replaceValue = dl.set(o1, idx1, incMod, o2, idx2, retIdx);
 					if(replaceValue == null)
 						original.remove(incMod);
-					else
+					else if (incMod == retIdx)
 						original.set(incMod, replaceValue);
+					else {
+						original.remove(incMod);
+						original.add(retIdx, replaceValue);
+					}
 					return replaceValue;
 				}
 			});
-		adjuster.adjust();
+		adjuster.noCreate().adjust();
 	}
 
 	/**

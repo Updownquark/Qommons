@@ -1,5 +1,11 @@
 package org.qommons.collect;
 
+/**
+ * Represents a single key-value pair in a {@link BetterMultiMap}
+ * 
+ * @param <K> The type of the key
+ * @param <V> The type of the value
+ */
 public interface MultiMapEntryHandle<K, V> extends MapEntryHandle<K, V> {
 	ElementId getKeyId();
 

@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The BreakpointHere class enables applications to transfer control to the java debugger, where this is VM-enabled. Users should always
@@ -30,6 +31,8 @@ public class BreakpointHere {
 		CLI_IGNORE = Collections.unmodifiableMap(cliIgnore);
 	}
 
+	private static final AtomicLong theBreakpointCatchCount = new AtomicLong();
+
 	private static enum IgnoreType {
 		/** Does nothing */
 		NONE,
@@ -41,10 +44,14 @@ public class BreakpointHere {
 		ALL;
 	}
 
-	/** Invoked to transfer control to the debugger. Debugging environments should set a breakpoint on the indicated line in this method. */
-	public static void breakpoint() {
+	/**
+	 * Invoked to transfer control to the debugger. Debugging environments should set a breakpoint on the indicated line in this method.
+	 * 
+	 * @return Whether the breakpoint was actually caught
+	 */
+	public static boolean breakpoint() {
 		if(IGNORE_ALL)
-			return;
+			return false;
 		Thread thread=Thread.currentThread();
 		StackTraceElement [] stack;
 		StackTraceElement source;
@@ -57,15 +64,16 @@ public class BreakpointHere {
 			if(stack == null || stack.length == 0) {
 				IGNORE_ALL = true;
 				System.err.println("WARNING! Application is attempting to catch a breakpoint, but line numbers seem to not be included");
-				return;
+				return false;
 			}
 			source = stack[2];
 			if(IGNORING_CLASSES.contains(source.getClassName()))
-				return;
+				return false;
 			if(IGNORING_LOCATIONS.contains(source))
-				return;
+				return false;
 		}
 
+		theBreakpointCatchCount.incrementAndGet();
 		boolean breakpointCaught = false;
 		boolean alerted = false;
 		AsyncInputReader reader = null;
@@ -102,9 +110,10 @@ public class BreakpointHere {
 				if(!alerted) {
 					String debugArg = isDebugEnabled();
 					if (debugArg == null) {
+						theBreakpointCatchCount.decrementAndGet();
 						System.err.println("WARNING! Application is attempting to catch a breakpoint, but debugging seems to be disabled");
 						IGNORE_ALL = true;
-						return;
+						return false;
 					}
 					alerted = true;
 
@@ -162,6 +171,12 @@ public class BreakpointHere {
 				break;
 			}
 		}
+		return breakpointCaught;
+	}
+
+	/** @return The (approximate) number of times a {@link #breakpoint()} was caught during this VM run */
+	public static long getBreakpointCatchCount() {
+		return theBreakpointCatchCount.get();
 	}
 
 	/** The set of known Java VM arguments that indicate that debugger attachment is possible */

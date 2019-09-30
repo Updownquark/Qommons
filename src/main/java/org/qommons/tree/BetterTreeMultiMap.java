@@ -2,8 +2,8 @@ package org.qommons.tree;
 
 import java.util.Comparator;
 import java.util.Objects;
-import java.util.function.Consumer;
 
+import org.qommons.Lockable;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterList;
@@ -16,7 +16,6 @@ import org.qommons.collect.MultiEntryHandle;
 import org.qommons.collect.MultiMapEntryHandle;
 import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
-import org.qommons.collect.MutableElementSpliterator;
 
 public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 	private final BetterTreeSet<MultiEntryImpl> theEntries;
@@ -45,6 +44,12 @@ public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 			valueT.close();
 			entryT.close();
 		};
+	}
+
+	@Override
+	public Transaction tryLock(boolean write, boolean structural, Object cause) {
+		return Lockable.lockAll(Lockable.lockable(theEntries, write, structural, cause),
+			Lockable.lockable(theValues, write, structural, cause));
 	}
 
 	@Override
@@ -210,6 +215,11 @@ public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 		}
 
 		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return BetterTreeMultiMap.this.tryLock(write, structural, cause);
+		}
+
+		@Override
 		public boolean isEmpty() {
 			return theEntries.isEmpty();
 		}
@@ -287,16 +297,6 @@ public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 			}
 		}
 
-		@Override
-		public MutableElementSpliterator<MultiEntry<K, V>> spliterator(boolean fromStart) {
-			return new EntrySplitWrapper(theEntries.spliterator(fromStart));
-		}
-
-		@Override
-		public MutableElementSpliterator<MultiEntry<K, V>> spliterator(ElementId element, boolean asNext) {
-			return new EntrySplitWrapper(theEntries.spliterator(element, asNext));
-		}
-
 		private class EntryElement implements CollectionElement<MultiEntry<K, V>> {
 			final MultiEntryImpl theEntry;
 
@@ -355,45 +355,6 @@ public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 				new ValueList(theEntry.theKey, theEntry).clear();
 			}
 		}
-
-		private class EntrySplitWrapper extends MutableElementSpliterator.SimpleMutableSpliterator<MultiEntry<K, V>> {
-			private final MutableElementSpliterator<MultiEntryImpl> theEntrySplit;
-
-			EntrySplitWrapper(MutableElementSpliterator<MultiEntryImpl> entrySplit) {
-				super(EntrySet.this);
-				theEntrySplit = entrySplit;
-			}
-
-			@Override
-			public long estimateSize() {
-				return theEntrySplit.estimateSize();
-			}
-
-			@Override
-			public int characteristics() {
-				return theEntrySplit.characteristics();
-			}
-
-			@Override
-			protected boolean internalForElement(Consumer<? super CollectionElement<MultiEntry<K, V>>> action, boolean forward) {
-				return theEntrySplit.forElement(el -> {
-					action.accept(new EntryElement(el.get()));
-				}, forward);
-			}
-
-			@Override
-			protected boolean internalForElementM(Consumer<? super MutableCollectionElement<MultiEntry<K, V>>> action, boolean forward) {
-				return theEntrySplit.forElementM(el -> {
-					action.accept(new MutableEntryElement(el.get(), () -> el.remove()));
-				}, forward);
-			}
-
-			@Override
-			public MutableElementSpliterator<MultiEntry<K, V>> trySplit() {
-				MutableElementSpliterator<MultiEntryImpl> entrySplit = theEntrySplit.trySplit();
-				return entrySplit == null ? null : new EntrySplitWrapper(entrySplit);
-			}
-		}
 	}
 
 	class KeySet implements BetterSortedSet<K> {
@@ -415,6 +376,11 @@ public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 		@Override
 		public Transaction lock(boolean write, boolean structural, Object cause) {
 			return BetterTreeMultiMap.this.lock(write, structural, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return BetterTreeMultiMap.this.tryLock(write, structural, cause);
 		}
 
 		@Override
@@ -478,16 +444,6 @@ public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 		public CollectionElement<K> addElement(K value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-		}
-
-		@Override
-		public MutableElementSpliterator<K> spliterator(boolean fromStart) {
-			return new KeySplitWrapper(theEntries.spliterator(fromStart));
-		}
-
-		@Override
-		public MutableElementSpliterator<K> spliterator(ElementId element, boolean asNext) {
-			return new KeySplitWrapper(theEntries.spliterator(element, asNext));
 		}
 
 		@Override
@@ -567,45 +523,6 @@ public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 				new ValueList(theEntry.theKey, theEntry).clear();
 			}
 		}
-
-		private class KeySplitWrapper extends MutableElementSpliterator.SimpleMutableSpliterator<K> {
-			private final MutableElementSpliterator<BetterTreeMultiMap<K, V>.MultiEntryImpl> theEntrySplit;
-
-			KeySplitWrapper(MutableElementSpliterator<MultiEntryImpl> entrySplit) {
-				super(KeySet.this);
-				theEntrySplit = entrySplit;
-			}
-
-			@Override
-			public long estimateSize() {
-				return theEntrySplit.estimateSize();
-			}
-
-			@Override
-			public int characteristics() {
-				return theEntrySplit.characteristics();
-			}
-
-			@Override
-			protected boolean internalForElement(Consumer<? super CollectionElement<K>> action, boolean forward) {
-				return theEntrySplit.forElement(el -> {
-					action.accept(new KeyElement(el.get()));
-				}, forward);
-			}
-
-			@Override
-			protected boolean internalForElementM(Consumer<? super MutableCollectionElement<K>> action, boolean forward) {
-				return theEntrySplit.forElementM(el -> {
-					action.accept(new MutableKeyElement(el.get(), () -> el.remove()));
-				}, forward);
-			}
-
-			@Override
-			public MutableElementSpliterator<K> trySplit() {
-				MutableElementSpliterator<MultiEntryImpl> entrySplit = theEntrySplit.trySplit();
-				return entrySplit == null ? null : new KeySplitWrapper(entrySplit);
-			}
-		}
 	}
 
 	class ValueList implements BetterList<V> {
@@ -630,6 +547,11 @@ public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 		@Override
 		public Transaction lock(boolean write, boolean structural, Object cause) {
 			return theValues.lock(write, structural, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return theValues.tryLock(write, structural, cause);
 		}
 
 		protected boolean acquireEntry() {
@@ -930,40 +852,6 @@ public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 			}
 		}
 
-		@Override
-		public MutableElementSpliterator<V> spliterator(boolean fromStart) {
-			try(Transaction t=lock(false, true, null)){
-				if(!acquireEntry())
-					return MutableElementSpliterator.empty();
-				ElementId start;
-				boolean asNext;
-				if(fromStart){
-					start=theEntry.firstEntry;
-					asNext=true;
-				} else if(theEntry.next!=null){
-					start=theEntry.next.firstEntry;
-					asNext=true;
-				} else{
-					start=theValues.getTerminalElement(false).getElementId();
-					asNext=false;
-				}
-				return new ValueSplitWrapper(theValues.spliterator(start, asNext));
-			}
-		}
-
-		@Override
-		public MutableElementSpliterator<V> spliterator(ElementId element, boolean asNext) {
-			try (Transaction t = lock(false, true, null)) {
-				if (!acquireEntry())
-					throw new IllegalArgumentException("Element does not exist in this collection");
-				CollectionElement<KVEntry> valueEl = theValues.getElement(element);
-				if (theEntry != valueEl.get().theEntry)
-					throw new IllegalArgumentException(
-						"The given element ID is not for this key (" + valueEl.get().theEntry.theKey + " vs. " + theEntry.theKey + ")");
-				return new ValueSplitWrapper(theValues.spliterator(element, asNext));
-			}
-		}
-
 		private class MutableValueElement implements MutableCollectionElement<V> {
 			private final KVEntry theValueEntry;
 			private final Runnable thePreRemove;
@@ -1058,74 +946,6 @@ public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 						}
 					}
 				}
-			}
-		}
-
-		private class ValueSplitWrapper extends MutableElementSpliterator.SimpleMutableSpliterator<V> {
-			private final MutableElementSpliterator<KVEntry> theEntrySplit;
-			private boolean isSplit;
-
-			ValueSplitWrapper(MutableElementSpliterator<KVEntry> entrySplit) {
-				super(ValueList.this);
-				theEntrySplit = entrySplit;
-			}
-
-			@Override
-			public long estimateSize() {
-				return isSplit ? Long.MAX_VALUE : ValueList.this.size();
-			}
-
-			@Override
-			public int characteristics() {
-				return theEntrySplit.characteristics();
-			}
-
-			@Override
-			protected boolean internalForElement(Consumer<? super CollectionElement<V>> action, boolean forward) {
-				try (Transaction t = lock(false, null)) {
-					if (!acquireEntry())
-						return false;
-					boolean[] backup = new boolean[1];
-					boolean advanced = theEntrySplit.forElement(el -> {
-						if (el.get().theEntry == theEntry)
-							action.accept(el.get());
-						else
-							backup[0] = true;
-					}, forward);
-					if (backup[0])
-						theEntrySplit.forElement(el -> {}, !forward);
-					return advanced && !backup[0];
-				}
-			}
-
-			@Override
-			protected boolean internalForElementM(Consumer<? super MutableCollectionElement<V>> action, boolean forward) {
-				try (Transaction t = lock(true, null)) {
-					if (!acquireEntry())
-						return false;
-					boolean[] backup = new boolean[1];
-					boolean advanced = theEntrySplit.forElementM(el -> {
-						if (el.get().theEntry == theEntry)
-							action.accept(//
-								new MutableValueElement(el.get(), () -> el.remove()));
-						else
-							backup[0] = true;
-					}, forward);
-					if (backup[0])
-						theEntrySplit.forElement(el -> {}, !forward);
-					return advanced && !backup[0];
-				}
-			}
-
-			@Override
-			public MutableElementSpliterator<V> trySplit() {
-				MutableElementSpliterator<KVEntry> entrySplit = theEntrySplit.trySplit();
-				if (entrySplit == null)
-					return null;
-				isSplit = true;
-				ValueSplitWrapper otherSplit = new ValueSplitWrapper(entrySplit);
-				otherSplit.isSplit = true;
-				return otherSplit;
 			}
 		}
 	}

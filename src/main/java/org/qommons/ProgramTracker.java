@@ -888,9 +888,13 @@ public class ProgramTracker implements Cloneable {
 				cn = routine;
 				while(cn != null && cn != theCurrentNode)
 					cn = cn.parent;
-				if(cn != null)
-					throw new IllegalStateException("Routine " + routine.getName() + " ended twice" + " or ended after parent routine");
-				else
+				if(cn != null){
+					if(routine.parent==null)
+						throw new IllegalStateException("Routine " + routine.getName() + " ended twice");
+					else
+						throw new IllegalStateException(
+							"Routine " + routine.getName() + " ended twice or ended after parent routine " + routine.parent.getName());
+				} else
 					throw new IllegalStateException(
 						"Routine " + routine.getName() + " not started or ended twice: " + printData(new StringBuilder()));
 			}

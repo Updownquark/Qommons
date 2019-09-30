@@ -40,6 +40,11 @@ public class ValueHolder<T> implements Consumer<T>, Supplier<T> {
 		theValue = t;
 	}
 
+	public void clear() {
+		isSet = false;
+		theValue = null;
+	}
+
 	@Override
 	public String toString() {
 		if (!isSet)
