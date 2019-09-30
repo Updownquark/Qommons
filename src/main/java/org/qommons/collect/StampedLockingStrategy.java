@@ -14,7 +14,7 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 	private final AtomicLong theStructureChanges;
 	private int optimisticTries;
 
-	public static boolean STORE_WRITERS = false; // A debug setting
+	public static boolean STORE_WRITERS = "true".equalsIgnoreCase(System.getProperty("qommons.locking.debug")); // A debug setting
 	private volatile Thread structWriteLocker;
 	private volatile Thread updateWriteLocker;
 
