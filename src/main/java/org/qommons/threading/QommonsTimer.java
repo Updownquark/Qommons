@@ -354,7 +354,7 @@ public class QommonsTimer {
 			if (!isActive.get())
 				return false;
 			else if (isWaiting) {
-				minNextRun[0] = Instant.MIN;
+				minNextRun[0] = now.plus(Duration.ofMillis(10));
 				return false;
 			}
 			Instant nextRun = theNextRun;
