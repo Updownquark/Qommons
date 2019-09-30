@@ -145,10 +145,10 @@ public class StringUtils {
 	}
 
 	public interface SequencePrinter {
-		<T> void printValue(StringBuilder into, T value, BiConsumer<? super T, ? super StringBuilder> format, int before, boolean last);
+		<T> void printValue(StringBuilder into, T value, BiConsumer<? super StringBuilder, ? super T> format, int before, boolean last);
 
 		default <T> StringBuilder print(StringBuilder into, Iterable<? extends T> values,
-			BiConsumer<? super T, ? super StringBuilder> format) {
+			BiConsumer<? super StringBuilder, ? super T> format) {
 			if (into == null)
 				into = new StringBuilder();
 			Iterator<? extends T> iter = values.iterator();
@@ -163,15 +163,15 @@ public class StringUtils {
 			return into;
 		}
 
-		default <T> StringBuilder print(StringBuilder into, T[] values, BiConsumer<? super T, ? super StringBuilder> format) {
+		default <T> StringBuilder print(StringBuilder into, T[] values, BiConsumer<? super StringBuilder, ? super T> format) {
 			return print(into, Arrays.asList(values), format);
 		}
 
-		default <T> StringBuilder print(Iterable<? extends T> values, BiConsumer<? super T, ? super StringBuilder> format) {
+		default <T> StringBuilder print(Iterable<? extends T> values, BiConsumer<? super StringBuilder, ? super T> format) {
 			return print(new StringBuilder(), values, format);
 		}
 
-		default <T> StringBuilder print(T[] values, BiConsumer<? super T, ? super StringBuilder> format) {
+		default <T> StringBuilder print(T[] values, BiConsumer<? super StringBuilder, ? super T> format) {
 			return print(Arrays.asList(values), format);
 		}
 	}
@@ -188,7 +188,7 @@ public class StringUtils {
 	public static SequencePrinter conversational(CharSequence delimiter, CharSequence preTerminal) {
 		return new SequencePrinter() {
 			@Override
-			public <T> void printValue(StringBuilder into, T value, BiConsumer<? super T, ? super StringBuilder> format, int before,
+			public <T> void printValue(StringBuilder into, T value, BiConsumer<? super StringBuilder, ? super T> format, int before,
 				boolean last) {
 				boolean first = before == 0;
 				boolean delimit = delimiter != null && !first && (!last || before > 1);
@@ -199,7 +199,7 @@ public class StringUtils {
 						into.deleteCharAt(into.length() - 1); // No double-space
 					into.append(preTerminal);
 				}
-				format.accept(value, into);
+				format.accept(into, value);
 			}
 		};
 	}
@@ -240,10 +240,21 @@ public class StringUtils {
 			return toCaseScheme(new StringBuilder(), initialCapital, intermediateCapital, delimiter).toString();
 		}
 
+		/**
+		 * Converts this name to pacal case, the same as camel-case, but with an initial capital
+		 * 
+		 * @return The pascal-cased name
+		 */
 		public String toPascalCase() {
 			return toPascalCase(new StringBuilder()).toString();
 		}
 
+		/**
+		 * Converts this name to pacal case, the same as camel-case, but with an initial capital
+		 * 
+		 * @param str The StringBuilder to append into
+		 * @return The pascal-cased name
+		 */
 		public StringBuilder toPascalCase(StringBuilder str) {
 			return toCaseScheme(str, true, true, null);
 		}
@@ -265,7 +276,13 @@ public class StringUtils {
 		}
 	}
 
-	public static Name parseByCase(String name) {
+	/**
+	 * @param name The name to parse by its capitalization
+	 * @param ignoreRepeatCapitals Whether to treat adjacent capitals as part of the same name component or not. This often results in
+	 *        prettier names, but also destroys information that cannot be re-created when parsing the formatted name.
+	 * @return The name object to be formatted in a different way
+	 */
+	public static Name parseByCase(String name, boolean ignoreRepeatCapitals) {
 		if (name.length() == 0)
 			return new Name(new String[0]);
 		List<String> components = new LinkedList<>();
@@ -273,7 +290,8 @@ public class StringUtils {
 		boolean hadLower = false;
 		for (int c = 0; c < name.length(); c++) {
 			if (Character.isUpperCase(name.charAt(c))) {
-				if (hadLower) {
+				boolean newComponent = c > 0 && (hadLower || !ignoreRepeatCapitals);
+				if (newComponent) {
 					components.add(comp.toString());
 					comp.setLength(0);
 					hadLower = false;
@@ -294,7 +312,7 @@ public class StringUtils {
 		for (int c = 0; c < str.length(); c++) {
 			if (str.charAt(c) == delimiter) {
 				components.add(str.substring(start, c));
-				start = c;
+				start = c + 1; // Skip the delimiter
 			}
 		}
 		components.add(str.substring(start));
@@ -308,7 +326,7 @@ public class StringUtils {
 	public static String pluralize(String name) {
 		if (name.endsWith("y")) {
 			name = name.substring(0, name.length() - 1) + "ie";
-		} else if (name.endsWith("s")) {
+		} else if (name.endsWith("s") || name.endsWith("x") || name.endsWith("ch")) {
 			name += "e";
 		}
 		name += "s";
@@ -320,15 +338,16 @@ public class StringUtils {
 	 * @return The singular of the given name
 	 */
 	public static String singularize(String name) {
-		if (name.endsWith("ies")) {
-			return name.substring(0, name.length() - 3) + "y";
-		} else if (name.endsWith("ses")) {
-			return name.substring(0, name.length() - 2);
-		} else if (name.endsWith("s")) {
-			return name.substring(0, name.length() - 1);
-		} else {
+		if (name.endsWith("eries")) // Don't singularize "series" to "sery"
 			return name;
-		}
+		else if (name.endsWith("ies"))
+			return name.substring(0, name.length() - 3) + "y";
+		else if (name.endsWith("ses"))
+			return name.substring(0, name.length() - 2);
+		else if (name.endsWith("s"))
+			return name.substring(0, name.length() - 1);
+		else
+			return name;
 	}
 
 	public static final String HEX_CHARS = "0123456789ABCDEF";

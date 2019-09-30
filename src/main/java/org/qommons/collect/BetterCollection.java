@@ -1,14 +1,6 @@
 package org.qommons.collect;
 
-import java.util.Collection;
-import java.util.ConcurrentModificationException;
-import java.util.Deque;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -89,13 +81,15 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	/**
 	 * @param sourceEl The source element to get derived values from
-	 * @return An element in this collection that is derived from the source element, or null if:
+	 * @return All element in this collection that are derived from the source element. Will be empty if:
 	 *         <ul>
 	 *         <li>the element belongs to a collection that is not a source for this collection,</li>
 	 *         <li>or the given element belongs to a source of this collection but is not a source of any element in this collection</li>
 	 *         </ul>
 	 */
-	CollectionElement<E> getElementBySource(ElementId sourceEl);
+	BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl);
+
+	BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection);
 
 	/**
 	 * Tests the ability to add an object into this collection within a given position range
@@ -664,6 +658,69 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	}
 
 	/**
+	 * A typical hashCode implementation for collections
+	 *
+	 * @param coll The collection to hash
+	 * @return The hash code of the collection's contents
+	 */
+	static int hashCode(BetterCollection<?> coll) {
+		try (Transaction t = coll.lock(false, null)) {
+			int hashCode = 1;
+			for (Object e : coll)
+				hashCode += e.hashCode();
+			return hashCode;
+		}
+	}
+
+	/**
+	 * A typical equals implementation for collections
+	 * 
+	 * @param <E> The type of the other collection
+	 * @param coll The collection to test
+	 * @param o The object to test the collection against
+	 * @return Whether the two objects are equal
+	 */
+	static <E> boolean equals(BetterCollection<E> coll, Object o) {
+		if (!(o instanceof Collection))
+			return false;
+		Collection<?> c = (Collection<?>) o;
+
+		try (Transaction t1 = coll.lock(false, null); Transaction t2 = Transactable.lock(c, false, null)) {
+			Iterator<E> e1 = coll.iterator();
+			Iterator<?> e2 = c.iterator();
+			while (e1.hasNext() && e2.hasNext()) {
+				E o1 = e1.next();
+				Object o2 = e2.next();
+				if (!Objects.equals(o1, o2))
+					return false;
+			}
+			return !(e1.hasNext() || e2.hasNext());
+		}
+	}
+
+	/**
+	 * A simple toString implementation for collections
+	 *
+	 * @param coll The collection to print
+	 * @return The string representation of the collection's contents
+	 */
+	static String toString(BetterCollection<?> coll) {
+		StringBuilder ret = new StringBuilder("[");
+		boolean first = true;
+		try (Transaction t = coll.lock(false, null)) {
+			for (Object value : coll) {
+				if (!first) {
+					ret.append(", ");
+				} else
+					first = false;
+				ret.append(value);
+			}
+		}
+		ret.append(']');
+		return ret.toString();
+	}
+
+	/**
 	 * Locks the given collection as specified if it is {@link Transactable}, using
 	 * {@link TransactableCollection#lock(boolean, boolean, Object)} for a {@link TransactableCollection},
 	 * 
@@ -945,8 +1002,15 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public CollectionElement<E> getElementBySource(ElementId sourceEl) {
-			return CollectionElement.reverse(theWrapped.getElementBySource(sourceEl));
+		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
+			return QommonsUtils.map2(theWrapped.getElementsBySource(sourceEl), el -> el.reverse());
+		}
+
+		@Override
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return BetterList.of(localElement);
+			return theWrapped.getSourceElements(localElement.reverse(), sourceCollection);
 		}
 
 		@Override
@@ -1078,7 +1142,12 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public CollectionElement<E> getElementBySource(ElementId sourceEl) {
+		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
+			return BetterList.empty();
+		}
+
+		@Override
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 		}
 

@@ -1,16 +1,12 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.NavigableSet;
-import java.util.NoSuchElementException;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import org.qommons.QommonsUtils;
 import org.qommons.Ternian;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -814,11 +810,15 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public CollectionElement<E> getElementBySource(ElementId sourceEl) {
-			CollectionElement<E> el = theWrapped.getElementBySource(sourceEl);
-			if (el != null && isInRange(el.get()) != 0)
-				return null;
-			return el;
+		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
+			return QommonsUtils.filterMap(theWrapped.getElementsBySource(sourceEl), el -> isInRange(el.get()) == 0, el -> el);
+		}
+
+		@Override
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return theWrapped.getSourceElements(localElement, theWrapped); // For element validation
+			return theWrapped.getSourceElements(localElement, sourceCollection);
 		}
 
 		@Override

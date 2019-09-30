@@ -358,6 +358,8 @@ public class QommonsTimer {
 				return false;
 			}
 			Instant nextRun = theNextRun;
+			if (nextRun == null)
+				nextRun = now;
 			boolean execute = now.compareTo(nextRun) >= 0;
 			Instant lastRun = theLastRun;
 			boolean terminate = false;

@@ -5,6 +5,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
 
+import org.qommons.QommonsUtils;
 import org.qommons.Transaction;
 
 /**
@@ -322,8 +323,15 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
-		public CollectionElement<K> getElementBySource(ElementId sourceEl) {
-			return handleFor(theEntries.getElementBySource(sourceEl));
+		public BetterList<CollectionElement<K>> getElementsBySource(ElementId sourceEl) {
+			return QommonsUtils.map2(theEntries.getElementsBySource(sourceEl), this::handleFor);
+		}
+
+		@Override
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return theEntries.getSourceElements(localElement, theEntries); // Validate element
+			return theEntries.getSourceElements(localElement, sourceCollection);
 		}
 
 		@Override

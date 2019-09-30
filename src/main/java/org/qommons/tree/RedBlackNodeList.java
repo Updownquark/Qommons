@@ -6,14 +6,8 @@ import java.util.function.Function;
 
 import org.qommons.Transactable;
 import org.qommons.Transaction;
-import org.qommons.collect.BetterCollection;
-import org.qommons.collect.BetterList;
-import org.qommons.collect.CollectionElement;
-import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.ElementId;
+import org.qommons.collect.*;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
-import org.qommons.collect.OptimisticContext;
-import org.qommons.collect.ValueStoredCollection;
 import org.qommons.collect.ValueStoredCollection.RepairListener;
 
 /**
@@ -171,10 +165,20 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	}
 
 	@Override
-	public CollectionElement<E> getElementBySource(ElementId sourceEl) {
+	public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
 		if (sourceEl instanceof RedBlackNodeList.NodeId && ((NodeId) sourceEl).getList() == this)
-			return getElement(sourceEl);
-		return null;
+			return BetterList.of(getElement(sourceEl));
+		return BetterList.empty();
+	}
+
+	@Override
+	public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+		if (sourceCollection == this) {
+			if (!(localElement instanceof RedBlackNodeList.NodeId) || ((NodeId) localElement).getList() == this)
+				throw new IllegalArgumentException(localElement + " does not belong to this collection");
+			return BetterList.of(localElement);
+		}
+		return BetterList.empty();
 	}
 
 	@Override
