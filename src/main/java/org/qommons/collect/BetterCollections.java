@@ -56,6 +56,11 @@ public class BetterCollections {
 		}
 
 		@Override
+		public Object getIdentity() {
+			return theWrapped.getIdentity();
+		}
+
+		@Override
 		public boolean isLockSupported() {
 			return theWrapped.isLockSupported();
 		}
@@ -366,6 +371,11 @@ public class BetterCollections {
 
 		protected BetterMap<? extends K, ? extends V> getWrapped() {
 			return theWrapped;
+		}
+
+		@Override
+		public Object getIdentity() {
+			return theWrapped.getIdentity();
 		}
 
 		@Override

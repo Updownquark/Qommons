@@ -16,6 +16,7 @@ import java.util.function.UnaryOperator;
 
 import org.qommons.ArrayUtils;
 import org.qommons.Causable;
+import org.qommons.Identifiable;
 import org.qommons.QommonsUtils;
 import org.qommons.StructuredStamped;
 import org.qommons.Transactable;
@@ -40,7 +41,7 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * 
  * @param <E> The type of value in the collection
  */
-public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>, StructuredStamped {
+public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>, StructuredStamped, Identifiable {
 	/** A message for an exception thrown when a view detects that it is invalid due to external modification of the underlying data */
 	public static final String BACKING_COLLECTION_CHANGED = "This collection view's backing collection has changed from underneath this view.\n"
 		+ "This view is now invalid";
@@ -927,6 +928,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 */
 	class ReversedCollection<E> implements BetterCollection<E> {
 		private final BetterCollection<E> theWrapped;
+		private Object theIdentity;
 
 		protected ReversedCollection(BetterCollection<E> wrap) {
 			theWrapped = wrap;
@@ -934,6 +936,13 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 		protected BetterCollection<E> getWrapped() {
 			return theWrapped;
+		}
+
+		@Override
+		public Object getIdentity() {
+			if (theIdentity == null)
+				theIdentity = Identifiable.wrap(theWrapped, "reverse");
+			return theIdentity;
 		}
 
 		@Override
@@ -1066,6 +1075,15 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @param <E> The type of the collection
 	 */
 	class EmptyCollection<E> implements BetterCollection<E> {
+		private Object theIdentity;
+
+		@Override
+		public Object getIdentity() {
+			if (theIdentity == null)
+				theIdentity = Identifiable.idFor(this, this::toString, this::hashCode, other -> other instanceof EmptyCollection);
+			return theIdentity;
+		}
+
 		@Override
 		public boolean isLockSupported() {
 			return true;

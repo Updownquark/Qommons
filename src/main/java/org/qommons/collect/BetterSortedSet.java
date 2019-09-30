@@ -6,6 +6,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import org.qommons.Identifiable;
 import org.qommons.QommonsUtils;
 import org.qommons.Ternian;
 import org.qommons.Transaction;
@@ -525,6 +526,8 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		private final Comparable<? super E> from;
 		private final Comparable<? super E> to;
 
+		private Object theIdentity;
+
 		/**
 		 * @param set The sorted set that this sub set is for
 		 * @param from The lower bound for the sub set
@@ -534,6 +537,13 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			theWrapped = set;
 			this.from = from;
 			this.to = to;
+		}
+
+		@Override
+		public Object getIdentity() {
+			if (theIdentity == null)
+				theIdentity = Identifiable.wrap(theWrapped.getIdentity(), "subSet", from, to);
+			return theIdentity;
 		}
 
 		/** @return The sorted set that this is a sub-set of */

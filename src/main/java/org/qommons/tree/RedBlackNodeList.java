@@ -4,10 +4,15 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.function.Function;
 
+import org.qommons.Identifiable;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.*;
+import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
+import org.qommons.collect.OptimisticContext;
+import org.qommons.collect.StampedLockingStrategy;
+import org.qommons.collect.ValueStoredCollection;
 import org.qommons.collect.ValueStoredCollection.RepairListener;
 
 /**
@@ -16,17 +21,110 @@ import org.qommons.collect.ValueStoredCollection.RepairListener;
  * @param <E> The type of values in the list
  */
 public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
+	/**
+	 * @param <E> The type of elements for the list
+	 * @param <L> The type of the list
+	 */
+	public static abstract class RBNLBuilder<E, L extends RedBlackNodeList<E>> {
+		private CollectionLockingStrategy theLocker;
+		private String theDescription;
+
+		/** @param initDescrip The initial (default) description for the list */
+		protected RBNLBuilder(String initDescrip) {
+			theDescription = initDescrip;
+			theLocker = new StampedLockingStrategy();
+		}
+
+		/** @return The locker for the list */
+		protected CollectionLockingStrategy getLocker() {
+			return theLocker;
+		}
+
+		/** @return The description for the list */
+		protected String getDescription() {
+			return theDescription;
+		}
+
+		/**
+		 * @param descrip The description for the list
+		 * @return This builder
+		 */
+		public RBNLBuilder<E, L> withDescription(String descrip) {
+			theDescription = descrip;
+			return this;
+		}
+
+		/**
+		 * Ensures the new list will be thread-safe
+		 * 
+		 * @return This builder
+		 */
+		public RBNLBuilder<E, L> safe() {
+			return withLocker(new StampedLockingStrategy());
+		}
+
+		/**
+		 * Ensures the new list will be more performant, but thread-unsafe
+		 * 
+		 * @return This builder
+		 */
+		public RBNLBuilder<E, L> unsafe() {
+			return withLocker(new FastFailLockingStrategy());
+		}
+
+		/**
+		 * @param locker The locking strategy for the new list
+		 * @return This builder
+		 */
+		public RBNLBuilder<E, L> withLocker(CollectionLockingStrategy locker) {
+			theLocker = locker;
+			return this;
+		}
+
+		/**
+		 * Builds the list
+		 * 
+		 * @return The new list
+		 */
+		public abstract L build();
+
+		/**
+		 * Builds the list
+		 * 
+		 * @param values The initial values for the new list
+		 * @return The new list
+		 */
+		public L build(Collection<? extends E> values) {
+			return (L) build().withAll(values);
+		}
+	}
+
 	private final RedBlackTree<E> theTree;
 	private final CollectionLockingStrategy theLocker;
+	private final Object theIdentity;
 
 	/**
 	 * Creates a list
 	 * 
 	 * @param locker The locking strategy to use
+	 * @param description The description for this list
 	 */
-	public RedBlackNodeList(CollectionLockingStrategy locker) {
+	public RedBlackNodeList(CollectionLockingStrategy locker, String description) {
 		theLocker = locker;
 		theTree = new RedBlackTree<>();
+		theIdentity = Identifiable.baseId(description, this);
+	}
+
+	/**
+	 * Creates a list
+	 * 
+	 * @param locker The locking strategy to use
+	 * @param identity The identity for this list
+	 */
+	protected RedBlackNodeList(CollectionLockingStrategy locker, Object identity) {
+		theLocker = locker;
+		theTree = new RedBlackTree<>();
+		theIdentity = identity;
 	}
 
 	/**
@@ -56,6 +154,11 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	/** @return This collection's locking strategy */
 	protected CollectionLockingStrategy getLocker() {
 		return theLocker;
+	}
+
+	@Override
+	public Object getIdentity() {
+		return theIdentity;
 	}
 
 	@Override

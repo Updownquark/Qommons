@@ -26,6 +26,65 @@ import org.qommons.collect.ValueStoredCollection;
  * @param <E> The type of value in the list
  */
 public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStoredCollection<E> {
+	private static final String DEFAULT_DESCRIP = "sorted-tree-list";
+
+	/**
+	 * @param <E> The type of elements in the list
+	 * @param <L> The sub-type of the list
+	 */
+	public static class Builder<E, L extends SortedTreeList<E>> extends RBNLBuilder<E, L> {
+	private final Comparator<? super E> theCompare;
+
+		/** @param compare The comparator for the list's ordering */
+		protected Builder(Comparator<? super E> compare) {
+			super(DEFAULT_DESCRIP);
+			theCompare = compare;
+		}
+
+		/** @return The comparator for the new list */
+		protected Comparator<? super E> getCompare() {
+			return theCompare;
+		}
+
+		@Override
+		public Builder<E, L> withDescription(String descrip) {
+			super.withDescription(descrip);
+			return this;
+		}
+
+		@Override
+		public Builder<E, L> safe() {
+			super.safe();
+			return this;
+		}
+
+		@Override
+		public Builder<E, L> unsafe() {
+			super.unsafe();
+			return this;
+		}
+
+		@Override
+		public Builder<E, L> withLocker(CollectionLockingStrategy locker) {
+			super.withLocker(locker);
+			return this;
+		}
+
+		@Override
+		public L build() {
+			return (L) new SortedTreeList<>(getLocker(), getDescription(), theCompare);
+		}
+	}
+
+	/**
+	 * @param <E> The type of elements for the list
+	 * @param compare The comparator for the list's ordering
+	 * @return The builder for the list
+	 */
+	public static <E> Builder<E, SortedTreeList<E>> buildTreeList(Comparator<? super E> compare) {
+		return new Builder<>(compare);
+	}
+
 	private final Comparator<? super E> theCompare;
 	private final boolean isDistinct;
 
@@ -42,9 +101,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 	 * @param compare The comparator to order the values
 	 */
 	public SortedTreeList(CollectionLockingStrategy locker, Comparator<? super E> compare) {
-		super(locker);
-		theCompare = compare;
-		isDistinct = this instanceof NavigableSet;
+		this(locker, DEFAULT_DESCRIP, compare);
 	}
 
 	public SortedTreeList(boolean safe, SortedSet<E> values) {
@@ -52,9 +109,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 	}
 
 	public SortedTreeList(CollectionLockingStrategy locker, SortedSet<E> values) {
-		super(locker);
-		theCompare = values.comparator();
-		isDistinct = this instanceof NavigableSet;
+		this(locker, DEFAULT_DESCRIP, values.comparator());
 		initialize(values, v -> v);
 	}
 
@@ -63,10 +118,30 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 	}
 
 	public SortedTreeList(CollectionLockingStrategy locker, SortedTreeList<E> values) {
-		super(locker);
-		theCompare = values.comparator();
-		isDistinct = this instanceof NavigableSet;
+		this(locker, DEFAULT_DESCRIP, values.comparator());
 		initialize(values, v -> v);
+	}
+
+	/**
+	 * @param locker The locker for this list
+	 * @param descrip The description for this list
+	 * @param compare The comparator for this list's ordering
+	 */
+	protected SortedTreeList(CollectionLockingStrategy locker, String descrip, Comparator<? super E> compare) {
+		super(locker, descrip);
+		theCompare = compare;
+		isDistinct = this instanceof NavigableSet;
+	}
+
+	/**
+	 * @param locker The locker for this list
+	 * @param identity The identity for this list
+	 * @param compare The comparator for this list's ordering
+	 */
+	protected SortedTreeList(CollectionLockingStrategy locker, Object identity, Comparator<? super E> compare) {
+		super(locker, identity);
+		theCompare = compare;
+		isDistinct = this instanceof NavigableSet;
 	}
 
 	/** @return The comparator that orders this list's values */

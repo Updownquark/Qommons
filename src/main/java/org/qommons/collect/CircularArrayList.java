@@ -5,6 +5,7 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 import org.junit.Assert;
+import org.qommons.Identifiable;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 
@@ -42,6 +43,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		private double theGrowthFactor;
 		private boolean isFeatureLocked;
 		private boolean isThreadSafe;
+		private String theDescription;
 
 		private Builder() {
 			System.err.println(CircularArrayList.class.getSimpleName() + " is not working yet.  Don't use it!");
@@ -109,6 +111,15 @@ public class CircularArrayList<E> implements BetterList<E> {
 			if (Double.isNaN(factor) || Double.isInfinite(factor) || factor >= 100)
 				throw new IllegalArgumentException("Growth factor must be a finite number less than 100");
 			theGrowthFactor = factor;
+			return this;
+		}
+
+		/**
+		 * @param description A description for the list
+		 * @return This builder;
+		 */
+		public Builder withDescription(String description) {
+			theDescription = description;
 			return this;
 		}
 
@@ -217,7 +228,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		 * @return The built list
 		 */
 		public <E> CircularArrayList<E> build() {
-			return new CircularArrayList<>(this, isFeatureLocked);
+			return new CircularArrayList<>(this, isFeatureLocked, theDescription);
 		}
 	}
 
@@ -243,6 +254,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 	/** Static value to avoid needing to instantiate multiple zero-length arrays */
 	private static final CircularArrayList<?>.ArrayElement[] EMPTY_ARRAY = new CircularArrayList.ArrayElement[0];
 
+	private final Object theIdentity;
 	private ArrayElement[] theArray;
 	private final CollectionLockingStrategy theLocker;
 	private final boolean isFeatureLocked;
@@ -257,10 +269,11 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 	/** Creates an empty list */
 	public CircularArrayList() {
-		this(build(), false);
+		this(build(), false, "circular-array-list");
 	}
 
-	private CircularArrayList(Builder builder, boolean featureLocked) {
+	private CircularArrayList(Builder builder, boolean featureLocked, String description) {
+		theIdentity = Identifiable.baseId(description, this);
 		theArray = builder.getInitCapacity() == 0 ? (ArrayElement[]) EMPTY_ARRAY
 			: new CircularArrayList.ArrayElement[builder.getInitCapacity()];
 		theMinCapacity = builder.getMinCapacity();
@@ -269,6 +282,11 @@ public class CircularArrayList<E> implements BetterList<E> {
 		theGrowthFactor = builder.getGrowthFactor();
 		theLocker = builder.makeLockingStrategy();
 		isFeatureLocked = featureLocked;
+	}
+
+	@Override
+	public Object getIdentity() {
+		return theIdentity;
 	}
 
 	/** For unit tests. Ensures the integrity of the list. */

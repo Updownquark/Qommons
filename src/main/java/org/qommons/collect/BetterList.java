@@ -15,6 +15,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.qommons.Identifiable;
 import org.qommons.QommonsUtils;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
@@ -598,6 +599,15 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
+		public Object getIdentity() {
+			// Since this sub-list's start and end values can change as modifications are made via the sub-list,
+			// different sub-lists created from the same base list with the same initial parameters can diverge later.
+			// This means that identity cannot be represented as a function of the wrapped list's identity,
+			// but that this list must be its own identity.
+			return this;
+		}
+
+		@Override
 		public boolean isLockSupported() {
 			return theWrapped.isLockSupported();
 		}
@@ -986,9 +996,19 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 */
 	class ConstantList<E> implements BetterList<E> {
 		private final List<? extends E> theValues;
+		private Object theIdentity;
 
+		/** @param values The values for this list. The backing list should never be modified. */
 		public ConstantList(List<? extends E> values) {
 			theValues = values;
+		}
+
+		@Override
+		public Object getIdentity() {
+			if (theIdentity == null)
+				theIdentity = Identifiable.idFor(this, this::toString, this::hashCode,
+					other -> other instanceof ConstantList && equals(other));
+			return theIdentity;
 		}
 
 		@Override

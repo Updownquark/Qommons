@@ -31,6 +31,52 @@ import org.qommons.collect.StampedLockingStrategy;
  * @param <E> The type of values in the list
  */
 public class BetterTreeList<E> extends RedBlackNodeList<E> {
+	private static final String DEFAULT_DESCRIPTION = "better-tree-list";
+
+	/** @param <E> The type of elements for the list */
+	public static class Builder<E> extends RBNLBuilder<E, BetterTreeList<E>> {
+		Builder() {
+			super(DEFAULT_DESCRIPTION);
+		}
+
+		@Override
+		public Builder<E> withDescription(String descrip) {
+			super.withDescription(descrip);
+			return this;
+		}
+
+		@Override
+		public Builder<E> safe() {
+			super.safe();
+			return this;
+		}
+
+		@Override
+		public Builder<E> unsafe() {
+			super.unsafe();
+			return this;
+		}
+
+		@Override
+		public Builder<E> withLocker(CollectionLockingStrategy locker) {
+			super.withLocker(locker);
+			return this;
+		}
+
+		@Override
+		public BetterTreeList<E> build() {
+			return new BetterTreeList<>(getLocker(), getDescription());
+		}
+	}
+
+	/**
+	 * @param <E> The type of elements for the list
+	 * @return A builder for the new list
+	 */
+	public static <E> Builder<E> build() {
+		return new Builder<>();
+	}
+
 	/** @param safe Whether to secure this collection for thread-safety */
 	public BetterTreeList(boolean safe) {
 		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy());
@@ -38,7 +84,15 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 
 	/** @param locker The locking strategy for the collection */
 	public BetterTreeList(CollectionLockingStrategy locker) {
-		super(locker);
+		super(locker, DEFAULT_DESCRIPTION);
+	}
+
+	/**
+	 * @param locker The locker for this list
+	 * @param description The description for this list
+	 */
+	protected BetterTreeList(CollectionLockingStrategy locker, String description) {
+		super(locker, description);
 	}
 
 	@Override
