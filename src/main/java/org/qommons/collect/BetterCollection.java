@@ -16,6 +16,7 @@ import java.util.function.UnaryOperator;
 
 import org.qommons.ArrayUtils;
 import org.qommons.Causable;
+import org.qommons.StructuredStamped;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.ValueHolder;
@@ -38,7 +39,7 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * 
  * @param <E> The type of value in the collection
  */
-public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E> {
+public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>, StructuredStamped {
 	/** A message for an exception thrown when a view detects that it is invalid due to external modification of the underlying data */
 	public static final String BACKING_COLLECTION_CHANGED = "This collection view's backing collection has changed from underneath this view.\n"
 		+ "This view is now invalid";
@@ -52,28 +53,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return Whether the given value might in any situation belong to this collection
 	 */
 	boolean belongs(Object o);
-
-	/**
-	 * <p>
-	 * Obtains a stamp with the current status of modifications to the collection, either structural or all changes. Whenever this
-	 * collection is modified, the stamp changes. Thus 2 stamps can be compared to determine whether a collection has changed in between 2
-	 * calls to this method. For more information on <b>structural</b> changes, see {@link #lock(boolean, boolean, Object)}.
-	 * </p>
-	 * <p>
-	 * The value returned from this method is <b>ONLY</b> for comparison. The value itself is not guaranteed to reveal anything about this
-	 * collection or its history, e.g. the actual times it has been modified. Also, if 2 stamps obtained from this method are different,
-	 * this does not guarantee that the collection was actually changed in any way, only that it might have been. It <b>IS</b> guaranteed
-	 * that if 2 stamps match, then no modification (of the corresponding type) has been made to the collection, and an effort shall be made
-	 * to avoid changing the stamps when no modification is performed, if possible.
-	 * </p>
-	 * <p>
-	 * No relationship is specified between stamps obtained with different parameters (structural/update).
-	 * </p>
-	 * 
-	 * @param structuralOnly Whether to monitor only structural changes or all changes.
-	 * @return The stamp for comparison
-	 */
-	long getStamp(boolean structuralOnly);
 
 	/**
 	 * @param value The value to get the element for
