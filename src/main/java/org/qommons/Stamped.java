@@ -1,5 +1,8 @@
 package org.qommons;
 
+import java.util.Collection;
+import java.util.function.ToLongFunction;
+
 /** An Object that provides a stamp that changes when it is modified */
 public interface Stamped {
 	/**
@@ -19,4 +22,27 @@ public interface Stamped {
 	 * @return The stamp for comparison
 	 */
 	long getStamp();
+
+	/**
+	 * Creates a composite stamp from a collection of other stamped items
+	 * 
+	 * @param <T> The type of the stamped values
+	 * @param values The values to create the composite stamp for
+	 * @param stampFn The function to produce stamps from the values
+	 * @return The composite stamp
+	 */
+	public static <T> long compositeStamp(Collection<? extends T> values, ToLongFunction<? super T> stampFn) {
+		long stamp = 0;
+		int shift = 64 / values.size();
+		int i = 0;
+		for (T value : values) {
+			if (value == null)
+				continue;
+			long valueStamp = stampFn.applyAsLong(value);
+			if (i > 0)
+				valueStamp = Long.rotateRight(valueStamp, shift * i);
+			stamp ^= valueStamp;
+		}
+		return stamp;
+	}
 }

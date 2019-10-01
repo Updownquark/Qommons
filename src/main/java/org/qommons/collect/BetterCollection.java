@@ -946,7 +946,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		@Override
 		public Object getIdentity() {
 			if (theIdentity == null)
-				theIdentity = Identifiable.wrap(theWrapped, "reverse");
+				theIdentity = Identifiable.wrap(theWrapped.getIdentity(), "reverse");
 			return theIdentity;
 		}
 
