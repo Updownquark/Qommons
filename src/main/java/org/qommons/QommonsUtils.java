@@ -3,7 +3,16 @@ package org.qommons;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TimeZone;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -704,7 +713,7 @@ public class QommonsUtils {
 		return Collections.unmodifiableList(list);
 	}
 
-	public static <T, V> List<V> map(List<? extends T> values, Function<? super T, ? extends V> map, boolean unmodifiable) {
+	public static <T, V> List<V> map(Collection<? extends T> values, Function<? super T, ? extends V> map, boolean unmodifiable) {
 		if (values.isEmpty())
 			return unmodifiable ? Collections.emptyList() : new ArrayList<>(5);
 		ArrayList<V> list = new ArrayList<>(values.size());
@@ -713,7 +722,7 @@ public class QommonsUtils {
 		return unmodifiable ? Collections.unmodifiableList(list) : list;
 	}
 
-	public static <T, V> BetterList<V> map2(List<? extends T> values, Function<? super T, ? extends V> map) {
+	public static <T, V> BetterList<V> map2(Collection<? extends T> values, Function<? super T, ? extends V> map) {
 		if (values.isEmpty())
 			return BetterList.empty();
 		ArrayList<V> list = new ArrayList<>(values.size());
@@ -722,7 +731,7 @@ public class QommonsUtils {
 		return BetterList.of(list);
 	}
 
-	public static <T, V> BetterList<V> filterMap(List<? extends T> values, Predicate<? super T> filter,
+	public static <T, V> BetterList<V> filterMap(Collection<? extends T> values, Predicate<? super T> filter,
 		Function<? super T, ? extends V> map) {
 		if (values.isEmpty())
 			return BetterList.empty();

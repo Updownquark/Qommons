@@ -32,6 +32,34 @@ public interface Identifiable {
 		return new SpecialIdentity(source, descrip, hashCode, equals);
 	}
 
+	public abstract class AbstractIdentifiable implements Identifiable {
+		private Object theIdentity;
+
+		protected abstract Object createIdentity();
+
+		@Override
+		public Object getIdentity() {
+			if (theIdentity == null)
+				theIdentity = createIdentity();
+			return theIdentity;
+		}
+
+		@Override
+		public int hashCode() {
+			return getIdentity().hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof Identifiable && getIdentity().equals(((Identifiable) obj).getIdentity());
+		}
+
+		@Override
+		public String toString() {
+			return getIdentity().toString();
+		}
+	}
+
 	public class BaseIdentity {
 		private final String theDescrip;
 		private final Object theObject;

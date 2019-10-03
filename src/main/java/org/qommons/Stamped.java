@@ -45,4 +45,22 @@ public interface Stamped {
 		}
 		return stamp;
 	}
+
+	/**
+	 * Creates a composite stamp from an array of stamps
+	 * 
+	 * @param stamps The stamps to create the composite stamp for
+	 * @return The composite stamp
+	 */
+	static long compositeStamp(long[] stamps) {
+		long stamp = 0;
+		int shift = 64 / stamps.length;
+		int i = 0;
+		for (long s : stamps) {
+			if (i > 0)
+				s = Long.rotateRight(s, shift * i);
+			stamp ^= s;
+		}
+		return stamp;
+	}
 }
