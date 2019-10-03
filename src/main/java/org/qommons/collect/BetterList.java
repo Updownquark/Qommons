@@ -394,7 +394,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public int hashCode() {
 			return BetterCollection.hashCode(this);
-	}
+		}
 
 		@Override
 		public boolean equals(Object obj) {
@@ -628,7 +628,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public Transaction tryLock(boolean write, boolean structural, Object cause) {
-				check();
+			check();
 			Transaction t = theWrapped.tryLock(write, structural, cause);
 			if (t == null)
 				return null;
@@ -640,7 +640,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				};
 			} else
 				return t;
-			}
+		}
 
 		void check() {
 			if (theWrapped.getStamp(true) != theStructureStamp)
@@ -874,8 +874,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			@Override
 			public void set(E value) throws IllegalArgumentException, UnsupportedOperationException {
 				try (Transaction t = lock(true, true, null)) {
-				theWrappedEl.set(value);
-			}
+					theWrappedEl.set(value);
+				}
 			}
 
 			@Override
@@ -987,7 +987,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				theEnd -= sz - theWrapped.size();
 			}
 		}
-		}
+	}
 
 	/**
 	 * An immutable {@link BetterList}
@@ -1169,7 +1169,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
-			if (sourceEl instanceof ConstantList.IndexElementId && ((IndexElementId) sourceEl).getList() == this)
+			if (sourceEl instanceof ConstantList<?>.IndexElementId && ((IndexElementId) sourceEl).getList() == this)
 				return BetterList.of(getElement(sourceEl));
 			return null;
 		}
@@ -1177,42 +1177,41 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
 			if (sourceCollection == this) {
-				if (!(localElement instanceof ConstantList.IndexElementId)
-					|| ((ConstantList.IndexElementId) localElement).getList() != this)
+				if (!(localElement instanceof ConstantList<?>.IndexElementId) || ((IndexElementId) localElement).getList() != this)
 					throw new IllegalArgumentException(localElement + " is not an element of this list");
 				return BetterList.of(localElement);
-		}
+			}
 			return BetterList.empty();
 		}
 
-				@Override
+		@Override
 		public String canAdd(E value, ElementId after, ElementId before) {
 			return StdMsg.UNSUPPORTED_OPERATION;
-				}
+		}
 
-				@Override
+		@Override
 		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
-					return null;
-				}
+			return null;
+		}
 
-				@Override
+		@Override
 		public void clear() {}
 
-				@Override
+		@Override
 		public int hashCode() {
 			return BetterCollection.hashCode(this);
-					}
+		}
 
-				@Override
+		@Override
 		public boolean equals(Object obj) {
 			return BetterCollection.equals(this, obj);
-					}
+		}
 
-				@Override
+		@Override
 		public String toString() {
 			return BetterCollection.toString(this);
-					}
+		}
 
 		private class IndexElementId implements ElementId {
 			final int index;
@@ -1238,7 +1237,23 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			@Override
 			public boolean isDerivedFrom(ElementId other) {
 				return equals(other);
+			}
+
+			@Override
+			public int hashCode() {
+				return index;
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return obj instanceof ConstantList<?>.IndexElementId && getList() == ((IndexElementId) obj).getList()
+					&& index == ((IndexElementId) obj).index;
+			}
+
+			@Override
+			public String toString() {
+				return new StringBuilder("[").append(index).append("]=").append(theValues.get(index)).toString();
+			}
 		}
-	}
 	}
 }
