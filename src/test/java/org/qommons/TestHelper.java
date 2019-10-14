@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import org.qommons.debug.Debug;
 import org.qommons.io.Format;
@@ -309,15 +310,23 @@ public class TestHelper {
 	}
 
 	public RandomAction doAction(double relativeProability, Runnable action) {
-		return new RandomAction(this).or(relativeProability, action);
+		return createAction().or(relativeProability, action);
 	}
 
-	public static class RandomAction {
+	public <T> RandomSupplier<T> createSupplier() {
+		return new RandomSupplier<>(this);
+	}
+
+	public <T> RandomSupplier<T> supply(double relativeProbability, Supplier<? extends T> action) {
+		return this.<T> createSupplier().or(relativeProbability, action);
+	}
+
+	static abstract class RandomExecutor<T, A> {
 		private final TestHelper theHelper;
-		private final TreeMap<Double, Runnable> theActions = new TreeMap<>();
+		private final TreeMap<Double, A> theActions = new TreeMap<>();
 		private double theTotalProbability;
 
-		private RandomAction(TestHelper helper) {
+		private RandomExecutor(TestHelper helper) {
 			theHelper = helper;
 		}
 
@@ -325,7 +334,7 @@ public class TestHelper {
 			return theHelper;
 		}
 
-		public RandomAction or(double relativeProbability, Runnable action) {
+		protected RandomExecutor<T, A> or(double relativeProbability, A action) {
 			if (relativeProbability <= 0 || Double.isNaN(relativeProbability) || Double.isInfinite(relativeProbability))
 				throw new IllegalArgumentException("Illegal probability: " + relativeProbability);
 			theActions.put(theTotalProbability, action);
@@ -333,13 +342,47 @@ public class TestHelper {
 			return this;
 		}
 
-		public void execute(String placemark) {
+		protected A getAction(String placemark) {
 			double random = theHelper.getDouble();
 			random *= theTotalProbability;
-			Runnable action = theActions.floorEntry(random).getValue();
+			A action = theActions.floorEntry(random).getValue();
 			if (placemark != null)
 				theHelper.placemark(placemark);
-			action.run();
+			return action;
+		}
+	}
+
+	public static class RandomSupplier<T> extends RandomExecutor<T, Supplier<? extends T>> {
+		private RandomSupplier(TestHelper helper) {
+			super(helper);
+		}
+
+		@Override
+		public RandomSupplier<T> or(double relativeProbability, Supplier<? extends T> action) {
+			super.or(relativeProbability, action);
+			return this;
+		}
+
+		public T get(String placemark) {
+			return getAction(placemark)//
+				.get();
+		}
+	}
+
+	public static class RandomAction extends RandomExecutor<Void, Runnable> {
+		private RandomAction(TestHelper helper) {
+			super(helper);
+		}
+
+		@Override
+		public RandomAction or(double relativeProbability, Runnable action) {
+			super.or(relativeProbability, action);
+			return this;
+		}
+
+		public void execute(String placemark) {
+			getAction(placemark)//
+				.run();
 		}
 	}
 
