@@ -283,7 +283,7 @@ public class TestHelper {
 	}
 
 	public double getDouble(double min, double avg, double max) {
-		if (avg <= min || avg >= max)
+		if (avg < min || avg > max)
 			throw new IllegalArgumentException("min=" + min + ", avg=" + avg + ", max=" + max);
 		double random = getDouble();
 		double skew = (avg - min) * 2 / (max - min);
