@@ -98,9 +98,9 @@ public class CsvParser {
 
 			@Override
 			public void accept(String column) throws TextParseException {
-				if (index == columns.length)
-					theParseState.throwParseException("More than the expected " + columns.length + " columns encountered");
 				columns[index] = column;
+				if (index == columns.length - 1 && theParseState.getLastTerminal() == CsvValueTerminal.COLUMN_END)
+					theParseState.throwParseException("More than the expected " + columns.length + " columns encountered");
 				index++;
 			}
 		}
