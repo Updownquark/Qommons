@@ -3,16 +3,7 @@ package org.qommons;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.TimeZone;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -691,7 +682,7 @@ public class QommonsUtils {
 	 * @param values The values to include
 	 * @return An unmodifiable copy of the given list
 	 */
-	public static <T> List<T> unmodifiableCopy(List<? extends T> values) {
+	public static <T> List<T> unmodifiableCopy(Collection<? extends T> values) {
 		if (values.isEmpty())
 			return Collections.emptyList();
 		ArrayList<T> list = new ArrayList<>(values.size());
