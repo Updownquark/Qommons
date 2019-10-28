@@ -3,6 +3,7 @@ package org.qommons;
 
 import java.lang.reflect.Array;
 import java.util.List;
+import java.util.function.BiPredicate;
 
 /**
  * ArrayUtils provides some static methods for manipulating arrays easily when using a tool such as {@link java.util.ArrayList} is
@@ -1355,6 +1356,35 @@ public final class ArrayUtils {
 		 */
 		@Override
 		T1 set(T1 o1, int idx1, int incMod, T2 o2, int idx2, int retIdx);
+	}
+
+	/**
+	 * @param <T> The type of the values
+	 * @param equals The equality test
+	 * @return A difference listener that causes all changes between lists to be accepted into the source list
+	 */
+	public static <T> DifferenceListener<T, T> acceptAllDifferences(BiPredicate<? super T, ? super T> equals) {
+		return new DifferenceListener<T, T>() {
+			@Override
+			public boolean identity(T o1, T o2) {
+				return equals.test(o1, o2);
+			}
+
+			@Override
+			public T added(T o, int mIdx, int retIdx) {
+				return o;
+			}
+
+			@Override
+			public T removed(T o, int oIdx, int incMod, int retIdx) {
+				return null;
+			}
+
+			@Override
+			public T set(T o1, int idx1, int incMod, T o2, int idx2, int retIdx) {
+				return o2;
+			}
+		};
 	}
 
 	/**
