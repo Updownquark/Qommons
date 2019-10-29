@@ -40,14 +40,20 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		private int theInitExpectedSize;
 		private double theLoadFactor;
 		private CollectionLockingStrategy theLocker;
+		private String theDescription;
 
-		/** Creates the builder */
-		protected HashSetBuilder() {
+		/**
+		 * Creates the builder
+		 * 
+		 * @param initDescrip An initial (defaul) description of the builder
+		 */
+		protected HashSetBuilder(String initDescrip) {
 			isSafe = true;
 			theHasher = Objects::hashCode;
 			theEquals = Objects::equals;
 			theInitExpectedSize = 10;
 			theLoadFactor = .75;
+			theDescription = initDescrip;
 		}
 
 		/**
@@ -60,6 +66,12 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			return this;
 		}
 
+		/**
+		 * Specifies a locking strategy for the hash set
+		 * 
+		 * @param locker The locking strategy
+		 * @return This builder
+		 */
 		public HashSetBuilder withLocking(CollectionLockingStrategy locker) {
 			theLocker = locker;
 			return this;
@@ -107,6 +119,20 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			return this;
 		}
 
+		/** @return The description for the hash set */
+		protected String getDescription() {
+			return theDescription;
+		}
+
+		/**
+		 * @param descrip A description for the hash set built with this builder
+		 * @return This builder
+		 */
+		public HashSetBuilder withDescription(String descrip) {
+			theDescription = descrip;
+			return this;
+		}
+
 		/**
 		 * @param <E> The value type for the set
 		 * @return An empty {@link BetterHashSet} built according to this builder's settings
@@ -115,7 +141,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			CollectionLockingStrategy locking = theLocker;
 			if (locking == null)
 				locking = isSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy();
-			return new BetterHashSet<>(locking, theHasher, theEquals, theInitExpectedSize, theLoadFactor);
+			return new BetterHashSet<>(locking, theHasher, theEquals, theInitExpectedSize, theLoadFactor, theDescription);
 		}
 
 		/**
@@ -141,7 +167,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 	/** @return A builder to create a {@link BetterHashSet} */
 	public static HashSetBuilder build() {
-		return new HashSetBuilder();
+		return new HashSetBuilder("better-hash-set");
 	}
 
 	private final CollectionLockingStrategy theLocker;
@@ -149,6 +175,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	private final BiFunction<Object, Object, Boolean> theEquals;
 	private final AtomicLong theFirstIdCreator;
 	private final AtomicLong theLastIdCreator;
+	private final Object theIdentity;
 
 	private final double theLoadFactor;
 
@@ -158,17 +185,23 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	private int theSize;
 
 	private BetterHashSet(CollectionLockingStrategy locker, ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals,
-		int initExpectedSize, double loadFactor) {
+		int initExpectedSize, double loadFactor, Object identity) {
 		theLocker = locker;
 		theHasher = hasher;
 		theEquals = equals;
 		theFirstIdCreator = new AtomicLong(-1);
 		theLastIdCreator = new AtomicLong(0);
+		theIdentity = identity;
 
 		if (loadFactor < MIN_LOAD_FACTOR || loadFactor > MAX_LOAD_FACTOR)
 			throw new IllegalArgumentException("Load factor must be between " + MIN_LOAD_FACTOR + " and " + MAX_LOAD_FACTOR);
 		theLoadFactor = loadFactor;
 		rehash(initExpectedSize);
+	}
+
+	@Override
+	public Object getIdentity() {
+		return theIdentity;
 	}
 
 	/** @return The function producing hash codes for this set's values */

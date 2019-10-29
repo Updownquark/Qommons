@@ -57,6 +57,8 @@ public interface MapEntryHandle<K, V> extends CollectionElement<V>, Map.Entry<K,
 	}
 
 	/**
+	 * @param <K> The key type of the entry
+	 * @param <V> The value type of the entry
 	 * @param entry The entry to reverse
 	 * @return The reversed entry, or null if entry was null
 	 */

@@ -11,16 +11,28 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
+ * <p>
  * An event or something that may have a cause.
+ * </p>
  * 
- * Each causable may itself have a cause, so cause chains can be created.
+ * <p>
+ * Each causable may itself have a cause (which itself may or may not be a Causable), so cause chains can be created.
+ * </p>
  * 
+ * <p>
  * Causables have the ability to allow code to keep track of the effects of a cause, then perform an action when they finish that is the
  * cumulative result of the cause.
+ * </p>
  * 
- * The typical use case is to grab the root causable and call {@link #onFinish(CausableKey)} with a key. The map returned is updated with
- * some effects of the cause. Then the terminal action of the key is called when the root cause finishes and the data in the map used to
- * cause the correct effects.
+ * <p>
+ * The typical use case is to grab the root causable and call {@link #onFinish(CausableKey)} with a key. The map returned may be updated
+ * with the effects of the current cause. Then the terminal action of the key is called when the root cause finishes and the data in the map
+ * may be used used to cause the correct effects.
+ * </p>
+ * 
+ * <p>
+ * Use {@link Causable#simpleCause(Object)} to create a simple cause, or create an extension of this class
+ * </p>
  */
 public abstract class Causable {
 	/** An action to be fired when a causable finishes */
@@ -44,13 +56,14 @@ public abstract class Causable {
 
 	/**
 	 * <p>
-	 * A CausableKey to use with {@link Causable#onFinish(CausableKey)}.
+	 * A key to use with {@link Causable#onFinish(CausableKey)} to keep track of the effects of a cause or set of causes and effect them
+	 * when the cause chain finishes.
 	 * </p>
 	 * <p>
-	 * Use {@link Causable#key(TerminalAction)} or {@link Causable#key(TerminalAction, TerminalAction)} to create one.
+	 * Use {@link Causable#key(TerminalAction)} to create a key
 	 * </p>
 	 */
-	public static final class CausableKey {
+	public static class CausableKey {
 		private final Map<Object, Object> theValues;
 		private final AtomicInteger theCauseCount;
 		private final TerminalAction theAction;
@@ -249,8 +262,8 @@ public abstract class Causable {
 							if (postActions == null)
 								postActions = new LinkedList<>();
 							postActions.addFirst(postAction);
-						}
-					}
+		}
+	}
 					if (postActions != null) {
 						for (Transaction key : postActions)
 							key.close();

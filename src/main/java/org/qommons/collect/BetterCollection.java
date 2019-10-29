@@ -1,12 +1,27 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.ConcurrentModificationException;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Set;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
-import org.qommons.*;
+import org.qommons.ArrayUtils;
+import org.qommons.Causable;
+import org.qommons.Identifiable;
+import org.qommons.QommonsUtils;
+import org.qommons.StructuredStamped;
+import org.qommons.Transactable;
+import org.qommons.Transaction;
+import org.qommons.ValueHolder;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
@@ -26,7 +41,7 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * 
  * @param <E> The type of value in the collection
  */
-public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E> {
+public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>, StructuredStamped, Identifiable {
 	/** A message for an exception thrown when a view detects that it is invalid due to external modification of the underlying data */
 	public static final String BACKING_COLLECTION_CHANGED = "This collection view's backing collection has changed from underneath this view.\n"
 		+ "This view is now invalid";
@@ -40,28 +55,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return Whether the given value might in any situation belong to this collection
 	 */
 	boolean belongs(Object o);
-
-	/**
-	 * <p>
-	 * Obtains a stamp with the current status of modifications to the collection, either structural or all changes. Whenever this
-	 * collection is modified, the stamp changes. Thus 2 stamps can be compared to determine whether a collection has changed in between 2
-	 * calls to this method. For more information on <b>structural</b> changes, see {@link #lock(boolean, boolean, Object)}.
-	 * </p>
-	 * <p>
-	 * The value returned from this method is <b>ONLY</b> for comparison. The value itself is not guaranteed to reveal anything about this
-	 * collection or its history, e.g. the actual times it has been modified. Also, if 2 stamps obtained from this method are different,
-	 * this does not guarantee that the collection was actually changed in any way, only that it might have been. It <b>IS</b> guaranteed
-	 * that if 2 stamps match, then no modification (of the corresponding type) has been made to the collection, and an effort shall be made
-	 * to avoid changing the stamps when no modification is performed, if possible.
-	 * </p>
-	 * <p>
-	 * No relationship is specified between stamps obtained with different parameters (structural/update).
-	 * </p>
-	 * 
-	 * @param structuralOnly Whether to monitor only structural changes or all changes.
-	 * @return The stamp for comparison
-	 */
-	long getStamp(boolean structuralOnly);
 
 	/**
 	 * @param value The value to get the element for
@@ -106,6 +99,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 */
 	BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl);
 
+	/**
+	 * @param localElement The element in this collection to get the source(s) for
+	 * @param sourceCollection The collection, potentially a source parent or ancestor of this collection, for which to get the elements
+	 * @return All elements of the source collection that affect the value of the given element in this collection
+	 */
 	BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection);
 
 	/**
@@ -935,6 +933,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 */
 	class ReversedCollection<E> implements BetterCollection<E> {
 		private final BetterCollection<E> theWrapped;
+		private Object theIdentity;
 
 		protected ReversedCollection(BetterCollection<E> wrap) {
 			theWrapped = wrap;
@@ -942,6 +941,13 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 		protected BetterCollection<E> getWrapped() {
 			return theWrapped;
+		}
+
+		@Override
+		public Object getIdentity() {
+			if (theIdentity == null)
+				theIdentity = Identifiable.wrap(theWrapped.getIdentity(), "reverse");
+			return theIdentity;
 		}
 
 		@Override
@@ -1074,6 +1080,15 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @param <E> The type of the collection
 	 */
 	class EmptyCollection<E> implements BetterCollection<E> {
+		private Object theIdentity;
+
+		@Override
+		public Object getIdentity() {
+			if (theIdentity == null)
+				theIdentity = Identifiable.idFor(this, this::toString, this::hashCode, other -> other instanceof EmptyCollection);
+			return theIdentity;
+		}
+
 		@Override
 		public boolean isLockSupported() {
 			return true;

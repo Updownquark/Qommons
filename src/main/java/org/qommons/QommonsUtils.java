@@ -682,7 +682,7 @@ public class QommonsUtils {
 	 * @param values The values to include
 	 * @return An unmodifiable copy of the given list
 	 */
-	public static <T> List<T> unmodifiableCopy(List<? extends T> values) {
+	public static <T> List<T> unmodifiableCopy(Collection<? extends T> values) {
 		if (values.isEmpty())
 			return Collections.emptyList();
 		ArrayList<T> list = new ArrayList<>(values.size());
@@ -704,7 +704,7 @@ public class QommonsUtils {
 		return Collections.unmodifiableList(list);
 	}
 
-	public static <T, V> List<V> map(List<? extends T> values, Function<? super T, ? extends V> map, boolean unmodifiable) {
+	public static <T, V> List<V> map(Collection<? extends T> values, Function<? super T, ? extends V> map, boolean unmodifiable) {
 		if (values.isEmpty())
 			return unmodifiable ? Collections.emptyList() : new ArrayList<>(5);
 		ArrayList<V> list = new ArrayList<>(values.size());
@@ -713,7 +713,7 @@ public class QommonsUtils {
 		return unmodifiable ? Collections.unmodifiableList(list) : list;
 	}
 
-	public static <T, V> BetterList<V> map2(List<? extends T> values, Function<? super T, ? extends V> map) {
+	public static <T, V> BetterList<V> map2(Collection<? extends T> values, Function<? super T, ? extends V> map) {
 		if (values.isEmpty())
 			return BetterList.empty();
 		ArrayList<V> list = new ArrayList<>(values.size());
@@ -722,7 +722,7 @@ public class QommonsUtils {
 		return BetterList.of(list);
 	}
 
-	public static <T, V> BetterList<V> filterMap(List<? extends T> values, Predicate<? super T> filter,
+	public static <T, V> BetterList<V> filterMap(Collection<? extends T> values, Predicate<? super T> filter,
 		Function<? super T, ? extends V> map) {
 		if (values.isEmpty())
 			return BetterList.empty();

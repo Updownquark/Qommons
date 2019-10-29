@@ -281,6 +281,10 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 	// This interface does not extend Map<String, V> because its functionality differs a bit
 	// It throws exceptions when a value is requested for a key that does not exist in the key set
 	public interface QuickMap<K, V> {
+		static <K, V> QuickMap<K, V> empty() {
+			return QuickSet.<K> empty().<V> createMap();
+		}
+
 		QuickSet<K> keySet();
 
 		/** @return The number of keys in this map */
@@ -559,6 +563,14 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		@Override
 		public boolean isEmpty() {
 			return theKeySet.isEmpty();
+		}
+
+		public V getAt(int index) {
+			return theMap.get(theKeySet.theReverseCustomOrder[index]);
+		}
+
+		public V putAt(int index, V value) {
+			return theMap.put(theKeySet.theReverseCustomOrder[index], value);
 		}
 
 		@Override

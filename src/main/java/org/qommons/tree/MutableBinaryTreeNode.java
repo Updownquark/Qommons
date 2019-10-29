@@ -221,6 +221,7 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 	}
 
 	/**
+	 * @param <E> The type of value in the node
 	 * @param node The node to get the immutable copy of
 	 * @return The immutable copy of the given node, or null if node was null
 	 */
@@ -229,6 +230,7 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 	}
 
 	/**
+	 * @param <E> The type of value in the node
 	 * @param node The node to reverse
 	 * @return The reversed node, or null if node was null
 	 */

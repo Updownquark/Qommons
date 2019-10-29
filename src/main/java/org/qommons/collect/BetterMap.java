@@ -6,6 +6,7 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import org.qommons.Identifiable;
 import org.qommons.QommonsUtils;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
@@ -21,7 +22,7 @@ import org.qommons.collect.ValueStoredCollection.RepairListener;
  * @param <K> The type of keys stored in the map
  * @param <V> The type of values stored in the map
  */
-public interface BetterMap<K, V> extends TransactableMap<K, V> {
+public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 	@Override
 	BetterSet<K> keySet();
 
@@ -382,6 +383,23 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 			return false;
 	}
 
+	/**
+	 * Like {@link #computeIfAbsent(Object, Function)}, but returns the element-addressed entry
+	 * 
+	 * @param key The key to get or put the value for
+	 * @param value The function to create the value if the key does not yet exist in the map
+	 * @param first Whether to perfer low or high insertion into the map
+	 * @return The non-null handle of the entry for the given key
+	 */
+	default MapEntryHandle<K, V> computeEntryIfAbsent(K key, Function<? super K, ? extends V> value, boolean first) {
+		try (Transaction t = lock(true, null)) {
+			MapEntryHandle<K, V> entry = getEntry(key);
+			if (entry == null)
+				entry = putEntry(key, value.apply(key), first);
+			return entry;
+		}
+	}
+
 	@Override
 	default V replace(K key, V value) {
 		MapEntryHandle<K, V> handle = getEntry(key);
@@ -478,6 +496,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	 */
 	class ReversedMap<K, V> implements BetterMap<K, V> {
 		private final BetterMap<K, V> theWrapped;
+		private Object theIdentity;
 
 		public ReversedMap(BetterMap<K, V> wrapped) {
 			theWrapped = wrapped;
@@ -485,6 +504,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 		protected BetterMap<K, V> getWrapped() {
 			return theWrapped;
+		}
+
+		@Override
+		public Object getIdentity() {
+			if (theIdentity == null)
+				theIdentity = Identifiable.wrap(theWrapped.getIdentity(), "reverse");
+			return theIdentity;
 		}
 
 		@Override
@@ -552,6 +578,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	 */
 	class BetterEntrySet<K, V> implements BetterSet<Map.Entry<K, V>> {
 		private final BetterMap<K, V> theMap;
+		private Object theIdentity;
 
 		public BetterEntrySet(BetterMap<K, V> map) {
 			theMap = map;
@@ -559,6 +586,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 		protected BetterMap<K, V> getMap() {
 			return theMap;
+		}
+
+		@Override
+		public Object getIdentity() {
+			if (theIdentity == null)
+				theIdentity = Identifiable.wrap(theMap.getIdentity(), "entrySet");
+			return theIdentity;
 		}
 
 		@Override
@@ -863,6 +897,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 	 */
 	class BetterMapValueCollection<K, V> implements BetterCollection<V> {
 		private final BetterMap<K, V> theMap;
+		private Object theIdentity;
 
 		public BetterMapValueCollection(BetterMap<K, V> map) {
 			theMap = map;
@@ -870,6 +905,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V> {
 
 		protected BetterMap<K, V> getMap() {
 			return theMap;
+		}
+
+		@Override
+		public Object getIdentity() {
+			if (theIdentity == null)
+				theIdentity = Identifiable.wrap(theMap.getIdentity(), "values");
+			return theIdentity;
 		}
 
 		@Override

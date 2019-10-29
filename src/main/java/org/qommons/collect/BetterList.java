@@ -15,6 +15,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.qommons.Identifiable;
 import org.qommons.QommonsUtils;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
@@ -31,8 +32,9 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	/**
 	 * @param index The index to get the element for
 	 * @return The element in this list at the given index
+	 * @throws IndexOutOfBoundsException If the given index is less than zero or &gt;={@link #size()}
 	 */
-	CollectionElement<E> getElement(int index);
+	CollectionElement<E> getElement(int index) throws IndexOutOfBoundsException;
 
 	/**
 	 * <p>
@@ -122,8 +124,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 */
 	@Override
 	default E get(int index) {
-		CollectionElement<E> el = getElement(index);
-		return el == null ? null : el.get();
+		return getElement(index).get();
 	}
 
 	@Override
@@ -599,6 +600,15 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
+		public Object getIdentity() {
+			// Since this sub-list's start and end values can change as modifications are made via the sub-list,
+			// different sub-lists created from the same base list with the same initial parameters can diverge later.
+			// This means that identity cannot be represented as a function of the wrapped list's identity,
+			// but that this list must be its own identity.
+			return this;
+		}
+
+		@Override
 		public boolean isLockSupported() {
 			return theWrapped.isLockSupported();
 		}
@@ -987,9 +997,19 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 */
 	class ConstantList<E> implements BetterList<E> {
 		private final List<? extends E> theValues;
+		private Object theIdentity;
 
+		/** @param values The values for this list. The backing list should never be modified. */
 		public ConstantList(List<? extends E> values) {
 			theValues = values;
+		}
+
+		@Override
+		public Object getIdentity() {
+			if (theIdentity == null)
+				theIdentity = Identifiable.idFor(this, this::toString, this::hashCode,
+					other -> other instanceof ConstantList && equals(other));
+			return theIdentity;
 		}
 
 		@Override
@@ -1150,7 +1170,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
-			if (sourceEl instanceof ConstantList.IndexElementId && ((IndexElementId) sourceEl).getList() == this)
+			if (sourceEl instanceof ConstantList<?>.IndexElementId && ((IndexElementId) sourceEl).getList() == this)
 				return BetterList.of(getElement(sourceEl));
 			return null;
 		}
@@ -1158,8 +1178,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
 			if (sourceCollection == this) {
-				if (!(localElement instanceof ConstantList.IndexElementId)
-					|| ((ConstantList.IndexElementId) localElement).getList() != this)
+				if (!(localElement instanceof ConstantList<?>.IndexElementId) || ((IndexElementId) localElement).getList() != this)
 					throw new IllegalArgumentException(localElement + " is not an element of this list");
 				return BetterList.of(localElement);
 			}
@@ -1219,6 +1238,22 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			@Override
 			public boolean isDerivedFrom(ElementId other) {
 				return equals(other);
+			}
+
+			@Override
+			public int hashCode() {
+				return index;
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return obj instanceof ConstantList<?>.IndexElementId && getList() == ((IndexElementId) obj).getList()
+					&& index == ((IndexElementId) obj).index;
+			}
+
+			@Override
+			public String toString() {
+				return new StringBuilder("[").append(index).append("]=").append(theValues.get(index)).toString();
 			}
 		}
 	}

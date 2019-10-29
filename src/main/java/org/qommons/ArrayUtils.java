@@ -1680,8 +1680,8 @@ public final class ArrayUtils {
 					ret[i] = null;
 			if (createArray) {
 				T1[] actualRet = (T1[]) Array.newInstance(original.getClass().getComponentType(), r);
-				System.arraycopy(ret, 0, actualRet, 0, r);
-				return actualRet;
+			System.arraycopy(ret, 0, actualRet, 0, r);
+			return actualRet;
 			} else
 				return null;
 		}

@@ -212,6 +212,7 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 	}
 
 	/**
+	 * @param <E> The type of value in the node
 	 * @param node The node to reverse
 	 * @return The reversed node, or null if node is null
 	 */

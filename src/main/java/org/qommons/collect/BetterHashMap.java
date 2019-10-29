@@ -5,6 +5,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
 
+import org.qommons.Identifiable;
 import org.qommons.QommonsUtils;
 import org.qommons.Transaction;
 
@@ -17,19 +18,25 @@ import org.qommons.Transaction;
 public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	/** Builds a {@link BetterHashMap} */
 	public static class HashMapBuilder extends BetterHashSet.HashSetBuilder {
+		HashMapBuilder(String initDescrip) {
+			super(initDescrip);
+		}
+
 		@Override
 		public HashMapBuilder unsafe() {
-			return (HashMapBuilder) super.unsafe();
+			super.unsafe();
+			return this;
 		}
 
 		@Override
 		public HashMapBuilder withLocking(CollectionLockingStrategy locker) {
-			return (HashMapBuilder) super.withLocking(locker);
+			super.withLocking(locker);
+			return this;
 		}
 
 		@Override
 		public HashMapBuilder withEquivalence(ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals) {
-			return (HashMapBuilder) super.withEquivalence(//
+			super.withEquivalence(//
 				entry -> {
 					if (entry instanceof Map.Entry)
 						return hasher.applyAsInt(((Map.Entry<?, ?>) entry).getKey());
@@ -42,21 +49,31 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 						return equals.apply(entry1, entry2);
 				}
 			);
+			return this;
 		}
 
 		@Override
 		public HashMapBuilder identity() {
-			return (HashMapBuilder) super.identity();
+			super.identity();
+			return this;
 		}
 
 		@Override
 		public HashMapBuilder withLoadFactor(double loadFactor) {
-			return (HashMapBuilder) super.withLoadFactor(loadFactor);
+			super.withLoadFactor(loadFactor);
+			return this;
 		}
 
 		@Override
 		public HashMapBuilder withInitialCapacity(int initExpectedSize) {
-			return (HashMapBuilder) super.withInitialCapacity(initExpectedSize);
+			super.withInitialCapacity(initExpectedSize);
+			return this;
+		}
+
+		@Override
+		public HashMapBuilder withDescription(String descrip) {
+			super.withDescription(descrip);
+			return this;
 		}
 
 		/**
@@ -83,7 +100,7 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 
 	/** @return A builder to create a new {@link BetterHashMap} */
 	public static HashMapBuilder build() {
-		return new HashMapBuilder();
+		return new HashMapBuilder("better-hash-map");
 	}
 
 	private final BetterHashSet<Map.Entry<K, V>> theEntries;
@@ -108,6 +125,11 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	 */
 	public double getEfficiency() {
 		return theEntries.getEfficiency();
+	}
+
+	@Override
+	public Object getIdentity() {
+		return theEntries.getIdentity();
 	}
 
 	@Override
@@ -237,6 +259,15 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	}
 
 	class KeySet implements BetterSet<K> {
+		private Object theIdentity;
+
+		@Override
+		public Object getIdentity() {
+			if (theIdentity == null)
+				theIdentity = Identifiable.wrap(BetterHashMap.this.getIdentity(), "keySet");
+			return theIdentity;
+		}
+
 		@Override
 		public boolean belongs(Object o) {
 			return true;

@@ -6,6 +6,7 @@ import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.function.Function;
 
+import org.qommons.Identifiable;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -453,6 +454,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		private final Comparable<? super K> theUpperBound;
 
 		private final BetterSortedSet<K> theKeySet;
+		private Object theIdentity;
 
 		public BetterSubMap(BetterSortedMap<K, V> source, Comparable<? super K> lowerBound, Comparable<? super K> upperBound) {
 			theSource = source;
@@ -472,6 +474,13 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 		protected Comparable<? super K> getUpperBound() {
 			return theUpperBound;
+		}
+
+		@Override
+		public Object getIdentity() {
+			if (theIdentity == null)
+				theIdentity = Identifiable.wrap(theSource.getIdentity(), "subMap", theLowerBound, theUpperBound);
+			return theIdentity;
 		}
 
 		@Override
