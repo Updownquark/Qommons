@@ -4,6 +4,7 @@ package org.qommons;
 import java.lang.reflect.Array;
 import java.util.List;
 import java.util.function.BiPredicate;
+import java.util.function.Function;
 
 /**
  * ArrayUtils provides some static methods for manipulating arrays easily when using a tool such as {@link java.util.ArrayList} is
@@ -1359,30 +1360,33 @@ public final class ArrayUtils {
 	}
 
 	/**
-	 * @param <T> The type of the values
+	 * @param <E> The type of the source values
+	 * @param <T> The type of the adjustment values
 	 * @param equals The equality test
+	 * @param map The map from the adjustment to the source
 	 * @return A difference listener that causes all changes between lists to be accepted into the source list
 	 */
-	public static <T> DifferenceListener<T, T> acceptAllDifferences(BiPredicate<? super T, ? super T> equals) {
-		return new DifferenceListener<T, T>() {
+	public static <E, T> DifferenceListener<E, T> acceptAllDifferences(BiPredicate<? super E, ? super T> equals,
+		Function<? super T, ? extends E> map) {
+		return new DifferenceListener<E, T>() {
 			@Override
-			public boolean identity(T o1, T o2) {
+			public boolean identity(E o1, T o2) {
 				return equals.test(o1, o2);
 			}
 
 			@Override
-			public T added(T o, int mIdx, int retIdx) {
-				return o;
+			public E added(T o, int mIdx, int retIdx) {
+				return map == null ? (E) o : map.apply(o);
 			}
 
 			@Override
-			public T removed(T o, int oIdx, int incMod, int retIdx) {
+			public E removed(E o, int oIdx, int incMod, int retIdx) {
 				return null;
 			}
 
 			@Override
-			public T set(T o1, int idx1, int incMod, T o2, int idx2, int retIdx) {
-				return o2;
+			public E set(E o1, int idx1, int incMod, T o2, int idx2, int retIdx) {
+				return map == null ? (E) o2 : map.apply(o2);
 			}
 		};
 	}
