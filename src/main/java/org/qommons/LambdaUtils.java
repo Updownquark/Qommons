@@ -9,59 +9,66 @@ import java.util.function.Supplier;
 
 /** A bunch of utilities to easily make functions that are prettier and more useful than ordinary lambdas */
 public class LambdaUtils {
-	private static final Map<PrintableLambda<?>, PrintableLambda<?>> NAME_IDENTIFIED_LAMBDAS = new ConcurrentHashMap<>();
+	private static final Map<PrintableLambda<?>, PrintableLambda<?>> IDENTIFIED_LAMBDAS = new ConcurrentHashMap<>();
+	public static final Object NULL_PLACEHOLDER = new Object() {
+		@Override
+		public String toString() {
+			return "null";
+		}
+	};
 
 	public static boolean isPrintable(Object o) {
 		return o instanceof PrintableLambda;
 	}
 
-	public static boolean isIdentifiedByName(Object o) {
-		return o instanceof PrintableLambda && ((PrintableLambda<?>) o).isIdentifiedByName;
+	public static Object getIdentifier(Object o) {
+		Object id = o instanceof PrintableLambda ? ((PrintableLambda<?>) o).identifier : null;
+		return id == NULL_PLACEHOLDER ? null : id;
 	}
 
 	public static <T> Function<T, T> identity() {
 		return (Function<T, T>) IdentityFunction.INSTANCE;
 	}
 
-	public static <T> Predicate<T> printablePred(Predicate<T> pred, String print, boolean identifiedByName) {
-		PrintablePredicate<T> p = new PrintablePredicate<>(pred, print, identifiedByName);
-		if (identifiedByName) {
-			p = (PrintablePredicate<T>) NAME_IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
+	public static <T> Predicate<T> printablePred(Predicate<T> pred, String print, Object identifier) {
+		PrintablePredicate<T> p = new PrintablePredicate<>(pred, print, identifier);
+		if (identifier != null) {
+			p = (PrintablePredicate<T>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
 		}
 		return p;
 	}
 
-	public static <T, X> Function<T, X> constantFn(X value, String print, boolean identifiedByName) {
+	public static <T, X> Function<T, X> constantFn(X value, String print, Object identifier) {
 		PrintableFunction<T, X> p = new PrintableFunction<>(t -> value,
-				print != null ? new ConstantSupply(print) : () -> String.valueOf(value), identifiedByName);
-		if (identifiedByName) {
-			p = (PrintableFunction<T, X>) NAME_IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
+			print != null ? new ConstantSupply(print) : () -> String.valueOf(value), identifier);
+		if (identifier != null) {
+			p = (PrintableFunction<T, X>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
 		}
 		return p;
 	}
 	
-	public static <T, V, X> BiFunction<T, V, X> constantBiFn(X value, String print, boolean identifiedByName) {
+	public static <T, V, X> BiFunction<T, V, X> constantBiFn(X value, String print, Object identifier) {
 		PrintableBiFunction<T, V, X> p = new PrintableBiFunction<>((t, v) -> value,
-				print != null ? new ConstantSupply(print) : () -> String.valueOf(value), identifiedByName);
-		if (identifiedByName) {
-			p = (PrintableBiFunction<T, V, X>) NAME_IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
+			print != null ? new ConstantSupply(print) : () -> String.valueOf(value), identifier);
+		if (identifier != null) {
+			p = (PrintableBiFunction<T, V, X>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
 		}
 		return p;
 	}
 
-	public static <T> Supplier<T> constantSupplier(T value, String print, boolean identifiedByName) {
+	public static <T> Supplier<T> constantSupplier(T value, String print, Object identifier) {
 		PrintableSupplier<T> p = new PrintableSupplier<>(() -> value,
-				print != null ? new ConstantSupply(print) : () -> String.valueOf(value), identifiedByName);
-		if (identifiedByName) {
-			p = (PrintableSupplier<T>) NAME_IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
+			print != null ? new ConstantSupply(print) : () -> String.valueOf(value), identifier);
+		if (identifier != null) {
+			p = (PrintableSupplier<T>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
 		}
 		return p;
 	}
 
-	public static <T, X> Function<T, X> printableFn(Function<T, X> fn, String print, boolean identifiedByName) {
-		PrintableFunction<T, X> p = new PrintableFunction<>(fn, new ConstantSupply(print), identifiedByName);
-		if (identifiedByName) {
-			p = (PrintableFunction<T, X>) NAME_IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
+	public static <T, X> Function<T, X> printableFn(Function<T, X> fn, String print, Object identifier) {
+		PrintableFunction<T, X> p = new PrintableFunction<>(fn, new ConstantSupply(print), identifier);
+		if (identifier != null) {
+			p = (PrintableFunction<T, X>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
 		}
 		return p;
 	}
@@ -74,18 +81,18 @@ public class LambdaUtils {
 		return new PrintableBiFunction<>(fn, print);
 	}
 
-	public static <T, U, X> BiFunction<T, U, X> printableBiFn(BiFunction<T, U, X> fn, String print, boolean identifiedByName) {
-		PrintableBiFunction<T, U, X> p = new PrintableBiFunction<>(fn, print, identifiedByName);
-		if (identifiedByName) {
-			p = (PrintableBiFunction<T, U, X>) NAME_IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
+	public static <T, U, X> BiFunction<T, U, X> printableBiFn(BiFunction<T, U, X> fn, String print, Object identifier) {
+		PrintableBiFunction<T, U, X> p = new PrintableBiFunction<>(fn, print, identifier);
+		if (identifier != null) {
+			p = (PrintableBiFunction<T, U, X>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
 		}
 		return p;
 	}
 
-	public static <T, U, V, X> TriFunction<T, U, V, X> printableTriFn(TriFunction<T, U, V, X> fn, String print, boolean identifiedByName) {
-		PrintableTriFunction<T, U, V, X> p = new PrintableTriFunction<>(fn, print, identifiedByName);
-		if (identifiedByName) {
-			p = (PrintableTriFunction<T, U, V, X>) NAME_IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
+	public static <T, U, V, X> TriFunction<T, U, V, X> printableTriFn(TriFunction<T, U, V, X> fn, String print, Object identifier) {
+		PrintableTriFunction<T, U, V, X> p = new PrintableTriFunction<>(fn, print, identifier);
+		if (identifier != null) {
+			p = (PrintableTriFunction<T, U, V, X>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
 		}
 		return p;
 	}
@@ -146,23 +153,23 @@ public class LambdaUtils {
 	private static class PrintableLambda<L> {
 		private final L theLambda;
 		private final Supplier<String> thePrint;
-		private final boolean isIdentifiedByName;
+		private final Object identifier;
 		private final int hashCode;
 		
-		PrintableLambda(L lambda, String print, boolean identifiedByName) {
-			this(lambda, print != null ? new ConstantSupply(print) : lambda::toString, identifiedByName);
+		PrintableLambda(L lambda, String print, Object identifier) {
+			this(lambda, print != null ? new ConstantSupply(print) : lambda::toString, identifier);
 		}
 
 		PrintableLambda(L lambda, Supplier<String> print) {
-			this(lambda, print, false);
+			this(lambda, print, null);
 		}
 
-		private PrintableLambda(L lambda, Supplier<String> print, boolean identifiedByName) {
+		private PrintableLambda(L lambda, Supplier<String> print, Object identifier) {
 			theLambda = lambda;
 			thePrint = print;
-			this.isIdentifiedByName = identifiedByName;
-			if (identifiedByName) {
-				hashCode = thePrint.hashCode();
+			this.identifier = identifier;
+			if (identifier != null) {
+				hashCode = identifier.hashCode();
 			} else {
 				hashCode=0;
 			}
@@ -174,7 +181,7 @@ public class LambdaUtils {
 
 		@Override
 		public int hashCode() {
-			if (isIdentifiedByName) {
+			if (identifier != null) {
 				return hashCode;
 			} else {
 				return theLambda.hashCode();
@@ -187,11 +194,11 @@ public class LambdaUtils {
 				return true;
 			} else if (obj == null || obj.getClass() != getClass()) {
 				return false;
-			} else if (isIdentifiedByName) {
+			} else if (identifier != null) {
 				if (hashCode != obj.hashCode()) {
 					return false;
 				}
-				return thePrint.equals(((PrintableLambda<?>) obj).thePrint);
+				return identifier.equals(((PrintableLambda<?>) obj).identifier);
 			} else {
 				return ((PrintableLambda<?>) obj).theLambda.equals(theLambda);
 			}
@@ -204,8 +211,8 @@ public class LambdaUtils {
 	}
 
 	static class PrintableSupplier<T> extends PrintableLambda<Supplier<T>> implements Supplier<T> {
-		PrintableSupplier(Supplier<T> lambda, Supplier<String> print, boolean identifiedByName) {
-			super(lambda, print, identifiedByName);
+		PrintableSupplier(Supplier<T> lambda, Supplier<String> print, Object identifier) {
+			super(lambda, print, identifier);
 		}
 
 		PrintableSupplier(Supplier<T> lambda, Supplier<String> print) {
@@ -219,8 +226,8 @@ public class LambdaUtils {
 	}
 
 	static class PrintablePredicate<T> extends PrintableLambda<Predicate<T>> implements Predicate<T> {
-		PrintablePredicate(Predicate<T> pred, String print, boolean identifiedByName) {
-			super(pred, print, identifiedByName);
+		PrintablePredicate(Predicate<T> pred, String print, Object identifier) {
+			super(pred, print, identifier);
 		}
 		
 		PrintablePredicate(Predicate<T> pred, Supplier<String> print) {
@@ -234,8 +241,8 @@ public class LambdaUtils {
 	}
 
 	static class PrintableFunction<T, X> extends PrintableLambda<Function<T, X>> implements Function<T, X> {
-		PrintableFunction(Function<T, X> function, Supplier<String> print, boolean identifiedByName) {
-			super(function, print, identifiedByName);
+		PrintableFunction(Function<T, X> function, Supplier<String> print, Object identifier) {
+			super(function, print, identifier);
 		}
 		
 		PrintableFunction(Function<T, X> function, Supplier<String> print) {
@@ -249,12 +256,12 @@ public class LambdaUtils {
 	}
 
 	static class PrintableBiFunction<T, U, X> extends PrintableLambda<BiFunction<T, U, X>> implements BiFunction<T, U, X> {
-		PrintableBiFunction(BiFunction<T, U, X> function, String print, boolean identifiedByName) {
-			super(function, print, identifiedByName);
+		PrintableBiFunction(BiFunction<T, U, X> function, String print, Object identifier) {
+			super(function, print, identifier);
 		}
 		
-		PrintableBiFunction(BiFunction<T, U, X> function, Supplier<String> print, boolean identifiedByName) {
-			super(function, print, identifiedByName);
+		PrintableBiFunction(BiFunction<T, U, X> function, Supplier<String> print, Object identifier) {
+			super(function, print, identifier);
 		}
 
 		PrintableBiFunction(BiFunction<T, U, X> function, Supplier<String> print) {
@@ -268,12 +275,12 @@ public class LambdaUtils {
 	}
 
 	static class PrintableTriFunction<T, U, V, X> extends PrintableLambda<TriFunction<T, U, V, X>> implements TriFunction<T, U, V, X> {
-		PrintableTriFunction(TriFunction<T, U, V, X> function, String print, boolean identifiedByName) {
-			super(function, print, identifiedByName);
+		PrintableTriFunction(TriFunction<T, U, V, X> function, String print, Object identifier) {
+			super(function, print, identifier);
 		}
 
-		PrintableTriFunction(TriFunction<T, U, V, X> function, Supplier<String> print, boolean identifiedByName) {
-			super(function, print, identifiedByName);
+		PrintableTriFunction(TriFunction<T, U, V, X> function, Supplier<String> print, Object identifier) {
+			super(function, print, identifier);
 		}
 
 		PrintableTriFunction(TriFunction<T, U, V, X> function, Supplier<String> print) {
