@@ -9,7 +9,6 @@ import java.util.SortedSet;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
-import org.qommons.collect.CollectionElement;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
@@ -74,33 +73,6 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 				if (root == null)
 					return -1;
 				return root.indexFor(node -> search.compareTo(node.get()), ctx);
-			}, true);
-	}
-
-	public BinaryTreeNode<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
-		if (isEmpty())
-			return null;
-		return getLocker().doOptimistically(null, //
-			(init, ctx) -> {
-				BinaryTreeNode<E> root = getRoot();
-				if (root == null)
-					return null;
-				BinaryTreeNode<E> node = root.findClosest(//
-					n -> search.compareTo(n.get()), filter.less.withDefault(true), filter.strict, ctx);
-				if (node != null){
-					if(search.compareTo(node.get())==0){
-						if(filter.strict){
-							 //Interpret this to mean that the caller is interested in the first or last node matching the search
-							BinaryTreeNode<E> adj=getAdjacentElement(node.getElementId(), filter==SortedSearchFilter.Greater);
-							while(adj!=null && search.compareTo(adj.get())==0){
-								node=adj;
-								adj=getAdjacentElement(node.getElementId(), filter==SortedSearchFilter.Greater);
-							}
-						}
-					} else if(filter == SortedSearchFilter.OnlyMatch)
-						node = null;
-				}
-				return node;
 			}, true);
 	}
 
@@ -275,21 +247,8 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 
 	@Override
 	public boolean isConsistent(ElementId element) {
-		CollectionElement<E> el = getElement(element);
-		CollectionElement<E> adj = getAdjacentElement(element, false);
-		if (adj != null) {
-			int comp = theCompare.compare(adj.get(), el.get());
-			if (comp > 0 || (isDistinct && comp == 0))
-				return false;
+		return super.isConsistent(element, theCompare, isDistinct);
 		}
-		adj = getAdjacentElement(element, true);
-		if (adj != null) {
-			int comp = theCompare.compare(adj.get(), el.get());
-			if (comp < 0 || (isDistinct && comp == 0))
-				return false;
-		}
-		return true;
-	}
 
 	@Override
 	public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
@@ -298,16 +257,8 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 
 	@Override
 	public boolean checkConsistency() {
-		try (Transaction t = lock(false, null)) {
-			E previous = null;
-			boolean hasPrevious = false;
-			for (E value : this) {
-				if (hasPrevious && theCompare.compare(value, previous) <= 0)
-					return true;
+		return super.checkConsistency(theCompare, isDistinct);
 			}
-			return false;
-		}
-	}
 
 	@Override
 	public <X> boolean repair(RepairListener<E, X> listener) {

@@ -239,12 +239,13 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	@Override
 	default void removeRange(int fromIndex, int toIndex) {
 		try (Transaction t = lock(true, null)) {
-			MutableElementSpliterator<E> spliter = spliterator(fromIndex);
-			for (int i = fromIndex; i < toIndex; i++)
-				spliter.forElementM(el -> {
-					if (el.canRemove() == null)
-						el.remove();
-				}, true);
+			CollectionElement<E> el = getElement(fromIndex);
+			for (int i = fromIndex; el != null && i < toIndex; i++) {
+				MutableCollectionElement<E> mutableEl = mutableElement(el.getElementId());
+				if (mutableEl.canRemove() == null)
+					mutableEl.remove();
+				el = getAdjacentElement(el.getElementId(), true);
+			}
 		}
 	}
 

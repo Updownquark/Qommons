@@ -6,8 +6,16 @@ import java.util.function.Function;
 
 import org.qommons.Transactable;
 import org.qommons.Transaction;
-import org.qommons.collect.*;
+import org.qommons.collect.BetterCollection;
+import org.qommons.collect.BetterList;
+import org.qommons.collect.BetterSortedSet;
+import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
+import org.qommons.collect.CollectionElement;
+import org.qommons.collect.CollectionLockingStrategy;
+import org.qommons.collect.ElementId;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
+import org.qommons.collect.OptimisticContext;
+import org.qommons.collect.ValueStoredCollection;
 import org.qommons.collect.ValueStoredCollection.RepairListener;
 
 /**
@@ -218,6 +226,49 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 			(init, ctx) -> wrap(RedBlackNode.splitBetween(((NodeId) element1).theNode, ((NodeId) element2).theNode, ctx)), true);
 	}
 
+	/**
+	 * <p>
+	 * Searches in this list for a value, using the stored order of the elements to optimize the search.
+	 * </p>
+	 * 
+	 * <p>
+	 * If this list's element order is not enforced (as in a {@link BetterSortedSet}) or it has become corrupt (i.e. in need of
+	 * {@link ValueStoredCollection#repair(RepairListener) repair}, this operation may fail; i.e. it may return null or a non-matching node
+	 * when the value exists in the list or a closer node exists.
+	 * </p>
+	 * 
+	 * @param search The search to use to search this list
+	 * @param filter The filter on the kind of node to return
+	 * @return The (or a) node in this list for which <code>search{@link Comparable#compareTo(Object) compareTo()}</code> returns zero, or
+	 *         the node in this list closest to such a hypothetical node matching the given filter.
+	 */
+	public BinaryTreeNode<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+		if (isEmpty())
+			return null;
+		return getLocker().doOptimistically(null, //
+			(init, ctx) -> {
+				BinaryTreeNode<E> root = getRoot();
+				if (root == null)
+					return null;
+				BinaryTreeNode<E> node = root.findClosest(//
+					n -> search.compareTo(n.get()), filter.less.withDefault(true), filter.strict, ctx);
+				if (node != null) {
+					if (search.compareTo(node.get()) == 0) {
+						if (filter.strict) {
+							// Interpret this to mean that the caller is interested in the first or last node matching the search
+							BinaryTreeNode<E> adj = getAdjacentElement(node.getElementId(), filter == SortedSearchFilter.Greater);
+							while (adj != null && search.compareTo(adj.get()) == 0) {
+								node = adj;
+								adj = getAdjacentElement(node.getElementId(), filter == SortedSearchFilter.Greater);
+							}
+						}
+					} else if (filter == SortedSearchFilter.OnlyMatch)
+						node = null;
+				}
+				return node;
+			}, true);
+	}
+
 	@Override
 	public boolean addAll(Collection<? extends E> c) {
 		try (Transaction t = lock(true, null)) {
@@ -240,6 +291,32 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	}
 
 	/**
+	 * Checks the collection's storage structure for consistency at the given element
+	 * 
+	 * @param element The element to check the structure's consistency at
+	 * @param compare The comparator by which this collection is ordered
+	 * @param distinct Whether this collection prevents duplicates
+	 * @return Whether the collection's storage appears to be consistent at the given element
+	 * @see ValueStoredCollection#isConsistent(ElementId)
+	 */
+	protected boolean isConsistent(ElementId element, Comparator<? super E> compare, boolean distinct) {
+		CollectionElement<E> el = getElement(element);
+		CollectionElement<E> adj = getAdjacentElement(element, false);
+		if (adj != null) {
+			int comp = compare.compare(adj.get(), el.get());
+			if (comp > 0 || (distinct && comp == 0))
+				return false;
+		}
+		adj = getAdjacentElement(element, true);
+		if (adj != null) {
+			int comp = compare.compare(adj.get(), el.get());
+			if (comp < 0 || (distinct && comp == 0))
+				return false;
+		}
+		return true;
+	}
+
+	/**
 	 * Searches for and fixes any inconsistencies in the collection's storage structure at the given element.
 	 * 
 	 * @param <X> The type of the data transferred for the listener
@@ -254,6 +331,29 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 		ValueStoredCollection.RepairListener<E, X> listener) {
 		try (Transaction t = lock(true, null)) {
 			return theTree.repair(checkNode(element, true).theNode, compare, distinct, new TreeRepairListener<>(listener));
+		}
+	}
+
+	/**
+	 * Searches for any inconsistencies in the entire collection's storage structure. This typically takes linear time.
+	 * 
+	 * @param compare The comparator by which this collection is ordered
+	 * @param distinct Whether this collection prevents duplicates
+	 * @return Whether any inconsistency was found in the collection
+	 * @see ValueStoredCollection#checkConsistency()
+	 */
+	protected boolean checkConsistency(Comparator<? super E> compare, boolean distinct) {
+		try (Transaction t = lock(false, null)) {
+			E previous = null;
+			boolean hasPrevious = false;
+			for (E value : this) {
+				if (hasPrevious) {
+					int comp = compare.compare(value, previous);
+					if (comp < 0 || (distinct && comp == 0))
+						return true;
+				}
+			}
+			return false;
 		}
 	}
 
