@@ -17,7 +17,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 	BetterSet<K> keySet();
 
 	@Override
-	BetterSet<? extends MultiEntry<K, V>> entrySet();
+	BetterSet<? extends MultiEntryHandle<K, V>> entrySet();
 
 	@Override
 	BetterCollection<V> get(Object key);
@@ -31,7 +31,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 
 	MultiEntryHandle<K, V> getEntry(ElementId keyId);
 
-	default MultiMapEntryHandle<K, V> getElement(K key, V value, boolean first) {
+	default MultiEntryValueHandle<K, V> getElement(K key, V value, boolean first) {
 		try (Transaction t = lock(false, null)) {
 			MultiEntryHandle<K, V> keyElement = getEntry(key);
 			if (keyElement == null)
@@ -43,10 +43,10 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 	}
 
-	default MultiMapEntryHandle<K, V> getElement(ElementId keyId, ElementId valueId) {
+	default MultiEntryValueHandle<K, V> getElement(ElementId keyId, ElementId valueId) {
 		MultiEntryHandle<K, V> keyElement = getEntry(keyId);
 		CollectionElement<V> valueElement = keyElement.getValues().getElement(valueId);
-		return new MultiMapEntryHandle<K, V>() {
+		return new MultiEntryValueHandle<K, V>() {
 			@Override
 			public ElementId getKeyId() {
 				return keyElement.getElementId();
@@ -135,11 +135,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		};
 	}
 
-	default MultiMapEntryHandle<K, V> putEntry(K key, V value, boolean first) {
+	default MultiEntryValueHandle<K, V> putEntry(K key, V value, boolean first) {
 		return putEntry(key, value, null, null, first);
 	}
 
-	MultiMapEntryHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first);
+	MultiEntryValueHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first);
 
 	@Override
 	default boolean add(K key, V value) {
@@ -211,7 +211,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 
 		@Override
-		public BetterSet<? extends MultiEntry<K, V>> entrySet() {
+		public BetterSet<? extends MultiEntryHandle<K, V>> entrySet() {
 			return theSource.entrySet().reverse();
 		}
 
@@ -222,12 +222,12 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 
 		@Override
 		public MultiEntryHandle<K, V> getEntry(ElementId keyId) {
-			return theSource.getEntry(keyId.reverse()).reverse();
+			return MultiEntryHandle.reverse(theSource.getEntry(keyId.reverse()));
 		}
 
 		@Override
-		public MultiMapEntryHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first) {
-			return MultiMapEntryHandle
+		public MultiEntryValueHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first) {
+			return MultiEntryValueHandle
 				.reverse(theSource.putEntry(key, value, ElementId.reverse(beforeKey), ElementId.reverse(afterKey), !first));
 		}
 

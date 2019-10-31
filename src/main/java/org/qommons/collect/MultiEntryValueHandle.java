@@ -6,22 +6,22 @@ package org.qommons.collect;
  * @param <K> The type of the key
  * @param <V> The type of the value
  */
-public interface MultiMapEntryHandle<K, V> extends MapEntryHandle<K, V> {
+public interface MultiEntryValueHandle<K, V> extends MapEntryHandle<K, V> {
 	ElementId getKeyId();
 
 	@Override
-	default MultiMapEntryHandle<K, V> reverse() {
+	default MultiEntryValueHandle<K, V> reverse() {
 		return new ReversedMultiMapEntryHandle<>(this);
 	}
 
-	class ReversedMultiMapEntryHandle<K, V> extends ReversedMapEntryHandle<K, V> implements MultiMapEntryHandle<K, V> {
-		public ReversedMultiMapEntryHandle(MultiMapEntryHandle<K, V> wrapped) {
+	class ReversedMultiMapEntryHandle<K, V> extends ReversedMapEntryHandle<K, V> implements MultiEntryValueHandle<K, V> {
+		public ReversedMultiMapEntryHandle(MultiEntryValueHandle<K, V> wrapped) {
 			super(wrapped);
 		}
 
 		@Override
-		protected MultiMapEntryHandle<K, V> getWrapped() {
-			return (MultiMapEntryHandle<K, V>) super.getWrapped();
+		protected MultiEntryValueHandle<K, V> getWrapped() {
+			return (MultiEntryValueHandle<K, V>) super.getWrapped();
 		}
 
 		@Override
@@ -35,12 +35,12 @@ public interface MultiMapEntryHandle<K, V> extends MapEntryHandle<K, V> {
 		}
 
 		@Override
-		public MultiMapEntryHandle<K, V> reverse() {
+		public MultiEntryValueHandle<K, V> reverse() {
 			return getWrapped();
 		}
 	}
 
-	static <K, V> MultiMapEntryHandle<K, V> reverse(MultiMapEntryHandle<K, V> entry) {
+	static <K, V> MultiEntryValueHandle<K, V> reverse(MultiEntryValueHandle<K, V> entry) {
 		return entry == null ? null : entry.reverse();
 	}
 }

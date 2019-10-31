@@ -13,7 +13,7 @@ import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.MultiEntryHandle;
-import org.qommons.collect.MultiMapEntryHandle;
+import org.qommons.collect.MultiEntryValueHandle;
 import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
@@ -70,7 +70,7 @@ public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 	}
 
 	@Override
-	public MultiMapEntryHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first) {
+	public MultiEntryValueHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first) {
 		if (!keySet().belongs(key))
 			throw new IllegalArgumentException("Unaccepable key: " + key);
 		try (Transaction t = theValues.lock(true, null)) {
@@ -96,7 +96,7 @@ public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 						"Cannot insert the given key (" + key + ") before the given entry: " + entry.theKey);
 			}
 			CollectionElement<V> valueEl = values.addElement(value, first);
-			return (MultiMapEntryHandle<K, V>) valueEl;
+			return (MultiEntryValueHandle<K, V>) valueEl;
 		}
 	}
 
@@ -115,7 +115,7 @@ public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 		return (MultiEntryImpl) CollectionElement.get(entrySet().search(entry -> search.compareTo(entry.getKey()), filter));
 	}
 
-	private class KVEntry implements MultiMapEntryHandle<K, V> {
+	private class KVEntry implements MultiEntryValueHandle<K, V> {
 		final MultiEntryImpl theEntry;
 		ElementId theElement;
 		V theValue;

@@ -1,7 +1,5 @@
 package org.qommons.collect;
 
-import java.util.Comparator;
-
 import org.qommons.Identifiable;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
@@ -12,11 +10,7 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 	BetterSortedSet<K> keySet();
 
 	@Override
-	BetterSortedSet<? extends MultiEntry<K, V>> entrySet();
-
-	default Comparator<? super K> comparator() {
-		return keySet().comparator();
-	}
+	BetterSortedSet<? extends MultiEntryHandle<K, V>> entrySet();
 
 	/**
 	 * Searches this sorted map for a value
@@ -123,8 +117,7 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public BetterSortedSet<? extends MultiEntry<K, V>> entrySet() {
-			// FIXME This is incorrect--each entry also needs to be reversed
+		public BetterSortedSet<? extends MultiEntryHandle<K, V>> entrySet() {
 			return getSource().entrySet().reverse();
 		}
 
@@ -195,7 +188,7 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public BetterSortedSet<? extends MultiEntry<K, V>> entrySet() {
+		public BetterSortedSet<? extends MultiEntryHandle<K, V>> entrySet() {
 			return theWrapped.entrySet().subSet(//
 				entry -> theLowerBound.compareTo(entry.getKey()), //
 				entry -> theUpperBound.compareTo(entry.getKey()));
@@ -209,7 +202,7 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public MultiMapEntryHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first) {
+		public MultiEntryValueHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first) {
 			if (!theKeySet.belongs(key))
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 			return theWrapped.putEntry(key, value, afterKey, beforeKey, first);

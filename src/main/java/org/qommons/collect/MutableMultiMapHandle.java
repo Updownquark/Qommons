@@ -1,6 +1,6 @@
 package org.qommons.collect;
 
-public interface MutableMultiMapHandle<K, V> extends MultiMapEntryHandle<K, V>, MutableMapEntryHandle<K, V> {
+public interface MutableMultiMapHandle<K, V> extends MultiEntryValueHandle<K, V>, MutableMapEntryHandle<K, V> {
 	@Override
 	default MutableMultiMapHandle<K, V> reverse() {
 		return new ReversedMutableMultiMapHandle<>(this);

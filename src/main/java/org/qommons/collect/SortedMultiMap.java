@@ -1,10 +1,15 @@
 package org.qommons.collect;
 
+import java.util.Comparator;
 import java.util.NavigableSet;
 
 public interface SortedMultiMap<K, V> extends MultiMap<K, V> {
 	@Override
 	NavigableSet<K> keySet();
+
+	default Comparator<? super K> comparator() {
+		return keySet().comparator();
+	}
 
 	@Override
 	NavigableSet<? extends MultiEntry<K, V>> entrySet();
