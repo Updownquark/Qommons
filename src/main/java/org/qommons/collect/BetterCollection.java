@@ -17,8 +17,10 @@ import java.util.function.UnaryOperator;
 import org.qommons.ArrayUtils;
 import org.qommons.Causable;
 import org.qommons.Identifiable;
+import org.qommons.Lockable;
 import org.qommons.QommonsUtils;
 import org.qommons.StructuredStamped;
+import org.qommons.StructuredTransactable;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.ValueHolder;
@@ -765,7 +767,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		try (Transaction t = Transactable.lock(c, false, null)) {
 			int hash = 0;
 			for (Object v : c)
-				hash += v == null ? 0 : v.hashCode();
+				hash = hash * 13 + (v == null ? 0 : v.hashCode());
 			return hash;
 		}
 	}
@@ -778,10 +780,12 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return Whether <code>o</code> is a collection whose content matches that of <code>c</code>
 	 */
 	public static boolean equals(Collection<?> c, Object o) {
-		try (Transaction t = Transactable.lock(c, false, null); Transaction t2 = Transactable.lock(o, false, null)) {
-			if (!(o instanceof Collection))
-				return false;
+		try (Transaction t = Lockable.lockAll(//
+			c instanceof StructuredTransactable ? Lockable.lockable((StructuredTransactable) c, false, false) : null, //
+			o instanceof StructuredTransactable ? Lockable.lockable((StructuredTransactable) o, false, false) : null)) {
 			Collection<?> c2 = (Collection<?>) o;
+			if (c.size() != c2.size())
+				return false;
 			Iterator<?> iter = c.iterator();
 			Iterator<?> cIter = c2.iterator();
 			while (iter.hasNext()) {

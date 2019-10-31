@@ -1,5 +1,6 @@
 package org.qommons.collect;
 
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiFunction;
@@ -7,7 +8,9 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.qommons.Identifiable;
+import org.qommons.Lockable;
 import org.qommons.QommonsUtils;
+import org.qommons.StructuredTransactable;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.ValueHolder;
@@ -292,6 +295,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		return keySet().repair(listener == null ? null : new KeySetRepairListener<>(this, listener));
 	}
 
+	/**
+	 * For tracking {@link BetterMap#repair(MapRepairListener) repairs}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param <X> The data transfer type of the tracker
+	 */
 	class EntryRepairTracker<K, V, X> implements Map.Entry<K, V> {
 		public final K key;
 		public final V value;
@@ -489,6 +499,46 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 	}
 
 	/**
+	 * A {@link Object#hashCode()} implementation for BetterMaps
+	 * 
+	 * @param map The map to get the hash code for
+	 * @return The hash code for the map
+	 */
+	static int hashCode(BetterMap<?, ?> map) {
+		int hashCode = 0;
+		try (Transaction t = map.lock(false, null)) {
+			for (Map.Entry<?, ?> entry : map.entrySet())
+				hashCode += Objects.hashCode(entry.getKey()) * 7 + Objects.hash(entry.getValue());
+		}
+		return hashCode;
+	}
+
+	/**
+	 * An {@link Object#equals(Object)} implementation for BetterMaps
+	 * 
+	 * @param map The map to compare
+	 * @param obj The other object to compare
+	 * @return Whether the map is equivalent to the given object
+	 */
+	static boolean equals(BetterMap<?, ?> map, Object obj) {
+		if (!(obj instanceof Map))
+			return false;
+		Map<?, ?> other = (Map<?, ?>) obj;
+		try (Transaction t = Lockable.lockAll(Lockable.lockable(map, false, false, null), //
+			other instanceof StructuredTransactable ? Lockable.lockable((StructuredTransactable) other, false, false) : null)) {
+			if (map.size() != other.size())
+				return false;
+			Iterator<? extends Map.Entry<?, ?>> thisIter = map.entrySet().iterator();
+			while (thisIter.hasNext()) {
+				Map.Entry<?, ?> thisEntry = thisIter.next();
+				if (!Objects.equals(thisEntry.getValue(), other.get(thisEntry.getKey())))
+					return false;
+			}
+			return true;
+		}
+	}
+
+	/**
 	 * Implements {@link BetterMap#reverse()}
 	 * 
 	 * @param <K> The key type of the map
@@ -567,6 +617,21 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 				}
 			};
 			return getWrapped().repair(reversedListener);
+		}
+
+		@Override
+		public int hashCode() {
+			return BetterMap.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterMap.equals(this, obj);
+		}
+
+		@Override
+		public String toString() {
+			return entrySet().toString();
 		}
 	}
 
@@ -732,6 +797,16 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 			MapRepairListener<K, V, EntryRepairTracker<K, V, X>> mapListener = listener == null ? null
 				: new EntryRepairListener<>(listener);
 			return theMap.repair(mapListener);
+		}
+
+		@Override
+		public int hashCode() {
+			return BetterSet.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterSet.equals(this, obj);
 		}
 
 		@Override
@@ -1010,6 +1085,21 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 			if (sourceCollection == this)
 				return keySet.getSourceElements(localElement, keySet); // Validate element
 			return keySet.getSourceElements(localElement, sourceCollection);
+		}
+
+		@Override
+		public int hashCode() {
+			return BetterCollection.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterCollection.equals(this, obj);
+		}
+
+		@Override
+		public String toString() {
+			return BetterCollection.toString(this);
 		}
 	}
 }

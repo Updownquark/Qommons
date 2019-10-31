@@ -5,6 +5,9 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
+import org.qommons.Lockable;
+import org.qommons.StructuredTransactable;
+import org.qommons.Transactable;
 import org.qommons.Transaction;
 
 /**
@@ -70,6 +73,44 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 	@Override
 	default BetterSet<E> reverse() {
 		return new ReversedBetterSet<>(this);
+	}
+
+	/**
+	 * A static utility method to be used by {@link BetterCollection#hashCode()} implementations
+	 * 
+	 * @param c The collection
+	 * @return The hash code for the collection's content
+	 */
+	public static int hashCode(Collection<?> c) {
+		try (Transaction t = Transactable.lock(c, false, null)) {
+			int hash = 0;
+			for (Object v : c)
+				hash += v == null ? 0 : v.hashCode();
+			return hash;
+		}
+	}
+
+	/**
+	 * A static utility method to be used by {@link BetterCollection#equals(Object)} implementations
+	 * 
+	 * @param c The collection
+	 * @param o The object to compare with the collection
+	 * @return Whether <code>o</code> is a collection whose content matches that of <code>c</code>
+	 */
+	public static boolean equals(Set<?> c, Object o) {
+		if (!(o instanceof Set))
+			return false;
+		try (Transaction t = Lockable.lockAll(//
+			c instanceof StructuredTransactable ? Lockable.lockable((StructuredTransactable) c, false, false) : null, //
+			o instanceof StructuredTransactable ? Lockable.lockable((StructuredTransactable) o, false, false) : null)) {
+			Set<?> c2 = (Set<?>) o;
+			Iterator<?> iter = c.iterator();
+			while (iter.hasNext()) {
+				if (!c2.contains(iter.next()))
+					return false;
+			}
+			return true;
+		}
 	}
 
 	/**
