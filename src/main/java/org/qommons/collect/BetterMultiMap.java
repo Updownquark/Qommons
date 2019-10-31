@@ -1,10 +1,15 @@
 package org.qommons.collect;
 
 import java.util.Collection;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.function.Function;
 
 import org.qommons.Identifiable;
+import org.qommons.QommonsUtils;
 import org.qommons.StructuredStamped;
 import org.qommons.Transaction;
+import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
  * An {@link CollectionElement element}-accessible structure of many values per key
@@ -17,7 +22,20 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 	BetterSet<K> keySet();
 
 	@Override
-	BetterSet<? extends MultiEntryHandle<K, V>> entrySet();
+	default BetterSet<? extends MultiEntryHandle<K, V>> entrySet() {
+		return new BetterMultiMapEntrySet<>(this);
+	}
+
+	@Override
+	default BetterCollection<? extends MultiEntryValueHandle<K, V>> singleEntries() {
+		return new BetterMapSingleEntryCollection<>(this);
+	}
+
+	MultiEntryHandle<K, V> getEntryById(ElementId keyId);
+
+	default MultiEntryValueHandle<K, V> getEntryById(ElementId keyId, ElementId valueId) {
+		return new DefaultValueHandle<>(getEntryById(keyId), valueId);
+	}
 
 	@Override
 	BetterCollection<V> get(Object key);
@@ -25,11 +43,9 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 	default MultiEntryHandle<K, V> getEntry(K key) {
 		try (Transaction t = lock(false, null)) {
 			CollectionElement<K> keyElement = keySet().getElement(key, true);
-			return keyElement == null ? null : getEntry(keyElement.getElementId());
+			return keyElement == null ? null : getEntryById(keyElement.getElementId());
 		}
 	}
-
-	MultiEntryHandle<K, V> getEntry(ElementId keyId);
 
 	default MultiEntryValueHandle<K, V> getElement(K key, V value, boolean first) {
 		try (Transaction t = lock(false, null)) {
@@ -44,7 +60,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 	}
 
 	default MultiEntryValueHandle<K, V> getElement(ElementId keyId, ElementId valueId) {
-		MultiEntryHandle<K, V> keyElement = getEntry(keyId);
+		MultiEntryHandle<K, V> keyElement = getEntryById(keyId);
 		CollectionElement<V> valueElement = keyElement.getValues().getElement(valueId);
 		return new MultiEntryValueHandle<K, V>() {
 			@Override
@@ -70,7 +86,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 	}
 
 	default MutableMultiMapHandle<K, V> mutableElement(ElementId keyId, ElementId valueId) {
-		MultiEntryHandle<K, V> keyElement = getEntry(keyId);
+		MultiEntryHandle<K, V> keyElement = getEntryById(keyId);
 		MutableCollectionElement<V> valueElement = keyElement.getValues().mutableElement(valueId);
 		return new MutableMultiMapHandle<K, V>() {
 			@Override
@@ -141,6 +157,17 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 
 	MultiEntryValueHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first);
 
+	/**
+	 * Retrieves or adds an entry for the given key and returns the entry of the affected element
+	 * 
+	 * @param key The key to retrieve or insert the value for
+	 * @param value The function to produce the initial values for the added entry, if not present
+	 * @param first Whether to prefer adding the new entry early or late in the key/entry set
+	 * @param added The runnable that will be invoked if the entry is added
+	 * @return The entry of the element if retrieved or added; may be null if key/value pair is not permitted in the map
+	 */
+	MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, boolean first, Runnable added);
+
 	@Override
 	default boolean add(K key, V value) {
 		return get(key).add(value);
@@ -169,6 +196,643 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 
 	default BetterMultiMap<K, V> reverse() {
 		return new ReversedMultiMap<>(this);
+	}
+
+	class BetterMultiMapEntrySet<K, V> extends AbstractIdentifiable implements BetterSet<MultiEntryHandle<K, V>> {
+		private final BetterMultiMap<K, V> theMap;
+
+		public BetterMultiMapEntrySet(BetterMultiMap<K, V> map) {
+			theMap = map;
+		}
+
+		protected BetterMultiMap<K, V> getMap() {
+			return theMap;
+		}
+
+		protected CollectionElement<MultiEntryHandle<K, V>> entryFor(MultiEntryHandle<K, V> entry) {
+			return entry == null ? null : new EntrySetElement(entry);
+		}
+
+		protected MutableCollectionElement<MultiEntryHandle<K, V>> mutableEntryFor(MultiEntryHandle<K, V> entry) {
+			return entry == null ? null : new MutableEntrySetElement(entry);
+		}
+
+		@Override
+		public boolean belongs(Object o) {
+			return o instanceof BetterMultiMapEntrySet.EntrySetElement && ((EntrySetElement) o).getCollection() == this;
+		}
+
+		@Override
+		public CollectionElement<MultiEntryHandle<K, V>> getElement(MultiEntryHandle<K, V> value, boolean first) {
+			return entryFor(getMap().getEntryById(value.getElementId()));
+		}
+
+		@Override
+		public CollectionElement<MultiEntryHandle<K, V>> getElement(ElementId id) {
+			return entryFor(getMap().getEntryById(id));
+		}
+
+		@Override
+		public CollectionElement<MultiEntryHandle<K, V>> getTerminalElement(boolean first) {
+			try (Transaction t = lock(false, true, null)) {
+				CollectionElement<K> keyEl = getMap().keySet().getTerminalElement(first);
+				return keyEl == null ? null : entryFor(getMap().getEntryById(keyEl.getElementId()));
+			}
+		}
+
+		@Override
+		public CollectionElement<MultiEntryHandle<K, V>> getAdjacentElement(ElementId elementId, boolean next) {
+			try (Transaction t = lock(false, true, null)) {
+				CollectionElement<K> keyEl = getMap().keySet().getAdjacentElement(elementId, next);
+				return keyEl == null ? null : entryFor(getMap().getEntryById(keyEl.getElementId()));
+			}
+		}
+
+		@Override
+		public MutableCollectionElement<MultiEntryHandle<K, V>> mutableElement(ElementId id) {
+			return mutableEntryFor(getMap().getEntryById(id));
+		}
+
+		@Override
+		public BetterList<CollectionElement<MultiEntryHandle<K, V>>> getElementsBySource(ElementId sourceEl) {
+			return QommonsUtils.map2(getMap().keySet().getElementsBySource(sourceEl), //
+				keyEl -> entryFor(getMap().getEntryById(keyEl.getElementId())));
+		}
+
+		@Override
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return BetterList.of(localElement);
+			return getMap().keySet().getSourceElements(localElement, sourceCollection);
+		}
+
+		@Override
+		public String canAdd(MultiEntryHandle<K, V> value, ElementId after, ElementId before) {
+			return StdMsg.UNSUPPORTED_OPERATION;
+		}
+
+		@Override
+		public CollectionElement<MultiEntryHandle<K, V>> addElement(MultiEntryHandle<K, V> value, ElementId after, ElementId before,
+			boolean first) throws UnsupportedOperationException, IllegalArgumentException {
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public void clear() {
+			getMap().clear();
+		}
+
+		@Override
+		public Object createIdentity() {
+			return Identifiable.wrap(getMap().getIdentity(), "entrySet");
+		}
+
+		@Override
+		public long getStamp(boolean structuralOnly) {
+			return getMap().getStamp(structuralOnly);
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return getMap().isLockSupported();
+		}
+
+		@Override
+		public Transaction lock(boolean write, boolean structural, Object cause) {
+			return getMap().lock(write, structural, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return getMap().tryLock(write, structural, cause);
+		}
+
+		@Override
+		public int size() {
+			return getMap().keySet().size();
+		}
+
+		@Override
+		public boolean isEmpty() {
+			return getMap().keySet().isEmpty();
+		}
+
+		@Override
+		public <T> T[] toArray(T[] a) {
+			return BetterSet.super.toArray(a);
+		}
+
+		@Override
+		public MultiEntryHandle<K, V>[] toArray() {
+			try (Transaction t = lock(false, null)) {
+				return toArray(new MultiEntryHandle[size()]);
+			}
+		}
+
+		@Override
+		public CollectionElement<MultiEntryHandle<K, V>> getOrAdd(MultiEntryHandle<K, V> value, boolean first, Runnable added) {
+			return entryFor(getMap().getOrPutEntry(value.getKey(), k -> value.getValues(), first, added));
+		}
+
+		@Override
+		public boolean isConsistent(ElementId element) {
+			return getMap().keySet().isConsistent(element);
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return getMap().keySet().checkConsistency();
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, RepairListener<MultiEntryHandle<K, V>, X> listener) {
+			return getMap().keySet().repair(element, //
+				listener == null ? null : new KeyRepairListener<>(listener));
+		}
+
+		@Override
+		public <X> boolean repair(RepairListener<MultiEntryHandle<K, V>, X> listener) {
+			return getMap().keySet().repair(listener == null ? null : new KeyRepairListener<>(listener));
+		}
+
+		private class EntrySetElement implements CollectionElement<MultiEntryHandle<K, V>> {
+			final MultiEntryHandle<K, V> theEntry;
+
+			EntrySetElement(MultiEntryHandle<K, V> entry) {
+				theEntry = entry;
+			}
+
+			@Override
+			public ElementId getElementId() {
+				return theEntry.getElementId();
+			}
+
+			@Override
+			public MultiEntryHandle<K, V> get() {
+				return theEntry;
+			}
+
+			public BetterCollection<MultiEntryHandle<K, V>> getCollection() {
+				return BetterMultiMapEntrySet.this;
+			}
+		}
+
+		private class MutableEntrySetElement extends EntrySetElement implements MutableCollectionElement<MultiEntryHandle<K, V>> {
+			MutableEntrySetElement(MultiEntryHandle<K, V> entry) {
+				super(entry);
+			}
+
+			@Override
+			public String isEnabled() {
+				return StdMsg.UNSUPPORTED_OPERATION;
+			}
+
+			@Override
+			public String isAcceptable(MultiEntryHandle<K, V> value) {
+				return isEnabled();
+			}
+
+			@Override
+			public void set(MultiEntryHandle<K, V> value) throws UnsupportedOperationException, IllegalArgumentException {
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			}
+
+			@Override
+			public String canRemove() {
+				return getMap().keySet().mutableElement(theEntry.getElementId()).canRemove();
+			}
+
+			@Override
+			public void remove() throws UnsupportedOperationException {
+				getMap().keySet().mutableElement(theEntry.getElementId()).remove();
+			}
+		}
+
+		private class KeyRepairListener<X> implements RepairListener<K, EntryRemovedData<K, V, X>> {
+			private final RepairListener<MultiEntryHandle<K, V>, X> theEntryRepairListener;
+
+			public KeyRepairListener(
+				org.qommons.collect.ValueStoredCollection.RepairListener<MultiEntryHandle<K, V>, X> entryRepairListener) {
+				theEntryRepairListener = entryRepairListener;
+			}
+
+			@Override
+			public EntryRemovedData<K, V, X> removed(CollectionElement<K> element) {
+				CollectionElement<MultiEntryHandle<K, V>> entry = entryFor(getMap().getEntryById(element.getElementId()));
+				return new EntryRemovedData<>(theEntryRepairListener.removed(entry), //
+					entry.get());
+			}
+
+			@Override
+			public void disposed(K value, EntryRemovedData<K, V, X> data) {
+				theEntryRepairListener.disposed(data.entry, data.listenerData);
+			}
+
+			@Override
+			public void transferred(CollectionElement<K> element, EntryRemovedData<K, V, X> data) {
+				theEntryRepairListener.transferred(entryFor(getMap().getEntryById(element.getElementId())), data.listenerData);
+			}
+		}
+
+		static class EntryRemovedData<K, V, X> {
+			private final X listenerData;
+			private final MultiEntryHandle<K, V> entry;
+
+			EntryRemovedData(X listenerData, MultiEntryHandle<K, V> entry) {
+				this.listenerData = listenerData;
+				this.entry = entry;
+			}
+		}
+	}
+
+	class BetterMapSingleEntryCollection<K, V> extends AbstractIdentifiable implements BetterCollection<MultiEntryValueHandle<K, V>> {
+		private final BetterMultiMap<K, V> theMap;
+
+		public BetterMapSingleEntryCollection(BetterMultiMap<K, V> map) {
+			theMap = map;
+		}
+
+		protected BetterMultiMap<K, V> getMap() {
+			return theMap;
+		}
+
+		@Override
+		public long getStamp(boolean structuralOnly) {
+			return getMap().getStamp(structuralOnly);
+		}
+
+		@Override
+		public boolean isEmpty() {
+			return getMap().keySet().isEmpty();
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return getMap().isLockSupported();
+		}
+
+		@Override
+		public Transaction lock(boolean write, boolean structural, Object cause) {
+			return getMap().lock(write, structural, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return getMap().tryLock(write, structural, cause);
+		}
+
+		@Override
+		public Object createIdentity() {
+			return Identifiable.wrap(getMap().getIdentity(), "entryValues");
+		}
+
+		@Override
+		public int size() {
+			return getMap().valueSize();
+		}
+
+		protected boolean keysEqual(K key1, K key2) {
+			return Objects.equals(key1, key2);
+		}
+
+		protected CollectionElement<MultiEntryValueHandle<K, V>> entryFor(MultiEntryValueHandle<K, V> entry) {
+			return entry == null ? null : new ValueHandleElement(entry);
+		}
+
+		protected MutableCollectionElement<MultiEntryValueHandle<K, V>> mutableEntryFor(MultiEntryValueHandle<K, V> entry) {
+			return entry == null ? null : new MutableValueHandleElement(entry);
+		}
+
+		@Override
+		public boolean belongs(Object o) {
+			return o instanceof MultiEntryValueHandle && getMap().keySet().belongs(((MultiEntryValueHandle<?, ?>) o).getKey());
+		}
+
+		@Override
+		public CollectionElement<MultiEntryValueHandle<K, V>> getElement(MultiEntryValueHandle<K, V> value, boolean first) {
+			return entryFor(getMap().getEntryById(value.getKeyId(), value.getElementId()));
+		}
+
+		@Override
+		public CollectionElement<MultiEntryValueHandle<K, V>> getElement(ElementId id) {
+			if (!(id instanceof KeyValueElementId))
+				throw new NoSuchElementException();
+			KeyValueElementId kvId = (KeyValueElementId) id;
+			return entryFor(getMap().getEntryById(kvId.keyId, kvId.valueId));
+		}
+
+		@Override
+		public CollectionElement<MultiEntryValueHandle<K, V>> getTerminalElement(boolean first) {
+			try (Transaction t = lock(false, null)) {
+				CollectionElement<K> keyEl = getMap().keySet().getTerminalElement(first);
+				if (keyEl == null)
+					return null;
+				MultiEntryHandle<K, V> entry = getMap().getEntryById(keyEl.getElementId());
+				CollectionElement<V> valueEl = entry.getValues().getTerminalElement(first);
+				return valueEl == null ? null : entryFor(getMap().getEntryById(keyEl.getElementId(), valueEl.getElementId()));
+			}
+		}
+
+		@Override
+		public CollectionElement<MultiEntryValueHandle<K, V>> getAdjacentElement(ElementId elementId, boolean next) {
+			if (!(elementId instanceof KeyValueElementId))
+				throw new NoSuchElementException();
+			KeyValueElementId kvId = (KeyValueElementId) elementId;
+			ElementId keyId = kvId.keyId;
+			MultiEntryHandle<K, V> entry = getMap().getEntryById(keyId);
+			CollectionElement<V> value = entry.getValues().getAdjacentElement(kvId.valueId, next);
+			while (value == null) {
+				keyId = CollectionElement.getElementId(getMap().keySet().getAdjacentElement(entry.getElementId(), next));
+				if (keyId == null)
+					break;
+				entry = getMap().getEntryById(keyId);
+				value = entry.getValues().getTerminalElement(next);
+			}
+			return value == null ? null : entryFor(getMap().getEntryById(keyId, value.getElementId()));
+		}
+
+		@Override
+		public MutableCollectionElement<MultiEntryValueHandle<K, V>> mutableElement(ElementId id) {
+			if (!(id instanceof KeyValueElementId))
+				throw new NoSuchElementException();
+			KeyValueElementId kvId = (KeyValueElementId) id;
+			return mutableEntryFor(getMap().getEntryById(kvId.keyId, kvId.valueId));
+		}
+
+		@Override
+		public BetterList<CollectionElement<MultiEntryValueHandle<K, V>>> getElementsBySource(ElementId sourceEl) {
+			BetterList<? extends CollectionElement<?>> els;
+			if (sourceEl instanceof KeyValueElementId) {
+				KeyValueElementId kvId = (KeyValueElementId) sourceEl;
+				els = getMap().keySet().getElementsBySource(kvId.keyId);
+				if (!els.isEmpty()) {
+					ElementId keyId = els.getFirst().getElementId();
+					return QommonsUtils.map2(getMap().getEntryById(keyId).getValues().getElementsBySource(kvId.valueId), //
+						valueEl -> entryFor(getMap().getEntryById(keyId, valueEl.getElementId())));
+				}
+			}
+			els = getMap().keySet().getElementsBySource(sourceEl);
+			if (!els.isEmpty()) {
+				return BetterList
+					.of(els.stream().flatMap(keyEl -> getMap().getEntryById(keyEl.getElementId()).getValues().elements().stream()//
+						.map(valueEl -> entryFor(getMap().getEntryById(keyEl.getElementId(), valueEl.getElementId())))));
+			}
+			// No choice but to go key-by-key
+			try (Transaction t = lock(false, null)) {
+				CollectionElement<K> keyEl = getMap().keySet().getTerminalElement(true);
+				while (keyEl != null) {
+					MultiEntryHandle<K, V> entry = getMap().getEntryById(keyEl.getElementId());
+					els = entry.getValues().getElementsBySource(sourceEl);
+					if (!els.isEmpty())
+						return BetterList
+							.of(els.stream().map(valueEl -> entryFor(getMap().getEntryById(entry.getElementId(), valueEl.getElementId()))));
+
+					keyEl = getMap().keySet().getAdjacentElement(keyEl.getElementId(), true);
+				}
+			}
+			return BetterList.empty();
+		}
+
+		@Override
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			if (!(localElement instanceof KeyValueElementId))
+				throw new NoSuchElementException();
+			KeyValueElementId kvId = (KeyValueElementId) localElement;
+
+			BetterList<ElementId> els = getMap().keySet().getSourceElements(kvId.keyId, sourceCollection);
+			if (!els.isEmpty())
+				return els;
+			MultiEntryHandle<K, V> entry = getMap().getEntryById(kvId.keyId);
+			return entry.getValues().getSourceElements(localElement, sourceCollection);
+		}
+
+		@Override
+		public String canAdd(MultiEntryValueHandle<K, V> value, ElementId after, ElementId before) {
+			if (after != null && !(after instanceof KeyValueElementId))
+				throw new NoSuchElementException();
+			KeyValueElementId kvAfter = (KeyValueElementId) after;
+			if (before != null && !(before instanceof KeyValueElementId))
+				throw new NoSuchElementException();
+			KeyValueElementId kvBefore = (KeyValueElementId) before;
+			if (kvAfter != null && kvBefore != null && kvAfter.compareTo(kvBefore) >= 0)
+				throw new IllegalArgumentException("after is after before");
+
+			try (Transaction t = lock(false, null)) {
+				if (kvAfter != null) {
+					MultiEntryHandle<K, V> afterEntry = getMap().getEntryById(kvAfter.keyId);
+					if (keysEqual(afterEntry.getKey(), value.getKey())) {
+						ElementId beforeValueId;
+						if (kvBefore == null)
+							beforeValueId = null;
+						else if (keysEqual(getMap().keySet().getElement(kvBefore.keyId).get(), value.getKey()))
+							beforeValueId = kvBefore.valueId;
+						else
+							beforeValueId = null;
+						return afterEntry.getValues().canAdd(value.getValue(), kvAfter.valueId, beforeValueId);
+					}
+				}
+				if (kvBefore != null) {
+					if (kvAfter != null && kvAfter.keyId.equals(kvBefore.keyId))
+						return StdMsg.ILLEGAL_ELEMENT_POSITION;
+					MultiEntryHandle<K, V> beforeEntry = getMap().getEntryById(kvBefore.keyId);
+					if (keysEqual(beforeEntry.getKey(), value.getKey()))
+						return beforeEntry.getValues().canAdd(value.getValue(), null, kvBefore.valueId);
+				}
+				MultiEntryHandle<K, V> entry = getMap().getEntry(value.getKey());
+				if (entry != null) {
+					if ((kvAfter != null && entry.getElementId().compareTo(kvAfter.keyId) < 0)//
+						|| (kvBefore != null && entry.getElementId().compareTo(kvBefore.keyId) > 0))
+						return StdMsg.ILLEGAL_ELEMENT_POSITION;
+					else
+						return entry.getValues().canAdd(value.getValue(), null, null);
+				} else
+					return getMap().keySet().canAdd(value.getKey(), kvAfter == null ? null : kvAfter.keyId,
+						kvBefore == null ? null : kvBefore.keyId);
+			}
+		}
+
+		@Override
+		public CollectionElement<MultiEntryValueHandle<K, V>> addElement(MultiEntryValueHandle<K, V> value, ElementId after,
+			ElementId before, boolean first) throws UnsupportedOperationException, IllegalArgumentException {
+			if (after != null && !(after instanceof KeyValueElementId))
+				throw new NoSuchElementException();
+			KeyValueElementId kvAfter = (KeyValueElementId) after;
+			if (before != null && !(before instanceof KeyValueElementId))
+				throw new NoSuchElementException();
+			KeyValueElementId kvBefore = (KeyValueElementId) before;
+			if (kvAfter != null && kvBefore != null && kvAfter.compareTo(kvBefore) >= 0)
+				throw new IllegalArgumentException("after is after before");
+
+			try (Transaction t = lock(true, null)) {
+				if (kvAfter != null) {
+					MultiEntryHandle<K, V> afterEntry = getMap().getEntryById(kvAfter.keyId);
+					if (keysEqual(afterEntry.getKey(), value.getKey())) {
+						ElementId beforeValueId;
+						if (kvBefore == null)
+							beforeValueId = null;
+						else if (keysEqual(getMap().keySet().getElement(kvBefore.keyId).get(), value.getKey()))
+							beforeValueId = kvBefore.valueId;
+						else
+							beforeValueId = null;
+						CollectionElement<V> valueEl = afterEntry.getValues().addElement(value.getValue(), kvAfter.valueId, beforeValueId,
+							first);
+						return valueEl == null ? null : entryFor(getMap().getEntryById(afterEntry.getElementId(), valueEl.getElementId()));
+					}
+				}
+				if (kvBefore != null) {
+					if (kvAfter != null && kvAfter.keyId.equals(kvBefore.keyId))
+						throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
+					MultiEntryHandle<K, V> beforeEntry = getMap().getEntryById(kvBefore.keyId);
+					if (keysEqual(beforeEntry.getKey(), value.getKey())) {
+						CollectionElement<V> valueEl = beforeEntry.getValues().addElement(value.getValue(), null, kvBefore.valueId, first);
+						return valueEl == null ? null : entryFor(getMap().getEntryById(beforeEntry.getElementId(), valueEl.getElementId()));
+					}
+				}
+				MultiEntryHandle<K, V> entry = getMap().getEntry(value.getKey());
+				if (entry != null) {
+					if ((kvAfter != null && entry.getElementId().compareTo(kvAfter.keyId) < 0)//
+						|| (kvBefore != null && entry.getElementId().compareTo(kvBefore.keyId) > 0))
+						throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
+					else {
+						CollectionElement<V> valueEl = entry.getValues().addElement(value.getValue(), null, null, first);
+						return valueEl == null ? null : entryFor(getMap().getEntryById(entry.getElementId(), valueEl.getElementId()));
+					}
+				} else {
+					return entryFor(getMap().putEntry(value.getKey(), value.getValue(), kvAfter == null ? null : kvAfter.keyId, //
+						kvBefore == null ? null : kvBefore.keyId, first));
+				}
+			}
+		}
+
+		@Override
+		public void clear() {
+			getMap().clear();
+		}
+
+		static class KeyValueElementId implements ElementId {
+			final ElementId keyId;
+			final ElementId valueId;
+
+			KeyValueElementId(ElementId keyId, ElementId valueId) {
+				this.keyId = keyId;
+				this.valueId = valueId;
+			}
+
+			@Override
+			public int compareTo(ElementId o) {
+				if (!(o instanceof KeyValueElementId))
+					throw new IllegalArgumentException("ElementIds can only be compared within the same collection");
+				KeyValueElementId other = (KeyValueElementId) o;
+				int comp = keyId.compareTo(other.keyId);
+				if (comp == 0)
+					comp = valueId.compareTo(other.valueId);
+				return comp;
+			}
+
+			@Override
+			public boolean isPresent() {
+				return keyId.isPresent() && valueId.isPresent();
+			}
+
+			@Override
+			public boolean isDerivedFrom(ElementId other) {
+				return keyId.isDerivedFrom(other) || valueId.isDerivedFrom(other);
+			}
+		}
+
+		class ValueHandleElement implements CollectionElement<MultiEntryValueHandle<K, V>> {
+			final MultiEntryValueHandle<K, V> theEntry;
+			KeyValueElementId theId;
+
+			ValueHandleElement(MultiEntryValueHandle<K, V> entry) {
+				theEntry = entry;
+			}
+
+			@Override
+			public ElementId getElementId() {
+				if (theId == null)
+					theId = new KeyValueElementId(theEntry.getKeyId(), theEntry.getElementId());
+				return theId;
+			}
+
+			@Override
+			public MultiEntryValueHandle<K, V> get() {
+				return theEntry;
+			}
+		}
+
+		class MutableValueHandleElement extends ValueHandleElement implements MutableCollectionElement<MultiEntryValueHandle<K, V>> {
+			final MutableCollectionElement<V> theValueEl;
+
+			MutableValueHandleElement(MultiEntryValueHandle<K, V> entry) {
+				super(entry);
+				theValueEl = getMap().getEntryById(entry.getKeyId()).getValues().mutableElement(entry.getElementId());
+			}
+
+			@Override
+			public BetterCollection<MultiEntryValueHandle<K, V>> getCollection() {
+				return BetterMapSingleEntryCollection.this;
+			}
+
+			@Override
+			public String isEnabled() {
+				return theValueEl.isEnabled();
+			}
+
+			@Override
+			public String isAcceptable(MultiEntryValueHandle<K, V> value) {
+				if (!keysEqual(theEntry.getKey(), value.getKey()))
+					return StdMsg.ILLEGAL_ELEMENT;
+				return theValueEl.isAcceptable(value.getValue());
+			}
+
+			@Override
+			public void set(MultiEntryValueHandle<K, V> value) throws UnsupportedOperationException, IllegalArgumentException {
+				if (!keysEqual(theEntry.getKey(), value.getKey()))
+					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
+				theValueEl.set(value.getValue());
+			}
+
+			@Override
+			public String canRemove() {
+				return theValueEl.canRemove();
+			}
+
+			@Override
+			public void remove() throws UnsupportedOperationException {
+				theValueEl.remove();
+			}
+		}
+	}
+
+	class DefaultValueHandle<K, V> implements MultiEntryValueHandle<K, V> {
+		private final MultiEntryHandle<K, V> theMultiEntry;
+		private final ElementId theValueId;
+
+		public DefaultValueHandle(MultiEntryHandle<K, V> multiEntry, ElementId valueId) {
+			theMultiEntry = multiEntry;
+			theValueId = valueId;
+		}
+
+		@Override
+		public K getKey() {
+			return theMultiEntry.getKey();
+		}
+
+		@Override
+		public ElementId getElementId() {
+			return theValueId;
+		}
+
+		@Override
+		public V get() {
+			return theMultiEntry.getValues().getElement(theValueId).get();
+		}
+
+		@Override
+		public ElementId getKeyId() {
+			return theMultiEntry.getElementId();
+		}
 	}
 
 	class ReversedMultiMap<K, V> implements BetterMultiMap<K, V> {
@@ -221,14 +885,35 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 
 		@Override
-		public MultiEntryHandle<K, V> getEntry(ElementId keyId) {
-			return MultiEntryHandle.reverse(theSource.getEntry(keyId.reverse()));
+		public int valueSize() {
+			return theSource.valueSize();
+		}
+
+		@Override
+		public MultiEntryHandle<K, V> getEntryById(ElementId keyId) {
+			return MultiEntryHandle.reverse(theSource.getEntryById(keyId.reverse()));
+		}
+
+		@Override
+		public MultiEntryValueHandle<K, V> getEntryById(ElementId keyId, ElementId valueId) {
+			return MultiEntryValueHandle.reverse(theSource.getEntryById(keyId.reverse(), valueId.reverse()));
 		}
 
 		@Override
 		public MultiEntryValueHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first) {
 			return MultiEntryValueHandle
 				.reverse(theSource.putEntry(key, value, ElementId.reverse(beforeKey), ElementId.reverse(afterKey), !first));
+		}
+
+		@Override
+		public MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, boolean first,
+			Runnable added) {
+			return MultiEntryHandle.reverse(theSource.getOrPutEntry(key, value, !first, added));
+		}
+
+		@Override
+		public boolean clear() {
+			return theSource.clear();
 		}
 
 		@Override

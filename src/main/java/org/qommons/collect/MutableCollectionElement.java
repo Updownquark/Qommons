@@ -56,13 +56,11 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 	 * @throws IllegalArgumentException If some property of the result prevents it being a replacement for this element's value
 	 */
 	default E transform(Function<? super E, ? extends E> map) throws UnsupportedOperationException, IllegalArgumentException {
-		try (Transaction t = getCollection().lock(true, false, null)) {
-			E oldValue = get();
-			E newValue = map.apply(oldValue);
-			if (newValue != oldValue)
-				set(newValue);
-			return oldValue;
-		}
+		E oldValue;
+		do {
+			oldValue=get();
+		} while (!compareAndSet(oldValue, map.apply(oldValue)));
+		return oldValue;
 	}
 
 	/**

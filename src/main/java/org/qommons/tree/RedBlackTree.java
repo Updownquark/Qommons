@@ -109,8 +109,8 @@ import org.qommons.collect.OptimisticContext;
 		if (node.size() == 1) {
 			boolean valid = check(node, compare, distinct);
 			if (!valid) {
-				node.delete();
 				X datum = listener == null ? null : listener.removed(node);
+				node.delete();
 				RedBlackNode<E> newNode = insert(node.getValue(), compare, distinct);
 				if (listener != null) {
 					if (newNode != null)

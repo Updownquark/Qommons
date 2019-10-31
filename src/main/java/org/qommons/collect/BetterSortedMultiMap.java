@@ -1,5 +1,8 @@
 package org.qommons.collect;
 
+import java.util.NoSuchElementException;
+import java.util.function.Function;
+
 import org.qommons.Identifiable;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
@@ -209,6 +212,52 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
+		public MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, boolean first,
+			Runnable added) {
+			if (!theKeySet.belongs(key))
+				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
+			return theWrapped.getOrPutEntry(key, value, first, added);
+		}
+
+		@Override
+		public int valueSize() {
+			int vs = 0;
+			MultiEntryHandle<K, V> entry = getWrapped().search(theLowerBound, SortedSearchFilter.Greater);
+			if (entry == null)
+				return 0;
+			while (theUpperBound.compareTo(entry.getKey()) >= 0) {
+				vs += entry.getValues().size();
+				CollectionElement<K> keyEl = getWrapped().keySet().getAdjacentElement(entry.getElementId(), true);
+				if (keyEl == null)
+					break;
+				entry = getWrapped().getEntryById(keyEl.getElementId());
+			}
+			return vs;
+		}
+
+		@Override
+		public boolean clear() {
+			try (Transaction t = lock(true, null)) {
+				MultiEntryHandle<K, V> entry = getWrapped().search(theLowerBound, SortedSearchFilter.Greater);
+				if (entry == null)
+					return false;
+				boolean cleared = false;
+				while (theUpperBound.compareTo(entry.getKey()) >= 0) {
+					int preSize = entry.getValues().size();
+					entry.getValues().clear();
+					if (!cleared && !entry.getElementId().isPresent() || entry.getValues().size() < preSize)
+						cleared = true;
+
+					CollectionElement<K> keyEl = getWrapped().keySet().getAdjacentElement(entry.getElementId(), true);
+					if (keyEl == null)
+						break;
+					entry = getWrapped().getEntryById(keyEl.getElementId());
+				}
+				return cleared;
+			}
+		}
+
+		@Override
 		public MultiEntryHandle<K, V> getEntry(K key) {
 			if (!theKeySet.belongs(key))
 				return null;
@@ -216,8 +265,16 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public MultiEntryHandle<K, V> getEntry(ElementId entryId) {
-			MultiEntryHandle<K, V> entry = theWrapped.getEntry(entryId);
+		public MultiEntryValueHandle<K, V> getEntryById(ElementId keyId, ElementId valueId) {
+			MultiEntryValueHandle<K, V> wrappedEntry = getWrapped().getEntryById(keyId, valueId);
+			if (theLowerBound.compareTo(wrappedEntry.getKey()) > 0 || theUpperBound.compareTo(wrappedEntry.getKey()) < 0)
+				throw new NoSuchElementException();
+			return wrappedEntry;
+		}
+
+		@Override
+		public MultiEntryHandle<K, V> getEntryById(ElementId entryId) {
+			MultiEntryHandle<K, V> entry = theWrapped.getEntryById(entryId);
 			if (!theKeySet.belongs(entry.getKey()))
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 			return entry;

@@ -32,11 +32,17 @@ public interface MultiMap<K, V> {
 	/** @return All key-value collection entries in this multi-map */
 	Set<? extends MultiEntry<K, V>> entrySet();
 
+	/** @return All key-value pairs in this multi-map */
+	Collection<? extends Map.Entry<K, V>> singleEntries();
+
 	/**
 	 * @param key The key to get values for
 	 * @return The collection of values stored for the given key in this map. Never null.
 	 */
 	Collection<V> get(Object key);
+
+	/** @return The number of values in this multi-map */
+	int valueSize();
 
 	/**
 	 * Adds a value for the given key
@@ -84,4 +90,11 @@ public interface MultiMap<K, V> {
 	 * @return Whether this map was changed as a result of the call
 	 */
 	boolean removeAll(K key);
+
+	/**
+	 * Removes all keys and values in this multi-map
+	 * 
+	 * @return Whether any keys or values were removed
+	 */
+	boolean clear();
 }

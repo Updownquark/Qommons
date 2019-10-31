@@ -515,9 +515,9 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		return new BetterCollectionIterator<>(this);
 	}
 
-	/** @return An iterable over this collection's elements */
-	default Iterable<CollectionElement<E>> elements() {
-		return () -> new CollectionElementIterator<>(this);
+	/** @return A collection of this collection's elements */
+	default BetterCollection<CollectionElement<E>> elements() {
+		return new ElementCollection<>(this);
 	}
 
 	/** @return A collection with the same content as this one, but whose order is reversed */
@@ -1200,6 +1200,175 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		@Override
 		public String toString() {
 			return "[]";
+		}
+	}
+
+	/**
+	 * Implements {@link BetterCollection#element()}
+	 * 
+	 * @param <E> The type of the collection
+	 */
+	class ElementCollection<E> extends AbstractIdentifiable implements BetterCollection<CollectionElement<E>> {
+		private final BetterCollection<E> theCollection;
+
+		public ElementCollection(BetterCollection<E> collection) {
+			theCollection = collection;
+		}
+
+		@Override
+		public int size() {
+			return theCollection.size();
+		}
+
+		@Override
+		public long getStamp(boolean structuralOnly) {
+			return theCollection.getStamp(true);
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return theCollection.isLockSupported();
+		}
+
+		@Override
+		public Transaction lock(boolean write, boolean structural, Object cause) {
+			return theCollection.lock(write, structural, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+			return theCollection.tryLock(write, structural, cause);
+		}
+
+		@Override
+		public boolean isEmpty() {
+			return theCollection.isEmpty();
+		}
+
+		@Override
+		public Object createIdentity() {
+			return Identifiable.wrap(theCollection.getIdentity(), "elements");
+		}
+
+		@Override
+		public boolean belongs(Object o) {
+			return o instanceof CollectionElement//
+				&& !theCollection.getSourceElements(((CollectionElement<?>) o).getElementId(), theCollection).isEmpty();
+		}
+
+		@Override
+		public CollectionElement<CollectionElement<E>> getElement(CollectionElement<E> value, boolean first) {
+			if (theCollection.getSourceElements(value.getElementId(), theCollection).isEmpty())
+				return null;
+			return wrap(value);
+		}
+
+		@Override
+		public CollectionElement<CollectionElement<E>> getElement(ElementId id) {
+			return wrap(theCollection.getElement(id));
+		}
+
+		@Override
+		public CollectionElement<CollectionElement<E>> getTerminalElement(boolean first) {
+			return wrap(theCollection.getTerminalElement(first));
+		}
+
+		@Override
+		public CollectionElement<CollectionElement<E>> getAdjacentElement(ElementId elementId, boolean next) {
+			return wrap(theCollection.getAdjacentElement(elementId, next));
+		}
+
+		@Override
+		public MutableCollectionElement<CollectionElement<E>> mutableElement(ElementId id) {
+			return wrapMutable(theCollection.mutableElement(id));
+		}
+
+		@Override
+		public BetterList<CollectionElement<CollectionElement<E>>> getElementsBySource(ElementId sourceEl) {
+			return QommonsUtils.map2(theCollection.getElementsBySource(sourceEl), this::wrap);
+		}
+
+		@Override
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			return theCollection.getSourceElements(localElement, sourceCollection);
+		}
+
+		@Override
+		public String canAdd(CollectionElement<E> value, ElementId after, ElementId before) {
+			return StdMsg.UNSUPPORTED_OPERATION;
+		}
+
+		@Override
+		public CollectionElement<CollectionElement<E>> addElement(CollectionElement<E> value, ElementId after, ElementId before,
+			boolean first) throws UnsupportedOperationException, IllegalArgumentException {
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public void clear() {
+			theCollection.clear();
+		}
+
+		protected CollectionElement<CollectionElement<E>> wrap(CollectionElement<E> el) {
+			return new WrappedCollectionElement(el);
+		}
+
+		protected MutableCollectionElement<CollectionElement<E>> wrapMutable(CollectionElement<E> el) {
+			return new MutableWrappedCollectionElement(el);
+		}
+
+		class WrappedCollectionElement implements CollectionElement<CollectionElement<E>> {
+			final CollectionElement<E> theElement;
+
+			WrappedCollectionElement(CollectionElement<E> element) {
+				theElement = element;
+			}
+
+			@Override
+			public ElementId getElementId() {
+				return theElement.getElementId();
+			}
+
+			@Override
+			public CollectionElement<E> get() {
+				return theElement;
+			}
+		}
+
+		class MutableWrappedCollectionElement extends WrappedCollectionElement implements MutableCollectionElement<CollectionElement<E>> {
+			MutableWrappedCollectionElement(CollectionElement<E> element) {
+				super(element);
+			}
+
+			@Override
+			public BetterCollection<CollectionElement<E>> getCollection() {
+				return ElementCollection.this;
+			}
+
+			@Override
+			public String isEnabled() {
+				return StdMsg.UNSUPPORTED_OPERATION;
+			}
+
+			@Override
+			public String isAcceptable(CollectionElement<E> value) {
+				return StdMsg.UNSUPPORTED_OPERATION;
+			}
+
+			@Override
+			public void set(CollectionElement<E> value) throws UnsupportedOperationException, IllegalArgumentException {
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			}
+
+			@Override
+			public String canRemove() {
+				return theCollection.mutableElement(theElement.getElementId()).canRemove();
+			}
+
+			@Override
+			public void remove() throws UnsupportedOperationException {
+				theCollection.mutableElement(theElement.getElementId()).remove();
+			}
 		}
 	}
 }

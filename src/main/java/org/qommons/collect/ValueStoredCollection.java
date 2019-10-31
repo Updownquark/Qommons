@@ -55,8 +55,8 @@ public interface ValueStoredCollection<E> extends BetterCollection<E> {
 	interface RepairListener<E, X> {
 		/**
 		 * <p>
-		 * Called immediately after an element is removed from a collection, before its value <b>may</b> transferred to a new position in
-		 * the collection. This call will be followed (but not necessarily immediately) by a call to either:
+		 * Called immediately before an element is removed from a collection. After removal, its value <b>may</b> be transferred to a new
+		 * position in the collection. This call will be followed (but not necessarily immediately) by a call to either:
 		 * <ul>
 		 * <li>{@link #transferred(CollectionElement, Object)} with a new element with the same value, or</li>
 		 * <li>{@link #disposed(Object, Object)}</li>

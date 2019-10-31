@@ -679,13 +679,14 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			return newHash == hashCode;
 		}
 
-		boolean repair(RepairListener<E, ?> listener) {
+		<X> boolean repair(RepairListener<E, X> listener) {
 			int newHash = theHasher.applyAsInt(theValue);
 			if (newHash == hashCode)
 				return false;
+			X data = listener.removed(immutable());
 			theTreeNode.remove();
 			if (getEntry(newHash, equalsTest(theValue)) != null)
-				listener.removed(immutable());
+				listener.disposed(theValue, data);
 			else
 				insert(theTable, this, -1, null);
 			return true;
