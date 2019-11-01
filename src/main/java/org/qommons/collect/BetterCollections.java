@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.function.Function;
 
 import org.qommons.Transaction;
-import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 public class BetterCollections {
@@ -244,7 +243,7 @@ public class BetterCollections {
 		}
 
 		@Override
-		public CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
+		public CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable added) {
 			if (!getWrapped().belongs(value))
 				return null;
 			return getElement(value, first);
@@ -325,7 +324,7 @@ public class BetterCollections {
 		}
 
 		@Override
-		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+		public CollectionElement<E> search(Comparable<? super E> search, BetterSortedList.SortedSearchFilter filter) {
 			return (CollectionElement<E>) getWrapped().search(search, filter);
 		}
 
@@ -335,7 +334,7 @@ public class BetterCollections {
 		}
 
 		@Override
-		public CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
+		public CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable added) {
 			return getElement(value, first);
 		}
 
@@ -359,6 +358,16 @@ public class BetterCollections {
 		public <X> boolean repair(RepairListener<E, X> listener) {
 			// Kinda weird here since this involves modification, but the caller itself isn't doing the modification
 			return ((BetterSet<E>) getWrapped()).repair(listener);
+		}
+
+		@Override
+		public <T> T[] toArray(T[] array) {
+			return BetterSortedSet.super.toArray(array);
+		}
+
+		@Override
+		public Object[] toArray() {
+			return BetterSortedSet.super.toArray();
 		}
 	}
 
@@ -396,7 +405,8 @@ public class BetterCollections {
 		}
 
 		@Override
-		public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, boolean first, Runnable added) {
+		public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before,
+			boolean first, Runnable added) {
 			return getEntry(key);
 		}
 
@@ -427,7 +437,7 @@ public class BetterCollections {
 		}
 
 		@Override
-		public MapEntryHandle<K, V> searchEntries(Comparable<? super Entry<K, V>> search, SortedSearchFilter filter) {
+		public MapEntryHandle<K, V> searchEntries(Comparable<? super Entry<K, V>> search, BetterSortedList.SortedSearchFilter filter) {
 			return unmodifiableEntry(getWrapped().searchEntries(entry -> search.compareTo((Map.Entry<K, V>) entry), filter));
 		}
 	}

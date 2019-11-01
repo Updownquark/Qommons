@@ -15,8 +15,8 @@ import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.BetterMapEntryImpl;
 import org.qommons.collect.BetterSet;
+import org.qommons.collect.BetterSortedList;
 import org.qommons.collect.BetterSortedMap;
-import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
@@ -157,7 +157,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	@Override
 	public BinaryTreeEntry<K, V> getEntry(K key) {
 		return wrap(theEntries.search(//
-			e -> theCompare.compare(key, e.getKey()), SortedSearchFilter.OnlyMatch));
+			e -> theCompare.compare(key, e.getKey()), BetterSortedList.SortedSearchFilter.OnlyMatch));
 	}
 
 	@Override
@@ -166,7 +166,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	}
 
 	@Override
-	public BinaryTreeEntry<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter) {
+	public BinaryTreeEntry<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, BetterSortedList.SortedSearchFilter filter) {
 		return wrap(theEntries.search(search, filter));
 	}
 
@@ -326,8 +326,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 
 		@Override
-		protected MutableCollectionElement<K> createMutableKeyHandle(BetterSet<Map.Entry<K, V>> entrySet,
-			Supplier<BetterSet<K>> keySet) {
+		protected MutableCollectionElement<K> createMutableKeyHandle(BetterSet<Map.Entry<K, V>> entrySet, Supplier<BetterSet<K>> keySet) {
 			MutableCollectionElement<Map.Entry<K, V>> mutableEntryEl = entrySet.mutableElement(theId);
 			return new MutableBinaryTreeKeyHandle<>(this, mutableEntryEl, keySet);
 		}
@@ -703,7 +702,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 
 		@Override
-		public BinaryTreeNode<K> search(Comparable<? super K> search, SortedSearchFilter filter) {
+		public BinaryTreeNode<K> search(Comparable<? super K> search, BetterSortedList.SortedSearchFilter filter) {
 			return handleFor(theEntries.search(e -> search.compareTo(e.getKey()), filter));
 		}
 
@@ -734,8 +733,8 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 
 		@Override
-		public BinaryTreeNode<K> getOrAdd(K value, boolean first, Runnable added) {
-			TreeEntry entry = (BetterTreeMap<K, V>.TreeEntry) BetterTreeMap.this.getOrPutEntry(value, null, first, added);
+		public BinaryTreeNode<K> getOrAdd(K value, ElementId after, ElementId before, boolean first, Runnable added) {
+			TreeEntry entry = (BetterTreeMap<K, V>.TreeEntry) BetterTreeMap.this.getOrPutEntry(value, null, after, before, first, added);
 			return entry == null ? null : entry.keyHandle();
 		}
 
@@ -830,7 +829,8 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 
 		@Override
-		public BinaryTreeNode<Map.Entry<K, V>> search(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter) {
+		public BinaryTreeNode<Map.Entry<K, V>> search(Comparable<? super Map.Entry<K, V>> search,
+			BetterSortedList.SortedSearchFilter filter) {
 			return (BinaryTreeNode<Map.Entry<K, V>>) super.search(search, filter);
 		}
 
@@ -845,8 +845,9 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 
 		@Override
-		public BinaryTreeNode<Map.Entry<K, V>> getOrAdd(Map.Entry<K, V> value, boolean first, Runnable added) {
-			return (BinaryTreeNode<Map.Entry<K, V>>) super.getOrAdd(value, first, added);
+		public BinaryTreeNode<Map.Entry<K, V>> getOrAdd(Map.Entry<K, V> value, ElementId after, ElementId before, boolean first,
+			Runnable added) {
+			return (BinaryTreeNode<Map.Entry<K, V>>) super.getOrAdd(value, after, before, first, added);
 		}
 
 		@Override

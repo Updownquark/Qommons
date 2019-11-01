@@ -47,8 +47,7 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 						return equals.apply(((Map.Entry<?, ?>) entry1).getKey(), ((Map.Entry<?, ?>) entry2).getKey());
 					else
 						return equals.apply(entry1, entry2);
-				}
-			);
+				});
 			return this;
 		}
 
@@ -184,13 +183,14 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	}
 
 	@Override
-	public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, boolean first, Runnable added) {
+	public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before,
+		boolean first, Runnable added) {
 		CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getOrAdd(//
 			theEntries.getHasher().applyAsInt(key), entry -> theEntries.getEquals().apply(entry.getKey(), key), //
 			() -> {
 				V newValue = value.apply(key);
 				return newEntry(key, newValue);
-			}, null, null, first, added);
+			}, after, before, first, added);
 		if (entryEl == null)
 			return null;
 		return handleFor(entryEl);
@@ -206,6 +206,12 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		return mutableHandleFor(theEntries.mutableElement(entryId));
 	}
 
+	/**
+	 * Checks an element ID for validity as a key ID in this map
+	 * 
+	 * @param elementId The ID to check
+	 * @return Whether the id is valid as a key ID in this map
+	 */
 	public boolean isValid(ElementId elementId) {
 		return theEntries.isValid(elementId);
 	}
@@ -343,8 +349,8 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
-		public CollectionElement<K> getOrAdd(K value, boolean first, Runnable added) {
-			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getOrAdd(newEntry(value, null), first, added);
+		public CollectionElement<K> getOrAdd(K value, ElementId after, ElementId before, boolean first, Runnable added) {
+			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getOrAdd(newEntry(value, null), after, before, first, added);
 			return entryEl == null ? null : handleFor(entryEl);
 		}
 

@@ -39,14 +39,17 @@ public class LambdaUtils {
 	}
 
 	public static <T, X> Function<T, X> constantFn(X value, String print, Object identifier) {
-		PrintableFunction<T, X> p = new PrintableFunction<>(t -> value,
-			print != null ? new ConstantSupply(print) : () -> String.valueOf(value), identifier);
+		return constantFn(value, print != null ? new ConstantSupply(print) : () -> String.valueOf(value), identifier);
+	}
+
+	public static <T, X> Function<T, X> constantFn(X value, Supplier<String> print, Object identifier) {
+		PrintableFunction<T, X> p = new PrintableFunction<>(t -> value, print != null ? print : () -> String.valueOf(value), identifier);
 		if (identifier != null) {
 			p = (PrintableFunction<T, X>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
 		}
 		return p;
 	}
-	
+
 	public static <T, V, X> BiFunction<T, V, X> constantBiFn(X value, String print, Object identifier) {
 		PrintableBiFunction<T, V, X> p = new PrintableBiFunction<>((t, v) -> value,
 			print != null ? new ConstantSupply(print) : () -> String.valueOf(value), identifier);
@@ -57,8 +60,11 @@ public class LambdaUtils {
 	}
 
 	public static <T> Supplier<T> constantSupplier(T value, String print, Object identifier) {
-		PrintableSupplier<T> p = new PrintableSupplier<>(() -> value,
-			print != null ? new ConstantSupply(print) : () -> String.valueOf(value), identifier);
+		return constantSupplier(value, print != null ? new ConstantSupply(print) : () -> String.valueOf(value), identifier);
+	}
+
+	public static <T> Supplier<T> constantSupplier(T value, Supplier<String> print, Object identifier) {
+		PrintableSupplier<T> p = new PrintableSupplier<>(() -> value, print != null ? print : () -> String.valueOf(value), identifier);
 		if (identifier != null) {
 			p = (PrintableSupplier<T>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
 		}
@@ -120,7 +126,7 @@ public class LambdaUtils {
 			return "identity";
 		}
 	}
-	
+
 	/** This class is only used for the {@link PrintableLambda#thePrint} field and doesn't extend PrintableLambda to avoid circularity */
 	private static class ConstantSupply implements Supplier<String> {
 		private final String theString;
@@ -155,7 +161,7 @@ public class LambdaUtils {
 		private final Supplier<String> thePrint;
 		private final Object identifier;
 		private final int hashCode;
-		
+
 		PrintableLambda(L lambda, String print, Object identifier) {
 			this(lambda, print != null ? new ConstantSupply(print) : lambda::toString, identifier);
 		}
@@ -171,7 +177,7 @@ public class LambdaUtils {
 			if (identifier != null) {
 				hashCode = identifier.hashCode();
 			} else {
-				hashCode=0;
+				hashCode = 0;
 			}
 		}
 
@@ -229,7 +235,7 @@ public class LambdaUtils {
 		PrintablePredicate(Predicate<T> pred, String print, Object identifier) {
 			super(pred, print, identifier);
 		}
-		
+
 		PrintablePredicate(Predicate<T> pred, Supplier<String> print) {
 			super(pred, print);
 		}
@@ -244,7 +250,7 @@ public class LambdaUtils {
 		PrintableFunction(Function<T, X> function, Supplier<String> print, Object identifier) {
 			super(function, print, identifier);
 		}
-		
+
 		PrintableFunction(Function<T, X> function, Supplier<String> print) {
 			super(function, print);
 		}
@@ -259,7 +265,7 @@ public class LambdaUtils {
 		PrintableBiFunction(BiFunction<T, U, X> function, String print, Object identifier) {
 			super(function, print, identifier);
 		}
-		
+
 		PrintableBiFunction(BiFunction<T, U, X> function, Supplier<String> print, Object identifier) {
 			super(function, print, identifier);
 		}

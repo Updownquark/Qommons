@@ -1,14 +1,17 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.NavigableSet;
+import java.util.NoSuchElementException;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.qommons.Identifiable;
 import org.qommons.QommonsUtils;
-import org.qommons.Ternian;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
@@ -24,147 +27,7 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * 
  * @param <E> The type of values in the set
  */
-public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, NavigableSet<E> {
-	/**
-	 * A filter on sorted search results. The underlying code for searches in a {@link BetterSortedSet} will always return an element unless
-	 * the set is empty. The value will either match the search exactly or will be adjacent to where a value matching the search exactly
-	 * would be inserted.
-	 * 
-	 * One of these filters may be used to direct and filter the search results.
-	 * 
-	 * Note that this class cannot be used to exclude an exact match. This may be done by creating a {@link Comparable search} that never
-	 * returns zero. For example, if a result strictly less than a search is desired, create a wrapping search that returns 1 for any values
-	 * that the wrapped search returns 0 for.
-	 * 
-	 * @see BetterSortedSet#search(Comparable, SortedSearchFilter)
-	 */
-	enum SortedSearchFilter {
-		/**
-		 * Accepts only results less than or equal to a search (i.e. <code>search.{@link Comparable#compareTo compareTo}(value)&gt;=0</code>
-		 */
-		Less(Ternian.TRUE, true),
-		/**
-		 * Prefers results less than or equal to a search (i.e. <code>search.{@link Comparable#compareTo compareTo}(value)&gt;=0</code>, but
-		 * accepts a greater result if no lesser result exists
-		 */
-		PreferLess(Ternian.TRUE, false),
-		/** Accepts only results for which a search returns 0 */
-		OnlyMatch(Ternian.NONE, true),
-		/**
-		 * Prefers results greater than or equal to a search (i.e. <code>search.{@link Comparable#compareTo compareTo}(value)&lt;=0</code>,
-		 * but accepts a lesser result if no greater result exists
-		 */
-		PreferGreater(Ternian.FALSE, false),
-		/**
-		 * Accepts only results greater than or equal to a search (i.e.
-		 * <code>search.{@link Comparable#compareTo compareTo}(value)&lt;=0</code>
-		 */
-		Greater(Ternian.FALSE, true);
-
-		/** Whether this search prefers values less than an exact match, or {@link Ternian#NONE} for {@link #OnlyMatch} */
-		public final Ternian less;
-		/** Whether this search allows matches that do not match the #less value */
-		public final boolean strict;
-
-		private SortedSearchFilter(Ternian less, boolean strict) {
-			this.less = less;
-			this.strict = strict;
-		}
-
-		public SortedSearchFilter opposite() {
-			switch (this) {
-			case Less:
-				return Greater;
-			case PreferLess:
-				return PreferGreater;
-			case PreferGreater:
-				return PreferLess;
-			case Greater:
-				return Less;
-			default:
-				return this;
-			}
-		}
-
-		public static SortedSearchFilter of(Boolean less, boolean strict) {
-			for (SortedSearchFilter ssf : SortedSearchFilter.values())
-				if (Objects.equals(ssf.less.value, less) && ssf.strict == strict)
-					return ssf;
-			throw new IllegalArgumentException("No such filter exists");
-		}
-
-		/** @return A short String representing this filter */
-		public String getSymbol() {
-			switch (this) {
-			case Less:
-				return "<";
-			case PreferLess:
-				return "<?";
-			case OnlyMatch:
-				return "==";
-			case PreferGreater:
-				return ">?";
-			case Greater:
-				return ">";
-			default:
-				throw new IllegalStateException();
-			}
-		}
-	}
-
-	/**
-	 * Searches this sorted set for an element
-	 *
-	 * @param search The search to navigate through this set for the target value. The search must follow this set's {@link #comparator()
-	 *        order}.
-	 * @param filter The filter on the result
-	 * @return The element that is the best found result of the search, or null if this set is empty or does not contain any element
-	 *         matching the given filter
-	 */
-	CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter);
-
-	/**
-	 * Same as {@link #search(Comparable, SortedSearchFilter)} but flattens to a value
-	 * 
-	 * @param search The search to navigate through this set for the target value. The search must follow this set's {@link #comparator()
-	 *        order}.
-	 * @param filter The filter on the result
-	 * @return The value that is the best found result of the search, or null if this set is empty or does not contain any element matching
-	 *         the given filter
-	 */
-	default E searchValue(Comparable<? super E> search, SortedSearchFilter filter) {
-		CollectionElement<E> el = search(search, filter);
-		return el == null ? null : el.get();
-	}
-
-	@Override
-	default CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
-		while (true) {
-			CollectionElement<E> found = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
-			if (found == null) {
-				found = addElement(value, first);
-				if (found != null && added != null)
-					added.run();
-				return found;
-			}
-			int compare = comparator().compare(value, found.get());
-			if (compare == 0)
-				return found;
-			try (Transaction t = lock(true, true, null)) {
-				MutableCollectionElement<E> mutableElement;
-				try {
-					mutableElement = mutableElement(found.getElementId());
-				} catch (IllegalArgumentException e) {
-					continue; // Possible it may have been removed already
-				}
-				ElementId addedId = mutableElement.add(value, compare < 0);
-				if (added != null)
-					added.run();
-				return getElement(addedId);
-			}
-		}
-	}
-
+public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, NavigableSet<E> {
 	/**
 	 * @param search The search to use
 	 * @return Either:
@@ -175,6 +38,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	 *         <code>search</code> would be if it were added</li>
 	 *         </ul>
 	 */
+	@Override
 	int indexFor(Comparable<? super E> search);
 
 	@Override
@@ -187,27 +51,27 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 	@Override
 	default MutableElementSpliterator<E> spliterator() {
-		return BetterList.super.spliterator();
+		return BetterSortedList.super.spliterator();
 	}
 
 	@Override
 	default Iterator<E> iterator() {
-		return BetterList.super.iterator();
+		return BetterSortedList.super.iterator();
 	}
 
 	@Override
 	default boolean contains(Object c) {
-		return BetterList.super.contains(c);
+		return BetterSortedList.super.contains(c);
 	}
 
 	@Override
 	default boolean containsAll(Collection<?> c) {
-		return BetterList.super.containsAll(c);
+		return BetterSortedList.super.containsAll(c);
 	}
 
 	@Override
 	default Object[] toArray() {
-		return BetterList.super.toArray();
+		return BetterSortedList.super.toArray();
 	}
 
 	@Override
@@ -224,86 +88,27 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 	@Override
 	default boolean remove(Object c) {
-		return BetterList.super.remove(c);
+		return BetterSortedList.super.remove(c);
 	}
 
 	@Override
 	default boolean removeAll(Collection<?> c) {
-		return BetterList.super.removeAll(c);
+		return BetterSortedList.super.removeAll(c);
 	}
 
 	@Override
 	default boolean retainAll(Collection<?> c) {
-		return BetterList.super.retainAll(c);
-	}
-
-	/**
-	 * Creates a {@link Comparable} to use in searching this sorted set from a value compatible with the set's comparator
-	 * 
-	 * @param value The comparable value
-	 * @param onExact The value to return when the comparator matches. For example, to search for values strictly less than
-	 *        <code>value</code>, an integer &lt;0 should be specified.
-	 * @return The search to use with {@link #search(Comparable, SortedSearchFilter)}, {@link #subSet(Comparable, Comparable)}, etc.
-	 */
-	default Comparable<? super E> searchFor(E value, int onExact) {
-		class ValueSearch<V> implements Comparable<V> {
-			private final Comparator<? super V> theCompare;
-			private final V theValue;
-			private final int theOnExact;
-
-			ValueSearch(Comparator<? super V> compare, V val, int _onExact) {
-				theCompare = compare;
-				theValue = val;
-				theOnExact = _onExact;
-			}
-
-			@Override
-			public int compareTo(V v) {
-				int compare = theCompare.compare(theValue, v);
-				if (compare == 0)
-					compare = theOnExact;
-				return compare;
-			}
-
-			@Override
-			public int hashCode() {
-				return Objects.hash(theCompare, theValue, theOnExact);
-			}
-
-			@Override
-			public boolean equals(Object o) {
-				if (!(o instanceof ValueSearch))
-					return false;
-				ValueSearch<?> other = (ValueSearch<?>) o;
-				return theCompare.equals(other.theCompare) && Objects.equals(theValue, other.theValue) && theOnExact == other.theOnExact;
-			}
-
-			@Override
-			public String toString() {
-				if (theOnExact < 0)
-					return "<" + theValue;
-				else if (theOnExact == 0)
-					return String.valueOf(theValue);
-				else
-					return ">" + theValue;
-			}
-		}
-		return new ValueSearch<>(comparator(), value, onExact);
+		return BetterSortedList.super.retainAll(c);
 	}
 
 	@Override
 	default int indexOf(Object o) {
-		return BetterList.super.indexOf(o);
+		return BetterSortedList.super.indexOf(o);
 	}
 
 	@Override
 	default int lastIndexOf(Object o) {
-		return BetterList.super.lastIndexOf(o);
-	}
-
-	@Override
-	default CollectionElement<E> getElement(E value, boolean first) {
-		return search(searchFor(value, 0), SortedSearchFilter.OnlyMatch);
+		return BetterSortedList.super.lastIndexOf(o);
 	}
 
 	@Override
@@ -318,35 +123,35 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 	@Override
 	default E pollLast() {
-		return BetterList.super.pollLast();
+		return BetterSortedList.super.pollLast();
 	}
 
 	@Override
 	default E pollFirst() {
-		return BetterList.super.pollFirst();
+		return BetterSortedList.super.pollFirst();
 	}
 
 	@Override
 	default E floor(E e) {
-		CollectionElement<E> element = search(searchFor(e, 0), SortedSearchFilter.Less);
+		CollectionElement<E> element = search(searchFor(e, 0), BetterSortedList.SortedSearchFilter.Less);
 		return element == null ? null : element.get();
 	}
 
 	@Override
 	default E lower(E e) {
-		CollectionElement<E> element = search(searchFor(e, -1), SortedSearchFilter.Less);
+		CollectionElement<E> element = search(searchFor(e, -1), BetterSortedList.SortedSearchFilter.Less);
 		return element == null ? null : element.get();
 	}
 
 	@Override
 	default E ceiling(E e) {
-		CollectionElement<E> element = search(searchFor(e, 0), SortedSearchFilter.Greater);
+		CollectionElement<E> element = search(searchFor(e, 0), BetterSortedList.SortedSearchFilter.Greater);
 		return element == null ? null : element.get();
 	}
 
 	@Override
 	default E higher(E e) {
-		CollectionElement<E> element = search(searchFor(e, 1), SortedSearchFilter.Greater);
+		CollectionElement<E> element = search(searchFor(e, 1), BetterSortedList.SortedSearchFilter.Greater);
 		return element == null ? null : element.get();
 	}
 
@@ -391,7 +196,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 	 */
 	default <T> T betweenElements(Comparable<? super E> search, Function<? super CollectionElement<E>, ? extends T> onMatchOrTerminal,
 		BiFunction<? super CollectionElement<E>, ? super CollectionElement<E>, ? extends T> interpolate, Supplier<? extends T> onEmpty) {
-		CollectionElement<E> found = search(search, SortedSearchFilter.Less);
+		CollectionElement<E> found = search(search, BetterSortedList.SortedSearchFilter.Less);
 		if (found == null) { // No element <= search
 			found = getTerminalElement(true);
 			if (found == null)
@@ -473,37 +278,6 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			Comparable<? super E> to = toIndex == size() ? null : searchFor(get(toIndex), -1);
 			return subSet(from, to);
 		}
-	}
-
-	/**
-	 * @param <E> The type of value to compare
-	 * @param c1 The first search
-	 * @param c2 The other search
-	 * @param low Whether the other search is for the lower or upper bound of a new sorted set
-	 * @return A lower or upper bound for both the given search and this sub set's lower or upper bound
-	 */
-	public static <E> Comparable<? super E> and(Comparable<? super E> c1, Comparable<? super E> c2, boolean low) {
-		if (c1 == null)
-			return c2;
-		else if (c2 == null)
-			return c1;
-		class AndCompare implements Comparable<E> {
-			@Override
-			public int compareTo(E v) {
-				int comp = c1.compareTo(v);
-				if (low && comp <= 0)
-					comp = c2.compareTo(v);
-				else if (!low && comp >= 0)
-					comp = c2.compareTo(v);
-				return comp;
-			}
-
-			@Override
-			public String toString() {
-				return c1 + " and " + c2;
-			}
-		}
-		return new AndCompare();
 	}
 
 	/**
@@ -767,9 +541,9 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			if (!belongs(value))
 				return StdMsg.ILLEGAL_ELEMENT;
 			if (after == null && from != null)
-				after = CollectionElement.getElementId(theWrapped.search(from, SortedSearchFilter.Less));
+				after = CollectionElement.getElementId(theWrapped.search(from, BetterSortedList.SortedSearchFilter.Less));
 			if (before == null && to != null)
-				before = CollectionElement.getElementId(theWrapped.search(to, SortedSearchFilter.Greater));
+				before = CollectionElement.getElementId(theWrapped.search(to, BetterSortedList.SortedSearchFilter.Greater));
 			return theWrapped.canAdd(value, after, before);
 		}
 
@@ -779,9 +553,9 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 			if (!belongs(value))
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 			if (after == null && from != null)
-				after = CollectionElement.getElementId(theWrapped.search(from, SortedSearchFilter.Less));
+				after = CollectionElement.getElementId(theWrapped.search(from, BetterSortedList.SortedSearchFilter.Less));
 			if (before == null && to != null)
-				before = CollectionElement.getElementId(theWrapped.search(to, SortedSearchFilter.Greater));
+				before = CollectionElement.getElementId(theWrapped.search(to, BetterSortedList.SortedSearchFilter.Greater));
 			return theWrapped.addElement(value, after, before, first);
 		}
 
@@ -838,12 +612,12 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 				if (from == null)
 					wrapTerminal = theWrapped.getTerminalElement(true);
 				else
-					wrapTerminal = theWrapped.search(from, SortedSearchFilter.PreferGreater);
+					wrapTerminal = theWrapped.search(from, BetterSortedList.SortedSearchFilter.PreferGreater);
 			} else {
 				if (to == null)
 					wrapTerminal = theWrapped.getTerminalElement(false);
 				else
-					wrapTerminal = theWrapped.search(to, SortedSearchFilter.PreferLess);
+					wrapTerminal = theWrapped.search(to, BetterSortedList.SortedSearchFilter.PreferLess);
 			}
 			if (wrapTerminal == null)
 				return null;
@@ -872,7 +646,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+		public CollectionElement<E> search(Comparable<? super E> search, BetterSortedList.SortedSearchFilter filter) {
 			CollectionElement<E> wrapResult = theWrapped.search(boundSearch(search), filter);
 			if (wrapResult == null)
 				return null;
@@ -886,7 +660,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 		@Override
 		public BetterSortedSet<E> subSet(Comparable<? super E> innerFrom, Comparable<? super E> innerTo) {
-			return new BetterSubSet<>(theWrapped, and(from, innerFrom, true), and(to, innerTo, false));
+			return new BetterSubSet<>(theWrapped, BetterSortedList.and(from, innerFrom, true), BetterSortedList.and(to, innerTo, false));
 		}
 
 				@Override
@@ -898,9 +672,9 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 
 		@Override
 		public void clear() {
-			CollectionElement<E> bound = from == null ? null : theWrapped.search(from, SortedSearchFilter.Less);
+			CollectionElement<E> bound = from == null ? null : theWrapped.search(from, BetterSortedList.SortedSearchFilter.Less);
 			if (bound == null)
-				bound = to == null ? null : theWrapped.search(to, SortedSearchFilter.Greater);
+				bound = to == null ? null : theWrapped.search(to, BetterSortedList.SortedSearchFilter.Greater);
 			if (bound == null) // This sub set contains all of the super set's elements
 				theWrapped.clear();
 			else
@@ -1085,7 +859,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+		public CollectionElement<E> search(Comparable<? super E> search, BetterSortedList.SortedSearchFilter filter) {
 			return CollectionElement.reverse(getWrapped().search(reverse(search), filter.opposite()));
 		}
 
@@ -1155,7 +929,7 @@ public interface BetterSortedSet<E> extends BetterSet<E>, BetterList<E>, Navigab
 		}
 
 		@Override
-		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+		public CollectionElement<E> search(Comparable<? super E> search, BetterSortedList.SortedSearchFilter filter) {
 			return null;
 		}
 

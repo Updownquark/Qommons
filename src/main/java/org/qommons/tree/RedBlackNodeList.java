@@ -9,8 +9,9 @@ import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterList;
+import org.qommons.collect.BetterSortedList;
+import org.qommons.collect.BetterSortedList.SortedSearchFilter;
 import org.qommons.collect.BetterSortedSet;
-import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
@@ -335,7 +336,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	 * @return The (or a) node in this list for which <code>search{@link Comparable#compareTo(Object) compareTo()}</code> returns zero, or
 	 *         the node in this list closest to such a hypothetical node matching the given filter.
 	 */
-	public BinaryTreeNode<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+	public BinaryTreeNode<E> search(Comparable<? super E> search, BetterSortedList.SortedSearchFilter filter) {
 		if (isEmpty())
 			return null;
 		return getLocker().doOptimistically(null, //
@@ -349,13 +350,13 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 					if (search.compareTo(node.get()) == 0) {
 						if (filter.strict) {
 							// Interpret this to mean that the caller is interested in the first or last node matching the search
-							BinaryTreeNode<E> adj = getAdjacentElement(node.getElementId(), filter == SortedSearchFilter.Greater);
+							BinaryTreeNode<E> adj = getAdjacentElement(node.getElementId(), filter == BetterSortedList.SortedSearchFilter.Greater);
 							while (adj != null && search.compareTo(adj.get()) == 0) {
 								node = adj;
-								adj = getAdjacentElement(node.getElementId(), filter == SortedSearchFilter.Greater);
+								adj = getAdjacentElement(node.getElementId(), filter == BetterSortedList.SortedSearchFilter.Greater);
 							}
 						}
-					} else if (filter == SortedSearchFilter.OnlyMatch)
+					} else if (filter == BetterSortedList.SortedSearchFilter.OnlyMatch)
 						node = null;
 				}
 				return node;

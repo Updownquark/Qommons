@@ -283,8 +283,8 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 
 			@Override
 			public SortedSetSplitSpliterable<E> subSet(Comparable<? super E> innerFrom, Comparable<? super E> innerTo) {
-				return new SSSSSubSet<>(getWrapped(), BetterSortedSet.and(getFrom(), innerFrom, true),
-					BetterSortedSet.and(getTo(), innerTo, false));
+				return new SSSSSubSet<>(getWrapped(), BetterSortedList.and(getFrom(), innerFrom, true),
+					BetterSortedList.and(getTo(), innerTo, false));
 			}
 		}
 	}

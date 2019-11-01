@@ -1,5 +1,6 @@
 package org.qommons.tree;
 
+import org.qommons.collect.ElementId;
 import org.qommons.collect.SplitSpliterable;
 
 public interface TreeBasedSet<E> extends TreeBasedSortedList<E>, SplitSpliterable.SortedSetSplitSpliterable<E> {
@@ -9,5 +10,5 @@ public interface TreeBasedSet<E> extends TreeBasedSortedList<E>, SplitSpliterabl
 	}
 
 	@Override
-	BinaryTreeNode<E> getOrAdd(E value, boolean first, Runnable added);
+	BinaryTreeNode<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable added);
 }

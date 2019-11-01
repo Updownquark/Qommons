@@ -8,23 +8,21 @@ import java.util.SortedSet;
 
 import org.qommons.Transaction;
 import org.qommons.collect.BetterCollection;
-import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
+import org.qommons.collect.BetterSortedList;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
-import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.OptimisticContext;
 import org.qommons.collect.StampedLockingStrategy;
-import org.qommons.collect.ValueStoredCollection;
 
 /**
  * A {@link org.qommons.collect.BetterList} backed by a tree structure that sorts its values, with duplicates allowed
  * 
  * @param <E> The type of value in the list
  */
-public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStoredCollection<E> {
+public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSortedList<E> {
 	private static final String DEFAULT_DESCRIP = "sorted-tree-list";
 
 	/**
@@ -32,7 +30,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 	 * @param <L> The sub-type of the list
 	 */
 	public static class Builder<E, L extends SortedTreeList<E>> extends RBNLBuilder<E, L> {
-	private final Comparator<? super E> theCompare;
+		private final Comparator<? super E> theCompare;
 
 		/** @param compare The comparator for the list's ordering */
 		protected Builder(Comparator<? super E> compare) {
@@ -138,6 +136,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 	}
 
 	/** @return The comparator that orders this list's values */
+	@Override
 	public Comparator<? super E> comparator() {
 		return theCompare;
 	}
@@ -156,6 +155,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 	 *         <li>or <code>-(i-1)</code> where <code>i</code> is the index at which such a value would be inserted in this list</li>
 	 *         </ul>
 	 */
+	@Override
 	public int indexFor(Comparable<? super E> search) {
 		if (isEmpty())
 			return -1;
@@ -170,7 +170,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 
 	@Override
 	public BinaryTreeNode<E> getElement(E value, boolean first) {
-		BinaryTreeNode<E> found = search(searchFor(value, 0), SortedSearchFilter.OnlyMatch);
+		BinaryTreeNode<E> found = search(searchFor(value, 0), BetterSortedList.SortedSearchFilter.OnlyMatch);
 		if (found == null)
 			return null;
 		else if (isDistinct || Objects.equals(found.get(), value))
@@ -214,59 +214,9 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 			else if (compare < 0)
 				return StdMsg.ILLEGAL_ELEMENT_POSITION;
 		}
-		if (isDistinct && search(searchFor(value, 0), SortedSearchFilter.OnlyMatch) != null)
+		if (isDistinct && search(searchFor(value, 0), BetterSortedList.SortedSearchFilter.OnlyMatch) != null)
 			return StdMsg.ELEMENT_EXISTS;
 		return super.canAdd(value, after, before);
-	}
-
-	/**
-	 * Creates a {@link Comparable} to use in searching this sorted list from a value compatible with the list's comparator
-	 * 
-	 * @param value The comparable value
-	 * @param onExact The value to return when the comparator matches. For example, to search for values strictly less than
-	 *        <code>value</code>, an integer &lt;0 should be specified.
-	 * @return The search to use with {@link #search(Comparable, SortedSearchFilter)}
-	 */
-	public Comparable<? super E> searchFor(E value, int onExact) {
-		class ValueSearch<V> implements Comparable<V> {
-			private final Comparator<? super V> theValueCompare;
-			private final V theValue;
-			private final int theOnExact;
-
-			ValueSearch(Comparator<? super V> compare, V val, int _onExact) {
-				theValueCompare = compare;
-				theValue = val;
-				theOnExact = _onExact;
-			}
-
-			@Override
-			public int compareTo(V v) {
-				int compare = theValueCompare.compare(theValue, v);
-				if (compare == 0)
-					compare = theOnExact;
-				return compare;
-			}
-
-			@Override
-			public boolean equals(Object o) {
-				if (!(o instanceof ValueSearch))
-					return false;
-				ValueSearch<?> other = (ValueSearch<?>) o;
-				return theValueCompare.equals(other.theValueCompare) && Objects.equals(theValue, other.theValue)
-					&& theOnExact == other.theOnExact;
-			}
-
-			@Override
-			public String toString() {
-				if (theOnExact < 0)
-					return "<" + theValue;
-				else if (theOnExact == 0)
-					return String.valueOf(theValue);
-				else
-					return ">" + theValue;
-			}
-		}
-		return new ValueSearch<>(comparator(), value, onExact);
 	}
 
 	@Override
@@ -294,7 +244,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 				if ((first && after != null) || (!first && before != null))
 					return super.addElement(value, after, null, true);
 			}
-			BinaryTreeNode<E> result = search(searchFor(value, 0), SortedSearchFilter.of(first, false));
+			BinaryTreeNode<E> result = search(searchFor(value, 0), BetterSortedList.SortedSearchFilter.of(first, false));
 			if (result == null)
 				return super.addElement(value, after, before, first);
 			int compare = theCompare.compare(result.get(), value);
@@ -319,37 +269,14 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 	}
 
 	@Override
-	public BinaryTreeNode<E> getOrAdd(E value, boolean first, Runnable added) {
-		while (true) {
-			BinaryTreeNode<E> found = search(searchFor(value, 0), SortedSearchFilter.PreferLess);
-			if (found == null) {
-				found = addElement(value, first);
-				if (found != null && added != null)
-					added.run();
-				return found;
-			}
-			int compare = comparator().compare(value, found.get());
-			if (compare == 0)
-				return found;
-			try (Transaction t = lock(true, true, null)) {
-				MutableCollectionElement<E> mutableElement;
-				try {
-					mutableElement = mutableElement(found.getElementId());
-				} catch (IllegalArgumentException e) {
-					continue; // Possible it may have been removed already
-				}
-				ElementId addedId = mutableElement.add(value, compare < 0);
-				if (added != null)
-					added.run();
-				return getElement(addedId);
-			}
-		}
+	public BinaryTreeNode<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable added) {
+		return (BinaryTreeNode<E>) BetterSortedList.super.getOrAdd(value, after, before, first, added);
 	}
 
 	@Override
 	public boolean isConsistent(ElementId element) {
 		return super.isConsistent(element, theCompare, isDistinct);
-		}
+	}
 
 	@Override
 	public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
@@ -359,7 +286,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements ValueStore
 	@Override
 	public boolean checkConsistency() {
 		return super.checkConsistency(theCompare, isDistinct);
-			}
+	}
 
 	@Override
 	public <X> boolean repair(RepairListener<E, X> listener) {

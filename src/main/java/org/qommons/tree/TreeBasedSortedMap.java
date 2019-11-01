@@ -3,8 +3,8 @@ package org.qommons.tree;
 import java.util.Map;
 import java.util.function.Function;
 
+import org.qommons.collect.BetterSortedList;
 import org.qommons.collect.BetterSortedMap;
-import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.collect.ElementId;
 
 public interface TreeBasedSortedMap<K, V> extends BetterSortedMap<K, V> {
@@ -32,16 +32,17 @@ public interface TreeBasedSortedMap<K, V> extends BetterSortedMap<K, V> {
 	TreeBasedSet<Map.Entry<K, V>> entrySet();
 
 	@Override
-	default BinaryTreeEntry<K, V> search(Comparable<? super K> search, SortedSearchFilter filter) {
+	default BinaryTreeEntry<K, V> search(Comparable<? super K> search, BetterSortedList.SortedSearchFilter filter) {
 		return (BinaryTreeEntry<K, V>) BetterSortedMap.super.search(search, filter);
 	}
 
 	@Override
-	BinaryTreeEntry<K, V> searchEntries(Comparable<? super java.util.Map.Entry<K, V>> search, SortedSearchFilter filter);
+	BinaryTreeEntry<K, V> searchEntries(Comparable<? super java.util.Map.Entry<K, V>> search, BetterSortedList.SortedSearchFilter filter);
 
 	@Override
-	default BinaryTreeEntry<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, boolean first, Runnable added) {
-		return (BinaryTreeEntry<K, V>) BetterSortedMap.super.getOrPutEntry(key, value, first, added);
+	default BinaryTreeEntry<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId afterKey, ElementId beforeKey,
+		boolean first, Runnable added) {
+		return (BinaryTreeEntry<K, V>) BetterSortedMap.super.getOrPutEntry(key, value, afterKey, beforeKey, first, added);
 	}
 
 	@Override

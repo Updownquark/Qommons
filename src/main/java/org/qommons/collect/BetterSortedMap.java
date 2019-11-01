@@ -8,7 +8,7 @@ import java.util.function.Function;
 
 import org.qommons.Identifiable;
 import org.qommons.Transaction;
-import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
+import org.qommons.collect.BetterSortedList.SortedSearchFilter;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
@@ -48,7 +48,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 	 * @param filter The filter on the result
 	 * @return The result of the search, or null if no such value was found
 	 */
-	default MapEntryHandle<K, V> search(Comparable<? super K> search, SortedSearchFilter filter) {
+	default MapEntryHandle<K, V> search(Comparable<? super K> search, BetterSortedList.SortedSearchFilter filter) {
 		return searchEntries(//
 			entry -> search.compareTo(entry.getKey()), filter);
 	}
@@ -61,12 +61,80 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 	 * @param filter The filter on the result
 	 * @return The result of the search, or null if no such value was found
 	 */
-	MapEntryHandle<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter);
+	MapEntryHandle<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, BetterSortedList.SortedSearchFilter filter);
 
 	@Override
-	default MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, boolean first, Runnable added) {
+	MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first);
+
+	@Override
+	default MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before,
+		boolean first, Runnable added) {
+		if (after != null || before != null) {
+			// If the given elements constrain the search space, we can probably be faster than the general method below
+			try (Transaction t = lock(true, null)) {
+				ElementId best = first ? after : before;
+				ElementId worst = first ? before : after;
+				if (best != null) {
+					MapEntryHandle<K, V> bestEntry = getEntryById(best);
+					int comp = comparator().compare(key, bestEntry.getKey());
+					if ((comp < 0) == first)
+						throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
+					while (true) {
+						if (comp == 0)
+							return bestEntry;
+						bestEntry = getAdjacentEntry(bestEntry.getElementId(), first);
+						if (bestEntry == null || (worst != null && (bestEntry.getElementId().compareTo(worst) > 0) == first))
+							break;
+						comp = comparator().compare(key, bestEntry.getKey());
+						if ((comp < 0) == first) {
+							MapEntryHandle<K, V> addedEntry = putEntry(key, value.apply(key), //
+								first ? null : bestEntry.getElementId(), //
+								first ? bestEntry.getElementId() : null, first);
+							if (added != null)
+								added.run();
+							return addedEntry;
+						}
+					}
+					if (worst == null) {
+						MapEntryHandle<K, V> addedEntry = putEntry(key, value.apply(key), //
+							first ? getTerminalEntry(false).getElementId() : null, //
+							first ? null : getTerminalEntry(true).getElementId(), !first);
+						if (added != null)
+							added.run();
+						return addedEntry;
+					}
+				} else {
+					MapEntryHandle<K, V> worstEntry = getEntryById(worst);
+					int comp = comparator().compare(key, worstEntry.getKey());
+					if ((comp > 0) == first)
+						throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
+					while (true) {
+						if (comp == 0)
+							return worstEntry;
+						worstEntry = getAdjacentEntry(worstEntry.getElementId(), !first);
+						if (worstEntry == null)
+							break;
+						comp = comparator().compare(key, worstEntry.getKey());
+						if ((comp > 0) == first) {
+							MapEntryHandle<K, V> addedEntry = putEntry(key, value.apply(key), //
+								first ? worstEntry.getElementId() : null, //
+								first ? null : worstEntry.getElementId(), !first);
+							if (added != null)
+								added.run();
+							return addedEntry;
+						}
+					}
+					MapEntryHandle<K, V> addedEntry = putEntry(key, value.apply(key), //
+						first ? getTerminalEntry(true).getElementId() : null, //
+						first ? null : getTerminalEntry(false).getElementId(), first);
+					if (added != null)
+						added.run();
+					return addedEntry;
+				}
+			}
+		}
 		// Don't lock initially. If we can find it optimistically, we'll do that.
-		MapEntryHandle<K, V> found = search(keySet().searchFor(key, 0), SortedSearchFilter.PreferLess);
+		MapEntryHandle<K, V> found = search(keySet().searchFor(key, 0), BetterSortedList.SortedSearchFilter.PreferLess);
 		int compare = 0;
 		if (found != null) {
 			compare = comparator().compare(key, found.getKey());
@@ -94,7 +162,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 							compare = 0;
 						} else if ((adjCompare < 0) == (compare < 0)) {
 							// Multiple elements have been added since we got the lock. Do the search again.
-							found = search(keySet().searchFor(key, 0), SortedSearchFilter.PreferLess);
+							found = search(keySet().searchFor(key, 0), BetterSortedList.SortedSearchFilter.PreferLess);
 							compare = comparator().compare(key, found.getKey());
 						} else {
 							found = putEntry(key, value.apply(key), //
@@ -107,7 +175,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 				}
 			} else {
 				// The map was null (see if it still is) or the found element was removed (do the search again).
-				found = search(keySet().searchFor(key, 0), SortedSearchFilter.PreferLess);
+				found = search(keySet().searchFor(key, 0), BetterSortedList.SortedSearchFilter.PreferLess);
 				if (found == null) {
 					// The map is still null. Add the first entry.
 					found = putEntry(key, value.apply(key), first);
@@ -141,7 +209,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default Map.Entry<K, V> lowerEntry(K key) {
-		return search(keySet().searchFor(key, -1), SortedSearchFilter.Less);
+		return search(keySet().searchFor(key, -1), BetterSortedList.SortedSearchFilter.Less);
 	}
 
 	@Override
@@ -160,7 +228,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default Map.Entry<K, V> floorEntry(K key) {
-		return search(keySet().searchFor(key, 0), SortedSearchFilter.Less);
+		return search(keySet().searchFor(key, 0), BetterSortedList.SortedSearchFilter.Less);
 	}
 
 	@Override
@@ -170,7 +238,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default Map.Entry<K, V> ceilingEntry(K key) {
-		return search(keySet().searchFor(key, 0), SortedSearchFilter.Greater);
+		return search(keySet().searchFor(key, 0), BetterSortedList.SortedSearchFilter.Greater);
 	}
 
 	@Override
@@ -180,7 +248,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default Map.Entry<K, V> higherEntry(K key) {
-		return search(keySet().searchFor(key, 1), SortedSearchFilter.Greater);
+		return search(keySet().searchFor(key, 1), BetterSortedList.SortedSearchFilter.Greater);
 	}
 
 	@Override
@@ -190,17 +258,17 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default Map.Entry<K, V> firstEntry() {
-		return search(k -> -1, SortedSearchFilter.PreferGreater);
+		return search(k -> -1, BetterSortedList.SortedSearchFilter.PreferGreater);
 	}
 
 	@Override
 	default Map.Entry<K, V> lastEntry() {
-		return search(k -> 1, SortedSearchFilter.PreferGreater);
+		return search(k -> 1, BetterSortedList.SortedSearchFilter.PreferGreater);
 	}
 
 	@Override
 	default Map.Entry<K, V> pollFirstEntry() {
-		MapEntryHandle<K, V> handle = search(v -> -1, SortedSearchFilter.PreferLess);
+		MapEntryHandle<K, V> handle = search(v -> -1, BetterSortedList.SortedSearchFilter.PreferLess);
 		if (handle != null) {
 			Map.Entry<K, V> result = new ImmutableMapEntry<>(handle.getKey(), handle.get());
 			forMutableEntry(handle.getElementId(), el -> el.remove());
@@ -211,7 +279,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default Map.Entry<K, V> pollLastEntry() {
-		MapEntryHandle<K, V> handle = search(v -> 1, SortedSearchFilter.PreferLess);
+		MapEntryHandle<K, V> handle = search(v -> 1, BetterSortedList.SortedSearchFilter.PreferLess);
 		if (handle != null) {
 			Map.Entry<K, V> result = new ImmutableMapEntry<>(handle.getKey(), handle.get());
 			forMutableEntry(handle.getElementId(), el -> el.remove());
@@ -377,7 +445,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		@Override
-		public MapEntryHandle<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter) {
+		public MapEntryHandle<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, BetterSortedList.SortedSearchFilter filter) {
 			return getWrapped().searchEntries(v -> -search.compareTo(v), filter.opposite());
 		}
 	}
@@ -420,7 +488,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		@Override
-		public CollectionElement<Map.Entry<K, V>> search(Comparable<? super Entry<K, V>> search, SortedSearchFilter filter) {
+		public CollectionElement<Map.Entry<K, V>> search(Comparable<? super Entry<K, V>> search, BetterSortedList.SortedSearchFilter filter) {
 			MapEntryHandle<K, V> result = getMap().searchEntries(search, filter);
 			if (result == null)
 				return null;
@@ -528,7 +596,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		@Override
-		public MapEntryHandle<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter) {
+		public MapEntryHandle<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, BetterSortedList.SortedSearchFilter filter) {
 			return theSource.searchEntries(boundSearch(search), filter);
 		}
 

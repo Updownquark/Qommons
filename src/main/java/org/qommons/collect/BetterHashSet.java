@@ -480,8 +480,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
-		return getOrAdd(theHasher.applyAsInt(value), equalsTest(value), () -> value, null, null, first, added);
+	public CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable added) {
+		return getOrAdd(theHasher.applyAsInt(value), equalsTest(value), () -> value, after, before, first, added);
 	}
 
 	@Override

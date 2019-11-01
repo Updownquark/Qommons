@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.qommons.Identifiable;
+import org.qommons.LambdaUtils;
 import org.qommons.Lockable;
 import org.qommons.QommonsUtils;
 import org.qommons.StructuredTransactable;
@@ -80,7 +81,16 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 	 * @param first Whether to prefer inserting the key toward the beginning or end of the key set (if supported)
 	 * @return The handle for the new or updated entry
 	 */
-	MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first);
+	default MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
+		boolean[] added = new boolean[1];
+		MapEntryHandle<K, V> entry = getOrPutEntry(key, LambdaUtils.constantFn(value, () -> String.valueOf(value), value), after, before,
+			first, () -> added[0] = true);
+		if (entry == null)
+			return null;
+		if (!added[0])
+			entry.setValue(value);
+		return entry;
+	}
 
 	/**
 	 * @param key The key to get the handle for
@@ -93,17 +103,43 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 	 * 
 	 * @param key The key to retrieve or insert the value for
 	 * @param value The function to produce the value for the added entry, if not present
+	 * @param after The ID of the key element to be the lower bound for the new entry's insertion in the key set
+	 * @param before The ID of the key element to be the upper bound for the new entry's insertion in the key set
 	 * @param first Whether to prefer adding the new entry early or late in the key/entry set
 	 * @param added The runnable that will be invoked if the entry is added
 	 * @return The entry of the element if retrieved or added; may be null if key/value pair is not permitted in the map
 	 */
-	MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, boolean first, Runnable added);
+	MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before, boolean first,
+		Runnable added);
 
 	/**
 	 * @param entryId The element ID to get the handle for
 	 * @return The handle for the entry in this map with the given ID
 	 */
 	MapEntryHandle<K, V> getEntryById(ElementId entryId);
+
+	/**
+	 * @param first Whether to get the first or last entry in the map
+	 * @return The first or last entry in this map, or null if the map is empty
+	 */
+	default MapEntryHandle<K, V> getTerminalEntry(boolean first) {
+		try (Transaction t = lock(false, null)) {
+			CollectionElement<K> keyEl = keySet().getTerminalElement(first);
+			return keyEl == null ? null : getEntryById(keyEl.getElementId());
+		}
+	}
+
+	/**
+	 * @param entryId The entry to get the adjacent entry for
+	 * @param next Whether to get the next or previous entry
+	 * @return The adjacent entry, or null if the given entry is terminal in the given direction
+	 */
+	default MapEntryHandle<K, V> getAdjacentEntry(ElementId entryId, boolean next) {
+		try (Transaction t = lock(false, null)) {
+			CollectionElement<K> keyEl = keySet().getAdjacentElement(entryId, next);
+			return keyEl == null ? null : getEntryById(keyEl.getElementId());
+		}
+	}
 
 	/**
 	 * @param entryId The element ID to get the handle for
@@ -171,7 +207,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 	default V put(K key, V value) {
 		while (true) {
 			boolean[] added = new boolean[1];
-			MapEntryHandle<K, V> entry = getOrPutEntry(key, k -> value, false, () -> added[0] = true);
+			MapEntryHandle<K, V> entry = getOrPutEntry(key, k -> value, null, null, false, () -> added[0] = true);
 			if (entry != null && !added[0]) {
 				// Get the mutable entry in case the immutable one doesn't support Entry.setValue(Object)
 				MutableMapEntryHandle<K, V> mutableEntry;
@@ -185,8 +221,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 				return old;
 			} else
 				return null;
-			}
 		}
+	}
 
 	@Override
 	default void putAll(Map<? extends K, ? extends V> m) {
@@ -423,7 +459,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 
 	@Override
 	default V computeIfAbsent(K key, Function<? super K, ? extends V> mappingFunction) {
-		MapEntryHandle<K, V> entry = getOrPutEntry(key, mappingFunction, false, null);
+		MapEntryHandle<K, V> entry = getOrPutEntry(key, mappingFunction, null, null, false, null);
 		return entry == null ? null : entry.getValue();
 	}
 
@@ -466,7 +502,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 				V newValue = remappingFunction.apply(k, null);
 				value.accept(newValue);
 				return newValue;
-			}, false, null);
+			}, null, null, false, null);
 			if (value.isPresent())
 				return value.get();// Added
 			MutableMapEntryHandle<K, V> mutableEntry;
@@ -570,12 +606,14 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 
 		@Override
 		public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
-			return MapEntryHandle.reverse(theWrapped.putEntry(key, value, ElementId.reverse(before), ElementId.reverse(after), !first));
+			return MapEntryHandle.reverse(getWrapped().putEntry(key, value, ElementId.reverse(before), ElementId.reverse(after), !first));
 		}
 
 		@Override
-		public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, boolean first, Runnable added) {
-			return MapEntryHandle.reverse(theWrapped.getOrPutEntry(key, value, !first, added));
+		public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before,
+			boolean first, Runnable added) {
+			return MapEntryHandle
+				.reverse(theWrapped.getOrPutEntry(key, value, ElementId.reverse(before), ElementId.reverse(after), !first, added));
 		}
 
 		@Override
@@ -744,8 +782,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		}
 
 		@Override
-		public CollectionElement<Entry<K, V>> getOrAdd(Entry<K, V> value, boolean first, Runnable added) {
-			MapEntryHandle<K, V> entry = theMap.getOrPutEntry(value.getKey(), k -> value.getValue(), first, added);
+		public CollectionElement<Entry<K, V>> getOrAdd(Entry<K, V> value, ElementId after, ElementId before, boolean first, Runnable added) {
+			MapEntryHandle<K, V> entry = theMap.getOrPutEntry(value.getKey(), k -> value.getValue(), after, before, first, added);
 			return entry == null ? null : getElement(entry.getElementId());
 		}
 

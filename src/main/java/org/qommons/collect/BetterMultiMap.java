@@ -37,6 +37,29 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		return new DefaultValueHandle<>(getEntryById(keyId), valueId);
 	}
 
+	/**
+	 * @param first Whether to get the first or last entry in the map
+	 * @return The first or last entry in this map, or null if the map is empty
+	 */
+	default MultiEntryHandle<K, V> getTerminalEntry(boolean first) {
+		try (Transaction t = lock(false, null)) {
+			CollectionElement<K> keyEl = keySet().getTerminalElement(first);
+			return keyEl == null ? null : getEntryById(keyEl.getElementId());
+		}
+	}
+
+	/**
+	 * @param entryId The entry to get the adjacent entry for
+	 * @param next Whether to get the next or previous entry
+	 * @return The adjacent entry, or null if the given entry is terminal in the given direction
+	 */
+	default MultiEntryHandle<K, V> getAdjacentEntry(ElementId entryId, boolean next) {
+		try (Transaction t = lock(false, null)) {
+			CollectionElement<K> keyEl = keySet().getAdjacentElement(entryId, next);
+			return keyEl == null ? null : getEntryById(keyEl.getElementId());
+		}
+	}
+
 	@Override
 	BetterCollection<V> get(Object key);
 
@@ -155,7 +178,20 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		return putEntry(key, value, null, null, first);
 	}
 
-	MultiEntryValueHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first);
+	default MultiEntryValueHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first) {
+		boolean[] added = new boolean[1];
+		MultiEntryHandle<K, V> entry = getOrPutEntry(key, k -> BetterList.of(value), afterKey, beforeKey, first, () -> added[0] = true);
+		if (entry == null)
+			return null;
+		CollectionElement<V> valueEl;
+		if (added[0])
+			valueEl = entry.getValues().getTerminalElement(true);
+		else
+			valueEl = entry.getValues().addElement(value, first);
+		if (valueEl == null)
+			return null;
+		return getEntryById(entry.getElementId(), valueEl.getElementId());
+	}
 
 	/**
 	 * Retrieves or adds an entry for the given key and returns the entry of the affected element
@@ -166,7 +202,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 	 * @param added The runnable that will be invoked if the entry is added
 	 * @return The entry of the element if retrieved or added; may be null if key/value pair is not permitted in the map
 	 */
-	MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, boolean first, Runnable added);
+	MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, ElementId afterKey,
+		ElementId beforeKey, boolean first, Runnable added);
 
 	@Override
 	default boolean add(K key, V value) {
@@ -330,8 +367,9 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 
 		@Override
-		public CollectionElement<MultiEntryHandle<K, V>> getOrAdd(MultiEntryHandle<K, V> value, boolean first, Runnable added) {
-			return entryFor(getMap().getOrPutEntry(value.getKey(), k -> value.getValues(), first, added));
+		public CollectionElement<MultiEntryHandle<K, V>> getOrAdd(MultiEntryHandle<K, V> value, ElementId after, ElementId before,
+			boolean first, Runnable added) {
+			return entryFor(getMap().getOrPutEntry(value.getKey(), k -> value.getValues(), after, before, first, added));
 		}
 
 		@Override
@@ -900,15 +938,10 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 
 		@Override
-		public MultiEntryValueHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first) {
-			return MultiEntryValueHandle
-				.reverse(theSource.putEntry(key, value, ElementId.reverse(beforeKey), ElementId.reverse(afterKey), !first));
-		}
-
-		@Override
-		public MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, boolean first,
-			Runnable added) {
-			return MultiEntryHandle.reverse(theSource.getOrPutEntry(key, value, !first, added));
+		public MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, ElementId afterKey,
+			ElementId beforeKey, boolean first, Runnable added) {
+			return MultiEntryHandle
+				.reverse(theSource.getOrPutEntry(key, value, ElementId.reverse(beforeKey), ElementId.reverse(afterKey), !first, added));
 		}
 
 		@Override

@@ -159,8 +159,9 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 		}
 
 		@Override
-		public CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
-			return CollectionElement.reverse(getWrapped().getOrAdd(value, !first, added));
+		public CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable added) {
+			return CollectionElement
+				.reverse(getWrapped().getOrAdd(value, ElementId.reverse(before), ElementId.reverse(after), !first, added));
 		}
 
 		@Override
@@ -226,7 +227,7 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 	 */
 	class EmptySet<E> extends BetterCollection.EmptyCollection<E> implements BetterSet<E> {
 		@Override
-		public CollectionElement<E> getOrAdd(E value, boolean first, Runnable added) {
+		public CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable added) {
 			return null;
 		}
 

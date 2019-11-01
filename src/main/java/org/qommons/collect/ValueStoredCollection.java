@@ -12,12 +12,16 @@ public interface ValueStoredCollection<E> extends BetterCollection<E> {
 	 * <code>added</code> runnable is invoked (if supplied), and the new element returned.
 	 * 
 	 * @param value The value to get or add
+	 * @param after The element currently occupying the position after which (exclusive) the value's insertion is desirable, or null if the
+	 *        element may be added at the beginning of the collection
+	 * @param before The element currently occupying the position before which (exclusive) the value's insertion is desirable, or null if
+	 *        the element may be added at the end of the collection
 	 * @param first Whether (if not present) to prefer to add the value to the beginning or end of the collection
 	 * @param added The runnable which, if not null will be {@link Runnable#run() invoked} if the value is added to the collection in this
 	 *        operation
 	 * @return The element containing the value, or null if the element was not present AND could not be added for any reason
 	 */
-	CollectionElement<E> getOrAdd(E value, boolean first, Runnable added);
+	CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable added);
 
 	/**
 	 * Checks the collection's storage structure for consistency at the given element
