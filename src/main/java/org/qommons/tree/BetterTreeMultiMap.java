@@ -2,42 +2,99 @@ package org.qommons.tree;
 
 import java.util.Comparator;
 import java.util.Objects;
+import java.util.function.Function;
 
 import org.qommons.Lockable;
 import org.qommons.Transaction;
-import org.qommons.collect.BetterCollection;
-import org.qommons.collect.BetterList;
-import org.qommons.collect.BetterSortedMultiMap;
-import org.qommons.collect.BetterSortedSet;
+import org.qommons.collect.*;
 import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
-import org.qommons.collect.CollectionElement;
-import org.qommons.collect.ElementId;
-import org.qommons.collect.MultiEntryHandle;
-import org.qommons.collect.MultiEntryValueHandle;
-import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 public class BetterTreeMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
-	private final BetterTreeSet<MultiEntryImpl> theEntries;
-	private final BetterTreeList<KVEntry> theValues;
-	private final Comparator<? super K> theKeyCompare;
-	private final Comparator<? super V> theValueCompare;
-	private final Comparator<MultiEntry<K, V>> theEntryCompare;
-	private final boolean isUniqueValued;
+	public interface ValueCollectionSupplier<K, V> {
+		<V2 extends V> BetterCollection<V2> createValuesFor(K key, CollectionLockingStrategy locking);
+	}
 
-	public BetterTreeMultiMap(boolean safe, Comparator<? super K> keyCompare, Comparator<? super V> valueCompare, boolean uniqueValues) {
-		if (uniqueValues && valueCompare == null)
-			throw new IllegalArgumentException("Values cannot be kept unique without a comparator");
+	public static <K, V> Builder<K, V> build(Comparator<? super K> keyCompare) {
+		return new Builder<>(keyCompare);
+	}
+
+	public static class Builder<K, V> {
+		private final Comparator<? super K> theKeyCompare;
+		private CollectionLockingStrategy theLocking;
+		private ValueCollectionSupplier<? super K, ? super V> theValues;
+
+		public Builder(Comparator<? super K> keyCompare) {
+			theKeyCompare = keyCompare;
+		}
+
+		public Builder<K, V> safe(boolean safe) {
+			theLocking = safe ? new StampedLockingStrategy() : new FastFailLockingStrategy();
+			return this;
+		}
+
+		public Builder<K, V> withLocking(CollectionLockingStrategy locking) {
+			theLocking = locking;
+			return this;
+		}
+
+		public Builder<K, V> withSortedValues(Comparator<? super V> valueCompare, boolean distinctValues) {
+			theValues = new ValueCollectionSupplier<K, V>() {
+				@Override
+				public <V2 extends V> BetterCollection<V2> createValuesFor(K key, CollectionLockingStrategy locking) {
+					return distinctValues ? new BetterTreeSet<>(locking, valueCompare) : new SortedTreeList<>(locking, valueCompare);
+				}
+			};
+			return this;
+		}
+
+		public Builder<K, V> withValues(ValueCollectionSupplier<? super K, ? super V> values) {
+			theValues = values;
+			return this;
+		}
+
+		protected Comparator<? super K> getKeyCompare() {
+			return theKeyCompare;
+		}
+
+		protected CollectionLockingStrategy getLocking() {
+			if (theLocking != null)
+				return theLocking;
+			else
+				return new StampedLockingStrategy();
+		}
+
+		protected ValueCollectionSupplier<? super K> getValues() {
+			return theValues;
+		}
+
+		public <V> BetterTreeMultiMap<K, V> buildTreeMultiMap(){
+			return new BetterTreeMultiMap<>(//
+				
+		}
+	}
+
+	private final CollectionLockingStrategy theLocking;
+	private final BetterTreeSet<MultiEntryImpl> theEntries;
+	private final Comparator<? super K> theKeyCompare;
+	private final Function<? super K, ? extends BetterCollection<? extends V>> theValuesProducer;
+	private final Comparator<MultiEntry<K, V>> theEntryCompare;
+
+	public BetterTreeMultiMap(boolean safe, Comparator<? super K> keyCompare,
+		Function<? super K, ? extends BetterCollection<? extends V>> values) {
+		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), keyCompare, values);
+	}
+
+	public BetterTreeMultiMap(CollectionLockingStrategy locking, Comparator<? super K> keyCompare, ValueCollectionSupplier<K, V> values) {
+		theLocking = locking;
 		theKeyCompare = keyCompare;
-		theValueCompare = valueCompare;
 		theEntryCompare = (entry1, entry2) -> theKeyCompare.compare(entry1.getKey(), entry2.getKey());
-		isUniqueValued = uniqueValues;
 		theEntries = new BetterTreeSet<>(safe, theEntryCompare);
-		theValues = new BetterTreeList<>(safe);
 	}
 
 	@Override
 	public Transaction lock(boolean write, boolean structural, Object cause) {
+		return theEntries.lock
 		Transaction entryT = theEntries.lock(write, structural, cause);
 		Transaction valueT = theValues.lock(write, structural, cause);
 		return () -> {
