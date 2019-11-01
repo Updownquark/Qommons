@@ -14,25 +14,79 @@ import org.qommons.tree.BetterTreeMultiMap;
 import org.qommons.tree.BetterTreeSet;
 import org.qommons.tree.SortedTreeList;
 
+/**
+ * An abstract {@link BetterMultiMap} implementation based on a {@link BetterMap}
+ * 
+ * @param <K> The key type of the map
+ * @param <V> The value type of the map
+ */
 public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, V> {
+	/**
+	 * Backs a {@link AbstractBetterMultiMap} by supplying value collections for each key
+	 * 
+	 * @param <K> The key super-type of the maps this supplier can support
+	 * @param <V> The value super-type of the maps this supplier can support
+	 */
 	public interface ValueCollectionSupplier<K, V> {
+		/**
+		 * @param <V2> The sub-type of value collection to create
+		 * @param key The key to create the value collection for
+		 * @param locking The locking strategy for the collection to use
+		 * @return The value collection to store values for the given key in the multi-map
+		 */
 		<V2 extends V> BetterCollection<V2> createValuesFor(K key, CollectionLockingStrategy locking);
 
+		/**
+		 * @param <V2> The sub-type of value collection to create
+		 * @return An immutable, empty collection to use for the values of a key that cannot exist in the multi-map
+		 */
 		<V2 extends V> BetterCollection<V2> createEmptyValues();
 
+		/**
+		 * Creates a collection representing the values associated with a key in the multi-map. The collection will be exposed through the
+		 * API and may have an unlimited lifetime. It will remain valid even as the key whose values it represents may be removed and added
+		 * from the multi-map.
+		 * 
+		 * @param <V2> The sub-type of value collection to create
+		 * @param backing The backing through which to poll the state and capabilities of the multi-map for the key
+		 * @return The collection to represent the key's values in the multi-map
+		 */
 		<V2 extends V> BetterCollection<V2> createWrapperCollection(ValueCollectionBacking<V2> backing);
 
+		/**
+		 * Called when a collection created with {@link #createValuesFor(Object, CollectionLockingStrategy)} is no longer needed due to all
+		 * its values being removed (an entry in a multi-map cannot exist with no values)
+		 * 
+		 * @param unused The unused collection
+		 */
 		default void dispose(BetterCollection<? extends V> unused) {}
 	}
 
+	/**
+	 * An implementation in {@link AbstractBetterMultiMap} used by
+	 * {@link AbstractBetterMultiMap.ValueCollectionSupplier#createWrapperCollection(ValueCollectionBacking)}. It represents the state of a
+	 * particular key in the multi-map.
+	 * 
+	 * @param <V> The value type of the map
+	 */
 	public interface ValueCollectionBacking<V> extends Identifiable, StructuredTransactable, StructuredStamped {
+		/**
+		 * @param addIfNotPresent Whether the key represented by this backing should be created if it is not present
+		 * @return The current collection of values for the key, or null if the key is not currently present in the map
+		 */
 		BetterCollection<V> getBacking(boolean addIfNotPresent);
 
+		/**
+		 * @return null if the key can be added to the map (e.g. by adding a value to the collection of a key that is not present), or a
+		 *         message saying why it can't be
+		 */
 		String canAdd();
 
+		/** Removes the key from the map */
 		void remove();
 	}
 
+	/** A simple {@link ValueCollectionSupplier} that just creates {@link BetterTreeList}s for each value */
 	public static final ValueCollectionSupplier<Object, Object> LIST_SUPPLIER = new ValueCollectionSupplier<Object, Object>() {
 		@Override
 		public <V2> BetterCollection<V2> createValuesFor(Object key, CollectionLockingStrategy locking) {
@@ -50,6 +104,13 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 	};
 
+	/**
+	 * @param <V> The super-type of value the supplier will support
+	 * @param sorting The sorting for the values
+	 * @param distinct Whether the values should be distinct within each key (i.e. the value collections will be {@link BetterSortedSet}s as
+	 *        opposed to {@link BetterSortedList}s)
+	 * @return A supplier that creates {@link BetterSortedList}s or {@link BetterSortedSet}s for each key
+	 */
 	public static <V> ValueCollectionSupplier<Object, V> sortedSupplier(Comparator<? super V> sorting, boolean distinct) {
 		return new ValueCollectionSupplier<Object, V>() {
 			private BetterList<V> EMPTY;
@@ -65,7 +126,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 					if (distinct)
 						EMPTY = BetterSortedSet.empty(sorting);
 					else
-						EMPTY = BetterList.empty();
+						EMPTY = BetterSortedList.empty(sorting);
 				}
 				return (BetterCollection<V2>) EMPTY;
 			}
@@ -80,49 +141,93 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		};
 	}
 
-	public static <K, V> Builder<K, V> buildSorted(Comparator<? super K> keyCompare) {
+	/**
+	 * @param <K> The key type for the map
+	 * @param <V> The value type for the map
+	 * @param keyCompare The key sorting for the map
+	 * @return A builder to build a tree-based, {@link BetterSortedMultiMap}
+	 */
+	public static <K, V> BetterTreeMultiMap.Builder<K, V> buildSorted(Comparator<? super K> keyCompare) {
 		return BetterTreeMultiMap.build(keyCompare);
 	}
 
-	public static <K, V> Builder<K, V> buildHashed() {
+	/**
+	 * @param <K> The key type for the map
+	 * @param <V> The value type for the map
+	 * @return A builder to build a hash-based {@link BetterMultiMap}
+	 */
+	public static <K, V> BetterHashMultiMap.Builder<K, V> buildHashed() {
 		return BetterHashMultiMap.build();
 	}
 
+	/**
+	 * A builder to build a {@link BetterMultiMap}
+	 * 
+	 * @param <K> The key type for the map
+	 * @param <V> The value type for the map
+	 */
 	public static abstract class Builder<K, V> {
 		private CollectionLockingStrategy theLocking;
 		private ValueCollectionSupplier<? super K, ? super V> theValues;
 		private String theDescription;
 
+		/** @param initDescription The initial description for the map */
 		protected Builder(String initDescription) {
 			theValues = LIST_SUPPLIER;
 			theDescription = initDescription;
 		}
 
+		/**
+		 * @param safe Whether the multi-map should be thread-safe
+		 * @return This builder
+		 */
 		public Builder<K, V> safe(boolean safe) {
 			theLocking = safe ? new StampedLockingStrategy() : new FastFailLockingStrategy();
 			return this;
 		}
 
+		/**
+		 * @param locking The locking strategy for the multi-map
+		 * @return This builder
+		 * @see AbstractBetterMultiMap#LIST_SUPPLIER
+		 */
 		public Builder<K, V> withLocking(CollectionLockingStrategy locking) {
 			theLocking = locking;
 			return this;
 		}
 
+		/**
+		 * Specifies that the multi-map's value collections should be sorted
+		 * 
+		 * @param valueCompare The sorting for the values
+		 * @param distinctValues Whether the values should be distinct
+		 * @return This builder
+		 * @see AbstractBetterMultiMap#sortedSupplier(Comparator, boolean)
+		 */
 		public Builder<K, V> withSortedValues(Comparator<? super V> valueCompare, boolean distinctValues) {
 			theValues = sortedSupplier(valueCompare, distinctValues);
 			return this;
 		}
 
+		/**
+		 * @param values The value supplier for the multi-map
+		 * @return This builder
+		 */
 		public Builder<K, V> withValues(ValueCollectionSupplier<? super K, ? super V> values) {
 			theValues = values;
 			return this;
 		}
 
+		/**
+		 * @param description The description for the multi-map's {@link BetterMultiMap#getIdentity() identity}
+		 * @return This builder
+		 */
 		public Builder<K, V> withDescription(String description) {
 			theDescription = description;
 			return this;
 		}
 
+		/** @return The locking for the multi-map */
 		protected CollectionLockingStrategy getLocking() {
 			if (theLocking != null)
 				return theLocking;
@@ -130,14 +235,17 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 				return new StampedLockingStrategy();
 		}
 
+		/** @return The value supplier for the multi-map */
 		protected ValueCollectionSupplier<? super K, ? super V> getValues() {
 			return theValues;
 		}
 
+		/** @return The description for the multi-map */
 		protected String getDescription() {
 			return theDescription;
 		}
 
+		/** @return The new multi-map */
 		public abstract BetterMultiMap<K, V> buildMultiMap();
 	}
 
@@ -152,6 +260,12 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	private long theLastCountStamp;
 	private int theLastCountedValueSize;
 
+	/**
+	 * @param locking The locking for the map
+	 * @param entries The backing {@link BetterMap} for the map
+	 * @param values The value supplier for the map
+	 * @param description The description for the map's {@link #getIdentity() identity}
+	 */
 	protected AbstractBetterMultiMap(CollectionLockingStrategy locking, BetterMap<K, BetterCollection<V>> entries,
 		ValueCollectionSupplier<? super K, ? super V> values, String description) {
 		theIdentity = Identifiable.baseId(description, this);
@@ -163,6 +277,10 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		theKeySet = createKeySet(theEntries.keySet());
 	}
 
+	/**
+	 * @param backing The {@link BetterMap#keySet() key set} of the backing {@link BetterMap}
+	 * @return The key set for this {@link BetterMultiMap}
+	 */
 	protected BetterSet<K> createKeySet(BetterSet<K> backing) {
 		return new BetterMultiMapKeySet(backing);
 	}
@@ -277,15 +395,18 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		};
 	}
 
+	/** Implements {@link AbstractBetterMultiMap#keySet()} */
 	protected class BetterMultiMapKeySet extends AbstractIdentifiable implements BetterSet<K> {
 		private final BetterSet<K> theBacking;
 		private long theKeyStamp;
 		private long theKeyStructureStamp;
 
+		/** @param backing The key set of the backing multi-map's backing {@link BetterMap} */
 		protected BetterMultiMapKeySet(BetterSet<K> backing) {
 			theBacking = backing;
 		}
 
+		/** @return The key set of the backing multi-map's backing {@link BetterMap} */
 		protected BetterSet<K> getBacking() {
 			return theBacking;
 		}
@@ -479,11 +600,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 	}
 
-	protected class ValueBacking extends AbstractIdentifiable implements ValueCollectionBacking<V> {
+	class ValueBacking extends AbstractIdentifiable implements ValueCollectionBacking<V> {
 		private final K theKey;
 		private ElementId theId;
 
-		protected ValueBacking(K key, ElementId id) {
+		ValueBacking(K key, ElementId id) {
 			theKey = key;
 			theId = id;
 		}
@@ -561,13 +682,21 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 	}
 
+	/**
+	 * Implements {@link AbstractBetterMultiMap.ValueCollectionSupplier#createWrapperCollection(ValueCollectionBacking)} for
+	 * {@link AbstractBetterMultiMap#LIST_SUPPLIER}
+	 * 
+	 * @param <E> The type of values in the collection
+	 */
 	protected static class WrappingBetterList<E> implements BetterList<E> {
 		private final ValueCollectionBacking<E> theWrapped;
 
+		/** @param wrapped The backing from the map for the key */
 		protected WrappingBetterList(ValueCollectionBacking<E> wrapped) {
 			theWrapped = wrapped;
 		}
 
+		/** @return The backing from the map for the key */
 		protected ValueCollectionBacking<E> getWrapped() {
 			return theWrapped;
 		}
@@ -801,9 +930,19 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 	}
 
+	/**
+	 * Implements {@link AbstractBetterMultiMap.ValueCollectionSupplier#createWrapperCollection(ValueCollectionBacking)} for
+	 * {@link AbstractBetterMultiMap#sortedSupplier(Comparator, boolean) sortedSupplier(false)}
+	 * 
+	 * @param <E> The type of values in the collection
+	 */
 	protected static class WrappingSortedList<E> extends WrappingBetterList<E> implements BetterSortedList<E> {
 		private final Comparator<? super E> theCompare;
 
+		/**
+		 * @param wrapped The backing from the map for the key
+		 * @param compare The sorting for the list
+		 */
 		protected WrappingSortedList(ValueCollectionBacking<E> wrapped, Comparator<? super E> compare) {
 			super(wrapped);
 			theCompare = compare;
@@ -855,7 +994,17 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 	}
 
+	/**
+	 * Implements {@link AbstractBetterMultiMap.ValueCollectionSupplier#createWrapperCollection(ValueCollectionBacking)} for
+	 * {@link AbstractBetterMultiMap#sortedSupplier(Comparator, boolean) sortedSupplier(true)}
+	 * 
+	 * @param <E> The type of values in the collection
+	 */
 	protected static class WrappingSortedSet<E> extends WrappingSortedList<E> implements BetterSortedSet<E> {
+		/**
+		 * @param wrapped The backing from the map for the key
+		 * @param compare The sorting for the set
+		 */
 		protected WrappingSortedSet(ValueCollectionBacking<E> wrapped, Comparator<? super E> compare) {
 			super(wrapped, compare);
 		}

@@ -370,6 +370,20 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		return getEntry(theHasher.applyAsInt(value), equalsTest(value)) == null ? null : StdMsg.ELEMENT_EXISTS;
 	}
 
+	/**
+	 * A version of {@link #getOrAdd(Object, ElementId, ElementId, boolean, Runnable)} that allows direct specification of hash code and
+	 * equality for more flexible searching of the table
+	 * 
+	 * @param hashCode The hash code to search for
+	 * @param equals The predicate for matching a value in the table
+	 * @param value Supplies the value in the case that it does not exist in the table
+	 * @param after The element after which to add the value (may be null)
+	 * @param before The element before which to add the value (may be null)
+	 * @param first Whether to prefer adding the value closer to the after element (or the beginning of the set) or the before element (or
+	 *        the end of the set)
+	 * @param added Will execute if the value is added
+	 * @return The existing or added element
+	 */
 	public CollectionElement<E> getOrAdd(int hashCode, Predicate<? super E> equals, Supplier<? extends E> value, ElementId after,
 		ElementId before, boolean first, Runnable added) {
 		HashTableEntry[] table = theTable;
@@ -464,6 +478,10 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		return added[0] ? element : null;
 	}
 
+	/**
+	 * @param value The value to create an equality tester for
+	 * @return A predicate that returns true for values that are equivalent to the given value by this set's reckoning
+	 */
 	public Predicate<E> equalsTest(E value) {
 		return v -> theEquals.apply(v, value);
 	}
@@ -474,6 +492,11 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		return entry == null ? null : entry.immutable();
 	}
 
+	/**
+	 * @param hashCode The hash code for the element to get
+	 * @param equals The equality test for the element to get
+	 * @return The element matching the given hash/equality in this table, or null
+	 */
 	public CollectionElement<E> getElement(int hashCode, Predicate<? super E> equals) {
 		HashEntry entry = getEntry(hashCode, equals);
 		return entry == null ? null : entry.immutable();
@@ -511,6 +534,10 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		return BetterList.empty();
 	}
 
+	/**
+	 * @param elementId The element ID to check
+	 * @return Whether the given element's location in the table is valid (i.e. its hash code has not changed)
+	 */
 	public boolean isValid(ElementId elementId){
 		HashEntry entry=((HashId) elementId).entry.check();
 		return entry.isValid();
@@ -623,6 +650,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		}
 	}
 
+	/** Represents the storage of one value in a {@link BetterHashSet} */
 	protected class HashEntry implements MutableCollectionElement<E> {
 		private long theOrder;
 		int hashCode;

@@ -7,6 +7,12 @@ import org.qommons.Ternian;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
+/**
+ * A {@link BetterList} whose values are maintained in the order of a comparator. This is different than a {@link BetterSortedSet} because
+ * distinctness may not be enforced.
+ * 
+ * @param <E> The type of values in the list
+ */
 public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterList<E> {
 	/**
 	 * A filter on sorted search results. The underlying code for searches in a {@link BetterSortedList} will always return an element
@@ -95,6 +101,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		}
 	}
 
+	/** @return The comparator sorting the values */
 	Comparator<? super E> comparator();
 
 	/**
@@ -307,5 +314,62 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	@Override
 	default CollectionElement<E> getElement(E value, boolean first) {
 		return search(searchFor(value, 0), BetterSortedList.SortedSearchFilter.OnlyMatch);
+	}
+
+	/**
+	 * @param <E> The type for the list
+	 * @param compare The sorting for the list
+	 * @return An immutable, empty {@link BetterSortedList}
+	 */
+	public static <E> BetterSortedList<E> empty(Comparator<? super E> compare) {
+		return new EmptyBetterSortedList<>(compare);
+	}
+
+	/**
+	 * Implements {@link BetterSortedList#empty(Comparator)}
+	 * 
+	 * @param <E> The type of the list
+	 */
+	class EmptyBetterSortedList<E> extends BetterList.EmptyList<E> implements BetterSortedList<E> {
+		private final Comparator<? super E> theSorting;
+
+		public EmptyBetterSortedList(Comparator<? super E> sorting) {
+			theSorting = sorting;
+		}
+
+		@Override
+		public boolean isConsistent(ElementId element) {
+			return false;
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return false;
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, org.qommons.collect.ValueStoredCollection.RepairListener<E, X> listener) {
+			return false;
+		}
+
+		@Override
+		public <X> boolean repair(org.qommons.collect.ValueStoredCollection.RepairListener<E, X> listener) {
+			return false;
+		}
+
+		@Override
+		public Comparator<? super E> comparator() {
+			return theSorting;
+		}
+
+		@Override
+		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+			return null;
+		}
+
+		@Override
+		public int indexFor(Comparable<? super E> search) {
+			return -1;
+		}
 	}
 }

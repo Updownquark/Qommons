@@ -31,8 +31,17 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		return new BetterMapSingleEntryCollection<>(this);
 	}
 
+	/**
+	 * @param keyId The key ID of the entry
+	 * @return The entry in this map with the given ID
+	 */
 	MultiEntryHandle<K, V> getEntryById(ElementId keyId);
 
+	/**
+	 * @param keyId The key ID of the entry
+	 * @param valueId The value ID of the entry
+	 * @return The value entry in this map with the given IDs
+	 */
 	default MultiEntryValueHandle<K, V> getEntryById(ElementId keyId, ElementId valueId) {
 		return new DefaultValueHandle<>(getEntryById(keyId), valueId);
 	}
@@ -63,6 +72,10 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 	@Override
 	BetterCollection<V> get(Object key);
 
+	/**
+	 * @param key The key of the entry
+	 * @return The entry in this map with the given key, or null if no such entry exists
+	 */
 	default MultiEntryHandle<K, V> getEntry(K key) {
 		try (Transaction t = lock(false, null)) {
 			CollectionElement<K> keyElement = keySet().getElement(key, true);
@@ -70,7 +83,13 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 	}
 
-	default MultiEntryValueHandle<K, V> getElement(K key, V value, boolean first) {
+	/**
+	 * @param key The key of the entry
+	 * @param value The value of the entry
+	 * @param first Whether to search for the first or last value in its key entry
+	 * @return The value entry in this map with the given key and value, or null if no such entry exists
+	 */
+	default MultiEntryValueHandle<K, V> getEntry(K key, V value, boolean first) {
 		try (Transaction t = lock(false, null)) {
 			MultiEntryHandle<K, V> keyElement = getEntry(key);
 			if (keyElement == null)
@@ -78,36 +97,15 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 			CollectionElement<V> valueElement = keyElement.getValues().getElement(value, first);
 			if (valueElement == null)
 				return null;
-			return getElement(keyElement.getElementId(), valueElement.getElementId());
+			return getEntryById(keyElement.getElementId(), valueElement.getElementId());
 		}
 	}
 
-	default MultiEntryValueHandle<K, V> getElement(ElementId keyId, ElementId valueId) {
-		MultiEntryHandle<K, V> keyElement = getEntryById(keyId);
-		CollectionElement<V> valueElement = keyElement.getValues().getElement(valueId);
-		return new MultiEntryValueHandle<K, V>() {
-			@Override
-			public ElementId getKeyId() {
-				return keyElement.getElementId();
-			}
-
-			@Override
-			public K getKey() {
-				return keyElement.getKey();
-			}
-
-			@Override
-			public ElementId getElementId() {
-				return valueElement.getElementId();
-			}
-
-			@Override
-			public V get() {
-				return valueElement.get();
-			}
-		};
-	}
-
+	/**
+	 * @param keyId The key ID of the entry
+	 * @param valueId The value ID of the entry
+	 * @return The mutable value entry in this map with the given IDs
+	 */
 	default MutableMultiMapHandle<K, V> mutableElement(ElementId keyId, ElementId valueId) {
 		MultiEntryHandle<K, V> keyElement = getEntryById(keyId);
 		MutableCollectionElement<V> valueElement = keyElement.getValues().mutableElement(valueId);
@@ -174,10 +172,24 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		};
 	}
 
+	/**
+	 * @param key The key for the entry
+	 * @param value The value to insert
+	 * @param first Whether to prefer inserting the value earlier or later in the key entry
+	 * @return The entry for the key into which the value may have been inserted (normal {@link Collection#add(Object)} rules may apply)
+	 */
 	default MultiEntryValueHandle<K, V> putEntry(K key, V value, boolean first) {
 		return putEntry(key, value, null, null, first);
 	}
 
+	/**
+	 * @param key The key for the entry
+	 * @param value The value to insert
+	 * @param afterKey The key element after which to insert the entry (if it must be created, may be null)
+	 * @param beforeKey The key element before which to insert the entry (if it must be created, may be null)
+	 * @param first Whether to prefer inserting the key entry (and the value element) earlier or later in the map
+	 * @return The entry for the key into which the value may have been inserted (normal {@link Collection#add(Object)} rules may apply)
+	 */
 	default MultiEntryValueHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first) {
 		boolean[] added = new boolean[1];
 		MultiEntryHandle<K, V> entry = getOrPutEntry(key, k -> BetterList.of(value), afterKey, beforeKey, first, () -> added[0] = true);
@@ -198,6 +210,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 	 * 
 	 * @param key The key to retrieve or insert the value for
 	 * @param value The function to produce the initial values for the added entry, if not present
+	 * @param afterKey The key element after which to insert the entry (if it must be added, null allowed)
+	 * @param beforeKey The key element before which to insert the entry (if it must be added, null allowed)
 	 * @param first Whether to prefer adding the new entry early or late in the key/entry set
 	 * @param added The runnable that will be invoked if the entry is added
 	 * @return The entry of the element if retrieved or added; may be null if key/value pair is not permitted in the map
@@ -231,10 +245,17 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 	}
 
+	/** @return A map with this map's content but whose key and value collections are reversed from this */
 	default BetterMultiMap<K, V> reverse() {
 		return new ReversedMultiMap<>(this);
 	}
 
+	/**
+	 * Implements {@link BetterMultiMap#entrySet()}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	class BetterMultiMapEntrySet<K, V> extends AbstractIdentifiable implements BetterSet<MultiEntryHandle<K, V>> {
 		private final BetterMultiMap<K, V> theMap;
 
@@ -483,6 +504,12 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 	}
 
+	/**
+	 * Implements {@link BetterMultiMap#singleEntries()}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	class BetterMapSingleEntryCollection<K, V> extends AbstractIdentifiable implements BetterCollection<MultiEntryValueHandle<K, V>> {
 		private final BetterMultiMap<K, V> theMap;
 
@@ -843,6 +870,12 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 	}
 
+	/**
+	 * A default implementation of {@link BetterMultiMap#getEntryById(ElementId, ElementId)}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	class DefaultValueHandle<K, V> implements MultiEntryValueHandle<K, V> {
 		private final MultiEntryHandle<K, V> theMultiEntry;
 		private final ElementId theValueId;
@@ -873,6 +906,12 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 	}
 
+	/**
+	 * Implements {@link BetterMultiMap#reverse()}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	class ReversedMultiMap<K, V> implements BetterMultiMap<K, V> {
 		private final BetterMultiMap<K, V> theSource;
 		private Object theIdentity;

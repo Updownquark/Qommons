@@ -1,9 +1,15 @@
 package org.qommons.collect;
 
 import java.util.Comparator;
+import java.util.Spliterator;
 
 import org.qommons.Transaction;
 
+/**
+ * A {@link BetterList} that has the performance enhancement of being able to quickly find a midway point between 2 elements
+ * 
+ * @param <E> The type of values in the list
+ */
 public interface SplitSpliterable<E> extends BetterList<E> {
 	/**
 	 * Quickly obtains an element that is well-spaced between two other elements
@@ -35,10 +41,26 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 		return new SubSplitSpliterable<>(this, fromIndex, toIndex);
 	}
 
+	/**
+	 * Implements {@link SplitSpliterable#spliterator()} by default
+	 * 
+	 * @param <E> The type of values in the list
+	 */
 	public class DefaultSplittableSpliterator<E> extends DefaultBetterSpliterator<E> {
 		private CollectionElement<E> theLeftBound;
 		private CollectionElement<E> theRightBound;
 
+		/**
+		 * @param collection The colection to create the spliterator for
+		 * @param compare The sorting of the collection (may be null)
+		 * @param characteristics The {@link Spliterator#characteristics() characteristics} for the spliterator
+		 * @param current The current element
+		 * @param currentIsNext Whether the current element should be returned from
+		 *        {@link Spliterator#tryAdvance(java.util.function.Consumer)} or
+		 *        {@link ElementSpliterator#tryReverse(java.util.function.Consumer)}
+		 * @param leftBound The left bound for this spliterator (inclusive)
+		 * @param rightBound The right bound for this spliterator (exclusive)
+		 */
 		public DefaultSplittableSpliterator(SplitSpliterable<E> collection, Comparator<? super E> compare, int characteristics,
 			CollectionElement<E> current, boolean currentIsNext, CollectionElement<E> leftBound, CollectionElement<E> rightBound) {
 			super(collection, compare, characteristics | SUBSIZED, current, currentIsNext);
@@ -142,7 +164,13 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 		}
 	}
 
+	/**
+	 * Implements {@link SplitSpliterable#reverse()}
+	 * 
+	 * @param <E> The type of values in the list
+	 */
 	public class ReversedSplitSpliterable<E> extends ReversedList<E> implements SplitSpliterable<E> {
+		/** @param wrap The collection to reverse */
 		public ReversedSplitSpliterable(SplitSpliterable<E> wrap) {
 			super(wrap);
 		}
@@ -163,7 +191,17 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 		}
 	}
 
+	/**
+	 * Implements {@link SplitSpliterable#subList(int, int)}
+	 * 
+	 * @param <E> The type of values in the list
+	 */
 	public class SubSplitSpliterable<E> extends SubList<E> implements SplitSpliterable<E> {
+		/**
+		 * @param wrapped The list to create the sub list for
+		 * @param start The beginning index for the sub-list (inclusive)
+		 * @param end The end index for the sub-list (exclusive)
+		 */
 		public SubSplitSpliterable(SplitSpliterable<E> wrapped, int start, int end) {
 			super(wrapped, start, end);
 		}
@@ -179,6 +217,11 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 		}
 	}
 
+	/**
+	 * A {@link SplitSpliterable} that is also a {@link BetterSortedSet}
+	 * 
+	 * @param <E> The type of values in the set
+	 */
 	public interface SortedSetSplitSpliterable<E> extends BetterSortedSet<E>, SplitSpliterable<E> {
 		@Override
 		default MutableElementSpliterator<E> spliterator(boolean fromStart) {
@@ -240,7 +283,13 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 			return new ReversedSSSS<>(this);
 		}
 
+		/**
+		 * Implements {@link SplitSpliterable.SortedSetSplitSpliterable#reverse()}
+		 * 
+		 * @param <E> The type of values in the set
+		 */
 		public class ReversedSSSS<E> extends ReversedSortedSet<E> implements SortedSetSplitSpliterable<E> {
+			/** @param wrap The collection to reverse */
 			public ReversedSSSS(SortedSetSplitSpliterable<E> wrap) {
 				super(wrap);
 			}
@@ -261,7 +310,17 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 			}
 		}
 
+		/**
+		 * Implements {@link SplitSpliterable.SortedSetSplitSpliterable#subSet(Comparable, Comparable)}
+		 * 
+		 * @param <E> The type of values in the set
+		 */
 		public class SSSSSubSet<E> extends BetterSortedSet.BetterSubSet<E> implements SortedSetSplitSpliterable<E> {
+			/**
+			 * @param set The set to create the sub set from
+			 * @param from The lower bound for the sub set
+			 * @param to The upper bound for the sub set
+			 */
 			public SSSSSubSet(SortedSetSplitSpliterable<E> set, Comparable<? super E> from, Comparable<? super E> to) {
 				super(set, from, to);
 			}

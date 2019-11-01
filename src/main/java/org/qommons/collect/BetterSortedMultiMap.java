@@ -8,6 +8,12 @@ import org.qommons.Identifiable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
+/**
+ * A {@link BetterMultiMap} whose {@link #keySet() key set} is sorted by a comparator
+ * 
+ * @param <K> The key type of the map
+ * @param <V> The value type of the map
+ */
 public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, SortedMultiMap<K, V> {
 	@Override
 	BetterSortedSet<K> keySet();
@@ -97,10 +103,25 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}, null);
 	}
 
+	/**
+	 * @param from The lower bound comparator
+	 * @param to The upper bound comparator
+	 * @return A multi-map whose contents are those of this map for which it is true of the key:
+	 *         <ul>
+	 *         <li><code>from.compareTo(key)<=0</code></li> and
+	 *         <li><code>to.compareTo(key)>=0</code></li>
+	 *         </ul>
+	 */
 	default BetterSortedMultiMap<K, V> subMap(Comparable<? super K> from, Comparable<? super K> to) {
 		return new BetterSubMultiMap<>(this, from, to);
 	}
 
+	/**
+	 * Implements {@link BetterSortedMultiMap#entrySet()}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	class BetterSortedMultiMapEntrySet<K, V> extends BetterMultiMapEntrySet<K, V> implements BetterSortedSet<MultiEntryHandle<K, V>> {
 		public BetterSortedMultiMapEntrySet(BetterSortedMultiMap<K, V> map) {
 			super(map);
@@ -171,6 +192,12 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 	}
 
+	/**
+	 * Implements {@link BetterSortedMultiMap#reverse()}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	class ReversedSortedMultiMap<K, V> extends ReversedMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 		public ReversedSortedMultiMap(BetterSortedMultiMap<K, V> source) {
 			super(source);
@@ -207,6 +234,12 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 	}
 
+	/**
+	 * Implements {@link BetterSortedMultiMap#subMap(Comparable, Comparable)}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	class BetterSubMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
 		private final BetterSortedMultiMap<K, V> theWrapped;
 		private final Comparable<? super K> theLowerBound;

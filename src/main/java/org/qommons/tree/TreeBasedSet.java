@@ -1,8 +1,14 @@
 package org.qommons.tree;
 
+import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.SplitSpliterable;
 
+/**
+ * A tree-based {@link BetterSortedSet}
+ * 
+ * @param <E> The type of values in the set
+ */
 public interface TreeBasedSet<E> extends TreeBasedSortedList<E>, SplitSpliterable.SortedSetSplitSpliterable<E> {
 	@Override
 	default BinaryTreeNode<E> getElement(E value, boolean first) {

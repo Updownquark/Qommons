@@ -65,6 +65,26 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 		public L build() {
 			return (L) new SortedTreeList<>(getLocker(), getDescription(), theCompare);
 		}
+
+		/**
+		 * @param values The initial values for the list
+		 * @return The new list
+		 */
+		public L build(SortedSet<? extends E> values) {
+			SortedTreeList<E> list = build();
+			list.initialize(values, v -> v);
+			return (L) list;
+		}
+
+		/**
+		 * @param values The initial values for the list
+		 * @return The new list
+		 */
+		public L build(BetterSortedList<? extends E> values) {
+			SortedTreeList<E> list = build();
+			list.initialize(values, v -> v);
+			return (L) list;
+		}
 	}
 
 	/**
@@ -93,24 +113,6 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 	 */
 	public SortedTreeList(CollectionLockingStrategy locker, Comparator<? super E> compare) {
 		this(locker, DEFAULT_DESCRIP, compare);
-	}
-
-	public SortedTreeList(boolean safe, SortedSet<E> values) {
-		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), values);
-	}
-
-	public SortedTreeList(CollectionLockingStrategy locker, SortedSet<E> values) {
-		this(locker, DEFAULT_DESCRIP, values.comparator());
-		initialize(values, v -> v);
-	}
-
-	public SortedTreeList(boolean safe, SortedTreeList<E> values) {
-		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), values);
-	}
-
-	public SortedTreeList(CollectionLockingStrategy locker, SortedTreeList<E> values) {
-		this(locker, DEFAULT_DESCRIP, values.comparator());
-		initialize(values, v -> v);
 	}
 
 	/**
