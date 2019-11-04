@@ -245,6 +245,14 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 	}
 
+	/**
+	 * @param firstValue Whether to use the first value in the map for each key, or the last value
+	 * @return A BetterMap with the same key set as this, but only a single value per key
+	 */
+	default BetterMap<K, V> singleMap(boolean firstValue) {
+		return new SingleMap<>(this, firstValue);
+	}
+
 	/** @return A map with this map's content but whose key and value collections are reversed from this */
 	default BetterMultiMap<K, V> reverse() {
 		return new ReversedMultiMap<>(this);
@@ -903,6 +911,179 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		@Override
 		public ElementId getKeyId() {
 			return theMultiEntry.getElementId();
+		}
+	}
+
+	/**
+	 * Implements {@link BetterMultiMap#singleMap(boolean)}
+	 *
+	 * @param <K> The key-type of the map
+	 * @param <V> The value-type of the map
+	 */
+	class SingleMap<K, V> implements BetterMap<K, V> {
+		private final BetterMultiMap<K, V> theSource;
+		private final boolean isFirstValue;
+		private Object theIdentity;
+
+		public SingleMap(BetterMultiMap<K, V> outer, boolean firstValue) {
+			theSource = outer;
+			isFirstValue = firstValue;
+		}
+
+		protected BetterMultiMap<K, V> getSource() {
+			return theSource;
+		}
+
+		/** @return Whether this map is using the first or last value for each key in the multi map */
+		public boolean isFirstValue() {
+			return isFirstValue;
+		}
+
+		@Override
+		public Object getIdentity() {
+			if (theIdentity == null)
+				theIdentity = Identifiable.wrap(theSource.getIdentity(), "single");
+			return theIdentity;
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return theSource.isLockSupported();
+		}
+
+		@Override
+		public Transaction lock(boolean write, boolean structural, Object cause) {
+			return theSource.lock(write, structural, cause);
+		}
+
+		@Override
+		public BetterSet<K> keySet() {
+			return theSource.keySet();
+		}
+
+		@Override
+		public V get(Object key) {
+			BetterCollection<V> values = theSource.get(key);
+			return isFirstValue ? values.peekFirst() : values.peekLast();
+		}
+
+		@Override
+		public MapEntryHandle<K, V> getEntry(K key) {
+			MultiEntryHandle<K, V> outerHandle = theSource.getEntry(key);
+			return outerHandle == null ? null : entryFor(outerHandle);
+		}
+
+		@Override
+		public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId afterKey, ElementId beforeKey,
+			boolean first, Runnable added) {
+			return entryFor(theSource.getOrPutEntry(key, k -> BetterList.of(value.apply(k)), afterKey, beforeKey, first, added));
+		}
+
+		private MapEntryHandle<K, V> entryFor(MultiEntryHandle<K, V> outerHandle) {
+			return new MapEntryHandle<K, V>() {
+				@Override
+				public ElementId getElementId() {
+					return outerHandle.getElementId();
+				}
+
+				@Override
+				public V get() {
+					return outerHandle.getValues().peekFirst();
+				}
+
+				@Override
+				public K getKey() {
+					return outerHandle.getKey();
+				}
+			};
+		}
+
+		@Override
+		public MapEntryHandle<K, V> getEntryById(ElementId entryId) {
+			return entryFor(theSource.getEntryById(entryId));
+		}
+
+		@Override
+		public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
+			return mutableEntryFor(theSource.getEntryById(entryId));
+		}
+
+		private MutableMapEntryHandle<K, V> mutableEntryFor(MultiEntryHandle<K, V> outerHandle) {
+			return new MutableMapEntryHandle<K, V>() {
+				@Override
+				public K getKey() {
+					return outerHandle.getKey();
+				}
+
+				@Override
+				public BetterCollection<V> getCollection() {
+					return outerHandle.getValues();
+				}
+
+				@Override
+				public ElementId getElementId() {
+					return outerHandle.getElementId();
+				}
+
+				@Override
+				public V get() {
+					return outerHandle.getValues().peekFirst();
+				}
+
+				@Override
+				public String isEnabled() {
+					return outerHandle.getValues().mutableElement(outerHandle.getValues().getTerminalElement(true).getElementId())
+						.isEnabled();
+				}
+
+				@Override
+				public String isAcceptable(V value) {
+					return outerHandle.getValues().mutableElement(outerHandle.getValues().getTerminalElement(true).getElementId())
+						.isAcceptable(value);
+				}
+
+				@Override
+				public void set(V value) throws UnsupportedOperationException, IllegalArgumentException {
+					outerHandle.getValues().mutableElement(outerHandle.getValues().getTerminalElement(true).getElementId()).set(value);
+				}
+
+				@Override
+				public String canRemove() {
+					for (CollectionElement<V> valueEl : outerHandle.getValues().elements()) {
+						String msg = outerHandle.getValues().mutableElement(valueEl.getElementId()).canRemove();
+						if (msg != null)
+							return msg;
+					}
+					return null;
+				}
+
+				@Override
+				public void remove() throws UnsupportedOperationException {
+					for (CollectionElement<V> valueEl : outerHandle.getValues().elements())
+						outerHandle.getValues().mutableElement(valueEl.getElementId()).remove();
+				}
+			};
+		}
+
+		@Override
+		public V put(K key, V value) {
+			try (Transaction t = theSource.lock(true, null)) {
+				BetterCollection<V> values = theSource.get(key);
+				CollectionElement<V> terminal = values.getTerminalElement(isFirstValue);
+				if (terminal == null) {
+					values.add(value);
+					return null;
+				} else {
+					V old = terminal.get();
+					values.mutableElement(terminal.getElementId()).set(value);
+					return old;
+				}
+			}
+		}
+
+		@Override
+		public String toString() {
+			return entrySet().toString();
 		}
 	}
 
