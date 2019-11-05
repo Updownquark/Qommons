@@ -8,7 +8,6 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
-import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -22,7 +21,6 @@ import org.qommons.QommonsUtils;
 import org.qommons.Stamped;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
-import org.qommons.ValueHolder;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
@@ -145,24 +143,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	void clear();
 
 	/**
-	 * @param fromStart Whether the returned spliterator should be initially positioned at the beginning of this collection or its end
-	 * @return The spliterator
-	 */
-	default MutableElementSpliterator<E> spliterator(boolean fromStart) {
-		return new DefaultBetterSpliterator<>(this, null, 0, null, fromStart);
-	}
-
-	/**
-	 * @param element The ID of the element at which to position the spliterator initially
-	 * @param asNext Whether the given element should be the first element returned from the spliterator's
-	 *        {@link MutableElementSpliterator#forElement(Consumer, boolean) forElement} method with a true or a false parameter
-	 * @return The spliterator
-	 */
-	default MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
-		return new DefaultBetterSpliterator<>(this, null, 0, getElement(element), asNext);
-	}
-
-	/**
 	 * Tests the compatibility of an object with this collection.
 	 *
 	 * @param value The value to test compatibility for
@@ -254,11 +234,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 */
 	default String canRemove(Object value) {
 		if (!belongs(value))
-			return MutableCollectionElement.StdMsg.NOT_FOUND;
-		String[] msg = new String[1];
-		if (!forMutableElement((E) value, el -> msg[0] = el.canRemove(), true))
-			return MutableCollectionElement.StdMsg.NOT_FOUND;
-		return msg[0];
+			return StdMsg.NOT_FOUND;
+		try (Transaction t = lock(false, null)) {
+			CollectionElement<E> found = getElement((E) value, true);
+			return mutableElement(found.getElementId()).canRemove();
+		}
 	}
 
 	@Override
@@ -286,13 +266,13 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 				if (c.isEmpty())
 					return false;
 				Set<Object> cSet = new HashSet<>(c);
-				Spliterator<E> iter = spliterator();
-				boolean[] found = new boolean[1];
-				while (iter.tryAdvance(next -> {
-					found[0] = cSet.contains(next);
-				}) && !found[0]) {
+				CollectionElement<E> el = getTerminalElement(true);
+				while (el != null) {
+					if (cSet.contains(el.get()))
+						return true;
+					el = getAdjacentElement(el.getElementId(), true);
 				}
-				return found[0];
+				return false;
 			}
 		}
 	}
@@ -319,8 +299,12 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default Object[] toArray() {
 		try (Transaction t = lock(false, null)) {
 			Object[] array = new Object[size()];
-			int[] index = new int[1];
-			spliterator().forEachRemaining(v -> array[index[0]++] = v);
+			CollectionElement<E> el = getTerminalElement(true);
+			int index = 0;
+			while (el != null) {
+				array[index++] = el.get();
+				el = getAdjacentElement(el.getElementId(), true);
+			}
 			return array;
 		}
 	}
@@ -331,9 +315,13 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 			int size = size();
 			if (a.length < size)
 				a = (T[]) java.lang.reflect.Array.newInstance(a.getClass().getComponentType(), size);
-			int[] index = new int[1];
 			T[] array = a;
-			spliterator().forEachRemaining(v -> array[index[0]++] = (T) v);
+			CollectionElement<E> el = getTerminalElement(true);
+			int index = 0;
+			while (el != null) {
+				array[index++] = (T) el.get();
+				el = getAdjacentElement(el.getElementId(), true);
+			}
 			return a;
 		}
 	}
@@ -342,8 +330,13 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default boolean remove(Object o) {
 		if (!belongs(o))
 			return false;
-		return forMutableElement((E) o, //
-			el -> el.remove(), true);
+		try (Transaction t = lock(true, null)) {
+			CollectionElement<E> found = getElement((E) o, true);
+			if (found == null)
+				return false;
+			mutableElement(found.getElementId()).remove();
+			return true;
+		}
 	}
 
 	/**
@@ -355,7 +348,13 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default boolean removeLast(Object o) {
 		if (!belongs(o))
 			return false;
-		return forMutableElement((E) o, el -> el.remove(), false);
+		try (Transaction t = lock(true, null)) {
+			CollectionElement<E> found = getElement((E) o, false);
+			if (found == null)
+				return false;
+			mutableElement(found.getElementId()).remove();
+			return true;
+		}
 	}
 
 	@Override
@@ -385,15 +384,17 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default boolean removeIf(Predicate<? super E> filter) {
 		if (isEmpty())
 			return false;
-		boolean[] removed = new boolean[1];
-		findAll(filter, //
-			el -> {
-				if (el.canRemove() == null) {
-					el.remove();
-					removed[0] = true;
+		boolean removed = false;
+		try (Transaction t = lock(true, null)) {
+			CollectionElement<E> el = getTerminalElement(true);
+			while (el != null) {
+				if (filter.test(el.get())) {
+					mutableElement(el.getElementId()).remove();
+					removed = true;
 				}
-			}, true);
-		return removed[0];
+			}
+		}
+		return removed;
 	}
 
 	/**
@@ -404,21 +405,25 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @param soft If true, this method will attempt to determine whether each differing mapped value is acceptable as a replacement. This
 	 *        may, but is not guaranteed to, prevent {@link IllegalArgumentException}s
 	 * @return Whether any elements were replaced
+	 * @throws UnsupportedOperationException If an update operation is not supported
 	 * @throws IllegalArgumentException If a mapped value is not acceptable as a replacement
 	 */
 	default boolean replaceAll(Function<? super E, ? extends E> map, boolean soft) {
 		try (Transaction t = lock(true, null)) {
-			boolean[] replaced = new boolean[1];
-			MutableElementSpliterator<E> iter = spliterator();
-			iter.forEachElementM(el -> {
-				E value = el.get();
-				E newValue = map.apply(value);
-				if (value != newValue && (!soft || el.isAcceptable(newValue) == null)) {
-					el.set(newValue);
-					replaced[0] = true;
+			boolean replaced = false;
+			CollectionElement<E> el = getTerminalElement(true);
+			while (el != null) {
+				E newValue = map.apply(el.get());
+				if (newValue != el.get()) {
+					MutableCollectionElement<E> mutableEl = mutableElement(el.getElementId());
+					if (!soft || mutableEl.isAcceptable(newValue) == null) {
+						mutableEl.set(newValue);
+						replaced = true;
+					}
 				}
-			}, true);
-			return replaced[0];
+				el = getAdjacentElement(el.getElementId(), true);
+			}
+			return replaced;
 		}
 	}
 
@@ -433,80 +438,44 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	}
 
 	/**
-	 * Finds an equivalent value in this collection
-	 *
-	 * @param value The value to find
-	 * @param onElement The listener to be called with the equivalent element
-	 * @param first Whether to find the first or last occurrence of the value
-	 * @return Whether the value was found
-	 */
-	default boolean forElement(E value, Consumer<? super CollectionElement<E>> onElement, boolean first) {
-		CollectionElement<E> el = getElement(value, first);
-		if (el != null)
-			onElement.accept(el);
-		return el != null;
-	}
-
-	/**
-	 * @param value The value to search for
-	 * @param onElement The action to perform on the element containing the given value, if found
-	 * @param first Whether to search for the first equivalent element or the last one
-	 * @return Whether such a value was found
-	 */
-	default boolean forMutableElement(E value, Consumer<? super MutableCollectionElement<E>> onElement, boolean first) {
-		CollectionElement<E> el = getElement(value, first);
-		if (el != null)
-			onElement.accept(mutableElement(el.getElementId()));
-		return el != null;
-	}
-
-	/**
-	 * Finds a value in this collection matching the given search and performs an action on the {@link MutableCollectionElement} for that
-	 * element
+	 * Finds an element in this collection matching the given search
 	 * 
 	 * @param search The search function
-	 * @param onElement The action to perform on the search's result
 	 * @param first Whether to search for the first matching element or the last one
-	 * @return Whether a result was found
+	 * @return The element of the matching result
 	 */
-	default boolean find(Predicate<? super E> search, Consumer<? super CollectionElement<E>> onElement, boolean first) {
+	default CollectionElement<E> find(Predicate<? super E> search, boolean first) {
 		try (Transaction t = lock(false, null)) {
 			CollectionElement<E> el = getTerminalElement(first);
 			while (el != null) {
-				if (search.test(el.get())) {
-					onElement.accept(el);
-					return true;
-				}
+				if (search.test(el.get()))
+					return el;
 				el = getAdjacentElement(el.getElementId(), first);
 			}
-			return false;
+			return null;
 		}
 	}
 
 	/**
-	 * Finds all values in this collection matching the given search and performs an action on the {@link MutableCollectionElement} for each
-	 * element
+	 * Finds all elements in this collection matching the given search and performs an action on each
 	 * 
 	 * @param search The search function
 	 * @param onElement The action to perform on the search's results
 	 * @param forward Whether to search beginning-to-end or end-to-beginning
 	 * @return The number of results found
 	 */
-	default int findAll(Predicate<? super E> search, Consumer<? super MutableCollectionElement<E>> onElement, boolean forward) {
-		int[] found = new int[1];
-		spliterator(forward).forEachElementM(//
-			el -> {
-				if (search.test(el.get())) {
-					found[0]++;
+	default int findAll(Predicate<? super E> search, Consumer<? super CollectionElement<E>> onElement, boolean forward) {
+		int found = 0;
+		CollectionElement<E> el = getTerminalElement(forward);
+		while (el != null) {
+			if (search.test(el.get())) {
+				found++;
+				if (onElement != null)
 					onElement.accept(el);
-				}
-			}, forward);
-		return found[0];
-	}
-
-	@Override
-	default MutableElementSpliterator<E> spliterator() {
-		return spliterator(true);
+			}
+			el = getAdjacentElement(el.getElementId(), forward);
+		}
+		return found;
 	}
 
 	@Override
@@ -550,77 +519,82 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	@Override
 	default E removeFirst() {
-		ValueHolder<E> value = new ValueHolder<>();
 		try (Transaction t = lock(true, null)) {
-			if (!spliterator(true).forElementM(el -> {
-				value.accept(el.get());
-				el.remove();
-			}, true))
+			CollectionElement<E> el = getTerminalElement(true);
+			if (el == null)
 				throw new NoSuchElementException("Empty collection");
+			E value = el.get();
+			mutableElement(el.getElementId()).remove();
+			return value;
 		}
-		return value.get();
 	}
 
 	@Override
 	default E removeLast() {
-		ValueHolder<E> value = new ValueHolder<>();
 		try (Transaction t = lock(true, null)) {
-			if (!spliterator(true).forElementM(el -> {
-				value.accept(el.get());
-				el.remove();
-			}, false))
+			CollectionElement<E> el = getTerminalElement(false);
+			if (el == null)
 				throw new NoSuchElementException("Empty collection");
+			E value = el.get();
+			mutableElement(el.getElementId()).remove();
+			return value;
 		}
-		return value.get();
 	}
 
 	@Override
 	default E pollFirst() {
-		ValueHolder<E> value = new ValueHolder<>();
-		spliterator(true).forElementM(el -> {
-			value.accept(el.get());
-			el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an exception
-		}, true);
-		return value.get();
+		try (Transaction t = lock(true, null)) {
+			CollectionElement<E> el = getTerminalElement(true);
+			if (el == null)
+				return null;
+			E value = el.get();
+			mutableElement(el.getElementId()).remove();
+			return value;
+		}
 	}
 
 	@Override
 	default E pollLast() {
-		ValueHolder<E> value = new ValueHolder<>();
-		spliterator(false).forElementM(el -> {
-			value.accept(el.get());
-			el.remove(); // The Deque contract says nothing about what to do if the element can't be removed, so we'll throw an exception
-		}, false);
-		return value.get();
+		try (Transaction t = lock(true, null)) {
+			CollectionElement<E> el = getTerminalElement(false);
+			if (el == null)
+				return null;
+			E value = el.get();
+			mutableElement(el.getElementId()).remove();
+			return value;
+		}
 	}
 
 	@Override
 	default E getFirst() {
-		ValueHolder<E> value = new ValueHolder<>();
-		if (!spliterator(true).tryAdvance(value))
+		CollectionElement<E> el = getTerminalElement(true);
+		if (el == null)
 			throw new NoSuchElementException("Empty collection");
-		return value.get();
+		return el.get();
 	}
 
 	@Override
 	default E getLast() {
-		ValueHolder<E> value = new ValueHolder<>();
-		spliterator(false).tryReverse(value);
-		return value.get();
+		CollectionElement<E> el = getTerminalElement(false);
+		if (el == null)
+			throw new NoSuchElementException("Empty collection");
+		return el.get();
 	}
 
 	@Override
 	default E peekFirst() {
-		ValueHolder<E> value = new ValueHolder<>();
-		spliterator(true).tryAdvance(value);
-		return value.get();
+		CollectionElement<E> el = getTerminalElement(true);
+		if (el == null)
+			return null;
+		return el.get();
 	}
 
 	@Override
 	default E peekLast() {
-		ValueHolder<E> value = new ValueHolder<>();
-		spliterator(false).tryReverse(value);
-		return value.get();
+		CollectionElement<E> el = getTerminalElement(false);
+		if (el == null)
+			return null;
+		return el.get();
 	}
 
 	@Override

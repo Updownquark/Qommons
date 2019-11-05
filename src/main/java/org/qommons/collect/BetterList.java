@@ -68,20 +68,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	@Override
 	void clear();
 
-	/**
-	 * @param index The index of the element to be the next element returned from the spliterator on forward access
-	 * @return The spliterator
-	 */
-	default MutableElementSpliterator<E> spliterator(int index) {
-		if (index == 0)
-			return spliterator(true);
-		try (Transaction t = lock(false, null)) {
-			if (index == size())
-				return spliterator(false);
-			return spliterator(getElement(index).getElementId(), true);
-		}
-	}
-
 	@Override
 	default Object[] toArray() {
 		return BetterCollection.super.toArray();
@@ -273,18 +259,13 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	}
 
 	@Override
-	default MutableElementSpliterator<E> spliterator() {
-		return BetterCollection.super.spliterator();
-	}
-
-	@Override
 	default Iterator<E> iterator() {
 		return BetterCollection.super.iterator();
 	}
 
 	@Override
 	default ListIterator<E> listIterator(int index) {
-		return new BetterListIterator<>(this, spliterator(index));
+		return new BetterListIterator<>(this, index == size() ? null : getElement(index));
 	}
 
 	@Override
@@ -449,7 +430,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		private static final Consumer<CollectionElement<?>> NULL_ACTION = el -> {};
 
 		private final BetterList<E> theList;
-		private final MutableElementSpliterator<E> backing;
 		private CollectionElement<E> element;
 		/**
 		 * If {@link #element} is non-null, then whether that element is prepped to be used for {@link #next()} or {@link #previous()}.
@@ -457,116 +437,138 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		 * Otherwise, whether {@link #next()} or {@link #previous()} method was called more recently
 		 */
 		private boolean elementIsNext;
-		private ElementId theLastElement;
 		private boolean isReadyForMod;
 
 		/**
 		 * @param list The list to iterate
-		 * @param backing The element spliterator from the list, positioned at the desired position for this iterator
+		 * @param next The next element to iterate toward
 		 */
-		public BetterListIterator(BetterList<E> list, MutableElementSpliterator<E> backing) {
+		public BetterListIterator(BetterList<E> list, CollectionElement<E> next) {
 			theList = list;
-			this.backing = backing;
+			this.element = next;
+			elementIsNext = true;
 		}
 
 		@Override
 		public boolean hasNext() {
-			if (element == null || !elementIsNext)
-				getElement(true);
-			return element != null && elementIsNext;
+			if (element != null && !element.getElementId().isPresent()) {
+				element = theList.getAdjacentElement(element.getElementId(), true);
+				elementIsNext = true;
+			}
+			if (elementIsNext)
+				return element != null;
+			else if (element == null)
+				return !theList.isEmpty();
+			else {
+				isReadyForMod = false;
+				element = theList.getAdjacentElement(element.getElementId(), true);
+				elementIsNext = true;
+				return element != null;
+			}
 		}
 
 		@Override
 		public E next() {
 			if (!hasNext())
 				throw new NoSuchElementException();
+			if (!elementIsNext)
+				element = theList.getAdjacentElement(element.getElementId(), true);
 			E value = element.get();
-			element = null;
+			elementIsNext = false;
 			isReadyForMod = true;
 			return value;
 		}
 
 		@Override
 		public boolean hasPrevious() {
-			if (element == null || elementIsNext)
-				getElement(false);
-			return element != null && !elementIsNext;
+			if (element != null && !element.getElementId().isPresent()) {
+				element = theList.getAdjacentElement(element.getElementId(), false);
+				elementIsNext = false;
+			}
+			if (!elementIsNext)
+				return element != null;
+			else if (element == null)
+				return !theList.isEmpty();
+			else {
+				isReadyForMod = false;
+				element = theList.getAdjacentElement(element.getElementId(), false);
+				elementIsNext = false;
+				return element != null;
+			}
 		}
 
 		@Override
 		public E previous() {
 			if (!hasPrevious())
 				throw new NoSuchElementException();
+			if (elementIsNext)
+				element = theList.getAdjacentElement(element.getElementId(), false);
 			E value = element.get();
-			element = null;
+			elementIsNext = true;
 			isReadyForMod = true;
 			return value;
 		}
 
-		private void getElement(boolean forward) {
-			backing.forElement(el -> element = el, forward);
-			theLastElement = element == null ? null : element.getElementId();
-			elementIsNext = forward;
-			isReadyForMod = false;
-		}
-
-		private void onLastElement(Consumer<MutableCollectionElement<E>> action, int backup) {
-			if (!isReadyForMod)
-				throw new IllegalStateException(
-					"Modification must come after a call to next() or previous() and before the next call to hasNext() or hasPrevious()");
-			boolean next = !elementIsNext;
-			Consumer<MutableCollectionElement<E>> elAction = el -> {
-				if (!theLastElement.equals(el.getElementId()))
-					throw new ConcurrentModificationException("Element appears to have moved or to have been removed");
-				action.accept(el);
-			};
-			backing.forElementM(elAction, next);
-			for (int i = 0; i < backup; i++)
-				backing.forElement(NULL_ACTION, !next);
-		}
-
 		@Override
 		public int nextIndex() {
-			if (theLastElement == null) {
-				if (!backing.forElement(NULL_ACTION, false))
+			if (elementIsNext) {
+				if (element != null)
+					return theList.getElementsBefore(element.getElementId());
+				else
 					return 0;
-				// Advance back over the element
-				backing.forElement(el -> theLastElement = el.getElementId(), true);
-				elementIsNext = true;
+			} else {
+				if (element != null) {
+					if (element.getElementId().isPresent())
+						return theList.getElementsBefore(element.getElementId()) + 1;
+					else
+						return theList.getElementsBefore(element.getElementId());
+				} else
+					return theList.size();
 			}
-			int index = theList.getElementsBefore(theLastElement);
-			if ((element == null) == elementIsNext)
-				index++;
-			return index;
 		}
 
 		@Override
 		public int previousIndex() {
-			return nextIndex() - 1;
+			if (elementIsNext) {
+				if (element != null) {
+					if (element.getElementId().isPresent())
+						return theList.getElementsBefore(element.getElementId()) - 1;
+					else
+						return theList.getElementsBefore(element.getElementId());
+				} else
+					return -1;
+			} else {
+				if (element != null)
+					return theList.getElementsBefore(element.getElementId());
+				else
+					return -1;
+			}
 		}
 
 		@Override
 		public void remove() {
-			onLastElement(el -> el.remove(), 0);
-			theLastElement = null;
+			if (!isReadyForMod)
+				throw new IllegalStateException(
+					"Modification must come after a call to next() or previous() and before the next call to hasNext() or hasPrevious()");
+			theList.mutableElement(element.getElementId()).remove();
 			isReadyForMod = false;
 		}
 
 		@Override
 		public void set(E e) {
-			onLastElement(el -> el.set(e), 1);
+			if (!isReadyForMod)
+				throw new IllegalStateException(
+					"Modification must come after a call to next() or previous() and before the next call to hasNext() or hasPrevious()");
+			theList.mutableElement(element.getElementId()).set(e);
 		}
 
 		@Override
 		public void add(E e) {
-			// If we need to back up, then we're going to add an element after the previous element;
-			// so we'll need to advance twice instead of once
-			onLastElement(el -> el.add(e, !elementIsNext), elementIsNext ? 2 : 1);
-		}
-
-		@Override
-		public String toString() {
-			return backing.toString();
+			if (!isReadyForMod)
+				throw new IllegalStateException(
+					"Modification must come after a call to next() or previous() and before the next call to hasNext() or hasPrevious()");
+			theList.addElement(e, element.getElementId(), //
+				CollectionElement.getElementId(theList.getAdjacentElement(element.getElementId(), true)), true);
 		}
 	}
 
