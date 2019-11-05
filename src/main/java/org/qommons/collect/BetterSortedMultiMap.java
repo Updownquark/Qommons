@@ -1,11 +1,13 @@
 package org.qommons.collect;
 
 import java.util.Comparator;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.function.Function;
 
 import org.qommons.Identifiable;
 import org.qommons.Transaction;
+import org.qommons.collect.BetterSortedList.SortedSearchFilter;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
@@ -31,7 +33,20 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 	 * @param filter The filter on the result
 	 * @return The result of the search, or null if no such value was found
 	 */
-	MultiEntryHandle<K, V> search(Comparable<? super K> search, BetterSortedList.SortedSearchFilter filter);
+	default MultiEntryHandle<K, V> search(Comparable<? super K> search, BetterSortedList.SortedSearchFilter filter) {
+		return searchEntries(entry -> search.compareTo(entry.getKey()), filter);
+	}
+
+	/**
+	 * Searches this sorted map for an entry
+	 *
+	 * @param search The search to navigate through this map for the target entry. The search must follow this map's {@link #comparator()
+	 *        order}.
+	 * @param filter The filter on the result
+	 * @return The result of the search, or null if no such value was found
+	 */
+	MultiEntryHandle<K, V> searchEntries(Comparable<? super MultiEntryHandle<K, V>> search,
+		BetterSortedList.SortedSearchFilter filter);
 
 	@Override
 	default MultiEntryHandle<K, V> lowerEntry(K key) {
@@ -61,6 +76,11 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 	@Override
 	default MultiEntryHandle<K, V> lastEntry() {
 		return search(k -> 1, BetterSortedList.SortedSearchFilter.PreferGreater);
+	}
+
+	@Override
+	default BetterMap<K, V> singleMap(boolean firstValue) {
+		return new SortedSingleMultiMap<>(this, firstValue);
 	}
 
 	@Override
@@ -193,6 +213,36 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 	}
 
 	/**
+	 * Implements {@link BetterSortedMultiMap#singleMap(boolean)}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
+	class SortedSingleMultiMap<K, V> extends SingleMap<K, V> implements BetterSortedMap<K, V> {
+		public SortedSingleMultiMap(BetterSortedMultiMap<K, V> outer, boolean firstValue) {
+			super(outer, firstValue);
+		}
+
+		@Override
+		protected BetterSortedMultiMap<K, V> getSource() {
+			return (BetterSortedMultiMap<K, V>) super.getSource();
+		}
+
+		@Override
+		public BetterSortedSet<K> keySet() {
+			return getSource().keySet();
+		}
+
+		@Override
+		public MapEntryHandle<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter) {
+			try (Transaction t = lock(false, null)) {
+				MultiEntryHandle<K, V> entry = getSource().searchEntries(e -> search.compareTo(entryFor(e)), filter);
+				return entryFor(entry);
+			}
+		}
+	}
+
+	/**
 	 * Implements {@link BetterSortedMultiMap#reverse()}
 	 * 
 	 * @param <K> The key type of the map
@@ -224,8 +274,9 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public MultiEntryHandle<K, V> search(Comparable<? super K> search, BetterSortedList.SortedSearchFilter filter) {
-			return MultiEntryHandle.reverse(getSource().search(v -> -search.compareTo(v), filter.opposite()));
+		public MultiEntryHandle<K, V> searchEntries(Comparable<? super MultiEntryHandle<K, V>> search,
+			BetterSortedList.SortedSearchFilter filter) {
+			return MultiEntryHandle.reverse(getSource().searchEntries(e -> -search.compareTo(e.reverse()), filter.opposite()));
 		}
 
 		@Override
@@ -393,18 +444,19 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 			return 0;
 		}
 
-		protected Comparable<K> boundSearch(Comparable<? super K> search) {
-			return v -> {
-				int compare = isInRange(v);
+		protected Comparable<MultiEntryHandle<K, V>> boundSearch(Comparable<? super MultiEntryHandle<K, V>> search) {
+			return entry -> {
+				int compare = isInRange(entry.getKey());
 				if (compare == 0)
-					compare = search.compareTo(v);
+					compare = search.compareTo(entry);
 				return compare;
 			};
 		}
 
 		@Override
-		public MultiEntryHandle<K, V> search(Comparable<? super K> search, BetterSortedList.SortedSearchFilter filter) {
-			return theWrapped.search(boundSearch(search), filter);
+		public MultiEntryHandle<K, V> searchEntries(Comparable<? super MultiEntryHandle<K, V>> search,
+			BetterSortedList.SortedSearchFilter filter) {
+			return theWrapped.searchEntries(boundSearch(search), filter);
 		}
 	}
 }

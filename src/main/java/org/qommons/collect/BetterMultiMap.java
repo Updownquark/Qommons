@@ -974,13 +974,31 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 
 		@Override
+		public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
+			try (Transaction t = lock(true, null)) {
+				boolean[] added = new boolean[1];
+				MultiEntryHandle<K, V> entry = theSource.getOrPutEntry(key, k -> BetterList.of(value), after, before, first,
+					() -> added[0] = true);
+				if (entry == null)
+					return null;
+				if (!added[0])
+					entry.getValues().mutableElement(entry.getValues().getTerminalElement(isFirstValue).getElementId()).set(value);
+				return entryFor(entry);
+			}
+		}
+
+		@Override
 		public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId afterKey, ElementId beforeKey,
 			boolean first, Runnable added) {
 			return entryFor(theSource.getOrPutEntry(key, k -> BetterList.of(value.apply(k)), afterKey, beforeKey, first, added));
 		}
 
-		private MapEntryHandle<K, V> entryFor(MultiEntryHandle<K, V> outerHandle) {
-			return new MapEntryHandle<K, V>() {
+		/**
+		 * @param outerHandle The multi-entry to wrap
+		 * @return The map entry to expose as an entry of this map, backed by the multi-entry from the source
+		 */
+		protected MapEntryHandle<K, V> entryFor(MultiEntryHandle<K, V> outerHandle) {
+			return outerHandle == null ? null : new MapEntryHandle<K, V>() {
 				@Override
 				public ElementId getElementId() {
 					return outerHandle.getElementId();
@@ -1009,7 +1027,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 
 		private MutableMapEntryHandle<K, V> mutableEntryFor(MultiEntryHandle<K, V> outerHandle) {
-			return new MutableMapEntryHandle<K, V>() {
+			return outerHandle == null ? null : new MutableMapEntryHandle<K, V>() {
 				@Override
 				public K getKey() {
 					return outerHandle.getKey();
