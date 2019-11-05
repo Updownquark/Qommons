@@ -198,7 +198,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 			int compare = comparator().compare(value, found.get());
 			if (compare == 0)
 				return found;
-			try (Transaction t = lock(true, true, null)) {
+			try (Transaction t = lock(true, null)) {
 				MutableCollectionElement<E> mutableElement;
 				try {
 					mutableElement = mutableElement(found.getElementId());

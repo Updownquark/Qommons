@@ -272,7 +272,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 
 	@Override
 	default BetterSortedSet<E> subList(int fromIndex, int toIndex) {
-		try (Transaction t = lock(false, true, null)) {
+		try (Transaction t = lock(false, null)) {
 			// Be inclusive so that adds succeed as often as possible
 			Comparable<? super E> from = fromIndex == 0 ? null : searchFor(get(fromIndex - 1), 1);
 			Comparable<? super E> to = toIndex == size() ? null : searchFor(get(toIndex), -1);
@@ -331,18 +331,18 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
-			return theWrapped.lock(write, structural, cause);
+		public Transaction lock(boolean write, Object cause) {
+			return theWrapped.lock(write, cause);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
-			return theWrapped.tryLock(write, structural, cause);
+		public Transaction tryLock(boolean write, Object cause) {
+			return theWrapped.tryLock(write, cause);
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
-			return theWrapped.getStamp(structuralOnly);
+		public long getStamp() {
+			return theWrapped.getStamp();
 		}
 
 		/** @return This sub-set's lower bound (may be null) */
@@ -531,7 +531,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		public E set(int index, E element) {
 			if (!belongs(element))
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			try (Transaction t = lock(true, false, null)) {
+			try (Transaction t = lock(true, null)) {
 				return theWrapped.set(checkIndex(index, false), element);
 			}
 		}

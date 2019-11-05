@@ -27,14 +27,14 @@ public class RRWLockingStrategy implements CollectionLockingStrategy {
 	}
 
 	@Override
-	public Transaction lock(boolean write, boolean structural, Object cause) {
+	public Transaction lock(boolean write, Object cause) {
 		Transaction lock = theLock.lock(write, cause);
 		theStamp++;
 		return lock;
 	}
 
 	@Override
-	public Transaction tryLock(boolean write, boolean structural, Object cause) {
+	public Transaction tryLock(boolean write, Object cause) {
 		Transaction lock = theLock.tryLock(write, cause);
 		if (lock != null)
 			theStamp++;
@@ -42,22 +42,22 @@ public class RRWLockingStrategy implements CollectionLockingStrategy {
 	}
 
 	@Override
-	public long getStamp(boolean structural) {
+	public long getStamp() {
 		return theStamp;
 	}
 
 	@Override
-	public <T> T doOptimistically(T init, OptimisticOperation<T> operation, boolean allowUpdate) {
+	public <T> T doOptimistically(T init, OptimisticOperation<T> operation) {
 		// Optimism not supported
-		try (Transaction t = lock(false, allowUpdate, null)) {
+		try (Transaction t = lock(false, null)) {
 			return operation.apply(init, OptimisticContext.TRUE);
 		}
 	}
 
 	@Override
-	public int doOptimistically(int init, OptimisticIntOperation operation, boolean allowUpdate) {
+	public int doOptimistically(int init, OptimisticIntOperation operation) {
 		// Optimism not supported
-		try (Transaction t = lock(false, allowUpdate, null)) {
+		try (Transaction t = lock(false, null)) {
 			return operation.apply(init, OptimisticContext.TRUE);
 		}
 	}

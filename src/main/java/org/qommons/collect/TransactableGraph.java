@@ -1,7 +1,7 @@
 package org.qommons.collect;
 
 import org.qommons.Lockable;
-import org.qommons.StructuredTransactable;
+import org.qommons.Transactable;
 import org.qommons.Transaction;
 
 /**
@@ -10,22 +10,22 @@ import org.qommons.Transaction;
  * @param <N> The type of node values for the graph
  * @param <E> The type of edge values for the graph
  */
-public interface TransactableGraph<N, E> extends Graph<N, E>, StructuredTransactable {
+public interface TransactableGraph<N, E> extends Graph<N, E>, Transactable {
 	@Override
 	default boolean isLockSupported() {
 		return getNodes().isLockSupported();
 	}
 
 	@Override
-	default Transaction lock(boolean write, boolean structural, Object cause) {
-		return Lockable.lockAll(Lockable.lockable(getNodes(), write, structural, cause), //
-			Lockable.lockable(getEdges(), write, structural, cause));
+	default Transaction lock(boolean write, Object cause) {
+		return Lockable.lockAll(Lockable.lockable(getNodes(), write, cause), //
+			Lockable.lockable(getEdges(), write, cause));
 	}
 
 	@Override
-	default Transaction tryLock(boolean write, boolean structural, Object cause) {
-		return Lockable.tryLockAll(Lockable.lockable(getNodes(), write, structural, cause), //
-			Lockable.lockable(getEdges(), write, structural, cause));
+	default Transaction tryLock(boolean write, Object cause) {
+		return Lockable.tryLockAll(Lockable.lockable(getNodes(), write, cause), //
+			Lockable.lockable(getEdges(), write, cause));
 	}
 
 	@Override

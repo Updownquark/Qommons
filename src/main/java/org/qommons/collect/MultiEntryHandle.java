@@ -20,6 +20,12 @@ public interface MultiEntryHandle<K, V> extends MultiMap.MultiEntry<K, V>, Colle
 		return new ReversedMultiEntryHandle<>(this);
 	}
 
+	/**
+	 * Implements {@link MultiEntryHandle#reverse()}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	class ReversedMultiEntryHandle<K, V> implements MultiEntryHandle<K, V> {
 		private final MultiEntryHandle<K, V> theSource;
 
@@ -47,6 +53,12 @@ public interface MultiEntryHandle<K, V> extends MultiMap.MultiEntry<K, V>, Colle
 		}
 	}
 
+	/**
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param entry The entry to reverse
+	 * @return The reversed entry (or null if entry was null)
+	 */
 	public static <K, V> MultiEntryHandle<K, V> reverse(MultiEntryHandle<K, V> entry) {
 		return entry == null ? null : entry.reverse();
 	}

@@ -73,7 +73,7 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 	 * @throws IllegalArgumentException If some property of the argument prevents it being a replacement for this element's value
 	 */
 	default boolean compareAndSet(E expected, E value) throws UnsupportedOperationException, IllegalArgumentException {
-		try (Transaction t = getCollection().lock(true, false, null)) {
+		try (Transaction t = getCollection().lock(true, null)) {
 			E oldValue = get();
 			if (Objects.equals(oldValue, expected)) {
 				set(value);

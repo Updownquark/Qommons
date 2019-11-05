@@ -7,7 +7,6 @@ import org.qommons.Transaction;
 /** A locking strategy that is not thread-safe, but it allows fail-fast behavior; that is, detecting changes in a thread-unsafe manner. */
 public class FastFailLockingStrategy implements CollectionLockingStrategy {
 	private volatile long theModCount = 0;
-	private volatile long theStuctureChanges = 0;
 
 	@Override
 	public boolean isLockSupported() {
@@ -15,45 +14,41 @@ public class FastFailLockingStrategy implements CollectionLockingStrategy {
 	}
 
 	@Override
-	public Transaction lock(boolean write, boolean structural, Object cause) {
-		if (write) {
-			if (structural)
-				theStuctureChanges++;
-			else
-				theModCount++;
-		}
+	public Transaction lock(boolean write, Object cause) {
+		if (write)
+			theModCount++;
 		return Transaction.NONE;
 	}
 
 	@Override
-	public Transaction tryLock(boolean write, boolean structural, Object cause) {
-		return lock(write, structural, cause);
+	public Transaction tryLock(boolean write, Object cause) {
+		return lock(write, cause);
 	}
 
 	@Override
-	public long getStamp(boolean structural) {
-		return structural ? theStuctureChanges : theModCount;
+	public long getStamp() {
+		return theModCount;
 	}
 
 	@Override
-	public <T> T doOptimistically(T init, OptimisticOperation<T> operation, boolean allowUpdate) {
+	public <T> T doOptimistically(T init, OptimisticOperation<T> operation) {
 		T res = init;
-		long[] stamp = new long[] { getStamp(allowUpdate) };
+		long[] stamp = new long[] { getStamp() };
 		FFLSOptimisticContext ctx;
 		do { // This locker does not have any way of preventing other threads from modifying, so this loop does not terminate until
-			ctx = new FFLSOptimisticContext(() -> getStamp(allowUpdate), stamp);
+			ctx = new FFLSOptimisticContext(() -> getStamp(), stamp);
 			res = operation.apply(res, ctx);
 		} while (ctx.failed);
 		return res;
 	}
 
 	@Override
-	public int doOptimistically(int init, OptimisticIntOperation operation, boolean allowUpdate) {
+	public int doOptimistically(int init, OptimisticIntOperation operation) {
 		int res = init;
-		long[] stamp = new long[] { getStamp(allowUpdate) };
+		long[] stamp = new long[] { getStamp() };
 		FFLSOptimisticContext ctx;
 		do { // This locker does not have any way of preventing other threads from modifying, so this loop does not terminate until
-			ctx = new FFLSOptimisticContext(() -> getStamp(allowUpdate), stamp);
+			ctx = new FFLSOptimisticContext(() -> getStamp(), stamp);
 			res = operation.apply(res, ctx);
 		} while (ctx.failed);
 		return res;

@@ -25,16 +25,12 @@ public interface Lockable {
 		return lockable(write ? lock.writeLock() : lock.readLock());
 	}
 
-	static Lockable lockable(Transactable lock, boolean write, Object cause) {
-		return new TransactableLockable(lock, write, cause);
-	}
-
-	static Lockable lockable(StructuredTransactable transactable) {
+	static Lockable lockable(Transactable transactable) {
 		return transactable == null ? null : new STLockable(transactable);
 	}
 
-	static Lockable lockable(StructuredTransactable transactable, boolean write, boolean structural, Object cause) {
-		return transactable == null ? null : new STLockable2(transactable, write, structural, cause);
+	static Lockable lockable(Transactable transactable, boolean write, Object cause) {
+		return transactable == null ? null : new STLockable2(transactable, write, cause);
 	}
 
 	static Lockable collapse(Collection<? extends Lockable> locks) {
@@ -276,9 +272,9 @@ public interface Lockable {
 	}
 
 	static class STLockable implements Lockable {
-		private final StructuredTransactable theTransactable;
+		private final Transactable theTransactable;
 
-		public STLockable(StructuredTransactable transactable) {
+		public STLockable(Transactable transactable) {
 			theTransactable = transactable;
 		}
 
@@ -289,12 +285,12 @@ public interface Lockable {
 
 		@Override
 		public Transaction lock() {
-			return theTransactable.lock(false, false, null);
+			return theTransactable.lock(false, null);
 		}
 
 		@Override
 		public Transaction tryLock() {
-			return theTransactable.tryLock(false, false, null);
+			return theTransactable.tryLock(false, null);
 		}
 
 		@Override
@@ -314,15 +310,13 @@ public interface Lockable {
 	}
 
 	static class STLockable2 implements Lockable {
-		private final StructuredTransactable theTransactable;
+		private final Transactable theTransactable;
 		private final boolean write;
-		private final boolean structural;
 		private final Object cause;
 
-		public STLockable2(StructuredTransactable transactable, boolean write, boolean structural, Object cause) {
+		public STLockable2(Transactable transactable, boolean write, Object cause) {
 			theTransactable = transactable;
 			this.write = write;
-			this.structural = structural;
 			this.cause = cause;
 		}
 
@@ -333,12 +327,12 @@ public interface Lockable {
 
 		@Override
 		public Transaction lock() {
-			return theTransactable.lock(write, structural, cause);
+			return theTransactable.lock(write, cause);
 		}
 
 		@Override
 		public Transaction tryLock() {
-			return theTransactable.tryLock(write, structural, cause);
+			return theTransactable.tryLock(write, cause);
 		}
 
 		@Override

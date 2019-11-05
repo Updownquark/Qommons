@@ -5,8 +5,8 @@ import java.util.NoSuchElementException;
 import java.util.function.Function;
 
 import org.qommons.Identifiable;
-import org.qommons.StructuredStamped;
-import org.qommons.StructuredTransactable;
+import org.qommons.Stamped;
+import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.tree.BetterTreeList;
@@ -69,7 +69,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	 * 
 	 * @param <V> The value type of the map
 	 */
-	public interface ValueCollectionBacking<V> extends Identifiable, StructuredTransactable, StructuredStamped {
+	public interface ValueCollectionBacking<V> extends Identifiable, Transactable, Stamped {
 		/**
 		 * @param addIfNotPresent Whether the key represented by this backing should be created if it is not present
 		 * @return The current collection of values for the key, or null if the key is not currently present in the map
@@ -182,7 +182,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		 * @return This builder
 		 */
 		public Builder<K, V> safe(boolean safe) {
-			theLocking = safe ? new StampedLockingStrategy() : new FastFailLockingStrategy();
+			theLocking = safe ? new RRWLockingStrategy() : new FastFailLockingStrategy();
 			return this;
 		}
 
@@ -232,7 +232,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			if (theLocking != null)
 				return theLocking;
 			else
-				return new StampedLockingStrategy();
+				return new RRWLockingStrategy();
 		}
 
 		/** @return The value supplier for the multi-map */
@@ -256,7 +256,6 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	private final BetterSet<K> theKeySet;
 
 	private long theStamp;
-	private long theStructureStamp;
 	private long theLastCountStamp;
 	private int theLastCountedValueSize;
 
@@ -291,26 +290,26 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	}
 
 	@Override
-	public Transaction lock(boolean write, boolean structural, Object cause) {
-		return theLocking.lock(write, structural, cause);
+	public Transaction lock(boolean write, Object cause) {
+		return theLocking.lock(write, cause);
 	}
 
 	@Override
-	public Transaction tryLock(boolean write, boolean structural, Object cause) {
-		return theLocking.tryLock(write, structural, cause);
+	public Transaction tryLock(boolean write, Object cause) {
+		return theLocking.tryLock(write, cause);
 	}
 
 	@Override
-	public long getStamp(boolean structuralOnly) {
-		return structuralOnly ? theStructureStamp : theStamp;
+	public long getStamp() {
+		return theStamp;
 	}
 
 	@Override
 	public int valueSize() {
-		if (theLastCountStamp == getStamp(true))
+		if (theLastCountStamp == getStamp())
 			return theLastCountedValueSize;
 		try (Transaction t = lock(false, null)) {
-			theLastCountStamp = getStamp(true);
+			theLastCountStamp = getStamp();
 			theLastCountedValueSize = 0;
 			for (BetterCollection<V> values : theEntries.values())
 				theLastCountedValueSize += values.size();
@@ -399,7 +398,6 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	protected class BetterMultiMapKeySet extends AbstractIdentifiable implements BetterSet<K> {
 		private final BetterSet<K> theBacking;
 		private long theKeyStamp;
-		private long theKeyStructureStamp;
 
 		/** @param backing The key set of the backing multi-map's backing {@link BetterMap} */
 		protected BetterMultiMapKeySet(BetterSet<K> backing) {
@@ -427,8 +425,8 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
-			return structuralOnly ? theKeyStructureStamp : theKeyStamp;
+		public long getStamp() {
+			return theKeyStamp;
 		}
 
 		@Override
@@ -442,13 +440,13 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
-			return getBacking().lock(write, structural, cause);
+		public Transaction lock(boolean write, Object cause) {
+			return getBacking().lock(write, cause);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
-			return getBacking().tryLock(write, structural, cause);
+		public Transaction tryLock(boolean write, Object cause) {
+			return getBacking().tryLock(write, cause);
 		}
 
 		@Override
@@ -549,7 +547,6 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 				if (isEmpty())
 					return;
 				theKeyStamp++;
-				theKeyStructureStamp++;
 				AbstractBetterMultiMap.this.clear();
 			}
 		}
@@ -646,18 +643,18 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
-			return AbstractBetterMultiMap.this.lock(write, structural, cause);
+		public Transaction lock(boolean write, Object cause) {
+			return AbstractBetterMultiMap.this.lock(write, cause);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
-			return AbstractBetterMultiMap.this.tryLock(write, structural, cause);
+		public Transaction tryLock(boolean write, Object cause) {
+			return AbstractBetterMultiMap.this.tryLock(write, cause);
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
-			return AbstractBetterMultiMap.this.getStamp(structuralOnly);
+		public long getStamp() {
+			return AbstractBetterMultiMap.this.getStamp();
 		}
 
 		@Override
@@ -859,18 +856,18 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
-			return theWrapped.lock(write, structural, cause);
+		public Transaction lock(boolean write, Object cause) {
+			return theWrapped.lock(write, cause);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
-			return theWrapped.tryLock(write, structural, cause);
+		public Transaction tryLock(boolean write, Object cause) {
+			return theWrapped.tryLock(write, cause);
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
-			return theWrapped.getStamp(structuralOnly);
+		public long getStamp() {
+			return theWrapped.getStamp();
 		}
 
 		@Override

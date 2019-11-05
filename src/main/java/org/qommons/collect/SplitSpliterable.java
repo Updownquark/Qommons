@@ -75,7 +75,7 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 
 		@Override
 		public long estimateSize() {
-			try (Transaction t = getCollection().lock(false, true, null)) {
+			try (Transaction t = getCollection().lock(false, null)) {
 				int size;
 				if (theRightBound != null)
 					size = getCollection().getElementsBefore(theRightBound.getElementId());

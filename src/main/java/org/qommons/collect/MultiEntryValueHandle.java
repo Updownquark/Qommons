@@ -7,6 +7,7 @@ package org.qommons.collect;
  * @param <V> The type of the value
  */
 public interface MultiEntryValueHandle<K, V> extends MapEntryHandle<K, V> {
+	/** @return The ID of the key element in the {@link BetterMultiMap#keySet() key set} */
 	ElementId getKeyId();
 
 	@Override
@@ -14,6 +15,12 @@ public interface MultiEntryValueHandle<K, V> extends MapEntryHandle<K, V> {
 		return new ReversedMultiMapEntryHandle<>(this);
 	}
 
+	/**
+	 * Implements {@link MultiEntryValueHandle#reverse()}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	class ReversedMultiMapEntryHandle<K, V> extends ReversedMapEntryHandle<K, V> implements MultiEntryValueHandle<K, V> {
 		public ReversedMultiMapEntryHandle(MultiEntryValueHandle<K, V> wrapped) {
 			super(wrapped);
@@ -40,6 +47,12 @@ public interface MultiEntryValueHandle<K, V> extends MapEntryHandle<K, V> {
 		}
 	}
 
+	/**
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param entry The entry to reverse
+	 * @return The reversed entry (or null if entry was null)
+	 */
 	static <K, V> MultiEntryValueHandle<K, V> reverse(MultiEntryValueHandle<K, V> entry) {
 		return entry == null ? null : entry.reverse();
 	}

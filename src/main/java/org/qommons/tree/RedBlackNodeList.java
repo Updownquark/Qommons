@@ -17,7 +17,7 @@ import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.OptimisticContext;
-import org.qommons.collect.StampedLockingStrategy;
+import org.qommons.collect.RRWLockingStrategy;
 import org.qommons.collect.ValueStoredCollection;
 import org.qommons.collect.ValueStoredCollection.RepairListener;
 
@@ -38,7 +38,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 		/** @param initDescrip The initial (default) description for the list */
 		protected RBNLBuilder(String initDescrip) {
 			theDescription = initDescrip;
-			theLocker = new StampedLockingStrategy();
+			theLocker = new RRWLockingStrategy();
 		}
 
 		/** @return The locker for the list */
@@ -67,7 +67,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 		 * @return This builder
 		 */
 		public RBNLBuilder<E, L> safe(boolean safe) {
-			return withLocker(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy());
+			return withLocker(safe ? new RRWLockingStrategy() : new FastFailLockingStrategy());
 		}
 
 		/**
@@ -171,7 +171,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	public BinaryTreeNode<E> getNode(int index) {
 		if (theTree.getRoot() == null)
 			throw new IndexOutOfBoundsException(index + " of 0");
-		return theLocker.doOptimistically(null, (init, ctx) -> wrap(theTree.getRoot().get(index, ctx)), true);
+		return theLocker.doOptimistically(null, (init, ctx) -> wrap(theTree.getRoot().get(index, ctx)));
 	}
 
 	/** For unit tests. Ensures the integrity of the collection. */
@@ -186,18 +186,18 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	}
 
 	@Override
-	public Transaction lock(boolean write, boolean structural, Object cause) {
-		return theLocker.lock(write, structural, cause);
+	public Transaction lock(boolean write, Object cause) {
+		return theLocker.lock(write, cause);
 	}
 
 	@Override
-	public Transaction tryLock(boolean write, boolean structural, Object cause) {
-		return theLocker.tryLock(write, structural, cause);
+	public Transaction tryLock(boolean write, Object cause) {
+		return theLocker.tryLock(write, cause);
 	}
 
 	@Override
-	public long getStamp(boolean structuralOnly) {
-		return theLocker.getStamp(structuralOnly);
+	public long getStamp() {
+		return theLocker.getStamp();
 	}
 
 	@Override
@@ -213,13 +213,13 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	@Override
 	public int getElementsBefore(ElementId id) {
 		return theLocker.doOptimistically(0, //
-			(init, ctx) -> ((NodeId) id).theNode.getNodesBefore(ctx), true);
+			(init, ctx) -> ((NodeId) id).theNode.getNodesBefore(ctx));
 	}
 
 	@Override
 	public int getElementsAfter(ElementId id) {
 		return theLocker.doOptimistically(0, //
-			(init, ctx) -> ((NodeId) id).theNode.getNodesAfter(ctx), true);
+			(init, ctx) -> ((NodeId) id).theNode.getNodesAfter(ctx));
 	}
 
 	@Override
@@ -257,7 +257,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 		RedBlackNode<E> root = theTree.getRoot();
 		if (root == null)
 			throw new IndexOutOfBoundsException(index + " of 0");
-		return theLocker.doOptimistically(null, (init, ctx) -> wrap(root.get(index, ctx)), true);
+		return theLocker.doOptimistically(null, (init, ctx) -> wrap(root.get(index, ctx)));
 	}
 
 	@Override
@@ -296,7 +296,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	public BinaryTreeNode<E> addElement(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException {
 		RedBlackNode<E> newNode = new RedBlackNode<>(theTree, value);
-		try (Transaction t = theLocker.lock(true, true, null)) {
+		try (Transaction t = theLocker.lock(true, null)) {
 			if (first && after != null) {
 				if (!((NodeId) after).theNode.isPresent())
 					throw new IllegalArgumentException("Unrecognized element");
@@ -316,7 +316,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	@Override
 	public BinaryTreeNode<E> splitBetween(ElementId element1, ElementId element2) {
 		return theLocker.doOptimistically(null,
-			(init, ctx) -> wrap(RedBlackNode.splitBetween(((NodeId) element1).theNode, ((NodeId) element2).theNode, ctx)), true);
+			(init, ctx) -> wrap(RedBlackNode.splitBetween(((NodeId) element1).theNode, ((NodeId) element2).theNode, ctx)));
 	}
 
 	/**
@@ -359,7 +359,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 						node = null;
 				}
 				return node;
-			}, true);
+			});
 	}
 
 	@Override
@@ -597,7 +597,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 						compare = 1;
 					return compare;
 				}
-			}, true);
+			});
 		}
 
 		@Override
@@ -617,7 +617,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 					return "" + theNode.getNodesBefore(ctx);
 				else
 					return "removed";
-			}, true);
+			});
 			return new StringBuilder().append('[').append(index).append("]: ").append(theNode.getValue()).toString();
 		}
 	}
@@ -680,19 +680,19 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 		@Override
 		public BinaryTreeNode<E> get(int index, OptimisticContext ctx) {
 			return theLocker.doOptimistically(null, //
-				(init, ctx2) -> wrap(theNode.get(index, OptimisticContext.and(ctx, ctx2))), true);
+				(init, ctx2) -> wrap(theNode.get(index, OptimisticContext.and(ctx, ctx2))));
 		}
 
 		@Override
 		public int getNodesBefore() {
 			return theLocker.doOptimistically(0, //
-				(init, ctx) -> theNode.getNodesBefore(ctx), true);
+				(init, ctx) -> theNode.getNodesBefore(ctx));
 		}
 
 		@Override
 		public int getNodesAfter() {
 			return theLocker.doOptimistically(0, //
-				(init, ctx) -> theNode.getNodesAfter(ctx), true);
+				(init, ctx) -> theNode.getNodesAfter(ctx));
 		}
 
 		@Override
@@ -758,15 +758,14 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 
 		@Override
 		public MutableBinaryTreeNode<E> get(int index, OptimisticContext ctx) {
-			return theLocker.doOptimistically(null, (init, ctx2) -> wrapMutable(theNode.get(index, OptimisticContext.and(ctx, ctx2))),
-				true);
+			return theLocker.doOptimistically(null, (init, ctx2) -> wrapMutable(theNode.get(index, OptimisticContext.and(ctx, ctx2))));
 		}
 
 		@Override
 		public MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly,
 			OptimisticContext ctx) {
 			return theLocker.doOptimistically(null,
-				(init, ctx2) -> mutableNodeFor(super.findClosest(finder, lesser, strictly, OptimisticContext.and(ctx, ctx2))), true);
+				(init, ctx2) -> mutableNodeFor(super.findClosest(finder, lesser, strictly, OptimisticContext.and(ctx, ctx2))));
 		}
 
 		@Override
@@ -785,7 +784,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 
 		@Override
 		public void set(E value) {
-			try (Transaction t = lock(true, false, null)) {
+			try (Transaction t = lock(true, null)) {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
 				theNode.setValue(value);

@@ -1,9 +1,10 @@
 package org.qommons.collect;
 
-import org.qommons.StructuredTransactable;
+import org.qommons.Stamped;
+import org.qommons.Transactable;
 
 /** A strategy for collection thread safety. Some implementations of this class may not be completely thread-safe for performance. */
-public interface CollectionLockingStrategy extends StructuredTransactable {
+public interface CollectionLockingStrategy extends Transactable, Stamped {
 	@FunctionalInterface
 	interface OptimisticOperation<T> {
 		T apply(T init, OptimisticContext ctx);
@@ -13,8 +14,6 @@ public interface CollectionLockingStrategy extends StructuredTransactable {
 	interface OptimisticIntOperation {
 		int apply(int init, OptimisticContext ctx);
 	}
-
-	long getStamp(boolean structural);
 
 	/**
 	 * Performs a safe, read-only operation, potentially without obtaining any locks.
@@ -32,10 +31,9 @@ public interface CollectionLockingStrategy extends StructuredTransactable {
 	 * @param <T> The type of value produced by the operation
 	 * @param init The initial value to feed to the operation
 	 * @param operation The operation to perform
-	 * @param allowUpdate Whether to allow updates within the operation
 	 * @return The result of the operation
 	 */
-	<T> T doOptimistically(T init, OptimisticOperation<T> operation, boolean allowUpdate);
+	<T> T doOptimistically(T init, OptimisticOperation<T> operation);
 
-	int doOptimistically(int init, OptimisticIntOperation operation, boolean allowUpdate);
+	int doOptimistically(int init, OptimisticIntOperation operation);
 }

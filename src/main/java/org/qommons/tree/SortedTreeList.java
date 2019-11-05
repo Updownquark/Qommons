@@ -15,7 +15,7 @@ import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.OptimisticContext;
-import org.qommons.collect.StampedLockingStrategy;
+import org.qommons.collect.RRWLockingStrategy;
 
 /**
  * A {@link org.qommons.collect.BetterList} backed by a tree structure that sorts its values, with duplicates allowed
@@ -104,7 +104,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 	 * @param compare The comparator to order the values
 	 */
 	public SortedTreeList(boolean safe, Comparator<? super E> compare) {
-		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), compare);
+		this(safe ? new RRWLockingStrategy() : new FastFailLockingStrategy(), compare);
 	}
 
 	/**
@@ -167,7 +167,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 				if (root == null)
 					return -1;
 				return root.indexFor(node -> search.compareTo(node.get()), ctx);
-			}, true);
+			});
 	}
 
 	@Override
@@ -224,7 +224,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 	@Override
 	public BinaryTreeNode<E> addElement(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException {
-		try (Transaction t = lock(true, true, null)) {
+		try (Transaction t = lock(true, null)) {
 			if (after != null) {
 				int compare = theCompare.compare(getElement(after).get(), value);
 				if (isDistinct && compare == 0)
@@ -386,14 +386,14 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 		@Override
 		public MutableBinaryTreeNode<E> get(int index, OptimisticContext ctx) {
 			return getLocker().doOptimistically(null, //
-				(init, ctx2) -> mutableNodeFor(theWrapped.get(index, OptimisticContext.and(ctx, ctx2))), true);
+				(init, ctx2) -> mutableNodeFor(theWrapped.get(index, OptimisticContext.and(ctx, ctx2))));
 		}
 
 		@Override
 		public MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly,
 			OptimisticContext ctx) {
 			return getLocker().doOptimistically(null, //
-				(init, ctx2) -> mutableNodeFor(theWrapped.findClosest(finder, lesser, strictly, OptimisticContext.and(ctx, ctx2))), true);
+				(init, ctx2) -> mutableNodeFor(theWrapped.findClosest(finder, lesser, strictly, OptimisticContext.and(ctx, ctx2))));
 		}
 
 		@Override

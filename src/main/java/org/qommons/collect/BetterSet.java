@@ -6,7 +6,6 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 
 import org.qommons.Lockable;
-import org.qommons.StructuredTransactable;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 
@@ -101,8 +100,8 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 		if (!(o instanceof Set))
 			return false;
 		try (Transaction t = Lockable.lockAll(//
-			c instanceof StructuredTransactable ? Lockable.lockable((StructuredTransactable) c, false, false) : null, //
-			o instanceof StructuredTransactable ? Lockable.lockable((StructuredTransactable) o, false, false) : null)) {
+			c instanceof Transactable ? Lockable.lockable((Transactable) c, false, false) : null, //
+			o instanceof Transactable ? Lockable.lockable((Transactable) o, false, false) : null)) {
 			Set<?> c2 = (Set<?>) o;
 			Iterator<?> iter = c.iterator();
 			while (iter.hasNext()) {

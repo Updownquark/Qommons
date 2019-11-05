@@ -5,15 +5,26 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.function.Supplier;
 
+/**
+ * A {@link MapEntryHandle} implementation for {@link BetterMap} implementations that caches some things for performance
+ * 
+ * @param <K> The key type of the map
+ * @param <V> The value type of the map
+ */
 public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 	K theKey;
 	V theValue;
+	/** The element ID of this entry */
 	protected ElementId theId; // Protected so implementations can set this
 
 	private MutableMapEntryHandle<K, V> mutableHandle;
 	private CollectionElement<K> keyHandle;
 	private MutableCollectionElement<K> mutableKeyHandle;
 
+	/**
+	 * @param key The key of this entry
+	 * @param value The value of this entry
+	 */
 	public BetterMapEntryImpl(K key, V value) {
 		theKey = key;
 		theValue = value;
@@ -49,6 +60,11 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 		return new StringBuilder().append(theKey).append('=').append(theValue).toString();
 	}
 
+	/**
+	 * @param entrySet The entry set for the map
+	 * @param values Supplies the {@link BetterMap#values() values} collection for the map
+	 * @return The mutable handle for this map entry
+	 */
 	protected MutableMapEntryHandle<K, V> mutable(BetterSet<Map.Entry<K, V>> entrySet, Supplier<BetterCollection<V>> values) {
 		if (mutableHandle == null) {
 			mutableHandle = createMutableHandle(entrySet, values);
@@ -56,6 +72,18 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 		return mutableHandle;
 	}
 
+	/**
+	 * Creates the mutable entry
+	 * 
+	 * @param entrySet The entry set for the map
+	 * @param values Supplies the {@link BetterMap#values() values} collection for the map
+	 * @return The mutable handle for this map entry
+	 */
+	protected MutableMapEntryHandle<K, V> createMutableHandle(BetterSet<Entry<K, V>> entrySet, Supplier<BetterCollection<V>> values) {
+		return new BetterMapMutableEntryHandleImpl<>(this, entrySet, values);
+	}
+
+	/** @return The collection element for this entry in the {@link BetterMap#keySet() key set} */
 	protected CollectionElement<K> keyHandle() {
 		if (keyHandle == null) {
 			keyHandle = makeKeyHandle();
@@ -63,10 +91,20 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 		return keyHandle;
 	}
 
+	/**
+	 * Creates the key set element for this entry
+	 * 
+	 * @return The collection element for this entry in the {@link BetterMap#keySet() key set}
+	 */
 	protected CollectionElement<K> makeKeyHandle() {
 		return new BetterMapEntryKeyHandle<>(this);
 	}
 
+	/**
+	 * @param entrySet The entry set for the map
+	 * @param keySet Supplies the {@link BetterMap#keySet() key set}
+	 * @return The mutable element for this entry in the {@link BetterMap#keySet() key set}
+	 */
 	protected MutableCollectionElement<K> mutableKeyHandle(BetterSet<Map.Entry<K, V>> entrySet, Supplier<BetterSet<K>> keySet) {
 		if (mutableKeyHandle == null) {
 			mutableKeyHandle = createMutableKeyHandle(entrySet, keySet);
@@ -74,22 +112,32 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 		return mutableKeyHandle;
 	}
 
+	/**
+	 * Creates the mutable key handle
+	 * 
+	 * @param entrySet The entry set for the map
+	 * @param keySet Supplies the {@link BetterMap#keySet() key set}
+	 * @return The mutable element for this entry in the {@link BetterMap#keySet() key set}
+	 */
 	protected MutableCollectionElement<K> createMutableKeyHandle(BetterSet<Entry<K, V>> entrySet, Supplier<BetterSet<K>> keySet) {
 		MutableCollectionElement<Map.Entry<K, V>> mutableEntryEl = entrySet.mutableElement(theId);
 		return new BetterMapEntryMutableKeyHandle<>(this, mutableEntryEl, keySet);
 	}
 
-	protected MutableMapEntryHandle<K, V> createMutableHandle(BetterSet<Entry<K, V>> entrySet, Supplier<BetterCollection<V>> values) {
-		return new BetterMapMutableEntryHandleImpl<>(this, entrySet, values);
-	}
-
+	/**
+	 * Implements {@link BetterMapEntryImpl#keyHandle()}
+	 * 
+	 * @param <K> The key type of the map
+	 */
 	public static class BetterMapEntryKeyHandle<K> implements CollectionElement<K> {
 		private final BetterMapEntryImpl<K, ?> theEntry;
 
+		/** @param entry The entry that this key handle is for */
 		public BetterMapEntryKeyHandle(BetterMapEntryImpl<K, ?> entry) {
 			theEntry = entry;
 		}
 
+		/** @return The entry that this key handle is for */
 		protected BetterMapEntryImpl<K, ?> getEntry() {
 			return theEntry;
 		}
@@ -105,10 +153,20 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 		}
 	}
 
+	/**
+	 * Implements {@link BetterMapEntryImpl#mutableKeyHandle(BetterSet, Supplier)}
+	 * 
+	 * @param <K> The key type of the map
+	 */
 	public static class BetterMapEntryMutableKeyHandle<K> extends BetterMapEntryKeyHandle<K> implements MutableCollectionElement<K> {
 		private final MutableCollectionElement<Entry<K, ?>> mutableEntryEl;
 		private final Supplier<BetterSet<K>> keySet;
 
+		/**
+		 * @param entry The entry that this key handle is for
+		 * @param mutableEntryEl The mutable entry for this entry in the {@link BetterMap#entrySet() entry set}
+		 * @param keySet Supplies the {@link BetterMap#keySet() key set}
+		 */
 		public BetterMapEntryMutableKeyHandle(BetterMapEntryImpl<K, ?> entry,
 			MutableCollectionElement<? extends Map.Entry<K, ?>> mutableEntryEl, Supplier<BetterSet<K>> keySet) {
 			super(entry);
@@ -152,11 +210,22 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 		}
 	}
 
+	/**
+	 * Implements {@link BetterMapEntryImpl#mutable(BetterSet, Supplier)}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	public static class BetterMapMutableEntryHandleImpl<K, V> implements MutableMapEntryHandle<K, V> {
 		private final BetterMapEntryImpl<K, V> theEntry;
 		private final MutableCollectionElement<Map.Entry<K, V>> theMutableEntryEl;
 		private final Supplier<BetterCollection<V>> theValues;
 
+		/**
+		 * @param entry The entry that this mutable entry is for
+		 * @param entrySet The {@link BetterMap#entrySet() entry set} for the map
+		 * @param values Supplies the {@link BetterMap#values() values} collection for the map
+		 */
 		public BetterMapMutableEntryHandleImpl(BetterMapEntryImpl<K, V> entry, BetterSet<Entry<K, V>> entrySet,
 			Supplier<BetterCollection<V>> values) {
 			theEntry = entry;
@@ -164,6 +233,7 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 			theValues = values;
 		}
 
+		/** @return The entry that this mutable entry is for */
 		protected BetterMapEntryImpl<K, V> getEntry() {
 			return theEntry;
 		}

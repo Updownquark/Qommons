@@ -7,7 +7,7 @@ import java.util.function.Function;
 
 import org.qommons.Identifiable;
 import org.qommons.QommonsUtils;
-import org.qommons.StructuredStamped;
+import org.qommons.Stamped;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
@@ -17,7 +17,7 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * @param <K> The type of keys in the map
  * @param <V> The type of values in the map
  */
-public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, StructuredStamped, Identifiable {
+public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stamped, Identifiable {
 	@Override
 	BetterSet<K> keySet();
 
@@ -236,7 +236,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 
 	@Override
 	default boolean removeAll(K key) {
-		try (Transaction t = lock(true, true, null)) {
+		try (Transaction t = lock(true, null)) {
 			Collection<V> values = get(key);
 			if (values.isEmpty())
 				return false;
@@ -300,7 +300,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 
 		@Override
 		public CollectionElement<MultiEntryHandle<K, V>> getTerminalElement(boolean first) {
-			try (Transaction t = lock(false, true, null)) {
+			try (Transaction t = lock(false, null)) {
 				CollectionElement<K> keyEl = getMap().keySet().getTerminalElement(first);
 				return keyEl == null ? null : entryFor(getMap().getEntryById(keyEl.getElementId()));
 			}
@@ -308,7 +308,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 
 		@Override
 		public CollectionElement<MultiEntryHandle<K, V>> getAdjacentElement(ElementId elementId, boolean next) {
-			try (Transaction t = lock(false, true, null)) {
+			try (Transaction t = lock(false, null)) {
 				CollectionElement<K> keyEl = getMap().keySet().getAdjacentElement(elementId, next);
 				return keyEl == null ? null : entryFor(getMap().getEntryById(keyEl.getElementId()));
 			}
@@ -354,8 +354,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
-			return getMap().getStamp(structuralOnly);
+		public long getStamp() {
+			return getMap().getStamp();
 		}
 
 		@Override
@@ -364,13 +364,13 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
-			return getMap().lock(write, structural, cause);
+		public Transaction lock(boolean write, Object cause) {
+			return getMap().lock(write, cause);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
-			return getMap().tryLock(write, structural, cause);
+		public Transaction tryLock(boolean write, Object cause) {
+			return getMap().tryLock(write, cause);
 		}
 
 		@Override
@@ -530,8 +530,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
-			return getMap().getStamp(structuralOnly);
+		public long getStamp() {
+			return getMap().getStamp();
 		}
 
 		@Override
@@ -545,13 +545,13 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
-			return getMap().lock(write, structural, cause);
+		public Transaction lock(boolean write, Object cause) {
+			return getMap().lock(write, cause);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
-			return getMap().tryLock(write, structural, cause);
+		public Transaction tryLock(boolean write, Object cause) {
+			return getMap().tryLock(write, cause);
 		}
 
 		@Override
@@ -952,8 +952,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
-			return theSource.lock(write, structural, cause);
+		public Transaction lock(boolean write, Object cause) {
+			return theSource.lock(write, cause);
 		}
 
 		@Override
@@ -1131,18 +1131,18 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Struct
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
-			return theSource.lock(write, structural, cause);
+		public Transaction lock(boolean write, Object cause) {
+			return theSource.lock(write, cause);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
-			return theSource.tryLock(write, structural, cause);
+		public Transaction tryLock(boolean write, Object cause) {
+			return theSource.tryLock(write, cause);
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
-			return theSource.getStamp(structuralOnly);
+		public long getStamp() {
+			return theSource.getStamp();
 		}
 
 		@Override

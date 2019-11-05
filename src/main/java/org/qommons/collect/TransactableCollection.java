@@ -2,7 +2,6 @@ package org.qommons.collect;
 
 import java.util.Collection;
 
-import org.qommons.StructuredTransactable;
 import org.qommons.Transactable;
 
 /**
@@ -10,5 +9,5 @@ import org.qommons.Transactable;
  * 
  * @param <E> The type of elements in the collection
  */
-public interface TransactableCollection<E> extends Collection<E>, StructuredTransactable {
+public interface TransactableCollection<E> extends Collection<E>, Transactable {
 }

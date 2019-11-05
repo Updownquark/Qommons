@@ -140,7 +140,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		public <E> BetterHashSet<E> buildSet() {
 			CollectionLockingStrategy locking = theLocker;
 			if (locking == null)
-				locking = isSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy();
+				locking = isSafe ? new RRWLockingStrategy() : new FastFailLockingStrategy();
 			return new BetterHashSet<>(locking, theHasher, theEquals, theInitExpectedSize, theLoadFactor, theDescription);
 		}
 
@@ -256,7 +256,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	 * @return Whether this table was rebuilt
 	 */
 	public boolean ensureCapacity(int expectedSize) {
-		try (Transaction t = lock(true, true, null)) {
+		try (Transaction t = lock(true, null)) {
 			int neededTableSize = (int) Math.ceil(expectedSize / theLoadFactor);
 			if (neededTableSize > theTable.length) {
 				// Do this so we don't rehash as often when growing
@@ -284,7 +284,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	 * @return The efficiency of this table
 	 */
 	public double getEfficiency() {
-		try (Transaction t = lock(false, true, null)) {
+		try (Transaction t = lock(false, null)) {
 			int sharing = 0;
 			for (HashTableEntry tableEntry : theTable) {
 				if (tableEntry == null || tableEntry.entries.size() <= 1)
@@ -320,18 +320,18 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public Transaction lock(boolean write, boolean structural, Object cause) {
-		return theLocker.lock(write, structural, cause);
+	public Transaction lock(boolean write, Object cause) {
+		return theLocker.lock(write, cause);
 	}
 
 	@Override
-	public Transaction tryLock(boolean write, boolean structural, Object cause) {
-		return theLocker.tryLock(write, structural, cause);
+	public Transaction tryLock(boolean write, Object cause) {
+		return theLocker.tryLock(write, cause);
 	}
 
 	@Override
-	public long getStamp(boolean structuralOnly) {
-		return theLocker.getStamp(structuralOnly);
+	public long getStamp() {
+		return theLocker.getStamp();
 	}
 
 	@Override
@@ -394,7 +394,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			return entry;
 
 		// Ordered insert is O(n), but we'll support it
-		try (Transaction t = lock(true, true, null)) {
+		try (Transaction t = lock(true, null)) {
 			ensureCapacity(theSize + 1);
 			if (theTable != table) {
 				// Table rebuilt, need to get the insertion information again
@@ -545,7 +545,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 	@Override
 	public boolean addAll(Collection<? extends E> c) {
-		try (Transaction t = lock(true, true, null); Transaction ct = Transactable.lock(c, false, null)) {
+		try (Transaction t = lock(true, null); Transaction ct = Transactable.lock(c, false, null)) {
 			for (E e : c)
 				add(e);
 			return !c.isEmpty();
@@ -556,7 +556,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	public void clear() {
 		if (isEmpty())
 			return;
-		try (Transaction t = lock(true, true, null)) {
+		try (Transaction t = lock(true, null)) {
 			for (int i = 0; i < theTable.length; i++)
 				theTable[i] = null;
 			theFirst = null;
@@ -740,7 +740,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 		@Override
 		public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
-			try (Transaction t = lock(true, false, null)) {
+			try (Transaction t = lock(true, null)) {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
 				int newHash = theHasher.applyAsInt(value);

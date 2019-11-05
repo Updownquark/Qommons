@@ -7,7 +7,7 @@ import java.util.SortedSet;
 import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.FastFailLockingStrategy;
-import org.qommons.collect.StampedLockingStrategy;
+import org.qommons.collect.RRWLockingStrategy;
 
 /**
  * A {@link BetterSortedSet} backed by a tree structure.
@@ -66,7 +66,7 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 	 * @param compare The comparator to order the set's values
 	 */
 	public BetterTreeSet(boolean safe, Comparator<? super E> compare) {
-		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), DEFAULT_DESCRIPTION, compare);
+		this(safe ? new RRWLockingStrategy() : new FastFailLockingStrategy(), DEFAULT_DESCRIPTION, compare);
 	}
 
 	/**
@@ -78,7 +78,7 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 	}
 
 	public BetterTreeSet(boolean safe, SortedSet<E> values) {
-		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), DEFAULT_DESCRIPTION, values.comparator());
+		this(safe ? new RRWLockingStrategy() : new FastFailLockingStrategy(), DEFAULT_DESCRIPTION, values.comparator());
 		initialize(values, v -> v);
 	}
 

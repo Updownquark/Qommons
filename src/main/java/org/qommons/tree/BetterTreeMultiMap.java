@@ -100,8 +100,9 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 	}
 
 	@Override
-	public MultiEntryHandle<K, V> search(Comparable<? super K> search, BetterSortedList.SortedSearchFilter filter) {
-		return CollectionElement.get(entrySet().search(entry -> search.compareTo(entry.getKey()), filter));
+	public MultiEntryHandle<K, V> searchEntries(Comparable<? super MultiEntryHandle<K, V>> search,
+		BetterSortedList.SortedSearchFilter filter) {
+		return CollectionElement.get(entrySet().search(entry -> search.compareTo(entry), filter));
 	}
 
 	class BetterTreeMultiMapKeySet extends BetterMultiMapKeySet implements TreeBasedSet<K> {

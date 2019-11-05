@@ -7,37 +7,86 @@ import java.util.function.Function;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
+/** A static utility class for {@link BetterCollection}s and related structures */
 public class BetterCollections {
 	private BetterCollections() {}
 
+	/**
+	 * @param <E> The type of the collection
+	 * @param collection The collection to get an unmodifiable view of
+	 * @return A BetterCollection backed by the given collection but though which the source collection cannot be modified in any way
+	 */
 	public static <E> BetterCollection<E> unmodifiableCollection(BetterCollection<? extends E> collection) {
 		return new UnmodifiableBetterCollection<>(collection);
 	}
 
+	/**
+	 * @param <E> The type of the set
+	 * @param set The set to get an unmodifiable view of
+	 * @return A BetterSet backed by the given set but though which the source set cannot be modified in any way
+	 */
 	public static <E> BetterSet<E> unmodifiableSet(BetterSet<? extends E> set) {
 		return new UnmodifiableBetterSet<>(set);
 	}
 
+	/**
+	 * @param <E> The type of the list
+	 * @param list The list to get an unmodifiable view of
+	 * @return A BetterList backed by the given list but though which the source list cannot be modified in any way
+	 */
 	public static <E> BetterList<E> unmodifiableList(BetterList<? extends E> list) {
 		return new UnmodifiableBetterList<>(list);
 	}
 
+	/**
+	 * @param <E> The type of the sorted set
+	 * @param sortedSet The sorted set to get an unmodifiable view of
+	 * @return A BetterSortedSet backed by the given sorted set but though which the source set cannot be modified in any way
+	 */
 	public static <E> BetterSortedSet<E> unmodifiableSortedSet(BetterSortedSet<? extends E> sortedSet) {
 		return new UnmodifiableBetterSortedSet<>(sortedSet);
 	}
 
+	/**
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param map The map to get an unmodifiable view of
+	 * @return A BetterMap backed by the given map but though which the source map cannot be modified in any way
+	 */
 	public static <K, V> BetterMap<K, V> unmodifiableMap(BetterMap<? extends K, ? extends V> map) {
 		return new UnmodifiableBetterMap<>(map);
 	}
 
+	/**
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param map The sorted map to get an unmodifiable view of
+	 * @return A BetterSortedMap backed by the given map but though which the source map cannot be modified in any way
+	 */
 	public static <K, V> BetterSortedMap<K, V> unmodifiableSortedMap(BetterSortedMap<? extends K, ? extends V> map) {
 		return new UnmodifiableBetterSortedMap<>(map);
 	}
 
+	/**
+	 * This is needed because the standard map entry defines {@link java.util.Map.Entry#setValue(Object) setValue(Object)}, which may be
+	 * supported without needed to retrieve the mutable entry.
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param entry The map entry to get an unmodifiable view of
+	 * @return A MapEntryHandle backed by the given entry but though which the source entry cannot be modified in any way
+	 */
 	protected static <K, V> MapEntryHandle<K, V> unmodifiableEntry(MapEntryHandle<? extends K, ? extends V> entry) {
 		return entry == null ? null : new UnmodifiableEntry<>(entry);
 	}
 
+	/**
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param values The {@link BetterMap#values() values} of the map
+	 * @param entry The map entry to get an unmodifiable view of
+	 * @return A MutableMapEntryHandle backed by the given entry but through which the source entry cannot be modified in any way
+	 */
 	protected static <K, V> MutableMapEntryHandle<K, V> unmodifiableMutableEntry(BetterCollection<? extends V> values,
 		MapEntryHandle<? extends K, ? extends V> entry) {
 		return entry == null ? null : new UnmodifiableMutableEntry<>(values, entry);
@@ -65,13 +114,13 @@ public class BetterCollections {
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
-			return theWrapped.lock(false, !write || structural, cause);
+		public Transaction lock(boolean write, Object cause) {
+			return theWrapped.lock(false, cause);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
-			return theWrapped.tryLock(false, !write || structural, cause);
+		public Transaction tryLock(boolean write, Object cause) {
+			return theWrapped.tryLock(false, cause);
 		}
 
 		@Override
@@ -90,8 +139,8 @@ public class BetterCollections {
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
-			return theWrapped.getStamp(structuralOnly);
+		public long getStamp() {
+			return theWrapped.getStamp();
 		}
 
 		@Override

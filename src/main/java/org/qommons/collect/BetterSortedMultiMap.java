@@ -327,18 +327,18 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
-			return theWrapped.lock(write, structural, cause);
+		public Transaction lock(boolean write, Object cause) {
+			return theWrapped.lock(write, cause);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
-			return theWrapped.tryLock(write, structural, cause);
+		public Transaction tryLock(boolean write, Object cause) {
+			return theWrapped.tryLock(write, cause);
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
-			return theWrapped.getStamp(structuralOnly);
+		public long getStamp() {
+			return theWrapped.getStamp();
 		}
 
 		@Override

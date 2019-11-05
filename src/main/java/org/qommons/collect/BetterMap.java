@@ -11,7 +11,6 @@ import org.qommons.Identifiable;
 import org.qommons.LambdaUtils;
 import org.qommons.Lockable;
 import org.qommons.QommonsUtils;
-import org.qommons.StructuredTransactable;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.ValueHolder;
@@ -46,21 +45,21 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 	}
 
 	@Override
-	default Transaction lock(boolean write, boolean structural, Object cause) {
-		return keySet().lock(write, structural, cause);
+	default Transaction lock(boolean write, Object cause) {
+		return keySet().lock(write, cause);
 	}
 
 	@Override
-	default Transaction tryLock(boolean write, boolean structural, Object cause) {
-		return keySet().tryLock(write, structural, cause);
+	default Transaction tryLock(boolean write, Object cause) {
+		return keySet().tryLock(write, cause);
 	}
 
 	/**
 	 * @param structuralOnly Whether to obtain the structural modification stamp, or to include updates
 	 * @return The stamp of the given type
 	 */
-	default long getStamp(boolean structuralOnly) {
-		return keySet().getStamp(structuralOnly);
+	default long getStamp() {
+		return keySet().getStamp();
 	}
 
 	/**
@@ -560,8 +559,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		if (!(obj instanceof Map))
 			return false;
 		Map<?, ?> other = (Map<?, ?>) obj;
-		try (Transaction t = Lockable.lockAll(Lockable.lockable(map, false, false, null), //
-			other instanceof StructuredTransactable ? Lockable.lockable((StructuredTransactable) other, false, false) : null)) {
+		try (Transaction t = Lockable.lockAll(Lockable.lockable(map, false, null), //
+			other instanceof Transactable ? Lockable.lockable((Transactable) other, false, null) : null)) {
 			if (map.size() != other.size())
 				return false;
 			Iterator<? extends Map.Entry<?, ?>> thisIter = map.entrySet().iterator();
@@ -709,18 +708,18 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
-			return theMap.lock(write, structural, cause);
+		public Transaction lock(boolean write, Object cause) {
+			return theMap.lock(write, cause);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
-			return theMap.tryLock(write, structural, cause);
+		public Transaction tryLock(boolean write, Object cause) {
+			return theMap.tryLock(write, cause);
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
-			return theMap.getStamp(structuralOnly);
+		public long getStamp() {
+			return theMap.getStamp();
 		}
 
 		@Override
@@ -884,7 +883,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 					@Override
 					public V setValue(V value) {
 						// Since the Map interface expects entries in the entrySet to support setValue, we'll allow this type of mutability
-						try (Transaction t = lock(true, false, null)) {
+						try (Transaction t = lock(true, null)) {
 							V current = theEntry.get();
 							theMap.mutableEntry(getEntry().getElementId()).setValue(value);
 							return current;
@@ -1033,18 +1032,18 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
-			return theMap.lock(write, structural, cause);
+		public Transaction lock(boolean write, Object cause) {
+			return theMap.lock(write, cause);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
-			return theMap.tryLock(write, structural, cause);
+		public Transaction tryLock(boolean write, Object cause) {
+			return theMap.tryLock(write, cause);
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
-			return theMap.getStamp(structuralOnly);
+		public long getStamp() {
+			return theMap.getStamp();
 		}
 
 		@Override

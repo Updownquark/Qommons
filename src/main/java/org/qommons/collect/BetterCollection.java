@@ -19,8 +19,7 @@ import org.qommons.Causable;
 import org.qommons.Identifiable;
 import org.qommons.Lockable;
 import org.qommons.QommonsUtils;
-import org.qommons.StructuredStamped;
-import org.qommons.StructuredTransactable;
+import org.qommons.Stamped;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.ValueHolder;
@@ -43,7 +42,7 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * 
  * @param <E> The type of value in the collection
  */
-public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>, StructuredStamped, Identifiable {
+public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>, Stamped, Identifiable {
 	/** A message for an exception thrown when a view detects that it is invalid due to external modification of the underlying data */
 	public static final String BACKING_COLLECTION_CHANGED = "This collection view's backing collection has changed from underneath this view.\n"
 		+ "This view is now invalid";
@@ -275,7 +274,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return Whether this collection contains any of the given collection's elements
 	 */
 	default boolean containsAny(Collection<?> c) {
-		try (Transaction t = lock(false, false, null); Transaction ct = Transactable.lock(c, false, null)) {
+		try (Transaction t = lock(false, null); Transaction ct = Transactable.lock(c, false, null)) {
 			if (c.isEmpty())
 				return true;
 			if (c.size() < size()) {
@@ -300,7 +299,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	@Override
 	default boolean containsAll(Collection<?> c) {
-		try (Transaction t = lock(false, false, null); Transaction ct = Transactable.lock(c, false, null)) {
+		try (Transaction t = lock(false, null); Transaction ct = Transactable.lock(c, false, null)) {
 			if (c.isEmpty())
 				return true;
 			if (c.size() < size()) {
@@ -318,7 +317,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	@Override
 	default Object[] toArray() {
-		try (Transaction t = lock(false, true, null)) {
+		try (Transaction t = lock(false, null)) {
 			Object[] array = new Object[size()];
 			int[] index = new int[1];
 			spliterator().forEachRemaining(v -> array[index[0]++] = v);
@@ -328,7 +327,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	@Override
 	default <T> T[] toArray(T[] a) {
-		try (Transaction t = lock(false, true, null)) {
+		try (Transaction t = lock(false, null)) {
 			int size = size();
 			if (a.length < size)
 				a = (T[]) java.lang.reflect.Array.newInstance(a.getClass().getComponentType(), size);
@@ -408,7 +407,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @throws IllegalArgumentException If a mapped value is not acceptable as a replacement
 	 */
 	default boolean replaceAll(Function<? super E, ? extends E> map, boolean soft) {
-		try (Transaction t = lock(true, false, null)) {
+		try (Transaction t = lock(true, null)) {
 			boolean[] replaced = new boolean[1];
 			MutableElementSpliterator<E> iter = spliterator();
 			iter.forEachElementM(el -> {
@@ -471,7 +470,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return Whether a result was found
 	 */
 	default boolean find(Predicate<? super E> search, Consumer<? super CollectionElement<E>> onElement, boolean first) {
-		try (Transaction t = lock(false, true, null)) {
+		try (Transaction t = lock(false, null)) {
 			CollectionElement<E> el = getTerminalElement(first);
 			while (el != null) {
 				if (search.test(el.get())) {
@@ -738,26 +737,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	}
 
 	/**
-	 * Locks the given collection as specified if it is {@link Transactable}, using
-	 * {@link TransactableCollection#lock(boolean, boolean, Object)} for a {@link TransactableCollection},
-	 * 
-	 * @param c The collection to lock
-	 * @param write Whether to lock for write or read-only
-	 * @param structural Whether to lock structurally or update
-	 * @param cause The cause of the transaction
-	 * @return The transaction to close to unlock the collection
-	 * @see TransactableCollection#lock(boolean, boolean, Object)
-	 */
-	public static Transaction lock(Collection<?> c, boolean write, boolean structural, Object cause) {
-		if (c instanceof TransactableCollection)
-			return ((TransactableCollection<?>) c).lock(write, structural, cause);
-		else if (c instanceof Transactable)
-			return ((Transactable) c).lock(write, cause);
-		else
-			return Transaction.NONE;
-	}
-
-	/**
 	 * A static utility method to be used by {@link BetterCollection#hashCode()} implementations
 	 * 
 	 * @param c The collection
@@ -781,8 +760,8 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 */
 	public static boolean equals(Collection<?> c, Object o) {
 		try (Transaction t = Lockable.lockAll(//
-			c instanceof StructuredTransactable ? Lockable.lockable((StructuredTransactable) c, false, false) : null, //
-			o instanceof StructuredTransactable ? Lockable.lockable((StructuredTransactable) o, false, false) : null)) {
+			c instanceof Transactable ? Lockable.lockable((Transactable) c, false, null) : null, //
+			o instanceof Transactable ? Lockable.lockable((Transactable) o, false, null) : null)) {
 			Collection<?> c2 = (Collection<?>) o;
 			if (c.size() != c2.size())
 				return false;
@@ -960,18 +939,18 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
-			return theWrapped.lock(write, structural, cause);
+		public Transaction lock(boolean write, Object cause) {
+			return theWrapped.lock(write, cause);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
-			return theWrapped.tryLock(write, structural, cause);
+		public Transaction tryLock(boolean write, Object cause) {
+			return theWrapped.tryLock(write, cause);
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
-			return theWrapped.getStamp(structuralOnly);
+		public long getStamp() {
+			return theWrapped.getStamp();
 		}
 
 		@Override
@@ -1099,17 +1078,17 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
+		public Transaction lock(boolean write, Object cause) {
 			return Transaction.NONE;
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+		public Transaction tryLock(boolean write, Object cause) {
 			return Transaction.NONE;
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
+		public long getStamp() {
 			return 0;
 		}
 
@@ -1221,8 +1200,8 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
-			return theCollection.getStamp(true);
+		public long getStamp() {
+			return theCollection.getStamp();
 		}
 
 		@Override
@@ -1231,13 +1210,13 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
-			return theCollection.lock(write, structural, cause);
+		public Transaction lock(boolean write, Object cause) {
+			return theCollection.lock(write, cause);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
-			return theCollection.tryLock(write, structural, cause);
+		public Transaction tryLock(boolean write, Object cause) {
+			return theCollection.tryLock(write, cause);
 		}
 
 		@Override

@@ -285,18 +285,18 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
-			return theEntries.lock(write, structural, cause);
+		public Transaction lock(boolean write, Object cause) {
+			return theEntries.lock(write, cause);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
-			return theEntries.tryLock(write, structural, cause);
+		public Transaction tryLock(boolean write, Object cause) {
+			return theEntries.tryLock(write, cause);
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
-			return theEntries.getStamp(structuralOnly);
+		public long getStamp() {
+			return theEntries.getStamp();
 		}
 
 		@Override

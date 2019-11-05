@@ -23,8 +23,8 @@ import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.OptimisticContext;
+import org.qommons.collect.RRWLockingStrategy;
 import org.qommons.collect.SimpleMapEntry;
-import org.qommons.collect.StampedLockingStrategy;
 
 /**
  * A tree-based implementation of {@link BetterSortedMap}
@@ -89,7 +89,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	 * @param compare The comparator to use to sort the keys
 	 */
 	public BetterTreeMap(boolean threadSafe, Comparator<? super K> compare) {
-		this(threadSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), compare);
+		this(threadSafe ? new RRWLockingStrategy() : new FastFailLockingStrategy(), compare);
 	}
 
 	/**
@@ -101,7 +101,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	}
 
 	public BetterTreeMap(boolean threadSafe, SortedMap<K, ? extends V> map) {
-		this(threadSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), map);
+		this(threadSafe ? new RRWLockingStrategy() : new FastFailLockingStrategy(), map);
 	}
 
 	public BetterTreeMap(CollectionLockingStrategy locker, SortedMap<K, ? extends V> map) {
@@ -285,7 +285,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		@Override
 		public TreeEntry get(int index, OptimisticContext ctx) {
 			return theEntries.getLocker().doOptimistically(null, //
-				(init, ctx2) -> wrap(theEntryNode.get(index, OptimisticContext.and(ctx, ctx2))), true);
+				(init, ctx2) -> wrap(theEntryNode.get(index, OptimisticContext.and(ctx, ctx2))));
 		}
 
 		@Override
@@ -293,8 +293,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 			return theEntries.getLocker()
 				.doOptimistically(null, //
 					(init, ctx2) -> wrap(
-						theEntryNode.findClosest(n -> finder.compareTo(wrap(n)), lesser, strictly, OptimisticContext.and(ctx, ctx2))),
-					true);
+						theEntryNode.findClosest(n -> finder.compareTo(wrap(n)), lesser, strictly, OptimisticContext.and(ctx, ctx2))));
 		}
 
 		MutableTreeEntry mutable() {
@@ -564,7 +563,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		@Override
 		public MutableBinaryTreeEntry<K, V> get(int index, OptimisticContext ctx) {
 			return theEntries.getLocker().doOptimistically(null, //
-				(init, ctx2) -> wrapMutable(getEntry().get(index, OptimisticContext.and(ctx, ctx2))), true);
+				(init, ctx2) -> wrapMutable(getEntry().get(index, OptimisticContext.and(ctx, ctx2))));
 		}
 
 		@Override
@@ -572,8 +571,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 			OptimisticContext ctx) {
 			return theEntries.getLocker().doOptimistically(null, //
 				(init, ctx2) -> wrapMutable(
-					getEntry().findClosest(n -> finder.compareTo(n), lesser, strictly, OptimisticContext.and(ctx, ctx2))),
-				true);
+					getEntry().findClosest(n -> finder.compareTo(n), lesser, strictly, OptimisticContext.and(ctx, ctx2))));
 		}
 
 		@Override
@@ -603,18 +601,18 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
-			return theEntries.lock(write, structural, cause);
+		public Transaction lock(boolean write, Object cause) {
+			return theEntries.lock(write, cause);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
-			return theEntries.tryLock(write, structural, cause);
+		public Transaction tryLock(boolean write, Object cause) {
+			return theEntries.tryLock(write, cause);
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
-			return theEntries.getStamp(structuralOnly);
+		public long getStamp() {
+			return theEntries.getStamp();
 		}
 
 		@Override

@@ -229,7 +229,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 	@Override
 	default E remove(int index) {
-		try (Transaction t = lock(true, true, null)) {
+		try (Transaction t = lock(true, null)) {
 			CollectionElement<E> el = getElement(index);
 			E value = el.get();
 			mutableElement(el.getElementId()).remove();
@@ -259,7 +259,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	default E set(int index, E element) {
 		if (!belongs(element))
 			throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-		try (Transaction t = lock(true, false, null)) {
+		try (Transaction t = lock(true, null)) {
 			CollectionElement<E> el = getElement(index);
 			E value = el.get();
 			mutableElement(el.getElementId()).set(element);
@@ -579,7 +579,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		private final BetterList<E> theWrapped;
 		private int theStart;
 		private int theEnd;
-		private long theStructureStamp;
+		private long theStamp;
 
 		public SubList(BetterList<E> wrapped, int start, int end) {
 			if (end > wrapped.size())
@@ -591,7 +591,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			theWrapped = wrapped;
 			theStart = start;
 			theEnd = end;
-			theStructureStamp = wrapped.getStamp(true);
+			theStamp = wrapped.getStamp();
 		}
 
 		/** @return The BetterList that this is a sub-list of */
@@ -614,10 +614,10 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
+		public Transaction lock(boolean write, Object cause) {
 			check();
-			Transaction t = theWrapped.lock(write, structural, cause);
-			if (write && structural) {
+			Transaction t = theWrapped.lock(write, cause);
+			if (write) {
 				updated();
 				return () -> {
 					updated();
@@ -628,12 +628,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+		public Transaction tryLock(boolean write, Object cause) {
 			check();
-			Transaction t = theWrapped.tryLock(write, structural, cause);
+			Transaction t = theWrapped.tryLock(write, cause);
 			if (t == null)
 				return null;
-			if (write && structural) {
+			if (write) {
 				updated();
 				return () -> {
 					updated();
@@ -644,18 +644,18 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		void check() {
-			if (theWrapped.getStamp(true) != theStructureStamp)
+			if (theWrapped.getStamp() != theStamp)
 				throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
 		}
 
 		void updated() {
-			theStructureStamp = theWrapped.getStamp(true);
+			theStamp = theWrapped.getStamp();
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
-			long stamp = theWrapped.getStamp(structuralOnly);
-			if (structuralOnly && theStructureStamp != stamp)
+		public long getStamp() {
+			long stamp = theWrapped.getStamp();
+			if (theStamp != stamp)
 				throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
 			return stamp;
 		}
@@ -686,7 +686,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public CollectionElement<E> getElement(E value, boolean first) {
-			try (Transaction t = lock(false, true, null)) {
+			try (Transaction t = lock(false, null)) {
 				CollectionElement<E> firstMatch = theWrapped.getElement(value, first);
 				if (firstMatch == null)
 					return null;
@@ -708,7 +708,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public CollectionElement<E> getElement(ElementId id) {
-			try (Transaction t = lock(false, true, null)) {
+			try (Transaction t = lock(false, null)) {
 				int index = theWrapped.getElementsBefore(id);
 				if (index < theStart || index >= theEnd)
 					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
@@ -734,14 +734,14 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public CollectionElement<E> getElement(int index) {
-			try (Transaction t = lock(false, true, null)) {
+			try (Transaction t = lock(false, null)) {
 				return theWrapped.getElement(theStart + checkIndex(index, false));
 			}
 		}
 
 		@Override
 		public int getElementsBefore(ElementId id) {
-			try (Transaction t = lock(false, true, null)) {
+			try (Transaction t = lock(false, null)) {
 				int wrappedEls = theWrapped.getElementsBefore(id);
 				if (wrappedEls < theStart || wrappedEls >= theEnd)
 					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
@@ -751,7 +751,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public int getElementsAfter(ElementId id) {
-			try (Transaction t = lock(false, true, null)) {
+			try (Transaction t = lock(false, null)) {
 				int wrappedEls = theWrapped.getElementsBefore(id);
 				if (wrappedEls < theStart || wrappedEls >= theEnd)
 					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
@@ -794,7 +794,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public Object[] toArray() {
-			try (Transaction t = lock(false, true, null)) {
+			try (Transaction t = lock(false, null)) {
 				Object[] array = new Object[size()];
 				for (int i = 0; i < array.length; i++)
 					array[i] = get(i);
@@ -804,7 +804,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public <T> T[] toArray(T[] a) {
-			try (Transaction t = lock(false, true, null)) {
+			try (Transaction t = lock(false, null)) {
 				T[] array = a.length >= size() ? a : (T[]) Array.newInstance(a.getClass().getComponentType(), size());
 				for (int i = 0; i < array.length; i++)
 					array[i] = (T) get(i);
@@ -874,7 +874,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 			@Override
 			public void set(E value) throws IllegalArgumentException, UnsupportedOperationException {
-				try (Transaction t = lock(true, true, null)) {
+				try (Transaction t = lock(true, null)) {
 					theWrappedEl.set(value);
 				}
 			}
@@ -886,7 +886,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 			@Override
 			public void remove() throws UnsupportedOperationException {
-				try (Transaction t = lock(true, true, null)) {
+				try (Transaction t = lock(true, null)) {
 					theWrappedEl.remove();
 					theEnd--;
 				}
@@ -894,7 +894,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 			@Override
 			public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-				try (Transaction t = lock(true, true, null)) {
+				try (Transaction t = lock(true, null)) {
 					ElementId newId = theWrappedEl.add(value, before);
 					theEnd++;
 					return newId;
@@ -917,14 +917,14 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public E get(int index) {
-			try (Transaction t = lock(false, true, null)) {
+			try (Transaction t = lock(false, null)) {
 				return theWrapped.get(checkIndex(index, false) + theStart);
 			}
 		}
 
 		@Override
 		public String canAdd(E value, ElementId after, ElementId before) {
-			try (Transaction t = lock(false, true, null)) {
+			try (Transaction t = lock(false, null)) {
 				if (after == null && theStart > 0)
 					after = theWrapped.getElement(theStart - 1).getElementId();
 				int wrapSize = theWrapped.size();
@@ -937,7 +937,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			try (Transaction t = lock(true, true, null)) {
+			try (Transaction t = lock(true, null)) {
 				if (after == null && theStart > 0)
 					after = theWrapped.getElement(theStart - 1).getElementId();
 				int wrapSize = theWrapped.size();
@@ -953,7 +953,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public CollectionElement<E> addElement(int index, E element) {
-			try (Transaction t = lock(true, true, null)) {
+			try (Transaction t = lock(true, null)) {
 				CollectionElement<E> newEl = theWrapped.addElement(theStart + checkIndex(index, true), element);
 				if (newEl != null) {
 					theEnd++;
@@ -964,7 +964,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public boolean addAll(int index, Collection<? extends E> c) {
-			try (Transaction t = lock(true, true, null)) {
+			try (Transaction t = lock(true, null)) {
 				int preSize = theWrapped.size();
 				if (!theWrapped.addAll(theStart + checkIndex(index, true), c))
 					return false;
@@ -975,7 +975,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public void clear() {
-			try (Transaction t = lock(true, true, null)) {
+			try (Transaction t = lock(true, null)) {
 				int sz = theWrapped.size();
 				if (sz <= theStart)
 					return;
@@ -1023,17 +1023,17 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public Transaction lock(boolean write, boolean structural, Object cause) {
+		public Transaction lock(boolean write, Object cause) {
 			return Transaction.NONE;
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, boolean structural, Object cause) {
+		public Transaction tryLock(boolean write, Object cause) {
 			return Transaction.NONE;
 		}
 
 		@Override
-		public long getStamp(boolean structuralOnly) {
+		public long getStamp() {
 			return 0;
 		}
 
