@@ -140,7 +140,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		public <E> BetterHashSet<E> buildSet() {
 			CollectionLockingStrategy locking = theLocker;
 			if (locking == null)
-				locking = isSafe ? new RRWLockingStrategy() : new FastFailLockingStrategy();
+				locking = isSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy();
 			return new BetterHashSet<>(locking, theHasher, theEquals, theInitExpectedSize, theLoadFactor, theDescription);
 		}
 

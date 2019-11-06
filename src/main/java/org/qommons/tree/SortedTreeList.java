@@ -14,7 +14,7 @@ import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.OptimisticContext;
-import org.qommons.collect.RRWLockingStrategy;
+import org.qommons.collect.StampedLockingStrategy;
 
 /**
  * A {@link org.qommons.collect.BetterList} backed by a tree structure that sorts its values, with duplicates allowed
@@ -103,7 +103,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 	 * @param compare The comparator to order the values
 	 */
 	public SortedTreeList(boolean safe, Comparator<? super E> compare) {
-		this(safe ? new RRWLockingStrategy() : new FastFailLockingStrategy(), compare);
+		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), compare);
 	}
 
 	/**

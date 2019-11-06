@@ -17,7 +17,7 @@ import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.OptimisticContext;
-import org.qommons.collect.RRWLockingStrategy;
+import org.qommons.collect.StampedLockingStrategy;
 import org.qommons.collect.ValueStoredCollection;
 import org.qommons.collect.ValueStoredCollection.RepairListener;
 
@@ -38,7 +38,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 		/** @param initDescrip The initial (default) description for the list */
 		protected RBNLBuilder(String initDescrip) {
 			theDescription = initDescrip;
-			theLocker = new RRWLockingStrategy();
+			theLocker = new StampedLockingStrategy();
 		}
 
 		/** @return The locker for the list */
@@ -67,7 +67,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 		 * @return This builder
 		 */
 		public RBNLBuilder<E, L> safe(boolean safe) {
-			return withLocker(safe ? new RRWLockingStrategy() : new FastFailLockingStrategy());
+			return withLocker(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy());
 		}
 
 		/**

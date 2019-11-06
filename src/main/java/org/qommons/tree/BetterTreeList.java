@@ -8,7 +8,7 @@ import org.qommons.Transaction;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
-import org.qommons.collect.RRWLockingStrategy;
+import org.qommons.collect.StampedLockingStrategy;
 import org.qommons.collect.ValueStoredCollection.RepairListener;
 
 /**
@@ -71,7 +71,7 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 
 	/** @param safe Whether to secure this collection for thread-safety */
 	public BetterTreeList(boolean safe) {
-		this(safe ? new RRWLockingStrategy() : new FastFailLockingStrategy());
+		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy());
 	}
 
 	/** @param locker The locking strategy for the collection */

@@ -1,12 +1,25 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
+/**
+ * A simple, default implementation of {@link MutableGraph}
+ * 
+ * @param <N> The type of node values in the graph
+ * @param <E> The type of edge values in the graph
+ */
 public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 	private final Collection<DefaultNode<N, E>> theNodes;
 	private final Collection<DefaultEdge<N, E>> theEdges;
 
+	/** Creates the graph */
 	public DefaultGraph() {
 		theNodes = new LinkedList<>();
 		theEdges = new LinkedList<>();
@@ -148,6 +161,12 @@ public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 		theEdges.clear();
 	}
 
+	/**
+	 * A simple implementation of org.qommons.collect.Graph.Node
+	 * 
+	 * @param <N> The type of node values in the graph
+	 * @param <E> The type of edge values in the graph
+	 */
 	public static class DefaultNode<N, E> implements Graph.Node<N, E> {
 		final DefaultGraph<N, E> theGraph;
 		private final N theValue;
@@ -181,6 +200,12 @@ public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 		}
 	}
 
+	/**
+	 * A simple implementation of org.qommons.collect.Graph.Edge
+	 * 
+	 * @param <N> The type of node values in the graph
+	 * @param <E> The type of edge values in the graph
+	 */
 	public static class DefaultEdge<N, E> implements Graph.Edge<N, E> {
 		final DefaultGraph<N, E> theGraph;
 		private final DefaultNode<N, E> theStart;

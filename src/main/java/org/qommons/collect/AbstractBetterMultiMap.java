@@ -182,7 +182,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		 * @return This builder
 		 */
 		public Builder<K, V> safe(boolean safe) {
-			theLocking = safe ? new RRWLockingStrategy() : new FastFailLockingStrategy();
+			theLocking = safe ? new StampedLockingStrategy() : new FastFailLockingStrategy();
 			return this;
 		}
 
@@ -232,7 +232,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			if (theLocking != null)
 				return theLocking;
 			else
-				return new RRWLockingStrategy();
+				return new StampedLockingStrategy();
 		}
 
 		/** @return The value supplier for the multi-map */

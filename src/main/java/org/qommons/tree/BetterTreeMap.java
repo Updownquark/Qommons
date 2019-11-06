@@ -23,8 +23,8 @@ import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.OptimisticContext;
-import org.qommons.collect.RRWLockingStrategy;
 import org.qommons.collect.SimpleMapEntry;
+import org.qommons.collect.StampedLockingStrategy;
 
 /**
  * A tree-based implementation of {@link BetterSortedMap}
@@ -89,7 +89,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	 * @param compare The comparator to use to sort the keys
 	 */
 	public BetterTreeMap(boolean threadSafe, Comparator<? super K> compare) {
-		this(threadSafe ? new RRWLockingStrategy() : new FastFailLockingStrategy(), compare);
+		this(threadSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), compare);
 	}
 
 	/**
@@ -101,7 +101,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	}
 
 	public BetterTreeMap(boolean threadSafe, SortedMap<K, ? extends V> map) {
-		this(threadSafe ? new RRWLockingStrategy() : new FastFailLockingStrategy(), map);
+		this(threadSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), map);
 	}
 
 	public BetterTreeMap(CollectionLockingStrategy locker, SortedMap<K, ? extends V> map) {

@@ -225,7 +225,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 
 		/** @return The locking strategy for the list */
 		public CollectionLockingStrategy makeLockingStrategy() {
-			return isThreadSafe ? new RRWLockingStrategy() : new FastFailLockingStrategy();
+			return isThreadSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy();
 		}
 
 		/**
