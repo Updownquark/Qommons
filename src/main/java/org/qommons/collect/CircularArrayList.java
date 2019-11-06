@@ -2,7 +2,6 @@ package org.qommons.collect;
 
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -552,15 +551,8 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public MutableElementSpliterator<E> spliterator(boolean forward) {
-		return new ArraySpliterator(0, theSize, forward ? 0 : theSize, theLocker.getStamp());
-	}
-
-	@Override
-	public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
-		try (Transaction t = lock(false, null)) {
-			return new ArraySpliterator(0, size(), ((ArrayElementId) element).element.check().getIndex(), theLocker.getStamp());
-		}
+	public Spliterator<E> spliterator() {
+		return new ArraySpliterator(0, theSize, 0);
 	}
 
 	@Override
@@ -1427,16 +1419,14 @@ public class CircularArrayList<E> implements BetterList<E> {
 		}
 	}
 
-	private class ArraySpliterator extends MutableElementSpliterator.SimpleMutableSpliterator<E> {
+	private class ArraySpliterator implements Spliterator<E> {
 		private int theStart;
 		private int theEnd;
 		private int theCursor; // The index of the element that would be given to the consumer for tryAdvance()
 		private int theCurrentIndex; // The index of the element last returned by this iterator from tryAdvance or tryReverse()
 		private boolean elementExists;
-		private long theStructureStamp;
 
-		ArraySpliterator(int start, int end, int initIndex, long structStamp) {
-			super(CircularArrayList.this);
+		ArraySpliterator(int start, int end, int initIndex) {
 			int size = theSize;
 			if (end < 0)
 				end = size;
@@ -1450,13 +1440,6 @@ public class CircularArrayList<E> implements BetterList<E> {
 			theEnd = end;
 			theCursor = initIndex;
 			theCurrentIndex = initIndex; // Just for toString()
-			theStructureStamp = structStamp;
-			check();
-		}
-
-		private void check() {
-			if (theStructureStamp != CircularArrayList.this.theLocker.getStamp())
-				throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
 		}
 
 		@Override
@@ -1475,134 +1458,28 @@ public class CircularArrayList<E> implements BetterList<E> {
 		}
 
 		@Override
-		protected boolean internalForElement(Consumer<? super CollectionElement<E>> action, boolean forward) {
-			int tIndex = tryElement(forward);
-			if (tIndex < 0)
+		public boolean tryAdvance(Consumer<? super E> action) {
+			if (theCursor >= theEnd)
 				return false;
-			action.accept(theArray[tIndex].immutable());
+			action.accept(get(theCursor));
+			theCursor++;
 			return true;
 		}
 
 		@Override
-		protected boolean internalForElementM(Consumer<? super MutableCollectionElement<E>> action, boolean forward) {
-			int tIndex = tryElement(forward);
-			if (tIndex < 0)
-				return false;
-			action.accept(new SpliterWrappingEl(theArray[tIndex], forward));
-			return true;
-		}
-
-		private int tryElement(boolean advance) {
-			check();
-			if (advance) {
-				if (theCursor >= theEnd)
-					return -1;
-				theCurrentIndex = theCursor;
-				theCursor++;
-			} else {
-				if (theCursor <= theStart)
-					return -1;
-				theCursor--;
-				theCurrentIndex = theCursor;
-			}
-			int translatedIndex = translateToInternalIndex(theCurrentIndex);
-			elementExists = true;
-			return translatedIndex;
-		}
-
-		@Override
-		public MutableElementSpliterator<E> trySplit() {
+		public Spliterator<E> trySplit() {
 			if (theEnd - theStart <= 1)
 				return null;
 			int mid = (theStart + theEnd) / 2;
 			ArraySpliterator split;
 			if (theCursor <= mid) {
-				split = new ArraySpliterator(mid, theEnd, mid, theStructureStamp);
+				split = new ArraySpliterator(mid, theEnd, mid);
 				theEnd = mid;
 			} else {
-				split = new ArraySpliterator(theStart, mid, mid, theStructureStamp);
+				split = new ArraySpliterator(theStart, mid, mid);
 				theStart = mid;
 			}
 			return split;
-		}
-
-		class SpliterWrappingEl implements MutableCollectionElement<E> {
-			private final MutableCollectionElement<E> el;
-			private final boolean isForward;
-
-			SpliterWrappingEl(MutableCollectionElement<E> el, boolean forward) {
-				this.el = el;
-				isForward = forward;
-			}
-
-			@Override
-			public BetterCollection<E> getCollection() {
-				return CircularArrayList.this;
-			}
-
-			@Override
-			public ElementId getElementId() {
-				return el.getElementId();
-			}
-
-			@Override
-			public E get() {
-				return el.get();
-			}
-
-			@Override
-			public String isEnabled() {
-				return el.isEnabled();
-			}
-
-			@Override
-			public String isAcceptable(E value) {
-				return el.isAcceptable(value);
-			}
-
-			@Override
-			public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
-				try (Transaction t = CircularArrayList.this.theLocker.lock(true, null)) {
-					el.set(value);
-				}
-			}
-
-			@Override
-			public String canRemove() {
-				return el.canRemove();
-			}
-
-			@Override
-			public void remove() throws UnsupportedOperationException {
-				try (Transaction t = CircularArrayList.this.theLocker.lock(true, null)) {
-					check();
-					el.remove();
-					theStructureStamp = CircularArrayList.this.theLocker.getStamp();
-					theEnd--;
-					if (isForward)
-						theCursor--;
-				}
-			}
-
-			@Override
-			public String canAdd(E value, boolean before) {
-				return el.canAdd(value, before);
-			}
-
-			@Override
-			public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-				try (Transaction t = CircularArrayList.this.theLocker.lock(true, null)) {
-					check();
-					ElementId newId = el.add(value, before);
-					if (newId == null)
-						return null; // Can't happen currently, but meh
-					theStructureStamp = CircularArrayList.this.theLocker.getStamp();
-					theEnd++;
-					if (before)
-						theCursor++;
-					return newId;
-				}
-			}
 		}
 
 		@Override

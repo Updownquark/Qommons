@@ -30,7 +30,6 @@ import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterList;
-import org.qommons.collect.ElementSpliterator;
 
 /** Testing utilities */
 public class QommonsTestUtils {
@@ -110,34 +109,6 @@ public class QommonsTestUtils {
 					assertEquals(rIter.next(), rrIter.next());
 				}
 				assertFalse(rrIter.hasNext());
-
-				// Test reversible spliterator
-				ElementSpliterator<Integer> rSplit = rc.spliterator();
-				ElementSpliterator<Integer> rrSplit = rrc.spliterator(false);
-				int count = 0;
-				Object[] prevV = new Object[1];
-				splitLoop: while (true) {
-					switch (count % 3) {
-					case 0:
-					case 1:
-						if (!rSplit.tryAdvance(v -> {
-							assertTrue(rrSplit.tryReverse(v2 -> {
-								assertEquals(v, v2);
-							}));
-							prevV[0] = v;
-						}))
-							break splitLoop;
-						break;
-					default:
-						assertTrue(rSplit.tryReverse(v -> {
-							assertEquals(prevV[0], v);
-							assertTrue(rrSplit.tryAdvance(v2 -> {
-								assertEquals(v, v2);
-							}));
-						}));
-					}
-					count++;
-				}
 
 				if (fCheck != null)
 					fCheck.accept(coll);

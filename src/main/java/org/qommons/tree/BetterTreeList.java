@@ -5,11 +5,8 @@ import java.util.Comparator;
 import java.util.Objects;
 
 import org.qommons.Transaction;
-import org.qommons.ValueHolder;
-import org.qommons.collect.CollectionElement;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
-import org.qommons.collect.ElementSpliterator;
 import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.RRWLockingStrategy;
 import org.qommons.collect.ValueStoredCollection.RepairListener;
@@ -110,13 +107,13 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 	@Override
 	public BinaryTreeNode<E> getElement(E value, boolean first) {
 		try (Transaction t = lock(false, null)) {
-			ValueHolder<CollectionElement<E>> element = new ValueHolder<>();
-			ElementSpliterator<E> spliter = first ? spliterator(first) : spliterator(first).reverse();
-			while (!element.isPresent() && spliter.forElement(el -> {
+			BinaryTreeNode<E> el = getTerminalElement(first);
+			while (el != null) {
 				if (Objects.equals(el.get(), value))
-					element.accept(first ? el : el.reverse());
-			}, true)) {}
-			return (BinaryTreeNode<E>) element.get();
+					return el;
+				el = getAdjacentElement(el.getElementId(), first);
+			}
+			return null;
 		}
 	}
 

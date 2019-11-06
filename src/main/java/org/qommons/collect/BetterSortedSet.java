@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.NavigableSet;
 import java.util.NoSuchElementException;
+import java.util.Spliterator;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -50,8 +51,8 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	}
 
 	@Override
-	default MutableElementSpliterator<E> spliterator() {
-		return BetterSortedList.super.spliterator();
+	default Spliterator<E> spliterator() {
+		return NavigableSet.super.spliterator();
 	}
 
 	@Override

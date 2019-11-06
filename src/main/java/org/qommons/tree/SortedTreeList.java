@@ -13,7 +13,6 @@ import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
-import org.qommons.collect.MutableElementSpliterator;
 import org.qommons.collect.OptimisticContext;
 import org.qommons.collect.RRWLockingStrategy;
 
@@ -299,16 +298,6 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 	public SortedTreeList<E> withAll(Collection<? extends E> values) {
 		super.withAll(values);
 		return this;
-	}
-
-	@Override
-	public MutableElementSpliterator<E> spliterator(boolean fromStart) {
-		return new DefaultSplittableSpliterator<>(this, comparator(), 0, null, fromStart, null, null);
-	}
-
-	@Override
-	public MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
-		return new DefaultSplittableSpliterator<>(this, comparator(), 0, getElement(element), asNext, null, null);
 	}
 
 	private class SortedMutableTreeNode implements MutableBinaryTreeNode<E> {

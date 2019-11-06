@@ -1,7 +1,9 @@
 package org.qommons.collect;
 
 import java.util.Comparator;
+import java.util.Set;
 import java.util.Spliterator;
+import java.util.function.Consumer;
 
 import org.qommons.Transaction;
 
@@ -22,13 +24,17 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 	CollectionElement<E> splitBetween(ElementId element1, ElementId element2);
 
 	@Override
-	default MutableElementSpliterator<E> spliterator(boolean fromStart) {
-		return new DefaultSplittableSpliterator<>(this, null, 0, null, fromStart, null, null);
-	}
-
-	@Override
-	default MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
-		return new DefaultSplittableSpliterator<>(this, null, 0, getElement(element), asNext, null, null);
+	default Spliterator<E> spliterator() {
+		int characteristics = Spliterator.ORDERED | Spliterator.SIZED | Spliterator.SUBSIZED;
+		if (isLockSupported())
+			characteristics |= Spliterator.CONCURRENT;
+		boolean sorted = this instanceof BetterSortedList;
+		if (sorted)
+			characteristics |= Spliterator.SORTED;
+		if (this instanceof Set)
+			characteristics |= Spliterator.DISTINCT;
+		return new DefaultSplittableSpliterator<>(this, //
+			sorted ? ((BetterSortedList<E>) this).comparator() : null, characteristics, null, true, null, null);
 	}
 
 	@Override
@@ -46,7 +52,13 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 	 * 
 	 * @param <E> The type of values in the list
 	 */
-	public class DefaultSplittableSpliterator<E> extends DefaultBetterSpliterator<E> {
+	public class DefaultSplittableSpliterator<E> implements Spliterator<E> {
+		private final SplitSpliterable<E> theCollection;
+		private CollectionElement<E> theElement;
+		private boolean elementIsNext;
+
+		private final Comparator<? super E> theSorting;
+		private final int theCharacteristics;
 		private CollectionElement<E> theLeftBound;
 		private CollectionElement<E> theRightBound;
 
@@ -55,73 +67,90 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 		 * @param compare The sorting of the collection (may be null)
 		 * @param characteristics The {@link Spliterator#characteristics() characteristics} for the spliterator
 		 * @param current The current element
-		 * @param currentIsNext Whether the current element should be returned from
-		 *        {@link Spliterator#tryAdvance(java.util.function.Consumer)} or
-		 *        {@link ElementSpliterator#tryReverse(java.util.function.Consumer)}
+		 * @param currentIsNext Whether the current element is the next element that should should be returned from
+		 *        {@link Spliterator#tryAdvance(java.util.function.Consumer)}
 		 * @param leftBound The left bound for this spliterator (inclusive)
 		 * @param rightBound The right bound for this spliterator (exclusive)
 		 */
 		public DefaultSplittableSpliterator(SplitSpliterable<E> collection, Comparator<? super E> compare, int characteristics,
 			CollectionElement<E> current, boolean currentIsNext, CollectionElement<E> leftBound, CollectionElement<E> rightBound) {
-			super(collection, compare, characteristics | SUBSIZED, current, currentIsNext);
+			theCollection = collection;
+			theElement = current;
+			elementIsNext = currentIsNext;
+			theSorting = compare;
+			theCharacteristics = characteristics;
 			theLeftBound = leftBound;
 			theRightBound = rightBound;
 		}
 
 		@Override
-		protected SplitSpliterable<E> getCollection() {
-			return (SplitSpliterable<E>) super.getCollection();
+		public long getExactSizeIfKnown() {
+			return estimateSize();
+		}
+
+		@Override
+		public Comparator<? super E> getComparator() {
+			return theSorting;
+		}
+
+		@Override
+		public int characteristics() {
+			return theCharacteristics;
 		}
 
 		@Override
 		public long estimateSize() {
-			try (Transaction t = getCollection().lock(false, null)) {
+			try (Transaction t = theCollection.lock(false, null)) {
 				int size;
 				if (theRightBound != null)
-					size = getCollection().getElementsBefore(theRightBound.getElementId());
+					size = theCollection.getElementsBefore(theRightBound.getElementId());
 				else
-					size = getCollection().size();
+					size = theCollection.size();
 				if (theLeftBound != null)
-					size -= getCollection().getElementsBefore(theLeftBound.getElementId());
+					size -= theCollection.getElementsBefore(theLeftBound.getElementId());
 				return size;
 			}
 		}
 
 		@Override
-		protected boolean isIncluded(CollectionElement<E> element) {
-			if (!super.isIncluded(element))
-				return false;
-			else if (theLeftBound != null && element.getElementId().compareTo(theLeftBound.getElementId()) < 0)
-				return false;
-			else if (theRightBound != null && element.getElementId().compareTo(theRightBound.getElementId()) >= 0)
-				return false;
+		public boolean tryAdvance(Consumer<? super E> action) {
+			if (elementIsNext) {
+				if (theElement == null && theLeftBound == null)
+					theElement = theCollection.getTerminalElement(true);
+			} else if (theElement != null)
+				theElement = theCollection.getAdjacentElement(theElement.getElementId(), true);
 			else
-				return true;
+				theElement = null;
+			if (theElement == null || (theRightBound != null && theElement.getElementId().compareTo(theRightBound.getElementId()) >= 0))
+				return false;
+			action.accept(theElement.get());
+			elementIsNext = false;
+			return true;
 		}
 
 		@Override
-		public MutableElementSpliterator<E> trySplit() {
-			CollectionElement<E> left = theLeftBound != null ? theLeftBound : getCollection().getTerminalElement(true);
+		public Spliterator<E> trySplit() {
+			CollectionElement<E> left = theLeftBound != null ? theLeftBound : theCollection.getTerminalElement(true);
 			if (left == null)
 				return null;
 
-			CollectionElement<E> right = theRightBound == null ? theRightBound : getCollection().getTerminalElement(true);
-			CollectionElement<E> divider = getCollection().splitBetween(left.getElementId(), right.getElementId());
+			CollectionElement<E> right = theRightBound == null ? theRightBound : theCollection.getTerminalElement(true);
+			CollectionElement<E> divider = theCollection.splitBetween(left.getElementId(), right.getElementId());
 			if (divider == null)
 				return null;
 
 			DefaultSplittableSpliterator<E> split;
 			int comp;
-			if (getCurrent() == null)
-				comp = isCurrentNext() ? -1 : 1;
+			if (theElement == null)
+				comp = elementIsNext ? -1 : 1;
 			else
-				comp = getCurrent().getElementId().compareTo(divider.getElementId());
+				comp = theElement.getElementId().compareTo(divider.getElementId());
 			if (comp < 0) { // We're on the left of the divider
-				split = new DefaultSplittableSpliterator<>(getCollection(), getComparator(), characteristics(), divider, true, divider,
+				split = new DefaultSplittableSpliterator<>(theCollection, getComparator(), characteristics(), divider, true, divider,
 					right);
 				theRightBound = divider;
 			} else {
-				split = new DefaultSplittableSpliterator<>(getCollection(), getComparator(), characteristics(), divider, true, left,
+				split = new DefaultSplittableSpliterator<>(theCollection, getComparator(), characteristics(), divider, true, left,
 					divider);
 				theLeftBound = divider;
 			}
@@ -131,32 +160,32 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 		@Override
 		public String toString() {
 			StringBuilder str = new StringBuilder();
-			CollectionElement<E> node = getCollection().getTerminalElement(true);
+			CollectionElement<E> node = theCollection.getTerminalElement(true);
 			if (theLeftBound == null && theRightBound != null)
 				str.append('<');
-			if (getCurrent() == null && isCurrentNext())
+			if (theElement == null && elementIsNext)
 				str.append('^');
 			while (node != null) {
 				if (theLeftBound != null && node.getElementId().equals(theLeftBound.getElementId()))
 					str.append('<');
-				if (getCurrent() != null && node.getElementId().equals(getCurrent().getElementId())) {
-					if (isCurrentNext())
+				if (theElement != null && node.getElementId().equals(theElement.getElementId())) {
+					if (elementIsNext)
 						str.append('^');
 					str.append('[');
 				}
 				str.append(node.get());
-				if (getCurrent() != null && node.getElementId().equals(getCurrent().getElementId())) {
+				if (theElement != null && node.getElementId().equals(theElement.getElementId())) {
 					str.append(']');
-					if (!isCurrentNext())
+					if (!elementIsNext)
 						str.append('^');
 				}
 				if (theRightBound != null && node.getElementId().equals(theRightBound.getElementId()))
 					str.append('>');
-				node = getCollection().getAdjacentElement(node.getElementId(), true);
+				node = theCollection.getAdjacentElement(node.getElementId(), true);
 				if (node != null)
 					str.append(", ");
 			}
-			if (getCurrent() == null && !isCurrentNext())
+			if (theElement == null && !elementIsNext)
 				str.append('^');
 			if (theRightBound == null && theLeftBound != null)
 				str.append('>');
@@ -224,13 +253,8 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 	 */
 	public interface SortedSetSplitSpliterable<E> extends BetterSortedSet<E>, SplitSpliterable<E> {
 		@Override
-		default MutableElementSpliterator<E> spliterator(boolean fromStart) {
-			return new DefaultSplittableSpliterator<>(this, comparator(), 0, null, fromStart, null, null);
-		}
-
-		@Override
-		default MutableElementSpliterator<E> spliterator(ElementId element, boolean asNext) {
-			return new DefaultSplittableSpliterator<>(this, comparator(), 0, getElement(element), asNext, null, null);
+		default Spliterator<E> spliterator() {
+			return SplitSpliterable.super.spliterator();
 		}
 
 		@Override

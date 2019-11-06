@@ -1092,12 +1092,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		@Override
 		public CollectionElement<V> getElement(V value, boolean first) {
 			try (Transaction t = lock(false, null)) {
-				CollectionElement<V>[] element = new CollectionElement[1];
-				while (element[0] == null && spliterator(first).forElement(el -> {
+				CollectionElement<V> el = getTerminalElement(first);
+				while (el != null) {
 					if (Objects.equals(el.get(), value))
-						element[0] = el;
-				}, first)) {}
-				return element[0];
+						return el;
+					el = getAdjacentElement(el.getElementId(), first);
+				}
+				return null;
 			}
 		}
 

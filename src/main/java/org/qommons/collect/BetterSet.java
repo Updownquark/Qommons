@@ -23,11 +23,6 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 	}
 
 	@Override
-	default MutableElementSpliterator<E> spliterator() {
-		return ValueStoredCollection.super.spliterator();
-	}
-
-	@Override
 	default Object[] toArray() {
 		return ValueStoredCollection.super.toArray();
 	}

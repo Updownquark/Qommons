@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -427,8 +426,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 * @param <E> The type of the list
 	 */
 	public static class BetterListIterator<E> implements ListIterator<E> {
-		private static final Consumer<CollectionElement<?>> NULL_ACTION = el -> {};
-
 		private final BetterList<E> theList;
 		private CollectionElement<E> element;
 		/**
@@ -689,6 +686,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public CollectionElement<E> getElement(E value, boolean first) {
 			try (Transaction t = lock(false, null)) {
+				if (isEmpty())
+					return null;
 				CollectionElement<E> firstMatch = theWrapped.getElement(value, first);
 				if (firstMatch == null)
 					return null;
@@ -697,14 +696,14 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 					return null;
 				if ((first && index >= theStart) || (!first && index < theEnd))
 					return firstMatch;
-				// There is a match, but the first such match is outside this sub-list's bounds. Need to just iterate.
-				ElementSpliterator<E> spliter = spliterator(first);
-				CollectionElement<E>[] found = new CollectionElement[1];
-				while (found[0] == null && spliter.forElement(el -> {
+				index = theStart;
+				CollectionElement<E> el = getTerminalElement(first);
+				while (index < theEnd && el != null) {
 					if (Objects.equals(el.get(), value))
-						found[0] = el;
-				}, first)) {}
-				return found[0];
+						return el;
+					el = theWrapped.getAdjacentElement(el.getElementId(), first);
+				}
+				return null;
 			}
 		}
 
