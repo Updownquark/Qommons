@@ -92,13 +92,20 @@ public class BetterCollections {
 		return entry == null ? null : new UnmodifiableMutableEntry<>(values, entry);
 	}
 
+	/**
+	 * Implements {@link BetterCollections#unmodifiableCollection(BetterCollection)}
+	 * 
+	 * @param <E> The type of the collection
+	 */
 	public static class UnmodifiableBetterCollection<E> implements BetterCollection<E> {
 		private final BetterCollection<? extends E> theWrapped;
 
+		/** @param wrapped The collection to wrap */
 		protected UnmodifiableBetterCollection(BetterCollection<? extends E> wrapped) {
 			theWrapped = wrapped;
 		}
 
+		/** @return The wrapped collection */
 		protected BetterCollection<? extends E> getWrapped() {
 			return theWrapped;
 		}
@@ -216,10 +223,19 @@ public class BetterCollections {
 		}
 	}
 
+	/**
+	 * Implements {@link MutableCollectionElement} in unmodifiable collection implementations
+	 * 
+	 * @param <E> The type of the element
+	 */
 	public static class UnmodifiableElementWrapper<E> implements MutableCollectionElement<E> {
 		private final UnmodifiableBetterCollection<E> theCollection;
 		private final CollectionElement<? extends E> theWrapped;
 
+		/**
+		 * @param collection The unmodifiable collection this element is for
+		 * @param wrapped The element to wrap
+		 */
 		protected UnmodifiableElementWrapper(UnmodifiableBetterCollection<E> collection, CollectionElement<? extends E> wrapped) {
 			theCollection = collection;
 			theWrapped = wrapped;
@@ -281,7 +297,13 @@ public class BetterCollections {
 		}
 	}
 
+	/**
+	 * Implements {@link BetterCollections#unmodifiableSet(BetterSet)}
+	 * 
+	 * @param <E> The type of the set
+	 */
 	public static class UnmodifiableBetterSet<E> extends UnmodifiableBetterCollection<E> implements BetterSet<E> {
+		/** @param wrapped The set to wrap */
 		protected UnmodifiableBetterSet(BetterSet<? extends E> wrapped) {
 			super(wrapped);
 		}
@@ -326,7 +348,13 @@ public class BetterCollections {
 		}
 	}
 
+	/**
+	 * Implements {@link BetterCollections#unmodifiableList(BetterList)}
+	 * 
+	 * @param <E> The type of the list
+	 */
 	public static class UnmodifiableBetterList<E> extends UnmodifiableBetterCollection<E> implements BetterList<E> {
+		/** @param wrapped The list to wrap */
 		protected UnmodifiableBetterList(BetterList<? extends E> wrapped) {
 			super(wrapped);
 		}
@@ -357,7 +385,13 @@ public class BetterCollections {
 		}
 	}
 
+	/**
+	 * Implements {@link BetterCollections#unmodifiableSortedSet(BetterSortedSet)}
+	 * 
+	 * @param <E> The type of the set
+	 */
 	public static class UnmodifiableBetterSortedSet<E> extends UnmodifiableBetterList<E> implements BetterSortedSet<E> {
+		/** @param wrapped The set to wrap */
 		protected UnmodifiableBetterSortedSet(BetterSortedSet<? extends E> wrapped) {
 			super(wrapped);
 		}
@@ -420,13 +454,21 @@ public class BetterCollections {
 		}
 	}
 
+	/**
+	 * Implements {@link BetterCollections#unmodifiableMap(BetterMap)}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	public static class UnmodifiableBetterMap<K, V> implements BetterMap<K, V> {
 		private final BetterMap<? extends K, ? extends V> theWrapped;
 
+		/** @param wrapped The map to wrap */
 		protected UnmodifiableBetterMap(BetterMap<? extends K, ? extends V> wrapped) {
 			theWrapped = wrapped;
 		}
 
+		/** @return The wrapped map */
 		protected BetterMap<? extends K, ? extends V> getWrapped() {
 			return theWrapped;
 		}
@@ -470,7 +512,14 @@ public class BetterCollections {
 		}
 	}
 
+	/**
+	 * Implements {@link BetterCollections#unmodifiableSortedMap(BetterSortedMap)}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	public static class UnmodifiableBetterSortedMap<K, V> extends UnmodifiableBetterMap<K, V> implements BetterSortedMap<K, V> {
+		/** @param wrapped The map to wrap */
 		protected UnmodifiableBetterSortedMap(BetterSortedMap<? extends K, ? extends V> wrapped) {
 			super(wrapped);
 		}
@@ -491,9 +540,16 @@ public class BetterCollections {
 		}
 	}
 
+	/**
+	 * Implements {@link MapEntryHandle} for unmodifiable maps
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	public static class UnmodifiableEntry<K, V> implements MapEntryHandle<K, V> {
 		private final MapEntryHandle<? extends K, ? extends V> theWrapped;
 
+		/** @param wrapped The map entry to wrap */
 		protected UnmodifiableEntry(MapEntryHandle<? extends K, ? extends V> wrapped) {
 			theWrapped = wrapped;
 		}
@@ -529,9 +585,19 @@ public class BetterCollections {
 		}
 	}
 
+	/**
+	 * Implements {@link MutableMapEntryHandle} for unmodifiable maps
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	public static class UnmodifiableMutableEntry<K, V> extends UnmodifiableEntry<K, V> implements MutableMapEntryHandle<K, V> {
 		private final BetterCollection<? extends V> theValues;
 
+		/**
+		 * @param values The values collection
+		 * @param wrapped The map entry to wrap
+		 */
 		protected UnmodifiableMutableEntry(BetterCollection<? extends V> values, MapEntryHandle<? extends K, ? extends V> wrapped) {
 			super(wrapped);
 			theValues = values;

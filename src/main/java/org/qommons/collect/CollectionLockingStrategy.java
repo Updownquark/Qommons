@@ -5,11 +5,17 @@ import org.qommons.Transactable;
 
 /** A strategy for collection thread safety. Some implementations of this class may not be completely thread-safe for performance. */
 public interface CollectionLockingStrategy extends Transactable, Stamped {
+	/**
+	 * A read-only operation that can be done optimistically, without obtaining a lock
+	 * 
+	 * @param <T> The type of the operation's result
+	 */
 	@FunctionalInterface
 	interface OptimisticOperation<T> {
 		T apply(T init, OptimisticContext ctx);
 	}
 
+	/** A read-only operation that can be done optimistically, without obtaining a lock */
 	@FunctionalInterface
 	interface OptimisticIntOperation {
 		int apply(int init, OptimisticContext ctx);
@@ -35,5 +41,12 @@ public interface CollectionLockingStrategy extends Transactable, Stamped {
 	 */
 	<T> T doOptimistically(T init, OptimisticOperation<T> operation);
 
+	/**
+	 * Same as {@link #doOptimistically(Object, OptimisticOperation)} but for a primitive integer, since this is a common use-case
+	 * 
+	 * @param init The initial value to feed to the operation
+	 * @param operation The operation to perform
+	 * @return The result of the operation
+	 */
 	int doOptimistically(int init, OptimisticIntOperation operation);
 }

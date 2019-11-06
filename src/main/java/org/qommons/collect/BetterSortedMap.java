@@ -8,7 +8,6 @@ import java.util.function.Function;
 
 import org.qommons.Identifiable;
 import org.qommons.Transaction;
-import org.qommons.collect.BetterSortedList.SortedSearchFilter;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
