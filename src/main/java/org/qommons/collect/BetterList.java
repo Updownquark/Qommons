@@ -527,17 +527,17 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public int previousIndex() {
 			if (elementIsNext) {
-				if (element != null) {
-					if (element.getElementId().isPresent())
-						return theList.getElementsBefore(element.getElementId()) - 1;
-					else
-						return theList.getElementsBefore(element.getElementId());
-				} else
+				if (element != null)
+					return theList.getElementsBefore(element.getElementId()) - 1;
+				else
 					return -1;
 			} else {
-				if (element != null)
-					return theList.getElementsBefore(element.getElementId());
-				else
+				if (element != null) {
+					if (element.getElementId().isPresent())
+						return theList.getElementsBefore(element.getElementId());
+					else
+						return theList.getElementsBefore(element.getElementId()) - 1;
+				} else
 					return -1;
 			}
 		}
@@ -547,7 +547,9 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			if (!isReadyForMod)
 				throw new IllegalStateException(
 					"Modification must come after a call to next() or previous() and before the next call to hasNext() or hasPrevious()");
+			CollectionElement<E> adjacent = theList.getAdjacentElement(element.getElementId(), elementIsNext);
 			theList.mutableElement(element.getElementId()).remove();
+			element = adjacent;
 			isReadyForMod = false;
 		}
 
@@ -564,8 +566,20 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			if (!isReadyForMod)
 				throw new IllegalStateException(
 					"Modification must come after a call to next() or previous() and before the next call to hasNext() or hasPrevious()");
-			theList.addElement(e, element.getElementId(), //
-				CollectionElement.getElementId(theList.getAdjacentElement(element.getElementId(), true)), true);
+			ElementId after, before;
+			boolean first;
+			if (elementIsNext) {
+				before = element.getElementId();
+				after = CollectionElement.getElementId(theList.getAdjacentElement(before, false));
+				first = false;
+			} else {
+				after = element.getElementId();
+				before = CollectionElement.getElementId(theList.getAdjacentElement(after, true));
+				first = true;
+			}
+			CollectionElement<E> added = theList.addElement(e, after, before, first);
+			if (added != null && !elementIsNext)
+				element = added;
 		}
 	}
 

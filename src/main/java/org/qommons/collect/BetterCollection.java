@@ -386,12 +386,13 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 			return false;
 		boolean removed = false;
 		try (Transaction t = lock(true, null)) {
-			CollectionElement<E> el = getTerminalElement(true);
+			CollectionElement<E> el = getTerminalElement(false);
 			while (el != null) {
 				if (filter.test(el.get())) {
 					mutableElement(el.getElementId()).remove();
 					removed = true;
 				}
+				el = getAdjacentElement(el.getElementId(), false);
 			}
 		}
 		return removed;

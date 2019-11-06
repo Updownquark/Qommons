@@ -67,6 +67,11 @@ public interface CollectionElement<E> extends Comparable<CollectionElement<E>> {
 		public boolean equals(Object o) {
 			return o instanceof CollectionElement && theWrapped.equals(((CollectionElement<?>) o).reverse());
 		}
+
+		@Override
+		public String toString() {
+			return "reverse(" + theWrapped + ")";
+		}
 	}
 
 	/**

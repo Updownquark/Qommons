@@ -774,8 +774,6 @@ public class BetterHashSet<E> implements BetterSet<E> {
 					previous.next = next;
 				if (next != null)
 					next.previous = previous;
-				next = null;
-				previous = null;
 				theSize--;
 			}
 		}

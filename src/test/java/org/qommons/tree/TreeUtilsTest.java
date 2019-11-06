@@ -367,7 +367,7 @@ public class TreeUtilsTest {
 	public void testTreeRepair() {
 		TestHelper.createTester(TreeRepairTester.class).withDebug(true)
 			.withPersistenceDir(new File("src/test/java/org/qommons/tree"), false).revisitKnownFailures(true)//
-			.withRandomCases(100000).withMaxFailures(10)//
+			.withRandomCases(10000).withMaxFailures(10)//
 			.execute().throwErrorIfFailed();
 	}
 
@@ -426,8 +426,8 @@ public class TreeUtilsTest {
 	 */
 	@Test
 	public void testTreeList() {
-		TestHelper.createTester(TreeListTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute()
-			.throwErrorIfFailed();
+		TestHelper.createTester(TreeListTester.class).withDebug(true).revisitKnownFailures(true).withFailurePersistence(true)
+			.withRandomCases(1).execute().throwErrorIfFailed();
 	}
 
 	private static void testIterationAdd(BetterTreeList<Integer> list) {
