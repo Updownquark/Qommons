@@ -6,8 +6,10 @@ import java.util.Objects;
 import java.util.function.Function;
 
 import org.qommons.Identifiable;
+import org.qommons.Lockable;
 import org.qommons.QommonsUtils;
 import org.qommons.Stamped;
+import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
@@ -256,6 +258,67 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 	/** @return A map with this map's content but whose key and value collections are reversed from this */
 	default BetterMultiMap<K, V> reverse() {
 		return new ReversedMultiMap<>(this);
+	}
+
+	/**
+	 * A typical {@link Object#hashCode()} implementation for multi-maps
+	 *
+	 * @param map The multi-map to hash
+	 * @return The hash code of the multi-map's contents
+	 */
+	public static int hashCode(BetterMultiMap<?, ?> map) {
+		try (Transaction t = map.lock(false, null)) {
+			int hash = 0;
+			for (MultiEntryHandle<?, ?> entry : map.entrySet()) {
+				int entryHash = Objects.hash(entry.getKey()) * 17 + entry.getValues().hashCode();
+				hash += entryHash;
+			}
+			return hash;
+		}
+	}
+
+	/**
+	 * A typical {@link Object#equals(Object)} implementation for multi-maps
+	 * 
+	 * @param map The multi-map to test
+	 * @param obj The object to test the multi-map against
+	 * @return Whether the two objects are equal
+	 */
+	public static boolean equals(BetterMultiMap<?, ?> map, Object obj) {
+		if (!(obj instanceof MultiMap))
+			return false;
+		MultiMap<?, ?> other = (MultiMap<?, ?>) obj;
+		try (Transaction t = Lockable.lockAll(Lockable.lockable(map, false, false), //
+			other instanceof Transactable ? Lockable.lockable((Transactable) other, false, false) : null)) {
+			if (map.keySet().size() != other.keySet().size() || map.valueSize() != other.valueSize())
+				return false;
+			for (MultiEntryHandle<?, ?> entry : map.entrySet()) {
+				if (!entry.getValues().equals(other.get(entry.getKey())))
+					return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * A simple {@link Object#toString()} implementation for multi-maps
+	 *
+	 * @param map The multi-map to print
+	 * @return The string representation of the multi-map's contents
+	 */
+	public static String toString(BetterMultiMap<?, ?> map) {
+		StringBuilder str = new StringBuilder();
+		try (Transaction t = map.lock(false, null)) {
+			boolean firstEntry = true;
+			for (MultiEntryHandle<?, ?> entry : map.entrySet()) {
+				if (!firstEntry)
+					str.append(", ");
+				else
+					firstEntry = false;
+				str.append(entry.getKey()).append('=').append(entry.getValues());
+			}
+		}
+		return str.toString();
 	}
 
 	/**

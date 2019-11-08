@@ -649,7 +649,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	}
 
 	/**
-	 * A typical hashCode implementation for collections
+	 * A typical {@link Object#hashCode()} implementation for collections
 	 *
 	 * @param coll The collection to hash
 	 * @return The hash code of the collection's contents
@@ -664,23 +664,23 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	}
 
 	/**
-	 * A typical equals implementation for collections
+	 * A typical {@link Object#equals(Object)} implementation for collections
 	 * 
-	 * @param <E> The type of the other collection
 	 * @param coll The collection to test
 	 * @param o The object to test the collection against
 	 * @return Whether the two objects are equal
 	 */
-	static <E> boolean equals(BetterCollection<E> coll, Object o) {
+	static boolean equals(BetterCollection<?> coll, Object o) {
 		if (!(o instanceof Collection))
 			return false;
 		Collection<?> c = (Collection<?>) o;
 
-		try (Transaction t1 = coll.lock(false, null); Transaction t2 = Transactable.lock(c, false, null)) {
-			Iterator<E> e1 = coll.iterator();
+		try (Transaction t = Lockable.lockAll(Lockable.lockable(coll, false, false), //
+			c instanceof Transactable ? Lockable.lockable((Transactable) c, false, false) : null)) {
+			Iterator<?> e1 = coll.iterator();
 			Iterator<?> e2 = c.iterator();
 			while (e1.hasNext() && e2.hasNext()) {
-				E o1 = e1.next();
+				Object o1 = e1.next();
 				Object o2 = e2.next();
 				if (!Objects.equals(o1, o2))
 					return false;
@@ -690,7 +690,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	}
 
 	/**
-	 * A simple toString implementation for collections
+	 * A simple {@link Object#toString()} implementation for collections
 	 *
 	 * @param coll The collection to print
 	 * @return The string representation of the collection's contents

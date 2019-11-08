@@ -40,9 +40,16 @@ public class ValueHolder<T> implements Consumer<T>, Supplier<T> {
 		theValue = t;
 	}
 
-	public void clear() {
+	/**
+	 * Clears this value, returning previously set value, if any
+	 * 
+	 * @return The previously set value
+	 */
+	public T clear() {
+		T value = theValue;
 		isSet = false;
 		theValue = null;
+		return value;
 	}
 
 	@Override
