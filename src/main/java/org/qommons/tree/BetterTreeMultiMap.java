@@ -7,10 +7,8 @@ import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterSet;
 import org.qommons.collect.BetterSortedList;
 import org.qommons.collect.BetterSortedMultiMap;
-import org.qommons.collect.CollectionElement;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
-import org.qommons.collect.MultiEntryHandle;
 import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.OptimisticContext;
 
@@ -97,12 +95,6 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 	@Override
 	public TreeBasedSet<K> keySet() {
 		return (TreeBasedSet<K>) super.keySet();
-	}
-
-	@Override
-	public MultiEntryHandle<K, V> searchEntries(Comparable<? super MultiEntryHandle<K, V>> search,
-		BetterSortedList.SortedSearchFilter filter) {
-		return CollectionElement.get(entrySet().search(entry -> search.compareTo(entry), filter));
 	}
 
 	class BetterTreeMultiMapKeySet extends BetterMultiMapKeySet implements TreeBasedSet<K> {

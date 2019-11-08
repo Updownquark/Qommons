@@ -45,8 +45,10 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 	 * @param filter The filter on the result
 	 * @return The result of the search, or null if no such value was found
 	 */
-	MultiEntryHandle<K, V> searchEntries(Comparable<? super MultiEntryHandle<K, V>> search,
-		BetterSortedList.SortedSearchFilter filter);
+	default MultiEntryHandle<K, V> searchEntries(Comparable<? super MultiEntryHandle<K, V>> search,
+		BetterSortedList.SortedSearchFilter filter) {
+		return CollectionElement.get(entrySet().search(entry -> search.compareTo(entry), filter));
+	}
 
 	@Override
 	default MultiEntryHandle<K, V> lowerEntry(K key) {
