@@ -275,7 +275,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	@Override
 	public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
 		if (sourceCollection == this) {
-			if (!(localElement instanceof RedBlackNodeList.NodeId) || ((NodeId) localElement).getList() == this)
+			if (!(localElement instanceof RedBlackNodeList.NodeId) || ((NodeId) localElement).getList() != this)
 				throw new IllegalArgumentException(localElement + " does not belong to this collection");
 			return BetterList.of(localElement);
 		}
