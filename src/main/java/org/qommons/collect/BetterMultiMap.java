@@ -1258,24 +1258,25 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		private Function<? super BetterCollection<? extends V>, String> theReversibilityQuery;
 		private BiFunction<? super BetterCollection<? extends V>, ? super X, String> theValuedReversibilityQuery;
 
-		CombinedSingleMapBuilder(BetterMultiMap<K, V> source, Function<? super BetterCollection<? extends V>, ? extends X> combination) {
+		protected CombinedSingleMapBuilder(BetterMultiMap<K, V> source,
+			Function<? super BetterCollection<? extends V>, ? extends X> combination) {
 			theSource = source;
 			theCombination = combination;
 		}
 
-		public CombinedSingleMapBuilder<K, V, X> setReverse(
+		public CombinedSingleMapBuilder<K, V, X> withReverse(
 			BiFunction<? super BetterCollection<? extends V>, ? super X, ? extends X> reverse) {
 			theReverse = reverse;
 			return this;
 		}
 
-		public CombinedSingleMapBuilder<K, V, X> setReversibilityQuery(
+		public CombinedSingleMapBuilder<K, V, X> withReversibility(
 			Function<? super BetterCollection<? extends V>, String> reversibilityQuery) {
 			theReversibilityQuery = reversibilityQuery;
 			return this;
 		}
 
-		public CombinedSingleMapBuilder<K, V, X> setValuedReversibilityQuery(
+		public CombinedSingleMapBuilder<K, V, X> withValuedReversibility(
 			BiFunction<? super BetterCollection<? extends V>, ? super X, String> valuedReversibilityQuery) {
 			theValuedReversibilityQuery = valuedReversibilityQuery;
 			return this;
@@ -1319,7 +1320,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		private Function<? super BetterCollection<? extends V>, String> theReversibilityQuery;
 		private BiFunction<? super BetterCollection<? extends V>, ? super X, String> theValuedReversibilityQuery;
 
-		CombinedSingleMap(BetterMultiMap<K, V> outer, Function<? super BetterCollection<? extends V>, ? extends X> combination,
+		protected CombinedSingleMap(BetterMultiMap<K, V> outer, Function<? super BetterCollection<? extends V>, ? extends X> combination,
 			BiFunction<? super BetterCollection<? extends V>, ? super X, ? extends X> reverse,
 			Function<? super BetterCollection<? extends V>, String> reversibility,
 			BiFunction<? super BetterCollection<? extends V>, ? super X, String> valuedReversibility) {

@@ -264,23 +264,23 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public CombinedSortedSingleMapBuilder<K, V, X> setReverse(
+		public CombinedSortedSingleMapBuilder<K, V, X> withReverse(
 			BiFunction<? super BetterCollection<? extends V>, ? super X, ? extends X> reverse) {
-			super.setReverse(reverse);
+			super.withReverse(reverse);
 			return this;
 		}
 
 		@Override
-		public CombinedSortedSingleMapBuilder<K, V, X> setReversibilityQuery(
+		public CombinedSortedSingleMapBuilder<K, V, X> withReversibility(
 			Function<? super BetterCollection<? extends V>, String> reversibilityQuery) {
-			super.setReversibilityQuery(reversibilityQuery);
+			super.withReversibility(reversibilityQuery);
 			return this;
 		}
 
 		@Override
-		public CombinedSortedSingleMapBuilder<K, V, X> setValuedReversibilityQuery(
+		public CombinedSortedSingleMapBuilder<K, V, X> withValuedReversibility(
 			BiFunction<? super BetterCollection<? extends V>, ? super X, String> valuedReversibilityQuery) {
-			super.setValuedReversibilityQuery(valuedReversibilityQuery);
+			super.withValuedReversibility(valuedReversibilityQuery);
 			return this;
 		}
 
