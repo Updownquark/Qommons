@@ -262,8 +262,8 @@ public abstract class Causable {
 							if (postActions == null)
 								postActions = new LinkedList<>();
 							postActions.addFirst(postAction);
-		}
-	}
+						}
+					}
 					if (postActions != null) {
 						for (Transaction key : postActions)
 							key.close();
