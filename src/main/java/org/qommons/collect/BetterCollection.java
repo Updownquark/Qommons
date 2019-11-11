@@ -1264,7 +1264,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		protected CollectionElement<CollectionElement<E>> wrap(CollectionElement<E> el) {
-			return new WrappedCollectionElement(el);
+			return el == null ? null : new WrappedCollectionElement(el);
 		}
 
 		protected MutableCollectionElement<CollectionElement<E>> wrapMutable(CollectionElement<E> el) {
