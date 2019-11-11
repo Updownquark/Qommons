@@ -3,6 +3,7 @@ package org.qommons.collect;
 import java.util.Collection;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import org.qommons.Identifiable;
@@ -12,6 +13,7 @@ import org.qommons.Stamped;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
+import org.qommons.tree.BetterTreeList;
 
 /**
  * An {@link CollectionElement element}-accessible structure of many values per key
@@ -253,6 +255,15 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 	 */
 	default BetterMap<K, V> singleMap(boolean firstValue) {
 		return new SingleMap<>(this, firstValue);
+	}
+
+	/**
+	 * @param <X> The type of the target map to build
+	 * @param combination A function to combine all values for a key in this map into a value in the target map
+	 * @return A builder to build a map whose values are a combination of all values in this map for the same key
+	 */
+	default <X> CombinedSingleMapBuilder<K, V, X> singleMap(Function<? super BetterCollection<? extends V>, X> combination) {
+		return new CombinedSingleMapBuilder<>(this, combination);
 	}
 
 	/** @return A map with this map's content but whose key and value collections are reversed from this */
@@ -978,28 +989,22 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 	}
 
 	/**
-	 * Implements {@link BetterMultiMap#singleMap(boolean)}
-	 *
-	 * @param <K> The key-type of the map
-	 * @param <V> The value-type of the map
+	 * Abstract implementation of a {@link BetterMap} backed by a {@link BetterMultiMap}
+	 * 
+	 * @param <K> The key type of both maps
+	 * @param <V> The value type of the multi-map
+	 * @param <X> The value type of this map
 	 */
-	class SingleMap<K, V> implements BetterMap<K, V> {
+	abstract class AbstractSingleMap<K, V, X> implements BetterMap<K, X> {
 		private final BetterMultiMap<K, V> theSource;
-		private final boolean isFirstValue;
 		private Object theIdentity;
 
-		public SingleMap(BetterMultiMap<K, V> outer, boolean firstValue) {
+		public AbstractSingleMap(BetterMultiMap<K, V> outer) {
 			theSource = outer;
-			isFirstValue = firstValue;
 		}
 
 		protected BetterMultiMap<K, V> getSource() {
 			return theSource;
-		}
-
-		/** @return Whether this map is using the first or last value for each key in the multi map */
-		public boolean isFirstValue() {
-			return isFirstValue;
 		}
 
 		@Override
@@ -1024,52 +1029,74 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 			return theSource.keySet();
 		}
 
+		protected abstract X map(BetterCollection<V> sourceValues);
+
+		protected abstract String canReverse();
+
+		protected abstract String canReverse(BetterCollection<V> sourceValues);
+
+		protected abstract String canReverse(BetterCollection<V> sourceValues, X value);
+
+		protected abstract X reverse(BetterCollection<V> sourceValues, X newValue)
+			throws UnsupportedOperationException, IllegalArgumentException;
+
 		@Override
-		public V get(Object key) {
-			BetterCollection<V> values = theSource.get(key);
-			return isFirstValue ? values.peekFirst() : values.peekLast();
+		public X get(Object key) {
+			BetterCollection<V> values = getSource().get(key);
+			return map(values);
 		}
 
 		@Override
-		public MapEntryHandle<K, V> getEntry(K key) {
-			MultiEntryHandle<K, V> outerHandle = theSource.getEntry(key);
+		public MapEntryHandle<K, X> getEntry(K key) {
+			MultiEntryHandle<K, V> outerHandle = getSource().getEntry(key);
 			return outerHandle == null ? null : entryFor(outerHandle);
 		}
 
 		@Override
-		public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
+		public MapEntryHandle<K, X> putEntry(K key, X value, ElementId after, ElementId before, boolean first) {
+			String msg = canReverse();
+			if (msg != null)
+				throw new UnsupportedOperationException(msg);
 			try (Transaction t = lock(true, null)) {
 				boolean[] added = new boolean[1];
-				MultiEntryHandle<K, V> entry = theSource.getOrPutEntry(key, k -> BetterList.of(value), after, before, first,
+				MultiEntryHandle<K, V> entry = getSource().getOrPutEntry(key, k -> {
+					BetterList<V> values = new BetterTreeList<>(false);
+					reverse(values, value);
+					return values;
+				}, after, before, first,
 					() -> added[0] = true);
 				if (entry == null)
 					return null;
 				if (!added[0])
-					entry.getValues().mutableElement(entry.getValues().getTerminalElement(isFirstValue).getElementId()).set(value);
+					reverse(entry.getValues(), value);
 				return entryFor(entry);
 			}
 		}
 
 		@Override
-		public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId afterKey, ElementId beforeKey,
+		public MapEntryHandle<K, X> getOrPutEntry(K key, Function<? super K, ? extends X> value, ElementId afterKey, ElementId beforeKey,
 			boolean first, Runnable added) {
-			return entryFor(theSource.getOrPutEntry(key, k -> BetterList.of(value.apply(k)), afterKey, beforeKey, first, added));
+			return entryFor(getSource().getOrPutEntry(key, k -> {
+				BetterList<V> values = new BetterTreeList<>(false);
+				reverse(values, value.apply(k));
+				return values;
+			}, afterKey, beforeKey, first, added));
 		}
 
 		/**
 		 * @param outerHandle The multi-entry to wrap
 		 * @return The map entry to expose as an entry of this map, backed by the multi-entry from the source
 		 */
-		protected MapEntryHandle<K, V> entryFor(MultiEntryHandle<K, V> outerHandle) {
-			return outerHandle == null ? null : new MapEntryHandle<K, V>() {
+		protected MapEntryHandle<K, X> entryFor(MultiEntryHandle<K, V> outerHandle) {
+			return outerHandle == null ? null : new MapEntryHandle<K, X>() {
 				@Override
 				public ElementId getElementId() {
 					return outerHandle.getElementId();
 				}
 
 				@Override
-				public V get() {
-					return outerHandle.getValues().peekFirst();
+				public X get() {
+					return map(outerHandle.getValues());
 				}
 
 				@Override
@@ -1080,25 +1107,25 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		}
 
 		@Override
-		public MapEntryHandle<K, V> getEntryById(ElementId entryId) {
-			return entryFor(theSource.getEntryById(entryId));
+		public MapEntryHandle<K, X> getEntryById(ElementId entryId) {
+			return entryFor(getSource().getEntryById(entryId));
 		}
 
 		@Override
-		public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
-			return mutableEntryFor(theSource.getEntryById(entryId));
+		public MutableMapEntryHandle<K, X> mutableEntry(ElementId entryId) {
+			return mutableEntryFor(values(), getSource().getEntryById(entryId));
 		}
 
-		private MutableMapEntryHandle<K, V> mutableEntryFor(MultiEntryHandle<K, V> outerHandle) {
-			return outerHandle == null ? null : new MutableMapEntryHandle<K, V>() {
+		private MutableMapEntryHandle<K, X> mutableEntryFor(BetterCollection<X> collection, MultiEntryHandle<K, V> outerHandle) {
+			return outerHandle == null ? null : new MutableMapEntryHandle<K, X>() {
 				@Override
 				public K getKey() {
 					return outerHandle.getKey();
 				}
 
 				@Override
-				public BetterCollection<V> getCollection() {
-					return outerHandle.getValues();
+				public BetterCollection<X> getCollection() {
+					return collection;
 				}
 
 				@Override
@@ -1107,25 +1134,23 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 				}
 
 				@Override
-				public V get() {
-					return outerHandle.getValues().peekFirst();
+				public X get() {
+					return map(outerHandle.getValues());
 				}
 
 				@Override
 				public String isEnabled() {
-					return outerHandle.getValues().mutableElement(outerHandle.getValues().getTerminalElement(true).getElementId())
-						.isEnabled();
+					return canReverse(outerHandle.getValues());
 				}
 
 				@Override
-				public String isAcceptable(V value) {
-					return outerHandle.getValues().mutableElement(outerHandle.getValues().getTerminalElement(true).getElementId())
-						.isAcceptable(value);
+				public String isAcceptable(X value) {
+					return canReverse(outerHandle.getValues(), value);
 				}
 
 				@Override
-				public void set(V value) throws UnsupportedOperationException, IllegalArgumentException {
-					outerHandle.getValues().mutableElement(outerHandle.getValues().getTerminalElement(true).getElementId()).set(value);
+				public void set(X value) throws UnsupportedOperationException, IllegalArgumentException {
+					AbstractSingleMap.this.reverse(outerHandle.getValues(), value);
 				}
 
 				@Override
@@ -1147,24 +1172,199 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		}
 
 		@Override
-		public V put(K key, V value) {
-			try (Transaction t = theSource.lock(true, null)) {
-				BetterCollection<V> values = theSource.get(key);
-				CollectionElement<V> terminal = values.getTerminalElement(isFirstValue);
-				if (terminal == null) {
-					values.add(value);
-					return null;
-				} else {
-					V old = terminal.get();
-					values.mutableElement(terminal.getElementId()).set(value);
-					return old;
-				}
+		public X put(K key, X value) {
+			try (Transaction t = getSource().lock(true, null)) {
+				BetterCollection<V> values = getSource().get(key);
+				return reverse(values, value);
 			}
 		}
 
 		@Override
 		public String toString() {
 			return entrySet().toString();
+		}
+	}
+
+	/**
+	 * Implements {@link BetterMultiMap#singleMap(boolean)}
+	 *
+	 * @param <K> The key-type of the map
+	 * @param <V> The value-type of the map
+	 */
+	class SingleMap<K, V> extends AbstractSingleMap<K, V, V> {
+		private final boolean isFirstValue;
+
+		public SingleMap(BetterMultiMap<K, V> outer, boolean firstValue) {
+			super(outer);
+			isFirstValue = firstValue;
+		}
+
+		/** @return Whether this map is using the first or last value for each key in the multi map */
+		public boolean isFirstValue() {
+			return isFirstValue;
+		}
+
+		@Override
+		protected V map(BetterCollection<V> values) {
+			return isFirstValue ? values.peekFirst() : values.peekLast();
+		}
+
+		@Override
+		protected String canReverse() {
+			return null;
+		}
+
+		@Override
+		protected String canReverse(BetterCollection<V> sourceValues) {
+			if (!sourceValues.isEmpty())
+				return sourceValues.mutableElement(sourceValues.getTerminalElement(isFirstValue).getElementId()).isEnabled();
+			return null; // No way to query without a value
+		}
+
+		@Override
+		protected String canReverse(BetterCollection<V> sourceValues, V value) {
+			if (sourceValues.isEmpty())
+				return sourceValues.canAdd(value);
+			else
+				return sourceValues.mutableElement(sourceValues.getTerminalElement(isFirstValue).getElementId()).isAcceptable(value);
+		}
+
+		@Override
+		protected V reverse(BetterCollection<V> sourceValues, V newValue) throws UnsupportedOperationException, IllegalArgumentException {
+			if (sourceValues.isEmpty()) {
+				sourceValues.add(newValue);
+				return null;
+			} else {
+				MutableCollectionElement<V> terminal = sourceValues
+					.mutableElement(sourceValues.getTerminalElement(isFirstValue).getElementId());
+				V oldValue = terminal.get();
+				terminal.set(newValue);
+				return oldValue;
+			}
+		}
+	}
+
+	/**
+	 * Builds a {@link BetterMap} whose values are a combination of all values of the same key from a {@link BetterMultiMap}
+	 * 
+	 * @param <K> The key type of both maps
+	 * @param <V> The value type of the multi-map
+	 * @param <X> The value type of the target map
+	 */
+	class CombinedSingleMapBuilder<K, V, X> {
+		private final BetterMultiMap<K, V> theSource;
+		private final Function<? super BetterCollection<? extends V>, ? extends X> theCombination;
+		private BiFunction<? super BetterCollection<? extends V>, ? super X, ? extends X> theReverse;
+		private Function<? super BetterCollection<? extends V>, String> theReversibilityQuery;
+		private BiFunction<? super BetterCollection<? extends V>, ? super X, String> theValuedReversibilityQuery;
+
+		CombinedSingleMapBuilder(BetterMultiMap<K, V> source, Function<? super BetterCollection<? extends V>, ? extends X> combination) {
+			theSource = source;
+			theCombination = combination;
+		}
+
+		public CombinedSingleMapBuilder<K, V, X> setReverse(
+			BiFunction<? super BetterCollection<? extends V>, ? super X, ? extends X> reverse) {
+			theReverse = reverse;
+			return this;
+		}
+
+		public CombinedSingleMapBuilder<K, V, X> setReversibilityQuery(
+			Function<? super BetterCollection<? extends V>, String> reversibilityQuery) {
+			theReversibilityQuery = reversibilityQuery;
+			return this;
+		}
+
+		public CombinedSingleMapBuilder<K, V, X> setValuedReversibilityQuery(
+			BiFunction<? super BetterCollection<? extends V>, ? super X, String> valuedReversibilityQuery) {
+			theValuedReversibilityQuery = valuedReversibilityQuery;
+			return this;
+		}
+
+		protected BetterMultiMap<K, V> getSource() {
+			return theSource;
+		}
+
+		protected Function<? super BetterCollection<? extends V>, ? extends X> getCombination() {
+			return theCombination;
+		}
+
+		protected BiFunction<? super BetterCollection<? extends V>, ? super X, ? extends X> getReverse() {
+			return theReverse;
+		}
+
+		protected Function<? super BetterCollection<? extends V>, String> getReversibilityQuery() {
+			return theReversibilityQuery;
+		}
+
+		protected BiFunction<? super BetterCollection<? extends V>, ? super X, String> getValuedReversibilityQuery() {
+			return theValuedReversibilityQuery;
+		}
+
+		public BetterMap<K, X> build() {
+			return new CombinedSingleMap<>(theSource, theCombination, theReverse, theReversibilityQuery, theValuedReversibilityQuery);
+		}
+	}
+
+	/**
+	 * Implements the map built by {@link BetterMultiMap#singleMap(Function)}
+	 * 
+	 * @param <K> The key type of both maps
+	 * @param <V> The value type of the source multi-map
+	 * @param <X> The value type of this map
+	 */
+	class CombinedSingleMap<K, V, X> extends AbstractSingleMap<K, V, X> {
+		private final Function<? super BetterCollection<? extends V>, ? extends X> theCombination;
+		private BiFunction<? super BetterCollection<? extends V>, ? super X, ? extends X> theReverse;
+		private Function<? super BetterCollection<? extends V>, String> theReversibilityQuery;
+		private BiFunction<? super BetterCollection<? extends V>, ? super X, String> theValuedReversibilityQuery;
+
+		CombinedSingleMap(BetterMultiMap<K, V> outer, Function<? super BetterCollection<? extends V>, ? extends X> combination,
+			BiFunction<? super BetterCollection<? extends V>, ? super X, ? extends X> reverse,
+			Function<? super BetterCollection<? extends V>, String> reversibility,
+			BiFunction<? super BetterCollection<? extends V>, ? super X, String> valuedReversibility) {
+			super(outer);
+			theCombination = combination;
+			theReverse = reverse;
+			theReversibilityQuery = reversibility;
+			theValuedReversibilityQuery = valuedReversibility;
+		}
+
+		@Override
+		protected X map(BetterCollection<V> sourceValues) {
+			return theCombination.apply(sourceValues);
+		}
+
+		@Override
+		protected String canReverse() {
+			return theReverse == null ? StdMsg.UNSUPPORTED_OPERATION : null;
+		}
+
+		@Override
+		protected String canReverse(BetterCollection<V> sourceValues) {
+			if (theReversibilityQuery != null)
+				return theReversibilityQuery.apply(sourceValues);
+			else if (theReverse == null)
+				return StdMsg.UNSUPPORTED_OPERATION;
+			else
+				return null;
+		}
+
+		@Override
+		protected String canReverse(BetterCollection<V> sourceValues, X value) {
+			if (theValuedReversibilityQuery != null)
+				return theValuedReversibilityQuery.apply(sourceValues, value);
+			else if (theReverse == null)
+				return StdMsg.UNSUPPORTED_OPERATION;
+			else
+				return null;
+		}
+
+		@Override
+		protected X reverse(BetterCollection<V> sourceValues, X newValue) throws UnsupportedOperationException, IllegalArgumentException {
+			if (theReverse == null)
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			return theReverse.apply(sourceValues, newValue);
 		}
 	}
 

@@ -3,6 +3,7 @@ package org.qommons.collect;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import org.qommons.Identifiable;
@@ -83,6 +84,11 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 	@Override
 	default BetterMap<K, V> singleMap(boolean firstValue) {
 		return new SortedSingleMultiMap<>(this, firstValue);
+	}
+
+	@Override
+	default <X> CombinedSortedSingleMapBuilder<K, V, X> singleMap(Function<? super BetterCollection<? extends V>, X> combination) {
+		return new CombinedSortedSingleMapBuilder<>(this, combination);
 	}
 
 	@Override
@@ -241,6 +247,79 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 				MultiEntryHandle<K, V> entry = getSource().searchEntries(e -> search.compareTo(entryFor(e)), filter);
 				return entryFor(entry);
 			}
+		}
+	}
+
+	/**
+	 * Builds a {@link BetterSortedMap} whose values are a combination of all values of the same key from a {@link BetterSortedMultiMap}
+	 * 
+	 * @param <K> The key type of both maps
+	 * @param <V> The value type of the multi-map
+	 * @param <X> The value type of the target map
+	 */
+	class CombinedSortedSingleMapBuilder<K, V, X> extends CombinedSingleMapBuilder<K, V, X> {
+		CombinedSortedSingleMapBuilder(BetterMultiMap<K, V> source,
+			Function<? super BetterCollection<? extends V>, ? extends X> combination) {
+			super(source, combination);
+		}
+
+		@Override
+		public CombinedSortedSingleMapBuilder<K, V, X> setReverse(
+			BiFunction<? super BetterCollection<? extends V>, ? super X, ? extends X> reverse) {
+			super.setReverse(reverse);
+			return this;
+		}
+
+		@Override
+		public CombinedSortedSingleMapBuilder<K, V, X> setReversibilityQuery(
+			Function<? super BetterCollection<? extends V>, String> reversibilityQuery) {
+			super.setReversibilityQuery(reversibilityQuery);
+			return this;
+		}
+
+		@Override
+		public CombinedSortedSingleMapBuilder<K, V, X> setValuedReversibilityQuery(
+			BiFunction<? super BetterCollection<? extends V>, ? super X, String> valuedReversibilityQuery) {
+			super.setValuedReversibilityQuery(valuedReversibilityQuery);
+			return this;
+		}
+
+		@Override
+		public BetterSortedMap<K, X> build() {
+			return new CombinedSortedSingleMap<>(getSource(), getCombination(), getReverse(), //
+				getReversibilityQuery(), getValuedReversibilityQuery());
+		}
+	}
+
+	/**
+	 * Implements the map built by {@link BetterSortedMultiMap#singleMap(Function)}
+	 * 
+	 * @param <K> The key type of both maps
+	 * @param <V> The value type of the source multi-map
+	 * @param <X> The value type of this map
+	 */
+	class CombinedSortedSingleMap<K, V, X> extends CombinedSingleMap<K, V, X> implements BetterSortedMap<K, X> {
+		CombinedSortedSingleMap(BetterMultiMap<K, V> outer, Function<? super BetterCollection<? extends V>, ? extends X> combination,
+			BiFunction<? super BetterCollection<? extends V>, ? super X, ? extends X> reverse,
+			Function<? super BetterCollection<? extends V>, String> reversibility,
+			BiFunction<? super BetterCollection<? extends V>, ? super X, String> valuedReversibility) {
+			super(outer, combination, reverse, reversibility, valuedReversibility);
+		}
+
+		@Override
+		protected BetterSortedMultiMap<K, V> getSource() {
+			return (BetterSortedMultiMap<K, V>) super.getSource();
+		}
+
+		@Override
+		public BetterSortedSet<K> keySet() {
+			return (BetterSortedSet<K>) super.keySet();
+		}
+
+		@Override
+		public MapEntryHandle<K, X> searchEntries(Comparable<? super Map.Entry<K, X>> search, SortedSearchFilter filter) {
+			CollectionElement<Map.Entry<K, X>> entry = entrySet().search(search, filter);
+			return entry == null ? null : getEntryById(entry.getElementId());
 		}
 	}
 
