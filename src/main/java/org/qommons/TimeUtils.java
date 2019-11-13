@@ -8,7 +8,6 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.EnumMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
@@ -53,7 +52,7 @@ public class TimeUtils {
 		public final Instant maxTime;
 		private final TimeZone theTimeZone;
 
-		public AbsoluteTime(String text, Instant time, TimeZone timeZone, DateElementType lowestResolution, int nanoDigits) {
+		public AbsoluteTime(String text, Instant time, Calendar cal, TimeZone timeZone, DateElementType lowestResolution, int nanoDigits) {
 			theText = text;
 			this.time = time;
 			this.theTimeZone = timeZone;
@@ -61,7 +60,12 @@ public class TimeUtils {
 			Instant max = null;
 			switch (lowestResolution) {
 			case Year:
+				cal.add(Calendar.YEAR, 1);
+				max = cal.toInstant();
+				break;
 			case Month:
+				cal.add(Calendar.MONTH, 1);
+				max = cal.toInstant();
 				break;
 			case Day:
 				max = time.plus(DAY);
@@ -179,7 +183,7 @@ public class TimeUtils {
 			cal.setTimeZone(GMT);
 			Instant ref = reference.get();
 			cal.setTimeInMillis(ref.getEpochSecond() * 1000);
-			cal.setTimeZone(theTimeZone);
+			cal.setTimeZone(theTimeZone != null ? theTimeZone : GMT);
 			int nanos = ref.getNano();
 			for (Map.Entry<DateElementType, ParsedDateElement> element : elements.entrySet()) {
 				switch (element.getKey()) {
@@ -314,12 +318,15 @@ public class TimeUtils {
 	 * <li>YYYY</li>
 	 * <li>YYYY-MM</li>
 	 * <li>YYYY-MM-DD</li>
-	 * <li>DDMonth (Month=e.g. "January" or "Apr")</li>
+	 * <li>MonthYY (Month=e.g. "January" or "Apr")</li>
+	 * <li>MonthYYYY</li>
+	 * <li>DDMonth</li>
 	 * <li>DDMonthYY</li>
 	 * <li>DDMonthYYYY</li>
 	 * </p>
 	 * For standard date formats, separators can be '-', '/', or '.'. Non-standard formats supported are:
 	 * <ul>
+	 * <li>MM/YYYY</li>
 	 * <li>MM/DD</li>
 	 * <li>MM/DD/YY</li>
 	 * <li>MM/DD/YYYY</li>
@@ -330,7 +337,8 @@ public class TimeUtils {
 	 * For non-standard, slash-separated formats, '/' may be replaced with '-'.
 	 * </p>
 	 * <p>
-	 * Time format is HH(:MM(:ss(.S*)))(am|pm). am/pm may also contain '.' characters. The time may end with a time zone identifier.
+	 * Time format is HH(:MM(:ss(.S*)))(am|pm). am/pm may also contain '.' characters. The time may end with a time zone identifier. The
+	 * hour-only format (HH) may only be used in conjunction with a date format--this parser will fail to parse a sole integer.
 	 * </p>
 	 * <p>
 	 * Dates and times can be used separately. If used together, time can come after the date with a separator of 'T', ':' or '.' or before
@@ -348,7 +356,7 @@ public class TimeUtils {
 	 * @throws ParseException If <code>throwIfNotFound</code> and the string cannot be parsed
 	 */
 	public static ParsedTime parseFlexFormatTime(CharSequence str, boolean wholeText, boolean throwIfNotFound) throws ParseException {
-		List<ParsedDateElement> elements = new LinkedList<>();
+		List<ParsedDateElement> elements = new ArrayList<>();
 		int i = 0;
 		boolean found = true;
 		while (found && i < str.length()) {
@@ -388,14 +396,25 @@ public class TimeUtils {
 			}
 		}
 		if (secondIndex > 0 && secondIndex < elements.size()) {
-			secondInfo = new EnumMap<>(DateElementType.class);
-			int index = -1;
-			for (DateFormat format : FLEX_FORMATS) {
-				secondInfo.clear();
-				index = format.match(secondInfo, elements);
-				if (index > 0) {
-					second = format;
-					break;
+			if (elements.get(secondIndex).type == ParsedDateElementType.SEP) {
+				char sep = elements.get(secondIndex).text.charAt(0);
+				if (sep == 'T' || sep == ':' || sep == '.') {
+					elements.remove(secondIndex);
+					secondIndex++;
+				} else if (!wholeText)
+					elements.subList(secondIndex, elements.size()).clear();
+			}
+
+			if (secondIndex > 0 && secondIndex < elements.size()) {
+				secondInfo = new EnumMap<>(DateElementType.class);
+				int index = -1;
+				for (DateFormat format : FLEX_FORMATS) {
+					secondInfo.clear();
+					index = format.match(secondInfo, elements);
+					if (index > 0) {
+						second = format;
+						break;
+					}
 				}
 			}
 		}
@@ -413,6 +432,11 @@ public class TimeUtils {
 					throw new ParseException("Formats " + first + " and " + second + " may not be used together", entry.getValue().index);
 				}
 			}
+		} else if (firstInfo.size() == 1 && firstInfo.get(DateElementType.Hour) != null) {
+			if (!throwIfNotFound)
+				return null;
+			else
+				throw new ParseException("The hour-only format is not valid without a date", 0);
 		}
 		TimeZone zone;
 		try {
@@ -453,8 +477,10 @@ public class TimeUtils {
 				cal.clear();
 				if (zone != null)
 					cal.setTimeZone(zone);
+				else
+					cal.setTimeZone(GMT);
 
-				cal.set(Calendar.YEAR, secondIndex);
+				cal.set(Calendar.YEAR, validate(DateElementType.Year, element));
 
 				DateElementType minType = DateElementType.Year;
 				element = firstInfo.get(DateElementType.Month);
@@ -466,21 +492,23 @@ public class TimeUtils {
 				element = firstInfo.get(DateElementType.Hour);
 				if (element != null)
 					cal.set(Calendar.HOUR_OF_DAY, validate(minType = DateElementType.Hour, element));
-				element = firstInfo.get(minType = DateElementType.Minute);
+				element = firstInfo.get(DateElementType.Minute);
 				if (element != null)
 					cal.set(Calendar.MINUTE, validate(minType = DateElementType.Minute, element));
-				element = firstInfo.get(minType = DateElementType.Second);
+				element = firstInfo.get(DateElementType.Second);
 				if (element != null)
 					cal.set(Calendar.SECOND, validate(minType = DateElementType.Second, element));
 				int nanos;
-				element = firstInfo.get(minType = DateElementType.SubSecond);
+				element = firstInfo.get(DateElementType.SubSecond);
 				if (element != null)
 					nanos = validate(minType = DateElementType.SubSecond, element);
 				else
 					nanos = 0;
-				Instant time = Instant.ofEpochSecond(cal.getTimeInMillis(), nanos);
-				return new AbsoluteTime(text, time, zone, minType, element == null ? 0 : element.text.length());
+				Instant time = Instant.ofEpochSecond(cal.getTimeInMillis() / 1000, nanos);
+				return new AbsoluteTime(text, time, cal, zone, minType, element == null ? 0 : element.text.length());
 			} else {
+				for (Map.Entry<DateElementType, ParsedDateElement> entry : firstInfo.entrySet())
+					validate(entry.getKey(), entry.getValue());
 				return new RelativeTime(text, zone, firstInfo);
 			}
 		} catch (ParseException e) {
@@ -565,7 +593,7 @@ public class TimeUtils {
 			int parse(CharSequence match) {
 				for (int m = 0; m < MONTHS.length; m++) {
 					int i;
-					for (i = 0; i < match.length() && Character.toLowerCase(match.charAt(i)) == MONTHS[i].charAt(i); i++) {}
+					for (i = 0; i < match.length() && Character.toLowerCase(match.charAt(i)) == MONTHS[m].charAt(i); i++) {}
 					if (i == match.length())
 						return m;
 				}
@@ -760,12 +788,15 @@ public class TimeUtils {
 			new DateFormat(year4, stdDateSep, monthDig, stdDateSep, day, stndrdth, timeZone), //
 			new DateFormat(year4, stdDateSep, monthDig, timeZone), //
 			new DateFormat(year4, timeZone), //
+			new DateFormat(monthCh, optionalonStdDateSep, year4, timeZone), //
+			new DateFormat(monthCh, optionalonStdDateSep, year2, timeZone), //
 			new DateFormat(day, optionalonStdDateSep, monthCh, optionalonStdDateSep, year4, timeZone), //
 			new DateFormat(day, optionalonStdDateSep, monthCh, optionalonStdDateSep, year2, timeZone), //
 			new DateFormat(day, optionalonStdDateSep, monthCh, timeZone), //
 			new DateFormat(monthDig, nonStdDateSep, day, stndrdth, nonStdDateSep, year4, timeZone), //
 			new DateFormat(monthDig, nonStdDateSep, day, stndrdth, nonStdDateSep, year2, timeZone), //
 			new DateFormat(monthDig, nonStdDateSep, day, stndrdth, timeZone), //
+			new DateFormat(monthDig, dot, year4, timeZone), //
 			new DateFormat(day, stndrdth, dot, monthDig, dot, year4, timeZone), //
 			new DateFormat(day, stndrdth, dot, monthDig, dot, year2, timeZone), //
 			new DateFormat(day, stndrdth, dot, monthDig, timeZone), //
