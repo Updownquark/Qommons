@@ -27,7 +27,7 @@ public class RRWLockingStrategy implements CollectionLockingStrategy {
 
 	@Override
 	public boolean isLockSupported() {
-		return true;
+		return theLock.isLockSupported();
 	}
 
 	@Override
