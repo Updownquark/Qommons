@@ -1,8 +1,18 @@
 package org.qommons;
 
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.Reader;
+import java.io.Writer;
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.LongConsumer;
@@ -326,7 +336,7 @@ public class StringUtils {
 	public static String pluralize(String name) {
 		if (name.endsWith("y")) {
 			name = name.substring(0, name.length() - 1) + "ie";
-		} else if (name.endsWith("s") || name.endsWith("x") || name.endsWith("ch")) {
+		} else if (name.endsWith("s") || name.endsWith("x") || name.endsWith("z") || name.endsWith("ch") || name.endsWith("sh")) {
 			name += "e";
 		}
 		name += "s";
@@ -348,6 +358,75 @@ public class StringUtils {
 			return name.substring(0, name.length() - 1);
 		else
 			return name;
+	}
+
+	/**
+	 * @param str The string to get the article for
+	 * @return "a" or "an"
+	 */
+	public static String getIndefiniteArticle(String str) {
+		if (str.isEmpty())
+			return "";
+		char init = Character.toLowerCase(str.charAt(0));
+		if (init == 'a' || init == 'e' || init == 'i' || init == 'o' || init == 'u')
+			return "an";
+		else
+			return "a";
+	}
+
+	/**
+	 * Gets unique name for a new item in a named item list
+	 * 
+	 * @param <E> The type of the list items
+	 * @param items The list of items
+	 * @param itemName The item name function
+	 * @param firstTry The default new item name
+	 * @param suffix Appends a try number (starting with 2) to <code>firstTry</code> in a user-friendly format.
+	 * @return The name for a new list item that is not the same as that of any existing item in the list
+	 */
+	public static <E> String getNewItemName(Iterable<? extends E> items, Function<? super E, String> itemName, String firstTry,
+		BiConsumer<StringBuilder, Integer> suffix) {
+		if (suffix == null)
+			suffix = (n, i) -> n.append(' ').append(i);
+		String name = firstTry;
+		int tryNumber = 1;
+		StringBuilder newName = null;
+		while (true) {
+			boolean nameExists = false;
+			for (E item : items) {
+				String name_i = itemName.apply(item);
+				if (name.equals(name_i)) {
+					nameExists = true;
+					break;
+				}
+			}
+			if (!nameExists)
+				return name;
+			tryNumber++;
+			if (newName == null)
+				newName = new StringBuilder(firstTry);
+			else {
+				newName.setLength(firstTry.length());
+				// Just in case the user does weird stuff with the string
+				for (int c = 0; c < firstTry.length(); c++)
+					newName.setCharAt(c, firstTry.charAt(c));
+			}
+			suffix.accept(newName, tryNumber);
+			String newNameStr = newName.toString();
+			if (name.equals(newNameStr)) // A catch to avoid an infinite loop if the suffix doesn't use the try number properly
+				throw new IllegalStateException("Suffix is not working properly");
+			name = newNameStr;
+		}
+	}
+
+	public static <E> boolean isUniqueName(Iterable<? extends E> items, Function<? super E, String> itemName, String name, E exclude) {
+		for (E item : items) {
+			if (item == exclude)
+				continue;
+			if (name.equals(itemName.apply(item)))
+				return false;
+		}
+		return true;
 	}
 
 	public static final String HEX_CHARS = "0123456789ABCDEF";
