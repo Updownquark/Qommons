@@ -43,7 +43,11 @@ public class StringUtils {
 	public static int compareNumberTolerant(String s1, String s2, boolean ignoreCase, boolean onlyZeroIfEqual) {
 		if (s1 == s2) {
 			return 0;
-		}
+		} else if (s1 == null)
+			return -1;
+		else if (s2 == null)
+			return 1;
+
 		int i1, i2;
 		int intolerantResult = 0;
 		for (i1 = 0, i2 = 0; i1 < s1.length() && i2 < s2.length(); i1++, i2++) {
