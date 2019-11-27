@@ -16,7 +16,10 @@ import java.util.NoSuchElementException;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.LongConsumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+/** Common utilities for dealing with Strings */
 public class StringUtils {
 	/**
 	 * A comparator that returns the result of {@link #compareNumberTolerant(String, String, boolean, boolean)
@@ -379,24 +382,123 @@ public class StringUtils {
 	}
 
 	/**
+	 * A naming scheme to detect and produce duplicate names for
+	 * {@link StringUtils#getNewItemName(Iterable, Function, String, DuplicateItemNamer) getNewItemName}
+	 */
+	public interface DuplicateItemNamer {
+		void appendDuplicate(StringBuilder name, int suffix);
+
+		DuplicateName detectDuplicate(String name);
+	}
+
+	public static class DuplicateName {
+		public final String originalName;
+		public final int duplicateSuffix;
+
+		public DuplicateName(String originalName, int duplicateSuffix) {
+			this.originalName = originalName;
+			this.duplicateSuffix = duplicateSuffix;
+		}
+	}
+
+	/**
+	 * Creates a naming scheme for {@link #getNewItemName(Iterable, Function, String, DuplicateItemNamer) getNewItemName} that makes
+	 * duplicate names like <code>originalName+between+index+post</code>.
+	 * 
+	 * @param between The string to put between the original name and the suffix (null is the same as empty)
+	 * @param post The string to put after the suffix (null is the same as empty)
+	 * @return The naming scheme
+	 */
+	public static DuplicateItemNamer duplicateAppending(String between, String post) {
+		StringBuilder patternStr = new StringBuilder("(?<original>.*)");
+		if (between != null)
+			patternStr.append(Pattern.quote(between));
+		patternStr.append("(?<suffix>\\d{1,9})");
+		if (post != null)
+			patternStr.append(Pattern.quote(post));
+		Pattern pattern = Pattern.compile(patternStr.toString());
+		return new DuplicateItemNamer() {
+			@Override
+			public void appendDuplicate(StringBuilder name, int suffix) {
+				if (between != null)
+					name.append(between);
+				name.append(suffix);
+				if (post != null)
+					name.append(post);
+			}
+
+			@Override
+			public DuplicateName detectDuplicate(String name) {
+				Matcher matcher = pattern.matcher(name);
+				if (matcher.matches())
+					return new DuplicateName(matcher.group("original"), Integer.parseInt(matcher.group("suffix")));
+				return null;
+			}
+		};
+	}
+
+	/**
+	 * A naming scheme for {@link #getNewItemName(Iterable, Function, String, DuplicateItemNamer) getNewItemName} that makes duplicate names
+	 * like "originalName (2)"
+	 */
+	public static DuplicateItemNamer PAREN_DUPLICATES = duplicateAppending(" (", ")");
+	/**
+	 * A naming scheme for {@link #getNewItemName(Iterable, Function, String, DuplicateItemNamer) getNewItemName} that makes duplicate names
+	 * like "originalName 2"
+	 */
+	public static DuplicateItemNamer SIMPLE_DUPLICATES = duplicateAppending(" ", null);
+
+	/**
 	 * Gets unique name for a new item in a named item list
 	 * 
 	 * @param <E> The type of the list items
 	 * @param items The list of items
 	 * @param itemName The item name function
 	 * @param firstTry The default new item name
-	 * @param suffix Appends a try number (starting with 2) to <code>firstTry</code> in a user-friendly format.
+	 * @param namer A scheme for modifying a name with a try number (starting with 2) in a user-friendly format.
 	 * @return The name for a new list item that is not the same as that of any existing item in the list
+	 * @see #PAREN_DUPLICATES
+	 * @see #SIMPLE_DUPLICATES
 	 */
 	public static <E> String getNewItemName(Iterable<? extends E> items, Function<? super E, String> itemName, String firstTry,
-		BiConsumer<StringBuilder, Integer> suffix) {
-		if (suffix == null)
-			suffix = (n, i) -> n.append(' ').append(i);
+		DuplicateItemNamer namer) {
+		if (namer == null)
+			namer = PAREN_DUPLICATES;
 		String name = firstTry;
-		int tryNumber = 1;
-		StringBuilder newName = null;
+		boolean nameExists = false;
+		for (E item : items) {
+			String name_i = itemName.apply(item);
+			if (name.equals(name_i)) {
+				nameExists = true;
+				break;
+			}
+		}
+		if (!nameExists)
+			return name;
+		String original;
+		int tryNumber;
+
+		DuplicateName duplicate = namer.detectDuplicate(firstTry);
+		if (duplicate != null) {
+			original = duplicate.originalName;
+			tryNumber = duplicate.duplicateSuffix + 1;
+		} else {
+			original = firstTry;
+			tryNumber = 2;
+		}
+		StringBuilder newName = new StringBuilder(original);
 		while (true) {
-			boolean nameExists = false;
+			newName.setLength(original.length());
+			// Just in case the user does weird stuff with the string
+			for (int c = 0; c < original.length(); c++)
+				newName.setCharAt(c, original.charAt(c));
+			namer.appendDuplicate(newName, tryNumber);
+			String newNameStr = newName.toString();
+			if (name.equals(newNameStr)) // A catch to avoid an infinite loop if the suffix doesn't use the try number properly
+				throw new IllegalStateException("Suffix is not working properly");
+			name = newNameStr;
+
+			nameExists = false;
 			for (E item : items) {
 				String name_i = itemName.apply(item);
 				if (name.equals(name_i)) {
@@ -407,19 +509,6 @@ public class StringUtils {
 			if (!nameExists)
 				return name;
 			tryNumber++;
-			if (newName == null)
-				newName = new StringBuilder(firstTry);
-			else {
-				newName.setLength(firstTry.length());
-				// Just in case the user does weird stuff with the string
-				for (int c = 0; c < firstTry.length(); c++)
-					newName.setCharAt(c, firstTry.charAt(c));
-			}
-			suffix.accept(newName, tryNumber);
-			String newNameStr = newName.toString();
-			if (name.equals(newNameStr)) // A catch to avoid an infinite loop if the suffix doesn't use the try number properly
-				throw new IllegalStateException("Suffix is not working properly");
-			name = newNameStr;
 		}
 	}
 
