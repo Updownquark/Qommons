@@ -153,7 +153,6 @@ public class QommonsTestUtils {
 		iter = coll.iterator();
 		assertEquals(true, iter.hasNext());
 		assertEquals(0, (int) iter.next());
-		helper.placemark();
 		iter.remove(); // Test iterator remove
 		assertEquals(0, coll.size());
 		if (check != null)
@@ -566,11 +565,13 @@ public class QommonsTestUtils {
 		ListIterator<Integer> listIter1 = list.listIterator(list.size() / 2); // Basic bi-directional read-only functionality
 		ListIterator<Integer> listIter2 = list.listIterator(list.size() / 2);
 		while (true) {
+			helper.placemark();
 			boolean stop = true;
 			if (listIter1.hasPrevious()) {
 				test.set(listIter1.previousIndex(), listIter1.previous());
 				stop = false;
 			}
+			helper.placemark();
 			if (listIter2.hasNext()) {
 				test.set(listIter2.nextIndex(), listIter2.next());
 				stop = false;

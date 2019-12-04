@@ -37,7 +37,7 @@ public class CircularListTest {
 	static class UnsafeCALTester implements TestHelper.Testable {
 		@Override
 		public void accept(TestHelper helper) {
-			QommonsTestUtils.testCollection(CircularArrayList.build().unsafe().withMinCapacity(20).withMinOccupancy(0.5).build(),
+			QommonsTestUtils.testCollection(CircularArrayList.build().withMinCapacity(20).withMinOccupancy(0.5).build(),
 				list -> list.checkValid(), null, helper);
 		}
 	}
@@ -49,16 +49,15 @@ public class CircularListTest {
 	 */
 	@Test
 	public void unsafeCALTest() {
-		TestHelper.createTester(UnsafeCALTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute()
-			.throwErrorIfFailed();
+		TestHelper.createTester(UnsafeCALTester.class).withDebug(false).withFailurePersistence(true).revisitKnownFailures(true)
+			.withDebug(true).withRandomCases(1).execute().throwErrorIfFailed();
 	}
 
 	static class PerformanceTester implements TestHelper.Testable {
 		@Override
 		public void accept(TestHelper helper) {
 			ArrayList<Integer> java = new ArrayList<>();
-			CircularArrayList<Integer> unsafe = CircularArrayList.build().unsafe().build();
-			// CircularArrayList<Integer> safe = new CircularArrayList<>();
+			CircularArrayList<Integer> unsafe = CircularArrayList.build().build();
 
 			long javaTime = 0;
 			// long safeTime = 0;
@@ -80,19 +79,12 @@ public class CircularListTest {
 				next = System.nanoTime();
 				if (i >= preTries)
 					unsafeTime += next - now;
-				// System.out.print(".");
-				// System.out.flush();
-				// now = next;
-				// QommonsTestUtils.testCollection(safe, null, null);
-				// if (i >= preTries)
-				// safeTime += System.nanoTime() - now;
 				System.out.print(tries + preTries - 1 - i);
 				System.out.flush();
 			}
 			System.out.println();
 			System.out.println(
-				"Java: " + printTime(javaTime) + ", unsafe: " + printTime(unsafeTime) + ": " + PC_FMT.format(unsafeTime * 1.0 / javaTime));
-			// System.out.println("Safe: " + org.qommons.QommonsUtils.printTimeLength(safeTime / 1000000));
+				"Java: " + printTime(javaTime) + ", CAL: " + printTime(unsafeTime) + ": " + PC_FMT.format(unsafeTime * 1.0 / javaTime));
 		}
 	}
 
@@ -112,7 +104,7 @@ public class CircularListTest {
 	@Test
 	public void testRandomAddPerformance() {
 		ArrayList<Integer> java = new ArrayList<>();
-		CircularArrayList<Integer> unsafe = CircularArrayList.build().unsafe().build();
+		CircularArrayList<Integer> unsafe = CircularArrayList.build().build();
 
 		int size = 100000; // CAL performs relatively well for large sizes
 
@@ -173,9 +165,8 @@ public class CircularListTest {
 		if (WITH_PROGRESS || !checkTime(unsafeAddTime, javaAddTime, prop) || !checkTime(unsafeRemoveTime, javaRemoveTime, prop)) {
 			System.out.println("Random Add: Java: " + printTime(javaAddTime) + ", CAL: " + printTime(unsafeAddTime) + ": "
 				+ PC_FMT.format(unsafeAddTime * 1.0 / javaAddTime));
-			System.out.println(
-				"Random Remove: Java: " + printTime(javaRemoveTime) + ", CAL: " + printTime(unsafeRemoveTime) + ": "
-					+ PC_FMT.format(unsafeRemoveTime * 1.0 / javaRemoveTime));
+			System.out.println("Random Remove: Java: " + printTime(javaRemoveTime) + ", CAL: " + printTime(unsafeRemoveTime) + ": "
+				+ PC_FMT.format(unsafeRemoveTime * 1.0 / javaRemoveTime));
 			Assert.assertTrue(checkTime(unsafeAddTime, javaRemoveTime, prop));
 			Assert.assertTrue(checkTime(unsafeRemoveTime, javaRemoveTime, prop));
 		}
@@ -191,7 +182,7 @@ public class CircularListTest {
 	@Test
 	public void testAgainstJava() {
 		ArrayList<Integer> java = new ArrayList<>();
-		CircularArrayList<Integer> unsafe = CircularArrayList.build().unsafe().build();
+		CircularArrayList<Integer> unsafe = CircularArrayList.build().build();
 
 		int size = 100; // CAL performs relatively poorly for small sizes
 
@@ -284,7 +275,7 @@ public class CircularListTest {
 			check.removeIf(i -> i % 2 == 0);
 			assertEquals(50, list.size());
 			list.addAll(QommonsTestUtils.sequence(100, i -> i * 2, false));
-			for (int i = 50; i >= 0; i++)
+			for (int i = 49; i >= 0; i--)
 				check.remove(i);
 			check.addAll(QommonsTestUtils.sequence(100, i -> i * 2, false));
 			assertEquals(100, list.size());
@@ -298,13 +289,13 @@ public class CircularListTest {
 			// Test element-dropping as a result of modification of views (sublists and iterators)
 			list.clear();
 			list.addAll(QommonsTestUtils.sequence(100, null, false));
-			BetterList<Integer> sub1 = list.subList(25, 75);
+			DequeList<Integer> sub1 = list.subList(25, 75);
 			sub1.removeRange(0, 10);
 			assertEquals(40, sub1.size());
 			assertEquals(90, list.size());
 			sub1.addAll(//
 				QommonsTestUtils.sequence(20, null, false));
-			// Should have pushed 10 elements off of the beginning of the list
+			// Should have pushed 10 elements off of the beginning of the list, but the sub-list shouldn't have lost any
 			assertEquals(60, sub1.size());
 			assertEquals(100, list.size());
 			for (int i = 0; i < 100; i++) {

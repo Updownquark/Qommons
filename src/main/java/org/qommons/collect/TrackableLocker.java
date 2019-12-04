@@ -22,6 +22,7 @@ import org.qommons.tree.BetterTreeList;
  * Any lock methods against a TrackableLocker instance will throw {@link DeadlockException} if waiting on the lock would result in deadlock.
  * </p>
  */
+@SuppressWarnings({ "javadoc", "unused" })
 /*public*/ interface TrackableLocker extends Transactable {
 	/** Represents a lock against a {@link TrackableLocker} that is held by a thread or that a thread is waiting to acquire */
 	public interface HeldLock {

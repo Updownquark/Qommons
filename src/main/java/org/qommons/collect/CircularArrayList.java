@@ -1,18 +1,16 @@
 package org.qommons.collect;
 
+import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.ListIterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.Spliterator;
-import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 import org.junit.Assert;
-import org.qommons.Identifiable;
-import org.qommons.Transactable;
-import org.qommons.Transaction;
+import org.qommons.Ternian;
 
 /**
  * A list/deque that uses an array that is indexed circularly. This allows performance improvements due to not having to move array contents
@@ -21,16 +19,12 @@ import org.qommons.Transaction;
  * This class also supports:
  * <ul>
  * <li>A {@link #setMaxCapacity(int) max capacity} option which will drop elements to maintain a maximum size.</li>
- * <li>Thread-safety</li>
  * <li>Automatic capacity management with {@link #setMinOccupancy(double)}</li>
- * <li>{@link BetterList Reversibility}</li>
  * </ul>
  * 
- * @deprecated Not really deprecated, but rather not ready yet. This class is broken and will be "deprecated" until I fix it.
  * @param <E> The type of elements in the list
  */
-@Deprecated
-public class CircularArrayList<E> implements BetterList<E> {
+public class CircularArrayList<E> implements DequeList<E> {
 	/**
 	 * The maximum size of array to allocate. Some VMs reserve some header words in an array. Attempts to allocate larger arrays may result
 	 * in OutOfMemoryError: Requested array size exceeds VM limit
@@ -47,15 +41,11 @@ public class CircularArrayList<E> implements BetterList<E> {
 		private double theMinOccupancy;
 		private double theGrowthFactor;
 		private boolean isFeatureLocked;
-		private boolean isThreadSafe;
-		private String theDescription;
 
 		private Builder() {
-			System.err.println(CircularArrayList.class.getSimpleName() + " is not working yet.  Don't use it!");
 			theInitCapacity = 0;
 			theMaxCapacity = MAX_ARRAY_SIZE;
 			theGrowthFactor = DEFAULT_GROWTH_FACTOR;
-			isThreadSafe = true;
 		}
 
 		/**
@@ -116,37 +106,6 @@ public class CircularArrayList<E> implements BetterList<E> {
 			if (Double.isNaN(factor) || Double.isInfinite(factor) || factor >= 100)
 				throw new IllegalArgumentException("Growth factor must be a finite number less than 100");
 			theGrowthFactor = factor;
-			return this;
-		}
-
-		/**
-		 * @param description A description for the list
-		 * @return This builder;
-		 */
-		public Builder withDescription(String description) {
-			theDescription = description;
-			return this;
-		}
-
-		/**
-		 * Makes the list thread-unsafe, but slightly more performant.
-		 * 
-		 * 30Apr2017: Unsafe is ~10% faster
-		 * 
-		 * @return This builder
-		 */
-		public Builder unsafe() {
-			isThreadSafe = false;
-			return this;
-		}
-
-		/**
-		 * Makes the list thread-safe at a slight performance cost
-		 * 
-		 * @return This builder
-		 */
-		public Builder safe() {
-			isThreadSafe = true;
 			return this;
 		}
 
@@ -218,22 +177,12 @@ public class CircularArrayList<E> implements BetterList<E> {
 			return theGrowthFactor;
 		}
 
-		/** @return Whether the collection will be thread-safe */
-		public boolean isThreadSafe() {
-			return isThreadSafe;
-		}
-
-		/** @return The locking strategy for the list */
-		public CollectionLockingStrategy makeLockingStrategy() {
-			return isThreadSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy();
-		}
-
 		/**
 		 * @param <E> The type of the list
 		 * @return The built list
 		 */
 		public <E> CircularArrayList<E> build() {
-			return new CircularArrayList<>(this, isFeatureLocked, theDescription);
+			return new CircularArrayList<>(this, isFeatureLocked);
 		}
 	}
 
@@ -257,11 +206,9 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	/** Static value to avoid needing to instantiate multiple zero-length arrays */
-	private static final CircularArrayList<?>.ArrayElement[] EMPTY_ARRAY = new CircularArrayList.ArrayElement[0];
+	private static final Object[] EMPTY_ARRAY = new Object[0];
 
-	private final Object theIdentity;
-	private ArrayElement[] theArray;
-	private final CollectionLockingStrategy theLocker;
+	private Object[] theArray;
 	private final boolean isFeatureLocked;
 	private int theOffset;
 	private int theSize;
@@ -269,29 +216,22 @@ public class CircularArrayList<E> implements BetterList<E> {
 	private int theMaxCapacity;
 	private double theMinOccupancy;
 	private double theGrowthFactor;
+	private long theStamp;
 
 	private int theAdvanced;
 
 	/** Creates an empty list */
 	public CircularArrayList() {
-		this(build(), false, "circular-array-list");
+		this(build(), false);
 	}
 
-	private CircularArrayList(Builder builder, boolean featureLocked, String description) {
-		theIdentity = Identifiable.baseId(description, this);
-		theArray = builder.getInitCapacity() == 0 ? (ArrayElement[]) EMPTY_ARRAY
-			: new CircularArrayList.ArrayElement[builder.getInitCapacity()];
+	private CircularArrayList(Builder builder, boolean featureLocked) {
+		theArray = builder.getInitCapacity() == 0 ? EMPTY_ARRAY : new Object[builder.getInitCapacity()];
 		theMinCapacity = builder.getMinCapacity();
 		theMaxCapacity = builder.getMaxCapacity();
 		theMinOccupancy = builder.getMinOccupancy();
 		theGrowthFactor = builder.getGrowthFactor();
-		theLocker = builder.makeLockingStrategy();
 		isFeatureLocked = featureLocked;
-	}
-
-	@Override
-	public Object getIdentity() {
-		return theIdentity;
 	}
 
 	/** For unit tests. Ensures the integrity of the list. */
@@ -308,7 +248,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 			int occSize = Math.max((int) Math.ceil(theSize / theMinOccupancy), theMinCapacity);
 			Assert.assertTrue(theArray.length <= occSize);
 		}
-		
+
 		// Ensure only elements contained in the list are referenced by the list
 		int t = theOffset + theSize;
 		if (t >= theArray.length)
@@ -332,14 +272,12 @@ public class CircularArrayList<E> implements BetterList<E> {
 	public CircularArrayList<E> setMinCapacity(int minCap) {
 		if (isFeatureLocked)
 			throw new IllegalStateException("This list's feature set is locked--its feature set cannot be changed directly");
-		try (Transaction t = lock(true, null)) {
-			int cap = capConstraintsAdjusted(theArray.length, minCap, theMaxCapacity);
-			if (theArray.length < cap) {
-				ArrayElement[] newArray = new CircularArrayList.ArrayElement[cap];
-				internalArrayCopy(newArray);
-				theArray = newArray;
-				theOffset = 0;
-			}
+		int cap = capConstraintsAdjusted(theArray.length, minCap, theMaxCapacity);
+		if (theArray.length < cap) {
+			Object[] newArray = new Object[cap];
+			internalArrayCopy(newArray);
+			theArray = newArray;
+			theOffset = 0;
 		}
 		return this;
 	}
@@ -354,17 +292,15 @@ public class CircularArrayList<E> implements BetterList<E> {
 	public CircularArrayList<E> setMaxCapacity(int maxCap) {
 		if (isFeatureLocked)
 			throw new IllegalStateException("This list's feature set is locked--its feature set cannot be changed directly");
-		try (Transaction t = lock(true, null)) {
-			int cap = capConstraintsAdjusted(theArray.length, theMinCapacity, maxCap);
-			theMaxCapacity = maxCap;
-			if (cap < theSize)
-				removeRange(0, theSize - maxCap);
-			if (theArray.length > cap) {
-				ArrayElement[] newArray = new CircularArrayList.ArrayElement[cap];
-				internalArrayCopy(newArray);
-				theArray = newArray;
-				theOffset = 0;
-			}
+		int cap = capConstraintsAdjusted(theArray.length, theMinCapacity, maxCap);
+		theMaxCapacity = maxCap;
+		if (cap < theSize)
+			removeRange(0, theSize - maxCap);
+		if (theArray.length > cap) {
+			Object[] newArray = new Object[cap];
+			internalArrayCopy(newArray);
+			theArray = newArray;
+			theOffset = 0;
 		}
 		return this;
 	}
@@ -431,28 +367,8 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public boolean isLockSupported() {
-		return true;
-	}
-
-	@Override
-	public Transaction lock(boolean write, Object cause) {
-		return theLocker.lock(write, cause);
-	}
-
-	@Override
-	public Transaction tryLock(boolean write, Object cause) {
-		return theLocker.tryLock(write, cause);
-	}
-
-	@Override
 	public long getStamp() {
-		return theLocker.getStamp();
-	}
-
-	@Override
-	public boolean isContentControlled() {
-		return false;
+		return theStamp;
 	}
 
 	@Override
@@ -466,319 +382,232 @@ public class CircularArrayList<E> implements BetterList<E> {
 	}
 
 	@Override
-	public boolean belongs(Object o) {
-		return true;
-	}
-
-	private ArrayElement getElementOptimistic(Object value, boolean first) {
-		return theLocker.doOptimistically(null, (element, stamp) -> {
-			return findElementOptimistic(value, first, theArray, theSize, theOffset, stamp);
-		});
-	}
-
-	private ArrayElement findElementOptimistic(Object value, boolean first, ArrayElement[] array, int size, int offset,
-		OptimisticContext ctx) {
-		int t = first ? offset : (offset + size - 1) % array.length;
-		for (int i = 0; i < size; i++) {
-			ArrayElement el = array[t];
-			if (!ctx.check())
-				return null;
-			if (Objects.equals(el.get(), value))
-				return el;
-			if (first) {
-				t++;
-				if (t == array.length)
-					t = 0;
-			} else {
-				t--;
-				if (t < 0)
-					t = array.length - 1;
-			}
-		}
-		return null;
-	}
-
-	@Override
-	public CollectionElement<E> getElement(E value, boolean first) {
-		return getElementOptimistic(value, first);
-	}
-
-	@Override
-	public CollectionElement<E> getElement(ElementId id) {
-		return ((ArrayElementId) id).element.check().immutable();
-	}
-
-	@Override
-	public CollectionElement<E> getTerminalElement(boolean first) {
-		try (Transaction t = lock(false, null)) {
-			if (isEmpty())
-				return null;
-			return getElement(first ? 0 : size() - 1);
-		}
-	}
-
-	@Override
-	public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
-		try (Transaction t = lock(false, null)) {
-			int index = ((ArrayElementId) elementId).element.index;
-			index += next ? 1 : -1;
-			if (index < 0 || index >= size())
-				return null;
-			return getElement(index);
-		}
-	}
-
-	@Override
-	public MutableCollectionElement<E> mutableElement(ElementId id) {
-		return ((ArrayElementId) id).element.check();
-	}
-
-	@Override
-	public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
-		if (sourceEl instanceof CircularArrayList.ArrayElementId && ((ArrayElementId) sourceEl).getList() == this)
-			return BetterList.of(getElement(sourceEl));
-		return BetterList.empty();
-	}
-
-	@Override
-	public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
-		if (sourceCollection == this) {
-			if (!(localElement instanceof CircularArrayList.ArrayElementId) || ((ArrayElementId) localElement).getList() != this)
-				throw new IllegalArgumentException(localElement + " does not belong to this list");
-			return BetterList.of(localElement);
-		}
-		return BetterList.empty();
-	}
-
-	@Override
-	public Spliterator<E> spliterator() {
-		return new ArraySpliterator(0, theSize, 0);
-	}
-
-	@Override
-	public CollectionElement<E> getElement(int index) {
-		if (index < 0)
-			throw new IndexOutOfBoundsException("" + index);
-		return theArray[translateToInternalIndex(index)].immutable();
-	}
-
-	@Override
-	public int getElementsBefore(ElementId id) {
-		int index = ((ArrayElementId) id).element.check().getIndex();
-		if (index < 0)
-			throw new IllegalArgumentException("Element has been removed");
-		return index;
-	}
-
-	@Override
-	public int getElementsAfter(ElementId id) {
-		return theLocker.doOptimistically(-1, (value, ctx) -> {
-			int index = ((ArrayElementId) id).element.check().getIndex();
-			if (index < 0)
-				throw new IllegalArgumentException("Element has been removed");
-			return theSize - index - 1;
-		});
-	}
-
-	@Override
 	public boolean contains(Object o) {
-		return getElementOptimistic(o, true) != null;
+		Object[] array = theArray;
+		int offset = theOffset;
+		int size = theSize;
+		int t = offset;
+		for (int i = 0; i < size; i++) {
+			Object v = array[t];
+			if (Objects.equals(v, o))
+				return true;
+			t++;
+			if (t == array.length)
+				t = 0;
+		}
+		return false;
 	}
 
 	@Override
 	public boolean containsAll(Collection<?> c) {
-		return theLocker.doOptimistically(false, (bool, ctx) -> {
-			ArrayElement[] array = theArray;
-			int offset = theOffset;
-			int size = theSize;
-			for (Object o : c)
-				if (findElementOptimistic(o, true, array, size, offset, ctx) == null)
-					return false;
-			return true;
-		});
+		Object[] array = theArray;
+		int offset = theOffset;
+		int size = theSize;
+		for (Object o : c) {
+			boolean found = false;
+			int t = offset;
+			for (int i = 0; i < size; i++) {
+				Object v = array[t];
+				if (Objects.equals(v, o)) {
+					found = true;
+					break;
+				}
+				t++;
+				if (t == array.length)
+					t = 0;
+			}
+			if (!found)
+				return false;
+		}
+		return true;
 	}
 
 	@Override
 	public boolean containsAny(Collection<?> c) {
-		return theLocker.doOptimistically(false, (bool, ctx) -> {
-			ArrayElement[] array = theArray;
-			int offset = theOffset;
-			int size = theSize;
-			for (Object o : c) {
-				if (findElementOptimistic(o, true, array, size, offset, ctx) != null)
+		Object[] array = theArray;
+		int offset = theOffset;
+		int size = theSize;
+		for (Object o : c) {
+			int t = offset;
+			for (int i = 0; i < size; i++) {
+				Object v = array[t];
+				if (Objects.equals(v, o)) {
 					return true;
+				}
+				t++;
+				if (t == array.length)
+					t = 0;
 			}
-			return false;
-		});
+		}
+		return false;
 	}
 
 	@Override
-	public <T> T[] toArray(T[] a) {
-		return BetterList.super.toArray(a);
-	}
-
-	@Override
-	public Object[] toArray() {
-		return BetterList.super.toArray();
+	public <T> T[] toArray(final T[] a) {
+		Object[] array = theArray;
+		int offset = theOffset;
+		int size = theSize;
+		T[] arr = a;
+		if (arr.length < size)
+			arr = (T[]) Array.newInstance(a.getClass().getComponentType(), size);
+		internalArrayCopy(array, offset, size, arr);
+		return arr;
 	}
 
 	@Override
 	public E get(int index) {
 		if (index < 0)
 			throw new IndexOutOfBoundsException("" + index);
-		return theLocker.doOptimistically(null, (v, ctx) -> {
-			ArrayElement[] array = theArray;
-			int offset = theOffset;
-			int size = theSize;
-			if (!ctx.check())
-				return null;
-			ArrayElement el = array[translateToInternalIndex(array, offset, size, index)];
-			if (el == null)
-				return null; // May have been removed by another thread
-			return el.get();
-		});
-	}
-
-	@Override
-	public E getFirst() {
-		return theLocker.doOptimistically(null, (v, ctx) -> {
-			ArrayElement[] array = theArray;
-			int offset = theOffset;
-			int size = theSize;
-			if (!ctx.check())
-				return null;
-			if (size == 0)
-				throw new NoSuchElementException();
-			ArrayElement el = array[offset];
-			if (el == null)
-				return null; // May have been removed by another thread
-			return el.get();
-		});
-	}
-
-	@Override
-	public E getLast() {
-		return theLocker.doOptimistically(null, (v, ctx) -> {
-			ArrayElement[] array = theArray;
-			int offset = theOffset;
-			int size = theSize;
-			if (!ctx.check())
-				return null;
-			if (size == 0)
-				throw new NoSuchElementException();
-			ArrayElement el = array[translateToInternalIndex(array, offset, size, size - 1)];
-			if (el == null)
-				return null; // May have been removed by another thread
-			return el.get();
-		});
+		Object[] array = theArray;
+		int offset = theOffset;
+		int size = theSize;
+		return (E) array[translateToInternalIndex(array, offset, size, index)];
 	}
 
 	@Override
 	public E peekFirst() {
-		return theLocker.doOptimistically(null, (v, ctx) -> {
-			ArrayElement[] array = theArray;
-			int offset = theOffset;
-			int size = theSize;
-			if (size == 0 || !ctx.check())
-				return null;
-			ArrayElement el = array[offset];
-			if (el == null)
-				return null; // May have been removed by another thread
-			return el.get();
-		});
+		Object[] array = theArray;
+		int offset = theOffset;
+		int size = theSize;
+		if (size == 0)
+			return null;
+		return size == 0 ? null : (E) array[offset];
 	}
 
 	@Override
 	public E peekLast() {
-		return theLocker.doOptimistically(null, (v, ctx) -> {
-			ArrayElement[] array = theArray;
-			int offset = theOffset;
-			int size = theSize;
-			if (size == 0 || !ctx.check())
-				return null;
-			ArrayElement el = array[translateToInternalIndex(array, offset, size, size - 1)];
-			if (el == null)
-				return null; // May have been removed by another thread
-			return el.get();
-		});
+		Object[] array = theArray;
+		int offset = theOffset;
+		int size = theSize;
+		if (size == 0)
+			return null;
+		return size == 0 ? null : (E) array[translateToInternalIndex(array, offset, size, size - 1)];
 	}
 
 	@Override
 	public int indexOf(Object o) {
-		return theLocker.doOptimistically(-1, (idx, ctx) -> {
-			ArrayElement el = getElementOptimistic(o, true);
-			return el == null ? -1 : el.getIndex();
-		});
+		Object[] array = theArray;
+		int offset = theOffset;
+		int size = theSize;
+		int t = offset;
+		for (int i = 0; i < size; i++) {
+			Object v = array[t];
+			if (Objects.equals(v, o))
+				return i;
+			t++;
+			if (t == array.length)
+				t = 0;
+		}
+		return -1;
 	}
 
 	@Override
 	public int lastIndexOf(Object o) {
-		return theLocker.doOptimistically(-1, (idx, ctx) -> {
-			ArrayElement el = getElementOptimistic(o, false);
-			return el == null ? -1 : el.getIndex();
-		});
-	}
-
-	@Override
-	public String canAdd(E value, ElementId after, ElementId before) {
-		return null;
-	}
-
-	@Override
-	public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
-		throws UnsupportedOperationException, IllegalArgumentException {
-		ElementId added;
-		if (first) {
-			if (after == null)
-				return internalAdd(first ? 0 : theSize, value).immutable();
-			else
-				added = mutableElement(after).add(value, false);
-		} else {
-			if (before == null)
-				return internalAdd(first ? 0 : theSize, value).immutable();
-			else
-				added = mutableElement(before).add(value, true);
+		Object[] array = theArray;
+		int offset = theOffset;
+		int size = theSize;
+		if (size == 0)
+			return -1;
+		int index = size - 1;
+		int t = translateToInternalIndex(array, offset, size, index);
+		for (; index >= 0; index--) {
+			Object v = array[t];
+			if (Objects.equals(v, o))
+				return index;
+			t--;
+			if (t < 0)
+				t = array.length - 1;
 		}
-		return internalAdd(first ? 0 : theSize, value).immutable();
+		return -1;
 	}
 
 	@Override
-	public CollectionElement<E> addElement(int index, E value) {
+	public E set(int index, E element) {
 		if (index < 0)
 			throw new IndexOutOfBoundsException("" + index);
-		try (Transaction t = lock(true, null)) {
-			if (index > theSize)
-				throw new IndexOutOfBoundsException(index + " of " + theSize);
-			return internalAdd(index, value).immutable();
-		}
+		int translated = translateToInternalIndex(index);
+		E old = (E) theArray[translated];
+		theArray[translated] = element;
+		theStamp++;
+		return old;
 	}
 
 	@Override
-	public void add(int index, E element) {
-		addElement(index, element);
+	public boolean add(E e) {
+		if (theSize == theMaxCapacity) {
+			ensureCapacity(theMaxCapacity);
+			theArray[theOffset] = e;
+			theOffset++;
+			if (theOffset == theArray.length)
+				theOffset = 0;
+			theAdvanced = 1;
+		} else {
+			int oldSize = theSize;
+			int newSize = theSize + 1;
+			ensureCapacity(newSize);
+			theSize = newSize;
+			theArray[translateToInternalIndex(oldSize)] = e;
+		}
+		theStamp++;
+		return true;
 	}
 
 	@Override
 	public boolean addAll(Collection<? extends E> c) {
 		if (c.isEmpty())
 			return false;
-		try (Transaction t = lock(true, null); Transaction ct = Transactable.lock(c, false, null)) {
-			return internalAddAll(theSize, c);
+		int cSize = c.size();
+		if (cSize + theSize > theMaxCapacity) {
+			ensureCapacity(theMaxCapacity);
+			if (cSize >= theMaxCapacity) {
+				theOffset = 0;
+				theAdvanced = theSize;
+				theSize = theMaxCapacity;
+				Iterator<? extends E> iter = c.iterator();
+				for (int i = cSize; i > theMaxCapacity; i++)
+					iter.next(); // Bleed off items that would be dropped due to capacity
+				for (int i = 0; i < theMaxCapacity; i++)
+					theArray[i] = iter.next();
+			} else {
+				theAdvanced = cSize + theSize - theMaxCapacity;
+				int start = translateToInternalIndex(theSize % theArray.length);
+				theOffset += theAdvanced;
+				if (theOffset >= theArray.length)
+					theOffset -= theArray.length;
+				theSize = theMaxCapacity;
+				for (E e : c)
+					theArray[start++] = e;
+			}
+		} else {
+			theAdvanced = 0;
+			ensureCapacity(theSize + cSize);
+			int preSize = theSize;
+			theSize += cSize;
+			int idx = translateToInternalIndex(preSize);
+			for (E e : c) {
+				theArray[idx] = e;
+				idx++;
+				if (idx == theArray.length)
+					idx = 0;
+			}
 		}
+		theStamp++;
+		return true;
+	}
+
+	@Override
+	public void add(int index, E element) {
+		if (index < 0)
+			throw new IndexOutOfBoundsException("" + index);
+		if (index > theSize)
+			throw new IndexOutOfBoundsException(index + " of " + theSize);
+		internalAdd(index, element);
 	}
 
 	@Override
 	public boolean addAll(int index, Collection<? extends E> c) {
 		if (index < 0)
 			throw new IndexOutOfBoundsException("" + index);
-		if (c.isEmpty())
-			return false;
-		try (Transaction t = lock(true, null); Transaction ct = Transactable.lock(c, false, null)) {
-			return internalAddAll(index, c);
-		}
-	}
-
-	private boolean internalAddAll(int index, Collection<? extends E> c) {
 		if (c.isEmpty())
 			return false;
 		int cSize = c.size();
@@ -789,7 +618,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		for (i = 0; i < cSize - spaces; i++)
 			iter.next(); // Bleed off items that would be dropped due to capacity
 		for (; i < cSize; i++) {
-			theArray[ti] = new ArrayElement(iter.next(), ti);
+			theArray[ti] = iter.next();
 			ti++;
 			if (ti == theArray.length)
 				ti = 0;
@@ -797,41 +626,43 @@ public class CircularArrayList<E> implements BetterList<E> {
 		theOffset += theAdvanced;
 		if (theOffset >= theArray.length)
 			theOffset -= theArray.length;
+		theStamp++;
 		return true;
 	}
 
 	@Override
-	public void addFirst(E e) {
-		add(0, e);
-	}
-
-	@Override
-	public void addLast(E e) {
-		add(e);
-	}
-
-	@Override
 	public boolean offerFirst(E e) {
-		// We'll interpret this method to mean that this method should not cause any items to be dropped due to capacity
-		try (Transaction t = lock(true, null)) {
-			if (theSize < theMaxCapacity) {
-				add(0, e);
-				return true;
-			}
+		if (theSize == theMaxCapacity)
 			return false;
-		}
+		add(0, e);
+		return true;
 	}
 
 	@Override
 	public boolean offerLast(E e) {
-		// We'll interpret this method to mean that this method should not cause any items to be dropped due to capacity
-		try (Transaction t = lock(true, null)) {
-			if (theSize < theMaxCapacity) {
-				add(e);
-				return true;
-			}
+		if (theSize == theMaxCapacity)
 			return false;
-		}
+		return add(e);
+	}
+
+	@Override
+	public boolean remove(Object o) {
+		int index = indexOf(o);
+		if (index >= 0) {
+			remove(index);
+			return true;
+		} else
+			return false;
+	}
+
+	@Override
+	public boolean removeLastOccurrence(Object o) {
+		int index = lastIndexOf(o);
+		if (index >= 0) {
+			remove(index);
+			return true;
+		} else
+			return false;
 	}
 
 	@Override
@@ -843,22 +674,20 @@ public class CircularArrayList<E> implements BetterList<E> {
 			throw new IllegalArgumentException(fromIndex + ">" + toIndex);
 		if (fromIndex < 0)
 			throw new IndexOutOfBoundsException("" + fromIndex);
-		try (Transaction t = lock(true, null)) {
-			if (toIndex > theSize)
-				throw new IndexOutOfBoundsException(toIndex + " of " + theSize);
-			if (fromIndex < theSize - toIndex) {
-				moveContents(theOffset, fromIndex, count);
-				clearEntries(theOffset, count);
-				theOffset = (theOffset + count) % theArray.length;
-				updateIndexes(theOffset, fromIndex);
-			} else {
-				moveContents(theOffset + toIndex, theSize - toIndex, -count);
-				clearEntries(translateToInternalIndex(theSize - count), count);
-				updateIndexes(theOffset + fromIndex, theSize - toIndex);
-			}
-			theSize -= count;
-			if (count > 0)
-				trimIfNeeded();
+		if (toIndex > theSize)
+			throw new IndexOutOfBoundsException(toIndex + " of " + theSize);
+		if (fromIndex < theSize - toIndex) {
+			moveContents(theOffset, fromIndex, count);
+			clearEntries(theOffset, count);
+			theOffset = (theOffset + count) % theArray.length;
+		} else {
+			moveContents(theOffset + toIndex, theSize - toIndex, -count);
+			clearEntries(translateToInternalIndex(theSize - count), count);
+		}
+		theSize -= count;
+		if (count > 0) {
+			trimIfNeeded();
+			theStamp++;
 		}
 	}
 
@@ -867,141 +696,141 @@ public class CircularArrayList<E> implements BetterList<E> {
 		if (theSize == 0)
 			return false;
 		int removed = 0;
-		try (Transaction t = lock(true, null)) {
-			if (theSize == 0)
-				return false;
-			int cap = theArray.length;
-			int inspect = theOffset;
-			int copyTo = inspect;
-			int dest = (theOffset + theSize + cap) % cap;
-			do {
-				ArrayElement value = theArray[inspect];
-				if (filter.test(value.get())) {
-					removed++;
-				} else {
-					if (removed > 0) {
-						theArray[copyTo] = value;
-						theArray[copyTo].setIndex(copyTo);
-					}
-					copyTo++;
-					if (copyTo == cap)
-						copyTo = 0;
-				}
-				inspect++;
-				if (inspect == cap)
-					inspect = 0;
-			} while (inspect != dest);
-			clearEntries(copyTo, removed);
-			theSize -= removed;
-			if (removed > 0) {
-				trimIfNeeded();
+		if (theSize == 0)
+			return false;
+		int cap = theArray.length;
+		int inspect = theOffset;
+		int copyTo = inspect;
+		int dest = (theOffset + theSize + cap) % cap;
+		do {
+			E value = (E) theArray[inspect];
+			if (filter.test(value)) {
+				removed++;
+			} else {
+				if (removed > 0)
+					theArray[copyTo] = value;
+				copyTo++;
+				if (copyTo == cap)
+					copyTo = 0;
 			}
+			inspect++;
+			if (inspect == cap)
+				inspect = 0;
+		} while (inspect != dest);
+		clearEntries(copyTo, removed);
+		theSize -= removed;
+		if (removed > 0) {
+			trimIfNeeded();
+			theStamp++;
 		}
 		return removed > 0;
 	}
 
 	@Override
 	public void clear() {
-		try (Transaction t = lock(true, null)) {
-			Arrays.fill(theArray, theOffset, Math.min(theOffset + theSize, theArray.length), null);
-			if (theOffset + theSize > theArray.length)
-				Arrays.fill(theArray, 0, theOffset + theSize - theArray.length, null);
-			int preSize = theSize;
-			theSize = 0;
-			theOffset = 0;
-			trimIfNeeded();
-		}
+		Arrays.fill(theArray, theOffset, Math.min(theOffset + theSize, theArray.length), null);
+		if (theOffset + theSize > theArray.length)
+			Arrays.fill(theArray, 0, theOffset + theSize - theArray.length, null);
+		theSize = 0;
+		theOffset = 0;
+		trimIfNeeded();
+		theStamp++;
 	}
 
 	@Override
 	public E remove(int index) {
 		if (index < 0)
 			throw new IndexOutOfBoundsException("" + index);
-		try (Transaction t = lock(true, null)) {
-			return internalRemove(index, translateToInternalIndex(index)).get();
-		}
+		return internalRemove(index, translateToInternalIndex(index));
+	}
+
+	@Override
+	public E pollFirst() {
+		if (theSize == 0)
+			return null;
+		return internalRemove(0, translateToInternalIndex(0));
+	}
+
+	@Override
+	public E pollLast() {
+		if (theSize == 0)
+			return null;
+		return internalRemove(theSize - 1, translateToInternalIndex(theSize - 1));
+	}
+
+	@Override
+	public ListIterator<E> iterator(int start, int end, int next, boolean forward) {
+		return new CALIterator(null, start, end, next, forward);
+	}
+
+	@Override
+	public SubList subList(int fromIndex, int toIndex) {
+		return new SubList(null, fromIndex, toIndex);
 	}
 
 	@Override
 	public int hashCode() {
-		return theLocker.doOptimistically(0, (h, ctx) -> {
-			ArrayElement[] array = theArray;
-			int offset = theOffset;
-			int size = theSize;
-			if (!ctx.check())
-				return -1;
-			int hash = 0;
-			int t = offset;
-			for (int i = 0; i < size; i++) {
-				ArrayElement el = array[t];
-				if (!ctx.check())
-					return -1;
-				hash += el.get() == null ? 0 : el.get().hashCode();
-				t++;
-				if (t == array.length)
-					t = 0;
-			}
-			return hash;
-		});
+		Object[] array = theArray;
+		int offset = theOffset;
+		int size = theSize;
+		int hash = 0;
+		int t = offset;
+		for (int i = 0; i < size; i++) {
+			E v = (E) array[t];
+			hash += v == null ? 0 : v.hashCode();
+			t++;
+			if (t == array.length)
+				t = 0;
+		}
+		return hash;
 	}
 
 	@Override
-	public boolean equals(Object o){
-		if(!(o instanceof Collection))
+	public boolean equals(Object o) {
+		if (!(o instanceof Collection))
 			return false;
-		Collection<?> c=(Collection<?>) o;
-		return theLocker.doOptimistically(false, (b, ctx) -> {
-			ArrayElement[] array = theArray;
-			int offset = theOffset;
-			int size = theSize;
-			if (!ctx.check())
+		Collection<?> c = (Collection<?>) o;
+		Object[] array = theArray;
+		int offset = theOffset;
+		int size = theSize;
+		if (c.size() != size)
+			return false;
+		int t = offset;
+		Iterator<?> iter = c.iterator();
+		for (int i = 0; i < size; i++) {
+			if (!iter.hasNext())
 				return false;
-			if (c.size() != size)
+			Object co = iter.next();
+			E v = (E) array[t];
+			if (!Objects.equals(v, co))
 				return false;
-			int t = offset;
-			Iterator<?> iter = c.iterator();
-			for (int i = 0; i < size; i++) {
-				if (!iter.hasNext())
-					return false;
-				Object co = iter.next();
-				ArrayElement el = array[t];
-				if (!ctx.check())
-					return false;
-				if (!Objects.equals(el.get(), co))
-					return false;
-				t++;
-				if (t == array.length)
-					t = 0;
-			}
-			return true;
-		});
+			t++;
+			if (t == array.length)
+				t = 0;
+		}
+		return true;
 	}
 
 	@Override
 	public String toString() {
-		return theLocker.doOptimistically(new StringBuilder(), (str, ctx) -> {
-			ArrayElement[] array = theArray;
-			int offset = theOffset;
-			int size = theSize;
-			if (!ctx.check())
-				return str;
-			str.setLength(0);
-			str.append('[');
-			int t = offset;
-			for (int i = 0; i < size; i++) {
-				ArrayElement el = array[t];
-				if (!ctx.check())
-					return str;
-				if (i > 0)
-					str.append(", ");
-				str.append(el.get());
-				t++;
-				if (t == array.length)
-					t = 0;
-			}
-			str.append(']');
-			return str;
-		}).toString();
+		StringBuilder str = new StringBuilder();
+		Object[] array = theArray;
+		int offset = theOffset;
+		int size = theSize;
+		str.setLength(0);
+		str.append('[');
+		int t = offset;
+		for (int i = 0; i < size; i++) {
+			E v = (E) array[t];
+			if (i > 0)
+				str.append(", ");
+			str.append(v);
+			t++;
+			if (t == array.length)
+				t = 0;
+		}
+		str.append(']');
+		return str.toString();
 	}
 
 	/**
@@ -1018,22 +847,20 @@ public class CircularArrayList<E> implements BetterList<E> {
 		if (capacity - theMaxCapacity > 0)
 			capacity = theMaxCapacity;
 		if (capacity - theArray.length > 0) {
-			try (Transaction t = theLocker.lock(true, null)) {
-				int oldCapacity = theArray.length;
-				if (capacity - MAX_ARRAY_SIZE > 0)
-					throw new OutOfMemoryError("Cannot allocate an array of size " + capacity);
-				int growCapacity = oldCapacity == 0 ? 10 : oldCapacity + (int) Math.round(theGrowthFactor * oldCapacity);
-				if (growCapacity - MAX_ARRAY_SIZE > 0)
-					growCapacity = MAX_ARRAY_SIZE;
-				int newCapacity = growCapacity;
-				if (newCapacity - capacity < 0)
-					newCapacity = capacity;
-				ArrayElement[] newArray = new CircularArrayList.ArrayElement[newCapacity];
-				if (theSize > 0)
-					internalArrayCopy(newArray);
-				theOffset = 0;
-				theArray = newArray;
-			}
+			int oldCapacity = theArray.length;
+			if (capacity - MAX_ARRAY_SIZE > 0)
+				throw new OutOfMemoryError("Cannot allocate an array of size " + capacity);
+			int growCapacity = oldCapacity == 0 ? 10 : oldCapacity + (int) Math.round(theGrowthFactor * oldCapacity);
+			if (growCapacity - MAX_ARRAY_SIZE > 0)
+				growCapacity = MAX_ARRAY_SIZE;
+			int newCapacity = growCapacity;
+			if (newCapacity - capacity < 0)
+				newCapacity = capacity;
+			Object[] newArray = new Object[newCapacity];
+			if (theSize > 0)
+				internalArrayCopy(newArray);
+			theOffset = 0;
+			theArray = newArray;
 			return true;
 		} else
 			return false;
@@ -1045,16 +872,14 @@ public class CircularArrayList<E> implements BetterList<E> {
 	 * @return This list
 	 */
 	public CircularArrayList<E> trimToSize() {
-		try (Transaction t = theLocker.lock(true, null)) {
-			_trimToSize();
-		}
+		_trimToSize();
 		return this;
 	}
 
 	private void _trimToSize() {
 		int newCap = Math.max(theSize, theMinCapacity);
 		if (newCap != theArray.length) {
-			ArrayElement[] newArray = newCap == 0 ? (ArrayElement[]) EMPTY_ARRAY : new CircularArrayList.ArrayElement[newCap];
+			Object[] newArray = newCap == 0 ? EMPTY_ARRAY : new Object[newCap];
 			internalArrayCopy(newArray);
 			theOffset = 0;
 			theArray = newArray;
@@ -1073,14 +898,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		return translateToInternalIndex(theArray, theOffset, theSize, index);
 	}
 
-	final int translateToCollectionIndex(int arrayIndex) {
-		int ci = arrayIndex - theOffset;
-		if (ci < 0)
-			ci += theArray.length;
-		return ci;
-	}
-
-	private static final int translateToInternalIndex(CircularArrayList<?>.ArrayElement[] array, int offset, int size, int index) {
+	private static final int translateToInternalIndex(Object[] array, int offset, int size, int index) {
 		if (index >= size)
 			throw new ArrayIndexOutOfBoundsException(index + " of " + size);
 		int t = index + offset;
@@ -1099,16 +917,15 @@ public class CircularArrayList<E> implements BetterList<E> {
 				return theMaxCapacity;
 			} else {
 				theAdvanced = theSize + spaces - theMaxCapacity;
-				// TODO Pretty sure this is wrong. Need to update offset for the less than half case, right?
-				if (index <= theSize / 2) {
+				if (index <= theSize / 2)
 					moveContents(theOffset + theAdvanced, index, -spaces);
-				} else {
+				else
 					moveContents(theOffset + index, theSize - index, spaces);
-				}
 				theSize = theMaxCapacity;
 				return spaces;
 			}
 		} else {
+			theAdvanced = 0;
 			ensureCapacity(theSize + spaces);
 			if (index <= theSize / 2) {
 				moveContents(theOffset, index, -spaces);
@@ -1126,7 +943,7 @@ public class CircularArrayList<E> implements BetterList<E> {
 		if (count == 0)
 			return;
 		int cap = theArray.length;
-		if (sourceStart >= cap)
+		if (sourceStart > cap)
 			sourceStart -= cap;
 		int sourceEnd = sourceStart + count;
 		int destStart = sourceStart + offset;
@@ -1180,16 +997,6 @@ public class CircularArrayList<E> implements BetterList<E> {
 			System.arraycopy(theArray, sourceStart, theArray, destStart, count);
 		}
 	}
-	
-	void updateIndexes(int from, int count){
-		int ti=from;
-		while(ti!=count){
-			if(ti==theArray.length)
-				ti=0;
-			theArray[ti].setIndex(ti);
-			ti++;
-		}
-	}
 
 	private void clearEntries(int from, int count) {
 		int end = from + count;
@@ -1207,30 +1014,27 @@ public class CircularArrayList<E> implements BetterList<E> {
 	 * 
 	 * @param a The array to copy this list's contents into
 	 */
-	protected final void internalArrayCopy(ArrayElement[] a) {
+	protected final void internalArrayCopy(Object[] a) {
 		internalArrayCopy(theArray, theOffset, theSize, a);
 	}
 
-	private static final void internalArrayCopy(CircularArrayList<?>.ArrayElement[] src, int offset, int size,
-		CircularArrayList<?>.ArrayElement[] dest) {
+	private static final void internalArrayCopy(Object[] src, int offset, int size, Object[] dest) {
 		System.arraycopy(src, offset, dest, 0, Math.min(size, src.length - offset));
 		if (offset + size > src.length)
 			System.arraycopy(src, 0, dest, src.length - offset, size - src.length + offset);
 	}
 
-	private final ArrayElement internalAdd(int index, E value) {
+	private final void internalAdd(int index, E element) {
 		makeRoom(index, 1);
-		ArrayElement element;
-		int ti = translateToInternalIndex(index);
-		theArray[ti] = element = new ArrayElement(value, ti);
+		theArray[translateToInternalIndex(index)] = element;
 		theOffset += theAdvanced;
 		if (theOffset >= theArray.length)
 			theOffset -= theArray.length;
-		return element;
+		theStamp++;
 	}
 
-	private final ArrayElement internalRemove(int listIndex, int translatedIndex) {
-		ArrayElement removed = theArray[translatedIndex];
+	private final E internalRemove(int listIndex, int translatedIndex) {
+		E removed = (E) theArray[translatedIndex];
 		// Figure out the optimum way to move array elements
 		if (theSize == 1) {
 			theArray[theOffset] = null; // Remove reference
@@ -1241,290 +1045,264 @@ public class CircularArrayList<E> implements BetterList<E> {
 			theOffset++;
 			if (theOffset == theArray.length)
 				theOffset = 0;
-			updateIndexes(theOffset, listIndex);
 			theSize--;
 		} else {
 			moveContents(translatedIndex + 1, theSize - listIndex - 1, -1);
 			theArray[translateToInternalIndex(theSize - 1)] = null; // Remove reference
-			updateIndexes(translatedIndex, theSize - listIndex - 1);
 			theSize--;
 		}
-		removed.removed();
 		trimIfNeeded();
+		theStamp++;
 		return removed;
 	}
 
-	private class ArrayElementId implements ElementId {
-		final ArrayElement element;
+	class CALIterator extends SubView<E> implements ListIterator<E> {
+		private int theNext;
+		private final boolean isForward;
+		private Ternian movedForward;
 
-		ArrayElementId(ArrayElement element) {
-			this.element = element;
-		}
-
-		CircularArrayList<E> getList() {
-			return CircularArrayList.this;
-		}
-
-		@Override
-		public boolean isPresent() {
-			return element.getIndex() >= 0;
+		CALIterator(SubList parent, int start, int end, int next, boolean forward) {
+			super(CircularArrayList.this, parent, start, end);
+			theNext = next;
+			isForward = forward;
+			movedForward = Ternian.NONE;
 		}
 
 		@Override
-		public boolean isDerivedFrom(ElementId other) {
-			return equals(other);
+		protected void changed(int added) {
+			super.changed(added);
+			if (added > 0 && theAdvanced > 0)
+				setStart(Math.max(0, getStart() - theAdvanced));
 		}
 
-		@Override
-		public int compareTo(ElementId o) {
-			int diff = element.getIndex() - ((ArrayElementId) o).element.getIndex();
-			if (isPresent()) {
-				if (o.isPresent())
-					return diff;
-				else
-					return diff + 1;
+		private boolean has(boolean next) {
+			check(-1);
+			if (next)
+				return theNext < getEnd();
+			else
+				return theNext > getStart();
+		}
+
+		private E advance(boolean next) {
+			check(-1);
+			E value;
+			if (next) {
+				if (theNext >= getEnd())
+					throw new NoSuchElementException();
+				value = getRoot().get(theNext);
+				theNext++;
 			} else {
-				if (o.isPresent())
-					return diff - 1;
-				else
-					return diff;
+				if (theNext <= getStart())
+					throw new NoSuchElementException();
+				theNext--;
+				value = getRoot().get(theNext);
 			}
+			movedForward = Ternian.of(next);
+			return value;
+		}
+
+		private int index(boolean next) {
+			check(-1);
+			if (next)
+				return theNext - getStart();
+			else
+				return theNext - getStart() - 1;
 		}
 
 		@Override
-		public int hashCode() {
-			return element.hashCode();
+		public boolean hasNext() {
+			return has(isForward);
 		}
 
 		@Override
-		public boolean equals(Object obj) {
-			return obj instanceof CircularArrayList.ArrayElementId && element == ((ArrayElementId) obj).element;
+		public E next() {
+			return advance(isForward);
+		}
+
+		@Override
+		public boolean hasPrevious() {
+			return has(!isForward);
+		}
+
+		@Override
+		public E previous() {
+			return advance(!isForward);
+		}
+
+		@Override
+		public int nextIndex() {
+			return index(isForward);
+		}
+
+		@Override
+		public int previousIndex() {
+			return index(!isForward);
+		}
+
+		@Override
+		public void remove() {
+			check(-1);
+			switch (movedForward) {
+			case FALSE:
+				getRoot().remove(theNext);
+				break;
+			case TRUE:
+				getRoot().remove(theNext - 1);
+				theNext--;
+				break;
+			default:
+				throw new IllegalStateException("Cannot operate on the last element in this state");
+			}
+			changed(-1);
+		}
+
+		@Override
+		public void set(E e) {
+			check(-1);
+			switch (movedForward) {
+			case FALSE:
+				getRoot().set(theNext, e);
+				break;
+			case TRUE:
+				getRoot().set(theNext - 1, e);
+				break;
+			default:
+				throw new IllegalStateException("Cannot operate on the last element in this state");
+			}
+			changed(0);
+		}
+
+		@Override
+		public void add(E e) {
+			check(-1);
+			switch (movedForward) {
+			case FALSE:
+			case TRUE:
+				getRoot().add(theNext, e);
+				theNext++;
+				break;
+			default:
+				throw new IllegalStateException("Cannot operate on the last element in this state");
+			}
+			changed(1);
 		}
 	}
 
-	private class ArrayElement implements MutableCollectionElement<E> {
-		private int index;
-		private final ArrayElementId theElementId;
-		private E theValue;
-
-		ArrayElement(E value, int index) {
-			this.index = index;
-			theElementId = new ArrayElementId(this);
-			theValue = value;
-		}
-
-		ArrayElement check() {
-			if (!isPresent())
-				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			return this;
-		}
-
-		private boolean isPresent() {
-			return index >= 0;
-		}
-
-		public int getIndex() {
-			int i = index;
-			if (i < 0)
-				i = -i - 1;
-			return translateToCollectionIndex(i);
-		}
-
-		private void setIndex(int index) {
-			this.index = index;
+	/**
+	 * The type of list returned from {@link CircularArrayList#subList(int, int)}. This list's {@link #subList(int, int)} also returns a
+	 * list of this type.
+	 */
+	public class SubList extends AbstractSubDequeList<E> {
+		SubList(SubList parent, int start, int end) {
+			super(CircularArrayList.this, parent, start, end);
 		}
 
 		@Override
-		public BetterCollection<E> getCollection() {
-			return CircularArrayList.this;
+		protected void changed(int added) {
+			super.changed(added);
+			if (added > 0 && theAdvanced > 0)
+				setStart(Math.max(0, getStart() - theAdvanced));
 		}
 
 		@Override
-		public ElementId getElementId() {
-			return theElementId;
+		public ListIterator<E> iterator(int start, int end, int next, boolean forward) {
+			if (start < 0 || end > size() || start > end)
+				throw new IndexOutOfBoundsException(start + " to " + end + " of " + size());
+			return new CALIterator(this, getStart() + start, getStart() + end, getStart() + next, forward);
 		}
 
 		@Override
-		public E get() {
-			return theValue;
-		}
-
-		@Override
-		public String isEnabled() {
-			if (index < 0)
-				throw new IllegalStateException("This element has been removed");
-			return null;
-		}
-
-		@Override
-		public String isAcceptable(E value) {
-			if (index < 0)
-				throw new IllegalStateException("This element has been removed");
-			if (!belongs(value))
-				return StdMsg.ILLEGAL_ELEMENT;
-			return null;
-		}
-
-		@Override
-		public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
-			if (index < 0)
-				throw new IllegalStateException("This element has been removed");
-			String msg = isAcceptable(value);
-			if (msg != null)
-				throw new IllegalArgumentException(msg);
-			theValue = value;
-		}
-
-		@Override
-		public String canRemove() {
-			return null;
-		}
-
-		@Override
-		public void remove() throws UnsupportedOperationException {
-			try (Transaction t = lock(false, null)) {
-				if (index < 0)
-					throw new IllegalStateException("This element has been removed");
-				internalRemove(getIndex(), index);
-			}
-		}
-
-		void removed() {
-			index = -(index + 1);
-		}
-
-		@Override
-		public String canAdd(E value, boolean before) {
-			if (index < 0)
-				throw new IllegalStateException("This element has been removed");
-			return isAcceptable(value);
-		}
-
-		@Override
-		public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-			if (index < 0)
-				throw new IllegalStateException("This element has been removed");
-			String msg = canAdd(value, before);
-			if (msg != null)
-				throw new IllegalArgumentException(msg);
-			int cIndex = getIndex();
-			if (!before)
-				cIndex++;
-			return CircularArrayList.this.addElement(cIndex, value).getElementId();
-		}
-
-		@Override
-		public String toString() {
-			return new StringBuilder().append('[').append(getIndex()).append("]=").append(theValue).toString();
-		}
-	}
-
-	private class ArraySpliterator implements Spliterator<E> {
-		private int theStart;
-		private int theEnd;
-		private int theCursor; // The index of the element that would be given to the consumer for tryAdvance()
-		private int theCurrentIndex; // The index of the element last returned by this iterator from tryAdvance or tryReverse()
-		private boolean elementExists;
-
-		ArraySpliterator(int start, int end, int initIndex) {
-			int size = theSize;
-			if (end < 0)
-				end = size;
-			if (start < 0)
-				throw new IndexOutOfBoundsException("" + start);
-			if (end > size)
-				throw new IndexOutOfBoundsException(end + " of " + size);
-			if (start > end)
-				throw new IndexOutOfBoundsException(start + ">" + end);
-			theStart = start;
-			theEnd = end;
-			theCursor = initIndex;
-			theCurrentIndex = initIndex; // Just for toString()
-		}
-
-		@Override
-		public long estimateSize() {
-			return theEnd - theStart;
-		}
-
-		@Override
-		public long getExactSizeIfKnown() {
-			return theEnd - theStart;
-		}
-
-		@Override
-		public int characteristics() {
-			return Spliterator.ORDERED | Spliterator.SIZED | Spliterator.SUBSIZED;
-		}
-
-		@Override
-		public boolean tryAdvance(Consumer<? super E> action) {
-			if (theCursor >= theEnd)
+		public boolean offerFirst(E e) {
+			if (theSize == theMaxCapacity)
 				return false;
-			action.accept(get(theCursor));
-			theCursor++;
+			add(0, e);
 			return true;
 		}
 
 		@Override
-		public Spliterator<E> trySplit() {
-			if (theEnd - theStart <= 1)
-				return null;
-			int mid = (theStart + theEnd) / 2;
-			ArraySpliterator split;
-			if (theCursor <= mid) {
-				split = new ArraySpliterator(mid, theEnd, mid);
-				theEnd = mid;
-			} else {
-				split = new ArraySpliterator(theStart, mid, mid);
-				theStart = mid;
-			}
-			return split;
+		public boolean offerLast(E e) {
+			if (theSize == theMaxCapacity)
+				return false;
+			add(size(), e);
+			return true;
 		}
 
 		@Override
-		public String toString() {
-			return CircularArrayList.this.theLocker.doOptimistically(new StringBuilder(), (str, ctx) -> {
-				ArrayElement[] array = theArray;
-				int offset = theOffset;
-				int size = theSize;
-				int start = theStart;
-				int end = theEnd;
-				int cursor = theCurrentIndex;
-				boolean ee = elementExists;
-				if (!ctx.check())
-					return str;
-				str.setLength(0);
-				str.append('<');
-				int index = start;
-				int t = translateToInternalIndex(array, offset, size, index);
-				boolean first = true;
-				for (; index < end; index++) {
-					ArrayElement el = array[t];
-					if (!ctx.check())
-						return str;
-					if (!first)
-						str.append(", ");
-					first = false;
-					if (index == cursor) {
-						str.append('*');
-						if (!ee)
-							str.append('*');
-					}
-					str.append(el.get());
-					if (ee && index == cursor)
-						str.append('*');
-					t++;
-					if (t == array.length)
-						t = 0;
+		public boolean add(E e) {
+			add(size(), e);
+			return true;
+		}
+
+		@Override
+		public void add(int index, E element) {
+			check(-1);
+			if (index < 0 || index > size())
+				throw new IndexOutOfBoundsException(index + " of " + size());
+			getRoot().add(getStart() + index, element);
+			changed(1);
+		}
+
+		@Override
+		public <T> T[] toArray(final T[] a) {
+			Object[] array = theArray;
+			int offset = theOffset;
+			int size = theSize;
+			int start = getStart();
+			int end = getEnd();
+			T[] arr = a;
+			check(-1);
+			if (arr.length < end - start)
+				arr = (T[]) Array.newInstance(a.getClass().getComponentType(), end - start);
+			internalArrayCopy(array, translateToInternalIndex(array, offset, size, start), end - start, arr);
+			return arr;
+		}
+
+		@Override
+		public boolean removeIf(Predicate<? super E> filter) {
+			if (theSize == 0)
+				return false;
+			int removed = 0;
+			Object[] array = theArray;
+			int cap = array.length;
+			int inspect = translateToInternalIndex(getStart());
+			int copyTo = inspect;
+			int dest = translateToInternalIndex(getEnd());
+			int size = theSize;
+			long stamp = check(-1);
+			do {
+				check(stamp);
+				E value = (E) array[inspect];
+				if (filter.test(value)) {
+					removed++;
+				} else {
+					if (removed > 0)
+						array[copyTo] = value;
+					copyTo++;
+					if (copyTo == cap)
+						copyTo = 0;
 				}
-				if (index == cursor) {
-					str.append('*');
-					str.append('*');
-				}
-				str.append('>');
-				return str;
-			}).toString();
+				inspect++;
+				if (inspect == cap)
+					inspect = 0;
+			} while (inspect != dest);
+			check(stamp);
+			moveContents(dest, size - getEnd(), -removed);
+			copyTo += size - getEnd();
+			if (copyTo > cap)
+				copyTo -= cap;
+			clearEntries(copyTo, removed);
+			theSize -= removed;
+			changed(-removed);
+			trimIfNeeded();
+			return removed > 0;
+		}
+
+		@Override
+		public SubList subList(int fromIndex, int toIndex) {
+			check(-1);
+			if (fromIndex < 0 || toIndex > size() || fromIndex > toIndex)
+				throw new IndexOutOfBoundsException(fromIndex + " to " + toIndex + " of " + size());
+			return new SubList(this, getStart() + fromIndex, getStart() + toIndex);
 		}
 	}
 }
