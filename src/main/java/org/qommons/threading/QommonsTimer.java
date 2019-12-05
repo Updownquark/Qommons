@@ -524,6 +524,16 @@ public class QommonsTimer {
 		return new TaskHandle(task, frequency, consistent);
 	}
 
+	/**
+	 * Sets a timer after which a task will be executed if this method is not called again with the same key. This method is useful for
+	 * ensuring that dynamically-created resources are closed when they may be re-used multiple times, without requiring that they be
+	 * re-allocated every time they are needed.
+	 * 
+	 * @param taskKey The key representing the task
+	 * @param task The task to run after the inactivity period has elapsed
+	 * @param inactiveTime The inactivity period after which to run the task if this method has not been called again with the same key
+	 * @return The task handle for the task
+	 */
 	public TaskHandle doAfterInactivity(Object taskKey, Runnable task, long inactiveTime) {
 		return doAfterInactivity(taskKey, task, Duration.ofMillis(inactiveTime));
 	}

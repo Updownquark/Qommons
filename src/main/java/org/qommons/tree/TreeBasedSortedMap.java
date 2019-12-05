@@ -7,6 +7,12 @@ import org.qommons.collect.BetterSortedList;
 import org.qommons.collect.BetterSortedMap;
 import org.qommons.collect.ElementId;
 
+/**
+ * A {@link BetterSortedMap} whose entries implement {@link BinaryTreeEntry}
+ * 
+ * @param <K> The key type of the map
+ * @param <V> The value type of the map
+ */
 public interface TreeBasedSortedMap<K, V> extends BetterSortedMap<K, V> {
 	@Override
 	default BinaryTreeEntry<K, V> putEntry(K key, V value, boolean first) {

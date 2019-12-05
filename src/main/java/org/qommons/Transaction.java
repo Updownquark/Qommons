@@ -10,6 +10,10 @@ public interface Transaction extends AutoCloseable {
 	@Override
 	void close();
 
+	/**
+	 * @param ts All the transactions to group
+	 * @return A transaction whose {@link #close()} method closes all non-null transactions in the given list
+	 */
 	static Transaction and(Transaction... ts) {
 		return () -> {
 			for (int i = ts.length - 1; i >= 0; i--) {

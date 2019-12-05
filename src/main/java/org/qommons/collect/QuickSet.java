@@ -23,7 +23,13 @@ import java.util.stream.StreamSupport;
 import org.qommons.ArrayUtils;
 
 /**
- * A sorted set of strings that is optimized for indexOf operations on small sets
+ * <p>
+ * A sorted set of strings that is optimized for indexOf operations on small sets. Large performance gains can be obtained by using
+ * instances of this set as key sets and {@link #createMap() creating maps} with it, as the same index can be used across all the maps.
+ * </p>
+ * <p>
+ * In addition, instances of QuickSet and QuickMap are thread safe without locking because QuickSet is immutable.
+ * </p>
  * 
  * @param <E> The type of value in the set
  */
@@ -32,10 +38,19 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 	private static final QuickMap<?, ?> EMPTY_MAP = new EmptyQuickMap<>();
 	private static final int MAX_CACHED_MAPS = 100;
 
+	/**
+	 * @param <K> The type of value for the set
+	 * @return An empty QuickSet
+	 */
 	public static <K> QuickSet<K> empty() {
 		return (QuickSet<K>) EMPTY;
 	}
 
+	/**
+	 * @param <E> The type of comparable to create the set for
+	 * @param keys The values for the set
+	 * @return A QuickSet containing the given values
+	 */
 	public static <E extends Comparable<E>> QuickSet<E> of(E... keys) {
 		if (keys.length == 0)
 			return (QuickSet<E>) EMPTY;
@@ -43,6 +58,11 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 			return new QuickSet<>(Comparable::compareTo, keys);
 	}
 
+	/**
+	 * @param <E> The type of comparable to create the set for
+	 * @param keys The values for the set
+	 * @return A QuickSet containing the given values
+	 */
 	public static <E extends Comparable<E>> QuickSet<E> of(Collection<? extends E> keys) {
 		if (keys.isEmpty())
 			return (QuickSet<E>) EMPTY;
@@ -50,6 +70,11 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 			return new QuickSet<>(Comparable::compareTo, keys);
 	}
 
+	/**
+	 * @param <E> The type of comparable to create the set for
+	 * @param keys The values for the set
+	 * @return A QuickSet containing the given values
+	 */
 	public static <E extends Comparable<E>> QuickSet<E> ofSorted(SortedSet<E> keys) {
 		if (keys.isEmpty())
 			return (QuickSet<E>) EMPTY;
@@ -57,6 +82,12 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 			return new QuickSet<>(keys.comparator(), keys);
 	}
 
+	/**
+	 * @param <E> The values to create the set for
+	 * @param compare The comparator for the values
+	 * @param keys The values for the set
+	 * @return A QuickSet containing the given values
+	 */
 	public static <E> QuickSet<E> of(Comparator<? super E> compare, E... keys) {
 		if (keys.length == 0)
 			return (QuickSet<E>) EMPTY;
@@ -64,6 +95,12 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 			return new QuickSet<>(compare, keys);
 	}
 
+	/**
+	 * @param <E> The values to create the set for
+	 * @param compare The comparator for the values
+	 * @param keys The values for the set
+	 * @return A QuickSet containing the given values
+	 */
 	public static <E> QuickSet<E> of(Comparator<? super E> compare, Collection<? extends E> keys) {
 		if (keys.isEmpty())
 			return (QuickSet<E>) EMPTY;
@@ -79,6 +116,10 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 	private int hashCode;
 	private ConcurrentLinkedQueue<QuickMapImpl<?, ?>> theMapCache;
 
+	/**
+	 * @param compare the comparator for this set
+	 * @param keys The values for the set
+	 */
 	public QuickSet(Comparator<? super E> compare, E... keys) {
 		this.compare = compare;
 		theKeys = keys;
@@ -86,6 +127,10 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		small = keys.length <= 10;
 	}
 
+	/**
+	 * @param compare the comparator for this set
+	 * @param keys The values for the set
+	 */
 	public QuickSet(Comparator<? super E> compare, Collection<? extends E> keys) {
 		this.compare = compare;
 		theKeys = keys.toArray();
@@ -98,6 +143,10 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		return theKeys.length;
 	}
 
+	/**
+	 * @param index The index to get the value in
+	 * @return The value in this set at the given index
+	 */
 	public E get(int index) {
 		return (E) theKeys[index];
 	}
@@ -112,6 +161,11 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		return theKeys.clone();
 	}
 
+	/**
+	 * @param key The value to find in this set
+	 * @return The index of the given value in this set, or <code>-index-1</code> if the value is not found, where <code>index</code> is
+	 *         where the value would belong in this set.
+	 */
 	public int indexOf(E key) {
 		if (small) {
 			for (int i = 0; i < theKeys.length; i++) {
@@ -136,6 +190,10 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		return compare.compare(test, key);
 	}
 
+	/**
+	 * @param key The object to find in this set
+	 * @return Same as {@link #indexOf(Object)}, but catches any {@link ClassCastException} thrown by the comparator and returns -1
+	 */
 	public int indexOfTolerant(Object key) {
 		try {
 			return indexOf((E) key);
@@ -153,6 +211,12 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		}
 	}
 
+	/**
+	 * Creates a {@link QuickMap} whose key set is this
+	 * 
+	 * @param <V> The type of values for the map
+	 * @return The new map
+	 */
 	public <V> QuickMap<E, V> createMap() {
 		if (theKeys.length == 0)
 			return (QuickMap<E, V>) EMPTY_MAP;
@@ -166,6 +230,13 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		return new QuickMapImpl<>(this, null);
 	}
 
+	/**
+	 * Creates a {@link QuickMap} whose key set is this and whose values are predetermined for each key
+	 * 
+	 * @param <V> The type of values for the map
+	 * @param valueProducer The producer to create or access values for each key in this set
+	 * @return The new map
+	 */
 	public <V> QuickMap<E, V> createMap(IntFunction<V> valueProducer) {
 		if (theMapCache != null) {
 			QuickMapImpl<?, ?> map = theMapCache.poll();
@@ -177,6 +248,13 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		return new QuickMapImpl<>(this, valueProducer);
 	}
 
+	/**
+	 * Creates a {@link QuickMap} whose key set is this and whose values are dynamically calculated for each key each time they are accessed
+	 * 
+	 * @param <V> The type of values for the map
+	 * @param valueProducer The producer to create or access values for each key in this set
+	 * @return The new map
+	 */
 	public <V> QuickMap<E, V> createDynamicMap(IntFunction<V> valueProducer) {
 		return new DynamicQuickMapImpl<>(this, valueProducer);
 	}
@@ -280,11 +358,30 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 
 	// This interface does not extend Map<String, V> because its functionality differs a bit
 	// It throws exceptions when a value is requested for a key that does not exist in the key set
+	/**
+	 * <p>
+	 * A "map" whose key set is a {@link QuickSet}. This interface does not extend Map<String, V> because its functionality differs a bit.
+	 * In particular it throws exceptions when a value is requested for a key that does not exist in the key set.
+	 * </p>
+	 * <p>
+	 * This map, like {@link QuickSet}, has extremely high performance for small key sets. Indexes for keys in the key set may be used to
+	 * access values in this map.
+	 * </p>
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	public interface QuickMap<K, V> {
+		/**
+		 * @param <K> The key type for the map
+		 * @param <V> The value type for the map
+		 * @return An empty map
+		 */
 		static <K, V> QuickMap<K, V> empty() {
 			return QuickSet.<K> empty().<V> createMap();
 		}
 
+		/** @return This map's key set */
 		QuickSet<K> keySet();
 
 		/** @return The number of keys in this map */
@@ -292,7 +389,12 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 			return keySet().size();
 		}
 
-		default int keyIndex(K key) {
+		/**
+		 * @param key The key to get the index for
+		 * @return The index in this map's key set of the given key
+		 * @throws IllegalArgumentException If the key is not found
+		 */
+		default int keyIndex(K key) throws IllegalArgumentException {
 			int index = keySet().indexOf(key);
 			if (index < 0) {
 				throw new IllegalArgumentException("Key is not present: " + key);
@@ -300,6 +402,10 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 			return index;
 		}
 
+		/**
+		 * @param key The key to get the index for
+		 * @return The index in this map's key set of the given key, or -1 if it is not found
+		 */
 		default int keyIndexTolerant(Object key) {
 			int index;
 			try {
@@ -313,17 +419,40 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		/** @return The number of non-null values in this map */
 		int valueCount();
 
+		/**
+		 * @param index The index in the key set for the value to get
+		 * @return The value in this map for the key at the given index in the key set
+		 */
 		V get(int index);
 
+		/**
+		 * @param index The index in the key set for the value to set
+		 * @param value The value to set for the key at the given index in the key set
+		 * @return The previously set value for the key
+		 */
 		V put(int index, V value);
 
+		/**
+		 * @param index The index in the key set for the value to set
+		 * @param valueProducer Produces a value for the key if none is set in this map
+		 * @return The retrieved or created value
+		 */
 		V computeIfAbsent(int index, Function<? super K, ? extends V> valueProducer);
 
-		default V get(K key) {
+		/**
+		 * @param key The key whose value to get from the map
+		 * @return The value in this map for the given key
+		 * @throws IllegalArgumentException If the given key is not present in the map
+		 */
+		default V get(K key) throws IllegalArgumentException {
 			return get(//
 					keyIndex(key));
 		}
 
+		/**
+		 * @param key The key whose value to get from the map
+		 * @return The value in this map for the given key, or null if the key is not present in the map
+		 */
 		default V getIfPresent(K key) {
 			int keyIndex = keyIndex(key);
 			if (keyIndex < 0)
@@ -331,14 +460,31 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 			return get(keyIndex);
 		}
 
-		default V put(K key, V value) {
+		/**
+		 * @param key The key to set the value for
+		 * @param value The value for the key
+		 * @return The previously set value for the key
+		 * @throws IllegalArgumentException If the key is not present in the map
+		 */
+		default V put(K key, V value) throws IllegalArgumentException {
 			return put(keyIndex(key), value);
 		}
 
+		/**
+		 * @param key The key to get or set the value for
+		 * @param valueProducer Produces a value for the key if none is set in this map
+		 * @return The retrieved or created value
+		 */
 		default V computeIfAbsent(K key, Function<? super K, ? extends V> valueProducer) {
 			return computeIfAbsent(keyIndex(key), valueProducer);
 		}
 
+		/**
+		 * Adds all entries in the given map for which the key exists in this map into this map
+		 * 
+		 * @param values The values to add
+		 * @return This map
+		 */
 		default QuickMap<K, V> withAll(Map<? extends K, ? extends V> values) {
 			for (Map.Entry<? extends K, ? extends V> entry : values.entrySet()) {
 				int idx = keySet().indexOf(entry.getKey());
@@ -348,16 +494,21 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 			return this;
 		}
 
+		/** Sets all values to null in this map */
 		void clear();
 
+		/** @return An iterable over the values in this map for each key in the key set */
 		Iterable<V> allValues();
 
+		/** @return An iterable over all values that have been set in this map */
 		Iterable<V> values();
 
+		/** @return A stream over all values that have been set in this map */
 		default Stream<V> stream() {
 			return StreamSupport.stream(Spliterators.spliterator(values().iterator(), valueCount(), 0), false);
 		}
 
+		/** @return An array of map entries for each key in this map's key set */
 		default Map.Entry<K, V>[] toEntryArray() {
 			Map.Entry<K, V>[] array = new Map.Entry[keySet().size()];
 			for (int i = 0; i < array.length; i++) {
@@ -366,6 +517,7 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 			return array;
 		}
 
+		/** @return An independent copy of this map with the same key set and values */
 		default QuickMap<K, V> copy() {
 			if (keySet().isEmpty())
 				return this;
@@ -376,8 +528,10 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 			return copy;
 		}
 
+		/** @return An unmodifiable view of this map */
 		QuickMap<K, V> unmodifiable();
 
+		/** @return A {@link Map} that behaves according to that class's contract but whose key set and values are the same as this */
 		default Map<K, V> asJavaMap() {
 			return new ParamMapAsMap<>(this);
 		}
@@ -385,6 +539,13 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		/** If supported, allows this map to be released and re-used later */
 		void release();
 
+		/**
+		 * @param <K> The key type of the map
+		 * @param <V> The value type of the map
+		 * @param values The map to create a QuickMap from
+		 * @param keyCompare The comparator for the keys
+		 * @return A QuickMap whose key set contains all keys from the given map and whose values are the same as those in the given map
+		 */
 		static <K, V> QuickMap<K, V> of(Map<K, V> values, Comparator<? super K> keyCompare) {
 			return QuickSet.of(keyCompare, values.keySet()).<V> createMap().withAll(values);
 		}
@@ -438,12 +599,22 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		public void release() {}
 	}
 
+	/**
+	 * A {@link Set} backed by a {@link QuickSet} whose values are ordered in a custom way
+	 * 
+	 * @param <E> The type of values in the set
+	 */
 	public static final class CustomOrderedQuickSet<E> extends AbstractSet<E> {
 		final QuickSet<E> theSet;
 		final int theSize;
 		final int[] theCustomOrder;
 		final int[] theReverseCustomOrder;
 
+		/**
+		 * @param set The {@link QuickSet} of values
+		 * @param order A set containing all values in <code>set</code> and whose order will be followed when iterating over values in this
+		 *        set
+		 */
 		public CustomOrderedQuickSet(QuickSet<E> set, Set<E> order) {
 			theSet = set;
 			theCustomOrder = new int[set.size()];
@@ -459,6 +630,7 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 			theSize = i;
 		}
 
+		/** @return The QuickSet backing this set */
 		public QuickSet<E> getQuickSet() {
 			return theSet;
 		}
@@ -534,10 +706,20 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		}
 	}
 
+	/**
+	 * A {@link Map} backed by a {@link QuickSet.QuickMap} whose {@link Map#keySet()} is a {@link QuickSet.CustomOrderedQuickSet}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	public static final class CustomOrderedQuickMap<K, V> extends AbstractMap<K, V> {
 		final QuickMap<K, V> theMap;
 		final CustomOrderedQuickSet<K> theKeySet;
 
+		/**
+		 * @param map The quick map to back this map
+		 * @param order The custom order for the key set
+		 */
 		public CustomOrderedQuickMap(QuickMap<K, V> map, Set<K> order) {
 			theMap = map;
 			if (order instanceof CustomOrderedQuickSet) {
@@ -547,12 +729,9 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 			}
 		}
 
+		/** @return The QuickMap backing this map */
 		public QuickMap<K, V> getMap() {
 			return theMap;
-		}
-
-		public CustomOrderedQuickSet<K> getKeySet() {
-			return theKeySet;
 		}
 
 		@Override
@@ -565,10 +744,19 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 			return theKeySet.isEmpty();
 		}
 
+		/**
+		 * @param index The index in this map of the value to get
+		 * @return The value for the key at the given index in this map's key set
+		 */
 		public V getAt(int index) {
 			return theMap.get(theKeySet.theReverseCustomOrder[index]);
 		}
 
+		/**
+		 * @param index The index in this map of the value to set
+		 * @param value The value for the key at the given index in this map's key set
+		 * @return The previously set value for the key
+		 */
 		public V putAt(int index, V value) {
 			return theMap.put(theKeySet.theReverseCustomOrder[index], value);
 		}
@@ -610,7 +798,7 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		}
 
 		@Override
-		public Set<K> keySet() {
+		public CustomOrderedQuickSet<K> keySet() {
 			return theKeySet;
 		}
 

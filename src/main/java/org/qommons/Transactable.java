@@ -1,6 +1,5 @@
 package org.qommons;
 
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
@@ -10,6 +9,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * Such implementations should return a {@link Transaction#NONE none} transaction or some such non-null transaction.
  */
 public interface Transactable {
+	/** A do-nothing transactable that always returns {@link Transaction#NONE} */
 	static Transactable NONE = new Transactable() {
 		@Override
 		public Transaction lock(boolean write, Object cause) {
@@ -43,20 +43,52 @@ public interface Transactable {
 	};
 
 	/**
-	 * Begins a transaction in which inspections and/or modifications to this object may be batched and combined for increased efficiency.
+	 * <p>
+	 * Begins a transaction. Either an exclusive transaction in which modifications to this object may be batched and combined for increased
+	 * efficiency, or a non-exclusive transaction during which exclusive locks cannot be obtained, allowing safe, stateful inspections.
+	 * </p>
+	 * <p>
+	 * If a conflicting lock (either an exclusive lock or, when attempting to obtain an exclusive lock, any lock) is held by another thread,
+	 * this method will block until it is able to obtain the lock. If a conflicting lock is held by this thread, this method may throw an
+	 * exception or deadlock.
+	 * </p>
 	 *
 	 * @param write Whether to lock this object for writing (prevents all access to controlled properties of the object outside of this
-	 *            thread) or just for reading (prevents all modification to this object, this thread included).
-	 * @param cause An object that may have caused the set of modifications to come. May be null.
+	 *        thread) or just for reading (prevents all modification to this object, this thread included).
+	 * @param cause An object that may have caused the set of modifications to come. May be null, typically unused for read.
 	 * @return The transaction to close when calling code is finished accessing or modifying this object
 	 */
 	Transaction lock(boolean write, Object cause);
 
+	/**
+	 * <p>
+	 * Attempts to begin a transaction. See {@link #lock(boolean, Object)}.
+	 * </p>
+	 * <p>
+	 * If a conflicting lock (either an exclusive lock or, when attempting to obtain an exclusive lock, any lock) is held by this or another
+	 * thread, this method will fail by returning <code>null</code>.
+	 * </p>
+	 *
+	 * @param write Whether to lock this object for writing (prevents all access to controlled properties of the object outside of this
+	 *        thread) or just for reading (prevents all modification to this object, this thread included).
+	 * @param cause An object that may have caused the set of modifications to come. May be null, typically unused for read.
+	 * @return The transaction to close when calling code is finished accessing or modifying this object, or null if obtaining the lock
+	 *         fails
+	 */
 	Transaction tryLock(boolean write, Object cause);
 
 	/** @return Whether this object actually support locking */
 	default boolean isLockSupported() {
 		return true;
+	}
+
+	/**
+	 * @param write Whether to lock this transactable for write or read
+	 * @param cause The cause for the transaction
+	 * @return A Lockable that locks this transactable
+	 */
+	default Lockable asLockable(boolean write, Object cause) {
+		return Lockable.lockable(this, write, cause);
 	}
 
 	/**
@@ -74,6 +106,10 @@ public interface Transactable {
 			return Transaction.NONE;
 	}
 
+	/**
+	 * @param lockable The potentially transactable item
+	 * @return The item, if it is a {@link Transactable}, or {@link #NONE} otherwise
+	 */
 	static Transactable asTransactable(Object lockable) {
 		if (lockable instanceof Transactable)
 			return (Transactable) lockable;
@@ -81,37 +117,17 @@ public interface Transactable {
 			return NONE;
 	}
 
-	static Transaction lock(Lock lock) {
-		if (lock == null)
-			return Transaction.NONE;
-		lock.lock();
-		return lock::unlock;
-	}
-
-	static Transaction tryLock(Lock lock) {
-		if (lock == null)
-			return Transaction.NONE;
-		if (lock.tryLock())
-			return lock::unlock;
-		return null;
-	}
-
+	/**
+	 * Represents a {@link ReentrantReadWriteLock} as a {@link Transactable}
+	 * 
+	 * @param lock The lock to represent
+	 * @return A {@link Transactable} backed by the lock
+	 */
 	static Transactable transactable(ReentrantReadWriteLock lock) {
 		return new RRWLTransactable(lock);
 	}
 
-	static Transaction lock(ReentrantReadWriteLock lock, boolean write) {
-		if (lock == null)
-			return Transaction.NONE;
-		return lock(write ? lock.writeLock() : lock.readLock());
-	}
-
-	static Transaction tryLock(ReentrantReadWriteLock lock, boolean write) {
-		if (lock == null)
-			return Transaction.NONE;
-		return tryLock(write ? lock.writeLock() : lock.readLock());
-	}
-
+	/** Implements {@link Transactable#transactable(ReentrantReadWriteLock)} */
 	static class RRWLTransactable implements Transactable {
 		private final ReentrantReadWriteLock theLock;
 
@@ -121,12 +137,12 @@ public interface Transactable {
 
 		@Override
 		public Transaction lock(boolean write, Object cause) {
-			return Transactable.lock(theLock, write);
+			return Lockable.lock(theLock, write);
 		}
 
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
-			return Transactable.tryLock(theLock, write);
+			return Lockable.tryLock(theLock, write);
 		}
 	}
 }

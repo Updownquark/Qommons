@@ -35,6 +35,11 @@ import org.qommons.collect.StampedLockingStrategy;
 public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	private static final String DEFAULT_DESCRIPTION = "better-tree-map";
 
+	/**
+	 * Builds a {@link BetterTreeMap}
+	 * 
+	 * @param <K> The key type for the map
+	 */
 	public static class Builder<K> extends BetterTreeSet.Builder<K, BetterTreeSet<K>> {
 		Builder(Comparator<? super K> compare) {
 			super(compare);
@@ -59,10 +64,19 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 			return this;
 		}
 
+		/**
+		 * @param <V> The value type for the map
+		 * @return The new map
+		 */
 		public <V> BetterTreeMap<K, V> buildMap() {
 			return new BetterTreeMap<>(getLocker(), getDescription(), getCompare());
 		}
 
+		/**
+		 * @param <V> The value type for the map
+		 * @param values The initial values for the map
+		 * @return The new map
+		 */
 		public <V> BetterTreeMap<K, V> buildMap(Map<? extends K, ? extends V> values) {
 			return (BetterTreeMap<K, V>) buildMap().withAll(values);
 		}
@@ -100,10 +114,18 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		this(locker, DEFAULT_DESCRIPTION, compare);
 	}
 
+	/**
+	 * @param threadSafe Whether the map should be thread-safe
+	 * @param map The initial values for the map
+	 */
 	public BetterTreeMap(boolean threadSafe, SortedMap<K, ? extends V> map) {
 		this(threadSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), map);
 	}
 
+	/**
+	 * @param locker The locking strategy for the map
+	 * @param map The initial values for the map
+	 */
 	public BetterTreeMap(CollectionLockingStrategy locker, SortedMap<K, ? extends V> map) {
 		theCompare = map.comparator();
 		theIdentity = Identifiable.baseId(DEFAULT_DESCRIPTION, this);
@@ -112,6 +134,11 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		theEntrySet = new EntrySet(this);
 	}
 
+	/**
+	 * @param locker The locking strategy for the map
+	 * @param description A description for the map
+	 * @param compare The key sorting for the map
+	 */
 	protected BetterTreeMap(CollectionLockingStrategy locker, String description, Comparator<? super K> compare) {
 		theCompare = compare;
 		theIdentity = Identifiable.baseId(description, this);
@@ -312,7 +339,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 
 		@Override
 		protected BinaryTreeNode<K> makeKeyHandle() {
-			return new BinaryTreeKeyHandle<>(this);
+			return new BinaryTreeKeyHandle(this);
 		}
 
 		MutableBinaryTreeNode<K> mutableKeyHandle() {
@@ -327,11 +354,11 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		@Override
 		protected MutableCollectionElement<K> createMutableKeyHandle(BetterSet<Map.Entry<K, V>> entrySet, Supplier<BetterSet<K>> keySet) {
 			MutableCollectionElement<Map.Entry<K, V>> mutableEntryEl = entrySet.mutableElement(theId);
-			return new MutableBinaryTreeKeyHandle<>(this, mutableEntryEl, keySet);
+			return new MutableBinaryTreeKeyHandle(this, mutableEntryEl, keySet);
 		}
 	}
 
-	class BinaryTreeKeyHandle<K> extends BetterMapEntryImpl.BetterMapEntryKeyHandle<K> implements BinaryTreeNode<K> {
+	class BinaryTreeKeyHandle extends BetterMapEntryImpl.BetterMapEntryKeyHandle<K> implements BinaryTreeNode<K> {
 		BinaryTreeKeyHandle(BetterTreeMap<K, ?>.TreeEntry entry) {
 			super(entry);
 		}
@@ -401,7 +428,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 	}
 
-	class MutableBinaryTreeKeyHandle<K> extends BetterMapEntryImpl.BetterMapEntryMutableKeyHandle<K> implements MutableBinaryTreeNode<K> {
+	class MutableBinaryTreeKeyHandle extends BetterMapEntryImpl.BetterMapEntryMutableKeyHandle<K> implements MutableBinaryTreeNode<K> {
 		MutableBinaryTreeKeyHandle(BetterTreeMap<K, ?>.TreeEntry entry, MutableCollectionElement<? extends Map.Entry<K, ?>> mutableEntryEl,
 			Supplier<BetterSet<K>> keySet) {
 			super(entry, mutableEntryEl, keySet);
@@ -580,14 +607,10 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 	}
 
-	class KeySet implements TreeBasedSet<K> {
-		private Object theIdentity;
-
+	class KeySet extends AbstractIdentifiable implements TreeBasedSet<K> {
 		@Override
-		public Object getIdentity() {
-			if (theIdentity == null)
-				theIdentity = Identifiable.wrap(BetterTreeMap.this.getIdentity(), "keySet");
-			return theIdentity;
+		protected Object createIdentity() {
+			return Identifiable.wrap(BetterTreeMap.this.getIdentity(), "keySet");
 		}
 
 		@Override

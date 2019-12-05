@@ -1517,7 +1517,7 @@ public class SAJParser {
 		}
 	}
 
-	private boolean testMax(String num, String max) throws ParseException {
+	private static boolean testMax(String num, String max) {
 		if(num == null || num.length() < max.length())
 			return false;
 		if(num.length() > max.length())
@@ -1527,14 +1527,14 @@ public class SAJParser {
 		return false;
 	}
 
-	private double powNeg10(int pow) {
+	private static double powNeg10(int pow) {
 		double ret = 1;
 		for(; pow > 0; pow--)
 			ret /= 10;
 		return ret;
 	}
 
-	private double pow10(int pow) {
+	private static double pow10(int pow) {
 		double ret = 1;
 		for(; pow > 0; pow--)
 			ret *= 10;

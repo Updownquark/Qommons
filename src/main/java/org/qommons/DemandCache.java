@@ -103,6 +103,7 @@ public class DemandCache<K, V> implements Map<K, V> {
 	private static class CacheValue<V> {
 		V value;
 		float demand;
+		@SuppressWarnings("unused")
 		int version;
 
 		CacheValue(V value, int version) {
@@ -131,7 +132,11 @@ public class DemandCache<K, V> implements Map<K, V> {
 
 	private float thePurgeMods;
 
-	/** Creates a DemandCache with default values */
+	/**
+	 * Creates a DemandCache with default values
+	 * 
+	 * @param safe Whether the cache should be thread-safe
+	 */
 	public DemandCache(boolean safe) {
 		this(safe, null, -1, -1);
 	}
@@ -139,6 +144,7 @@ public class DemandCache<K, V> implements Map<K, V> {
 	/**
 	 * Creates a DemandCache
 	 *
+	 * @param safe Whether the cache should be thread-safe
 	 * @param qualitizer The qualitizer to qualitize the values by
 	 * @param prefSize The preferred size of this cache, or <=0 if this cache should have no preferred size
 	 * @param halfLife The preferred entry age of this cache
@@ -159,6 +165,7 @@ public class DemandCache<K, V> implements Map<K, V> {
 	/**
 	 * Creates a DemandCache
 	 *
+	 * @param safe Whether the cache should be thread-safe
 	 * @param qualitizer The qualitizer to qualitize the values by
 	 * @param prefSize The preferred size of this cache, or <=0 if this cache should have no preferred size
 	 * @param halfLife The preferred entry age of this cache
@@ -177,6 +184,10 @@ public class DemandCache<K, V> implements Map<K, V> {
 		thePurgeListeners = new PurgeListener[0];
 	}
 
+	/**
+	 * @param write Whether to lock the cache for write or read
+	 * @return A transaction to close to release the lock
+	 */
 	public Transaction lock(boolean write) {
 		if (theLock == null)
 			return Transaction.NONE;

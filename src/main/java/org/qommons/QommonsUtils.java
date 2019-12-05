@@ -3,7 +3,16 @@ package org.qommons;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TimeZone;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -138,6 +147,13 @@ public class QommonsUtils {
 		return sb.toString();
 	}
 
+	/**
+	 * Prints a time length to a string
+	 *
+	 * @param seconds The length of time in seconds
+	 * @param nanos Additional nanoseconds past the seconds
+	 * @return The representation of the time length
+	 */
 	public static String printTimeLength(long seconds, int nanos) {
 		StringBuilder sb = new StringBuilder();
 		printTimeLength(seconds, nanos, sb, false);
@@ -150,19 +166,44 @@ public class QommonsUtils {
 	 * @param length The length of time in milliseconds
 	 * @param sb The StringBuilder to write the representation of the time length into
 	 * @param abbrev Whether to shorten the string intelligibly as much as possible
+	 * @return The printed time length
 	 */
 	public static StringBuilder printTimeLength(long length, StringBuilder sb, boolean abbrev) {
 		return printTimeLength(length / 1000, ((int) (length % 1000)) * 1000000, sb, abbrev);
 	}
 
+	/**
+	 * Prints a time length to a string
+	 *
+	 * @param d The length of time
+	 * @param abbrev Whether to shorten the string intelligibly as much as possible
+	 * @return The representation of the time length
+	 */
 	public static String printDuration(Duration d, boolean abbrev) {
 		return printDuration(d, new StringBuilder(), abbrev).toString();
 	}
 
+	/**
+	 * Prints a time length to a StringBuilder
+	 *
+	 * @param d The length of time
+	 * @param sb The StringBuilder to append into
+	 * @param abbrev Whether to shorten the string intelligibly as much as possible
+	 * @return The representation of the time length
+	 */
 	public static StringBuilder printDuration(Duration d, StringBuilder sb, boolean abbrev) {
 		return printTimeLength(d.getSeconds(), d.getNano(), sb, abbrev);
 	}
 
+	/**
+	 * Prints a time length to a StringBuilder
+	 *
+	 * @param seconds The length of time in seconds
+	 * @param nanos Additional nanoseconds past the seconds
+	 * @param sb The StringBuilder to append into
+	 * @param abbrev Whether to shorten the string intelligibly as much as possible
+	 * @return The representation of the time length
+	 */
 	public static StringBuilder printTimeLength(long seconds, int nanos, StringBuilder sb, boolean abbrev) {
 		if (seconds == 0 && nanos == 0) {
 			sb.append("no time");
@@ -540,6 +581,26 @@ public class QommonsUtils {
 		return new SimpleDateFormat(format.toString());
 	}
 
+	/**
+	 * <p>
+	 * Prints a time in a human-readable format relative to a reference time. This method produces very natural string whose format varies
+	 * depending on how far removed the given time is from the reference.
+	 * </p>
+	 * <p>
+	 * For example, if the time is less than a day removed from the reference and a precision of seconds is given, the result will be
+	 * formatted like "HH:mm". If it is more than a day removed but less than a year, the day and month ("ddMMM") will be prepended. If more
+	 * than a year removed, the string will be absolute formatted like "ddMMMyyyy HH:mm".
+	 * </p>
+	 * 
+	 * @param time The time to print
+	 * @param referenceTime The reference time relative to which to print the given time
+	 * @param precision The maximum precision to print the time in
+	 * @param timeZone The timezone to use
+	 * @param justNowThreshold A time difference threshold below which the given justNow string will be returned
+	 * @param justNow A string to return if the difference between the time and the reference is below either the given justNowThreshold or
+	 *        the given precision
+	 * @return The relative-printed string
+	 */
 	public static String printRelativeTime(long time, long referenceTime, TimePrecision precision, TimeZone timeZone, long justNowThreshold,
 		String justNow) {
 		long diff = time - referenceTime;
@@ -704,6 +765,14 @@ public class QommonsUtils {
 		return Collections.unmodifiableList(list);
 	}
 
+	/**
+	 * @param <T> The type of the source values
+	 * @param <V> The type of the mapped values
+	 * @param values The values to map
+	 * @param map The mapping function
+	 * @param unmodifiable Whether the result should be unmodifiable
+	 * @return The list of mapped values
+	 */
 	public static <T, V> List<V> map(Collection<? extends T> values, Function<? super T, ? extends V> map, boolean unmodifiable) {
 		if (values.isEmpty())
 			return unmodifiable ? Collections.emptyList() : new ArrayList<>(5);
@@ -713,6 +782,15 @@ public class QommonsUtils {
 		return unmodifiable ? Collections.unmodifiableList(list) : list;
 	}
 
+	/**
+	 * Same as {@link #map(Collection, Function, boolean)} but produces an unmodifiable {@link BetterList}
+	 * 
+	 * @param <T> The type of the source values
+	 * @param <V> The type of the mapped values
+	 * @param values The values to map
+	 * @param map The mapping function
+	 * @return The BetterList of mapped values
+	 */
 	public static <T, V> BetterList<V> map2(Collection<? extends T> values, Function<? super T, ? extends V> map) {
 		if (values.isEmpty())
 			return BetterList.empty();
@@ -722,14 +800,22 @@ public class QommonsUtils {
 		return BetterList.of(list);
 	}
 
+	/**
+	 * @param <T> The type of the source values
+	 * @param <V> The type of the mapped values
+	 * @param values The values to map
+	 * @param filter The source value filter, may be null to use all source values
+	 * @param map The mapping function, may be null if source and value types are the same
+	 * @return An unmodifiable BetterList containing all source values passing the given filter, mapped with the given map
+	 */
 	public static <T, V> BetterList<V> filterMap(Collection<? extends T> values, Predicate<? super T> filter,
 		Function<? super T, ? extends V> map) {
 		if (values.isEmpty())
 			return BetterList.empty();
 		ArrayList<V> list = new ArrayList<>(values.size());
 		for (T value : values) {
-			if (filter.test(value))
-				list.add(map.apply(value));
+			if (filter == null || filter.test(value))
+				list.add(map == null ? (V) value : map.apply(value));
 		}
 		list.trimToSize();
 		return BetterList.of(list);
@@ -770,8 +856,7 @@ public class QommonsUtils {
 	 */
 	public static String encodeUnicode(String str) {
 		int c;
-		for (c = 0; c < str.length() && str.codePointAt(c) <= 0x7f; c++)
-			;
+		for (c = 0; c < str.length() && str.codePointAt(c) <= 0x7f; c++) {}
 		if (c == str.length())
 			return str;
 
@@ -787,8 +872,7 @@ public class QommonsUtils {
 	public static int encodeUnicode(StringBuilder str) {
 		int ret = 0;
 		int c;
-		for (c = 0; c < str.length() && str.codePointAt(c) <= 0x7f; c++)
-			;
+		for (c = 0; c < str.length() && str.codePointAt(c) <= 0x7f; c++) {}
 		if (c == str.length())
 			return ret;
 
@@ -912,8 +996,7 @@ public class QommonsUtils {
 		int ret = 0;
 		for (int i = 0; i <= str.length() - srch.length(); i++) {
 			int j;
-			for (j = 0; j < srch.length() && str.charAt(i + j) == srch.charAt(j); j++)
-				;
+			for (j = 0; j < srch.length() && str.charAt(i + j) == srch.charAt(j); j++) {}
 			if (j == srch.length()) {
 				ret++;
 				for (j = 0; j < srch.length() && j < replacement.length(); j++)
@@ -926,41 +1009,6 @@ public class QommonsUtils {
 			}
 		}
 		return ret;
-	}
-
-	public static String getPluralSuffix(String str) {
-		if (str.endsWith("ies"))
-			return "ies";
-		else if (str.endsWith("es"))
-			return "es";
-		else if (str.endsWith("s"))
-			return "s";
-		else
-			return null;
-	}
-
-	public static String pluralize(String string) {
-		if (string.endsWith("y"))
-			return string.substring(0, string.length() - 1) + "ies";
-		else if (string.endsWith("s"))
-			return string + "es";
-		else
-			return string + "s";
-	}
-
-	public static String singularize(String string) {
-		String suffix = getPluralSuffix(string);
-		if (suffix != null) {
-			switch (suffix) {
-			case "ies":
-				return string.substring(0, string.length() - 3) + "y";
-			case "es":
-				return string.substring(0, string.length() - 2);
-			case "s":
-				return string.substring(0, string.length() - 1);
-			}
-		}
-		return string;
 	}
 
 	private static final long SIGN_MASK = 1L << 63;

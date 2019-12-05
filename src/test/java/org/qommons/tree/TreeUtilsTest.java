@@ -143,6 +143,7 @@ public class TreeUtilsTest {
 		}
 	}
 
+	/** Barrage-tests {@link RedBlackNode#splitBetween(RedBlackNode, RedBlackNode, java.util.function.BooleanSupplier)} */
 	@Test
 	public void testTreeNodeSplit() {
 		TestHelper.createTester(TreeSplitTester.class).withRandomCases(1)//
@@ -180,6 +181,7 @@ public class TreeUtilsTest {
 		}
 	}
 
+	/** Tests {@link RedBlackTree#copy()} */
 	@Test
 	public void testTreeCopy() {
 		RedBlackTree<Integer> tree = new RedBlackTree<>();
@@ -195,6 +197,10 @@ public class TreeUtilsTest {
 		checkIntegrity(copy);
 	}
 
+	/**
+	 * Tests {@link RedBlackNode#build(RedBlackTree, Iterable, java.util.function.Function)} against java {@link TreeSet} and
+	 * {@link TreeMap}
+	 */
 	@Test
 	public void testTreeCopyFromJavaTree() {
 		TreeSet<Integer> tree = new TreeSet<>();

@@ -12,7 +12,8 @@ import org.qommons.collect.OptimisticContext;
  * A red-black tree structure
  * 
  * @param <E> The type of values stored in the tree
- */public class RedBlackTree<E> {
+ */
+public class RedBlackTree<E> {
 	private RedBlackNode<E> theRoot;
 	RedBlackNode<E> theFirst;
 	RedBlackNode<E> theLast;
@@ -57,6 +58,13 @@ import org.qommons.collect.OptimisticContext;
 		// return theRoot == null ? null : theRoot.getTerminal(first, () -> true);
 	}
 
+	/**
+	 * @param value The value to add
+	 * @param compare The value sorting
+	 * @param distinct Whether to return null if the values is already present (i.e. {@link Comparator#compare(Object, Object)} returns 0
+	 *        for a value in the tree and the argument)
+	 * @return The new node, or null if the value was found and <code>distinct</code> was true
+	 */
 	public RedBlackNode<E> insert(E value, Comparator<? super E> compare, boolean distinct) {
 		if (theRoot == null) {
 			theRoot = new RedBlackNode<>(this, value);
@@ -71,6 +79,7 @@ import org.qommons.collect.OptimisticContext;
 		return newNode;
 	}
 
+	/** @return An independent copy of this tree */
 	public RedBlackTree<E> copy() {
 		RedBlackTree<E> copy = new RedBlackTree<>();
 		if (theRoot != null)
@@ -79,6 +88,12 @@ import org.qommons.collect.OptimisticContext;
 		return copy;
 	}
 
+	/**
+	 * Allows tracking of the {@link RedBlackTree#repair(Comparator, boolean, RepairListener)} operation
+	 * 
+	 * @param <E> The type of values in the tree
+	 * @param <X> The custom data object to use to track removed and moved nodes
+	 */
 	public interface RepairListener<E, X> {
 		/** @see org.qommons.collect.ValueStoredCollection.RepairListener#removed(org.qommons.collect.CollectionElement) */
 		@SuppressWarnings("javadoc")

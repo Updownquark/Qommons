@@ -13,17 +13,40 @@ import java.util.regex.Pattern;
 
 import org.qommons.QommonsUtils;
 
+/**
+ * Knows how to parse a type of value from text and to print a type of value into text
+ * 
+ * @param <T> The type of object that this object can parse and format
+ */
 public interface Format<T> {
+	/**
+	 * Appends a value into a StringBuilder in this format
+	 * 
+	 * @param text The text to append the value into
+	 * @param value The value to append to the text
+	 */
 	void append(StringBuilder text, T value);
 
+	/**
+	 * Formats a value to a String
+	 * 
+	 * @param value The value to format
+	 * @return The formatted value
+	 */
 	default String format(T value) {
 		StringBuilder s = new StringBuilder();
 		append(s, value);
 		return s.toString();
 	}
 
+	/**
+	 * @param text The text to parse
+	 * @return The parsed value
+	 * @throws ParseException If a value of this type was not recognized in the text
+	 */
 	T parse(CharSequence text) throws ParseException;
 
+	/** Stupid-simple text format that just formats and parses text as-is */
 	public static final Format<String> TEXT = new Format<String>() {
 		@Override
 		public void append(StringBuilder text, String value) {
@@ -36,6 +59,7 @@ public interface Format<T> {
 		}
 	};
 
+	/** Parses integers from text */
 	public static final Format<Integer> INT = new Format<Integer>() {
 		@Override
 		public void append(StringBuilder text, Integer value) {
@@ -45,15 +69,17 @@ public interface Format<T> {
 		@Override
 		public Integer parse(CharSequence text) throws ParseException {
 			Long parsed = LONG.parse(text);
+			if (text.length() > 10)
+				throw new ParseException("Integer values must be between " + Integer.MIN_VALUE + " and " + Integer.MAX_VALUE, 0);
 			if (parsed.longValue() < Integer.MIN_VALUE || parsed.longValue() > Integer.MAX_VALUE)
 				throw new ParseException("Integer values must be between " + Integer.MIN_VALUE + " and " + Integer.MAX_VALUE, 0);
 			return parsed.intValue();
 		}
 	};
 
+	/** Parses long integers from text */
 	public static final Format<Long> LONG = new Format<Long>() {
 		private static final String MAX_TEXT = "" + Long.MAX_VALUE;
-		private static final String MIN_TEXT = "" + Long.MIN_VALUE;
 
 		@Override
 		public void append(StringBuilder text, Long value) {
@@ -108,6 +134,7 @@ public interface Format<T> {
 		}
 	};
 
+	/** Parses durations from text */
 	public static final Format<Duration> DURATION = new Format<Duration>() {
 		@Override
 		public void append(StringBuilder text, Duration value) {
@@ -209,10 +236,20 @@ public interface Format<T> {
 		}
 	};
 
+	/**
+	 * @param pattern Pattern to match
+	 * @param errorText The error message to throw for non-matches
+	 * @return A text format that throws an exception when text does not match the pattern
+	 */
 	public static Format<String> validatedText(Pattern pattern, String errorText) {
 		return validatedText(pattern, m -> m.matches() ? null : errorText);
 	}
 
+	/**
+	 * @param pattern Pattern to match
+	 * @param errorText Supplies an error message for non-matches
+	 * @return A text format that throws an exception when text does not match the pattern
+	 */
 	public static Format<String> validatedText(Pattern pattern, Function<Matcher, String> errorText) {
 		return new Format<String>() {
 			@Override
@@ -231,6 +268,11 @@ public interface Format<T> {
 		};
 	}
 
+	/**
+	 * @param pattern The float format pattern
+	 * @return A float-value format with the given pattern
+	 * @see DecimalFormat#DecimalFormat(String)
+	 */
 	public static Format<Float> floatFormat(String pattern) {
 		Format<Double> doubleFormat = doubleFormat(pattern);
 		return new Format<Float>() {
@@ -249,6 +291,11 @@ public interface Format<T> {
 		};
 	}
 
+	/**
+	 * @param pattern The float format pattern
+	 * @return A double-value format with the given pattern
+	 * @see DecimalFormat#DecimalFormat(String)
+	 */
 	public static Format<Double> doubleFormat(String pattern) {
 		DecimalFormat format = new DecimalFormat(pattern);
 		return new Format<Double>() {
@@ -278,6 +325,14 @@ public interface Format<T> {
 		};
 	}
 
+	/**
+	 * Adds validation to a format, creating a format that throws an exception for values parsed by the given format that fail a filter
+	 * 
+	 * @param <T> The type of values to format
+	 * @param format The format to format and parse values
+	 * @param validation The validation function to supply an error message for illegal values (and null for legal ones)
+	 * @return The validated format
+	 */
 	public static <T> Format<T> validate(Format<T> format, Function<? super T, String> validation) {
 		return new Format<T>() {
 			@Override
@@ -296,10 +351,19 @@ public interface Format<T> {
 		};
 	}
 
+	/**
+	 * @param dateFormat The date format pattern
+	 * @return A date format with the given pattern
+	 * @see SimpleDateFormat#SimpleDateFormat(String)
+	 */
 	public static Format<Instant> date(String dateFormat) {
 		return date(new SimpleDateFormat(dateFormat));
 	}
 
+	/**
+	 * @param dateFormat The date format
+	 * @return A {@link Format} backed by the given {@link SimpleDateFormat}
+	 */
 	public static Format<Instant> date(SimpleDateFormat dateFormat) {
 		return new Format<Instant>() {
 			@Override

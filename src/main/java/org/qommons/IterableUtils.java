@@ -2,6 +2,7 @@ package org.qommons;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -525,13 +526,47 @@ public class IterableUtils {
 		};
 	}
 
+	/**
+	 * Used by {@link IterableUtils#compare(Iterable, Iterable, SortedAdjuster)}
+	 * 
+	 * @param <T> The type of the first collection
+	 * @param <X> The type of the second collection
+	 */
 	public interface SortedAdjuster<T, X> {
+		/**
+		 * Compares objects from the 2 collections
+		 * 
+		 * @param v1 The object from the first collection
+		 * @param v2 The object from the second collection
+		 * @return Like {@link Comparator#compare(Object, Object)}, but for heterogeneous types
+		 */
 		int compare(T v1, X v2);
 
+		/**
+		 * @param newValue The value from the second collection that was not present in the first
+		 * @param after The value in the first collection that the new value should be placed after (or null if the new value should be
+		 *        first object in the first collection)
+		 * @param before The value in the first collection that the new value should be placed before (or null if the new value should be
+		 *        last object in the first collection)
+		 */
 		void added(X newValue, T after, T before);
 
+		/**
+		 * @param oldValue The value from the first collection that is not present in the second
+		 * @param after The value in the second collection that the value should be placed after (or null if the value should be first
+		 *        object in the second collection)
+		 * @param before The value in the second collection that the value should be placed before (or null if the value should be last
+		 *        object in the second collection)
+		 * @return Whether to remove the value from the second collection (via {@link Iterator#remove()}}
+		 */
 		boolean removed(T oldValue, X after, X before);
 
+		/**
+		 * Called when a value is found in both collections (i.e. when {@link #compare(Object, Object)} returns 0)
+		 * 
+		 * @param v1 The value in the first collection
+		 * @param v2 The value in the second collection
+		 */
 		void found(T v1, X v2);
 	}
 
@@ -550,6 +585,15 @@ public class IterableUtils {
 		return exRes.unsafe();
 	}
 
+	/**
+	 * Compares two related sorted sequences
+	 * 
+	 * @param <T> The type of the first sequence
+	 * @param <X> The type of the second sequence
+	 * @param v1 The first sequence
+	 * @param v2 The second sequence
+	 * @param adjuster The adjuster to compare the iterator values and act upon differences
+	 */
 	public static <T, X> void compare(Iterable<? extends T> v1, Iterable<? extends X> v2, SortedAdjuster<T, X> adjuster) {
 		compare(v1.iterator(), v2.iterator(), adjuster);
 	}

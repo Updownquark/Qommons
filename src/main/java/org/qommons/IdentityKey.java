@@ -15,6 +15,10 @@ public class IdentityKey<T> {
 		this(val, true);
 	}
 
+	/**
+	 * @param val The value to wrap
+	 * @param useIdHash True to use {@link System#identityHashCode(Object)} for the hash code, or false to use the value's own hash code
+	 */
 	public IdentityKey(T val, boolean useIdHash) {
 		value = val;
 		this.useIdHash = useIdHash;

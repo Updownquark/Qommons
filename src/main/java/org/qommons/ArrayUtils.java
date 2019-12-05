@@ -1599,6 +1599,11 @@ public final class ArrayUtils {
 			createArray = true;
 		}
 
+		/**
+		 * Tells this adjuster to perform the operation without actually creating a new array for the result (null will be returned)
+		 * 
+		 * @return This adjuster
+		 */
 		public ArrayAdjuster<T1, T2, E> noCreate() {
 			createArray = false;
 			return this;
@@ -1680,8 +1685,8 @@ public final class ArrayUtils {
 					ret[i] = null;
 			if (createArray) {
 				T1[] actualRet = (T1[]) Array.newInstance(original.getClass().getComponentType(), r);
-			System.arraycopy(ret, 0, actualRet, 0, r);
-			return actualRet;
+				System.arraycopy(ret, 0, actualRet, 0, r);
+				return actualRet;
 			} else
 				return null;
 		}

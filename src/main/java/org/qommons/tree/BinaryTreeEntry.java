@@ -49,7 +49,7 @@ public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<V>, MapEntryHandle
 	 * A {@link BinaryTreeEntry} that is reversed
 	 * 
 	 * @param <K> The key type of the entry
-	 * @param <V> The value type fo the entry
+	 * @param <V> The value type for the entry
 	 */
 	class ReversedBinaryTreeEntry<K, V> extends ReversedBinaryTreeNode<V> implements BinaryTreeEntry<K, V> {
 		public ReversedBinaryTreeEntry(BinaryTreeEntry<K, V> wrap) {
@@ -113,6 +113,12 @@ public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<V>, MapEntryHandle
 		}
 	}
 
+	/**
+	 * @param <K> The key type of the entry
+	 * @param <V> The value type of the entry
+	 * @param entry The entry to reverse
+	 * @return The {@link BinaryTreeEntry#reverse() reversed} entry, or null if the entry is null
+	 */
 	public static <K, V> BinaryTreeEntry<K, V> reverse(BinaryTreeEntry<K, V> entry) {
 		return entry == null ? null : entry.reverse();
 	}

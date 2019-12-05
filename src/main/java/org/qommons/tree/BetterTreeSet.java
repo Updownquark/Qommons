@@ -77,20 +77,38 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 		this(locker, DEFAULT_DESCRIPTION, compare);
 	}
 
+	/**
+	 * @param safe Whether the set should be thread-safe
+	 * @param values The initial values for the set
+	 */
 	public BetterTreeSet(boolean safe, SortedSet<E> values) {
 		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), DEFAULT_DESCRIPTION, values.comparator());
 		initialize(values, v -> v);
 	}
 
+	/**
+	 * @param locker The locking strategy for the set
+	 * @param values The initial values for the set
+	 */
 	public BetterTreeSet(CollectionLockingStrategy locker, SortedSet<E> values) {
 		this(locker, DEFAULT_DESCRIPTION, values.comparator());
 		initialize(values, v -> v);
 	}
 
+	/**
+	 * @param locker The locking strategy for the set
+	 * @param descrip A description of the set
+	 * @param compare The value sorting for the set
+	 */
 	protected BetterTreeSet(CollectionLockingStrategy locker, String descrip, Comparator<? super E> compare) {
 		super(locker, descrip, compare);
 	}
 
+	/**
+	 * @param locker The locking strategy for the set
+	 * @param identity The identity for the set
+	 * @param compare The value sorting for the set
+	 */
 	protected BetterTreeSet(CollectionLockingStrategy locker, Object identity, Comparator<? super E> compare) {
 		super(locker, identity, compare);
 	}

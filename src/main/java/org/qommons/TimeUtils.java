@@ -22,37 +22,57 @@ import org.qommons.collect.QuickSet.QuickMap;
  * very slow. This class contains optimized implementations of some useful time operations.
  */
 public class TimeUtils {
+	/** {@link TimeZone#getTimeZone(String) TimeZone.getTimeZone("GMT")} */
 	public static final TimeZone GMT = TimeZone.getTimeZone("GMT");
 
 	private enum DateElementType {
 		Year, Month, Day, Hour, Minute, Second, SubSecond, AmPm, TimeZone
 	}
 
+	/** A parsed time returned from {@link TimeUtils#parseFlexFormatTime(CharSequence, boolean, boolean)} */
 	public interface ParsedTime extends Comparable<ParsedTime> {
+		/** @return The time zone of the parsed time, if specified */
 		TimeZone getTimeZone();
 
+		/**
+		 * @param reference The reference time that the parsed time may be relative to
+		 * @return The instant represented by this time relative to the given reference time
+		 */
 		Instant evaluate(Supplier<Instant> reference);
 
+		/**
+		 * @param time The time to compare this to
+		 * @return Whether this time may represent the given time relative to any reference
+		 */
 		boolean mayMatch(Instant time);
 
+		/**
+		 * Whether this time can be {@link #compareTo(ParsedTime) compared} to the given time. E.g. relative times cannot be compared if the
+		 * largest time granularity they specify is not the same, like ("18May" and "12:15").
+		 * 
+		 * @param other The time to compare to
+		 * @return Whether the result of {@link #compareTo(ParsedTime)} will have meaning for the given time
+		 */
 		boolean isComparable(ParsedTime other);
 	}
 
-	private static final Duration MIN_YEAR = Duration.ofDays(365);
-	private static final Duration MAX_YEAR = Duration.ofDays(366);
-	private static final Duration MIN_MONTH = Duration.ofDays(28);
-	private static final Duration MAX_MONTH = Duration.ofDays(31);
 	private static final Duration DAY = Duration.ofDays(1);
 	private static final Duration HOUR = Duration.ofHours(1);
 	private static final Duration MINUTE = Duration.ofMinutes(1);
 
+	/**
+	 * A time parsed from {@link TimeUtils#parseFlexFormatTime(CharSequence, boolean, boolean)} for which the year is specified with 4
+	 * digits, meaning that it represents an absolute instant or a single range in time.
+	 */
 	public static class AbsoluteTime implements ParsedTime {
 		private final String theText;
+		/** The lower bound of the range represented by this time */
 		public final Instant time;
+		/** The upper bound of the range represented by this time */
 		public final Instant maxTime;
 		private final TimeZone theTimeZone;
 
-		public AbsoluteTime(String text, Instant time, Calendar cal, TimeZone timeZone, DateElementType lowestResolution, int nanoDigits) {
+		AbsoluteTime(String text, Instant time, Calendar cal, TimeZone timeZone, DateElementType lowestResolution, int nanoDigits) {
 			theText = text;
 			this.time = time;
 			this.theTimeZone = timeZone;
@@ -151,6 +171,10 @@ public class TimeUtils {
 		}
 	}
 
+	/**
+	 * A time parsed from {@link TimeUtils#parseFlexFormatTime(CharSequence, boolean, boolean)} where the year was not specified with 4
+	 * digits, meaning that this time can represent any number of time ranges depending on a reference point.
+	 */
 	public static class RelativeTime implements ParsedTime {
 		private final String theText;
 		private final TimeZone theTimeZone;
@@ -351,6 +375,8 @@ public class TimeUtils {
 	 * </p>
 	 * 
 	 * @param str The text to parse
+	 * @param wholeText Whether the entire sequence should be parsed. If false, this will return a value if the beginning of the sequence is
+	 *        understood.
 	 * @param throwIfNotFound Whether to throw a {@link ParseException} or return null if a time cannot be parsed for any reason
 	 * @return A ParsedTime evaluated from the text
 	 * @throws ParseException If <code>throwIfNotFound</code> and the string cannot be parsed
@@ -551,6 +577,7 @@ public class TimeUtils {
 		return value;
 	}
 
+	/** A thread-local calendar. Calendars are rather heavy objects but are thread-unsafe. */
 	public static final ThreadLocal<Calendar> CALENDAR = ThreadLocal.withInitial(Calendar::getInstance);
 
 	private static final String[] MONTHS = new String[] { "january", "february", "march", "april", "may", "june", "july", "august",

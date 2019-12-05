@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Spliterator;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.BooleanSupplier;
@@ -125,7 +126,7 @@ public final class RedBlackNode<E> {
 	 *
 	 * @return A map containing mutable properties that may be used to ensure validation of the structure
 	 */
-	protected Map<String, Object> initValidationProperties() {
+	protected static Map<String, Object> initValidationProperties() {
 		Map<String, Object> ret = new java.util.LinkedHashMap<>();
 		ret.put("black-depth", 0);
 		return ret;
@@ -391,6 +392,16 @@ public final class RedBlackNode<E> {
 			return -bSide; // Either b was not the ancestor or the node parameters were identical
 	}
 
+	/**
+	 * Quickly returns a node that is between 2 nodes (or null if the nodes are the same or adjacent). This powers speedy
+	 * {@link Spliterator#trySplit()} functionality for parallel streaming.
+	 * 
+	 * @param <E> The type of the nodes
+	 * @param a The first node
+	 * @param b The second node
+	 * @param cont The optimistic context (null will be returned if this ever returns false)
+	 * @return A node between the given nodes, or null if the nodes are the same or adjacent
+	 */
 	public static <E> RedBlackNode<E> splitBetween(RedBlackNode<E> a, RedBlackNode<E> b, BooleanSupplier cont) {
 		if (a == null || b == null)
 			throw new NullPointerException((a == null && b == null) ? "Both null" : (a == null ? "a is null" : "b is null"));
@@ -803,7 +814,17 @@ public final class RedBlackNode<E> {
 		return left ? thePrevious : theNext;
 	}
 
-	public static <T, E extends T> RedBlackNode<T> deepCopy(RedBlackNode<E> root, RedBlackTree<T> tree,
+	/**
+	 * Creates a copy of a node for a new tree
+	 * 
+	 * @param <E> The type of the source tree
+	 * @param <T> The type of the new tree
+	 * @param root The node to copy
+	 * @param tree The tree to copy the node into
+	 * @param map The function to apply to the source tree's values
+	 * @return The new root node
+	 */
+	public static <T, E> RedBlackNode<T> deepCopy(RedBlackNode<E> root, RedBlackTree<T> tree,
 		Function<? super E, ? extends T> map) {
 		RedBlackNode<T> copy = _deepCopy(root, tree, null, true, true, map);
 		// The only thing the private method leaves undone is hooking up the next/previous links
@@ -811,7 +832,7 @@ public final class RedBlackNode<E> {
 		return copy;
 	}
 
-	private static <T, E extends T> RedBlackNode<T> _deepCopy(RedBlackNode<E> node, RedBlackTree<T> tree, RedBlackNode<T> parent,
+	private static <E, T> RedBlackNode<T> _deepCopy(RedBlackNode<E> node, RedBlackTree<T> tree, RedBlackNode<T> parent,
 		boolean mayBeFirst, boolean mayBeLast, Function<? super E, ? extends T> map) {
 		RedBlackNode<T> copy = new RedBlackNode<>(tree, map.apply(node.theValue));
 		copy.theParent = parent;
@@ -1093,6 +1114,17 @@ public final class RedBlackNode<E> {
 		JAVA_TREE_ROOT_GETTERS = Collections.unmodifiableMap(rootGetters);
 	}
 
+	/**
+	 * Builds a tree from a sequence of values. This method applies some optimizations in cases where the structure of the sequence can be
+	 * used to create the tree structure more quickly.
+	 * 
+	 * @param <T> The type of the tree to populate
+	 * @param <E> The type of the source sequence
+	 * @param tree The tree to populate
+	 * @param values The value sequence to populate the tree with
+	 * @param mapFn The mapping to apply to the sequence values
+	 * @return Whether optimization was used to populate the tree
+	 */
 	public static <T, E> boolean build(RedBlackTree<T> tree, Iterable<E> values, Function<? super E, ? extends T> mapFn) {
 		Class<?> type = values.getClass();
 		TreeMapRootAccess rootGetter;

@@ -138,11 +138,30 @@ public class StringUtils {
 		return intolerantResult;
 	}
 
+	/**
+	 * Prints a sequence of values to a StringBuilder
+	 * 
+	 * @param <T> The type of values to print
+	 * @param delimiter The character sequence to place between each value
+	 * @param values The sequence to print
+	 * @param format The formatter for the sequence (e.g. <code>StringBuilder::append</code>)
+	 * @return The printed StringBuilder
+	 */
 	public static <T> StringBuilder print(CharSequence delimiter, Iterable<? extends T> values,
 		Function<? super T, ? extends CharSequence> format) {
 		return print(new StringBuilder(), delimiter, values, (v, str) -> str.append(format == null ? String.valueOf(v) : format.apply(v)));
 	}
 
+	/**
+	 * Prints a sequence of values to a StringBuilder
+	 * 
+	 * @param <T> The type of values to print
+	 * @param into The StringBuilder to print into--may be null, in which case a new one will be created
+	 * @param delimiter The character sequence to place between each value
+	 * @param values The sequence to print
+	 * @param format The formatter for the sequence (e.g. <code>StringBuilder::append</code>)
+	 * @return The printed StringBuilder
+	 */
 	public static <T> StringBuilder print(StringBuilder into, CharSequence delimiter, Iterable<? extends T> values,
 		BiConsumer<? super T, ? super StringBuilder> format) {
 		if (into == null)
@@ -161,9 +180,27 @@ public class StringUtils {
 		return into;
 	}
 
+	/** Prints values from a sequence to a String */
 	public interface SequencePrinter {
+		/**
+		 * Prints a value into a StringBuilder
+		 * 
+		 * @param <T> The type of the value
+		 * @param into The StringBuilder to append to
+		 * @param value The value to append
+		 * @param format The format to use to print the value
+		 * @param before The number of values that were in the sequence before this one
+		 * @param last Whether the value is the last in the sequence
+		 */
 		<T> void printValue(StringBuilder into, T value, BiConsumer<? super StringBuilder, ? super T> format, int before, boolean last);
 
+		/**
+		 * @param <T> The type of the value
+		 * @param into The StringBuilder to append to
+		 * @param values The values to print
+		 * @param format The format to use to print the values
+		 * @return The StringBuilder
+		 */
 		default <T> StringBuilder print(StringBuilder into, Iterable<? extends T> values,
 			BiConsumer<? super StringBuilder, ? super T> format) {
 			if (into == null)
@@ -180,14 +217,33 @@ public class StringUtils {
 			return into;
 		}
 
+		/**
+		 * @param <T> The type of the value
+		 * @param into The StringBuilder to append to
+		 * @param values The values to print
+		 * @param format The format to use to print the values
+		 * @return The StringBuilder
+		 */
 		default <T> StringBuilder print(StringBuilder into, T[] values, BiConsumer<? super StringBuilder, ? super T> format) {
 			return print(into, Arrays.asList(values), format);
 		}
 
+		/**
+		 * @param <T> The type of the value
+		 * @param values The values to print
+		 * @param format The format to use to print the values
+		 * @return The StringBuilder
+		 */
 		default <T> StringBuilder print(Iterable<? extends T> values, BiConsumer<? super StringBuilder, ? super T> format) {
 			return print(new StringBuilder(), values, format);
 		}
 
+		/**
+		 * @param <T> The type of the value
+		 * @param values The values to print
+		 * @param format The format to use to print the values
+		 * @return The StringBuilder
+		 */
 		default <T> StringBuilder print(T[] values, BiConsumer<? super StringBuilder, ? super T> format) {
 			return print(Arrays.asList(values), format);
 		}
@@ -221,17 +277,29 @@ public class StringUtils {
 		};
 	}
 
+	/** Represents a composite name made up of joined components */
 	public static class Name {
 		private final String[] theComponents;
 
+		/** @param components The components of the name */
 		public Name(String[] components) {
 			theComponents = components;
 		}
 
+		/** @return The comonents of this name */
 		public String[] getComponents() {
 			return theComponents;
 		}
 
+		/**
+		 * Prints the name using a case scheme
+		 * 
+		 * @param str The StringBuilder to print into
+		 * @param initialCapital Whether the initial character should be capitalized
+		 * @param intermediateCapital Whether the first character of each component but the first should be capitalized
+		 * @param delimiter A sequence to place between each component, null is interpreted as empty
+		 * @return The StringBuilder
+		 */
 		public StringBuilder toCaseScheme(StringBuilder str, boolean initialCapital, boolean intermediateCapital, CharSequence delimiter) {
 			for (int i = 0; i < theComponents.length; i++) {
 				if (i == 0) {
@@ -253,6 +321,14 @@ public class StringUtils {
 			return str;
 		}
 
+		/**
+		 * Prints the name using a case scheme
+		 * 
+		 * @param initialCapital Whether the initial character should be capitalized
+		 * @param intermediateCapital Whether the first character of each component but the first should be capitalized
+		 * @param delimiter A sequence to place between each component
+		 * @return The printed string
+		 */
 		public String toCaseScheme(boolean initialCapital, boolean intermediateCapital, CharSequence delimiter) {
 			return toCaseScheme(new StringBuilder(), initialCapital, intermediateCapital, delimiter).toString();
 		}
@@ -276,18 +352,40 @@ public class StringUtils {
 			return toCaseScheme(str, true, true, null);
 		}
 
+		/**
+		 * Same as {@link #toCaseScheme(boolean, boolean, CharSequence) toCaseScheme(false, true, null)}
+		 * 
+		 * @return The camel case string
+		 */
 		public String toCamelCase() {
 			return toCamelCase(new StringBuilder()).toString();
 		}
 
+		/**
+		 * Same as {@link #toCaseScheme(StringBuilder, boolean, boolean, CharSequence) toCaseScheme(str, false, true, null)}
+		 * 
+		 * @param str The StringBuilder to print to
+		 * @return The StringBuilder
+		 */
 		public StringBuilder toCamelCase(StringBuilder str) {
 			return toCaseScheme(str, false, true, null);
 		}
 
+		/**
+		 * Same as {@link #toCaseScheme(boolean, boolean, CharSequence) toCaseScheme(false, false, "-")}
+		 * 
+		 * @return The kebab-case string
+		 */
 		public String toKebabCase() {
 			return toKebabCase(new StringBuilder()).toString();
 		}
 
+		/**
+		 * Same as {@link #toCaseScheme(StringBuilder, boolean, boolean, CharSequence) toCaseScheme(str, false, false, "-")}
+		 * 
+		 * @param str The StringBuilder to print to
+		 * @return The StringBuilder
+		 */
 		public StringBuilder toKebabCase(StringBuilder str) {
 			return toCaseScheme(str, false, false, "-");
 		}
@@ -323,6 +421,13 @@ public class StringUtils {
 		return new Name(components.toArray(new String[components.size()]));
 	}
 
+	/**
+	 * Parses a name sequence from a string with a character delimiter (e.g. '.' to parse java.util.Collection)
+	 * 
+	 * @param str The string to parse
+	 * @param delimiter The character delimiter
+	 * @return The parsed name
+	 */
 	public static Name split(String str, char delimiter) {
 		List<String> components = new LinkedList<>();
 		int start = 0;
@@ -386,15 +491,31 @@ public class StringUtils {
 	 * {@link StringUtils#getNewItemName(Iterable, Function, String, DuplicateItemNamer) getNewItemName}
 	 */
 	public interface DuplicateItemNamer {
+		/**
+		 * @param name The name containing the first try to append the duplicate suffix onto
+		 * @param suffix The suffix integer to append
+		 */
 		void appendDuplicate(StringBuilder name, int suffix);
 
+		/**
+		 * @param name The name to test
+		 * @return The parsed name duplicate if the given name matches duplicate names produced by this format, or null if the name is not
+		 *         recognized as a duplicate
+		 */
 		DuplicateName detectDuplicate(String name);
 	}
 
+	/** A name that is recognized as a duplicate by {@link DuplicateItemNamer#detectDuplicate(String)} */
 	public static class DuplicateName {
+		/** The name of the item that was duplicated */
 		public final String originalName;
+		/** The duplicate suffix that was appended to make the name unique in the set if items */
 		public final int duplicateSuffix;
 
+		/**
+		 * @param originalName The name of the item that was duplicated
+		 * @param duplicateSuffix The duplicate suffix that was appended to make the name unique in the set if items
+		 */
 		public DuplicateName(String originalName, int duplicateSuffix) {
 			this.originalName = originalName;
 			this.duplicateSuffix = duplicateSuffix;
@@ -512,6 +633,14 @@ public class StringUtils {
 		}
 	}
 
+	/**
+	 * @param <E> The type of named items
+	 * @param items The set of named items
+	 * @param itemName The name function for the items
+	 * @param name The name to test
+	 * @param exclude A potential item in the list to exclude from consideration (e.g. the item being renamed)
+	 * @return Whether the given name is unique within the set (with the possible exception of the excluded item)
+	 */
 	public static <E> boolean isUniqueName(Iterable<? extends E> items, Function<? super E, String> itemName, String name, E exclude) {
 		for (E item : items) {
 			if (item == exclude)
@@ -522,17 +651,34 @@ public class StringUtils {
 		return true;
 	}
 
-	public static final String HEX_CHARS = "0123456789ABCDEF";
-
+	/** A source of binary data */
 	public interface ByteIterator {
+		/**
+		 * @return Whether another byte exists in the sequence
+		 * @throws IOException If the information cannot be determined
+		 */
 		boolean hasNext() throws IOException;
 
+		/**
+		 * @return The next byte in the sequence
+		 * @throws IOException If the information cannot be retrieved
+		 */
 		int next() throws IOException;
 
+		/**
+		 * @param bytes The bytes to iterate over
+		 * @return A ByteIterator over the given bytes
+		 */
 		public static ByteIterator of(byte[] bytes) {
 			return of(bytes, 0, bytes.length);
 		}
 
+		/**
+		 * @param bytes The bytes to iterate over
+		 * @param start The start offset in the byte array
+		 * @param end The end offset in the byte array
+		 * @return A ByteIterator over the given data
+		 */
 		public static ByteIterator of(byte[] bytes, int start, int end) {
 			if (start < 0)
 				throw new IndexOutOfBoundsException(start + "<0");
@@ -556,6 +702,10 @@ public class StringUtils {
 			};
 		}
 
+		/**
+		 * @param in The input stream to iterate over
+		 * @return A ByteIterator over the given stream
+		 */
 		public static ByteIterator of(InputStream in) {
 			return new ByteIterator() {
 				private boolean hasNext;
@@ -580,6 +730,7 @@ public class StringUtils {
 		}
 	}
 
+	/** Accepts a sequence of binary data */
 	public interface BinaryAccumulator {
 		/** @return Whether this accumulator can accept any more bytes */
 		boolean canAcceptMore();
@@ -594,6 +745,7 @@ public class StringUtils {
 		boolean accumulate(byte nextByte) throws IOException;
 	}
 
+	/** Accepts a sequence of characters */
 	public interface CharAccumulator {
 		/** @return Whether this accumulator can accept any more characters */
 		boolean canAcceptMore();
@@ -608,13 +760,16 @@ public class StringUtils {
 		boolean accumulate(char nextChar) throws IOException;
 	}
 
+	/** Implements {@link BinaryAccumulator} for a {@link ByteBuffer} */
 	public static class ByteBufferAccumulator implements BinaryAccumulator {
 		private final ByteBuffer theBuffer;
 
+		/** @param buffer The buffer to append data into */
 		public ByteBufferAccumulator(ByteBuffer buffer) {
 			theBuffer = buffer;
 		}
 
+		/** @return The buffer being appended to */
 		public ByteBuffer getBuffer() {
 			return theBuffer;
 		}
@@ -631,11 +786,17 @@ public class StringUtils {
 		}
 	}
 
+	/** A {@link BinaryAccumulator} for a byte array */
 	public static class ByteArrayAccumulator implements BinaryAccumulator {
 		private final byte[] theBytes;
 		private final int theLimit;
 		private int thePosition;
 
+		/**
+		 * @param bytes The bytes to put data into
+		 * @param start The start offset in the array
+		 * @param end The end offset in the array
+		 */
 		public ByteArrayAccumulator(byte[] bytes, int start, int end) {
 			if (start < 0)
 				throw new IndexOutOfBoundsException(start + "<0");
@@ -649,20 +810,24 @@ public class StringUtils {
 			theLimit = end;
 		}
 
+		/** @param bytes The bytes to put data into */
 		public ByteArrayAccumulator(byte[] bytes) {
 			theBytes = bytes;
 			thePosition = 0;
 			theLimit = bytes.length;
 		}
 
+		/** @return The index in the byte array at which the next byte will be put */
 		public int getPosition() {
 			return thePosition;
 		}
 
+		/** @return The byte array being modified */
 		public byte[] getBytes() {
 			return theBytes;
 		}
 
+		/** @return The last position plus one at which this accumulator will write data into the array */
 		public int getLimit() {
 			return theLimit;
 		}
@@ -679,13 +844,16 @@ public class StringUtils {
 		}
 	}
 
+	/** A {@link BinaryAccumulator} for an {@link OutputStream} */
 	public static class OutputStreamAccumulator implements BinaryAccumulator {
 		private final OutputStream theStream;
 
+		/** @param stream The stream to write the data into */
 		public OutputStreamAccumulator(OutputStream stream) {
 			theStream = stream;
 		}
 
+		/** @return The stream being written to */
 		public OutputStream getStream() {
 			return theStream;
 		}
@@ -702,11 +870,14 @@ public class StringUtils {
 		}
 	}
 
+	/** A {@link OutputStreamAccumulator} specifically for a {@link ByteArrayOutputStream} */
 	public static class ByteArrayOSAccumulator extends OutputStreamAccumulator {
+		/** Creates a new {@link ByteArrayOutputStream} to accumulate into */
 		public ByteArrayOSAccumulator() {
 			this(new ByteArrayOutputStream());
 		}
 
+		/** @param bytes The {@link ByteArrayOutputStream} to accumulate into */
 		public ByteArrayOSAccumulator(ByteArrayOutputStream bytes) {
 			super(bytes);
 		}
@@ -717,18 +888,26 @@ public class StringUtils {
 		}
 	}
 
+	/**
+	 * A {@link Reader} of a {@link CharSequence}
+	 * 
+	 * @param <C> The sub-type of CharSequence
+	 */
 	public static class CharSequenceReader<C extends CharSequence> extends Reader {
 		private final C theSequence;
 		private int thePosition;
 
+		/** @param sequence The sequence to read */
 		public CharSequenceReader(C sequence) {
 			theSequence = sequence;
 		}
 
+		/** @return The position in the sequence where the next character will be read from */
 		public int getPosition() {
 			return thePosition;
 		}
 
+		/** @return The sequence */
 		public C getSequence() {
 			return theSequence;
 		}
@@ -747,13 +926,20 @@ public class StringUtils {
 		public void close() {}
 	}
 
+	/**
+	 * A {@link CharAccumulator} for an {@link Appendable}
+	 * 
+	 * @param <A> The sub-type of Appendable
+	 */
 	public static class AppendableWriter<A extends Appendable> implements CharAccumulator {
 		private final A theAppendable;
 
+		/** @param appendable The appendable to write character data to */
 		public AppendableWriter(A appendable) {
 			theAppendable = appendable;
 		}
 
+		/** @return The appendable being written to */
 		public A getAppendable() {
 			return theAppendable;
 		}
@@ -770,9 +956,11 @@ public class StringUtils {
 		}
 	}
 
+	/** A {@link CharAccumulator} for a {@link Writer} */
 	public static class WriterAccumulator implements CharAccumulator {
 		private final Writer theWriter;
 
+		/** @param writer The writer to write to */
 		public WriterAccumulator(Writer writer) {
 			theWriter = writer;
 		}
@@ -789,6 +977,7 @@ public class StringUtils {
 		}
 	}
 
+	/** Encodes and decodes binary data to and from encoded character sequences */
 	public interface BinaryDataEncoder {
 		/** @return The radix of this encoder */
 		int getRadix();
@@ -805,10 +994,30 @@ public class StringUtils {
 		 */
 		int getByteLength(int encodedLength);
 
+		/**
+		 * @param <A> The type of the character accumulator to accumulate the data into
+		 * @param in The bytes to encode
+		 * @param out The character accumulator to accumulate the data into
+		 * @param byteCount Accepts the number of bytes that were in the iterator
+		 * @return The accumulator
+		 * @throws IOException If an exception is thrown from the byte iterator or the accumulator
+		 */
 		<A extends CharAccumulator> A format(ByteIterator in, A out, LongConsumer byteCount) throws IOException;
 
+		/**
+		 * @param <B> The type of the binary data accumulator to accumulate the data into
+		 * @param in The reader containing the character sequence data to parse
+		 * @param out The binary data accumulator to accumulate the data into
+		 * @param byteCount Accepts the number of bytes that were parsed from the sequence
+		 * @return The accumulator
+		 * @throws IOException If an exception is thrown from the reader or the accumulator
+		 */
 		<B extends BinaryAccumulator> B parse(Reader in, B out, LongConsumer byteCount) throws IOException;
 
+		/**
+		 * @param str The string to parse
+		 * @return The bytes represented by the string
+		 */
 		default byte[] parse(CharSequence str) {
 			try {
 				return parse(//
@@ -819,7 +1028,16 @@ public class StringUtils {
 			}
 		}
 
+		/**
+		 * @param str The string builder to format the data into, or null to create a new one
+		 * @param bytes The bytes to format
+		 * @param start The start offset in the bytes array
+		 * @param end The end offset in the bytes array
+		 * @return The StringBuilder
+		 */
 		default StringBuilder format(StringBuilder str, byte[] bytes, int start, int end) {
+			if (str == null)
+				str = new StringBuilder();
 			try {
 				return format(ByteIterator.of(bytes, start, end), new AppendableWriter<>(str), null).getAppendable();
 			} catch (IOException e) {
@@ -827,11 +1045,19 @@ public class StringUtils {
 			}
 		}
 
+		/**
+		 * @param bytes The binary data to format
+		 * @return The formatted data
+		 */
 		default String format(byte[] bytes) {
 			return format(new StringBuilder(), bytes, 0, bytes.length).toString();
 		}
 	}
 
+	/** The hex characters output by {@link #encodeHex()} (A-F are upper case, but lower case will be parsed as well) */
+	public static final String HEX_CHARS = "0123456789ABCDEF";
+
+	/** @return An encoder that encodes and decodes data to and from hex (16-base) sequences */
 	public static BinaryDataEncoder encodeHex() {
 		return new HexDataParser();
 	}
@@ -884,10 +1110,10 @@ public class StringUtils {
 			int read = in.read();
 			while (readyForMore && read >= 0) {
 				count++;
-				byte nextByte = (byte) (hexChar((char) read) << 4);
+				byte nextByte = (byte) (hexDigit((char) read) << 4);
 				read = in.read();
 				if (read >= 0) {
-					nextByte |= (hexChar((char) read) & 0xf);
+					nextByte |= (hexDigit((char) read) & 0xf);
 					read = in.read();
 				}
 				readyForMore = out.accumulate(nextByte);
@@ -901,7 +1127,11 @@ public class StringUtils {
 	private static final char A_MINUS_0 = 'A' - '0';
 	private static final char a_MINUS_A = 'a' - 'A';
 
-	public static int hexChar(char ch) {
+	/**
+	 * @param ch The hex character to parse
+	 * @return The digit (0-15) represented by the character
+	 */
+	public static int hexDigit(char ch) {
 		int dig = ch - '0';
 		if (dig < 0)
 			throw new IllegalArgumentException("Character " + ch + " (decimal " + (int) ch + ") is not a hex digit");
@@ -915,16 +1145,23 @@ public class StringUtils {
 		return 10 + dig;
 	}
 
+	/**
+	 * @param str The hex-formatted character sequence
+	 * @return The sequence of bytes, each of which is represented by 2 characters in the sequence
+	 */
 	public static byte[] parseHex(CharSequence str) {
 		return encodeHex().parse(str);
 	}
 
+	/** Characters representing digits 0-63 in 64-base */
 	public static final String BASE_64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	/** The padding character to use on the end of base-64 encoded sequences so that there are a multiple of 3 characters */
 	public static final char BASE_64_PADDING = '=';
 	private static final int ZERO_POSITION_64 = 52;
 	private static final int PLUS_POSITION_64 = ZERO_POSITION_64 + 10;
 	private static final int ZERO_MINUS_PLUS = '0' - '+';
 
+	/** Encodes data to and from base-64 sequences */
 	public static class Base64Encoder implements BinaryDataEncoder {
 		@Override
 		public int getRadix() {
@@ -1011,13 +1248,13 @@ public class StringUtils {
 			int read = in.read();
 			while (readyForMore && read >= 0) {
 				count++;
-				int firstDig = base64Char((char) read);
+				int firstDig = base64Digit((char) read);
 				byte firstByte = (byte) (firstDig << 2);
 				read = in.read();
 				if (isPadding(read))
 					break;
 				else if (read >= 0) {
-					int secondDig = base64Char((char) read);
+					int secondDig = base64Digit((char) read);
 					firstByte |= (byte) (secondDig >>> 4);
 					readyForMore = out.accumulate(firstByte);
 					if (!readyForMore)
@@ -1028,7 +1265,7 @@ public class StringUtils {
 					if (isPadding(read))
 						break;
 					else if (read >= 0) {
-						int thirdDig = base64Char((char) read);
+						int thirdDig = base64Digit((char) read);
 						secondByte |= (thirdDig >>> 2);
 						readyForMore = out.accumulate(secondByte);
 						if (!readyForMore)
@@ -1039,7 +1276,7 @@ public class StringUtils {
 						if (isPadding(read))
 							break;
 						else if (read >= 0) {
-							int fourthDig = base64Char((char) read);
+							int fourthDig = base64Digit((char) read);
 							thirdByte |= fourthDig;
 							read = in.read();
 						}
@@ -1055,11 +1292,16 @@ public class StringUtils {
 		}
 	}
 
+	/** @return An encoder that encodes and decodes data to and from 64-base sequences */
 	public static BinaryDataEncoder encodeBase64() {
 		return new Base64Encoder();
 	}
 
-	public static int base64Char(char ch) {
+	/**
+	 * @param ch The 64-base character in a sequence
+	 * @return The digit (0-63) represented by the character
+	 */
+	public static int base64Digit(char ch) {
 		if (ch == '=')
 			return 0; // Padding
 		int dig = ch - '+';
