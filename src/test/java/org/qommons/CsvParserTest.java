@@ -8,7 +8,15 @@ import org.junit.Test;
 import org.qommons.io.CsvParser;
 import org.qommons.io.TextParseException;
 
+/** Tests {@link CsvParser} */
 public class CsvParserTest {
+	/**
+	 * A very simple test
+	 * 
+	 * @throws TextParseException Shouldn't happen
+	 * @throws IOException Shouldn't happen
+	 */
+	@SuppressWarnings("static-method")
 	@Test
 	public void testSimple() throws TextParseException, IOException {
 		String csv = "This is a test, a very, very simple test\n"//
@@ -29,7 +37,14 @@ public class CsvParserTest {
 		Assert.assertFalse("Should not have more content", parser.parseNextLine(columns));
 	}
 
+	/**
+	 * Tests against text with correctly-escaped quotes
+	 * 
+	 * @throws TextParseException Shouldn't happen
+	 * @throws IOException Shouldn't happen
+	 */
 	@Test
+	@SuppressWarnings("static-method")
 	public void testValidQuotes() throws TextParseException, IOException {
 		String csv = "This is a test, a somewhat more complicated test\n"//
 			+ "It uses well-placed quotes,\" and by \"\"well-placed\"\",\n I mean it should parse without exception.\"\n"//
@@ -57,7 +72,14 @@ public class CsvParserTest {
 		Assert.assertFalse("Should not have more content", parser.parseNextLine(columns));
 	}
 
+	/**
+	 * Tests against lines with errors to verify error handling
+	 * 
+	 * @throws TextParseException Shouldn't happen
+	 * @throws IOException Shouldn't happen
+	 */
 	@Test
+	@SuppressWarnings("static-method")
 	public void testErrorCases() throws TextParseException, IOException {
 		String csv = "This is a test that is designed to fail, specifically by throwing exceptions."//
 			+ "The first error is that this csv file should have been separated by a newline char, but isn't";
@@ -78,7 +100,14 @@ public class CsvParserTest {
 		} catch (TextParseException e) {}
 	}
 
+	/**
+	 * Tests the line-skipping functionality
+	 * 
+	 * @throws TextParseException Shouldn't happen
+	 * @throws IOException Shouldn't happen
+	 */
 	@Test
+	@SuppressWarnings("static-method")
 	public void testBlankLines() throws TextParseException, IOException {
 		String csv = "This is a test that uses blank, empty lines.\n"//
 			+ "\n"//

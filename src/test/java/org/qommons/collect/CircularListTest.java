@@ -29,6 +29,7 @@ public class CircularListTest {
 	 * collection test suite against a basic {@link CircularArrayList}.
 	 */
 	@Test
+	@SuppressWarnings("static-method")
 	public void safeCALTest() {
 		TestHelper.createTester(SafeCALTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute()
 			.throwErrorIfFailed();
@@ -48,6 +49,7 @@ public class CircularListTest {
 	 * collection test suite against a basic {@link CircularArrayList}.
 	 */
 	@Test
+	@SuppressWarnings("static-method")
 	public void unsafeCALTest() {
 		TestHelper.createTester(UnsafeCALTester.class).withDebug(false).withFailurePersistence(true).revisitKnownFailures(true)
 			.withDebug(true).withRandomCases(1).execute().throwErrorIfFailed();
@@ -89,7 +91,8 @@ public class CircularListTest {
 	}
 
 	/** Runs a gauntlet of tests against {@link CircularArrayList} */
-	// @Test
+	@Test
+	@SuppressWarnings("static-method")
 	public void testPerformance() {
 		TestHelper.createTester(PerformanceTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute()
 			.throwErrorIfFailed();
@@ -102,6 +105,7 @@ public class CircularListTest {
 	 * elements for any operation.
 	 */
 	@Test
+	@SuppressWarnings("static-method")
 	public void testRandomAddPerformance() {
 		ArrayList<Integer> java = new ArrayList<>();
 		CircularArrayList<Integer> unsafe = CircularArrayList.build().build();
@@ -180,6 +184,7 @@ public class CircularListTest {
 	 * ArrayList.
 	 */
 	@Test
+	@SuppressWarnings("static-method")
 	public void testAgainstJava() {
 		ArrayList<Integer> java = new ArrayList<>();
 		CircularArrayList<Integer> unsafe = CircularArrayList.build().build();
@@ -315,12 +320,9 @@ public class CircularListTest {
 
 	/** Tests {@link CircularArrayList}'s {@link CircularArrayList#setMaxCapacity(int) max capacity} capability */
 	@Test
+	@SuppressWarnings("static-method")
 	public void maxCapTest() {
 		TestHelper.createTester(MaxCapTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute()
 			.throwErrorIfFailed();
 	}
-
-	/* TODO Test:
-	 * Thread safeness
-	 */
 }

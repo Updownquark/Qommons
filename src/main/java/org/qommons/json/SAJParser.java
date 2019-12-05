@@ -508,7 +508,7 @@ public class SAJParser {
 
 		@Override
 		public void close() throws IOException {
-			while(read() >= 0);
+			while (read() >= 0) {}
 		}
 	}
 
@@ -1081,7 +1081,7 @@ public class SAJParser {
 		return ch == '{' || ch == '}' || ch == '[' || ch == ']' || ch == ',' || ch == ':';
 	}
 
-	String parseWhiteSpace(StringBuilder sb, ParseState state) throws IOException {
+	static String parseWhiteSpace(StringBuilder sb, ParseState state) throws IOException {
 		int ch = state.currentChar();
 		do {
 			sb.append((char) ch);
@@ -1093,7 +1093,7 @@ public class SAJParser {
 		return ret;
 	}
 
-	void parseComment(StringBuilder sb, ParseState state) throws IOException, ParseException {
+	static void parseComment(StringBuilder sb, ParseState state) throws IOException, ParseException {
 		int ch = state.currentChar();
 		if(ch != '/')
 			state.error("Invalid comment");
@@ -1541,7 +1541,7 @@ public class SAJParser {
 		return ret;
 	}
 
-	Boolean parseBoolean(ParseState state) throws IOException, ParseException {
+	static Boolean parseBoolean(ParseState state) throws IOException, ParseException {
 		Boolean ret;
 		int ch = state.currentChar();
 		if(ch == 't') {

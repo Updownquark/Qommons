@@ -132,7 +132,7 @@ public class JsonSerialReader
 		/** @param sepType The type of separator that this item represents */
 		public Separator(ParseToken sepType)
 		{
-			theSepType = sepType;;
+			theSepType = sepType;
 		}
 
 		@Override

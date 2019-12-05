@@ -538,6 +538,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	 * @param elementId The element ID to check
 	 * @return Whether the given element's location in the table is valid (i.e. its hash code has not changed)
 	 */
+	@SuppressWarnings("static-method")
 	public boolean isValid(ElementId elementId){
 		HashEntry entry=((HashId) elementId).entry.check();
 		return entry.isValid();

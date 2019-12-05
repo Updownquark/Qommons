@@ -144,9 +144,9 @@ public class ThreadPoolWorker implements Worker {
 	public ThreadPoolWorker(String name, int threads) {
 		theName = name;
 		theLock = new java.util.concurrent.locks.ReentrantLock();
-		theAvailableThreads = new java.util.ArrayList<ReusableThread>();
-		theInUseThreads = new java.util.ArrayList<ReusableThread>();
-		theTaskQueue = new java.util.LinkedList<TaskQueueObject>();
+		theAvailableThreads = new java.util.ArrayList<>();
+		theInUseThreads = new java.util.ArrayList<>();
+		theTaskQueue = new java.util.LinkedList<>();
 		thePriority = Thread.NORM_PRIORITY;
 		setMaxThreadCount(threads);
 	}
@@ -327,16 +327,13 @@ public class ThreadPoolWorker implements Worker {
 		int total = getThreadCount();
 		int ret;
 		if (used == total) {
-			for (ret = 1; ret * ret <= total; ret++)
-				;
+			for (ret = 1; ret * ret <= total; ret++) {}
 			ret = ret * ret;
 		} else {
 			int ceilUsedSqrt;
-			for (ceilUsedSqrt = 1; ceilUsedSqrt * ceilUsedSqrt < used; ceilUsedSqrt++)
-				;
+			for (ceilUsedSqrt = 1; ceilUsedSqrt * ceilUsedSqrt < used; ceilUsedSqrt++) {}
 			int floorTotalSqrt;
-			for (floorTotalSqrt = 1; floorTotalSqrt * floorTotalSqrt <= total; floorTotalSqrt++)
-				;
+			for (floorTotalSqrt = 1; floorTotalSqrt * floorTotalSqrt <= total; floorTotalSqrt++) {}
 			floorTotalSqrt--;
 			if (ceilUsedSqrt < floorTotalSqrt - 1)
 				ret = (ceilUsedSqrt + 1) * (ceilUsedSqrt + 1);

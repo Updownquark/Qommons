@@ -19,7 +19,9 @@ import org.qommons.TestHelper;
  * @see ListenerListTest
  */
 public class CLQTest {
+	/** Compares the performance of {@link ListenerList} against {@link ConcurrentLinkedQueue} */
 	@Test
+	@SuppressWarnings("static-method")
 	public void threadTest() {
 		TestHelper.Testing testing = TestHelper.createTester(ThreadTester.class)//
 			.withRandomCases(5).withFailurePersistence(false).withMaxFailures(1).withMaxTotalDuration(Duration.ofMinutes(1));
@@ -39,7 +41,7 @@ public class CLQTest {
 	 */
 	public static class ThreadTester implements TestHelper.Testable {
 		private static final int THREAD_COUNT = 20;
-		private static final int TEST_ACTIONS = 100_000;
+		private static final int TEST_ACTIONS = 10_000;
 
 		private final ConcurrentLinkedQueue<Integer> list = new ConcurrentLinkedQueue<>();
 		private final ConcurrentHashMap<Integer, Integer> copy = new ConcurrentHashMap<>();

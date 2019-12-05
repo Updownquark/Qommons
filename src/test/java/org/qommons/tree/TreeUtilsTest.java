@@ -96,6 +96,7 @@ public class TreeUtilsTest {
 
 	/** A simple test against {@link RedBlackNode} */
 	@Test
+	@SuppressWarnings("static-method")
 	public void testTreeBasic() {
 		RedBlackTree<String> tree = new RedBlackTree<>();
 		tree.setRoot(new RedBlackNode<>(tree, "a"));
@@ -104,6 +105,7 @@ public class TreeUtilsTest {
 
 	/** Tests {@link RedBlackNode#compare(RedBlackNode, RedBlackNode, java.util.function.BooleanSupplier)} */
 	@Test
+	@SuppressWarnings("static-method")
 	public void testTreeNodeCompare() {
 		TestHelper.createTester(NodeCompareTester.class).withRandomCases(1)//
 			.withDebug(false)//
@@ -145,6 +147,7 @@ public class TreeUtilsTest {
 
 	/** Barrage-tests {@link RedBlackNode#splitBetween(RedBlackNode, RedBlackNode, java.util.function.BooleanSupplier)} */
 	@Test
+	@SuppressWarnings("static-method")
 	public void testTreeNodeSplit() {
 		TestHelper.createTester(TreeSplitTester.class).withRandomCases(1)//
 			.withDebug(true)//
@@ -370,6 +373,7 @@ public class TreeUtilsTest {
 
 	/** Tests the {@link ValueStoredCollection} repair API */
 	@Test
+	@SuppressWarnings("static-method")
 	public void testTreeRepair() {
 		TestHelper.createTester(TreeRepairTester.class).withDebug(true)
 			.withPersistenceDir(new File("src/test/java/org/qommons/tree"), false).revisitKnownFailures(true)//
@@ -391,6 +395,7 @@ public class TreeUtilsTest {
 	 * tests against {@link BetterTreeSet}
 	 */
 	@Test
+	@SuppressWarnings("static-method")
 	public void testTreeSet() {
 		TestHelper.createTester(TreeSetTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute()
 			.throwErrorIfFailed();
@@ -401,6 +406,7 @@ public class TreeUtilsTest {
 	 * {@link BetterTreeMap}
 	 */
 	@Test
+	@SuppressWarnings("static-method")
 	public void testTreeMap() {
 		BetterTreeMap<Integer, Integer> map = new BetterTreeMap<>(false, new Comparator<Integer>() {
 			@Override
@@ -431,6 +437,7 @@ public class TreeUtilsTest {
 	 * tests against {@link BetterTreeList}
 	 */
 	@Test
+	@SuppressWarnings("static-method")
 	public void testTreeList() {
 		TestHelper.createTester(TreeListTester.class).withDebug(true).revisitKnownFailures(true).withFailurePersistence(true)
 			.withRandomCases(1).execute().throwErrorIfFailed();

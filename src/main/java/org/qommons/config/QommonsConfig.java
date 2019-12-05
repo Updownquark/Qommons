@@ -21,9 +21,13 @@ import org.jdom2.Element;
  * </p>
  */
 public abstract class QommonsConfig implements Cloneable {
+	/** Replaces spaces in XML names */
 	protected static final String SPACE_REPLACEMENT = "._sp_.";
+	/** Prefix for XML names in which illegal characters have been replaced */
 	protected static final String PREFIX = "_.pfx._";
+	/** Pattern for finding sequences to replace in {@link #PREFIX}-marked names */
 	protected static final Pattern INVALID_REPLACEMENT_PATT = Pattern.compile("\\._ch(?<code>[0-9A-Fa-f]{4})_\\.");
+	/** Pattern for replacing sequences with characters that are illegal for XML names */
 	protected static final String INVALID_REPLACEMENT_TEXT = "._chXXXX_.";
 
 	/** The default config implementation */
@@ -300,6 +304,7 @@ public abstract class QommonsConfig implements Cloneable {
 	 * @param size The size of the array to create
 	 * @return A config array whose type is that of this class
 	 */
+	@SuppressWarnings("static-method")
 	protected QommonsConfig [] createConfigArray(int size) {
 		return new QommonsConfig[size];
 	}

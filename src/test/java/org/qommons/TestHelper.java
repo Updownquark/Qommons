@@ -1,12 +1,27 @@
 package org.qommons;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.NavigableMap;
+import java.util.NavigableSet;
+import java.util.Objects;
+import java.util.Random;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -88,13 +103,23 @@ import org.qommons.io.Format;
  * </p>
  */
 public class TestHelper {
+	/** A test case to execute against a {@link TestHelper} */
 	public static interface Testable extends Consumer<TestHelper> {}
 
+	/** Represents a test failure */
 	public static class TestFailure {
+		/** The seed of the test case that failed */
 		public final long seed;
+		/** The random generation sequence position of the failure */
 		public final long bytes;
+		/** The placemark positions at the failure */
 		public final NavigableMap<String, Long> placemarks;
 
+		/**
+		 * @param seed The seed of the test case that failed
+		 * @param bytes The random generation sequence position of the failure
+		 * @param placemarks The random generation sequence position of the failure
+		 */
 		public TestFailure(long seed, long bytes, NavigableMap<String, Long> placemarks) {
 			this.seed = seed;
 			this.bytes = bytes;
@@ -104,11 +129,17 @@ public class TestHelper {
 			this.placemarks = Collections.unmodifiableNavigableMap(ps);
 		}
 
+		/** @return the placemark positions at the failure */
 		public NavigableSet<Long> getBreakpoints() {
 			if (placemarks.isEmpty() && bytes > 0)
 				return new TreeSet<>(Arrays.asList(bytes));
 			else
 				return new TreeSet<>(placemarks.values());
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(seed, bytes, placemarks);
 		}
 
 		@Override
@@ -172,36 +203,51 @@ public class TestHelper {
 		}
 	}
 
+	/** @return Whether the current test case is a reproduction of a previous failure */
 	public boolean isReproducing() {
 		return isReproducing;
 	}
 
+	/** @return The seed of the current test case */
 	public long getSeed() {
 		return theSeed;
 	}
 
+	/** @return The current random generation position */
 	public long getPosition() {
 		return theBytes;
 	}
 
+	/** @return The set of placemark names recognized by this test case */
 	public NavigableSet<String> getPlacemarkNames() {
 		return thePlacemarkNames;
 	}
 
+	/**
+	 * @param name The name of the placemark
+	 * @return The position of the last call to the given placemark
+	 */
 	public long getLastPlacemark(String name) {
 		Long placemark = thePlacemarks.get(name);
 		return placemark == null ? -1 : placemark.longValue();
 	}
 
+	/** @return A new {@link TestHelper} whose sequence is determined by this helper's seed and its position */
 	public TestHelper fork() {
 		long forkSeed = getAnyLong();
 		return new TestHelper(isReproducing, isCheckingIn, forkSeed, 0, theBreakpoints, thePlacemarkNames);
 	}
 
+	/** Sets a generic placemark */
 	public void placemark() {
 		placemark("Placemark");
 	}
 
+	/**
+	 * Sets a named placemark (must be configured with {@link Testing#withPlacemarks(String...)})
+	 * 
+	 * @param name The name for the placemark
+	 */
 	public void placemark(String name) {
 		if (!thePlacemarkNames.contains(name))
 			throw new IllegalArgumentException("Unrecognized placemark name: " + name);
@@ -211,47 +257,72 @@ public class TestHelper {
 		thePlacemarks.put(name, theBytes);
 	}
 
+	/** @return If configured, the last time this helper was used */
 	public Instant getLastCheckIn() {
 		return theLastCheckIn;
 	}
 
-	public TestHelper tolerate(Duration timeout) {
-		return this;
-	}
-
+	/** @return A random integer between {@link Integer#MIN_VALUE} and {@link Integer#MAX_VALUE} */
 	public int getAnyInt() {
 		getBytes(4);
 		return theRandomness.nextInt();
 	}
 
+	/**
+	 * @param min The minimum
+	 * @param max The maximum
+	 * @return An integer <code>i</code> such that <code>min&lt;=i&lt;max</code>
+	 */
 	public int getInt(int min, int max) {
 		if (min == max)
 			return min;
 		return min + Math.abs(getAnyInt() % (max - min));
 	}
 
+	/** @return A random long between {@link Long#MIN_VALUE} and {@link Long#MAX_VALUE} */
 	public long getAnyLong() {
 		getBytes(8);
 		return theRandomness.nextLong();
 	}
 
+	/**
+	 * @param min The minimum
+	 * @param max The maximum
+	 * @return A long <code>i</code> such that <code>min&lt;=i&lt;max</code>
+	 */
 	public long getLong(long min, long max) {
 		return min + Math.abs(getAnyLong() % (max - min));
 	}
 
+	/** @return A random float from a uniform distribution between 0.0 (inclusive) and 1.0 (exclusive) */
 	public float getFloat() {
 		getBytes(4);
 		return theRandomness.nextFloat();
 	}
 
+	/**
+	 * @return A float generated from a random byte sequence. The distribution of values for such floats is quite irregular and many random
+	 *         byte sequences map to {@link Float#NaN}
+	 */
 	public float getAnyFloat() {
 		return Float.intBitsToFloat(getAnyInt());
 	}
 
+	/**
+	 * @param min The minimum
+	 * @param max The maximum
+	 * @return A float <code>f</code> such that <code>min&lt;=f&lt;max</code>
+	 */
 	public float getFloat(float min, float max) {
 		return min + getFloat() * (max - min);
 	}
 
+	/**
+	 * @param min The minimum
+	 * @param max The maximum
+	 * @param avg The average value
+	 * @return A float <code>f</code> such that <code>min&lt;=f&lt;max</code>. The result is weighted toward <code>avg</code>.
+	 */
 	public float getFloat(float min, float avg, float max) {
 		if (avg <= min || avg >= max)
 			throw new IllegalArgumentException("min=" + min + ", avg=" + avg + ", max=" + max);
@@ -264,24 +335,41 @@ public class TestHelper {
 			return avg + random * (max - avg);
 	}
 
+	/** @return A random double from a uniform distribution between 0.0 (inclusive) and 1.0 (exclusive) */
 	public double getDouble() {
 		getBytes(8);
 		return theRandomness.nextDouble();
 	}
 
+	/** @return A random float from a normal distribution between 0.0 (inclusive) and 1.0 (exclusive) */
 	public double getGaussian() {
 		getBytes(8);
 		return theRandomness.nextGaussian();
 	}
 
+	/**
+	 * @return A double generated from a random byte sequence. The distribution of values for such doubles is quite irregular and many
+	 *         random byte sequences map to {@link Double#NaN}
+	 */
 	public double getAnyDouble() {
 		return Double.longBitsToDouble(getAnyLong());
 	}
 
+	/**
+	 * @param min The minimum
+	 * @param max The maximum
+	 * @return A double <code>d</code> such that <code>min&lt;=d&lt;max</code>
+	 */
 	public double getDouble(double min, double max) {
 		return min + getDouble() * (max - min);
 	}
 
+	/**
+	 * @param min The minimum
+	 * @param max The maximum
+	 * @param avg The average value
+	 * @return A double <code>d</code> such that <code>min&lt;=d&lt;max</code>. The result is weighted toward <code>avg</code>.
+	 */
 	public double getDouble(double min, double avg, double max) {
 		if (avg < min || avg > max)
 			throw new IllegalArgumentException("min=" + min + ", avg=" + avg + ", max=" + max);
@@ -294,6 +382,7 @@ public class TestHelper {
 			return avg + random * (max - avg);
 	}
 
+	/** @return A random boolean */
 	public boolean getBoolean() {
 		getBytes(1);
 		byte[] bytes = new byte[1];
@@ -301,22 +390,48 @@ public class TestHelper {
 		return bytes[0] >= 0;
 	}
 
+	/**
+	 * @param odds The odds of getting <code>true</code>
+	 * @return A random boolean weighted by <code>odds</code>
+	 */
 	public boolean getBoolean(double odds) {
 		return getDouble() < odds;
 	}
 
+	/** @return A RandomAction that can be configured to execute one of a number of weighted-probability tasks */
 	public RandomAction createAction() {
 		return new RandomAction(this);
 	}
 
-	public RandomAction doAction(double relativeProability, Runnable action) {
-		return createAction().or(relativeProability, action);
+	/**
+	 * Equivalent to {@link #createAction()}.{@link RandomAction#or(double, Runnable) or(relativeProbability, action)}
+	 * 
+	 * @param relativeProbability The probability (relative to the sum of all probabilities in the {@link RandomAction}) that the given
+	 *        action will be performed
+	 * @param action The action to perform
+	 * @return The {@link RandomAction} to add other tasks to
+	 */
+	public RandomAction doAction(double relativeProbability, Runnable action) {
+		return createAction().or(relativeProbability, action);
 	}
 
+	/**
+	 * @param <T> The type of value to supply
+	 * @return A RandomSupplier that can be configured to execute one of a number of weighted-probability suppliers
+	 */
 	public <T> RandomSupplier<T> createSupplier() {
 		return new RandomSupplier<>(this);
 	}
 
+	/**
+	 * Equivalent to {@link #createSupplier()}.{@link RandomSupplier#or(double, Supplier) or(relativeProbability, action)}
+	 * 
+	 * @param <T> The type of value to supply
+	 * @param relativeProbability The probability (relative to the sum of all probabilities in the {@link RandomSupplier}) that the given
+	 *        action will be performed
+	 * @param action The action to perform
+	 * @return The {@link RandomSupplier} to add other tasks to
+	 */
 	public <T> RandomSupplier<T> supply(double relativeProbability, Supplier<? extends T> action) {
 		return this.<T> createSupplier().or(relativeProbability, action);
 	}
@@ -352,6 +467,11 @@ public class TestHelper {
 		}
 	}
 
+	/**
+	 * A supplier that calls one of its probability-weighted delegates
+	 * 
+	 * @param <T> The type of value supplied
+	 */
 	public static class RandomSupplier<T> extends RandomExecutor<T, Supplier<? extends T>> {
 		private RandomSupplier(TestHelper helper) {
 			super(helper);
@@ -363,12 +483,17 @@ public class TestHelper {
 			return this;
 		}
 
+		/**
+		 * @param placemark The placemark to set before calling the supplier
+		 * @return The supplied value
+		 */
 		public T get(String placemark) {
 			return getAction(placemark)//
 				.get();
 		}
 	}
 
+	/** An action that calls one of its probability-weighted delegates */
 	public static class RandomAction extends RandomExecutor<Void, Runnable> {
 		private RandomAction(TestHelper helper) {
 			super(helper);
@@ -380,12 +505,14 @@ public class TestHelper {
 			return this;
 		}
 
+		/** @param placemark The placemark to set before calling the supplier */
 		public void execute(String placemark) {
 			getAction(placemark)//
 				.run();
 		}
 	}
 
+	/** Configures a {@link TestHelper}-backed test case */
 	public static class Testing {
 		private final Class<? extends Testable> theTestable;
 		private final Constructor<? extends Testable> theCreator;
@@ -410,63 +537,124 @@ public class TestHelper {
 			thePlacemarkNames = new TreeSet<>();
 		}
 
+		/**
+		 * @param b Whether the tester should look for a known failure file and, if found, re-try the test cases contained. Default is
+		 *        false.
+		 * @return This configuration
+		 */
 		public Testing revisitKnownFailures(boolean b) {
 			isRevisitingKnownFailures = b;
 			return this;
 		}
 
+		/**
+		 * @param debug Whether, when {@link #revisitKnownFailures(boolean) revisiting} previous failures, this class should attempt to
+		 *        catch a {@link BreakpointHere#breakpoint() breakpoint} just before the failure. Default is false.
+		 * @return This configuration
+		 */
 		public Testing withDebug(boolean debug) {
 			isDebugging = debug;
 			return this;
 		}
 
+		/**
+		 * Specifies a specific test case in code
+		 * 
+		 * @param hash The test case seed
+		 * @param placemarks The set of placemarks
+		 * @return This configuration
+		 */
 		public Testing withCase(long hash, NavigableMap<String, Long> placemarks) {
 			theSpecifiedCases.add(new TestFailure(hash, 0, placemarks));
 			return this;
 		}
 
+		/**
+		 * @param cases The number of new, random cases to execute. Default is zero.
+		 * @return This configuration
+		 */
 		public Testing withRandomCases(int cases) {
 			theMaxRandomCases = cases;
 			return this;
 		}
 
+		/**
+		 * @param failures The maximum number of failures to tolerate before aborting the tests. Default is 1.
+		 * @return This configuration
+		 */
 		public Testing withMaxFailures(int failures) {
 			theMaxFailures = failures;
 			return this;
 		}
 
+		/**
+		 * @param duration The maximum amount of time to allow testing to continue. This setting will abort any executing test and will stop
+		 *        test execution if the total time since testing began passes this duration.
+		 * @return This configuration
+		 */
 		public Testing withMaxTotalDuration(Duration duration) {
 			theMaxTotalDuration = duration;
 			return this;
 		}
 
+		/**
+		 * @param duration The maximum amount of time a test case is allowed to take. If a test case exceeds this duration, the test will be
+		 *        stopped and no further tests willl be executed.
+		 * @return This configuration
+		 */
 		public Testing withMaxCaseDuration(Duration duration) {
 			theMaxCaseDuration = duration;
 			return this;
 		}
 
+		/**
+		 * @param duration If the test helper is called used by a test case for the given interval, the test will fail. This is to detect
+		 *        infinite loops or too-long-running routines.
+		 * @return This configuration
+		 * @see TestHelper#getLastCheckIn()
+		 */
 		public Testing withMaxProgressInterval(Duration duration) {
 			theMaxProgressInterval = duration;
 			return this;
 		}
 
+		/**
+		 * @param names The names of placemarks to recognize during testing
+		 * @return This configuration
+		 */
 		public Testing withPlacemarks(String... names) {
 			for (String name : names)
 				thePlacemarkNames.add(name);
 			return this;
 		}
 
+		/**
+		 * @param onProgress If true, the tester will print a status message to {@link System#out} after each test case. Default is true.
+		 * @param onFailure If true, the tester will print a status message to {@link System#err} after each test failure. Default is true.
+		 * @return This configuration
+		 */
 		public Testing withPrinting(boolean onProgress, boolean onFailure) {
 			isPrintingProgress = onProgress;
 			isPrintingFailures = onFailure;
 			return this;
 		}
 
+		/**
+		 * @param persist Whether to persist failed tests to a failure file (*.broken) for {@link #revisitKnownFailures(boolean) revisiting}
+		 *        later. Default is false.
+		 * @return This configuration
+		 */
 		public Testing withFailurePersistence(boolean persist) {
 			isPersistingFailures = persist;
 			return this;
 		}
 
+		/**
+		 * @param dir The directory in which to place the failure file
+		 * @param qualifiedName Whether the file should contain the qualified name of the test, or its {@link Class#getSimpleName() simple}
+		 *        name
+		 * @return This configuration
+		 */
 		public Testing withPersistenceDir(File dir, boolean qualifiedName) {
 			if (dir != null)
 				isPersistingFailures = true;
@@ -475,7 +663,12 @@ public class TestHelper {
 			return this;
 		}
 
-		public TestSummary execute() throws AssertionError {
+		/**
+		 * Executes the test
+		 * 
+		 * @return The results of the test
+		 */
+		public TestSummary execute() {
 			int maxCases = theMaxRandomCases;
 			int maxFailures = theMaxFailures;
 			if (maxCases < 0)
@@ -572,7 +765,7 @@ public class TestHelper {
 		}
 	}
 
-	public static class TestSetExecution implements AutoCloseable {
+	static class TestSetExecution implements AutoCloseable {
 		private final Constructor<? extends Testable> theCreator;
 		private final boolean isPrintingProgress;
 		private final boolean isPrintingFailures;
@@ -755,12 +948,19 @@ public class TestHelper {
 		}
 	}
 
+	/** The results of executing a set of test cases */
 	public static class TestSummary {
 		private final int theSuccesses;
 		private final int theFailures;
 		private final Duration theDuration;
 		private final Throwable theFirstError;
 
+		/**
+		 * @param successes The number of successful test cases
+		 * @param failures The number of failed test cases
+		 * @param duration The total duration of the testing
+		 * @param firstError The first error thrown by any failed test
+		 */
 		public TestSummary(int successes, int failures, Duration duration, Throwable firstError) {
 			theSuccesses = successes;
 			theFailures = failures;
@@ -768,22 +968,27 @@ public class TestHelper {
 			theFirstError = firstError;
 		}
 
+		/** @return The number of successful test cases */
 		public int getSuccesses() {
 			return theSuccesses;
 		}
 
+		/** @return The number of failed test cases */
 		public int getFailures() {
 			return theFailures;
 		}
 
+		/** @return The total duration of the testing */
 		public Duration getDuration() {
 			return theDuration;
 		}
 
+		/** @return The first error thrown by any failed test */
 		public Throwable getFirstError() {
 			return theFirstError;
 		}
 
+		/** @throws AssertionError If any test failed */
 		public void throwErrorIfFailed() throws AssertionError {
 			if (theFirstError instanceof AssertionError)
 				throw (AssertionError) theFirstError;
@@ -809,6 +1014,12 @@ public class TestHelper {
 		}
 	}
 
+	/**
+	 * Creates a test configuration
+	 * 
+	 * @param testable The testable class to execute tests with
+	 * @return The test configuration
+	 */
 	public static Testing createTester(Class<? extends Testable> testable) {
 		return new Testing(testable);
 	}

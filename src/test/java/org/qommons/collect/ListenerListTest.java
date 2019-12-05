@@ -13,8 +13,11 @@ import org.junit.Test;
 import org.qommons.BreakpointHere;
 import org.qommons.TestHelper;
 
+/** Tests {@link ListenerList} */
 public class ListenerListTest {
+	/** Tests {@link ListenerList}'s thread-safety */
 	@Test
+	@SuppressWarnings("static-method")
 	public void threadTest() {
 		TestHelper.Testing testing = TestHelper.createTester(ThreadTester.class)//
 			.withRandomCases(5).withFailurePersistence(false).withMaxFailures(1).withMaxTotalDuration(Duration.ofMinutes(1));
@@ -34,7 +37,7 @@ public class ListenerListTest {
 	 */
 	public static class ThreadTester implements TestHelper.Testable {
 		private static final int THREAD_COUNT = 20;
-		private static final int TEST_ACTIONS = 100_000;
+		private static final int TEST_ACTIONS = 10_000;
 
 		private final ListenerList<Integer> list = new ListenerList<>(null);
 		/**

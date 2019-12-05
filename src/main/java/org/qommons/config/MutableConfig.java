@@ -217,6 +217,7 @@ public class MutableConfig extends QommonsConfig {
 	 * @param name The name for the new child
 	 * @return A new config element to be added as a child to this config
 	 */
+	@SuppressWarnings("static-method")
 	protected MutableConfig createChild(String name) {
 		return new MutableConfig(name);
 	}

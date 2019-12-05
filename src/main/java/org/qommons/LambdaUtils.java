@@ -10,6 +10,7 @@ import java.util.function.Supplier;
 /** A bunch of utilities to easily make functions that are prettier and more useful than ordinary lambdas */
 public class LambdaUtils {
 	private static final Map<PrintableLambda<?>, PrintableLambda<?>> IDENTIFIED_LAMBDAS = new ConcurrentHashMap<>();
+	/** An identifier placeholder for <code>null</code> */
 	public static final Object NULL_PLACEHOLDER = new Object() {
 		@Override
 		public String toString() {
@@ -17,19 +18,38 @@ public class LambdaUtils {
 		}
 	};
 
+	/**
+	 * @param o The lambda to check
+	 * @return Whether the given lambda has been configured to print
+	 */
 	public static boolean isPrintable(Object o) {
 		return o instanceof PrintableLambda;
 	}
 
+	/**
+	 * @param o The lambda to get
+	 * @return The identifier associated with the given lambda, if any
+	 */
 	public static Object getIdentifier(Object o) {
 		Object id = o instanceof PrintableLambda ? ((PrintableLambda<?>) o).identifier : null;
 		return id == NULL_PLACEHOLDER ? null : id;
 	}
 
+	/**
+	 * @param <T> The type for the function
+	 * @return A function that returns its argument
+	 */
 	public static <T> Function<T, T> identity() {
 		return (Function<T, T>) IdentityFunction.INSTANCE;
 	}
 
+	/**
+	 * @param <T> The type of value to test
+	 * @param pred The predicate doing the testing
+	 * @param print The printed predicate representation
+	 * @param identifier An identifier for the predicate
+	 * @return The printable predicate
+	 */
 	public static <T> Predicate<T> printablePred(Predicate<T> pred, String print, Object identifier) {
 		PrintablePredicate<T> p = new PrintablePredicate<>(pred, print, identifier);
 		if (identifier != null) {
@@ -38,10 +58,26 @@ public class LambdaUtils {
 		return p;
 	}
 
+	/**
+	 * @param <T> The argument type of the function
+	 * @param <X> The result type of the function
+	 * @param value The value to return from the function
+	 * @param print The printed function representation
+	 * @param identifier The identifier for the function
+	 * @return A function that always returns the given value
+	 */
 	public static <T, X> Function<T, X> constantFn(X value, String print, Object identifier) {
 		return constantFn(value, print != null ? new ConstantSupply(print) : () -> String.valueOf(value), identifier);
 	}
 
+	/**
+	 * @param <T> The argument type of the function
+	 * @param <X> The result type of the function
+	 * @param value The value to return from the function
+	 * @param print The printed function representation
+	 * @param identifier The identifier for the function
+	 * @return A function that always returns the given value
+	 */
 	public static <T, X> Function<T, X> constantFn(X value, Supplier<String> print, Object identifier) {
 		PrintableFunction<T, X> p = new PrintableFunction<>(t -> value, print != null ? print : () -> String.valueOf(value), identifier);
 		if (identifier != null) {
@@ -50,6 +86,15 @@ public class LambdaUtils {
 		return p;
 	}
 
+	/**
+	 * @param <T> The first argument type of the function
+	 * @param <V> The second argument type of the function
+	 * @param <X> The result type of the function
+	 * @param value The value to return from the function
+	 * @param print The printed function representation
+	 * @param identifier The identifier for the function
+	 * @return A function that always returns the given value
+	 */
 	public static <T, V, X> BiFunction<T, V, X> constantBiFn(X value, String print, Object identifier) {
 		PrintableBiFunction<T, V, X> p = new PrintableBiFunction<>((t, v) -> value,
 			print != null ? new ConstantSupply(print) : () -> String.valueOf(value), identifier);
@@ -59,10 +104,24 @@ public class LambdaUtils {
 		return p;
 	}
 
+	/**
+	 * @param <T> The type of the supplier
+	 * @param value The value to supply
+	 * @param print The printed supplier representation
+	 * @param identifier The identifier for the supplier
+	 * @return A supplier that always returns the given value
+	 */
 	public static <T> Supplier<T> constantSupplier(T value, String print, Object identifier) {
 		return constantSupplier(value, print != null ? new ConstantSupply(print) : () -> String.valueOf(value), identifier);
 	}
 
+	/**
+	 * @param <T> The type of the supplier
+	 * @param value The value to supply
+	 * @param print The printed supplier representation
+	 * @param identifier The identifier for the supplier
+	 * @return A supplier that always returns the given value
+	 */
 	public static <T> Supplier<T> constantSupplier(T value, Supplier<String> print, Object identifier) {
 		PrintableSupplier<T> p = new PrintableSupplier<>(() -> value, print != null ? print : () -> String.valueOf(value), identifier);
 		if (identifier != null) {
@@ -71,6 +130,14 @@ public class LambdaUtils {
 		return p;
 	}
 
+	/**
+	 * @param <T> The argument type of the function
+	 * @param <X> The return type of the function
+	 * @param fn The function
+	 * @param print The printed representation of the function
+	 * @param identifier The identifier for the function
+	 * @return The printable function
+	 */
 	public static <T, X> Function<T, X> printableFn(Function<T, X> fn, String print, Object identifier) {
 		PrintableFunction<T, X> p = new PrintableFunction<>(fn, new ConstantSupply(print), identifier);
 		if (identifier != null) {
@@ -79,14 +146,38 @@ public class LambdaUtils {
 		return p;
 	}
 
+	/**
+	 * @param <T> The argument type of the function
+	 * @param <X> The return type of the function
+	 * @param fn The function
+	 * @param print The printed representation of the function
+	 * @return The printable function
+	 */
 	public static <T, X> Function<T, X> printableFn(Function<T, X> fn, Supplier<String> print) {
 		return new PrintableFunction<>(fn, print);
 	}
 
+	/**
+	 * @param <T> The first argument type of the function
+	 * @param <U> The second argument type of the function
+	 * @param <X> The return type of the function
+	 * @param fn The function
+	 * @param print The printed representation of the function
+	 * @return The printable function
+	 */
 	public static <T, U, X> BiFunction<T, U, X> printableBiFn(BiFunction<T, U, X> fn, Supplier<String> print) {
 		return new PrintableBiFunction<>(fn, print);
 	}
 
+	/**
+	 * @param <T> The first argument type of the function
+	 * @param <U> The second argument type of the function
+	 * @param <X> The return type of the function
+	 * @param fn The function
+	 * @param print The printed representation of the function
+	 * @param identifier The identifier for the function
+	 * @return The printable function
+	 */
 	public static <T, U, X> BiFunction<T, U, X> printableBiFn(BiFunction<T, U, X> fn, String print, Object identifier) {
 		PrintableBiFunction<T, U, X> p = new PrintableBiFunction<>(fn, print, identifier);
 		if (identifier != null) {
@@ -95,6 +186,16 @@ public class LambdaUtils {
 		return p;
 	}
 
+	/**
+	 * @param <T> The first argument type of the function
+	 * @param <U> The second argument type of the function
+	 * @param <V> The third argument type of the function
+	 * @param <X> The return type of the function
+	 * @param fn The function
+	 * @param print The printed representation of the function
+	 * @param identifier The identifier for the function
+	 * @return The printable function
+	 */
 	public static <T, U, V, X> TriFunction<T, U, V, X> printableTriFn(TriFunction<T, U, V, X> fn, String print, Object identifier) {
 		PrintableTriFunction<T, U, V, X> p = new PrintableTriFunction<>(fn, print, identifier);
 		if (identifier != null) {

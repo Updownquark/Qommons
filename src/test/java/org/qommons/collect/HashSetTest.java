@@ -15,6 +15,7 @@ public class HashSetTest {
 
 	/** Tests {@link BetterHashSet} */
 	@Test
+	@SuppressWarnings("static-method")
 	public void testHashSet() {
 		TestHelper.createTester(HashSetTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute()
 			.throwErrorIfFailed();
@@ -22,6 +23,7 @@ public class HashSetTest {
 
 	/** Tests {@link BetterHashMap} */
 	@Test
+	@SuppressWarnings("static-method")
 	public void testHashMap() {
 		QommonsTestUtils.testMap(BetterHashMap.build().unsafe().buildMap(), null, null);
 	}

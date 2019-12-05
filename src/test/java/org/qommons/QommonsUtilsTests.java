@@ -3,17 +3,20 @@ package org.qommons;
 import org.junit.Assert;
 import org.junit.Test;
 
+/** Tests for some of the methods in {@link QommonsUtils} */
 public class QommonsUtilsTests {
+	/** Tests {@link QommonsUtils#compareDoubleBits(long, long)} */
+	@SuppressWarnings("static-method")
 	@Test
 	public void testDoubleBitCompare() {
 		TestHelper.createTester(DoubleBitCompareTester.class).withFailurePersistence(true).revisitKnownFailures(true).withDebug(true)//
 			.withMaxFailures(1).withRandomCases(10).execute().throwErrorIfFailed();
 	}
 
-	public static class DoubleBitCompareTester implements TestHelper.Testable {
+	static class DoubleBitCompareTester implements TestHelper.Testable {
 		@Override
 		public void accept(TestHelper t) {
-			for (int i = 0; i < 10_000_000; i++) {
+			for (int i = 0; i < 1_000_000; i++) {
 				double v1 = t.getBoolean(0.01) ? (t.getBoolean() ? Double.POSITIVE_INFINITY : Double.NEGATIVE_INFINITY) : t.getAnyDouble();
 				double v2 = t.getBoolean(0.01) ? (t.getBoolean() ? Double.POSITIVE_INFINITY : Double.NEGATIVE_INFINITY) : t.getAnyDouble();
 				int comp = QommonsUtils.compareDoubleBits(//

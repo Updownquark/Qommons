@@ -566,7 +566,8 @@ public class ArgumentParsing {
          *            The value check for the argument, or null if the value is not to be checked against a predicate
          * @return Whether the constraint is satisfied
          */
-        protected boolean isConstraintSatisfied(Arguments args, String argName, Object value, Predicate<?> test) {
+		@SuppressWarnings("static-method")
+		protected boolean isConstraintSatisfied(Arguments args, String argName, Object value, Predicate<?> test) {
             List<Argument> targetArgs = args.getArguments(argName);
             if (test == null) {
                 return !targetArgs.isEmpty();
