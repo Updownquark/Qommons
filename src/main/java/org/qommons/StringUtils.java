@@ -139,6 +139,70 @@ public class StringUtils {
 	}
 
 	/**
+	 * Adds a number to a String integer
+	 * 
+	 * @param string The String containing a number to add to
+	 * @param cursor The character position at which to add the amount
+	 * @param amount The number to add to the String (may be negative)
+	 * @return The String with the number at the given position changed by the given amount
+	 */
+	public static String add(CharSequence string, int cursor, int amount) {
+		StringBuilder str = new StringBuilder(string);
+		char ch = str.charAt(cursor);
+		if (ch < '0' || ch > '9') {
+			// If the given character is not a digit, we'll just insert the amount there
+			str.insert(cursor, amount);
+			return str.toString();
+		}
+		int remainder;
+		int sum = amount + ch - '0';
+		remainder = sum / 10;
+		int dig = sum % 10;
+		if (dig < 0) {
+			dig += 10;
+			remainder--;
+		}
+		str.setCharAt(cursor, (char) ('0' + dig));
+		while (remainder != 0) {
+			if (cursor > 0 && Character.isDigit(str.charAt(cursor - 1)))
+				cursor--;
+			else if (remainder != -1)
+				str.insert(cursor, '0');
+			else
+				break;
+			sum = remainder + str.charAt(cursor) - '0';
+			remainder = sum / 10;
+			dig = sum % 10;
+			if (dig < 0) {
+				dig += 10;
+				remainder--;
+			}
+			str.setCharAt(cursor, (char) ('0' + dig));
+		}
+		return str.toString();
+	}
+
+	/**
+	 * Prints an integer into a StringBuilder, padding zeros as necessary to a specified number of places
+	 * 
+	 * @param value The value to append
+	 * @param places The number of digits (not including the '-', if any) for the integer
+	 * @param into The StringBuilder to append to (or null to create a new one)
+	 * @return The StringBuilder
+	 */
+	public static StringBuilder printInt(long value, int places, StringBuilder into) {
+		if (into == null)
+			into = new StringBuilder();
+		int start = into.length();
+		into.append(value);
+		if (into.charAt(start) == '-')
+			start++;
+		while (into.length() - start < places)
+			into.insert(start, '0');
+		return into;
+	}
+
+	/**
 	 * Prints a sequence of values to a StringBuilder
 	 * 
 	 * @param <T> The type of values to print
@@ -429,6 +493,7 @@ public class StringUtils {
 	 * @return The parsed name
 	 */
 	public static Name split(String str, char delimiter) {
+
 		List<String> components = new LinkedList<>();
 		int start = 0;
 		for (int c = 0; c < str.length(); c++) {

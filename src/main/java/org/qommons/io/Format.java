@@ -7,11 +7,13 @@ import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.TimeZone;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.qommons.QommonsUtils;
+import org.qommons.TimeUtils;
 
 /**
  * Knows how to parse a type of value from text and to print a type of value into text
@@ -138,6 +140,8 @@ public interface Format<T> {
 	public static final Format<Duration> DURATION = new Format<Duration>() {
 		@Override
 		public void append(StringBuilder text, Duration value) {
+			if (value == null)
+				return;
 			if (value.isNegative()) {
 				text.append('-');
 				value = value.abs();
@@ -235,6 +239,8 @@ public interface Format<T> {
 			return QommonsUtils.parseDuration(text);
 		}
 	};
+	/** A flexible-format date parser */
+	public static final Format<Instant> FLEX_DATE = flexibleDate("ddMMMyyyy", null);
 
 	/**
 	 * @param pattern Pattern to match
@@ -278,6 +284,8 @@ public interface Format<T> {
 		return new Format<Float>() {
 			@Override
 			public void append(StringBuilder text, Float value) {
+				if (value == null)
+					return;
 				text.append(value);
 			}
 
@@ -301,6 +309,8 @@ public interface Format<T> {
 		return new Format<Double>() {
 			@Override
 			public void append(StringBuilder text, Double value) {
+				if (value == null)
+					return;
 				text.append(format.format(value.doubleValue()));
 			}
 
@@ -368,13 +378,55 @@ public interface Format<T> {
 		return new Format<Instant>() {
 			@Override
 			public void append(StringBuilder text, Instant value) {
+				if (value == null)
+					return;
 				text.append(dateFormat.format(Date.from(value)));
 			}
 
 			@Override
 			public Instant parse(CharSequence text) throws ParseException {
+				if (text.length() == 0)
+					return null;
 				return dateFormat.parse(text.toString()).toInstant();
 			}
 		};
+	}
+
+	/**
+	 * @param dayFormat The format for the day/month/year
+	 * @param timeZone The time zone for the format (may be null)
+	 * @return A flexible date format
+	 */
+	public static Format<Instant> flexibleDate(String dayFormat, TimeZone timeZone) {
+		return new FlexDateFormat(dayFormat, timeZone);
+	}
+
+	/** A flexible date format */
+	public static class FlexDateFormat implements Format<Instant> {
+		private final String theDayFormat;
+		private final TimeZone theTimeZone;
+
+		/**
+		 * @param dayFormat The format for the day/month/year
+		 * @param timeZone The time zone for the format (may be null)
+		 */
+		public FlexDateFormat(String dayFormat, TimeZone timeZone) {
+			theDayFormat = dayFormat;
+			theTimeZone = timeZone;
+		}
+
+		@Override
+		public void append(StringBuilder text, Instant value) {
+			if (value == null)
+				return;
+			text.append(TimeUtils.asFlexTime(value, theTimeZone, theDayFormat).toString());
+		}
+
+		@Override
+		public Instant parse(CharSequence text) throws ParseException {
+			if (text.length() == 0)
+				return null;
+			return TimeUtils.parseFlexFormatTime(text, true, true).evaluate(Instant::now);
+		}
 	}
 }
