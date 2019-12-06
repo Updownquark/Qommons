@@ -411,6 +411,7 @@ public class QommonsUtils {
 	 * @throws ParseException If the specified text is unrecognized as a duration
 	 */
 	public static Duration parseDuration(CharSequence text) throws ParseException {
+		// return parseDurationComponents(text).asDuration(); TODO Uncomment this when the componentized parser is working
 		Duration duration = Duration.ZERO;
 		int c = 0;
 		if (c < text.length() && Character.isWhitespace(text.charAt(c)))
@@ -536,6 +537,229 @@ public class QommonsUtils {
 		if (neg)
 			duration = duration.negated();
 		return duration;
+	}
+
+	public static class DurationComponent {
+		public final int start;
+		public final long value;
+		public final String unit;
+		public final boolean isSeparator;
+		public final boolean printUnit;
+
+		public DurationComponent(int start, long value, String unit, boolean separator, boolean printUnit) {
+			this.start = start;
+			this.value = value;
+			this.unit = unit;
+			isSeparator = separator;
+			this.printUnit = printUnit;
+		}
+
+		@Override
+		public String toString() {
+			if (isSeparator)
+				return unit;
+			else if (printUnit)
+				return value + unit;
+			else
+				return String.valueOf(value);
+		}
+	}
+
+	public static class ParsedDuration {
+		public final boolean isNegative;
+		public final List<DurationComponent> components;
+
+		public ParsedDuration(boolean negative, List<DurationComponent> components) {
+			isNegative = negative;
+			this.components = components;
+		}
+
+		public Duration asDuration() {
+			Duration d = Duration.ZERO;
+			for (DurationComponent c : components) {
+				if (c.isSeparator)
+					continue;
+				String unit = c.unit.toLowerCase();
+				if (unit.startsWith("y"))
+					d = d.plusDays(365 * c.value);
+				else if (unit.startsWith("mo"))
+					d = d.plusDays(30 * c.value);
+				else if (unit.startsWith("d"))
+					d = d.plusDays(c.value);
+				else if (unit.startsWith("h"))
+					d = d.plusHours(c.value);
+				else if (unit.equals("ms") || unit.startsWith("mil"))
+					d = d.plusMillis(c.value);
+				else if (unit.startsWith("m"))
+					d = d.plusMinutes(c.value);
+				else if (unit.startsWith("s"))
+					d = d.plusSeconds(c.value);
+				else if (unit.startsWith("n"))
+					d = d.plusNanos(c.value);
+				else
+					throw new IllegalStateException("Unrecognized unit: " + unit);
+			}
+			return d;
+		}
+
+		@Override
+		public String toString() {
+			StringBuilder str = new StringBuilder();
+			if (isNegative)
+				str.append('-');
+			for (DurationComponent c : components)
+				str.append(c.toString());
+			return str.toString();
+		}
+	}
+
+	public static ParsedDuration parseDurationComponents(CharSequence text) throws ParseException {
+		ArrayList<DurationComponent> components = new ArrayList<>();
+		Duration duration = Duration.ZERO;
+		int c = 0;
+		StringBuilder spacer = new StringBuilder();
+		while (c < text.length() && Character.isWhitespace(text.charAt(c))) {
+			spacer.append(text.charAt(c));
+			c++;
+		}
+		if (spacer.length() > 0) {
+			components.add(new DurationComponent(c - spacer.length(), 0, spacer.toString(), true, true));
+			spacer.setLength(0);
+		}
+
+		boolean neg = c < text.length() && text.charAt(c) == '-';
+		if (neg)
+			c++;
+		StringBuilder unit = new StringBuilder();
+		boolean hadContent = false;
+		for (; c < text.length(); c++) {
+			while (c < text.length() && Character.isWhitespace(text.charAt(c))) {
+				spacer.append(text.charAt(c));
+				c++;
+			}
+			if (spacer.length() > 0) {
+				components.add(new DurationComponent(c - spacer.length(), 0, spacer.toString(), true, true));
+				spacer.setLength(0);
+			}
+			if (c == text.length())
+				break;
+			hadContent = true;
+			int valueStart = c;
+			long value = 0;
+			while (c < text.length() && text.charAt(c) >= '0' && text.charAt(c) <= '9') {
+				if (c - valueStart > 19)
+					throw new ParseException("Too many digits in value", c);
+				value = value * 10 + (text.charAt(c) - '0');
+				c++;
+			}
+			int decimalStart = c;
+			double decimal = Double.NaN;
+			if (c < text.length() && text.charAt(c) == '.') {
+				decimal = 0;
+				c++;
+				double place = 0.1;
+				while (c < text.length() && text.charAt(c) >= '0' && text.charAt(c) <= '9') {
+					if (c - decimalStart < 9) {
+						// Only ns precision is supported. Ignore remaining digits.
+						decimal = decimal + (text.charAt(c) - '0') * place;
+						place /= 10;
+					}
+					c++;
+				}
+				if (c == decimalStart)
+					throw new ParseException("Unrecognized duration", 0);
+			}
+			while (c < text.length() && Character.isWhitespace(text.charAt(c)))
+				c++;
+
+			int unitStart = c;
+			unit.setLength(0);
+			while (c < text.length() && Character.isAlphabetic(text.charAt(c))) {
+				unit.append(text.charAt(c));
+				c++;
+			}
+			if (unit.length() == 0)
+				throw new ParseException("Unit expected", unitStart);
+			if (unit.length() > 2 && unit.charAt(unit.length() - 1) == 's')
+				unit.deleteCharAt(unit.length() - 1); // Remove the plural
+			String unitStr = unit.toString().toLowerCase();
+			if (!Double.isNaN(decimal)) {
+				switch (unitStr) {
+				case "s":
+				case "sec":
+				case "second":
+				case "ms":
+				case "milli":
+				case "millisecond":
+					break;
+				default:
+					throw new ParseException("Decimal values are only permitted for unit 'second' and 'millisecond'", decimalStart);
+				}
+			}
+			switch (unit.toString()) {
+			case "y":
+			case "yr":
+			case "year":
+				components.add(new DurationComponent(valueStart, value, unitStr, false, true));
+				break;
+			case "mo":
+			case "month":
+				components.add(new DurationComponent(valueStart, value, unitStr, false, true));
+				break;
+			case "w":
+			case "wk":
+			case "week":
+				components.add(new DurationComponent(valueStart, value, unitStr, false, true));
+				break;
+			case "d":
+			case "dy":
+			case "day":
+				components.add(new DurationComponent(valueStart, value, unitStr, false, true));
+				break;
+			case "h":
+			case "hr":
+			case "hour":
+				components.add(new DurationComponent(valueStart, value, unitStr, false, true));
+				break;
+			case "m":
+			case "min":
+			case "minute":
+				components.add(new DurationComponent(valueStart, value, unitStr, false, true));
+				break;
+			case "s":
+			case "sec":
+			case "second":
+				if (value > 0 || decimalStart > valueStart)
+					components.add(new DurationComponent(valueStart, value, unitStr, false, true));
+				if (!Double.isNaN(decimal)) {
+					components.add(new DurationComponent(decimalStart, 0, ".", true, true));
+					components.add(new DurationComponent(decimalStart + 1, (long) (decimal * 1_000_000_000), "ns", false, false));
+				}
+				break;
+			case "ms":
+			case "milli":
+			case "millisecond":
+				if (value > 0 || decimalStart > valueStart)
+					components.add(new DurationComponent(valueStart, value, unitStr, false, true));
+				if (!Double.isNaN(decimal)) {
+					components.add(new DurationComponent(decimalStart, 0, ".", true, true));
+					components.add(new DurationComponent(decimalStart + 1, (long) (decimal * 1_000_000), "ns", false, false));
+				}
+				break;
+			case "ns":
+			case "nano":
+			case "nanosecond":
+				components.add(new DurationComponent(valueStart, value, unitStr, false, true));
+				break;
+			default:
+				throw new ParseException("Unrecognized unit: " + unitStr, unitStart);
+			}
+		}
+		if (!hadContent)
+			throw new ParseException("No content to parse", c);
+		if (neg)
+			duration = duration.negated();
+		return new ParsedDuration(neg, components);
 	}
 
 	private static final long MINUTE_LENGTH = 60000;

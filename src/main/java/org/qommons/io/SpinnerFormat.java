@@ -2,6 +2,7 @@ package org.qommons.io;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.TimeZone;
 import java.util.function.Function;
@@ -135,6 +136,55 @@ public interface SpinnerFormat<T> extends Format<T> {
 	};
 	/** A flexible date format */
 	public static SpinnerFormat<Instant> FLEX_DATE = flexDate(null, "ddMMMyyyy", null);
+	/** A duration format */
+	public static SpinnerFormat<Duration> DURATION=new AbstractSpinnerFormat<Duration>(Format.DURATION) {
+		@Override
+		public boolean supportsAdjustment(boolean withContext) {
+			return withContext;
+		}
+
+		@Override
+		public BiTuple<Duration, String> adjust(Duration value, String formatted, int cursor, boolean up) {
+			int unitIndex=cursor;
+			if(unitIndex>0 && (unitIndex==formatted.length() || Character.isWhitespace(formatted.charAt(unitIndex))))
+				unitIndex--;
+			while(unitIndex<formatted.length() && (Character.isDigit(formatted.charAt(unitIndex)) || Character.isWhitespace(formatted.charAt(unitIndex))))
+				unitIndex++;
+			while(unitIndex>0 && (formatted.charAt(unitIndex-1)=='.' || Character.isLetter(formatted.charAt(unitIndex-1))))
+				unitIndex--;
+			if(unitIndex==formatted.length() || !(formatted.charAt(unitIndex)=='.' || Character.isLetter(formatted.charAt(unitIndex))))
+				return null; //Shouldn't happen with a well-formatted string
+			
+			int digitEnd=unitIndex;
+			while(digitEnd>0 && !Character.isDigit(formatted.charAt(digitEnd-1)))
+				digitEnd--;
+			if(digitEnd==0)
+				return null; //Shouldn't happen with a well-formatted string
+			
+			StringBuilder unit=new StringBuilder();
+			for(int i=unitIndex;i<formatted.length() && Character.isLetter(formatted.charAt(unitIndex));i++)
+				unit.append(formatted.charAt(unitIndex));
+			Duration newValue;
+			String newText;
+			String unitStr=unit.toString();
+			if(unitStr.startsWith("y")){
+				newValue=value.plus(Duration.ofDays(365));
+				newText=StringUtils.add(formatted, digitEnd-1, 1);
+			} else if(unitStr.startsWith("mo")){
+				newValue=value.plus(Duration.ofDays(30));
+				newText=StringUtils.add(formatted, digitEnd-1, 1);
+			} else if(unitStr.startsWith("d")){
+			} else if(unitStr.startsWith("h")){
+			} else if(unitStr.startsWith("m")){
+			} else if(unitStr.startsWith("s")){
+			}
+				break;
+			case "d":
+			}
+			// TODO Auto-generated method stub
+			return null;
+		}
+};
 
 	/**
 	 * A {@link SpinnerFormat} that uses a plain {@link Format} for formatting and parsing
