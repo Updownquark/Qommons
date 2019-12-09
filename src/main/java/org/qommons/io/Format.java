@@ -239,8 +239,6 @@ public interface Format<T> {
 			return QommonsUtils.parseDuration(text);
 		}
 	};
-	/** A flexible-format date parser */
-	public static final Format<Instant> FLEX_DATE = flexibleDate("ddMMMyyyy", null);
 
 	/**
 	 * @param pattern Pattern to match

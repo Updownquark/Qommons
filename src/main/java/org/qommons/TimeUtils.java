@@ -16,10 +16,12 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 
-import org.qommons.collect.BetterSortedList.SortedSearchFilter;
+import org.qommons.collect.BetterCollections;
 import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.QuickSet;
 import org.qommons.collect.QuickSet.QuickMap;
+import org.qommons.io.FieldedAdjustable;
+import org.qommons.io.FieldedComponent;
 import org.qommons.tree.BetterTreeSet;
 
 /**
@@ -52,10 +54,16 @@ public class TimeUtils {
 		TimeZone
 	}
 
+	public enum DurationComponentType {
+		Year, Month, Week, Day, Hour, Minute, Second, Millisecond, Microseond, Nanosecond
+	}
+
 	/** A parsed time returned from {@link TimeUtils#parseFlexFormatTime(CharSequence, boolean, boolean)} */
-	public interface ParsedTime extends Comparable<ParsedTime> {
+	public interface ParsedTime extends FieldedAdjustable<DateElementType, TimeComponent, ParsedTime> {
 		/** @return The time zone of the parsed time, if specified */
 		TimeZone getTimeZone();
+
+		ParsedTime add(DateElementType field, int amount);
 
 		/**
 		 * @param reference The reference time that the parsed time may be relative to
@@ -77,19 +85,378 @@ public class TimeUtils {
 		 * @return Whether the result of {@link #compareTo(ParsedTime)} will have meaning for the given time
 		 */
 		boolean isComparable(ParsedTime other);
+	}
 
-		/**
-		 * @param position The position in the text
-		 * @return The portion of the date at the given cursor position, or null if it's white space
-		 */
-		DateElementType getField(int position);
+	public static class TimeComponent extends FieldedComponent<DateElementType> {
+		final ParsedDateElement theParsedElement;
 
-		/**
-		 * @param field The field to add or remove from
-		 * @param amount The amount to add or remove to the field type (may be negative)
-		 * @return A similarly-formatted time changed by the given amount
-		 */
-		ParsedTime add(DateElementType field, int amount);
+		TimeComponent(DateElementType field, ParsedDateElement element) {
+			super(element.index, element.index + element.text.length(), field, element.value);
+			theParsedElement = element;
+		}
+
+		@Override
+		public String toString() {
+			return theParsedElement.text.toString();
+		}
+	}
+
+	public static class DurationComponent extends FieldedComponent<DurationComponentType> {
+		private final String text;
+		final int valueStart;
+		final int valueEnd;
+
+		public DurationComponent(int start, int valueStart, int valueEnd, DurationComponentType field, int value, String text) {
+			super(start, start + text.length(), field, value);
+			if (start < 0 || valueStart < start || valueEnd < valueStart || (valueEnd - valueStart) > text.length())
+				throw new IndexOutOfBoundsException(start + ", " + valueStart + ", " + valueEnd + " of " + text.length());
+			this.text = text;
+			this.valueStart = valueStart;
+			this.valueEnd = valueEnd;
+		}
+
+		@Override
+		public String toString() {
+			return text;
+		}
+	}
+
+	public static class ParsedDuration implements FieldedAdjustable<DurationComponentType, DurationComponent, ParsedDuration> {
+		private final boolean isNegative;
+		private final EnumMap<DurationComponentType, DurationComponent> components;
+		private final List<DurationComponent> theSequence;
+		private final List<String> theSeparators;
+
+		public ParsedDuration(boolean negative, List<DurationComponent> sequence, List<String> separators) {
+			isNegative = negative;
+			components = new EnumMap<>(DurationComponentType.class);
+			for (DurationComponent c : sequence)
+				if (components.put(c.getField(), c) != null)
+					throw new IllegalArgumentException("Duplicate components of type " + c.getField());
+			this.theSequence = sequence;
+			theSeparators = separators;
+		}
+
+		@Override
+		public List<DurationComponent> getComponents() {
+			return theSequence;
+		}
+
+		@Override
+		public Class<DurationComponentType> getFieldType() {
+			return DurationComponentType.class;
+		}
+
+		@Override
+		public DurationComponent getField(DurationComponentType type) {
+			return components.get(type);
+		}
+
+		@Override
+		public org.qommons.TimeUtils.ParsedDuration adjust(int position, int amount) {
+			return FieldedAdjustable.super.adjust(position, isNegative ? -amount : amount);
+		}
+
+		@Override
+		public ParsedDuration with(DurationComponentType type, int value) {
+			EnumMap<DurationComponentType, Integer> fieldValues = new EnumMap<>(DurationComponentType.class);
+			for (Map.Entry<DurationComponentType, DurationComponent> entry : components.entrySet())
+				fieldValues.put(entry.getKey(), entry.getValue().getValue());
+			DurationComponent found = getField(type);
+			boolean adjusted;
+			if (found == null)
+				adjusted = adjustValues(fieldValues, type, value);
+			else
+				adjusted = adjustValues(fieldValues, type, value - found.getValue());
+			if (!adjusted)
+				return null;
+			List<DurationComponent> sequence = new ArrayList<>();
+			List<String> separators = new ArrayList<>();
+			separators.add(theSeparators.get(0));
+			int index = separators.get(0).length();
+			for (DurationComponentType field : DurationComponentType.values()) {
+				DurationComponent oldComp = components.get(field);
+				Integer newVal = fieldValues.getOrDefault(field, 0);
+				String valueStr = newVal.toString();
+				String text;
+				int valueStart;
+				String separator;
+				if (oldComp != null) {
+					valueStart = oldComp.valueStart - oldComp.getStart();
+					text = oldComp.text.substring(0, valueStart) + newVal + oldComp.text.substring(oldComp.valueEnd - oldComp.getStart());
+					separator = theSeparators.get(theSequence.indexOf(oldComp) + 1);
+				} else if (newVal != 0) {
+					valueStart = 0;
+					text = newVal.toString();
+					switch (field) {
+					case Year:
+						text += "y";
+						break;
+					case Month:
+						text += "mo";
+						break;
+					case Week:
+						text += "w";
+						break;
+					case Day:
+						text += "d";
+						break;
+					case Hour:
+						text += "h";
+						break;
+					case Minute:
+						text += "m";
+						break;
+					case Second:
+						text += "s";
+						break;
+					case Millisecond:
+						text += "ms";
+						break;
+					case Microseond:
+						text += "us";
+						break;
+					case Nanosecond:
+						text += "ns";
+						break;
+					}
+					if (sequence.isEmpty())
+						separator = theSeparators.get(1);
+					else
+						separator = separators.get(separators.size() - 1);
+				} else
+					continue;
+				sequence.add(new DurationComponent(index, index + valueStart, index + valueStart + valueStr.length(), field, newVal, text));
+				separators.add(separator);
+				index += text.length() + separator.length();
+			}
+			return new ParsedDuration(isNegative, sequence, separators);
+		}
+
+		private static boolean adjustValues(EnumMap<DurationComponentType, Integer> fieldValues, DurationComponentType type, int amount) {
+			Integer oldValue = fieldValues.get(type);
+			int newValue = (oldValue == null ? 0 : oldValue.intValue()) + amount;
+			int limit = 0;
+			DurationComponentType superType = null;
+			if (type.ordinal() > 0)
+				superType = DurationComponentType.values()[type.ordinal() - 1];
+			switch (type) {
+			case Year:
+				limit = Integer.MAX_VALUE;
+				break;
+			case Month:
+				superType = DurationComponentType.Year;
+				limit = 12;
+				break;
+			case Week:
+				superType = null;
+				limit = Integer.MAX_VALUE;
+				break;
+			case Day:
+				if (fieldValues.containsKey(DurationComponentType.Week)) {
+					superType = DurationComponentType.Week;
+					limit = 7;
+				} else if (fieldValues.containsKey(DurationComponentType.Month)) {
+					superType = DurationComponentType.Month;
+					limit = 31;
+				} else if (fieldValues.containsKey(DurationComponentType.Year)) {
+					superType = DurationComponentType.Year;
+					limit = 365;
+				} else {
+					superType = null;
+					limit = Integer.MAX_VALUE;
+				}
+				break;
+			case Hour:
+				limit = 24;
+				break;
+			case Minute:
+			case Second:
+				limit = 60;
+				break;
+			case Millisecond:
+				limit = 1000;
+				break;
+			case Microseond:
+				if (fieldValues.containsKey(DurationComponentType.Millisecond)) {
+					superType = DurationComponentType.Millisecond;
+					limit = 1000;
+				} else {
+					superType = DurationComponentType.Second;
+					limit = 1000;
+				}
+				break;
+			case Nanosecond:
+				if (fieldValues.containsKey(DurationComponentType.Microseond)
+					|| fieldValues.containsKey(DurationComponentType.Millisecond)) {
+					superType = DurationComponentType.Microseond;
+					limit = 1000;
+				} else {
+					superType = DurationComponentType.Second;
+					limit = 1_000_000_000;
+				}
+				break;
+			}
+			if (superType != null) {
+				int passOn = 0;
+				if (newValue < 0) {
+					passOn = newValue / limit;
+					newValue %= limit;
+					if (newValue < 0) {
+						passOn--;
+						newValue += limit;
+					}
+				} else if (newValue >= limit) {
+					passOn = newValue / limit;
+					newValue %= limit;
+				}
+				if (passOn != 0 && !adjustValues(fieldValues, superType, passOn))
+					return false;
+			} else if (newValue < 0)
+				return false;
+			fieldValues.put(type, newValue);
+			return true;
+		}
+
+		public Duration asDuration() {
+			Duration d = Duration.ZERO;
+			for (DurationComponent c : theSequence) {
+				switch (c.getField()) {
+				case Year:
+					d = d.plusDays(getDaysInYears(c.getValue()));
+					break;
+				case Month:
+					d = d.plusDays(getDaysInMonths(c.getValue()));
+					break;
+				case Week:
+					d = d.plusDays(c.getValue() * 7L);
+					break;
+				case Day:
+					d = d.plusDays(c.getValue());
+					break;
+				case Hour:
+					d = d.plusHours(c.getValue());
+					break;
+				case Minute:
+					d = d.plusMinutes(c.getValue());
+					break;
+				case Second:
+					d = d.plusSeconds(c.getValue());
+					break;
+				case Millisecond:
+					d = d.plusMillis(c.getValue());
+					break;
+				case Microseond:
+					d = d.plusNanos(c.getValue() * 1000L);
+					break;
+				case Nanosecond:
+					d = d.plusNanos(c.getValue());
+					break;
+				}
+			}
+			return d;
+		}
+
+		@Override
+		public String toString() {
+			StringBuilder str = new StringBuilder();
+			if (isNegative)
+				str.append('-');
+			for (int i = 0; i < theSequence.size(); i++) {
+				str.append(theSeparators.get(i));
+				str.append(theSequence.get(i).toString());
+			}
+			str.append(theSeparators.get(theSeparators.size() - 1));
+			return str.toString();
+		}
+
+		public static ParsedDuration asParsedDuration(Duration d) {
+			boolean neg = d.isNegative();
+			if (neg)
+				d = d.negated();
+			List<String> separators = new ArrayList<>();
+			List<DurationComponent> components = new ArrayList<>();
+			separators.add("");
+			int index = 0;
+			long seconds = d.getSeconds();
+			if (seconds > DAY.getSeconds()) {
+				int days = (int) (seconds / DAY.getSeconds());
+				seconds %= DAY.getSeconds();
+				String valueStr = String.valueOf(days);
+				components
+					.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Day, days, valueStr + "d"));
+				index += valueStr.length() + 1;
+			}
+			if (seconds > HOUR.getSeconds()) {
+				if (!components.isEmpty()) {
+					separators.add(" ");
+					index++;
+				}
+				int hours = (int) (seconds / HOUR.getSeconds());
+				seconds %= HOUR.getSeconds();
+				String valueStr = String.valueOf(hours);
+				components
+					.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Hour, hours, valueStr + "h"));
+				index += valueStr.length() + 1;
+			}
+			if (seconds > 60) {
+				if (!components.isEmpty()) {
+					separators.add(" ");
+					index++;
+				}
+				int minutes = (int) (seconds / 60);
+				seconds %= 60;
+				String valueStr = String.valueOf(minutes);
+				components.add(
+					new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Minute, minutes, valueStr + "m"));
+				index += valueStr.length() + 1;
+			}
+			if (seconds > 0) {
+				if (!components.isEmpty()) {
+					separators.add(" ");
+					index++;
+				}
+				String valueStr = String.valueOf(seconds);
+				components.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Second, (int) seconds,
+					valueStr + "s"));
+				index += valueStr.length() + 1;
+			}
+			int nanos = d.getNano();
+			if (nanos == 0) {} else if (nanos % 1_000_000 == 0) {
+				if (!components.isEmpty()) {
+					separators.add(" ");
+					index++;
+				}
+				int millis = nanos / 1_000_000;
+				String valueStr = String.valueOf(millis);
+				components.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Millisecond, millis,
+					valueStr + "ms"));
+				index += valueStr.length() + 2;
+			} else if (nanos % 1_000 == 0) {
+				if (!components.isEmpty()) {
+					separators.add(" ");
+					index++;
+				}
+				int micros = nanos / 1_000;
+				String valueStr = String.valueOf(micros);
+				components.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Microseond, micros,
+					valueStr + "us"));
+				index += valueStr.length() + 2;
+			} else {
+				if (!components.isEmpty()) {
+					separators.add(" ");
+					index++;
+				}
+				String valueStr = String.valueOf(nanos);
+				components.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Nanosecond, nanos,
+					valueStr + "ns"));
+				index += valueStr.length() + 2;
+			}
+			separators.add("");
+			if (components.isEmpty())
+				components.add(new DurationComponent(index, index, index + 2, DurationComponentType.Second, 0, "0s"));
+			return new ParsedDuration(neg, components, separators);
+		}
 	}
 
 	private static final Duration DAY = Duration.ofDays(1);
@@ -99,16 +466,16 @@ public class TimeUtils {
 	static abstract class ParsedTimeImpl implements ParsedTime {
 		private final String theText;
 		private final TimeZone theTimeZone;
-		protected final Map<DateElementType, ParsedDateElement> elements;
-		protected final BetterSortedSet<BiTuple<ParsedDateElement, DateElementType>> elementsByPosition;
+		protected final Map<DateElementType, TimeComponent> elements;
+		protected final BetterSortedSet<TimeComponent> sequence;
 
-		public ParsedTimeImpl(String text, TimeZone timeZone, Map<DateElementType, ParsedDateElement> elements) {
+		public ParsedTimeImpl(String text, TimeZone timeZone, Map<DateElementType, TimeComponent> elements) {
 			theText = text;
 			theTimeZone = timeZone;
 			this.elements = elements;
-			elementsByPosition = new BetterTreeSet<>(false, (t1, t2) -> Integer.compare(t1.getValue1().index, t2.getValue1().index));
-			for (Map.Entry<DateElementType, ParsedDateElement> element : elements.entrySet())
-				elementsByPosition.add(new BiTuple<>(element.getValue(), element.getKey()));
+			BetterSortedSet<TimeComponent> ebp = new BetterTreeSet<>(false, (t1, t2) -> Integer.compare(t1.getStart(), t2.getStart()));
+			ebp.addAll(elements.values());
+			sequence = BetterCollections.unmodifiableSortedSet(ebp);
 		}
 
 		@Override
@@ -117,60 +484,77 @@ public class TimeUtils {
 		}
 
 		@Override
-		public DateElementType getField(int position) {
-			BiTuple<ParsedDateElement, DateElementType> element = elementsByPosition.searchValue(entry -> {
-				if (position < entry.getValue1().index)
-					return -1;
-				else if (position >= entry.getValue1().index + entry.getValue1().text.length())
-					return 1;
-				else
-					return 0;
-			}, SortedSearchFilter.OnlyMatch);
-			return element == null ? null : element.getValue2();
+		public Class<DateElementType> getFieldType() {
+			return DateElementType.class;
 		}
 
-		protected Map<DateElementType, ParsedDateElement> adjustElements(StringBuilder str, ToIntFunction<DateElementType> value) {
-			Map<DateElementType, ParsedDateElement> newElements = new EnumMap<>(DateElementType.class);
+		@Override
+		public TimeComponent getField(DateElementType type) {
+			return elements.get(type);
+		}
+
+		@Override
+		public List<TimeComponent> getComponents() {
+			return sequence;
+		}
+
+		@Override
+		public ParsedTime with(DateElementType type, int value) {
+			switch (type) {
+			case AmPm:
+			case TimeZone:
+				throw new IllegalArgumentException("Adding to field " + type + " is not supported");
+			default:
+				break;
+			}
+			TimeComponent component = elements.get(type);
+			if (component == null)
+				throw new IllegalArgumentException("Field " + type + " not present in this parsed time");
+			return add(type, value - component.getValue());
+		}
+
+		protected Map<DateElementType, TimeComponent> adjustElements(StringBuilder str, ToIntFunction<DateElementType> value) {
+			Map<DateElementType, TimeComponent> newElements = new EnumMap<>(DateElementType.class);
 			newElements.putAll(elements);
 			int indexBump = 0;
-			for (BiTuple<ParsedDateElement, DateElementType> element : elementsByPosition) {
-				ParsedDateElement oldEl = elements.get(element.getValue2());
+			for (TimeComponent component : sequence) {
+				ParsedDateElement oldEl = elements.get(component.getField()).theParsedElement;
 				ParsedDateElement newEl = null;
 				int newValue;
-				switch (element.getValue2()) {
+				switch (component.getField()) {
 				case Year:
-					newValue = value.applyAsInt(element.getValue2());
-					if (element.getValue1().text.length() == 2)
+					newValue = value.applyAsInt(component.getField());
+					if (component.theParsedElement.text.length() == 2)
 						newValue = newValue % 100;
-					newEl = adjust(element.getValue1(), newValue, indexBump);
+					newEl = adjust(component.theParsedElement, newValue, indexBump);
 					break;
 				case Month:
-					newEl = adjust(element.getValue1(), value.applyAsInt(element.getValue2()), indexBump);
+					newEl = adjust(component.theParsedElement, value.applyAsInt(component.getField()), indexBump);
 					break;
 				case Day:
-					newEl = adjust(element.getValue1(), value.applyAsInt(element.getValue2()), indexBump);
+					newEl = adjust(component.theParsedElement, value.applyAsInt(component.getField()), indexBump);
 					break;
 				case Hour:
-					newEl = adjust(element.getValue1(), value.applyAsInt(element.getValue2()), indexBump);
+					newEl = adjust(component.theParsedElement, value.applyAsInt(component.getField()), indexBump);
 					break;
 				case Minute:
-					newEl = adjust(element.getValue1(), value.applyAsInt(element.getValue2()), indexBump);
+					newEl = adjust(component.theParsedElement, value.applyAsInt(component.getField()), indexBump);
 					break;
 				case Second:
-					newEl = adjust(element.getValue1(), value.applyAsInt(element.getValue2()), indexBump);
+					newEl = adjust(component.theParsedElement, value.applyAsInt(component.getField()), indexBump);
 					break;
 				case SubSecond:
-					newEl = adjust(element.getValue1(), value.applyAsInt(element.getValue2()), indexBump);
+					newEl = adjust(component.theParsedElement, value.applyAsInt(component.getField()), indexBump);
 					break;
 				case AmPm:
-					newEl = adjust(element.getValue1(), value.applyAsInt(element.getValue2()), indexBump);
+					newEl = adjust(component.theParsedElement, value.applyAsInt(component.getField()), indexBump);
 					break;
 				case TimeZone:
 					break;
 				}
 
-				if (newEl != element.getValue1()) {
-					newElements.put(element.getValue2(), newEl);
+				if (newEl != component.theParsedElement) {
+					newElements.put(component.getField(), new TimeComponent(component.getField(), newEl));
 					str.delete(newEl.index, newEl.index + oldEl.text.length());
 					str.insert(newEl.index, newEl.text);
 					indexBump += newEl.text.length() - oldEl.text.length();
@@ -239,7 +623,7 @@ public class TimeUtils {
 		int nanoDigits;
 
 		AbsoluteTime(String text, Instant time, Calendar cal, TimeZone timeZone, DateElementType lowestResolution, int nanoDigits,
-			Map<DateElementType, ParsedDateElement> elements) {
+			Map<DateElementType, TimeComponent> elements) {
 			super(text, timeZone, elements);
 			this.time = time;
 
@@ -380,7 +764,7 @@ public class TimeUtils {
 			}
 			StringBuilder str = new StringBuilder(toString());
 			int fNanos = nanos;
-			Map<DateElementType, ParsedDateElement> newElements = adjustElements(str, type -> {
+			Map<DateElementType, TimeComponent> newElements = adjustElements(str, type -> {
 				switch (type) {
 				case Year:
 					return cal.get(Calendar.YEAR);
@@ -437,11 +821,11 @@ public class TimeUtils {
 		private final int nanoResolution;
 		private final int nanoDigits;
 
-		RelativeTime(String text, TimeZone timeZone, Map<DateElementType, ParsedDateElement> elements) {
+		RelativeTime(String text, TimeZone timeZone, Map<DateElementType, TimeComponent> elements) {
 			super(text, timeZone, elements);
-			ParsedDateElement subSecEl = elements.get(DateElementType.SubSecond);
+			TimeComponent subSecEl = elements.get(DateElementType.SubSecond);
 			if (subSecEl != null) {
-				nanoDigits = subSecEl.text.length();
+				nanoDigits = subSecEl.theParsedElement.text.length();
 				int nanoRes = 1_000_000_000;
 				for (int i = 0; i < nanoDigits; i++)
 					nanoRes /= 10;
@@ -460,12 +844,12 @@ public class TimeUtils {
 			cal.setTimeInMillis(ref.getEpochSecond() * 1000);
 			cal.setTimeZone(getTimeZone() != null ? getTimeZone() : GMT);
 			int nanos = ref.getNano();
-			for (Map.Entry<DateElementType, ParsedDateElement> element : elements.entrySet()) {
+			for (Map.Entry<DateElementType, TimeComponent> element : elements.entrySet()) {
 				switch (element.getKey()) {
 				case Year:
 					// If the year was absolute, it wouldn't be a relative time
 					int year = cal.get(Calendar.YEAR);
-					int newYear = (year / 100) * 100 + element.getValue().value;
+					int newYear = (year / 100) * 100 + element.getValue().getValue();
 					int diff = year - newYear;
 					if (diff <= -50)
 						newYear += 100;
@@ -474,22 +858,22 @@ public class TimeUtils {
 					cal.set(Calendar.YEAR, newYear);
 					break;
 				case Month:
-					cal.set(Calendar.MONTH, element.getValue().value);
+					cal.set(Calendar.MONTH, element.getValue().getValue());
 					break;
 				case Day:
-					cal.set(Calendar.DAY_OF_MONTH, element.getValue().value);
+					cal.set(Calendar.DAY_OF_MONTH, element.getValue().getValue());
 					break;
 				case Hour:
-					cal.set(Calendar.HOUR_OF_DAY, element.getValue().value);
+					cal.set(Calendar.HOUR_OF_DAY, element.getValue().getValue());
 					break;
 				case Minute:
-					cal.set(Calendar.MINUTE, element.getValue().value);
+					cal.set(Calendar.MINUTE, element.getValue().getValue());
 					break;
 				case Second:
-					cal.set(Calendar.SECOND, element.getValue().value);
+					cal.set(Calendar.SECOND, element.getValue().getValue());
 					break;
 				case SubSecond:
-					nanos = element.getValue().value;
+					nanos = element.getValue().getValue();
 					break;
 				case AmPm:
 				case TimeZone:
@@ -503,34 +887,34 @@ public class TimeUtils {
 		public boolean mayMatch(Instant time) {
 			Calendar cal = CALENDAR.get();
 			cal.setTimeInMillis(time.getEpochSecond() * 1000);
-			for (Map.Entry<DateElementType, ParsedDateElement> element : elements.entrySet()) {
+			for (Map.Entry<DateElementType, TimeComponent> element : elements.entrySet()) {
 				switch (element.getKey()) {
 				case Year:
-					if (cal.get(Calendar.YEAR) % 100 != element.getValue().value)
+					if (cal.get(Calendar.YEAR) % 100 != element.getValue().getValue())
 						return false;
 					break;
 				case Month:
-					if (cal.get(Calendar.MONTH) != element.getValue().value)
+					if (cal.get(Calendar.MONTH) != element.getValue().getValue())
 						return false;
 					break;
 				case Day:
-					if (cal.get(Calendar.DAY_OF_MONTH) != element.getValue().value)
+					if (cal.get(Calendar.DAY_OF_MONTH) != element.getValue().getValue())
 						return false;
 					break;
 				case Hour:
-					if (cal.get(Calendar.HOUR_OF_DAY) != element.getValue().value)
+					if (cal.get(Calendar.HOUR_OF_DAY) != element.getValue().getValue())
 						return false;
 					break;
 				case Minute:
-					if (cal.get(Calendar.MINUTE) != element.getValue().value)
+					if (cal.get(Calendar.MINUTE) != element.getValue().getValue())
 						return false;
 					break;
 				case Second:
-					if (cal.get(Calendar.SECOND) != element.getValue().value)
+					if (cal.get(Calendar.SECOND) != element.getValue().getValue())
 						return false;
 					break;
 				case SubSecond:
-					int nanoDiff = time.getNano() - element.getValue().value;
+					int nanoDiff = time.getNano() - element.getValue().getValue();
 					if (nanoDiff < 0 || nanoDiff >= nanoResolution)
 						return false;
 					break;
@@ -562,11 +946,11 @@ public class TimeUtils {
 				return -o.compareTo(this);
 			RelativeTime other = (RelativeTime) o;
 			for (DateElementType type : DateElementType.values()) {
-				ParsedDateElement el = elements.get(type);
-				ParsedDateElement otherEl = other.elements.get(type);
+				TimeComponent el = elements.get(type);
+				TimeComponent otherEl = other.elements.get(type);
 				if (el != null) {
 					if (otherEl != null) {
-						int comp = Integer.compare(el.value, otherEl.value);
+						int comp = Integer.compare(el.getValue(), otherEl.getValue());
 						if (comp != 0)
 							return comp;
 					} else
@@ -582,8 +966,8 @@ public class TimeUtils {
 			if(!elements.containsKey(field))
 				throw new IllegalArgumentException("Field "+field+" is not present in this time");
 			Map<DateElementType, Integer> newValues=new EnumMap<>(DateElementType.class);
-			for(Map.Entry<DateElementType, ParsedDateElement> element : elements.entrySet())
-				newValues.put(element.getKey(), element.getValue().value);
+			for (Map.Entry<DateElementType, TimeComponent> element : elements.entrySet())
+				newValues.put(element.getKey(), element.getValue().getValue());
 			DateElementType adjustingField = field;
 			int superAdjust = amount;
 			while (superAdjust != 0) {
@@ -592,7 +976,7 @@ public class TimeUtils {
 					adjustingField = DateElementType.values()[adjustingField.ordinal() - 1];
 			}
 			StringBuilder str=new StringBuilder(toString());
-			Map<DateElementType, ParsedDateElement> newElements = adjustElements(str, newValues::get);
+			Map<DateElementType, TimeComponent> newElements = adjustElements(str, newValues::get);
 			return new RelativeTime(str.toString(), getTimeZone(), newElements);
 		}
 
@@ -933,17 +1317,26 @@ public class TimeUtils {
 				else
 					nanos = 0;
 				Instant time = Instant.ofEpochSecond(cal.getTimeInMillis() / 1000, nanos);
-				return new AbsoluteTime(text, time, cal, zone, minType, element == null ? 0 : element.text.length(), firstInfo);
+				return new AbsoluteTime(text, time, cal, zone, minType, element == null ? 0 : element.text.length(),
+					toComponents(firstInfo));
 			} else {
 				for (Map.Entry<DateElementType, ParsedDateElement> entry : firstInfo.entrySet())
 					validate(entry.getKey(), entry.getValue());
-				return new RelativeTime(text, zone, firstInfo);
+				return new RelativeTime(text, zone, toComponents(firstInfo));
 			}
 		} catch (ParseException e) {
 			if (!throwIfNotFound)
 				return null;
 			throw e;
 		}
+	}
+
+	private static Map<DateElementType, TimeComponent> toComponents(EnumMap<DateElementType, ParsedDateElement> fields) {
+		EnumMap<DateElementType, TimeComponent> components = new EnumMap<>(DateElementType.class);
+		for (Map.Entry<DateElementType, ParsedDateElement> entry : fields.entrySet()) {
+			components.put(entry.getKey(), new TimeComponent(entry.getKey(), entry.getValue()));
+		}
+		return components;
 	}
 
 	private static int validate(DateElementType type, ParsedDateElement element) throws ParseException {
@@ -1109,6 +1502,11 @@ public class TimeUtils {
 			this.type = type;
 			this.index = index;
 			this.text = text;
+		}
+
+		ParsedDateElement setValue(int value) {
+			this.value = value;
+			return this;
 		}
 	}
 
@@ -1311,7 +1709,8 @@ public class TimeUtils {
 						else
 							StringUtils.printInt(cal.get(Calendar.DAY_OF_MONTH), i - start, str);
 						elements.put(DateElementType.Day,
-							new ParsedDateElement(ParsedDateElementType.DIGIT, strStart, str.substring(strStart)));
+							new ParsedDateElement(ParsedDateElementType.DIGIT, strStart, str.substring(strStart))
+								.setValue(cal.get(Calendar.DAY_OF_MONTH)));
 						break;
 					case 'M':
 						if (i - start == 2) {
@@ -1323,7 +1722,8 @@ public class TimeUtils {
 							if (i - start > 1 && mo.length() > i - start)
 								mo = mo.substring(0, i - start);
 							str.append(mo);
-							elements.put(DateElementType.Month, new ParsedDateElement(ParsedDateElementType.MONTH, strStart, mo));
+							elements.put(DateElementType.Month,
+								new ParsedDateElement(ParsedDateElementType.MONTH, strStart, mo).setValue(cal.get(Calendar.MONTH)));
 						}
 						break;
 					case 'y':
@@ -1332,7 +1732,8 @@ public class TimeUtils {
 						else
 							StringUtils.printInt(cal.get(Calendar.YEAR), i - start, str);
 						elements.put(DateElementType.Year,
-							new ParsedDateElement(ParsedDateElementType.DIGIT, strStart, str.substring(strStart)));
+							new ParsedDateElement(ParsedDateElementType.DIGIT, strStart, str.substring(strStart))
+								.setValue(cal.get(Calendar.YEAR)));
 						break;
 					case 'E':
 						if (i - start == 3)
@@ -1365,44 +1766,288 @@ public class TimeUtils {
 		if (time.getNano() != 0) {
 			resolution = DateElementType.SubSecond;
 			str.append(' ');
+			int index = str.length();
 			StringUtils.printInt(cal.get(Calendar.HOUR_OF_DAY), 2, str);
+			elements.put(DateElementType.Hour, new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index))
+				.setValue(cal.get(Calendar.HOUR_OF_DAY)));
 			str.append(':');
+			index = str.length();
 			StringUtils.printInt(cal.get(Calendar.MINUTE), 2, str);
+			elements.put(DateElementType.Minute,
+				new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index)).setValue(cal.get(Calendar.MINUTE)));
 			str.append(':');
+			index = str.length();
 			StringUtils.printInt(cal.get(Calendar.SECOND), 2, str);
+			elements.put(DateElementType.Second,
+				new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index)).setValue(cal.get(Calendar.SECOND)));
 			str.append('.');
 			nanoDigits = 9;
+			index = str.length();
 			StringUtils.printInt(time.getNano(), nanoDigits, str);
 			while (str.charAt(str.length() - 1) == '0') {
 				nanoDigits--;
 				str.setLength(str.length() - 1);
 			}
+			elements.put(DateElementType.SubSecond,
+				new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index)).setValue(time.getNano()));
 		} else if (time.getEpochSecond() % 60 != 0) {
 			resolution = DateElementType.Second;
 			str.append(' ');
+			int index = str.length();
 			StringUtils.printInt(cal.get(Calendar.HOUR_OF_DAY), 2, str);
+			elements.put(DateElementType.Hour, new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index))
+				.setValue(cal.get(Calendar.HOUR_OF_DAY)));
 			str.append(':');
+			index = str.length();
 			StringUtils.printInt(cal.get(Calendar.MINUTE), 2, str);
+			elements.put(DateElementType.Minute,
+				new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index)).setValue(cal.get(Calendar.MINUTE)));
 			str.append(':');
+			index = str.length();
 			StringUtils.printInt(cal.get(Calendar.SECOND), 2, str);
+			elements.put(DateElementType.Second,
+				new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index)).setValue(cal.get(Calendar.SECOND)));
 		} else if (time.getEpochSecond() % DAY.getSeconds() != 0) {
 			resolution = DateElementType.Minute;
 			str.append(' ');
+			int index = str.length();
 			StringUtils.printInt(cal.get(Calendar.HOUR_OF_DAY), 2, str);
+			elements.put(DateElementType.Hour, new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index))
+				.setValue(cal.get(Calendar.HOUR_OF_DAY)));
 			str.append(':');
+			index = str.length();
 			StringUtils.printInt(cal.get(Calendar.MINUTE), 2, str);
+			elements.put(DateElementType.Minute,
+				new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index)).setValue(cal.get(Calendar.MINUTE)));
 		} else
 			resolution = DateElementType.Day;
 		if (foundYear)
-			return new AbsoluteTime(str.toString(), time, cal, zone, resolution, nanoDigits, elements);
+			return new AbsoluteTime(str.toString(), time, cal, zone, resolution, nanoDigits, toComponents(elements));
 		else
-			return new RelativeTime(str.toString(), zone, elements);
+			return new RelativeTime(str.toString(), zone, toComponents(elements));
 	}
 
 	private static String capitalize(String str) {
 		StringBuilder ret = new StringBuilder(str);
 		ret.setCharAt(0, Character.toUpperCase(str.charAt(0)));
 		return ret.toString();
+	}
+
+	public static ParsedDuration parseDuration(CharSequence text) throws ParseException {
+		ArrayList<DurationComponent> components = new ArrayList<>();
+		ArrayList<String> separators = new ArrayList<>();
+		Duration duration = Duration.ZERO;
+		int c = 0;
+		StringBuilder spacer = new StringBuilder();
+		while (c < text.length() && Character.isWhitespace(text.charAt(c))) {
+			spacer.append(text.charAt(c));
+			c++;
+		}
+
+		boolean neg = c < text.length() && text.charAt(c) == '-';
+		if (neg)
+			c++;
+		StringBuilder unit = new StringBuilder();
+		boolean hadContent = false;
+		while (true) {
+			while (c < text.length() && Character.isWhitespace(text.charAt(c))) {
+				spacer.append(text.charAt(c));
+				c++;
+			}
+			separators.add(spacer.toString());
+			spacer.setLength(0);
+			if (c == text.length())
+				break;
+			hadContent = true;
+			int valueStart = c;
+			long value = 0;
+			while (c < text.length() && text.charAt(c) >= '0' && text.charAt(c) <= '9') {
+				if (c - valueStart > 10)
+					throw new ParseException("Too many digits in value", c);
+				value = value * 10 + (text.charAt(c) - '0');
+				c++;
+			}
+			if (value > Integer.MAX_VALUE)
+				throw new ParseException("Too many digits in value", c);
+			int decimalStart = c;
+			double decimal = Double.NaN;
+			if (c < text.length() && text.charAt(c) == '.') {
+				decimal = 0;
+				c++;
+				double place = 0.1;
+				while (c < text.length() && text.charAt(c) >= '0' && text.charAt(c) <= '9') {
+					if (c - decimalStart < 9) {
+						// Only ns precision is supported. Ignore remaining digits.
+						decimal = decimal + (text.charAt(c) - '0') * place;
+						place /= 10;
+					}
+					c++;
+				}
+				if (c == decimalStart)
+					throw new ParseException("Unrecognized duration", 0);
+			}
+			while (c < text.length() && Character.isWhitespace(text.charAt(c)))
+				c++;
+
+			int unitStart = c;
+			unit.setLength(0);
+			while (c < text.length() && Character.isAlphabetic(text.charAt(c))) {
+				unit.append(text.charAt(c));
+				c++;
+			}
+			if (unit.length() == 0)
+				throw new ParseException("Unit expected", unitStart);
+			if (unit.length() > 2 && unit.charAt(unit.length() - 1) == 's')
+				unit.deleteCharAt(unit.length() - 1); // Remove the plural
+			String unitStr = unit.toString().toLowerCase();
+			if (!Double.isNaN(decimal)) {
+				switch (unitStr) {
+				case "s":
+				case "sec":
+				case "second":
+				case "ms":
+				case "milli":
+				case "millisecond":
+					break;
+				default:
+					throw new ParseException("Decimal values are only permitted for unit 'second' and 'millisecond'", decimalStart);
+				}
+			}
+			switch (unit.toString()) {
+			case "y":
+			case "yr":
+			case "year":
+				components.add(
+					new DurationComponent(valueStart, valueStart, decimalStart, DurationComponentType.Year, (int) value,
+						text.subSequence(valueStart, c).toString()));
+				break;
+			case "mo":
+			case "month":
+				components.add(new DurationComponent(valueStart, valueStart, decimalStart, DurationComponentType.Month, (int) value,
+					text.subSequence(valueStart, c).toString()));
+				break;
+			case "w":
+			case "wk":
+			case "week":
+				components.add(new DurationComponent(valueStart, valueStart, decimalStart, DurationComponentType.Week, (int) value,
+					text.subSequence(valueStart, c).toString()));
+				break;
+			case "d":
+			case "dy":
+			case "day":
+				components.add(new DurationComponent(valueStart, valueStart, decimalStart, DurationComponentType.Day, (int) value,
+					text.subSequence(valueStart, c).toString()));
+				break;
+			case "h":
+			case "hr":
+			case "hour":
+				components.add(new DurationComponent(valueStart, valueStart, decimalStart, DurationComponentType.Hour, (int) value,
+					text.subSequence(valueStart, c).toString()));
+				break;
+			case "m":
+			case "min":
+			case "minute":
+				components.add(new DurationComponent(valueStart, valueStart, decimalStart, DurationComponentType.Minute, (int) value,
+					text.subSequence(valueStart, c).toString()));
+				break;
+			case "s":
+			case "sec":
+			case "second":
+				if (value > 0 || decimalStart > valueStart)
+					components.add(new DurationComponent(valueStart, valueStart, decimalStart, DurationComponentType.Second, (int) value,
+						text.subSequence(valueStart, decimalStart).toString()));
+				if (!Double.isNaN(decimal)) {
+					components.add(new DurationComponent(decimalStart, decimalStart, decimalStart + 1, DurationComponentType.Nanosecond,
+						(int) (decimal * 1_000_000_000), text.subSequence(decimalStart, c).toString()));
+				}
+				break;
+			case "ms":
+			case "milli":
+			case "millisecond":
+				if (value > 0 || decimalStart > valueStart)
+					components.add(new DurationComponent(valueStart, valueStart, decimalStart, DurationComponentType.Millisecond,
+						(int) value, text.subSequence(valueStart, decimalStart).toString()));
+				if (!Double.isNaN(decimal)) {
+					components.add(new DurationComponent(decimalStart, decimalStart, decimalStart + 1, DurationComponentType.Nanosecond,
+						(int) (decimal * 1_000_000), text.subSequence(decimalStart, c).toString()));
+				}
+				break;
+			case "us":
+			case "micro":
+			case "microsecond":
+				if (value > 0 || decimalStart > valueStart)
+					components.add(new DurationComponent(valueStart, valueStart, decimalStart, DurationComponentType.Microseond,
+						(int) value, text.subSequence(valueStart, decimalStart).toString()));
+				if (!Double.isNaN(decimal)) {
+					components.add(new DurationComponent(decimalStart, decimalStart, decimalStart + 1, DurationComponentType.Nanosecond,
+						(int) (decimal * 1_000), text.subSequence(decimalStart, c).toString()));
+				}
+				break;
+			case "ns":
+			case "nano":
+			case "nanosecond":
+				components.add(new DurationComponent(valueStart, valueStart, decimalStart, DurationComponentType.Minute, (int) value,
+					text.subSequence(valueStart, c).toString()));
+				break;
+			default:
+				throw new ParseException("Unrecognized unit: " + unitStr, unitStart);
+			}
+		}
+		if (!hadContent)
+			throw new ParseException("No content to parse", c);
+		if (neg)
+			duration = duration.negated();
+		return new ParsedDuration(neg, components, separators);
+	}
+
+	public static final long getDaysInYears(int years) {
+		boolean neg = years < 0;
+		if (neg)
+			years = -years;
+		long days = years * 365L;
+		if (years >= 4) {
+			days += years / 4;
+			if (years >= 100) {
+				days -= years / 100;
+				if (years >= 400) {
+					days += years / 400;
+				}
+			}
+		}
+		return neg ? -days : days;
+	}
+
+	public static final long getDaysInMonths(int months) {
+		boolean neg = months < 0;
+		if (neg)
+			months = -months;
+		long days;
+		boolean subMonthDays;
+		if (months >= 12) {
+			int years = months / 12;
+			months %= 12;
+			if (months >= 6) {
+				years++;
+				months = -6;
+				subMonthDays = true;
+			} else
+				subMonthDays = false;
+			days = getDaysInYears(years);
+		} else {
+			days = 0;
+			subMonthDays = false;
+		}
+		int monthDays = months * 30;
+		if (months >= 2) {
+			monthDays += months / 2;
+			if (months >= 10)
+				monthDays--;
+		}
+		if (subMonthDays)
+			days -= monthDays;
+		else
+			days += monthDays;
+		return neg ? -days : days;
 	}
 
 	/**

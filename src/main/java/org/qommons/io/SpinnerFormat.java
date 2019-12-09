@@ -11,7 +11,6 @@ import java.util.function.Supplier;
 import org.qommons.BiTuple;
 import org.qommons.StringUtils;
 import org.qommons.TimeUtils;
-import org.qommons.TimeUtils.ParsedTime;
 
 /**
  * A format that supports incremental adjustment
@@ -87,105 +86,6 @@ public interface SpinnerFormat<T> extends Format<T> {
 		}
 	};
 
-	/** A flexible date format for {@link org.qommons.TimeUtils.ParsedTime}s */
-	public static SpinnerFormat<TimeUtils.ParsedTime> FLEX_DATE2 = new SpinnerFormat<TimeUtils.ParsedTime>() {
-		@Override
-		public void append(StringBuilder text, ParsedTime value) {
-			text.append(value);
-		}
-
-		@Override
-		public ParsedTime parse(CharSequence text) throws ParseException {
-			return TimeUtils.parseFlexFormatTime(text, true, true);
-		}
-
-		@Override
-		public boolean supportsAdjustment(boolean withContext) {
-			return withContext;
-		}
-
-		@Override
-		public BiTuple<ParsedTime, String> adjust(ParsedTime value, String formatted, int cursor, boolean up) {
-			TimeUtils.DateElementType element = value.getField(cursor);
-			if (cursor > 0) {
-				// If the field after the cursor is not adjustable, adjust the field adjacent to the left
-				if (element == null)
-					element = value.getField(cursor - 1);
-				else {
-					switch (element) {
-					case AmPm:
-					case TimeZone:
-						element = value.getField(cursor - 1);
-						break;
-					default:
-						break;
-					}
-				}
-			}
-			if (element == null)
-				return null;
-			switch (element) {
-			case AmPm:
-			case TimeZone:
-				return null;
-			default:
-				TimeUtils.ParsedTime newTime = value.add(element, up ? 1 : -1);
-				return new BiTuple<>(newTime, newTime.toString());
-			}
-		}
-	};
-	/** A flexible date format */
-	public static SpinnerFormat<Instant> FLEX_DATE = flexDate(null, "ddMMMyyyy", null);
-	/** A duration format */
-	public static SpinnerFormat<Duration> DURATION=new AbstractSpinnerFormat<Duration>(Format.DURATION) {
-		@Override
-		public boolean supportsAdjustment(boolean withContext) {
-			return withContext;
-		}
-
-		@Override
-		public BiTuple<Duration, String> adjust(Duration value, String formatted, int cursor, boolean up) {
-			int unitIndex=cursor;
-			if(unitIndex>0 && (unitIndex==formatted.length() || Character.isWhitespace(formatted.charAt(unitIndex))))
-				unitIndex--;
-			while(unitIndex<formatted.length() && (Character.isDigit(formatted.charAt(unitIndex)) || Character.isWhitespace(formatted.charAt(unitIndex))))
-				unitIndex++;
-			while(unitIndex>0 && (formatted.charAt(unitIndex-1)=='.' || Character.isLetter(formatted.charAt(unitIndex-1))))
-				unitIndex--;
-			if(unitIndex==formatted.length() || !(formatted.charAt(unitIndex)=='.' || Character.isLetter(formatted.charAt(unitIndex))))
-				return null; //Shouldn't happen with a well-formatted string
-			
-			int digitEnd=unitIndex;
-			while(digitEnd>0 && !Character.isDigit(formatted.charAt(digitEnd-1)))
-				digitEnd--;
-			if(digitEnd==0)
-				return null; //Shouldn't happen with a well-formatted string
-			
-			StringBuilder unit=new StringBuilder();
-			for(int i=unitIndex;i<formatted.length() && Character.isLetter(formatted.charAt(unitIndex));i++)
-				unit.append(formatted.charAt(unitIndex));
-			Duration newValue;
-			String newText;
-			String unitStr=unit.toString();
-			if(unitStr.startsWith("y")){
-				newValue=value.plus(Duration.ofDays(365));
-				newText=StringUtils.add(formatted, digitEnd-1, 1);
-			} else if(unitStr.startsWith("mo")){
-				newValue=value.plus(Duration.ofDays(30));
-				newText=StringUtils.add(formatted, digitEnd-1, 1);
-			} else if(unitStr.startsWith("d")){
-			} else if(unitStr.startsWith("h")){
-			} else if(unitStr.startsWith("m")){
-			} else if(unitStr.startsWith("s")){
-			}
-				break;
-			case "d":
-			}
-			// TODO Auto-generated method stub
-			return null;
-		}
-};
-
 	/**
 	 * A {@link SpinnerFormat} that uses a plain {@link Format} for formatting and parsing
 	 * 
@@ -210,6 +110,19 @@ public interface SpinnerFormat<T> extends Format<T> {
 		}
 	}
 
+	public interface Parser<T> {
+		T parse(CharSequence text) throws ParseException;
+	}
+
+	public static <T extends ParsedAdjustable<T, ?>> SpinnerFormat<T> forAdjustable(Parser<T> parse) {
+		return new AdjustableFormat<>(parse);
+	}
+
+	public static <T, A extends ParsedAdjustable<A, ?>> SpinnerFormat<T> wrapAdjustable(SpinnerFormat<A> adjustableFormat,
+		Function<? super A, ? extends T> map, Function<? super T, ? extends A> reverse) {
+		return new AdjustableFormatWrapper<>(adjustableFormat, map, reverse);
+	}
+
 	/**
 	 * Creates a date format that can increment or decrement the date at integers within the format
 	 * 
@@ -220,7 +133,14 @@ public interface SpinnerFormat<T> extends Format<T> {
 	 * @see SimpleDateFormat#SimpleDateFormat(String)
 	 */
 	public static SpinnerFormat<Instant> flexDate(Supplier<Instant> reference, String dayFormat, TimeZone timeZone) {
-		return new FlexDateWrapper(FLEX_DATE2, reference == null ? Instant::now : reference, dayFormat, timeZone);
+		return SpinnerFormat.<Instant, TimeUtils.ParsedTime> wrapAdjustable(
+			forAdjustable(text -> TimeUtils.parseFlexFormatTime(text, true, true)), //
+			time -> time.evaluate(Instant::now), instant -> TimeUtils.asFlexTime(instant, TimeUtils.GMT, "ddMMMyyyy"));
+	}
+
+	public static SpinnerFormat<Duration> flexDuration() {
+		return SpinnerFormat.<Duration, TimeUtils.ParsedDuration> wrapAdjustable(forAdjustable(TimeUtils::parseDuration),
+			TimeUtils.ParsedDuration::asDuration, TimeUtils.ParsedDuration::asParsedDuration);
 	}
 
 	/**
@@ -249,60 +169,102 @@ public interface SpinnerFormat<T> extends Format<T> {
 		};
 	}
 
-	/** An {@link Instant} formatter that uses a {@link org.qommons.TimeUtils.ParsedTime} formatter */
-	public static class FlexDateWrapper implements SpinnerFormat<Instant> {
-		private final SpinnerFormat<TimeUtils.ParsedTime> theFlexTimeFormat;
-		private final Supplier<Instant> theReference;
-		private final String theDayFormat;
-		private final TimeZone theTimeZone;
+	public static class AdjustableFormat<T extends ParsedAdjustable<T, ?>> implements SpinnerFormat<T> {
+		private final Parser<T> theParser;
 
-		/**
-		 * @param flexTimeFormat The parsed time formatter to do this formatter's work
-		 * @param reference The reference time for relative-formatted times
-		 * @param dayFormat The date format to print the day/month/year
-		 * @param timeZone The time zone for the format--may be null
-		 */
-		public FlexDateWrapper(SpinnerFormat<TimeUtils.ParsedTime> flexTimeFormat, Supplier<Instant> reference, String dayFormat,
-			TimeZone timeZone) {
-			theFlexTimeFormat = flexTimeFormat;
-			theReference = reference;
-			theDayFormat = dayFormat;
-			theTimeZone = timeZone;
+		public AdjustableFormat(Parser<T> parser) {
+			theParser = parser;
 		}
 
 		@Override
-		public void append(StringBuilder text, Instant value) {
-			if (value == null)
-				return;
-			theFlexTimeFormat.append(text, TimeUtils.asFlexTime(value, theTimeZone, theDayFormat));
+		public void append(StringBuilder text, T value) {
+			if (value != null)
+				text.append(value);
 		}
 
 		@Override
-		public Instant parse(CharSequence text) throws ParseException {
+		public T parse(CharSequence text) throws ParseException {
 			if (text.length() == 0)
 				return null;
-			return TimeUtils.parseFlexFormatTime(text, true, true).evaluate(theReference);
+			return theParser.parse(text);
 		}
 
 		@Override
 		public boolean supportsAdjustment(boolean withContext) {
-			return theFlexTimeFormat.supportsAdjustment(withContext);
+			return true;
 		}
 
 		@Override
-		public BiTuple<Instant, String> adjust(Instant value, String formatted, int cursor, boolean up) {
-			TimeUtils.ParsedTime parsed;
-			try {
-				parsed = TimeUtils.parseFlexFormatTime(formatted, true, false);
-			} catch (ParseException e) {
-				return null; // Shouldn't happen, since the last argument is false, but whatever
-			}
-			if (parsed == null)
-				return null; // Also shouldn't happen, since formatted should have been produced by this format
-			BiTuple<TimeUtils.ParsedTime, String> adjusted = theFlexTimeFormat.adjust(parsed, formatted, cursor, up);
+		public BiTuple<T, String> adjust(T value, String formatted, int cursor, boolean up) {
+			if (value == null)
+				return null;
+			T adjusted = value.adjust(cursor, up ? 1 : -1);
 			if (adjusted == null)
 				return null;
-			return new BiTuple<>(adjusted.getValue1().evaluate(theReference), adjusted.getValue2());
+			return new BiTuple<>(adjusted, adjusted.toString());
+		}
+	}
+
+	public static class AdjustableFormatWrapper<T, A extends ParsedAdjustable<A, ?>> implements SpinnerFormat<T> {
+		private final SpinnerFormat<A> theFormat;
+		private final Function<? super A, ? extends T> theMap;
+		private final Function<? super T, ? extends A> theReverse;
+
+		private A theLastAdjustable;
+		private T theLastValue;
+
+		public AdjustableFormatWrapper(SpinnerFormat<A> format, Function<? super A, ? extends T> map,
+			Function<? super T, ? extends A> reverse) {
+			theFormat = format;
+			theMap = map;
+			theReverse = reverse;
+		}
+
+		protected A adjustable(T value) {
+			if (value == theLastValue)
+				return theLastAdjustable;
+			A adjustable = theReverse.apply(value);
+			theLastAdjustable = adjustable;
+			theLastValue = value;
+			return adjustable;
+		}
+
+		@Override
+		public void append(StringBuilder text, T value) {
+			if (value != null)
+				text.append(adjustable(value));
+		}
+
+		@Override
+		public T parse(CharSequence text) throws ParseException {
+			if (text.length() == 0)
+				return null;
+			if (theLastAdjustable != null && text.toString().equals(theLastAdjustable.toString()))
+				return theLastValue;
+			A adjustable = theFormat.parse(text);
+			T value = theMap.apply(adjustable);
+			theLastAdjustable = adjustable;
+			theLastValue = value;
+			return value;
+		}
+
+		@Override
+		public boolean supportsAdjustment(boolean withContext) {
+			return theFormat.supportsAdjustment(withContext);
+		}
+
+		@Override
+		public BiTuple<T, String> adjust(T value, String formatted, int cursor, boolean up) {
+			if (value == null)
+				return null;
+			A adjustable = adjustable(value);
+			BiTuple<A, String> adjusted = theFormat.adjust(adjustable, formatted, cursor, up);
+			if (adjusted == null)
+				return null;
+			T newValue = theMap.apply(adjusted.getValue1());
+			theLastAdjustable = adjusted.getValue1();
+			theLastValue = newValue;
+			return new BiTuple<>(newValue, adjusted.getValue2());
 		}
 	}
 }
