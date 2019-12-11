@@ -67,7 +67,7 @@ public interface SpinnerFormat<T> extends Format<T> {
 			int newValue = up ? value + 1 : value - 1;
 			if ((newValue > value) != up)
 				return null; // Wraparound
-			return new BiTuple<>(value, format(value));
+			return new BiTuple<>(newValue, format(newValue));
 		}
 	};
 	/** Long format with increment/decrement capability */
