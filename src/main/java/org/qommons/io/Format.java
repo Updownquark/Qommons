@@ -136,6 +136,10 @@ public interface Format<T> {
 		}
 	};
 
+	public static <E extends Enum<?>> Format<E> enumFormat(Class<E> type) {
+		return new EnumFormat<>(type);
+	}
+
 	/** Parses durations from text */
 	public static final Format<Duration> DURATION = new Format<Duration>() {
 		@Override
@@ -397,6 +401,30 @@ public interface Format<T> {
 	 */
 	public static Format<Instant> flexibleDate(String dayFormat, TimeZone timeZone) {
 		return new FlexDateFormat(dayFormat, timeZone);
+	}
+
+	public static class EnumFormat<E extends Enum<?>> implements Format<E> {
+		private final Class<E> theType;
+
+		public EnumFormat(Class<E> type) {
+			theType = type;
+		}
+
+		@Override
+		public void append(StringBuilder text, E value) {
+			if (value != null)
+				text.append(value);
+		}
+
+		@Override
+		public E parse(CharSequence text) throws ParseException {
+			String str = text.toString().toLowerCase();
+			for (E value : theType.getEnumConstants()) {
+				if (value.toString().toLowerCase().equals(str))
+					return value;
+			}
+			throw new ParseException("Unrecognized " + theType.getSimpleName() + " constant", 0);
+		}
 	}
 
 	/** A flexible date format */

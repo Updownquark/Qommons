@@ -454,7 +454,7 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		 * @return The value in this map for the given key, or null if the key is not present in the map
 		 */
 		default V getIfPresent(K key) {
-			int keyIndex = keyIndex(key);
+			int keyIndex = keyIndexTolerant(key);
 			if (keyIndex < 0)
 				return null;
 			return get(keyIndex);
