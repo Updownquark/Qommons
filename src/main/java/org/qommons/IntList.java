@@ -3,6 +3,8 @@
  */
 package org.qommons;
 
+import java.util.NoSuchElementException;
+
 /**
  * <p>
  * Acts like an {@link java.util.ArrayList} but for primitive int values.
@@ -256,14 +258,56 @@ public class IntList implements Iterable<Integer>, Sealable, Cloneable
 	}
 
 	/**
-	 * Performs a binary search to find the location where the given value would belong in this
-	 * list. If there already exist more than one instance of the given value, the result will be
-	 * the index of one of these, but the exact index of the result is undetermined if more than one
-	 * instance exists.
+	 * @return The first value in this list
+	 * @throws NoSuchElementException If the list is empty
+	 */
+	public int getFirst() throws NoSuchElementException {
+		if (isEmpty())
+			throw new NoSuchElementException();
+		return get(0);
+	}
+
+	/**
+	 * @return The last value in this list
+	 * @throws NoSuchElementException If the list is empty
+	 */
+	public int getLast() throws NoSuchElementException {
+		if (isEmpty())
+			throw new NoSuchElementException();
+		return get(size() - 1);
+	}
+
+	/**
+	 * Removes and returns the first value in this list
+	 * 
+	 * @return The first value in the list
+	 * @throws NoSuchElementException If the list is empty
+	 */
+	public int removeFirst() throws NoSuchElementException {
+		if (isEmpty())
+			throw new NoSuchElementException();
+		return remove(0);
+	}
+
+	/**
+	 * Removes and returns the last value in this list
+	 * 
+	 * @return The last value in the list
+	 * @throws NoSuchElementException If the list is empty
+	 */
+	public int removeLast() throws NoSuchElementException {
+		if (isEmpty())
+			throw new NoSuchElementException();
+		return remove(size() - 1);
+	}
+
+	/**
+	 * Performs a binary search to find the location where the given value would belong in this list. If there already exist more than one
+	 * instance of the given value, the result will be the index of one of these, but the exact index of the result is undetermined if more
+	 * than one instance exists.
 	 *
 	 * @param value The value to find the index for
-	 * @return The index at which the given value would be added into this array from an
-	 *         {@link #add(int) add} operation.
+	 * @return The index at which the given value would be added into this array from an {@link #add(int) add} operation.
 	 * @throws IllegalStateException If this list is not sorted
 	 */
 	public int indexFor(int value)
