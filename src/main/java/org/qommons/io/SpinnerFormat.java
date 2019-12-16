@@ -110,11 +110,11 @@ public interface SpinnerFormat<T> extends Format<T> {
 		}
 	}
 
-	public interface Parser<T> {
+	public interface SimpleParser<T> {
 		T parse(CharSequence text) throws ParseException;
 	}
 
-	public static <T extends ParsedAdjustable<T, ?>> SpinnerFormat<T> forAdjustable(Parser<T> parse) {
+	public static <T extends ParsedAdjustable<T, ?>> SpinnerFormat<T> forAdjustable(SimpleParser<T> parse) {
 		return new AdjustableFormat<>(parse);
 	}
 
@@ -170,9 +170,9 @@ public interface SpinnerFormat<T> extends Format<T> {
 	}
 
 	public static class AdjustableFormat<T extends ParsedAdjustable<T, ?>> implements SpinnerFormat<T> {
-		private final Parser<T> theParser;
+		private final SimpleParser<T> theParser;
 
-		public AdjustableFormat(Parser<T> parser) {
+		public AdjustableFormat(SimpleParser<T> parser) {
 			theParser = parser;
 		}
 
