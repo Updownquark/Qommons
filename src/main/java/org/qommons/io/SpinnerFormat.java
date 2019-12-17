@@ -86,6 +86,21 @@ public interface SpinnerFormat<T> extends Format<T> {
 		}
 	};
 
+	public static SpinnerFormat<Double> doubleFormat(String format, double increment) {
+		return new AbstractSpinnerFormat<Double>(Format.doubleFormat(format)) {
+			@Override
+			public boolean supportsAdjustment(boolean withContext) {
+				return !withContext;
+			}
+
+			@Override
+			public BiTuple<Double, String> adjust(Double value, String formatted, int cursor, boolean up) {
+				double d = up ? value + increment : value - increment;
+				return new BiTuple<>(d, format(d));
+			}
+		};
+	}
+
 	/**
 	 * A {@link SpinnerFormat} that uses a plain {@link Format} for formatting and parsing
 	 * 
