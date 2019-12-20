@@ -59,6 +59,11 @@ public interface Format<T> {
 		public String parse(CharSequence text) throws ParseException {
 			return text.toString();
 		}
+
+		@Override
+		public String toString() {
+			return "TEXT";
+		}
 	};
 
 	/** Parses integers from text */
@@ -76,6 +81,11 @@ public interface Format<T> {
 			if (parsed.longValue() < Integer.MIN_VALUE || parsed.longValue() > Integer.MAX_VALUE)
 				throw new ParseException("Integer values must be between " + Integer.MIN_VALUE + " and " + Integer.MAX_VALUE, 0);
 			return parsed.intValue();
+		}
+
+		@Override
+		public String toString() {
+			return "INT";
 		}
 	};
 
@@ -115,6 +125,11 @@ public interface Format<T> {
 				value = -value;
 			return value;
 		}
+
+		@Override
+		public String toString() {
+			return "LONG";
+		}
 	};
 
 	/** Formats a boolean value to "true" or "false" (or "null") */
@@ -133,6 +148,11 @@ public interface Format<T> {
 				return null;
 			else
 				return Boolean.FALSE;
+		}
+
+		@Override
+		public String toString() {
+			return "BOOLEAN";
 		}
 	};
 
@@ -242,6 +262,11 @@ public interface Format<T> {
 		public Duration parse(CharSequence text) throws ParseException {
 			return QommonsUtils.parseDuration(text);
 		}
+
+		@Override
+		public String toString() {
+			return "DURATION";
+		}
 	};
 
 	/**
@@ -273,6 +298,11 @@ public interface Format<T> {
 					throw new ParseException(error, 0);
 				return text.toString();
 			}
+
+			@Override
+			public String toString() {
+				return pattern.pattern() + "(" + errorText + ")";
+			}
 		};
 	}
 
@@ -297,6 +327,11 @@ public interface Format<T> {
 				if (d.doubleValue() < Float.MIN_VALUE || d.doubleValue() > Float.MAX_VALUE)
 					throw new ParseException("Float values must be between " + Float.MIN_VALUE + " and " + Float.MAX_VALUE, 0);
 				return d.floatValue();
+			}
+
+			@Override
+			public String toString() {
+				return "FLOAT(" + pattern + ")";
 			}
 		};
 	}
@@ -334,6 +369,11 @@ public interface Format<T> {
 				else
 					return n.doubleValue();
 			}
+
+			@Override
+			public String toString() {
+				return "DOUBLE(" + pattern + ")";
+			}
 		};
 	}
 
@@ -359,6 +399,11 @@ public interface Format<T> {
 				if (validated != null)
 					throw new ParseException(validated, 0);
 				return parsed;
+			}
+
+			@Override
+			public String toString() {
+				return format.toString() + ".validate(" + validation + ")";
 			}
 		};
 	}
@@ -390,6 +435,11 @@ public interface Format<T> {
 				if (text.length() == 0)
 					return null;
 				return dateFormat.parse(text.toString()).toInstant();
+			}
+
+			@Override
+			public String toString() {
+				return "DATE(" + dateFormat.toPattern() + ")";
 			}
 		};
 	}
@@ -425,6 +475,11 @@ public interface Format<T> {
 			}
 			throw new ParseException("Unrecognized " + theType.getSimpleName() + " constant", 0);
 		}
+
+		@Override
+		public String toString() {
+			return theType.getSimpleName();
+		}
 	}
 
 	/** A flexible date format */
@@ -453,6 +508,11 @@ public interface Format<T> {
 			if (text.length() == 0)
 				return null;
 			return TimeUtils.parseFlexFormatTime(text, true, true).evaluate(Instant::now);
+		}
+
+		@Override
+		public String toString() {
+			return "FLEXDATE";
 		}
 	}
 }
