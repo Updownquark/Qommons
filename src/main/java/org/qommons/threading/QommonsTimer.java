@@ -505,7 +505,7 @@ public class QommonsTimer {
 	 * @return The task handle to use to control or stop the task's execution
 	 */
 	public TaskHandle execute(Runnable task, Duration initialDelay, Duration frequency, boolean consistent) {
-		return build(task, frequency, consistent).runNextIn(frequency).setActive(true);
+		return build(task, frequency, consistent).runNextIn(initialDelay).setActive(true);
 	}
 
 	/**
