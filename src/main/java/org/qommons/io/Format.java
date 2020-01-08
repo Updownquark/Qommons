@@ -6,7 +6,9 @@ import java.text.ParsePosition;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.TimeZone;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -156,6 +158,11 @@ public interface Format<T> {
 		}
 	};
 
+	/**
+	 * @param <E> The enum type
+	 * @param type The enum class
+	 * @return A format to parse and format enum values from/to text
+	 */
 	public static <E extends Enum<?>> Format<E> enumFormat(Class<E> type) {
 		return new EnumFormat<>(type);
 	}
@@ -353,21 +360,7 @@ public interface Format<T> {
 
 			@Override
 			public Double parse(CharSequence text) throws ParseException {
-				String str = text.toString();
-				if ("NaN".equals(str))
-					return Double.NaN;
-				else if ("-Inf".equals(str) || "-Infinity".equals(str))
-					return Double.NEGATIVE_INFINITY;
-				else if ("Inf".equals(str) || "Infinity".equals(str))
-					return Double.POSITIVE_INFINITY;
-				ParsePosition pos = new ParsePosition(0);
-				Number n = format.parse(str, pos);
-				if (pos.getErrorIndex() >= 0 || pos.getIndex() < text.length())
-					throw new ParseException("Invalid number", pos.getIndex());
-				if (n instanceof Double)
-					return (Double) n;
-				else
-					return n.doubleValue();
+				return parseDouble(text, format);
 			}
 
 			@Override
@@ -375,6 +368,44 @@ public interface Format<T> {
 				return "DOUBLE(" + pattern + ")";
 			}
 		};
+	}
+
+	/**
+	 * @param text The text to parse
+	 * @param format The decimal format to do most of the work
+	 * @return The parsed value
+	 * @throws ParseException If the value cannot be parsed
+	 */
+	public static double parseDouble(CharSequence text, DecimalFormat format) throws ParseException {
+		String str = text.toString();
+		if ("NaN".equals(str))
+			return Double.NaN;
+		else if ("-Inf".equals(str) || "-Infinity".equals(str))
+			return Double.NEGATIVE_INFINITY;
+		else if ("Inf".equals(str) || "Infinity".equals(str))
+			return Double.POSITIVE_INFINITY;
+		ParsePosition pos = new ParsePosition(0);
+		Number n = format.parse(str, pos);
+		if (pos.getErrorIndex() >= 0 || pos.getIndex() < text.length())
+			throw new ParseException("Invalid number", pos.getIndex());
+		if (n instanceof Double)
+			return (Double) n;
+		else
+			return n.doubleValue();
+	}
+
+	/**
+	 * @param sigDigs The number of significant digits to print
+	 * @param maxDigs The maximum number of digits left of the decimal to allow before switching to scientific notation
+	 * @param maxDecimalZeros The maximum number of zeros immediately right of the decimal to allow before switching to scientific notation
+	 * @return A double format with the given parameters
+	 */
+	public static Format<Double> doubleFormat(int sigDigs, int maxDigs, int maxDecimalZeros) {
+		return new BetterDoubleFormat(sigDigs, maxDigs, maxDecimalZeros);
+	}
+
+	public static Format<Double> parseMetricValue(int sigDigs, int maxDigits, int maxDecimalZeros, String baseUnit) {
+		return new MetricFormat(baseUnit);
 	}
 
 	/**
@@ -453,9 +484,56 @@ public interface Format<T> {
 		return new FlexDateFormat(dayFormat, timeZone);
 	}
 
+	/** Returned from {@link Format#parseUnitValue(CharSequence, Format)} */
+	public static class ParsedUnitValue {
+		/** The parsed value */
+		public final double value;
+		/** The parsed unit */
+		public final String unit;
+
+		/**
+		 * @param value The parsed value
+		 * @param unit The parsed unit
+		 */
+		public ParsedUnitValue(double value, String unit) {
+			this.value = value;
+			this.unit = unit;
+		}
+	}
+
+	/**
+	 * @param text The text to parse
+	 * @param format The double format to use for the value
+	 * @return The parsed unit value
+	 * @throws ParseException If the value cannot be parsed
+	 */
+	public static ParsedUnitValue parseUnitValue(CharSequence text, Format<Double> format) throws ParseException {
+		if (text.length() == 0) {
+			throw new ParseException("Empty text", 0);
+		}
+		String unit = "";
+		for (int c = text.length() - 1; c >= 0 && !Character.isDigit(text.charAt(c)); c--) {
+			unit = text.charAt(c) + unit;
+		}
+		if (unit.length() == 0) {
+			throw new ParseException("Power must end with a unit", text.length());
+		}
+		try {
+			return new ParsedUnitValue(Double.parseDouble(text.subSequence(0, text.length() - unit.length()).toString().trim()), unit);
+		} catch (NumberFormatException e) {
+			throw new ParseException("Unrecognized number", 0);
+		}
+	}
+
+	/**
+	 * Formats an enumeration
+	 * 
+	 * @param <E> The enum type
+	 */
 	public static class EnumFormat<E extends Enum<?>> implements Format<E> {
 		private final Class<E> theType;
 
+		/** @param type The enum type */
 		public EnumFormat(Class<E> type) {
 			theType = type;
 		}
@@ -513,6 +591,104 @@ public interface Format<T> {
 		@Override
 		public String toString() {
 			return "FLEXDATE";
+		}
+	}
+
+	public static class DoubleFormatSupplier {
+		private static final List<DecimalFormat> DECIMAL_FORMATS = new ArrayList<>();
+
+		public static DecimalFormat getFormat(int decimalDigits) {
+			if (decimalDigits >= DECIMAL_FORMATS.size()) {
+				synchronized (DECIMAL_FORMATS) {
+					StringBuilder format = new StringBuilder("#,##0");
+					if (DECIMAL_FORMATS.isEmpty()) {
+						DECIMAL_FORMATS.add(new DecimalFormat(format.toString()));
+						format.append(',');
+					}
+					while (decimalDigits >= DECIMAL_FORMATS.size()) {
+						format.append('0');
+						DECIMAL_FORMATS.add(new DecimalFormat(format.toString()));
+					}
+				}
+			}
+			return DECIMAL_FORMATS.get(decimalDigits);
+		}
+	}
+
+	/** Implements {@link Format#doubleFormat(int, int, int)} */
+	public static class BetterDoubleFormat implements Format<Double> {
+		private final int theSignificantDigits;
+		private final int theMaxDigits;
+		private final int theMaxDecimalZeros;
+
+		private final double theMaxDigitLimit;
+		private final double theMinDigitLimit;
+
+		/**
+		 * @param significantDigits The number of significant digits to print
+		 * @param maxDigits The maximum number of digits left of the decimal to allow before switching to scientific notation
+		 * @param maxDecimalZeros The maximum number of zeros immediately right of the decimal to allow before switching to scientific
+		 *        notation
+		 */
+		public BetterDoubleFormat(int significantDigits, int maxDigits, int maxDecimalZeros) {
+			theSignificantDigits = significantDigits;
+			theMaxDigits = maxDigits;
+			theMaxDecimalZeros = maxDecimalZeros;
+
+			theMaxDigitLimit = Math.pow(10, theMaxDigits);
+			theMinDigitLimit = Math.pow(10, -(theMaxDecimalZeros + 1));
+		}
+
+		@Override
+		public void append(StringBuilder text, Double value) {
+			if (value == null)
+				text.append("");
+			else if (Double.isNaN(value))
+				text.append("NaN");
+			else if (value.doubleValue() == Double.POSITIVE_INFINITY)
+				text.append("Infinity");
+			else if (value.doubleValue() == Double.NEGATIVE_INFINITY)
+				text.append("-Infinity");
+			else {
+				int exp = (int) Math.floor(Math.log10(value));
+				append(text, value, exp);
+			}
+		}
+
+		protected void append(StringBuilder text, double value, int exp) {
+			boolean expNotation = value <= theMinDigitLimit || value >= theMaxDigitLimit;
+			int digits;
+			if (expNotation) {
+				value /= Math.pow(10, exp);
+				digits = theSignificantDigits - 1;
+			} else
+				digits = theSignificantDigits - exp - 1;
+			DecimalFormat format = DoubleFormatSupplier.getFormat(digits);
+			text.append(format.format(value));
+			if (expNotation)
+				text.append('E').append(exp);
+		}
+
+		@Override
+		public Double parse(CharSequence text) throws ParseException {
+			return Double.parseDouble(text.toString());
+		}
+	}
+
+	public static class MetricFormat extends BetterDoubleFormat {
+		private final String theBaseUnit;
+
+		public MetricFormat(int significantDigits, int maxDigits, int maxDecimalZeros, String baseUnit) {
+			super(significantDigits, maxDigits, maxDecimalZeros);
+			theBaseUnit = baseUnit;
+		}
+
+		@Override
+		public Double parse(CharSequence text) throws ParseException {}
+
+		@Override
+		protected void append(StringBuilder text, double value, int exp) {
+			// TODO
 		}
 	}
 }
