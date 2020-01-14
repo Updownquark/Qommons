@@ -771,7 +771,14 @@ public interface Format<T> {
 			else if (value.doubleValue() == Double.NEGATIVE_INFINITY)
 				text.append("-Infinity");
 			else {
-				int exp = (int) Math.log10(value);
+				int exp;
+				int sign = Double.compare(value, 0.0);
+				if (sign == 0)
+					exp = 0;
+				else if (sign > 0)
+					exp = (int) Math.log10(value);
+				else
+					exp = (int) Math.log10(-value);
 				append(text, value, exp);
 			}
 		}
@@ -783,8 +790,13 @@ public interface Format<T> {
 		 */
 		protected void append(StringBuilder text, double value, int exp) {
 			Map.Entry<Integer, String> prefix = thePrefixes.floorEntry(exp);
-			if (prefix == null)
+			if (prefix == null) {
 				prefix = thePrefixes.firstEntry();
+				if (prefix != null && prefix.getKey().intValue() > 0)
+					prefix = null;
+			}
+			if (prefix != null && exp == 0 && prefix.getKey().intValue() != 0)
+				prefix = null;
 			if (prefix != null && prefix.getKey().intValue() != 0) {
 				value *= Math.pow(10, -prefix.getKey());
 				exp -= prefix.getKey();
@@ -795,6 +807,8 @@ public interface Format<T> {
 			if (expNotation) {
 				value /= Math.pow(10, exp);
 				digits = theSignificantDigits - 1;
+			} else if (prefix == null && value == (long) value) {
+				digits = 0;
 			} else
 				digits = theSignificantDigits - exp - 1;
 			DecimalFormat format = getFormat(digits);
