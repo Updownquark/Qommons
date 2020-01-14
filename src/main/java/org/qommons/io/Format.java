@@ -596,6 +596,8 @@ public interface Format<T> {
 	/** A builder for a {@link SuperDoubleFormat} */
 	public static class SuperDoubleFormatBuilder {
 		private final int theSignificantDigits;
+		private int theMaxIntDigits;
+		private boolean printIntsWithPrefixes;
 		private int theMaxNormalExp;
 		private int theMinNormalExp;
 
@@ -607,6 +609,7 @@ public interface Format<T> {
 
 		SuperDoubleFormatBuilder(int sigDigs) {
 			theSignificantDigits = sigDigs;
+			theMaxIntDigits = -1;
 			theMaxNormalExp = sigDigs;
 			theMinNormalExp = 1;
 			theBaseUnit = "";
@@ -614,6 +617,17 @@ public interface Format<T> {
 			isBaseUnitCaseSensitive = true;
 			arePrefixesCaseSensitive = true;
 			thePrefixes = new TreeMap<>();
+		}
+
+		/**
+		 * @param maxIntDigits The maximum number of digits for which an integer will be printed (for int-exact values)
+		 * @param withPrefixes Whether to also print integers for this condition in front of prefixes
+		 * @return This builder
+		 */
+		public SuperDoubleFormatBuilder printIntFor(int maxIntDigits, boolean withPrefixes) {
+			theMaxIntDigits = maxIntDigits;
+			this.printIntsWithPrefixes = withPrefixes;
+			return this;
 		}
 
 		/**
@@ -672,8 +686,11 @@ public interface Format<T> {
 						throw new IllegalStateException("Duplicate prefixes: " + prefix.getValue());
 				}
 			}
-			return new SuperDoubleFormat(theSignificantDigits, theMaxNormalExp, theMinNormalExp, theBaseUnit, isBaseUnitRequired,
-				isBaseUnitCaseSensitive, arePrefixesCaseSensitive, prefixCopy, reversePrefixes);
+			int maxIntDigits = theMaxIntDigits;
+			if (maxIntDigits < 0)
+				maxIntDigits = theMaxNormalExp;
+			return new SuperDoubleFormat(theSignificantDigits, maxIntDigits, printIntsWithPrefixes, theMaxNormalExp, theMinNormalExp,
+				theBaseUnit, isBaseUnitRequired, isBaseUnitCaseSensitive, arePrefixesCaseSensitive, prefixCopy, reversePrefixes);
 		}
 	}
 
@@ -689,6 +706,8 @@ public interface Format<T> {
 	 */
 	public static class SuperDoubleFormat implements Format<Double> {
 		private final int theSignificantDigits;
+		private final int theMaxIntDigits;
+		private final boolean printIntsWithPrefixes;
 		private final int theMaxNormalExp;
 		private final int theMinNormalExp;
 
@@ -699,10 +718,13 @@ public interface Format<T> {
 		private final NavigableMap<Integer, String> thePrefixes;
 		private final Map<String, Integer> theReversePrefixes;
 
-		SuperDoubleFormat(int significantDigits, int maxNormalExp, int minNormalExp, String baseUnit, boolean baseUnitRequired,
-			boolean baseUnitCaseSensitive,
-			boolean arePrefixesCaseSensitive, NavigableMap<Integer, String> prefixes, Map<String, Integer> reversePrefixes) {
+		SuperDoubleFormat(int significantDigits, int maxIntDigits, boolean intWithPrefixes, int maxNormalExp, int minNormalExp,
+			String baseUnit,
+			boolean baseUnitRequired, boolean baseUnitCaseSensitive, boolean arePrefixesCaseSensitive,
+			NavigableMap<Integer, String> prefixes, Map<String, Integer> reversePrefixes) {
 			theSignificantDigits = significantDigits;
+			theMaxIntDigits = maxIntDigits;
+			printIntsWithPrefixes = intWithPrefixes;
 			theMaxNormalExp = maxNormalExp;
 			theMinNormalExp = minNormalExp;
 			theBaseUnit = baseUnit;
@@ -789,26 +811,35 @@ public interface Format<T> {
 		 * @param exp The ten-power exponent of the value
 		 */
 		protected void append(StringBuilder text, double value, int exp) {
-			Map.Entry<Integer, String> prefix = thePrefixes.floorEntry(exp);
-			if (prefix == null) {
-				prefix = thePrefixes.firstEntry();
-				if (prefix != null && prefix.getKey().intValue() > 0)
-					prefix = null;
-			}
-			if (prefix != null && exp == 0 && prefix.getKey().intValue() != 0)
+			Map.Entry<Integer, String> prefix;
+			boolean printInt;
+			if (exp >= 0 && exp < theMaxIntDigits && value == (int) value) {
 				prefix = null;
-			if (prefix != null && prefix.getKey().intValue() != 0) {
-				value *= Math.pow(10, -prefix.getKey());
-				exp -= prefix.getKey();
+				printInt = true;
+			} else {
+				prefix = thePrefixes.floorEntry(exp);
+				if (prefix == null) {
+					prefix = thePrefixes.firstEntry();
+					if (prefix != null && prefix.getKey().intValue() > 0)
+						prefix = null;
+				}
+				if (prefix != null && exp == 0 && prefix.getKey().intValue() != 0)
+					prefix = null;
+				if (prefix != null && prefix.getKey().intValue() != 0) {
+					value *= Math.pow(10, -prefix.getKey());
+					exp -= prefix.getKey();
+					printInt = printIntsWithPrefixes && exp >= 0 && exp <= theMaxIntDigits && value == (long) value;
+				} else
+					printInt = false;
 			}
 
-			boolean expNotation = exp < theMinNormalExp || exp > theMaxNormalExp;
+			boolean expNotation = !printInt && (exp < theMinNormalExp || exp > theMaxNormalExp);
 			int digits;
-			if (expNotation) {
+			if (printInt)
+				digits = 0;
+			else if (expNotation) {
 				value /= Math.pow(10, exp);
 				digits = theSignificantDigits - 1;
-			} else if (prefix == null && value == (long) value) {
-				digits = 0;
 			} else
 				digits = theSignificantDigits - exp - 1;
 			DecimalFormat format = getFormat(digits);
