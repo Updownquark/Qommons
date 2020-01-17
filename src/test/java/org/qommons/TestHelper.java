@@ -398,6 +398,45 @@ public class TestHelper {
 		return getDouble() < odds;
 	}
 
+	private static final char[] ALPHA_NUMERIC = new char[62];
+	static {
+		for (int i = 0; i < 10; i++)
+			ALPHA_NUMERIC[i] = (char) ('0' + i);
+		for (char c = 'a'; c <= 'z'; c++) {
+			ALPHA_NUMERIC[c - 'a' + 10] = c;
+			ALPHA_NUMERIC[c - 'a' + 36] = (char) (c - 'a' + 'A');
+		}
+	}
+
+	/**
+	 * @param minLength The minimum length for the string
+	 * @param maxLength The maximum length for the string
+	 * @return A random alphanumeric string (potentially with both upper- and lower-case letters) with a length in the given range
+	 */
+	public String getAlphaNumericString(int minLength, int maxLength) {
+		int length;
+		if (minLength == maxLength)
+			length = minLength;
+		else
+			length = getInt(minLength, maxLength);
+		StringBuilder str = new StringBuilder(length);
+		for (int i = 0; i < length; i += 5) {
+			int randomInt = getAnyInt();
+			int mask = 0x3f000000;
+			for (int j = 0; j < 5 && i + j < length; j++) {
+				int c = (randomInt & mask) >>> (24 - j * 6);
+				if (c >= ALPHA_NUMERIC.length) {
+					c = Integer.rotateRight(randomInt, j) % ALPHA_NUMERIC.length;
+					if (c < 0)
+						c += ALPHA_NUMERIC.length;
+				}
+				str.append(ALPHA_NUMERIC[c]);
+				mask >>>= 6;
+			}
+		}
+		return str.toString();
+	}
+
 	/** @return A RandomAction that can be configured to execute one of a number of weighted-probability tasks */
 	public RandomAction createAction() {
 		return new RandomAction(this);
