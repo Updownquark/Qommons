@@ -1,20 +1,9 @@
 package org.qommons.io;
 
-import java.text.DecimalFormat;
-import java.text.NumberFormat;
-import java.text.ParseException;
-import java.text.ParsePosition;
-import java.text.SimpleDateFormat;
+import java.text.*;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.TimeZone;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -483,30 +472,39 @@ public interface Format<T> {
 		return new FlexDateFormat(dayFormat, timeZone);
 	}
 
-	/** Returned from {@link Format#parseUnitValue(CharSequence, Format)} */
-	public static class ParsedUnitValue {
+	/**
+	 * Returned from {@link Format#parseUnitValue(CharSequence, Format)}
+	 * 
+	 * @param <T> The type of the value
+	 */
+	public static class ParsedUnitValue<T> {
 		/** The parsed value */
-		public final double value;
+		public final T value;
 		/** The parsed unit */
 		public final String unit;
+		/** The index in the text where the unit started */
+		public final int unitStart;
 
 		/**
 		 * @param value The parsed value
 		 * @param unit The parsed unit
+		 * @param unitStart The position in the text where the unit started
 		 */
-		public ParsedUnitValue(double value, String unit) {
+		public ParsedUnitValue(T value, String unit, int unitStart) {
 			this.value = value;
 			this.unit = unit;
+			this.unitStart = unitStart;
 		}
 	}
 
 	/**
+	 * @param <T> The type of the value to parse
 	 * @param text The text to parse
 	 * @param format The double format to use for the value
 	 * @return The parsed unit value
 	 * @throws ParseException If the value cannot be parsed
 	 */
-	public static ParsedUnitValue parseUnitValue(CharSequence text, Format<Double> format) throws ParseException {
+	public static <T> ParsedUnitValue<T> parseUnitValue(CharSequence text, Format<T> format) throws ParseException {
 		if (text.length() == 0) {
 			throw new ParseException("Empty text", 0);
 		}
@@ -517,8 +515,9 @@ public interface Format<T> {
 		if (unit.length() == 0) {
 			throw new ParseException("Power must end with a unit", text.length());
 		}
+		int unitStart = text.length() - unit.length();
 		try {
-			return new ParsedUnitValue(Double.parseDouble(text.subSequence(0, text.length() - unit.length()).toString().trim()), unit);
+			return new ParsedUnitValue<>(format.parse(text.subSequence(0, unitStart).toString().trim()), unit, unitStart);
 		} catch (NumberFormatException e) {
 			throw new ParseException("Unrecognized number", 0);
 		}
