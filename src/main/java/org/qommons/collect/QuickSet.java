@@ -528,6 +528,16 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 			return copy;
 		}
 
+		/**
+		 * @param value The value to set for each of this map's keys
+		 * @return This map
+		 */
+		default QuickMap<K, V> fill(V value) {
+			for (int i = 0; i < keySize(); i++)
+				put(i, value);
+			return this;
+		}
+
 		/** @return An unmodifiable view of this map */
 		QuickMap<K, V> unmodifiable();
 
