@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import org.qommons.Named;
 
@@ -18,13 +19,17 @@ public class HtmlNavigator {
 		private final String theName;
 		private final Set<String> theClasses;
 		private final Map<String, String> theAttributes;
+		private final boolean isSelfClosing;
+		private final int theDepth;
 		private boolean isClosed;
 
-		public Tag(Tag parent, String name, Set<String> classes, Map<String, String> attributes) {
+		public Tag(Tag parent, String name, Set<String> classes, Map<String, String> attributes, boolean selfClosing, int depth) {
 			theParent = parent;
 			theName = name;
 			theClasses = classes == null ? Collections.emptySet() : Collections.unmodifiableSet(classes);
 			theAttributes = attributes == null ? Collections.emptyMap() : Collections.unmodifiableMap(attributes);
+			isClosed = isSelfClosing = selfClosing;
+			theDepth = depth;
 		}
 
 		@Override
@@ -42,6 +47,10 @@ public class HtmlNavigator {
 
 		public Map<String, String> getAttributes() {
 			return theAttributes;
+		}
+
+		public int getDepth() {
+			return theDepth;
 		}
 
 		public boolean isClosed() {
@@ -79,12 +88,18 @@ public class HtmlNavigator {
 					str.append(' ').append(attr.getKey()).append("=\"").append(attr.getValue()).append('"');
 				}
 			}
+			if (isSelfClosing)
+				str.append('/');
 			str.append('>');
 			return str.toString();
 		}
+
+		public String printEnd() {
+			return new StringBuilder("</").append(theName).append('>').toString();
+		}
 	}
 
-	private static final Set<String> UNCLOSED_TAGS = new HashSet<>(Arrays.asList("meta", "br"));
+	public static final Set<String> UNCLOSED_TAGS = new HashSet<>(Arrays.asList("meta", "br"));
 
 	private final Reader theReader;
 	private Tag theTop;
@@ -104,16 +119,24 @@ public class HtmlNavigator {
 		return isDone;
 	}
 
+	public int getDepth() {
+		return theTop == null ? 0 : theTop.getDepth();
+	}
+
 	public Tag find(String tagName, String... classNames) throws IOException {
-		int depth = 0;
-		while (!isDone && depth >= 0) {
+		return find(//
+			tag -> tag.matches(tagName, classNames));
+	}
+
+	public Tag find(Predicate<Tag> filter) throws IOException {
+		Tag top = theTop;
+		while (!isDone) {
 			Tag tag = descend();
 			if (tag != null) {
-				depth++;
-				if (tag.matches(tagName, classNames))
+				if (filter.test(tag))
 					return tag;
-			} else
-				depth--;
+			} else if (theTop == null || (top != null && top.isClosed()))
+				break;
 		}
 		return null;
 	}
@@ -135,43 +158,59 @@ public class HtmlNavigator {
 						endTag.append((char) r);
 						r = theReader.read();
 					}
-					while (r != '>') {
+					if (theTop != null && theTop.matches("script") && !endTag.toString().toLowerCase().equals("script")) {}
+					{
+						while (r != '>') {
+							r = theReader.read();
+						}
+						ascend(endTag.toString());
+						return null;
+					}
+				} else if (theTop != null && theTop.matches("script")) {
+					// Don't parse script tag content
+				} else {
+					boolean closed[] = new boolean[1];
+					while (r >= 0 && (Character.isAlphabetic(r) || (tagNameTemp.length() == 0 && r == '!'))) {
+						if (r == '!')
+							closed[0] = true;
+						tagNameTemp.append((char) r);
 						r = theReader.read();
 					}
-					ascend(endTag.toString());
-					return null;
-				}
-				while (r >= 0 && Character.isAlphabetic(r)) {
-					tagNameTemp.append((char) r);
-					r = theReader.read();
-				}
-				Map<String, String> attributes = null;
-				Set<String> classes = null;
-				if (r != '>') {
-					String attr = getAttribute(attrName);
-					while (attr != null) {
-						if (attrName[0].toLowerCase().equals("class")) {
-							classes = new HashSet<>();
-							for (String c : attr.split(" ")) {
-								if (c.length() > 0) {
-									classes.add(c);
+					Map<String, String> attributes = null;
+					Set<String> classes = null;
+					if (r == '/') {
+						closed[0] = true;
+						while (r != '>')
+							r = theReader.read();
+					} else if (r != '>') {
+						String attr = getAttribute(attrName, closed);
+						while (attr != null) {
+							if (attrName[0].toLowerCase().equals("class")) {
+								classes = new HashSet<>();
+								for (String c : attr.split(" ")) {
+									if (c.length() > 0) {
+										classes.add(c);
+									}
 								}
+							} else {
+								if (attributes == null) {
+									attributes = new LinkedHashMap<>();
+								}
+								attributes.put(attrName[0], attr);
 							}
-						} else {
-							if (attributes == null) {
-								attributes = new LinkedHashMap<>();
-							}
-							attributes.put(attrName[0], attr);
+							attr = getAttribute(attrName, closed);
 						}
-						attr = getAttribute(attrName);
 					}
+					if (!closed[0])
+						closed[0] = UNCLOSED_TAGS.contains(tagNameTemp.toString());
+					Tag tag = new Tag(theTop, tagNameTemp.toString(), //
+						classes == null ? Collections.emptySet() : classes, //
+						attributes == null ? Collections.emptyMap() : attributes, //
+						closed[0], theTop == null ? 1 : theTop.getDepth() + 1);
+					if (!tag.isClosed())
+						theTop = tag;
+					return tag;
 				}
-				Tag tag = new Tag(theTop, tagNameTemp.toString(), //
-					classes == null ? Collections.emptySet() : classes, //
-					attributes == null ? Collections.emptyMap() : attributes);
-				if (!UNCLOSED_TAGS.contains(tag.getName().toLowerCase()))
-					theTop = tag;
-				return tag;
 			} else {
 				theContent.append((char) r);
 			}
@@ -212,9 +251,11 @@ public class HtmlNavigator {
 		}
 	}
 
-	private String getAttribute(String[] attrName) throws IOException {
+	private String getAttribute(String[] attrName, boolean[] closed) throws IOException {
 		int r = theReader.read();
-		while (r >= 0 && r != '>' && !Character.isAlphabetic(r)) {
+		while (r >= 0 && r != '>' && !isAttChar(r)) {
+			if (r == '/')
+				closed[0] = true;
 			r = theReader.read();
 		}
 		if (Character.isAlphabetic(r)) {
@@ -222,7 +263,7 @@ public class HtmlNavigator {
 			do {
 				str.append((char) r);
 				r = theReader.read();
-			} while (r >= 0 && Character.isAlphabetic(r));
+			} while (r >= 0 && isAttChar(r));
 			while (Character.isWhitespace((char) r)) {
 				r = theReader.read();
 			}
@@ -247,5 +288,9 @@ public class HtmlNavigator {
 		} else {
 			return null;
 		}
+	}
+
+	private static boolean isAttChar(int r) {
+		return Character.isAlphabetic(r) || Character.isDigit(r) || r == '-' || r == '_' || r == '.';
 	}
 }
