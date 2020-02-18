@@ -714,6 +714,8 @@ public final class RedBlackNode<E> {
 
 	/** Removes this node (but not its children) from the tree, rebalancing if necessary */
 	public void delete() {
+		if (!isPresent())
+			throw new IllegalStateException("This node has already been removed");
 		int preDeleteIndex = getNodesBefore(() -> true);
 
 		// First let's link up the next and previous fields
