@@ -207,7 +207,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 	}
 
 	@Override
-	default Map.Entry<K, V> lowerEntry(K key) {
+	default MapEntryHandle<K, V> lowerEntry(K key) {
 		return search(keySet().searchFor(key, -1), BetterSortedList.SortedSearchFilter.Less);
 	}
 
@@ -226,7 +226,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 	}
 
 	@Override
-	default Map.Entry<K, V> floorEntry(K key) {
+	default MapEntryHandle<K, V> floorEntry(K key) {
 		return search(keySet().searchFor(key, 0), BetterSortedList.SortedSearchFilter.Less);
 	}
 
@@ -246,7 +246,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 	}
 
 	@Override
-	default Map.Entry<K, V> higherEntry(K key) {
+	default MapEntryHandle<K, V> higherEntry(K key) {
 		return search(keySet().searchFor(key, 1), BetterSortedList.SortedSearchFilter.Greater);
 	}
 
@@ -256,12 +256,12 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 	}
 
 	@Override
-	default Map.Entry<K, V> firstEntry() {
+	default MapEntryHandle<K, V> firstEntry() {
 		return search(k -> -1, BetterSortedList.SortedSearchFilter.PreferGreater);
 	}
 
 	@Override
-	default Map.Entry<K, V> lastEntry() {
+	default MapEntryHandle<K, V> lastEntry() {
 		return search(k -> 1, BetterSortedList.SortedSearchFilter.PreferGreater);
 	}
 
