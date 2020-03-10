@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
 
+import org.qommons.collect.CollectionUtils;
+
 /**
  * ArrayUtils provides some static methods for manipulating arrays easily when using a tool such as {@link java.util.ArrayList} is
  * inconvenient.
@@ -1814,7 +1816,9 @@ public final class ArrayUtils {
 	 * @param modifier The modifying list
 	 * @param dl The listener to determine how to deal with differences between the two lists
 	 * @throws E If the {@link DifferenceListenerE} throws an exception
+	 * @deprecated I know there is a bug in here somewhere. Use {@link CollectionUtils#synchronize(List, List)} instead.
 	 */
+	@Deprecated
 	public static <T1, T2, E extends Throwable> void adjust(List<T1> original, List<T2> modifier, DifferenceListenerE<T1, T2, E> dl)
 		throws E {
 		ArrayAdjuster<T1, T2, E> adjuster = new ArrayAdjuster<>((T1 []) original.toArray(), (T2 []) modifier.toArray(),
