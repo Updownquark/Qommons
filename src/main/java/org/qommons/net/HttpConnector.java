@@ -291,6 +291,7 @@ public class HttpConnector
 		}
 	}
 
+	/** Builds a connector */
 	public static class Builder {
 		private final String theURL;
 
@@ -317,11 +318,17 @@ public class HttpConnector
 			theReadTimeout=-1;
 		}
 
+		/** @return A builder for the cookies to supply with the connector */
 		public ParamsBuilder<Builder> withCookies() {
 			withCookies=true;
 			return theCookies;
 		}
 
+		/**
+		 * Specifies that the connector should not supply any cookies
+		 * 
+		 * @return This builder
+		 */
 		public Builder noCookies(){
 			withCookies=false;
 			return this;
@@ -353,7 +360,10 @@ public class HttpConnector
 			return this;
 		}
 
-		/** @param verifier The hostname verifier that this connector will use HTTPS connections */
+		/**
+		 * @param verifier The hostname verifier that this connector will use HTTPS connections
+		 * @return This builder
+		 */
 		public Builder withHostnameVerifier(HostnameVerifier verifier){
 			if(theHostnameVerifier!=null)
 				System.err.println("WARNING: Replacing hostname verifier");
@@ -362,9 +372,9 @@ public class HttpConnector
 		}
 
 		/**
-		 * @param follow Whether connections made by this connector should automatically follow redirect
-		 *        codes sent from the server. Null means this property will be unset and the default
-		 *        value should be used.
+		 * @param follow Whether connections made by this connector should automatically follow redirect codes sent from the server. Null
+		 *        means this property will be unset and the default value should be used.
+		 * @return This builder
 		 * @see HttpURLConnection#setFollowRedirects(boolean)
 		 */
 		public Builder followRedirects(boolean follow){
@@ -373,9 +383,9 @@ public class HttpConnector
 		}
 
 		/**
-		 * @param connectTimeout The timeout value, in milliseconds that connections made by this connector
-		 *        should wait for the connection to be established. A negative value indicates that this
-		 *        parameter should not be set and the default should be used.
+		 * @param connectTimeout The timeout value, in milliseconds that connections made by this connector should wait for the connection
+		 *        to be established. A negative value indicates that this parameter should not be set and the default should be used.
+		 * @return This builder
 		 * @see java.net.URLConnection#setConnectTimeout(int)
 		 */
 		public Builder withConnectTimeout(int connectTimeout){
@@ -384,9 +394,9 @@ public class HttpConnector
 		}
 
 		/**
-		 * @param readTimeout The timeout value, in milliseconds that connections made by this connector
-		 *        should wait for data to be available to read. A negative value indicates that this
-		 *        parameter should not be set and the default should be used.
+		 * @param readTimeout The timeout value, in milliseconds that connections made by this connector should wait for data to be
+		 *        available to read. A negative value indicates that this parameter should not be set and the default should be used.
+		 * @return This builder
 		 * @see java.net.URLConnection#setReadTimeout(int)
 		 */
 		public Builder withReadTimeout(int readTimeout){
@@ -395,11 +405,10 @@ public class HttpConnector
 		}
 
 		/**
-		 *
-		 * @return
+		 * @return The built connector
 		 * @throws NoSuchAlgorithmException If the "SSL" algorithm cannot be found in the environment
-		 * @throws KeyManagementException If the SSL context cannot be initialized with the given
-		 * {@link #withKeyManager(KeyManager) key managers} and {@link #withTrustManager(TrustManager) trust managers}, if any are set
+		 * @throws KeyManagementException If the SSL context cannot be initialized with the given {@link #withKeyManager(KeyManager) key
+		 *         managers} and {@link #withTrustManager(TrustManager) trust managers}, if any are set
 		 */
 		public HttpConnector build() throws NoSuchAlgorithmException, KeyManagementException{
 			KeyManager[] keyManagers = theKeyManagers.toArray(new KeyManager[theKeyManagers.size()]);
@@ -424,12 +433,22 @@ public class HttpConnector
 		}
 	}
 
+	/**
+	 * @param url The URL to connect to
+	 * @return A builder for a {@link HttpConnector} to the given URL
+	 */
 	public static Builder build(String url) {
 		return new Builder(url);
 	}
 
+	/**
+	 * A builder for a parameter set
+	 * 
+	 * @param <T> The type of the parameter set's owner
+	 */
 	public static class ParamsBuilder<T>{
 		private final T theBuilder;
+		/** The parameters */
 		protected final Map<String, Object> theParams;
 
 		ParamsBuilder(T builder) {
@@ -437,10 +456,16 @@ public class HttpConnector
 			theParams = new LinkedHashMap<>();
 		}
 
+		/** @return The builder that owns this parameter set */
 		public T out(){
 			return theBuilder;
 		}
 
+		/**
+		 * @param param The parameter name
+		 * @param value The parameter value
+		 * @return This parameter builder
+		 */
 		protected ParamsBuilder<T> withObj(String param, Object value){
 			Object old=theParams.put(param, value);
 			if(old!=null)
@@ -448,25 +473,46 @@ public class HttpConnector
 			return this;
 		}
 
+		/**
+		 * @param param The parameter name
+		 * @param value The parameter value
+		 * @return This parameter builder
+		 */
 		public ParamsBuilder<T> with(String param, String value){
 			return withObj(param, value);
 		}
 	}
 
+	/**
+	 * A builder for a parameter set that can supply long values
+	 * 
+	 * @param <T> The type of the parameter set's owner
+	 */
 	public static class StreamParamsBuilder<T> extends ParamsBuilder<T>{
 		StreamParamsBuilder(T builder){
 			super(builder);
 		}
 
+		/**
+		 * @param param The parameter name
+		 * @param value The binary value stream
+		 * @return This parameter builder
+		 */
 		public ParamsBuilder<T> with(String param, InputStream value){
 			return withObj(param, value);
 		}
 
+		/**
+		 * @param param The parameter name
+		 * @param value The text value stream
+		 * @return This parameter builder
+		 */
 		public ParamsBuilder<T> with(String param, Reader value){
 			return withObj(param, value);
 		}
 	}
 
+	/** A request to a URL */
 	public class Request {
 		private final ParamsBuilder<Request> theRequestProperties;
 		private final ParamsBuilder<Request> theGetParams;
@@ -483,18 +529,25 @@ public class HttpConnector
 			theRequestProperties.theParams.put("Accept-Charset", "UTF-8");
 		}
 
+		/** @return A parameter set to use to configure the request properties */
 		public ParamsBuilder<Request> withRequestProperties(){
 			return theRequestProperties;
 		}
 
+		/** @return A parameter set to use to configure the GET parameters */
 		public ParamsBuilder<Request> withGet(){
 			return theGetParams;
 		}
 
+		/** @return A parameter set to use to configure the POST parameters */
 		public StreamParamsBuilder<Request> withPost(){
 			return thePostParams;
 		}
 
+		/**
+		 * @param content The content to supply
+		 * @return This request
+		 */
 		public Request withContent(String content){
 			if(theContent!=null)
 				System.err.println("WARNING: Replacing content");
@@ -502,6 +555,10 @@ public class HttpConnector
 			return this;
 		}
 
+		/**
+		 * @param content The text content to supply
+		 * @return This request
+		 */
 		public Request withContent(Reader content){
 			if(theContent!=null)
 				System.err.println("WARNING: Replacing content");
@@ -509,6 +566,10 @@ public class HttpConnector
 			return this;
 		}
 
+		/**
+		 * @param content The binary content to supply
+		 * @return This request
+		 */
 		public Request withContent(InputStream content){
 			if(theContent!=null)
 				System.err.println("WARNING: Replacing content");
@@ -516,6 +577,12 @@ public class HttpConnector
 			return this;
 		}
 
+		/**
+		 * Makes the connection
+		 * 
+		 * @return The connection
+		 * @throws IOException If a connection error occurs
+		 */
 		public HttpURLConnection connect() throws IOException{
 			HttpURLConnection conn = null;
 			try
@@ -795,6 +862,7 @@ public class HttpConnector
 		}
 	}
 
+	/** @return A request object to configure and make a request to this connector's URL */
 	public Request createRequest(){
 		return new Request();
 	}

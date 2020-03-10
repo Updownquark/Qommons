@@ -54,8 +54,28 @@ public class TimeUtils {
 		TimeZone
 	}
 
+	/** Time units in a parsed duration */
 	public enum DurationComponentType {
-		Year, Month, Week, Day, Hour, Minute, Second, Millisecond, Microseond, Nanosecond
+		/** Years */
+		Year,
+		/** Months */
+		Month,
+		/** Weeks */
+		Week,
+		/** Days */
+		Day,
+		/** Hours */
+		Hour,
+		/** Minutes */
+		Minute,
+		/** Seconds */
+		Second,
+		/** Milliseconds */
+		Millisecond,
+		/** Microseconds */
+		Microsecond,
+		/** Nanoseconds */
+		Nanosecond
 	}
 
 	/** A parsed time returned from {@link TimeUtils#parseFlexFormatTime(CharSequence, boolean, boolean)} */
@@ -63,6 +83,11 @@ public class TimeUtils {
 		/** @return The time zone of the parsed time, if specified */
 		TimeZone getTimeZone();
 
+		/**
+		 * @param field The type to increment
+		 * @param amount The amount to increment the date by
+		 * @return The incremented time
+		 */
 		ParsedTime add(DateElementType field, int amount);
 
 		/**
@@ -87,6 +112,7 @@ public class TimeUtils {
 		boolean isComparable(ParsedTime other);
 	}
 
+	/** A component of a {@link ParsedTime} */
 	public static class TimeComponent extends FieldedComponent<DateElementType> {
 		final ParsedDateElement theParsedElement;
 
@@ -101,11 +127,20 @@ public class TimeUtils {
 		}
 	}
 
+	/** A component of a {@link ParsedDuration} */
 	public static class DurationComponent extends FieldedComponent<DurationComponentType> {
 		private final String text;
 		final int valueStart;
 		final int valueEnd;
 
+		/**
+		 * @param start The character index of the start of this component
+		 * @param valueStart The character index of the start of this component's value (as opposed to any unit)
+		 * @param valueEnd The character index of the end of this component's value
+		 * @param field The type of this component
+		 * @param value The value of this component
+		 * @param text The text that was parsed into this component
+		 */
 		public DurationComponent(int start, int valueStart, int valueEnd, DurationComponentType field, int value, String text) {
 			super(start, start + text.length(), field, value);
 			if (start < 0 || valueStart < start || valueEnd < valueStart || (valueEnd - valueStart) > text.length())
@@ -121,12 +156,18 @@ public class TimeUtils {
 		}
 	}
 
+	/** A parsed time returned from {@link TimeUtils#parseDuration(CharSequence)} */
 	public static class ParsedDuration implements FieldedAdjustable<DurationComponentType, DurationComponent, ParsedDuration> {
 		private final boolean isNegative;
 		private final EnumMap<DurationComponentType, DurationComponent> components;
 		private final List<DurationComponent> theSequence;
 		private final List<String> theSeparators;
 
+		/**
+		 * @param negative Whether this represents a negative duration
+		 * @param sequence The parsed components composing this duration
+		 * @param separators The whitespace separators between each component
+		 */
 		public ParsedDuration(boolean negative, List<DurationComponent> sequence, List<String> separators) {
 			isNegative = negative;
 			components = new EnumMap<>(DurationComponentType.class);
@@ -213,7 +254,7 @@ public class TimeUtils {
 					case Millisecond:
 						text += "ms";
 						break;
-					case Microseond:
+					case Microsecond:
 						text += "us";
 						break;
 					case Nanosecond:
@@ -277,7 +318,7 @@ public class TimeUtils {
 			case Millisecond:
 				limit = 1000;
 				break;
-			case Microseond:
+			case Microsecond:
 				if (fieldValues.containsKey(DurationComponentType.Millisecond)) {
 					superType = DurationComponentType.Millisecond;
 					limit = 1000;
@@ -287,9 +328,9 @@ public class TimeUtils {
 				}
 				break;
 			case Nanosecond:
-				if (fieldValues.containsKey(DurationComponentType.Microseond)
+				if (fieldValues.containsKey(DurationComponentType.Microsecond)
 					|| fieldValues.containsKey(DurationComponentType.Millisecond)) {
-					superType = DurationComponentType.Microseond;
+					superType = DurationComponentType.Microsecond;
 					limit = 1000;
 				} else {
 					superType = DurationComponentType.Second;
@@ -318,6 +359,7 @@ public class TimeUtils {
 			return true;
 		}
 
+		/** @return A duration with this object's magnitude */
 		public Duration asDuration() {
 			Duration d = Duration.ZERO;
 			for (DurationComponent c : theSequence) {
@@ -346,7 +388,7 @@ public class TimeUtils {
 				case Millisecond:
 					d = d.plusMillis(c.getValue());
 					break;
-				case Microseond:
+				case Microsecond:
 					d = d.plusNanos(c.getValue() * 1000L);
 					break;
 				case Nanosecond:
@@ -370,6 +412,10 @@ public class TimeUtils {
 			return str.toString();
 		}
 
+		/**
+		 * @param d The duration to convert
+		 * @return A parsed duration with the same magnitude as the given duration
+		 */
 		public static ParsedDuration asParsedDuration(Duration d) {
 			boolean neg = d.isNegative();
 			if (neg)
@@ -439,7 +485,7 @@ public class TimeUtils {
 				}
 				int micros = nanos / 1_000;
 				String valueStr = String.valueOf(micros);
-				components.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Microseond, micros,
+				components.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Microsecond, micros,
 					valueStr + "us"));
 				index += valueStr.length() + 2;
 			} else {
@@ -1833,6 +1879,11 @@ public class TimeUtils {
 		return ret.toString();
 	}
 
+	/**
+	 * @param text The text to parse
+	 * @return A duration parsed from the text
+	 * @throws ParseException If the duration cannot be parsed
+	 */
 	public static ParsedDuration parseDuration(CharSequence text) throws ParseException {
 		ArrayList<DurationComponent> components = new ArrayList<>();
 		ArrayList<String> separators = new ArrayList<>();
@@ -1976,7 +2027,7 @@ public class TimeUtils {
 			case "micro":
 			case "microsecond":
 				if (value > 0 || decimalStart > valueStart)
-					components.add(new DurationComponent(valueStart, valueStart, decimalStart, DurationComponentType.Microseond,
+					components.add(new DurationComponent(valueStart, valueStart, decimalStart, DurationComponentType.Microsecond,
 						(int) value, text.subSequence(valueStart, decimalStart).toString()));
 				if (!Double.isNaN(decimal)) {
 					components.add(new DurationComponent(decimalStart, decimalStart, decimalStart + 1, DurationComponentType.Nanosecond,
@@ -2000,6 +2051,10 @@ public class TimeUtils {
 		return new ParsedDuration(neg, components, separators);
 	}
 
+	/**
+	 * @param years The number of years to convert
+	 * @return The number of days in the given number of years
+	 */
 	public static final long getDaysInYears(int years) {
 		boolean neg = years < 0;
 		if (neg)
@@ -2017,6 +2072,10 @@ public class TimeUtils {
 		return neg ? -days : days;
 	}
 
+	/**
+	 * @param months The number of months to convert
+	 * @return The number of days in the given number of months
+	 */
 	public static final long getDaysInMonths(int months) {
 		boolean neg = months < 0;
 		if (neg)

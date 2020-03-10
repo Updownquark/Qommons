@@ -58,10 +58,20 @@ public interface ExIterable<T, E extends Throwable> {
 		};
 	}
 
+	/**
+	 * @param <V> The type for the new iterable
+	 * @param map The mapping function
+	 * @return An iterable that supplies the same values as this iterable, mapped by the given function
+	 */
 	default <V> ExIterable<V, E> map(Function<? super T, V> map) {
 		return mapEx(ExFunction.of(map));
 	}
 
+	/**
+	 * @param <V> The type for the new iterable
+	 * @param map The mapping function
+	 * @return An iterable that supplies the same values as this iterable, mapped by the given function
+	 */
 	default <V> ExIterable<V, E> mapEx(ExFunction<? super T, V, ? extends E> map) {
 		ExIterable<T, E> outer = this;
 		return new ExIterable<V, E>() {
@@ -89,6 +99,10 @@ public interface ExIterable<T, E extends Throwable> {
 		};
 	}
 
+	/**
+	 * @param filter The filter to apply
+	 * @return An Iterable that supplies the same values as this iterable, except those that don't pass the given filter
+	 */
 	default ExIterable<T, E> filter(ExPredicate<? super T, ? extends E> filter) {
 		ExIterable<T, E> outer = this;
 		return new ExIterable<T, E>() {
@@ -128,6 +142,10 @@ public interface ExIterable<T, E extends Throwable> {
 		};
 	}
 
+	/**
+	 * @param others The other iterable to iterate over
+	 * @return An iterable that iterates over this iterable's values, followed by those of the other iterables
+	 */
 	default ExIterable<T, E> append(ExIterable<? extends T, ? extends E>... others) {
 		ArrayList<ExIterable<? extends T, ? extends E>> list = new ArrayList<>();
 		list.add(this);
@@ -140,6 +158,11 @@ public interface ExIterable<T, E extends Throwable> {
 		return flatten(iterable);
 	}
 
+	/**
+	 * @param action The action to run before returning each next value
+	 * @return An iterable that supplies the same values as this iterable, but runs the given action before returning each value from
+	 *         {@link Iterator#next()}
+	 */
 	default ExIterable<T, E> beforeEach(Runnable action) {
 		ExIterable<T, E> outer = this;
 		return new ExIterable<T, E>() {
@@ -168,6 +191,11 @@ public interface ExIterable<T, E extends Throwable> {
 		};
 	}
 
+	/**
+	 * @param onValue The action to run before returning each next value
+	 * @return An iterable that supplies the same values as this iterable, but runs the given action oneach value from
+	 *         {@link Iterator#next()} before returning it
+	 */
 	default ExIterable<T, E> onEach(Consumer<? super T> onValue) {
 		ExIterable<T, E> outer = this;
 		return new ExIterable<T, E>() {
@@ -197,6 +225,11 @@ public interface ExIterable<T, E extends Throwable> {
 		};
 	}
 
+	/**
+	 * @param action The action to run when iteration starts
+	 * @return An iterable that supplies the same values as this iterable, but calls the given action from the first
+	 *         {@link Iterator#hasNext()} call
+	 */
 	default ExIterable<T, E> onStart(Runnable action){
 		ExIterable<T, E> outer = this;
 		return new ExIterable<T, E>() {
@@ -229,6 +262,11 @@ public interface ExIterable<T, E extends Throwable> {
 		};
 	}
 
+	/**
+	 * @param action The action to run when iteration finishes
+	 * @return An iterable that supplies the same values as this iterable, but calls the given action from the first
+	 *         {@link Iterator#hasNext()} call that returns false
+	 */
 	default ExIterable<T, E> onFinish(Runnable action) {
 		ExIterable<T, E> outer = this;
 		return new ExIterable<T, E>() {
@@ -265,6 +303,12 @@ public interface ExIterable<T, E extends Throwable> {
 		};
 	}
 
+	/**
+	 * @param <T> The type of the values
+	 * @param <E> The exception type
+	 * @param values The values to iterate over
+	 * @return An iterable that returns the given values and never throws any checked exceptions
+	 */
 	static <T, E extends Throwable> ExIterable<T, E> from(T... values) {
 		return new ExIterable<T, E>() {
 			@Override
@@ -288,6 +332,11 @@ public interface ExIterable<T, E extends Throwable> {
 		};
 	}
 
+	/**
+	 * @param <T> The type of the values
+	 * @param values The iterable to wrap
+	 * @return An iterable that supplies the same values as the given iterable and never throws any checked exceptions
+	 */
 	static <T> ExIterable<T, RuntimeException> fromIterable(Iterable<? extends T> values) {
 		return new ExIterable<T, RuntimeException>() {
 			@Override
@@ -297,10 +346,22 @@ public interface ExIterable<T, E extends Throwable> {
 		};
 	}
 
-	static <T, E extends Throwable> ExIterable<T, E> forEx(ExIterable<T, RuntimeException> safe) {
+	/**
+	 * @param <T> The type of the values
+	 * @param <E> The checked exception type
+	 * @param safe The iterable to wrap
+	 * @return An iterable that supplies the same values as the given iterable and never throws any checked exceptions
+	 */
+	static <T, E extends Throwable> ExIterable<T, E> forEx(ExIterable<T, ? extends RuntimeException> safe) {
 		return (ExIterable<T, E>)(ExIterable<T, ?>) safe;
 	}
 
+	/**
+	 * @param <T> The type of the values
+	 * @param <E> The exception type
+	 * @param container The iterable of iterables
+	 * @return An iterable that supplies the values of each iterable supplied by <code>container</code>
+	 */
 	static <T, E extends Throwable> ExIterable<T, E> flatten(
 			ExIterable<? extends ExIterable<? extends T, ? extends E>, ? extends E> container) {
 		return new ExIterable<T, E>() {
