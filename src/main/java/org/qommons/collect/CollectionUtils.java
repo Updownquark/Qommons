@@ -168,76 +168,180 @@ public class CollectionUtils {
 	}
 
 	/**
-	 * Creates a simple synchronizer (for any of the {@link CollectionUtils#synchronize(List, List, ElementFinder) synchronize} methods)
-	 * whose basic behavior (i.e. whether an element will be in the left list) does not depend on element value or position.
+	 * A simple synchronizer (for any of the {@link CollectionUtils#synchronize(List, List, ElementFinder) synchronize} methods) whose
+	 * left-only and right-only behaviors (i.e. whether an element will be in the left list) does not depend on element value or position.
 	 * 
 	 * @param <E1> The type of the list to adjust
 	 * @param <E2> The type of the list to synchronize against
 	 * @param <X> An exception type that may be thrown by the mapping function
-	 * @param remove Whether to remove left-only elements
-	 * @param add Whether to add right-only elements to the left list
-	 * @param update Whether to update the left value of common elements with identical values
-	 * @param map The (exception-throwing) function to produce left-list values from right-list ones
-	 * @return The simple synchronizer
+	 * @param <S> Self parameter, making chain methods of this class easier with subclasses
 	 */
-	public static final <E1, E2, X extends Throwable> CollectionSynchronizerE<E1, E2, X> simpleSyncE(boolean remove, boolean add,
-		boolean update, ExFunction<? super E2, ? extends E1, X> map) {
-		if (map == null && (add || update))
-			throw new IllegalArgumentException("Mapping function must not be null if add or update are true");
-		return new CollectionSynchronizerE<E1, E2, X>() {
-			@Override
-			public ElementSyncAction leftOnly(ElementSyncInput<E1, E2> element) throws X {
-				return remove ? element.remove() : element.preserve();
-			}
+	public static class SimpleCollectionSynchronizer<E1, E2, X extends Throwable, S extends SimpleCollectionSynchronizer<E1, E2, X, S>>
+		implements CollectionSynchronizerE<E1, E2, X> {
+		private static final ExFunction<ElementSyncInput<?, ?>, ElementSyncAction, RuntimeException> PRESERVE_COMMON = el -> el.preserve();
 
-			@Override
-			public ElementSyncAction rightOnly(ElementSyncInput<E1, E2> element) throws X {
-				return add ? element.useValue(map.apply(element.getRightValue())) : element.preserve();
-			}
+		private final ExFunction<? super E2, ? extends E1, ? extends X> theMap;
+		private boolean isAdding;
+		private boolean isRemoving;
+		private ExFunction<? super ElementSyncInput<E1, E2>, ElementSyncAction, ? extends X> theCommonHandler;
 
-			@Override
-			public ElementSyncAction common(ElementSyncInput<E1, E2> element) throws X {
-				if (map == null)
-					return element.preserve();
-				E1 value = map.apply(element.getRightValue());
-				if (value != element.getLeftValue() || update)
-					return element.useValue(value);
+		/** @param map The (exception-throwing) function to produce left-list values from right-list ones */
+		public SimpleCollectionSynchronizer(ExFunction<? super E2, ? extends E1, ? extends X> map) {
+			theMap = map;
+			isAdding = map != null;
+			isRemoving = true;
+			if (map != null)
+				commonUsesRight(false);
+			else
+				commonUsesLeft();
+		}
+
+		/**
+		 * @param add Whether to add right-only elements to the left list
+		 * @return This synchronizer
+		 */
+		public S withAdd(boolean add) {
+			if (add && theMap == null)
+				throw new IllegalStateException("A mapping must be specified for the synchronizer if right values are to be used");
+			isAdding = add;
+			return (S) this;
+		}
+
+		/**
+		 * @param remove Whether to remove left-only elements
+		 * @return This synchronizer
+		 */
+		public S withRemove(boolean remove) {
+			isRemoving = remove;
+			return (S) this;
+		}
+
+		/**
+		 * Specifies that when common elements (in both the left and right lists) are encountered, the left value should be used with no
+		 * update
+		 * 
+		 * @return This synchronizer
+		 */
+		public S commonUsesLeft() {
+			theCommonHandler = (ExFunction<? super ElementSyncInput<E1, E2>, ElementSyncAction, ? extends X>) PRESERVE_COMMON;
+			return (S) this;
+		}
+
+		/**
+		 * Specifies that when common elements (in both the left and right lists) are encountered, the mapped right value should be used
+		 * 
+		 * @param update Whether to update the left value of common elements when the map of the right value is identical to the left value
+		 * @return This synchronizer
+		 */
+		public S commonUsesRight(boolean update) {
+			if (theMap == null)
+				throw new IllegalStateException("A mapping must be specified for the synchronizer if right values are to be used");
+			theCommonHandler = el -> {
+				E1 mapped = theMap.apply(el.getRightValue());
+				if (update || el.getLeftValue() != mapped)
+					return el.useValue(mapped);
 				else
-					return element.preserve();
-			}
+					return el.preserve();
+			};
+			return (S) this;
+		}
 
-			@Override
-			public ElementSyncAction universalLeftOnly(ElementSyncInput<E1, E2> element) {
-				return remove ? element.remove() : element.preserve();
-			}
+		/**
+		 * @param left Whether to use the left or mapped right value when common elements (in both the left and right lists) are encountered
+		 * @param update Whether to update the left value when the map of the right value is identical to the left value (if
+		 *        <code>left==false</code>) or always (if <code>left==true</code>)
+		 * @return This synchronizer
+		 */
+		public S commonUses(boolean left, boolean update) {
+			if (left) {
+				if (update) {
+					theCommonHandler = el -> el.useValue(el.getLeftValue());
+					return (S) this;
+				} else
+					return commonUsesLeft();
+			} else
+				return commonUsesRight(update);
+		}
 
-			@Override
-			public ElementSyncAction universalRightOnly(ElementSyncInput<E1, E2> element) {
-				return add ? null : element.preserve();
-			}
+		/**
+		 * Specifies that common elements (in both the left and right lists) should be removed
+		 * 
+		 * @return This synchronizer
+		 */
+		public S removeCommon() {
+			theCommonHandler = null;
+			return (S) this;
+		}
 
-			@Override
-			public ElementSyncAction universalCommon(ElementSyncInput<E1, E2> element) {
-				return map == null ? element.preserve() : null;
-			}
-		};
+		/**
+		 * @param commonHandler Custom handler for common elements (in both the left and right lists)
+		 * @return This synchronizer
+		 */
+		public S handleCommon(
+			ExFunction<ElementSyncInput<E1, E2>, ElementSyncAction, ? extends X> commonHandler) {
+			theCommonHandler = commonHandler;
+			return (S) this;
+		}
+
+		@Override
+		public ElementSyncAction leftOnly(ElementSyncInput<E1, E2> element) throws X {
+			return isRemoving ? element.remove() : element.preserve();
+		}
+
+		@Override
+		public ElementSyncAction rightOnly(ElementSyncInput<E1, E2> element) throws X {
+			return isAdding ? element.useValue(theMap.apply(element.getRightValue())) : element.preserve();
+		}
+
+		@Override
+		public ElementSyncAction common(ElementSyncInput<E1, E2> element) throws X {
+			if (theCommonHandler == null)
+				return element.remove();
+			else
+				return theCommonHandler.apply(element);
+		}
+
+		@Override
+		public ElementSyncAction universalLeftOnly(ElementSyncInput<E1, E2> element) {
+			return isRemoving ? element.remove() : element.preserve();
+		}
+
+		@Override
+		public ElementSyncAction universalRightOnly(ElementSyncInput<E1, E2> element) {
+			return isAdding ? null : element.preserve();
+		}
+
+		@Override
+		public ElementSyncAction universalCommon(ElementSyncInput<E1, E2> element) {
+			if (theCommonHandler == null)
+				return element.remove();
+			else if (theCommonHandler == PRESERVE_COMMON)
+				return element.preserve();
+			else
+				return null;
+		}
 	}
 
 	/**
-	 * Creates a simple synchronizer (for any of the {@link CollectionUtils#synchronize(List, List, ElementFinder) synchronize} methods)
-	 * whose basic behavior (i.e. whether an element will be in the left list) does not depend on element value or position.
-	 * 
 	 * @param <E1> The type of the list to adjust
 	 * @param <E2> The type of the list to synchronize against
-	 * @param remove Whether to remove left-only elements
-	 * @param add Whether to add right-only elements to the left list
-	 * @param update Whether to update the left value of common elements with identical values
-	 * @param map The function to produce left-list values from right-list ones
-	 * @return The simple synchronizer
+	 * @param <X> An exception type that the mapping function may throw
+	 * @param map The function to produce left-type values from right-type ones
+	 * @return A simple synchronizer to configure
 	 */
-	public static final <E1, E2> CollectionSynchronizerE<E1, E2, RuntimeException> simpleSync(boolean remove, boolean add, boolean update,
-		Function<? super E2, ? extends E1> map) {
-		return simpleSyncE(remove, add, update, v -> map.apply(v));
+	public static <E1, E2, X extends Throwable> SimpleCollectionSynchronizer<E1, E2, X, ?> simpleSyncE(
+		ExFunction<? super E2, ? extends E1, ? extends X> map) {
+		return new SimpleCollectionSynchronizer<>(map);
+	}
+
+	/**
+	 * @param <E1> The type of the list to adjust
+	 * @param <E2> The type of the list to synchronize against
+	 * @param map The function to produce left-type values from right-type ones
+	 * @return A simple synchronizer to configure
+	 */
+	public static <E1, E2> SimpleCollectionSynchronizer<E1, E2, RuntimeException, ?> simpleSync(Function<? super E2, ? extends E1> map) {
+		return simpleSyncE(e2 -> map.apply(e2));
 	}
 
 	/**
@@ -294,6 +398,23 @@ public class CollectionUtils {
 		 * @throws X If the synchronizer throws an exception
 		 */
 		<X extends Throwable> void adjust(CollectionSynchronizerE<E1, E2, X> sync, boolean indexedAdd) throws X;
+
+		/**
+		 * @param <X> An exception type that the mapping function may throw
+		 * @param map A mapping from right to left values
+		 * @return A SimpleAdjustment to configure
+		 */
+		default <X extends Throwable> SimpleAdjustment<E1, E2, X> simpleE(ExFunction<? super E2, ? extends E1, ? extends X> map) {
+			return new SimpleAdjustment<>(this, map);
+		}
+
+		/**
+		 * @param map A mapping from right to left values
+		 * @return A SimpleAdjustment to configure
+		 */
+		default SimpleAdjustment<E1, E2, RuntimeException> simple(Function<? super E2, ? extends E1> map) {
+			return simpleE(e2 -> map.apply(e2));
+		}
 	}
 
 	/**
@@ -345,7 +466,7 @@ public class CollectionUtils {
 			rightIndex++;
 		}
 
-		return new SimpleAdjuster<>(left, right, leftToRight, rightToLeft, add, remove, common);
+		return new AdjustmentImpl<>(left, right, leftToRight, rightToLeft, add, remove, common);
 	}
 
 	/**
@@ -395,9 +516,75 @@ public class CollectionUtils {
 		});
 	}
 
-	static class SimpleAdjuster<E1, E2> implements CollectionAdjustment<E1, E2> {
-		private static ElementSyncAction PRESERVE = new ElementSyncAction() {};
-		private static ElementSyncAction REMOVE = new ElementSyncAction() {};
+	/**
+	 * A {@link CollectionAdjustment} look-alike that does not require an external synchronizer, but uses itself. Implementing The behavior
+	 * of this adjustment can be configured using the {@link SimpleCollectionSynchronizer} methods.
+	 * 
+	 * @param <E1> The type of the list to adjust
+	 * @param <E2> The type of the list to synchronize against
+	 * @param <X> An exception type that may be thrown by the mapping function
+	 */
+	public static class SimpleAdjustment<E1, E2, X extends Throwable>
+		extends SimpleCollectionSynchronizer<E1, E2, X, SimpleAdjustment<E1, E2, X>> {
+		private final CollectionAdjustment<E1, E2> theAdjustment;
+
+		SimpleAdjustment(CollectionAdjustment<E1, E2> adjustment, ExFunction<? super E2, ? extends E1, ? extends X> map) {
+			super(map);
+			theAdjustment = adjustment;
+		}
+
+		/**
+		 * @return The number of elements in the right list that do not have a one-to-one mapping with an element in the left list
+		 * @see CollectionAdjustment#getRightOnly()
+		 */
+		public int getRightOnly() {
+			return theAdjustment.getRightOnly();
+		}
+
+		/**
+		 * @return The number of elements in the left list that do not have a one-to-one mapping with an element in the right list
+		 * @see CollectionAdjustment#getLeftOnly()
+		 */
+		public int getLeftOnly() {
+			return theAdjustment.getLeftOnly();
+		}
+
+		/**
+		 * @return The number of elements common between the left and right lists
+		 * @see CollectionAdjustment#getCommon()
+		 */
+		public int getCommon() {
+			return theAdjustment.getCommon();
+		}
+
+		/**
+		 * Synchronizes the content of the two lists.
+		 * 
+		 * @see CollectionAdjustment#adjust(CollectionSynchronizerE, boolean)
+		 * 
+		 * @param indexedAdd Whether to insert right-only elements into the left list in order of occurrence, instead of using the
+		 *        index-less {@link List#add(Object)} method. This parameter should be false if the left list may control the order of its
+		 *        content (such as a {@link BetterSortedSet}) such that adding elements at a specified position might fail.
+		 * @throws X If the mapping function (or {@link #handleCommon(ExFunction) custom common element handler}) throws an exception
+		 */
+		public void adjust(boolean indexedAdd) throws X {
+			theAdjustment.adjust(this, indexedAdd);
+		}
+	}
+
+	static class AdjustmentImpl<E1, E2> implements CollectionAdjustment<E1, E2> {
+		private static final ElementSyncAction PRESERVE = new ElementSyncAction() {
+			@Override
+			public String toString() {
+				return "PRESERVE";
+			}
+		};
+		private static final ElementSyncAction REMOVE = new ElementSyncAction() {
+			@Override
+			public String toString() {
+				return "REMOVE";
+			}
+		};
 		private final List<E1> theLeft;
 		private final List<E2> theRight;
 		private final int[] leftToRight;
@@ -407,7 +594,7 @@ public class CollectionUtils {
 		private final int commonCount;
 		private boolean adjusted;
 
-		public SimpleAdjuster(List<E1> left, List<E2> right, int[] leftToRight, int[] rightToLeft, int add, int remove, int common) {
+		public AdjustmentImpl(List<E1> left, List<E2> right, int[] leftToRight, int[] rightToLeft, int add, int remove, int common) {
 			theLeft = left;
 			theRight = right;
 			this.leftToRight = leftToRight;
@@ -439,6 +626,13 @@ public class CollectionUtils {
 			adjusted = true;
 			SyncInputImpl<E1, E2> input = new SyncInputImpl<>();
 
+			boolean hasAdds;
+			if (toAdd == 0)
+				hasAdds = false;
+			else {
+				ElementSyncAction rightAction = sync.universalRightOnly(input);
+				hasAdds = rightAction != PRESERVE && rightAction != REMOVE;
+			}
 			boolean doLeftSync = true;
 			if (leftToRight.length == 0)
 				doLeftSync = false;
@@ -449,7 +643,7 @@ public class CollectionUtils {
 					if (leftAction == REMOVE) {
 						doLeftSync = false;
 						theLeft.clear();
-					} else if (leftAction == PRESERVE)
+					} else if (leftAction == PRESERVE && (!hasAdds || !indexedAdd))
 						doLeftSync = false;
 				}
 				if (!doLeftSync) {//
@@ -460,38 +654,38 @@ public class CollectionUtils {
 					} else if (leftAction == PRESERVE)
 						doLeftSync = false;
 				} else if (commonCount == leftToRight.length) {
-					leftAction = sync.universalLeftOnly(input);
-					if (leftAction == REMOVE) {
+					if (commonAction == REMOVE) {
 						doLeftSync = false;
 						theLeft.clear();
-					} else if (leftAction == PRESERVE)
+					} else if (commonAction == PRESERVE && (!hasAdds || !indexedAdd))
 						doLeftSync = false;
 				}
 			}
-			boolean hasAdds;
-			if (toAdd == 0)
-				hasAdds = false;
-			else {
-				ElementSyncAction rightAction = sync.universalRightOnly(input);
-				hasAdds = rightAction != PRESERVE && rightAction != REMOVE;
-			}
 
+			ListIterator<E1> leftIter = null;
+			Iterator<E2> rightIter = null;
+			int nextRightIndex = -1;
 			if (indexedAdd && hasAdds && rightToLeft[0] < 0) {
 				// Add initial values only present in the right list before any that map to an element in the left
-				ListIterator<E1> leftIter = theLeft.listIterator();
+				leftIter = theLeft.listIterator();
+				rightIter = theRight.iterator();
+				nextRightIndex = 0;
 				input.hasRight = true;
 				for (input.rightIndex = 0; input.rightIndex < rightToLeft.length && rightToLeft[input.rightIndex] < 0; input.rightIndex++) {
+					input.rightVal = rightIter.next();
+					nextRightIndex++;
 					ElementSyncAction action = sync.rightOnly(input);
 					if (action instanceof ValueSyncAction) {
-						leftIter.set(((ValueSyncAction<E1>) action).value);
+						leftIter.add(((ValueSyncAction<E1>) action).value);
 						input.targetIndex++;
 					}
 				}
+				if (input.rightIndex == rightToLeft.length)
+					hasAdds = false; // Already added everything, no more adds
 			}
 			if (doLeftSync) {
-				ListIterator<E1> leftIter = theLeft.listIterator();
-				Iterator<E2> rightIter = null;
-				int nextRightIndex = -1;
+				if (leftIter == null)
+					leftIter = theLeft.listIterator();
 
 				input.hasLeft = true;
 				input.targetIndex = 0;
@@ -536,9 +730,6 @@ public class CollectionUtils {
 			}
 
 			if (hasAdds && (!indexedAdd || !doLeftSync)) {
-				Iterator<E2> rightIter = null;
-				int nextRightIndex = -1;
-
 				input.hasLeft = false;
 				input.leftIndex = -1;
 				input.leftVal = null;
@@ -565,6 +756,11 @@ public class CollectionUtils {
 
 		static class ValueSyncAction<E1> implements ElementSyncAction {
 			E1 value;
+
+			@Override
+			public String toString() {
+				return "VALUE=" + value;
+			}
 		}
 
 		static class SyncInputImpl<E1, E2> implements ElementSyncInput<E1, E2> {
