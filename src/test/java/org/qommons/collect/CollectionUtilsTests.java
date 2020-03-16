@@ -3,15 +3,18 @@ package org.qommons.collect;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.Assert;
 import org.junit.Test;
 import org.qommons.QommonsTestUtils;
 import org.qommons.TestHelper;
+import org.qommons.collect.CollectionUtils.AdjustmentOrder;
 
 /** Tests for {@link CollectionUtils} utilities */
-public class CollectionsUtilsTests {
+public class CollectionUtilsTests {
 	/** Tests {@link CollectionUtils#synchronize(List, List) list synchronization} */
 	@SuppressWarnings("static-method")
 	@Test
@@ -26,8 +29,12 @@ public class CollectionsUtilsTests {
 		public void accept(TestHelper helper) {
 			int originalLength = helper.getInt(2, 15);
 			List<String> original = new ArrayList<>(originalLength);
-			for (int i = 0; i < originalLength; i++)
-				original.add(helper.getAlphaNumericString(3, 8));
+			Set<String> originalLC = new HashSet<>();
+			for (int i = 0; i < originalLength; i++) {
+				String str = helper.getAlphaNumericString(3, 8);
+				original.add(str);
+				originalLC.add(str.toLowerCase());
+			}
 
 			int adjustLength = helper.getInt(2, 15);
 			List<String> adjust = new ArrayList<>(adjustLength);
@@ -35,6 +42,7 @@ public class CollectionsUtilsTests {
 			boolean remove = helper.getBoolean();
 			boolean changeCase = helper.getBoolean();
 			boolean indexed = helper.getBoolean(0.75);
+			boolean leftFirst = helper.getBoolean();
 			int[] map = new int[originalLength];
 			int[] reverse = new int[adjustLength];
 			Arrays.fill(map, -1);
@@ -43,7 +51,12 @@ public class CollectionsUtilsTests {
 				int adjI = i;
 				adjust.add(//
 					helper.<String> createSupplier()//
-						.or(1, () -> helper.getAlphaNumericString(3, 8))//
+						.or(1, () -> {
+							String str = helper.getAlphaNumericString(3, 8);
+							while (originalLC.contains(str.toLowerCase()))
+								str = helper.getAlphaNumericString(3, 8);
+							return str;
+						})//
 						.or(1, () -> {
 							int index = helper.getInt(0, originalLength);
 							if (map[index] < 0) {
@@ -56,27 +69,36 @@ public class CollectionsUtilsTests {
 			}
 
 			List<String> expect = new ArrayList<>(originalLength + adjustLength);
-			if (indexed && add) {
-				for (int i = 0; i < adjustLength && reverse[i] < 0; i++)
-					expect.add(adjust.get(i));
-			}
-			for (int i = 0; i < originalLength; i++) {
+			int i = 0, j = 0;
+			for (; i < originalLength; i++) {
 				if (map[i] >= 0) {
+					if (indexed && add) {
+						for (; j < adjustLength && reverse[j] < 0; j++)
+							expect.add(adjust.get(j));
+					}
+					j = map[i];
 					if (changeCase)
-						expect.add(adjust.get(map[i]));
+						expect.add(adjust.get(j));
 					else
 						expect.add(original.get(i));
-					if (add && indexed) {
-						for (int adjI = map[i] + 1; adjI < adjustLength && reverse[adjI] < 0; adjI++)
-							expect.add(adjust.get(adjI));
+					j++;
+				} else {
+					if (indexed && add && !leftFirst) {
+						for (; j < adjustLength && reverse[j] < 0; j++)
+							expect.add(adjust.get(j));
 					}
-				} else if (!remove)
-					expect.add(original.get(i));
+					if (!remove)
+						expect.add(original.get(i));
+				}
 			}
-			if (add && !indexed) {
-				for (int i = 0; i < adjustLength; i++) {
-					if (reverse[i] < 0)
-						expect.add(adjust.get(i));
+			if (add) {
+				if (!indexed)
+					j = 0;
+				for (; j < adjustLength; j++) {
+					if (reverse[j] < 0)
+						expect.add(adjust.get(j));
+					else if (indexed)
+						break;
 				}
 			}
 
@@ -84,8 +106,9 @@ public class CollectionsUtilsTests {
 			adjusted.addAll(original);
 			helper.placemark("test");
 			CollectionUtils.synchronize(adjusted, adjust, (s1, s2) -> s1.equalsIgnoreCase(s2)).simple(v -> v)//
-				.withAdd(add).withRemove(remove).commonUses(!changeCase, false)//
-				.adjust(indexed);
+				.withAdd(add).withRemove(remove).commonUses(!changeCase, false).leftFirst(leftFirst)
+				.setOrder(indexed ? AdjustmentOrder.LeftOrder : AdjustmentOrder.AddLast)//
+				.adjust();
 
 			Assert.assertThat(adjusted, QommonsTestUtils.collectionsEqual(expect, true));
 		}

@@ -5,7 +5,7 @@ import org.junit.runners.Suite;
 import org.junit.runners.Suite.SuiteClasses;
 import org.qommons.collect.CLQTest;
 import org.qommons.collect.CircularListTest;
-import org.qommons.collect.CollectionsUtilsTests;
+import org.qommons.collect.CollectionUtilsTests;
 import org.qommons.collect.HashSetTest;
 import org.qommons.collect.ListenerListTest;
 import org.qommons.tree.TreeUtilsTest;
@@ -19,7 +19,7 @@ import org.qommons.tree.TreeUtilsTest;
 	StringUtilsTest.class, //
 	CircularListTest.class,
 	CLQTest.class, //
-	CollectionsUtilsTests.class, //
+	CollectionUtilsTests.class, //
 	HashSetTest.class, //
 	ListenerListTest.class, //
 	TreeUtilsTest.class //
