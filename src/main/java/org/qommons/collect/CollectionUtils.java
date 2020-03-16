@@ -86,7 +86,8 @@ public class CollectionUtils {
 	public interface ElementSyncAction {}
 
 	/**
-	 * Controls the {@link CollectionAdjustment#adjust(CollectionSynchronizerE, boolean) synchronization} of each element of two lists
+	 * Controls the {@link CollectionAdjustment#adjust(CollectionSynchronizerE, AdjustmentOrder) synchronization} of each element of two
+	 * lists
 	 * 
 	 * @param <E1> The type of the list to adjust
 	 * @param <E2> The type of the list to synchronize against
@@ -384,13 +385,17 @@ public class CollectionUtils {
 		return simpleSyncE(e2 -> map.apply(e2));
 	}
 
-	enum AdjustmentOrder {
+	/** The order that a {@link CollectionUtils#synchronize(List, List) synchronized} list should be in */
+	public enum AdjustmentOrder {
+		/** Preserves the order of the left list, inserting right-only elements as encountered */
 		LeftOrder,
+		/** Reorders the left list to be ordered like the right list */
 		RightOrder,
 		/**
-		 * Inserts right-only elements into the left list using the index-less {@link List#add(Object)} method after all left-only and
-		 * common elements have been synchronized. This order should be used if the left list may control the order of its content (such as
-		 * a {@link BetterSortedSet}) such that adding elements at a specified position might fail.
+		 * Preserves the order of the left list and inserts right-only elements into the left list using the index-less
+		 * {@link List#add(Object)} method after all left-only and common elements have been synchronized. This order should be used if the
+		 * left list may control the order of its content (such as a {@link BetterSortedSet}) such that adding elements at a specified
+		 * position might fail.
 		 */
 		AddLast
 	}
@@ -443,9 +448,7 @@ public class CollectionUtils {
 		 * 
 		 * @param <X> The type of the exception that the synchronizer may throw
 		 * @param sync The synchronizer to govern the adjustment
-		 * @param indexedAdd Whether to insert right-only elements into the left list in order of occurrence, instead of using the
-		 *        index-less {@link List#add(Object)} method. This parameter should be false if the left list may control the order of its
-		 *        content (such as a {@link BetterSortedSet}) such that adding elements at a specified position might fail.
+		 * @param order The order for the adjusted list
 		 * @throws X If the synchronizer throws an exception
 		 */
 		<X extends Throwable> void adjust(CollectionSynchronizerE<E1, E2, X> sync, AdjustmentOrder order) throws X;
@@ -609,27 +612,46 @@ public class CollectionUtils {
 			return theAdjustment.getCommon();
 		}
 
+		/**
+		 * Sets the adjustment order to {@link AdjustmentOrder#LeftOrder left}
+		 * 
+		 * @return This adjustment
+		 */
 		public SimpleAdjustment<E1, E2, X> leftOrder() {
 			theOrder = AdjustmentOrder.LeftOrder;
 			return this;
 		}
 
+		/**
+		 * Sets the adjustment order to {@link AdjustmentOrder#RightOrder right}
+		 * 
+		 * @return This adjustment
+		 */
 		public SimpleAdjustment<E1, E2, X> rightOrder() {
 			theOrder = AdjustmentOrder.RightOrder;
 			return this;
 		}
 
+		/**
+		 * Sets the adjustment order to {@link AdjustmentOrder#AddLast add-last}
+		 * 
+		 * @return This adjustment
+		 */
 		public SimpleAdjustment<E1, E2, X> addLast() {
 			theOrder = AdjustmentOrder.AddLast;
 			return this;
 		}
 
+		/**
+		 * @param order The order for this adjustment
+		 * @return This adjustment
+		 */
 		public SimpleAdjustment<E1, E2, X> setOrder(AdjustmentOrder order) {
 			theOrder = order;
 			return this;
 		}
 
-		/** @return Whether to insert right-only elements into the left list in order of occurrence */
+		/** @return This adjustment's order */
 		public AdjustmentOrder getOrder() {
 			return theOrder;
 		}
@@ -637,7 +659,7 @@ public class CollectionUtils {
 		/**
 		 * Synchronizes the content of the two lists.
 		 * 
-		 * @see CollectionAdjustment#adjust(CollectionSynchronizerE, boolean)
+		 * @see CollectionAdjustment#adjust(CollectionSynchronizerE, AdjustmentOrder)
 		 * 
 		 * @throws X If the mapping function (or {@link #handleCommon(ExFunction) custom common element handler}) throws an exception
 		 */
@@ -700,416 +722,6 @@ public class CollectionUtils {
 			adjusted = true;
 			new AdjustmentState()//
 				.adjust(sync, order);
-		}
-
-		public <X extends Throwable> void oldAdjust(CollectionSynchronizerE<E1, E2, X> sync, boolean indexedAdd) throws X {
-			if (adjusted)
-				throw new IllegalStateException("Adjustment may only be done once");
-			adjusted = true;
-			SyncInputImpl<E1, E2> input = new SyncInputImpl<>();
-
-			boolean hasAdds;
-			if (rightOnly == 0)
-				hasAdds = false;
-			else {
-				ElementSyncAction rightAction = sync.universalRightOnly(input);
-				hasAdds = rightAction != PRESERVE && rightAction != REMOVE;
-			}
-			boolean doLeftSync = true;
-			if (leftToRight.length == 0)
-				doLeftSync = false;
-			else {
-				ElementSyncAction leftAction = sync.universalLeftOnly(input);
-				ElementSyncAction commonAction = sync.universalCommon(input);
-				if (leftAction == commonAction) {
-					if (leftAction == REMOVE) {
-						doLeftSync = false;
-						theLeft.clear();
-					} else if (leftAction == PRESERVE && (!hasAdds || !indexedAdd))
-						doLeftSync = false;
-				}
-				if (!doLeftSync) {//
-				} else if (leftOnly == leftToRight.length) {
-					if (leftAction == REMOVE) {
-						doLeftSync = false;
-						theLeft.clear();
-					} else if (leftAction == PRESERVE)
-						doLeftSync = false;
-				} else if (commonCount == leftToRight.length) {
-					if (commonAction == REMOVE) {
-						doLeftSync = false;
-						theLeft.clear();
-					} else if (commonAction == PRESERVE && (!hasAdds || !indexedAdd))
-						doLeftSync = false;
-				}
-			}
-
-			ListIterator<E1> leftIter = null;
-			Iterator<E2> rightIter = null;
-			int nextRightIndex = -1;
-			if (indexedAdd && hasAdds && rightToLeft[0] < 0) {
-				// Add initial values only present in the right list before any that map to an element in the left
-				leftIter = theLeft.listIterator();
-				rightIter = theRight.iterator();
-				nextRightIndex = 0;
-				input.hasRight = true;
-				for (input.rightIndex = 0; input.rightIndex < rightToLeft.length && rightToLeft[input.rightIndex] < 0; input.rightIndex++) {
-					input.rightVal = rightIter.next();
-					nextRightIndex++;
-					ElementSyncAction action = sync.rightOnly(input);
-					if (action instanceof ValueSyncAction) {
-						leftIter.add(((ValueSyncAction<E1>) action).value);
-						input.targetIndex++;
-					}
-				}
-				if (input.rightIndex == rightToLeft.length)
-					hasAdds = false; // Already added everything, no more adds
-			}
-			if (doLeftSync) {
-				if (leftIter == null)
-					leftIter = theLeft.listIterator();
-
-				input.hasLeft = true;
-				input.targetIndex = 0;
-				for (input.leftIndex = 0; input.leftIndex < leftToRight.length; input.leftIndex++) {
-					input.leftVal = leftIter.next();
-					input.rightIndex = leftToRight[input.leftIndex];
-					ElementSyncAction action;
-					if (input.rightIndex >= 0) {
-						input.hasRight = true;
-						if (input.rightIndex != nextRightIndex) {
-							rightIter = theRight.listIterator(input.rightIndex);
-							nextRightIndex = input.rightIndex;
-						}
-						input.rightVal = rightIter.next();
-						nextRightIndex++;
-						action = sync.common(input);
-					} else {
-						input.hasRight = false;
-						action = sync.leftOnly(input);
-					}
-					if (action == REMOVE)
-						leftIter.remove();
-					else {
-						if (action instanceof ValueSyncAction)
-							leftIter.set(((ValueSyncAction<E1>) action).value);
-						input.targetIndex++;
-					}
-					if (indexedAdd && hasAdds && input.hasRight) {
-						// Add subsequent right-only values present in the right list before the next that maps to an element in the left
-						for (input.rightIndex++; input.rightIndex < rightToLeft.length
-							&& rightToLeft[input.rightIndex] < 0; input.rightIndex++) {
-							input.rightVal = rightIter.next();
-							action = sync.rightOnly(input);
-							if (action instanceof ValueSyncAction) {
-								leftIter.add(((ValueSyncAction<E1>) action).value);
-								input.targetIndex++;
-							}
-						}
-					}
-					input.rightVal = null;
-				}
-			}
-
-			if (hasAdds && (!indexedAdd || !doLeftSync)) {
-				input.hasLeft = false;
-				input.leftIndex = -1;
-				input.leftVal = null;
-				input.targetIndex = indexedAdd ? leftToRight.length : -1;
-				input.hasRight = true;
-				for (input.rightIndex = 0; input.rightIndex < rightToLeft.length; input.rightIndex++) {
-					if (rightToLeft[input.rightIndex] < 0) {
-						if (input.rightIndex != nextRightIndex) {
-							rightIter = theRight.listIterator(input.rightIndex);
-							nextRightIndex = input.rightIndex;
-						}
-						input.rightVal = rightIter.next();
-						nextRightIndex++;
-						ElementSyncAction action = sync.rightOnly(input);
-						if (action instanceof ValueSyncAction) {
-							theLeft.add(((ValueSyncAction<E1>) action).value);
-							if (indexedAdd)
-								input.targetIndex++;
-						}
-					}
-				}
-			}
-		}
-
-		public <X extends Throwable> void adjust2(CollectionSynchronizerE<E1, E2, X> sync, boolean leftOrder, boolean indexedAdd)
-			throws X {
-			if (adjusted)
-				throw new IllegalStateException("Adjustment may only be done once");
-			adjusted = true;
-			SyncInputImpl<E1, E2> input = new SyncInputImpl<>();
-
-			boolean hasAdds;
-			if (rightOnly == 0)
-				hasAdds = false;
-			else {
-				ElementSyncAction rightAction = sync.universalRightOnly(input);
-				hasAdds = rightAction != PRESERVE && rightAction != REMOVE;
-			}
-			boolean doMainSync = true, hasCommon = commonCount > 0;
-			int leftIndex = 0;
-			int mainLength = leftOrder ? leftToRight.length : rightToLeft.length;
-			if (mainLength == 0)
-				doMainSync = false;
-			else {
-				ElementSyncAction leftAction = sync.universalLeftOnly(input);
-				ElementSyncAction commonAction = sync.universalCommon(input);
-				if (leftAction == commonAction) {
-					if (leftAction == REMOVE) {
-						doMainSync = hasCommon = false;
-						theLeft.clear();
-						leftIndex = leftToRight.length;
-					} else if (leftOrder && leftAction == PRESERVE && (!hasAdds || !indexedAdd))
-						doMainSync = false;
-				}
-				if (!doMainSync) {//
-				} else if (leftOnly == leftToRight.length) {
-					if (leftAction == REMOVE) {
-						doMainSync = hasCommon = false;
-						theLeft.clear();
-						leftIndex = leftToRight.length;
-					} else if (leftOrder && leftAction == PRESERVE)
-						doMainSync = false;
-				} else if (commonCount == leftToRight.length) {
-					if (commonAction == REMOVE) {
-						doMainSync = hasCommon = false;
-						theLeft.clear();
-						leftIndex = leftToRight.length;
-					} else if (leftOrder && commonAction == PRESERVE && (!hasAdds || !indexedAdd))
-						doMainSync = false;
-				}
-			}
-
-			ListIterator<E1> leftIter = null;
-			Iterator<E2> rightIter = null;
-			int nextRightIndex = -1;// TODO Remove
-			if (doMainSync || (indexedAdd && hasAdds && hasCommon && rightToLeft[0] < 0)) {
-				// TODO Comment Add initial values only present in the right list before any that map to an element in the left
-				leftIter = theLeft.listIterator();
-				rightIter = theRight.iterator();
-				int rightIndex = 0;
-				// Find the first preserved, updated, or common left element
-				E1 leftVal = null;
-				boolean updateLeft = false;
-				input.hasLeft = true;
-				input.leftIndex = 0;
-				while (leftIndex < leftToRight.length && leftToRight[leftIndex] < 0) {
-					input.leftVal = leftVal = leftIter.next();
-					ElementSyncAction action = sync.leftOnly(input);
-					if (action == REMOVE) {
-						leftIter.remove();
-						input.leftIndex++;
-					} else if (action == PRESERVE)
-						break;
-					else {
-						leftVal = ((ValueSyncAction<E1>) action).value;
-						updateLeft = true;
-						break;
-					}
-				}
-				// Find the first common or added right element
-				E2 rightVal = null;
-				E1 rightMapped = null;
-				input.hasLeft = false;
-				input.leftIndex = -1;
-				input.leftVal = null;
-				input.hasRight = true;
-				input.rightIndex = 0;
-				while (rightIndex < rightToLeft.length && rightToLeft[rightIndex] < 0) {
-					input.rightVal = rightVal = rightIter.next();
-					ElementSyncAction action = sync.rightOnly(input);
-					if (action instanceof ValueSyncAction) {
-						rightMapped = ((ValueSyncAction<E1>) action).value;
-						break;
-					} else
-						input.rightIndex++;
-				}
-				boolean hasLeft = leftIndex < leftToRight.length;
-				boolean hasRight = rightIndex < rightToLeft.length;
-				while ((!leftOrder || hasLeft) && (leftOrder || hasRight)) {
-					if (hasLeft && hasRight && leftToRight[leftIndex] < 0 && rightToLeft[rightIndex] < 0) {
-						input.hasLeft = input.hasRight = true;
-						input.leftIndex = leftIndex;
-						input.rightIndex = rightIndex;
-						input.leftVal = leftVal;
-						input.rightVal = rightVal;
-						if (sync.getOrder(input, rightMapped)) {
-							if (updateLeft)
-								leftIter.set(leftVal);
-							input.leftVal = leftVal = leftIter.next();
-							input.targetIndex++;
-							while (true) {
-								leftIndex++;
-								input.leftIndex++;
-								hasLeft = leftIndex < leftToRight.length;
-								if (hasLeft && leftToRight[leftIndex] >= 0)
-									break;
-								ElementSyncAction action = sync.leftOnly(input);
-								if (action == REMOVE)
-									leftIter.remove();
-								else if (action instanceof ValueSyncAction) {
-									updateLeft = true;
-									leftVal = ((ValueSyncAction<E1>) action).value;
-									break;
-								} else {
-									updateLeft = false;
-									break;
-								}
-							}
-						} else {
-							leftIter.previous(); // Step back over the next left element
-							leftIter.add(rightMapped);
-							leftIter.next(); // Return to previous position
-
-						}
-					}
-				}
-				while (leftIndex < leftToRight.length && rightIndex < rightToLeft.length) {
-					if (leftOrder) {
-						if (leftToRight[leftIndex] < 0) {
-							// Already checked and it's preserved
-							if (updateLeft)
-								leftIter.set(leftVal);
-							leftVal = leftIter.next();
-							input.targetIndex++;
-						} else {
-							if (leftToRight[leftIndex] == rightIndex)
-								input.rightVal = rightVal;
-							else if (leftToRight[leftIndex] == rightIndex + 1) {
-								rightIndex++;
-								input.rightVal = rightIter.next();
-							} else {
-								rightIndex = leftToRight[leftIndex];
-								rightIter = theRight.listIterator(rightIndex);
-								input.rightVal = rightIter.next();
-							}
-							input.hasLeft = input.hasRight = true;
-							input.leftIndex = leftIndex;
-							input.rightIndex = leftToRight[leftIndex];
-							input.leftVal = leftVal;
-							ElementSyncAction action = sync.common(input);
-							if (action == PRESERVE) {
-								leftIter.next();
-								input.targetIndex++;
-							} else if (action == REMOVE)
-								leftIter.remove();
-						}
-						leftIndex++;
-					} else {
-						// TODO
-						rightIndex++;
-					}
-				}
-				boolean hastFirstLeft;
-				if (doMainSync)
-					hastFirstLeft = true;
-				else {
-					input.hasLeft = true;
-					input.leftIndex = 0;
-					input.leftVal = leftVal;
-					ElementSyncAction action = sync.leftOnly(input);
-					hastFirstLeft = action != REMOVE;
-					input.hasLeft = false;
-					input.leftIndex = -1;
-					input.leftVal = null;
-				}
-				if (hastFirstLeft) {
-					nextRightIndex = 0;
-					input.hasRight = true;
-					for (input.rightIndex = 0; input.rightIndex < rightToLeft.length
-						&& rightToLeft[input.rightIndex] < 0; input.rightIndex++) {
-						input.rightVal = rightIter.next();
-						nextRightIndex++;
-						ElementSyncAction action = sync.rightOnly(input);
-						if (action instanceof ValueSyncAction) {
-							E1 mappedRight = ((ValueSyncAction<E1>) action).value;
-							input.hasLeft = true;
-							input.leftIndex = 0;
-							input.leftVal = leftVal;
-							if (sync.getOrder(input, mappedRight)) {
-								break;
-							}
-							leftIter.add(mappedRight);
-							input.targetIndex++;
-						}
-					}
-					if (input.rightIndex == rightToLeft.length)
-						hasAdds = false; // Already added everything, no more adds
-				}
-			}
-			if (doMainSync) {
-				if (leftIter == null)
-					leftIter = theLeft.listIterator();
-
-				input.hasLeft = true;
-				input.targetIndex = 0;
-				for (input.leftIndex = 0; input.leftIndex < leftToRight.length; input.leftIndex++) {
-					input.leftVal = leftIter.next();
-					input.rightIndex = leftToRight[input.leftIndex];
-					ElementSyncAction action;
-					if (input.rightIndex >= 0) {
-						input.hasRight = true;
-						if (input.rightIndex != nextRightIndex) {
-							rightIter = theRight.listIterator(input.rightIndex);
-							nextRightIndex = input.rightIndex;
-						}
-						input.rightVal = rightIter.next();
-						nextRightIndex++;
-						action = sync.common(input);
-					} else {
-						input.hasRight = false;
-						action = sync.leftOnly(input);
-					}
-					if (action == REMOVE)
-						leftIter.remove();
-					else {
-						if (action instanceof ValueSyncAction)
-							leftIter.set(((ValueSyncAction<E1>) action).value);
-						input.targetIndex++;
-					}
-					if (indexedAdd && hasAdds && input.hasRight) {
-						// Add subsequent right-only values present in the right list before the next that maps to an element in the left
-						for (input.rightIndex++; input.rightIndex < rightToLeft.length
-							&& rightToLeft[input.rightIndex] < 0; input.rightIndex++) {
-							input.rightVal = rightIter.next();
-							action = sync.rightOnly(input);
-							if (action instanceof ValueSyncAction) {
-								leftIter.add(((ValueSyncAction<E1>) action).value);
-								input.targetIndex++;
-							}
-						}
-					}
-					input.rightVal = null;
-				}
-			}
-
-			if (hasAdds && (!indexedAdd || !doMainSync)) {
-				input.hasLeft = false;
-				input.leftIndex = -1;
-				input.leftVal = null;
-				input.targetIndex = indexedAdd ? leftToRight.length : -1;
-				input.hasRight = true;
-				for (input.rightIndex = 0; input.rightIndex < rightToLeft.length; input.rightIndex++) {
-					if (rightToLeft[input.rightIndex] < 0) {
-						if (input.rightIndex != nextRightIndex) {
-							rightIter = theRight.listIterator(input.rightIndex);
-							nextRightIndex = input.rightIndex;
-						}
-						input.rightVal = rightIter.next();
-						nextRightIndex++;
-						ElementSyncAction action = sync.rightOnly(input);
-						if (action instanceof ValueSyncAction) {
-							theLeft.add(((ValueSyncAction<E1>) action).value);
-							if (indexedAdd)
-								input.targetIndex++;
-						}
-					}
-				}
-			}
 		}
 
 		class AdjustmentState {
@@ -1328,7 +940,7 @@ public class CollectionUtils {
 			}
 		}
 
-		class SyncInputImpl<E1, E2> implements ElementSyncInput<E1, E2> {
+		static class SyncInputImpl<E1, E2> implements ElementSyncInput<E1, E2> {
 			private final ValueSyncAction<E1> valueAction;
 
 			boolean hasLeft = false;
@@ -1386,38 +998,6 @@ public class CollectionUtils {
 			public ElementSyncAction useValue(E1 newValue) {
 				valueAction.value = newValue;
 				return valueAction;
-			}
-
-			<X extends Throwable> void handleUnmapped(ListIterator<E1> leftIter, Iterator<E2> rightIter,
-				CollectionSynchronizerE<E1, E2, X> sync) throws X {
-				while (hasLeft && hasRight) {
-					E1 mappedRight = valueAction.value;
-					if (sync.getOrder(this, mappedRight)) {
-						leftIndex++;
-						targetIndex++;
-						hasLeft = leftIndex < leftToRight.length && leftToRight[leftIndex] < 0;
-						if (hasLeft) {
-							leftVal = leftIter.next();
-							ElementSyncAction action = sync.leftOnly(this);
-							if (action == REMOVE)
-								hasLeft = false;
-							else if (action == valueAction) {
-								leftVal = valueAction.value;
-								valueAction.value = mappedRight;
-							}
-						}
-					} else {
-						rightIndex++;
-						hasRight = rightIndex < rightToLeft.length && rightToLeft[rightIndex] < 0;
-						if (hasRight) {
-							rightVal = rightIter.next();
-							ElementSyncAction action = sync.rightOnly(this);
-							hasRight = action == valueAction;
-						}
-					}
-				}
-				while (hasLeft) {}
-				while (hasRight) {}
 			}
 		}
 	}
