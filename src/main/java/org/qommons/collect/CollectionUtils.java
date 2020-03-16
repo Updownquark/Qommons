@@ -744,7 +744,7 @@ public class CollectionUtils {
 				leftIndex = rightIndex = -1;
 				move(true, 0);
 				move(false, 0);
-				input.targetIndex++;
+				input.targetIndex = 0;
 				switch (order) {
 				case LeftOrder:
 					while (hasLeft) {
@@ -757,11 +757,11 @@ public class CollectionUtils {
 						doElement(false, sync);
 					break;
 				case RightOrder:
-					updatedLeftIndexes = new int[leftOnly + rightOnly + commonCount];
+					updatedLeftIndexes = new int[leftToRight.length];
 					for (int i = 0; i < leftToRight.length; i++)
 						updatedLeftIndexes[i] = i;
 					while (hasRight) {
-						if (!hasLeft || leftToRight[leftIndex] >= 0 || !compare(sync))
+						if (!hasLeft || leftToRight[leftIndex] >= 0 || (rightToLeft[rightIndex] < 0 && !compare(sync)))
 							doElement(false, sync);
 						else
 							doElement(true, sync);
@@ -859,19 +859,22 @@ public class CollectionUtils {
 							adjustLeftIndexes(false);
 						}
 					} else {
-						move(true, leftIndex);
 						E1 value;
 						if (action == PRESERVE)
 							value = leftVal;
 						else
 							value = ((ValueSyncAction<E1>) action).value;
-						if (hasLeft) {
+						if (input.hasLeft)
+							leftIter.set(value);
+						else if (hasLeft) {
 							leftIter.previous();
 							leftIter.add(value);
 							leftIter.next();
 						} else
 							leftIter.add(value);
 						input.targetIndex++;
+						if (!input.hasLeft)
+							adjustLeftIndexes(true);
 					}
 					rightIndex++;
 					hasRight = rightIter.hasNext();
@@ -888,13 +891,22 @@ public class CollectionUtils {
 
 			private boolean move(boolean left, int index) {
 				if (left) {
-					if (index == leftIndex)
-						return false;
-					if (index == 0)
+					int target;
+					if (updatedLeftIndexes == null) {
+						target = index;
+						if (leftIndex == index)
+							return false;
+					} else {
+						target = updatedLeftIndexes[index];
+						if (input.targetIndex == target)
+							return false;
+					}
+					if (target == 0)
 						leftIter = theLeft.listIterator();
 					else
-						leftIter = theLeft.listIterator(index);
+						leftIter = theLeft.listIterator(target);
 					leftIndex = index;
+					input.targetIndex = target;
 					hasLeft = leftIter.hasNext();
 					if (hasLeft)
 						leftVal = leftIter.next();
@@ -920,12 +932,11 @@ public class CollectionUtils {
 			private void adjustLeftIndexes(boolean add) {
 				if (updatedLeftIndexes == null)
 					return;
-				// TODO Don't think this is right
 				if (add) {
-					for (int i = input.targetIndex + 1; i < updatedLeftIndexes.length; i++)
-						updatedLeftIndexes[i] = updatedLeftIndexes[i - 1] + 1;
+					for (int i = leftIndex; i < updatedLeftIndexes.length; i++)
+						updatedLeftIndexes[i]++;
 				} else {
-					for (int i = input.targetIndex + 1; i < updatedLeftIndexes.length; i++)
+					for (int i = leftIndex + 1; i < updatedLeftIndexes.length; i++)
 						updatedLeftIndexes[i]--;
 				}
 			}

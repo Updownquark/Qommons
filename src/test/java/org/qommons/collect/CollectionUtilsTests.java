@@ -11,7 +11,6 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.qommons.QommonsTestUtils;
 import org.qommons.TestHelper;
-import org.qommons.collect.CollectionUtils.AdjustmentOrder;
 
 /** Tests for {@link CollectionUtils} utilities */
 public class CollectionUtilsTests {
@@ -41,7 +40,7 @@ public class CollectionUtilsTests {
 			boolean add = helper.getBoolean(0.8);
 			boolean remove = helper.getBoolean();
 			boolean changeCase = helper.getBoolean();
-			boolean indexed = helper.getBoolean(0.75);
+			CollectionUtils.AdjustmentOrder order = CollectionUtils.AdjustmentOrder.values()[helper.getInt(0, 3)];
 			boolean leftFirst = helper.getBoolean();
 			int[] map = new int[originalLength];
 			int[] reverse = new int[adjustLength];
@@ -70,35 +69,68 @@ public class CollectionUtilsTests {
 
 			List<String> expect = new ArrayList<>(originalLength + adjustLength);
 			int i = 0, j = 0;
-			for (; i < originalLength; i++) {
-				if (map[i] >= 0) {
-					if (indexed && add) {
-						for (; j < adjustLength && reverse[j] < 0; j++)
+			if (order != CollectionUtils.AdjustmentOrder.RightOrder) {
+				boolean indexed = order == CollectionUtils.AdjustmentOrder.LeftOrder;
+				for (; i < originalLength; i++) {
+					if (map[i] >= 0) {
+						if (indexed && add) {
+							for (; j < adjustLength && reverse[j] < 0; j++)
+								expect.add(adjust.get(j));
+						}
+						j = map[i];
+						if (changeCase)
 							expect.add(adjust.get(j));
+						else
+							expect.add(original.get(i));
+						j++;
+					} else {
+						if (indexed && add && !leftFirst) {
+							for (; j < adjustLength && reverse[j] < 0; j++)
+								expect.add(adjust.get(j));
+						}
+						if (!remove)
+							expect.add(original.get(i));
 					}
-					j = map[i];
-					if (changeCase)
-						expect.add(adjust.get(j));
-					else
-						expect.add(original.get(i));
-					j++;
-				} else {
-					if (indexed && add && !leftFirst) {
-						for (; j < adjustLength && reverse[j] < 0; j++)
-							expect.add(adjust.get(j));
-					}
-					if (!remove)
-						expect.add(original.get(i));
 				}
-			}
-			if (add) {
-				if (!indexed)
-					j = 0;
+				if (add) {
+					if (!indexed)
+						j = 0;
+					for (; j < adjustLength; j++) {
+						if (reverse[j] < 0)
+							expect.add(adjust.get(j));
+						else if (indexed)
+							break;
+					}
+				}
+			} else {
 				for (; j < adjustLength; j++) {
-					if (reverse[j] < 0)
-						expect.add(adjust.get(j));
-					else if (indexed)
-						break;
+					if (reverse[j] >= 0) {
+						if (!remove) {
+							for (; i < originalLength && map[i] < 0; i++)
+								expect.add(original.get(i));
+						}
+						i = reverse[j];
+						if (changeCase)
+							expect.add(adjust.get(j));
+						else
+							expect.add(original.get(i));
+						i++;
+					} else {
+						if (!remove && leftFirst) {
+							for (; i < originalLength && map[i] < 0; i++)
+								expect.add(original.get(i));
+						}
+						if (add)
+							expect.add(adjust.get(j));
+					}
+				}
+				if (!remove) {
+					for (; i < originalLength; i++) {
+						if (map[i] < 0)
+							expect.add(original.get(i));
+						else
+							break;
+					}
 				}
 			}
 
@@ -106,8 +138,7 @@ public class CollectionUtilsTests {
 			adjusted.addAll(original);
 			helper.placemark("test");
 			CollectionUtils.synchronize(adjusted, adjust, (s1, s2) -> s1.equalsIgnoreCase(s2)).simple(v -> v)//
-				.withAdd(add).withRemove(remove).commonUses(!changeCase, false).leftFirst(leftFirst)
-				.setOrder(indexed ? AdjustmentOrder.LeftOrder : AdjustmentOrder.AddLast)//
+				.withAdd(add).withRemove(remove).commonUses(!changeCase, false).leftFirst(leftFirst).setOrder(order)//
 				.adjust();
 
 			Assert.assertThat(adjusted, QommonsTestUtils.collectionsEqual(expect, true));
