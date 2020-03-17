@@ -205,6 +205,7 @@ public class CollectionUtilsTests {
 				.adjust(sync, order);
 
 			Assert.assertThat(adjusted, QommonsTestUtils.collectionsEqual(expect, true, (s1, s2) -> s1.equalsIgnoreCase(s2)));
+			Assert.assertThat(adjusting, QommonsTestUtils.collectionsEqual(expect, true, (s1, s2) -> s1.equalsIgnoreCase(s2)));
 		}
 	}
 }

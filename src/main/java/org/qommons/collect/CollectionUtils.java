@@ -906,10 +906,7 @@ public class CollectionUtils {
 			int leftIndex;
 			int rightIndex;
 			L leftVal;
-			boolean updateLeft;
 			R rightVal;
-			L rightMapped;
-			boolean leftOverstepped;
 			int[] updatedLeftIndexes;
 			Object[] leftValues;
 
@@ -922,58 +919,32 @@ public class CollectionUtils {
 				input.targetIndex = 0;
 				switch (order) {
 				case LeftOrder:
-					while (hasLeft) {
-						if (!hasRight || rightToLeft[rightIndex] >= 0 || (leftToRight[leftIndex] < 0 && compare(sync)))
-							doElement(true, sync);
-						else
-							doElement(false, sync);
-					}
-					while (hasRight && rightToLeft[rightIndex] < 0)
-						doElement(false, sync);
-					break;
-				case RightOrder:
-					updatedLeftIndexes = new int[leftToRight.length];
-					for (int i = 0; i < leftToRight.length; i++)
-						updatedLeftIndexes[i] = i;
-					leftValues = theLeft.toArray();
-					while (hasRight) {
-						if (!hasLeft || leftToRight[leftIndex] >= 0 || (rightToLeft[rightIndex] < 0 && !compare(sync)))
-							doElement(false, sync);
-						else
-							doElement(true, sync);
-					}
-					while (hasLeft && leftToRight[leftIndex] < 0)
-						doElement(true, sync);
-					break;
 				case AddLast:
-					while (hasLeft)
-						doElement(true, sync);
-					input.hasLeft = false;
-					input.leftIndex = -1;
-					input.leftVal = null;
-					input.hasRight = true;
-					input.targetIndex = -1;
-					for (int right = 0; right < rightToLeft.length; right++) {
-						if (rightToLeft[right] < 0) {
-							move(false, right);
-							input.rightIndex = right;
-							input.rightVal = rightVal;
-							ElementSyncAction action = sync.rightOnly(input);
-							if (action instanceof ValueSyncAction)
-								theLeft.add(((ValueSyncAction<L>) action).value);
-					}
-				}
+					throw new IllegalStateException();
+				case RightOrder:
 					break;
 				}
+				updatedLeftIndexes = new int[leftToRight.length];
+				for (int i = 0; i < leftToRight.length; i++)
+					updatedLeftIndexes[i] = i;
+				leftValues = theLeft.toArray();
+				while (hasRight) {
+					if (!hasLeft || leftToRight[leftIndex] >= 0 || (rightToLeft[rightIndex] < 0 && !compare(sync)))
+						doElement(false, sync);
+					else
+						doElement(true, sync);
+				}
+				while (hasLeft && leftToRight[leftIndex] < 0)
+					doElement(true, sync);
 			}
 
-			private boolean compare(CollectionSynchronizerE<L, R, ?> sync) {
+			private <X extends Throwable> boolean compare(CollectionSynchronizerE<L, R, X> sync) throws X {
 				input.hasLeft = input.hasRight = true;
 				input.leftIndex = leftIndex;
 				input.rightIndex = rightIndex;
 				input.leftVal = leftVal;
 				input.rightVal = rightVal;
-				return sync.getOrder(input, rightMapped);
+				return sync.getOrder(input);
 			}
 
 			private <X extends Throwable> void doElement(boolean left, CollectionSynchronizerE<L, R, X> sync) throws X {
