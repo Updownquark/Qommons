@@ -12,6 +12,7 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.qommons.QommonsTestUtils;
 import org.qommons.TestHelper;
+import org.qommons.collect.CollectionUtils.AdjustmentOrder;
 import org.qommons.collect.CollectionUtils.ElementSyncAction;
 import org.qommons.collect.CollectionUtils.ElementSyncInput;
 
@@ -43,8 +44,8 @@ public class CollectionUtilsTests {
 			boolean add = helper.getBoolean(0.8);
 			boolean remove = helper.getBoolean();
 			boolean changeCase = helper.getBoolean();
-			CollectionUtils.AdjustmentOrder order;
-			order = CollectionUtils.AdjustmentOrder.values()[helper.getInt(0, 3)]; // TODO Enable this when right-order is complete
+			AdjustmentOrder order;
+			order = AdjustmentOrder.values()[helper.getInt(0, 3)]; // TODO Enable this when right-order is complete
 			// order = helper.getBoolean() ? CollectionUtils.AdjustmentOrder.LeftOrder : CollectionUtils.AdjustmentOrder.AddLast;
 			boolean leftFirst = helper.getBoolean();
 			int[] map = new int[originalLength];
@@ -77,8 +78,8 @@ public class CollectionUtilsTests {
 
 			List<String> expect = new ArrayList<>(originalLength + adjustLength);
 			int i = 0, j = 0;
-			if (order != CollectionUtils.AdjustmentOrder.RightOrder) {
-				boolean indexed = order == CollectionUtils.AdjustmentOrder.LeftOrder;
+			if (order != AdjustmentOrder.RightOrder) {
+				boolean indexed = order == AdjustmentOrder.LeftOrder;
 				for (; i < originalLength; i++) {
 					if (map[i] >= 0) {
 						if (indexed && add) {
@@ -163,7 +164,7 @@ public class CollectionUtilsTests {
 					Assert.assertEquals(adjust.get(element.getRightIndex()), element.getRightValue());
 					Assert.assertEquals(-1, element.getOriginalLeftIndex());
 					if (add) {
-						if (order == CollectionUtils.AdjustmentOrder.AddLast) {
+						if (order == AdjustmentOrder.AddLast) {
 							Assert.assertEquals(-1, element.getTargetIndex());
 							adjusting.add(element.getRightValue());
 						} else
@@ -175,7 +176,8 @@ public class CollectionUtilsTests {
 				@Override
 				public ElementSyncAction common(ElementSyncInput<String, String> element) {
 					Assert.assertEquals(original.get(element.getOriginalLeftIndex()), element.getLeftValue());
-					// Assert.assertEquals(adjusting.get(element.getTargetIndex()), element.getLeftValue());
+					if (order != AdjustmentOrder.RightOrder)
+						Assert.assertEquals(adjusting.get(element.getTargetIndex()), element.getLeftValue());
 					Assert.assertEquals(adjust.get(element.getRightIndex()), element.getRightValue());
 					Assert.assertTrue(element.getLeftValue().equalsIgnoreCase(element.getRightValue()));
 					if (changeCase)
