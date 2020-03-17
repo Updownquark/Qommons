@@ -11,6 +11,8 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.qommons.QommonsTestUtils;
 import org.qommons.TestHelper;
+import org.qommons.collect.CollectionUtils.ElementSyncAction;
+import org.qommons.collect.CollectionUtils.ElementSyncInput;
 
 /** Tests for {@link CollectionUtils} utilities */
 public class CollectionUtilsTests {
@@ -40,7 +42,9 @@ public class CollectionUtilsTests {
 			boolean add = helper.getBoolean(0.8);
 			boolean remove = helper.getBoolean();
 			boolean changeCase = helper.getBoolean();
-			CollectionUtils.AdjustmentOrder order = CollectionUtils.AdjustmentOrder.values()[helper.getInt(0, 3)];
+			CollectionUtils.AdjustmentOrder order;
+			// order= CollectionUtils.AdjustmentOrder.values()[helper.getInt(0, 3)]; //TODO Enable this when right-order is complete
+			order = helper.getBoolean() ? CollectionUtils.AdjustmentOrder.LeftOrder : CollectionUtils.AdjustmentOrder.AddLast;
 			boolean leftFirst = helper.getBoolean();
 			int[] map = new int[originalLength];
 			int[] reverse = new int[adjustLength];
@@ -134,14 +138,73 @@ public class CollectionUtilsTests {
 				}
 			}
 
+			List<String> adjusting = new ArrayList<>(originalLength);
+			class TestSync extends CollectionUtils.SimpleCollectionSynchronizer<String, String, RuntimeException, TestSync> {
+				TestSync() {
+					super(v -> v);
+				}
+
+				@Override
+				public ElementSyncAction leftOnly(ElementSyncInput<String, String> element) {
+					Assert.assertEquals(original.get(element.getOriginalLeftIndex()), element.getLeftValue());
+					Assert.assertEquals(adjusting.get(element.getTargetIndex()), element.getLeftValue());
+					Assert.assertEquals(-1, element.getRightIndex());
+					if (remove)
+						adjusting.remove(element.getTargetIndex());
+					return super.leftOnly(element);
+				}
+
+				@Override
+				public ElementSyncAction rightOnly(ElementSyncInput<String, String> element) {
+					Assert.assertEquals(adjust.get(element.getRightIndex()), element.getRightValue());
+					Assert.assertEquals(-1, element.getOriginalLeftIndex());
+					if (add) {
+						if (order == CollectionUtils.AdjustmentOrder.AddLast) {
+							Assert.assertEquals(-1, element.getTargetIndex());
+							adjusting.add(element.getRightValue());
+						} else
+							adjusting.add(element.getTargetIndex(), element.getRightValue());
+					}
+					return super.rightOnly(element);
+				}
+
+				@Override
+				public ElementSyncAction common(ElementSyncInput<String, String> element) {
+					Assert.assertEquals(original.get(element.getOriginalLeftIndex()), element.getLeftValue());
+					Assert.assertEquals(adjusting.get(element.getTargetIndex()), element.getLeftValue());
+					Assert.assertEquals(adjust.get(element.getRightIndex()), element.getRightValue());
+					Assert.assertTrue(element.getLeftValue().equalsIgnoreCase(element.getRightValue()));
+					if (changeCase)
+						adjusting.set(element.getTargetIndex(), element.getRightValue());
+					return super.common(element);
+				}
+
+				@Override
+				public boolean getOrder(ElementSyncInput<String, String> element) {
+					Assert.assertEquals(original.get(element.getOriginalLeftIndex()), element.getLeftValue());
+					Assert.assertEquals(-1, element.getTargetIndex());
+					Assert.assertEquals(adjust.get(element.getRightIndex()), element.getRightValue());
+
+					return super.getOrder(element);
+				}
+			}
+			TestSync sync = new TestSync().withAdd(add).withRemove(remove).commonUses(!changeCase, false).leftFirst(leftFirst);
+			boolean sorted = order != CollectionUtils.AdjustmentOrder.AddLast && helper.getBoolean();
+			if (sorted) {
+				original.sort(String::compareToIgnoreCase);
+				adjust.sort(String::compareToIgnoreCase);
+				expect.sort(String::compareToIgnoreCase);
+				sync.withElementCompare(String::compareToIgnoreCase);
+			}
+			adjusting.addAll(original);
 			List<String> adjusted = new ArrayList<>(originalLength);
 			adjusted.addAll(original);
-			helper.placemark("test");
-			CollectionUtils.synchronize(adjusted, adjust, (s1, s2) -> s1.equalsIgnoreCase(s2)).simple(v -> v)//
-				.withAdd(add).withRemove(remove).commonUses(!changeCase, false).leftFirst(leftFirst).setOrder(order)//
-				.adjust();
 
-			Assert.assertThat(adjusted, QommonsTestUtils.collectionsEqual(expect, true));
+			helper.placemark("test");
+			CollectionUtils.synchronize(adjusted, adjust, (s1, s2) -> s1.equalsIgnoreCase(s2))//
+				.adjust(sync, order);
+
+			Assert.assertThat(adjusted, QommonsTestUtils.collectionsEqual(expect, true, (s1, s2) -> s1.equalsIgnoreCase(s2)));
 		}
 	}
 }

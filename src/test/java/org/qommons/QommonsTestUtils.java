@@ -23,6 +23,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -1073,6 +1074,18 @@ public class QommonsTestUtils {
 	 * @return A matcher that matches a collection c if c is equivalent to the given collection, in an ordered way if specified
 	 */
 	public static <T> Matcher<Collection<T>> collectionsEqual(Collection<? extends T> values, boolean ordered) {
+		return collectionsEqual(values, ordered, Objects::equals);
+	}
+
+	/**
+	 * @param <T> The element type of the collection
+	 * @param values The collection to test against
+	 * @param ordered Whether to test the equality of the collections as if order matters
+	 * @param equals A test for equality between two elements
+	 * @return A matcher that matches a collection c if c is equivalent to the given collection, in an ordered way if specified
+	 */
+	public static <T> Matcher<Collection<T>> collectionsEqual(Collection<? extends T> values, boolean ordered,
+		BiPredicate<? super T, ? super T> equals) {
 		return new org.hamcrest.BaseMatcher<Collection<T>>() {
 			private final String DESCRIP = "collection equivalent to ";
 			private final int MAX_SIZE_LENGTH = 5;
@@ -1095,7 +1108,7 @@ public class QommonsTestUtils {
 						T aValue = aIter.next();
 						vValueCounts.compute(vValue, (v, count) -> count == null ? 1 : count + 1);
 						aValueCounts.compute(aValue, (v, count) -> count == null ? 1 : count + 1);
-						if (theFirstMiss < 0 && !Objects.equals(vValue, aValue))
+						if (theFirstMiss < 0 && !equals.test(vValue, aValue))
 							theFirstMiss = i;
 					}
 					boolean bothDone = !(vIter.hasNext() || aIter.hasNext());
