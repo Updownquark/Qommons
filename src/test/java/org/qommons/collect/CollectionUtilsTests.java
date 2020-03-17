@@ -44,8 +44,8 @@ public class CollectionUtilsTests {
 			boolean remove = helper.getBoolean();
 			boolean changeCase = helper.getBoolean();
 			CollectionUtils.AdjustmentOrder order;
-			// order= CollectionUtils.AdjustmentOrder.values()[helper.getInt(0, 3)]; //TODO Enable this when right-order is complete
-			order = helper.getBoolean() ? CollectionUtils.AdjustmentOrder.LeftOrder : CollectionUtils.AdjustmentOrder.AddLast;
+			order = CollectionUtils.AdjustmentOrder.values()[helper.getInt(0, 3)]; // TODO Enable this when right-order is complete
+			// order = helper.getBoolean() ? CollectionUtils.AdjustmentOrder.LeftOrder : CollectionUtils.AdjustmentOrder.AddLast;
 			boolean leftFirst = helper.getBoolean();
 			int[] map = new int[originalLength];
 			int[] reverse = new int[adjustLength];
@@ -175,7 +175,7 @@ public class CollectionUtilsTests {
 				@Override
 				public ElementSyncAction common(ElementSyncInput<String, String> element) {
 					Assert.assertEquals(original.get(element.getOriginalLeftIndex()), element.getLeftValue());
-					Assert.assertEquals(adjusting.get(element.getTargetIndex()), element.getLeftValue());
+					// Assert.assertEquals(adjusting.get(element.getTargetIndex()), element.getLeftValue());
 					Assert.assertEquals(adjust.get(element.getRightIndex()), element.getRightValue());
 					Assert.assertTrue(element.getLeftValue().equalsIgnoreCase(element.getRightValue()));
 					if (changeCase)

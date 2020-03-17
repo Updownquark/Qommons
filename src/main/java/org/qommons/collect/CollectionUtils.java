@@ -118,6 +118,7 @@ public class CollectionUtils {
 		/**
 		 * @param element The element representing an element from the left list, and one from the right list that is to be added
 		 * @return Whether the left element should be preserved before the right element is added or vice versa
+		 * @throws X If the operation cannot be performed
 		 */
 		boolean getOrder(ElementSyncInput<L, R> element) throws X;
 
@@ -738,25 +739,47 @@ public class CollectionUtils {
 			SyncInputImpl<L, R> input;
 			ListIterator<L> leftIter;
 			Iterator<R> rightIter;
+			boolean hasLeft;
+			int leftIndex;
+			L leftVal;
+			boolean hasRight;
+			int rightIndex;
+			R rightVal;
+
+			void init() {
+				input = new SyncInputImpl<>();
+				leftIter = theLeft.listIterator();
+				hasLeft = leftIter.hasNext();
+				if (hasLeft)
+					leftVal = leftIter.next();
+				leftIndex = input.targetIndex = 0;
+				rightIter = theRight.iterator();
+				hasRight = rightIter.hasNext();
+				if (hasRight)
+					rightVal = rightIter.next();
+				rightIndex = 0;
+			}
 
 			abstract <X extends Throwable> void adjust(CollectionSynchronizerE<L, R, X> sync, AdjustmentOrder order) throws X;
+
+			<X extends Throwable> boolean compare(CollectionSynchronizerE<L, R, X> sync) throws X {
+				input.hasLeft = input.hasRight = true;
+				input.leftIndex = leftIndex;
+				input.rightIndex = rightIndex;
+				input.leftVal = leftVal;
+				input.rightVal = rightVal;
+				int preTarget = input.targetIndex;
+				input.targetIndex = -1;
+				boolean order = sync.getOrder(input);
+				input.targetIndex = preTarget;
+				return order;
+			}
 		}
 
 		class LeftOrderAdjustmentState extends AdjustmentState {
-			boolean hasLeft;
-			boolean hasRight;
-			int leftIndex;
-			int rightIndex;
-			L leftVal;
-			R rightVal;
-
 			@Override
 			<X extends Throwable> void adjust(CollectionSynchronizerE<L, R, X> sync, AdjustmentOrder order) throws X {
-				input = new SyncInputImpl<>();
-				leftIndex = rightIndex = -1;
-				move(true, 0);
-				move(false, 0);
-				input.targetIndex = 0;
+				init();
 				switch (order) {
 				case LeftOrder:
 					while (hasLeft) {
@@ -780,7 +803,7 @@ public class CollectionUtils {
 					input.targetIndex = -1;
 					for (int right = 0; right < rightToLeft.length; right++) {
 						if (rightToLeft[right] < 0) {
-							move(false, right);
+							moveRight(right);
 							input.rightIndex = right;
 							input.rightVal = rightVal;
 							ElementSyncAction action = sync.rightOnly(input);
@@ -792,19 +815,6 @@ public class CollectionUtils {
 				}
 			}
 
-			private <X extends Throwable> boolean compare(CollectionSynchronizerE<L, R, X> sync) throws X {
-				input.hasLeft = input.hasRight = true;
-				input.leftIndex = leftIndex;
-				input.rightIndex = rightIndex;
-				input.leftVal = leftVal;
-				input.rightVal = rightVal;
-				int preTarget = input.targetIndex;
-				input.targetIndex = -1;
-				boolean order = sync.getOrder(input);
-				input.targetIndex = preTarget;
-				return order;
-			}
-
 			private <X extends Throwable> void doElement(boolean left, CollectionSynchronizerE<L, R, X> sync) throws X {
 				if (left) {
 					input.hasLeft = true;
@@ -813,7 +823,7 @@ public class CollectionUtils {
 					ElementSyncAction action;
 					input.hasRight = leftToRight[leftIndex] >= 0;
 					if (input.hasRight) {
-						move(false, leftToRight[leftIndex]);
+						moveRight(leftToRight[leftIndex]);
 						input.rightIndex = rightIndex;
 						input.rightVal = rightVal;
 						action = sync.common(input);
@@ -849,7 +859,7 @@ public class CollectionUtils {
 					input.rightIndex = rightIndex;
 					input.rightVal = rightVal;
 					ElementSyncAction action = sync.rightOnly(input);
-					if (action == REMOVE || action == PRESERVE) { // PRESERVE means do nothing for right-only
+					if (action == REMOVE || action == PRESERVE) { // Both PRESERVE and REMOVE mean do nothing for right-only
 					} else {
 						L toAdd = ((ValueSyncAction<L>) action).value;
 						if (hasLeft) {
@@ -867,56 +877,28 @@ public class CollectionUtils {
 				}
 			}
 
-			private boolean move(boolean left, int index) {
-				if (left) {
-					if (leftIndex == index)
-						return false;
-					if (index == 0)
-						leftIter = theLeft.listIterator();
-					else
-						leftIter = theLeft.listIterator(index);
-					leftIndex = index;
-					input.targetIndex = index;
-					hasLeft = leftIter.hasNext();
-					if (hasLeft)
-						leftVal = leftIter.next();
-					else
-						leftVal = null;
-				} else {
-					if (index == rightIndex)
-						return false;
-					if (index == 0)
-						rightIter = theRight.iterator();
-					else
-						rightIter = theRight.listIterator(index);
-					rightIndex = index;
-					hasRight = rightIter.hasNext();
-					if (hasRight)
-						rightVal = rightIter.next();
-					else
-						rightVal = null;
-				}
+			private boolean moveRight(int index) {
+				if (index == rightIndex)
+					return false;
+				if (index == 0)
+					rightIter = theRight.iterator();
+				else
+					rightIter = theRight.listIterator(index);
+				rightIndex = index;
+				hasRight = rightIter.hasNext();
+				if (hasRight)
+					rightVal = rightIter.next();
+				else
+					rightVal = null;
 				return true;
 			}
 		}
 
 		class RightOrderAdjustmentState extends AdjustmentState {
-			boolean hasLeft;
-			boolean hasRight;
-			int leftIndex;
-			int rightIndex;
-			L leftVal;
-			R rightVal;
 			int[] updatedLeftIndexes;
-			Object[] leftValues;
 
 			@Override
 			<X extends Throwable> void adjust(CollectionSynchronizerE<L, R, X> sync, AdjustmentOrder order) throws X {
-				input = new SyncInputImpl<>();
-				leftIndex = rightIndex = -1;
-				move(true, 0);
-				move(false, 0);
-				input.targetIndex = 0;
 				switch (order) {
 				case LeftOrder:
 				case AddLast:
@@ -924,10 +906,17 @@ public class CollectionUtils {
 				case RightOrder:
 					break;
 				}
+				input = new SyncInputImpl<>();
+				leftIndex = rightIndex = -1;
+				moveLeft(0);
+				rightIter = theRight.iterator();
+				hasRight = rightIter.hasNext();
+				if (hasRight)
+					rightVal = rightIter.next();
+				rightIndex = 0;
 				updatedLeftIndexes = new int[leftToRight.length];
 				for (int i = 0; i < leftToRight.length; i++)
 					updatedLeftIndexes[i] = i;
-				leftValues = theLeft.toArray();
 				while (hasRight) {
 					if (!hasLeft || leftToRight[leftIndex] >= 0 || (rightToLeft[rightIndex] < 0 && !compare(sync)))
 						doElement(false, sync);
@@ -938,15 +927,6 @@ public class CollectionUtils {
 					doElement(true, sync);
 			}
 
-			private <X extends Throwable> boolean compare(CollectionSynchronizerE<L, R, X> sync) throws X {
-				input.hasLeft = input.hasRight = true;
-				input.leftIndex = leftIndex;
-				input.rightIndex = rightIndex;
-				input.leftVal = leftVal;
-				input.rightVal = rightVal;
-				return sync.getOrder(input);
-			}
-
 			private <X extends Throwable> void doElement(boolean left, CollectionSynchronizerE<L, R, X> sync) throws X {
 				if (left) {
 					input.hasLeft = true;
@@ -954,16 +934,9 @@ public class CollectionUtils {
 					input.leftVal = leftVal;
 					ElementSyncAction action;
 					input.hasRight = leftToRight[leftIndex] >= 0;
-					if (input.hasRight) {
-						move(false, leftToRight[leftIndex]);
-						input.rightIndex = rightIndex;
-						input.rightVal = rightVal;
-						action = sync.common(input);
-					} else {
-						input.rightIndex = -1;
-						input.rightVal = null;
-						action = sync.leftOnly(input);
-					}
+					input.rightIndex = -1;
+					input.rightVal = null;
+					action = sync.leftOnly(input);
 					if (action == PRESERVE) {//
 						input.targetIndex++;
 					} else if (action == REMOVE) {
@@ -978,12 +951,6 @@ public class CollectionUtils {
 					hasLeft = leftIter.hasNext();
 					if (hasLeft)
 						leftVal = leftIter.next();
-					if (input.hasRight) {
-						rightIndex++;
-						hasRight = rightIter.hasNext();
-						if (hasRight)
-							rightVal = rightIter.next();
-					}
 				} else {
 					input.hasRight = true;
 					input.rightIndex = rightIndex;
@@ -992,7 +959,13 @@ public class CollectionUtils {
 					input.hasLeft = rightToLeft[rightIndex] >= 0;
 					if (input.hasLeft) {
 						input.leftIndex = rightToLeft[rightIndex];
-						input.leftVal = (L) leftValues[input.leftIndex];
+						if (input.leftIndex == leftIndex)
+							input.leftVal = leftVal;
+						else {
+							input.leftVal = theLeft.remove(updatedLeftIndexes[input.leftIndex]);
+							leftIter = theLeft.listIterator(input.targetIndex);
+							leftIter.next();
+						}
 						action = sync.common(input);
 					} else {
 						input.leftIndex = -1;
@@ -1007,7 +980,7 @@ public class CollectionUtils {
 					} else {
 						L value;
 						if (action == PRESERVE)
-							value = leftVal;
+							value = input.leftVal;
 						else
 							value = ((ValueSyncAction<L>) action).value;
 						if (input.hasLeft)
@@ -1035,43 +1008,28 @@ public class CollectionUtils {
 				}
 			}
 
-			private boolean move(boolean left, int index) {
-				if (left) {
-					int target;
-					if (updatedLeftIndexes == null) {
-						target = index;
-						if (leftIndex == index)
-							return false;
-					} else {
-						target = updatedLeftIndexes[index];
-						if (input.targetIndex == target)
-							return false;
-					}
-					if (target == 0)
-						leftIter = theLeft.listIterator();
-					else
-						leftIter = theLeft.listIterator(target);
-					leftIndex = index;
-					input.targetIndex = target;
-					hasLeft = leftIter.hasNext();
-					if (hasLeft)
-						leftVal = leftIter.next();
-					else
-						leftVal = null;
-				} else {
-					if (index == rightIndex)
+			private boolean moveLeft(int index) {
+				int target;
+				if (updatedLeftIndexes == null) {
+					target = index;
+					if (leftIndex == index)
 						return false;
-					if (index == 0)
-						rightIter = theRight.iterator();
-					else
-						rightIter = theRight.listIterator(index);
-					rightIndex = index;
-					hasRight = rightIter.hasNext();
-					if (hasRight)
-						rightVal = rightIter.next();
-					else
-						rightVal = null;
+				} else {
+					target = updatedLeftIndexes[index];
+					if (input.targetIndex == target)
+						return false;
 				}
+				if (target == 0)
+					leftIter = theLeft.listIterator();
+				else
+					leftIter = theLeft.listIterator(target);
+				leftIndex = index;
+				input.targetIndex = target;
+				hasLeft = leftIter.hasNext();
+				if (hasLeft)
+					leftVal = leftIter.next();
+				else
+					leftVal = null;
 				return true;
 			}
 
