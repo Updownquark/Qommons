@@ -3,9 +3,10 @@ package org.qommons.collect;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
+import java.util.function.BiPredicate;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -30,11 +31,11 @@ public class CollectionUtilsTests {
 		public void accept(TestHelper helper) {
 			int originalLength = helper.getInt(2, 15);
 			List<String> original = new ArrayList<>(originalLength);
-			Set<String> originalLC = new HashSet<>();
+			Map<String, Integer> originalLC = new HashMap<>();
 			for (int i = 0; i < originalLength; i++) {
 				String str = helper.getAlphaNumericString(3, 8);
 				original.add(str);
-				originalLC.add(str.toLowerCase());
+				originalLC.putIfAbsent(str.toLowerCase(), i);
 			}
 
 			int adjustLength = helper.getInt(2, 15);
@@ -56,12 +57,15 @@ public class CollectionUtilsTests {
 					helper.<String> createSupplier()//
 						.or(1, () -> {
 							String str = helper.getAlphaNumericString(3, 8);
-							while (originalLC.contains(str.toLowerCase()))
+							while (originalLC.containsKey(str.toLowerCase()))
 								str = helper.getAlphaNumericString(3, 8);
 							return str;
 						})//
 						.or(1, () -> {
 							int index = helper.getInt(0, originalLength);
+							// If two strings in the original are equal (ignoring case) and we choose the second,
+							// the algorithm will choose the first, so we need to account for this
+							index = originalLC.get(original.get(index).toLowerCase());
 							if (map[index] < 0) {
 								map[index] = adjI;
 								reverse[adjI] = index;
@@ -190,12 +194,15 @@ public class CollectionUtilsTests {
 			}
 			TestSync sync = new TestSync().withAdd(add).withRemove(remove).commonUses(!changeCase, false).leftFirst(leftFirst);
 			boolean sorted = order != CollectionUtils.AdjustmentOrder.AddLast && helper.getBoolean();
+			BiPredicate<String, String> equals;
 			if (sorted) {
+				equals = String::equalsIgnoreCase;
 				original.sort(String::compareToIgnoreCase);
 				adjust.sort(String::compareToIgnoreCase);
 				expect.sort(String::compareToIgnoreCase);
 				sync.withElementCompare(String::compareToIgnoreCase);
-			}
+			} else
+				equals = String::equals;
 			adjusting.addAll(original);
 			List<String> adjusted = new ArrayList<>(originalLength);
 			adjusted.addAll(original);
@@ -204,8 +211,8 @@ public class CollectionUtilsTests {
 			CollectionUtils.synchronize(adjusted, adjust, (s1, s2) -> s1.equalsIgnoreCase(s2))//
 				.adjust(sync, order);
 
-			Assert.assertThat(adjusted, QommonsTestUtils.collectionsEqual(expect, true, (s1, s2) -> s1.equalsIgnoreCase(s2)));
-			Assert.assertThat(adjusting, QommonsTestUtils.collectionsEqual(expect, true, (s1, s2) -> s1.equalsIgnoreCase(s2)));
+			Assert.assertThat(adjusted, QommonsTestUtils.collectionsEqual(expect, true, equals));
+			Assert.assertThat(adjusting, QommonsTestUtils.collectionsEqual(expect, true, equals));
 		}
 	}
 }
