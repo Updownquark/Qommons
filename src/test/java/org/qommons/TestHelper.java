@@ -107,7 +107,7 @@ public class TestHelper {
 	public static interface Testable extends Consumer<TestHelper> {}
 
 	/** Represents a test failure */
-	public static class TestFailure {
+	public static class TestFailure implements Comparable<TestFailure> {
 		/** The seed of the test case that failed */
 		public final long seed;
 		/** The random generation sequence position of the failure */
@@ -133,8 +133,17 @@ public class TestHelper {
 		public NavigableSet<Long> getBreakpoints() {
 			if (placemarks.isEmpty() && bytes > 0)
 				return new TreeSet<>(Arrays.asList(bytes));
-			else
-				return new TreeSet<>(placemarks.values());
+			else {
+				NavigableSet<Long> breakpoints = new TreeSet<>(placemarks.values());
+				if (bytes > 0)
+					breakpoints.add(bytes);
+				return breakpoints;
+			}
+		}
+
+		@Override
+		public int compareTo(TestFailure o) {
+			return Long.compare(bytes, o.bytes);
 		}
 
 		@Override
