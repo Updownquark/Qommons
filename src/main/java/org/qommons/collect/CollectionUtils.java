@@ -6,7 +6,9 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.NavigableMap;
 import java.util.NoSuchElementException;
+import java.util.TreeMap;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
 
@@ -669,25 +671,25 @@ public class CollectionUtils {
 	}
 
 	static class AdjustmentImpl<L, R> implements CollectionAdjustment<L, R> {
-		private static final ElementSyncAction PRESERVE = new ElementSyncAction() {
+		static final ElementSyncAction PRESERVE = new ElementSyncAction() {
 			@Override
 			public String toString() {
 				return "PRESERVE";
 			}
 		};
-		private static final ElementSyncAction REMOVE = new ElementSyncAction() {
+		static final ElementSyncAction REMOVE = new ElementSyncAction() {
 			@Override
 			public String toString() {
 				return "REMOVE";
 			}
 		};
-		private final List<L> theLeft;
-		private final List<R> theRight;
-		private final int[] leftToRight;
-		private final int[] rightToLeft;
-		private final int rightOnly;
-		private final int leftOnly;
-		private final int commonCount;
+		final List<L> theLeft;
+		final List<R> theRight;
+		final int[] leftToRight;
+		final int[] rightToLeft;
+		final int rightOnly;
+		final int leftOnly;
+		final int commonCount;
 		private boolean adjusted;
 
 		public AdjustmentImpl(List<L> left, List<R> right, int[] leftToRight, int[] rightToLeft, int add, int remove, int common) {
@@ -745,9 +747,41 @@ public class CollectionUtils {
 			boolean hasRight;
 			int rightIndex;
 			R rightVal;
+			ElementSyncAction universalLeft;
+			ElementSyncAction universalRight;
+			ElementSyncAction universalCommon;
 
-			void init() {
+			boolean init(CollectionSynchronizerE<L, R, ?> sync) {
 				input = new SyncInputImpl<>();
+				universalLeft = sync.universalLeftOnly(input);
+				if (universalLeft instanceof ValueSyncAction)
+					throw new IllegalStateException("A value action cannot be returned for universal handling");
+				universalRight = sync.universalRightOnly(input);
+				if (universalRight == PRESERVE)
+					universalRight = REMOVE;
+				else if (universalRight instanceof ValueSyncAction)
+					throw new IllegalStateException("A value action cannot be returned for universal handling");
+				universalCommon = sync.universalCommon(input);
+				if (universalCommon instanceof ValueSyncAction)
+					throw new IllegalStateException("A value action cannot be returned for universal handling");
+
+				if (universalLeft != null && leftOnly == theLeft.size()) {
+					if (universalLeft == REMOVE)
+						theLeft.clear();
+					if (universalRight == REMOVE)
+						return true;
+				} else if (universalCommon != null && commonCount == theLeft.size()) {
+					if (universalCommon == REMOVE)
+						theLeft.clear();
+					if (universalRight == REMOVE)
+						return true;
+				} else if (universalLeft != null && universalLeft == universalCommon && leftOnly + commonCount == theLeft.size()) {
+					if (universalLeft == REMOVE)
+						theLeft.clear();
+					if (universalRight == REMOVE)
+						return true;
+				}
+
 				leftIter = theLeft.listIterator();
 				hasLeft = leftIter.hasNext();
 				if (hasLeft)
@@ -758,6 +792,7 @@ public class CollectionUtils {
 				if (hasRight)
 					rightVal = rightIter.next();
 				rightIndex = 0;
+				return false;
 			}
 
 			abstract <X extends Throwable> void adjust(CollectionSynchronizerE<L, R, X> sync, AdjustmentOrder order) throws X;
@@ -779,7 +814,9 @@ public class CollectionUtils {
 		class LeftOrderAdjustmentState extends AdjustmentState {
 			@Override
 			<X extends Throwable> void adjust(CollectionSynchronizerE<L, R, X> sync, AdjustmentOrder order) throws X {
-				init();
+				if (init(sync))
+					return;
+
 				switch (order) {
 				case LeftOrder:
 					while (hasLeft) {
@@ -788,27 +825,31 @@ public class CollectionUtils {
 						else
 							doElement(false, sync);
 					}
-					while (hasRight && rightToLeft[rightIndex] < 0)
-						doElement(false, sync);
+					if (universalRight != REMOVE) {
+						while (hasRight && rightToLeft[rightIndex] < 0)
+							doElement(false, sync);
+					}
 					break;
 				case RightOrder:
 					throw new IllegalStateException();
 				case AddLast:
 					while (hasLeft)
 						doElement(true, sync);
-					input.hasLeft = false;
-					input.leftIndex = -1;
-					input.leftVal = null;
-					input.hasRight = true;
-					input.targetIndex = -1;
-					for (int right = 0; right < rightToLeft.length; right++) {
-						if (rightToLeft[right] < 0) {
-							moveRight(right);
-							input.rightIndex = right;
-							input.rightVal = rightVal;
-							ElementSyncAction action = sync.rightOnly(input);
-							if (action instanceof ValueSyncAction)
-								theLeft.add(((ValueSyncAction<L>) action).value);
+					if (universalRight != REMOVE) {
+						input.hasLeft = false;
+						input.leftIndex = -1;
+						input.leftVal = null;
+						input.hasRight = true;
+						input.targetIndex = -1;
+						for (int right = 0; right < rightToLeft.length; right++) {
+							if (rightToLeft[right] < 0) {
+								moveRight(right);
+								input.rightIndex = right;
+								input.rightVal = rightVal;
+								ElementSyncAction action = sync.rightOnly(input);
+								if (action instanceof ValueSyncAction)
+									theLeft.add(((ValueSyncAction<L>) action).value);
+							}
 						}
 					}
 					break;
@@ -824,13 +865,21 @@ public class CollectionUtils {
 					input.hasRight = leftToRight[leftIndex] >= 0;
 					if (input.hasRight) {
 						moveRight(leftToRight[leftIndex]);
-						input.rightIndex = rightIndex;
-						input.rightVal = rightVal;
-						action = sync.common(input);
+						if (universalCommon != null)
+							action = universalCommon;
+						else {
+							input.rightIndex = rightIndex;
+							input.rightVal = rightVal;
+							action = sync.common(input);
+						}
 					} else {
-						input.rightIndex = -1;
-						input.rightVal = null;
-						action = sync.leftOnly(input);
+						if (universalLeft != null) {
+							action = universalLeft;
+						} else {
+							input.rightIndex = -1;
+							input.rightVal = null;
+							action = sync.leftOnly(input);
+						}
 					}
 					if (action == PRESERVE) {//
 						input.targetIndex++;
@@ -852,13 +901,18 @@ public class CollectionUtils {
 							rightVal = rightIter.next();
 					}
 				} else {
-					input.hasLeft = false;
-					input.leftIndex = -1;
-					input.leftVal = null;
-					input.hasRight = true;
-					input.rightIndex = rightIndex;
-					input.rightVal = rightVal;
-					ElementSyncAction action = sync.rightOnly(input);
+					ElementSyncAction action;
+					if (universalRight != null)
+						action = universalRight;
+					else {
+						input.hasLeft = false;
+						input.leftIndex = -1;
+						input.leftVal = null;
+						input.hasRight = true;
+						input.rightIndex = rightIndex;
+						input.rightVal = rightVal;
+						action = sync.rightOnly(input);
+					}
 					if (action == REMOVE || action == PRESERVE) { // Both PRESERVE and REMOVE mean do nothing for right-only
 					} else {
 						L toAdd = ((ValueSyncAction<L>) action).value;
@@ -896,6 +950,7 @@ public class CollectionUtils {
 
 		class RightOrderAdjustmentState extends AdjustmentState {
 			int[] updatedLeftIndexes;
+			NavigableMap<Integer, L> passedCommonLeft;
 
 			@Override
 			<X extends Throwable> void adjust(CollectionSynchronizerE<L, R, X> sync, AdjustmentOrder order) throws X {
@@ -917,14 +972,24 @@ public class CollectionUtils {
 				updatedLeftIndexes = new int[leftToRight.length];
 				for (int i = 0; i < leftToRight.length; i++)
 					updatedLeftIndexes[i] = i;
+				passedCommonLeft = new TreeMap<>();
 				while (hasRight) {
 					if (!hasLeft || leftToRight[leftIndex] >= 0 || (rightToLeft[rightIndex] < 0 && !compare(sync)))
 						doElement(false, sync);
 					else
 						doElement(true, sync);
 				}
-				while (hasLeft && leftToRight[leftIndex] < 0)
-					doElement(true, sync);
+				while (hasLeft) {
+					if (leftToRight[leftIndex] < 0)
+						doElement(true, sync);
+					else {
+						leftIter.remove();
+						leftIndex++;
+						hasLeft = leftIter.hasNext();
+						if (hasLeft)
+							leftVal = leftIter.next();
+					}
+				}
 			}
 
 			private <X extends Throwable> void doElement(boolean left, CollectionSynchronizerE<L, R, X> sync) throws X {

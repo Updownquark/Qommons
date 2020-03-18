@@ -45,8 +45,8 @@ public class CollectionUtilsTests {
 			boolean remove = helper.getBoolean();
 			boolean changeCase = helper.getBoolean();
 			AdjustmentOrder order;
-			order = AdjustmentOrder.values()[helper.getInt(0, 3)]; // TODO Enable this when right-order is complete
-			// order = helper.getBoolean() ? CollectionUtils.AdjustmentOrder.LeftOrder : CollectionUtils.AdjustmentOrder.AddLast;
+			// order = AdjustmentOrder.values()[helper.getInt(0, 3)]; // TODO Enable this when right-order is complete
+			order = helper.getBoolean() ? CollectionUtils.AdjustmentOrder.LeftOrder : CollectionUtils.AdjustmentOrder.AddLast;
 			boolean leftFirst = helper.getBoolean();
 			int[] map = new int[originalLength];
 			int[] reverse = new int[adjustLength];
@@ -143,6 +143,7 @@ public class CollectionUtilsTests {
 				}
 			}
 
+			boolean useUniversal = helper.getBoolean(.75);
 			List<String> adjusting = new ArrayList<>(originalLength);
 			class TestSync extends CollectionUtils.SimpleCollectionSynchronizer<String, String, RuntimeException, TestSync> {
 				TestSync() {
@@ -151,19 +152,22 @@ public class CollectionUtilsTests {
 
 				@Override
 				public ElementSyncAction leftOnly(ElementSyncInput<String, String> element) {
+					helper.placemark();
 					Assert.assertEquals(original.get(element.getOriginalLeftIndex()), element.getLeftValue());
-					Assert.assertEquals(adjusting.get(element.getTargetIndex()), element.getLeftValue());
+					if (!useUniversal)
+						Assert.assertEquals(adjusting.get(element.getTargetIndex()), element.getLeftValue());
 					Assert.assertEquals(-1, element.getRightIndex());
-					if (remove)
+					if (remove && !useUniversal)
 						adjusting.remove(element.getTargetIndex());
 					return super.leftOnly(element);
 				}
 
 				@Override
 				public ElementSyncAction rightOnly(ElementSyncInput<String, String> element) {
+					helper.placemark();
 					Assert.assertEquals(adjust.get(element.getRightIndex()), element.getRightValue());
 					Assert.assertEquals(-1, element.getOriginalLeftIndex());
-					if (add) {
+					if (add && !useUniversal) {
 						if (order == AdjustmentOrder.AddLast) {
 							Assert.assertEquals(-1, element.getTargetIndex());
 							adjusting.add(element.getRightValue());
@@ -175,23 +179,49 @@ public class CollectionUtilsTests {
 
 				@Override
 				public ElementSyncAction common(ElementSyncInput<String, String> element) {
+					helper.placemark();
 					Assert.assertEquals(original.get(element.getOriginalLeftIndex()), element.getLeftValue());
-					if (order != AdjustmentOrder.RightOrder)
+					if (order != AdjustmentOrder.RightOrder && !useUniversal)
 						Assert.assertEquals(adjusting.get(element.getTargetIndex()), element.getLeftValue());
 					Assert.assertEquals(adjust.get(element.getRightIndex()), element.getRightValue());
 					Assert.assertTrue(element.getLeftValue().equalsIgnoreCase(element.getRightValue()));
-					if (changeCase)
+					if (changeCase && !useUniversal)
 						adjusting.set(element.getTargetIndex(), element.getRightValue());
 					return super.common(element);
 				}
 
 				@Override
 				public boolean getOrder(ElementSyncInput<String, String> element) {
+					helper.placemark();
 					Assert.assertEquals(original.get(element.getOriginalLeftIndex()), element.getLeftValue());
 					Assert.assertEquals(-1, element.getTargetIndex());
 					Assert.assertEquals(adjust.get(element.getRightIndex()), element.getRightValue());
 
 					return super.getOrder(element);
+				}
+
+				@Override
+				public ElementSyncAction universalLeftOnly(ElementSyncInput<String, String> element) {
+					if (useUniversal)
+						return super.universalLeftOnly(element);
+					else
+						return null;
+				}
+
+				@Override
+				public ElementSyncAction universalRightOnly(ElementSyncInput<String, String> element) {
+					if (useUniversal)
+						return super.universalRightOnly(element);
+					else
+						return null;
+				}
+
+				@Override
+				public ElementSyncAction universalCommon(ElementSyncInput<String, String> element) {
+					if (useUniversal)
+						return super.universalCommon(element);
+					else
+						return null;
 				}
 			}
 			TestSync sync = new TestSync().withAdd(add).withRemove(remove).commonUses(!changeCase, false).leftFirst(leftFirst);
@@ -214,7 +244,8 @@ public class CollectionUtilsTests {
 				.adjust(sync, order);
 
 			Assert.assertThat(adjusted, QommonsTestUtils.collectionsEqual(expect, true, equals));
-			Assert.assertThat(adjusting, QommonsTestUtils.collectionsEqual(expect, true, equals));
+			if (!useUniversal)
+				Assert.assertThat(adjusting, QommonsTestUtils.collectionsEqual(expect, true, equals));
 		}
 	}
 }
