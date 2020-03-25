@@ -241,7 +241,7 @@ public class ElasticExecutor<T> {
 	 */
 	public boolean execute(T task) {
 		int newQueueSize = theQueueSize.incrementAndGet();
-		if (newQueueSize >= theMaxQueueSize) {
+		if (newQueueSize > theMaxQueueSize) {
 			theQueueSize.decrementAndGet();
 			return false;
 		}
