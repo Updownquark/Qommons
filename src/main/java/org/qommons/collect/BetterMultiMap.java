@@ -418,6 +418,17 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		}
 
 		@Override
+		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+			return theMap.keySet().canMove(valueEl, after, before);
+		}
+
+		@Override
+		public CollectionElement<MultiEntryHandle<K, V>> move(ElementId valueEl, ElementId after, ElementId before, boolean first,
+			Runnable afterRemove) throws UnsupportedOperationException, IllegalArgumentException {
+			return getElement(theMap.keySet().move(valueEl, after, before, first, afterRemove).getElementId());
+		}
+
+		@Override
 		public void clear() {
 			getMap().clear();
 		}
@@ -849,6 +860,111 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 						kvBefore == null ? null : kvBefore.keyId, first));
 				}
 			}
+		}
+
+		@Override
+		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+			KeyValueElementId kvValueEl = (KeyValueElementId) valueEl;
+			KeyValueElementId kvAfter = (KeyValueElementId) after;
+			KeyValueElementId kvBefore = (KeyValueElementId) before;
+			MultiEntryHandle<K, V> entry;
+			if (kvAfter != null)
+				entry = theMap.getEntryById(kvAfter.keyId);
+			else
+				entry = theMap.getTerminalEntry(true);
+			int endCompare = 0;
+			boolean firstEntry = true;
+			MutableCollectionElement<V> valueCollEl = theMap.getEntryById(kvValueEl.keyId).getValues().mutableElement(kvValueEl.valueId);
+			String removable = valueCollEl.canRemove();
+			String firstMsg = null;
+			while (entry != null && (kvBefore == null || (endCompare = entry.getElementId().compareTo(kvBefore.keyId)) <= 0)) {
+				ElementId low, high;
+				if (kvAfter != null && firstEntry)
+					low = kvAfter.valueId;
+				else
+					low = null;
+				if (kvBefore != null && endCompare == 0)
+					high = kvBefore.valueId;
+				else
+					high = null;
+				String msg;
+				if (entry.getElementId().equals(kvValueEl.keyId))
+					msg = entry.getValues().canMove(kvValueEl.valueId, low, high);
+				else if (!entry.getValues().belongs(valueCollEl.get()))
+					msg = StdMsg.ILLEGAL_ELEMENT_POSITION;
+				else if (removable != null)
+					msg = removable;
+				else
+					msg = entry.getValues().canAdd(valueCollEl.get(), low, high);
+
+				if (msg == null)
+					return null;
+				else if (firstMsg == null)
+					firstMsg = msg;
+			}
+			return firstMsg;
+		}
+
+		@Override
+		public CollectionElement<MultiEntryValueHandle<K, V>> move(ElementId valueEl, ElementId after, ElementId before, boolean first,
+			Runnable afterRemove) throws UnsupportedOperationException, IllegalArgumentException {
+			KeyValueElementId kvValueEl = (KeyValueElementId) valueEl;
+			KeyValueElementId kvAfter = (KeyValueElementId) after;
+			KeyValueElementId kvBefore = (KeyValueElementId) before;
+			MultiEntryHandle<K, V> entry;
+			if (kvAfter != null)
+				entry = theMap.getEntryById(kvAfter.keyId);
+			else
+				entry = theMap.getTerminalEntry(true);
+			int endCompare = 0;
+			boolean firstEntry = true;
+			MutableCollectionElement<V> valueCollEl = theMap.getEntryById(kvValueEl.keyId).getValues().mutableElement(kvValueEl.valueId);
+			String removable = valueCollEl.canRemove();
+			String firstMsg = null;
+			while (entry != null && (kvBefore == null || (endCompare = entry.getElementId().compareTo(kvBefore.keyId)) <= 0)) {
+				ElementId low, high;
+				if (kvAfter != null && firstEntry)
+					low = kvAfter.valueId;
+				else
+					low = null;
+				if (kvBefore != null && endCompare == 0)
+					high = kvBefore.valueId;
+				else
+					high = null;
+				String msg;
+				if (entry.getElementId().equals(kvValueEl.keyId)) {
+					msg = entry.getValues().canMove(kvValueEl.valueId, low, high);
+					if (msg == null) {
+						ElementId newValueId = entry.getValues().move(kvValueEl.valueId, low, high, first, afterRemove).getElementId();
+						return entryFor(theMap.getEntryById(entry.getElementId(), newValueId));
+					}
+				} else if (!entry.getValues().belongs(valueCollEl.get()))
+					msg = StdMsg.ILLEGAL_ELEMENT_POSITION;
+				else if (removable != null)
+					msg = removable;
+				else {
+					msg = entry.getValues().canAdd(valueCollEl.get(), low, high);
+					if (msg == null) {
+						valueCollEl.remove();
+						if (afterRemove != null)
+							afterRemove.run();
+						ElementId newValueId = CollectionElement
+							.getElementId(entry.getValues().addElement(valueCollEl.get(), low, high, first));
+						if (newValueId == null)
+							throw new IllegalStateException("Removed, but was not able to re-add");
+						return entryFor(theMap.getEntryById(entry.getElementId(), newValueId));
+					}
+				}
+
+				if (msg == null)
+					return null;
+				else if (firstMsg == null)
+					firstMsg = msg;
+			}
+			if (firstMsg == null || firstMsg.equals(StdMsg.UNSUPPORTED_OPERATION))
+				throw new UnsupportedOperationException(firstMsg);
+			else
+				throw new IllegalArgumentException(firstMsg);
 		}
 
 		@Override

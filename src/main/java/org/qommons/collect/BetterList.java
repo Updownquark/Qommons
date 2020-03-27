@@ -978,6 +978,32 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
+		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+			try (Transaction t = lock(false, null)) {
+				if (after == null && theStart > 0)
+					after = theWrapped.getElement(theStart - 1).getElementId();
+				int wrapSize = theWrapped.size();
+				if (before == null && theEnd < wrapSize)
+					before = theWrapped.getElement(theEnd).getElementId();
+				return theWrapped.canMove(valueEl, after, before);
+			}
+		}
+
+		@Override
+		public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			try (Transaction t = lock(true, null)) {
+				if (after == null && theStart > 0)
+					after = theWrapped.getElement(theStart - 1).getElementId();
+				int wrapSize = theWrapped.size();
+				if (before == null && theEnd < wrapSize)
+					before = theWrapped.getElement(theEnd).getElementId();
+				CollectionElement<E> newEl = theWrapped.move(valueEl, after, before, first, afterRemove);
+				return newEl;
+			}
+		}
+
+		@Override
 		public boolean addAll(int index, Collection<? extends E> c) {
 			try (Transaction t = lock(true, null)) {
 				int preSize = theWrapped.size();
@@ -1209,6 +1235,17 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			return null;
+		}
+
+		@Override
+		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+			return StdMsg.UNSUPPORTED_OPERATION;
+		}
+
+		@Override
+		public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
 
 		@Override

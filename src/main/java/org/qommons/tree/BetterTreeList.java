@@ -5,9 +5,11 @@ import java.util.Comparator;
 import java.util.Objects;
 
 import org.qommons.Transaction;
+import org.qommons.collect.CollectionElement;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
+import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.StampedLockingStrategy;
 import org.qommons.collect.ValueStoredCollection.RepairListener;
 
@@ -115,6 +117,22 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 			}
 			return null;
 		}
+	}
+
+	@Override
+	public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+		return null;
+	}
+
+	@Override
+	public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+		throws UnsupportedOperationException, IllegalArgumentException {
+		MutableCollectionElement<E> el = mutableElement(valueEl);
+		E value = el.get();
+		el.remove();
+		if (afterRemove != null)
+			afterRemove.run();
+		return addElement(value, after, before, first);
 	}
 
 	@Override

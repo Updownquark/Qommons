@@ -808,6 +808,17 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		}
 
 		@Override
+		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+			return theMap.keySet().canMove(valueEl, after, before);
+		}
+
+		@Override
+		public CollectionElement<Entry<K, V>> move(ElementId valueEl, ElementId after, ElementId before, boolean first,
+			Runnable afterRemove) throws UnsupportedOperationException, IllegalArgumentException {
+			return getElement(theMap.keySet().move(valueEl, after, before, first, afterRemove).getElementId());
+		}
+
+		@Override
 		public void clear() {
 			theMap.clear();
 		}
@@ -1082,6 +1093,17 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		public CollectionElement<V> addElement(V value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+			return theMap.keySet().canMove(valueEl, after, before);
+		}
+
+		@Override
+		public CollectionElement<V> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return getElement(theMap.keySet().move(valueEl, after, before, first, afterRemove).getElementId());
 		}
 
 		@Override

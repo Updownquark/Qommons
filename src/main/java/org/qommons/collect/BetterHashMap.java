@@ -383,6 +383,17 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
+		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+			return theEntries.canMove(valueEl, after, before);
+		}
+
+		@Override
+		public CollectionElement<K> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return handleFor(theEntries.move(valueEl, after, before, first, afterRemove));
+		}
+
+		@Override
 		public void clear() {
 			theEntries.clear();
 		}

@@ -9,9 +9,11 @@ import java.util.SortedSet;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterSortedList;
+import org.qommons.collect.CollectionElement;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
+import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.OptimisticContext;
 import org.qommons.collect.StampedLockingStrategy;
@@ -267,6 +269,30 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 			else
 				return super.addElement(value, null, result.getElementId(), false);
 		}
+	}
+
+	@Override
+	public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+		E value = getElement(valueEl).get();
+		if (after != null && theCompare.compare(value, getElement(after).get()) < 0)
+			return StdMsg.ILLEGAL_ELEMENT_POSITION;
+		if (before != null && theCompare.compare(value, getElement(before).get()) > 0)
+			return StdMsg.ILLEGAL_ELEMENT_POSITION;
+		return null;
+	}
+
+	@Override
+	public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+		throws UnsupportedOperationException, IllegalArgumentException {
+		MutableCollectionElement<E> el = mutableElement(before);
+		E value = el.get();
+		if (after != null && theCompare.compare(value, getElement(after).get()) < 0)
+			throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
+		if (before != null && theCompare.compare(value, getElement(before).get()) > 0)
+			throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
+		el.remove();
+		afterRemove.run();
+		return addElement(value, after, before, first);
 	}
 
 	@Override

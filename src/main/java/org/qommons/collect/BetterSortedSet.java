@@ -113,6 +113,17 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	}
 
 	@Override
+	default String canMove(ElementId valueEl, ElementId after, ElementId before) {
+		return StdMsg.ILLEGAL_ELEMENT_POSITION;
+	}
+
+	@Override
+	default CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+		throws UnsupportedOperationException, IllegalArgumentException {
+		throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
+	}
+
+	@Override
 	default E first() {
 		return getFirst();
 	}

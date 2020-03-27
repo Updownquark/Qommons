@@ -138,6 +138,29 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException;
 
+	/**
+	 * @param valueEl The element to move
+	 * @param after The lower bound of the target range to move the element to (may be null to leave the range low-unbounded)
+	 * @param before The upper bound of the target range to move the element to (may be null to leave the range high-unbounded)
+	 * @return null if the element can be moved into the given range (always true if the element is already in that range), or a message
+	 *         describing why it can't be moved there
+	 */
+	String canMove(ElementId valueEl, ElementId after, ElementId before);
+
+	/**
+	 * @param valueEl The element to move
+	 * @param after The lower bound of the target range to move the element to (may be null to leave the range low-unbounded)
+	 * @param before The upper bound of the target range to move the element to (may be null to leave the range high-unbounded)
+	 * @param first Whether to attempt to move the element toward the low (true) or the high (false) end of the range
+	 * @param afterRemove A callback that will be invoked after the element is removed from its current position and before it has been
+	 *        re-added to its new position (may be null)
+	 * @return The element in its new position (elements cannot be re-used, so this will be a new element)
+	 * @throws UnsupportedOperationException If the given move is not supported for a general reason
+	 * @throws IllegalArgumentException If the given move in particular is not supported
+	 */
+	CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+		throws UnsupportedOperationException, IllegalArgumentException;
+
 	/** Removes all {@link MutableCollectionElement#canRemove() removable} values from this collection */
 	@Override
 	void clear();
@@ -1012,6 +1035,21 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
+		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+			return getWrapped()//
+				.canMove(//
+					valueEl.reverse(), ElementId.reverse(after), ElementId.reverse(before));
+		}
+
+		@Override
+		public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove) {
+			return getWrapped()//
+				.move(//
+					valueEl.reverse(), ElementId.reverse(after), ElementId.reverse(before), !first, afterRemove)
+				.reverse();
+		}
+
+		@Override
 		public void clear() {
 			getWrapped().clear();
 		}
@@ -1101,6 +1139,16 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			return null;
+		}
+
+		@Override
+		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+			throw new NoSuchElementException();
+		}
+
+		@Override
+		public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove) {
+			throw new NoSuchElementException();
 		}
 
 		@Override
@@ -1256,6 +1304,17 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		public CollectionElement<CollectionElement<E>> addElement(CollectionElement<E> value, ElementId after, ElementId before,
 			boolean first) throws UnsupportedOperationException, IllegalArgumentException {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+			return theCollection.canMove(valueEl, after, before);
+		}
+
+		@Override
+		public CollectionElement<CollectionElement<E>> move(ElementId valueEl, ElementId after, ElementId before, boolean first,
+			Runnable afterRemove) {
+			return wrap(theCollection.move(valueEl, after, before, first, afterRemove));
 		}
 
 		@Override

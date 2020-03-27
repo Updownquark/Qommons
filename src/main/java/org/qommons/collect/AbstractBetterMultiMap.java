@@ -542,6 +542,17 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 
 		@Override
+		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+			return theBacking.canMove(valueEl, after, before);
+		}
+
+		@Override
+		public CollectionElement<K> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return getBacking().move(valueEl, after, before, first, afterRemove);
+		}
+
+		@Override
 		public void clear() {
 			try (Transaction t = AbstractBetterMultiMap.this.lock(true, null)) {
 				if (isEmpty())
@@ -848,6 +859,19 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			throws UnsupportedOperationException, IllegalArgumentException {
 			BetterCollection<E> wrapped = theWrapped.getBacking(true);
 			return wrapped.addElement(value, after, before, first);
+		}
+
+		@Override
+		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+			BetterCollection<E> wrapped = theWrapped.getBacking(true);
+			return wrapped.canMove(valueEl, after, before);
+		}
+
+		@Override
+		public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			BetterCollection<E> wrapped = theWrapped.getBacking(true);
+			return wrapped.move(valueEl, after, before, first, afterRemove);
 		}
 
 		@Override

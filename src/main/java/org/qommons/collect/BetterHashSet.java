@@ -2,6 +2,7 @@ package org.qommons.collect;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
@@ -406,67 +407,73 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			if (entry != null && entry.hashCode == hashCode && equals.test(entry.theValue))
 				return entry;
 			HashEntry adjacent = entry;
-			if (first) {
-				if (after != null) {
-					HashEntry afterEntry = ((HashId) after).entry;
-					afterEntry.check();
-					entry = new HashEntry(afterEntry.theOrder, value.get(), hashCode);
-					entry.previous = afterEntry;
-					entry.next = afterEntry.next;
-					if (afterEntry.next != null)
-						afterEntry.next.previous = entry;
-					else
-						theLast = entry;
-					afterEntry.next = entry;
-					while (afterEntry != null) {
-						afterEntry.theOrder--;
-						afterEntry = afterEntry.previous;
-					}
-					if (theFirst.theOrder == theFirstIdCreator.get())
-						theFirstIdCreator.getAndDecrement();
-				} else {
-					entry = new HashEntry(theFirstIdCreator.getAndDecrement(), value.get(), hashCode);
-					entry.next = theFirst;
-					if (theFirst != null)
-						theFirst.previous = entry;
-					theFirst = entry;
-					if (theLast == null)
-						theLast = entry;
-				}
-			} else {
-				if (before != null) {
-					HashEntry beforeEntry = ((HashId) before).entry;
-					beforeEntry.check();
-					entry = new HashEntry(beforeEntry.theOrder, value.get(), hashCode);
-					entry.next = beforeEntry;
-					entry.previous = beforeEntry.previous;
-					if (beforeEntry.previous != null)
-						beforeEntry.previous.next = entry;
-					else
-						theFirst = entry;
-					beforeEntry.previous = entry;
-					while (beforeEntry != null) {
-						beforeEntry.theOrder++;
-						beforeEntry = beforeEntry.next;
-					}
-					if (theLast.theOrder == theLastIdCreator.get())
-						theLastIdCreator.getAndIncrement();
-				} else {
-					entry = new HashEntry(theLastIdCreator.getAndIncrement(), value.get(), hashCode);
-					if (theLast != null)
-						theLast.next = entry;
-					entry.previous = theLast;
-					theLast = entry;
-					if (theFirst == null)
-						theFirst = entry;
-				}
-			}
+			entry = linkUp(hashCode, value.get(), after, before, first);
 			insert(table, entry, tableIndex, adjacent);
 			theSize++;
 			if (added != null)
 				added.run();
 			return entry.immutable();
 		}
+	}
+
+	private HashEntry linkUp(int hashCode, E value, ElementId after, ElementId before, boolean first) {
+		HashEntry entry;
+		if (first) {
+			if (after != null) {
+				HashEntry afterEntry = ((HashId) after).entry;
+				afterEntry.check();
+				entry = new HashEntry(afterEntry.theOrder, value, hashCode);
+				entry.previous = afterEntry;
+				entry.next = afterEntry.next;
+				if (afterEntry.next != null)
+					afterEntry.next.previous = entry;
+				else
+					theLast = entry;
+				afterEntry.next = entry;
+				while (afterEntry != null) {
+					afterEntry.theOrder--;
+					afterEntry = afterEntry.previous;
+				}
+				if (theFirst.theOrder == theFirstIdCreator.get())
+					theFirstIdCreator.getAndDecrement();
+			} else {
+				entry = new HashEntry(theFirstIdCreator.getAndDecrement(), value, hashCode);
+				entry.next = theFirst;
+				if (theFirst != null)
+					theFirst.previous = entry;
+				theFirst = entry;
+				if (theLast == null)
+					theLast = entry;
+			}
+		} else {
+			if (before != null) {
+				HashEntry beforeEntry = ((HashId) before).entry;
+				beforeEntry.check();
+				entry = new HashEntry(beforeEntry.theOrder, value, hashCode);
+				entry.next = beforeEntry;
+				entry.previous = beforeEntry.previous;
+				if (beforeEntry.previous != null)
+					beforeEntry.previous.next = entry;
+				else
+					theFirst = entry;
+				beforeEntry.previous = entry;
+				while (beforeEntry != null) {
+					beforeEntry.theOrder++;
+					beforeEntry = beforeEntry.next;
+				}
+				if (theLast.theOrder == theLastIdCreator.get())
+					theLastIdCreator.getAndIncrement();
+			} else {
+				entry = new HashEntry(theLastIdCreator.getAndIncrement(), value, hashCode);
+				if (theLast != null)
+					theLast.next = entry;
+				entry.previous = theLast;
+				theLast = entry;
+				if (theFirst == null)
+					theFirst = entry;
+			}
+		}
+		return entry;
 	}
 
 	@Override
@@ -476,6 +483,52 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		CollectionElement<E> element = getOrAdd(theHasher.applyAsInt(value), equalsTest(value), () -> value, after, before, first,
 			() -> added[0] = true);
 		return added[0] ? element : null;
+	}
+
+	@Override
+	public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+		return null;
+	}
+
+	@Override
+	public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+		throws UnsupportedOperationException, IllegalArgumentException {
+		HashId hashId = (BetterHashSet<E>.HashId) valueEl;
+		if (!hashId.isPresent())
+			throw new NoSuchElementException("Element has been removed");
+		else if (hashId.getSet() != this)
+			throw new NoSuchElementException("Element does not belong to this set");
+		try (Transaction t = lock(true, null)) {
+			HashEntry entry = hashId.entry;
+			if (first) {
+				if ((after == null && entry.previous == null) || (after != null && after.equals(entry.previous.getElementId())))
+					return entry.immutable();
+			} else {
+				if ((before == null && entry.next == null) || (before != null && before.equals(entry.next.getElementId())))
+					return entry.immutable();
+			}
+			// Remove the element
+			if (entry.previous != null)
+				entry.previous.next = entry.next;
+			if (entry.next != null)
+				entry.next.previous = entry.previous;
+			HashEntry newEntry;
+			ElementId prevTreeEntry = CollectionElement
+				.getElementId(entry.theTableEntry.entries.getAdjacentElement(entry.theTreeNode.getElementId(), false));
+			entry.theTreeNode.remove();
+			if (afterRemove != null) {
+				long preStamp = getStamp();
+				theSize--;
+				afterRemove.run();
+				if (getStamp() != preStamp)
+					throw new IllegalStateException("after-remove callback may not modify the set");
+				theSize++;
+			}
+			newEntry = linkUp(entry.hashCode, entry.theValue, after, before, first);
+			ElementId added = entry.theTableEntry.entries.addElement(newEntry, prevTreeEntry, null, true).getElementId();
+			newEntry.placedAt(entry.theTableEntry, entry.theTableEntry.entries.mutableElement(added));
+			return newEntry.immutable();
+		}
 	}
 
 	/**
@@ -653,6 +706,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 	/** Represents the storage of one value in a {@link BetterHashSet} */
 	protected class HashEntry implements MutableCollectionElement<E> {
+		HashTableEntry theTableEntry;
 		private long theOrder;
 		int hashCode;
 		private MutableBinaryTreeNode<HashEntry> theTreeNode;
@@ -667,7 +721,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			this.hashCode = hashCode;
 		}
 
-		void placedAt(MutableBinaryTreeNode<HashEntry> treeNode) {
+		void placedAt(HashTableEntry tableEntry, MutableBinaryTreeNode<HashEntry> treeNode) {
+			theTableEntry = tableEntry;
 			theTreeNode = treeNode;
 		}
 
@@ -816,16 +871,16 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		void add(HashEntry entry, HashEntry adjacentEntry) {
 			if (adjacentEntry != null) {
 				ElementId id = adjacentEntry.theTreeNode.add(entry, entry.hashCode < adjacentEntry.hashCode);
-				entry.placedAt(entries.mutableElement(id));
+				entry.placedAt(this, entries.mutableElement(id));
 				return;
 			}
 			BinaryTreeNode<HashEntry> node = entries.getRoot();
 			if (node == null) {
-				entry.placedAt(entries.mutableNodeFor(entries.addElement(entry, false)));
+				entry.placedAt(this, entries.mutableNodeFor(entries.addElement(entry, false)));
 				return;
 			}
 			node = node.findClosest(entry::compareToNode, true, false, null);
-			entry.placedAt(entries.mutableNodeFor(entries.mutableNodeFor(node).add(entry, entry.hashCode() < node.get().hashCode())));
+			entry.placedAt(this, entries.mutableNodeFor(entries.mutableNodeFor(node).add(entry, entry.hashCode() < node.get().hashCode())));
 		}
 
 		HashEntry findForInsert(int hashCode, Predicate<? super E> equals, OptimisticContext ctx) {
