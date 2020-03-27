@@ -239,6 +239,11 @@ public abstract class Causable {
 		return key.theValues;
 	}
 
+	/** @return Whether this causable has finished or is finishing */
+	public boolean isFinished() {
+		return isFinished;
+	}
+
 	/** @return Whether this causable has completely finished being fired */
 	public boolean isTerminated() {
 		return isTerminated;
