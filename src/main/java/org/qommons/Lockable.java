@@ -288,27 +288,32 @@ public interface Lockable {
 			Transaction[] locks = new Transaction[coll.size() + (outer == null ? 0 : 1)];
 			if (outerLock != null)
 				locks[0] = outerLock;
-			int i = outerLock == null ? 0 : 1;
-			for (X value : lockables.get()) {
-				Lockable lockable = map.apply(value);
-				if (lockable == null) {} else if (!hasLock) {
-					hasLock = true;
-					locks[i] = lockable.lock();
-				} else {
-					Transaction lock = lockable.tryLock();
-					if (lock == null) {
-						for (int j = i - 1; j >= 0; j--)
-							locks[j].close();
-						try {
-							Thread.sleep(2);
-						} catch (InterruptedException e) {}
-						continue reattempt;
+			try {
+				int i = outerLock == null ? 0 : 1;
+				for (X value : lockables.get()) {
+					Lockable lockable = map.apply(value);
+					if (lockable == null) {} else if (!hasLock) {
+						hasLock = true;
+						locks[i] = lockable.lock();
+					} else {
+						Transaction lock = lockable.tryLock();
+						if (lock == null) {
+							for (int j = i - 1; j >= 0; j--)
+								locks[j].close();
+							try {
+								Thread.sleep(2);
+							} catch (InterruptedException e) {}
+							continue reattempt;
+						}
+						locks[i] = lock;
 					}
-					locks[i] = lock;
+					i++;
 				}
-				i++;
+				return Transaction.and(locks);
+			} catch (RuntimeException | Error e) {
+				Transaction.and(locks).close();
+				throw e;
 			}
-			return Transaction.and(locks);
 		}
 	}
 
@@ -378,18 +383,23 @@ public interface Lockable {
 		Transaction[] locks = new Transaction[(outerLock == null ? 0 : 1) + coll.size()];
 		if (outerLock != null)
 			locks[0] = outerLock;
-		int i = outerLock == null ? 0 : 1;
-		for (X value : coll) {
-			Lockable lockable = map.apply(value);
-			locks[i] = Lockable.tryLock(lockable);
-			if (locks[i] == null) {
-				for (int j = i - 1; j >= 0; j--)
-					locks[j].close();
-				return null;
+		try {
+			int i = outerLock == null ? 0 : 1;
+			for (X value : coll) {
+				Lockable lockable = map.apply(value);
+				locks[i] = Lockable.tryLock(lockable);
+				if (locks[i] == null) {
+					for (int j = i - 1; j >= 0; j--)
+						locks[j].close();
+					return null;
+				}
+				i++;
 			}
-			i++;
+			return Transaction.and(locks);
+		} catch (RuntimeException | Error e) {
+			Transaction.and(locks).close();
+			throw e;
 		}
-		return Transaction.and(locks);
 	}
 
 	/**
@@ -407,7 +417,13 @@ public interface Lockable {
 			Lockable inner = getInner.get();
 			if (inner == null)
 				return outerLock;
-			Transaction innerLock = inner.tryLock();
+			Transaction innerLock;
+			try {
+				innerLock = inner.tryLock();
+			} catch (RuntimeException | Error e) {
+				outerLock.close();
+				throw e;
+			}
 			if (innerLock == null) {
 				outerLock.close();
 				try {
