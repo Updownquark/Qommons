@@ -272,6 +272,20 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		return new SubList<>(this, fromIndex, toIndex);
 	}
 
+	/**
+	 * Creates a sub-list of collection elements backed by this list
+	 * 
+	 * @param low The low bound of the list (may be null)
+	 * @param lowIncluded Whether the low bound should be included in the list
+	 * @param high The high bound of the list (may be null)
+	 * @param highIncluded Whether the high bound should be included in the list
+	 * @return The sub-list
+	 */
+	default BetterList<CollectionElement<E>> elementsBetween(ElementId low, boolean lowIncluded, ElementId high, boolean highIncluded) {
+		return new ElementList<>(this, low, lowIncluded, high, highIncluded);
+	}
+
+
 	/** An empty list */
 	public static final EmptyList<Object> EMPTY = new EmptyList<>();
 
@@ -1028,6 +1042,221 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				theWrapped.removeRange(theStart, end);
 				theEnd -= sz - theWrapped.size();
 			}
+		}
+	}
+
+	/**
+	 * Implements {@link BetterList#elementsBetween(ElementId, boolean, ElementId, boolean)}
+	 * 
+	 * @param <E> The type of the backing list
+	 */
+	class ElementList<E> extends ElementCollection<E> implements BetterList<CollectionElement<E>> {
+		private final ElementId theLowBound;
+		private final boolean isLowIncluded;
+		private final ElementId theHighBound;
+		private final boolean isHighIncluded;
+
+		public ElementList(BetterList<E> collection, ElementId lowBound, boolean lowIncluded, ElementId highBound, boolean highIncluded) {
+			super(collection);
+			theLowBound = lowBound;
+			isLowIncluded = lowIncluded;
+			theHighBound = highBound;
+			isHighIncluded = highIncluded;
+		}
+
+		@Override
+		protected BetterList<E> getCollection() {
+			return (BetterList<E>) super.getCollection();
+		}
+
+		/** @return The low bound of this sub-collection */
+		public ElementId getLowBound() {
+			return theLowBound;
+		}
+
+		/** @return Whether the low bound of this sub-collection is included or excluded from this sub-collection */
+		public boolean isLowIncluded() {
+			return isLowIncluded;
+		}
+
+		/** @return The high bound of this sub-collection */
+		public ElementId getHighBound() {
+			return theHighBound;
+		}
+
+		/** @return Whether the high bound of this sub-collection is included or excluded from this sub-collection */
+		public boolean isHighIncluded() {
+			return isHighIncluded;
+		}
+
+		protected boolean check(ElementId toCheck, boolean low, boolean high) {
+			if (low && theLowBound != null) {
+				int comp = toCheck.compareTo(theLowBound);
+				if (comp < 0 || (comp == 0 && !isLowIncluded))
+					return false;
+			}
+			if (high && theHighBound != null) {
+				int comp = toCheck.compareTo(theHighBound);
+				if (comp > 0 || (comp == 0 && !isHighIncluded))
+					return false;
+			}
+			return true;
+		}
+
+		@Override
+		public boolean isEmpty() {
+			return size() == 0;
+		}
+
+		@Override
+		public int size() {
+			int size = super.size();
+			if (theLowBound != null) {
+				size -= getCollection().getElementsBefore(theLowBound);
+				if (!isLowIncluded)
+					size--;
+			}
+			if (theHighBound != null) {
+				size -= getCollection().getElementsAfter(theHighBound);
+				if (!isHighIncluded)
+					size--;
+			}
+			return size;
+		}
+
+		@Override
+		public CollectionElement<CollectionElement<E>> getElement(CollectionElement<E> value, boolean first) {
+			if (value == null || !check(value.getElementId(), true, true))
+				return null;
+			return super.getElement(value, first);
+		}
+
+		@Override
+		public CollectionElement<CollectionElement<E>> getElement(ElementId id) {
+			if (!check(id, true, true))
+				throw new NoSuchElementException("Element is not included in this sub-list: " + id);
+			return super.getElement(id);
+		}
+
+		@Override
+		public CollectionElement<CollectionElement<E>> getTerminalElement(boolean first) {
+			CollectionElement<E> el;
+			if (first) {
+				if (theLowBound != null) {
+					if (isLowIncluded)
+						el = getCollection().getElement(theLowBound);
+					else {
+						el = getCollection().getAdjacentElement(theLowBound, true);
+						if (el != null && !check(el.getElementId(), false, true))
+							return null;
+					}
+				} else
+					el = getCollection().getTerminalElement(first);
+			} else {
+				if (theHighBound != null) {
+					if (isHighIncluded)
+						el = getCollection().getElement(theHighBound);
+					else {
+						el = getCollection().getAdjacentElement(theHighBound, false);
+						if (el != null && !check(el.getElementId(), true, false))
+							return null;
+					}
+				} else
+					el = getCollection().getTerminalElement(first);
+			}
+			return wrap(el);
+		}
+
+		@Override
+		public CollectionElement<CollectionElement<E>> getAdjacentElement(ElementId elementId, boolean next) {
+			if (!check(elementId, true, true))
+				throw new NoSuchElementException("Element is not included in this sub-list: " + elementId);
+			CollectionElement<E> el = getCollection().getAdjacentElement(elementId, next);
+			if (el != null && !check(el.getElementId(), !next, next))
+				return null;
+			return super.getAdjacentElement(elementId, next);
+		}
+
+		@Override
+		public MutableCollectionElement<CollectionElement<E>> mutableElement(ElementId id) {
+			if (!check(id, true, true))
+				throw new NoSuchElementException("Element is not included in this sub-list: " + id);
+			return super.mutableElement(id);
+		}
+
+		@Override
+		public BetterList<CollectionElement<CollectionElement<E>>> getElementsBySource(ElementId sourceEl) {
+			return QommonsUtils.filterMap(super.getElementsBySource(sourceEl), el -> check(el.getElementId(), true, true), null);
+		}
+
+		@Override
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			if (!check(localElement, true, true))
+				throw new NoSuchElementException("Element is not included in this sub-list: " + localElement);
+			return super.getSourceElements(localElement, sourceCollection);
+		}
+
+		@Override
+		public CollectionElement<CollectionElement<E>> move(ElementId valueEl, ElementId after, ElementId before, boolean first,
+			Runnable afterRemove) {
+			if (!check(valueEl, true, true))
+				throw new NoSuchElementException("Element is not included in this sub-list: " + valueEl);
+			if (after != null && !check(after, true, true))
+				throw new NoSuchElementException("Element is not included in this sub-list: " + after);
+			if (before != null && !check(before, true, true))
+				throw new NoSuchElementException("Element is not included in this sub-list: " + before);
+			return super.move(valueEl, after, before, first, afterRemove);
+		}
+
+		@Override
+		public CollectionElement<CollectionElement<E>> getElement(int index) throws IndexOutOfBoundsException {
+			if (index < 0)
+				throw new IndexOutOfBoundsException("" + index);
+			int index2 = index;
+			if (theLowBound != null) {
+				index2 += getCollection().getElementsBefore(theLowBound);
+				if (!isLowIncluded)
+					index2++;
+			}
+			CollectionElement<E> el = getCollection().getElement(index2);
+			if (!check(el.getElementId(), false, true))
+				throw new IndexOutOfBoundsException(index + " of " + size());
+			return wrap(el);
+		}
+
+		@Override
+		public boolean isContentControlled() {
+			return getCollection().isContentControlled();
+		}
+
+		@Override
+		public int getElementsBefore(ElementId id) {
+			int eb = getCollection().getElementsBefore(id);
+			if (theLowBound != null) {
+				eb -= getCollection().getElementsBefore(theLowBound);
+				if (!isLowIncluded)
+					eb--;
+				if (eb < 0)
+					throw new NoSuchElementException("Element is not included in this sub-list: " + id);
+			}
+			if (!check(id, false, true))
+				throw new NoSuchElementException("Element is not included in this sub-list: " + id);
+			return eb;
+		}
+
+		@Override
+		public int getElementsAfter(ElementId id) {
+			int ea = getCollection().getElementsAfter(id);
+			if (theHighBound != null) {
+				ea -= getCollection().getElementsAfter(theHighBound);
+				if (!isHighIncluded)
+					ea--;
+				if (ea < 0)
+					throw new NoSuchElementException("Element is not included in this sub-list: " + id);
+			}
+			if (!check(id, true, false))
+				throw new NoSuchElementException("Element is not included in this sub-list: " + id);
+			return ea;
 		}
 	}
 

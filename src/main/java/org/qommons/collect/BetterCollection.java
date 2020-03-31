@@ -1217,6 +1217,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 			theCollection = collection;
 		}
 
+		/** @return The collection that this element collection is backed by */
+		protected BetterCollection<E> getCollection() {
+			return theCollection;
+		}
+
 		@Override
 		public int size() {
 			return theCollection.size();
