@@ -879,11 +879,6 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		}
 
 		@Override
-		public BetterSortedSet<E> reverse() {
-			return getWrapped();
-		}
-
-		@Override
 		public boolean isConsistent(ElementId element) {
 			return getWrapped().isConsistent(element.reverse());
 		}

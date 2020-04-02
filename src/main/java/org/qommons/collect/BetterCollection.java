@@ -1022,11 +1022,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public BetterCollection<E> reverse() {
-			return getWrapped();
-		}
-
-		@Override
 		public String canAdd(E value, ElementId after, ElementId before) {
 			return getWrapped().canAdd(value, ElementId.reverse(before), ElementId.reverse(after));
 		}

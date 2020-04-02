@@ -181,11 +181,6 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 		}
 
 		@Override
-		public BetterSet<E> reverse() {
-			return getWrapped();
-		}
-
-		@Override
 		public String toString() {
 			return BetterSet.toString(this);
 		}

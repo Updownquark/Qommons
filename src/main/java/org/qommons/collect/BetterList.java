@@ -343,11 +343,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public BetterList<E> reverse() {
-			return getWrapped();
-		}
-
-		@Override
 		public boolean isContentControlled() {
 			return getWrapped().isContentControlled();
 		}
