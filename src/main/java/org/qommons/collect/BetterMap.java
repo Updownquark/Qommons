@@ -768,8 +768,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		}
 
 		@Override
-		public BetterList<CollectionElement<Entry<K, V>>> getElementsBySource(ElementId sourceEl) {
-			return QommonsUtils.map2(theMap.keySet().getElementsBySource(sourceEl), keyEl -> getElement(keyEl.getElementId()));
+		public BetterList<CollectionElement<Entry<K, V>>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return BetterList.of(getElement(sourceEl));
+			return QommonsUtils.map2(theMap.keySet().getElementsBySource(sourceEl, sourceCollection),
+				keyEl -> getElement(keyEl.getElementId()));
 		}
 
 		@Override
@@ -1135,8 +1138,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		}
 
 		@Override
-		public BetterList<CollectionElement<V>> getElementsBySource(ElementId sourceEl) {
-			return QommonsUtils.map2(theMap.keySet().getElementsBySource(sourceEl), keyEl -> theMap.getEntryById(keyEl.getElementId()));
+		public BetterList<CollectionElement<V>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return BetterList.of(getElement(sourceEl));
+			return QommonsUtils.map2(theMap.keySet().getElementsBySource(sourceEl, sourceCollection),
+				keyEl -> theMap.getEntryById(keyEl.getElementId()));
 		}
 
 		@Override

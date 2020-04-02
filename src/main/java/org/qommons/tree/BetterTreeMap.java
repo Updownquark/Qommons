@@ -712,8 +712,10 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 
 		@Override
-		public BetterList<CollectionElement<K>> getElementsBySource(ElementId sourceEl) {
-			return QommonsUtils.map2(theEntries.getElementsBySource(sourceEl), this::handleFor);
+		public BetterList<CollectionElement<K>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return BetterList.of(getElement(sourceEl));
+			return QommonsUtils.map2(theEntries.getElementsBySource(sourceEl, sourceCollection), this::handleFor);
 		}
 
 		@Override

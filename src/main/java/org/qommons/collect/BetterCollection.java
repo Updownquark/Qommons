@@ -90,13 +90,15 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	/**
 	 * @param sourceEl The source element to get derived values from
+	 * @param sourceCollection The collection, potentially a source parent or ancestor of this collection, that the given source element is
+	 *        from
 	 * @return All element in this collection that are derived from the source element. Will be empty if:
 	 *         <ul>
 	 *         <li>the element belongs to a collection that is not a source for this collection,</li>
 	 *         <li>or the given element belongs to a source of this collection but is not a source of any element in this collection</li>
 	 *         </ul>
 	 */
-	BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl);
+	BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection);
 
 	/**
 	 * @param localElement The element in this collection to get the source(s) for
@@ -1006,14 +1008,16 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
-			return QommonsUtils.map2(theWrapped.getElementsBySource(sourceEl), el -> el.reverse());
+		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return BetterList.of(getElement(sourceEl));
+			return QommonsUtils.map2(theWrapped.getElementsBySource(sourceEl, sourceCollection), el -> el.reverse());
 		}
 
 		@Override
 		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
 			if (sourceCollection == this)
-				return BetterList.of(localElement);
+				return QommonsUtils.map2(theWrapped.getSourceElements(localElement.reverse(), theWrapped), el -> el.reverse());
 			return theWrapped.getSourceElements(localElement.reverse(), sourceCollection);
 		}
 
@@ -1180,7 +1184,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
+		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
 			return BetterList.empty();
 		}
 
@@ -1291,8 +1295,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public BetterList<CollectionElement<CollectionElement<E>>> getElementsBySource(ElementId sourceEl) {
-			return QommonsUtils.map2(theCollection.getElementsBySource(sourceEl), this::wrap);
+		public BetterList<CollectionElement<CollectionElement<E>>> getElementsBySource(ElementId sourceEl,
+			BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return BetterList.of(getElement(sourceEl));
+			return QommonsUtils.map2(theCollection.getElementsBySource(sourceEl, sourceCollection), this::wrap);
 		}
 
 		@Override

@@ -789,8 +789,10 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
-			return QommonsUtils.filterMap(theWrapped.getElementsBySource(sourceEl), el -> {
+		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return BetterList.of(getElement(sourceEl));
+			return QommonsUtils.filterMap(theWrapped.getElementsBySource(sourceEl, sourceCollection), el -> {
 				int index = theWrapped.getElementsBefore(el.getElementId());
 				return index >= theStart && index < theEnd;
 			}, el -> el);
@@ -1185,8 +1187,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public BetterList<CollectionElement<CollectionElement<E>>> getElementsBySource(ElementId sourceEl) {
-			return QommonsUtils.filterMap(super.getElementsBySource(sourceEl), el -> check(el.getElementId(), true, true), null);
+		public BetterList<CollectionElement<CollectionElement<E>>> getElementsBySource(ElementId sourceEl,
+			BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return BetterList.of(getElement(sourceEl));
+			return QommonsUtils.filterMap(super.getElementsBySource(sourceEl, sourceCollection), el -> check(el.getElementId(), true, true),
+				null);
 		}
 
 		@Override
@@ -1439,10 +1445,10 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
-			if (sourceEl instanceof ConstantList<?>.IndexElementId && ((IndexElementId) sourceEl).getList() == this)
+		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
 				return BetterList.of(getElement(sourceEl));
-			return null;
+			return BetterList.empty();
 		}
 
 		@Override

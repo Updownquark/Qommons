@@ -518,8 +518,10 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 
 		@Override
-		public BetterList<CollectionElement<K>> getElementsBySource(ElementId sourceEl) {
-			return getBacking().getElementsBySource(sourceEl);
+		public BetterList<CollectionElement<K>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return BetterList.of(getElement(sourceEl));
+			return getBacking().getElementsBySource(sourceEl, sourceCollection);
 		}
 
 		@Override
@@ -828,9 +830,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 
 		@Override
-		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
+		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return BetterList.of(getElement(sourceEl));
 			BetterCollection<E> wrapped = theWrapped.getBacking(false);
-			return wrapped == null ? BetterList.empty() : wrapped.getElementsBySource(sourceEl);
+			return wrapped == null ? BetterList.empty() : wrapped.getElementsBySource(sourceEl, sourceCollection);
 		}
 
 		@Override

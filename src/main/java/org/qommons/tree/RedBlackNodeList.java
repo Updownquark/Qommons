@@ -266,8 +266,8 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	}
 
 	@Override
-	public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
-		if (sourceEl instanceof RedBlackNodeList.NodeId && ((NodeId) sourceEl).getList() == this)
+	public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
+		if (sourceCollection == this)
 			return BetterList.of(getElement(sourceEl));
 		return BetterList.empty();
 	}

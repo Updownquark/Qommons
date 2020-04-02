@@ -394,8 +394,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		}
 
 		@Override
-		public BetterList<CollectionElement<MultiEntryHandle<K, V>>> getElementsBySource(ElementId sourceEl) {
-			return QommonsUtils.map2(getMap().keySet().getElementsBySource(sourceEl), //
+		public BetterList<CollectionElement<MultiEntryHandle<K, V>>> getElementsBySource(ElementId sourceEl,
+			BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return BetterList.of(getElement(sourceEl));
+			return QommonsUtils.map2(getMap().keySet().getElementsBySource(sourceEl, sourceCollection), //
 				keyEl -> entryFor(getMap().getEntryById(keyEl.getElementId())));
 		}
 
@@ -718,18 +721,21 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		}
 
 		@Override
-		public BetterList<CollectionElement<MultiEntryValueHandle<K, V>>> getElementsBySource(ElementId sourceEl) {
+		public BetterList<CollectionElement<MultiEntryValueHandle<K, V>>> getElementsBySource(ElementId sourceEl,
+			BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return BetterList.of(getElement(sourceEl));
 			BetterList<? extends CollectionElement<?>> els;
 			if (sourceEl instanceof KeyValueElementId) {
 				KeyValueElementId kvId = (KeyValueElementId) sourceEl;
-				els = getMap().keySet().getElementsBySource(kvId.keyId);
+				els = getMap().keySet().getElementsBySource(kvId.keyId, sourceCollection);
 				if (!els.isEmpty()) {
 					ElementId keyId = els.getFirst().getElementId();
-					return QommonsUtils.map2(getMap().getEntryById(keyId).getValues().getElementsBySource(kvId.valueId), //
+					return QommonsUtils.map2(getMap().getEntryById(keyId).getValues().getElementsBySource(kvId.valueId, sourceCollection), //
 						valueEl -> entryFor(getMap().getEntryById(keyId, valueEl.getElementId())));
 				}
 			}
-			els = getMap().keySet().getElementsBySource(sourceEl);
+			els = getMap().keySet().getElementsBySource(sourceEl, sourceCollection);
 			if (!els.isEmpty()) {
 				return BetterList
 					.of(els.stream().flatMap(keyEl -> getMap().getEntryById(keyEl.getElementId()).getValues().elements().stream()//
@@ -740,7 +746,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 				CollectionElement<K> keyEl = getMap().keySet().getTerminalElement(true);
 				while (keyEl != null) {
 					MultiEntryHandle<K, V> entry = getMap().getEntryById(keyEl.getElementId());
-					els = entry.getValues().getElementsBySource(sourceEl);
+					els = entry.getValues().getElementsBySource(sourceEl, sourceCollection);
 					if (!els.isEmpty())
 						return BetterList
 							.of(els.stream().map(valueEl -> entryFor(getMap().getEntryById(entry.getElementId(), valueEl.getElementId()))));

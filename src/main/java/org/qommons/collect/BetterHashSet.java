@@ -571,8 +571,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
-		if (sourceEl instanceof BetterHashSet.HashId && ((HashId) sourceEl).getSet() == this)
+	public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
+		if (sourceCollection == this)
 			return BetterList.of(getElement(sourceEl));
 		return BetterList.empty();
 	}

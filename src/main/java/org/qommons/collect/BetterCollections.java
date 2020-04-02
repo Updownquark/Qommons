@@ -178,8 +178,10 @@ public class BetterCollections {
 		}
 
 		@Override
-		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
-			return (BetterList<CollectionElement<E>>) (BetterList<?>) theWrapped.getElementsBySource(sourceEl);
+		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return BetterList.of(getElement(sourceEl));
+			return (BetterList<CollectionElement<E>>) (BetterList<?>) theWrapped.getElementsBySource(sourceEl, sourceCollection);
 		}
 
 		@Override

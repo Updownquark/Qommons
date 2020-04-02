@@ -606,8 +606,11 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		}
 
 		@Override
-		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl) {
-			return QommonsUtils.filterMap(theWrapped.getElementsBySource(sourceEl), el -> isInRange(el.get()) == 0, el -> el);
+		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return BetterList.of(getElement(sourceEl));
+			return QommonsUtils.filterMap(theWrapped.getElementsBySource(sourceEl, sourceCollection), el -> isInRange(el.get()) == 0,
+				el -> el);
 		}
 
 		@Override
