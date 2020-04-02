@@ -414,8 +414,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 			CollectionElement<E> el = getTerminalElement(false);
 			while (el != null) {
 				if (filter.test(el.get())) {
-					mutableElement(el.getElementId()).remove();
-					removed = true;
+					MutableCollectionElement<E> mutableEl = mutableElement(el.getElementId());
+					if (mutableEl.canRemove() == null) {
+						mutableEl.remove();
+						removed = true;
+					}
 				}
 				el = getAdjacentElement(el.getElementId(), false);
 			}

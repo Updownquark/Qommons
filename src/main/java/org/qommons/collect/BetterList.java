@@ -1055,6 +1055,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		public ElementList(BetterList<E> collection, ElementId lowBound, boolean lowIncluded, ElementId highBound, boolean highIncluded) {
 			super(collection);
+			if (lowBound != null && highBound != null && lowBound.compareTo(highBound) > 0)
+				throw new IllegalArgumentException("Low bound (" + lowBound + ") is after high bound (" + highBound + ")");
 			theLowBound = lowBound;
 			isLowIncluded = lowIncluded;
 			theHighBound = highBound;
