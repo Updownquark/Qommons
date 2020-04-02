@@ -719,12 +719,23 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 					return null;
 				if ((first && index >= theStart) || (!first && index < theEnd))
 					return firstMatch;
-				index = theStart;
 				CollectionElement<E> el = getTerminalElement(first);
-				while (index < theEnd && el != null) {
-					if (Objects.equals(el.get(), value))
-						return el;
-					el = theWrapped.getAdjacentElement(el.getElementId(), first);
+				if (first) {
+					index = theStart;
+					while (index < theEnd && el != null) {
+						if (Objects.equals(el.get(), value))
+							return el;
+						el = theWrapped.getAdjacentElement(el.getElementId(), first);
+						index++;
+					}
+				} else {
+					index = theEnd - 1;
+					while (index >= theStart && el != null) {
+						if (Objects.equals(el.get(), value))
+							return el;
+						el = theWrapped.getAdjacentElement(el.getElementId(), first);
+						index--;
+					}
 				}
 				return null;
 			}
