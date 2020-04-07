@@ -1,5 +1,6 @@
 package org.qommons;
 
+import java.util.Comparator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
@@ -204,6 +205,16 @@ public class LambdaUtils {
 		return p;
 	}
 
+	/**
+	 * @param <T> The type to compare
+	 * @param compare The comparator to wrap
+	 * @param print The toString for the comparator
+	 * @return The printable comparator
+	 */
+	public static <T> Comparator<T> printableComparator(Comparator<T> compare, Supplier<String> print) {
+		return new PrintableComparator<>(compare, print);
+	}
+
 	static class IdentityFunction<T> implements Function<T, T> {
 		static final IdentityFunction<?> INSTANCE = new IdentityFunction<>();
 
@@ -397,6 +408,17 @@ public class LambdaUtils {
 		@Override
 		public X apply(T t, U u, V v) {
 			return getLambda().apply(t, u, v);
+		}
+	}
+
+	static class PrintableComparator<T> extends PrintableLambda<Comparator<T>> implements Comparator<T> {
+		public PrintableComparator(Comparator<T> lambda, Supplier<String> print) {
+			super(lambda, print);
+		}
+
+		@Override
+		public int compare(T o1, T o2) {
+			return getLambda().compare(o1, o2);
 		}
 	}
 }
