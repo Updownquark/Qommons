@@ -226,12 +226,18 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 	public BinaryTreeNode<E> addElement(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException {
 		try (Transaction t = lock(true, null)) {
+			boolean useAfter = false, useBefore = false;
 			if (after != null) {
 				int compare = theCompare.compare(getElement(after).get(), value);
 				if (isDistinct && compare == 0)
 					return null;
 				else if (compare > 0)
 					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
+				if (first) {
+					CollectionElement<E> adj = getAdjacentElement(after, true);
+					if (adj == null || theCompare.compare(adj.get(), value) >= 0)
+						useAfter = true;
+				}
 			}
 			if (before != null) {
 				int compare = theCompare.compare(getElement(before).get(), value);
@@ -239,16 +245,21 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 					return null;
 				else if (compare < 0)
 					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
+				if (!first) {
+					CollectionElement<E> adj = getAdjacentElement(before, false);
+					if (adj == null || theCompare.compare(adj.get(), value) <= 0)
+						useBefore = true;
+				}
 			}
 			if (!isDistinct) {
 				// If this list is not distinct, and therefore the positioning may be flexible,
 				// try to put the value in the appropriate position relative to the after or before elements
 				// Also more efficient this way if the caller has gone to the trouble of figuring out where to put the element
-				if ((first && after != null) || (!first && before != null))
-					return super.addElement(value, after, null, true);
+				if (useAfter || useBefore)
+					return super.addElement(value, after, before, first);
 			}
 			BinaryTreeNode<E> result = search(searchFor(value, 0), BetterSortedList.SortedSearchFilter.of(first, false));
-			if (result == null)
+			if (result == null) // Empty list
 				return super.addElement(value, after, before, first);
 			int compare = theCompare.compare(result.get(), value);
 			if (isDistinct) {
@@ -273,6 +284,8 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 
 	@Override
 	public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+		if (after != null && before != null && after.compareTo(before) > 0)
+			throw new IllegalArgumentException("after (" + after + ") is after before (" + before + ")");
 		E value = getElement(valueEl).get();
 		if (after != null && theCompare.compare(value, getElement(after).get()) < 0)
 			return StdMsg.ILLEGAL_ELEMENT_POSITION;
@@ -284,7 +297,11 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 	@Override
 	public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 		throws UnsupportedOperationException, IllegalArgumentException {
-		MutableCollectionElement<E> el = mutableElement(before);
+		if (after != null && before != null && after.compareTo(before) > 0)
+			throw new IllegalArgumentException("after (" + after + ") is after before (" + before + ")");
+		if ((after == null || valueEl.compareTo(after) >= 0) && (before == null || valueEl.compareTo(before) <= 0))
+			return getElement(valueEl);
+		MutableCollectionElement<E> el = mutableElement(valueEl);
 		E value = el.get();
 		if (after != null && theCompare.compare(value, getElement(after).get()) < 0)
 			throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);

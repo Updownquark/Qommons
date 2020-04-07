@@ -1138,7 +1138,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		public CollectionElement<CollectionElement<E>> getElement(CollectionElement<E> value, boolean first) {
 			if (value == null || !check(value.getElementId(), true, true))
 				return null;
-			return super.getElement(value, first);
+			return getElement(value.getElementId());
 		}
 
 		@Override

@@ -1040,14 +1040,14 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
 			return getWrapped()//
 				.canMove(//
-					valueEl.reverse(), ElementId.reverse(after), ElementId.reverse(before));
+					valueEl.reverse(), ElementId.reverse(before), ElementId.reverse(after));
 		}
 
 		@Override
 		public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove) {
 			return getWrapped()//
 				.move(//
-					valueEl.reverse(), ElementId.reverse(after), ElementId.reverse(before), !first, afterRemove)
+					valueEl.reverse(), ElementId.reverse(before), ElementId.reverse(after), !first, afterRemove)
 				.reverse();
 		}
 

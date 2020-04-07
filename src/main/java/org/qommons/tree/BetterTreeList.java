@@ -127,6 +127,8 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 	@Override
 	public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 		throws UnsupportedOperationException, IllegalArgumentException {
+		if ((first && valueEl.equals(after)) || (!first && valueEl.equals(before)))
+			return getElement(valueEl);
 		MutableCollectionElement<E> el = mutableElement(valueEl);
 		E value = el.get();
 		el.remove();
