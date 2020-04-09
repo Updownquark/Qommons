@@ -19,6 +19,15 @@ public class LambdaUtils {
 		}
 	};
 
+	public static final Object IDENTITY = new Object() {
+		@Override
+		public String toString() {
+			return "IDENTITY";
+		}
+	};
+
+	private interface Identity {}
+
 	/**
 	 * @param o The lambda to check
 	 * @return Whether the given lambda has been configured to print
@@ -32,6 +41,8 @@ public class LambdaUtils {
 	 * @return The identifier associated with the given lambda, if any
 	 */
 	public static Object getIdentifier(Object o) {
+		if (o instanceof Identity)
+			return IDENTITY;
 		Object id = o instanceof PrintableLambda ? ((PrintableLambda<?>) o).identifier : null;
 		return id == NULL_PLACEHOLDER ? null : id;
 	}
@@ -207,6 +218,16 @@ public class LambdaUtils {
 
 	/**
 	 * @param <T> The type to compare
+	 * @param compare The comparable to wrap
+	 * @param print The toString for the comparable
+	 * @return The printable comparable
+	 */
+	public static <T> Comparable<T> printableComparable(Comparable<T> compare, Supplier<String> print) {
+		return new PrintableComparable<>(compare, print);
+	}
+
+	/**
+	 * @param <T> The type to compare
 	 * @param compare The comparator to wrap
 	 * @param print The toString for the comparator
 	 * @return The printable comparator
@@ -215,7 +236,7 @@ public class LambdaUtils {
 		return new PrintableComparator<>(compare, print);
 	}
 
-	static class IdentityFunction<T> implements Function<T, T> {
+	static class IdentityFunction<T> implements Function<T, T>, Identity {
 		static final IdentityFunction<?> INSTANCE = new IdentityFunction<>();
 
 		@Override
@@ -408,6 +429,17 @@ public class LambdaUtils {
 		@Override
 		public X apply(T t, U u, V v) {
 			return getLambda().apply(t, u, v);
+		}
+	}
+
+	static class PrintableComparable<T> extends PrintableLambda<Comparable<T>> implements Comparable<T> {
+		public PrintableComparable(Comparable<T> lambda, Supplier<String> print) {
+			super(lambda, print);
+		}
+
+		@Override
+		public int compareTo(T o1) {
+			return getLambda().compareTo(o1);
 		}
 	}
 
