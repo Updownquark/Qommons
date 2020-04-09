@@ -10,8 +10,10 @@ import java.util.NavigableMap;
 import java.util.NoSuchElementException;
 import java.util.TreeMap;
 import java.util.function.BiPredicate;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
+import org.qommons.ex.ExConsumer;
 import org.qommons.ex.ExFunction;
 
 /** A {@link Collection} utility class */
@@ -197,6 +199,9 @@ public class CollectionUtils {
 		private boolean isLeftFirst;
 		private Comparator<? super L> theCompare;
 		private ExFunction<? super ElementSyncInput<L, R>, ElementSyncAction, ? extends X> theCommonHandler;
+		private ExConsumer<ElementSyncInput<L, R>, ? extends X> theLeftListener;
+		private ExConsumer<ElementSyncInput<L, R>, ? extends X> theRightListener;
+		private ExConsumer<ElementSyncInput<L, R>, ? extends X> theCommonListener;
 
 		/** @param map The (exception-throwing) function to produce left-list values from right-list ones */
 		public SimpleCollectionSynchronizer(ExFunction<? super R, ? extends L, ? extends X> map) {
@@ -318,18 +323,75 @@ public class CollectionUtils {
 			return (S) this;
 		}
 
+		/**
+		 * @param onLeft The listener to be notified for each left-only element encountered in the adjustment
+		 * @return This synchronizer
+		 */
+		public S onLeftX(ExConsumer<ElementSyncInput<L, R>, ? extends X> onLeft) {
+			theLeftListener = onLeft;
+			return (S) this;
+		}
+
+		/**
+		 * @param onLeft The listener to be notified for each left-only element encountered in the adjustment
+		 * @return This synchronizer
+		 */
+		public S onLeft(Consumer<ElementSyncInput<L, R>> onLeft) {
+			return onLeftX(ExConsumer.wrap(onLeft));
+		}
+
+		/**
+		 * @param onRight The listener to be notified for each right-only element encountered in the adjustment
+		 * @return This synchronizer
+		 */
+		public S onRightX(ExConsumer<ElementSyncInput<L, R>, ? extends X> onRight) {
+			theRightListener = onRight;
+			return (S) this;
+		}
+
+		/**
+		 * @param onRight The listener to be notified for each right-only element encountered in the adjustment
+		 * @return This synchronizer
+		 */
+		public S onRight(Consumer<ElementSyncInput<L, R>> onRight) {
+			return onRightX(ExConsumer.wrap(onRight));
+		}
+
+		/**
+		 * @param onCommon The listener to be notified for each common element encountered in the adjustment
+		 * @return This synchronizer
+		 */
+		public S onCommonX(ExConsumer<ElementSyncInput<L, R>, ? extends X> onCommon) {
+			theCommonListener = onCommon;
+			return (S) this;
+		}
+
+		/**
+		 * @param onCommon The listener to be notified for each common element encountered in the adjustment
+		 * @return This synchronizer
+		 */
+		public S onCommon(Consumer<ElementSyncInput<L, R>> onCommon) {
+			return onCommonX(ExConsumer.wrap(onCommon));
+		}
+
 		@Override
 		public ElementSyncAction leftOnly(ElementSyncInput<L, R> element) throws X {
+			if (theLeftListener != null)
+				theLeftListener.accept(element);
 			return isRemoving ? element.remove() : element.preserve();
 		}
 
 		@Override
 		public ElementSyncAction rightOnly(ElementSyncInput<L, R> element) throws X {
+			if (theRightListener != null)
+				theRightListener.accept(element);
 			return isAdding ? element.useValue(theMap.apply(element.getRightValue())) : element.preserve();
 		}
 
 		@Override
 		public ElementSyncAction common(ElementSyncInput<L, R> element) throws X {
+			if (theCommonListener != null)
+				theCommonListener.accept(element);
 			if (theCommonHandler == null)
 				return element.remove();
 			else
@@ -347,16 +409,22 @@ public class CollectionUtils {
 
 		@Override
 		public ElementSyncAction universalLeftOnly(ElementSyncInput<L, R> element) {
+			if (theLeftListener != null)
+				return null;
 			return isRemoving ? element.remove() : element.preserve();
 		}
 
 		@Override
 		public ElementSyncAction universalRightOnly(ElementSyncInput<L, R> element) {
+			if (theRightListener != null)
+				return null;
 			return isAdding ? null : element.preserve();
 		}
 
 		@Override
 		public ElementSyncAction universalCommon(ElementSyncInput<L, R> element) {
+			if (theCommonListener != null)
+				return null;
 			if (theCommonHandler == null)
 				return element.remove();
 			else if (theCommonHandler == PRESERVE_COMMON)
