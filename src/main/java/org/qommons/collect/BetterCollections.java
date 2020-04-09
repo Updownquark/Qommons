@@ -102,6 +102,8 @@ public class BetterCollections {
 
 		/** @param wrapped The collection to wrap */
 		protected UnmodifiableBetterCollection(BetterCollection<? extends E> wrapped) {
+			if(wrapped==null)
+				throw new NullPointerException();
 			theWrapped = wrapped;
 		}
 

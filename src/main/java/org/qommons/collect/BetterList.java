@@ -477,8 +477,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		public E next() {
 			if (!hasNext())
 				throw new NoSuchElementException();
-			if (!elementIsNext)
-				element = theList.getAdjacentElement(element.getElementId(), true);
+			if (!elementIsNext) {
+				if (element != null)
+					element = theList.getAdjacentElement(element.getElementId(), true);
+				else
+					element = theList.getTerminalElement(true);
+			}
 			E value = element.get();
 			elementIsNext = false;
 			isReadyForMod = true;
@@ -507,8 +511,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		public E previous() {
 			if (!hasPrevious())
 				throw new NoSuchElementException();
-			if (elementIsNext)
-				element = theList.getAdjacentElement(element.getElementId(), false);
+			if (elementIsNext) {
+				if (element != null)
+					element = theList.getAdjacentElement(element.getElementId(), false);
+				else
+					element = theList.getTerminalElement(false);
+			}
 			E value = element.get();
 			elementIsNext = true;
 			isReadyForMod = true;
@@ -572,12 +580,13 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public void add(E e) {
-			if (!isReadyForMod)
-				throw new IllegalStateException(
-					"Modification must come after a call to next() or previous() and before the next call to hasNext() or hasPrevious()");
 			ElementId after, before;
 			boolean first;
-			if (elementIsNext) {
+			if (!hasNext()) {
+				after = CollectionElement.getElementId(theList.getTerminalElement(false));
+				before = null;
+				first = false;
+			} else if (elementIsNext) {
 				before = element.getElementId();
 				after = CollectionElement.getElementId(theList.getAdjacentElement(before, false));
 				first = false;
@@ -974,29 +983,46 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
+			CollectionElement<E> newEl;
+			int wrapSize;
 			try (Transaction t = lock(true, null)) {
 				if (after == null && theStart > 0)
 					after = theWrapped.getElement(theStart - 1).getElementId();
-				int wrapSize = theWrapped.size();
+				wrapSize = theWrapped.size();
 				if (before == null && theEnd < wrapSize)
 					before = theWrapped.getElement(theEnd).getElementId();
-				CollectionElement<E> newEl = theWrapped.addElement(value, after, before, first);
+				newEl = theWrapped.addElement(value, after, before, first);
 				if (newEl != null) {
 					theEnd++;
 				}
-				return newEl;
 			}
+			if (newEl == null && (theStart > 0 || theEnd < wrapSize) && !contains(value)) {
+				// The contract of Collection says that the only way this method can return null is in the case that
+				// the value is already in the collection and may not be added in duplicate.
+				// If the underlying list does rejects the add for this reason but the element is out of the bounds of this sub list,
+				// we need to throw an exception
+				throw new IllegalArgumentException(StdMsg.ELEMENT_EXISTS);
+			}
+			return newEl;
 		}
 
 		@Override
 		public CollectionElement<E> addElement(int index, E element) {
+			CollectionElement<E> newEl;
 			try (Transaction t = lock(true, null)) {
-				CollectionElement<E> newEl = theWrapped.addElement(theStart + checkIndex(index, true), element);
+				newEl = theWrapped.addElement(theStart + checkIndex(index, true), element);
 				if (newEl != null) {
 					theEnd++;
 				}
-				return newEl;
 			}
+			if (newEl == null && (theStart > 0 || theEnd < theWrapped.size()) && !contains(element)) {
+				// The contract of Collection says that the only way this method can return null is in the case that
+				// the value is already in the collection and may not be added in duplicate.
+				// If the underlying list does rejects the add for this reason but the element is out of the bounds of this sub list,
+				// we need to throw an exception
+				throw new IllegalArgumentException(StdMsg.ELEMENT_EXISTS);
+			}
+			return newEl;
 		}
 
 		@Override

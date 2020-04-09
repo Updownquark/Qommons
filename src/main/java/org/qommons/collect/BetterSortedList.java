@@ -269,12 +269,14 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 
 			@Override
 			public String toString() {
+				StringBuilder str = new StringBuilder();
 				if (theOnExact < 0)
-					return "<" + theValue;
-				else if (theOnExact == 0)
-					return String.valueOf(theValue);
-				else
-					return ">" + theValue;
+					str.append('<');
+				else if (theOnExact > 0)
+					str.append('>');
+				str.append(theValue);
+				str.append(':').append(theCompare);
+				return str.toString();
 			}
 		}
 		return new ValueSearch<>(comparator(), value, onExact);

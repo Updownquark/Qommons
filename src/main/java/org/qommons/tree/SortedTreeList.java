@@ -3,7 +3,6 @@ package org.qommons.tree;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.NavigableSet;
-import java.util.Objects;
 import java.util.SortedSet;
 
 import org.qommons.Transaction;
@@ -176,19 +175,20 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 		BinaryTreeNode<E> found = search(searchFor(value, 0), BetterSortedList.SortedSearchFilter.OnlyMatch);
 		if (found == null)
 			return null;
-		else if (isDistinct || Objects.equals(found.get(), value))
+		else if (isDistinct)
 			return found;
-		for (BinaryTreeNode<E> left = found.getClosest(true); left != null
-			&& theCompare.compare(left.get(), value) == 0; left = left.getClosest(true)) {
-			if (Objects.equals(left.get(), value))
-				return left;
+		if (first) {
+			for (BinaryTreeNode<E> left = found.getClosest(true); left != null
+				&& theCompare.compare(left.get(), value) == 0; left = left.getClosest(true)) {
+				found = left;
+			}
+		} else {
+			for (BinaryTreeNode<E> right = found.getClosest(false); right != null
+				&& theCompare.compare(right.get(), value) == 0; right = right.getClosest(false)) {
+				found = right;
+			}
 		}
-		for (BinaryTreeNode<E> right = found.getClosest(false); right != null
-			&& theCompare.compare(right.get(), value) == 0; right = right.getClosest(false)) {
-			if (Objects.equals(right.get(), value))
-				return right;
-		}
-		return null;
+		return found;
 	}
 
 	@Override

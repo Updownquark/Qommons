@@ -442,18 +442,18 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 			if (index >= 0)
 				return index;
 			else
-				return -index - 1;
+				return -index - 1; // Zeroth element is AFTER the from search
 		}
 
 		/** @return The last index in the wrapped */
 		protected int getMaxIndex() {
 			if (to == null)
-				return theWrapped.size() - 1;
+				return theWrapped.size();
 			int index = theWrapped.indexFor(to);
 			if (index >= 0)
 				return index;
 			else
-				return -index - 2;
+				return -index - 1;
 		}
 
 		@Override
@@ -467,7 +467,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 			if (minIndex < 0)
 				return 0;
 			int maxIndex = getMaxIndex();
-			return Math.max(0, maxIndex - minIndex + 1); // Both minIndex and maxIndex are included here
+			return Math.max(0, maxIndex - minIndex);
 		}
 
 		@Override
@@ -476,14 +476,14 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 			if (minIndex < 0)
 				return true;
 			int maxIndex = getMaxIndex();
-			return minIndex > maxIndex; // Both minIndex and maxIndex are included here
+			return minIndex >= maxIndex;
 		}
 
 		@Override
 		public int indexFor(Comparable<? super E> search) {
 			int minIndex = getMinIndex();
 			int maxIndex = getMaxIndex();
-			if (minIndex > maxIndex)
+			if (minIndex >= maxIndex)
 				return -1;
 			int wrapIdx = theWrapped.indexFor(boundSearch(search));
 			if (wrapIdx < 0) {
@@ -499,7 +499,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 			int minIdx = getMinIndex();
 			if (wIndex < minIdx)
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			if (wIndex > getMaxIndex())
+			if (wIndex >= getMaxIndex())
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 			return wIndex - minIdx;
 		}
@@ -508,11 +508,11 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		public int getElementsAfter(ElementId id) {
 			int wIndex = theWrapped.getElementsBefore(id);
 			int maxIdx = getMaxIndex();
-			if (wIndex > maxIdx)
+			if (wIndex >= maxIdx)
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 			if (wIndex < getMinIndex())
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			return maxIdx - wIndex;
+			return maxIdx - wIndex - 1;
 		}
 
 		@Override
@@ -537,8 +537,8 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 			int min = getMinIndex();
 			int max = getMaxIndex();
 			int wrapIndex = min + index;
-			if (wrapIndex > max + 1 || (wrapIndex == max + 1 && !includeTerminus))
-				throw new IndexOutOfBoundsException(index + " of " + Math.max(0, max - min + 1));
+			if (wrapIndex > max || (wrapIndex == max && !includeTerminus))
+				throw new IndexOutOfBoundsException(index + " of " + Math.max(0, max - min));
 			return min + index;
 		}
 
@@ -635,12 +635,12 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 				if (from == null)
 					wrapTerminal = theWrapped.getTerminalElement(true);
 				else
-					wrapTerminal = theWrapped.search(from, BetterSortedList.SortedSearchFilter.PreferGreater);
+					wrapTerminal = theWrapped.search(from, BetterSortedList.SortedSearchFilter.Greater);
 			} else {
 				if (to == null)
 					wrapTerminal = theWrapped.getTerminalElement(false);
 				else
-					wrapTerminal = theWrapped.search(to, BetterSortedList.SortedSearchFilter.PreferLess);
+					wrapTerminal = theWrapped.search(to, BetterSortedList.SortedSearchFilter.Less);
 			}
 			if (wrapTerminal == null)
 				return null;
@@ -862,7 +862,59 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 
 		@Override
 		public Comparator<? super E> comparator() {
-			return getWrapped().comparator().reversed();
+			return reverse(getWrapped().comparator());
+		}
+
+		/**
+		 * @param <X> The type to compare
+		 * @param search The comparable to reverse
+		 * @return The reversed comparable
+		 */
+		public static <X> Comparable<X> reverse(Comparable<X> search) {
+			class ReversedSearch implements Comparable<X> {
+				Comparable<X> getWrapped() {
+					return search;
+				}
+
+				@Override
+				public int compareTo(X v) {
+					return -search.compareTo(v);
+				}
+
+				@Override
+				public String toString() {
+					return "reverse(" + search + ")";
+				}
+			}
+			if (search instanceof ReversedSearch)
+				return ((ReversedSearch) search).getWrapped();
+			return new ReversedSearch();
+		}
+
+		/**
+		 * @param <X> The type to compare
+		 * @param compare The comparator to reverse
+		 * @return The reversed comparator
+		 */
+		public static <X> Comparator<X> reverse(Comparator<X> compare) {
+			class ReversedCompare implements Comparator<X> {
+				Comparator<X> getWrapped() {
+					return compare;
+				}
+
+				@Override
+				public int compare(X v1, X v2) {
+					return -compare.compare(v1, v2);
+				}
+
+				@Override
+				public String toString() {
+					return "reverse(" + compare + ")";
+				}
+			}
+			if (compare instanceof ReversedCompare)
+				return ((ReversedCompare) compare).getWrapped();
+			return new ReversedCompare();
 		}
 
 		@Override
@@ -875,10 +927,6 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 				index = size() - index;
 				return -(index + 1);
 			}
-		}
-
-		private static <X> Comparable<X> reverse(Comparable<X> compare) {
-			return v -> -compare.compareTo(v);
 		}
 
 		@Override
