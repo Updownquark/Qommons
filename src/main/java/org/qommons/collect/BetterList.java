@@ -382,6 +382,14 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
+		public BetterList<E> reverse() {
+			if (BetterCollections.simplifyDuplicateOperations())
+				return this;
+			else
+				return BetterList.super.reverse();
+		}
+
+		@Override
 		public int hashCode() {
 			return BetterCollection.hashCode(this);
 		}

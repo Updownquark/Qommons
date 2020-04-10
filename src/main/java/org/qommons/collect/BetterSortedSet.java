@@ -451,7 +451,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 				return theWrapped.size();
 			int index = theWrapped.indexFor(to);
 			if (index >= 0)
-				return index;
+				return index + 1;
 			else
 				return -index - 1;
 		}
@@ -683,7 +683,11 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 
 		@Override
 		public BetterSortedSet<E> subSet(Comparable<? super E> innerFrom, Comparable<? super E> innerTo) {
-			return new BetterSubSet<>(theWrapped, BetterSortedList.and(from, innerFrom, true), BetterSortedList.and(to, innerTo, false));
+			if (BetterCollections.simplifyDuplicateOperations())
+				return new BetterSubSet<>(theWrapped, BetterSortedList.and(from, innerFrom, true),
+					BetterSortedList.and(to, innerTo, false));
+			else
+				return BetterSortedSet.super.subSet(innerFrom, innerTo);
 		}
 
 				@Override
@@ -954,6 +958,14 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		public <X> boolean repair(RepairListener<E, X> listener) {
 			RepairListener<E, X> reversedListener = listener == null ? null : new BetterSet.ReversedBetterSet.ReversedRepairListener<>(listener);
 			return getWrapped().repair(reversedListener);
+		}
+
+		@Override
+		public BetterSortedSet<E> reverse() {
+			if (BetterCollections.simplifyDuplicateOperations())
+				return this;
+			else
+				return BetterSortedSet.super.reverse();
 		}
 
 		@Override

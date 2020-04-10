@@ -213,6 +213,14 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 		public CollectionElement<E> splitBetween(ElementId element1, ElementId element2) {
 			return getWrapped().splitBetween(element1, element2);
 		}
+
+		@Override
+		public SplitSpliterable<E> reverse() {
+			if (BetterCollections.simplifyDuplicateOperations())
+				return this;
+			else
+				return SplitSpliterable.super.reverse();
+		}
 	}
 
 	/**
@@ -321,6 +329,14 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 			@Override
 			public CollectionElement<E> splitBetween(ElementId element1, ElementId element2) {
 				return getWrapped().splitBetween(element1, element2);
+			}
+
+			@Override
+			public SortedSetSplitSpliterable<E> reverse() {
+				if (BetterCollections.simplifyDuplicateOperations())
+					return this;
+				else
+					return SortedSetSplitSpliterable.super.reverse();
 			}
 		}
 

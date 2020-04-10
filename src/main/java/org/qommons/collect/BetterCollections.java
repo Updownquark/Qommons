@@ -9,6 +9,32 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /** A static utility class for {@link BetterCollection}s and related structures */
 public class BetterCollections {
+	/**
+	 * This flag allows some BetterCollection implementations to simplify duplicate operations like collection.reverse().reverse().
+	 * 
+	 * It is disableable for testing.
+	 */
+	private static boolean SIMPLIFY_DUPLICATE_OPERATIONS = true;
+
+	/**
+	 * This flag allows some BetterCollection implementations to simplify duplicate operations like collection.reverse().reverse().
+	 * 
+	 * It is disableable for testing.
+	 * 
+	 * @return Whether BetterCollections should simplify duplicate operations
+	 */
+	public static boolean simplifyDuplicateOperations() {
+		return SIMPLIFY_DUPLICATE_OPERATIONS;
+	}
+
+	/**
+	 * @param simplify Whether BetterCollections should simplify duplicate operations
+	 * @see #simplifyDuplicateOperations()
+	 */
+	public static void setSimplifyDuplicateOperations(boolean simplify) {
+		SIMPLIFY_DUPLICATE_OPERATIONS = simplify;
+	}
+
 	private BetterCollections() {}
 
 	/**
