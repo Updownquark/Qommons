@@ -1096,37 +1096,35 @@ public class QommonsTestUtils {
 			@Override
 			public boolean matches(Object arg0) {
 				Collection<T> arg = (Collection<T>) arg0;
-				if (ordered) {
-					// Must be equivalent
-					Map<T, Integer> vValueCounts = new HashMap<>();
-					Map<T, Integer> aValueCounts = new HashMap<>();
-					Iterator<? extends T> vIter = values.iterator();
-					Iterator<T> aIter = arg.iterator();
-					int i;
-					for (i = 0; vIter.hasNext() && aIter.hasNext(); i++) {
-						T vValue = vIter.next();
-						T aValue = aIter.next();
-						vValueCounts.compute(vValue, (v, count) -> count == null ? 1 : count + 1);
-						aValueCounts.compute(aValue, (v, count) -> count == null ? 1 : count + 1);
-						if (theFirstMiss < 0 && !equals.test(vValue, aValue))
-							theFirstMiss = i;
-					}
-					boolean bothDone = !(vIter.hasNext() || aIter.hasNext());
-					if (theFirstMiss < 0) {
-						if (!bothDone)
-							theFirstMiss = i;
-						else
-							isSizeMismatched = arg.size() != values.size();
-					} else
-						wasUnorderedEqual = bothDone && vValueCounts.equals(aValueCounts);
-					return theFirstMiss < 0;
-				} else {
-					// Split out here for debugging
-					if (values.containsAll(arg))
-						return true;
-					else
-						return false;
+
+				// Must be equivalent
+				Map<T, Integer> vValueCounts = new HashMap<>();
+				Map<T, Integer> aValueCounts = new HashMap<>();
+				Iterator<? extends T> vIter = values.iterator();
+				Iterator<T> aIter = arg.iterator();
+				int i;
+				for (i = 0; vIter.hasNext() && aIter.hasNext(); i++) {
+					T vValue = vIter.next();
+					T aValue = aIter.next();
+					vValueCounts.compute(vValue, (v, count) -> count == null ? 1 : count + 1);
+					aValueCounts.compute(aValue, (v, count) -> count == null ? 1 : count + 1);
+					if (theFirstMiss < 0 && !equals.test(vValue, aValue))
+						theFirstMiss = i;
 				}
+				boolean bothDone = !(vIter.hasNext() || aIter.hasNext());
+				if (theFirstMiss < 0) {
+					if (!bothDone)
+						theFirstMiss = i;
+					else
+						isSizeMismatched = arg.size() != values.size();
+				} else
+					wasUnorderedEqual = bothDone && vValueCounts.equals(aValueCounts);
+				if (theFirstMiss < 0)
+					return true;
+				else if (!ordered)
+					return wasUnorderedEqual;
+				else
+					return false;
 			}
 
 			@Override
