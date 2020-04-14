@@ -988,11 +988,17 @@ public class TestHelper {
 		public void close() {
 			isTestSetDone = true;
 			theTestExecThread.interrupt();
-			try {
-				Thread.sleep(10); // Wait for the thread to die naturally if possible
-			} catch (InterruptedException e) {}
-			if (theTestExecThread.isAlive())
-				theTestExecThread.stop();
+			if (theTestExecThread.isAlive()) {
+				if (BreakpointHere.getBreakpointCatchCount() > 1) {
+					System.out.println("Declining to kill test on account of breakpoint");
+				} else {
+					try {
+						Thread.sleep(10); // Wait for the thread to die naturally if possible
+					} catch (InterruptedException e) {}
+					if (theTestExecThread.isAlive())
+						theTestExecThread.stop();
+				}
+			}
 		}
 	}
 
