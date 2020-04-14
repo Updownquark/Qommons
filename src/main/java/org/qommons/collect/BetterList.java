@@ -247,7 +247,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		try (Transaction t = lock(true, null)) {
 			CollectionElement<E> el = getElement(index);
 			E value = el.get();
-			mutableElement(el.getElementId()).set(element);
+			mutableElement(el.getElementId())//
+				.set(element);
 			return value;
 		}
 	}
