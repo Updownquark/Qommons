@@ -392,7 +392,13 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		@Override
 		public CollectionElement<K> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			return handleFor(theEntries.move(valueEl, after, before, first, afterRemove));
+			CollectionElement<Map.Entry<K, V>> entry = theEntries.move(valueEl, after, before, first, afterRemove);
+			if (entry.getElementId().equals(valueEl))
+				return getElement(valueEl);
+			Entry newEntry = (Entry) newEntry(entry.get().getKey(), entry.get().getValue());
+			newEntry.theId = entry.getElementId();
+			theEntries.mutableElement(entry.getElementId()).set(newEntry);
+			return newEntry.keyHandle();
 		}
 
 		@Override

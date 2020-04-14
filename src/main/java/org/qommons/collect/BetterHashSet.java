@@ -230,14 +230,38 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		return (n < 0) ? 1 : (n >= MAXIMUM_CAPACITY) ? MAXIMUM_CAPACITY : n + 1;
 	}
 
+	private void checkIntegrity() {
+		if (!BetterCollections.isTesting())
+			return;
+		HashEntry entry = theFirst;
+		HashEntry last = null;
+		int entryCount = 0;
+		while (entry != null) {
+			if (!entry.getElementId().isPresent())
+				throw new IllegalStateException("Entry removed: " + entry);
+			entryCount++;
+			last = entry;
+			entry = entry.next;
+		}
+		if (theLast != last)
+			throw new IllegalStateException("Expected last to be " + theLast + ", but was " + last);
+		if (entryCount != theSize)
+			throw new IllegalStateException(
+				"Expected size " + theSize + " but only encountered " + entryCount + " elements: last was " + last);
+	}
+
 	private void rehash(int expectedSize) {
 		int tableSize = tableSizeFor((int) Math.ceil(expectedSize / theLoadFactor));
 		HashTableEntry[] table = new BetterHashSet.HashTableEntry[tableSize];
 		HashEntry entry = theFirst;
+		int entryCount = 0;
 		while (entry != null) {
 			insert(table, entry, -1, null);
 			entry = entry.next;
+			entryCount++;
 		}
+		if (entryCount != theSize)
+			throw new IllegalStateException("Expected size " + theSize + " but only encountered " + entryCount + " elements");
 		theTable = table;
 	}
 
@@ -387,6 +411,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	 */
 	public CollectionElement<E> getOrAdd(int hashCode, Predicate<? super E> equals, Supplier<? extends E> value, ElementId after,
 		ElementId before, boolean first, Runnable added) {
+		checkIntegrity(); // TODO Debugging, remove
 		HashTableEntry[] table = theTable;
 		int tableIndex = getTableIndex(table.length, hashCode);
 		HashTableEntry tableEntry = table[tableIndex];
@@ -408,10 +433,11 @@ public class BetterHashSet<E> implements BetterSet<E> {
 				return entry;
 			HashEntry adjacent = entry;
 			entry = linkUp(hashCode, value.get(), after, before, first);
-			insert(table, entry, tableIndex, adjacent);
 			theSize++;
+			insert(table, entry, tableIndex, adjacent);
 			if (added != null)
 				added.run();
+			checkIntegrity(); // TODO Debugging, remove
 			return entry.immutable();
 		}
 	}
@@ -430,7 +456,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 				else
 					theLast = entry;
 				afterEntry.next = entry;
-				while (afterEntry != null) {
+				while (afterEntry != null && afterEntry.theOrder == afterEntry.next.theOrder) {
 					afterEntry.theOrder--;
 					afterEntry = afterEntry.previous;
 				}
@@ -457,7 +483,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 				else
 					theFirst = entry;
 				beforeEntry.previous = entry;
-				while (beforeEntry != null) {
+				while (beforeEntry != null && beforeEntry.theOrder == beforeEntry.previous.theOrder) {
 					beforeEntry.theOrder++;
 					beforeEntry = beforeEntry.next;
 				}
@@ -493,6 +519,11 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	@Override
 	public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 		throws UnsupportedOperationException, IllegalArgumentException {
+		checkIntegrity(); // TODO Debugging, remove
+		if (valueEl.equals(after))
+			after = CollectionElement.getElementId(getAdjacentElement(after, false));
+		if (valueEl.equals(before))
+			before = CollectionElement.getElementId(getAdjacentElement(before, true));
 		HashId hashId = (BetterHashSet<E>.HashId) valueEl;
 		if (!hashId.isPresent())
 			throw new NoSuchElementException("Element has been removed");
@@ -501,32 +532,41 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		try (Transaction t = lock(true, null)) {
 			HashEntry entry = hashId.entry;
 			if (first) {
-				if ((after == null && entry.previous == null) || (after != null && after.equals(entry.previous.getElementId())))
+				if ((after == null && entry.previous == null)
+					|| (after != null && entry.previous != null && after.equals(entry.previous.getElementId())))
 					return entry.immutable();
 			} else {
-				if ((before == null && entry.next == null) || (before != null && before.equals(entry.next.getElementId())))
+				if ((before == null && entry.next == null)
+					|| (before != null && entry.next != null && before.equals(entry.next.getElementId())))
 					return entry.immutable();
 			}
 			// Remove the element
 			if (entry.previous != null)
 				entry.previous.next = entry.next;
+			else
+				theFirst = entry.next;
 			if (entry.next != null)
 				entry.next.previous = entry.previous;
+			else
+				theLast = entry.previous;
 			HashEntry newEntry;
 			ElementId prevTreeEntry = CollectionElement
 				.getElementId(entry.theTableEntry.entries.getAdjacentElement(entry.theTreeNode.getElementId(), false));
 			entry.theTreeNode.remove();
+			entry.next = entry.previous = null;
 			if (afterRemove != null) {
 				long preStamp = getStamp();
 				theSize--;
 				afterRemove.run();
 				if (getStamp() != preStamp)
 					throw new IllegalStateException("after-remove callback may not modify the set");
+				checkIntegrity(); // TODO Debugging, remove
 				theSize++;
 			}
 			newEntry = linkUp(entry.hashCode, entry.theValue, after, before, first);
 			ElementId added = entry.theTableEntry.entries.addElement(newEntry, prevTreeEntry, null, true).getElementId();
 			newEntry.placedAt(entry.theTableEntry, entry.theTableEntry.entries.mutableElement(added));
+			checkIntegrity(); // TODO Debugging, remove
 			return newEntry.immutable();
 		}
 	}
@@ -821,6 +861,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			try (Transaction t = lock(true, null)) {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
+				checkIntegrity(); // TODO Debugging, remove
 				theTreeNode.remove();
 				if (theFirst == this)
 					theFirst = next;
@@ -831,6 +872,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 				if (next != null)
 					next.previous = previous;
 				theSize--;
+				checkIntegrity(); // TODO Debugging, remove
 			}
 		}
 
@@ -919,6 +961,11 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			if (found != null && (found.hashCode != hashCode || !equals.test(found.theValue)))
 				found = null;
 			return found;
+		}
+
+		@Override
+		public String toString() {
+			return "[" + theTableIndex + "]" + entries;
 		}
 	}
 }
