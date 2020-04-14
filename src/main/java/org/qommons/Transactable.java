@@ -107,6 +107,21 @@ public interface Transactable {
 	}
 
 	/**
+	 * Attempts to lock the transactable if it is one
+	 * 
+	 * @param lockable The (possibly) transactable object to lock
+	 * @param write Whether to lock the object for write or read
+	 * @param cause The cause of the lock
+	 * @return The transaction to use to unlock the object, or null if the lock could not be obtained
+	 */
+	static Transaction tryLock(Object lockable, boolean write, Object cause) {
+		if (lockable instanceof Transactable)
+			return ((Transactable) lockable).tryLock(write, cause);
+		else
+			return Transaction.NONE;
+	}
+
+	/**
 	 * @param lockable The potentially transactable item
 	 * @return The item, if it is a {@link Transactable}, or {@link #NONE} otherwise
 	 */

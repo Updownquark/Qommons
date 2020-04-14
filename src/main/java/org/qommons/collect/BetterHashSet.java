@@ -411,7 +411,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	 */
 	public CollectionElement<E> getOrAdd(int hashCode, Predicate<? super E> equals, Supplier<? extends E> value, ElementId after,
 		ElementId before, boolean first, Runnable added) {
-		checkIntegrity(); // TODO Debugging, remove
+		checkIntegrity();
 		HashTableEntry[] table = theTable;
 		int tableIndex = getTableIndex(table.length, hashCode);
 		HashTableEntry tableEntry = table[tableIndex];
@@ -437,7 +437,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			insert(table, entry, tableIndex, adjacent);
 			if (added != null)
 				added.run();
-			checkIntegrity(); // TODO Debugging, remove
+			checkIntegrity();
 			return entry.immutable();
 		}
 	}
@@ -519,7 +519,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	@Override
 	public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 		throws UnsupportedOperationException, IllegalArgumentException {
-		checkIntegrity(); // TODO Debugging, remove
+		checkIntegrity();
 		if (valueEl.equals(after))
 			after = CollectionElement.getElementId(getAdjacentElement(after, false));
 		if (valueEl.equals(before))
@@ -560,13 +560,13 @@ public class BetterHashSet<E> implements BetterSet<E> {
 				afterRemove.run();
 				if (getStamp() != preStamp)
 					throw new IllegalStateException("after-remove callback may not modify the set");
-				checkIntegrity(); // TODO Debugging, remove
+				checkIntegrity();
 				theSize++;
 			}
 			newEntry = linkUp(entry.hashCode, entry.theValue, after, before, first);
 			ElementId added = entry.theTableEntry.entries.addElement(newEntry, prevTreeEntry, null, true).getElementId();
 			newEntry.placedAt(entry.theTableEntry, entry.theTableEntry.entries.mutableElement(added));
-			checkIntegrity(); // TODO Debugging, remove
+			checkIntegrity();
 			return newEntry.immutable();
 		}
 	}
@@ -861,7 +861,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			try (Transaction t = lock(true, null)) {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
-				checkIntegrity(); // TODO Debugging, remove
+				checkIntegrity();
 				theTreeNode.remove();
 				if (theFirst == this)
 					theFirst = next;
@@ -872,7 +872,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 				if (next != null)
 					next.previous = previous;
 				theSize--;
-				checkIntegrity(); // TODO Debugging, remove
+				checkIntegrity();
 			}
 		}
 
