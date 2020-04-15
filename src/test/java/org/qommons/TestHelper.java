@@ -888,6 +888,7 @@ public class TestHelper {
 				System.out.print(caseLabel);
 				System.out.flush();
 			}
+			System.gc(); // Clean out the garbage before each test so we don't mistakenly think the test itself is taking too long
 			Instant caseStart = Instant.now();
 			theTestCase = () -> {
 				tester.accept(helper);
