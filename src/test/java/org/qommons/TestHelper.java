@@ -829,6 +829,7 @@ public class TestHelper {
 		private boolean isTestCaseDone;
 		private Throwable theTestCaseError;
 		private boolean isTestSetDone;
+		private volatile Instant theCaseStart;
 
 		TestSetExecution(Constructor<? extends Testable> creator, boolean isPrintingProgress, boolean isPrintingFailures,
 			Instant originalStart, Duration maxTotalDuration, Duration maxCaseDuration, Duration maxProgressInterval) {
@@ -846,6 +847,10 @@ public class TestHelper {
 				while (!isTestSetDone) {
 					Runnable testCase = theTestCase;
 					if (testCase != null) {
+						// Clean out the garbage before each test so we don't mistakenly think the test itself is taking too long
+						System.gc();
+						theCaseStart = Instant.now();
+						System.out.println("Started at " + theCaseStart);
 						theTestCase = null;
 						try {
 							testCase.run();
@@ -888,12 +893,25 @@ public class TestHelper {
 				System.out.print(caseLabel);
 				System.out.flush();
 			}
-			System.gc(); // Clean out the garbage before each test so we don't mistakenly think the test itself is taking too long
-			Instant caseStart = Instant.now();
 			theTestCase = () -> {
 				tester.accept(helper);
 			};
 			theTestExecThread.interrupt(); // Start test execution
+			Instant caseStart = theCaseStart;
+			long waitStart = System.currentTimeMillis();
+			boolean printedGC = false;
+			while (caseStart == null) {
+				try {
+					Thread.sleep(10);
+				} catch (InterruptedException e) {}
+
+				caseStart = theCaseStart;
+				if (caseStart == null && !printedGC && System.currentTimeMillis() - waitStart >= 250) {
+					printedGC = true;
+					System.out.print(" (GC-ing...) ");
+					System.out.flush();
+				}
+			}
 			Instant totalMax = theMaxTotalDuration == null ? null : caseStart.plus(theMaxTotalDuration);
 			Instant caseMax = theMaxCaseDuration == null ? null : caseStart.plus(theMaxCaseDuration);
 			Instant checkInMax = theMaxProgressInterval == null ? null : caseStart.plus(theMaxProgressInterval);
@@ -907,7 +925,6 @@ public class TestHelper {
 				sleep = Duration.between(caseStart, checkInMax);
 			long caseDebugHitCount = BreakpointHere.getBreakpointCatchCount();
 			boolean first = true;
-			System.out.println("Started at " + caseStart);
 			while (!isTestCaseDone) {
 				long debugHits = BreakpointHere.getBreakpointCatchCount();
 				if (first) {
@@ -950,6 +967,7 @@ public class TestHelper {
 				} catch (InterruptedException e) {}
 			}
 			isTestCaseDone = false;
+			theCaseStart = null;
 			Throwable e = theTestCaseError;
 			theTestCaseError = null;
 			if (e != null) {
