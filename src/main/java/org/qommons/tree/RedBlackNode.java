@@ -254,7 +254,7 @@ public final class RedBlackNode<E> {
 		if (!checkedCont)
 			return null;
 		if (node == null)
-			throw new IndexOutOfBoundsException(index + " of " + nodeIndex);
+			throw new IndexOutOfBoundsException(index + " of " + (nodeIndex + 1));
 		return node;
 	}
 
