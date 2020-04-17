@@ -109,7 +109,7 @@ public class Debug {
 				d.addRootName(path);
 				theData.compute(path, (p, oldD) -> {
 					if (oldD != null)
-						d.merge(oldD);
+						d._merge(oldD);
 					return d;
 				});
 			} else {
@@ -272,7 +272,16 @@ public class Debug {
 			}
 		}
 
-		private void merge(DebugData other) {
+		public void merge(DebugData other) {
+			if (theDebug == null || other.theDebug == null)
+				return;
+			// I don't remember why _merge doesn't merge fields, so I'm leaving it as it is and making this public method do it
+			_merge(other);
+			theValue = other.theValue;
+			theFields.putAll(other.theFields);
+		}
+
+		private void _merge(DebugData other) {
 			other.theCheckRemove.run();
 			theRootNames.addAll(other.theRootNames);
 			theRefs.putAll(other.theRefs);
@@ -294,6 +303,10 @@ public class Debug {
 				return this;
 			theRootNames.add(name);
 			return this;
+		}
+
+		public boolean isActive() {
+			return theDebug != null;
 		}
 
 		public NavigableSet<String> getNames() {
@@ -563,7 +576,7 @@ public class Debug {
 						if (fieldDebug == null)
 							oldD.removeReverseRef(fieldName, this);
 						else if (oldD != fieldDebug)
-							fieldDebug.merge(oldD);
+							fieldDebug._merge(oldD);
 					} else
 						fieldDebug.addReverseRef(fieldName, this);
 					return fieldDebug;
