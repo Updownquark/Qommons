@@ -291,7 +291,9 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	}
 
 	@Override
-	default BetterSortedSet<E> subList(int fromIndex, int toIndex) {
+	default BetterList<E> subList(int fromIndex, int toIndex) {
+		if(!BetterCollections.simplifyDuplicateOperations())
+			return BetterSortedList.super.subList(fromIndex, toIndex);
 		try (Transaction t = lock(false, null)) {
 			// Be inclusive so that adds succeed as often as possible
 			Comparable<? super E> from = fromIndex == 0 ? null : searchFor(get(fromIndex - 1), 1);
@@ -495,7 +497,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 
 		@Override
 		public int getElementsBefore(ElementId id) {
-			int wIndex = theWrapped.getElementsBefore(id);
+			int wIndex = theWrapped.getElementsBefore(strip(id));
 			int minIdx = getMinIndex();
 			if (wIndex < minIdx)
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
@@ -506,7 +508,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 
 		@Override
 		public int getElementsAfter(ElementId id) {
-			int wIndex = theWrapped.getElementsBefore(id);
+			int wIndex = theWrapped.getElementsBefore(strip(id));
 			int maxIdx = getMaxIndex();
 			if (wIndex >= maxIdx)
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
@@ -560,6 +562,8 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		public String canAdd(E value, ElementId after, ElementId before) {
 			if (!belongs(value))
 				return StdMsg.ILLEGAL_ELEMENT;
+			after = strip(after);
+			before = strip(before);
 			if (after == null && from != null)
 				after = CollectionElement.getElementId(theWrapped.search(from, BetterSortedList.SortedSearchFilter.Less));
 			if (before == null && to != null)
@@ -572,11 +576,13 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 			throws UnsupportedOperationException, IllegalArgumentException {
 			if (!belongs(value))
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
+			after = strip(after);
+			before = strip(before);
 			if (after == null && from != null)
 				after = CollectionElement.getElementId(theWrapped.search(from, BetterSortedList.SortedSearchFilter.Less));
 			if (before == null && to != null)
 				before = CollectionElement.getElementId(theWrapped.search(to, BetterSortedList.SortedSearchFilter.Greater));
-			return theWrapped.addElement(value, after, before, first);
+			return getElement(theWrapped.addElement(value, after, before, first));
 		}
 
 		@Override
@@ -595,37 +601,37 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 
 		@Override
 		public CollectionElement<E> getElement(int index) {
-			return theWrapped.getElement(checkIndex(index, false));
+			return getElement(theWrapped.getElement(checkIndex(index, false)));
 		}
 
 		@Override
 		public CollectionElement<E> getElement(E value, boolean first) {
 			if (!belongs(value))
 				return null;
-			return theWrapped.getElement(value, first);
+			return getElement(theWrapped.getElement(value, first));
 		}
 
 		@Override
 		public CollectionElement<E> getElement(ElementId id) {
-			CollectionElement<E> el = theWrapped.getElement(id);
+			CollectionElement<E> el = theWrapped.getElement(strip(id));
 			if (isInRange(el.get()) != 0)
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			return el;
+			return getElement(el);
 		}
 
 		@Override
 		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
 			if (sourceCollection == this)
 				return BetterList.of(getElement(sourceEl));
-			return QommonsUtils.filterMap(theWrapped.getElementsBySource(sourceEl, sourceCollection), el -> isInRange(el.get()) == 0,
-				el -> el);
+			return QommonsUtils.filterMap(theWrapped.getElementsBySource(strip(sourceEl), sourceCollection), el -> isInRange(el.get()) == 0,
+				el -> getElement(el));
 		}
 
 		@Override
 		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
 			if (sourceCollection == this)
-				return theWrapped.getSourceElements(localElement, theWrapped); // For element validation
-			return theWrapped.getSourceElements(localElement, sourceCollection);
+				return BetterList.of(theWrapped.getSourceElements(strip(localElement), theWrapped).stream().map(this::wrap));
+			return theWrapped.getSourceElements(strip(localElement), sourceCollection);
 		}
 
 		@Override
@@ -649,22 +655,20 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 			else if (to != null && to.compareTo(wrapTerminal.get()) < 0)
 				return null;
 			else
-				return wrapTerminal;
+				return getElement(wrapTerminal);
 		}
 
 		@Override
 		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
-			CollectionElement<E> el = theWrapped.getAdjacentElement(elementId, next);
+			CollectionElement<E> el = theWrapped.getAdjacentElement(strip(elementId), next);
 			if (el == null || isInRange(el.get()) != 0)
 				return null;
-			return el;
+			return getElement(el);
 		}
 
 		@Override
 		public MutableCollectionElement<E> mutableElement(ElementId id) {
-			MutableCollectionElement<E> el = theWrapped.mutableElement(id);
-			if (isInRange(el.get()) != 0)
-				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+			MutableCollectionElement<E> el = theWrapped.mutableElement(strip(id));
 			return new BoundedMutableElement(el);
 		}
 
@@ -675,7 +679,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 				return null;
 			int range = isInRange(wrapResult.get());
 			if (range == 0)
-				return wrapResult;
+				return getElement(wrapResult);
 			if (filter.strict)
 				return null;
 			return getTerminalElement(range < 0);
@@ -710,7 +714,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 
 		@Override
 		public boolean isConsistent(ElementId element) {
-			return theWrapped.isConsistent(element);
+			return theWrapped.isConsistent(unwrap(element));
 		}
 
 		@Override
@@ -721,7 +725,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		@Override
 		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
 			RepairListener<E, X> subListener = listener == null ? null : new BoundedRepairListener<>(listener);
-			return theWrapped.repair(element, subListener);
+			return theWrapped.repair(unwrap(element), subListener);
 		}
 
 		@Override
@@ -755,21 +759,99 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 			return ret.toString();
 		}
 
-		class BoundedMutableElement implements MutableCollectionElement<E> {
-			private final MutableCollectionElement<E> theWrappedEl;
+		ElementId strip(ElementId id) {
+			if (id == null)
+				return null;
+			BoundedElementId boundedId = (BetterSubSet<E>.BoundedElementId) id;
+			if (!boundedId.check())
+				throw new NoSuchElementException(StdMsg.ELEMENT_REMOVED);
+			return boundedId.theSourceId;
+		}
 
-			BoundedMutableElement(MutableCollectionElement<E> wrappedEl) {
+		BoundedElement getElement(CollectionElement<E> element) {
+			return element == null ? null : new BoundedElement(element);
+		}
+
+		/**
+		 * @param wrappedElId The element ID from the wrapped sorted set
+		 * @return The element ID for this set
+		 */
+		protected ElementId wrap(ElementId wrappedElId) {
+			return new BoundedElementId(wrappedElId);
+		}
+
+		/**
+		 * @param wrappedElId The element ID from the this set
+		 * @return The element ID for the wrapped set
+		 */
+		protected ElementId unwrap(ElementId wrappedElId) {
+			return ((BoundedElementId) wrappedElId).theSourceId;
+		}
+
+		class BoundedElementId implements ElementId {
+			private final ElementId theSourceId;
+
+			BoundedElementId(ElementId sourceId) {
+				theSourceId = sourceId;
+			}
+
+			boolean check() {
+				if (!theSourceId.isPresent())
+					return true;
+				return isInRange(getWrapped().getElement(theSourceId).get()) == 0;
+			}
+
+			@Override
+			public int compareTo(ElementId o) {
+				return theSourceId.compareTo(((BoundedElementId) o).theSourceId);
+			}
+
+			@Override
+			public boolean isPresent() {
+				return theSourceId.isPresent() && check();
+			}
+
+			@Override
+			public int hashCode() {
+				return theSourceId.hashCode();
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				if (obj == this)
+					return true;
+				else if (!(obj instanceof BetterSubSet.BoundedElementId))
+					return false;
+				else
+					return theSourceId.equals(((BoundedElementId) obj).theSourceId);
+			}
+
+			@Override
+			public String toString() {
+				String str = theSourceId.toString();
+				if (theSourceId.isPresent() && !check())
+					str = "(removed) " + str;
+				return str;
+			}
+		}
+
+		class BoundedElement implements CollectionElement<E> {
+			private final CollectionElement<E> theWrappedEl;
+			private BoundedElementId theId;
+
+			BoundedElement(CollectionElement<E> wrappedEl) {
 				theWrappedEl = wrappedEl;
 			}
 
-			@Override
-			public BetterCollection<E> getCollection() {
-				return BetterSubSet.this;
+			CollectionElement<E> getWrappedEl() {
+				return theWrappedEl;
 			}
 
 			@Override
-			public ElementId getElementId() {
-				return theWrappedEl.getElementId();
+			public BoundedElementId getElementId() {
+				if (theId == null)
+					theId = new BoundedElementId(theWrappedEl.getElementId());
+				return theId;
 			}
 
 			@Override
@@ -778,37 +860,81 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 			}
 
 			@Override
-			public String isEnabled() {
-				return theWrappedEl.isEnabled();
+			public int hashCode() {
+				return theWrappedEl.hashCode();
 			}
 
 			@Override
-			public String isAcceptable(E value) {
-				if (isInRange(value) != 0)
-					return StdMsg.ILLEGAL_ELEMENT;
-				return theWrappedEl.isAcceptable(value);
-			}
-
-			@Override
-			public void set(E value) throws IllegalArgumentException, UnsupportedOperationException {
-				if (isInRange(value) != 0)
-					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-				theWrappedEl.set(value);
-			}
-
-			@Override
-			public String canRemove() {
-				return theWrappedEl.canRemove();
-			}
-
-			@Override
-			public void remove() throws UnsupportedOperationException {
-				theWrappedEl.remove();
+			public boolean equals(Object obj) {
+				if (obj == this)
+					return true;
+				else if (!(obj instanceof BetterSubSet.BoundedElement))
+					return false;
+				else
+					return theWrappedEl.equals(((BoundedElement) obj).theWrappedEl);
 			}
 
 			@Override
 			public String toString() {
-				return theWrappedEl.toString();
+				String str = theWrappedEl.toString();
+				if (theWrappedEl.getElementId().isPresent() && !getElementId().check())
+					str = "(removed) " + str;
+				return str;
+			}
+		}
+
+		class BoundedMutableElement extends BoundedElement implements MutableCollectionElement<E> {
+			BoundedMutableElement(MutableCollectionElement<E> wrappedEl) {
+				super(wrappedEl);
+			}
+
+			@Override
+			MutableCollectionElement<E> getWrappedEl() {
+				return (MutableCollectionElement<E>) super.getWrappedEl();
+			}
+
+			@Override
+			public BetterCollection<E> getCollection() {
+				return BetterSubSet.this;
+			}
+
+			@Override
+			public String isEnabled() {
+				if (!getElementId().check())
+					return StdMsg.UNSUPPORTED_OPERATION;
+				return getWrappedEl().isEnabled();
+			}
+
+			@Override
+			public String isAcceptable(E value) {
+				if (!getElementId().check())
+					return StdMsg.UNSUPPORTED_OPERATION;
+				if (isInRange(value) != 0)
+					return StdMsg.ILLEGAL_ELEMENT;
+				return getWrappedEl().isAcceptable(value);
+			}
+
+			@Override
+			public void set(E value) throws IllegalArgumentException, UnsupportedOperationException {
+				if (!getElementId().check())
+					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+				if (isInRange(value) != 0)
+					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
+				getWrappedEl().set(value);
+			}
+
+			@Override
+			public String canRemove() {
+				if (!getElementId().check())
+					return StdMsg.UNSUPPORTED_OPERATION;
+				return getWrappedEl().canRemove();
+			}
+
+			@Override
+			public void remove() throws UnsupportedOperationException {
+				if (!getElementId().check())
+					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+				getWrappedEl().remove();
 			}
 		}
 
@@ -826,7 +952,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 				// sub-set.
 				// It is for this reason that the repair API specifies that this method may be called even for elements that were not
 				// present in the set.
-				return theWrappedListener.removed(element);
+				return theWrappedListener.removed(getElement(element));
 			}
 
 			@Override
@@ -843,7 +969,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 			@Override
 			public void transferred(CollectionElement<E> element, X data) {
 				if (isInRange(element.get()) == 0)
-					theWrappedListener.transferred(element, data);
+					theWrappedListener.transferred(getElement(element), data);
 			}
 		}
 	}
