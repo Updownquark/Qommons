@@ -917,18 +917,22 @@ public class TestHelper {
 			Instant checkInMax = theMaxProgressInterval == null ? null : caseStart.plus(theMaxProgressInterval);
 			Instant checkInMin = theMaxProgressInterval == null ? null : caseStart;
 			Duration sleep = Duration.ofDays(1);
-			if (totalMax != null && caseStart.plus(sleep).compareTo(totalMax) > 0)
-				sleep = Duration.between(caseStart, totalMax);
-			if (caseMax != null && caseStart.plus(sleep).compareTo(caseMax) > 0)
-				sleep = Duration.between(caseStart, caseMax);
-			if (checkInMax != null && caseStart.plus(sleep).compareTo(checkInMax) > 0)
-				sleep = Duration.between(caseStart, checkInMax);
+			boolean debug = reproduction && BreakpointHere.isDebugEnabled() != null;
+			if (!debug) {
+				if (totalMax != null && caseStart.plus(sleep).compareTo(totalMax) > 0)
+					sleep = Duration.between(caseStart, totalMax);
+				if (caseMax != null && caseStart.plus(sleep).compareTo(caseMax) > 0)
+					sleep = Duration.between(caseStart, caseMax);
+				if (checkInMax != null && caseStart.plus(sleep).compareTo(checkInMax) > 0)
+					sleep = Duration.between(caseStart, checkInMax);
+			}
 			long caseDebugHitCount = BreakpointHere.getBreakpointCatchCount();
 			boolean first = true;
 			while (!isTestCaseDone) {
 				long debugHits = BreakpointHere.getBreakpointCatchCount();
-				if (first) {
+				if (first)
 					first = false;
+				else if (debug) {// No timeout checking for debugging
 				} else if (debugHits == caseDebugHitCount) {
 					// Make sure the test case doesn't take longer than configured limits
 					Instant now = Instant.now();
@@ -1008,9 +1012,9 @@ public class TestHelper {
 			isTestSetDone = true;
 			theTestExecThread.interrupt();
 			if (theTestExecThread.isAlive()) {
-				if (BreakpointHere.getBreakpointCatchCount() > 1) {
+				if (BreakpointHere.getBreakpointCatchCount() > 1)
 					System.out.println("Declining to kill test on account of breakpoint");
-				} else {
+				else {
 					try {
 						Thread.sleep(10); // Wait for the thread to die naturally if possible
 					} catch (InterruptedException e) {}
