@@ -719,11 +719,6 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		}
 
 		@Override
-		public boolean isDerivedFrom(ElementId other) {
-			return equals(other);
-		}
-
-		@Override
 		public int compareTo(ElementId o) {
 			return Long.compare(entry.theOrder, ((HashId) o).entry.theOrder);
 		}

@@ -1002,11 +1002,6 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 			public boolean isPresent() {
 				return keyId.isPresent() && valueId.isPresent();
 			}
-
-			@Override
-			public boolean isDerivedFrom(ElementId other) {
-				return keyId.isDerivedFrom(other) || valueId.isDerivedFrom(other);
-			}
 		}
 
 		class ValueHandleElement implements CollectionElement<MultiEntryValueHandle<K, V>> {

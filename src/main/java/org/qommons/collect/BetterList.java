@@ -1566,11 +1566,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			}
 
 			@Override
-			public boolean isDerivedFrom(ElementId other) {
-				return equals(other);
-			}
-
-			@Override
 			public int hashCode() {
 				return index;
 			}

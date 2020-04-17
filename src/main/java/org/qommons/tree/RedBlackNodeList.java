@@ -564,11 +564,6 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 		}
 
 		@Override
-		public boolean isDerivedFrom(ElementId other) {
-			return equals(other);
-		}
-
-		@Override
 		public int compareTo(ElementId id) {
 			NodeId nodeId = (NodeId) id;
 			if (theTree != nodeId.theNode.getTree())
