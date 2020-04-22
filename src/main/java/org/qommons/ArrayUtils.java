@@ -1831,8 +1831,14 @@ public final class ArrayUtils {
 				@Override
 				public T1 added(T2 o, int mIdx, int retIdx) throws E {
 					T1 newValue = dl.added(o, mIdx, retIdx);
-					if(newValue != null)
+					if (newValue != null) {
+						int preSize = original.size();
 						original.add(retIdx, newValue);
+						if (original.size() == preSize) {
+							System.err.println("Could not add " + newValue);
+							newValue = null;
+						}
+					}
 					return newValue;
 				}
 
@@ -1855,7 +1861,12 @@ public final class ArrayUtils {
 						original.set(incMod, replaceValue);
 					else {
 						original.remove(incMod);
+						int preSize = original.size();
 						original.add(retIdx, replaceValue);
+						if (original.size() == preSize) {
+							System.err.println("Could not add " + replaceValue);
+							replaceValue = null;
+						}
 					}
 					return replaceValue;
 				}
