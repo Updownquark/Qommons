@@ -498,10 +498,12 @@ public class TestHelper {
 		}
 
 		protected RandomExecutor<T, A> or(double relativeProbability, A action) {
-			if (relativeProbability <= 0 || Double.isNaN(relativeProbability) || Double.isInfinite(relativeProbability))
+			if (relativeProbability < 0 || Double.isNaN(relativeProbability) || Double.isInfinite(relativeProbability))
 				throw new IllegalArgumentException("Illegal probability: " + relativeProbability);
-			theActions.put(theTotalProbability, action);
-			theTotalProbability += relativeProbability;
+			else if (relativeProbability != 0) {
+				theActions.put(theTotalProbability, action);
+				theTotalProbability += relativeProbability;
+			}
 			return this;
 		}
 

@@ -13,8 +13,12 @@ import org.junit.Test;
 import org.qommons.QommonsTestUtils;
 import org.qommons.TestHelper;
 import org.qommons.collect.CollectionUtils.AdjustmentOrder;
+import org.qommons.collect.CollectionUtils.CollectionAdjustment;
 import org.qommons.collect.CollectionUtils.ElementSyncAction;
 import org.qommons.collect.CollectionUtils.ElementSyncInput;
+import org.qommons.debug.Debug;
+import org.qommons.ex.ExFunction;
+import org.qommons.tree.BetterTreeList;
 
 /** Tests for {@link CollectionUtils} utilities */
 public class CollectionUtilsTests {
@@ -23,14 +27,14 @@ public class CollectionUtilsTests {
 	@Test
 	public void testCollectionAdjustment() {
 		TestHelper.createTester(CollectionAdjustmentTester.class).revisitKnownFailures(true).withDebug(true).withFailurePersistence(true)//
-			.withMaxTotalDuration(Duration.ofSeconds(1)).withPlacemarks("test")//
+			.withMaxTotalDuration(Duration.ofSeconds(5)).withPlacemarks("test")//
 			.execute().throwErrorIfFailed();
 	}
 
 	static class CollectionAdjustmentTester implements TestHelper.Testable {
 		@Override
 		public void accept(TestHelper helper) {
-			int originalLength = helper.getInt(2, 15);
+			int originalLength = helper.getInt(0, 8);
 			List<String> original = new ArrayList<>(originalLength);
 			Map<String, Integer> originalLC = new HashMap<>();
 			for (int i = 0; i < originalLength; i++) {
@@ -39,14 +43,13 @@ public class CollectionUtilsTests {
 				originalLC.putIfAbsent(str.toLowerCase(), i);
 			}
 
-			int adjustLength = helper.getInt(2, 15);
+			int adjustLength = helper.getInt(0, 8);
 			List<String> adjust = new ArrayList<>(adjustLength);
 			boolean add = helper.getBoolean(0.8);
 			boolean remove = helper.getBoolean();
 			boolean changeCase = helper.getBoolean();
 			AdjustmentOrder order;
-			// order = AdjustmentOrder.values()[helper.getInt(0, 3)]; // TODO Enable this when right-order is complete
-			order = helper.getBoolean() ? CollectionUtils.AdjustmentOrder.LeftOrder : CollectionUtils.AdjustmentOrder.AddLast;
+			order = AdjustmentOrder.values()[helper.getInt(0, 3)];
 			boolean leftFirst = helper.getBoolean();
 			int[] map = new int[originalLength];
 			int[] reverse = new int[adjustLength];
@@ -62,7 +65,7 @@ public class CollectionUtilsTests {
 								str = helper.getAlphaNumericString(3, 8);
 							return str;
 						})//
-						.or(1, () -> {
+						.or(original.isEmpty() ? 0 : 1, () -> {
 							int index = helper.getInt(0, originalLength);
 							// If two strings in the original are equal (ignoring case) and we choose the second,
 							// the algorithm will choose the first, so we need to account for this
@@ -134,12 +137,8 @@ public class CollectionUtilsTests {
 					}
 				}
 				if (!remove) {
-					for (; i < originalLength; i++) {
-						if (map[i] < 0)
-							expect.add(original.get(i));
-						else
-							break;
-					}
+					for (; i < originalLength && map[i] < 0; i++)
+						expect.add(original.get(i));
 				}
 			}
 
@@ -147,7 +146,7 @@ public class CollectionUtilsTests {
 			List<String> adjusting = new ArrayList<>(originalLength);
 			class TestSync extends CollectionUtils.SimpleCollectionSynchronizer<String, String, RuntimeException, TestSync> {
 				TestSync() {
-					super(v -> v);
+					super(ExFunction.identity());
 				}
 
 				@Override
@@ -155,10 +154,14 @@ public class CollectionUtilsTests {
 					helper.placemark();
 					Assert.assertEquals(original.get(element.getOriginalLeftIndex()), element.getLeftValue());
 					if (!useUniversal)
-						Assert.assertEquals(adjusting.get(element.getTargetIndex()), element.getLeftValue());
+						Assert.assertEquals(adjusting.get(element.getUpdatedLeftIndex()), element.getLeftValue());
 					Assert.assertEquals(-1, element.getRightIndex());
-					if (remove && !useUniversal)
-						adjusting.remove(element.getTargetIndex());
+					if (!useUniversal) {
+						if (remove)
+							adjusting.remove(element.getUpdatedLeftIndex());
+						else if (element.getUpdatedLeftIndex() != element.getTargetIndex())
+							adjusting.add(element.getTargetIndex(), adjusting.remove(element.getUpdatedLeftIndex()));
+					}
 					return super.leftOnly(element);
 				}
 
@@ -182,11 +185,18 @@ public class CollectionUtilsTests {
 					helper.placemark();
 					Assert.assertEquals(original.get(element.getOriginalLeftIndex()), element.getLeftValue());
 					if (order != AdjustmentOrder.RightOrder && !useUniversal)
-						Assert.assertEquals(adjusting.get(element.getTargetIndex()), element.getLeftValue());
+						Assert.assertEquals(adjusting.get(element.getUpdatedLeftIndex()), element.getLeftValue());
 					Assert.assertEquals(adjust.get(element.getRightIndex()), element.getRightValue());
 					Assert.assertTrue(element.getLeftValue().equalsIgnoreCase(element.getRightValue()));
-					if (changeCase && !useUniversal)
-						adjusting.set(element.getTargetIndex(), element.getRightValue());
+					if (!useUniversal) {
+						String value = changeCase ? element.getRightValue() : element.getLeftValue();
+						if (element.getUpdatedLeftIndex() == element.getTargetIndex())
+							adjusting.set(element.getTargetIndex(), value);
+						else {
+							adjusting.remove(element.getUpdatedLeftIndex());
+							adjusting.add(element.getTargetIndex(), value);
+						}
+					}
 					return super.common(element);
 				}
 
@@ -236,12 +246,30 @@ public class CollectionUtilsTests {
 			} else
 				equals = String::equals;
 			adjusting.addAll(original);
-			List<String> adjusted = new ArrayList<>(originalLength);
+			List<String> adjusted;
+			// Use BetterList implementation sometimes because it's handled a little differently in some cases
+			if (helper.getBoolean())
+				adjusted = new BetterTreeList<>(false);
+			else
+				adjusted = new ArrayList<>(originalLength);
 			adjusted.addAll(original);
+			if (helper.isReproducing()) {
+				System.out.println("Adjust " + originalLength + original);
+				System.out.println("     ->" + adjustLength + adjust);
+				System.out.print("Add=" + add + ", remove=" + remove + ", set=" + changeCase + ", " + order + ", ");
+				if (sorted)
+					System.out.print("sorted, ");
+				else
+					System.out.print((leftFirst ? "left" : "right") + " first, ");
+				System.out.println("universal=" + useUniversal + ", better=" + (adjusted instanceof BetterList));
+			}
 
 			helper.placemark("test");
-			CollectionUtils.synchronize(adjusted, adjust, (s1, s2) -> s1.equalsIgnoreCase(s2))//
-				.adjust(sync, order);
+			CollectionAdjustment<String, String> adjuster = CollectionUtils.synchronize(adjusted, adjust,
+				(s1, s2) -> s1.equalsIgnoreCase(s2));
+			if (helper.isReproducing())
+				Debug.d().start().debug(adjuster, true).setField("debugging", true);
+			adjuster.adjust(sync, order);
 
 			Assert.assertThat(adjusted, QommonsTestUtils.collectionsEqual(expect, true, equals));
 			if (!useUniversal)

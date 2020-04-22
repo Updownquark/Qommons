@@ -2,6 +2,8 @@ package org.qommons.ex;
 
 import java.util.function.Function;
 
+import org.qommons.LambdaUtils;
+
 /**
  * A {@link Function} look-alike that can throw a checked exception
  * 
@@ -11,6 +13,9 @@ import java.util.function.Function;
  */
 @FunctionalInterface
 public interface ExFunction<F, T, E extends Throwable> {
+	/** The identity function */
+	public static final ExFunction<Object, Object, RuntimeException> IDENTITY = v -> v;
+
 	/**
 	 * @param value The argument
 	 * @return The return value
@@ -39,6 +44,16 @@ public interface ExFunction<F, T, E extends Throwable> {
 	 * @return An {@link ExFunction} that calls the given function and does not actually throw any checked exceptions
 	 */
 	static <F, T, E extends Throwable> ExFunction<F, T, E> of(Function<F, T> f) {
+		if (LambdaUtils.getIdentifier(f) == LambdaUtils.IDENTITY)
+			return (ExFunction<F, T, E>) IDENTITY;
 		return value -> f.apply(value);
+	}
+
+	/**
+	 * @param <F> The type of the value to accept and return
+	 * @return The identity function
+	 */
+	static <F> ExFunction<F, F, RuntimeException> identity() {
+		return (ExFunction<F, F, RuntimeException>) IDENTITY;
 	}
 }
