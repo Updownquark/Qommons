@@ -839,6 +839,12 @@ public class StringUtils {
 			return theBuffer;
 		}
 
+		/** @return The buffer being appended to, after having its position set to zero */
+		public ByteBuffer getResetBuffer() {
+			theBuffer.position(0);
+			return theBuffer;
+		}
+
 		@Override
 		public boolean canAcceptMore() {
 			return theBuffer.position() < theBuffer.capacity();
@@ -1078,6 +1084,19 @@ public class StringUtils {
 		 * @throws IOException If an exception is thrown from the reader or the accumulator
 		 */
 		<B extends BinaryAccumulator> B parse(Reader in, B out, LongConsumer byteCount) throws IOException;
+
+		/**
+		 * @param <B> The type of the binary data accumulator to accumulate the data into
+		 * @param str The character sequence to parse
+		 * @param out The binary data accumulator to accumulate the data into
+		 * @param byteCount Accepts the number of bytes that were parsed from the sequence
+		 * @return The accumulator
+		 * @throws IOException If an exception is thrown from the reader or the accumulator
+		 */
+		default <B extends BinaryAccumulator> B parse(CharSequence str, B out, LongConsumer byteCount) throws IOException {
+			return parse(//
+				new CharSequenceReader<>(str), out, null);
+		}
 
 		/**
 		 * @param str The string to parse

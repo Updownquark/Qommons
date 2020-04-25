@@ -27,7 +27,10 @@ public class CollectionUtilsTests {
 	@Test
 	public void testCollectionAdjustment() {
 		TestHelper.createTester(CollectionAdjustmentTester.class).revisitKnownFailures(true).withDebug(true).withFailurePersistence(true)//
-			.withMaxTotalDuration(Duration.ofSeconds(5)).withPlacemarks("test")//
+			.withMaxTotalDuration(Duration.ofSeconds(5))//
+			// .withRandomCases(200)//
+			.withConcurrency(5)//
+			.withPlacemarks("test")//
 			.execute().throwErrorIfFailed();
 	}
 
@@ -49,7 +52,7 @@ public class CollectionUtilsTests {
 			boolean remove = helper.getBoolean();
 			boolean changeCase = helper.getBoolean();
 			AdjustmentOrder order;
-			order = AdjustmentOrder.values()[helper.getInt(0, 3)];
+			order = AdjustmentOrder.values()[helper.getInt(0, AdjustmentOrder.values().length)];
 			boolean leftFirst = helper.getBoolean();
 			int[] map = new int[originalLength];
 			int[] reverse = new int[adjustLength];

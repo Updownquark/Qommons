@@ -5,14 +5,23 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
+import java.nio.ByteBuffer;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -20,13 +29,20 @@ import java.util.NavigableSet;
 import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
+import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import org.qommons.collect.BetterList;
+import org.qommons.collect.ListenerList;
+import org.qommons.collect.ListenerList.Element;
 import org.qommons.debug.Debug;
 import org.qommons.io.Format;
+import org.qommons.tree.BetterTreeList;
 
 /**
  * <p>
@@ -253,7 +269,7 @@ public class TestHelper {
 	}
 
 	/**
-	 * Sets a named placemark (must be configured with {@link Testing#withPlacemarks(String...)})
+	 * Sets a named placemark (must be configured with {@link TestConfig#withPlacemarks(String...)})
 	 * 
 	 * @param name The name for the placemark
 	 */
@@ -563,7 +579,7 @@ public class TestHelper {
 	}
 
 	/** Configures a {@link TestHelper}-backed test case */
-	public static class Testing {
+	public static class TestConfig {
 		private final Class<? extends Testable> theTestable;
 		private final Constructor<? extends Testable> theCreator;
 		private boolean isRevisitingKnownFailures = true;
@@ -580,11 +596,13 @@ public class TestHelper {
 		private boolean isPersistingFailures = true;
 		private File theFailureDir = null;
 		private boolean isFailureFileQualified = true;
+		private int theConcurrency;
 
-		private Testing(Class<? extends Testable> testable) {
+		private TestConfig(Class<? extends Testable> testable) {
 			theTestable = testable;
 			theCreator = getCreator(testable);
 			thePlacemarkNames = new TreeSet<>();
+			theConcurrency = 1;
 		}
 
 		/**
@@ -592,7 +610,7 @@ public class TestHelper {
 		 *        false.
 		 * @return This configuration
 		 */
-		public Testing revisitKnownFailures(boolean b) {
+		public TestConfig revisitKnownFailures(boolean b) {
 			isRevisitingKnownFailures = b;
 			return this;
 		}
@@ -602,7 +620,7 @@ public class TestHelper {
 		 *        catch a {@link BreakpointHere#breakpoint() breakpoint} just before the failure. Default is false.
 		 * @return This configuration
 		 */
-		public Testing withDebug(boolean debug) {
+		public TestConfig withDebug(boolean debug) {
 			isDebugging = debug;
 			return this;
 		}
@@ -614,7 +632,7 @@ public class TestHelper {
 		 * @param placemarks The set of placemarks
 		 * @return This configuration
 		 */
-		public Testing withCase(long hash, NavigableMap<String, Long> placemarks) {
+		public TestConfig withCase(long hash, NavigableMap<String, Long> placemarks) {
 			theSpecifiedCases.add(new TestFailure(hash, 0, placemarks));
 			return this;
 		}
@@ -623,7 +641,7 @@ public class TestHelper {
 		 * @param cases The number of new, random cases to execute. Default is zero.
 		 * @return This configuration
 		 */
-		public Testing withRandomCases(int cases) {
+		public TestConfig withRandomCases(int cases) {
 			theMaxRandomCases = cases;
 			return this;
 		}
@@ -632,7 +650,7 @@ public class TestHelper {
 		 * @param failures The maximum number of failures to tolerate before aborting the tests. Default is 1.
 		 * @return This configuration
 		 */
-		public Testing withMaxFailures(int failures) {
+		public TestConfig withMaxFailures(int failures) {
 			theMaxFailures = failures;
 			return this;
 		}
@@ -642,7 +660,7 @@ public class TestHelper {
 		 *        test execution if the total time since testing began passes this duration.
 		 * @return This configuration
 		 */
-		public Testing withMaxTotalDuration(Duration duration) {
+		public TestConfig withMaxTotalDuration(Duration duration) {
 			theMaxTotalDuration = duration;
 			return this;
 		}
@@ -652,7 +670,7 @@ public class TestHelper {
 		 *        stopped and no further tests willl be executed.
 		 * @return This configuration
 		 */
-		public Testing withMaxCaseDuration(Duration duration) {
+		public TestConfig withMaxCaseDuration(Duration duration) {
 			theMaxCaseDuration = duration;
 			return this;
 		}
@@ -663,8 +681,17 @@ public class TestHelper {
 		 * @return This configuration
 		 * @see TestHelper#getLastCheckIn()
 		 */
-		public Testing withMaxProgressInterval(Duration duration) {
+		public TestConfig withMaxProgressInterval(Duration duration) {
 			theMaxProgressInterval = duration;
+			return this;
+		}
+
+		/**
+		 * @param concurrency The number of test cases to execute simultaneously
+		 * @return This configuration
+		 */
+		public TestConfig withConcurrency(int concurrency) {
+			theConcurrency = concurrency;
 			return this;
 		}
 
@@ -672,7 +699,7 @@ public class TestHelper {
 		 * @param names The names of placemarks to recognize during testing
 		 * @return This configuration
 		 */
-		public Testing withPlacemarks(String... names) {
+		public TestConfig withPlacemarks(String... names) {
 			for (String name : names)
 				thePlacemarkNames.add(name);
 			return this;
@@ -683,7 +710,7 @@ public class TestHelper {
 		 * @param onFailure If true, the tester will print a status message to {@link System#err} after each test failure. Default is true.
 		 * @return This configuration
 		 */
-		public Testing withPrinting(boolean onProgress, boolean onFailure) {
+		public TestConfig withPrinting(boolean onProgress, boolean onFailure) {
 			isPrintingProgress = onProgress;
 			isPrintingFailures = onFailure;
 			return this;
@@ -694,7 +721,7 @@ public class TestHelper {
 		 *        later. Default is false.
 		 * @return This configuration
 		 */
-		public Testing withFailurePersistence(boolean persist) {
+		public TestConfig withFailurePersistence(boolean persist) {
 			isPersistingFailures = persist;
 			return this;
 		}
@@ -705,7 +732,7 @@ public class TestHelper {
 		 *        name
 		 * @return This configuration
 		 */
-		public Testing withPersistenceDir(File dir, boolean qualifiedName) {
+		public TestConfig withPersistenceDir(File dir, boolean qualifiedName) {
 			if (dir != null)
 				isPersistingFailures = true;
 			theFailureDir = dir;
@@ -739,6 +766,7 @@ public class TestHelper {
 			try (TestSetExecution exec = new TestSetExecution(theCreator, isPrintingProgress, isPrintingFailures, Instant.now(),
 				theMaxTotalDuration, theMaxCaseDuration, theMaxProgressInterval)) {
 				if (isRevisitingKnownFailures) {
+					// Always revisit known failures and specified cases linearly
 					if (!knownFailures.isEmpty()) {
 						for (int i = 0; i < knownFailures.size() && failures < maxFailures
 							&& Instant.now().compareTo(termination) < 0; i++) {
@@ -793,25 +821,83 @@ public class TestHelper {
 						successes++;
 					i++;
 				}
-				for (; i < maxCases && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
-					TestHelper helper = new TestHelper(false, theMaxProgressInterval != null, Double.doubleToLongBits(Math.random()), 0,
-						Collections.emptyNavigableSet(), thePlacemarkNames);
-					Throwable err = exec.executeTestCase(i + 1, helper, false);
-					if (err != null) {
-						if (isPersistingFailures) {
-							TestFailure failure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.thePlacemarks);
+				TestSummary summary;
+				if (maxCases <= 0 || failures >= maxFailures || Instant.now().compareTo(termination) >= 0) {
+					Duration testDuration = Duration.between(exec.getStart(), Instant.now());
+					summary = new TestSummary(successes, failures, testDuration, firstError);
+				} else if (theConcurrency <= 1)
+					summary = executeLinear(exec, knownFailures, i, successes, failures, maxCases, maxFailures, termination, firstError);
+				else
+					summary = executeParallel(exec, knownFailures, i, successes, failures, maxCases, maxFailures, termination, firstError);
+				return summary;
+			}
+		}
+
+		private TestSummary executeLinear(TestSetExecution exec, List<TestFailure> knownFailures, int cases, int successes, int failures,
+			int maxCases,
+			int maxFailures, Instant termination, Throwable firstError) {
+			for (int i = cases; i < maxCases && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
+				TestHelper helper = new TestHelper(false, theMaxProgressInterval != null, Double.doubleToLongBits(Math.random()), 0,
+					Collections.emptyNavigableSet(), thePlacemarkNames);
+				Throwable err = exec.executeTestCase(i + 1, helper, false);
+				if (err != null) {
+					if (isPersistingFailures) {
+						TestFailure failure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.thePlacemarks);
+						knownFailures.add(failure);
+						writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames, knownFailures);
+					}
+					if (firstError == null)
+						firstError = err;
+					failures++;
+				} else
+					successes++;
+			}
+			Duration testDuration = Duration.between(exec.getStart(), Instant.now());
+			return new TestSummary(successes, failures, testDuration, firstError);
+		}
+
+		private TestSummary executeParallel(TestSetExecution exec, List<TestFailure> knownFailures, int cases, int successes, int failures,
+			int maxCases, int maxFailures, Instant termination, Throwable firstError) {
+			TestExecutionMaster master = new TestExecutionMaster(exec, thePlacemarkNames, Thread.currentThread(), theConcurrency, cases,
+				successes, failures);
+			Throwable[] error = new Throwable[] { firstError };
+
+			master.start();
+			while (true) {
+				if (master.getFailures() >= maxFailures) {
+					master.kill();
+					break;
+				} else if (master.getCases() >= maxCases || Instant.now().compareTo(termination) >= 0) {
+					master.stop();
+					break;
+				}
+
+				while (master.isFull()) {
+					try {
+						Thread.sleep(24L * 60 * 60 * 1000);
+					} catch (InterruptedException e) {}
+				}
+
+				master.execute(//
+					(failure, err) -> {
+						synchronized (exec) {
+							if (error[0] == null)
+								error[0] = err;
 							knownFailures.add(failure);
 							writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames, knownFailures);
 						}
-						if (firstError == null)
-							firstError = err;
-						failures++;
-					} else
-						successes++;
-				}
-				Duration testDuration = Duration.between(exec.getStart(), Instant.now());
-				return new TestSummary(successes, failures, testDuration, firstError);
+					});
 			}
+
+			// Wait for slaves to die
+			while (master.isAlive()) {
+				try {
+					Thread.sleep(100);
+				} catch (InterruptedException e) {}
+			}
+
+			Duration testDuration = Duration.between(exec.getStart(), Instant.now());
+			return new TestSummary(successes, failures, testDuration, firstError);
 		}
 	}
 
@@ -852,7 +938,8 @@ public class TestHelper {
 						// Clean out the garbage before each test so we don't mistakenly think the test itself is taking too long
 						System.gc();
 						theCaseStart = Instant.now();
-						System.out.println("Started at " + theCaseStart);
+						if (isPrintingProgress)
+							System.out.println("Started at " + theCaseStart);
 						theTestCase = null;
 						try {
 							testCase.run();
@@ -867,6 +954,7 @@ public class TestHelper {
 					} catch (InterruptedException e) {}
 				}
 			}, "Test Case Runner");
+			theTestExecThread.setDaemon(true);
 			theTestExecThread.start();
 		}
 
@@ -1027,6 +1115,578 @@ public class TestHelper {
 		}
 	}
 
+	private static final String DATE_FORMAT_STR = "ddMMMyyyy HH:mm:ss.SSS";
+	private static final boolean DEBUG_CONCURRENT = false;
+
+	public static class TestExecutionMaster {
+		private final TestSetExecution theExecutor;
+		private final NavigableSet<String> thePlacemarkNames;
+		private final Thread theTestSetThread;
+		private final TestSlaveHandle[] theSlaves;
+		private final AtomicInteger theExecutingTestCases;
+		private final AtomicInteger theTotalCases;
+		private final AtomicInteger theTotalSuccesses;
+		private final AtomicInteger theTotalFailures;
+		private final Random theRandom;
+
+		private Thread theStreamDrainer;
+
+		public TestExecutionMaster(TestSetExecution exec, NavigableSet<String> placemarkNames, Thread testSetThread, int concurrency,
+			int cases, int successes, int failures) {
+			theExecutor = exec;
+			thePlacemarkNames = placemarkNames;
+			theTestSetThread = testSetThread;
+			theSlaves = new TestSlaveHandle[DEBUG_CONCURRENT ? 1 : concurrency];
+			theExecutingTestCases = new AtomicInteger();
+			theTotalCases = new AtomicInteger(cases);
+			theTotalSuccesses = new AtomicInteger(successes);
+			theTotalFailures = new AtomicInteger(failures);
+			theRandom = new Random();
+		}
+
+		public TestExecutionMaster start() {
+			BetterList<String> args = new BetterTreeList<String>(false).with("java");
+			if (DEBUG_CONCURRENT)
+				args.add("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000");
+			args.with("-classpath", System.getProperty("java.class.path"), //
+				TestExecutionSlave.class.getName());
+			int testerIdIndex = args.size();
+			args.add("--testerID=0");
+			args.add("--testable=" + theExecutor.theCreator.getDeclaringClass().getName());
+			args.add("--start=" + new SimpleDateFormat(DATE_FORMAT_STR).format(Date.from(theExecutor.theOriginalStart)));
+			if (theExecutor.theMaxTotalDuration != null)
+				args.add("--max-total-duration=" + Format.DURATION.format(theExecutor.theMaxTotalDuration));
+			if (theExecutor.theMaxCaseDuration != null)
+				args.add("--max-case-duration=" + Format.DURATION.format(theExecutor.theMaxCaseDuration));
+			if (theExecutor.theMaxProgressInterval != null)
+				args.add("--max-progress-interval=" + Format.DURATION.format(theExecutor.theMaxProgressInterval));
+			StringBuilder placemarkArg = new StringBuilder("--placemarks=");
+			for (String placemark : thePlacemarkNames)
+				placemarkArg.append(placemark).append(',');
+			placemarkArg.deleteCharAt(placemarkArg.length() - 1);
+			args.add(placemarkArg.toString());
+
+			Random random = new Random();
+			for (int p = 0; p < theSlaves.length; p++) {
+				String testerID = Long.toHexString(random.nextLong());
+				args.set(testerIdIndex, "--testerID=" + testerID);
+				Process process;
+				try {
+					process = new ProcessBuilder(args).start();
+					theSlaves[p] = new TestSlaveHandle(testerID, process);
+				} catch (IOException e) {
+					throw new IllegalStateException("Could not start tester slave", e);
+				}
+			}
+
+			theStreamDrainer = new Thread(() -> {
+				while (true) {
+					for (TestSlaveHandle slave : theSlaves)
+						slave.printOutput();
+
+					try {
+						Thread.sleep(50);
+					} catch (InterruptedException e) {}
+				}
+			}, "Stream Drainer");
+			theStreamDrainer.setDaemon(true);
+			theStreamDrainer.start();
+			return this;
+		}
+
+		boolean isFull() {
+			return theExecutingTestCases.get() == theSlaves.length;
+		}
+
+		void execute(BiConsumer<TestFailure, Throwable> onFail) {
+			for(TestSlaveHandle slave : theSlaves){
+				if (!slave.isDead && slave.theTestCase < 0) {
+					int caseNumber = theTotalCases.incrementAndGet();
+					long seed = theRandom.nextLong();
+					slave.execute(caseNumber, seed, onFail);
+					return;
+				}
+			}
+			throw new IllegalStateException("Full on test cases");
+		}
+
+		void kill() {
+			for (TestSlaveHandle slave : theSlaves)
+				slave.kill();
+		}
+
+		void stop() {
+			for (TestSlaveHandle slave : theSlaves)
+				slave.stop();
+		}
+
+		int getCases() {
+			return theTotalCases.get();
+		}
+
+		int getSuccesses() {
+			return theTotalSuccesses.get();
+		}
+
+		int getFailures() {
+			return theTotalFailures.get();
+		}
+
+		boolean isAlive() {
+			for (TestSlaveHandle slave : theSlaves) {
+				if (slave.theProcess.isAlive())
+					return true;
+			}
+			return false;
+		}
+
+		static class MessageLine {
+			final int testCase;
+			final String message;
+			final boolean err;
+
+			MessageLine(int testCase, String message, boolean err) {
+				this.testCase = testCase;
+				this.message = message;
+				this.err = err;
+			}
+
+			void print() {
+				(err ? System.err : System.out).println((testCase >= 0 ? (testCase + ": ") : "") + message);
+			}
+		}
+
+		class TestSlaveHandle {
+			private final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat(TestHelper.DATE_FORMAT_STR);
+			private final String theTesterId;
+			private final Process theProcess;
+			private final BufferedReader theSystemOut;
+			private final BufferedReader theSystemErr;
+			private final BufferedWriter theSystemIn;
+			private final Thread theOutListener;
+			private final Thread theErrListener;
+			private final ListenerList<MessageLine> theMessages;
+			volatile int theTestCase;
+			volatile long theSeed;
+			volatile BiConsumer<TestFailure, Throwable> theFailListener;
+			private volatile Instant theTestCaseStart;
+			private volatile boolean isDead;
+
+			TestSlaveHandle(String testerId, Process process) {
+				theTesterId = testerId;
+				theProcess = process;
+				theTestCase = -1;
+				isDead = false;
+				theMessages = ListenerList.build().build();
+
+				theSystemOut = new BufferedReader(new InputStreamReader(theProcess.getInputStream()));
+				theSystemErr = new BufferedReader(new InputStreamReader(theProcess.getErrorStream()));
+				theSystemIn = new BufferedWriter(new OutputStreamWriter(theProcess.getOutputStream()));
+
+				Thread heartbeatThread = new Thread(() -> {
+					while (!isDead) {
+						sendHeartBeat();
+						try {
+							Thread.sleep(TestExecutionSlave.HEARTBEAT_FREQUENCY);
+						} catch (InterruptedException e) {}
+					}
+				}, "Tester " + theTesterId + " Heartbeat");
+				heartbeatThread.setDaemon(true);
+				heartbeatThread.start();
+				theOutListener = new Thread(() -> {
+					try {
+						String line = theSystemOut.readLine();
+						while (line != null) {
+							theMessages.add(new MessageLine(theTestCase, line, false), false);
+							line = theSystemOut.readLine();
+						}
+					} catch (IOException e) {
+						System.err.println("I/O error reading System out?");
+						e.printStackTrace();
+						kill();
+					}
+				}, "Tester " + theTesterId + " Out Listener");
+				theOutListener.setDaemon(true);
+				theErrListener = new Thread(() -> {
+					try {
+						String line = theSystemErr.readLine();
+						while (line != null) {
+							if (line.startsWith(theTesterId))
+								processSlaveRequest(line.substring(theTesterId.length() + 1));// Drop the colon too
+							else
+								theMessages.add(new MessageLine(theTestCase, line, true), false);
+							line = theSystemErr.readLine();
+						}
+					} catch (IOException e) {
+						System.err.println("I/O error reading System out?");
+						e.printStackTrace();
+						kill();
+					}
+				}, "Tester " + theTesterId + " Out Listener");
+				theErrListener.setDaemon(true);
+				theOutListener.start();
+				theErrListener.start();
+			}
+
+			void execute(int testCase, long seed, BiConsumer<TestFailure, Throwable> onFail) {
+				if (theTestCase >= 0)
+					throw new IllegalStateException("This slave is already executing test case " + theTestCase);
+				theExecutingTestCases.getAndIncrement();
+				theTestCase = testCase;
+				theSeed = seed;
+				this.theFailListener = onFail;
+				try {
+					theSystemIn.write(Integer.toHexString(testCase) + ":" + Long.toHexString(seed) + "\n");
+					theSystemIn.flush();
+				} catch (IOException e) {
+					throw new IllegalStateException("I/O Error writing to system in stream", e);
+				}
+			}
+
+			@SuppressWarnings("deprecation")
+			void kill() {
+				isDead = true;
+				theProcess.destroy();
+				theOutListener.stop();
+				theErrListener.stop();
+			}
+
+			void stop() {
+				try {
+					theSystemIn.write("X\n");
+					theSystemIn.flush();
+				} catch (IOException e) {
+					throw new IllegalStateException("I/O Error writing to system in stream", e);
+				}
+			}
+
+			void sendHeartBeat() {
+				if (isDead || !theProcess.isAlive())
+					return;
+				try {
+					theSystemIn.write('\n');
+					theSystemIn.flush();
+				} catch (IOException e) {
+					throw new IllegalStateException("I/O Error writing to system in stream", e);
+				}
+			}
+
+			void processSlaveRequest(String request) {
+				if (request.startsWith("X:")) {
+					int nextColon = request.indexOf(':', 2);
+					String endTimeStr = request.substring(2, nextColon);
+					Instant endTime;
+					try {
+						endTime = DATE_FORMAT.parse(endTimeStr).toInstant();
+					} catch (ParseException e) {
+						theMessages.add(new MessageLine(theTestCase,
+							"Bad end time \"" + endTimeStr + "\" in " + request.substring(2, nextColon + 1) + ": " + e.getMessage(), true),
+							false);
+						endTime = Instant.now();
+					}
+					int start = nextColon + 1;
+					nextColon = request.indexOf(':', start);
+					long position = parseHexLong(request.substring(start, nextColon));
+					NavigableMap<String, Long> placemarks = new TreeMap<>();
+					for (String placemark : thePlacemarkNames) {
+						start = nextColon + 1;
+						nextColon = request.indexOf(':', start);
+						position = parseHexLong(request.substring(start, nextColon));
+						placemarks.put(placemark, position);
+					}
+					TestFailure failure = new TestFailure(theSeed, position, placemarks);
+					endTestCase(endTime, failure, new AssertionError("\n" + request.substring(nextColon + 1).replaceAll("\\n", "\n")));
+				} else if (request.startsWith("I:")) {
+					int nextColon = request.indexOf(':', 2);
+					int testCase = Integer.parseInt(request.substring(2, nextColon), 16);
+					if (testCase != theTestCase)
+						theMessages.add(new MessageLine(theTestCase, "Received initialization for test case " + testCase, true), false);
+					else {
+						String startTimeStr=request.substring(nextColon+1);
+						Instant startTime;
+						try {
+							startTime = DATE_FORMAT.parse(startTimeStr).toInstant();
+						} catch (ParseException | RuntimeException e) {
+							theMessages.add(new MessageLine(theTestCase, "Bad start time \"" + startTimeStr + "\" in " + request, true),
+								false);
+							startTime = Instant.now();
+						}
+						theTestCaseStart = startTime;
+						beginTestCase();
+					}
+				} else if (request.startsWith("D:")) {
+					int nextColon = request.indexOf(':', 2);
+					int testCase = Integer.parseInt(request.substring(2, nextColon), 16);
+					if (testCase != theTestCase)
+						throw new IllegalStateException("Received finish notification for test case " + testCase);
+					String endTimeStr = request.substring(nextColon + 1);
+					Instant endTime;
+					try {
+						endTime = DATE_FORMAT.parse(endTimeStr).toInstant();
+					} catch (ParseException | RuntimeException e) {
+						theMessages.add(new MessageLine(theTestCase, "Bad end time \"" + endTimeStr + "\" in " + request, true), false);
+						endTime = Instant.now();
+					}
+					endTestCase(endTime, null, null);
+				} else
+					theMessages.add(new MessageLine(theTestCase, "Tester error: " + request, true), false);
+			}
+
+			void printOutput() {
+				Element<MessageLine> message = theMessages.poll(0);
+				while (message != null) {
+					message.get().print();
+
+					message = theMessages.poll(0);
+				}
+			}
+
+			private void beginTestCase() {
+				theMessages.add(
+					new MessageLine(theTestCase, "Executing at " + QommonsUtils.printEndTime(theExecutor.theOriginalStart.toEpochMilli(),
+						theTestCaseStart.toEpochMilli(), TimeZone.getDefault(), Calendar.SECOND), false),
+					false);
+			}
+
+			private void endTestCase(Instant endTime, TestFailure failure, Throwable error) {
+				if (failure != null)
+					theFailListener.accept(failure, error);
+				if ((theExecutor.isPrintingProgress && failure == null) || (theExecutor.isPrintingFailures && failure != null)) {
+					StringBuilder msg = new StringBuilder();
+					msg.append(failure == null ? "Succeeded" : "Failed").append(" at ")//
+						.append(QommonsUtils.printEndTime(theExecutor.theOriginalStart.toEpochMilli(), theTestCaseStart.toEpochMilli(),
+							TimeZone.getDefault(), Calendar.MINUTE))//
+						.append(" (");
+					QommonsUtils.printDuration(Duration.between(theTestCaseStart, endTime), msg, false);
+					msg.append(", ");
+					QommonsUtils.printDuration(Duration.between(theExecutor.theOriginalStart, endTime), msg, false);
+					msg.append(" total)");
+					theMessages.add(new MessageLine(theTestCase, msg.toString(), error != null), false);
+				}
+				theTestCase = -1;
+				theTestCaseStart = null;
+				if (failure != null)
+					theTotalFailures.getAndIncrement();
+				else
+					theTotalSuccesses.getAndIncrement();
+				theExecutingTestCases.getAndDecrement();
+				theTestSetThread.interrupt();
+			}
+		}
+	}
+
+	static long parseHexLong(String hexLong) {
+		try {
+			return StringUtils.encodeHex()
+				.parse(//
+					hexLong, new StringUtils.ByteBufferAccumulator(ByteBuffer.allocate(8)), null)//
+				.getResetBuffer().getLong();
+		} catch (IOException e) {
+			throw new IllegalStateException(hexLong);
+		}
+	}
+
+	public static class TestExecutionSlave {
+		private static class TestCase {
+			final int caseNumber;
+			final TestHelper helper;
+
+			TestCase(int caseNumber, TestHelper helper) {
+				this.caseNumber = caseNumber;
+				this.helper = helper;
+			}
+		}
+
+		static final int HEARTBEAT_FREQUENCY = 500;
+
+		private final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat(DATE_FORMAT_STR);
+
+		private final String theTesterId;
+		private final Thread theExecutionThread;
+		private final TestSetExecution theTesting;
+		private volatile TestCase theTestCase;
+
+		public TestExecutionSlave(String testerId, Constructor<? extends Testable> testable, Instant originalStart,
+			Duration maxTotalDuration,
+			Duration maxCaseDuration, Duration maxProgressInterval) {
+			theTesterId = testerId;
+			TestSetExecution[] exec = new TestSetExecution[1];
+			theExecutionThread = new Thread(() -> {
+				exec[0] = new TestSetExecution(testable, false, true, originalStart, maxTotalDuration, maxCaseDuration,
+					maxProgressInterval);
+				while (true) {
+					try {
+						Thread.sleep(24L * 60 * 60 * 1000);
+					} catch (InterruptedException e) {}
+					TestCase testCase = theTestCase;
+					if (testCase != null)
+						executeTestCase(testCase.caseNumber, testCase.helper);
+				}
+			}, "Test Case Queue");
+			theExecutionThread.setDaemon(true);
+			theExecutionThread.start();
+			while (exec[0] == null) {
+				try {
+					Thread.sleep(10);
+				} catch (InterruptedException e) {}
+			}
+			theTesting = exec[0];
+		}
+
+		public void queueTestCase(int caseNumber, TestHelper helper) {
+			theTestCase = new TestCase(caseNumber, helper);
+			theExecutionThread.interrupt();
+		}
+
+		public void executeTestCase(int caseNumber, TestHelper helper) {
+			System.err.println(theTesterId + ":I:" + Integer.toHexString(caseNumber) + ":" + DATE_FORMAT.format(new Date()));
+			Throwable error = theTesting.executeTestCase(caseNumber, helper, false);
+			if (error != null) {
+				StringBuilder msg = new StringBuilder(theTesterId).append(":X:").append(Integer.toHexString(caseNumber)).append(':');
+				msg.append(DATE_FORMAT.format(new Date())).append(':');
+				msg.append(Long.toHexString(helper.getPosition())).append(':');
+				for (String placemark : helper.getPlacemarkNames())
+					msg.append(Long.toHexString(helper.getLastPlacemark(placemark))).append(':');
+				msg.append(formatException(error));
+				System.err.println(msg);
+			} else
+				System.err.println(theTesterId + ":D:" + Integer.toHexString(caseNumber) + ":" + DATE_FORMAT.format(new Date()));
+			theTestCase = null;
+		}
+
+		public boolean isCheckIn() {
+			return theTesting.theMaxProgressInterval != null;
+		}
+
+		public static void main(String[] args) {
+			ArgumentParsing.ArgumentParser argParser = ArgumentParsing.create()//
+				.forDefaultPattern()//
+				.stringArg("testerID").required()//
+				.stringArg("testable").required()//
+				.instantArg("start").required()//
+				.durationArg("max-total-duration").defValue((Duration) null)//
+				.durationArg("max-case-duration").defValue((Duration) null)//
+				.durationArg("max-progress-interval").defValue((Duration) null)//
+				.forDefaultMultiValuePattern()//
+				.stringArg("placemarks").required()//
+				.getParser();
+			ArgumentParsing.Arguments parsedArgs;
+			try {
+				parsedArgs = argParser.parse(args);
+			} catch (RuntimeException e) {
+				e.printStackTrace();
+				System.out.println(Arrays.toString(args));
+				System.out.println(argParser);
+				return;
+			}
+
+			String testerID = parsedArgs.getString("testerID");
+			String testClassName = parsedArgs.getString("testable");
+			Class<? extends Testable> testClass;
+			try {
+				testClass = Class.forName(testClassName).asSubclass(Testable.class);
+			} catch (ClassNotFoundException e) {
+				System.err.println(testerID + ":Test class " + testClassName + " not found");
+				System.exit(1);
+				return;
+			} catch (ClassCastException e) {
+				System.err.println(testerID + ":Class " + testClassName + " does not extend testable");
+				System.exit(1);
+				return;
+			}
+			Constructor<? extends Testable> creator;
+			try {
+				creator = getCreator(testClass);
+			} catch (RuntimeException e) {
+				System.err.println(e.getMessage());
+				System.exit(1);
+				return;
+			}
+			NavigableSet<String> placemarkNames = new TreeSet<>(parsedArgs.getAll("placemarks", String.class));
+
+			TestExecutionSlave slave = new TestExecutionSlave(testerID, creator, //
+				parsedArgs.getInstant("start", null), parsedArgs.getDuration("max-total-duration", null),
+				parsedArgs.getDuration("max-case-duration", null), parsedArgs.getDuration("max-progress-interval", null));
+			class HeartBeat implements Runnable {
+				volatile long lastHeartbeatReceived = System.currentTimeMillis();
+
+				@Override
+				public void run() {
+					if (System.currentTimeMillis() - lastHeartbeatReceived > HEARTBEAT_FREQUENCY * 2) {
+						System.err.println(testerID + ":No heartbeat detected--parent process must have terminated--exiting");
+						System.exit(2);
+					}
+				}
+			}
+			HeartBeat heartBeat = new HeartBeat();
+			Thread heartBeatThread = new Thread(() -> {
+				while (true) {
+					try {
+						Thread.sleep(HEARTBEAT_FREQUENCY);
+					} catch (InterruptedException e) {}
+					heartBeat.run();
+				}
+			}, "Heart Beat Listener");
+			heartBeatThread.setDaemon(true);
+			heartBeatThread.start();
+			try (BufferedReader in = new BufferedReader(new InputStreamReader(System.in))) {
+				String line = in.readLine();
+				while (line != null) {
+					heartBeat.lastHeartbeatReceived = System.currentTimeMillis();
+					if (line.length() == 0) {
+						line = in.readLine();
+						continue; // Heartbeat
+					}
+					else if (line.length() == 1)
+						break;// Stop command
+					int colonIdx = line.indexOf(':');
+					if (colonIdx < 0) {
+						System.err.println(testerID + ":Illegal test case input: " + line);
+						System.exit(1);
+						return;
+					}
+					int caseNumber;
+					try {
+						caseNumber = Integer.parseInt(line.substring(0, colonIdx), 16);
+					} catch (NumberFormatException e) {
+						System.err.println(testerID + ":Illegal case number input: " + line);
+						System.exit(1);
+						return;
+					}
+					long seed;
+					try {
+						seed = parseHexLong(line.substring(colonIdx + 1));
+					} catch (NumberFormatException e) {
+						System.err.println(testerID + ":Illegal random seed input: " + line);
+						System.exit(1);
+						return;
+					}
+					TestHelper helper = new TestHelper(false, slave.isCheckIn(), seed, 0, Collections.emptyNavigableSet(), placemarkNames);
+					slave.queueTestCase(caseNumber, helper);
+
+					line = in.readLine();
+				}
+			} catch (IOException e) {
+				System.err
+					.println(testerID + ":I/O Error occurred with input: " + formatException(e));
+				System.exit(1);
+				return;
+			}
+
+			while (slave.theTestCase != null) {
+				try {
+					Thread.sleep(5);
+				} catch (InterruptedException e) {}
+			}
+		}
+
+		private static String formatException(Throwable e) {
+			StringWriter str = new StringWriter();
+			e.printStackTrace(new PrintWriter(str));
+			return str.toString().replaceAll("\r", "").replaceAll("\n", "\\n");
+		}
+	}
+
 	/** The results of executing a set of test cases */
 	public static class TestSummary {
 		private final int theSuccesses;
@@ -1099,8 +1759,8 @@ public class TestHelper {
 	 * @param testable The testable class to execute tests with
 	 * @return The test configuration
 	 */
-	public static Testing createTester(Class<? extends Testable> testable) {
-		return new Testing(testable);
+	public static TestConfig createTester(Class<? extends Testable> testable) {
+		return new TestConfig(testable);
 	}
 
 	private static List<TestFailure> getKnownFailures(File failureDir, Class<? extends Testable> testable, boolean qualifiedName,

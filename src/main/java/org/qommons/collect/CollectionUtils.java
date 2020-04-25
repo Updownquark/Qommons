@@ -307,7 +307,7 @@ public class CollectionUtils {
 		public S commonUsesRight(boolean update) {
 			if (theMap == null)
 				throw new IllegalStateException("A mapping must be specified for the synchronizer if right values are to be used");
-			isReplacingCommon = true;
+			isReplacingCommon = update;
 			theCommonHandler = el -> {
 				L mapped = theMap.apply(el.getRightValue());
 				if (update || el.getLeftValue() != mapped)
@@ -933,9 +933,11 @@ public class CollectionUtils {
 						if (simpleAddRight) {
 							theLeft.addAll((List<? extends L>) theRight);
 							return true;
-						} else if (universalRight == REMOVE)
+						} else if (universalRight == REMOVE || rightToLeft.length == 0)
 							return true;
 					} else if (easyLeft == PRESERVE) {
+						if (rightToLeft.length == 0)
+							return true;
 						if (universalRight == REMOVE && (commonCount == 0 || order != AdjustmentOrder.RightOrder))
 							return true;
 						else if (simpleAddRight && order == AdjustmentOrder.AddLast
@@ -1063,12 +1065,12 @@ public class CollectionUtils {
 				for (int i = 0; i < theLeft.size(); i++) {
 					if (i > 0)
 						System.out.print(", ");
-					if (leftTarget < updatedLeftIndexes.length && updatedLeftIndexes[leftTarget] == i)
+					if (leftTarget < leftToRight.length && getUpdatedLeftIndex(leftTarget) == i)
 						System.out.print('*');
 					System.out.print(theLeft.get(i));
-					if (leftTarget == updatedLeftIndexes.length && i == theLeft.size() - 1)
+					if (leftTarget == leftToRight.length && i == theLeft.size() - 1)
 						System.out.print('*');
-					if (leftIndex == updatedLeftIndexes.length || updatedLeftIndexes[leftIndex] == i)
+					if (leftIndex == leftToRight.length || getUpdatedLeftIndex(leftIndex) == i)
 						System.out.print('^');
 				}
 				System.out.println("]");

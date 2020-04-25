@@ -188,9 +188,7 @@ public class ElasticExecutor<T> {
 	 * @return This executor
 	 */
 	public ElasticExecutor<T> setPreferredQueueSize(int prefQueueSize) {
-		if (prefQueueSize < 2)
-			throw new IllegalArgumentException("Preferred queue size cannot be less than two: " + prefQueueSize);
-		else if (prefQueueSize > MAX_POSSIBLE_QUEUE_SIZE)
+		if (prefQueueSize > MAX_POSSIBLE_QUEUE_SIZE)
 			throw new IllegalArgumentException("Preferred queue size cannot exceed " + MAX_POSSIBLE_QUEUE_SIZE + ": " + prefQueueSize);
 		thePreferredQueueSize = prefQueueSize;
 		return this;
@@ -252,6 +250,13 @@ public class ElasticExecutor<T> {
 					throw new IllegalStateException("Could not start first worker thread--task executor returned null");
 			} else
 				theThreadCount.decrementAndGet();
+		} else if (newQueueSize > thePreferredQueueSize && getActiveThreads() == getThreadCount()) {
+			int newId = theThreadCount.incrementAndGet();
+			if (newId <= theMaxThreadCount) {
+				startThread(newId);
+			} else {
+				theThreadCount.decrementAndGet();
+			}
 		}
 		return true;
 	}

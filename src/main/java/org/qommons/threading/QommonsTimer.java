@@ -23,7 +23,7 @@ public class QommonsTimer {
 	private static final QommonsTimer COMMON_INSTANCE = new QommonsTimer(new SystemClock(), r -> {
 		Thread t = new Thread(r, "Qommon Timer");
 		t.start();
-	}, new ElasticExecutor<>("Qommon Timer Offloader", () -> Runnable::run).setUsedThreadLifetime(2000)::execute);
+	}, new ElasticExecutor<>("Qommon Timer Offloader", () -> Runnable::run).setPreferredQueueSize(0).setUsedThreadLifetime(2000)::execute);
 
 	/** @return A common timer that uses the system clock */
 	public static QommonsTimer getCommonInstance() {
@@ -570,6 +570,20 @@ public class QommonsTimer {
 				return existing;
 			}
 		});
+	}
+
+	/**
+	 * @param task The task to execute
+	 * @param delay The delay to wait before executing the task (may be null to execute immediately)
+	 * @return The handle for the task
+	 */
+	public TaskHandle offload(Runnable task, Duration delay) {
+		TaskHandle handle = build(task, null, false).times(1);
+		if (delay != null)
+			handle.runNextIn(delay);
+		else
+			handle.runImmediately();
+		return handle;
 	}
 
 	Runnable schedule(TaskHandle task) {
