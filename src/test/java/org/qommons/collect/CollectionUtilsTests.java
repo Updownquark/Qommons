@@ -29,7 +29,7 @@ public class CollectionUtilsTests {
 		TestHelper.createTester(CollectionAdjustmentTester.class).revisitKnownFailures(true).withDebug(true).withFailurePersistence(true)//
 			.withMaxTotalDuration(Duration.ofSeconds(5))//
 			// .withRandomCases(200)//
-			.withConcurrency(5)//
+			.withConcurrency(max -> max - 1)//
 			.withPlacemarks("test")//
 			.execute().throwErrorIfFailed();
 	}

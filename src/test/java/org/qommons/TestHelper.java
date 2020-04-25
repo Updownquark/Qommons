@@ -36,6 +36,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 
 import org.qommons.collect.BetterList;
 import org.qommons.collect.ListenerList;
@@ -692,6 +693,17 @@ public class TestHelper {
 		 */
 		public TestConfig withConcurrency(int concurrency) {
 			theConcurrency = concurrency;
+			return this;
+		}
+
+		/**
+		 * @param fromMax The number of test cases to execute simultaneously, as a function of the number of available processors on this
+		 *        system
+		 * @return This configuration
+		 */
+		public TestConfig withConcurrency(UnaryOperator<Integer> fromMax) {
+			int max = Runtime.getRuntime().availableProcessors();
+			theConcurrency = fromMax.apply(max);
 			return this;
 		}
 
