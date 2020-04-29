@@ -403,6 +403,15 @@ public class ListenerList<E> {
 		} while (wait);
 		return null;
 	}
+	
+	/** @return The first element in this list, or null if the list is empty */
+	public Element<E> peekFirst(){
+		Node node=theTerminal.next;
+		if(node==theTerminal)
+			return null;
+		else
+			return node;
+	}
 
 	/** @param action The action to perform on each listener in this list */
 	public void forEach(Consumer<E> action) {
