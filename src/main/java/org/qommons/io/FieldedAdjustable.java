@@ -2,12 +2,29 @@ package org.qommons.io;
 
 import java.util.Iterator;
 
+/**
+ * A {@link ParsedAdjustable} adjustable value whose components are typed by an enumeration and have integer values
+ * 
+ * @param <F> The field-type enum
+ * @param <C> The type of {@link FieldedComponent component} composing this adjustable
+ * @param <T> This fielded adjustable sub-type
+ */
 public interface FieldedAdjustable<F extends Enum<F>, C extends FieldedComponent<F>, T extends FieldedAdjustable<F, C, T>>
 	extends ParsedAdjustable<T, C>, Comparable<T> {
+	/** @return The field-type enum class */
 	Class<F> getFieldType();
 
+	/**
+	 * @param type The field type
+	 * @return The component in this adjustable with the given type, or null if this value does not have such a component
+	 */
 	C getField(F type);
 
+	/**
+	 * @param type The field type to set
+	 * @param value The value for the field
+	 * @return A new adjustable that is identical to this one except for the value of the given field
+	 */
 	T with(F type, int value);
 
 	@Override

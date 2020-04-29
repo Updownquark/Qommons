@@ -12,8 +12,10 @@ import java.util.function.Predicate;
 
 import org.qommons.Named;
 
-/** A tool for parsing HTML files */
+/** A tool for parsing HTML files. Pretty sure it has issues, wouldn't trust it. */
+@SuppressWarnings("javadoc")
 public class HtmlNavigator {
+	/** Represents an HTML tag */
 	public static class Tag implements Named {
 		private final Tag theParent;
 		private final String theName;

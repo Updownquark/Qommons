@@ -86,6 +86,11 @@ public interface SpinnerFormat<T> extends Format<T> {
 		}
 	};
 
+	/**
+	 * @param format The format String to use to format and parse the double value
+	 * @param increment The amount to increment/decrement the value by for each action
+	 * @return A spinner format for double values
+	 */
 	public static SpinnerFormat<Double> doubleFormat(String format, double increment) {
 		return new AbstractSpinnerFormat<Double>(Format.doubleFormat(format)) {
 			@Override
@@ -125,15 +130,38 @@ public interface SpinnerFormat<T> extends Format<T> {
 		}
 	}
 
+	/**
+	 * A simple parser to use with {@link SpinnerFormat#forAdjustable(SimpleParser)}
+	 * 
+	 * @param <T> The type of value to parse
+	 */
 	public interface SimpleParser<T> {
+		/**
+		 * @param text The text representing the value to parse
+		 * @return The parsed value
+		 * @throws ParseException If the value could not be parsed
+		 */
 		T parse(CharSequence text) throws ParseException;
 	}
 
+	/**
+	 * @param <T> The adjustable type to format
+	 * @param parse The simple parser for the type
+	 * @return A spinner format for the type
+	 */
 	public static <T extends ParsedAdjustable<T, ?>> SpinnerFormat<T> forAdjustable(SimpleParser<T> parse) {
 		return new AdjustableFormat<>(parse);
 	}
 
-	public static <T, A extends ParsedAdjustable<A, ?>> SpinnerFormat<T> wrapAdjustable(SpinnerFormat<A> adjustableFormat,
+	/**
+	 * @param <A> The type of the adjustable format
+	 * @param <T> The type for the mapped format
+	 * @param adjustableFormat The adjustable format
+	 * @param map The function to produce target values from values provided by the adjustable format
+	 * @param reverse The function to produce values for the adjustable format from target values
+	 * @return A spinner format for the target type
+	 */
+	public static <A extends ParsedAdjustable<A, ?>, T> SpinnerFormat<T> wrapAdjustable(SpinnerFormat<A> adjustableFormat,
 		Function<? super A, ? extends T> map, Function<? super T, ? extends A> reverse) {
 		return new AdjustableFormatWrapper<>(adjustableFormat, map, reverse);
 	}
@@ -148,13 +176,14 @@ public interface SpinnerFormat<T> extends Format<T> {
 	 * @see SimpleDateFormat#SimpleDateFormat(String)
 	 */
 	public static SpinnerFormat<Instant> flexDate(Supplier<Instant> reference, String dayFormat, TimeZone timeZone) {
-		return SpinnerFormat.<Instant, TimeUtils.ParsedTime> wrapAdjustable(
+		return SpinnerFormat.<TimeUtils.ParsedTime, Instant> wrapAdjustable(
 			forAdjustable(text -> TimeUtils.parseFlexFormatTime(text, true, true)), //
 			time -> time.evaluate(Instant::now), instant -> TimeUtils.asFlexTime(instant, TimeUtils.GMT, "ddMMMyyyy"));
 	}
 
+	/** @return A spinner format that parses durations (time lengths) using a flexible format */
 	public static SpinnerFormat<Duration> flexDuration() {
-		return SpinnerFormat.<Duration, TimeUtils.ParsedDuration> wrapAdjustable(forAdjustable(TimeUtils::parseDuration),
+		return SpinnerFormat.<TimeUtils.ParsedDuration, Duration> wrapAdjustable(forAdjustable(TimeUtils::parseDuration),
 			TimeUtils.ParsedDuration::asDuration, TimeUtils.ParsedDuration::asParsedDuration);
 	}
 
@@ -184,9 +213,15 @@ public interface SpinnerFormat<T> extends Format<T> {
 		};
 	}
 
+	/**
+	 * A spinner format for parsing {@link ParsedAdjustable} values
+	 * 
+	 * @param <T> The {@link ParsedAdjustable} sub-type to parse
+	 */
 	public static class AdjustableFormat<T extends ParsedAdjustable<T, ?>> implements SpinnerFormat<T> {
 		private final SimpleParser<T> theParser;
 
+		/** @param parser The simple parser to parse values from text */
 		public AdjustableFormat(SimpleParser<T> parser) {
 			theParser = parser;
 		}
@@ -220,7 +255,13 @@ public interface SpinnerFormat<T> extends Format<T> {
 		}
 	}
 
-	public static class AdjustableFormatWrapper<T, A extends ParsedAdjustable<A, ?>> implements SpinnerFormat<T> {
+	/**
+	 * Implements {@link SpinnerFormat#wrapAdjustable(SpinnerFormat, Function, Function)}
+	 * 
+	 * @param <A> The type of the {@link ParsedAdjustable} that the adjustable format is for
+	 * @param <T> Type for this format
+	 */
+	public static class AdjustableFormatWrapper<A extends ParsedAdjustable<A, ?>, T> implements SpinnerFormat<T> {
 		private final SpinnerFormat<A> theFormat;
 		private final Function<? super A, ? extends T> theMap;
 		private final Function<? super T, ? extends A> theReverse;
@@ -228,6 +269,11 @@ public interface SpinnerFormat<T> extends Format<T> {
 		private A theLastAdjustable;
 		private T theLastValue;
 
+		/**
+		 * @param format The spinner format for the source type
+		 * @param map The source-to-target mapping
+		 * @param reverse The target-to-source reverse mapping
+		 */
 		public AdjustableFormatWrapper(SpinnerFormat<A> format, Function<? super A, ? extends T> map,
 			Function<? super T, ? extends A> reverse) {
 			theFormat = format;
@@ -235,6 +281,10 @@ public interface SpinnerFormat<T> extends Format<T> {
 			theReverse = reverse;
 		}
 
+		/**
+		 * @param value The target value
+		 * @return The reverse-mapped source value
+		 */
 		protected A adjustable(T value) {
 			if (value == theLastValue)
 				return theLastAdjustable;

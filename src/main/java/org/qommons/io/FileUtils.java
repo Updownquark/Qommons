@@ -24,35 +24,55 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import org.qommons.ArrayUtils;
+import org.qommons.Named;
 import org.qommons.ex.ExSupplier;
 
+/** Utilities to use on {@link File}s or similar structures */
 public class FileUtils {
 	private FileUtils() {}
 
-	public interface FileDataSource {
-		String getName();
-
+	/** A structure representing a {@link File file}, directory, or some other such hierarchical data storage structure */
+	public interface FileDataSource extends Named {
+		/** @return This file's parent */
 		FileDataSource getParent();
 
+		/** @return Whether this file exists in the data source */
 		boolean exists();
 
+		/** @return Whether this file represents a symbolic link to another location in the data source */
 		boolean isSymbolicLink();
 
+		/** @return The time (millis since epoch) at which this file is marked as having last been modified */
 		long getLastModified();
 
+		/** @return Whether this file represents a directory potentially containing other file structures */
 		boolean isDirectory();
 
+		/** @return The files contained in this directory, or null if this is not a directory */
 		FileDataSource[] listFiles();
 
+		/**
+		 * @return A stream to read this file's content
+		 * @throws IOException If the content could not be accessed
+		 */
 		InputStream read() throws IOException;
 
+		/**
+		 * @param path The path of the resource to get relative to this resource
+		 * @return A structure representing the given resource
+		 */
 		FileDataSource at(String path);
 
+		/**
+		 * @param childFilter The filter to apply
+		 * @return A file identical to this file but whose {@link #listFiles() file list} will exclude files not passing the given filter
+		 */
 		default FileDataSource filterContent(Predicate<FileDataSource> childFilter) {
 			return new FilteredDataSource(this, childFilter);
 		}
 	}
 
+	/** A structure representing a {@link FileDataSource} whose content can be modified */
 	public interface MutableFileDataSource extends FileDataSource {
 		@Override
 		MutableFileDataSource getParent();
@@ -63,39 +83,96 @@ public class FileUtils {
 		@Override
 		MutableFileDataSource[] listFiles();
 
+		/**
+		 * Attempts to delete the file and all its sub-content, if any
+		 * 
+		 * @param results The results to update with the result of this operation
+		 * @return Whether the deletion succeeded
+		 */
 		boolean delete(DirectorySyncResults results);
 
+		/**
+		 * Attempts to create this resource as a directory (and any necessary parent directories)
+		 * 
+		 * @return This resource
+		 * @throws IOException If the directory could not be created
+		 */
 		MutableFileDataSource createDirectory() throws IOException;
 
+		/**
+		 * @return A stream to write data into this resource
+		 * @throws IOException If the data could not be accessed for write
+		 */
 		OutputStream write() throws IOException;
 
+		/**
+		 * @param lastModified The time (millis since epoch) to mark this file as having been modified
+		 * @return Whether the mark succeeded
+		 */
 		boolean setLastModified(long lastModified);
 	}
 
+	/**
+	 * @param file The file to represent
+	 * @return A {@link MutableFileDataSource} representing the file on the file system
+	 */
 	public static MutableFileDataSource dataSource(File file) {
 		return new DefaultFileDataSource(null, file);
 	}
 
+	/**
+	 * @param path The path for the resource
+	 * @param dataSource The resource
+	 * @return A resource representing a synthetic ancestor directory with the given data source as its only content at the given relative
+	 *         path
+	 */
 	public static FileDataSource asSubFile(String path, FileDataSource dataSource) {
 		return new SubFile(dataSource, path.split("[\\\\/]+"));
 	}
 
+	/**
+	 * Creates a synthetic file data source
+	 * 
+	 * @param name The name for the resource
+	 * @param data The data supplier for the resource
+	 * @param lastModified The last-modified supplier for the resource
+	 * @return The synthetic resource
+	 */
 	public static FileDataSource dataSource(String name, ExSupplier<InputStream, IOException> data, LongSupplier lastModified) {
 		return new SingleFileSource(name, data, lastModified);
 	}
 
+	/**
+	 * @param name The name for the resource
+	 * @param sources The resources to combine
+	 * @return A directory resource whose content is the union of all the content of the given sources.
+	 * @see #combine(String, Iterable)
+	 */
 	public static FileDataSource combine(String name, FileDataSource... sources) {
 		return combine(name, Arrays.asList(sources));
 	}
 
+	/**
+	 * @param name The name for the resource
+	 * @param sources The resources to combine
+	 * @return A directory resource whose content is the union of all the content of the given sources. If multiple sources contain the same
+	 *         resource (by name), the first source in the list containing the resource will be considered the authority for it.
+	 */
 	public static FileDataSource combine(String name, Iterable<? extends FileDataSource> sources) {
 		return new CombinedFileDataSource(name, sources);
 	}
 
+	/** @return An empty file synchronization operation */
 	public static FileSyncOperation sync() {
 		return new FileSyncOperation();
 	}
 
+	/**
+	 * @param file The file or directory to search in
+	 * @param folder Whether to search for a folder
+	 * @param test The test to search for a pass
+	 * @return The file or directory resource in the given root that matches the given folder and test requirements
+	 */
 	public static FileDataSource find(FileDataSource file, boolean folder, Predicate<FileDataSource> test) {
 		if (!file.exists()) {
 			return null;
@@ -115,11 +192,22 @@ public class FileUtils {
 		return null;
 	}
 
+	/**
+	 * @param file The file or directory to search in
+	 * @param folder Whether to search for a folder
+	 * @param test The test to search for a pass
+	 * @return The file or directory resource in the given root that matches the given folder and test requirements
+	 */
 	public static File find(File file, boolean folder, Predicate<File> test) {
 		FileDataSource found = find(dataSource(file), folder, f -> test.test(((DefaultFileDataSource) f).getRoot()));
 		return found == null ? null : ((DefaultFileDataSource) found).getRoot();
 	}
 
+	/**
+	 * @param clazz The java class responsible for the resource
+	 * @param resourcePath The path of the resource relative to the class's definition file
+	 * @return The last modified time of the resource, or 0 if it could not be discovered
+	 */
 	public static long getResourceLastModified(Class<?> clazz, String resourcePath) {
 		URL resource = clazz.getResource(resourcePath);
 		if (resource == null)
@@ -154,16 +242,44 @@ public class FileUtils {
 		}
 	}
 
+	/** Possible actions to take for a source-dest resource pair in a {@link FileSyncOperation} */
 	public enum FileAction {
-		IGNORE, DELETE, COPY;
+		/** Ignores the resource performs no action */
+		IGNORE,
+		/** Deletes the resource from the destination */
+		DELETE,
+		/** Copies the resource from the source (authority) into the destination, creating it if it does not yet exist */
+		COPY;
 	}
 
+	/**
+	 * Controls the behavior of a {@link FileSyncOperation} by deciding what action to take for each resource pair between the source
+	 * (authority) and destination data sets.
+	 */
 	public interface FileSyncControl {
+		/**
+		 * <p>
+		 * Determines what action to perform for a resource pair between the source (authority) and destination data sets.
+		 * </p>
+		 * <p>
+		 * Either the source or destination resources or neither (but not both) may be non-existent
+		 * </p>
+		 * 
+		 * @param source The resource from the source (authority) data set
+		 * @param dest The resource in the destination data set
+		 * @return The action to perform on the destination resource
+		 * @throws IOException If the action could not be determined
+		 */
 		FileAction getAction(FileDataSource source, MutableFileDataSource dest) throws IOException;
 	}
 
-	public static final FileSyncControl NO_DELETE = (src, dest) -> src == null ? FileAction.IGNORE : FileAction.COPY;
+	/**
+	 * A simple {@link FileSyncControl} instance that copies all data from the source to the destination but will not delete data from the
+	 * destination if it is not found in the source
+	 */
+	public static final FileSyncControl NO_DELETE = (src, dest) -> (src == null || !src.exists()) ? FileAction.IGNORE : FileAction.COPY;
 
+	/** An operation to synchronize resources between 2 file sources (typically directories) */
 	public static class FileSyncOperation {
 		private FileDataSource theSource;
 		private MutableFileDataSource theDest;
@@ -174,39 +290,78 @@ public class FileUtils {
 			isCaseSensitive = true;
 		}
 
+		/**
+		 * @param source The data source to synchronize information from (the authority)
+		 * @return This operation
+		 */
 		public FileSyncOperation from(FileDataSource source) {
 			theSource = source;
 			return this;
 		}
 
+		/**
+		 * @param source The data source to synchronize information from (the authority)
+		 * @return This operation
+		 */
 		public FileSyncOperation from(File source) {
 			return from(dataSource(source));
 		}
 
+		/**
+		 * @param dest The data source to synchronize information into (the destination)
+		 * @return This operation
+		 */
 		public FileSyncOperation to(MutableFileDataSource dest) {
 			theDest = dest;
 			return this;
 		}
 
+		/**
+		 * @param dest The data source to synchronize information into (the destination)
+		 * @return This operation
+		 */
 		public FileSyncOperation to(File dest) {
 			return to(dataSource(dest));
 		}
 
+		/**
+		 * @param caseSensitive Whether resources whose names differ only in case should be regarded as distinct or as representing the same
+		 *        resource
+		 * @return This operation
+		 */
 		public FileSyncOperation caseSensitive(boolean caseSensitive) {
 			isCaseSensitive = caseSensitive;
 			return this;
 		}
 
+		/**
+		 * @param control The control mechanism to determine the action to perform for each resource pair between the source and dest
+		 *        resources
+		 * @return This operation
+		 */
 		public FileSyncOperation control(FileSyncControl control) {
 			theControl = control;
 			return this;
 		}
 
+		/**
+		 * Performs the synchronization operation
+		 * 
+		 * @return The results of the operation
+		 * @throws IOException If an I/O exception occurs reading from the source or modifying the destination
+		 */
 		public DirectorySyncResults sync() throws IOException {
 			return sync(//
 				new DirectorySyncResults());
 		}
 
+		/**
+		 * Performs the synchronization operation
+		 * 
+		 * @param results The results structure to accumulate the operation results into
+		 * @return The results of the operation
+		 * @throws IOException If an I/O exception occurs reading from the source or modifying the destination
+		 */
 		public DirectorySyncResults sync(DirectorySyncResults results) throws IOException {
 			if (theSource == null)
 				throw new IllegalStateException("No source configured");
@@ -332,6 +487,7 @@ public class FileUtils {
 		}
 	}
 
+	/** The results of a {@link FileSyncOperation} */
 	public static class DirectorySyncResults {
 		private int filesAdded;
 		private int directoriesAdded;
@@ -342,38 +498,51 @@ public class FileUtils {
 		private int totalDirectories;
 		private int lastModifyFailures;
 
+		/** @return The number of data files added to the destination resource structure */
 		public int getFilesAdded() {
 			return filesAdded;
 		}
 
+		/** @return The number of directories added to the destination resource structure */
 		public int getDirectoriesAdded() {
 			return directoriesAdded;
 		}
 
+		/** @return The number of data files deleted from the destination resource structure */
 		public int getFilesDeleted() {
 			return filesDeleted;
 		}
 
+		/** @return The number of directories deleted from the destination resource structure */
 		public int getDirectoriesDeleted() {
 			return directoriesDeleted;
 		}
 
+		/** @return The number of data files updated in the destination resource structure */
 		public int getFilesUpdated() {
 			return filesUpdated;
 		}
 
+		/** @return The total number of data file resources checked between the resource structures */
 		public int getTotalFiles() {
 			return totalFiles;
 		}
 
+		/** @return The total number of directories checked between the resource structures */
 		public int getTotalDirectories() {
 			return totalDirectories;
 		}
 
+		/** @return The number of {@link MutableFileDataSource#setLastModified(long)} failures on destination files and directories */
 		public int getLastModifyFailures() {
 			return lastModifyFailures;
 		}
 
+		/**
+		 * Clears this results set for re-use
+		 * 
+		 * @return This results set
+		 */
 		public DirectorySyncResults clear() {
 			filesAdded = 0;
 			directoriesAdded = 0;
@@ -466,6 +635,11 @@ public class FileUtils {
 		}
 	}
 
+	/**
+	 * @param file The file or directory resource to delete
+	 * @param results The results to accumulate the deletion results into
+	 * @return Whether the resource was fully removed from the data source
+	 */
 	public static boolean delete(File file, DirectorySyncResults results) {
 		if (!file.exists()) {
 			return true;
@@ -486,6 +660,7 @@ public class FileUtils {
 		return file.delete();
 	}
 
+	/** Default {@link File}-based implementation of {@link MutableFileDataSource} */
 	public static class DefaultFileDataSource implements MutableFileDataSource {
 		private DefaultFileDataSource theParent;
 		private final File theRoot;
@@ -495,6 +670,7 @@ public class FileUtils {
 			theRoot = root;
 		}
 
+		/** @return The root file of this data structure */
 		public File getRoot() {
 			return theRoot;
 		}

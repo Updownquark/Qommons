@@ -19,6 +19,7 @@ public class LambdaUtils {
 		}
 	};
 
+	/** The {@link LambdaUtils#getIdentifier(Object) identifier} representing the identity function */
 	public static final Object IDENTITY = new Object() {
 		@Override
 		public String toString() {

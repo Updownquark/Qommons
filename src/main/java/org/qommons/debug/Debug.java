@@ -22,12 +22,18 @@ import org.qommons.Transaction;
 import org.qommons.collect.ListenerList;
 
 /**
- * This is a class I created to ease debugging. It has several features that can be useful.
+ * <p>
+ * This is a class I created to ease debugging. Production code can be set up to query this class and print out debugging information or
+ * call breakpoints when needed. If called correctly these features will be virtually free in production or when debugging is inactive.
+ * <p>
+ * <p>
+ * It has several features that can be useful.
+ * </p>
  * <ul>
- * <li>Variables. Static variables can be creates without the need to declare them via {@link #d() d()}.{@link #data()
- * data()}.{@link DebugData#setReference(String, Object) set()}. This is ideal for on-the-fly debugging.</li>
- * <li>Breakpoint utilities. Although the {@link BreakpointHere} class could be used the {@link DebugData#breakIf(Predicate)} and
- * {@link DebugData#breakOn(Predicate)} shortcuts make one-line breakpoints a cinch.</li>
+ * <li>Variables. Static variables can be created without the need to declare them via {@link #d() d()}.{@link #set(String, Object)}.</li>
+ * <li>Debug data structures. {@link #d() d()}.{@link #debug(Object, boolean) debug(Object, true)} can create a {@link DebugData} object
+ * that can store its own field data, perform actions based on that data, and power debugging code that only runs when the {@link Debug}
+ * architecture is {@link #isActive() active} and a particular object is flagged for debugging.</li>
  * </ul>
  * 
  * More features to be added later.
@@ -71,15 +77,26 @@ public class Debug {
 		isActive = new AtomicLong();
 	}
 
+	/** @return Whether the debug architecture is currently active */
 	public boolean isActive() {
 		return isActive.get() > 0;
 	}
 
+	/**
+	 * Activates debugging
+	 * 
+	 * @return This debug instance
+	 */
 	public Debug start() {
 		isActive.getAndIncrement();
 		return this;
 	}
 
+	/**
+	 * Deactivates debugging, unless it has also been activated elsewhere
+	 * 
+	 * @return This debug instance
+	 */
 	public Debug end() {
 		isActive.getAndDecrement();
 		return this;
