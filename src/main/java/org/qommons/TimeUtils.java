@@ -1663,7 +1663,7 @@ public class TimeUtils {
 			return c == '-' || c == '/';
 		}, false);
 		DateFormatComponent dot = new DateFormatComponent(null, ParsedDateElementType.SEP, str -> str.charAt(0) == '.', true);
-		DateFormatComponent colon = new DateFormatComponent(null, ParsedDateElementType.SEP, str -> str.charAt(0) == ':', true);
+		DateFormatComponent colon = new DateFormatComponent(null, ParsedDateElementType.SEP, str -> str.charAt(0) == ':', false);
 
 		List<DateFormat> formats = new ArrayList<>();
 		formats.addAll(Arrays.asList(//

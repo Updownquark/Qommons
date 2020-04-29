@@ -341,6 +341,7 @@ public class ArgumentParsing {
 				default:
 					msg += times + " times";
 				}
+				msg += ", not " + times;
 				throw new IllegalArgumentException(msg);
 			}
 			if (times < getMinTimes()) {
@@ -353,8 +354,9 @@ public class ArgumentParsing {
 					msg += "twice";
 					break;
 				default:
-					msg += times + " times";
+					msg += getMinTimes() + " times";
 				}
+				msg += ", not " + times;
 				throw new IllegalArgumentException(msg);
 			}
 			if (times > getMaxTimes()) {
@@ -367,8 +369,9 @@ public class ArgumentParsing {
 					msg += "twice";
 					break;
 				default:
-					msg += times + " times";
+					msg += getMaxTimes() + " times";
 				}
+				msg += ", not " + times;
 				throw new IllegalArgumentException(msg);
 			}
 			for (ArgumentConstraint constraint : getConstraints()) {

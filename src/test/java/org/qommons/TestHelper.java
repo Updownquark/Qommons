@@ -12,7 +12,6 @@ import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
-import java.nio.ByteBuffer;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
@@ -870,27 +869,31 @@ public class TestHelper {
 
 		private TestSummary executeParallel(TestSetExecution exec, List<TestFailure> knownFailures, int cases, int successes, int failures,
 			int maxCases, int maxFailures, Instant termination, Throwable firstError) {
-			TestExecutionMaster master = new TestExecutionMaster(exec, thePlacemarkNames, Thread.currentThread(), theConcurrency, cases,
-				successes, failures);
+			// Since we're delegating the rest of the testing to slave processes, the executor won't be executing any more test cases.
+			// So we can let its test execution thread die
+			exec.close();
+			System.gc();
+			TestExecutionMaster master = new TestExecutionMaster(exec, thePlacemarkNames, theConcurrency, cases, successes, failures);
 			Throwable[] error = new Throwable[] { firstError };
 
 			master.start();
 			while (true) {
-				if (master.getFailures() >= maxFailures) {
-					master.kill();
-					break;
-				} else if (master.getCases() >= maxCases || Instant.now().compareTo(termination) >= 0) {
+				String stopReason = null;
+				if (master.getFailures() >= maxFailures)
+					stopReason = master.getFailures() + " failures--ending test set";
+				else if (master.getCases() >= maxCases)
+					stopReason = "Test set complete after " + master.getCases();
+				else if (Instant.now().compareTo(termination) >= 0)
+					stopReason = "Test set complete after "
+						+ QommonsUtils.printDuration(Duration.between(termination, Instant.now()), false);
+				if (stopReason != null) {
+					System.out.println(stopReason);
 					master.stop();
 					break;
 				}
 
-				while (master.isFull()) {
-					try {
-						Thread.sleep(24L * 60 * 60 * 1000);
-					} catch (InterruptedException e) {}
-				}
-
-				master.execute(//
+				System.gc();
+				if (!master.execute(//
 					(failure, err) -> {
 						synchronized (exec) {
 							if (error[0] == null)
@@ -898,7 +901,10 @@ public class TestHelper {
 							knownFailures.add(failure);
 							writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames, knownFailures);
 						}
-					});
+					})) {
+					System.err.println("All slaves died");
+					break;
+				}
 			}
 
 			// Wait for slaves to die
@@ -909,7 +915,7 @@ public class TestHelper {
 			}
 
 			Duration testDuration = Duration.between(exec.getStart(), Instant.now());
-			return new TestSummary(successes, failures, testDuration, firstError);
+			return new TestSummary(master.getSuccesses(), master.getFailures(), testDuration, error[0]);
 		}
 	}
 
@@ -1069,7 +1075,8 @@ public class TestHelper {
 					sleep = Duration.ofDays(1);
 				}
 				try {
-					Thread.sleep(sleep.toMillis(), sleep.getNano() % 1000000);
+					if (sleep.compareTo(Duration.ZERO) > 0)
+						Thread.sleep(sleep.toMillis(), sleep.getNano() % 1000000);
 				} catch (InterruptedException e) {}
 			}
 			isTestCaseDone = false;
@@ -1111,6 +1118,8 @@ public class TestHelper {
 		@SuppressWarnings("deprecation")
 		@Override
 		public void close() {
+			if (isTestSetDone)
+				return;
 			isTestSetDone = true;
 			theTestExecThread.interrupt();
 			if (theTestExecThread.isAlive()) {
@@ -1127,15 +1136,16 @@ public class TestHelper {
 		}
 	}
 
-	private static final String DATE_FORMAT_STR = "ddMMMyyyy HH:mm:ss.SSS";
+	private static final String DATE_FORMAT_STR = "ddMMMyyyy HHmmss.SSS"; // Can't have colons in the format because those are special
 	private static final boolean DEBUG_CONCURRENT = false;
 
+	/** Controls a set of {@link TestExecutionSlave}s to execute test cases from multiple processes simultaneously */
 	public static class TestExecutionMaster {
 		private final TestSetExecution theExecutor;
 		private final NavigableSet<String> thePlacemarkNames;
-		private final Thread theTestSetThread;
 		private final TestSlaveHandle[] theSlaves;
-		private final AtomicInteger theExecutingTestCases;
+		private final AtomicInteger theLivingSlaves;
+		private final ListenerList<TestSlaveHandle> theAvailableSlaves;
 		private final AtomicInteger theTotalCases;
 		private final AtomicInteger theTotalSuccesses;
 		private final AtomicInteger theTotalFailures;
@@ -1143,19 +1153,32 @@ public class TestHelper {
 
 		private Thread theStreamDrainer;
 
-		public TestExecutionMaster(TestSetExecution exec, NavigableSet<String> placemarkNames, Thread testSetThread, int concurrency,
+		/**
+		 * @param exec The test executor to execute tests with
+		 * @param placemarkNames The placemark names the tester may encounter
+		 * @param concurrency The number of tests to run concurrently
+		 * @param cases The number of random cases to execute
+		 * @param successes The number of successful test cases so far
+		 * @param failures The number of test case failures so far
+		 */
+		public TestExecutionMaster(TestSetExecution exec, NavigableSet<String> placemarkNames, int concurrency,
 			int cases, int successes, int failures) {
 			theExecutor = exec;
 			thePlacemarkNames = placemarkNames;
-			theTestSetThread = testSetThread;
 			theSlaves = new TestSlaveHandle[DEBUG_CONCURRENT ? 1 : concurrency];
-			theExecutingTestCases = new AtomicInteger();
+			theLivingSlaves = new AtomicInteger(theSlaves.length);
+			theAvailableSlaves = ListenerList.build().build();
 			theTotalCases = new AtomicInteger(cases);
 			theTotalSuccesses = new AtomicInteger(successes);
 			theTotalFailures = new AtomicInteger(failures);
 			theRandom = new Random();
 		}
 
+		/**
+		 * Spins up the slave processes and all the threads and resources to monitor and control them
+		 * 
+		 * @return This master
+		 */
 		public TestExecutionMaster start() {
 			BetterList<String> args = new BetterTreeList<String>(false).with("java");
 			if (DEBUG_CONCURRENT)
@@ -1186,15 +1209,20 @@ public class TestHelper {
 				try {
 					process = new ProcessBuilder(args).start();
 					theSlaves[p] = new TestSlaveHandle(testerID, process);
+					theAvailableSlaves.add(theSlaves[p], false);
 				} catch (IOException e) {
+					theLivingSlaves.getAndDecrement();
 					throw new IllegalStateException("Could not start tester slave", e);
 				}
 			}
 
 			theStreamDrainer = new Thread(() -> {
+				AccumulatedMessage message=new AccumulatedMessage();
 				while (true) {
 					for (TestSlaveHandle slave : theSlaves)
-						slave.printOutput();
+						slave.printOutput(message);
+					
+					message.flush();
 
 					try {
 						Thread.sleep(50);
@@ -1206,20 +1234,16 @@ public class TestHelper {
 			return this;
 		}
 
-		boolean isFull() {
-			return theExecutingTestCases.get() == theSlaves.length;
-		}
-
-		void execute(BiConsumer<TestFailure, Throwable> onFail) {
-			for(TestSlaveHandle slave : theSlaves){
-				if (!slave.isDead && slave.theTestCase < 0) {
-					int caseNumber = theTotalCases.incrementAndGet();
-					long seed = theRandom.nextLong();
-					slave.execute(caseNumber, seed, onFail);
-					return;
-				}
+		boolean execute(BiConsumer<TestFailure, Throwable> onFail) {
+			int caseNumber = theTotalCases.incrementAndGet();
+			long seed = theRandom.nextLong();
+			while (true) {
+				if (theLivingSlaves.get() == 0)
+					return false;
+				ListenerList.Element<TestSlaveHandle> slave = theAvailableSlaves.poll(Long.MAX_VALUE);
+				if (slave.get().execute(caseNumber, seed, onFail))
+					return true;
 			}
-			throw new IllegalStateException("Full on test cases");
 		}
 
 		void kill() {
@@ -1251,6 +1275,35 @@ public class TestHelper {
 			}
 			return false;
 		}
+		
+		static class AccumulatedMessage{
+			private final StringBuilder text;
+			private boolean error;
+			
+			AccumulatedMessage() {
+				this.text = new StringBuilder();
+			}
+			
+			void append(MessageLine message){
+				if (text.length() > 0) {
+					if (error != message.err) {
+						flush();
+						error = message.err;
+					} else
+						text.append('\n');
+				}
+				message.print(text);
+				if(text.length()>=1_000_000)
+					flush();
+			}
+			
+			void flush(){
+				if (text.length() > 0) {
+					(error ? System.err : System.out).println(text);
+					text.setLength(0);
+				}
+			}
+		}
 
 		static class MessageLine {
 			final int testCase;
@@ -1263,8 +1316,10 @@ public class TestHelper {
 				this.err = err;
 			}
 
-			void print() {
-				(err ? System.err : System.out).println((testCase >= 0 ? (testCase + ": ") : "") + message);
+			void print(StringBuilder str) {
+				if (testCase >= 0)
+					str.append(testCase).append(": ");
+				str.append(message);
 			}
 		}
 
@@ -1282,6 +1337,7 @@ public class TestHelper {
 			volatile long theSeed;
 			volatile BiConsumer<TestFailure, Throwable> theFailListener;
 			private volatile Instant theTestCaseStart;
+			private volatile boolean isStopped;
 			private volatile boolean isDead;
 
 			TestSlaveHandle(String testerId, Process process) {
@@ -1296,13 +1352,21 @@ public class TestHelper {
 				theSystemIn = new BufferedWriter(new OutputStreamWriter(theProcess.getOutputStream()));
 
 				Thread heartbeatThread = new Thread(() -> {
-					while (!isDead) {
-						sendHeartBeat();
-						try {
-							Thread.sleep(TestExecutionSlave.HEARTBEAT_FREQUENCY);
-						} catch (InterruptedException e) {}
+					long lastHeartBeat = System.currentTimeMillis();
+					while (!isDead && sendHeartBeat()) {
+						long now = System.currentTimeMillis();
+						if (now - lastHeartBeat < TestExecutionSlave.HEARTBEAT_FREQUENCY) {
+							try {
+								Thread.sleep(TestExecutionSlave.HEARTBEAT_FREQUENCY - now + lastHeartBeat);
+							} catch (InterruptedException e) {}
+							lastHeartBeat = System.currentTimeMillis();
+						} else
+							lastHeartBeat = now;
 					}
+					isDead = true;
+					theLivingSlaves.getAndDecrement();
 				}, "Tester " + theTesterId + " Heartbeat");
+				heartbeatThread.setPriority(Thread.MAX_PRIORITY);
 				heartbeatThread.setDaemon(true);
 				heartbeatThread.start();
 				theOutListener = new Thread(() -> {
@@ -1310,6 +1374,9 @@ public class TestHelper {
 						String line = theSystemOut.readLine();
 						while (line != null) {
 							theMessages.add(new MessageLine(theTestCase, line, false), false);
+
+							if (isDead)
+								return;
 							line = theSystemOut.readLine();
 						}
 					} catch (IOException e) {
@@ -1323,10 +1390,18 @@ public class TestHelper {
 					try {
 						String line = theSystemErr.readLine();
 						while (line != null) {
-							if (line.startsWith(theTesterId))
-								processSlaveRequest(line.substring(theTesterId.length() + 1));// Drop the colon too
-							else
+							if (line.startsWith(theTesterId)) {
+								try {
+									processSlaveRequest(line.substring(theTesterId.length() + 1));// Drop the colon too
+								} catch (RuntimeException e) {
+									System.err.println("Could not process slave request: " + line);
+									e.printStackTrace();
+								}
+							} else
 								theMessages.add(new MessageLine(theTestCase, line, true), false);
+
+							if (isDead)
+								return;
 							line = theSystemErr.readLine();
 						}
 					} catch (IOException e) {
@@ -1334,24 +1409,28 @@ public class TestHelper {
 						e.printStackTrace();
 						kill();
 					}
-				}, "Tester " + theTesterId + " Out Listener");
+				}, "Tester " + theTesterId + " Err Listener");
 				theErrListener.setDaemon(true);
 				theOutListener.start();
 				theErrListener.start();
 			}
 
-			void execute(int testCase, long seed, BiConsumer<TestFailure, Throwable> onFail) {
+			boolean execute(int testCase, long seed, BiConsumer<TestFailure, Throwable> onFail) {
+				if (isDead)
+					return false;
 				if (theTestCase >= 0)
 					throw new IllegalStateException("This slave is already executing test case " + theTestCase);
-				theExecutingTestCases.getAndIncrement();
 				theTestCase = testCase;
 				theSeed = seed;
 				this.theFailListener = onFail;
 				try {
 					theSystemIn.write(Integer.toHexString(testCase) + ":" + Long.toHexString(seed) + "\n");
 					theSystemIn.flush();
+					return true;
 				} catch (IOException e) {
-					throw new IllegalStateException("I/O Error writing to system in stream", e);
+					isDead = true;
+					System.err.println("I/O Error writing to system in stream");
+					return false;
 				}
 			}
 
@@ -1364,50 +1443,60 @@ public class TestHelper {
 			}
 
 			void stop() {
-				try {
-					theSystemIn.write("X\n");
-					theSystemIn.flush();
-				} catch (IOException e) {
-					throw new IllegalStateException("I/O Error writing to system in stream", e);
-				}
+				isStopped = true;
 			}
 
-			void sendHeartBeat() {
+			boolean sendHeartBeat() {
 				if (isDead || !theProcess.isAlive())
-					return;
+					return false;
 				try {
-					theSystemIn.write('\n');
+					if (isStopped)
+						theSystemIn.write("X\n");
+					else
+						theSystemIn.write('\n');
 					theSystemIn.flush();
+					return theProcess.isAlive();
 				} catch (IOException e) {
-					throw new IllegalStateException("I/O Error writing to system in stream", e);
+					System.err.println("I/O Error writing to system in stream");
+					e.printStackTrace();
+					return false;
 				}
 			}
 
 			void processSlaveRequest(String request) {
 				if (request.startsWith("X:")) {
 					int nextColon = request.indexOf(':', 2);
-					String endTimeStr = request.substring(2, nextColon);
-					Instant endTime;
-					try {
-						endTime = DATE_FORMAT.parse(endTimeStr).toInstant();
-					} catch (ParseException e) {
-						theMessages.add(new MessageLine(theTestCase,
-							"Bad end time \"" + endTimeStr + "\" in " + request.substring(2, nextColon + 1) + ": " + e.getMessage(), true),
+					int testCase = Integer.parseInt(request.substring(2, nextColon), 16);
+					if (testCase != theTestCase)
+						theMessages.add(new MessageLine(theTestCase, "Received error for test case " + testCase + ": " + request, true),
 							false);
-						endTime = Instant.now();
-					}
-					int start = nextColon + 1;
-					nextColon = request.indexOf(':', start);
-					long position = parseHexLong(request.substring(start, nextColon));
-					NavigableMap<String, Long> placemarks = new TreeMap<>();
-					for (String placemark : thePlacemarkNames) {
+					else {
+						int start = nextColon + 1;
+						nextColon = request.indexOf(':', start);
+						String endTimeStr = request.substring(start, nextColon);
+						Instant endTime;
+						try {
+							endTime = DATE_FORMAT.parse(endTimeStr).toInstant();
+						} catch (ParseException e) {
+							theMessages.add(new MessageLine(theTestCase,
+								"Bad end time \"" + endTimeStr + "\" in " + request.substring(2, nextColon + 1) + ": " + e.getMessage(),
+								true), false);
+							endTime = Instant.now();
+						}
 						start = nextColon + 1;
 						nextColon = request.indexOf(':', start);
-						position = parseHexLong(request.substring(start, nextColon));
-						placemarks.put(placemark, position);
+						long position = parseHexLong(request.substring(start, nextColon));
+						NavigableMap<String, Long> placemarks = new TreeMap<>();
+						for (String placemark : thePlacemarkNames) {
+							start = nextColon + 1;
+							nextColon = request.indexOf(':', start);
+							position = parseHexLong(request.substring(start, nextColon));
+							placemarks.put(placemark, position);
+						}
+						TestFailure failure = new TestFailure(theSeed, position, placemarks);
+						endTestCase(endTime, failure, new AssertionError("\n" + request.substring(nextColon + 1).replaceAll("\\n", "\n")),
+							position);
 					}
-					TestFailure failure = new TestFailure(theSeed, position, placemarks);
-					endTestCase(endTime, failure, new AssertionError("\n" + request.substring(nextColon + 1).replaceAll("\\n", "\n")));
 				} else if (request.startsWith("I:")) {
 					int nextColon = request.indexOf(':', 2);
 					int testCase = Integer.parseInt(request.substring(2, nextColon), 16);
@@ -1439,28 +1528,30 @@ public class TestHelper {
 						theMessages.add(new MessageLine(theTestCase, "Bad end time \"" + endTimeStr + "\" in " + request, true), false);
 						endTime = Instant.now();
 					}
-					endTestCase(endTime, null, null);
+					endTestCase(endTime, null, null, 0);
 				} else
 					theMessages.add(new MessageLine(theTestCase, "Tester error: " + request, true), false);
 			}
 
-			void printOutput() {
+			void printOutput(AccumulatedMessage accumulated) {
 				Element<MessageLine> message = theMessages.poll(0);
 				while (message != null) {
-					message.get().print();
+					accumulated.append(message.get());
 
 					message = theMessages.poll(0);
 				}
 			}
 
 			private void beginTestCase() {
-				theMessages.add(
-					new MessageLine(theTestCase, "Executing at " + QommonsUtils.printEndTime(theExecutor.theOriginalStart.toEpochMilli(),
-						theTestCaseStart.toEpochMilli(), TimeZone.getDefault(), Calendar.SECOND), false),
-					false);
+				if (theExecutor.isPrintingProgress)
+					theMessages.add(new MessageLine(theTestCase,
+						Long.toHexString(theSeed) + ": Executing at "
+							+ QommonsUtils.printEndTime(theExecutor.theOriginalStart.toEpochMilli(), theTestCaseStart.toEpochMilli(),
+								TimeZone.getDefault(), Calendar.MINUTE),
+						false), false);
 			}
 
-			private void endTestCase(Instant endTime, TestFailure failure, Throwable error) {
+			private void endTestCase(Instant endTime, TestFailure failure, Throwable error, long position) {
 				if (failure != null)
 					theFailListener.accept(failure, error);
 				if ((theExecutor.isPrintingProgress && failure == null) || (theExecutor.isPrintingFailures && failure != null)) {
@@ -1473,6 +1564,8 @@ public class TestHelper {
 					msg.append(", ");
 					QommonsUtils.printDuration(Duration.between(theExecutor.theOriginalStart, endTime), msg, false);
 					msg.append(" total)");
+					if (failure != null)
+						msg.append(", position=" + position);
 					theMessages.add(new MessageLine(theTestCase, msg.toString(), error != null), false);
 				}
 				theTestCase = -1;
@@ -1481,23 +1574,21 @@ public class TestHelper {
 					theTotalFailures.getAndIncrement();
 				else
 					theTotalSuccesses.getAndIncrement();
-				theExecutingTestCases.getAndDecrement();
-				theTestSetThread.interrupt();
+				if (!isDead)
+					theAvailableSlaves.add(this, false);
 			}
 		}
 	}
 
 	static long parseHexLong(String hexLong) {
-		try {
-			return StringUtils.encodeHex()
-				.parse(//
-					hexLong, new StringUtils.ByteBufferAccumulator(ByteBuffer.allocate(8)), null)//
-				.getResetBuffer().getLong();
-		} catch (IOException e) {
-			throw new IllegalStateException(hexLong);
-		}
+		byte[] bytes = StringUtils.encodeHex().parse(hexLong);
+		long result = 0;
+		for (byte b : bytes)
+			result = (result << 8) | ((b + 0x100) & 0xff);
+		return result;
 	}
 
+	/** A slave process that accepts test cases via stdin, executes them, and provides results via stderr */
 	public static class TestExecutionSlave {
 		private static class TestCase {
 			final int caseNumber;
@@ -1518,9 +1609,16 @@ public class TestHelper {
 		private final TestSetExecution theTesting;
 		private volatile TestCase theTestCase;
 
+		/**
+		 * @param testerId The master-supplied ID of this slave
+		 * @param testable The testable class constructor to use to create fresh test cases
+		 * @param originalStart The start time of the test set
+		 * @param maxTotalDuration The total duration for the test set
+		 * @param maxCaseDuration The maximum test case duration
+		 * @param maxProgressInterval The maximum progress interval, or time without calling the {@link TestHelper}
+		 */
 		public TestExecutionSlave(String testerId, Constructor<? extends Testable> testable, Instant originalStart,
-			Duration maxTotalDuration,
-			Duration maxCaseDuration, Duration maxProgressInterval) {
+			Duration maxTotalDuration, Duration maxCaseDuration, Duration maxProgressInterval) {
 			theTesterId = testerId;
 			TestSetExecution[] exec = new TestSetExecution[1];
 			theExecutionThread = new Thread(() -> {
@@ -1545,12 +1643,18 @@ public class TestHelper {
 			theTesting = exec[0];
 		}
 
+		/**
+		 * Starts executing a test case
+		 * 
+		 * @param caseNumber The case number (usually a sequence)
+		 * @param helper The test helper randomness source for the test case
+		 */
 		public void queueTestCase(int caseNumber, TestHelper helper) {
 			theTestCase = new TestCase(caseNumber, helper);
 			theExecutionThread.interrupt();
 		}
 
-		public void executeTestCase(int caseNumber, TestHelper helper) {
+		void executeTestCase(int caseNumber, TestHelper helper) {
 			System.err.println(theTesterId + ":I:" + Integer.toHexString(caseNumber) + ":" + DATE_FORMAT.format(new Date()));
 			Throwable error = theTesting.executeTestCase(caseNumber, helper, false);
 			if (error != null) {
@@ -1566,10 +1670,24 @@ public class TestHelper {
 			theTestCase = null;
 		}
 
-		public boolean isCheckIn() {
+		boolean isCheckIn() {
 			return theTesting.theMaxProgressInterval != null;
 		}
 
+		/**
+		 * The main method to spin up the slave
+		 * 
+		 * @param args Command-line arguments:
+		 *        <ul>
+		 *        <li><b>--testerID=</b>The ID for this test slave</li>
+		 *        <li><b>--testable=</b>The fully-qualified name of the {@link Testable} implementation to test</li>
+		 *        <li><b>--start=</b>The start time of the test set</li>
+		 *        <li><b>--max-total-duration=</b>The total duration for the test set</li>
+		 *        <li><b>--max-case-duration=</b>The maximum test case duration</li>
+		 *        <li><b>--max-progress-interval</b>The maximum progress interval, or time without calling the {@link TestHelper}</li>
+		 *        <li><b>--placemarks=</b>The comma-separated list of placemarks to expect for the test cases</li>
+		 *        </ul>
+		 */
 		public static void main(String[] args) {
 			ArgumentParsing.ArgumentParser argParser = ArgumentParsing.create()//
 				.forDefaultPattern()//
@@ -1580,7 +1698,7 @@ public class TestHelper {
 				.durationArg("max-case-duration").defValue((Duration) null)//
 				.durationArg("max-progress-interval").defValue((Duration) null)//
 				.forDefaultMultiValuePattern()//
-				.stringArg("placemarks").required()//
+				.stringArg("placemarks").times(1, Integer.MAX_VALUE)//
 				.getParser();
 			ArgumentParsing.Arguments parsedArgs;
 			try {
@@ -1619,20 +1737,25 @@ public class TestHelper {
 			TestExecutionSlave slave = new TestExecutionSlave(testerID, creator, //
 				parsedArgs.getInstant("start", null), parsedArgs.getDuration("max-total-duration", null),
 				parsedArgs.getDuration("max-case-duration", null), parsedArgs.getDuration("max-progress-interval", null));
+			// Set up a heart beat listener that expects some input from the master every so often.
+			// If no input is received in that interval, the tester is assumed to have been killed and we will exit.
+			boolean[] stopped = new boolean[1];
 			class HeartBeat implements Runnable {
 				volatile long lastHeartbeatReceived = System.currentTimeMillis();
 
 				@Override
 				public void run() {
-					if (System.currentTimeMillis() - lastHeartbeatReceived > HEARTBEAT_FREQUENCY * 2) {
+					if (System.currentTimeMillis() - lastHeartbeatReceived > HEARTBEAT_FREQUENCY * 5) {
 						System.err.println(testerID + ":No heartbeat detected--parent process must have terminated--exiting");
-						System.exit(2);
+						stopped[0] = true;
 					}
 				}
 			}
+			Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
 			HeartBeat heartBeat = new HeartBeat();
 			Thread heartBeatThread = new Thread(() -> {
-				while (true) {
+				while (!stopped[0]) {
+					System.gc(); // Do this here so the heartbeat isn't disrupted
 					try {
 						Thread.sleep(HEARTBEAT_FREQUENCY);
 					} catch (InterruptedException e) {}
@@ -1645,36 +1768,41 @@ public class TestHelper {
 				String line = in.readLine();
 				while (line != null) {
 					heartBeat.lastHeartbeatReceived = System.currentTimeMillis();
-					if (line.length() == 0) {
-						line = in.readLine();
-						continue; // Heartbeat
+					if (stopped[0]) {
+						if (slave.theTestCase == null)
+							break;
+					} else if (line.length() == 0) { // Heartbeat
+					} else if (line.length() == 1) { // Stop command
+						stopped[0] = true;
+						if (slave.theTestCase == null)
+							break;
+					} else {
+						int colonIdx = line.indexOf(':');
+						if (colonIdx < 0) {
+							System.err.println(testerID + ":Illegal test case input: " + line);
+							System.exit(1);
+							return;
+						}
+						int caseNumber;
+						try {
+							caseNumber = Integer.parseInt(line.substring(0, colonIdx), 16);
+						} catch (NumberFormatException e) {
+							System.err.println(testerID + ":Illegal case number input: " + line);
+							System.exit(1);
+							return;
+						}
+						long seed;
+						try {
+							seed = parseHexLong(line.substring(colonIdx + 1));
+						} catch (NumberFormatException e) {
+							System.err.println(testerID + ":Illegal random seed input: " + line);
+							System.exit(1);
+							return;
+						}
+						TestHelper helper = new TestHelper(false, slave.isCheckIn(), seed, 0, Collections.emptyNavigableSet(),
+							placemarkNames);
+						slave.queueTestCase(caseNumber, helper);
 					}
-					else if (line.length() == 1)
-						break;// Stop command
-					int colonIdx = line.indexOf(':');
-					if (colonIdx < 0) {
-						System.err.println(testerID + ":Illegal test case input: " + line);
-						System.exit(1);
-						return;
-					}
-					int caseNumber;
-					try {
-						caseNumber = Integer.parseInt(line.substring(0, colonIdx), 16);
-					} catch (NumberFormatException e) {
-						System.err.println(testerID + ":Illegal case number input: " + line);
-						System.exit(1);
-						return;
-					}
-					long seed;
-					try {
-						seed = parseHexLong(line.substring(colonIdx + 1));
-					} catch (NumberFormatException e) {
-						System.err.println(testerID + ":Illegal random seed input: " + line);
-						System.exit(1);
-						return;
-					}
-					TestHelper helper = new TestHelper(false, slave.isCheckIn(), seed, 0, Collections.emptyNavigableSet(), placemarkNames);
-					slave.queueTestCase(caseNumber, helper);
 
 					line = in.readLine();
 				}
@@ -1683,12 +1811,6 @@ public class TestHelper {
 					.println(testerID + ":I/O Error occurred with input: " + formatException(e));
 				System.exit(1);
 				return;
-			}
-
-			while (slave.theTestCase != null) {
-				try {
-					Thread.sleep(5);
-				} catch (InterruptedException e) {}
 			}
 		}
 
@@ -1806,7 +1928,7 @@ public class TestHelper {
 				split[column++] = splitLine;
 				if (column != filePlacemarks.size() + 2)
 					throw new IllegalStateException("Need " + (filePlacemarks.size() + 2) + " columns, not " + column);
-				long seed = Long.parseLong(split[0], 16);
+				long seed = parseHexLong(split[0]);
 				long bytes = Long.parseLong(split[1]);
 				for (int i = 2; i < split.length; i++) {
 					if (split[i].length() == 0)
