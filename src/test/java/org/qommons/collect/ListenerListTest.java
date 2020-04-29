@@ -19,7 +19,7 @@ public class ListenerListTest {
 	@Test
 	@SuppressWarnings("static-method")
 	public void threadTest() {
-		TestHelper.Testing testing = TestHelper.createTester(ThreadTester.class)//
+		TestHelper.TestConfig testing = TestHelper.createTester(ThreadTester.class)//
 			.withRandomCases(5).withFailurePersistence(false).withMaxFailures(1).withMaxTotalDuration(Duration.ofMinutes(1));
 		System.out.println(testing.execute());
 	}
