@@ -1,6 +1,10 @@
 package org.qommons;
 
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Represents a mutable object whose modifications may possibly be batched for increased efficiency.
@@ -136,28 +140,154 @@ public interface Transactable {
 	 * Represents a {@link ReentrantReadWriteLock} as a {@link Transactable}
 	 * 
 	 * @param lock The lock to represent
+	 * @param debugInfo Information to use to debug locking
 	 * @return A {@link Transactable} backed by the lock
 	 */
-	static Transactable transactable(ReentrantReadWriteLock lock) {
-		return new RRWLTransactable(lock);
+	static Transactable transactable(ReentrantReadWriteLock lock, Object debugInfo) {
+		return new RRWLTransactable(lock, debugInfo);
 	}
 
-	/** Implements {@link Transactable#transactable(ReentrantReadWriteLock)} */
+	/**
+	 * Combines the transactables into a single transactable that locks all of them safely
+	 * 
+	 * @param transactables The transactables to lock collectively
+	 * @return The combined transactable
+	 */
+	static Transactable combine(Collection<? extends Transactable> transactables) {
+		return combine(null, () -> transactables, x -> x);
+	}
+
+	/**
+	 * Combines the transactables into a single transactable that locks all of them safely
+	 * 
+	 * @param first The first transactable to lock collectively
+	 * @param others The other transactables to lock collectively
+	 * @return The combined transactable
+	 */
+	static Transactable combine(Transactable first, Transactable... others) {
+		return combine(first, () -> Arrays.asList(others), x -> x);
+	}
+
+	/**
+	 * Combines the transactables into a single transactable that locks all of them safely
+	 * 
+	 * @param first The first transactable to lock collectively
+	 * @param others The other transactables to lock collectively
+	 * @return The combined transactable
+	 */
+	static Transactable combine(Transactable first, Collection<? extends Transactable> others) {
+		return combine(first, () -> others, t -> t);
+	}
+
+	/**
+	 * Combines the transactables into a single transactable that locks all of them safely
+	 * 
+	 * @param <X> The type of transactable to lock
+	 * @param first The first transactable to lock collectively
+	 * @param others The other transactables to lock collectively
+	 * @param map The function to supply a Transactable for each non-null item among <code>first</code> and <code>others</code>
+	 * @return The combined transactable
+	 */
+	static <X> Transactable combine(Transactable first, Supplier<? extends Collection<? extends X>> others,
+		Function<? super X, ? extends Transactable> map) {
+		return new CombinedTransactable<X>(first, others, map);
+	}
+
+	/**
+	 * @param lockable The lockable
+	 * @return A transactable that locks the lockable
+	 */
+	static Transactable transactable(Lockable lockable) {
+		return new LockableTransactable(lockable);
+	}
+
+	/** Implements {@link Transactable#transactable(ReentrantReadWriteLock, Object)} */
 	static class RRWLTransactable implements Transactable {
 		private final ReentrantReadWriteLock theLock;
+		private final Object theDebugInfo;
 
-		RRWLTransactable(ReentrantReadWriteLock lock) {
+		RRWLTransactable(ReentrantReadWriteLock lock, Object debugInfo) {
 			theLock = lock;
+			theDebugInfo = debugInfo;
 		}
 
 		@Override
 		public Transaction lock(boolean write, Object cause) {
-			return Lockable.lock(theLock, write);
+			return Lockable.lock(theLock, theDebugInfo, write);
 		}
 
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
-			return Lockable.tryLock(theLock, write);
+			return Lockable.tryLock(theLock, theDebugInfo, write);
+		}
+	}
+
+	/**
+	 * Implements {@link Transactable#combine(Transactable, Supplier, Function)} and the other combine methods.
+	 * 
+	 * @param <X> The type of transactable value
+	 */
+	static class CombinedTransactable<X> implements Transactable {
+		private final Transactable theFirst;
+		private final Supplier<? extends Collection<? extends X>> theOthers;
+		private final Function<? super X, ? extends Transactable> theMap;
+
+		public CombinedTransactable(Transactable first, Supplier<? extends Collection<? extends X>> others,
+			Function<? super X, ? extends Transactable> map) {
+			theFirst = first;
+			theOthers = others;
+			theMap = map;
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			if (theFirst != null && !theFirst.isLockSupported())
+				return false;
+			for (X lockable : theOthers.get())
+				if (lockable != null && !theMap.apply(lockable).isLockSupported())
+					return false;
+			return true;
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return Lockable.lockAll(//
+				Lockable.lockable(theFirst, write, cause), theOthers, x -> Lockable.lockable(theMap.apply(x), write, cause));
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, Object cause) {
+			return Lockable.tryLockAll(//
+				Lockable.lockable(theFirst, write, cause), theOthers, x -> Lockable.lockable(theMap.apply(x), write, cause));
+		}
+
+		@Override
+		public String toString() {
+			return "transactable(" + theFirst + ", " + theOthers.get() + ")";
+		}
+	}
+
+	/** Implements {@link Transactable#transactable(Lockable)} */
+	static class LockableTransactable implements Transactable {
+		private final Lockable theLockable;
+
+		public LockableTransactable(Lockable lockable) {
+			theLockable = lockable;
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return theLockable.isLockSupported();
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return theLockable.lock();
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, Object cause) {
+			return theLockable.tryLock();
 		}
 	}
 }

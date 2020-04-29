@@ -90,7 +90,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	public static final ValueCollectionSupplier<Object, Object> LIST_SUPPLIER = new ValueCollectionSupplier<Object, Object>() {
 		@Override
 		public <V2> BetterCollection<V2> createValuesFor(Object key, CollectionLockingStrategy locking) {
-			return new BetterTreeList<>(locking);
+			return BetterTreeList.<V2>build().withLocker(locking).build();
 		}
 
 		@Override
@@ -117,7 +117,8 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 
 			@Override
 			public <V2 extends V> BetterCollection<V2> createValuesFor(Object key, CollectionLockingStrategy locking) {
-				return distinct ? new BetterTreeSet<>(locking, sorting) : new SortedTreeList<>(locking, sorting);
+				return distinct ? BetterTreeSet.<V2> buildTreeSet(sorting).withLocker(locking).build()
+					: SortedTreeList.<V2> buildTreeList(sorting).withLocker(locking).build();
 			}
 
 			@Override
@@ -167,7 +168,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	 * @param <V> The value type for the map
 	 */
 	public static abstract class Builder<K, V> {
-		private CollectionLockingStrategy theLocking;
+		private Function<Object, CollectionLockingStrategy> theLocking;
 		private ValueCollectionSupplier<? super K, ? super V> theValues;
 		private String theDescription;
 
@@ -182,8 +183,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		 * @return This builder
 		 */
 		public Builder<K, V> safe(boolean safe) {
-			theLocking = safe ? new StampedLockingStrategy() : new FastFailLockingStrategy();
-			return this;
+			return withLocking(v -> safe ? new StampedLockingStrategy(v) : new FastFailLockingStrategy());
 		}
 
 		/**
@@ -192,6 +192,15 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		 * @see AbstractBetterMultiMap#LIST_SUPPLIER
 		 */
 		public Builder<K, V> withLocking(CollectionLockingStrategy locking) {
+			return withLocking(__ -> locking);
+		}
+
+		/**
+		 * @param locking The locking strategy for the multi-map
+		 * @return This builder
+		 * @see AbstractBetterMultiMap#LIST_SUPPLIER
+		 */
+		public Builder<K, V> withLocking(Function<Object, CollectionLockingStrategy> locking) {
 			theLocking = locking;
 			return this;
 		}
@@ -227,12 +236,15 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			return this;
 		}
 
-		/** @return The locking for the multi-map */
-		protected CollectionLockingStrategy getLocking() {
+		/**
+		 * @param built The built multi map
+		 * @return The locking for the multi-map
+		 */
+		protected CollectionLockingStrategy getLocking(Object built) {
 			if (theLocking != null)
-				return theLocking;
+				return theLocking.apply(built);
 			else
-				return new StampedLockingStrategy();
+				return new StampedLockingStrategy(built);
 		}
 
 		/** @return The value supplier for the multi-map */
@@ -265,10 +277,10 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	 * @param values The value supplier for the map
 	 * @param description The description for the map's {@link #getIdentity() identity}
 	 */
-	protected AbstractBetterMultiMap(CollectionLockingStrategy locking, BetterMap<K, BetterCollection<V>> entries,
+	protected AbstractBetterMultiMap(Function<Object, CollectionLockingStrategy> locking, BetterMap<K, BetterCollection<V>> entries,
 		ValueCollectionSupplier<? super K, ? super V> values, String description) {
 		theIdentity = Identifiable.baseId(description, this);
-		theLocking = locking;
+		theLocking = locking.apply(this);
 		theEntries = entries;
 		theValues = values;
 		theLastCountStamp = -1;

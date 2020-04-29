@@ -32,18 +32,21 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	 * @param <L> The type of the list
 	 */
 	public static abstract class RBNLBuilder<E, L extends RedBlackNodeList<E>> {
-		private CollectionLockingStrategy theLocker;
+		private Function<Object, CollectionLockingStrategy> theLocker;
 		private String theDescription;
 
 		/** @param initDescrip The initial (default) description for the list */
 		protected RBNLBuilder(String initDescrip) {
 			theDescription = initDescrip;
-			theLocker = new StampedLockingStrategy();
+			theLocker = v -> new StampedLockingStrategy(v);
 		}
 
-		/** @return The locker for the list */
-		protected CollectionLockingStrategy getLocker() {
-			return theLocker;
+		/**
+		 * @param built The built list
+		 * @return The locker for the list
+		 */
+		protected CollectionLockingStrategy getLocker(Object built) {
+			return theLocker.apply(built);
 		}
 
 		/** @return The description for the list */
@@ -67,7 +70,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 		 * @return This builder
 		 */
 		public RBNLBuilder<E, L> safe(boolean safe) {
-			return withLocker(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy());
+			return withLocker(v -> safe ? new StampedLockingStrategy(v) : new FastFailLockingStrategy());
 		}
 
 		/**
@@ -75,6 +78,14 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 		 * @return This builder
 		 */
 		public RBNLBuilder<E, L> withLocker(CollectionLockingStrategy locker) {
+			return withLocker(__ -> locker);
+		}
+
+		/**
+		 * @param locker The locking strategy for the new list
+		 * @return This builder
+		 */
+		public RBNLBuilder<E, L> withLocker(Function<Object, CollectionLockingStrategy> locker) {
 			theLocker = locker;
 			return this;
 		}
@@ -107,8 +118,8 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	 * @param locker The locking strategy to use
 	 * @param description The description for this list
 	 */
-	public RedBlackNodeList(CollectionLockingStrategy locker, String description) {
-		theLocker = locker;
+	public RedBlackNodeList(Function<Object, CollectionLockingStrategy> locker, String description) {
+		theLocker = locker.apply(this);
 		theTree = new RedBlackTree<>();
 		theIdentity = Identifiable.baseId(description, this);
 	}
@@ -119,8 +130,8 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	 * @param locker The locking strategy to use
 	 * @param identity The identity for this list
 	 */
-	protected RedBlackNodeList(CollectionLockingStrategy locker, Object identity) {
-		theLocker = locker;
+	protected RedBlackNodeList(Function<Object, CollectionLockingStrategy> locker, Object identity) {
+		theLocker = locker.apply(this);
 		theTree = new RedBlackTree<>();
 		theIdentity = identity;
 	}

@@ -3,6 +3,7 @@ package org.qommons.tree;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.SortedSet;
+import java.util.function.Function;
 
 import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.CollectionLockingStrategy;
@@ -47,8 +48,14 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 		}
 
 		@Override
+		public Builder<E, L> withLocker(Function<Object, CollectionLockingStrategy> locker) {
+			super.withLocker(locker);
+			return this;
+		}
+
+		@Override
 		public L build() {
-			return (L) new BetterTreeSet<>(getLocker(), getDescription(), getCompare());
+			return (L) new BetterTreeSet<>(this::getLocker, getDescription(), getCompare());
 		}
 	}
 
@@ -66,15 +73,7 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 	 * @param compare The comparator to order the set's values
 	 */
 	public BetterTreeSet(boolean safe, Comparator<? super E> compare) {
-		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), DEFAULT_DESCRIPTION, compare);
-	}
-
-	/**
-	 * @param locker The locking strategy for the set
-	 * @param compare The comparator to order the set's values
-	 */
-	public BetterTreeSet(CollectionLockingStrategy locker, Comparator<? super E> compare) {
-		this(locker, DEFAULT_DESCRIPTION, compare);
+		this(v -> safe ? new StampedLockingStrategy(v) : new FastFailLockingStrategy(), DEFAULT_DESCRIPTION, compare);
 	}
 
 	/**
@@ -82,7 +81,7 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 	 * @param values The initial values for the set
 	 */
 	public BetterTreeSet(boolean safe, SortedSet<E> values) {
-		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), DEFAULT_DESCRIPTION, values.comparator());
+		this(v -> safe ? new StampedLockingStrategy(v) : new FastFailLockingStrategy(), DEFAULT_DESCRIPTION, values.comparator());
 		initialize(values, v -> v);
 	}
 
@@ -90,7 +89,7 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 	 * @param locker The locking strategy for the set
 	 * @param values The initial values for the set
 	 */
-	public BetterTreeSet(CollectionLockingStrategy locker, SortedSet<E> values) {
+	public BetterTreeSet(Function<Object, CollectionLockingStrategy> locker, SortedSet<E> values) {
 		this(locker, DEFAULT_DESCRIPTION, values.comparator());
 		initialize(values, v -> v);
 	}
@@ -100,7 +99,7 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 	 * @param descrip A description of the set
 	 * @param compare The value sorting for the set
 	 */
-	protected BetterTreeSet(CollectionLockingStrategy locker, String descrip, Comparator<? super E> compare) {
+	protected BetterTreeSet(Function<Object, CollectionLockingStrategy> locker, String descrip, Comparator<? super E> compare) {
 		super(locker, descrip, compare);
 	}
 
@@ -109,7 +108,7 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 	 * @param identity The identity for the set
 	 * @param compare The value sorting for the set
 	 */
-	protected BetterTreeSet(CollectionLockingStrategy locker, Object identity, Comparator<? super E> compare) {
+	protected BetterTreeSet(Function<Object, CollectionLockingStrategy> locker, Object identity, Comparator<? super E> compare) {
 		super(locker, identity, compare);
 	}
 

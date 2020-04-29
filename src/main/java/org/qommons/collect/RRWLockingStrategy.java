@@ -10,14 +10,21 @@ public class RRWLockingStrategy implements CollectionLockingStrategy {
 	private final Transactable theLock;
 	private volatile long theStamp;
 
-	/** Creates the locking strategy */
-	public RRWLockingStrategy() {
-		this(new ReentrantReadWriteLock());
+	/**
+	 * Creates the locking strategy
+	 * 
+	 * @param owner The owner of the lock, for debugging
+	 */
+	public RRWLockingStrategy(Object owner) {
+		this(new ReentrantReadWriteLock(), owner);
 	}
 
-	/** @param lock The lock to use */
-	public RRWLockingStrategy(ReentrantReadWriteLock lock) {
-		this(Transactable.transactable(lock));
+	/**
+	 * @param lock The lock to use
+	 * @param owner The owner of the lock, for debugging
+	 */
+	public RRWLockingStrategy(ReentrantReadWriteLock lock, Object owner) {
+		this(Transactable.transactable(lock, owner));
 	}
 
 	/** @param lock The lock to use */
@@ -64,5 +71,10 @@ public class RRWLockingStrategy implements CollectionLockingStrategy {
 		try (Transaction t = lock(false, null)) {
 			return operation.apply(init, OptimisticContext.TRUE);
 		}
+	}
+
+	@Override
+	public String toString() {
+		return theLock.toString();
 	}
 }

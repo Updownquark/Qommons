@@ -1,6 +1,7 @@
 package org.qommons.tree;
 
 import java.util.Comparator;
+import java.util.function.Function;
 
 import org.qommons.collect.AbstractBetterMultiMap;
 import org.qommons.collect.BetterCollection;
@@ -56,6 +57,12 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 		}
 
 		@Override
+		public Builder<K, V> withLocking(Function<Object, CollectionLockingStrategy> locking) {
+			super.withLocking(locking);
+			return this;
+		}
+
+		@Override
 		public Builder<K, V> withSortedValues(Comparator<? super V> valueCompare, boolean distinctValues) {
 			super.withSortedValues(valueCompare, distinctValues);
 			return this;
@@ -75,15 +82,15 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 		@Override
 		public BetterTreeMultiMap<K, V> buildMultiMap() {
 			return new BetterTreeMultiMap<>(//
-				getLocking(), getKeyCompare(), getValues(), getDescription());
+				this::getLocking, getKeyCompare(), getValues(), getDescription());
 		}
 	}
 
 	private final Comparator<? super K> theKeyCompare;
 
-	private BetterTreeMultiMap(CollectionLockingStrategy locking, Comparator<? super K> keyCompare,
+	private BetterTreeMultiMap(Function<Object, CollectionLockingStrategy> locking, Comparator<? super K> keyCompare,
 		ValueCollectionSupplier<? super K, ? super V> values, String description) {
-		super(locking, new BetterTreeMap<>(locking, keyCompare), values, description);
+		super(locking, new BetterTreeMap<>(locking, description, keyCompare), values, description);
 		theKeyCompare = keyCompare;
 	}
 

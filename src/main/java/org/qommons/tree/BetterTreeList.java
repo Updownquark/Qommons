@@ -3,6 +3,7 @@ package org.qommons.tree;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.Objects;
+import java.util.function.Function;
 
 import org.qommons.Transaction;
 import org.qommons.collect.CollectionElement;
@@ -58,8 +59,14 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 		}
 
 		@Override
+		public Builder<E> withLocker(Function<Object, CollectionLockingStrategy> locker) {
+			super.withLocker(locker);
+			return this;
+		}
+
+		@Override
 		public BetterTreeList<E> build() {
-			return new BetterTreeList<>(getLocker(), getDescription());
+			return new BetterTreeList<>(this::getLocker, getDescription());
 		}
 	}
 
@@ -73,19 +80,14 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 
 	/** @param safe Whether to secure this collection for thread-safety */
 	public BetterTreeList(boolean safe) {
-		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy());
-	}
-
-	/** @param locker The locking strategy for the collection */
-	public BetterTreeList(CollectionLockingStrategy locker) {
-		super(locker, DEFAULT_DESCRIPTION);
+		this(v -> safe ? new StampedLockingStrategy(v) : new FastFailLockingStrategy(), DEFAULT_DESCRIPTION);
 	}
 
 	/**
 	 * @param locker The locker for this list
 	 * @param description The description for this list
 	 */
-	protected BetterTreeList(CollectionLockingStrategy locker, String description) {
+	protected BetterTreeList(Function<Object, CollectionLockingStrategy> locker, String description) {
 		super(locker, description);
 	}
 

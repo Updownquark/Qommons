@@ -13,10 +13,11 @@ import java.util.function.Supplier;
  * A concurrent interface that can be locked.
  * </p>
  * <p>
- * The meaning of the lock is context-dependent. For example, the Lockable obtained from {@link #lockable(ReentrantReadWriteLock, boolean)}
- * with an argument of true will only allow a single thread to obtain a lock at any given time. But with an argument of false, any number of
- * threads may obtain a lock simultaneously, as long as no thread holds a write lock on the lock argument. Interfaces exposing or
- * implementing Lockables should generally advertise the purpose and behavior of the lock in the documentation.
+ * The meaning of the lock is context-dependent. For example, the Lockable obtained from
+ * {@link #lockable(ReentrantReadWriteLock, Object, boolean)} with an argument of true will only allow a single thread to obtain a lock at
+ * any given time. But with an argument of false, any number of threads may obtain a lock simultaneously, as long as no thread holds a write
+ * lock on the lock argument. Interfaces exposing or implementing Lockables should generally advertise the purpose and behavior of the lock
+ * in the documentation.
  * </p>
  * <p>
  * Instances of this class may not actually support thread-safe locking (see {@link #isLockSupported()}).
@@ -98,22 +99,30 @@ public interface Lockable {
 	 * Locks the given lock
 	 * 
 	 * @param lock The lock to lock--may be null, in which case {@link Transactable#NONE} will be returned
+	 * @param debugInfo The object to include for debugging
 	 * @param write Whether to lock for write or read
 	 * @return The transaction to use to unlock the lock
 	 */
-	static Transaction lock(ReentrantReadWriteLock lock, boolean write) {
-		return lock == null ? Transaction.NONE : lock(write ? lock.writeLock() : lock.readLock());
+	static Transaction lock(ReentrantReadWriteLock lock, Object debugInfo, boolean write) {
+		if (lock == null)
+			return Transaction.NONE;
+		else
+			return LockDebug.debug(lock, debugInfo, write, false, () -> lock(write ? lock.writeLock() : lock.readLock()));
 	}
 
 	/**
 	 * Attempts to lock the given lock
 	 * 
 	 * @param lock The lock to lock--may be null, in which case {@link Transactable#NONE} will be returned
+	 * @param debugInfo The object to include for debugging
 	 * @param write Whether to lock for write or read
 	 * @return The transaction to use to unlock the lock, or null if the lock could not be obtained
 	 */
-	static Transaction tryLock(ReentrantReadWriteLock lock, boolean write) {
-		return lock == null ? Transaction.NONE : tryLock(write ? lock.writeLock() : lock.readLock());
+	static Transaction tryLock(ReentrantReadWriteLock lock, Object debugInfo, boolean write) {
+		if (lock == null)
+			return Transaction.NONE;
+		else
+			return LockDebug.debug(lock, debugInfo, write, true, () -> tryLock(write ? lock.writeLock() : lock.readLock()));
 	}
 
 	/**
@@ -126,11 +135,15 @@ public interface Lockable {
 
 	/**
 	 * @param lock The lock to represent
+	 * @param debugInfo Information to make available with debugging
 	 * @param write Whether the Lockable should lock the lock for write or read--may be null, in which case {@link #NONE} will be returned
 	 * @return A Lockable representing the lock
 	 */
-	static Lockable lockable(ReentrantReadWriteLock lock, boolean write) {
-		return lock == null ? NONE : lockable(write ? lock.writeLock() : lock.readLock());
+	static Lockable lockable(ReentrantReadWriteLock lock, Object debugInfo, boolean write) {
+		if (lock == null)
+			return NONE;
+		else
+			return new RRWLLockable(lock, debugInfo, write);
 	}
 
 	/**
@@ -234,7 +247,8 @@ public interface Lockable {
 	 * @return The transaction to close to release the lock
 	 */
 	static Transaction lockAll(Lockable... lockables) {
-		return lockAll(Arrays.asList(lockables));
+		return lockAll(//
+			Arrays.asList(lockables));
 	}
 
 	/**
@@ -259,7 +273,8 @@ public interface Lockable {
 	 * @return The transaction to close to release the lock
 	 */
 	static Transaction lockAll(Lockable outer, Collection<? extends Lockable> lockables) {
-		return lockAll(outer, () -> lockables, l -> l);
+		return lockAll(outer, //
+			() -> lockables, l -> l);
 	}
 
 	/**
@@ -292,14 +307,17 @@ public interface Lockable {
 				int i = outerLock == null ? 0 : 1;
 				for (X value : lockables.get()) {
 					Lockable lockable = map.apply(value);
-					if (lockable == null) {} else if (!hasLock) {
+					if (lockable == null) {//
+					} else if (!hasLock) {
 						hasLock = true;
 						locks[i] = lockable.lock();
 					} else {
 						Transaction lock = lockable.tryLock();
 						if (lock == null) {
-							for (int j = i - 1; j >= 0; j--)
-								locks[j].close();
+							for (int j = i - 1; j >= 0; j--) {
+								if (locks[j] != null)
+									locks[j].close();
+							}
 							try {
 								Thread.sleep(2);
 							} catch (InterruptedException e) {}
@@ -566,6 +584,34 @@ public interface Lockable {
 		@Override
 		public Transaction tryLock() {
 			return tryLockAll(theFirst, theLocks, l -> l);
+		}
+	}
+
+	/** Implements {@link Lockable#lockable(ReentrantReadWriteLock, Object, boolean)} */
+	static class RRWLLockable implements Lockable {
+		private final ReentrantReadWriteLock theLock;
+		private final Object theDebugInfo;
+		private final boolean isWrite;
+
+		public RRWLLockable(ReentrantReadWriteLock lock, Object debugInfo, boolean write) {
+			theLock = lock;
+			theDebugInfo = debugInfo;
+			isWrite = write;
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return true;
+		}
+
+		@Override
+		public Transaction lock() {
+			return Lockable.lock(theLock, theDebugInfo, isWrite);
+		}
+
+		@Override
+		public Transaction tryLock() {
+			return Lockable.tryLock(theLock, theDebugInfo, isWrite);
 		}
 	}
 }

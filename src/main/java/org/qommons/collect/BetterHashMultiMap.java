@@ -2,6 +2,7 @@ package org.qommons.collect;
 
 import java.util.Comparator;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.ToIntFunction;
 
 /**
@@ -76,12 +77,13 @@ public class BetterHashMultiMap<K, V> extends AbstractBetterMultiMap<K, V> {
 
 		@Override
 		public BetterMultiMap<K, V> buildMultiMap() {
-			return new BetterHashMultiMap<>(getLocking(), getValues(), getDescription(), //
-				theMapBuilder.withLocking(getLocking()).withDescription(getDescription() + " entries").buildMap());
+			return new BetterHashMultiMap<>(this::getLocking, getValues(), getDescription(), //
+				theMapBuilder.withLocking(this::getLocking).withDescription(getDescription() + " entries").buildMap());
 		}
 	}
 
-	private BetterHashMultiMap(CollectionLockingStrategy locking, ValueCollectionSupplier<? super K, ? super V> values, String description,
+	private BetterHashMultiMap(Function<Object, CollectionLockingStrategy> locking, ValueCollectionSupplier<? super K, ? super V> values,
+		String description,
 		BetterMap<K, BetterCollection<V>> entries) {
 		super(locking, entries, values, description);
 	}

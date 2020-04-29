@@ -6,6 +6,7 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
@@ -40,7 +41,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		private BiFunction<Object, Object, Boolean> theEquals;
 		private int theInitExpectedSize;
 		private double theLoadFactor;
-		private CollectionLockingStrategy theLocker;
+		private Function<Object, CollectionLockingStrategy> theLocker;
 		private String theDescription;
 
 		/**
@@ -74,6 +75,16 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		 * @return This builder
 		 */
 		public HashSetBuilder withLocking(CollectionLockingStrategy locker) {
+			return withLocking(__ -> locker);
+		}
+
+		/**
+		 * Specifies a locking strategy for the hash set
+		 * 
+		 * @param locker The locking strategy
+		 * @return This builder
+		 */
+		public HashSetBuilder withLocking(Function<Object, CollectionLockingStrategy> locker) {
 			theLocker = locker;
 			return this;
 		}
@@ -139,9 +150,9 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		 * @return An empty {@link BetterHashSet} built according to this builder's settings
 		 */
 		public <E> BetterHashSet<E> buildSet() {
-			CollectionLockingStrategy locking = theLocker;
+			Function<Object, CollectionLockingStrategy> locking = theLocker;
 			if (locking == null)
-				locking = isSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy();
+				locking = s -> isSafe ? new StampedLockingStrategy(s) : new FastFailLockingStrategy();
 			return new BetterHashSet<>(locking, theHasher, theEquals, theInitExpectedSize, theLoadFactor, theDescription);
 		}
 
@@ -185,14 +196,15 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	private HashEntry theLast;
 	private int theSize;
 
-	private BetterHashSet(CollectionLockingStrategy locker, ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals,
+	private BetterHashSet(Function<Object, CollectionLockingStrategy> locker, ToIntFunction<Object> hasher,
+		BiFunction<Object, Object, Boolean> equals,
 		int initExpectedSize, double loadFactor, Object identity) {
-		theLocker = locker;
 		theHasher = hasher;
 		theEquals = equals;
 		theFirstIdCreator = new AtomicLong(-1);
 		theLastIdCreator = new AtomicLong(0);
 		theIdentity = identity;
+		theLocker = locker.apply(this);
 
 		if (loadFactor < MIN_LOAD_FACTOR || loadFactor > MAX_LOAD_FACTOR)
 			throw new IllegalArgumentException("Load factor must be between " + MIN_LOAD_FACTOR + " and " + MAX_LOAD_FACTOR);

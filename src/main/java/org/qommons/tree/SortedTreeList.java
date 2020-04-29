@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.NavigableSet;
 import java.util.SortedSet;
+import java.util.function.Function;
 
 import org.qommons.Transaction;
 import org.qommons.collect.BetterCollection;
@@ -63,7 +64,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 
 		@Override
 		public L build() {
-			return (L) new SortedTreeList<>(getLocker(), getDescription(), theCompare);
+			return (L) new SortedTreeList<>(this::getLocker, getDescription(), theCompare);
 		}
 
 		/**
@@ -104,14 +105,14 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 	 * @param compare The comparator to order the values
 	 */
 	public SortedTreeList(boolean safe, Comparator<? super E> compare) {
-		this(safe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), compare);
+		this(v -> safe ? new StampedLockingStrategy(v) : new FastFailLockingStrategy(), DEFAULT_DESCRIP, compare);
 	}
 
 	/**
 	 * @param locker The locking strategy for the list
 	 * @param compare The comparator to order the values
 	 */
-	public SortedTreeList(CollectionLockingStrategy locker, Comparator<? super E> compare) {
+	public SortedTreeList(Function<Object, CollectionLockingStrategy> locker, Comparator<? super E> compare) {
 		this(locker, DEFAULT_DESCRIP, compare);
 	}
 
@@ -120,7 +121,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 	 * @param descrip The description for this list
 	 * @param compare The comparator for this list's ordering
 	 */
-	protected SortedTreeList(CollectionLockingStrategy locker, String descrip, Comparator<? super E> compare) {
+	protected SortedTreeList(Function<Object, CollectionLockingStrategy> locker, String descrip, Comparator<? super E> compare) {
 		super(locker, descrip);
 		theCompare = compare;
 		isDistinct = this instanceof NavigableSet;
@@ -131,7 +132,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 	 * @param identity The identity for this list
 	 * @param compare The comparator for this list's ordering
 	 */
-	protected SortedTreeList(CollectionLockingStrategy locker, Object identity, Comparator<? super E> compare) {
+	protected SortedTreeList(Function<Object, CollectionLockingStrategy> locker, Object identity, Comparator<? super E> compare) {
 		super(locker, identity);
 		theCompare = compare;
 		isDistinct = this instanceof NavigableSet;

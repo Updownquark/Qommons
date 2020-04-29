@@ -3,10 +3,12 @@ package org.qommons.collect;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.StampedLock;
 
+import org.qommons.LockDebug;
 import org.qommons.Transaction;
 
 /** A collection-locking strategy using {@link StampedLock} */
 public class StampedLockingStrategy implements CollectionLockingStrategy {
+	private final Object theOwner;
 	private final ThreadLocal<ThreadState> theStampCollection;
 	private final StampedLock theUpdateLocker;
 	private final AtomicLong theModCount;
@@ -20,21 +22,30 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 	public static boolean STORE_WRITERS = "true".equalsIgnoreCase(System.getProperty("qommons.locking.debug")); // A debug setting
 	volatile Thread updateWriteLocker;
 
-	/** Creates the locking strategy */
-	public StampedLockingStrategy() {
-		this(1);
+	/**
+	 * Creates the locking strategy
+	 * 
+	 * @param owner The owner of this lock, for debugging
+	 */
+	public StampedLockingStrategy(Object owner) {
+		this(1, owner);
 	}
 
-	/** @param optimisticTries The number of optimistic tries to use in the optimistic methods before obtaining a lock */
-	public StampedLockingStrategy(int optimisticTries) {
-		this(new StampedLock(), optimisticTries);
+	/**
+	 * @param optimisticTries The number of optimistic tries to use in the optimistic methods before obtaining a lock
+	 * @param owner The owner of this lock, for debugging
+	 */
+	public StampedLockingStrategy(int optimisticTries, Object owner) {
+		this(new StampedLock(), optimisticTries, owner);
 	}
 
 	/**
 	 * @param lock The stamped lock to use
 	 * @param optimisticTries The number of optimistic tries to use in the optimistic methods before obtaining a lock
+	 * @param owner The owner of this lock, for debugging
 	 */
-	public StampedLockingStrategy(StampedLock lock, int optimisticTries) {
+	public StampedLockingStrategy(StampedLock lock, int optimisticTries, Object owner) {
+		theOwner = owner;
 		theStampCollection = new ThreadLocal<ThreadState>() {
 			@Override
 			protected ThreadState initialValue() {
@@ -122,6 +133,11 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 			}
 		}
 		return res;
+	}
+
+	@Override
+	public String toString() {
+		return theOwner + " Stamped Lock";
 	}
 
 	class LockStamp {
@@ -216,11 +232,13 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 		Transaction obtain(boolean write) {
 			if (write)
 				theModCount.getAndIncrement();
-			return updateStamp.lock(theUpdateLocker, write);
+			return LockDebug.debug(theUpdateLocker, theOwner, write, false,
+				() -> updateStamp.lock(theUpdateLocker, write));
 		}
 
 		Transaction tryObtain(boolean write) {
-			Transaction updateTrans = updateStamp.tryLock(theUpdateLocker, write);
+			Transaction updateTrans = LockDebug.debug(theUpdateLocker, theOwner, write, true,
+				() -> updateStamp.lock(theUpdateLocker, write));
 			if (write && updateTrans != null)
 				theModCount.getAndIncrement();
 			return updateTrans;

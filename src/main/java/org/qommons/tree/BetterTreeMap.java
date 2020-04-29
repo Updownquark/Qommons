@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.qommons.Identifiable;
@@ -64,12 +65,18 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 			return this;
 		}
 
+		@Override
+		public Builder<K> withLocker(Function<Object, CollectionLockingStrategy> locker) {
+			super.withLocker(locker);
+			return this;
+		}
+
 		/**
 		 * @param <V> The value type for the map
 		 * @return The new map
 		 */
 		public <V> BetterTreeMap<K, V> buildMap() {
-			return new BetterTreeMap<>(getLocker(), getDescription(), getCompare());
+			return new BetterTreeMap<>(this::getLocker, getDescription(), getCompare());
 		}
 
 		/**
@@ -103,15 +110,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	 * @param compare The comparator to use to sort the keys
 	 */
 	public BetterTreeMap(boolean threadSafe, Comparator<? super K> compare) {
-		this(threadSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), compare);
-	}
-
-	/**
-	 * @param locker The locking strategy for the collection
-	 * @param compare The comparator to use to sort the keys
-	 */
-	public BetterTreeMap(CollectionLockingStrategy locker, Comparator<? super K> compare) {
-		this(locker, DEFAULT_DESCRIPTION, compare);
+		this(v -> threadSafe ? new StampedLockingStrategy(v) : new FastFailLockingStrategy(), DEFAULT_DESCRIPTION, compare);
 	}
 
 	/**
@@ -119,14 +118,14 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	 * @param map The initial values for the map
 	 */
 	public BetterTreeMap(boolean threadSafe, SortedMap<K, ? extends V> map) {
-		this(threadSafe ? new StampedLockingStrategy() : new FastFailLockingStrategy(), map);
+		this(v -> threadSafe ? new StampedLockingStrategy(v) : new FastFailLockingStrategy(), map);
 	}
 
 	/**
 	 * @param locker The locking strategy for the map
 	 * @param map The initial values for the map
 	 */
-	public BetterTreeMap(CollectionLockingStrategy locker, SortedMap<K, ? extends V> map) {
+	public BetterTreeMap(Function<Object, CollectionLockingStrategy> locker, SortedMap<K, ? extends V> map) {
 		theCompare = map.comparator();
 		theIdentity = Identifiable.baseId(DEFAULT_DESCRIPTION, this);
 		theEntries = new BetterTreeEntrySet<>(locker, theIdentity, map, this::newEntry);
@@ -139,7 +138,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	 * @param description A description for the map
 	 * @param compare The key sorting for the map
 	 */
-	protected BetterTreeMap(CollectionLockingStrategy locker, String description, Comparator<? super K> compare) {
+	protected BetterTreeMap(Function<Object, CollectionLockingStrategy> locker, String description, Comparator<? super K> compare) {
 		theCompare = compare;
 		theIdentity = Identifiable.baseId(description, this);
 		theEntries = new BetterTreeEntrySet<>(locker, description, compare);
@@ -512,11 +511,11 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	}
 
 	static class BetterTreeEntrySet<K, V> extends BetterTreeSet<Map.Entry<K, V>> {
-		BetterTreeEntrySet(CollectionLockingStrategy locker, Object mapId, Comparator<? super K> compare) {
+		BetterTreeEntrySet(Function<Object, CollectionLockingStrategy> locker, Object mapId, Comparator<? super K> compare) {
 			super(locker, Identifiable.wrap(mapId, "entrySet"), (e1, e2) -> compare.compare(e1.getKey(), e2.getKey()));
 		}
 
-		BetterTreeEntrySet(CollectionLockingStrategy locker, Object mapId, SortedMap<K, ? extends V> map,
+		BetterTreeEntrySet(Function<Object, CollectionLockingStrategy> locker, Object mapId, SortedMap<K, ? extends V> map,
 			BiFunction<K, V, Map.Entry<K, V>> creator) {
 			this(locker, Identifiable.wrap(mapId, "entrySet"), map.comparator());
 			initialize((Set<? extends Map.Entry<K, V>>) map.entrySet(), entry -> creator.apply(entry.getKey(), entry.getValue()));

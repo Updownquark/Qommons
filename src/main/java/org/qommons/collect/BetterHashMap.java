@@ -35,6 +35,12 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
+		public HashMapBuilder withLocking(Function<Object, CollectionLockingStrategy> locker) {
+			super.withLocking(locker);
+			return this;
+		}
+
+		@Override
 		public HashMapBuilder withEquivalence(ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals) {
 			super.withEquivalence(//
 				entry -> {
