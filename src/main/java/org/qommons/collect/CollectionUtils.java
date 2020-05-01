@@ -180,6 +180,9 @@ public class CollectionUtils {
 	 */
 	public interface CollectionSynchronizer<L, R> extends CollectionSynchronizerE<L, R, RuntimeException> {
 		@Override
+		boolean getOrder(ElementSyncInput<L, R> element);
+
+		@Override
 		ElementSyncAction leftOnly(ElementSyncInput<L, R> element);
 
 		@Override
