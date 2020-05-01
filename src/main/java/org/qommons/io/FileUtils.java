@@ -3,9 +3,11 @@ package org.qommons.io;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -33,6 +35,22 @@ public class FileUtils {
 
 	/** A structure representing a {@link File file}, directory, or some other such hierarchical data storage structure */
 	public interface FileDataSource extends Named {
+		/** @return The path from the file root to this file */
+		default String getPath() {
+			LinkedList<String> path = new LinkedList<>();
+			FileDataSource file = this;
+			while (file != null) {
+				path.addFirst(file.getName());
+				file = file.getParent();
+			}
+
+			StringBuilder str = new StringBuilder();
+			for (String p : path)
+				str.append(p).append('/');
+			str.deleteCharAt(str.length() - 1);
+			return str.toString();
+		}
+
 		/** @return This file's parent */
 		FileDataSource getParent();
 
@@ -50,6 +68,9 @@ public class FileUtils {
 
 		/** @return The files contained in this directory, or null if this is not a directory */
 		FileDataSource[] listFiles();
+
+		/** @return The number of bytes in this file, or 0 if it is not a valid, readable file */
+		long length();
 
 		/**
 		 * @return A stream to read this file's content
@@ -117,7 +138,26 @@ public class FileUtils {
 	 * @return A {@link MutableFileDataSource} representing the file on the file system
 	 */
 	public static MutableFileDataSource dataSource(File file) {
-		return new DefaultFileDataSource(null, file);
+		if (file == null)
+			return null;
+		else if (file instanceof SyntheticFile && ((SyntheticFile<?>) file).getFile() instanceof MutableFileDataSource)
+			return (MutableFileDataSource) ((SyntheticFile<?>) file).getFile();
+		else
+			return new DefaultFileDataSource(null, file);
+	}
+
+	/**
+	 * @param <F> The {@link FileDataSource} sub-type of the file
+	 * @param file The resource to represent as a {@link File}
+	 * @return The {@link File} representing the resource
+	 */
+	public static <F extends FileDataSource> File asFile(F file) {
+		if (file == null)
+			return null;
+		else if (file instanceof DefaultFileDataSource)
+			return ((DefaultFileDataSource) file).getRoot();
+		else
+			return new SyntheticFile<>(file);
 	}
 
 	/**
@@ -135,11 +175,13 @@ public class FileUtils {
 	 * 
 	 * @param name The name for the resource
 	 * @param data The data supplier for the resource
+	 * @param size The size supplier for the resource
 	 * @param lastModified The last-modified supplier for the resource
 	 * @return The synthetic resource
 	 */
-	public static FileDataSource dataSource(String name, ExSupplier<InputStream, IOException> data, LongSupplier lastModified) {
-		return new SingleFileSource(name, data, lastModified);
+	public static FileDataSource dataSource(String name, ExSupplier<InputStream, IOException> data, LongSupplier size,
+		LongSupplier lastModified) {
+		return new SingleFileSource(name, data, size, lastModified);
 	}
 
 	/**
@@ -724,6 +766,11 @@ public class FileUtils {
 		}
 
 		@Override
+		public long length() {
+			return theRoot.length();
+		}
+
+		@Override
 		public InputStream read() throws IOException {
 			return new FileInputStream(theRoot);
 		}
@@ -760,6 +807,179 @@ public class FileUtils {
 		@Override
 		public String toString() {
 			return theRoot.getPath();
+		}
+	}
+
+	/**
+	 * A {@link File} backed by a {@link FileDataSource}
+	 * 
+	 * @param <F> The {@link FileDataSource} sub-type
+	 */
+	public static class SyntheticFile<F extends FileDataSource> extends File {
+		private final F theFile;
+
+		/** @param file The {@link FileDataSource} to back this file */
+		public SyntheticFile(F file) {
+			super(file.getPath());
+			theFile = file;
+		}
+
+		/** @return The {@link FileDataSource} backing this file */
+		public F getFile() {
+			return theFile;
+		}
+
+		@Override
+		public String getName() {
+			return theFile.getName();
+		}
+
+		@Override
+		public String getParent() {
+			File parentFile = getParentFile();
+			return parentFile == null ? null : parentFile.getName();
+		}
+
+		@Override
+		public File getParentFile() {
+			return asFile(theFile.getParent());
+		}
+
+		@Override
+		public String getPath() {
+			return theFile.getPath();
+		}
+
+		@Override
+		public boolean exists() {
+			return theFile.exists();
+		}
+
+		@Override
+		public boolean isDirectory() {
+			return theFile.isDirectory();
+		}
+
+		@Override
+		public boolean isFile() {
+			return !theFile.isDirectory();
+		}
+
+		@Override
+		public boolean isHidden() {
+			return false;
+		}
+
+		@Override
+		public boolean isAbsolute() {
+			return true;
+		}
+
+		@Override
+		public long lastModified() {
+			return theFile.getLastModified();
+		}
+
+		@Override
+		public long length() {
+			return theFile.length();
+		}
+
+		@Override
+		public String[] list() {
+			FileDataSource[] files = theFile.listFiles();
+			if (files == null)
+				return null;
+			String[] list = new String[files.length];
+			for (int i = 0; i < files.length; i++)
+				list[i] = files[i].getName();
+			return list;
+		}
+
+		@Override
+		public String[] list(FilenameFilter filter) {
+			FileDataSource[] files = theFile.listFiles();
+			if (files == null)
+				return null;
+			List<String> list = new ArrayList<>(files.length);
+			for (FileDataSource f : files) {
+				if (filter.accept(asFile(f), f.getName()))
+					list.add(f.getName());
+			}
+			return list.toArray(new String[list.size()]);
+		}
+
+		@Override
+		public File[] listFiles() {
+			FileDataSource[] files = theFile.listFiles();
+			if (files == null)
+				return null;
+			File[] list = new File[files.length];
+			for (int i = 0; i < files.length; i++)
+				list[i] = asFile(files[i]);
+			return list;
+		}
+
+		@Override
+		public File[] listFiles(FilenameFilter filter) {
+			FileDataSource[] files = theFile.listFiles();
+			if (files == null)
+				return null;
+			List<File> list = new ArrayList<>(files.length);
+			for (FileDataSource f : files) {
+				File file = asFile(f);
+				if (filter.accept(file, f.getName()))
+					list.add(file);
+			}
+			return list.toArray(new File[list.size()]);
+		}
+
+		@Override
+		public File[] listFiles(FileFilter filter) {
+			FileDataSource[] files = theFile.listFiles();
+			if (files == null)
+				return null;
+			List<File> list = new ArrayList<>(files.length);
+			for (FileDataSource f : files) {
+				File file = asFile(f);
+				if (filter.accept(file))
+					list.add(file);
+			}
+			return list.toArray(new File[list.size()]);
+		}
+
+		@Override
+		public boolean delete() {
+			if (theFile instanceof MutableFileDataSource)
+				return ((MutableFileDataSource) theFile).delete(null);
+			else
+				return false;
+		}
+
+		@Override
+		public boolean mkdir() {
+			return mkdirs();
+		}
+
+		@Override
+		public boolean mkdirs() {
+			if (theFile instanceof MutableFileDataSource) {
+				try {
+					((MutableFileDataSource) theFile).createDirectory();
+					return true;
+				} catch (IOException e) {
+					return false;
+				}
+			} else
+				return false;
+		}
+
+		@Override
+		public boolean setLastModified(long time) {
+			if (theFile instanceof MutableFileDataSource)
+				return ((MutableFileDataSource) theFile).setLastModified(time);
+			else
+				return false;
 		}
 	}
 
@@ -813,6 +1033,11 @@ public class FileUtils {
 					filtered.add(list[i]);
 			}
 			return filtered.toArray(new FileDataSource[filtered.size()]);
+		}
+
+		@Override
+		public long length() {
+			return theSource.length();
 		}
 
 		@Override
@@ -917,6 +1142,14 @@ public class FileUtils {
 		}
 
 		@Override
+		public long length() {
+			for (FileDataSource source : theSources)
+				if (source.exists())
+					return source.length();
+			return 0;
+		}
+
+		@Override
 		public InputStream read() throws IOException {
 			for (FileDataSource source : theSources)
 				if (source.exists())
@@ -994,6 +1227,11 @@ public class FileUtils {
 		}
 
 		@Override
+		public long length() {
+			return 0;
+		}
+
+		@Override
 		public InputStream read() throws IOException {
 			throw new IOException(getName() + " is a directory");
 		}
@@ -1008,11 +1246,13 @@ public class FileUtils {
 	static class SingleFileSource implements FileDataSource {
 		private final String theName;
 		private final ExSupplier<InputStream, IOException> theData;
+		private final LongSupplier theSize;
 		private final LongSupplier theLastModified;
 
-		SingleFileSource(String name, ExSupplier<InputStream, IOException> data, LongSupplier lastModified) {
+		SingleFileSource(String name, ExSupplier<InputStream, IOException> data, LongSupplier size, LongSupplier lastModified) {
 			theName = name;
 			theData = data;
+			theSize = size;
 			theLastModified = lastModified;
 		}
 
@@ -1052,6 +1292,11 @@ public class FileUtils {
 		}
 
 		@Override
+		public long length() {
+			return theSize.getAsLong();
+		}
+
+		@Override
 		public InputStream read() throws IOException {
 			InputStream data = theData.get();
 			if (data == null)
@@ -1069,4 +1314,5 @@ public class FileUtils {
 			return theName;
 		}
 	}
+
 }
