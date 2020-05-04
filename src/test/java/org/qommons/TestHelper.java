@@ -882,10 +882,10 @@ public class TestHelper {
 				if (master.getFailures() >= maxFailures)
 					stopReason = master.getFailures() + " failures--ending test set";
 				else if (master.getCases() >= maxCases)
-					stopReason = "Test set complete after " + master.getCases();
+					stopReason = "Test set complete after " + master.getCases() + " cases";
 				else if (Instant.now().compareTo(termination) >= 0)
 					stopReason = "Test set complete after "
-						+ QommonsUtils.printDuration(Duration.between(termination, Instant.now()), false);
+						+ QommonsUtils.printDuration(Duration.between(exec.getStart(), Instant.now()), false);
 				if (stopReason != null) {
 					System.out.println(stopReason);
 					master.stop();
@@ -902,7 +902,7 @@ public class TestHelper {
 							writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames, knownFailures);
 						}
 					})) {
-					System.err.println("All slaves died");
+					System.err.println(stopReason = "All slaves died");
 					break;
 				}
 			}
