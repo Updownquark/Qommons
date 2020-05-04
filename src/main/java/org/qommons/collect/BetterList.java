@@ -1517,13 +1517,21 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
-			return StdMsg.UNSUPPORTED_OPERATION;
+			if (after != null && valueEl.compareTo(after) < 0)
+				return StdMsg.UNSUPPORTED_OPERATION;
+			else if (before != null && valueEl.compareTo(before) > 0)
+				return StdMsg.UNSUPPORTED_OPERATION;
+			return null;
 		}
 
 		@Override
 		public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			if (after != null && valueEl.compareTo(after) < 0)
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			else if (before != null && valueEl.compareTo(before) > 0)
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			return getElement(valueEl);
 		}
 
 		@Override
