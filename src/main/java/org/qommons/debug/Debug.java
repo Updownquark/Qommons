@@ -289,13 +289,14 @@ public class Debug {
 			}
 		}
 
-		public void merge(DebugData other) {
+		public DebugData merge(DebugData other) {
 			if (theDebug == null || other.theDebug == null)
-				return;
+				return this;
 			// I don't remember why _merge doesn't merge fields, so I'm leaving it as it is and making this public method do it
 			_merge(other);
 			theValue = other.theValue;
 			theFields.putAll(other.theFields);
+			return this;
 		}
 
 		private void _merge(DebugData other) {
@@ -777,6 +778,10 @@ public class Debug {
 			theName = name;
 			isActive = active;
 			theParameters = active ? new LinkedHashMap<>() : Collections.emptyMap();
+		}
+
+		public DebugData getData() {
+			return theData;
 		}
 
 		public String getName() {
