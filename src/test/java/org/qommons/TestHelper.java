@@ -1006,19 +1006,12 @@ public class TestHelper {
 			};
 			theTestExecThread.interrupt(); // Start test execution
 			Instant caseStart = theCaseStart;
-			long waitStart = System.currentTimeMillis();
-			boolean printedGC = false;
 			while (caseStart == null) {
 				try {
 					Thread.sleep(10);
 				} catch (InterruptedException e) {}
 
 				caseStart = theCaseStart;
-				if (caseStart == null && !printedGC && System.currentTimeMillis() - waitStart >= 250) {
-					printedGC = true;
-					System.out.print(" (GC-ing...) ");
-					System.out.flush();
-				}
 			}
 			Instant totalMax = theMaxTotalDuration == null ? null : caseStart.plus(theMaxTotalDuration);
 			Instant caseMax = theMaxCaseDuration == null ? null : caseStart.plus(theMaxCaseDuration);
