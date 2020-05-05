@@ -225,12 +225,14 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	@Override
 	default void removeRange(int fromIndex, int toIndex) {
 		try (Transaction t = lock(true, null)) {
+			if (fromIndex == size() || fromIndex == toIndex)
+				return;
 			CollectionElement<E> el = getElement(fromIndex);
-			for (int i = fromIndex; el != null && i < toIndex; i++) {
+			ElementId end = toIndex == size() ? null : getElement(toIndex).getElementId();
+			while (el != null && (end == null || el.getElementId().compareTo(end) < 0)) {
 				MutableCollectionElement<E> mutableEl = mutableElement(el.getElementId());
 				if (mutableEl.canRemove() == null)
 					mutableEl.remove();
-				el = getAdjacentElement(el.getElementId(), true);
 			}
 		}
 	}
@@ -1190,24 +1192,22 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				if (theLowBound != null) {
 					if (isLowIncluded)
 						el = getCollection().getElement(theLowBound);
-					else {
+					else
 						el = getCollection().getAdjacentElement(theLowBound, true);
-						if (el != null && !check(el.getElementId(), false, true))
-							return null;
-					}
 				} else
 					el = getCollection().getTerminalElement(first);
+				if (el != null && !check(el.getElementId(), false, true))
+					return null;
 			} else {
 				if (theHighBound != null) {
 					if (isHighIncluded)
 						el = getCollection().getElement(theHighBound);
-					else {
+					else
 						el = getCollection().getAdjacentElement(theHighBound, false);
-						if (el != null && !check(el.getElementId(), true, false))
-							return null;
-					}
 				} else
 					el = getCollection().getTerminalElement(first);
+				if (el != null && !check(el.getElementId(), true, false))
+					return null;
 			}
 			return wrap(el);
 		}

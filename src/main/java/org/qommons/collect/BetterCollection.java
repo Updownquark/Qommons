@@ -411,8 +411,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 			return false;
 		boolean removed = false;
 		try (Transaction t = lock(true, null)) {
-			CollectionElement<E> el = getTerminalElement(false);
-			while (el != null) {
+			for (CollectionElement<E> el : elements()) {
 				if (filter.test(el.get())) {
 					MutableCollectionElement<E> mutableEl = mutableElement(el.getElementId());
 					if (mutableEl.canRemove() == null) {
@@ -420,7 +419,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 						removed = true;
 					}
 				}
-				el = getAdjacentElement(el.getElementId(), false);
 			}
 		}
 		return removed;
@@ -440,8 +438,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default boolean replaceAll(Function<? super E, ? extends E> map, boolean soft) {
 		try (Transaction t = lock(true, null)) {
 			boolean replaced = false;
-			CollectionElement<E> el = getTerminalElement(true);
-			while (el != null) {
+			for (CollectionElement<E> el : elements()) {
 				E newValue = map.apply(el.get());
 				if (newValue != el.get()) {
 					MutableCollectionElement<E> mutableEl = mutableElement(el.getElementId());
@@ -450,7 +447,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 						replaced = true;
 					}
 				}
-				el = getAdjacentElement(el.getElementId(), true);
 			}
 			return replaced;
 		}
@@ -828,7 +824,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 		@Override
 		public boolean hasNext() {
-			if (next != null)
+			if (next != null && next.getElementId().isPresent())
 				return true;
 			else {
 				if (theLastElement == null)
@@ -847,7 +843,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 			if (!theLastElement.isPresent())
 				throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
 			E value = next.get();
-			next = null;
+			next = theCollection.getAdjacentElement(theLastElement, true);
 			return value;
 		}
 
@@ -857,7 +853,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 				throw new IllegalStateException("Iterator is not started or there were no elements");
 			else if (!theLastElement.isPresent())
 				throw new IllegalStateException("Element has already been removed");
-			hasNext(); // Since last element will be removed after this, need to grab the next element (if there is one) before removing it
 			theCollection.mutableElement(theLastElement).remove();
 		}
 	}

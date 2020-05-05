@@ -808,6 +808,8 @@ public final class RedBlackNode<E> {
 	 */
 	public RedBlackNode<E> getClosest(boolean left) {
 		if (!isPresent()) {
+			if (theTree.getRoot() == null)
+				return null;
 			CachedIndex ci = theCachedIndex;
 			// This method can be called immediately after the node has been removed, but not if the tree has since been changed
 			if (theTree.theStructureStamp != ci.stamp)
