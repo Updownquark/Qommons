@@ -77,7 +77,7 @@ public class QommonsTestUtils {
 			}
 		}
 
-		// Test reversible collections
+		// Test reversibility
 		List<Collection<Integer>> derived = new ArrayList<>();
 		if (coll instanceof BetterCollection) {
 			BetterCollection<Integer> rc = (BetterCollection<Integer>) coll;
@@ -86,6 +86,7 @@ public class QommonsTestUtils {
 			Consumer<? super T> fCheck = check;
 			ArrayList<Integer> copy = new ArrayList<>();
 			Consumer<Collection<?>> rCheck = c -> {
+				helper.placemark();
 				// Test that reversed is really reversed
 				assertEquals(rc.size(), rrc.size());
 				for (Integer v : rc)
@@ -94,6 +95,7 @@ public class QommonsTestUtils {
 				assertThat(rrc, collectionsEqual(copy, true));
 				copy.clear();
 
+				helper.placemark();
 				// Test descending iteration
 				Iterator<Integer> rIter = rc.iterator();
 				Iterator<Integer> rrIter = rrc.descendingIterator();
@@ -103,6 +105,7 @@ public class QommonsTestUtils {
 				}
 				assertFalse(rrIter.hasNext());
 
+				helper.placemark();
 				rIter = rc.descendingIterator();
 				rrIter = rrc.iterator();
 				while (rIter.hasNext()) {
