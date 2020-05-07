@@ -774,6 +774,8 @@ public class TestHelper {
 				knownFailures = getKnownFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames);
 			else
 				knownFailures = null;
+			if (theMaxTotalDuration == null && maxCases == 0 && (!isRevisitingKnownFailures || knownFailures.isEmpty()))
+				throw new IllegalStateException("No cases configured.  Use withRandomCases() or withMaxTotalDuration()");
 			try (TestSetExecution exec = new TestSetExecution(theCreator, isPrintingProgress, isPrintingFailures, Instant.now(),
 				theMaxTotalDuration, theMaxCaseDuration, theMaxProgressInterval)) {
 				if (isRevisitingKnownFailures) {
@@ -1188,11 +1190,13 @@ public class TestHelper {
 				args.add("--max-case-duration=" + Format.DURATION.format(theExecutor.theMaxCaseDuration));
 			if (theExecutor.theMaxProgressInterval != null)
 				args.add("--max-progress-interval=" + Format.DURATION.format(theExecutor.theMaxProgressInterval));
-			StringBuilder placemarkArg = new StringBuilder("--placemarks=");
-			for (String placemark : thePlacemarkNames)
-				placemarkArg.append(placemark).append(',');
-			placemarkArg.deleteCharAt(placemarkArg.length() - 1);
-			args.add(placemarkArg.toString());
+			if (!thePlacemarkNames.isEmpty()) {
+				StringBuilder placemarkArg = new StringBuilder("--placemarks=");
+				for (String placemark : thePlacemarkNames)
+					placemarkArg.append(placemark).append(',');
+				placemarkArg.deleteCharAt(placemarkArg.length() - 1);
+				args.add(placemarkArg.toString());
+			}
 
 			Random random = new Random();
 			for (int p = 0; p < theSlaves.length; p++) {
@@ -1691,7 +1695,7 @@ public class TestHelper {
 				.durationArg("max-case-duration").defValue((Duration) null)//
 				.durationArg("max-progress-interval").defValue((Duration) null)//
 				.forDefaultMultiValuePattern()//
-				.stringArg("placemarks").times(1, Integer.MAX_VALUE)//
+				.stringArg("placemarks").times(0, 1)//
 				.getParser();
 			ArgumentParsing.Arguments parsedArgs;
 			try {
@@ -1854,12 +1858,22 @@ public class TestHelper {
 			return theFirstError;
 		}
 
-		/** @throws AssertionError If any test failed */
-		public void throwErrorIfFailed() throws AssertionError {
+		/**
+		 * @return This summary
+		 * @throws AssertionError If any test failed
+		 */
+		public TestSummary throwErrorIfFailed() throws AssertionError {
 			if (theFirstError instanceof AssertionError)
 				throw (AssertionError) theFirstError;
 			else if (theFirstError != null)
 				throw new AssertionError(theFirstError.getMessage(), theFirstError);
+			return this;
+		}
+
+		/** @return Prints this summary to {@link System#out} */
+		public TestSummary printResults() {
+			System.out.println("Summary: " + this);
+			return this;
 		}
 
 		@Override
