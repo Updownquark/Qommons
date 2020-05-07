@@ -213,7 +213,7 @@ public class StringUtils {
 	 */
 	public static <T> StringBuilder print(CharSequence delimiter, Iterable<? extends T> values,
 		Function<? super T, ? extends CharSequence> format) {
-		return print(new StringBuilder(), delimiter, values, (v, str) -> str.append(format == null ? String.valueOf(v) : format.apply(v)));
+		return print(new StringBuilder(), delimiter, values, (str, v) -> str.append(format == null ? String.valueOf(v) : format.apply(v)));
 	}
 
 	/**
@@ -227,7 +227,7 @@ public class StringUtils {
 	 * @return The printed StringBuilder
 	 */
 	public static <T> StringBuilder print(StringBuilder into, CharSequence delimiter, Iterable<? extends T> values,
-		BiConsumer<? super T, ? super StringBuilder> format) {
+		BiConsumer<? super StringBuilder, ? super T> format) {
 		if (into == null)
 			into = new StringBuilder();
 		boolean first = true;
@@ -237,7 +237,7 @@ public class StringUtils {
 			else
 				into.append(delimiter);
 			if (format != null)
-				format.accept(value, into);
+				format.accept(into, value);
 			else
 				into.append(value);
 		}
