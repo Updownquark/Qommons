@@ -309,17 +309,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default BetterSortedMap<K, V> subMap(K fromKey, boolean fromInclusive, K toKey, boolean toInclusive) {
-		return subMap(k -> {
-			int compare = comparator().compare(fromKey, k);
-			if (!fromInclusive && compare == 0)
-				compare = 1;
-			return compare;
-		}, k -> {
-			int compare = comparator().compare(toKey, k);
-			if (!toInclusive && compare == 0)
-				compare = -1;
-			return compare;
-		});
+		return subMap(keySet().searchFor(fromKey, fromInclusive ? 0 : 1), keySet().searchFor(toKey, toInclusive ? 0 : -1));
 	}
 
 	/**
@@ -333,22 +323,12 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default BetterSortedMap<K, V> headMap(K toKey, boolean inclusive) {
-		return subMap(null, k -> {
-			int compare = comparator().compare(toKey, k);
-			if (!inclusive && compare == 0)
-				compare = -1;
-			return compare;
-		});
+		return subMap(null, keySet().searchFor(toKey, inclusive ? 0 : -1));
 	}
 
 	@Override
 	default BetterSortedMap<K, V> tailMap(K fromKey, boolean inclusive) {
-		return subMap(k -> {
-			int compare = comparator().compare(fromKey, k);
-			if (!inclusive && compare == 0)
-				compare = 1;
-			return compare;
-		}, null);
+		return subMap(keySet().searchFor(fromKey, inclusive ? 0 : 1), null);
 	}
 
 	@Override
@@ -520,7 +500,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		private final Comparable<? super K> theLowerBound;
 		private final Comparable<? super K> theUpperBound;
 
-		private final BetterSortedSet<K> theKeySet;
+		private final BetterSortedSet.BetterSubSet<K> theKeySet;
 		private Object theIdentity;
 
 		public BetterSubMap(BetterSortedMap<K, V> source, Comparable<? super K> lowerBound, Comparable<? super K> upperBound) {
@@ -528,7 +508,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 			theLowerBound = lowerBound;
 			theUpperBound = upperBound;
 
-			theKeySet = source.keySet().subSet(theLowerBound, theUpperBound);
+			theKeySet = (BetterSortedSet.BetterSubSet<K>) source.keySet().subSet(theLowerBound, theUpperBound);
 		}
 
 		protected BetterSortedMap<K, V> getSource() {
@@ -559,22 +539,24 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
 			if (!theKeySet.belongs(key))
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			return theSource.putEntry(key, value, after, before, first);
+			return wrap(theSource.putEntry(key, value, //
+				theKeySet.strip(after), theKeySet.strip(before), first));
 		}
 
 		@Override
 		public MapEntryHandle<K, V> getEntry(K key) {
 			if (!theKeySet.belongs(key))
 				return null;
-			return theSource.getEntry(key);
+			return wrap(theSource.getEntry(key));
 		}
 
 		@Override
 		public MapEntryHandle<K, V> getEntryById(ElementId entryId) {
-			MapEntryHandle<K, V> entry = theSource.getEntryById(entryId);
+			MapEntryHandle<K, V> entry = theSource.getEntryById(//
+				theKeySet.strip(entryId));
 			if (!theKeySet.belongs(entry.getKey()))
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			return entry;
+			return wrap(entry);
 		}
 
 		public int isInRange(K value) {
@@ -596,15 +578,23 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 		@Override
 		public MapEntryHandle<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, BetterSortedList.SortedSearchFilter filter) {
-			return theSource.searchEntries(boundSearch(search), filter);
+			MapEntryHandle<K, V> found = theSource.searchEntries(boundSearch(search), filter);
+			if (found == null)
+				return null;
+			int range = theKeySet.isInRange(found.getKey());
+			if (range == 0)
+				return wrap(found);
+			if (filter.strict)
+				return null;
+			return getTerminalEntry(range < 0);
 		}
 
 		@Override
 		public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
-			MutableMapEntryHandle<K, V> entry = theSource.mutableEntry(entryId);
+			MutableMapEntryHandle<K, V> entry = theSource.mutableEntry(theKeySet.strip(entryId));
 			if (!keySet().belongs(entry.getKey()))
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			return entry;
+			return wrap(entry);
 		}
 
 		@Override
@@ -624,6 +614,99 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		@Override
 		public String toString() {
 			return entrySet().toString();
+		}
+
+		MapEntryHandle<K, V> wrap(MapEntryHandle<K, V> entry) {
+			return entry == null ? null : new BoundedMapEntry(entry);
+		}
+
+		MutableMapEntryHandle<K, V> wrap(MutableMapEntryHandle<K, V> entry) {
+			return entry == null ? null : new BoundedMutableEntry(entry);
+		}
+
+		class BoundedMapEntry implements MapEntryHandle<K, V> {
+			private final MapEntryHandle<K, V> theSourceEntry;
+			private final ElementId theSubSetId;
+
+			BoundedMapEntry(MapEntryHandle<K, V> sourceEntry) {
+				theSourceEntry = sourceEntry;
+				theSubSetId = theKeySet.wrap(sourceEntry.getElementId());
+			}
+
+			protected MapEntryHandle<K, V> getSourceEntry() {
+				return theSourceEntry;
+			}
+
+			@Override
+			public ElementId getElementId() {
+				return theSubSetId;
+			}
+
+			@Override
+			public V get() {
+				return theSourceEntry.get();
+			}
+
+			@Override
+			public K getKey() {
+				return theSourceEntry.getKey();
+			}
+
+			@Override
+			public int hashCode() {
+				return theSourceEntry.hashCode();
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return obj instanceof BetterSubMap.BoundedMapEntry && theSourceEntry.equals(((BoundedMapEntry) obj).theSourceEntry);
+			}
+
+			@Override
+			public String toString() {
+				return theSourceEntry.toString();
+			}
+		}
+
+		class BoundedMutableEntry extends BoundedMapEntry implements MutableMapEntryHandle<K, V> {
+			public BoundedMutableEntry(MutableMapEntryHandle<K, V> sourceEntry) {
+				super(sourceEntry);
+			}
+
+			@Override
+			protected MutableMapEntryHandle<K, V> getSourceEntry() {
+				return (MutableMapEntryHandle<K, V>) super.getSourceEntry();
+			}
+
+			@Override
+			public BetterCollection<V> getCollection() {
+				return getSourceEntry().getCollection();
+			}
+
+			@Override
+			public String isEnabled() {
+				return getSourceEntry().isEnabled();
+			}
+
+			@Override
+			public String isAcceptable(V value) {
+				return getSourceEntry().isAcceptable(value);
+			}
+
+			@Override
+			public void set(V value) throws UnsupportedOperationException, IllegalArgumentException {
+				getSourceEntry().setValue(value);
+			}
+
+			@Override
+			public String canRemove() {
+				return getSourceEntry().canRemove();
+			}
+
+			@Override
+			public void remove() throws UnsupportedOperationException {
+				getSourceEntry().remove();
+			}
 		}
 	}
 }

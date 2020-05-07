@@ -176,7 +176,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				beforeEl = getAdjacentElement(after, true);
 			}
 			ElementId before = beforeEl == null ? null : beforeEl.getElementId();
-			return addElement(element, after, before, false);
+			return addElement(element, after, before, true);
 		}
 	}
 
@@ -233,6 +233,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				MutableCollectionElement<E> mutableEl = mutableElement(el.getElementId());
 				if (mutableEl.canRemove() == null)
 					mutableEl.remove();
+				el = getAdjacentElement(el.getElementId(), true);
 			}
 		}
 	}
@@ -387,7 +388,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public BetterList<E> reverse() {
 			if (BetterCollections.simplifyDuplicateOperations())
-				return this;
+				return getWrapped();
 			else
 				return BetterList.super.reverse();
 		}

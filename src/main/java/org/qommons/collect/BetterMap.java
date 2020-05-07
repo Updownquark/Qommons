@@ -206,7 +206,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 	default V put(K key, V value) {
 		while (true) {
 			boolean[] added = new boolean[1];
-			MapEntryHandle<K, V> entry = getOrPutEntry(key, k -> value, null, null, false, () -> added[0] = true);
+			MapEntryHandle<K, V> entry = getOrPutEntry(key, //
+				k -> value, null, null, false, () -> added[0] = true);
 			if (entry != null && !added[0]) {
 				// Get the mutable entry in case the immutable one doesn't support Entry.setValue(Object)
 				MutableMapEntryHandle<K, V> mutableEntry;

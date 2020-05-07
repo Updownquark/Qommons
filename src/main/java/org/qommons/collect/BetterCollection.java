@@ -1049,7 +1049,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		@Override
 		public BetterCollection<E> reverse() {
 			if (BetterCollections.simplifyDuplicateOperations())
-				return this;
+				return getWrapped();
 			else
 				return BetterCollection.super.reverse();
 		}

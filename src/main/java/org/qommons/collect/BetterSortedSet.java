@@ -623,7 +623,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
 			if (sourceCollection == this)
 				return BetterList.of(getElement(sourceEl));
-			return QommonsUtils.filterMap(theWrapped.getElementsBySource(strip(sourceEl), sourceCollection), el -> isInRange(el.get()) == 0,
+			return QommonsUtils.filterMap(theWrapped.getElementsBySource(sourceEl, sourceCollection), el -> isInRange(el.get()) == 0,
 				el -> getElement(el));
 		}
 
@@ -759,7 +759,11 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 			return ret.toString();
 		}
 
-		ElementId strip(ElementId id) {
+		/**
+		 * @param id The element ID for this sub-set
+		 * @return The corresponding element ID for the parent set
+		 */
+		protected ElementId strip(ElementId id) {
 			if (id == null)
 				return null;
 			BoundedElementId boundedId = (BetterSubSet<E>.BoundedElementId) id;
@@ -784,8 +788,8 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		 * @param wrappedElId The element ID from the this set
 		 * @return The element ID for the wrapped set
 		 */
-		protected ElementId unwrap(ElementId wrappedElId) {
-			return ((BoundedElementId) wrappedElId).theSourceId;
+		protected static ElementId unwrap(ElementId wrappedElId) {
+			return ((BetterSubSet.BoundedElementId) wrappedElId).theSourceId;
 		}
 
 		class BoundedElementId implements ElementId {
@@ -1089,7 +1093,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		@Override
 		public BetterSortedSet<E> reverse() {
 			if (BetterCollections.simplifyDuplicateOperations())
-				return this;
+				return getWrapped();
 			else
 				return BetterSortedSet.super.reverse();
 		}

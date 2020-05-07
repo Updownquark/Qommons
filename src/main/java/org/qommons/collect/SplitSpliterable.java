@@ -217,7 +217,7 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 		@Override
 		public SplitSpliterable<E> reverse() {
 			if (BetterCollections.simplifyDuplicateOperations())
-				return this;
+				return getWrapped();
 			else
 				return SplitSpliterable.super.reverse();
 		}
@@ -334,7 +334,7 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 			@Override
 			public SortedSetSplitSpliterable<E> reverse() {
 				if (BetterCollections.simplifyDuplicateOperations())
-					return this;
+					return getWrapped();
 				else
 					return SortedSetSplitSpliterable.super.reverse();
 			}

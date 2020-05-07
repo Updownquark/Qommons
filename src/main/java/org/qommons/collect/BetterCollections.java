@@ -558,6 +558,21 @@ public class BetterCollections {
 		public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
+
+		@Override
+		public int hashCode() {
+			return BetterMap.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterMap.equals(this, obj);
+		}
+
+		@Override
+		public String toString() {
+			return entrySet().toString();
+		}
 	}
 
 	/**
