@@ -377,7 +377,7 @@ public class TreeUtilsTest {
 	public void testTreeRepair() {
 		TestHelper.createTester(TreeRepairTester.class).withDebug(true)
 			.withPersistenceDir(new File("src/test/java/org/qommons/tree"), false).revisitKnownFailures(true)//
-			.withRandomCases(10000).withMaxFailures(10)//
+			.withRandomCases(1000).withMaxFailures(10)//
 			.execute().throwErrorIfFailed();
 	}
 
