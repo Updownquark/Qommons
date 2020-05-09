@@ -1695,7 +1695,7 @@ public class TestHelper {
 				.durationArg("max-case-duration").defValue((Duration) null)//
 				.durationArg("max-progress-interval").defValue((Duration) null)//
 				.forDefaultMultiValuePattern()//
-				.stringArg("placemarks").times(0, 1)//
+				.stringArg("placemarks").times(0, Integer.MAX_VALUE)//
 				.getParser();
 			ArgumentParsing.Arguments parsedArgs;
 			try {
