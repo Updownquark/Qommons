@@ -4,6 +4,7 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -176,10 +177,11 @@ public class LambdaUtils {
 	 * @param <X> The return type of the function
 	 * @param fn The function
 	 * @param print The printed representation of the function
+	 * @param identifier The identifier for the function
 	 * @return The printable function
 	 */
-	public static <T, U, X> BiFunction<T, U, X> printableBiFn(BiFunction<T, U, X> fn, Supplier<String> print) {
-		return new PrintableBiFunction<>(fn, print);
+	public static <T, U, X> BiFunction<T, U, X> printableBiFn(BiFunction<T, U, X> fn, String print, Object identifier) {
+		return printableBiFn(fn, () -> print, identifier);
 	}
 
 	/**
@@ -191,10 +193,37 @@ public class LambdaUtils {
 	 * @param identifier The identifier for the function
 	 * @return The printable function
 	 */
-	public static <T, U, X> BiFunction<T, U, X> printableBiFn(BiFunction<T, U, X> fn, String print, Object identifier) {
+	public static <T, U, X> BiFunction<T, U, X> printableBiFn(BiFunction<T, U, X> fn, Supplier<String> print, Object identifier) {
 		PrintableBiFunction<T, U, X> p = new PrintableBiFunction<>(fn, print, identifier);
 		if (identifier != null) {
 			p = (PrintableBiFunction<T, U, X>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
+		}
+		return p;
+	}
+
+	/**
+	 * @param <T> The first argument type of the predicate
+	 * @param <U> The second argument type of the predicate
+	 * @param test The predicate
+	 * @param print The printed representation of the predicate
+	 * @return The printable predicate
+	 */
+	public static <T, U> BiPredicate<T, U> printableBiPredicate(BiPredicate<T, U> test, Supplier<String> print) {
+		return printableBiPredicate(test, print, null);
+	}
+
+	/**
+	 * @param <T> The first argument type of the predicate
+	 * @param <U> The second argument type of the predicate
+	 * @param test The predicate
+	 * @param print The printed representation of the predicate
+	 * @param identifier The identifier for the predicate
+	 * @return The printable predicate
+	 */
+	public static <T, U> BiPredicate<T, U> printableBiPredicate(BiPredicate<T, U> test, Supplier<String> print, Object identifier) {
+		PrintableBiPredicate<T, U> p = new PrintableBiPredicate<>(test, print, identifier);
+		if (identifier != null) {
+			p = (PrintableBiPredicate<T, U>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
 		}
 		return p;
 	}
@@ -210,6 +239,21 @@ public class LambdaUtils {
 	 * @return The printable function
 	 */
 	public static <T, U, V, X> TriFunction<T, U, V, X> printableTriFn(TriFunction<T, U, V, X> fn, String print, Object identifier) {
+		return printableTriFn(fn, () -> print, identifier);
+	}
+
+	/**
+	 * @param <T> The first argument type of the function
+	 * @param <U> The second argument type of the function
+	 * @param <V> The third argument type of the function
+	 * @param <X> The return type of the function
+	 * @param fn The function
+	 * @param print The printed representation of the function
+	 * @param identifier The identifier for the function
+	 * @return The printable function
+	 */
+	public static <T, U, V, X> TriFunction<T, U, V, X> printableTriFn(TriFunction<T, U, V, X> fn, Supplier<String> print,
+		Object identifier) {
 		PrintableTriFunction<T, U, V, X> p = new PrintableTriFunction<>(fn, print, identifier);
 		if (identifier != null) {
 			p = (PrintableTriFunction<T, U, V, X>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
@@ -377,6 +421,25 @@ public class LambdaUtils {
 		@Override
 		public boolean test(T t) {
 			return getLambda().test(t);
+		}
+	}
+
+	static class PrintableBiPredicate<T, U> extends PrintableLambda<BiPredicate<T, U>> implements BiPredicate<T, U> {
+		PrintableBiPredicate(BiPredicate<T, U> function, String print, Object identifier) {
+			super(function, print, identifier);
+		}
+
+		PrintableBiPredicate(BiPredicate<T, U> function, Supplier<String> print, Object identifier) {
+			super(function, print, identifier);
+		}
+
+		PrintableBiPredicate(BiPredicate<T, U> function, Supplier<String> print) {
+			super(function, print);
+		}
+
+		@Override
+		public boolean test(T t, U u) {
+			return getLambda().test(t, u);
 		}
 	}
 
