@@ -931,13 +931,16 @@ public class CollectionUtils {
 					easyLeft = null;
 				if (easyLeft != null) {
 					if (easyLeft == REMOVE) {
-						if (!theLeft.isEmpty())
-							theLeft.clear();
 						if (simpleAddRight) {
+							if (!theLeft.isEmpty())
+								theLeft.clear();
 							theLeft.addAll((List<? extends L>) theRight);
 							return true;
-						} else if (universalRight == REMOVE || rightToLeft.length == 0)
+						} else if (universalRight == REMOVE || rightToLeft.length == 0) {
+							if (!theLeft.isEmpty())
+								theLeft.clear();
 							return true;
+						}
 					} else if (easyLeft == PRESERVE) {
 						if (rightToLeft.length == 0)
 							return true;

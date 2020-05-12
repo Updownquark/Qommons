@@ -31,7 +31,7 @@ public class CollectionUtilsTests {
 			// .withRandomCases(200)//
 			.withConcurrency(max -> max - 1)//
 			.withPlacemarks("test")//
-			.execute().throwErrorIfFailed();
+			.execute().throwErrorIfFailed().printResults();
 	}
 
 	static class CollectionAdjustmentTester implements TestHelper.Testable {
@@ -149,7 +149,11 @@ public class CollectionUtilsTests {
 			List<String> adjusting = new ArrayList<>(originalLength);
 			class TestSync extends CollectionUtils.SimpleCollectionSynchronizer<String, String, RuntimeException, TestSync> {
 				TestSync() {
-					super(ExFunction.identity());
+					// Using only the identity function here was causing some test cases related to universality to be overlooked
+					super(//
+						helper.getBoolean(.75)//
+							? ExFunction.identity()//
+							: v -> v);
 				}
 
 				@Override
