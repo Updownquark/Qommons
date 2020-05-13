@@ -727,7 +727,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 		@Override
 		public boolean isPresent() {
-			return entry.next != null || theLast == entry;
+			return entry.isPresent();
 		}
 
 		@Override
@@ -774,7 +774,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		}
 
 		private boolean isPresent() {
-			return next != null || theLast == this;
+			return theTreeNode != null && theTreeNode.getElementId().isPresent();
 		}
 
 		HashEntry check() {
