@@ -815,8 +815,9 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 */
 	class BetterCollectionIterator<E> implements Iterator<E> {
 		private final BetterCollection<E> theCollection;
+		private ElementId previous;
 		private CollectionElement<E> next;
-		private ElementId theLastElement;
+		private ElementId theLastReturnedElement;
 
 		public BetterCollectionIterator(BetterCollection<E> collection) {
 			theCollection = collection;
@@ -826,84 +827,40 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		public boolean hasNext() {
 			if (next != null && next.getElementId().isPresent())
 				return true;
-			else {
-				if (theLastElement == null)
-					next = theCollection.getTerminalElement(true);
-				else if (theLastElement != null)
-					next = theCollection.getAdjacentElement(theLastElement, true);
-				return next != null;
-			}
+			else if (theLastReturnedElement != null && theLastReturnedElement.isPresent()) {
+				previous = theLastReturnedElement;
+				next = theCollection.getAdjacentElement(theLastReturnedElement, true);
+			} else if (previous != null) {
+				CollectionElement<E> oldNext = next;
+				next = theCollection.getAdjacentElement(previous, true);
+				if (oldNext != null && oldNext.getElementId().isPresent())
+					previous = oldNext.getElementId();
+			} else
+				next = theCollection.getTerminalElement(true);
+			return next != null;
 		}
 
 		@Override
 		public E next() {
 			if (!hasNext())
 				throw new NoSuchElementException();
-			theLastElement = next.getElementId();
-			if (!theLastElement.isPresent())
+			if (theLastReturnedElement != null && theLastReturnedElement.isPresent())
+				previous = theLastReturnedElement;
+			theLastReturnedElement = next.getElementId();
+			if (!theLastReturnedElement.isPresent())
 				throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
 			E value = next.get();
-			next = theCollection.getAdjacentElement(theLastElement, true);
+			next = theCollection.getAdjacentElement(theLastReturnedElement, true);
 			return value;
 		}
 
 		@Override
 		public void remove() {
-			if (theLastElement == null)
+			if (theLastReturnedElement == null)
 				throw new IllegalStateException("Iterator is not started or there were no elements");
-			else if (!theLastElement.isPresent())
+			else if (!theLastReturnedElement.isPresent())
 				throw new IllegalStateException("Element has already been removed");
-			theCollection.mutableElement(theLastElement).remove();
-		}
-	}
-
-	/**
-	 * Iterates over a BetterCollection's {@link BetterCollection#elements() elements}
-	 * 
-	 * @param <E> The type of elements to iterate over
-	 */
-	class CollectionElementIterator<E> implements Iterator<CollectionElement<E>> {
-		private final BetterCollection<E> theCollection;
-		private CollectionElement<E> next;
-		private ElementId theLastElement;
-
-		public CollectionElementIterator(BetterCollection<E> collection) {
-			theCollection = collection;
-		}
-
-		@Override
-		public boolean hasNext() {
-			if (next != null)
-				return true;
-			else {
-				if (theLastElement == null)
-					next = theCollection.getTerminalElement(true);
-				else if (theLastElement.isPresent())
-					next = theCollection.getAdjacentElement(theLastElement, true);
-				return next != null;
-			}
-		}
-
-		@Override
-		public CollectionElement<E> next() {
-			if (!hasNext())
-				throw new NoSuchElementException();
-			theLastElement = next.getElementId();
-			if (!theLastElement.isPresent())
-				throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
-			CollectionElement<E> element = next;
-			next = null;
-			return element;
-		}
-
-		@Override
-		public void remove() {
-			if (theLastElement == null)
-				throw new IllegalStateException("Iterator is not started or there were no elements");
-			else if (!theLastElement.isPresent())
-				throw new IllegalStateException("Element has already been removed");
-			hasNext(); // Since last element will be removed after this, need to grab the next element (if there is one) before removing it
-			theCollection.mutableElement(theLastElement).remove();
+			theCollection.mutableElement(theLastReturnedElement).remove();
 		}
 	}
 
