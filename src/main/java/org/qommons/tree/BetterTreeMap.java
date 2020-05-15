@@ -725,6 +725,11 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 
 		@Override
+		public ElementId getEquivalentElement(ElementId equivalentEl) {
+			return theEntries.getEquivalentElement(equivalentEl);
+		}
+
+		@Override
 		public BinaryTreeNode<K> search(Comparable<? super K> search, BetterSortedList.SortedSearchFilter filter) {
 			return handleFor(theEntries.search(e -> search.compareTo(e.getKey()), filter));
 		}

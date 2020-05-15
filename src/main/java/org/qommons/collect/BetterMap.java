@@ -785,6 +785,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		}
 
 		@Override
+		public ElementId getEquivalentElement(ElementId equivalentEl) {
+			return theMap.keySet().getEquivalentElement(equivalentEl);
+		}
+
+		@Override
 		public CollectionElement<Entry<K, V>> getOrAdd(Entry<K, V> value, ElementId after, ElementId before, boolean first, Runnable added) {
 			MapEntryHandle<K, V> entry = theMap.getOrPutEntry(value.getKey(), k -> value.getValue(), after, before, first, added);
 			return entry == null ? null : getElement(entry.getElementId());
@@ -1152,6 +1157,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 			if (sourceCollection == this)
 				return keySet.getSourceElements(localElement, keySet); // Validate element
 			return keySet.getSourceElements(localElement, sourceCollection);
+		}
+
+		@Override
+		public ElementId getEquivalentElement(ElementId equivalentEl) {
+			return theMap.keySet().getEquivalentElement(equivalentEl);
 		}
 
 		@Override

@@ -410,6 +410,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		}
 
 		@Override
+		public ElementId getEquivalentElement(ElementId equivalentEl) {
+			return getMap().keySet().getEquivalentElement(equivalentEl);
+		}
+
+		@Override
 		public String canAdd(MultiEntryHandle<K, V> value, ElementId after, ElementId before) {
 			return StdMsg.UNSUPPORTED_OPERATION;
 		}
@@ -767,7 +772,20 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 			if (!els.isEmpty())
 				return els;
 			MultiEntryHandle<K, V> entry = getMap().getEntryById(kvId.keyId);
-			return entry.getValues().getSourceElements(localElement, sourceCollection);
+			return entry.getValues().getSourceElements(kvId.valueId, sourceCollection);
+		}
+
+		@Override
+		public ElementId getEquivalentElement(ElementId equivalentEl) {
+			if (!(equivalentEl instanceof KeyValueElementId))
+				return null;
+			KeyValueElementId kvId = (KeyValueElementId) equivalentEl;
+
+			ElementId keyEl = getMap().keySet().getEquivalentElement(kvId.keyId);
+			if (keyEl == null)
+				return null;
+			MultiEntryHandle<K, V> entry = getMap().getEntryById(kvId.keyId);
+			return entry.getValues().getEquivalentElement(kvId.valueId);
 		}
 
 		@Override

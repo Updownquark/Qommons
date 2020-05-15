@@ -2,6 +2,7 @@ package org.qommons.tree;
 
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.NoSuchElementException;
 import java.util.function.Function;
 
 import org.qommons.Identifiable;
@@ -287,10 +288,17 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
 		if (sourceCollection == this) {
 			if (!(localElement instanceof RedBlackNodeList.NodeId) || ((NodeId) localElement).getList() != this)
-				throw new IllegalArgumentException(localElement + " does not belong to this collection");
+				throw new NoSuchElementException(localElement + " does not belong to this collection");
 			return BetterList.of(localElement);
 		}
 		return BetterList.empty();
+	}
+
+	@Override
+	public ElementId getEquivalentElement(ElementId equivalentEl) {
+		if (!(equivalentEl instanceof RedBlackNodeList.NodeId) || ((NodeId) equivalentEl).getList() != this)
+			return null;
+		return equivalentEl;
 	}
 
 	@Override

@@ -633,10 +633,17 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
 		if (sourceCollection == this) {
 			if (!(localElement instanceof BetterHashSet.HashId) || ((HashId) localElement).getSet() != this)
-				throw new IllegalArgumentException(localElement + " does not belong to this set");
+				throw new NoSuchElementException(localElement + " does not belong to this set");
 			return BetterList.of(localElement);
 		}
 		return BetterList.empty();
+	}
+
+	@Override
+	public ElementId getEquivalentElement(ElementId equivalentEl) {
+		if (!(equivalentEl instanceof BetterHashSet.HashId) || ((HashId) equivalentEl).getSet() != this)
+			return null;
+		return equivalentEl;
 	}
 
 	/**

@@ -227,6 +227,11 @@ public class BetterCollections {
 		}
 
 		@Override
+		public ElementId getEquivalentElement(ElementId equivalentEl) {
+			return theWrapped.getEquivalentElement(equivalentEl);
+		}
+
+		@Override
 		public String canAdd(E value, ElementId after, ElementId before) {
 			return StdMsg.UNSUPPORTED_OPERATION;
 		}

@@ -833,6 +833,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
+		public ElementId getEquivalentElement(ElementId equivalentEl) {
+			return theWrapped.getEquivalentElement(equivalentEl);
+		}
+
+		@Override
 		public boolean belongs(Object o) {
 			return theWrapped.belongs(o);
 		}
@@ -1503,6 +1508,13 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				return BetterList.of(localElement);
 			}
 			return BetterList.empty();
+		}
+
+		@Override
+		public ElementId getEquivalentElement(ElementId equivalentEl) {
+			if (equivalentEl instanceof ConstantList.IndexElementId && ((IndexElementId) equivalentEl).getList() == this)
+				return equivalentEl;
+			return null;
 		}
 
 		@Override

@@ -635,6 +635,14 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		}
 
 		@Override
+		public ElementId getEquivalentElement(ElementId equivalentEl) {
+			if (!(equivalentEl instanceof BetterSubSet.BoundedElementId))
+				return null;
+			ElementId wrappedId = theWrapped.getEquivalentElement(((BoundedElementId) equivalentEl).theSourceId);
+			return wrap(wrappedId);
+		}
+
+		@Override
 		public CollectionElement<E> getTerminalElement(boolean first) {
 			CollectionElement<E> wrapTerminal;
 			if (first) {
@@ -781,7 +789,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		 * @return The element ID for this set
 		 */
 		protected ElementId wrap(ElementId wrappedElId) {
-			return new BoundedElementId(wrappedElId);
+			return wrappedElId == null ? null : new BoundedElementId(wrappedElId);
 		}
 
 		/**

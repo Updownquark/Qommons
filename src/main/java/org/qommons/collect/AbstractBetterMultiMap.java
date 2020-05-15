@@ -545,6 +545,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 
 		@Override
+		public ElementId getEquivalentElement(ElementId equivalentEl) {
+			return getBacking().getEquivalentElement(equivalentEl);
+		}
+
+		@Override
 		public String canAdd(K value, ElementId after, ElementId before) {
 			return StdMsg.UNSUPPORTED_OPERATION;
 		}
@@ -857,6 +862,14 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			if (sourceCollection == this)
 				return wrapped.getSourceElements(localElement, wrapped);
 			return wrapped.getSourceElements(localElement, sourceCollection);
+		}
+
+		@Override
+		public ElementId getEquivalentElement(ElementId equivalentEl) {
+			BetterCollection<E> wrapped = theWrapped.getBacking(false);
+			if (wrapped == null)
+				return null;
+			return wrapped.getEquivalentElement(equivalentEl);
 		}
 
 		@Override

@@ -108,6 +108,20 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection);
 
 	/**
+	 * Retrieves the ID of the element in this collection that is equivalent to some element from a different collection derived from the
+	 * same data. The element will only be recognized if the given element's collection is derived from the source data in a very similar
+	 * way to this collection.
+	 * 
+	 * @param equivalentEl An element from a different collection
+	 * @return The element in this collection equivalent to the given element, or null if:
+	 *         <ul>
+	 *         <li>the element is from a collection not derived from the same data as this one,</li>
+	 *         <li>the element, though from a related collection, is not represented in this collection</li>
+	 *         </ul>
+	 */
+	ElementId getEquivalentElement(ElementId equivalentEl);
+
+	/**
 	 * Tests the ability to add an object into this collection within a given position range
 	 * 
 	 * @param value The value to test addability for
@@ -977,6 +991,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
+		public ElementId getEquivalentElement(ElementId equivalentEl) {
+			return ElementId.reverse(theWrapped.getEquivalentElement(equivalentEl.reverse()));
+		}
+
+		@Override
 		public String canAdd(E value, ElementId after, ElementId before) {
 			return getWrapped().canAdd(value, ElementId.reverse(before), ElementId.reverse(after));
 		}
@@ -1152,6 +1171,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
+		public ElementId getEquivalentElement(ElementId equivalentEl) {
+			return null;
+		}
+
+		@Override
 		public int hashCode() {
 			return 0;
 		}
@@ -1263,6 +1287,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		@Override
 		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
 			return theCollection.getSourceElements(localElement, sourceCollection);
+		}
+
+		@Override
+		public ElementId getEquivalentElement(ElementId equivalentEl) {
+			return theCollection.getEquivalentElement(equivalentEl);
 		}
 
 		@Override
