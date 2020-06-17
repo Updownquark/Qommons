@@ -4,6 +4,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.TimeZone;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -213,6 +214,10 @@ public interface SpinnerFormat<T> extends Format<T> {
 		};
 	}
 
+	public static <T> SpinnerFormat<T> wrapAround(SpinnerFormat<T> format, Supplier<T> min, Supplier<T> max) {
+		return new WrappingSpinnerFormat<>(format, min, max);
+	}
+
 	/**
 	 * A spinner format for parsing {@link ParsedAdjustable} values
 	 * 
@@ -330,6 +335,45 @@ public interface SpinnerFormat<T> extends Format<T> {
 			theLastAdjustable = adjusted.getValue1();
 			theLastValue = newValue;
 			return new BiTuple<>(newValue, adjusted.getValue2());
+		}
+	}
+
+	public static class WrappingSpinnerFormat<T> implements SpinnerFormat<T> {
+		private final SpinnerFormat<T> theWrapped;
+		private final Supplier<T> theMinimum;
+		private final Supplier<T> theMaximum;
+
+		public WrappingSpinnerFormat(SpinnerFormat<T> wrapped, Supplier<T> minimum, Supplier<T> maximum) {
+			theWrapped = wrapped;
+			theMinimum = minimum;
+			theMaximum = maximum;
+		}
+
+		@Override
+		public void append(StringBuilder text, T value) {
+			theWrapped.append(text, value);
+		}
+
+		@Override
+		public T parse(CharSequence text) throws ParseException {
+			return theWrapped.parse(text);
+		}
+
+		@Override
+		public boolean supportsAdjustment(boolean withContext) {
+			return theWrapped.supportsAdjustment(withContext);
+		}
+
+		@Override
+		public BiTuple<T, String> adjust(T value, String formatted, int cursor, boolean up) {
+			T min = theMinimum.get();
+			T max = theMaximum.get();
+			if (up && Objects.equals(value, max))
+				return new BiTuple<>(min, format(min));
+			else if (!up && Objects.equals(value, min))
+				return new BiTuple<>(max, format(max));
+			else
+				return theWrapped.adjust(value, formatted, cursor, up);
 		}
 	}
 }
