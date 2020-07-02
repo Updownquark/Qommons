@@ -50,7 +50,12 @@ public class BetterCollections {
 	 * @return A BetterCollection backed by the given collection but though which the source collection cannot be modified in any way
 	 */
 	public static <E> BetterCollection<E> unmodifiableCollection(BetterCollection<? extends E> collection) {
-		return new UnmodifiableBetterCollection<>(collection);
+		if (collection instanceof BetterSet)
+			return unmodifiableSet((BetterSet<? extends E>) collection);
+		else if (collection instanceof BetterList)
+			return unmodifiableList((BetterList<? extends E>) collection);
+		else
+			return new UnmodifiableBetterCollection<>(collection);
 	}
 
 	/**
@@ -59,7 +64,10 @@ public class BetterCollections {
 	 * @return A BetterSet backed by the given set but though which the source set cannot be modified in any way
 	 */
 	public static <E> BetterSet<E> unmodifiableSet(BetterSet<? extends E> set) {
-		return new UnmodifiableBetterSet<>(set);
+		if (set instanceof BetterSortedSet)
+			return unmodifiableSortedSet((BetterSortedSet<? extends E>) set);
+		else
+			return new UnmodifiableBetterSet<>(set);
 	}
 
 	/**
@@ -68,7 +76,10 @@ public class BetterCollections {
 	 * @return A BetterList backed by the given list but though which the source list cannot be modified in any way
 	 */
 	public static <E> BetterList<E> unmodifiableList(BetterList<? extends E> list) {
-		return new UnmodifiableBetterList<>(list);
+		if (list instanceof BetterSortedSet)
+			return unmodifiableSortedSet((BetterSortedSet<? extends E>) list);
+		else
+			return new UnmodifiableBetterList<>(list);
 	}
 
 	/**
@@ -87,7 +98,10 @@ public class BetterCollections {
 	 * @return A BetterMap backed by the given map but though which the source map cannot be modified in any way
 	 */
 	public static <K, V> BetterMap<K, V> unmodifiableMap(BetterMap<? extends K, ? extends V> map) {
-		return new UnmodifiableBetterMap<>(map);
+		if (map instanceof BetterSortedMap)
+			return unmodifiableSortedMap((BetterSortedMap<? extends K, ? extends V>) map);
+		else
+			return new UnmodifiableBetterMap<>(map);
 	}
 
 	/**
@@ -123,6 +137,26 @@ public class BetterCollections {
 	protected static <K, V> MutableMapEntryHandle<K, V> unmodifiableMutableEntry(BetterCollection<? extends V> values,
 		MapEntryHandle<? extends K, ? extends V> entry) {
 		return entry == null ? null : new UnmodifiableMutableEntry<>(values, entry);
+	}
+
+	/**
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param map The map to get an unmodifiable view of
+	 * @return A BetterMultiMap backed by the given map but though which the source map cannot be modified in any way
+	 */
+	public static <K, V> BetterMultiMap<K, V> unmodifiableMultiMap(BetterMultiMap<? extends K, ? extends V> map) {
+		return new UnmodifiableBetterMultiMap<>(map);
+	}
+
+	/**
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param entry The multi-map entry to get an unmodifiable view of
+	 * @return A MultiEntryHandle backed by the given entry but through which the source entry cannot be modified in any way
+	 */
+	protected static <K, V> MultiEntryHandle<K, V> unmodifiableEntry(MultiEntryHandle<? extends K, ? extends V> entry) {
+		return entry == null ? null : new UnmodifiableMultiEntry<>(entry);
 	}
 
 	/**
@@ -267,6 +301,10 @@ public class BetterCollections {
 
 		@Override
 		public boolean equals(Object obj) {
+			if (obj == this)
+				return true;
+			if (obj instanceof UnmodifiableBetterCollection)
+				obj = ((UnmodifiableBetterCollection<?>) obj).theWrapped;
 			return theWrapped.equals(obj);
 		}
 
@@ -699,6 +737,159 @@ public class BetterCollections {
 		@Override
 		public void remove() throws UnsupportedOperationException {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+	}
+
+	/**
+	 * Implements {@link BetterCollections#unmodifiableMultiMap(BetterMultiMap)}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
+	public static class UnmodifiableBetterMultiMap<K, V> implements BetterMultiMap<K, V> {
+		private final BetterMultiMap<? extends K, ? extends V> theWrapped;
+		private BetterSet<K> theKeySet;
+
+		/** @param wrapped The multi-map to wrap */
+		protected UnmodifiableBetterMultiMap(BetterMultiMap<? extends K, ? extends V> wrapped) {
+			theWrapped = wrapped;
+		}
+
+		@Override
+		public Object getIdentity() {
+			return theWrapped.getIdentity();
+		}
+
+		@Override
+		public long getStamp() {
+			return theWrapped.getStamp();
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return theWrapped.isLockSupported();
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return theWrapped.lock(false, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, Object cause) {
+			return theWrapped.tryLock(false, cause);
+		}
+
+		@Override
+		public int valueSize() {
+			return theWrapped.valueSize();
+		}
+
+		@Override
+		public BetterSet<K> keySet() {
+			if (theKeySet == null)
+				theKeySet = unmodifiableSet(theWrapped.keySet());
+			return theKeySet;
+		}
+
+		@Override
+		public MultiEntryHandle<K, V> getEntryById(ElementId keyId) {
+			return unmodifiableEntry(theWrapped.getEntryById(keyId));
+		}
+
+		@Override
+		public BetterCollection<V> get(Object key) {
+			return unmodifiableCollection(theWrapped.get(key));
+		}
+
+		@Override
+		public MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, ElementId afterKey,
+			ElementId beforeKey, boolean first, Runnable added) {
+			if (!theWrapped.keySet().belongs(key))
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			MultiEntryHandle<? extends K, ? extends V> found = ((BetterMultiMap<K, V>) theWrapped).getEntry(key);
+			if (found != null)
+				return unmodifiableEntry(found);
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public boolean clear() {
+			if (theWrapped.keySet().isEmpty())
+				return false;
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public int hashCode() {
+			return theWrapped.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (obj == this)
+				return true;
+			if (obj instanceof UnmodifiableBetterMultiMap)
+				obj = ((UnmodifiableBetterMultiMap<?, ?>) obj).theWrapped;
+			return theWrapped.equals(obj);
+		}
+
+		@Override
+		public String toString() {
+			return theWrapped.toString();
+		}
+	}
+
+	/**
+	 * Implements {@link MultiEntryHandle} for unmodifiable multi-maps
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
+	public static class UnmodifiableMultiEntry<K, V> implements MultiEntryHandle<K, V> {
+		private final MultiEntryHandle<? extends K, ? extends V> theWrapped;
+		private BetterCollection<V> theValues;
+
+		/** @param wrapped The entry to wrap */
+		protected UnmodifiableMultiEntry(MultiEntryHandle<? extends K, ? extends V> wrapped) {
+			theWrapped = wrapped;
+		}
+
+		@Override
+		public ElementId getElementId() {
+			return theWrapped.getElementId();
+		}
+
+		@Override
+		public K getKey() {
+			return theWrapped.getKey();
+		}
+
+		@Override
+		public BetterCollection<V> getValues() {
+			if (theValues == null)
+				theValues = unmodifiableCollection(theWrapped.getValues());
+			return theValues;
+		}
+
+		@Override
+		public int hashCode() {
+			return theWrapped.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (obj == this)
+				return true;
+			else if (!(obj instanceof MultiEntryHandle))
+				return false;
+			else
+				return theWrapped.getElementId().equals(((MultiEntryHandle<?, ?>) obj).getElementId());
+		}
+
+		@Override
+		public String toString() {
+			return theWrapped.toString();
 		}
 	}
 }
