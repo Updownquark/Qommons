@@ -1,5 +1,6 @@
 package org.qommons.collect;
 
+import java.util.AbstractList;
 import java.util.AbstractMap;
 import java.util.AbstractSet;
 import java.util.Arrays;
@@ -498,7 +499,7 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		void clear();
 
 		/** @return An iterable over the values in this map for each key in the key set */
-		Iterable<V> allValues();
+		List<V> allValues();
 
 		/** @return An iterable over all values that have been set in this map */
 		Iterable<V> values();
@@ -591,7 +592,7 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		public void clear() {}
 
 		@Override
-		public Iterable<T> allValues() {
+		public List<T> allValues() {
 			return Collections.emptyList();
 		}
 
@@ -1058,17 +1059,37 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 	private static final class ParamMapValueIterable<V> implements Iterable<V> {
 		private final Object[] theValues;
 		private final IntFunction<V> theValueFunction;
-		private final boolean allValues;
 
-		ParamMapValueIterable(Object[] values, IntFunction<V> valueFunction, boolean allValues) {
+		ParamMapValueIterable(Object[] values, IntFunction<V> valueFunction) {
 			theValues = values;
 			theValueFunction = valueFunction;
-			this.allValues = allValues;
 		}
 
 		@Override
 		public Iterator<V> iterator() {
-			return new ParamMapValueIterator<>(theValues, theValueFunction, allValues);
+			return new ParamMapValueIterator<>(theValues, theValueFunction, false);
+		}
+	}
+
+	private static final class ParamMapValueList<V> extends AbstractList<V> {
+		private final Object[] theValues;
+		private final IntFunction<V> theValueFunction;
+
+		ParamMapValueList(Object[] values, IntFunction<V> valueFunction) {
+			theValues = values;
+			theValueFunction = valueFunction;
+		}
+
+		@Override
+		public V get(int index) {
+			if (theValues[index] == null && theValueFunction != null)
+				theValues[index] = theValueFunction.apply(index);
+			return (V) theValues[index];
+		}
+
+		@Override
+		public int size() {
+			return theValues.length;
 		}
 	}
 
@@ -1206,17 +1227,17 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		}
 
 		@Override
-		public Iterable<V> allValues() {
+		public List<V> allValues() {
 			if (theValues == null)
 				theValues = new Object[theKeys.size()];
-			return new ParamMapValueIterable<>(theValues, theValueFunction, true);
+			return new ParamMapValueList<>(theValues, theValueFunction);
 		}
 
 		@Override
 		public Iterable<V> values() {
 			if (theValues == null)
 				return Collections.emptyList();
-			return new ParamMapValueIterable<>(theValues, theValueFunction, false);
+			return new ParamMapValueIterable<>(theValues, theValueFunction);
 		}
 
 		@Override
@@ -1338,25 +1359,16 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		}
 
 		@Override
-		public Iterable<V> allValues() {
-			return new Iterable<V>() {
+		public List<V> allValues() {
+			return new AbstractList<V>() {
 				@Override
-				public Iterator<V> iterator() {
-					return new Iterator<V>() {
-						private int theIndex;
+				public V get(int index) {
+					return theValues.apply(index);
+				}
 
-						@Override
-						public boolean hasNext() {
-							return theIndex < theKeys.size();
-						}
-
-						@Override
-						public V next() {
-							if (theIndex == theKeys.size())
-								throw new NoSuchElementException();
-							return theValues.apply(theIndex++);
-						}
-					};
+				@Override
+				public int size() {
+					return theKeys.size();
 				}
 			};
 		}
@@ -1491,8 +1503,8 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		}
 
 		@Override
-		public Iterable<V> allValues() {
-			return theWrapped.allValues();
+		public List<V> allValues() {
+			return Collections.unmodifiableList(theWrapped.allValues());
 		}
 
 		@Override
