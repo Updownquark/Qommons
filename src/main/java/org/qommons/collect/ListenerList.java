@@ -1,6 +1,9 @@
 package org.qommons.collect;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
@@ -498,6 +501,29 @@ public class ListenerList<E> {
 			node = node.next;
 		}
 		return collection;
+	}
+
+	/**
+	 * Removes this list's content and returns it in a new list. If items are added to this list externally during this call, the list may
+	 * contain the added items after this call returns.
+	 * 
+	 * @return The list of content that was previously in this list
+	 */
+	public List<E> dumpAndClear() {
+		if (isEmpty())
+			return Collections.emptyList();
+		int size = size();
+		List<E> list = new ArrayList<>(size);
+		int i = 0;
+		Node node = theTerminal.next;
+		while (i < size && node != theTerminal) {
+			list.add(node.theListener);
+			node.remove();
+			node = node.next;
+		}
+		if (node != theTerminal)
+			theTerminal.next = node;
+		return list;
 	}
 
 	@Override
