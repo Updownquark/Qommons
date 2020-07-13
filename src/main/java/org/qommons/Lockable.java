@@ -243,7 +243,7 @@ public interface Lockable {
 	 * composite locks, all locks will be released and re-tried. This is very effective at preventing deadlock where multiple thread-safe
 	 * resources are needed for an operation.
 	 * 
-	 * @param lockables The lockables to lock, any of which may be nulll
+	 * @param lockables The lockables to lock, any of which may be null
 	 * @return The transaction to close to release the lock
 	 */
 	static Transaction lockAll(Lockable... lockables) {
@@ -256,7 +256,7 @@ public interface Lockable {
 	 * composite locks, all locks will be released and re-tried. This is very effective at preventing deadlock where multiple thread-safe
 	 * resources are needed for an operation.
 	 * 
-	 * @param lockables The lockables to lock, any of which may be nulll
+	 * @param lockables The lockables to lock, any of which may be null
 	 * @return The transaction to close to release the lock
 	 */
 	static Transaction lockAll(Collection<? extends Lockable> lockables) {
@@ -269,7 +269,7 @@ public interface Lockable {
 	 * resources are needed for an operation.
 	 * 
 	 * @param outer The first lockable to lock
-	 * @param lockables The additional lockables to lock, any of which may be nulll
+	 * @param lockables The additional lockables to lock, any of which may be null
 	 * @return The transaction to close to release the lock
 	 */
 	static Transaction lockAll(Lockable outer, Collection<? extends Lockable> lockables) {
@@ -284,7 +284,7 @@ public interface Lockable {
 	 * 
 	 * @param <X> The type of structures to lock
 	 * @param outer The first lockable to lock
-	 * @param lockables The additional structures to lock, any of which may be nulll
+	 * @param lockables The additional structures to lock, any of which may be null
 	 * @param map The map to produce Lockables from each item in the list
 	 * @return The transaction to close to release the lock
 	 */
@@ -359,7 +359,7 @@ public interface Lockable {
 	 * Attempts to obtain a lock for a set of lockables. If any lock is unobtainable, all locks are released and null is returned.
 	 * 
 	 * @param outer The first lockable to lock
-	 * @param lockables The additonal lockables to lock
+	 * @param lockables The additional lockables to lock
 	 * @return A transaction to close to release the locks, or null if the lock could not be obtained.
 	 */
 	static Transaction tryLockAll(Lockable outer, Collection<? extends Lockable> lockables) {
@@ -370,7 +370,7 @@ public interface Lockable {
 	 * Attempts to obtain a lock for a set of lockables. If any lock is unobtainable, all locks are released and null is returned.
 	 * 
 	 * @param outer The first lockable to lock
-	 * @param lockables The additonal lockables to lock
+	 * @param lockables The additional lockables to lock
 	 * @return A transaction to close to release the locks, or null if the lock could not be obtained.
 	 */
 	static Transaction tryLockAll(Lockable outer, Supplier<? extends Collection<? extends Lockable>> lockables) {
@@ -382,7 +382,7 @@ public interface Lockable {
 	 * 
 	 * @param <X> The type of structures to lock
 	 * @param outer The first lockable to lock
-	 * @param lockables The additonal structures to lock
+	 * @param lockables The additional structures to lock
 	 * @param map The map to produce Lockables from each item in the list
 	 * @return A transaction to close to release the locks, or null if the lock could not be obtained.
 	 */
