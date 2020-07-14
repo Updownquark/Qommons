@@ -6,17 +6,30 @@ import java.util.Arrays;
 
 /** A simple utility for writing XML to a {@link Writer} serially */
 public class XmlSerialWriter {
+	/** The default version (1.0) that will be written for the document if not explicitly specified */
 	public static final String DEFAULT_VERSION = "1.0";
+	/** The default encoding (UTF-8) that will be written for the document if not explicitly specified */
 	public static final String DEFAULT_ENCODING = "UTF-8";
 
+	/** User-supplied code to configure an XML element */
 	public interface XmlChild {
+		/**
+		 * @param element The element to populate
+		 * @throws IOException If an error occurs writing the content
+		 */
 		void configure(Element element) throws IOException;
 	}
 
+	/**
+	 * @param writer The writer to populate with XML
+	 * @return The document to use to write XML data
+	 * @throws IOException If an exception occurs initializing the XML document
+	 */
 	public static Document createDocument(Writer writer) throws IOException {
 		return new Document(writer);
 	}
 
+	/** A {@link Document} or an {@link Element} */
 	public static abstract class XmlComponent {
 		boolean isNewLine;
 
@@ -26,6 +39,7 @@ public class XmlSerialWriter {
 		abstract void closeHeader() throws IOException;
 		abstract void indent() throws IOException;
 
+		/** @return -1 for a document, 0 for the root element, etc. */
 		public abstract int getDepth();
 
 		void preContent() throws IOException {
@@ -36,6 +50,11 @@ public class XmlSerialWriter {
 			indent();
 		}
 
+		/**
+		 * @param comment The text of the comment to write
+		 * @return This component
+		 * @throws IOException If an exception occurs writing the comment
+		 */
 		public XmlComponent writeComment(String comment) throws IOException {
 			preContent();
 			getDocument().getWriter().append("<!--");
@@ -58,6 +77,7 @@ public class XmlSerialWriter {
 		}
 	}
 
+	/** An XML document */
 	public static class Document extends XmlComponent {
 		private final Writer theWriter;
 		private Stage theStage;
@@ -77,19 +97,29 @@ public class XmlSerialWriter {
 			init();
 		}
 
+		/** @return The indent String that will be used to indent children in this document */
 		public String getIndent() {
 			return theIndent;
 		}
 
+		/**
+		 * @param indent The indent String that will be used to indent children in this document
+		 * @return This document
+		 */
 		public Document setIndent(String indent) {
 			theIndent = indent;
 			return this;
 		}
 
+		/** @return Whether this document will insert a newline character between elements */
 		public boolean isContentOnSeparateLines() {
 			return isContentOnSeparateLines;
 		}
 
+		/**
+		 * @param contentOnSeparateLines Whether this document will insert a newline character between elements
+		 * @return This document
+		 */
 		public Document setContentOnSeparateLines(boolean contentOnSeparateLines) {
 			isContentOnSeparateLines = contentOnSeparateLines;
 			return this;
@@ -117,6 +147,11 @@ public class XmlSerialWriter {
 			theWriter.append("<?xml");
 		}
 
+		/**
+		 * @param version The version string to write for this document
+		 * @return This document
+		 * @throws IOException If an exception occurs writing the data
+		 */
 		public Document setVersion(String version) throws IOException {
 			if (theStage != Stage.HEADER)
 				throw new IllegalStateException("Cannot write version except in the header before any content");
@@ -131,6 +166,11 @@ public class XmlSerialWriter {
 			return this;
 		}
 
+		/**
+		 * @param encoding The encoding string to write for this document
+		 * @return This document
+		 * @throws IOException If an exception occurs writing the data
+		 */
 		public Document setEncoding(String encoding) throws IOException {
 			if (theStage != Stage.HEADER)
 				throw new IllegalStateException("Cannot write encoding except in the header before any content");
@@ -158,6 +198,11 @@ public class XmlSerialWriter {
 			theStage = Stage.POST_HEADER;
 		}
 
+		/**
+		 * @param whitespace The whitespace string to write
+		 * @return This document
+		 * @throws IOException If an exception occurs writing the data
+		 */
 		public Document writeWhitespace(String whitespace) throws IOException {
 			for (int c = 0; c < whitespace.length(); c++)
 				if (!Character.isWhitespace(whitespace.charAt(c)))
@@ -175,6 +220,12 @@ public class XmlSerialWriter {
 			return this;
 		}
 
+		/**
+		 * @param rootElementName The name for the root element of this document
+		 * @param body The code to configure the root element
+		 * @return This document
+		 * @throws IOException If an exception occurs writing the data
+		 */
 		public Document writeRoot(String rootElementName, XmlChild body) throws IOException {
 			if (theStage == Stage.POST_CONTENT)
 				throw new IllegalStateException("Root element has already been written");
@@ -187,6 +238,7 @@ public class XmlSerialWriter {
 		}
 	}
 
+	/** An XML element */
 	public static class Element extends XmlComponent {
 		private final Document theDocument;
 		private final String theElementName;
@@ -200,6 +252,7 @@ public class XmlSerialWriter {
 			theDocument = doc;
 			theElementName = elementName;
 			theDepth = depth;
+			isEmpty = true;
 
 			init();
 		}
@@ -242,15 +295,28 @@ public class XmlSerialWriter {
 			return this;
 		}
 
+		/**
+		 * @param attribute The name of the attribute to write
+		 * @param value The value to write for the attribute
+		 * @return This element
+		 * @throws IOException If an exception occurs writing the data
+		 */
 		public Element att(String attribute, String value) throws IOException {
 			return addAttribute(attribute, value);
 		}
 
+		/**
+		 * @param attribute The name of the attribute to write
+		 * @param value The value to write for the attribute
+		 * @return This element
+		 * @throws IOException If an exception occurs writing the data
+		 */
 		public Element addAttribute(String attribute, String value) throws IOException {
 			if (isClosed)
 				throw new IllegalStateException("This element has already been closed");
 			if (isHeaderClosed)
 				throw new IllegalStateException("This element's header has already been closed to allow for content");
+			theDocument.getWriter().write(' ');
 			writeXmlContent(theDocument.getWriter(), attribute, XmlContentType.ATTRIBUTE_NAME);
 			theDocument.getWriter().write("=\"");
 			writeXmlContent(theDocument.getWriter(), value, XmlContentType.ATTRIBUTE_VALUE);
@@ -258,6 +324,12 @@ public class XmlSerialWriter {
 			return this;
 		}
 
+		/**
+		 * @param childName The name for the child element
+		 * @param onChild The code to configure the child element
+		 * @return This element
+		 * @throws IOException If an exception occurs writing the data
+		 */
 		public Element child(String childName, XmlChild onChild) throws IOException {
 			return addChild(childName, onChild);
 		}
@@ -270,6 +342,11 @@ public class XmlSerialWriter {
 			return this;
 		}
 
+		/**
+		 * @param content Text content for this element
+		 * @return This element
+		 * @throws IOException If an exception occurs writing the data
+		 */
 		public Element addContent(String content) throws IOException {
 			if (isClosed)
 				throw new IllegalStateException("This element has already been closed");
@@ -278,6 +355,11 @@ public class XmlSerialWriter {
 			return this;
 		}
 
+		/**
+		 * Specifies that this element should not be self-closing (e.g. &lt;element attr="attrValue" /&gt;)
+		 * 
+		 * @return This element
+		 */
 		public Element nonEmpty() {
 			if (isClosed)
 				throw new IllegalStateException("This element has already been closed");
@@ -287,7 +369,7 @@ public class XmlSerialWriter {
 
 		void close() throws IOException {
 			if (isEmpty) {
-				theDocument.getWriter().write("/>");
+				theDocument.getWriter().write(" />");
 				isHeaderClosed = true;
 			} else {
 				preContent();
@@ -362,6 +444,8 @@ public class XmlSerialWriter {
 					start = c;
 				}
 			}
+			if (start < content.length())
+				writer.write(content, start, content.length());
 			break;
 		case COMMENT:
 			boolean wasDash = false;
@@ -373,6 +457,7 @@ public class XmlSerialWriter {
 				} else if (wasDash)
 					wasDash = false;
 			}
+			writer.write(content);
 			break;
 		}
 	}
