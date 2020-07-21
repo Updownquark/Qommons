@@ -17,6 +17,8 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 
 import org.qommons.collect.BetterList;
+import org.qommons.ex.ExFunction;
+import org.qommons.ex.ExPredicate;
 
 /** Even more general utilities that I can't think where else to put */
 public class QommonsUtils {
@@ -811,6 +813,31 @@ public class QommonsUtils {
 	 */
 	public static <T, V> BetterList<V> filterMap(Collection<? extends T> values, Predicate<? super T> filter,
 		Function<? super T, ? extends V> map) {
+		if (values.isEmpty())
+			return BetterList.empty();
+		ArrayList<V> list = new ArrayList<>(values.size());
+		for (T value : values) {
+			if (filter == null || filter.test(value))
+				list.add(map == null ? (V) value : map.apply(value));
+		}
+		list.trimToSize();
+		return BetterList.of(list);
+	}
+
+	/**
+	 * @param <T> The type of the source values
+	 * @param <V> The type of the mapped values
+	 * @param <FE> The type of exception that may be thrown by the filter
+	 * @param <ME> The type of exception that may be thrown by the map
+	 * @param values The values to map
+	 * @param filter The source value filter, may be null to use all source values
+	 * @param map The mapping function, may be null if source and value types are the same
+	 * @return An unmodifiable BetterList containing all source values passing the given filter, mapped with the given map
+	 * @throws FE If the filter throws an exception
+	 * @throws ME If the map throws an exception
+	 */
+	public static <T, V, FE extends Throwable, ME extends Throwable> BetterList<V> filterMapE(Collection<? extends T> values,
+		ExPredicate<? super T, ? extends FE> filter, ExFunction<? super T, ? extends V, ? extends ME> map) throws FE, ME {
 		if (values.isEmpty())
 			return BetterList.empty();
 		ArrayList<V> list = new ArrayList<>(values.size());
