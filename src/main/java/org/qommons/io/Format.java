@@ -1,9 +1,20 @@
 package org.qommons.io;
 
-import java.text.*;
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
+import java.text.ParseException;
+import java.text.ParsePosition;
+import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.NavigableMap;
+import java.util.TimeZone;
+import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -841,7 +852,7 @@ public interface Format<T> {
 				digits = theSignificantDigits - 1;
 			} else
 				digits = theSignificantDigits - exp - 1;
-			DecimalFormat format = getFormat(digits);
+			DecimalFormat format = getFormat(Math.max(0, digits));
 			text.append(format.format(value));
 			if (expNotation)
 				text.append('E').append(exp);
