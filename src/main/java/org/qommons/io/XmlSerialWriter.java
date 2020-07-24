@@ -32,6 +32,7 @@ public class XmlSerialWriter {
 	/** A {@link Document} or an {@link Element} */
 	public static abstract class XmlComponent {
 		boolean isNewLine;
+		boolean isBusy;
 
 		abstract Document getDocument();
 
@@ -43,11 +44,18 @@ public class XmlSerialWriter {
 		public abstract int getDepth();
 
 		void preContent() throws IOException {
+			assertWritable();
 			closeHeader();
 			if (getDocument().isContentOnSeparateLines() && !isNewLine)
 				getDocument().getWriter().write('\n');
 			isNewLine = false;
 			indent();
+		}
+
+		/** Makes sure it is currently ok to write content to this component */
+		protected void assertWritable() {
+			if (isBusy)
+				throw new IllegalStateException("Cannot attempt to write another child while one is being configured");
 		}
 
 		/**
@@ -56,6 +64,7 @@ public class XmlSerialWriter {
 		 * @throws IOException If an exception occurs writing the comment
 		 */
 		public XmlComponent writeComment(String comment) throws IOException {
+			assertWritable();
 			preContent();
 			getDocument().getWriter().append("<!--");
 			writeXmlContent(getDocument().getWriter(), comment, XmlContentType.COMMENT);
@@ -64,10 +73,14 @@ public class XmlSerialWriter {
 		}
 
 		XmlComponent addChild(String elementName, XmlChild onChild) throws IOException {
+			assertWritable();
 			preContent();
 			Element element = new Element(getDocument(), elementName, getDepth() + 1);
-			if (onChild != null)
+			if (onChild != null) {
+				isBusy = true;
 				onChild.configure(element);
+				isBusy = false;
+			}
 			element.close();
 			if (getDocument().isContentOnSeparateLines()) {
 				getDocument().getWriter().write('\n');
@@ -204,6 +217,7 @@ public class XmlSerialWriter {
 		 * @throws IOException If an exception occurs writing the data
 		 */
 		public Document writeWhitespace(String whitespace) throws IOException {
+			assertWritable();
 			for (int c = 0; c < whitespace.length(); c++)
 				if (!Character.isWhitespace(whitespace.charAt(c)))
 					throw new IllegalArgumentException("Character " + whitespace.charAt(c) + " (\\u" + //
@@ -312,6 +326,7 @@ public class XmlSerialWriter {
 		 * @throws IOException If an exception occurs writing the data
 		 */
 		public Element addAttribute(String attribute, String value) throws IOException {
+			assertWritable();
 			if (isClosed)
 				throw new IllegalStateException("This element has already been closed");
 			if (isHeaderClosed)
