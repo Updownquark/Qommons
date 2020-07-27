@@ -4,6 +4,8 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.TimeZone;
 import java.util.function.Function;
@@ -374,6 +376,109 @@ public interface SpinnerFormat<T> extends Format<T> {
 				return new BiTuple<>(max, format(max));
 			else
 				return theWrapped.adjust(value, formatted, cursor, up);
+		}
+	}
+
+	public static class ListFormat<T> implements SpinnerFormat<List<T>> {
+		private final SpinnerFormat<T> theFormat;
+		private final String theDelimiter;
+		private final String postDelimit;
+
+		public ListFormat(SpinnerFormat<T> format, String delimiter, String postDelimit) {
+			theFormat = format;
+			theDelimiter = delimiter;
+			this.postDelimit = postDelimit;
+		}
+
+		@Override
+		public void append(StringBuilder text, List<T> value) {
+			boolean first = true;
+			for (T v : value) {
+				if (first)
+					first = false;
+				else {
+					text.append(theDelimiter);
+					if (postDelimit != null)
+						text.append(postDelimit);
+				}
+				theFormat.append(text, v);
+			}
+		}
+
+		@Override
+		public List<T> parse(CharSequence text) throws ParseException {
+			int start = 0;
+			int delimitIdx = 0;
+			List<T> list = new ArrayList<>();
+			for (int i = 0; i < text.length(); i++) {
+				if (text.charAt(i) == theDelimiter.charAt(delimitIdx)) {
+					delimitIdx++;
+					if (delimitIdx == theDelimiter.length()) {
+						delimitIdx = 0;
+						T value = theFormat.parse(text.subSequence(start, i + 1 - theDelimiter.length()));
+						list.add(value);
+						while (i < text.length() - 1 && Character.isWhitespace(text.charAt(i + 1)))
+							i++;
+						start = i + 1;
+					}
+				}
+			}
+			if (start < text.length()) {
+				T value = theFormat.parse(text.subSequence(start, text.length()));
+				list.add(value);
+			}
+			return list;
+		}
+
+		@Override
+		public boolean supportsAdjustment(boolean withContext) {
+			return withContext;
+		}
+
+		@Override
+		public BiTuple<List<T>, String> adjust(List<T> value, String formatted, int cursor, boolean up) {
+			int start = 0;
+			int delimitIdx = 0;
+			int index = 0;
+			int i;
+			for (i = 0; i < formatted.length(); i++) {
+				if (formatted.charAt(i) == theDelimiter.charAt(delimitIdx)) {
+					delimitIdx++;
+					if (delimitIdx == theDelimiter.length()) {
+						if (i > cursor) {
+							if (i - cursor < theDelimiter.length())
+								return null; // Adjustment on the delimiter
+							BiTuple<T, String> adjusted = theFormat.adjust(//
+								value.get(index), formatted.substring(start, i - theDelimiter.length()), cursor - start, up);
+							if (adjusted == null)
+								return null;
+							List<T> newValue = new ArrayList<>(value.size());
+							newValue.addAll(value);
+							newValue.set(i, adjusted.getValue1());
+							String newFormatted = formatted.substring(0, start) + adjusted.getValue2()
+								+ formatted.substring(i - theDelimiter.length());
+							return new BiTuple<>(newValue, newFormatted);
+						}
+						index++;
+						delimitIdx = 0;
+						while (i < formatted.length() - 1 && Character.isWhitespace(formatted.charAt(i + 1)))
+							i++;
+						start = i + 1;
+					}
+				}
+			}
+			if (delimitIdx > 0) {
+				return null;
+			}
+			BiTuple<T, String> adjusted = theFormat.adjust(//
+				value.get(index), formatted.substring(start, i - theDelimiter.length()), cursor - start, up);
+			if (adjusted == null)
+				return null;
+			List<T> newValue = new ArrayList<>(value.size());
+			newValue.addAll(value);
+			newValue.set(i, adjusted.getValue1());
+			String newFormatted = formatted.substring(0, start) + adjusted.getValue2() + formatted.substring(i - theDelimiter.length());
+			return new BiTuple<>(newValue, newFormatted);
 		}
 	}
 }
