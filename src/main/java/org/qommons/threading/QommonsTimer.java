@@ -451,7 +451,8 @@ public class QommonsTimer {
 	/**
 	 * @param clock The clock implementation to use for scheduling
 	 * @param mainRunner Runs the scheduler for this timer
-	 * @param accessoryRunner Runs offloaded tasks for this timer (see {@link TaskHandle#onAnyThread()})
+	 * @param accessoryRunner Runs offloaded tasks for this timer (see {@link TaskHandle#onAnyThread()}). The return boolean should be true
+	 *        if the task was queued, or false if it wasn't (e.g. due to queue size)
 	 */
 	public QommonsTimer(TimerClock clock, Consumer<Runnable> mainRunner, Function<Runnable, Boolean> accessoryRunner) {
 		theClock = clock;

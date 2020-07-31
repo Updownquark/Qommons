@@ -56,6 +56,8 @@ public class ElasticExecutor<T> {
 	private final AtomicInteger theActiveThreads;
 	private volatile ConcurrentLinkedQueue<TaskExecutor<? super T>> theCachedWorkers;
 
+	private final Object theLock;
+
 	/**
 	 * Creates an executor
 	 * 
@@ -76,6 +78,8 @@ public class ElasticExecutor<T> {
 		theRunner = new DefaultRunner();
 		theThreadCount = new AtomicInteger();
 		theActiveThreads = new AtomicInteger();
+
+		theLock = new Object();
 	}
 
 	/**
@@ -244,6 +248,10 @@ public class ElasticExecutor<T> {
 			return false;
 		}
 		theQueue.add(task);
+		synchronized (theLock) {
+			theLock.notify();
+		}
+		newQueueSize = theQueueSize.get();
 		if (newQueueSize == 1) {
 			if (theThreadCount.incrementAndGet() == 1) {// Start the first thread
 				if (!startThread(1))
@@ -252,11 +260,10 @@ public class ElasticExecutor<T> {
 				theThreadCount.decrementAndGet();
 		} else if (newQueueSize > thePreferredQueueSize && getActiveThreads() == getThreadCount()) {
 			int newId = theThreadCount.incrementAndGet();
-			if (newId <= theMaxThreadCount) {
+			if (newId <= theMaxThreadCount)
 				startThread(newId);
-			} else {
+			else
 				theThreadCount.decrementAndGet();
-			}
 		}
 		return true;
 	}
@@ -372,7 +379,7 @@ public class ElasticExecutor<T> {
 				if (task != null) {
 					theActiveThreads.getAndIncrement();
 					do {
-						if (theQueueSize.decrementAndGet() >= thePreferredQueueSize) {
+						if (theQueueSize.decrementAndGet() > thePreferredQueueSize) {
 							// Think about allocating a new writer
 							int newId = theThreadCount.incrementAndGet();
 							if (newId <= theMaxThreadCount) {
@@ -392,9 +399,11 @@ public class ElasticExecutor<T> {
 					} while (task != null);
 					theActiveThreads.decrementAndGet();
 				} else {
-					try {
-						Thread.sleep(5);
-					} catch (InterruptedException e) {}
+					synchronized (theLock) {
+						try {
+							theLock.wait(theUnusedThreadLifetime);
+						} catch (InterruptedException e) {}
+					}
 					now = System.currentTimeMillis();
 					task = theQueue.poll();
 				}
