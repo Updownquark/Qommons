@@ -782,7 +782,7 @@ public interface Format<T> {
 				exp = theReversePrefixes.get(prefix.toString().toLowerCase());
 			if (exp == null)
 				throw new ParseException("Unrecognized prefix '" + prefix + "'", i + 1);
-			while (i >= 0 && Character.isDigit(text.charAt(i)))
+			while (i >= 0 && !Character.isDigit(text.charAt(i)))
 				i--;
 			if (i < 0)
 				throw new ParseException("No value given", 0);
