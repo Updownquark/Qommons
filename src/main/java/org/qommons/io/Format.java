@@ -843,7 +843,7 @@ public interface Format<T> {
 					printInt = false;
 			}
 
-			boolean expNotation = !printInt && (exp < theMinNormalExp || exp > theMaxNormalExp);
+			boolean expNotation = !printInt && (exp < -theMinNormalExp || exp > theMaxNormalExp);
 			int digits;
 			if (printInt)
 				digits = 0;
