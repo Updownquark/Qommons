@@ -23,7 +23,11 @@ public class QommonsTimer {
 	private static final QommonsTimer COMMON_INSTANCE = new QommonsTimer(new SystemClock(), r -> {
 		Thread t = new Thread(r, "Qommon Timer");
 		t.start();
-	}, new ElasticExecutor<>("Qommon Timer Offloader", () -> Runnable::run).setPreferredQueueSize(0).setUsedThreadLifetime(2000)::execute);
+	}, new ElasticExecutor<>("Qommon Timer Offloader", () -> Runnable::run)//
+		.setPreferredQueueSize(0)//
+		.setUsedThreadLifetime(2000)//
+		.setMaxQueueSize(1_000_000_000)// No offload rejection if we can help it
+	::execute);
 
 	/** @return A common timer that uses the system clock */
 	public static QommonsTimer getCommonInstance() {
@@ -104,6 +108,7 @@ public class QommonsTimer {
 		private volatile boolean isWaiting;
 		private volatile long theExecCount;
 		private volatile TaskThreading theThreading;
+		private volatile boolean didOffloadFail;
 
 		TaskHandle(Runnable task, Duration frequency, boolean consistent) {
 			theTask = task;
@@ -353,7 +358,10 @@ public class QommonsTimer {
 		boolean shouldExecute(Instant now, Instant[] minNextRun) {
 			if (!isActive.get())
 				return false;
-			else if (isWaiting) {
+			else if (didOffloadFail) {
+				didOffloadFail = false;
+				return true;
+			} else if (isWaiting) {
 				minNextRun[0] = now.plus(Duration.ofMillis(10));
 				return false;
 			}
@@ -390,6 +398,10 @@ public class QommonsTimer {
 			} else if (terminate)
 				setActive(false);
 			return execute;
+		}
+
+		void offloadFailed() {
+			didOffloadFail = true;
 		}
 
 		void execute() {
@@ -574,6 +586,8 @@ public class QommonsTimer {
 	}
 
 	/**
+	 * Executes a task one time (unless the task handle is modified to execute more) after an optional delay
+	 * 
 	 * @param task The task to execute
 	 * @param delay The delay to wait before executing the task (may be null to execute immediately)
 	 * @return The handle for the task
@@ -585,6 +599,19 @@ public class QommonsTimer {
 		else
 			handle.runImmediately();
 		return handle;
+	}
+
+	/**
+	 * Executes a task one time in a different thread as soon as possible
+	 * 
+	 * @param task The task to execute
+	 */
+	public void offload(Runnable task) {
+		while (!theAccessoryRunner.apply(task)) {
+			try {
+				Thread.sleep(5);
+			} catch (InterruptedException e) {}
+		}
 	}
 
 	Runnable schedule(TaskHandle task) {
@@ -627,8 +654,10 @@ public class QommonsTimer {
 						EventQueue.invokeLater(handle::execute);
 						break;
 					case Any:
-						if (!theAccessoryRunner.apply(handle::execute))
+						if (!theAccessoryRunner.apply(handle::execute)) {
+							handle.offloadFailed();
 							minNextRun[0] = Instant.MIN;
+						}
 						break;
 					}
 				}
