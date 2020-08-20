@@ -1,5 +1,7 @@
 package org.qommons;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
@@ -10,11 +12,14 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.qommons.collect.BetterList;
 import org.qommons.ex.ExFunction;
@@ -873,6 +878,71 @@ public class QommonsUtils {
 	 */
 	public static int compareNumberTolerant(String s1, String s2, boolean ignoreCase, boolean onlyZeroIfEqual) {
 		return StringUtils.compareNumberTolerant(s1, s2, ignoreCase, onlyZeroIfEqual);
+	}
+
+	private static final Method PATTERN_NAMED_GROUPS_GETTER;
+	static {
+		Method getter;
+		try {
+			getter = Pattern.class.getDeclaredMethod("namedGroups");
+			getter.setAccessible(true);
+		} catch (NoSuchMethodException | SecurityException e) {
+			System.err.println("Could not get or access Pattern named group getter");
+			e.printStackTrace();
+			getter = null;
+		}
+		PATTERN_NAMED_GROUPS_GETTER = getter;
+	}
+
+	/**
+	 * @param pattern The pattern
+	 * @return A map of the names of each named capture group in the pattern to the group index in the matcher
+	 */
+	public static Map<String, Integer> getCaptureGroupNames(Pattern pattern) {
+		if (PATTERN_NAMED_GROUPS_GETTER == null) {
+			System.err.println("Could not get or access Pattern named group getter");
+			return Collections.emptyMap();
+		}
+		try {
+			return (Map<String, Integer>) PATTERN_NAMED_GROUPS_GETTER.invoke(pattern);
+		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+			System.err.println("Could not invoke Pattern named group getter");
+			return Collections.emptyMap();
+		}
+	}
+
+	/**
+	 * @param matcher The matcher
+	 * @return A map of capture group name to capture group value for each named capture group in the macher's pattern
+	 */
+	public static Map<String, NamedGroupCapture> getCaptureGroups(Matcher matcher) {
+		Map<String, Integer> captureGroupNames = getCaptureGroupNames(matcher.pattern());
+		if (captureGroupNames.isEmpty())
+			return Collections.emptyMap();
+		Map<String, NamedGroupCapture> captureGroups = new LinkedHashMap<>();
+		for (Map.Entry<String, Integer> cg : captureGroupNames.entrySet()) {
+			int start = matcher.start(cg.getValue());
+			if (start >= 0)
+				captureGroups.put(cg.getKey(), new NamedGroupCapture(start, matcher.group(cg.getValue())));
+		}
+		return captureGroups;
+	}
+
+	/** Represents the capture of a named group in a pattern-matched text sequence */
+	public static class NamedGroupCapture {
+		/** The start of the captured sequence within the whole */
+		public final int start;
+		/** The matched group sequence */
+		public final String value;
+
+		/**
+		 * @param start The start of the captured sequence within the whole
+		 * @param value The matched group sequence
+		 */
+		public NamedGroupCapture(int start, String value) {
+			this.start = start;
+			this.value = value;
+		}
 	}
 
 	/**
