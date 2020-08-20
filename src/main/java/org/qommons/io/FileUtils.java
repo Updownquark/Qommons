@@ -6,7 +6,6 @@ import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -16,6 +15,7 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -26,139 +26,12 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import org.qommons.ArrayUtils;
-import org.qommons.Named;
 import org.qommons.ex.ExSupplier;
+import org.qommons.io.BetterFile.FileBooleanAttribute;
 
 /** Utilities to use on {@link File}s or similar structures */
 public class FileUtils {
 	private FileUtils() {}
-
-	/** A structure representing a {@link File file}, directory, or some other such hierarchical data storage structure */
-	public interface FileDataSource extends Named {
-		/** @return The path from the file root to this file */
-		default String getPath() {
-			LinkedList<String> path = new LinkedList<>();
-			FileDataSource file = this;
-			while (file != null) {
-				path.addFirst(file.getName());
-				file = file.getParent();
-			}
-
-			StringBuilder str = new StringBuilder();
-			for (String p : path)
-				str.append(p).append('/');
-			str.deleteCharAt(str.length() - 1);
-			return str.toString();
-		}
-
-		/** @return This file's parent */
-		FileDataSource getParent();
-
-		/** @return Whether this file exists in the data source */
-		boolean exists();
-
-		/** @return Whether this file represents a symbolic link to another location in the data source */
-		boolean isSymbolicLink();
-
-		/** @return The time (millis since epoch) at which this file is marked as having last been modified */
-		long getLastModified();
-
-		/** @return Whether this file represents a directory potentially containing other file structures */
-		boolean isDirectory();
-
-		/** @return The files contained in this directory, or null if this is not a directory */
-		FileDataSource[] listFiles();
-
-		/** @return The number of bytes in this file, or 0 if it is not a valid, readable file */
-		long length();
-
-		/**
-		 * @return A stream to read this file's content
-		 * @throws IOException If the content could not be accessed
-		 */
-		InputStream read() throws IOException;
-
-		/**
-		 * @param path The path of the resource to get relative to this resource
-		 * @return A structure representing the given resource
-		 */
-		FileDataSource at(String path);
-
-		/**
-		 * @param childFilter The filter to apply
-		 * @return A file identical to this file but whose {@link #listFiles() file list} will exclude files not passing the given filter
-		 */
-		default FileDataSource filterContent(Predicate<FileDataSource> childFilter) {
-			return new FilteredDataSource(this, childFilter);
-		}
-	}
-
-	/** A structure representing a {@link FileDataSource} whose content can be modified */
-	public interface MutableFileDataSource extends FileDataSource {
-		@Override
-		MutableFileDataSource getParent();
-
-		@Override
-		MutableFileDataSource at(String path);
-
-		@Override
-		MutableFileDataSource[] listFiles();
-
-		/**
-		 * Attempts to delete the file and all its sub-content, if any
-		 * 
-		 * @param results The results to update with the result of this operation
-		 * @return Whether the deletion succeeded
-		 */
-		boolean delete(DirectorySyncResults results);
-
-		/**
-		 * Attempts to create this resource as a directory (and any necessary parent directories)
-		 * 
-		 * @return This resource
-		 * @throws IOException If the directory could not be created
-		 */
-		MutableFileDataSource createDirectory() throws IOException;
-
-		/**
-		 * @return A stream to write data into this resource
-		 * @throws IOException If the data could not be accessed for write
-		 */
-		OutputStream write() throws IOException;
-
-		/**
-		 * @param lastModified The time (millis since epoch) to mark this file as having been modified
-		 * @return Whether the mark succeeded
-		 */
-		boolean setLastModified(long lastModified);
-	}
-
-	/**
-	 * @param file The file to represent
-	 * @return A {@link MutableFileDataSource} representing the file on the file system
-	 */
-	public static MutableFileDataSource dataSource(File file) {
-		if (file == null)
-			return null;
-		else if (file instanceof SyntheticFile && ((SyntheticFile<?>) file).getFile() instanceof MutableFileDataSource)
-			return (MutableFileDataSource) ((SyntheticFile<?>) file).getFile();
-		else
-			return new DefaultFileDataSource(null, file);
-	}
-
-	/**
-	 * @param <F> The {@link FileDataSource} sub-type of the file
-	 * @param file The resource to represent as a {@link File}
-	 * @return The {@link File} representing the resource
-	 */
-	public static <F extends FileDataSource> File asFile(F file) {
-		if (file == null)
-			return null;
-		else if (file instanceof DefaultFileDataSource)
-			return ((DefaultFileDataSource) file).getRoot();
-		else
-			return new SyntheticFile<>(file);
-	}
 
 	/**
 	 * @param path The path for the resource
@@ -166,8 +39,26 @@ public class FileUtils {
 	 * @return A resource representing a synthetic ancestor directory with the given data source as its only content at the given relative
 	 *         path
 	 */
-	public static FileDataSource asSubFile(String path, FileDataSource dataSource) {
+	public static BetterFile asSubFile(String path, BetterFile dataSource) {
 		return new SubFile(dataSource, path.split("[\\\\/]+"));
+	}
+
+	/**
+	 * @param file The resource to represent as a {@link File}
+	 * @return The {@link File} representing the resource
+	 */
+	public static File asFile(BetterFile file) {
+		if (file == null)
+			return null;
+		else
+			return new SyntheticFile(file);
+	}
+
+	public static BetterFile better(File file) {
+		if (file instanceof SyntheticFile)
+			return ((SyntheticFile) file).getFile();
+		else
+			return NativeFileSource.of(file);
 	}
 
 	/**
@@ -179,9 +70,9 @@ public class FileUtils {
 	 * @param lastModified The last-modified supplier for the resource
 	 * @return The synthetic resource
 	 */
-	public static FileDataSource dataSource(String name, ExSupplier<InputStream, IOException> data, LongSupplier size,
+	public static BetterFile syntheticFile(String name, ExSupplier<InputStream, IOException> data, LongSupplier size,
 		LongSupplier lastModified) {
-		return new SingleFileSource(name, data, size, lastModified);
+		return new SyntheticBetterFile(name, data, size, lastModified);
 	}
 
 	/**
@@ -190,7 +81,7 @@ public class FileUtils {
 	 * @return A directory resource whose content is the union of all the content of the given sources.
 	 * @see #combine(String, Iterable)
 	 */
-	public static FileDataSource combine(String name, FileDataSource... sources) {
+	public static BetterFile combine(String name, BetterFile... sources) {
 		return combine(name, Arrays.asList(sources));
 	}
 
@@ -200,7 +91,7 @@ public class FileUtils {
 	 * @return A directory resource whose content is the union of all the content of the given sources. If multiple sources contain the same
 	 *         resource (by name), the first source in the list containing the resource will be considered the authority for it.
 	 */
-	public static FileDataSource combine(String name, Iterable<? extends FileDataSource> sources) {
+	public static BetterFile combine(String name, Iterable<? extends BetterFile> sources) {
 		return new CombinedFileDataSource(name, sources);
 	}
 
@@ -215,15 +106,15 @@ public class FileUtils {
 	 * @param test The test to search for a pass
 	 * @return The file or directory resource in the given root that matches the given folder and test requirements
 	 */
-	public static FileDataSource find(FileDataSource file, boolean folder, Predicate<FileDataSource> test) {
+	public static BetterFile find(BetterFile file, boolean folder, Predicate<BetterFile> test) {
 		if (!file.exists()) {
 			return null;
 		} else if (file.isDirectory()) {
 			if (folder && test.test(file)) {
 				return file;
 			}
-			for (FileDataSource f : file.listFiles()) {
-				FileDataSource found = find(f, folder, test);
+			for (BetterFile f : file.listFiles()) {
+				BetterFile found = find(f, folder, test);
 				if (found != null) {
 					return found;
 				}
@@ -241,8 +132,8 @@ public class FileUtils {
 	 * @return The file or directory resource in the given root that matches the given folder and test requirements
 	 */
 	public static File find(File file, boolean folder, Predicate<File> test) {
-		FileDataSource found = find(dataSource(file), folder, f -> test.test(((DefaultFileDataSource) f).getRoot()));
-		return found == null ? null : ((DefaultFileDataSource) found).getRoot();
+		BetterFile found = find(NativeFileSource.of(file), folder, f -> test.test(asFile(f)));
+		return found == null ? null : asFile(found);
 	}
 
 	/**
@@ -312,7 +203,7 @@ public class FileUtils {
 		 * @return The action to perform on the destination resource
 		 * @throws IOException If the action could not be determined
 		 */
-		FileAction getAction(FileDataSource source, MutableFileDataSource dest) throws IOException;
+		FileAction getAction(BetterFile source, BetterFile dest) throws IOException;
 	}
 
 	/**
@@ -323,8 +214,8 @@ public class FileUtils {
 
 	/** An operation to synchronize resources between 2 file sources (typically directories) */
 	public static class FileSyncOperation {
-		private FileDataSource theSource;
-		private MutableFileDataSource theDest;
+		private BetterFile theSource;
+		private BetterFile theDest;
 		private FileSyncControl theControl;
 		private boolean isCaseSensitive;
 
@@ -336,7 +227,7 @@ public class FileUtils {
 		 * @param source The data source to synchronize information from (the authority)
 		 * @return This operation
 		 */
-		public FileSyncOperation from(FileDataSource source) {
+		public FileSyncOperation from(BetterFile source) {
 			theSource = source;
 			return this;
 		}
@@ -346,14 +237,14 @@ public class FileUtils {
 		 * @return This operation
 		 */
 		public FileSyncOperation from(File source) {
-			return from(dataSource(source));
+			return from(NativeFileSource.of(source));
 		}
 
 		/**
 		 * @param dest The data source to synchronize information into (the destination)
 		 * @return This operation
 		 */
-		public FileSyncOperation to(MutableFileDataSource dest) {
+		public FileSyncOperation to(BetterFile dest) {
 			theDest = dest;
 			return this;
 		}
@@ -363,7 +254,7 @@ public class FileUtils {
 		 * @return This operation
 		 */
 		public FileSyncOperation to(File dest) {
-			return to(dataSource(dest));
+			return to(NativeFileSource.of(dest));
 		}
 
 		/**
@@ -414,26 +305,27 @@ public class FileUtils {
 			return results;
 		}
 
-		private void sync(FileDataSource authority, MutableFileDataSource copy, byte[] buffer, DirectorySyncResults results,
+		private void sync(BetterFile authority, BetterFile copy, byte[] buffer, DirectorySyncResults results,
 			LinkedList<String> path) throws IOException {
 			path.add(authority.getName());
-			if (copy.exists() && copy.isSymbolicLink()) {//
+			if (copy.exists() && copy.get(FileBooleanAttribute.Symbolic)) {//
 			} else if (authority.isDirectory()) {
 				results.checked(true);
 				if (copy.exists() && !copy.isDirectory() && !copy.delete(results)) {
 					throw new IOException("Could not delete file " + printPath(path) + " to replace it with the directory from OneSAF");
 				}
 				try {
-					copy.createDirectory();
+					copy.create(true);
 				} catch (IOException e) {
 					throw new IOException("Could not create directory " + printPath(path), e);
 				}
-				FileDataSource[] authContents = authority.listFiles();
-				MutableFileDataSource[] copyContents = copy.listFiles();
-				new ArrayUtils.ArrayAdjuster<>(copyContents, authContents,
-					new ArrayUtils.DifferenceListenerE<MutableFileDataSource, FileDataSource, IOException>() {
+				List<? extends BetterFile> authContents = authority.listFiles();
+				List<? extends BetterFile> copyContents = copy.listFiles();
+				new ArrayUtils.ArrayAdjuster<>(copyContents.toArray(new BetterFile[copyContents.size()]), //
+					authContents.toArray(new BetterFile.FilteredFile[authContents.size()]), //
+					new ArrayUtils.DifferenceListenerE<BetterFile, BetterFile, IOException>() {
 						@Override
-						public boolean identity(MutableFileDataSource o1, FileDataSource o2) {
+						public boolean identity(BetterFile o1, BetterFile o2) {
 							if (isCaseSensitive)
 								return o1.getName().equals(o2.getName());
 							else
@@ -441,7 +333,7 @@ public class FileUtils {
 						}
 
 						@Override
-						public MutableFileDataSource added(FileDataSource o, int mIdx, int retIdx) throws IOException {
+						public BetterFile added(BetterFile o, int mIdx, int retIdx) throws IOException {
 							FileAction action = theControl == null ? FileAction.COPY : theControl.getAction(o, null);
 							switch (action) {
 							case IGNORE:
@@ -455,7 +347,7 @@ public class FileUtils {
 						}
 
 						@Override
-						public MutableFileDataSource removed(MutableFileDataSource o, int oIdx, int incMod, int retIdx) throws IOException {
+						public BetterFile removed(BetterFile o, int oIdx, int incMod, int retIdx) throws IOException {
 							FileAction action = theControl == null ? FileAction.DELETE : theControl.getAction(null, o);
 							switch (action) {
 							case IGNORE:
@@ -473,7 +365,7 @@ public class FileUtils {
 						}
 
 						@Override
-						public MutableFileDataSource set(MutableFileDataSource o1, int idx1, int incMod, FileDataSource o2, int idx2,
+						public BetterFile set(BetterFile o1, int idx1, int incMod, BetterFile o2, int idx2,
 							int retIdx) throws IOException {
 							FileAction action = theControl == null ? FileAction.COPY : theControl.getAction(o2, o1);
 							switch (action) {
@@ -702,130 +594,18 @@ public class FileUtils {
 		return file.delete();
 	}
 
-	/** Default {@link File}-based implementation of {@link MutableFileDataSource} */
-	public static class DefaultFileDataSource implements MutableFileDataSource {
-		private DefaultFileDataSource theParent;
-		private final File theRoot;
+	/** A {@link File} backed by a {@link BetterFile} */
+	public static class SyntheticFile extends File {
+		private final BetterFile theFile;
 
-		DefaultFileDataSource(DefaultFileDataSource parent, File root) {
-			theParent = parent;
-			theRoot = root;
-		}
-
-		/** @return The root file of this data structure */
-		public File getRoot() {
-			return theRoot;
-		}
-
-		@Override
-		public String getName() {
-			return theRoot.getName();
-		}
-
-		@Override
-		public DefaultFileDataSource getParent() {
-			if (theParent == null)
-				theParent = new DefaultFileDataSource(null, theRoot.getParentFile());
-			return theParent;
-		}
-
-		@Override
-		public boolean exists() {
-			return theRoot.exists();
-		}
-
-		@Override
-		public boolean isSymbolicLink() {
-			return Files.isSymbolicLink(theRoot.toPath());
-		}
-
-		@Override
-		public long getLastModified() {
-			return theRoot.lastModified();
-		}
-
-		@Override
-		public boolean setLastModified(long lastModified) {
-			return theRoot.setLastModified(lastModified);
-		}
-
-		@Override
-		public boolean isDirectory() {
-			return theRoot.isDirectory();
-		}
-
-		@Override
-		public DefaultFileDataSource[] listFiles() {
-			File[] files = theRoot.listFiles();
-			if (files == null)
-				return null;
-			DefaultFileDataSource[] children = new DefaultFileDataSource[files.length];
-			for (int i = 0; i < files.length; i++)
-				children[i] = new DefaultFileDataSource(this, files[i]);
-			return children;
-		}
-
-		@Override
-		public long length() {
-			return theRoot.length();
-		}
-
-		@Override
-		public InputStream read() throws IOException {
-			return new FileInputStream(theRoot);
-		}
-
-		@Override
-		public DefaultFileDataSource at(String path) {
-			boolean multiLevel = path.indexOf('/') >= 0 || path.indexOf('\\') >= 0;
-			return new DefaultFileDataSource(multiLevel ? null : this, new File(theRoot, path));
-		}
-
-		@Override
-		public boolean delete(DirectorySyncResults results) {
-			return FileUtils.delete(theRoot, results);
-		}
-
-		@Override
-		public DefaultFileDataSource createDirectory() throws IOException {
-			if (theRoot.exists()) {
-				if (theRoot.isDirectory())
-					return this;
-				else
-					throw new IOException(theRoot.getPath() + " is a file, not a directory");
-			} else if (theRoot.mkdirs())
-				return this;
-			else
-				throw new IOException("Could not create directory " + theRoot.getPath());
-		}
-
-		@Override
-		public OutputStream write() throws IOException {
-			return new FileOutputStream(theRoot);
-		}
-
-		@Override
-		public String toString() {
-			return theRoot.getPath();
-		}
-	}
-
-	/**
-	 * A {@link File} backed by a {@link FileDataSource}
-	 * 
-	 * @param <F> The {@link FileDataSource} sub-type
-	 */
-	public static class SyntheticFile<F extends FileDataSource> extends File {
-		private final F theFile;
-
-		/** @param file The {@link FileDataSource} to back this file */
-		public SyntheticFile(F file) {
+		/** @param file The {@link BetterFile} to back this file */
+		public SyntheticFile(BetterFile file) {
 			super(file.getPath());
 			theFile = file;
 		}
 
-		/** @return The {@link FileDataSource} backing this file */
-		public F getFile() {
+		/** @return The {@link BetterFile} backing this file */
+		public BetterFile getFile() {
 			return theFile;
 		}
 
@@ -843,6 +623,16 @@ public class FileUtils {
 		@Override
 		public File getParentFile() {
 			return asFile(theFile.getParent());
+		}
+
+		@Override
+		public String getCanonicalPath() {
+			return getPath();
+		}
+
+		@Override
+		public File getCanonicalFile() {
+			return this;
 		}
 
 		@Override
@@ -867,12 +657,42 @@ public class FileUtils {
 
 		@Override
 		public boolean isHidden() {
-			return false;
+			return theFile.get(FileBooleanAttribute.Hidden);
 		}
 
 		@Override
-		public boolean isAbsolute() {
-			return true;
+		public boolean canRead() {
+			return theFile.get(FileBooleanAttribute.Readable);
+		}
+
+		@Override
+		public boolean canWrite() {
+			return theFile.get(FileBooleanAttribute.Writable);
+		}
+
+		@Override
+		public boolean setReadOnly() {
+			return setWritable(false);
+		}
+
+		@Override
+		public boolean setWritable(boolean writable, boolean ownerOnly) {
+			return theFile.set(FileBooleanAttribute.Writable, writable, ownerOnly);
+		}
+
+		@Override
+		public boolean setWritable(boolean writable) {
+			return theFile.set(FileBooleanAttribute.Writable, writable, false);
+		}
+
+		@Override
+		public boolean setReadable(boolean readable, boolean ownerOnly) {
+			return theFile.set(FileBooleanAttribute.Readable, readable, ownerOnly);
+		}
+
+		@Override
+		public boolean setReadable(boolean readable) {
+			return theFile.set(FileBooleanAttribute.Readable, readable, false);
 		}
 
 		@Override
@@ -887,7 +707,7 @@ public class FileUtils {
 
 		@Override
 		public String[] list() {
-			FileDataSource[] files = theFile.listFiles();
+			BetterFile[] files = theFile.listFiles().toArray(new BetterFile[0]);
 			if (files == null)
 				return null;
 			String[] list = new String[files.length];
@@ -898,11 +718,11 @@ public class FileUtils {
 
 		@Override
 		public String[] list(FilenameFilter filter) {
-			FileDataSource[] files = theFile.listFiles();
+			BetterFile[] files = theFile.listFiles().toArray(new BetterFile[0]);
 			if (files == null)
 				return null;
 			List<String> list = new ArrayList<>(files.length);
-			for (FileDataSource f : files) {
+			for (BetterFile f : files) {
 				if (filter.accept(asFile(f), f.getName()))
 					list.add(f.getName());
 			}
@@ -911,7 +731,7 @@ public class FileUtils {
 
 		@Override
 		public File[] listFiles() {
-			FileDataSource[] files = theFile.listFiles();
+			BetterFile[] files = theFile.listFiles().toArray(new BetterFile[0]);
 			if (files == null)
 				return null;
 			File[] list = new File[files.length];
@@ -922,11 +742,11 @@ public class FileUtils {
 
 		@Override
 		public File[] listFiles(FilenameFilter filter) {
-			FileDataSource[] files = theFile.listFiles();
+			BetterFile[] files = theFile.listFiles().toArray(new BetterFile[0]);
 			if (files == null)
 				return null;
 			List<File> list = new ArrayList<>(files.length);
-			for (FileDataSource f : files) {
+			for (BetterFile f : files) {
 				File file = asFile(f);
 				if (filter.accept(file, f.getName()))
 					list.add(file);
@@ -936,11 +756,11 @@ public class FileUtils {
 
 		@Override
 		public File[] listFiles(FileFilter filter) {
-			FileDataSource[] files = theFile.listFiles();
+			BetterFile[] files = theFile.listFiles().toArray(new BetterFile[0]);
 			if (files == null)
 				return null;
 			List<File> list = new ArrayList<>(files.length);
-			for (FileDataSource f : files) {
+			for (BetterFile f : files) {
 				File file = asFile(f);
 				if (filter.accept(file))
 					list.add(file);
@@ -950,10 +770,7 @@ public class FileUtils {
 
 		@Override
 		public boolean delete() {
-			if (theFile instanceof MutableFileDataSource)
-				return ((MutableFileDataSource) theFile).delete(null);
-			else
-				return false;
+			return theFile.delete(null);
 		}
 
 		@Override
@@ -963,99 +780,31 @@ public class FileUtils {
 
 		@Override
 		public boolean mkdirs() {
-			if (theFile instanceof MutableFileDataSource) {
-				try {
-					((MutableFileDataSource) theFile).createDirectory();
-					return true;
-				} catch (IOException e) {
-					return false;
-				}
-			} else
+			try {
+				theFile.create(true);
+				return true;
+			} catch (IOException e) {
 				return false;
+			}
+		}
+
+		@Override
+		public boolean createNewFile() throws IOException {
+			theFile.create(false);
+			return true;
 		}
 
 		@Override
 		public boolean setLastModified(long time) {
-			if (theFile instanceof MutableFileDataSource)
-				return ((MutableFileDataSource) theFile).setLastModified(time);
-			else
-				return false;
+			return theFile.setLastModified(time);
 		}
 	}
 
-	static class FilteredDataSource implements FileDataSource {
-		private final FileDataSource theSource;
-		private final Predicate<FileDataSource> theFilter;
-
-		FilteredDataSource(FileDataSource source, Predicate<FileDataSource> filter) {
-			theSource = source;
-			theFilter = filter;
-		}
-
-		@Override
-		public String getName() {
-			return theSource.getName();
-		}
-
-		@Override
-		public FileDataSource getParent() {
-			return theSource.getParent();
-		}
-
-		@Override
-		public boolean exists() {
-			return theSource.exists();
-		}
-
-		@Override
-		public boolean isSymbolicLink() {
-			return theSource.isSymbolicLink();
-		}
-
-		@Override
-		public long getLastModified() {
-			return theSource.getLastModified();
-		}
-
-		@Override
-		public boolean isDirectory() {
-			return theSource.isDirectory();
-		}
-
-		@Override
-		public FileDataSource[] listFiles() {
-			FileDataSource[] list = theSource.listFiles();
-			if (list == null)
-				return list;
-			List<FileDataSource> filtered = new ArrayList<>(list.length);
-			for (int i = 0; i < list.length; i++) {
-				if (theFilter.test(list[i]))
-					filtered.add(list[i]);
-			}
-			return filtered.toArray(new FileDataSource[filtered.size()]);
-		}
-
-		@Override
-		public long length() {
-			return theSource.length();
-		}
-
-		@Override
-		public InputStream read() throws IOException {
-			return theSource.read();
-		}
-
-		@Override
-		public FileDataSource at(String path) {
-			return theSource.at(path);
-		}
-	}
-
-	static class CombinedFileDataSource implements FileDataSource {
+	static class CombinedFileDataSource implements BetterFile {
 		private final String theName;
-		private final Iterable<? extends FileDataSource> theSources;
+		private final Iterable<? extends BetterFile> theSources;
 
-		CombinedFileDataSource(String name, Iterable<? extends FileDataSource> sources) {
+		CombinedFileDataSource(String name, Iterable<? extends BetterFile> sources) {
 			theName = name;
 			theSources = sources;
 			if (!sources.iterator().hasNext())
@@ -1068,82 +817,63 @@ public class FileUtils {
 		}
 
 		@Override
-		public FileDataSource getParent() {
-			List<FileDataSource> sourceParents = null;
-			String name = null;
-			for (FileDataSource source : theSources) {
-				FileDataSource parent = source.getParent();
-				if (parent == null)
-					return null;
-				name = parent.getName();
-				if (sourceParents == null)
-					sourceParents = new ArrayList<>();
-				sourceParents.add(parent);
-			}
-			return new CombinedFileDataSource(name, sourceParents);
+		public String getPath() {
+			return theName;
+		}
+
+		@Override
+		public BetterFile getRoot() {
+			return this;
+		}
+
+		@Override
+		public BetterFile getParent() {
+			return null;
 		}
 
 		@Override
 		public boolean exists() {
-			for (FileDataSource source : theSources)
+			for (BetterFile source : theSources)
 				if (source.exists())
-					return true;
-			return false;
-		}
-
-		@Override
-		public boolean isSymbolicLink() {
-			for (FileDataSource source : theSources)
-				if (source.isSymbolicLink())
 					return true;
 			return false;
 		}
 
 		@Override
 		public long getLastModified() {
-			for (FileDataSource source : theSources)
+			for (BetterFile source : theSources)
 				if (source.exists())
 					return source.getLastModified();
 			return 0;
 		}
 
 		@Override
-		public boolean isDirectory() {
-			for (FileDataSource source : theSources)
-				if (source.exists())
-					return source.isDirectory();
-			return false;
-		}
-
-		@Override
-		public FileDataSource[] listFiles() {
-			Map<String, List<FileDataSource>> names = null;
-			for (FileDataSource source : theSources) {
-				FileDataSource[] sourceList = source.listFiles();
+		public List<? extends BetterFile> listFiles() {
+			Map<String, List<BetterFile>> names = null;
+			for (BetterFile source : theSources) {
+				List<? extends BetterFile> sourceList = source.listFiles();
 				if (sourceList != null) {
 					if (names == null)
 						names = new LinkedHashMap<>();
-					for (FileDataSource s : sourceList)
+					for (BetterFile s : sourceList)
 						names.computeIfAbsent(s.getName(), __ -> new LinkedList<>()).add(s);
 				}
 			}
 			if (names == null)
 				return null;
-			FileDataSource[] ret = new FileDataSource[names.size()];
-			int i = 0;
-			for (Map.Entry<String, List<FileDataSource>> entry : names.entrySet()) {
+			List<BetterFile> ret = new ArrayList<>(names.size());
+			for (Map.Entry<String, List<BetterFile>> entry : names.entrySet()) {
 				if (entry.getValue().size() == 1)
-					ret[i] = entry.getValue().get(0);
+					ret.add(entry.getValue().get(0));
 				else
-					ret[i] = new CombinedFileDataSource(theName, entry.getValue());
-				i++;
+					ret.add(new CombinedFileDataSource(theName, entry.getValue()));
 			}
-			return ret;
+			return Collections.unmodifiableList(ret);
 		}
 
 		@Override
 		public long length() {
-			for (FileDataSource source : theSources)
+			for (BetterFile source : theSources)
 				if (source.exists())
 					return source.length();
 			return 0;
@@ -1151,20 +881,20 @@ public class FileUtils {
 
 		@Override
 		public InputStream read() throws IOException {
-			for (FileDataSource source : theSources)
+			for (BetterFile source : theSources)
 				if (source.exists())
 					return source.read();
 			throw new FileNotFoundException("No such file found: " + theName);
 		}
 
 		@Override
-		public FileDataSource at(String path) {
+		public BetterFile at(String path) {
 			while (path.length() > 0 && (path.charAt(path.length() - 1) == '/' || path.charAt(path.length() - 1) == '\\'))
 				path = path.substring(0, path.length() - 1);
 			if (path.length() == 0)
 				return this;
-			List<FileDataSource> sources = new ArrayList<>();
-			for (FileDataSource source : theSources)
+			List<BetterFile> sources = new ArrayList<>();
+			for (BetterFile source : theSources)
 				sources.add(source.at(path));
 			String name;
 			int lastSlash = path.lastIndexOf('/');
@@ -1177,15 +907,78 @@ public class FileUtils {
 				name = path.substring(lastSlash + 1);
 			return new CombinedFileDataSource(name, sources);
 		}
+
+		@Override
+		public boolean get(FileBooleanAttribute attribute) {
+			boolean or;
+			switch (attribute) {
+			case Directory:
+			case Readable:
+				or = true;
+				break;
+			case Hidden:
+			case Symbolic:
+				or = false;
+				break;
+			default:
+				return false;
+			}
+			if (or) {
+				for (BetterFile source : theSources)
+					if (source.get(attribute))
+						return true;
+				return false;
+			} else {
+				for (BetterFile source : theSources)
+					if (!source.get(attribute))
+						return false;
+				return true;
+			}
+		}
+
+		@Override
+		public boolean delete(DirectorySyncResults results) {
+			return false;
+		}
+
+		@Override
+		public BetterFile create(boolean directory) throws IOException {
+			throw new IOException("Cannot create directories here");
+		}
+
+		@Override
+		public OutputStream write() throws IOException {
+			throw new IOException("Not writable");
+		}
+
+		@Override
+		public boolean set(FileBooleanAttribute attribute, boolean value, boolean ownerOnly) {
+			return get(attribute) == value;
+		}
+
+		@Override
+		public boolean setLastModified(long lastModified) {
+			return getLastModified() == lastModified;
+		}
+
+		@Override
+		public String toString() {
+			return getPath();
+		}
 	}
 
-	static class SubFile implements FileDataSource {
-		private final FileDataSource theSource;
+	static class SubFile implements BetterFile {
+		private final BetterFile theSource;
 		private final String[] thePath;
 
-		SubFile(FileDataSource source, String[] path) {
+		SubFile(BetterFile source, String[] path) {
 			theSource = source;
 			thePath = path;
+		}
+
+		@Override
+		public BetterFile getRoot() {
+			return theSource.getRoot();
 		}
 
 		@Override
@@ -1193,8 +986,18 @@ public class FileUtils {
 			return thePath[0];
 		}
 
+
 		@Override
-		public FileDataSource getParent() {
+		public String getPath() {
+			StringBuilder str = new StringBuilder();
+			for (String p : thePath)
+				str.append(p).append('/');
+			str.append(theSource.getName());
+			return str.toString();
+		}
+
+		@Override
+		public BetterFile getParent() {
 			return null;
 		}
 
@@ -1204,26 +1007,32 @@ public class FileUtils {
 		}
 
 		@Override
-		public boolean isSymbolicLink() {
-			return false;
-		}
-
-		@Override
 		public long getLastModified() {
 			return 0;
 		}
 
 		@Override
-		public boolean isDirectory() {
-			return true;
+		public boolean get(FileBooleanAttribute attribute) {
+			switch (attribute) {
+			case Readable:
+				return true;
+			case Writable:
+				return false;
+			case Directory:
+				return true;
+			case Hidden:
+			case Symbolic:
+				return false;
+			}
+			throw new IllegalStateException();
 		}
 
 		@Override
-		public FileDataSource[] listFiles() {
+		public List<? extends BetterFile> listFiles() {
 			if (thePath.length == 1)
-				return new FileDataSource[] { theSource };
+				return Arrays.asList(theSource);
 			else
-				return new FileDataSource[] { new SubFile(theSource, ArrayUtils.remove(thePath, 0)) };
+				return Arrays.asList(new SubFile(theSource, ArrayUtils.remove(thePath, 0)));
 		}
 
 		@Override
@@ -1237,23 +1046,70 @@ public class FileUtils {
 		}
 
 		@Override
-		public FileDataSource at(String path) {
+		public BetterFile at(String path) {
 			// TODO Can do better than this, but don't need it at the moment
 			throw new IllegalStateException("Cannot make children of this file source");
 		}
+
+		@Override
+		public boolean delete(DirectorySyncResults results) {
+			return theSource.delete(results);
+		}
+
+		@Override
+		public BetterFile create(boolean directory) throws IOException {
+			theSource.create(directory);
+			return this;
+		}
+
+		@Override
+		public OutputStream write() throws IOException {
+			return theSource.write();
+		}
+
+		@Override
+		public boolean set(FileBooleanAttribute attribute, boolean value, boolean ownerOnly) {
+			return theSource.set(attribute, value, ownerOnly);
+		}
+
+		@Override
+		public boolean setLastModified(long lastModified) {
+			return theSource.setLastModified(lastModified);
+		}
+
+		@Override
+		public int hashCode() {
+			return theSource.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof SubFile && ArrayUtils.equals(thePath, ((SubFile) obj).thePath)
+				&& theSource.equals(((SubFile) obj).theSource);
+		}
+
+		@Override
+		public String toString() {
+			return getPath();
+		}
 	}
 
-	static class SingleFileSource implements FileDataSource {
+	static class SyntheticBetterFile implements BetterFile {
 		private final String theName;
 		private final ExSupplier<InputStream, IOException> theData;
 		private final LongSupplier theSize;
 		private final LongSupplier theLastModified;
 
-		SingleFileSource(String name, ExSupplier<InputStream, IOException> data, LongSupplier size, LongSupplier lastModified) {
+		SyntheticBetterFile(String name, ExSupplier<InputStream, IOException> data, LongSupplier size, LongSupplier lastModified) {
 			theName = name;
 			theData = data;
 			theSize = size;
 			theLastModified = lastModified;
+		}
+
+		@Override
+		public BetterFile getRoot() {
+			return this;
 		}
 
 		@Override
@@ -1262,7 +1118,12 @@ public class FileUtils {
 		}
 
 		@Override
-		public FileDataSource getParent() {
+		public String getPath() {
+			return theName;
+		}
+
+		@Override
+		public BetterFile getParent() {
 			return null;
 		}
 
@@ -1272,23 +1133,29 @@ public class FileUtils {
 		}
 
 		@Override
-		public boolean isSymbolicLink() {
-			return false;
-		}
-
-		@Override
 		public long getLastModified() {
 			return theLastModified.getAsLong();
 		}
 
 		@Override
-		public boolean isDirectory() {
-			return false;
+		public boolean get(FileBooleanAttribute attribute) {
+			switch (attribute) {
+			case Readable:
+				return theData != null;
+			case Writable:
+				return false;
+			case Directory:
+				return false;
+			case Hidden:
+			case Symbolic:
+				return false;
+			}
+			throw new IllegalStateException();
 		}
 
 		@Override
-		public FileDataSource[] listFiles() {
-			return null;
+		public List<? extends BetterFile> listFiles() {
+			return theData == null ? Collections.emptyList() : null;
 		}
 
 		@Override
@@ -1298,6 +1165,8 @@ public class FileUtils {
 
 		@Override
 		public InputStream read() throws IOException {
+			if (theData == null)
+				throw new IOException("Not readable");
 			InputStream data = theData.get();
 			if (data == null)
 				throw new IOException("No such data found");
@@ -1305,8 +1174,35 @@ public class FileUtils {
 		}
 
 		@Override
-		public FileDataSource at(String path) {
+		public BetterFile at(String path) {
 			throw new IllegalStateException("Cannot make children of this file source");
+		}
+
+		@Override
+		public boolean delete(DirectorySyncResults results) {
+			return false;
+		}
+
+		@Override
+		public BetterFile create(boolean directory) throws IOException {
+			if (isDirectory() != directory)
+				throw new IOException("This file is a " + (directory ? "file" : "directory"));
+			return this;
+		}
+
+		@Override
+		public OutputStream write() throws IOException {
+			throw new IOException("This file is not writable");
+		}
+
+		@Override
+		public boolean set(FileBooleanAttribute attribute, boolean value, boolean ownerOnly) {
+			return get(attribute) == value;
+		}
+
+		@Override
+		public boolean setLastModified(long lastModified) {
+			return getLastModified() == lastModified;
 		}
 
 		@Override
@@ -1314,5 +1210,4 @@ public class FileUtils {
 			return theName;
 		}
 	}
-
 }
