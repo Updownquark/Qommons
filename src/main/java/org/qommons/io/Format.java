@@ -560,7 +560,7 @@ public interface Format<T> {
 				if (value.toString().toLowerCase().equals(str))
 					return value;
 			}
-			throw new ParseException("Unrecognized " + theType.getSimpleName() + " constant", 0);
+			throw new ParseException("Unrecognized " + theType.getSimpleName() + " constant: " + text, 0);
 		}
 
 		@Override
