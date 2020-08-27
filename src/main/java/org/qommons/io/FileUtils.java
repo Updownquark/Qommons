@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.JarURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -73,6 +74,31 @@ public class FileUtils {
 	public static BetterFile syntheticFile(String name, ExSupplier<InputStream, IOException> data, LongSupplier size,
 		LongSupplier lastModified) {
 		return new SyntheticBetterFile(name, data, size, lastModified);
+	}
+
+	public static BetterFile.FileDataSource getDefaultFileSource() {
+		return new CompressionEnabledFileSource(new NativeFileSource())//
+			.withCompression(new CompressionEnabledFileSource.ZipCompression());
+	}
+
+	public static BetterFile ofUrl(URL url) throws MalformedURLException {
+		return ofUrl(getDefaultFileSource(), url);
+	}
+
+	public static BetterFile ofUrl(BetterFile.FileDataSource fileSource, URL url) throws MalformedURLException {
+		switch (url.getProtocol()) {
+		case "file":
+			return BetterFile.at(fileSource, url.getPath());
+		case "jar":
+			String path = url.getPath();
+			int div = path.indexOf('!');
+			URL jarUrl = new URL(url, "/" + path.substring(0, div));
+			BetterFile jarFile = ofUrl(fileSource, jarUrl);
+			return jarFile.at(path.substring(div + 1));
+		default:
+			return BetterFile.at(new CompressionEnabledFileSource(new UrlFileSource(new URL(url, "/")))//
+				.withCompression(new CompressionEnabledFileSource.ZipCompression()), url.getPath());
+		}
 	}
 
 	/**
