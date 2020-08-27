@@ -9,6 +9,8 @@ import java.util.regex.Pattern;
 
 import org.jdom2.Attribute;
 import org.jdom2.Element;
+import org.jdom2.input.SAXBuilder;
+import org.jdom2.input.sax.XMLReaderSAX2Factory;
 
 /**
  * <p>
@@ -644,6 +646,9 @@ public abstract class QommonsConfig implements Cloneable {
 		return configEl;
 	}
 
+	private static final ThreadLocal<SAXBuilder> SAX_BUILDERS = ThreadLocal
+		.withInitial(() -> new SAXBuilder(new XMLReaderSAX2Factory(false)));
+
 	/**
 	 * Parses the root element from an XML file
 	 *
@@ -654,7 +659,7 @@ public abstract class QommonsConfig implements Cloneable {
 	public static Element getRootElement(InputStream stream) throws IOException {
 		Element configEl;
 		try {
-			configEl = new org.jdom2.input.SAXBuilder().build(stream).getRootElement();
+			configEl = SAX_BUILDERS.get().build(stream).getRootElement();
 		} catch (org.jdom2.JDOMException e) {
 			throw new java.io.IOException("Could not read XML file " + stream, e);
 		}
