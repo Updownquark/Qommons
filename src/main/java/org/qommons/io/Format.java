@@ -647,7 +647,7 @@ public interface Format<T> {
 		 */
 		public SuperDoubleFormatBuilder withExpCondition(int maxNormalExp, int minNormalExp) {
 			theMaxNormalExp = maxNormalExp;
-			theMinNormalExp = minNormalExp;
+			theMinNormalExp = Math.abs(minNormalExp); // Always treated as a positive, which is then negated by the format
 			return this;
 		}
 
@@ -843,7 +843,15 @@ public interface Format<T> {
 					printInt = false;
 			}
 
-			boolean expNotation = !printInt && (exp < -theMinNormalExp || exp > theMaxNormalExp);
+			boolean expNotation;
+			if (printInt)
+				expNotation = false;
+			else if (exp < -theMinNormalExp)
+				expNotation = true;
+			else if (exp > theMaxNormalExp)
+				expNotation = true;
+			else
+				expNotation = false;
 			int digits;
 			if (printInt)
 				digits = 0;
