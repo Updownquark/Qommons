@@ -65,6 +65,17 @@ public class LambdaUtils {
 	 * @return The printable predicate
 	 */
 	public static <T> Predicate<T> printablePred(Predicate<T> pred, String print, Object identifier) {
+		return printablePred(pred, () -> print, identifier);
+	}
+
+	/**
+	 * @param <T> The type of value to test
+	 * @param pred The predicate doing the testing
+	 * @param print The printed predicate representation
+	 * @param identifier An identifier for the predicate
+	 * @return The printable predicate
+	 */
+	public static <T> Predicate<T> printablePred(Predicate<T> pred, Supplier<String> print, Object identifier) {
 		PrintablePredicate<T> p = new PrintablePredicate<>(pred, print, identifier);
 		if (identifier != null) {
 			p = (PrintablePredicate<T>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
@@ -436,7 +447,7 @@ public class LambdaUtils {
 	}
 
 	static class PrintablePredicate<T> extends PrintableLambda<Predicate<T>> implements Predicate<T> {
-		PrintablePredicate(Predicate<T> pred, String print, Object identifier) {
+		PrintablePredicate(Predicate<T> pred, Supplier<String> print, Object identifier) {
 			super(pred, print, identifier);
 		}
 

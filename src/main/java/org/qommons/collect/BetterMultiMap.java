@@ -515,6 +515,21 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 			return getMap().keySet().repair(listener == null ? null : new KeyRepairListener<>(listener));
 		}
 
+		@Override
+		public int hashCode() {
+			return BetterSet.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterSet.equals(this, obj);
+		}
+
+		@Override
+		public String toString() {
+			return BetterSet.toString(this);
+		}
+
 		private class EntrySetElement implements CollectionElement<MultiEntryHandle<K, V>> {
 			final MultiEntryHandle<K, V> theEntry;
 

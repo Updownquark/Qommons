@@ -16,6 +16,7 @@ import java.util.function.UnaryOperator;
 import org.qommons.ArrayUtils;
 import org.qommons.Causable;
 import org.qommons.Identifiable;
+import org.qommons.LambdaUtils;
 import org.qommons.Lockable;
 import org.qommons.QommonsUtils;
 import org.qommons.Stamped;
@@ -401,7 +402,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		if (c.isEmpty())
 			return false;
 		return removeIf(//
-			c::contains);
+			LambdaUtils.printablePred(c::contains, () -> "in" + c, null));
 	}
 
 	@Override
@@ -416,7 +417,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 			}
 		}
 		return removeIf(//
-			o -> !c.contains(o));
+			LambdaUtils.printablePred(o -> !c.contains(o), () -> "notIn" + c, null));
 	}
 
 	@Override
@@ -473,7 +474,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @param op The operation to apply to each value in this collection
 	 */
 	default void replaceAll(UnaryOperator<E> op) {
-		replaceAll(v -> op.apply(v), false);
+		replaceAll(LambdaUtils.printableFn(v -> op.apply(v), op::toString), false);
 	}
 
 	/**
