@@ -202,6 +202,32 @@ public class LambdaUtils {
 	}
 
 	/**
+	 * Makes a bi-function out of a function, ignoring the second argument
+	 * 
+	 * @param <T> The type of the first parameter (the one passed to the input function)
+	 * @param <U> The type of the second parameter (ignored)
+	 * @param <X> The type of the output
+	 * @param map The function to back the bi-function
+	 * @return The binary function
+	 */
+	public static <T, U, X> BiFunction<T, U, X> toBiFunction1(Function<? super T, ? extends X> map) {
+		return new MappedBiFunction1<>(map);
+	}
+
+	/**
+	 * Makes a bi-function out of a function, ignoring the first argument
+	 * 
+	 * @param <T> The type of the first parameter (ignored)
+	 * @param <U> The type of the second parameter (the one passed to the input function)
+	 * @param <X> The type of the output
+	 * @param map The function to back the bi-function
+	 * @return The binary function
+	 */
+	public static <T, U, X> BiFunction<T, U, X> toBiFunction2(Function<? super U, ? extends X> map) {
+		return new MappedBiFunction2<>(map);
+	}
+
+	/**
 	 * @param <T> The first argument type of the predicate
 	 * @param <U> The second argument type of the predicate
 	 * @param test The predicate
@@ -474,6 +500,70 @@ public class LambdaUtils {
 		@Override
 		public X apply(T t, U u) {
 			return getLambda().apply(t, u);
+		}
+	}
+
+	static class MappedBiFunction1<T, U, X> implements BiFunction<T, U, X> {
+		private final Function<? super T, ? extends X> theMap;
+
+		MappedBiFunction1(Function<? super T, ? extends X> map) {
+			theMap = map;
+		}
+
+		@Override
+		public X apply(T t, U u) {
+			return theMap.apply(t);
+		}
+
+		@Override
+		public int hashCode() {
+			return theMap.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof MappedBiFunction1))
+				return false;
+			return theMap.equals(((MappedBiFunction1<?, ?, ?>) obj).theMap);
+		}
+
+		@Override
+		public String toString() {
+			return theMap.toString();
+		}
+	}
+
+	static class MappedBiFunction2<T, U, X> implements BiFunction<T, U, X> {
+		private final Function<? super U, ? extends X> theMap;
+
+		MappedBiFunction2(Function<? super U, ? extends X> map) {
+			theMap = map;
+		}
+
+		@Override
+		public X apply(T t, U u) {
+			return theMap.apply(u);
+		}
+
+		@Override
+		public int hashCode() {
+			return theMap.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof MappedBiFunction2))
+				return false;
+			return theMap.equals(((MappedBiFunction1<?, ?, ?>) obj).theMap);
+		}
+
+		@Override
+		public String toString() {
+			return theMap.toString();
 		}
 	}
 
