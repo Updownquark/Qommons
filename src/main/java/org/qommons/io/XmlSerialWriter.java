@@ -43,13 +43,14 @@ public class XmlSerialWriter {
 		/** @return -1 for a document, 0 for the root element, etc. */
 		public abstract int getDepth();
 
-		void preContent() throws IOException {
+		void preContent(boolean indent) throws IOException {
 			assertWritable();
 			closeHeader();
-			if (getDocument().isContentOnSeparateLines() && !isNewLine)
+			if (indent && getDocument().isContentOnSeparateLines() && !isNewLine)
 				getDocument().getWriter().write('\n');
 			isNewLine = false;
-			indent();
+			if (indent)
+				indent();
 		}
 
 		/** Makes sure it is currently ok to write content to this component */
@@ -65,7 +66,7 @@ public class XmlSerialWriter {
 		 */
 		public XmlComponent writeComment(String comment) throws IOException {
 			assertWritable();
-			preContent();
+			preContent(true);
 			getDocument().getWriter().append("<!--");
 			writeXmlContent(getDocument().getWriter(), comment, XmlContentType.COMMENT);
 			getDocument().getWriter().append("-->");
@@ -74,7 +75,7 @@ public class XmlSerialWriter {
 
 		XmlComponent addChild(String elementName, XmlChild onChild) throws IOException {
 			assertWritable();
-			preContent();
+			preContent(true);
 			Element element = new Element(getDocument(), elementName, getDepth() + 1);
 			if (onChild != null) {
 				isBusy = true;
@@ -259,6 +260,7 @@ public class XmlSerialWriter {
 		private final int theDepth;
 
 		private boolean isEmpty;
+		private boolean isContentOnly;
 		private boolean isHeaderClosed;
 		private boolean isClosed;
 
@@ -353,6 +355,7 @@ public class XmlSerialWriter {
 		public Element addChild(String childName, XmlChild onChild) throws IOException {
 			if (isClosed)
 				throw new IllegalStateException("This element has already been closed");
+			isContentOnly = false;
 			super.addChild(childName, onChild);
 			return this;
 		}
@@ -365,7 +368,8 @@ public class XmlSerialWriter {
 		public Element addContent(String content) throws IOException {
 			if (isClosed)
 				throw new IllegalStateException("This element has already been closed");
-			preContent();
+			isContentOnly = isEmpty;
+			preContent(!isContentOnly);
 			writeXmlContent(theDocument.getWriter(), content, XmlContentType.CONTENT);
 			return this;
 		}
@@ -387,7 +391,7 @@ public class XmlSerialWriter {
 				theDocument.getWriter().write(" />");
 				isHeaderClosed = true;
 			} else {
-				preContent();
+				preContent(!isContentOnly);
 				theDocument.getWriter().write("</");
 				writeXmlContent(theDocument.getWriter(), theElementName, XmlContentType.ELEMENT_NAME);
 				theDocument.getWriter().write(">");
