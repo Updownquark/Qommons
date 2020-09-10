@@ -32,6 +32,8 @@ public interface Stamped {
 	 * @return The composite stamp
 	 */
 	public static <T> long compositeStamp(Collection<? extends T> values, ToLongFunction<? super T> stampFn) {
+		if (values.isEmpty())
+			return 0;
 		long stamp = 0;
 		int shift = 64 / values.size();
 		int i = 0;
@@ -47,12 +49,38 @@ public interface Stamped {
 	}
 
 	/**
+	 * Creates a composite stamp from a collection of other stamped items
+	 * 
+	 * @param <T> The type of the stamped values
+	 * @param values The stamped values to create the composite stamp for
+	 * @return The composite stamp
+	 */
+	public static <T> long compositeStamp(Collection<? extends Stamped> values) {
+		if (values.isEmpty())
+			return 0;
+		long stamp = 0;
+		int shift = 64 / values.size();
+		int i = 0;
+		for (Stamped value : values) {
+			if (value == null)
+				continue;
+			long valueStamp = value.getStamp();
+			if (i > 0)
+				valueStamp = Long.rotateRight(valueStamp, shift * i);
+			stamp ^= valueStamp;
+		}
+		return stamp;
+	}
+
+	/**
 	 * Creates a composite stamp from an array of stamps
 	 * 
 	 * @param stamps The stamps to create the composite stamp for
 	 * @return The composite stamp
 	 */
-	static long compositeStamp(long[] stamps) {
+	static long compositeStamp(long... stamps) {
+		if (stamps.length == 0)
+			return 0;
 		long stamp = 0;
 		int shift = 64 / stamps.length;
 		int i = 0;

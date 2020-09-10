@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -100,6 +101,34 @@ public interface Lockable {
 	 * 
 	 * @param lock The lock to lock--may be null, in which case {@link Transactable#NONE} will be returned
 	 * @param debugInfo The object to include for debugging
+	 * @return The transaction to use to unlock the lock
+	 */
+	static Transaction lock(ReentrantLock lock, Object debugInfo) {
+		if (lock == null)
+			return Transaction.NONE;
+		else
+			return LockDebug.debug(lock, debugInfo, true, false, () -> lock(lock));
+	}
+
+	/**
+	 * Attempts to lock the given lock
+	 * 
+	 * @param lock The lock to lock--may be null, in which case {@link Transactable#NONE} will be returned
+	 * @param debugInfo The object to include for debugging
+	 * @return The transaction to use to unlock the lock, or null if the lock could not be obtained
+	 */
+	static Transaction tryLock(ReentrantLock lock, Object debugInfo) {
+		if (lock == null)
+			return Transaction.NONE;
+		else
+			return LockDebug.debug(lock, debugInfo, true, true, () -> tryLock(lock));
+	}
+
+	/**
+	 * Locks the given lock
+	 * 
+	 * @param lock The lock to lock--may be null, in which case {@link Transactable#NONE} will be returned
+	 * @param debugInfo The object to include for debugging
 	 * @param write Whether to lock for write or read
 	 * @return The transaction to use to unlock the lock
 	 */
@@ -131,6 +160,18 @@ public interface Lockable {
 	 */
 	static Lockable lockable(Lock lock) {
 		return lock == null ? NONE : new LockLockable(lock);
+	}
+
+	/**
+	 * @param lock The lock to represent
+	 * @param debugInfo Information to make available with debugging
+	 * @return A Lockable representing the lock
+	 */
+	static Lockable lockable(ReentrantLock lock, Object debugInfo) {
+		if (lock == null)
+			return NONE;
+		else
+			return new ReentrantLockLockable(lock, debugInfo);
 	}
 
 	/**
@@ -584,6 +625,32 @@ public interface Lockable {
 		@Override
 		public Transaction tryLock() {
 			return tryLockAll(theFirst, theLocks, l -> l);
+		}
+	}
+
+	/** Implements {@link Lockable#lockable(ReentrantLock, Object)} */
+	static class ReentrantLockLockable implements Lockable {
+		private final ReentrantLock theLock;
+		private final Object theDebugInfo;
+
+		public ReentrantLockLockable(ReentrantLock lock, Object debugInfo) {
+			theLock = lock;
+			theDebugInfo = debugInfo;
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return true;
+		}
+
+		@Override
+		public Transaction lock() {
+			return Lockable.lock(theLock, theDebugInfo);
+		}
+
+		@Override
+		public Transaction tryLock() {
+			return Lockable.tryLock(theLock, theDebugInfo);
 		}
 	}
 

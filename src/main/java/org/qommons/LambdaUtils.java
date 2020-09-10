@@ -1,8 +1,7 @@
 package org.qommons;
 
 import java.util.Comparator;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
@@ -11,7 +10,6 @@ import java.util.function.Supplier;
 
 /** A bunch of utilities to easily make functions that are prettier and more useful than ordinary lambdas */
 public class LambdaUtils {
-	private static final Map<PrintableLambda<?>, PrintableLambda<?>> IDENTIFIED_LAMBDAS = new ConcurrentHashMap<>();
 	/** An identifier placeholder for <code>null</code> */
 	public static final Object NULL_PLACEHOLDER = new Object() {
 		@Override
@@ -65,6 +63,8 @@ public class LambdaUtils {
 	 * @return The printable predicate
 	 */
 	public static <T> Predicate<T> printablePred(Predicate<T> pred, String print, Object identifier) {
+		if (pred == null)
+			return null;
 		return printablePred(pred, () -> print, identifier);
 	}
 
@@ -76,11 +76,9 @@ public class LambdaUtils {
 	 * @return The printable predicate
 	 */
 	public static <T> Predicate<T> printablePred(Predicate<T> pred, Supplier<String> print, Object identifier) {
-		PrintablePredicate<T> p = new PrintablePredicate<>(pred, print, identifier);
-		if (identifier != null) {
-			p = (PrintablePredicate<T>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
-		}
-		return p;
+		if (pred == null)
+			return null;
+		return new PrintablePredicate<>(pred, print, identifier);
 	}
 
 	/**
@@ -104,11 +102,7 @@ public class LambdaUtils {
 	 * @return A function that always returns the given value
 	 */
 	public static <T, X> Function<T, X> constantFn(X value, Supplier<String> print, Object identifier) {
-		PrintableFunction<T, X> p = new PrintableFunction<>(t -> value, print != null ? print : () -> String.valueOf(value), identifier);
-		if (identifier != null) {
-			p = (PrintableFunction<T, X>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
-		}
-		return p;
+		return new PrintableFunction<>(t -> value, print != null ? print : () -> String.valueOf(value), identifier);
 	}
 
 	/**
@@ -121,12 +115,8 @@ public class LambdaUtils {
 	 * @return A function that always returns the given value
 	 */
 	public static <T, V, X> BiFunction<T, V, X> constantBiFn(X value, String print, Object identifier) {
-		PrintableBiFunction<T, V, X> p = new PrintableBiFunction<>((t, v) -> value,
+		return new PrintableBiFunction<>((t, v) -> value,
 			print != null ? new ConstantSupply(print) : () -> String.valueOf(value), identifier);
-		if (identifier != null) {
-			p = (PrintableBiFunction<T, V, X>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
-		}
-		return p;
 	}
 
 	/**
@@ -148,11 +138,7 @@ public class LambdaUtils {
 	 * @return A supplier that always returns the given value
 	 */
 	public static <T> Supplier<T> constantSupplier(T value, Supplier<String> print, Object identifier) {
-		PrintableSupplier<T> p = new PrintableSupplier<>(() -> value, print != null ? print : () -> String.valueOf(value), identifier);
-		if (identifier != null) {
-			p = (PrintableSupplier<T>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
-		}
-		return p;
+		return new PrintableSupplier<>(() -> value, print != null ? print : () -> String.valueOf(value), identifier);
 	}
 
 	/**
@@ -164,11 +150,9 @@ public class LambdaUtils {
 	 * @return The printable function
 	 */
 	public static <T, X> Function<T, X> printableFn(Function<T, X> fn, String print, Object identifier) {
-		PrintableFunction<T, X> p = new PrintableFunction<>(fn, new ConstantSupply(print), identifier);
-		if (identifier != null) {
-			p = (PrintableFunction<T, X>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
-		}
-		return p;
+		if (fn == null)
+			return null;
+		return new PrintableFunction<>(fn, new ConstantSupply(print), identifier);
 	}
 
 	/**
@@ -179,6 +163,8 @@ public class LambdaUtils {
 	 * @return The printable function
 	 */
 	public static <T, X> Function<T, X> printableFn(Function<T, X> fn, Supplier<String> print) {
+		if (fn == null)
+			return null;
 		return new PrintableFunction<>(fn, print);
 	}
 
@@ -192,6 +178,8 @@ public class LambdaUtils {
 	 * @return The printable function
 	 */
 	public static <T, U, X> BiFunction<T, U, X> printableBiFn(BiFunction<T, U, X> fn, String print, Object identifier) {
+		if (fn == null)
+			return null;
 		return printableBiFn(fn, () -> print, identifier);
 	}
 
@@ -205,11 +193,23 @@ public class LambdaUtils {
 	 * @return The printable function
 	 */
 	public static <T, U, X> BiFunction<T, U, X> printableBiFn(BiFunction<T, U, X> fn, Supplier<String> print, Object identifier) {
-		PrintableBiFunction<T, U, X> p = new PrintableBiFunction<>(fn, print, identifier);
-		if (identifier != null) {
-			p = (PrintableBiFunction<T, U, X>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
-		}
-		return p;
+		if (fn == null)
+			return null;
+		return new PrintableBiFunction<>(fn, print, identifier);
+	}
+
+	/**
+	 * @param <T> The first argument type of the consumer
+	 * @param <U> The second argument type of the consumer
+	 * @param fn The consumer
+	 * @param print The printed representation of the consumer
+	 * @param identifier The identifier for the consumer
+	 * @return The printable consumer
+	 */
+	public static <T, U> BiConsumer<T, U> printableBiConsumer(BiConsumer<T, U> fn, Supplier<String> print, Object identifier) {
+		if (fn == null)
+			return null;
+		return new PrintableBiConsumer<>(fn, print, identifier);
 	}
 
 	/**
@@ -222,6 +222,8 @@ public class LambdaUtils {
 	 * @return The binary function
 	 */
 	public static <T, U, X> BiFunction<T, U, X> toBiFunction1(Function<? super T, ? extends X> map) {
+		if (map == null)
+			return null;
 		return new MappedBiFunction1<>(map);
 	}
 
@@ -235,7 +237,105 @@ public class LambdaUtils {
 	 * @return The binary function
 	 */
 	public static <T, U, X> BiFunction<T, U, X> toBiFunction2(Function<? super U, ? extends X> map) {
+		if (map == null)
+			return null;
 		return new MappedBiFunction2<>(map);
+	}
+
+	/**
+	 * Makes a tri-function out of a function, ignoring the second and third arguments
+	 * 
+	 * @param <T> The type of the first parameter (the one passed to the input function)
+	 * @param <U> The type of the second parameter (ignored)
+	 * @param <V> The type of the third parameter (ignored)
+	 * @param <X> The type of the output
+	 * @param map The function to back the tri-function
+	 * @return The ternary function
+	 */
+	public static <T, U, V, X> TriFunction<T, U, V, X> toTriFunction1(Function<? super T, ? extends X> map) {
+		if (map == null)
+			return null;
+		return new MappedTriFunction1<>(map);
+	}
+
+	/**
+	 * Makes a tri-function out of a function, ignoring the first and third arguments
+	 * 
+	 * @param <T> The type of the first parameter (ignored)
+	 * @param <U> The type of the second parameter (the one passed to the input function)
+	 * @param <V> The type of the third parameter (ignored)
+	 * @param <X> The type of the output
+	 * @param map The function to back the tri-function
+	 * @return The ternary function
+	 */
+	public static <T, U, V, X> TriFunction<T, U, V, X> toTriFunction2(Function<? super U, ? extends X> map) {
+		if (map == null)
+			return null;
+		return new MappedTriFunction2<>(map);
+	}
+
+	/**
+	 * Makes a tri-function out of a function, ignoring the first and second arguments
+	 * 
+	 * @param <T> The type of the first parameter (ignored)
+	 * @param <U> The type of the second parameter (ignored)
+	 * @param <V> The type of the third parameter (the one passed to the input function)
+	 * @param <X> The type of the output
+	 * @param map The function to back the tri-function
+	 * @return The ternary function
+	 */
+	public static <T, U, V, X> TriFunction<T, U, V, X> toTriFunction3(Function<? super V, ? extends X> map) {
+		if (map == null)
+			return null;
+		return new MappedTriFunction3<>(map);
+	}
+
+	/**
+	 * Makes a tri-function out of a bi-function, ignoring the last argument
+	 * 
+	 * @param <T> The type of the first parameter (the first one passed to the input function)
+	 * @param <U> The type of the second parameter (the second one passed to the input function)
+	 * @param <V> The type of the third parameter (ignored)
+	 * @param <X> The type of the output
+	 * @param map The bi-function to back the tri-function
+	 * @return The ternary function
+	 */
+	public static <T, U, V, X> TriFunction<T, U, V, X> toTriFunction1And2(BiFunction<? super T, ? super U, ? extends X> map) {
+		if (map == null)
+			return null;
+		return new BiMappedTriFunction12<>(map);
+	}
+
+	/**
+	 * Makes a tri-function out of a bi-function, ignoring the second argument
+	 * 
+	 * @param <T> The type of the first parameter (the first one passed to the input function)
+	 * @param <U> The type of the second parameter (ignored)
+	 * @param <V> The type of the third parameter (the second one passed to the input function)
+	 * @param <X> The type of the output
+	 * @param map The bi-function to back the tri-function
+	 * @return The ternary function
+	 */
+	public static <T, U, V, X> TriFunction<T, U, V, X> toTriFunction1And3(BiFunction<? super T, ? super V, ? extends X> map) {
+		if (map == null)
+			return null;
+		return new BiMappedTriFunction13<>(map);
+	}
+
+	/**
+	 * Makes a tri-function out of a bi-function, ignoring the first argument
+	 * 
+	 * @param <T> The type of the first parameter (ignored)
+	 * @param <U> The type of the second parameter (the first one passed to the input function)
+	 * @param <V> The type of the third parameter (the second one passed to the input function)
+	 * @param <X> The type of the output
+	 * @param map The bi-function to back the tri-function
+	 * @return The ternary function
+	 */
+	public static <T, U, V, X> TriFunction<T, U, V, X> toTriFunction2And3(BiFunction<? super U, ? super V, ? extends X> map) {
+		if (map == null)
+			return null;
+		return new BiMappedTriFunction23<>(map);
 	}
 
 	/**
@@ -258,11 +358,9 @@ public class LambdaUtils {
 	 * @return The printable predicate
 	 */
 	public static <T, U> BiPredicate<T, U> printableBiPredicate(BiPredicate<T, U> test, Supplier<String> print, Object identifier) {
-		PrintableBiPredicate<T, U> p = new PrintableBiPredicate<>(test, print, identifier);
-		if (identifier != null) {
-			p = (PrintableBiPredicate<T, U>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
-		}
-		return p;
+		if (test == null)
+			return null;
+		return new PrintableBiPredicate<>(test, print, identifier);
 	}
 
 	/**
@@ -291,11 +389,9 @@ public class LambdaUtils {
 	 */
 	public static <T, U, V, X> TriFunction<T, U, V, X> printableTriFn(TriFunction<T, U, V, X> fn, Supplier<String> print,
 		Object identifier) {
-		PrintableTriFunction<T, U, V, X> p = new PrintableTriFunction<>(fn, print, identifier);
-		if (identifier != null) {
-			p = (PrintableTriFunction<T, U, V, X>) IDENTIFIED_LAMBDAS.computeIfAbsent(p, x -> x);
-		}
-		return p;
+		if (fn == null)
+			return null;
+		return new PrintableTriFunction<>(fn, print, identifier);
 	}
 
 	/**
@@ -305,6 +401,8 @@ public class LambdaUtils {
 	 * @return The printable comparable
 	 */
 	public static <T> Comparable<T> printableComparable(Comparable<T> compare, Supplier<String> print) {
+		if (compare == null)
+			return null;
 		return new PrintableComparable<>(compare, print);
 	}
 
@@ -315,6 +413,8 @@ public class LambdaUtils {
 	 * @return The printable comparator
 	 */
 	public static <T> Comparator<T> printableComparator(Comparator<T> compare, Supplier<String> print) {
+		if (compare == null)
+			return null;
 		return new PrintableComparator<>(compare, print);
 	}
 
@@ -514,6 +614,17 @@ public class LambdaUtils {
 		}
 	}
 
+	static class PrintableBiConsumer<T, U> extends PrintableLambda<BiConsumer<T, U>> implements BiConsumer<T, U> {
+		PrintableBiConsumer(BiConsumer<T, U> function, Supplier<String> print, Object identifier) {
+			super(function, print, identifier);
+		}
+
+		@Override
+		public void accept(T t, U u) {
+			getLambda().accept(t, u);
+		}
+	}
+
 	static class MappedBiFunction1<T, U, X> implements BiFunction<T, U, X> {
 		private final Function<? super T, ? extends X> theMap;
 
@@ -570,6 +681,198 @@ public class LambdaUtils {
 			else if (!(obj instanceof MappedBiFunction2))
 				return false;
 			return theMap.equals(((MappedBiFunction1<?, ?, ?>) obj).theMap);
+		}
+
+		@Override
+		public String toString() {
+			return theMap.toString();
+		}
+	}
+
+	static class MappedTriFunction1<T, U, V, X> implements TriFunction<T, U, V, X> {
+		private final Function<? super T, ? extends X> theMap;
+
+		MappedTriFunction1(Function<? super T, ? extends X> map) {
+			theMap = map;
+		}
+
+		@Override
+		public X apply(T t, U u, V v) {
+			return theMap.apply(t);
+		}
+
+		@Override
+		public int hashCode() {
+			return theMap.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof MappedTriFunction1))
+				return false;
+			return theMap.equals(((MappedTriFunction1<?, ?, ?, ?>) obj).theMap);
+		}
+
+		@Override
+		public String toString() {
+			return theMap.toString();
+		}
+	}
+
+	static class MappedTriFunction2<T, U, V, X> implements TriFunction<T, U, V, X> {
+		private final Function<? super U, ? extends X> theMap;
+
+		MappedTriFunction2(Function<? super U, ? extends X> map) {
+			theMap = map;
+		}
+
+		@Override
+		public X apply(T t, U u, V v) {
+			return theMap.apply(u);
+		}
+
+		@Override
+		public int hashCode() {
+			return theMap.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof MappedTriFunction2))
+				return false;
+			return theMap.equals(((MappedTriFunction2<?, ?, ?, ?>) obj).theMap);
+		}
+
+		@Override
+		public String toString() {
+			return theMap.toString();
+		}
+	}
+
+	static class MappedTriFunction3<T, U, V, X> implements TriFunction<T, U, V, X> {
+		private final Function<? super V, ? extends X> theMap;
+
+		MappedTriFunction3(Function<? super V, ? extends X> map) {
+			theMap = map;
+		}
+
+		@Override
+		public X apply(T t, U u, V v) {
+			return theMap.apply(v);
+		}
+
+		@Override
+		public int hashCode() {
+			return theMap.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof MappedTriFunction3))
+				return false;
+			return theMap.equals(((MappedTriFunction3<?, ?, ?, ?>) obj).theMap);
+		}
+
+		@Override
+		public String toString() {
+			return theMap.toString();
+		}
+	}
+
+	static class BiMappedTriFunction12<T, U, V, X> implements TriFunction<T, U, V, X> {
+		private final BiFunction<? super T, ? super U, ? extends X> theMap;
+
+		BiMappedTriFunction12(BiFunction<? super T, ? super U, ? extends X> map) {
+			theMap = map;
+		}
+
+		@Override
+		public X apply(T arg1, U arg2, V arg3) {
+			return theMap.apply(arg1, arg2);
+		}
+
+		@Override
+		public int hashCode() {
+			return theMap.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof BiMappedTriFunction12))
+				return false;
+			return theMap.equals(((BiMappedTriFunction12<?, ?, ?, ?>) obj).theMap);
+		}
+
+		@Override
+		public String toString() {
+			return theMap.toString();
+		}
+	}
+
+	static class BiMappedTriFunction13<T, U, V, X> implements TriFunction<T, U, V, X> {
+		private final BiFunction<? super T, ? super V, ? extends X> theMap;
+
+		BiMappedTriFunction13(BiFunction<? super T, ? super V, ? extends X> map) {
+			theMap = map;
+		}
+
+		@Override
+		public X apply(T arg1, U arg2, V arg3) {
+			return theMap.apply(arg1, arg3);
+		}
+
+		@Override
+		public int hashCode() {
+			return theMap.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof BiMappedTriFunction13))
+				return false;
+			return theMap.equals(((BiMappedTriFunction13<?, ?, ?, ?>) obj).theMap);
+		}
+
+		@Override
+		public String toString() {
+			return theMap.toString();
+		}
+	}
+
+	static class BiMappedTriFunction23<T, U, V, X> implements TriFunction<T, U, V, X> {
+		private final BiFunction<? super U, ? super V, ? extends X> theMap;
+
+		BiMappedTriFunction23(BiFunction<? super U, ? super V, ? extends X> map) {
+			theMap = map;
+		}
+
+		@Override
+		public X apply(T arg1, U arg2, V arg3) {
+			return theMap.apply(arg2, arg3);
+		}
+
+		@Override
+		public int hashCode() {
+			return theMap.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof BiMappedTriFunction23))
+				return false;
+			return theMap.equals(((BiMappedTriFunction23<?, ?, ?, ?>) obj).theMap);
 		}
 
 		@Override
