@@ -55,6 +55,10 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		return BetterFile.getRoots(new NativeFileSource(file)).get(0);
 	}
 
+	public static BetterFile of(String filePath) {
+		return of(new File(filePath));
+	}
+
 	class NativeFileBacking implements BetterFile.FileBacking {
 		private final NativeFileBacking theParent;
 		private final File theFile;
