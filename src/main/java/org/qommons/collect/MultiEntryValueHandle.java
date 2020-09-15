@@ -1,7 +1,8 @@
 package org.qommons.collect;
 
 /**
- * Represents a single key-value pair in a {@link BetterMultiMap}
+ * Represents a single key-value pair in a {@link BetterMultiMap}. The {@link #getElementId() element ID} may be used in the value
+ * collection returned by {@link BetterMultiMap#get(Object) BetterMultiMap.getEntry}({@link #getKeyId()}).
  * 
  * @param <K> The type of the key
  * @param <V> The type of the value

@@ -83,10 +83,9 @@ public interface Format<T> {
 		@Override
 		public Integer parse(CharSequence text) throws ParseException {
 			Long parsed = LONG.parse(text);
-			if (text.length() > 10)
-				throw new ParseException("Integer values must be between " + Integer.MIN_VALUE + " and " + Integer.MAX_VALUE, 0);
 			if (parsed.longValue() < Integer.MIN_VALUE || parsed.longValue() > Integer.MAX_VALUE)
-				throw new ParseException("Integer values must be between " + Integer.MIN_VALUE + " and " + Integer.MAX_VALUE, 0);
+				throw new ParseException("Integer values must be between " + Integer.MIN_VALUE + " and " + Integer.MAX_VALUE + ": " + text,
+					0);
 			return parsed.intValue();
 		}
 

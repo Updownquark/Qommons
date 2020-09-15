@@ -395,6 +395,8 @@ public interface SpinnerFormat<T> extends Format<T> {
 
 		@Override
 		public void append(StringBuilder text, List<T> value) {
+			if (value == null)
+				return;
 			boolean first = true;
 			for (T v : value) {
 				if (first)
@@ -498,6 +500,8 @@ public interface SpinnerFormat<T> extends Format<T> {
 
 		@Override
 		public void append(StringBuilder text, Set<T> value) {
+			if (value == null)
+				return;
 			boolean first = true;
 			for (T v : value) {
 				if (first)
