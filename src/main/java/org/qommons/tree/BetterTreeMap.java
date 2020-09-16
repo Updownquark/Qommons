@@ -520,6 +520,11 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 			this(locker, Identifiable.wrap(mapId, "entrySet"), map.comparator());
 			initialize((Set<? extends Map.Entry<K, V>>) map.entrySet(), entry -> creator.apply(entry.getKey(), entry.getValue()));
 		}
+
+		@Override
+		public SortedSetSplitSpliterable<Map.Entry<K, V>> subList(int fromIndex, int toIndex) {
+			return super.subList(fromIndex, toIndex);
+		}
 	}
 
 	@SuppressWarnings("static-method")

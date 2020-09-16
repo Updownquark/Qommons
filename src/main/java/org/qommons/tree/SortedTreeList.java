@@ -16,6 +16,7 @@ import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.OptimisticContext;
+import org.qommons.collect.SplitSpliterable;
 import org.qommons.collect.StampedLockingStrategy;
 
 /**
@@ -23,7 +24,7 @@ import org.qommons.collect.StampedLockingStrategy;
  * 
  * @param <E> The type of value in the list
  */
-public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSortedList<E> {
+public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedSortedList<E>, BetterSortedList<E> {
 	private static final String DEFAULT_DESCRIP = "sorted-tree-list";
 
 	/**
@@ -343,6 +344,105 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements BetterSort
 		super.withAll(values);
 		return this;
 	}
+
+	@Override
+	public ReversedSortedTreeList<E> reverse() {
+		return new ReversedSortedTreeList<>(this);
+	}
+
+	@Override
+	public SplitSpliterable<E> subList(int fromIndex, int toIndex) {
+		return TreeBasedSortedList.super.subList(fromIndex, toIndex);
+	}
+
+	/**
+	 * Implements {@link SortedTreeList#reverse()}
+	 * 
+	 * @param <E> The type of values in the list
+	 */
+	public static class ReversedSortedTreeList<E> extends BetterSortedList.ReversedSortedList<E> implements TreeBasedSortedList<E> {
+		/** @param wrap The {@link SortedTreeList} to reverse */
+		public ReversedSortedTreeList(SortedTreeList<E> wrap) {
+			super(wrap);
+		}
+
+		@Override
+		protected SortedTreeList<E> getWrapped() {
+			return (SortedTreeList<E>) super.getWrapped();
+		}
+
+		@Override
+		public BinaryTreeNode<E> getRoot() {
+			return BinaryTreeNode.reverse(getWrapped().getRoot());
+		}
+
+		@Override
+		public BinaryTreeNode<E> splitBetween(ElementId element1, ElementId element2) {
+			return BinaryTreeNode.reverse(getWrapped().splitBetween(ElementId.reverse(element1), ElementId.reverse(element2)));
+		}
+
+		@Override
+		public BinaryTreeNode<E> getTerminalElement(boolean first) {
+			return (BinaryTreeNode<E>) super.getTerminalElement(first);
+		}
+
+		@Override
+		public BinaryTreeNode<E> getElement(int index) {
+			return (BinaryTreeNode<E>) super.getElement(index);
+		}
+
+		@Override
+		public BinaryTreeNode<E> getAdjacentElement(ElementId elementId, boolean next) {
+			return (BinaryTreeNode<E>) super.getAdjacentElement(elementId, next);
+		}
+
+		@Override
+		public BinaryTreeNode<E> getElement(E value, boolean first) {
+			return (BinaryTreeNode<E>) super.getElement(value, first);
+		}
+
+		@Override
+		public BinaryTreeNode<E> getElement(ElementId id) {
+			return (BinaryTreeNode<E>) super.getElement(id);
+		}
+
+		@Override
+		public BinaryTreeNode<E> addElement(E value, boolean first) throws UnsupportedOperationException, IllegalArgumentException {
+			return TreeBasedSortedList.super.addElement(value, first);
+		}
+
+		@Override
+		public BinaryTreeNode<E> addElement(int index, E element) {
+			return TreeBasedSortedList.super.addElement(index, element);
+		}
+
+		@Override
+		public BinaryTreeNode<E> addElement(E value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return (BinaryTreeNode<E>) super.addElement(value, after, before, first);
+		}
+
+		@Override
+		public MutableBinaryTreeNode<E> mutableElement(ElementId id) {
+			return getWrapped().mutableElement(id.reverse()).reverse();
+		}
+
+		@Override
+		public BinaryTreeNode<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+			return (BinaryTreeNode<E>) super.search(search, filter);
+		}
+
+		@Override
+		public SortedTreeList<E> reverse() {
+			return getWrapped();
+		}
+
+		@Override
+		public SplitSpliterable<E> subList(int fromIndex, int toIndex) {
+			return TreeBasedSortedList.super.subList(fromIndex, toIndex);
+		}
+	}
+
 
 	private class SortedMutableTreeNode implements MutableBinaryTreeNode<E> {
 		private final MutableBinaryTreeNode<E> theWrapped;

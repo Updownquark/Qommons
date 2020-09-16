@@ -1,18 +1,14 @@
 package org.qommons.collect;
 
-import java.lang.reflect.Array;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.NavigableSet;
-import java.util.NoSuchElementException;
 import java.util.Spliterator;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import org.qommons.Identifiable;
-import org.qommons.QommonsUtils;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
@@ -29,22 +25,6 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * @param <E> The type of values in the set
  */
 public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, NavigableSet<E> {
-	/**
-	 * @param search The search to use
-	 * @return Either:
-	 *         <ul>
-	 *         <li>The index of the element <code>search</code>
-	 *         (<code>search.{@link Comparable#compareTo(Object) compareTo}(element)==0</code>)</li>
-	 *         <li>or <code>-index-1</code>, where <code>index</code> is the index in this sorted set where a value matching
-	 *         <code>search</code> would be if it were added</li>
-	 *         </ul>
-	 */
-	@Override
-	int indexFor(Comparable<? super E> search);
-
-	@Override
-	void clear();
-
 	@Override
 	default boolean isContentControlled() {
 		return true;
@@ -133,12 +113,12 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 
 	@Override
 	default E first() {
-		return getFirst();
+		return BetterSortedList.super.first();
 	}
 
 	@Override
 	default E last() {
-		return getLast();
+		return BetterSortedList.super.last();
 	}
 
 	@Override
@@ -153,67 +133,31 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 
 	@Override
 	default E floor(E e) {
-		CollectionElement<E> element = search(searchFor(e, 0), BetterSortedList.SortedSearchFilter.Less);
-		return element == null ? null : element.get();
+		return BetterSortedList.super.floor(e);
 	}
 
 	@Override
 	default E lower(E e) {
-		CollectionElement<E> element = search(searchFor(e, -1), BetterSortedList.SortedSearchFilter.Less);
-		return element == null ? null : element.get();
+		return BetterSortedList.super.lower(e);
 	}
 
 	@Override
 	default E ceiling(E e) {
-		CollectionElement<E> element = search(searchFor(e, 0), BetterSortedList.SortedSearchFilter.Greater);
-		return element == null ? null : element.get();
+		return BetterSortedList.super.ceiling(e);
 	}
 
 	@Override
 	default E higher(E e) {
-		CollectionElement<E> element = search(searchFor(e, 1), BetterSortedList.SortedSearchFilter.Greater);
-		return element == null ? null : element.get();
+		return BetterSortedList.super.higher(e);
 	}
 
-	/**
-	 * Given a value/search, returns an interpolated value within this set's contents
-	 * 
-	 * @param <T> The type of value to return
-	 * @param search The search to search for a position within this set's values
-	 * @param onMatchOrTerminal Provides the result in the case that:
-	 *        <ul>
-	 *        <li>A value in this set matches the search exactly</li>
-	 *        <li>The first value in this set is greater than the search</li>
-	 *        <li>The last value in this set is less than the search</li>
-	 *        </ul>
-	 * @param interpolate Provides the result in the case that there are two adjacent values in this set, <code>v1</code> and
-	 *        <code>v2</code>, such that <code>v1&lt;search && v2&gt;search</code>
-	 * @param onEmpty Provides the result in the case that this set is empty
-	 * @return The value supplied by the appropriate function
-	 */
+	@Override
 	default <T> T between(Comparable<? super E> search, Function<? super E, ? extends T> onMatchOrTerminal,
 		BiFunction<? super E, ? super E, ? extends T> interpolate, Supplier<? extends T> onEmpty) {
-		return betweenElements(search, //
-			el -> onMatchOrTerminal.apply(el.get()), (el1, el2) -> interpolate.apply(el1.get(), el2.get()), onEmpty);
+		return BetterSortedList.super.between(search, onMatchOrTerminal, interpolate, onEmpty);
 	}
 
-	/**
-	 * Same as {@link #between(Comparable, Function, BiFunction, Supplier)}, but supplies the {@link CollectionElement element}s to the
-	 * value functions
-	 * 
-	 * @param <T> The type of value to return
-	 * @param search The search to search for a position within this set's values
-	 * @param onMatchOrTerminal Provides the result in the case that:
-	 *        <ul>
-	 *        <li>An element in this set matches the search exactly</li>
-	 *        <li>The first element in this set is greater than the search</li>
-	 *        <li>The last element in this set is less than the search</li>
-	 *        </ul>
-	 * @param interpolate Provides the result in the case that there are two adjacent elements in this set whose values, <code>v1</code> and
-	 *        <code>v2</code> are such that <code>v1&lt;search && v2&gt;search</code>
-	 * @param onEmpty Provides the result in the case that this set is empty
-	 * @return The value supplied by the appropriate function
-	 */
+	@Override
 	default <T> T betweenElements(Comparable<? super E> search, Function<? super CollectionElement<E>, ? extends T> onMatchOrTerminal,
 		BiFunction<? super CollectionElement<E>, ? super CollectionElement<E>, ? extends T> interpolate, Supplier<? extends T> onEmpty) {
 		CollectionElement<E> found = search(search, BetterSortedList.SortedSearchFilter.Less);
@@ -247,6 +191,41 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	@Override
 	default Iterator<E> descendingIterator() {
 		return reverse().iterator();
+	}
+
+	@Override
+	default BetterSortedSet<E> subSequence(E fromElement, boolean fromInclusive, E toElement, boolean toInclusive) {
+		return subSet(fromElement, fromInclusive, toElement, toInclusive);
+	}
+
+	@Override
+	default BetterSortedSet<E> subSequence(Comparable<? super E> from, Comparable<? super E> to) {
+		return subSet(from, to);
+	}
+
+	@Override
+	default BetterSortedSet<E> headSequence(E toElement, boolean inclusive) {
+		return headSet(toElement, inclusive);
+	}
+
+	@Override
+	default BetterSortedSet<E> tailSequence(E fromElement, boolean inclusive) {
+		return tailSet(fromElement, inclusive);
+	}
+
+	@Override
+	default BetterSortedSet<E> subSequence(E fromElement, E toElement) {
+		return subSet(fromElement, toElement);
+	}
+
+	@Override
+	default BetterSortedSet<E> headSequence(E toElement) {
+		return headSet(toElement);
+	}
+
+	@Override
+	default BetterSortedSet<E> tailSequence(E fromElement) {
+		return tailSet(fromElement);
 	}
 
 	@Override
@@ -316,673 +295,53 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	 *
 	 * @param <E> The type of elements in the set
 	 */
-	public static class BetterSubSet<E> implements BetterSortedSet<E> {
-		private final BetterSortedSet<E> theWrapped;
-
-		private final Comparable<? super E> from;
-		private final Comparable<? super E> to;
-
-		private Object theIdentity;
-
+	public static class BetterSubSet<E> extends BetterSubSequence<E> implements BetterSortedSet<E> {
 		/**
 		 * @param set The sorted set that this sub set is for
 		 * @param from The lower bound for the sub set
 		 * @param to The upper bound for the sub set
 		 */
 		public BetterSubSet(BetterSortedSet<E> set, Comparable<? super E> from, Comparable<? super E> to) {
-			theWrapped = set;
-			this.from = from;
-			this.to = to;
+			super(set, from, to);
 		}
 
 		@Override
-		public Object getIdentity() {
-			if (theIdentity == null)
-				theIdentity = Identifiable.wrap(theWrapped.getIdentity(), "subSet", from, to);
-			return theIdentity;
-		}
-
-		/** @return The sorted set that this is a sub-set of */
 		public BetterSortedSet<E> getWrapped() {
-			return theWrapped;
+			return (BetterSortedSet<E>) super.getWrapped();
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return theWrapped.isLockSupported();
-		}
-
-		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theWrapped.lock(write, cause);
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return theWrapped.tryLock(write, cause);
-		}
-
-		@Override
-		public long getStamp() {
-			return theWrapped.getStamp();
-		}
-
-		/** @return This sub-set's lower bound (may be null) */
-		public Comparable<? super E> getFrom() {
-			return from;
-		}
-
-		/** @return This sub-set's upper bound (may be null) */
-		public Comparable<? super E> getTo() {
-			return to;
-		}
-
-		/**
-		 * @param value The value to check
-		 * @return
-		 *         <ul>
-		 *         <li><b>0</b> if the value belongs in this set</li>
-		 *         <li><b>&lt;0</b> if <code>{@link #getFrom() from}.{@link Comparable#compareTo(Object) compareTo}(value)&gt;0</code></li>
-		 *         <li><b>&gt;0</b> if <code>{@link #getTo() to}.{@link Comparable#compareTo(Object) compareTo}(value)&lt;0</code></li>
-		 *         </ul>
-		 */
-		public int isInRange(E value) {
-			if (from != null && from.compareTo(value) > 0)
-				return -1;
-			if (to != null && to.compareTo(value) < 0)
-				return 1;
-			return 0;
-		}
-
-		/**
-		 * @param search The search for this sub set
-		 * @return A search to use within this sub set's {@link #getWrapped() super set} that obeys the given search within the sub-set's
-		 *         bounds, but returns &lt;0 for values below and &gt;0 for values above this sub set's bounds
-		 */
-		protected Comparable<E> boundSearch(Comparable<? super E> search) {
-			class BoundedSearch<V> implements Comparable<V> {
-				private final BetterSubSet<V> theSubSet;
-				private final Comparable<? super V> theSearch;
-
-				BoundedSearch(BetterSubSet<V> subSet, Comparable<? super V> srch) {
-					theSubSet = subSet;
-					theSearch = srch;
-				}
-
-				@Override
-				public int compareTo(V v) {
-					int compare = -theSubSet.isInRange(v);
-					if (compare == 0)
-						compare = theSearch.compareTo(v);
-					return compare;
-				}
-
-				@Override
-				public String toString() {
-					StringBuilder str = new StringBuilder("bounded(").append(search);
-					if (theSubSet.from != null)
-						str.append(", " + theSubSet.from);
-					if (theSubSet.to != null)
-						str.append(", " + theSubSet.to);
-					str.append(')');
-					return str.toString();
-				}
-			}
-			return new BoundedSearch<>(this, search);
-		}
-
-		@Override
-		public boolean belongs(Object o) {
-			return theWrapped.belongs(o) && isInRange((E) o) == 0;
-		}
-
-		/** @return The first index in the wrapped sorted set that is included in this set */
-		protected int getMinIndex() {
-			if (from == null)
-				return 0;
-			int index = theWrapped.indexFor(from);
-			if (index >= 0)
-				return index;
-			else
-				return -index - 1; // Zeroth element is AFTER the from search
-		}
-
-		/** @return The last index in the wrapped */
-		protected int getMaxIndex() {
-			if (to == null)
-				return theWrapped.size();
-			int index = theWrapped.indexFor(to);
-			if (index >= 0)
-				return index + 1;
-			else
-				return -index - 1;
-		}
-
-		@Override
-		public Comparator<? super E> comparator() {
-			return theWrapped.comparator();
-		}
-
-		@Override
-		public int size() {
-			int minIndex = getMinIndex();
-			if (minIndex < 0)
-				return 0;
-			int maxIndex = getMaxIndex();
-			return Math.max(0, maxIndex - minIndex);
-		}
-
-		@Override
-		public boolean isEmpty() {
-			int minIndex = getMinIndex();
-			if (minIndex < 0)
-				return true;
-			int maxIndex = getMaxIndex();
-			return minIndex >= maxIndex;
-		}
-
-		@Override
-		public int indexFor(Comparable<? super E> search) {
-			int minIndex = getMinIndex();
-			int maxIndex = getMaxIndex();
-			if (minIndex >= maxIndex)
-				return -1;
-			int wrapIdx = theWrapped.indexFor(boundSearch(search));
-			if (wrapIdx < 0) {
-				wrapIdx = -wrapIdx - 1 - minIndex;
-				return -wrapIdx - 1;
-			} else
-				return wrapIdx - minIndex;
-		}
-
-		@Override
-		public int getElementsBefore(ElementId id) {
-			int wIndex = theWrapped.getElementsBefore(strip(id));
-			int minIdx = getMinIndex();
-			if (wIndex < minIdx)
-				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			if (wIndex >= getMaxIndex())
-				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			return wIndex - minIdx;
-		}
-
-		@Override
-		public int getElementsAfter(ElementId id) {
-			int wIndex = theWrapped.getElementsBefore(strip(id));
-			int maxIdx = getMaxIndex();
-			if (wIndex >= maxIdx)
-				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			if (wIndex < getMinIndex())
-				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			return maxIdx - wIndex - 1;
-		}
-
-		@Override
-		public Object[] toArray() {
-			Object[] array = new Object[size()];
-			for (int i = 0; i < array.length; i++)
-				array[i] = get(i);
-			return array;
-		}
-
-		@Override
-		public <T> T[] toArray(T[] a) {
-			T[] array = a.length >= size() ? a : (T[]) Array.newInstance(a.getClass().getComponentType(), size());
-			for (int i = 0; i < array.length; i++)
-				array[i] = (T) get(i);
-			return array;
-		}
-
-		private int checkIndex(int index, boolean includeTerminus) {
-			if (index < 0)
-				throw new IndexOutOfBoundsException("" + index);
-			int min = getMinIndex();
-			int max = getMaxIndex();
-			int wrapIndex = min + index;
-			if (wrapIndex > max || (wrapIndex == max && !includeTerminus))
-				throw new IndexOutOfBoundsException(index + " of " + Math.max(0, max - min));
-			return min + index;
-		}
-
-		@Override
-		public E get(int index) {
-			return theWrapped.get(checkIndex(index, false));
-		}
-
-		@Override
-		public E set(int index, E element) {
-			if (!belongs(element))
-				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			try (Transaction t = lock(true, null)) {
-				return theWrapped.set(checkIndex(index, false), element);
-			}
-		}
-
-		@Override
-		public String canAdd(E value, ElementId after, ElementId before) {
-			if (!belongs(value))
-				return StdMsg.ILLEGAL_ELEMENT;
-			after = strip(after);
-			before = strip(before);
-			if (after == null && from != null)
-				after = CollectionElement.getElementId(theWrapped.search(from, BetterSortedList.SortedSearchFilter.Less));
-			if (before == null && to != null)
-				before = CollectionElement.getElementId(theWrapped.search(to, BetterSortedList.SortedSearchFilter.Greater));
-			return theWrapped.canAdd(value, after, before);
-		}
-
-		@Override
-		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
-			throws UnsupportedOperationException, IllegalArgumentException {
-			if (!belongs(value))
-				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			after = strip(after);
-			before = strip(before);
-			if (after == null && from != null)
-				after = CollectionElement.getElementId(theWrapped.search(from, BetterSortedList.SortedSearchFilter.Less));
-			if (before == null && to != null)
-				before = CollectionElement.getElementId(theWrapped.search(to, BetterSortedList.SortedSearchFilter.Greater));
-			return getElement(theWrapped.addElement(value, after, before, first));
-		}
-
-		@Override
-		public void add(int index, E element) {
-			if (!belongs(element))
-				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			try (Transaction t = lock(true, null)) {
-				theWrapped.add(checkIndex(index, true), element);
-			}
-		}
-
-		@Override
-		public E remove(int index) {
-			return theWrapped.remove(checkIndex(index, false));
-		}
-
-		@Override
-		public CollectionElement<E> getElement(int index) {
-			return getElement(theWrapped.getElement(checkIndex(index, false)));
-		}
-
-		@Override
-		public CollectionElement<E> getElement(E value, boolean first) {
-			if (!belongs(value))
-				return null;
-			return getElement(theWrapped.getElement(value, first));
-		}
-
-		@Override
-		public CollectionElement<E> getElement(ElementId id) {
-			CollectionElement<E> el = theWrapped.getElement(strip(id));
-			if (isInRange(el.get()) != 0)
-				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			return getElement(el);
-		}
-
-		@Override
-		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
-			if (sourceCollection == this)
-				return BetterList.of(getElement(sourceEl));
-			return QommonsUtils.filterMap(theWrapped.getElementsBySource(sourceEl, sourceCollection), el -> isInRange(el.get()) == 0,
-				el -> getElement(el));
-		}
-
-		@Override
-		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
-			if (sourceCollection == this)
-				return BetterList.of(theWrapped.getSourceElements(strip(localElement), theWrapped).stream().map(this::wrap));
-			return theWrapped.getSourceElements(strip(localElement), sourceCollection);
-		}
-
-		@Override
-		public ElementId getEquivalentElement(ElementId equivalentEl) {
-			if (!(equivalentEl instanceof BetterSubSet.BoundedElementId))
-				return null;
-			ElementId wrappedId = theWrapped.getEquivalentElement(((BoundedElementId) equivalentEl).theSourceId);
-			return wrap(wrappedId);
-		}
-
-		@Override
-		public CollectionElement<E> getTerminalElement(boolean first) {
-			CollectionElement<E> wrapTerminal;
-			if (first) {
-				if (from == null)
-					wrapTerminal = theWrapped.getTerminalElement(true);
-				else
-					wrapTerminal = theWrapped.search(from, BetterSortedList.SortedSearchFilter.Greater);
-			} else {
-				if (to == null)
-					wrapTerminal = theWrapped.getTerminalElement(false);
-				else
-					wrapTerminal = theWrapped.search(to, BetterSortedList.SortedSearchFilter.Less);
-			}
-			if (wrapTerminal == null)
-				return null;
-			else if (from != null && from.compareTo(wrapTerminal.get()) > 0)
-				return null;
-			else if (to != null && to.compareTo(wrapTerminal.get()) < 0)
-				return null;
-			else
-				return getElement(wrapTerminal);
-		}
-
-		@Override
-		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
-			CollectionElement<E> el = theWrapped.getAdjacentElement(strip(elementId), next);
-			if (el == null || isInRange(el.get()) != 0)
-				return null;
-			return getElement(el);
-		}
-
-		@Override
-		public MutableCollectionElement<E> mutableElement(ElementId id) {
-			MutableCollectionElement<E> el = theWrapped.mutableElement(strip(id));
-			return new BoundedMutableElement(el);
-		}
-
-		@Override
-		public CollectionElement<E> search(Comparable<? super E> search, BetterSortedList.SortedSearchFilter filter) {
-			CollectionElement<E> wrapResult = theWrapped.search(boundSearch(search), filter);
-			if (wrapResult == null)
-				return null;
-			int range = isInRange(wrapResult.get());
-			if (range == 0)
-				return getElement(wrapResult);
-			if (filter.strict)
-				return null;
-			return getTerminalElement(range < 0);
+		public boolean add(E value) {
+			return BetterSortedSet.super.add(value);
 		}
 
 		@Override
 		public BetterSortedSet<E> subSet(Comparable<? super E> innerFrom, Comparable<? super E> innerTo) {
 			if (BetterCollections.simplifyDuplicateOperations())
-				return new BetterSubSet<>(theWrapped, BetterSortedList.and(from, innerFrom, true),
-					BetterSortedList.and(to, innerTo, false));
+				return new BetterSubSet<>(getWrapped(), BetterSortedList.and(getFrom(), innerFrom, true),
+					BetterSortedList.and(getTo(), innerTo, false));
 			else
 				return BetterSortedSet.super.subSet(innerFrom, innerTo);
 		}
 
-				@Override
-		public boolean removeLast(Object o) {
-			if ((o != null && !theWrapped.belongs(o)) || isInRange((E) o) != 0)
-				return false;
-			return theWrapped.removeLast(o);
-		}
-
 		@Override
-		public void clear() {
-			CollectionElement<E> bound = from == null ? null : theWrapped.search(from, BetterSortedList.SortedSearchFilter.Less);
-			if (bound == null)
-				bound = to == null ? null : theWrapped.search(to, BetterSortedList.SortedSearchFilter.Greater);
-			if (bound == null) // This sub set contains all of the super set's elements
-				theWrapped.clear();
-			else
-				removeIf(v -> true);
-		}
-
-		@Override
-		public boolean isConsistent(ElementId element) {
-			return theWrapped.isConsistent(unwrap(element));
-		}
-
-		@Override
-		public boolean checkConsistency() {
-			return theWrapped.checkConsistency();
-		}
-
-		@Override
-		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
-			RepairListener<E, X> subListener = listener == null ? null : new BoundedRepairListener<>(listener);
-			return theWrapped.repair(unwrap(element), subListener);
-		}
-
-		@Override
-		public <X> boolean repair(RepairListener<E, X> listener) {
-			RepairListener<E, X> subListener = listener == null ? null : new BoundedRepairListener<>(listener);
-			return theWrapped.repair(subListener);
+		public BetterSortedSet<E> subSequence(Comparable<? super E> innerFrom, Comparable<? super E> innerTo) {
+			return subSet(innerFrom, innerTo);
 		}
 
 		@Override
 		public int hashCode() {
-			return BetterCollection.hashCode(this);
+			return BetterSet.hashCode(this);
 		}
 
 		@Override
 		public boolean equals(Object obj) {
-			return BetterCollection.equals(this, obj);
+			return BetterSet.equals(this, obj);
 		}
 
 		@Override
 		public String toString() {
-			StringBuilder ret = new StringBuilder("{");
-			boolean first = true;
-			for (Object value : this) {
-				if (!first) {
-					ret.append(", ");
-				} else
-					first = false;
-				ret.append(value);
-			}
-			ret.append('}');
-			return ret.toString();
-		}
-
-		/**
-		 * @param id The element ID for this sub-set
-		 * @return The corresponding element ID for the parent set
-		 */
-		protected ElementId strip(ElementId id) {
-			if (id == null)
-				return null;
-			BoundedElementId boundedId = (BetterSubSet<E>.BoundedElementId) id;
-			if (!boundedId.check())
-				throw new NoSuchElementException(StdMsg.ELEMENT_REMOVED);
-			return boundedId.theSourceId;
-		}
-
-		BoundedElement getElement(CollectionElement<E> element) {
-			return element == null ? null : new BoundedElement(element);
-		}
-
-		/**
-		 * @param wrappedElId The element ID from the wrapped sorted set
-		 * @return The element ID for this set
-		 */
-		protected ElementId wrap(ElementId wrappedElId) {
-			return wrappedElId == null ? null : new BoundedElementId(wrappedElId);
-		}
-
-		/**
-		 * @param wrappedElId The element ID from the this set
-		 * @return The element ID for the wrapped set
-		 */
-		protected static ElementId unwrap(ElementId wrappedElId) {
-			return ((BetterSubSet.BoundedElementId) wrappedElId).theSourceId;
-		}
-
-		class BoundedElementId implements ElementId {
-			private final ElementId theSourceId;
-
-			BoundedElementId(ElementId sourceId) {
-				theSourceId = sourceId;
-			}
-
-			boolean check() {
-				if (!theSourceId.isPresent())
-					return true;
-				return isInRange(getWrapped().getElement(theSourceId).get()) == 0;
-			}
-
-			@Override
-			public int compareTo(ElementId o) {
-				return theSourceId.compareTo(((BoundedElementId) o).theSourceId);
-			}
-
-			@Override
-			public boolean isPresent() {
-				return theSourceId.isPresent() && check();
-			}
-
-			@Override
-			public int hashCode() {
-				return theSourceId.hashCode();
-			}
-
-			@Override
-			public boolean equals(Object obj) {
-				if (obj == this)
-					return true;
-				else if (!(obj instanceof BetterSubSet.BoundedElementId))
-					return false;
-				else
-					return theSourceId.equals(((BoundedElementId) obj).theSourceId);
-			}
-
-			@Override
-			public String toString() {
-				String str = theSourceId.toString();
-				if (theSourceId.isPresent() && !check())
-					str = "(removed) " + str;
-				return str;
-			}
-		}
-
-		class BoundedElement implements CollectionElement<E> {
-			private final CollectionElement<E> theWrappedEl;
-			private BoundedElementId theId;
-
-			BoundedElement(CollectionElement<E> wrappedEl) {
-				theWrappedEl = wrappedEl;
-			}
-
-			CollectionElement<E> getWrappedEl() {
-				return theWrappedEl;
-			}
-
-			@Override
-			public BoundedElementId getElementId() {
-				if (theId == null)
-					theId = new BoundedElementId(theWrappedEl.getElementId());
-				return theId;
-			}
-
-			@Override
-			public E get() {
-				return theWrappedEl.get();
-			}
-
-			@Override
-			public int hashCode() {
-				return theWrappedEl.hashCode();
-			}
-
-			@Override
-			public boolean equals(Object obj) {
-				if (obj == this)
-					return true;
-				else if (!(obj instanceof BetterSubSet.BoundedElement))
-					return false;
-				else
-					return theWrappedEl.equals(((BoundedElement) obj).theWrappedEl);
-			}
-
-			@Override
-			public String toString() {
-				String str = theWrappedEl.toString();
-				if (theWrappedEl.getElementId().isPresent() && !getElementId().check())
-					str = "(removed) " + str;
-				return str;
-			}
-		}
-
-		class BoundedMutableElement extends BoundedElement implements MutableCollectionElement<E> {
-			BoundedMutableElement(MutableCollectionElement<E> wrappedEl) {
-				super(wrappedEl);
-			}
-
-			@Override
-			MutableCollectionElement<E> getWrappedEl() {
-				return (MutableCollectionElement<E>) super.getWrappedEl();
-			}
-
-			@Override
-			public BetterCollection<E> getCollection() {
-				return BetterSubSet.this;
-			}
-
-			@Override
-			public String isEnabled() {
-				if (!getElementId().check())
-					return StdMsg.UNSUPPORTED_OPERATION;
-				return getWrappedEl().isEnabled();
-			}
-
-			@Override
-			public String isAcceptable(E value) {
-				if (!getElementId().check())
-					return StdMsg.UNSUPPORTED_OPERATION;
-				if (isInRange(value) != 0)
-					return StdMsg.ILLEGAL_ELEMENT;
-				return getWrappedEl().isAcceptable(value);
-			}
-
-			@Override
-			public void set(E value) throws IllegalArgumentException, UnsupportedOperationException {
-				if (!getElementId().check())
-					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-				if (isInRange(value) != 0)
-					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-				getWrappedEl().set(value);
-			}
-
-			@Override
-			public String canRemove() {
-				if (!getElementId().check())
-					return StdMsg.UNSUPPORTED_OPERATION;
-				return getWrappedEl().canRemove();
-			}
-
-			@Override
-			public void remove() throws UnsupportedOperationException {
-				if (!getElementId().check())
-					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-				getWrappedEl().remove();
-			}
-		}
-
-		private class BoundedRepairListener<X> implements RepairListener<E, X> {
-			private final RepairListener<E, X> theWrappedListener;
-
-			BoundedRepairListener(RepairListener<E, X> wrapped) {
-				theWrappedListener = wrapped;
-			}
-
-			@Override
-			public X removed(CollectionElement<E> element) {
-				// As the repair method may be called after any number of changes to the set's values,
-				// we cannot assume anything about the previous state of the element, e.g. whether it was previously present in this
-				// sub-set.
-				// It is for this reason that the repair API specifies that this method may be called even for elements that were not
-				// present in the set.
-				return theWrappedListener.removed(getElement(element));
-			}
-
-			@Override
-			public void disposed(E value, X data) {
-				// As the repair method may be called after any number of changes to the set's values,
-				// we cannot assume anything about the previous state of the element, e.g. whether it was previously present in this
-				// sub-set.
-				// It is for this reason that the repair API specifies that this method may be called even for elements that were not
-				// present in the set.
-				// Therefore, we need to inform the listener about the element by one of the 2 methods
-				theWrappedListener.disposed(value, data);
-			}
-
-			@Override
-			public void transferred(CollectionElement<E> element, X data) {
-				if (isInRange(element.get()) == 0)
-					theWrappedListener.transferred(getElement(element), data);
-			}
+			return BetterSet.toString(this);
 		}
 	}
 
@@ -991,7 +350,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	 *
 	 * @param <E> The type of elements in the collection
 	 */
-	public static class ReversedSortedSet<E> extends ReversedList<E> implements BetterSortedSet<E> {
+	public static class ReversedSortedSet<E> extends ReversedSortedList<E> implements BetterSortedSet<E> {
 		/** @param wrap The sorted set to reverse */
 		public ReversedSortedSet(BetterSortedSet<E> wrap) {
 			super(wrap);
@@ -1000,102 +359,6 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		@Override
 		protected BetterSortedSet<E> getWrapped() {
 			return (BetterSortedSet<E>) super.getWrapped();
-		}
-
-		@Override
-		public Comparator<? super E> comparator() {
-			return reverse(getWrapped().comparator());
-		}
-
-		/**
-		 * @param <X> The type to compare
-		 * @param search The comparable to reverse
-		 * @return The reversed comparable
-		 */
-		public static <X> Comparable<X> reverse(Comparable<X> search) {
-			class ReversedSearch implements Comparable<X> {
-				Comparable<X> getWrapped() {
-					return search;
-				}
-
-				@Override
-				public int compareTo(X v) {
-					return -search.compareTo(v);
-				}
-
-				@Override
-				public String toString() {
-					return "reverse(" + search + ")";
-				}
-			}
-			if (search instanceof ReversedSearch)
-				return ((ReversedSearch) search).getWrapped();
-			return new ReversedSearch();
-		}
-
-		/**
-		 * @param <X> The type to compare
-		 * @param compare The comparator to reverse
-		 * @return The reversed comparator
-		 */
-		public static <X> Comparator<X> reverse(Comparator<X> compare) {
-			class ReversedCompare implements Comparator<X> {
-				Comparator<X> getWrapped() {
-					return compare;
-				}
-
-				@Override
-				public int compare(X v1, X v2) {
-					return -compare.compare(v1, v2);
-				}
-
-				@Override
-				public String toString() {
-					return "reverse(" + compare + ")";
-				}
-			}
-			if (compare instanceof ReversedCompare)
-				return ((ReversedCompare) compare).getWrapped();
-			return new ReversedCompare();
-		}
-
-		@Override
-		public int indexFor(Comparable<? super E> search) {
-			int index = getWrapped().indexFor(reverse(search));
-			if (index >= 0)
-				return size() - index - 1;
-			else {
-				index = -index - 1;
-				index = size() - index;
-				return -(index + 1);
-			}
-		}
-
-		@Override
-		public CollectionElement<E> search(Comparable<? super E> search, BetterSortedList.SortedSearchFilter filter) {
-			return CollectionElement.reverse(getWrapped().search(reverse(search), filter.opposite()));
-		}
-
-		@Override
-		public boolean isConsistent(ElementId element) {
-			return getWrapped().isConsistent(element.reverse());
-		}
-
-		@Override
-		public boolean checkConsistency() {
-			return getWrapped().checkConsistency();
-		}
-
-		@Override
-		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
-			RepairListener<E, X> reversedListener = listener == null ? null : new BetterSet.ReversedBetterSet.ReversedRepairListener<>(listener);
-			return getWrapped().repair(element, reversedListener);
-		}
-
-		@Override
-		public <X> boolean repair(RepairListener<E, X> listener) {
-			RepairListener<E, X> reversedListener = listener == null ? null : new BetterSet.ReversedBetterSet.ReversedRepairListener<>(listener);
-			return getWrapped().repair(reversedListener);
 		}
 
 		@Override
@@ -1108,17 +371,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 
 		@Override
 		public String toString() {
-			StringBuilder ret = new StringBuilder("{");
-			boolean first = true;
-			for (Object value : this) {
-				if (!first) {
-					ret.append(", ");
-				} else
-					first = false;
-				ret.append(value);
-			}
-			ret.append('}');
-			return ret.toString();
+			return BetterSet.toString(this);
 		}
 	}
 
@@ -1127,46 +380,14 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	 * 
 	 * @param <E> The type of the set
 	 */
-	public static class EmptySortedSet<E> extends BetterList.EmptyList<E> implements BetterSortedSet<E> {
-		private final Comparator<? super E> theCompare;
-
+	public static class EmptySortedSet<E> extends EmptySortedList<E> implements BetterSortedSet<E> {
 		EmptySortedSet(Comparator<? super E> compare) {
-			theCompare = compare;
+			super(compare);
 		}
 
 		@Override
-		public Comparator<? super E> comparator() {
-			return theCompare;
-		}
-
-		@Override
-		public int indexFor(Comparable<? super E> search) {
-			return -1;
-		}
-
-		@Override
-		public CollectionElement<E> search(Comparable<? super E> search, BetterSortedList.SortedSearchFilter filter) {
-			return null;
-		}
-
-		@Override
-		public boolean isConsistent(ElementId element) {
-			throw new NoSuchElementException();
-		}
-
-		@Override
-		public boolean checkConsistency() {
-			return false;
-		}
-
-		@Override
-		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
-			throw new NoSuchElementException();
-		}
-
-		@Override
-		public <X> boolean repair(org.qommons.collect.BetterSet.RepairListener<E, X> listener) {
-			return false;
+		public String toString() {
+			return BetterSet.toString(this);
 		}
 	}
 }

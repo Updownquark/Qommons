@@ -7,6 +7,7 @@ import java.util.function.Function;
 
 import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.CollectionLockingStrategy;
+import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.StampedLockingStrategy;
 
@@ -116,5 +117,48 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 	public BetterTreeSet<E> withAll(Collection<? extends E> values) {
 		super.withAll(values);
 		return this;
+	}
+
+	@Override
+	public ReversedTreeSet<E> reverse() {
+		return new ReversedTreeSet<>(this);
+	}
+
+	@Override
+	public SortedSetSplitSpliterable<E> subList(int fromIndex, int toIndex) {
+		return TreeBasedSet.super.subList(fromIndex, toIndex);
+	}
+
+	/**
+	 * Implements {@link BetterTreeSet#reverse()}
+	 * 
+	 * @param <E> The type of values in the set
+	 */
+	public static class ReversedTreeSet<E> extends SortedTreeList.ReversedSortedTreeList<E> implements TreeBasedSet<E> {
+		/** @param wrap The set to reverse */
+		public ReversedTreeSet(BetterTreeSet<E> wrap) {
+			super(wrap);
+		}
+
+		@Override
+		protected BetterTreeSet<E> getWrapped() {
+			return (BetterTreeSet<E>) super.getWrapped();
+		}
+
+		@Override
+		public BinaryTreeNode<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable added) {
+			return BinaryTreeNode
+				.reverse(getWrapped().getOrAdd(value, ElementId.reverse(before), ElementId.reverse(before), !first, added));
+		}
+
+		@Override
+		public BetterTreeSet<E> reverse() {
+			return getWrapped();
+		}
+
+		@Override
+		public SortedSetSplitSpliterable<E> subList(int fromIndex, int toIndex) {
+			return TreeBasedSet.super.subList(fromIndex, toIndex);
+		}
 	}
 }
