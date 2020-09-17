@@ -385,6 +385,11 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		/** @return This map's key set */
 		QuickSet<K> keySet();
 
+		/** @return Whether this map's key set is empty */
+		default boolean isEmpty() {
+			return keySet().isEmpty();
+		}
+
 		/** @return The number of keys in this map */
 		default int keySize() {
 			return keySet().size();
