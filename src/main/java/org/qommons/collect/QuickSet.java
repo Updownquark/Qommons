@@ -486,6 +486,31 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		}
 
 		/**
+		 * Like {@link #put(int, Object)} but returns this map
+		 * 
+		 * @param keyIndex The index in the key set for the value to set
+		 * @param value The value to set for the key at the given index in the key set
+		 * @return This map
+		 */
+		default QuickMap<K, V> with(int keyIndex, V value) {
+			put(keyIndex, value);
+			return this;
+		}
+
+		/**
+		 * Like {@link #put(Object, Object)} but returns this map
+		 * 
+		 * @param key The key to set the value for
+		 * @param value The value for the key
+		 * @return The previously set value for the key
+		 * @throws IllegalArgumentException If the key is not present in the map
+		 */
+		default QuickMap<K, V> with(K key, V value) throws IllegalArgumentException {
+			put(key, value);
+			return this;
+		}
+
+		/**
 		 * Adds all entries in the given map for which the key exists in this map into this map
 		 * 
 		 * @param values The values to add
