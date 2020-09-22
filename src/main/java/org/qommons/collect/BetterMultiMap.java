@@ -1253,6 +1253,21 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 				public K getKey() {
 					return outerHandle.getKey();
 				}
+
+				@Override
+				public int hashCode() {
+					return outerHandle.hashCode();
+				}
+
+				@Override
+				public boolean equals(Object obj) {
+					return obj instanceof MapEntryHandle && Objects.equals(getKey(), ((MapEntryHandle<?, ?>) obj).getKey());
+				}
+
+				@Override
+				public String toString() {
+					return getKey() + "=" + get();
+				}
 			};
 		}
 
