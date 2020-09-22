@@ -169,6 +169,20 @@ public class LambdaUtils {
 	}
 
 	/**
+	 * @param <T> The argument type of the function
+	 * @param <X> The return type of the function
+	 * @param fn The function
+	 * @param print The printed representation of the function
+	 * @param identifier The identifier for the function
+	 * @return The printable function
+	 */
+	public static <T, X> Function<T, X> printableFn(Function<T, X> fn, Supplier<String> print, Object identifier) {
+		if (fn == null)
+			return null;
+		return new PrintableFunction<>(fn, print, identifier);
+	}
+
+	/**
 	 * @param <T> The first argument type of the function
 	 * @param <U> The second argument type of the function
 	 * @param <X> The return type of the function
@@ -413,9 +427,20 @@ public class LambdaUtils {
 	 * @return The printable comparator
 	 */
 	public static <T> Comparator<T> printableComparator(Comparator<T> compare, Supplier<String> print) {
+		return printableComparator(compare, print, null);
+	}
+
+	/**
+	 * @param <T> The type to compare
+	 * @param compare The comparator to wrap
+	 * @param print The toString for the comparator
+	 * @param identifier The identifier to use for the comparator
+	 * @return The printable comparator
+	 */
+	public static <T> Comparator<T> printableComparator(Comparator<T> compare, Supplier<String> print, Object identifier) {
 		if (compare == null)
 			return null;
-		return new PrintableComparator<>(compare, print);
+		return new PrintableComparator<>(compare, print, identifier);
 	}
 
 	static class IdentityFunction<T> implements Function<T, T>, Identity {
@@ -912,8 +937,8 @@ public class LambdaUtils {
 	}
 
 	static class PrintableComparator<T> extends PrintableLambda<Comparator<T>> implements Comparator<T> {
-		public PrintableComparator(Comparator<T> lambda, Supplier<String> print) {
-			super(lambda, print);
+		public PrintableComparator(Comparator<T> lambda, Supplier<String> print, Object identifier) {
+			super(lambda, print, identifier);
 		}
 
 		@Override
