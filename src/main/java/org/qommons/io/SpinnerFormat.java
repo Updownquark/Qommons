@@ -182,15 +182,35 @@ public interface SpinnerFormat<T> extends Format<T> {
 	 * @see SimpleDateFormat#SimpleDateFormat(String)
 	 */
 	public static SpinnerFormat<Instant> flexDate(Supplier<Instant> reference, String dayFormat, TimeZone timeZone) {
-		return SpinnerFormat.<TimeUtils.ParsedTime, Instant> wrapAdjustable(
-			forAdjustable(text -> TimeUtils.parseFlexFormatTime(text, true, true)), //
-			time -> time.evaluate(Instant::now), instant -> TimeUtils.asFlexTime(instant, TimeUtils.GMT, "ddMMMyyyy"));
+		return flexDate(reference, dayFormat, timeZone, TimeUtils.DateElementType.Second, true);
 	}
 
-	/** @return A spinner format that parses durations (time lengths) using a flexible format */
-	public static SpinnerFormat<Duration> flexDuration() {
+	/**
+	 * Creates a date format that can increment or decrement the date at integers within the format
+	 * 
+	 * @param reference The reference time for relative date formats (if null, <code>Instant::now</code> will be used)
+	 * @param dayFormat The format for the day/month/year
+	 * @param timeZone The time zone for the format (may be null)
+	 * @param maxResolution The finest time component to print
+	 * @param militaryTime Whether to use military or AM/PM type time
+	 * @return A date format with the given pattern
+	 * @see SimpleDateFormat#SimpleDateFormat(String)
+	 */
+	public static SpinnerFormat<Instant> flexDate(Supplier<Instant> reference, String dayFormat, TimeZone timeZone,
+		TimeUtils.DateElementType maxResolution, boolean militaryTime) {
+		return SpinnerFormat.<TimeUtils.ParsedTime, Instant> wrapAdjustable(
+			forAdjustable(text -> TimeUtils.parseFlexFormatTime(text, true, true)), //
+			time -> time.evaluate(Instant::now),
+			instant -> TimeUtils.asFlexTime(instant, timeZone, dayFormat, maxResolution, militaryTime));
+	}
+
+	/**
+	 * @param weeks Whether to print weeks or just days
+	 * @return A spinner format that parses durations (time lengths) using a flexible format
+	 */
+	public static SpinnerFormat<Duration> flexDuration(boolean weeks) {
 		return SpinnerFormat.<TimeUtils.ParsedDuration, Duration> wrapAdjustable(forAdjustable(TimeUtils::parseDuration),
-			TimeUtils.ParsedDuration::asDuration, TimeUtils.ParsedDuration::asParsedDuration);
+			TimeUtils.ParsedDuration::asDuration, d -> TimeUtils.ParsedDuration.asParsedDuration(d, weeks));
 	}
 
 	/**

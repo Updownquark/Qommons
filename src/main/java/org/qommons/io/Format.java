@@ -478,7 +478,7 @@ public interface Format<T> {
 	 * @param timeZone The time zone for the format (may be null)
 	 * @return A flexible date format
 	 */
-	public static Format<Instant> flexibleDate(String dayFormat, TimeZone timeZone) {
+	public static FlexDateFormat flexibleDate(String dayFormat, TimeZone timeZone) {
 		return new FlexDateFormat(dayFormat, timeZone);
 	}
 
@@ -572,6 +572,8 @@ public interface Format<T> {
 	public static class FlexDateFormat implements Format<Instant> {
 		private final String theDayFormat;
 		private final TimeZone theTimeZone;
+		private TimeUtils.DateElementType theMaxResolution;
+		private boolean isMilitaryTime;
 
 		/**
 		 * @param dayFormat The format for the day/month/year
@@ -580,13 +582,34 @@ public interface Format<T> {
 		public FlexDateFormat(String dayFormat, TimeZone timeZone) {
 			theDayFormat = dayFormat;
 			theTimeZone = timeZone;
+			theMaxResolution = TimeUtils.DateElementType.Second;
+			isMilitaryTime = true;
+		}
+
+		/**
+		 * @param maxResolution The maximum resolution to print
+		 * @return This format
+		 */
+		public FlexDateFormat setMaxResolution(TimeUtils.DateElementType maxResolution) {
+			theMaxResolution = maxResolution;
+			return this;
+		}
+
+		/** @return militaryTime Whether to use military or AM/PM type time */
+		public boolean isMilitaryTime() {
+			return isMilitaryTime;
+		}
+
+		/** @param militaryTime Whether to use military or AM/PM type time */
+		public void setMilitaryTime(boolean militaryTime) {
+			isMilitaryTime = militaryTime;
 		}
 
 		@Override
 		public void append(StringBuilder text, Instant value) {
 			if (value == null)
 				return;
-			text.append(TimeUtils.asFlexTime(value, theTimeZone, theDayFormat).toString());
+			text.append(TimeUtils.asFlexTime(value, theTimeZone, theDayFormat, theMaxResolution, isMilitaryTime).toString());
 		}
 
 		@Override

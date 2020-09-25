@@ -414,9 +414,10 @@ public class TimeUtils {
 
 		/**
 		 * @param d The duration to convert
+		 * @param withWeeks Whether to print weeks or just days
 		 * @return A parsed duration with the same magnitude as the given duration
 		 */
-		public static ParsedDuration asParsedDuration(Duration d) {
+		public static ParsedDuration asParsedDuration(Duration d, boolean withWeeks) {
 			boolean neg = d.isNegative();
 			if (neg)
 				d = d.negated();
@@ -425,7 +426,19 @@ public class TimeUtils {
 			separators.add("");
 			int index = 0;
 			long seconds = d.getSeconds();
-			if (seconds > DAY.getSeconds()) {
+			if (seconds > WEEK.getSeconds() && withWeeks) {
+				int weeks = (int) (seconds / WEEK.getSeconds());
+				seconds %= WEEK.getSeconds();
+				String valueStr = String.valueOf(weeks);
+				components
+					.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Week, weeks, valueStr + "w"));
+				index += valueStr.length() + 1;
+			}
+			if (seconds >= DAY.getSeconds()) {
+				if (!components.isEmpty()) {
+					separators.add(" ");
+					index++;
+				}
 				int days = (int) (seconds / DAY.getSeconds());
 				seconds %= DAY.getSeconds();
 				String valueStr = String.valueOf(days);
@@ -433,7 +446,7 @@ public class TimeUtils {
 					.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Day, days, valueStr + "d"));
 				index += valueStr.length() + 1;
 			}
-			if (seconds > HOUR.getSeconds()) {
+			if (seconds >= HOUR.getSeconds()) {
 				if (!components.isEmpty()) {
 					separators.add(" ");
 					index++;
@@ -445,7 +458,7 @@ public class TimeUtils {
 					.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Hour, hours, valueStr + "h"));
 				index += valueStr.length() + 1;
 			}
-			if (seconds > 60) {
+			if (seconds >= 60) {
 				if (!components.isEmpty()) {
 					separators.add(" ");
 					index++;
@@ -505,6 +518,7 @@ public class TimeUtils {
 		}
 	}
 
+	private static final Duration WEEK = Duration.ofDays(7);
 	private static final Duration DAY = Duration.ofDays(1);
 	private static final Duration HOUR = Duration.ofHours(1);
 	private static final Duration MINUTE = Duration.ofMinutes(1);
@@ -1699,10 +1713,12 @@ public class TimeUtils {
 	/**
 	 * @param time The time
 	 * @param zone The time zone (may be null, will be formatted as GMT)
+	 * @param maxResolution The finest-grained date element to print
+	 * @param militaryTime Whether to use military or AM/PM type time
 	 * @return An {@link AbsoluteTime} whose minimum resolution may be days, hours, minutes, seconds, or sub-second
 	 */
-	public static ParsedTime asFlexTime(Instant time, TimeZone zone) {
-		return asFlexTime(time, zone, DAY_FORMAT);
+	public static ParsedTime asFlexTime(Instant time, TimeZone zone, DateElementType maxResolution, boolean militaryTime) {
+		return asFlexTime(time, zone, DAY_FORMAT, maxResolution, militaryTime);
 	}
 
 	private static final String[] DAYS = new String[] { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
@@ -1712,9 +1728,12 @@ public class TimeUtils {
 	 * @param time The time
 	 * @param zone The time zone (may be null, will be formatted as GMT)
 	 * @param dayFormat The date format to use to format the year, month, and day
+	 * @param maxResolution The finest-grained date element to print
+	 * @param militaryTime Whether to use military or AM/PM type time
 	 * @return A parsed time whose minimum resolution may be days, hours, minutes, seconds, or sub-second
 	 */
-	public static ParsedTime asFlexTime(Instant time, TimeZone zone, String dayFormat) {
+	public static ParsedTime asFlexTime(Instant time, TimeZone zone, String dayFormat, DateElementType maxResolution,
+		boolean militaryTime) {
 		EnumMap<DateElementType, ParsedDateElement> elements = new EnumMap<>(DateElementType.class);
 		StringBuilder str = new StringBuilder();
 		Calendar cal = TimeUtils.CALENDAR.get();
@@ -1810,63 +1829,55 @@ public class TimeUtils {
 		DateElementType resolution;
 		int nanoDigits = 0;
 		if (time.getNano() != 0) {
-			resolution = DateElementType.SubSecond;
-			str.append(' ');
-			int index = str.length();
-			StringUtils.printInt(cal.get(Calendar.HOUR_OF_DAY), 2, str);
-			elements.put(DateElementType.Hour, new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index))
-				.setValue(cal.get(Calendar.HOUR_OF_DAY)));
-			str.append(':');
-			index = str.length();
-			StringUtils.printInt(cal.get(Calendar.MINUTE), 2, str);
-			elements.put(DateElementType.Minute,
-				new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index)).setValue(cal.get(Calendar.MINUTE)));
-			str.append(':');
-			index = str.length();
-			StringUtils.printInt(cal.get(Calendar.SECOND), 2, str);
-			elements.put(DateElementType.Second,
-				new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index)).setValue(cal.get(Calendar.SECOND)));
-			str.append('.');
-			nanoDigits = 9;
-			index = str.length();
-			StringUtils.printInt(time.getNano(), nanoDigits, str);
-			while (str.charAt(str.length() - 1) == '0') {
-				nanoDigits--;
-				str.setLength(str.length() - 1);
-			}
-			elements.put(DateElementType.SubSecond,
-				new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index)).setValue(time.getNano()));
+			resolution = maxResolution == null ? DateElementType.SubSecond : maxResolution;
 		} else if (time.getEpochSecond() % 60 != 0) {
 			resolution = DateElementType.Second;
-			str.append(' ');
-			int index = str.length();
-			StringUtils.printInt(cal.get(Calendar.HOUR_OF_DAY), 2, str);
-			elements.put(DateElementType.Hour, new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index))
-				.setValue(cal.get(Calendar.HOUR_OF_DAY)));
-			str.append(':');
-			index = str.length();
-			StringUtils.printInt(cal.get(Calendar.MINUTE), 2, str);
-			elements.put(DateElementType.Minute,
-				new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index)).setValue(cal.get(Calendar.MINUTE)));
-			str.append(':');
-			index = str.length();
-			StringUtils.printInt(cal.get(Calendar.SECOND), 2, str);
-			elements.put(DateElementType.Second,
-				new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index)).setValue(cal.get(Calendar.SECOND)));
 		} else if (time.getEpochSecond() % DAY.getSeconds() != 0) {
 			resolution = DateElementType.Minute;
-			str.append(' ');
-			int index = str.length();
-			StringUtils.printInt(cal.get(Calendar.HOUR_OF_DAY), 2, str);
-			elements.put(DateElementType.Hour, new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index))
-				.setValue(cal.get(Calendar.HOUR_OF_DAY)));
-			str.append(':');
-			index = str.length();
-			StringUtils.printInt(cal.get(Calendar.MINUTE), 2, str);
-			elements.put(DateElementType.Minute,
-				new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index)).setValue(cal.get(Calendar.MINUTE)));
 		} else
 			resolution = DateElementType.Day;
+		if (resolution.compareTo(DateElementType.Hour) >= 0) {
+			str.append(' ');
+			int index = str.length();
+			int hour = cal.get(Calendar.HOUR_OF_DAY);
+			boolean am = hour < 12;
+			if (militaryTime)
+				StringUtils.printInt(hour, 2, str);
+			else
+				str.append(cal.get(Calendar.HOUR));
+			elements.put(DateElementType.Hour, new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index))
+				.setValue(cal.get(Calendar.HOUR_OF_DAY)));
+			if (resolution.compareTo(DateElementType.Minute) >= 0) {
+				str.append(':');
+				index = str.length();
+				StringUtils.printInt(cal.get(Calendar.MINUTE), 2, str);
+				elements.put(DateElementType.Minute, new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index))
+					.setValue(cal.get(Calendar.MINUTE)));
+				if (resolution.compareTo(DateElementType.Second) >= 0) {
+					str.append(':');
+					index = str.length();
+					StringUtils.printInt(cal.get(Calendar.SECOND), 2, str);
+					elements.put(DateElementType.Second,
+						new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index))
+							.setValue(cal.get(Calendar.SECOND)));
+					if (resolution.compareTo(DateElementType.SubSecond) >= 0) {
+						str.append('.');
+						nanoDigits = 9;
+						index = str.length();
+						StringUtils.printInt(time.getNano(), nanoDigits, str);
+						while (str.charAt(str.length() - 1) == '0') {
+							nanoDigits--;
+							str.setLength(str.length() - 1);
+						}
+						elements.put(DateElementType.SubSecond,
+							new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index))
+								.setValue(time.getNano()));
+					}
+				}
+			}
+			if (!militaryTime)
+				str.append(am ? "am" : "pm");
+		}
 		if (foundYear)
 			return new AbsoluteTime(str.toString(), time, cal, zone, resolution, nanoDigits, toComponents(elements));
 		else
