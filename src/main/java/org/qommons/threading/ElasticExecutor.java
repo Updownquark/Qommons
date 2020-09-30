@@ -293,7 +293,7 @@ public class ElasticExecutor<T> {
 		long endTime = timeout <= 0 ? 0 : System.currentTimeMillis() + timeout;
 		while (theActiveThreads.get() > 0 || theQueueSize.get() > 0) {
 			long sleepTime;
-			if (timeout >= 0) {
+			if (timeout > 0) {
 				long now = System.currentTimeMillis();
 				if (now >= endTime)
 					return false;

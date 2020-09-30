@@ -630,6 +630,24 @@ public class CircularArrayList<E> implements DequeList<E> {
 		return true;
 	}
 
+	/**
+	 * @param values The values to add
+	 * @return This list
+	 */
+	public CircularArrayList<E> with(E... values) {
+		addAll(Arrays.asList(values));
+		return this;
+	}
+
+	/**
+	 * @param values The values to add
+	 * @return This list
+	 */
+	public CircularArrayList<E> withAll(Collection<? extends E> values) {
+		addAll(values);
+		return this;
+	}
+
 	@Override
 	public boolean offerFirst(E e) {
 		if (theSize == theMaxCapacity)

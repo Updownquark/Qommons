@@ -587,6 +587,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			if (!isReadyForMod)
 				throw new IllegalStateException(
 					"Modification must come after a call to next() or previous() and before the next call to hasNext() or hasPrevious()");
+
 			theList.mutableElement(element.getElementId()).set(e);
 		}
 
@@ -608,8 +609,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				first = true;
 			}
 			CollectionElement<E> added = theList.addElement(e, after, before, first);
-			if (added != null && !elementIsNext)
+			if (added != null) {
 				element = added;
+				elementIsNext = false;
+				isReadyForMod = true;
+			}
 		}
 	}
 
