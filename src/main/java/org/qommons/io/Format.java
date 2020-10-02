@@ -189,11 +189,19 @@ public interface Format<T> {
 				boolean appended = false;
 				long seconds = value.getSeconds();
 				int dayLength = 24 * 60 * 60;
-				double yearLength = 365.25 * dayLength;
-				int years = (int) Math.floor(seconds / yearLength);
-				if (years > 0) {
-					text.append(years).append('y');
-					seconds -= Math.floor(years * yearLength);
+				// double yearLength = 365.25 * dayLength;
+				// int years = (int) Math.floor(seconds / yearLength);
+				// if (years > 0) {
+				// text.append(years).append('y');
+				// seconds -= Math.floor(years * yearLength);
+				// appended = true;
+				// }
+				int weeks = (int) (seconds / dayLength / 7);
+				if (weeks > 0) {
+					if (appended)
+						text.append(' ');
+					text.append(weeks).append('w');
+					seconds -= weeks * dayLength * 7;
 					appended = true;
 				}
 				long days = (int) (seconds / dayLength);
