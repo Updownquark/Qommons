@@ -624,7 +624,7 @@ public interface Format<T> {
 		public Instant parse(CharSequence text) throws ParseException {
 			if (text.length() == 0)
 				return null;
-			return TimeUtils.parseFlexFormatTime(text, true, true).evaluate(Instant::now);
+			return TimeUtils.parseFlexFormatTime(text, theTimeZone, true, true).evaluate(Instant::now);
 		}
 
 		@Override

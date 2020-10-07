@@ -78,7 +78,7 @@ public class TimeUtils {
 		Nanosecond
 	}
 
-	/** A parsed time returned from {@link TimeUtils#parseFlexFormatTime(CharSequence, boolean, boolean)} */
+	/** A parsed time returned from {@link TimeUtils#parseFlexFormatTime(CharSequence, TimeZone, boolean, boolean)} */
 	public interface ParsedTime extends FieldedAdjustable<DateElementType, TimeComponent, ParsedTime> {
 		/** @return The time zone of the parsed time, if specified */
 		TimeZone getTimeZone();
@@ -671,8 +671,8 @@ public class TimeUtils {
 	}
 
 	/**
-	 * A time parsed from {@link TimeUtils#parseFlexFormatTime(CharSequence, boolean, boolean)} for which the year is specified with 4
-	 * digits, meaning that it represents an absolute instant or a single range in time.
+	 * A time parsed from {@link TimeUtils#parseFlexFormatTime(CharSequence, TimeZone, boolean, boolean)} for which the year is specified
+	 * with 4 digits, meaning that it represents an absolute instant or a single range in time.
 	 */
 	public static class AbsoluteTime extends ParsedTimeImpl {
 		/** The lower bound of the range represented by this time */
@@ -874,8 +874,8 @@ public class TimeUtils {
 	}
 
 	/**
-	 * A time parsed from {@link TimeUtils#parseFlexFormatTime(CharSequence, boolean, boolean)} where the year was not specified with 4
-	 * digits, meaning that this time can represent any number of time ranges depending on a reference point.
+	 * A time parsed from {@link TimeUtils#parseFlexFormatTime(CharSequence, TimeZone, boolean, boolean)} where the year was not specified
+	 * with 4 digits, meaning that this time can represent any number of time ranges depending on a reference point.
 	 */
 	public static class RelativeTime extends ParsedTimeImpl {
 		private final int nanoResolution;
@@ -899,10 +899,9 @@ public class TimeUtils {
 		@Override
 		public Instant evaluate(Supplier<Instant> reference) {
 			Calendar cal = CALENDAR.get();
-			cal.setTimeZone(GMT);
 			Instant ref = reference.get();
 			cal.setTimeInMillis(ref.getEpochSecond() * 1000);
-			cal.setTimeZone(getTimeZone() != null ? getTimeZone() : GMT);
+			cal.setTimeZone(getTimeZone());
 			int nanos = ref.getNano();
 			for (Map.Entry<DateElementType, TimeComponent> element : elements.entrySet()) {
 				switch (element.getKey()) {
@@ -1023,9 +1022,9 @@ public class TimeUtils {
 
 		@Override
 		public ParsedTime add(DateElementType field, int amount) {
-			if(!elements.containsKey(field))
-				throw new IllegalArgumentException("Field "+field+" is not present in this time");
-			Map<DateElementType, Integer> newValues=new EnumMap<>(DateElementType.class);
+			if (!elements.containsKey(field))
+				throw new IllegalArgumentException("Field " + field + " is not present in this time");
+			Map<DateElementType, Integer> newValues = new EnumMap<>(DateElementType.class);
 			for (Map.Entry<DateElementType, TimeComponent> element : elements.entrySet())
 				newValues.put(element.getKey(), element.getValue().getValue());
 			DateElementType adjustingField = field;
@@ -1035,7 +1034,7 @@ public class TimeUtils {
 				if (superAdjust != 0)
 					adjustingField = DateElementType.values()[adjustingField.ordinal() - 1];
 			}
-			StringBuilder str=new StringBuilder(toString());
+			StringBuilder str = new StringBuilder(toString());
 			Map<DateElementType, TimeComponent> newElements = adjustElements(str, newValues::get);
 			return new RelativeTime(str.toString(), getTimeZone(), newElements);
 		}
@@ -1218,17 +1217,23 @@ public class TimeUtils {
 	 * </p>
 	 * 
 	 * @param str The text to parse
+	 * @param defaultTimeZone The time zone to parse times in, unless specified in the text
 	 * @param wholeText Whether the entire sequence should be parsed. If false, this will return a value if the beginning of the sequence is
 	 *        understood.
 	 * @param throwIfNotFound Whether to throw a {@link ParseException} or return null if a time cannot be parsed for any reason
 	 * @return A ParsedTime evaluated from the text
 	 * @throws ParseException If <code>throwIfNotFound</code> and the string cannot be parsed
 	 */
-	public static ParsedTime parseFlexFormatTime(CharSequence str, boolean wholeText, boolean throwIfNotFound) throws ParseException {
+	public static ParsedTime parseFlexFormatTime(CharSequence str, TimeZone defaultTimeZone, boolean wholeText, boolean throwIfNotFound)
+		throws ParseException {
 		List<ParsedDateElement> elements = new ArrayList<>();
 		int i = 0;
 		boolean found = true;
 		while (found && i < str.length()) {
+			if (Character.isWhitespace(str.charAt(i))) {
+				i++;
+				continue;
+			}
 			found = false;
 			for (ParsedDateElementType type : ParsedDateElementType.values()) {
 				int end = type.find(str, i);
@@ -1310,7 +1315,7 @@ public class TimeUtils {
 			else
 				throw new ParseException("The hour-only format is not valid without a date", 0);
 		}
-		TimeZone zone;
+		TimeZone timeZone = defaultTimeZone;
 		try {
 			ParsedDateElement element = firstInfo.remove(DateElementType.TimeZone);
 			if (element != null) {
@@ -1323,9 +1328,8 @@ public class TimeUtils {
 				}
 				if (TIME_ZONES.get(zoneIndex) == null)
 					TIME_ZONES.put(zoneIndex, TimeZone.getTimeZone(zoneId));
-				zone = TIME_ZONES.get(zoneIndex);
-			} else
-				zone = null;
+				timeZone = TIME_ZONES.get(zoneIndex);
+			}
 			element = firstInfo.remove(DateElementType.AmPm);
 			if (element != null) {
 				boolean pm = element.type.parse(element.text) > 0;
@@ -1347,10 +1351,7 @@ public class TimeUtils {
 			if (element != null && element.text.length() >= 4) {
 				Calendar cal = CALENDAR.get();
 				cal.clear();
-				if (zone != null)
-					cal.setTimeZone(zone);
-				else
-					cal.setTimeZone(GMT);
+				cal.setTimeZone(timeZone);
 
 				cal.set(Calendar.YEAR, validate(DateElementType.Year, element));
 
@@ -1377,12 +1378,12 @@ public class TimeUtils {
 				else
 					nanos = 0;
 				Instant time = Instant.ofEpochSecond(cal.getTimeInMillis() / 1000, nanos);
-				return new AbsoluteTime(text, time, cal, zone, minType, element == null ? 0 : element.text.length(),
+				return new AbsoluteTime(text, time, cal, timeZone, minType, element == null ? 0 : element.text.length(),
 					toComponents(firstInfo));
 			} else {
 				for (Map.Entry<DateElementType, ParsedDateElement> entry : firstInfo.entrySet())
 					validate(entry.getKey(), entry.getValue());
-				return new RelativeTime(text, zone, toComponents(firstInfo));
+				return new RelativeTime(text, timeZone, toComponents(firstInfo));
 			}
 		} catch (ParseException e) {
 			if (!throwIfNotFound)
@@ -1568,6 +1569,11 @@ public class TimeUtils {
 			this.value = value;
 			return this;
 		}
+
+		@Override
+		public String toString() {
+			return text.toString();
+		}
 	}
 
 	private static class DateFormatComponent {
@@ -1587,6 +1593,14 @@ public class TimeUtils {
 			if (parsedType != element.type)
 				return false;
 			return filter.test(element.text);
+		}
+
+		@Override
+		public String toString() {
+			if (dateType != null)
+				return dateType.toString();
+			else
+				return parsedType.toString();
 		}
 	}
 
@@ -1686,7 +1700,6 @@ public class TimeUtils {
 			new DateFormat(year4, stdDateSep, monthDig, timeZone), //
 			new DateFormat(year4, timeZone), //
 			new DateFormat(monthCh, optionalonStdDateSep, year4, timeZone), //
-			new DateFormat(monthCh, optionalonStdDateSep, year2, timeZone), //
 			new DateFormat(day, optionalonStdDateSep, monthCh, optionalonStdDateSep, year4, timeZone), //
 			new DateFormat(day, optionalonStdDateSep, monthCh, optionalonStdDateSep, year2, timeZone), //
 			new DateFormat(day, optionalonStdDateSep, monthCh, timeZone), //
@@ -1697,6 +1710,7 @@ public class TimeUtils {
 			new DateFormat(day, stndrdth, dot, monthDig, dot, year4, timeZone), //
 			new DateFormat(day, stndrdth, dot, monthDig, dot, year2, timeZone), //
 			new DateFormat(day, stndrdth, dot, monthDig, timeZone), //
+			new DateFormat(monthCh, optionalonStdDateSep, day, timeZone), //
 			// Time formats
 			new DateFormat(hour, colon, minute, colon, second, dot, subSecond, ampm, timeZone), //
 			new DateFormat(hour, colon, minute, colon, second, ampm, timeZone), //
@@ -1737,7 +1751,7 @@ public class TimeUtils {
 		EnumMap<DateElementType, ParsedDateElement> elements = new EnumMap<>(DateElementType.class);
 		StringBuilder str = new StringBuilder();
 		Calendar cal = TimeUtils.CALENDAR.get();
-		cal.setTimeZone(zone == null ? GMT : zone);
+		cal.setTimeZone(zone == null ? TimeZone.getDefault() : zone);
 		cal.setTimeInMillis(time.toEpochMilli());
 
 		boolean foundDay = false, foundMonth = false, foundYear = false;
@@ -1843,8 +1857,14 @@ public class TimeUtils {
 			boolean am = hour < 12;
 			if (militaryTime)
 				StringUtils.printInt(hour, 2, str);
-			else
-				str.append(cal.get(Calendar.HOUR));
+			else {
+				if (hour >= 12)
+					hour -= 12;
+				if (hour == 0)
+					str.append("12");
+				else
+					str.append(hour);
+			}
 			elements.put(DateElementType.Hour, new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index))
 				.setValue(cal.get(Calendar.HOUR_OF_DAY)));
 			if (resolution.compareTo(DateElementType.Minute) >= 0) {
@@ -1979,9 +1999,8 @@ public class TimeUtils {
 			case "y":
 			case "yr":
 			case "year":
-				components.add(
-					new DurationComponent(valueStart, valueStart, decimalStart, DurationComponentType.Year, (int) value,
-						text.subSequence(valueStart, c).toString()));
+				components.add(new DurationComponent(valueStart, valueStart, decimalStart, DurationComponentType.Year, (int) value,
+					text.subSequence(valueStart, c).toString()));
 				break;
 			case "mo":
 			case "month":

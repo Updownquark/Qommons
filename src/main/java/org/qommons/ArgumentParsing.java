@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.TimeZone;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -1740,12 +1741,14 @@ public class ArgumentParsing {
 
 	/** The definition of an instant-valued argument */
 	public static class InstantArgumentDef extends ValuedArgumentDefImpl<Instant, InstantArgumentDef> {
+		private TimeZone theTimeZone;
 		/**
 		 * @param pattern The argument pattern that this argument is for
 		 * @param name This argument's name
 		 */
 		public InstantArgumentDef(ArgumentPattern pattern, String name) {
 			super(pattern, name);
+			theTimeZone = TimeZone.getDefault();
 		}
 
 		@Override
@@ -1753,10 +1756,24 @@ public class ArgumentParsing {
 			return new ValuedArgument<>(this, value, specified);
 		}
 
+		/** @return The time zone that this argument type parses dates with */
+		public TimeZone getTimeZone() {
+			return theTimeZone;
+		}
+
+		/**
+		 * @param timeZone The time zone for this argument type to parse dates with
+		 * @return This argument type
+		 */
+		public InstantArgumentDef withTimeZone(TimeZone timeZone) {
+			theTimeZone = timeZone;
+			return this;
+		}
+
 		@Override
 		protected Instant parseValue(String text, Arguments parsed) throws IllegalArgumentException {
 			try {
-				return TimeUtils.parseFlexFormatTime(text, true, true).evaluate(Instant::now);
+				return TimeUtils.parseFlexFormatTime(text, theTimeZone, true, true).evaluate(Instant::now);
 			} catch (java.text.ParseException e) {
 				throw new IllegalArgumentException(getName() + " value \"" + text + "\" is not a duration: " + e.getMessage());
 			}

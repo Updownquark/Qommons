@@ -199,7 +199,7 @@ public interface SpinnerFormat<T> extends Format<T> {
 	public static SpinnerFormat<Instant> flexDate(Supplier<Instant> reference, String dayFormat, TimeZone timeZone,
 		TimeUtils.DateElementType maxResolution, boolean militaryTime) {
 		return SpinnerFormat.<TimeUtils.ParsedTime, Instant> wrapAdjustable(
-			forAdjustable(text -> TimeUtils.parseFlexFormatTime(text, true, true)), //
+			forAdjustable(text -> TimeUtils.parseFlexFormatTime(text, timeZone, true, true)), //
 			time -> time.evaluate(Instant::now),
 			instant -> TimeUtils.asFlexTime(instant, timeZone, dayFormat, maxResolution, militaryTime));
 	}
