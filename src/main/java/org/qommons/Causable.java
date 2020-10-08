@@ -34,7 +34,7 @@ import java.util.function.Supplier;
  * Use {@link Causable#simpleCause(Object)} to create a simple cause, or create an extension of this class
  * </p>
  */
-public abstract class Causable {
+public interface Causable {
 	/** An action to be fired when a causable finishes */
 	@FunctionalInterface
 	public interface TerminalAction {
@@ -106,9 +106,109 @@ public abstract class Causable {
 		}
 	}
 
-	private static class SimpleCause extends Causable {
-		SimpleCause(Object cause) {
-			super(cause);
+	/** An abstract implementation of Causable */
+	public static class AbstractCausable implements Causable {
+		private final Object theCause;
+		private final Causable theRootCausable;
+		private LinkedHashMap<IdentityKey<CausableKey>, Supplier<Transaction>> theKeys;
+		private boolean isStarted;
+		private boolean isFinished;
+		private boolean isTerminated;
+
+		/** @param cause The cause of this causable */
+		public AbstractCausable(Object cause) {
+			theCause = cause;
+			if (cause == null)
+				theRootCausable = this;
+			else if (cause instanceof Causable) {
+				Causable c = (Causable) cause;
+				theRootCausable = c.getRootCausable();
+				if (c.isTerminated() || theRootCausable.isTerminated())
+					throw new IllegalStateException("Cannot use a finished Causable as a cause");
+			} else
+				theRootCausable = this;
+		}
+
+		@Override
+		public Object getCause() {
+			return theCause;
+		}
+
+		@Override
+		public Causable getRootCausable() {
+			return theRootCausable;
+		}
+
+		@Override
+		public Map<Object, Object> onFinish(CausableKey key) {
+			if (!isStarted)
+				throw new IllegalStateException("Not started!  Use Causable.use(Causable)");
+			else if (isTerminated)
+				throw new IllegalStateException("This cause has already terminated");
+			if (theKeys == null)
+				theKeys = new LinkedHashMap<>();
+			theKeys.computeIfAbsent(new IdentityKey<>(key), k -> k.value.use(this));
+			return key.theValues;
+		}
+
+		@Override
+		public boolean isFinished() {
+			return isFinished;
+		}
+
+		@Override
+		public boolean isTerminated() {
+			return isTerminated;
+		}
+
+		private void finish() {
+			if (!isStarted)
+				throw new IllegalStateException("Not started!  Use Causable.use(Causable)");
+			if (isFinished)
+				throw new IllegalStateException("A cause may only be finished once");
+			isFinished = true;
+			// The finish actions may use this causable as a cause for events they fire.
+			// These events may trigger onRootFinish calls, which add more actions to this causable
+			// Though this cycle is allowed, care must be taken by callers to ensure it does not become infinite
+			try {
+				if (theKeys != null) {
+					while (!theKeys.isEmpty()) {
+						LinkedList<Transaction> postActions = null;
+						while (!theKeys.isEmpty()) {
+							Iterator<Supplier<Transaction>> keyActionIter = theKeys.values().iterator();
+							Supplier<Transaction> keyAction = keyActionIter.next();
+							keyActionIter.remove();
+							Transaction postAction = keyAction.get();
+							if (postAction != null) {
+								if (postActions == null)
+									postActions = new LinkedList<>();
+								postActions.addFirst(postAction);
+							}
+						}
+						if (postActions != null) {
+							for (Transaction key : postActions)
+								key.close();
+							postActions.clear();
+						}
+					}
+				}
+			} finally {
+				isTerminated = true;
+			}
+		}
+
+		@Override
+		public Transaction use() {
+			if (isStarted)
+				throw new IllegalStateException("This causable is already being (or has been) used");
+			isStarted = true;
+			return this::finish;
+		}
+
+		private static class SimpleCause extends AbstractCausable {
+			SimpleCause(Object cause) {
+				super(cause);
+			}
 		}
 	}
 
@@ -141,42 +241,17 @@ public abstract class Causable {
 	 * @return A simple Causable
 	 */
 	public static Causable simpleCause(Object cause) {
-		return new SimpleCause(cause);
-	}
-
-	private final Object theCause;
-	private final Causable theRootCausable;
-	private LinkedHashMap<IdentityKey<CausableKey>, Supplier<Transaction>> theKeys;
-	private boolean isStarted;
-	private boolean isFinished;
-	private boolean isTerminated;
-
-	/** @param cause The cause of this causable */
-	public Causable(Object cause) {
-		theCause = cause;
-		if (cause == null)
-			theRootCausable = this;
-		else if (cause instanceof Causable) {
-			Causable c = (Causable) cause;
-			theRootCausable = c.theRootCausable;
-			if (c.isTerminated || theRootCausable.isTerminated)
-				throw new IllegalStateException("Cannot use a finished Causable as a cause");
-		} else
-			theRootCausable = this;
+		return new AbstractCausable.SimpleCause(cause);
 	}
 
 	/** @return The cause of this event or thing--typically another event or null */
-	public Object getCause() {
-		return theCause;
-	}
+	Object getCause();
 
 	/** @return The thing that caused the chain of events that led to this event or thing */
-	public Causable getRootCausable() {
-		return theRootCausable;
-	}
+	Causable getRootCausable();
 
 	/** @return The root cause of this causable (the root may or may not be causable itself) */
-	public Object getRootCause() {
+	default Object getRootCause() {
 		Causable root = getRootCausable();
 		if (root.getCause() != null)
 			return root.getCause();
@@ -190,7 +265,7 @@ public abstract class Causable {
 	 * @param test The test to apply
 	 * @return The most immediate cause of this causable that passes the given test, or null if none exists
 	 */
-	public Object hasCauseLike(Predicate<Object> test) {
+	default Object hasCauseLike(Predicate<Object> test) {
 		return getCauseLike(c -> test.test(c) ? c : null);
 	}
 
@@ -202,7 +277,7 @@ public abstract class Causable {
 	 * @param test The test to use to search through the causes
 	 * @return The first non-null results of the test on the chain of events
 	 */
-	public <T> T getCauseLike(Function<Object, T> test) {
+	default <T> T getCauseLike(Function<Object, T> test) {
 		T value = test.apply(this);
 		if (value != null)
 			return value;
@@ -228,74 +303,31 @@ public abstract class Causable {
 	 * @param key The key to add the action for. An action will only be added once to a causable for a given key.
 	 * @return A map of key-values that may be modified to keep track of information from multiple sub-causes of this cause
 	 */
-	public Map<Object, Object> onFinish(CausableKey key) {
-		if (!isStarted)
-			throw new IllegalStateException("Not started!  Use Causable.use(Causable)");
-		else if (isTerminated)
-			throw new IllegalStateException("This cause has already terminated");
-		if (theKeys == null)
-			theKeys = new LinkedHashMap<>();
-		theKeys.computeIfAbsent(new IdentityKey<>(key), k -> k.value.use(this));
-		return key.theValues;
-	}
+	Map<Object, Object> onFinish(CausableKey key);
 
 	/** @return Whether this causable has finished or is finishing */
-	public boolean isFinished() {
-		return isFinished;
-	}
+	boolean isFinished();
 
 	/** @return Whether this causable has completely finished being fired */
-	public boolean isTerminated() {
-		return isTerminated;
-	}
-
-	private void finish() {
-		if (!isStarted)
-			throw new IllegalStateException("Not started!  Use Causable.use(Causable)");
-		if (isFinished)
-			throw new IllegalStateException("A cause may only be finished once");
-		isFinished = true;
-		// The finish actions may use this causable as a cause for events they fire.
-		// These events may trigger onRootFinish calls, which add more actions to this causable
-		// Though this cycle is allowed, care must be taken by callers to ensure it does not become infinite
-		try {
-			if (theKeys != null) {
-				while (!theKeys.isEmpty()) {
-					LinkedList<Transaction> postActions = null;
-					while (!theKeys.isEmpty()) {
-						Iterator<Supplier<Transaction>> keyActionIter = theKeys.values().iterator();
-						Supplier<Transaction> keyAction = keyActionIter.next();
-						keyActionIter.remove();
-						Transaction postAction = keyAction.get();
-						if (postAction != null) {
-							if (postActions == null)
-								postActions = new LinkedList<>();
-							postActions.addFirst(postAction);
-						}
-					}
-					if (postActions != null) {
-						for (Transaction key : postActions)
-							key.close();
-						postActions.clear();
-					}
-				}
-			}
-		} finally {
-			isTerminated = true;
-		}
-	}
+	boolean isTerminated();
 
 	/**
+	 * Begins use of this cause. This method may only be called once.
+	 * 
+	 * @return A transaction whose {@link Transaction#close()} method finishes this cause
+	 */
+	Transaction use();
+
+	/**
+	 * Same as {@link #use()}, but may be called with null or non-Causable values, in which case {@value Transaction#NONE} will be returned
+	 * 
 	 * @param cause The cause to use
 	 * @return A transaction whose {@link Transaction#close()} method finishes the cause
 	 */
-	public static Transaction use(Object cause) {
-		if (!(cause instanceof Causable))
+	static Transaction use(Object cause) {
+		if (cause instanceof Causable)
+			return ((Causable) cause).use();
+		else
 			return Transaction.NONE;
-		Causable c = (Causable) cause;
-		if (c.isStarted)
-			throw new IllegalStateException("This causable is already being (or has been) used");
-		c.isStarted = true;
-		return c::finish;
 	}
 }
