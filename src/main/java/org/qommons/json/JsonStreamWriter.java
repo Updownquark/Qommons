@@ -39,9 +39,11 @@ public class JsonStreamWriter implements JsonSerialWriter {
 	 * </ul>
 	 *
 	 * @param formal Whether this writer writes formal JSON
+	 * @return This writer
 	 */
-	public void setFormal(boolean formal) {
+	public JsonStreamWriter setFormal(boolean formal) {
 		useFormalJson = formal;
+		return this;
 	}
 
 	/**
@@ -53,9 +55,11 @@ public class JsonStreamWriter implements JsonSerialWriter {
 
 	/**
 	 * @param indent The string to use to indent JSON content that is written, or null if this writer should not format its data
+	 * @return This writer
 	 */
-	public void setFormatIndent(String indent) {
+	public JsonStreamWriter setFormatIndent(String indent) {
 		theFormatIndent = indent;
+		return this;
 	}
 
 	/**
@@ -74,9 +78,11 @@ public class JsonStreamWriter implements JsonSerialWriter {
 
 	/**
 	 * @param encode Whether unicode characters in strings and property names written to this writer are encoded before they are written
+	 * @return This writer
 	 */
-	public void setUnicodeEncoded(boolean encode) {
+	public JsonStreamWriter setUnicodeEncoded(boolean encode) {
 		isUnicodeEncoded = encode;
+		return this;
 	}
 
 	/**
