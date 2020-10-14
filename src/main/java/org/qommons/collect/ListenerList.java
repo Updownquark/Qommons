@@ -266,6 +266,19 @@ public class ListenerList<E> {
 		}
 	}
 
+	/**
+	 * Thrown from {@link ListenerList#forEach(Consumer)} if the method is called recursively and reentrant notification is not allowed
+	 * 
+	 * @see ListenerList#ListenerList(String)
+	 * @see ListenerList.Builder#reentrancyError(String)
+	 */
+	public static class ReentrantNotificationException extends IllegalStateException {
+		/** @param message The message for the exception */
+		public ReentrantNotificationException(String message) {
+			super(message);
+		}
+	}
+
 	private final ThreadLocal<Object> isFiring;
 	final Node theTerminal;
 	private final String theReentrancyError;
@@ -278,9 +291,9 @@ public class ListenerList<E> {
 	/**
 	 * Creates the listener list
 	 * 
-	 * @param reentrancyError The message to throw in an {@link IllegalStateException} from {@link #forEach(Consumer)} if the method is
-	 *        called as a result of the action being invoked from a higher {@link #forEach(Consumer) forEach} call. Or null if such
-	 *        reentrancy is to be allowed.
+	 * @param reentrancyError The message to throw in an {@link ReentrantNotificationException} from {@link #forEach(Consumer)} if the
+	 *        method is called as a result of the action being invoked from a higher {@link #forEach(Consumer) forEach} call. Or null if
+	 *        such reentrancy is to be allowed.
 	 */
 	public ListenerList(String reentrancyError) {
 		this(reentrancyError, true, null);
@@ -289,9 +302,9 @@ public class ListenerList<E> {
 	/**
 	 * Creates the listener list
 	 * 
-	 * @param reentrancyError The message to throw in an {@link IllegalStateException} from {@link #forEach(Consumer)} if the method is
-	 *        called as a result of the action being invoked from a higher {@link #forEach(Consumer) forEach} call. Or null if such
-	 *        reentrancy is to be allowed.
+	 * @param reentrancyError The message to throw in an {@link ReentrantNotificationException} from {@link #forEach(Consumer)} if the
+	 *        method is called as a result of the action being invoked from a higher {@link #forEach(Consumer) forEach} call. Or null if
+	 *        such reentrancy is to be allowed.
 	 * @param safeForEach If the reentrancy and {@link #add(Object, boolean) skipCurrent} features are not thread-safe, this class can
 	 *        perform much better. This is safe if the {@link #forEach(Consumer)} method is never called from multiple threads
 	 *        simultaneously OR if reentrancy is enabled AND the skipCurrent feature need not be reliable.
@@ -424,7 +437,7 @@ public class ListenerList<E> {
 		if (isFiring != null) {
 			reentrant = isFiring.get();
 			if (reentrant != null && theReentrancyError != null)
-				throw new IllegalStateException(theReentrancyError);
+				throw new ReentrantNotificationException(theReentrancyError);
 			isFiring.set(iterId);
 		} else {
 			reentrant = unsafeIterId;
