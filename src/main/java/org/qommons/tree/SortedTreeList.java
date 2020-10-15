@@ -124,6 +124,8 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 	 */
 	protected SortedTreeList(Function<Object, CollectionLockingStrategy> locker, String descrip, Comparator<? super E> compare) {
 		super(locker, descrip);
+		if (compare == null)
+			throw new NullPointerException();
 		theCompare = compare;
 		isDistinct = this instanceof NavigableSet;
 	}
@@ -135,6 +137,8 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 	 */
 	protected SortedTreeList(Function<Object, CollectionLockingStrategy> locker, Object identity, Comparator<? super E> compare) {
 		super(locker, identity);
+		if (compare == null)
+			throw new NullPointerException();
 		theCompare = compare;
 		isDistinct = this instanceof NavigableSet;
 	}

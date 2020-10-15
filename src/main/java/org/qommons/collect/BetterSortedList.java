@@ -254,6 +254,8 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 			private final int theOnExact;
 
 			ValueSearch(Comparator<? super V> compare, V val, int _onExact) {
+				if (compare == null)
+					throw new NullPointerException();
 				theCompare = compare;
 				theValue = val;
 				theOnExact = _onExact;
