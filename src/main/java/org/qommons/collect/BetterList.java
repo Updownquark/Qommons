@@ -1335,9 +1335,15 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		@Override
 		public Object getIdentity() {
-			if (theIdentity == null)
-				theIdentity = Identifiable.idFor(this, this::toString, this::hashCode,
-					other -> other instanceof ConstantList && equals(other));
+			if (theIdentity == null) {
+				List<Object> identities = QommonsUtils.map(theValues, v -> {
+					if (v instanceof Identifiable)
+						return ((Identifiable) v).getIdentity();
+					else
+						return v;
+				}, true);
+				theIdentity = Identifiable.idFor(identities, identities::toString, identities::hashCode, identities::equals);
+			}
 			return theIdentity;
 		}
 
