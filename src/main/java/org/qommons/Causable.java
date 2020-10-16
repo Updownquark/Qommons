@@ -1,5 +1,6 @@
 package org.qommons;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -9,6 +10,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+
+import org.qommons.collect.BetterList;
+import org.qommons.collect.CircularArrayList;
 
 /**
  * <p>
@@ -31,7 +35,8 @@ import java.util.function.Supplier;
  * </p>
  * 
  * <p>
- * Use {@link Causable#simpleCause(Object)} to create a simple cause, or create an extension of this class
+ * Use {@link Causable#simpleCause(Object [])} to create a simple cause, or create an implementation of this interface or an extension of
+ * {@link AbstractCausable}.
  * </p>
  */
 public interface Causable {
@@ -51,7 +56,7 @@ public interface Causable {
 	 */
 	public interface ChainBreak {
 		/** @return The wrapped cause */
-		Object getCause();
+		Object getCauses();
 	}
 
 	/**
@@ -108,30 +113,42 @@ public interface Causable {
 
 	/** An abstract implementation of Causable */
 	public static class AbstractCausable implements Causable {
-		private final Object theCause;
+		private final BetterList<Object> theCauses;
 		private final Causable theRootCausable;
 		private LinkedHashMap<IdentityKey<CausableKey>, Supplier<Transaction>> theKeys;
 		private boolean isStarted;
 		private boolean isFinished;
 		private boolean isTerminated;
 
-		/** @param cause The cause of this causable */
-		public AbstractCausable(Object cause) {
-			theCause = cause;
-			if (cause == null)
+		/** @param causes The causes of this causable */
+		public AbstractCausable(Object... causes) {
+			theCauses = BetterList.of(causes);
+			if (causes == null)
 				theRootCausable = this;
-			else if (cause instanceof Causable) {
-				Causable c = (Causable) cause;
-				theRootCausable = c.getRootCausable();
-				if (c.isTerminated() || theRootCausable.isTerminated())
-					throw new IllegalStateException("Cannot use a finished Causable as a cause");
-			} else
-				theRootCausable = this;
+			else {
+				Causable root = this;
+				for (Object cause : causes) {
+					if (cause instanceof Causable) {
+						if (((Causable) cause).isTerminated())
+							throw new IllegalStateException("Cannot use a finished Causable as a cause");
+						root = ((Causable) cause).getRootCausable();
+						if (root.isTerminated())
+							throw new IllegalStateException("Cannot use a finished Causable as a cause");
+						break;
+					}
+				}
+				theRootCausable = root;
+			}
+		}
+
+		/** @param causes The causes of this causable */
+		public AbstractCausable(Collection<?> causes) {
+			this(causes.toArray());
 		}
 
 		@Override
-		public Object getCause() {
-			return theCause;
+		public BetterList<Object> getCauses() {
+			return theCauses;
 		}
 
 		@Override
@@ -206,8 +223,8 @@ public interface Causable {
 		}
 
 		private static class SimpleCause extends AbstractCausable {
-			SimpleCause(Object cause) {
-				super(cause);
+			SimpleCause(Object... causes) {
+				super(causes);
 			}
 		}
 	}
@@ -237,15 +254,23 @@ public interface Causable {
 	}
 
 	/**
-	 * @param cause The cause of the causable
+	 * @param causes The causes of the causable
 	 * @return A simple Causable
 	 */
-	public static Causable simpleCause(Object cause) {
-		return new AbstractCausable.SimpleCause(cause);
+	public static Causable simpleCause(Object... causes) {
+		return new AbstractCausable.SimpleCause(causes);
 	}
 
-	/** @return The cause of this event or thing--typically another event or null */
-	Object getCause();
+	/**
+	 * @param causes The causes of the causable
+	 * @return A simple Causable
+	 */
+	public static Causable simpleCause(Collection<?> causes) {
+		return new AbstractCausable.SimpleCause(causes);
+	}
+
+	/** @return The causes of this event or thing--typically another event or null */
+	BetterList<Object> getCauses();
 
 	/** @return The thing that caused the chain of events that led to this event or thing */
 	Causable getRootCausable();
@@ -253,10 +278,7 @@ public interface Causable {
 	/** @return The root cause of this causable (the root may or may not be causable itself) */
 	default Object getRootCause() {
 		Causable root = getRootCausable();
-		if (root.getCause() != null)
-			return root.getCause();
-		else
-			return root;
+		return root.getCauses().peekFirst();
 	}
 
 	/**
@@ -281,20 +303,16 @@ public interface Causable {
 		T value = test.apply(this);
 		if (value != null)
 			return value;
-		Causable root = this;
-		Object cause = getCause();
-		if (cause != null) {
+		CircularArrayList<Object> causes = CircularArrayList.build().build().withAll(getCauses());
+		while (!causes.isEmpty()) {
+			Object cause = causes.removeFirst();
 			value = test.apply(cause);
 			if (value != null)
 				return value;
-		}
-		while ((cause instanceof Causable || cause instanceof ChainBreak) && value == null) {
-			if (cause instanceof Causable) {
-				root = (Causable) cause;
-				cause = root.getCause();
-			} else
-				cause = ((ChainBreak) cause).getCause();
-			value = test.apply(cause);
+			if (cause instanceof Causable)
+				causes.addAll(((Causable) cause).getCauses());
+			else if (cause instanceof ChainBreak)
+				causes.add(((ChainBreak) cause).getCauses());
 		}
 		return value;
 	}

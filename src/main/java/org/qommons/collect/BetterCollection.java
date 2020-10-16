@@ -220,7 +220,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default boolean addAll(Collection<? extends E> c) {
 		if (c.isEmpty())
 			return false;
-		Causable cause = Causable.simpleCause(null);
+		Causable cause = Causable.simpleCause();
 		try (Transaction cst = cause.use();
 			Transaction t = lock(true, cause);
 			Transaction ct = Transactable.lock(c, false, cause)) {
@@ -238,7 +238,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return This collection
 	 */
 	default BetterCollection<E> with(E... values) {
-		Causable cause = Causable.simpleCause(null);
+		Causable cause = Causable.simpleCause();
 		try (Transaction cst = cause.use(); Transaction t = lock(true, cause)) {
 			for (E e : values) {
 				if (canAdd(e) == null)
@@ -253,7 +253,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return This collection
 	 */
 	default BetterCollection<E> withAll(Collection<? extends E> values) {
-		Causable cause = Causable.simpleCause(null);
+		Causable cause = Causable.simpleCause();
 		try (Transaction cst = cause.use(); Transaction t = lock(true, cause)) {
 			for (E e : values) {
 				if (canAdd(e) == null)
