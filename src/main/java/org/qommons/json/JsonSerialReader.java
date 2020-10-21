@@ -813,19 +813,21 @@ public class JsonSerialReader
 	{
 		if(theLastEnded instanceof ObjectItem)
 			return null;
+		int preDepth = theState.getDepth();
+		if (theState.top().token == ParseToken.PROPERTY)
+			preDepth--;
 		parsePastPropertySeparator();
+		if (theState.getDepth() < preDepth)
+			return null; // End of the object
 		if(theState.top() == null || (theState.top().token != ParseToken.OBJECT && theState.top().token != ParseToken.PROPERTY))
 			throw new IllegalStateException("The current state is not in an object.");
-		int preDepth = theState.getDepth();
-		if(theState.top().token == ParseToken.PROPERTY)
-			preDepth--;
 		JsonParseItem item;
 		do
 		{
 			item = getNextItem(true, false, true);
 			if(item == null)
 				theState.error("Unexpected end of content");
-			if(item instanceof PropertyItem)
+			if (theState.getDepth() == preDepth + 1 && item instanceof PropertyItem)
 				return ((PropertyItem) item).getName();
 
 		} while(theState.getDepth() >= preDepth);
@@ -1173,7 +1175,7 @@ public class JsonSerialReader
 	public String parseString() throws IOException, ParseException
 	{
 		Object ret = parseNext(false);
-		if(ret == null)
+		if (ret == null || ret == NULL)
 			return null;
 		else if(!(ret instanceof String))
 			throw new IllegalStateException("Next element is a " + getType(ret) + ", not a string");

@@ -81,6 +81,18 @@ public class FileUtils {
 			.withCompression(new CompressionEnabledFileSource.ZipCompression());
 	}
 
+	public static BetterFile getClassFile(Class<?> clazz) throws MalformedURLException {
+		String classFileName = clazz.getName();
+		int dotIdx = classFileName.lastIndexOf('.');
+		if (dotIdx >= 0)
+			classFileName = classFileName.substring(dotIdx + 1);
+		classFileName += ".class";
+		URL resource = clazz.getResource(classFileName);
+		if (resource == null)
+			throw new IllegalStateException("Could not find class file for " + clazz.getName());
+		return ofUrl(resource);
+	}
+
 	public static BetterFile ofUrl(URL url) throws MalformedURLException {
 		return ofUrl(getDefaultFileSource(), url);
 	}
@@ -88,13 +100,14 @@ public class FileUtils {
 	public static BetterFile ofUrl(BetterFile.FileDataSource fileSource, URL url) throws MalformedURLException {
 		switch (url.getProtocol()) {
 		case "file":
-			return BetterFile.at(fileSource, url.getPath());
+			// TODO Better escape handling
+			return BetterFile.at(fileSource, url.getPath().replaceAll("%20", " "));
 		case "jar":
 			String path = url.getPath();
 			int div = path.indexOf('!');
-			URL jarUrl = new URL(url, "/" + path.substring(0, div));
+			URL jarUrl = new URL(path.substring(0, div));
 			BetterFile jarFile = ofUrl(fileSource, jarUrl);
-			return jarFile.at(path.substring(div + 1));
+			return jarFile.at(path.substring(div + 2));
 		default:
 			return BetterFile.at(new CompressionEnabledFileSource(new UrlFileSource(new URL(url, "/")))//
 				.withCompression(new CompressionEnabledFileSource.ZipCompression()), url.getPath());
