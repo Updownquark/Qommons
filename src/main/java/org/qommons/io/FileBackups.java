@@ -2,17 +2,20 @@ package org.qommons.io;
 
 import java.io.IOException;
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
-import java.util.TimeZone;
 
 import org.qommons.ArrayUtils;
 import org.qommons.TimeUtils;
+import org.qommons.collect.BetterSortedSet;
+import org.qommons.tree.BetterTreeSet;
 
 public class FileBackups {
-	public static final Format<Instant> DATE_FORMAT = Format.flexibleDate("ddMMMyyyy", TimeZone.getDefault());
+	public static final ThreadLocal<SimpleDateFormat> DATE_FORMAT = ThreadLocal
+		.withInitial(() -> new SimpleDateFormat("ddMMMyyyy_HHmmss.SSS"));
 
 	private static class BackupFile {
 		final String fileName;
@@ -31,8 +34,8 @@ public class FileBackups {
 		public Instant getBackupTime(String backupFileName) {
 			if (backupFileName.startsWith(fileName) && backupFileName.endsWith(suffix)) {
 				try {
-					Instant time = DATE_FORMAT
-						.parse(backupFileName.substring(fileName.length(), backupFileName.length() - suffix.length()));
+					Instant time = DATE_FORMAT.get()
+						.parse(backupFileName.substring(fileName.length(), backupFileName.length() - suffix.length())).toInstant();
 					return time;
 				} catch (ParseException e) {
 					return null;
@@ -42,7 +45,7 @@ public class FileBackups {
 		}
 
 		public String getBackupFileName(Instant backupTime) {
-			return fileName + DATE_FORMAT.format(backupTime) + suffix;
+			return fileName + DATE_FORMAT.get().format(Date.from(backupTime)) + suffix;
 		}
 	}
 
@@ -102,9 +105,13 @@ public class FileBackups {
 	}
 
 	public void saveLatest(boolean moveOrCopy) throws IOException {
+		if (!theTargetFile.exists())
+			return;
 		purgeIfNeeded(theTargetFile.length());
 		Instant time = Instant.now();
 		BetterFile backupFile = theDirectory.at(theTargetBackup.getBackupFileName(time));
+		if (!theDirectory.exists())
+			theDirectory.create(true);
 		if (!moveOrCopy || theTargetFile.move(backupFile) == null) {
 			FileUtils.sync().from(theTargetFile).to(backupFile).sync();
 		}
@@ -114,6 +121,8 @@ public class FileBackups {
 		int count = 1;
 		long totalSize = addedSize;
 		List<? extends BetterFile> files = theDirectory.listFiles();
+		if (files == null)
+			return;
 		Instant[] backupTimes = new Instant[files.size()];
 		long[] sizes = new long[files.size()];
 		for (int i = 0; i < backupTimes.length; i++) {
@@ -184,8 +193,8 @@ public class FileBackups {
 		return false;
 	}
 
-	public List<Instant> getBackups() {
-		List<Instant> backups = new ArrayList<>();
+	public BetterSortedSet<Instant> getBackups() {
+		BetterSortedSet<Instant> backups = BetterTreeSet.buildTreeSet(Instant::compareTo).safe(false).build();
 		for (BetterFile file : theDirectory.listFiles()) {
 			Instant time = theTargetBackup.getBackupTime(file.getName());
 			if (time != null)
@@ -201,7 +210,7 @@ public class FileBackups {
 	public void restore(Instant backupTime) throws IOException {
 		BetterFile backupFile = getBackup(backupTime);
 		if (!backupFile.exists())
-			throw new IllegalArgumentException("No such backup for " + DATE_FORMAT.format(backupTime));
+			throw new IllegalArgumentException("No such backup for " + DATE_FORMAT.get().format(backupTime));
 		FileUtils.sync().from(backupFile).to(theTargetFile).sync();
 	}
 
@@ -259,6 +268,13 @@ public class FileBackups {
 
 		public Builder withBackupDirectory(BetterFile directory) {
 			theDirectory = directory;
+			return this;
+		}
+
+		public Builder all() {
+			withDuration(Duration.ZERO, Duration.ofDays(100_000L * 365));
+			withBackupCount(0, Integer.MAX_VALUE);
+			withBackupSize(0, Long.MAX_VALUE);
 			return this;
 		}
 

@@ -482,7 +482,7 @@ public interface BetterFile extends Named {
 		@Override
 		protected FileBacking createBacking(boolean directory) throws IOException {
 			FileBacking backing = findBacking();
-			if (backing != null) {
+			if (backing != null && backing.exists()) {
 				if (backing.get(BetterFile.FileBooleanAttribute.Directory) != directory)
 					throw new IOException(getPath() + " already exists as a " + (directory ? "file" : "directory"));
 			}

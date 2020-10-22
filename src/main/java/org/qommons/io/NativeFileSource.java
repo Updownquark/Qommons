@@ -52,7 +52,11 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 	}
 	
 	public static BetterFile of(File file) {
-		return BetterFile.getRoots(new NativeFileSource(file)).get(0);
+		int slash = file.getName().indexOf('/');
+		int otherSlash = file.getName().indexOf('\\');
+		if (slash < 0 || (otherSlash >= 0 && otherSlash < slash))
+			slash = otherSlash;
+		return BetterFile.at(new NativeFileSource(File.listRoots()), file.getAbsolutePath());
 	}
 
 	public static BetterFile of(String filePath) {
