@@ -104,6 +104,7 @@ public interface BetterFile extends Named {
 	/**
 	 * Attempts to create this resource as a file or a directory (and any necessary parent directories)
 	 * 
+	 * @param directory Whether to create a directory or a file
 	 * @return This resource
 	 * @throws IOException If the file or directory could not be created
 	 */
@@ -122,6 +123,14 @@ public interface BetterFile extends Named {
 	 * @return Whether the mark succeeded
 	 */
 	boolean setLastModified(long lastModified);
+
+	/**
+	 * Attempts to move and/or rename this file
+	 * 
+	 * @param newFile The new name and location for this file
+	 * @return If the move/rename succeeded, the new file. Otherwise null.
+	 */
+	BetterFile move(BetterFile newFile);
 
 	default BetterFile unmodifiable() {
 		return new UnmodifiableFile(this);
@@ -214,6 +223,8 @@ public interface BetterFile extends Named {
 		boolean set(BetterFile.FileBooleanAttribute attribute, boolean value, boolean ownerOnly);
 	
 		boolean setLastModified(long lastModified);
+
+		boolean move(String newFilePath);
 	}
 
 	public interface FileDataSource {
@@ -362,7 +373,21 @@ public interface BetterFile extends Named {
 		@Override
 		public boolean setLastModified(long lastModified) {
 			FileBacking backing = check();
-			return backing == null ? false : backing.setLastModified(lastModified);
+			if (backing == null)
+				return false;
+			if (backing.getLastModified() == lastModified)
+				return true;
+			return backing.setLastModified(lastModified);
+		}
+
+		@Override
+		public BetterFile move(BetterFile newFile) {
+			if (getPath().equals(newFile))
+				return this;
+			FileBacking backing = check();
+			if (backing == null || !backing.move(newFile.getPath()))
+				return null;
+			return at(newFile.getPath());
 		}
 
 		@Override
@@ -594,6 +619,18 @@ public interface BetterFile extends Named {
 		}
 
 		@Override
+		public BetterFile move(BetterFile newFile) {
+			String path = newFile.getPath();
+			BetterFile newSourceFile = theSource.getParent().at(path);
+			if (!theFilter.test(newFile))
+				return this;
+			newSourceFile = theSource.move(newSourceFile);
+			if (newSourceFile == null)
+				return null;
+			return new FilteredFile(newSourceFile, theFilter);
+		}
+
+		@Override
 		public int hashCode() {
 			return theSource.hashCode();
 		}
@@ -711,6 +748,13 @@ public interface BetterFile extends Named {
 		@Override
 		public boolean setLastModified(long lastModified) {
 			return theSource.getLastModified() == lastModified;
+		}
+
+		@Override
+		public BetterFile move(BetterFile newFile) {
+			if (getPath().equals(newFile.getPath()))
+				return this;
+			return null;
 		}
 
 		@Override

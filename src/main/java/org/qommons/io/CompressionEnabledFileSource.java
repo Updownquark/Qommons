@@ -252,6 +252,11 @@ public class CompressionEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
+		public boolean move(String newFilePath) {
+			return false;
+		}
+
+		@Override
 		public int hashCode() {
 			return theBacking.hashCode();
 		}
@@ -539,6 +544,11 @@ public class CompressionEnabledFileSource implements BetterFile.FileDataSource {
 		public boolean setLastModified(long lastModified) {
 			return false;
 		}
+
+		@Override
+		public boolean move(String newFilePath) {
+			return false;
+		}
 	}
 
 	class DanglingZipEntry implements BetterFile.FileBacking {
@@ -622,6 +632,11 @@ public class CompressionEnabledFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public boolean setLastModified(long lastModified) {
+			return false;
+		}
+
+		@Override
+		public boolean move(String newFilePath) {
 			return false;
 		}
 	}

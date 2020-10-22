@@ -186,6 +186,8 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 				return theFile.setReadable(value, ownerOnly);
 			case Writable:
 				return theFile.setWritable(value, ownerOnly);
+			case Symbolic:
+				return false;
 			}
 			throw new IllegalStateException("" + attribute);
 		}
@@ -193,6 +195,11 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		@Override
 		public boolean setLastModified(long lastModified) {
 			return theFile.setLastModified(lastModified);
+		}
+
+		@Override
+		public boolean move(String newFilePath) {
+			return theFile.renameTo(new File(newFilePath));
 		}
 
 		@Override

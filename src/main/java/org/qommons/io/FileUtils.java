@@ -1001,6 +1001,11 @@ public class FileUtils {
 		}
 
 		@Override
+		public BetterFile move(BetterFile newFile) {
+			return null;
+		}
+
+		@Override
 		public String toString() {
 			return getPath();
 		}
@@ -1113,7 +1118,12 @@ public class FileUtils {
 
 		@Override
 		public boolean setLastModified(long lastModified) {
-			return theSource.setLastModified(lastModified);
+			return getLastModified() == lastModified;
+		}
+
+		@Override
+		public BetterFile move(BetterFile newFile) {
+			return null;
 		}
 
 		@Override
@@ -1242,6 +1252,11 @@ public class FileUtils {
 		@Override
 		public boolean setLastModified(long lastModified) {
 			return getLastModified() == lastModified;
+		}
+
+		@Override
+		public BetterFile move(BetterFile newFile) {
+			return null;
 		}
 
 		@Override

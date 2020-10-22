@@ -173,5 +173,10 @@ public class UrlFileSource implements FileDataSource {
 		public boolean setLastModified(long lastModified) {
 			return getLastModified() == lastModified;
 		}
+
+		@Override
+		public boolean move(String newFilePath) {
+			return false;
+		}
 	}
 }
