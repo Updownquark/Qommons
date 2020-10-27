@@ -279,7 +279,7 @@ public class ListenerList<E> {
 		}
 	}
 
-	private final ThreadLocal<Object> isFiring;
+	private final ThreadLocal<Object> isFiringSafe;
 	final Node theTerminal;
 	private final String theReentrancyError;
 	private final InUseListener theInUseListener;
@@ -324,7 +324,7 @@ public class ListenerList<E> {
 		theTerminal = new Node(null);
 		theTerminal.next = theTerminal.previous = theTerminal;
 
-		isFiring = safeForEach ? new ThreadLocal<>() : null;
+		isFiringSafe = safeForEach ? new ThreadLocal<>() : null;
 		theReentrancyError = reentrancyError;
 		theInUseListener = inUseListener;
 		if (inUseListener != null)
@@ -342,8 +342,8 @@ public class ListenerList<E> {
 	public Element<E> add(E listener, boolean skipCurrent) {
 		Object firing;
 		if (skipCurrent) {
-			if (isFiring != null)
-				firing = isFiring.get(); // Thread safe because isFiring is a ThreadLocal
+			if (isFiringSafe != null)
+				firing = isFiringSafe.get(); // Thread safe because isFiring is a ThreadLocal
 			else
 				firing = unsafeIterId;
 		} else
@@ -434,13 +434,15 @@ public class ListenerList<E> {
 		Node node = theTerminal.next;
 		Object iterId = new Object();
 		Object reentrant;
-		if (isFiring != null) {
-			reentrant = isFiring.get();
+		if (isFiringSafe != null) {
+			reentrant = isFiringSafe.get();
 			if (reentrant != null && theReentrancyError != null)
 				throw new ReentrantNotificationException(theReentrancyError);
-			isFiring.set(iterId);
+			isFiringSafe.set(iterId);
 		} else {
 			reentrant = unsafeIterId;
+			if (reentrant != null && theReentrancyError != null)
+				throw new ReentrantNotificationException(theReentrancyError);
 			unsafeIterId = iterId;
 		}
 		try {
@@ -451,11 +453,11 @@ public class ListenerList<E> {
 				node = nextNode;
 			}
 		} finally {
-			if (isFiring != null) {
+			if (isFiringSafe != null) {
 				if (reentrant == null)
-					isFiring.remove();
+					isFiringSafe.remove();
 				else
-					isFiring.set(reentrant);
+					isFiringSafe.set(reentrant);
 			} else {
 				unsafeIterId = reentrant;
 			}
