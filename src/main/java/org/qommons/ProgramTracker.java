@@ -2,12 +2,14 @@
 package org.qommons;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.WeakHashMap;
 
 import org.apache.log4j.Logger;
-import org.json.simple.JSONObject;
+import org.qommons.json.JsonObject;
 
 /** A simple utility to help in finding performance bottlenecks in a program */
 public class ProgramTracker implements Cloneable {
@@ -646,24 +648,24 @@ public class ProgramTracker implements Cloneable {
 		/**
 		 * Serializes this tracking node and its children to JSON
 		 *
-		 * @return The JSON representation of this node. May be deserialized with {@link #fromJson(JSONObject)}.
+		 * @return The JSON representation of this node. May be deserialized with {@link #fromJson(JsonObject)}.
 		 */
-		public JSONObject toJson() {
-			JSONObject ret = new JSONObject();
-			ret.put("name", name);
-			ret.put("count", Integer.valueOf(count));
-			ret.put("latestCount", Integer.valueOf(latestCount));
-			ret.put("startTime", Long.valueOf(startTime));
-			ret.put("latestStartTime", Long.valueOf(latestStartTime));
-			ret.put("latestStartNanos", Long.valueOf(latestStartNanos));
-			ret.put("latestStartCPU", Long.valueOf(latestStartCPU));
-			ret.put("endTime", Long.valueOf(endTime));
-			ret.put("length", Long.valueOf(runLength));
-			ret.put("unfinished", Integer.valueOf(unfinished));
+		public JsonObject toJson() {
+			JsonObject ret = new JsonObject();
+			ret.with("name", name);
+			ret.with("count", Integer.valueOf(count));
+			ret.with("latestCount", Integer.valueOf(latestCount));
+			ret.with("startTime", Long.valueOf(startTime));
+			ret.with("latestStartTime", Long.valueOf(latestStartTime));
+			ret.with("latestStartNanos", Long.valueOf(latestStartNanos));
+			ret.with("latestStartCPU", Long.valueOf(latestStartCPU));
+			ret.with("endTime", Long.valueOf(endTime));
+			ret.with("length", Long.valueOf(runLength));
+			ret.with("unfinished", Integer.valueOf(unfinished));
 			if(lengthStats != null)
-				ret.put("lengthStats", lengthStats.toJson());
-			org.json.simple.JSONArray jsonChildren = new org.json.simple.JSONArray();
-			ret.put("children", jsonChildren);
+				ret.with("lengthStats", lengthStats.toJson());
+			List<Object> jsonChildren = new ArrayList<>(children.size());
+			ret.with("children", jsonChildren);
 			for(TrackNode child : children)
 				jsonChildren.add(child.toJson());
 			return ret;
@@ -1042,14 +1044,14 @@ public class ProgramTracker implements Cloneable {
 	/**
 	 * Serializes this tracker to JSON
 	 *
-	 * @return A JSON-serialized representation of this tracker. May be deserialized with {@link #fromJson(JSONObject)}
+	 * @return A JSON-serialized representation of this tracker. May be deserialized with {@link #fromJson(JsonObject)}
 	 */
-	public JSONObject toJson() {
-		JSONObject ret = new JSONObject();
-		ret.put("name", theName);
-		ret.put("withStats", Boolean.valueOf(isWithRTStats));
-		org.json.simple.JSONArray nodes = new org.json.simple.JSONArray();
-		ret.put("nodes", nodes);
+	public JsonObject toJson() {
+		JsonObject ret = new JsonObject();
+		ret.with("name", theName);
+		ret.with("withStats", Boolean.valueOf(isWithRTStats));
+		List<Object> nodes = new ArrayList<>();
+		ret.with("nodes", nodes);
 		for(TrackNode node : theNodes)
 			nodes.add(node.toJson());
 		return ret;
@@ -1138,9 +1140,9 @@ public class ProgramTracker implements Cloneable {
 	 * @param json The JSON representation of a tracker serialized with {@link #toJson()}
 	 * @return A tracker with the same content as the one serialized
 	 */
-	public static ProgramTracker fromJson(JSONObject json) {
+	public static ProgramTracker fromJson(JsonObject json) {
 		ProgramTracker ret = new ProgramTracker((String) json.get("name"), ((Boolean) json.get("withStats")).booleanValue());
-		for(JSONObject node : (java.util.List<JSONObject>) json.get("nodes"))
+		for (JsonObject node : (java.util.List<JsonObject>) json.get("nodes"))
 			ret.theNodes.add(ret.nodeFromJson(null, node));
 		return ret;
 	}
@@ -1152,7 +1154,7 @@ public class ProgramTracker implements Cloneable {
 	 * @param json The JSON-serialized node, serialized with {@link #toJson()}
 	 * @return A track node with the same content as the one that was serialized
 	 */
-	public TrackNode nodeFromJson(TrackNode parent, JSONObject json) {
+	public TrackNode nodeFromJson(TrackNode parent, JsonObject json) {
 		TrackNode ret = new TrackNode(parent, (String) json.get("name"), false);
 		ret.startTime = ((Number) json.get("startTime")).longValue();
 		ret.latestStartCPU = ((Number) json.get("latestStartCPU")).longValue();
@@ -1163,8 +1165,8 @@ public class ProgramTracker implements Cloneable {
 		ret.runLength = ((Number) json.get("length")).longValue();
 		ret.unfinished = ((Number) json.get("unfinished")).intValue();
 		if(json.get("lengthStats") != null)
-			ret.lengthStats = RunningStatistic.fromJson((JSONObject) json.get("lengthStats"));
-		for(JSONObject node : (java.util.List<JSONObject>) json.get("children"))
+			ret.lengthStats = RunningStatistic.fromJson((JsonObject) json.get("lengthStats"));
+		for (JsonObject node : (java.util.List<JsonObject>) json.get("children"))
 			ret.children.add(nodeFromJson(ret, node));
 		return ret;
 	}

@@ -3,6 +3,8 @@ package org.qommons.json;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Parses JSON from a stream incrementally, notifying a handler as each piece is parsed */
 public class SAJParser {
@@ -159,11 +161,11 @@ public class SAJParser {
 		@Override
 		public void startObject(ParseState state) {
 			theState = state;
-			org.json.simple.JSONObject value = new org.json.simple.JSONObject();
-			if(top() instanceof org.json.simple.JSONArray)
-				((org.json.simple.JSONArray) top()).add(value);
-			else if(top() instanceof org.json.simple.JSONObject)
-				((org.json.simple.JSONObject) top()).put(state.fromTop(1).getPropertyName(), value);
+			JsonObject value = new JsonObject();
+			if (top() instanceof List)
+				((List<Object>) top()).add(value);
+			else if (top() instanceof JsonObject)
+				((JsonObject) top()).with(state.fromTop(1).getPropertyName(), value);
 			thePath.add(value);
 		}
 
@@ -191,11 +193,11 @@ public class SAJParser {
 		@Override
 		public void startArray(ParseState state) {
 			theState = state;
-			org.json.simple.JSONArray value = new org.json.simple.JSONArray();
-			if(top() instanceof org.json.simple.JSONArray)
-				((org.json.simple.JSONArray) top()).add(value);
-			else if(top() instanceof org.json.simple.JSONObject)
-				((org.json.simple.JSONObject) top()).put(state.fromTop(1).getPropertyName(), value);
+			List<Object> value = new ArrayList<>();
+			if (top() instanceof List)
+				((List<Object>) top()).add(value);
+			else if (top() instanceof JsonObject)
+				((JsonObject) top()).with(state.fromTop(1).getPropertyName(), value);
 			thePath.add(value);
 		}
 
@@ -224,10 +226,10 @@ public class SAJParser {
 		 */
 		public void valueString(ParseState state, String value) {
 			theState = state;
-			if(top() instanceof org.json.simple.JSONArray)
-				((org.json.simple.JSONArray) top()).add(value);
-			else if(top() instanceof org.json.simple.JSONObject)
-				((org.json.simple.JSONObject) top()).put(state.top().getPropertyName(), value);
+			if (top() instanceof List)
+				((List<Object>) top()).add(value);
+			else if (top() instanceof JsonObject)
+				((JsonObject) top()).with(state.top().getPropertyName(), value);
 			else
 				theValue = value;
 		}
@@ -235,10 +237,10 @@ public class SAJParser {
 		@Override
 		public void valueNumber(ParseState state, Number value) {
 			theState = state;
-			if(top() instanceof org.json.simple.JSONArray)
-				((org.json.simple.JSONArray) top()).add(value);
-			else if(top() instanceof org.json.simple.JSONObject)
-				((org.json.simple.JSONObject) top()).put(state.top().getPropertyName(), value);
+			if (top() instanceof List)
+				((List<Object>) top()).add(value);
+			else if (top() instanceof JsonObject)
+				((JsonObject) top()).with(state.top().getPropertyName(), value);
 			else
 				theValue = value;
 		}
@@ -247,10 +249,10 @@ public class SAJParser {
 		public void valueBoolean(ParseState state, boolean value) {
 			Boolean bValue = value ? Boolean.TRUE : Boolean.FALSE;
 			theState = state;
-			if(top() instanceof org.json.simple.JSONArray)
-				((org.json.simple.JSONArray) top()).add(bValue);
-			else if(top() instanceof org.json.simple.JSONObject)
-				((org.json.simple.JSONObject) top()).put(state.top().getPropertyName(), bValue);
+			if (top() instanceof List)
+				((List<Object>) top()).add(bValue);
+			else if (top() instanceof JsonObject)
+				((JsonObject) top()).with(state.top().getPropertyName(), bValue);
 			else
 				theValue = Boolean.valueOf(value);
 		}
@@ -258,10 +260,10 @@ public class SAJParser {
 		@Override
 		public void valueNull(ParseState state) {
 			theState = state;
-			if(top() instanceof org.json.simple.JSONArray)
-				((org.json.simple.JSONArray) top()).add(null);
-			else if(top() instanceof org.json.simple.JSONObject)
-				((org.json.simple.JSONObject) top()).put(state.top().getPropertyName(), null);
+			if (top() instanceof List)
+				((List<Object>) top()).add(null);
+			else if (top() instanceof JsonObject)
+				((JsonObject) top()).with(state.top().getPropertyName(), null);
 			else
 				theValue = null;
 		}
@@ -295,8 +297,8 @@ public class SAJParser {
 		protected void setLastValue(Object lastValue) {
 			theValue = lastValue;
 			Object top = top();
-			if(top instanceof org.json.simple.JSONArray) {
-				org.json.simple.JSONArray jsonA = (org.json.simple.JSONArray) top;
+			if (top instanceof List) {
+				List<Object> jsonA = (List<Object>) top;
 				jsonA.set(jsonA.size() - 1, lastValue);
 			}
 		}
@@ -891,6 +893,7 @@ public class SAJParser {
 		@Override
 		public String toString() {
 			StringBuilder ret = new StringBuilder();
+			ret.append("Line ").append(theLineNumber).append(", Column ").append(theCharNumber).append('\n');
 			for(ParseNode node : thePath)
 				ret.append(node.toString()).append('/');
 			if(ret.length() > 0)
@@ -1341,6 +1344,7 @@ public class SAJParser {
 		char type = 0;
 		while(true) {
 			if(isWhiteSpace(ch)) {
+				break;
 			} else if(ch >= '0' && ch <= '9') {
 				if(ch >= '8' && radix == 8)
 					state.error("8 or 9 digit used in octal number");
@@ -1708,8 +1712,8 @@ public class SAJParser {
 	 * @return The first JSON value in the stream. May be null if that is the first value in the stream. Otherwise the value will be an
 	 *         instance of:
 	 *         <ul>
-	 *         <li>{@link org.json.simple.JSONObject}</li>
-	 *         <li>{@link org.json.simple.JSONArray}</li>
+	 *         <li>{@link JsonObject}</li>
+	 *         <li>{@link List}</li>
 	 *         <li>{@link java.lang.String}</li>
 	 *         <li>{@link java.lang.Number}</li>
 	 *         <li>{@link java.lang.Boolean}</li>
@@ -1728,8 +1732,8 @@ public class SAJParser {
 	 * @return The first JSON value in the stream. May be null if that is the first value in the string. Otherwise the value will be an
 	 *         instance of:
 	 *         <ul>
-	 *         <li>{@link org.json.simple.JSONObject}</li>
-	 *         <li>{@link org.json.simple.JSONArray}</li>
+	 *         <li>{@link JsonObject}</li>
+	 *         <li>{@link List}</li>
 	 *         <li>{@link java.lang.String}</li>
 	 *         <li>{@link java.lang.Number}</li>
 	 *         <li>{@link java.lang.Boolean}</li>
@@ -1741,28 +1745,6 @@ public class SAJParser {
 			return parse(new java.io.StringReader(string));
 		} catch(IOException e) {
 			throw new IllegalStateException("IO Exception thrown from StringReader?!!", e);
-		}
-	}
-
-	/**
-	 * Main tester method. This method asks the user repeatedly for JSON input to parse and prints it to the screen formatted.
-	 *
-	 * @param args Command-line arguments, ignored.
-	 */
-	public static void main(String [] args) {
-		DefaultHandler handler = new DefaultHandler();
-		SAJParser parser = new SAJParser();
-		while(true) {
-			System.out.println("\nEnter a JSON value to parse");
-			try {
-				System.out.println(org.qommons.JsonUtils.format(parser.parse(new java.io.InputStreamReader(System.in), handler)));
-			} catch(IOException e) {
-				handler.reset();
-				System.err.println("Could not read from system in: " + e.getMessage());
-			} catch(ParseException e) {
-				handler.reset();
-				System.err.println("Could not parse JSON: " + e.getMessage());
-			}
 		}
 	}
 }

@@ -2,8 +2,10 @@
 package org.qommons;
 
 import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.List;
 
-import org.json.simple.JSONObject;
+import org.qommons.json.JsonObject;
 
 /** Efficiently collects statistics one datum at a time. */
 public class RunningStatistic implements Cloneable {
@@ -20,15 +22,15 @@ public class RunningStatistic implements Cloneable {
 			theSigma = sigma;
 		}
 
-		JSONObject toJson() {
-			JSONObject ret = new JSONObject();
-			ret.put("index", Integer.valueOf(theIndex));
-			ret.put("mean", Float.valueOf(theMean));
-			ret.put("sigma", Float.valueOf(theSigma));
+		JsonObject toJson() {
+			JsonObject ret = new JsonObject();
+			ret.with("index", Integer.valueOf(theIndex));
+			ret.with("mean", Float.valueOf(theMean));
+			ret.with("sigma", Float.valueOf(theSigma));
 			return ret;
 		}
 
-		static SampleSet fromJson(JSONObject json) {
+		static SampleSet fromJson(JsonObject json) {
 			return new SampleSet(((Number) json.get("index")).intValue(), ((Number) json.get("mean")).floatValue(),
 				((Number) json.get("sigma")).floatValue());
 		}
@@ -539,30 +541,30 @@ public class RunningStatistic implements Cloneable {
 	/**
 	 * Serializes this running statistic to JSON
 	 *
-	 * @return A JSON representation of this statistic that may be deserialized with {@link #fromJson(JSONObject)}
+	 * @return A JSON representation of this statistic that may be deserialized with {@link #fromJson(JsonObject)}
 	 */
-	public JSONObject toJson() {
+	public JsonObject toJson() {
 		finish();
-		JSONObject ret = new JSONObject();
-		ret.put("sampleRate", Integer.valueOf(theSampleRate));
-		ret.put("startCount", Integer.valueOf(theStartCount));
-		ret.put("count", Integer.valueOf(theCount));
-		ret.put("normalCount", Integer.valueOf(theNormalCount));
-		ret.put("mean", Float.valueOf(theOverallMean));
-		ret.put("variance", Float.valueOf(theVariance));
-		ret.put("min", Float.valueOf(theMin));
-		ret.put("max", Float.valueOf(theMax));
-		ret.put("nanCount", Integer.valueOf(theNaNCount));
-		ret.put("negInfCount", Integer.valueOf(theNegInfCount));
-		ret.put("posInfCount", Integer.valueOf(thePosInfCount));
-		ret.put("sampleSetCount", Integer.valueOf(theSampleSetCount));
+		JsonObject ret = new JsonObject();
+		ret.with("sampleRate", Integer.valueOf(theSampleRate));
+		ret.with("startCount", Integer.valueOf(theStartCount));
+		ret.with("count", Integer.valueOf(theCount));
+		ret.with("normalCount", Integer.valueOf(theNormalCount));
+		ret.with("mean", Float.valueOf(theOverallMean));
+		ret.with("variance", Float.valueOf(theVariance));
+		ret.with("min", Float.valueOf(theMin));
+		ret.with("max", Float.valueOf(theMax));
+		ret.with("nanCount", Integer.valueOf(theNaNCount));
+		ret.with("negInfCount", Integer.valueOf(theNegInfCount));
+		ret.with("posInfCount", Integer.valueOf(thePosInfCount));
+		ret.with("sampleSetCount", Integer.valueOf(theSampleSetCount));
 
-		org.json.simple.JSONArray samples = new org.json.simple.JSONArray();
-		ret.put("sampleSets", samples);
+		List<Object> samples = new ArrayList<>(theSampleSets.size());
+		ret.with("sampleSets", samples);
 		for(SampleSet ss : theSampleSets)
 			samples.add(ss.toJson());
-		org.json.simple.JSONArray outliers = new org.json.simple.JSONArray();
-		ret.put("outliers", outliers);
+		List<Object> outliers = new ArrayList<>(theOutliers.size());
+		ret.with("outliers", outliers);
 		for(float f : theOutliers.toArray())
 			outliers.add(Float.valueOf(f));
 		return ret;
@@ -574,7 +576,7 @@ public class RunningStatistic implements Cloneable {
 	 * @param json The JSON representation of a statistic generated with {@link #toJson()}
 	 * @return A running statistic whose content is the same as the one that was serialized
 	 */
-	public static RunningStatistic fromJson(org.json.simple.JSONObject json) {
+	public static RunningStatistic fromJson(JsonObject json) {
 		RunningStatistic ret = new RunningStatistic(((Number) json.get("sampleRate")).intValue());
 		ret.theStartCount = ((Number) json.get("startCount")).intValue();
 		ret.theCount = ((Number) json.get("count")).intValue();
@@ -587,7 +589,7 @@ public class RunningStatistic implements Cloneable {
 		ret.theNegInfCount = ((Number) json.get("negInfCount")).intValue();
 		ret.thePosInfCount = ((Number) json.get("posInfCount")).intValue();
 		ret.theSampleSetCount = ((Number) json.get("sampleSetCount")).intValue();
-		for(org.json.simple.JSONObject sample : (java.util.List<org.json.simple.JSONObject>) json.get("sampleSets"))
+		for (JsonObject sample : (List<JsonObject>) json.get("sampleSets"))
 			ret.theSampleSets.add(SampleSet.fromJson(sample));
 		for(Number outlier : (java.util.List<Number>) json.get("outliers"))
 			ret.theOutliers.add(outlier.floatValue());

@@ -5,6 +5,7 @@ package org.qommons.json;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.util.List;
 
 import org.qommons.json.SAJParser.ParseException;
 import org.qommons.json.SAJParser.ParseNode;
@@ -22,11 +23,9 @@ import org.qommons.json.SAJParser.ParseToken;
  * retrieved through that instance of this class.
  * </p>
  */
-public class JsonSerialReader
-{
+public class JsonSerialReader {
 	/** The type of an item parsed from a JSON stream */
-	public static enum JsonParseType
-	{
+	public static enum JsonParseType {
 		/** Represents some white space which has no effect on the JSON content */
 		WHITESPACE,
 		/** Represents either a line comment started with // or a block comment beginning with /* (slash-star) and ending with star-slash */
@@ -49,39 +48,33 @@ public class JsonSerialReader
 	}
 
 	/** A JsonParseItem is an item parsed from a JSON stream */
-	public static interface JsonParseItem
-	{
+	public static interface JsonParseItem {
 		/** @return The type of this item */
 		public JsonParseType getType();
 	}
 
 	/** Represents white space which has no effect on the JSON content */
-	public static class WhiteSpace implements JsonParseItem
-	{
+	public static class WhiteSpace implements JsonParseItem {
 		private final String theContent;
 
 		/** @param content The white space sequence */
-		public WhiteSpace(String content)
-		{
+		public WhiteSpace(String content) {
 			theContent = content;
 		}
 
 		@Override
-		public JsonParseType getType()
-		{
+		public JsonParseType getType() {
 			return JsonParseType.WHITESPACE;
 		}
 
 		/** @return The white space sequence */
-		public String getContent()
-		{
+		public String getContent() {
 			return theContent;
 		}
 	}
 
 	/** Represents either a line comment started with // or a block comment beginning with /* (slash-star) and ending with star-slash */
-	public static class Comment implements JsonParseItem
-	{
+	public static class Comment implements JsonParseItem {
 		private final String theContent;
 
 		private final String theFullComment;
@@ -90,33 +83,28 @@ public class JsonSerialReader
 		 * @param content The content of the comment, excluding commenting characters
 		 * @param fullComment The full text of the comment
 		 */
-		public Comment(String content, String fullComment)
-		{
+		public Comment(String content, String fullComment) {
 			theContent = content;
 			theFullComment = fullComment;
 		}
 
 		@Override
-		public JsonParseType getType()
-		{
+		public JsonParseType getType() {
 			return JsonParseType.COMMENT;
 		}
 
 		/** @return Whether this comment is a block comment or a line comment */
-		public boolean isBlock()
-		{
+		public boolean isBlock() {
 			return theFullComment.startsWith("/*");
 		}
 
 		/** @return The content of the comment, excluding commenting characters */
-		public String getContent()
-		{
+		public String getContent() {
 			return theContent;
 		}
 
 		/** @return The full text of the comment */
-		public String getFullComment()
-		{
+		public String getFullComment() {
 			return theFullComment;
 		}
 	}
@@ -125,19 +113,16 @@ public class JsonSerialReader
 	 * Represents a comma between elements in an array, a colon between the name and value of an object property, or a comma between
 	 * name/value pairs in an object
 	 */
-	public static class Separator implements JsonParseItem
-	{
+	public static class Separator implements JsonParseItem {
 		private final ParseToken theSepType;
 
 		/** @param sepType The type of separator that this item represents */
-		public Separator(ParseToken sepType)
-		{
+		public Separator(ParseToken sepType) {
 			theSepType = sepType;
 		}
 
 		@Override
-		public JsonParseType getType()
-		{
+		public JsonParseType getType() {
 			return JsonParseType.SEPARATOR;
 		}
 
@@ -145,166 +130,141 @@ public class JsonSerialReader
 		 * @return The type of separator that this item represents:
 		 *         <ul>
 		 *         <li>{@link org.qommons.json.SAJParser.ParseToken#OBJECT} For a comma between properties of an object</li>
-		 *         <li>{@link org.qommons.json.SAJParser.ParseToken#PROPERTY} For a colon between the name and value of an object property</li>
+		 *         <li>{@link org.qommons.json.SAJParser.ParseToken#PROPERTY} For a colon between the name and value of an object
+		 *         property</li>
 		 *         <li>{@link org.qommons.json.SAJParser.ParseToken#OBJECT} For a comma between elements of an array</li>
 		 *         </ul>
 		 */
-		public ParseToken getSeparatorType()
-		{
+		public ParseToken getSeparatorType() {
 			return theSepType;
 		}
 	}
 
 	/** A tagging interface that marks an item as important to the JSON data structure */
-	public static interface JsonContentItem extends JsonParseItem
-	{
-	}
+	public static interface JsonContentItem extends JsonParseItem {}
 
 	/** Represents a JSON object or array */
-	public static abstract class StructItem implements JsonContentItem
-	{
+	public static abstract class StructItem implements JsonContentItem {
 		private final boolean isBegin;
 
 		/** @param begin Whether this item represents the beginning or end of the structure */
-		public StructItem(boolean begin)
-		{
+		public StructItem(boolean begin) {
 			isBegin = begin;
 		}
 
 		/** @return Whether this item represents the beginning or end of the structure */
-		public boolean isBegin()
-		{
+		public boolean isBegin() {
 			return isBegin;
 		}
 	}
 
 	/** Represents either the beginning ('{') or end ('}') of a JSON object */
-	public static class ObjectItem extends StructItem
-	{
+	public static class ObjectItem extends StructItem {
 		/** @param begin Whether this item represents the beginning or end of the structure */
-		public ObjectItem(boolean begin)
-		{
+		public ObjectItem(boolean begin) {
 			super(begin);
 		}
 
 		@Override
-		public JsonParseType getType()
-		{
+		public JsonParseType getType() {
 			return JsonParseType.OBJECT;
 		}
 	}
 
 	/** Represents either the beginning ('[') or end (']') of a JSON array */
-	public static class ArrayItem extends StructItem
-	{
+	public static class ArrayItem extends StructItem {
 		/** @param begin Whether this item represents the beginning or end of the structure */
-		public ArrayItem(boolean begin)
-		{
+		public ArrayItem(boolean begin) {
 			super(begin);
 		}
 
 		@Override
-		public JsonParseType getType()
-		{
+		public JsonParseType getType() {
 			return JsonParseType.ARRAY;
 		}
 	}
 
 	/** Represents the beginning of a property in a JSON object */
-	public static class PropertyItem implements JsonContentItem
-	{
+	public static class PropertyItem implements JsonContentItem {
 		private final String theName;
 
 		/** @param name The name of the property that was parsed */
-		public PropertyItem(String name)
-		{
+		public PropertyItem(String name) {
 			theName = name;
 		}
 
 		@Override
-		public JsonParseType getType()
-		{
+		public JsonParseType getType() {
 			return JsonParseType.PROPERTY;
 		}
 
 		/** @return The name of the property that was parsed */
-		public String getName()
-		{
+		public String getName() {
 			return theName;
 		}
 	}
 
 	/** epresents a String, Number, Boolean, or null as a property value in a JSON object, an element in an array, or a standalone value */
-	public static class PrimitiveItem implements JsonContentItem
-	{
+	public static class PrimitiveItem implements JsonContentItem {
 		private Object theValue;
 
 		/** @param value The value that was parsed */
-		public PrimitiveItem(Object value)
-		{
+		public PrimitiveItem(Object value) {
 			theValue = value;
 		}
 
 		@Override
-		public JsonParseType getType()
-		{
+		public JsonParseType getType() {
 			return JsonParseType.PRIMITIVE;
 		}
 
 		/** @return The value that was parsed */
-		public Object getValue()
-		{
+		public Object getValue() {
 			return theValue;
 		}
 	}
 
 	/** Represents a saved state that may be referred to later */
-	public static class StructState
-	{
-		private ParseNode [] thePath;
+	public static class StructState {
+		private ParseNode[] thePath;
 
-		private StructState(ParseNode [] path)
-		{
+		private StructState(ParseNode[] path) {
 			thePath = path;
 		}
 
-		StructState(ParseState state, ParseNode... add)
-		{
+		StructState(ParseState state, ParseNode... add) {
 			ParseNode top;
-			if(add.length > 0)
+			if (add.length > 0)
 				top = add[add.length - 1];
 			else
 				top = state.top();
-			if(top == null || (top.token != ParseToken.OBJECT && top.token != ParseToken.ARRAY))
+			if (top == null || (top.token != ParseToken.OBJECT && top.token != ParseToken.ARRAY))
 				throw new IllegalArgumentException("State can only be saved for an object or array");
 
-			thePath = new ParseNode [state.getDepth() + add.length];
+			thePath = new ParseNode[state.getDepth() + add.length];
 			int i;
-			for(i = 0; i < state.getDepth(); i++)
+			for (i = 0; i < state.getDepth(); i++)
 				thePath[state.getDepth() - i - 1] = state.fromTop(i);
-			for(; i < thePath.length; i++)
+			for (; i < thePath.length; i++)
 				thePath[i] = add[i - state.getDepth()];
 		}
 
 		/** @return The parent state of this state */
-		public StructState getParent()
-		{
-			if(thePath.length == 0)
+		public StructState getParent() {
+			if (thePath.length == 0)
 				return null;
-			ParseNode [] newPath = new ParseNode [thePath.length - 1];
+			ParseNode[] newPath = new ParseNode[thePath.length - 1];
 			System.arraycopy(thePath, 0, newPath, 0, newPath.length);
 			return new StructState(newPath);
 		}
 
 		/** @return The depth of this state */
-		public int getDepth()
-		{
+		public int getDepth() {
 			return thePath.length;
 		}
 
 		/** @return The top parse node of this state. Will be of type {@link ParseToken#OBJECT object} or {@link ParseToken#ARRAY array} */
-		public ParseNode top()
-		{
+		public ParseNode top() {
 			return thePath[thePath.length - 1];
 		}
 
@@ -312,39 +272,34 @@ public class JsonSerialReader
 		 * @param depth The depth to get the node of
 		 * @return The parse node of this state <code>depth</code> deep
 		 */
-		public ParseNode fromTop(int depth)
-		{
-			if(thePath.length <= depth)
+		public ParseNode fromTop(int depth) {
+			if (thePath.length <= depth)
 				return null;
 			return thePath[thePath.length - depth - 1];
 		}
 
 		/** @return this state's path */
-		public ParseNode [] getPath()
-		{
+		public ParseNode[] getPath() {
 			return thePath;
 		}
 
 		@Override
-		public String toString()
-		{
+		public String toString() {
 			StringBuilder ret = new StringBuilder();
-			for(ParseNode node : thePath)
+			for (ParseNode node : thePath)
 				ret.append(node.toString()).append('/');
-			if(ret.length() > 0)
+			if (ret.length() > 0)
 				ret.setLength(ret.length() - 1);
 			return ret.toString();
 		}
 
 		@Override
-		public boolean equals(Object o)
-		{
+		public boolean equals(Object o) {
 			return o instanceof StructState && org.qommons.ArrayUtils.equals(thePath, ((StructState) o).thePath);
 		}
 
 		@Override
-		public int hashCode()
-		{
+		public int hashCode() {
 			return org.qommons.ArrayUtils.hashCode(thePath);
 		}
 
@@ -352,9 +307,8 @@ public class JsonSerialReader
 		 * @param state The state to check
 		 * @return Whether this state matches the given state exactly
 		 */
-		public boolean matches(ParseState state)
-		{
-			if(state.getDepth() != thePath.length)
+		public boolean matches(ParseState state) {
+			if (state.getDepth() != thePath.length)
 				return false;
 			return isStartOf(state);
 		}
@@ -363,20 +317,18 @@ public class JsonSerialReader
 		 * @param state The state to check
 		 * @return Whether the given state begins with this state
 		 */
-		public boolean isStartOf(ParseState state)
-		{
-			if(state.getDepth() < thePath.length)
+		public boolean isStartOf(ParseState state) {
+			if (state.getDepth() < thePath.length)
 				return false;
-			for(int i = 0; i < thePath.length; i++)
-				if(!thePath[i].equals(state.fromTop(thePath.length - i - 1)))
+			for (int i = 0; i < thePath.length; i++)
+				if (!thePath[i].equals(state.fromTop(thePath.length - i - 1)))
 					return false;
 			return true;
 		}
 	}
 
 	/** Allows the JSON serial reader class to capture parsed data selectively */
-	public static class ToggleHandler extends org.qommons.json.SAJParser.DefaultHandler
-	{
+	public static class ToggleHandler extends org.qommons.json.SAJParser.DefaultHandler {
 		private Boolean theMode;
 
 		private boolean isStringAsReader;
@@ -403,8 +355,7 @@ public class JsonSerialReader
 		 *        <li>true - On. This handler accepts all input</li>
 		 *        </ul>
 		 */
-		public void setMode(Boolean mode)
-		{
+		public void setMode(Boolean mode) {
 			theMode = mode;
 		}
 
@@ -412,61 +363,51 @@ public class JsonSerialReader
 		 * @param stringAsReader Whether, when strings are encountered, to store them in the stringReader field for later retrieval, or to
 		 *        parse them as normal string objects
 		 */
-		public void setStringAsReader(boolean stringAsReader)
-		{
+		public void setStringAsReader(boolean stringAsReader) {
 			isStringAsReader = stringAsReader;
 		}
 
 		/** @return The mode that this handler is in */
-		public Boolean getMode()
-		{
+		public Boolean getMode() {
 			return theMode;
 		}
 
 		/** @return Whether the last parsed entity was a separator */
-		public boolean isSeparator()
-		{
+		public boolean isSeparator() {
 			return isSep;
 		}
 
 		/** @return Whether the last parsed entity was whitespace */
-		public boolean isWhitespace()
-		{
+		public boolean isWhitespace() {
 			return isWhitespace;
 		}
 
 		/** @return Whether the last parsed entity was a comment */
-		public boolean isComment()
-		{
+		public boolean isComment() {
 			return isComment;
 		}
 
 		/** @return Whether the last parsed entity was the null value */
-		public boolean isNull()
-		{
+		public boolean isNull() {
 			return isNull;
 		}
 
 		/** @return The reader for the string just encountered */
-		public Reader getString()
-		{
+		public Reader getString() {
 			return theStringReader;
 		}
 
 		/** @return The value of the last white space or comment parsed */
-		public String getContent()
-		{
+		public String getContent() {
 			return theContent;
 		}
 
 		/** @return The full text of the last comment parsed */
-		public String getFullComment()
-		{
+		public String getFullComment() {
 			return theFullComment;
 		}
 
-		private void clearNonContent()
-		{
+		private void clearNonContent() {
 			isSep = false;
 			isWhitespace = false;
 			isComment = false;
@@ -477,94 +418,78 @@ public class JsonSerialReader
 		}
 
 		@Override
-		public void startObject(ParseState state)
-		{
+		public void startObject(ParseState state) {
 			clearNonContent();
-			if(Boolean.TRUE.equals(theMode))
+			if (Boolean.TRUE.equals(theMode))
 				super.startObject(state);
 		}
 
 		@Override
-		public void startProperty(ParseState state, String name)
-		{
+		public void startProperty(ParseState state, String name) {
 			clearNonContent();
-			if(Boolean.TRUE.equals(theMode))
+			if (Boolean.TRUE.equals(theMode))
 				super.startProperty(state, name);
 		}
 
 		@Override
-		public void endProperty(ParseState state, String propName)
-		{
+		public void endProperty(ParseState state, String propName) {
 			clearNonContent();
-			if(Boolean.TRUE.equals(theMode))
+			if (Boolean.TRUE.equals(theMode))
 				super.endProperty(state, propName);
 		}
 
 		@Override
-		public void endObject(ParseState state)
-		{
+		public void endObject(ParseState state) {
 			clearNonContent();
-			if(Boolean.TRUE.equals(theMode) && getDepth() > 0)
+			if (Boolean.TRUE.equals(theMode) && getDepth() > 0)
 				super.endObject(state);
 		}
 
 		@Override
-		public void startArray(ParseState state)
-		{
+		public void startArray(ParseState state) {
 			clearNonContent();
-			if(Boolean.TRUE.equals(theMode))
+			if (Boolean.TRUE.equals(theMode))
 				super.startArray(state);
 		}
 
 		@Override
-		public void endArray(ParseState state)
-		{
+		public void endArray(ParseState state) {
 			clearNonContent();
-			if(Boolean.TRUE.equals(theMode) && getDepth() > 0)
+			if (Boolean.TRUE.equals(theMode) && getDepth() > 0)
 				super.endArray(state);
 		}
 
 		@Override
-		public void valueString(ParseState state, java.io.Reader value) throws IOException
-		{
-			if(theMode != null)
-			{
+		public void valueString(ParseState state, java.io.Reader value) throws IOException {
+			if (theMode != null) {
 				clearNonContent();
-				if(isStringAsReader)
-				{
+				if (isStringAsReader) {
 					theStringReader = value;
 					super.valueString(state, "");
-				}
-				else
+				} else
 					super.valueString(state, value);
 			}
 		}
 
 		@Override
-		public void valueNumber(ParseState state, Number value)
-		{
-			if(theMode != null)
-			{
+		public void valueNumber(ParseState state, Number value) {
+			if (theMode != null) {
 				super.valueNumber(state, value);
 				clearNonContent();
 			}
 		}
 
 		@Override
-		public void valueBoolean(ParseState state, boolean value)
-		{
-			if(theMode != null)
-			{
+		public void valueBoolean(ParseState state, boolean value) {
+			if (theMode != null) {
 				super.valueBoolean(state, value);
 				clearNonContent();
 			}
 		}
 
 		@Override
-		public void valueNull(ParseState state)
-		{
-			if(theMode != null)
-			{
+		public void valueNull(ParseState state) {
+			if (theMode != null) {
 				super.valueNull(state);
 				clearNonContent();
 				isNull = true;
@@ -572,10 +497,8 @@ public class JsonSerialReader
 		}
 
 		@Override
-		public void separator(ParseState state)
-		{
-			if(theMode != null)
-			{
+		public void separator(ParseState state) {
+			if (theMode != null) {
 				super.separator(state);
 				clearNonContent();
 				isSep = true;
@@ -583,10 +506,8 @@ public class JsonSerialReader
 		}
 
 		@Override
-		public void whiteSpace(ParseState state, String ws)
-		{
-			if(theMode != null)
-			{
+		public void whiteSpace(ParseState state, String ws) {
+			if (theMode != null) {
 				super.whiteSpace(state, ws);
 				clearNonContent();
 				isWhitespace = true;
@@ -595,10 +516,8 @@ public class JsonSerialReader
 		}
 
 		@Override
-		public void comment(ParseState state, String fullComment, String content)
-		{
-			if(theMode != null)
-			{
+		public void comment(ParseState state, String fullComment, String content) {
+			if (theMode != null) {
 				super.comment(state, fullComment, content);
 				clearNonContent();
 				isComment = true;
@@ -608,8 +527,7 @@ public class JsonSerialReader
 		}
 
 		@Override
-		public void reset()
-		{
+		public void reset() {
 			super.reset();
 			clearNonContent();
 		}
@@ -638,16 +556,14 @@ public class JsonSerialReader
 	 * 
 	 * @param reader The input reader to parse the JSON from
 	 */
-	public JsonSerialReader(java.io.Reader reader)
-	{
+	public JsonSerialReader(java.io.Reader reader) {
 		theParser = new SAJParser();
 		theHandler = new ToggleHandler();
 		theState = new SAJParser.ParseState(reader, theHandler);
 	}
 
 	/** @return The current state of parsing */
-	public ParseState getState()
-	{
+	public ParseState getState() {
 		return theState;
 	}
 
@@ -662,66 +578,54 @@ public class JsonSerialReader
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If the next item cannot be parsed in context
 	 */
-	public JsonParseItem getNextItem(boolean jsonOnly, boolean stringAsReader) throws IOException, ParseException
-	{
+	public JsonParseItem getNextItem(boolean jsonOnly, boolean stringAsReader) throws IOException, ParseException {
 		return getNextItem(jsonOnly, stringAsReader, false);
 	}
 
-	private JsonParseItem getNextItem(boolean jsonOnly, boolean stringAsReader, boolean calledInternal) throws IOException, ParseException
-	{
+	private JsonParseItem getNextItem(boolean jsonOnly, boolean stringAsReader, boolean calledInternal) throws IOException, ParseException {
 		needsPastSep = false;
-		if(theLastEnded != null)
-		{
+		if (theLastEnded != null) {
 			JsonParseItem ret = theLastEnded;
 			theLastEnded = null;
 			theLastState = null;
-			if(calledInternal)
+			if (calledInternal)
 				return ret;
 		}
 		theHandler.setStringAsReader(stringAsReader);
 		boolean preOff = theHandler.getMode() == null;
-		if(preOff)
+		if (preOff)
 			theHandler.setMode(Boolean.FALSE);
-		try
-		{
+		try {
 			Object preValue = theHandler.finalValue();
 			org.qommons.json.SAJParser.ParseNode top;
-			do
-			{
+			do {
 				top = theState.top();
-				if(!theParser.parseNext(theState))
+				if (!theParser.parseNext(theState))
 					return null;
-			} while(jsonOnly && (top == theState.top() || theHandler.isSeparator()) && theHandler.finalValue() == preValue
+			} while (jsonOnly && (top == theState.top() || theHandler.isSeparator()) && theHandler.finalValue() == preValue
 				&& !theHandler.isNull());
 
-			if(theHandler.isNull())
+			if (theHandler.isNull())
 				return new PrimitiveItem(null);
-			else if(theHandler.getString() != null)
-			{
-				if(stringAsReader)
+			else if (theHandler.getString() != null) {
+				if (stringAsReader)
 					return new PrimitiveItem(theHandler.getString());
-				else
-				{
+				else {
 					StringBuilder contents = new StringBuilder();
 					int read = theHandler.getString().read();
-					while(read >= 0)
-					{
+					while (read >= 0) {
 						contents.append((char) read);
 						read = theHandler.getString().read();
 					}
 					return new PrimitiveItem(contents.toString());
 				}
-			}
-			else if(theHandler.finalValue() != preValue)
+			} else if (theHandler.finalValue() != preValue)
 				return new PrimitiveItem(theHandler.finalValue());
-			else if(theHandler.isSeparator())
+			else if (theHandler.isSeparator())
 				return new Separator(top.token);
-			else if(top != theState.top())
-			{
-				if(top == null || theState.getDepth() > 1 && theState.fromTop(1) == top)
-				{ // Beginning of a new item
-					switch(theState.top().token)
-					{
+			else if (top != theState.top()) {
+				if (top == null || theState.getDepth() > 1 && theState.fromTop(1) == top) { // Beginning of a new item
+					switch (theState.top().token) {
 					case OBJECT:
 						return new ObjectItem(true);
 					case ARRAY:
@@ -730,11 +634,8 @@ public class JsonSerialReader
 						return new PropertyItem(theState.top().getPropertyName());
 					}
 					throw new IllegalStateException("Unrecognized parse token: " + theState.top());
-				}
-				else
-				{
-					switch(top.token)
-					{
+				} else {
+					switch (top.token) {
 					case OBJECT: {
 						ObjectItem ret = new ObjectItem(false);
 						theLastEnded = ret;
@@ -755,17 +656,14 @@ public class JsonSerialReader
 					}
 					throw new IllegalStateException("Unrecognized parse token: " + theState.top());
 				}
-			}
-			else if(theHandler.isWhitespace())
+			} else if (theHandler.isWhitespace())
 				return new WhiteSpace(theHandler.getContent());
-			else if(theHandler.isComment())
+			else if (theHandler.isComment())
 				return new Comment(theHandler.getContent(), theHandler.getFullComment());
 			else
 				throw new AssertionError("Unable to determine what was parsed");
-		} finally
-		{
-			if(preOff)
-			{
+		} finally {
+			if (preOff) {
 				theHandler.setMode(null);
 				theHandler.reset();
 			}
@@ -776,8 +674,7 @@ public class JsonSerialReader
 	 * @return The current state of this reader, to use with {@link #endObject(StructState)} or {@link #endArray(StructState)}
 	 * @throws IllegalArgumentException If the current state is not an object or array
 	 */
-	public StructState save()
-	{
+	public StructState save() {
 		return new StructState(theState);
 	}
 
@@ -788,14 +685,13 @@ public class JsonSerialReader
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If the next item in the stream is not an object
 	 */
-	public StructState startObject() throws IOException, ParseException
-	{
-		if(theState.top() != null && theState.top().token == ParseToken.OBJECT)
+	public StructState startObject() throws IOException, ParseException {
+		if (theState.top() != null && theState.top().token == ParseToken.OBJECT)
 			throw new IllegalStateException("The current state is an object. The next item cannot be an object");
 		JsonParseItem item = getNextItem(true, false, true);
-		if(item == null)
+		if (item == null)
 			theState.error("Unexpected end of content");
-		if(item instanceof ObjectItem && ((ObjectItem) item).isBegin())
+		if (item instanceof ObjectItem && ((ObjectItem) item).isBegin())
 			return new StructState(theState);
 		else
 			throw new ParseException("An object was not next in the stream", theState);
@@ -809,9 +705,8 @@ public class JsonSerialReader
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If an error occurs parsing to the next property
 	 */
-	public String getNextProperty() throws IOException, ParseException
-	{
-		if(theLastEnded instanceof ObjectItem)
+	public String getNextProperty() throws IOException, ParseException {
+		if (theLastEnded instanceof ObjectItem)
 			return null;
 		int preDepth = theState.getDepth();
 		if (theState.top().token == ParseToken.PROPERTY)
@@ -819,18 +714,17 @@ public class JsonSerialReader
 		parsePastPropertySeparator();
 		if (theState.getDepth() < preDepth)
 			return null; // End of the object
-		if(theState.top() == null || (theState.top().token != ParseToken.OBJECT && theState.top().token != ParseToken.PROPERTY))
+		if (theState.top() == null || (theState.top().token != ParseToken.OBJECT && theState.top().token != ParseToken.PROPERTY))
 			throw new IllegalStateException("The current state is not in an object.");
 		JsonParseItem item;
-		do
-		{
+		do {
 			item = getNextItem(true, false, true);
-			if(item == null)
+			if (item == null)
 				theState.error("Unexpected end of content");
 			if (theState.getDepth() == preDepth + 1 && item instanceof PropertyItem)
 				return ((PropertyItem) item).getName();
 
-		} while(theState.getDepth() >= preDepth);
+		} while (theState.getDepth() >= preDepth);
 		return null;
 	}
 
@@ -846,10 +740,9 @@ public class JsonSerialReader
 	 * @throws ParseException If an error occurs parsing the data between the current stream position and the value of the given property,
 	 *         or the end of the current object if the property cannot be found
 	 */
-	public boolean goToProperty(String name) throws IOException, ParseException
-	{
+	public boolean goToProperty(String name) throws IOException, ParseException {
 		String propName = getNextProperty();
-		while(propName != null && !propName.equals(name))
+		while (propName != null && !propName.equals(name))
 			propName = getNextProperty();
 		return propName != null;
 	}
@@ -864,61 +757,54 @@ public class JsonSerialReader
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If the data between the current location and the end of the object cannot be parsed
 	 */
-	public int endObject(StructState state) throws IOException, ParseException
-	{
+	public int endObject(StructState state) throws IOException, ParseException {
 		int ret = 0;
-		if(state != null)
-		{
-			if(state.equals(theLastState))
-			{
+		if (state != null) {
+			if (state.equals(theLastState)) {
 				theLastEnded = null;
 				theLastState = null;
 				return ret;
 			}
-			if(state.top().token != ParseToken.OBJECT)
+			if (state.top().token != ParseToken.OBJECT)
 				throw new IllegalArgumentException("The given state is not of an object");
 			// Make sure we're still in the object that the state points to
-			if(theState.getDepth() < state.getPath().length)
+			if (theState.getDepth() < state.getPath().length)
 				throw new IllegalArgumentException(state + " has already been parsed past");
-			for(int i = 0; i < state.getPath().length; i++)
-				if(!theState.fromTop(theState.getDepth() - i - 1).equals(state.getPath()[i]))
+			for (int i = 0; i < state.getPath().length; i++)
+				if (!theState.fromTop(theState.getDepth() - i - 1).equals(state.getPath()[i]))
 					throw new IllegalArgumentException(state + " has already been parsed past");
 			// Parse to the level of the object that the state points to
-			while(theState.getDepth() > state.getPath().length)
-			{
+			while (theState.getDepth() > state.getPath().length) {
 				JsonParseItem item = getNextItem(false, false, true);
-				if(item == null)
+				if (item == null)
 					theState.error("Unexpected end of content");
-				if(item instanceof PropertyItem)
+				if (item instanceof PropertyItem)
 					ret++;
 			}
-			if(theState.getDepth() < state.getPath().length)
-			{
+			if (theState.getDepth() < state.getPath().length) {
 				theLastEnded = null;
 				theLastState = null;
 				return ret;
 			}
 		}
-		if(theLastEnded instanceof ObjectItem)
-		{
+		if (theLastEnded instanceof ObjectItem) {
 			theLastEnded = null;
 			theLastState = null;
 			return ret;
 		}
-		if(theState.top() == null || (theState.top().token != ParseToken.OBJECT && theState.top().token != ParseToken.PROPERTY))
+		if (theState.top() == null || (theState.top().token != ParseToken.OBJECT && theState.top().token != ParseToken.PROPERTY))
 			throw new IllegalStateException("The current state is not in an object: " + theState);
 		int preDepth = theState.getDepth();
-		if(theState.top().token == ParseToken.PROPERTY)
+		if (theState.top().token == ParseToken.PROPERTY)
 			preDepth--;
 		JsonParseItem item;
-		do
-		{
+		do {
 			item = getNextItem(true, false);
-			if(item == null)
+			if (item == null)
 				theState.error("Unexpected end of content");
-			if(item instanceof PropertyItem && theState.getDepth() == preDepth + 1)
+			if (item instanceof PropertyItem && theState.getDepth() == preDepth + 1)
 				ret++;
-		} while(theState.getDepth() >= preDepth);
+		} while (theState.getDepth() >= preDepth);
 		return ret;
 	}
 
@@ -929,14 +815,13 @@ public class JsonSerialReader
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If the next item in the stream is not an array
 	 */
-	public StructState startArray() throws IOException, ParseException
-	{
-		if(theState.top() != null && theState.top().token == ParseToken.OBJECT)
+	public StructState startArray() throws IOException, ParseException {
+		if (theState.top() != null && theState.top().token == ParseToken.OBJECT)
 			throw new IllegalStateException("The current state is an object. The next item cannot be an array.");
 		JsonParseItem item = getNextItem(true, false, true);
-		if(item == null)
+		if (item == null)
 			theState.error("Unexpected end of content");
-		if(item instanceof ArrayItem && ((ArrayItem) item).isBegin())
+		if (item instanceof ArrayItem && ((ArrayItem) item).isBegin())
 			return new StructState(theState);
 		else
 			throw new ParseException("An array was not next in the stream", theState);
@@ -951,62 +836,55 @@ public class JsonSerialReader
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If the data between the current location and the end of the array cannot be parsed
 	 */
-	public int endArray(StructState state) throws IOException, ParseException
-	{
+	public int endArray(StructState state) throws IOException, ParseException {
 		parsePastPropertySeparator();
 		int ret = 0;
-		if(state != null)
-		{
-			if(state.equals(theLastState))
-			{
+		if (state != null) {
+			if (state.equals(theLastState)) {
 				theLastEnded = null;
 				theLastState = null;
 				return ret;
 			}
-			if(state.top().token != ParseToken.OBJECT)
+			if (state.top().token != ParseToken.OBJECT)
 				throw new IllegalArgumentException("The given state is not of an array");
 			// Make sure we're still in the array that the state points to
-			if(theState.getDepth() < state.getPath().length)
+			if (theState.getDepth() < state.getPath().length)
 				throw new IllegalArgumentException(state + " has already been parsed past");
-			for(int i = 0; i < state.getPath().length; i++)
-				if(!theState.fromTop(theState.getDepth() - i - 1).equals(state.getPath()[i]))
+			for (int i = 0; i < state.getPath().length; i++)
+				if (!theState.fromTop(theState.getDepth() - i - 1).equals(state.getPath()[i]))
 					throw new IllegalArgumentException(state + " has already been parsed past");
 			// Parse to the level of the array that the state points to
-			while(theState.getDepth() > state.getPath().length)
-			{
+			while (theState.getDepth() > state.getPath().length) {
 				JsonParseItem item = getNextItem(false, false, true);
-				if(item == null)
+				if (item == null)
 					theState.error("Unexpected end of content");
-				if(item instanceof JsonContentItem && state.getDepth() == state.getPath().length)
+				if (item instanceof JsonContentItem && state.getDepth() == state.getPath().length)
 					ret++;
 			}
-			if(theState.getDepth() < state.getPath().length)
-			{
+			if (theState.getDepth() < state.getPath().length) {
 				theLastEnded = null;
 				theLastState = null;
 				return ret;
 			}
 		}
-		if(theLastEnded instanceof ArrayItem)
-		{
+		if (theLastEnded instanceof ArrayItem) {
 			theLastEnded = null;
 			theLastState = null;
 			return ret;
 		}
-		if(theState.top() == null || theState.top().token != ParseToken.ARRAY)
+		if (theState.top() == null || theState.top().token != ParseToken.ARRAY)
 			throw new IllegalStateException("The current state is not in an array");
 		int preDepth = theState.getDepth();
 		JsonParseItem item;
-		do
-		{
+		do {
 			item = getNextItem(true, false);
-			if(item == null)
+			if (item == null)
 				theState.error("Unexpected end of content");
-			if(theState.getDepth() == preDepth + 1 && item instanceof StructItem && ((StructItem) item).isBegin())
+			if (theState.getDepth() == preDepth + 1 && item instanceof StructItem && ((StructItem) item).isBegin())
 				ret++;
-			else if(theState.getDepth() == preDepth && item instanceof PrimitiveItem)
+			else if (theState.getDepth() == preDepth && item instanceof PrimitiveItem)
 				ret++;
-		} while(theState.getDepth() >= preDepth);
+		} while (theState.getDepth() >= preDepth);
 		return ret;
 	}
 
@@ -1014,30 +892,27 @@ public class JsonSerialReader
 	 * Parses the next element in an array, value of a property in an object, or value in a stream
 	 * 
 	 * @param stringAsReader Whether, if the next element in the array or object is a string, to return a Reader or a String object
-	 * @return The value of the current property or the next element in the array. May be an instance of {@link org.json.simple.JSONObject},
-	 *         {@link org.json.simple.JSONArray}, Number, String, Boolean, or may be {@link #NULL} if the next parsed value is null. An
-	 *         actual null will be returned if the last element of the array has already been parsed.
+	 * @return The value of the current property or the next element in the array. May be an instance of {@link JsonObject}, {@link List
+	 *         array}, Number, String, Boolean, or may be {@link #NULL} if the next parsed value is null. An actual null will be returned if
+	 *         the last element of the array has already been parsed.
 	 * @throws IllegalStateException If the top of this parser's state is not either an array or an object property
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If the element cannot be parsed
 	 */
-	public Object parseNext(boolean stringAsReader) throws IOException, ParseException
-	{
-		if(theLastEnded != null)
+	public Object parseNext(boolean stringAsReader) throws IOException, ParseException {
+		if (theLastEnded != null)
 			return null;
 		parsePastPropertySeparator();
-		if(theState.top() != null && theState.top().token != ParseToken.ARRAY && theState.top().token != ParseToken.PROPERTY)
+		if (theState.top() != null && theState.top().token != ParseToken.ARRAY && theState.top().token != ParseToken.PROPERTY)
 			throw new IllegalStateException("The current state is not an array or object property");
 
 		Object ret = null;
 		theHandler.setMode(Boolean.TRUE);
-		try
-		{
+		try {
 			JsonParseItem item = getNextItem(true, stringAsReader, true);
-			if(item == null)
+			if (item == null)
 				return null;
-			switch(item.getType())
-			{
+			switch (item.getType()) {
 			case WHITESPACE:
 			case COMMENT:
 			case SEPARATOR:
@@ -1045,48 +920,43 @@ public class JsonSerialReader
 			case PROPERTY:
 				throw new IllegalStateException("State was not an object--should not have returned a property");
 			case OBJECT:
-				if(((StructItem) item).isBegin())
-				{
+				if (((StructItem) item).isBegin()) {
 					endObject(null);
 					ret = theHandler.finalValue();
 				}
 				break;
 			case ARRAY:
-				if(((StructItem) item).isBegin())
-				{
+				if (((StructItem) item).isBegin()) {
 					endArray(null);
 					ret = theHandler.finalValue();
 				}
 				break;
 			case PRIMITIVE:
 				ret = ((PrimitiveItem) item).getValue();
-				if(ret == null)
+				if (ret == null)
 					ret = NULL;
 				needsPastSep = true;
 			}
-		} finally
-		{
+		} finally {
 			theHandler.setMode(null);
 			theHandler.reset();
 		}
 		return ret;
 	}
 
-	private void parsePastPropertySeparator() throws IOException, ParseException
-	{
-		if(!needsPastSep || theState.top() == null || theState.top().token != ParseToken.PROPERTY)
+	private void parsePastPropertySeparator() throws IOException, ParseException {
+		if (!needsPastSep || theState.top() == null || theState.top().token != ParseToken.PROPERTY)
 			return;
 		needsPastSep = false;
 
 		JsonParseItem item;
-		do
-		{
+		do {
 			item = getNextItem(false, false, true);
-			if(item instanceof ObjectItem && !((ObjectItem) item).isBegin())
+			if (item instanceof ObjectItem && !((ObjectItem) item).isBegin())
 				break;
-			if(item instanceof JsonContentItem)
+			if (item instanceof JsonContentItem)
 				throw new IllegalStateException("Should not encounter content before the property separator");
-		} while(!(item instanceof Separator));
+		} while (!(item instanceof Separator));
 	}
 
 	/**
@@ -1102,15 +972,14 @@ public class JsonSerialReader
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If the next element cannot be parsed
 	 */
-	public org.json.simple.JSONObject parseObject() throws IOException, ParseException
-	{
+	public JsonObject parseObject() throws IOException, ParseException {
 		Object ret = parseNext(false);
-		if(ret == null)
+		if (ret == null)
 			return null;
-		else if(!(ret instanceof org.json.simple.JSONObject))
+		else if (!(ret instanceof JsonObject))
 			throw new IllegalStateException("Next element is type " + getType(ret) + ", not a JSON object");
 		else
-			return (org.json.simple.JSONObject) ret;
+			return (JsonObject) ret;
 	}
 
 	/**
@@ -1126,15 +995,14 @@ public class JsonSerialReader
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If the next element cannot be parsed
 	 */
-	public org.json.simple.JSONArray parseArray() throws IOException, ParseException
-	{
+	public List<Object> parseArray() throws IOException, ParseException {
 		Object ret = parseNext(false);
-		if(ret == null)
+		if (ret == null)
 			return null;
-		else if(!(ret instanceof org.json.simple.JSONArray))
+		else if (!(ret instanceof List))
 			throw new IllegalStateException("Next element is a " + getType(ret) + ", not a JSON array");
 		else
-			return (org.json.simple.JSONArray) ret;
+			return (List<Object>) ret;
 	}
 
 	/**
@@ -1149,12 +1017,11 @@ public class JsonSerialReader
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If the next element cannot be parsed
 	 */
-	public Number parseNumber() throws IOException, ParseException
-	{
+	public Number parseNumber() throws IOException, ParseException {
 		Object ret = parseNext(false);
-		if(ret == null)
+		if (ret == null)
 			return null;
-		else if(!(ret instanceof Number))
+		else if (!(ret instanceof Number))
 			throw new IllegalStateException("Next element is a " + getType(ret) + ", not a number");
 		else
 			return (Number) ret;
@@ -1172,12 +1039,11 @@ public class JsonSerialReader
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If the next element cannot be parsed
 	 */
-	public String parseString() throws IOException, ParseException
-	{
+	public String parseString() throws IOException, ParseException {
 		Object ret = parseNext(false);
 		if (ret == null || ret == NULL)
 			return null;
-		else if(!(ret instanceof String))
+		else if (!(ret instanceof String))
 			throw new IllegalStateException("Next element is a " + getType(ret) + ", not a string");
 		else
 			return (String) ret;
@@ -1195,12 +1061,11 @@ public class JsonSerialReader
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If the next element cannot be parsed
 	 */
-	public java.io.Reader parseStringAsReader() throws IOException, ParseException
-	{
+	public java.io.Reader parseStringAsReader() throws IOException, ParseException {
 		Object ret = parseNext(true);
-		if(ret == null)
+		if (ret == null)
 			return null;
-		else if(!(ret instanceof Reader))
+		else if (!(ret instanceof Reader))
 			throw new IllegalStateException("Next element is a " + getType(ret) + ", not a string");
 		else
 			return (Reader) ret;
@@ -1215,12 +1080,11 @@ public class JsonSerialReader
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If the next element cannot be parsed
 	 */
-	public int parseInt() throws IOException, ParseException
-	{
+	public int parseInt() throws IOException, ParseException {
 		Object ret = parseNext(false);
-		if(ret == null)
+		if (ret == null)
 			throw new IllegalStateException("No more elements in array");
-		else if(!(ret instanceof Integer))
+		else if (!(ret instanceof Integer))
 			throw new IllegalStateException("Next element is a " + getType(ret) + ", not an integer");
 		else
 			return ((Number) ret).intValue();
@@ -1235,12 +1099,11 @@ public class JsonSerialReader
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If the next element cannot be parsed
 	 */
-	public long parseLong() throws IOException, ParseException
-	{
+	public long parseLong() throws IOException, ParseException {
 		Object ret = parseNext(false);
-		if(ret == null)
+		if (ret == null)
 			throw new IllegalStateException("No more elements in array");
-		else if(!(ret instanceof Integer) && !(ret instanceof Long))
+		else if (!(ret instanceof Integer) && !(ret instanceof Long))
 			throw new IllegalStateException("Next element is a " + getType(ret) + ", not a long");
 		else
 			return ((Number) ret).longValue();
@@ -1256,12 +1119,11 @@ public class JsonSerialReader
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If the next element cannot be parsed
 	 */
-	public float parseFloat() throws IOException, ParseException
-	{
+	public float parseFloat() throws IOException, ParseException {
 		Object ret = parseNext(false);
-		if(ret == null)
+		if (ret == null)
 			throw new IllegalStateException("No more elements in array");
-		else if(!(ret instanceof Float) && !(ret instanceof Double))
+		else if (!(ret instanceof Float) && !(ret instanceof Double))
 			throw new IllegalStateException("Next element is a " + getType(ret) + ", not a float");
 		else
 			return ((Number) ret).floatValue();
@@ -1277,12 +1139,11 @@ public class JsonSerialReader
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If the next element cannot be parsed
 	 */
-	public double parseDouble() throws IOException, ParseException
-	{
+	public double parseDouble() throws IOException, ParseException {
 		Object ret = parseNext(false);
-		if(ret == null)
+		if (ret == null)
 			throw new IllegalStateException("No more elements in array");
-		else if(!(ret instanceof Float) && !(ret instanceof Double))
+		else if (!(ret instanceof Float) && !(ret instanceof Double))
 			throw new IllegalStateException("Next element is a " + getType(ret) + ", not a double");
 		else
 			return ((Number) ret).doubleValue();
@@ -1297,12 +1158,11 @@ public class JsonSerialReader
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If the next element cannot be parsed
 	 */
-	public boolean parseBoolean() throws IOException, ParseException
-	{
+	public boolean parseBoolean() throws IOException, ParseException {
 		Object ret = parseNext(false);
-		if(ret == null)
+		if (ret == null)
 			throw new IllegalStateException("No more elements in array");
-		else if(!(ret instanceof Boolean))
+		else if (!(ret instanceof Boolean))
 			throw new IllegalStateException("Next element is a " + getType(ret) + ", not a boolean ");
 		else
 			return ((Boolean) ret).booleanValue();
@@ -1317,12 +1177,11 @@ public class JsonSerialReader
 	 * @throws IOException If an error occurs reading the data from the stream
 	 * @throws ParseException If the next element cannot be parsed
 	 */
-	public void parseNull() throws IOException, ParseException
-	{
+	public void parseNull() throws IOException, ParseException {
 		Object ret = parseNext(false);
-		if(ret == null)
+		if (ret == null)
 			throw new IllegalStateException("No more elements in array");
-		else if(ret != NULL)
+		else if (ret != NULL)
 			throw new IllegalStateException("Next element is a " + getType(ret) + ", not null");
 	}
 
@@ -1330,25 +1189,24 @@ public class JsonSerialReader
 	 * @param item The JSON item to describe
 	 * @return The name of the JSON item's type
 	 */
-	public static String getType(Object item)
-	{
-		if(item instanceof org.json.simple.JSONObject)
+	public static String getType(Object item) {
+		if (item instanceof JsonObject)
 			return "object";
-		else if(item instanceof org.json.simple.JSONArray)
+		else if (item instanceof List)
 			return "array";
-		else if(item instanceof Long)
+		else if (item instanceof Long)
 			return "long";
-		else if(item instanceof Integer)
+		else if (item instanceof Integer)
 			return "integer";
-		else if(item instanceof Float)
+		else if (item instanceof Float)
 			return "float";
-		else if(item instanceof Double)
+		else if (item instanceof Double)
 			return "double";
-		else if(item instanceof Number)
+		else if (item instanceof Number)
 			return "number";
-		else if(item instanceof Boolean)
+		else if (item instanceof Boolean)
 			return "boolean";
-		else if(item == NULL || item == null)
+		else if (item == NULL || item == null)
 			return "null";
 		else
 			return item.getClass().getName();
