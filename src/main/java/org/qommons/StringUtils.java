@@ -1136,6 +1136,16 @@ public class StringUtils {
 		default String format(byte[] bytes) {
 			return format(new StringBuilder(), bytes, 0, bytes.length).toString();
 		}
+
+		/**
+		 * @param bytes The binary data to format
+		 * @param start The start position in data
+		 * @param end The end position in the data
+		 * @return The formatted data
+		 */
+		default String format(byte[] bytes, int start, int end) {
+			return format(new StringBuilder(), bytes, start, end).toString();
+		}
 	}
 
 	/** The hex characters output by {@link #encodeHex()} (A-F are upper case, but lower case will be parsed as well) */
