@@ -195,10 +195,13 @@ public class FileBackups {
 
 	public BetterSortedSet<Instant> getBackups() {
 		BetterSortedSet<Instant> backups = BetterTreeSet.buildTreeSet(Instant::compareTo).safe(false).build();
-		for (BetterFile file : theDirectory.listFiles()) {
-			Instant time = theTargetBackup.getBackupTime(file.getName());
-			if (time != null)
-				backups.add(time);
+		List<? extends BetterFile> files = theDirectory.listFiles();
+		if (files != null) {
+			for (BetterFile file : files) {
+				Instant time = theTargetBackup.getBackupTime(file.getName());
+				if (time != null)
+					backups.add(time);
+			}
 		}
 		return backups;
 	}
