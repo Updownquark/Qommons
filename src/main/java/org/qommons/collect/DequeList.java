@@ -98,23 +98,17 @@ public interface DequeList<E> extends Deque<E>, RRList<E>, Stamped {
 
 	@Override
 	default E removeFirst() {
-		long stamp = getStamp();
 		if (isEmpty())
 			throw new NoSuchElementException("List is empty");
 		E v = pollFirst();
-		if (stamp != getStamp())
-			throw new ConcurrentModificationException("List was modified externally");
 		return v;
 	}
 
 	@Override
 	default E removeLast() {
-		long stamp = getStamp();
 		if (isEmpty())
 			throw new NoSuchElementException("List is empty");
 		E v = pollLast();
-		if (stamp != getStamp())
-			throw new ConcurrentModificationException("List was modified externally");
 		return v;
 	}
 
