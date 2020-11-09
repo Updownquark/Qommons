@@ -199,7 +199,7 @@ public class ListenerList<E> {
 			theListener = listener;
 		}
 
-		boolean skipOne(Object firing) {
+		boolean isInAddFiringRound(Object firing) {
 			return false;
 		}
 
@@ -257,12 +257,25 @@ public class ListenerList<E> {
 		}
 
 		@Override
-		boolean skipOne(Object firing) {
+		boolean isInAddFiringRound(Object firing) {
 			if (firing == skipOne) {
 				skipOne = null;
 				return true;
 			}
 			return false;
+		}
+	}
+
+	private class RunLastNode extends SkipOneNode {
+		RunLastNode(E listener, Object skipOne) {
+			super(listener, skipOne);
+		}
+	}
+
+	/** Added to the sequence for a listener {@link ListenerList#addLast(Object, boolean) added last} */
+	private class TempNode extends SkipOneNode {
+		TempNode(E listener, Object skipOne) {
+			super(listener, skipOne);
 		}
 	}
 
@@ -349,6 +362,31 @@ public class ListenerList<E> {
 		} else
 			firing = null;
 		Node newNode = firing == null ? new Node(listener) : new SkipOneNode(listener, firing);
+		return addNode(newNode);
+	}
+
+	/**
+	 * Adds a listener to this list, to be executed after all other listeners (that were not themselves added with this method)
+	 * 
+	 * @param listener The listener to add
+	 * @param skipCurrent Whether to skip calling this listener the first time if this addition is a result of the action being invoked from
+	 *        a {@link #forEach(Consumer)} call
+	 * @return The action to invoke (i.e. {@link Runnable#run()}) to remove this listener
+	 */
+	public Element<E> addLast(E listener, boolean skipCurrent) {
+		Object firing;
+		if (skipCurrent) {
+			if (isFiringSafe != null)
+				firing = isFiringSafe.get(); // Thread safe because isFiring is a ThreadLocal
+			else
+				firing = unsafeIterId;
+		} else
+			firing = null;
+		RunLastNode node = new RunLastNode(listener, firing);
+		return addNode(node);
+	}
+
+	private Element<E> addNode(Node newNode) {
 		newNode.next = theTerminal;// We know we'll be adding this node as the last node (excluding the terminal)
 		// The next part affects the list's state, so only one at a time
 		switch (theSyncType) {
@@ -401,12 +439,30 @@ public class ListenerList<E> {
 		boolean timeChecking = wait && waitTime < Long.MAX_VALUE;
 		long start = timeChecking ? System.currentTimeMillis() : 0;
 		int waited = 0;
+		RunLastNode runLast = null;
+		Node remove = theTerminal.next;
 		do {
-			Node remove = theTerminal.next;
-			if (remove != theTerminal) {
-				if (remove.remove())
-					return remove;
-			} else if (wait) {
+			if (remove == theTerminal) {} else if (remove instanceof ListenerList.RunLastNode) {
+				if (runLast == null)
+					runLast = (RunLastNode) remove;
+				remove = remove.next;
+				continue;
+			} else if (remove instanceof ListenerList.TempNode) {
+				remove = remove.next;
+				continue;
+			} else if (!remove.remove()) {
+				remove = theTerminal.next;
+				continue; // Removed elsewhere--try again
+			} else
+				return remove;
+
+			if (runLast != null) {
+				if (runLast.remove())
+					return runLast;
+				runLast = null;
+				continue;
+			}
+			if (wait) {
 				try {
 					Thread.sleep(0, 100_000);
 				} catch (InterruptedException e) {}
@@ -422,9 +478,19 @@ public class ListenerList<E> {
 	
 	/** @return The first element in this list, or null if the list is empty */
 	public Element<E> peekFirst(){
+		RunLastNode runLast = null;
 		Node node=theTerminal.next;
+		while (node != theTerminal) {
+			if (node instanceof ListenerList.RunLastNode) {
+				runLast = (ListenerList<E>.RunLastNode) node;
+				node = node.next;
+			} else if (node instanceof ListenerList.TempNode) {
+				node = node.next;
+			} else
+				break;
+		}
 		if(node==theTerminal)
-			return null;
+			return runLast;
 		else
 			return node;
 	}
@@ -448,8 +514,18 @@ public class ListenerList<E> {
 		try {
 			while (node != theTerminal) {
 				Node nextNode = node.next; // Get the next node before calling the listener, since the listener might remove itself
-				if (!node.skipOne(iterId))
+				if (node instanceof ListenerList.TempNode) {
+					if (node.isInAddFiringRound(iterId)) {
+						node.remove();
+						action.accept(node.theListener);
+					}
+				} else if (node.isInAddFiringRound(iterId)) { // Don't execute the same round it was added, if so configured
+				} else if (node instanceof ListenerList.RunLastNode) {
+					TempNode tempNode = new TempNode(node.theListener, iterId);
+					addNode(tempNode);
+				} else
 					action.accept(node.theListener);
+
 				node = nextNode;
 			}
 		} finally {
@@ -495,7 +571,8 @@ public class ListenerList<E> {
 		Node node = theTerminal.next;
 		int sz = 0;
 		while (node != theTerminal) {
-			sz++;
+			if (!(node instanceof ListenerList.TempNode))
+				sz++;
 			node = node.next;
 		}
 		return sz;
@@ -511,10 +588,18 @@ public class ListenerList<E> {
 	public <C extends Collection<? super E>> C dumpInto(C collection) {
 		// Don't use forEach, since this might be useful for debugging during event firing and reentrancy may not be allowed
 		Node node = theTerminal.next;
+		List<E> lastNodes = null;
 		while (node != theTerminal) {
-			collection.add(node.theListener);
+			if (node instanceof ListenerList.RunLastNode) {
+				if (lastNodes == null)
+					lastNodes = new ArrayList<>();
+				lastNodes.add(node.theListener);
+			} else
+				collection.add(node.theListener);
 			node = node.next;
 		}
+		if (lastNodes != null)
+			collection.addAll(lastNodes);
 		return collection;
 	}
 
@@ -527,15 +612,30 @@ public class ListenerList<E> {
 	public List<E> dumpAndClear() {
 		if (isEmpty())
 			return Collections.emptyList();
-		int size = size();
-		List<E> list = new ArrayList<>(size);
+		int size;
+		List<E> list;
+		if (theSize != null) {
+			size = theSize.get();
+			list = new ArrayList<>(size);
+		} else {
+			size = Integer.MAX_VALUE;
+			list = new ArrayList<>();
+		}
 		int i = 0;
 		Node node = theTerminal.next;
+		List<E> lastNodes = null;
 		while (i < size && node != theTerminal) {
-			list.add(node.theListener);
+			if (node instanceof ListenerList.RunLastNode) {
+				if (lastNodes == null)
+					lastNodes = new ArrayList<>();
+				lastNodes.add(node.theListener);
+			} else
+				list.add(node.theListener);
 			node.remove();
 			node = node.next;
 		}
+		if (lastNodes != null)
+			list.addAll(lastNodes);
 		if (node != theTerminal)
 			theTerminal.next = node;
 		return list;
@@ -545,16 +645,30 @@ public class ListenerList<E> {
 	public String toString() {
 		StringBuilder str = new StringBuilder();
 		str.append('[');
-		boolean[] first = new boolean[] { true };
+		boolean first = true;
+		StringBuilder lastStr = null;
 		// Don't use forEach, since toString might be useful for debugging during event firing and reentrancy may not be allowed
 		Node node = theTerminal.next;
 		while (node != theTerminal) {
-			if (!first[0])
-				str.append(", ");
-			first[0] = false;
-			str.append(node.theListener);
+			StringBuilder s;
+			if (node instanceof ListenerList.RunLastNode) {
+				if (lastStr == null)
+					lastStr = new StringBuilder();
+				else
+					lastStr.append(", ");
+				s = lastStr;
+			} else {
+				if (first)
+					first = false;
+				else
+					str.append(", ");
+				s = str;
+			}
+			s.append(node.theListener);
 			node = node.next;
 		}
+		if (lastStr != null)
+			str.append(lastStr);
 		str.append(']');
 		return str.toString();
 	}
