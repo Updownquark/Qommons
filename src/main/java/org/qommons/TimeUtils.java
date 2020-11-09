@@ -4,6 +4,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -57,25 +58,32 @@ public class TimeUtils {
 	/** Time units in a parsed duration */
 	public enum DurationComponentType {
 		/** Years */
-		Year,
+		Year(ChronoUnit.YEARS),
 		/** Months */
-		Month,
+		Month(ChronoUnit.MONTHS),
 		/** Weeks */
-		Week,
+		Week(ChronoUnit.WEEKS),
 		/** Days */
-		Day,
+		Day(ChronoUnit.DAYS),
 		/** Hours */
-		Hour,
+		Hour(ChronoUnit.HOURS),
 		/** Minutes */
-		Minute,
+		Minute(ChronoUnit.MINUTES),
 		/** Seconds */
-		Second,
+		Second(ChronoUnit.SECONDS),
 		/** Milliseconds */
-		Millisecond,
+		Millisecond(ChronoUnit.MILLIS),
 		/** Microseconds */
-		Microsecond,
+		Microsecond(ChronoUnit.MICROS),
 		/** Nanoseconds */
-		Nanosecond
+		Nanosecond(ChronoUnit.NANOS);
+
+		/** The {@link ChronoUnit} corresponding to this duration component */
+		public final ChronoUnit unit;
+
+		private DurationComponentType(ChronoUnit unit) {
+			this.unit = unit;
+		}
 	}
 
 	/** A parsed time returned from {@link TimeUtils#parseFlexFormatTime(CharSequence, TimeZone, boolean, boolean)} */
@@ -924,12 +932,23 @@ public class TimeUtils {
 					break;
 				case Hour:
 					cal.set(Calendar.HOUR_OF_DAY, element.getValue().getValue());
+					if (!elements.containsKey(DateElementType.Minute)) {
+						cal.set(Calendar.MINUTE, 0);
+						cal.set(Calendar.SECOND, 0);
+						nanos = 0;
+					}
 					break;
 				case Minute:
 					cal.set(Calendar.MINUTE, element.getValue().getValue());
+					if (!elements.containsKey(DateElementType.Second)) {
+						cal.set(Calendar.SECOND, 0);
+						nanos = 0;
+					}
 					break;
 				case Second:
 					cal.set(Calendar.SECOND, element.getValue().getValue());
+					if (!elements.containsKey(DateElementType.SubSecond))
+						nanos = 0;
 					break;
 				case SubSecond:
 					nanos = element.getValue().getValue();
@@ -2165,8 +2184,106 @@ public class TimeUtils {
 		return neg ? -days : days;
 	}
 
-	private static final List<String> PRECISION_NAMES;
-	private static final List<String> PRECISION_ABBREVS;
+	public static ParsedDuration flexDuration(int amount, DurationComponentType unit) {
+		StringBuilder str = new StringBuilder().append(Math.abs(amount));
+		int valueEnd = str.length();
+		str.append(DURATION_PRECISION_ABBREVS.get(unit.ordinal()));
+		return new ParsedDuration(amount < 0,
+			Collections.unmodifiableList(Arrays.asList(new DurationComponent(0, 0, valueEnd, unit, Math.abs(amount), str.toString()))),
+			Collections.emptyList());
+	}
+
+	/**
+	 * @param d The duration to represent as a {@link ParsedDuration}
+	 * @return The parsed duration with the same duration as the given duration
+	 */
+	public static ParsedDuration asFlexDuration(Duration d) {
+		boolean neg = d.isNegative();
+		if (neg)
+			d = d.negated();
+		ArrayList<DurationComponent> components = new ArrayList<>();
+		ArrayList<String> separators = new ArrayList<>();
+		long seconds = d.getSeconds();
+		StringBuilder str = new StringBuilder();
+		if (seconds > 0) {
+			long days = seconds / (24 * 60 * 60);
+			seconds %= 24 * 60 * 60;
+			if (days > 0) {
+				int years = (int) (days / 365.25);
+				long daysInYears = getDaysInYears(years);
+				days -= daysInYears;
+				if (days < 0) {
+					years--;
+					days += daysInYears - getDaysInYears(years);
+				} else if (days > 365) {
+					years++;
+					days += getDaysInYears(years) - daysInYears;
+				} else if (days == 365 && getDaysInYears(years + 1) == daysInYears + 365) {
+					years++;
+					days = 0;
+				}
+				addComponent(components, separators, str, years, DurationComponentType.Year);
+
+				int months = (int) (days / 30);
+				long daysInMonths = getDaysInMonths(months);
+				if (days < 0) {
+					months--;
+					days += daysInMonths - getDaysInMonths(months);
+				} else if (days > 30) {
+					months++;
+					days += getDaysInMonths(months) - daysInMonths;
+				} else if (days == 30 && getDaysInMonths(months + 1) == daysInMonths + 30) {
+					months++;
+					days = 0;
+				}
+				addComponent(components, separators, str, months, DurationComponentType.Month);
+
+				addComponent(components, separators, str, (int) days, DurationComponentType.Day);
+			}
+
+			int hours = (int) (seconds / 3600);
+			seconds %= 3600;
+			int minutes = (int) (seconds / 60);
+			seconds %= 60;
+			addComponent(components, separators, str, hours, DurationComponentType.Hour);
+			addComponent(components, separators, str, minutes, DurationComponentType.Minute);
+			addComponent(components, separators, str, (int) seconds, DurationComponentType.Second);
+		}
+		int nanos = d.getNano();
+		if (nanos > 1_000_000) {
+			addComponent(components, separators, str, nanos / 1_000_000, DurationComponentType.Millisecond);
+			nanos %= 1_000_000;
+		}
+		if (nanos > 1000) {
+			addComponent(components, separators, str, nanos / 1000, DurationComponentType.Microsecond);
+			nanos %= 1000;
+		}
+		if (nanos != 0)
+			addComponent(components, separators, str, nanos, DurationComponentType.Nanosecond);
+
+		components.trimToSize();
+		separators.trimToSize();
+		return new ParsedDuration(neg, Collections.unmodifiableList(components), Collections.unmodifiableList(separators));
+	}
+
+	private static void addComponent(List<DurationComponent> components, List<String> separators, StringBuilder str, int amount,
+		DurationComponentType type) {
+		if (amount == 0)
+			return;
+		int start = str.length();
+		if (start > 0) {
+			separators.add(" ");
+			start++;
+			str.append(' ');
+		}
+		str.append(amount);
+		int valueEnd = str.length();
+		str.append(DURATION_PRECISION_ABBREVS.get(type.ordinal()));
+		components.add(new DurationComponent(start, start, valueEnd, type, amount, str.substring(start, valueEnd)));
+	}
+
+	private static final List<String> DURATION_PRECISION_NAMES;
+	private static final List<String> DURATION_PRECISION_ABBREVS;
 
 	static {
 		List<String> precisions = new ArrayList<>(DurationComponentType.values().length);
@@ -2216,8 +2333,8 @@ public class TimeUtils {
 			}
 		}
 
-		PRECISION_NAMES = Collections.unmodifiableList(precisions);
-		PRECISION_ABBREVS = Collections.unmodifiableList(abbrevs);
+		DURATION_PRECISION_NAMES = Collections.unmodifiableList(precisions);
+		DURATION_PRECISION_ABBREVS = Collections.unmodifiableList(abbrevs);
 	}
 
 	public enum AboveDaysStrategy {
@@ -2244,7 +2361,7 @@ public class TimeUtils {
 			theTimeZone = TimeZone.getDefault();
 			theMaxPrecision = DurationComponentType.Minute;
 			theMaxElements = 1;
-			thePrecisionNames = PRECISION_ABBREVS;
+			thePrecisionNames = DURATION_PRECISION_ABBREVS;
 			theAboveDayStrategy = AboveDaysStrategy.None;
 			theAgo = "ago";
 		}
@@ -2270,7 +2387,7 @@ public class TimeUtils {
 		}
 
 		public RelativeTimeFormat abbreviated(boolean abbrev, boolean pluralized) {
-			thePrecisionNames = abbrev ? PRECISION_ABBREVS : PRECISION_NAMES;
+			thePrecisionNames = abbrev ? DURATION_PRECISION_ABBREVS : DURATION_PRECISION_NAMES;
 			isPluralized = pluralized;
 			return this;
 		}
