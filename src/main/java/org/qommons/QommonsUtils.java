@@ -752,7 +752,7 @@ public class QommonsUtils {
 	 * @return An unmodifiable copy of the given list
 	 */
 	public static <T> List<T> unmodifiableCopy(Collection<? extends T> values) {
-		if (values.isEmpty())
+		if (values == null || values.isEmpty())
 			return Collections.emptyList();
 		ArrayList<T> list = new ArrayList<>(values.size());
 		list.addAll(values);
@@ -765,12 +765,26 @@ public class QommonsUtils {
 	 * @return An unmodifiable copy of the given list
 	 */
 	public static <T> List<T> unmodifiableCopy(T... values) {
-		if (values.length == 0)
+		if (values == null || values.length == 0)
 			return Collections.emptyList();
 		ArrayList<T> list = new ArrayList<>(values.length);
 		for (T v : values)
 			list.add(v);
 		return Collections.unmodifiableList(list);
+	}
+
+	/**
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param map The map to create the copy of
+	 * @return An unmodifiable copy of the given map
+	 */
+	public static <K, V> Map<K, V> unmodifiableCopy(Map<? extends K, ? extends V> map) {
+		if (map == null || map.isEmpty())
+			return Collections.emptyMap();
+		Map<K, V> copy = new LinkedHashMap<>(map.size() * 2);
+		copy.putAll(map);
+		return Collections.unmodifiableMap(copy);
 	}
 
 	/**
