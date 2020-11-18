@@ -175,83 +175,8 @@ public interface Format<T> {
 	public static final Format<Duration> DURATION = new Format<Duration>() {
 		@Override
 		public void append(StringBuilder text, Duration value) {
-			if (value == null)
-				return;
-			if (value.isNegative()) {
-				text.append('-');
-				value = value.abs();
-			}
-			if (value.isZero())
-				text.append("0s");
-			else if (value.compareTo(Duration.ofSeconds(1)) < 0) {
-				appendNanos(text, value.getNano());
-			} else {
-				boolean appended = false;
-				long seconds = value.getSeconds();
-				int dayLength = 24 * 60 * 60;
-				// double yearLength = 365.25 * dayLength;
-				// int years = (int) Math.floor(seconds / yearLength);
-				// if (years > 0) {
-				// text.append(years).append('y');
-				// seconds -= Math.floor(years * yearLength);
-				// appended = true;
-				// }
-				int weeks = (int) (seconds / dayLength / 7);
-				if (weeks > 0) {
-					if (appended)
-						text.append(' ');
-					text.append(weeks).append('w');
-					seconds -= weeks * dayLength * 7;
-					appended = true;
-				}
-				long days = (int) (seconds / dayLength);
-				if (days > 0) {
-					if (appended)
-						text.append(' ');
-					text.append(days).append('d');
-					seconds -= days * dayLength;
-					appended = true;
-				}
-				int hours = (int) seconds / 60 / 60;
-				if (hours > 0) {
-					if (appended)
-						text.append(' ');
-					text.append(hours).append('h');
-					seconds -= hours * 60 * 60;
-					appended = true;
-				}
-				int minutes = (int) seconds / 60;
-				if (minutes > 0) {
-					if (appended)
-						text.append(' ');
-					text.append(minutes).append('m');
-					seconds -= minutes * 60;
-					appended = true;
-				}
-				int ns = value.getNano();
-				if (seconds > 0) {
-					if (appended)
-						text.append(' ');
-					text.append(seconds);
-					if (ns > 1000000) {
-						text.append('.');
-						int divisor = 100000000;
-						while (ns > 0 && divisor > 0) {
-							text.append(ns / divisor);
-							ns %= divisor;
-							divisor /= 10;
-						}
-					} else if (ns > 0) {
-						text.append(' ');
-						appendNanos(text, ns);
-					}
-					text.append('s');
-				} else if (ns > 0) {
-					if (appended)
-						text.append(' ');
-					appendNanos(text, ns);
-				}
-			}
+			if (value != null)
+				QommonsUtils.printDuration(value, text, true);
 		}
 
 		private void appendNanos(StringBuilder text, int ns) {
