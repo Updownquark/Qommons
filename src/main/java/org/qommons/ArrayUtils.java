@@ -2,11 +2,16 @@
 package org.qommons;
 
 import java.lang.reflect.Array;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
+import java.util.function.IntToDoubleFunction;
 
+import org.qommons.collect.BetterSortedList.SortedSearchFilter;
+import org.qommons.collect.CollectionElement;
 import org.qommons.collect.CollectionUtils;
+import org.qommons.tree.BetterTreeSet;
 
 /**
  * ArrayUtils provides some static methods for manipulating arrays easily when using a tool such as {@link java.util.ArrayList} is
@@ -531,6 +536,163 @@ public final class ArrayUtils {
 			return min;
 		else
 			return -(min + 1);
+	}
+
+	/**
+	 * @param min The lowest index in the search domain
+	 * @param max The highest index in the search domain
+	 * @param measure A function to produce a double measure value for each position in the search space
+	 * @return The value between min and max (both inclusive) with the largest corresponding measure value
+	 */
+	public static int optimize(int min, int max, IntToDoubleFunction measure) {
+		return optimize(min, max, measure, Double::compare);
+	}
+
+	public interface DoubleComparator {
+		int compare(double d1, double d2);
+	}
+
+	/**
+	 * @param min The lowest index in the search domain
+	 * @param max The highest index in the search domain
+	 * @param measure A function to produce a double measure value for each position in the search space
+	 * @param measureCompare Compares two measure values from different positions
+	 * @return The value between min and max (both inclusive) with the best corresponding measure value
+	 */
+	public static int optimize(int min, int max, IntToDoubleFunction measure, DoubleComparator measureCompare) {
+		if (min == max)
+			return min;
+		else if (min > max)
+			return -1;
+		else if (max - min + 1 > 1000)
+			return optimizeWithSet(min, max, measure, measureCompare);
+		else
+			return optimizeWithArray(min, max, measure, measureCompare);
+	}
+
+	private static int optimizeWithSet(int min, int max, IntToDoubleFunction measure, DoubleComparator measureCompare) {
+		class PositionMeasure implements Comparable<PositionMeasure> {
+			final int position;
+			final double value;
+
+			PositionMeasure(int position, double value) {
+				this.position = position;
+				this.value = value;
+			}
+
+			@Override
+			public int compareTo(PositionMeasure o) {
+				return Integer.compare(position, o.position);
+			}
+		}
+		BetterTreeSet<PositionMeasure> values = BetterTreeSet.buildTreeSet(PositionMeasure::compareTo).safe(false).build();
+		return binarySearch(min, max, pos -> {
+			double posValue, adjValue;
+			boolean adjIsLess;
+			CollectionElement<PositionMeasure> found = values.search(pm -> Integer.compare(pos, pm.position),
+				SortedSearchFilter.PreferLess);
+			if (found != null && found.get().position == pos) {
+				posValue = found.get().value;
+				CollectionElement<PositionMeasure> adjEl = values.getAdjacentElement(found.getElementId(), false);
+				if (adjEl != null && adjEl.get().position == pos - 1) {
+					adjIsLess = true;
+					adjValue = adjEl.get().value;
+				} else {
+					adjEl = values.getAdjacentElement(found.getElementId(), true);
+					if (adjEl != null && adjEl.get().position == pos + 1) {
+						adjIsLess = false;
+						adjValue = adjEl.get().value;
+					} else if (pos > min) {
+						adjIsLess = true;
+						adjValue = measure.applyAsDouble(pos - 1);
+						values.add(new PositionMeasure(pos - 1, adjValue));
+					} else {
+						adjIsLess = false;
+						adjValue = measure.applyAsDouble(pos + 1);
+						values.add(new PositionMeasure(pos + 1, adjValue));
+					}
+				}
+			} else {
+				posValue = measure.applyAsDouble(pos);
+				found = values.addElement(new PositionMeasure(pos, posValue), false);
+				if (found != null && Math.abs(found.get().position - pos) == 1) {
+					adjIsLess = found.get().position < pos;
+					adjValue = found.get().value;
+				} else if (pos > min) {
+					adjIsLess = true;
+					adjValue = measure.applyAsDouble(pos - 1);
+					values.add(new PositionMeasure(pos - 1, adjValue));
+				} else {
+					adjIsLess = false;
+					adjValue = measure.applyAsDouble(pos + 1);
+					values.add(new PositionMeasure(pos + 1, adjValue));
+				}
+			}
+			if (measureCompare.compare(adjValue, posValue) > 0)
+				return adjIsLess ? -1 : 1;
+			adjIsLess = !adjIsLess;
+			CollectionElement<PositionMeasure> adjEl = values.getAdjacentElement(found.getElementId(), !adjIsLess);
+			if (adjEl != null && Math.abs(adjEl.get().position - pos) == 1) {
+				adjValue = adjEl.get().value;
+			} else if (adjIsLess) {
+				if (pos == min)
+					return 0;
+				adjValue = measure.applyAsDouble(pos - 1);
+				values.add(new PositionMeasure(pos - 1, adjValue));
+			} else {
+				if (pos == max)
+					return 0;
+				adjValue = measure.applyAsDouble(pos + 1);
+				values.add(new PositionMeasure(pos + 1, adjValue));
+			}
+			if (measureCompare.compare(adjValue, posValue) > 0)
+				return adjIsLess ? -1 : 1;
+			return 0;
+		});
+	}
+
+	private static int optimizeWithArray(int min, int max, IntToDoubleFunction measure, DoubleComparator measureCompare) {
+		double[] values = new double[max - min + 1];
+		Arrays.fill(values, Double.NaN);
+		return min + binarySearch(0, max - min, pos -> {
+			double posValue = values[pos];
+			if (Double.isNaN(posValue))
+				values[pos] = posValue = measure.applyAsDouble(min + pos);
+			double adjValue;
+			boolean adjIsLess;
+			if (pos > 0 && !Double.isNaN(values[pos - 1])) {
+				adjIsLess = true;
+				adjValue = values[pos - 1];
+			} else if (pos < values.length - 1 && !Double.isNaN(values[pos + 1])) {
+				adjIsLess = false;
+				adjValue = values[pos + 1];
+			} else if (pos > 0) {
+				adjIsLess = true;
+				values[pos - 1] = adjValue = measure.applyAsDouble(min + pos - 1);
+			} else {
+				adjIsLess = false;
+				values[pos + 1] = adjValue = measure.applyAsDouble(min + pos + 1);
+			}
+			if (measureCompare.compare(adjValue, posValue) > 0)
+				return adjIsLess ? -1 : 1;
+			adjIsLess = !adjIsLess;
+			if (adjIsLess) {
+				if (pos == 0)
+					return 0;
+				if (Double.isNaN(values[pos - 1]))
+					values[pos - 1] = measure.applyAsDouble(min + pos - 1);
+				adjValue = values[pos - 1];
+			} else {
+				if (pos == values.length - 1)
+					return 0;
+				if (Double.isNaN(values[pos + 1]))
+					values[pos + 1] = measure.applyAsDouble(min + pos + 1);
+				adjValue = values[pos + 1];
+			}
+			if (measureCompare.compare(adjValue, posValue) > 0)
+				return adjIsLess ? -1 : 1;
+			return 0;
+		});
 	}
 
 	/**
