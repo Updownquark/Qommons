@@ -408,6 +408,28 @@ public class TimeUtils {
 		}
 
 		@Override
+		public int compareTo(ParsedDuration other) {
+			for (DurationComponentType type : DurationComponentType.values()) {
+				DurationComponent thisC = components.get(type);
+				DurationComponent otherC = other.components.get(type);
+				if (thisC == null || thisC.getValue() == 0) {
+					if (otherC == null || otherC.getValue() == 0) {
+						continue;
+					} else {
+						return -1;
+					}
+				} else if (otherC == null || otherC.getValue() == 0) {
+					return 1;
+				} else {
+					int comp = Integer.compare(thisC.getValue(), otherC.getValue());
+					if (comp != 0)
+						return comp;
+				}
+			}
+			return 0;
+		}
+
+		@Override
 		public String toString() {
 			StringBuilder str = new StringBuilder();
 			if (isNegative)
@@ -2081,7 +2103,7 @@ public class TimeUtils {
 			case "second":
 				if (value > 0 || decimalStart > valueStart)
 					components.add(new DurationComponent(valueStart, valueStart, decimalStart, DurationComponentType.Second, (int) value,
-						text.subSequence(valueStart, decimalStart).toString()));
+						text.subSequence(valueStart, c).toString()));
 				if (!Double.isNaN(decimal)) {
 					components.add(new DurationComponent(decimalStart, decimalStart, decimalStart + 1, DurationComponentType.Nanosecond,
 						(int) (decimal * 1_000_000_000), text.subSequence(decimalStart, c).toString()));
@@ -2092,7 +2114,7 @@ public class TimeUtils {
 			case "millisecond":
 				if (value > 0 || decimalStart > valueStart)
 					components.add(new DurationComponent(valueStart, valueStart, decimalStart, DurationComponentType.Millisecond,
-						(int) value, text.subSequence(valueStart, decimalStart).toString()));
+						(int) value, text.subSequence(valueStart, c).toString()));
 				if (!Double.isNaN(decimal)) {
 					components.add(new DurationComponent(decimalStart, decimalStart, decimalStart + 1, DurationComponentType.Nanosecond,
 						(int) (decimal * 1_000_000), text.subSequence(decimalStart, c).toString()));
@@ -2103,7 +2125,7 @@ public class TimeUtils {
 			case "microsecond":
 				if (value > 0 || decimalStart > valueStart)
 					components.add(new DurationComponent(valueStart, valueStart, decimalStart, DurationComponentType.Microsecond,
-						(int) value, text.subSequence(valueStart, decimalStart).toString()));
+						(int) value, text.subSequence(valueStart, c).toString()));
 				if (!Double.isNaN(decimal)) {
 					components.add(new DurationComponent(decimalStart, decimalStart, decimalStart + 1, DurationComponentType.Nanosecond,
 						(int) (decimal * 1_000), text.subSequence(decimalStart, c).toString()));
