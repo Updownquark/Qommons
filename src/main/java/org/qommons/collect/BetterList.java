@@ -1603,8 +1603,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 			@Override
 			public boolean equals(Object obj) {
-				return obj instanceof ConstantList<?>.IndexElementId && getList() == ((IndexElementId) obj).getList()
-					&& index == ((IndexElementId) obj).index;
+				return obj instanceof ConstantList<?>.IndexElementId && index == ((IndexElementId) obj).index//
+					&& getList().getIdentity().equals(((IndexElementId) obj).getList().getIdentity());
 			}
 
 			@Override
