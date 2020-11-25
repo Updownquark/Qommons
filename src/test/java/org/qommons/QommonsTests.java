@@ -17,6 +17,7 @@ import org.qommons.tree.TreeUtilsTest;
 	IterableUtilsTest.class, //
 	QommonsUtilsTests.class, //
 	StringUtilsTest.class, //
+	ArgumentParsing2Test.class, //
 	CircularListTest.class,
 	CLQTest.class, //
 	CollectionUtilsTests.class, //
