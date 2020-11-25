@@ -1444,14 +1444,14 @@ public class TimeUtils {
 	private static int validate(DateElementType type, ParsedDateElement element) throws ParseException {
 		if (element.value >= 0)
 			return element.value;
-		int value = element.type.parse(element.text);
+		int value = element.type.parse(element.text) + element.offset;
 		switch (type) {
 		case Year:
 		case AmPm:
 		case TimeZone:
 			break;
 		case Month:
-			if (value < 0 || value > 11)
+			if (value < 1 || value > 12)
 				throw new ParseException("Unrecognized month " + element.text, element.index);
 			break;
 		case Day:
@@ -1600,6 +1600,7 @@ public class TimeUtils {
 		final ParsedDateElementType type;
 		final int index;
 		final CharSequence text;
+		int offset;
 		int value;
 
 		ParsedDateElement(ParsedDateElementType type, int index, CharSequence text) {
@@ -1625,12 +1626,18 @@ public class TimeUtils {
 		final ParsedDateElementType parsedType;
 		final Predicate<CharSequence> filter;
 		final boolean required;
+		int theOffset;
 
 		DateFormatComponent(DateElementType dateType, ParsedDateElementType parsedType, Predicate<CharSequence> filter, boolean required) {
 			this.dateType = dateType;
 			this.parsedType = parsedType;
 			this.filter = filter;
 			this.required = required;
+		}
+
+		DateFormatComponent offset(int offset) {
+			this.theOffset = offset;
+			return this;
 		}
 
 		boolean matches(ParsedDateElement element) {
@@ -1649,6 +1656,7 @@ public class TimeUtils {
 	}
 
 	private static class DateFormat {
+		@SuppressWarnings("unused")
 		final String theName;
 		final List<DateFormatComponent> components;
 		final Map<DateElementType, DateFormatComponent> componentsByType;
@@ -1669,8 +1677,10 @@ public class TimeUtils {
 				DateFormatComponent component = components.get(j);
 				ParsedDateElement element = elements.get(i);
 				if (component.matches(element)) {
-					if (component.dateType != null)
+					if (component.dateType != null) {
+						element.offset = component.theOffset;
 						info.put(component.dateType, element);
+					}
 					i++;
 				} else if (component.required)
 					return 0;
@@ -1728,7 +1738,8 @@ public class TimeUtils {
 		}, false);
 		DateFormatComponent year2 = new DateFormatComponent(DateElementType.Year, ParsedDateElementType.DIGIT, twoDigits, true);
 		DateFormatComponent year4 = new DateFormatComponent(DateElementType.Year, ParsedDateElementType.DIGIT, fourDigits, true);
-		DateFormatComponent monthDig = new DateFormatComponent(DateElementType.Month, ParsedDateElementType.DIGIT, oneOrTwoDigits, true);
+		DateFormatComponent monthDig = new DateFormatComponent(DateElementType.Month, ParsedDateElementType.DIGIT, oneOrTwoDigits, true)
+			.offset(-1);
 		DateFormatComponent monthCh = new DateFormatComponent(DateElementType.Month, ParsedDateElementType.MONTH,
 			str -> Character.isAlphabetic(str.charAt(0)), true);
 		DateFormatComponent day = new DateFormatComponent(DateElementType.Day, ParsedDateElementType.DIGIT, oneOrTwoDigits, true);
