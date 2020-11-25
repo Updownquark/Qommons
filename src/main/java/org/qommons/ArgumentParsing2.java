@@ -10,11 +10,11 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -52,7 +52,7 @@ public class ArgumentParsing2 {
 		public void validate(String argumentName) {}
 
 		@Override
-		public MatchedArgument match(String argument) {
+		public MatchedArgument match(String argument, Supplier<String> moreArgs) {
 			if (argument.length() > 2 && argument.startsWith("--"))
 				return new MatchedArgument(argument.substring(2), Collections.emptyList());
 			return null;
@@ -73,13 +73,82 @@ public class ArgumentParsing2 {
 		}
 
 		@Override
-		public MatchedArgument match(String argument) {
+		public MatchedArgument match(String argument, Supplier<String> moreArgs) {
 			if (argument.length() < 3 || !argument.startsWith("--"))
 				return null;
 			int equalIdx = argument.indexOf('=', 2);
 			if (equalIdx < 0)
 				return null;
 			return new MatchedArgument(argument.substring(2, equalIdx), Arrays.asList(argument.substring(equalIdx + 1)));
+		}
+
+		@Override
+		public String print(MatchedArgument argument) {
+			return "--" + argument.getName() + "=" + argument.getValues().get(0);
+		}
+
+		@Override
+		public boolean isMultiValued() {
+			return false;
+		}
+	};
+
+	/**
+	 * A pattern for parsing single-value arguments that uses 2 actual command-line arguments, the first for the name (as "--name") and the
+	 * second for the value
+	 */
+	public static final ArgumentPattern.ValuePattern SPLIT_VALUE_PATTERN = new ArgumentPattern.ValuePattern() {
+		@Override
+		public void validate(String argumentName) {
+		}
+
+		@Override
+		public MatchedArgument match(String argument, Supplier<String> moreArgs) {
+			if (argument.length() < 2 || !argument.startsWith("--"))
+				return null;
+			String nextArg = moreArgs.get();
+			if (nextArg == null)
+				return null;
+			return new MatchedArgument(argument.substring(2), Arrays.asList(nextArg));
+		}
+
+		@Override
+		public String print(MatchedArgument argument) {
+			return "--" + argument.getName() + "=" + argument.getValues().get(0);
+		}
+
+		@Override
+		public boolean isMultiValued() {
+			return false;
+		}
+	};
+
+	/**
+	 * A pattern for parsing multi-value arguments that uses 2 actual command-line arguments, the first for the name (as "--name") and the
+	 * second for the comma-separated values
+	 */
+	public static final ArgumentPattern.ValuePattern SPLIT_MULTI_VALUE_PATTERN = new ArgumentPattern.ValuePattern() {
+		@Override
+		public void validate(String argumentName) {}
+
+		@Override
+		public MatchedArgument match(String argument, Supplier<String> moreArgs) {
+			if (argument.length() < 2 || !argument.startsWith("--"))
+				return null;
+			String nextArg = moreArgs.get();
+			if (nextArg == null)
+				return null;
+			List<String> values = new ArrayList<>(5);
+			int valueStart = 0;
+			for (int i = valueStart; i < nextArg.length(); i++) {
+				if (nextArg.charAt(i) == ',') {
+					values.add(nextArg.substring(valueStart, i));
+					valueStart = i + 1;
+				}
+			}
+			if (valueStart < nextArg.length())
+				values.add(nextArg.substring(valueStart));
+			return new MatchedArgument(argument.substring(2), Collections.unmodifiableList(values));
 		}
 
 		@Override
@@ -104,7 +173,7 @@ public class ArgumentParsing2 {
 		}
 
 		@Override
-		public MatchedArgument match(String argument) {
+		public MatchedArgument match(String argument, Supplier<String> moreArgs) {
 			if (argument.length() < 3 || !argument.startsWith("--"))
 				return null;
 			int equalIdx = argument.indexOf('=', 2);
@@ -152,9 +221,10 @@ public class ArgumentParsing2 {
 
 		/**
 		 * @param argument The command-line argument to parse
+		 * @param moreArgs Allows this pattern to use more than 1 command-line argument, E.g. "--version 0.2.3"
 		 * @return The parsed structure of the argument, or null if the given argument does not match this pattern
 		 */
-		MatchedArgument match(String argument);
+		MatchedArgument match(String argument, Supplier<String> moreArgs);
 
 		/**
 		 * @param argument The matched argument to print
@@ -973,25 +1043,25 @@ public class ArgumentParsing2 {
 		}
 
 		/**
-		 * @param args The command-line arguments to parse. This collection will be drained as the arguments are successfully parsed
+		 * @param args The command-line arguments to parse. This collection will be drained as the arguments are successfully parsed.
 		 * @param completely If true, arguments that do not match any argument types in this parser will be added to the result's
 		 *        {@link Arguments#getUnmatched() unmatched} list (if so configured) or an exception will be thrown. If false, the arguments
 		 *        will be left in the collection.
 		 * @return The parsed argument set
 		 * @throws IllegalArgumentException If the arguments couldn't be parsed for any reason
 		 */
-		Arguments parse(Collection<String> args, boolean completely) throws IllegalArgumentException;
+		Arguments parse(List<String> args, boolean completely) throws IllegalArgumentException;
 
 		/**
 		 * @param print Whether this parser should print it's {@link #printHelp() help} message to {@link System#out} if
-		 *        {@link #parse(Collection, boolean)} is called with an empty collection. This is true by default.
+		 *        {@link #parse(List, boolean)} is called with an empty collection. This is true by default.
 		 * @return This parser
 		 */
 		ArgumentParser printHelpOnEmpty(boolean print);
 
 		/**
 		 * @param print Whether this parser should print it's {@link #printHelp() help} message to {@link System#out} if argument
-		 *        {@link #parse(Collection, boolean) parsing} fails. This is true by default.
+		 *        {@link #parse(List, boolean) parsing} fails. This is true by default.
 		 * @return This parser
 		 */
 		ArgumentParser printHelpOnError(boolean print);
@@ -2922,7 +2992,7 @@ public class ArgumentParsing2 {
 			}
 
 			@Override
-			public Arguments parse(Collection<String> args, boolean completely) {
+			public Arguments parse(List<String> args, boolean completely) {
 				boolean printedHelp = false;
 				if (args.isEmpty() && isPrintingHelpOnEmpty) {
 					printedHelp=true;
@@ -2968,18 +3038,33 @@ public class ArgumentParsing2 {
 				}
 			}
 
-			private <T> void parse(Collection<String> args, ArgumentTypeHolder<T> argType,
+			private <T> void parse(List<String> args, ArgumentTypeHolder<T> argType,
 				QuickMap<String, List<Argument<?>>> foundMatches) {
-				Iterator<String> argIter = args.iterator();
+				ListIterator<String> argIter = args.listIterator();
 				boolean found = false;
 				while (argIter.hasNext()) {
 					String arg = argIter.next();
-					MatchedArgument matchedArg = argType.argument.getPattern().match(arg);
-					if (matchedArg == null || !matchedArg.getName().equals(argType.argument.getName()))
+					int[] extraArgs = new int[1];
+					MatchedArgument matchedArg = argType.argument.getPattern().match(arg, () -> {
+						if (!argIter.hasNext())
+							return null;
+						extraArgs[0]++;
+						return argIter.next();
+					});
+					for (int i = 0; i < extraArgs[0]; i++)
+						argIter.previous();
+					argIter.previous();
+					argIter.next();
+					if (matchedArg == null || !matchedArg.getName().equals(argType.argument.getName())) {
 						continue;
+					}
 
 					found = true;
 					argIter.remove();
+					for (int i = 0; i < extraArgs[0]; i++) {
+						argIter.next();
+						argIter.remove();
+					}
 					Argument<T> argument;
 					if (matchedArg.getValues().isEmpty()) {
 						argument = new DefaultArg<>(argType.argument, matchedArg, Collections.emptyList());
