@@ -548,7 +548,13 @@ public final class ArrayUtils {
 		return optimize(min, max, measure, Double::compare);
 	}
 
+	/** Compares 2 doubles */
 	public interface DoubleComparator {
+		/**
+		 * @param d1 The first double
+		 * @param d2 The second double
+		 * @return Which value is "better {@link ArrayUtils#optimize(int, int, IntToDoubleFunction, DoubleComparator) optimized}"
+		 */
 		int compare(double d1, double d2);
 	}
 
