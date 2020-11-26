@@ -33,6 +33,7 @@ import org.qommons.collect.BetterList;
 import org.qommons.collect.QuickSet.QuickMap;
 import org.qommons.ex.ExFunction;
 import org.qommons.io.BetterFile;
+import org.qommons.io.BetterFile.FileBacking;
 import org.qommons.io.BetterFile.FileDataSource;
 import org.qommons.io.NativeFileSource;
 
@@ -2661,15 +2662,64 @@ public class ArgumentParsing2 {
 
 			static abstract class FileParser<F> implements ArgumentValueParser<F> {
 				final String argumentName;
+				final Class<F> theType;
 				Boolean directory;
 				boolean mustExist;
 				boolean create;
 				F relativeTo;
 				String relativeToArgument;
 
-				FileParser(String argumentName) {
+				FileParser(String argumentName, Class<F> type) {
 					this.argumentName = argumentName;
+					theType = type;
 				}
+
+				@Override
+				public F parse(String value, Arguments otherArgs) throws ParseException {
+					F file;
+					if (isAbsolute(value))
+						file = getFile(value, null);
+					else { // If not specified as absolute, resolve as relative if configured
+						F relative;
+						if (relativeToArgument != null) {
+							F argValue = otherArgs.get(relativeToArgument, theType);
+							if (argValue == null) {
+								throw new IllegalArgumentException("No \"" + relativeToArgument
+									+ "\" argument (for relative directory) specified before this argument (\"" + argumentName + "\")");
+							} else {
+								relative = argValue;
+							}
+						} else if (relativeTo != null) {
+							relative = relativeTo;
+						} else {
+							relative = null;
+						}
+						if (relative != null) {
+							file = getFile(value, relative);
+						} else
+							file = getFile(value, null);
+					}
+					if (mustExist && !exists(file)) {
+						throw new IllegalArgumentException(file + " does not exist");
+					}
+					if (exists(file) && directory != null && isDirectory(file) != directory.booleanValue()) {
+						throw new IllegalArgumentException(file + " is " + (directory ? "not " : "") + "a directory");
+					}
+					if (create && !exists(file)) {
+						create(file, directory);
+					}
+					return file;
+				}
+
+				protected abstract boolean isAbsolute(String path);
+
+				protected abstract F getFile(String path, F relative);
+
+				protected abstract boolean exists(F file);
+
+				protected abstract boolean isDirectory(F file);
+
+				protected abstract void create(F file, boolean dir);
 
 				@Override
 				public String toString() {
@@ -2708,52 +2758,37 @@ public class ArgumentParsing2 {
 				boolean canonical;
 
 				Parser(String argumentName) {
-					super(argumentName);
+					super(argumentName, File.class);
 				}
 
 				@Override
-				public File parse(String value, Arguments otherArgs) throws ParseException {
-					File file = new File(value);
-					if (!file.getAbsolutePath().equals(file.getPath())) { // If not specified as absolute, resolve as relative if configured
-						File relative;
-						if (relativeToArgument != null) {
-							File argValue = otherArgs.get(relativeToArgument, File.class);
-							if (argValue == null) {
-								throw new IllegalArgumentException("No \"" + relativeToArgument
-									+ "\" argument (for relative directory) specified before this argument (\"" + argumentName + "\")");
-							} else {
-								relative = argValue;
-							}
-						} else if (relativeTo != null) {
-							relative = relativeTo;
-						} else {
-							relative = null;
-						}
-						if (relative != null) {
-							file = new File(relative, value);
-						}
-					}
-					if (canonical) {
-						try {
-							file = new File(file.getCanonicalPath());
-						} catch (IOException e) {
-							throw new IllegalArgumentException("Could not canonize file " + file.getPath(), e);
-						}
-					}
-					if (mustExist && !file.exists()) {
-						throw new IllegalArgumentException(file.getPath() + " does not exist");
-					}
-					if (file.exists() && directory != null && file.isDirectory() != directory.booleanValue()) {
-						throw new IllegalArgumentException(file.getPath() + " is " + (directory ? "not " : "") + "a directory");
-					}
-					if (create && !file.exists()) {
-						if (directory) {
-							if (!file.mkdirs())
-								throw new IllegalArgumentException("Could not create directory " + file.getPath());
-						} else if (!file.setLastModified(System.currentTimeMillis()))
-							throw new IllegalArgumentException("Could not create empty file " + file.getPath());
-					}
-					return file;
+				protected boolean isAbsolute(String path) {
+					File file = new File(path);
+					return file.getAbsolutePath().equals(file.getPath());
+				}
+
+				@Override
+				protected File getFile(String path, File relative) {
+					return relative == null ? new File(path) : new File(relative, path);
+				}
+
+				@Override
+				protected boolean exists(File file) {
+					return file.exists();
+				}
+
+				@Override
+				protected boolean isDirectory(File file) {
+					return file.isDirectory();
+				}
+
+				@Override
+				protected void create(File file, boolean dir) {
+					if (dir) {
+						if (!file.mkdirs())
+							throw new IllegalArgumentException("Could not create directory " + file.getPath());
+					} else if (!file.setLastModified(System.currentTimeMillis()))
+						throw new IllegalArgumentException("Could not create empty file " + file.getPath());
 				}
 			}
 		}
@@ -2779,47 +2814,44 @@ public class ArgumentParsing2 {
 				BetterFile.FileDataSource dataSource;
 
 				Parser(String argumentName) {
-					super(argumentName);
+					super(argumentName, BetterFile.class);
 					dataSource = new NativeFileSource();
 				}
 
 				@Override
-				public BetterFile parse(String text, Arguments otherArgs) throws ParseException {
-					BetterFile file = BetterFile.at(dataSource, text);
-					if (!file.getPath().equals(file.getPath())) { // If not specified as absolute, resolve as relative if configured
-						BetterFile relative;
-						if (relativeToArgument != null) {
-							BetterFile argValue = otherArgs.get(relativeToArgument, BetterFile.class);
-							if (argValue == null) {
-								throw new IllegalArgumentException("No \"" + relativeToArgument
-									+ "\" argument (for relative directory) specified before this argument (\"" + argumentName + "\")");
-							} else {
-								relative = argValue;
-							}
-						} else if (relativeTo != null) {
-							relative = relativeTo;
-						} else {
-							relative = null;
-						}
-						if (relative != null) {
-							file = relative.at(text);
-						}
+				protected boolean isAbsolute(String path) {
+					for (FileBacking root : dataSource.getRoots()) {
+						if (path.startsWith(root.getName()) //
+							&& (path.length() == root.getName().length() || path.charAt(root.getName().length()) == '/'
+								|| path.charAt(root.getName().length()) == '\\'))
+							return true;
 					}
-					if (mustExist && !file.exists()) {
-						throw new IllegalArgumentException(file.getPath() + " does not exist");
+					return false;
+				}
+
+				@Override
+				protected BetterFile getFile(String path, BetterFile relative) {
+					return relative != null ? relative.at(path) : BetterFile.at(dataSource, path);
+				}
+
+				@Override
+				protected boolean exists(BetterFile file) {
+					return file.exists();
+				}
+
+				@Override
+				protected boolean isDirectory(BetterFile file) {
+					return file.isDirectory();
+				}
+
+				@Override
+				protected void create(BetterFile file, boolean dir) {
+					try {
+						file.create(dir);
+					} catch (IOException e) {
+						throw new IllegalArgumentException(
+							"Could not create " + file.getPath() + " as a " + (directory ? "directory" : "file"));
 					}
-					if (file.exists() && directory != null && file.isDirectory() != directory.booleanValue()) {
-						throw new IllegalArgumentException(file.getPath() + " is " + (directory ? "not " : "") + "a directory");
-					}
-					if (create && !file.exists()) {
-						try {
-							file.create(directory);
-						} catch (IOException e) {
-							throw new IllegalArgumentException(
-								"Could not create " + file.getPath() + " as a " + (directory ? "directory" : "file"));
-						}
-					}
-					return file;
 				}
 			}
 		}
