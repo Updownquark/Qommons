@@ -10,11 +10,11 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -1324,8 +1324,9 @@ public class ArgumentParsing2 {
 	public interface ArgumentValueParser<T> {
 		/**
 		 * @param text The text representing the value as specified in the command-line argument
-		 * @param otherArgs Arguments that have already been parsed (arguments are parsed in the order in which they are specified on the
-		 *        builder)
+		 * @param otherArgs Other arguments in the argument set. If arguments are requested that have not been parsed yet, they will be
+		 *        parsed upon request. Circularities will result in an exception. Arguments returned from this {@link Arguments} object have
+		 *        <b>NOT</b> been validated against their constraints.
 		 * @return The parsed value
 		 * @throws ParseException If the value cannot be parsed (either this or {@link IllegalArgumentException} may be thrown)
 		 * @throws IllegalArgumentException If the value cannot be parsed (either this or {@link ParseException} may be thrown)
@@ -3031,14 +3032,11 @@ public class ArgumentParsing2 {
 					System.out.println(printHelp());
 				}
 				try {
-					QuickMap<String, List<Argument<?>>> foundMatches = theArguments.keySet().createMap();
-					List<String> errors = new LinkedList<>();
+					ParsingArguments parsingArgs = new ParsingArguments(this, theArguments.keySet().createMap(), args);
 					for (ArgumentType<?> at : theArgumentsList) {
-						int index = ((DefaultArgType<?>) at).index;
-						ArgumentTypeHolder<?> argType = theArguments.get(index);
-						foundMatches.put(index, new ArrayList<>());
-						parse(args, argType, foundMatches);
+						parsingArgs.getArguments(at);
 					}
+					List<String> errors = new LinkedList<>();
 					List<String> unmatched;
 					if (!args.isEmpty() && completely) {
 						if (isAcceptingUnmatched) {
@@ -3055,7 +3053,7 @@ public class ArgumentParsing2 {
 						throw new IllegalArgumentException(StringUtils.print("\n", errors, e -> e).toString());
 					}
 					// Check constraints
-					Arguments parsedArgs = new DefaultArgs(this, foundMatches, unmatched);
+					Arguments parsedArgs = new DefaultArgs(this, parsingArgs.theMatches, unmatched);
 					for (int a = 0; a < theArguments.keySize(); a++) {
 						checkConstraints(theArguments.get(a).argument, parsedArgs, errors);
 					}
@@ -3067,62 +3065,6 @@ public class ArgumentParsing2 {
 					if (!printedHelp && isPrintingHelpOnError)
 						System.err.println(printHelp());
 					throw e;
-				}
-			}
-
-			private <T> void parse(List<String> args, ArgumentTypeHolder<T> argType,
-				QuickMap<String, List<Argument<?>>> foundMatches) {
-				ListIterator<String> argIter = args.listIterator();
-				boolean found = false;
-				while (argIter.hasNext()) {
-					String arg = argIter.next();
-					int[] extraArgs = new int[1];
-					MatchedArgument matchedArg = argType.argument.getPattern().match(arg, () -> {
-						if (!argIter.hasNext())
-							return null;
-						extraArgs[0]++;
-						return argIter.next();
-					});
-					for (int i = 0; i < extraArgs[0]; i++)
-						argIter.previous();
-					argIter.previous();
-					argIter.next();
-					if (matchedArg == null || !matchedArg.getName().equals(argType.argument.getName())) {
-						continue;
-					}
-
-					found = true;
-					argIter.remove();
-					for (int i = 0; i < extraArgs[0]; i++) {
-						argIter.next();
-						argIter.remove();
-					}
-					Argument<T> argument;
-					if (matchedArg.getValues().isEmpty()) {
-						argument = new DefaultArg<>(argType.argument, matchedArg, Collections.emptyList());
-					} else if (argType.parser != null) {
-						List<T> values = new ArrayList<>(matchedArg.getValues().size());
-						for (int v = 0; v < matchedArg.getValues().size(); v++) {
-							try {
-								values.add(argType.parser.parse(matchedArg.getValues().get(v),
-									new PartialArguments(this, foundMatches, argType.argument)));
-							} catch (ParseException e) {
-								throw new IllegalArgumentException(e.getMessage(), e);
-							}
-						}
-						argument = new DefaultArg<>(argType.argument, matchedArg, values);
-					} else
-						throw new IllegalStateException("Values found for flag argument " + argType.argument.getName());
-					foundMatches.get(argType.argument.index).add(argument);
-				}
-				if (!found && argType.defaultValue != null) {
-					T defValue;
-					try {
-						defValue = argType.defaultValue.apply(new PartialArguments(this, foundMatches, argType.argument));
-					} catch (ParseException e) {
-						throw new IllegalArgumentException(e.getMessage(), e);
-					}
-					foundMatches.get(argType.argument.index).add(new DefaultArg<>(argType.argument, null, Arrays.asList(defValue)));
 				}
 			}
 
@@ -3216,7 +3158,7 @@ public class ArgumentParsing2 {
 			private final QuickMap<String, BetterList<? extends Argument<?>>> theMatches;
 			private final BetterList<String> theUnmatched;
 
-			DefaultArgs(DefaultArgParser parser, QuickMap<String, List<Argument<?>>> matches, List<String> unmatched) {
+			DefaultArgs(DefaultArgParser parser, QuickMap<String, List<? extends Argument<?>>> matches, List<String> unmatched) {
 				theParser = parser;
 				theMatches = matches.keySet().createMap();
 				for (int a = 0; a < matches.keySize(); a++) {
@@ -3254,15 +3196,17 @@ public class ArgumentParsing2 {
 			}
 		}
 
-		static class PartialArguments implements Arguments {
+		static class ParsingArguments implements Arguments {
 			private final DefaultArgParser theParser;
-			private final QuickMap<String, List<Argument<?>>> theMatches;
-			private final DefaultArgType<?> theParsing;
+			private final QuickMap<String, List<? extends Argument<?>>> theMatches;
+			private final List<String> theCLArgs;
+			private final Set<String> theParsingArgs;
 
-			PartialArguments(DefaultArgParser parser, QuickMap<String, List<Argument<?>>> matches, DefaultArgType<?> parsing) {
+			ParsingArguments(DefaultArgParser parser, QuickMap<String, List<? extends Argument<?>>> matches, List<String> clArgs) {
 				theParser = parser;
 				theMatches = matches;
-				theParsing = parsing;
+				theCLArgs = clArgs;
+				theParsingArgs = new LinkedHashSet<>();
 			}
 
 			@Override
@@ -3271,19 +3215,99 @@ public class ArgumentParsing2 {
 			}
 
 			@Override
+			public boolean has(String argument) {
+				ArgumentTypeHolder<?> holder = theParser.getHolder(argument);
+				if (theMatches.get(holder.argument.index) != null)
+					return !theMatches.get(holder.argument.index).isEmpty();
+				if (theParsingArgs.contains(argument))
+					throw new IllegalArgumentException("Circularity detected: " + theParsingArgs + "+" + argument);
+				Iterator<String> argIter = theCLArgs.iterator();
+				while (argIter.hasNext()) {
+					MatchedArgument matched = holder.argument.getPattern().match(argIter.next(), () -> {
+						return argIter.hasNext() ? argIter.next() : null;
+					});
+					if (matched != null && matched.getName().equals(argument))
+						return true;
+				}
+				return false;
+			}
+
+			@Override
 			public <T> BetterList<Argument<T>> getArguments(ArgumentType<T> type) {
 				ArgumentTypeHolder<T> holder = (ArgumentTypeHolder<T>) theParser.getHolder(type.getName());
 				if (holder.argument != type)
 					throw new IllegalArgumentException("Unrecognized argument: " + type);
-				if (theParser.getArguments().indexOf(holder.argument) >= theParser.getArguments().indexOf(theParsing))
-					throw new IllegalArgumentException("An argument cannot be referred to by a previously-declared argument: " + type);
-				List<? extends Argument<?>> matches = theMatches.get(((DefaultArgType<T>) type).index);
-				return matches == null ? BetterList.empty() : BetterList.of((List<Argument<T>>) matches);
+				List<? extends Argument<?>> matches = theMatches.get(holder.argument.index);
+				if (theMatches.get(holder.argument.index) == null) {
+					if (!theParsingArgs.add(type.getName()))
+						throw new IllegalArgumentException(theParsingArgs + "+" + type.getName());
+					matches = parseArgument(holder);
+					theMatches.put(holder.argument.index, matches);
+					theParsingArgs.remove(type.getName());
+				}
+				return BetterList.of((List<Argument<T>>) matches);
 			}
 
 			@Override
 			public BetterList<String> getUnmatched() {
 				return BetterList.empty();
+			}
+
+			private <T> List<Argument<T>> parseArgument(ArgumentTypeHolder<T> argType) {
+				boolean found = false, foundAny = false;
+				List<Argument<T>> matches = null;
+				do {
+					found = false;
+					for (int i = 0; i < theCLArgs.size(); i++) {
+						String arg = theCLArgs.get(i);
+						int[] extraArgIndex = new int[] { i + 1 };
+						MatchedArgument matchedArg = argType.argument.getPattern().match(arg, () -> {
+							if (extraArgIndex[0] < theCLArgs.size())
+								return theCLArgs.get(extraArgIndex[0]++);
+							else
+								return null;
+						});
+						if (matchedArg == null || !matchedArg.getName().equals(argType.argument.getName())) {
+							continue;
+						}
+
+						foundAny = found = true;
+						for (int j = extraArgIndex[0] - 1; j >= i; j--) {
+							theCLArgs.remove(j);
+						}
+						i--;
+						Argument<T> argument;
+						if (matchedArg.getValues().isEmpty()) {
+							argument = new DefaultArg<>(argType.argument, matchedArg, Collections.emptyList());
+						} else if (argType.parser != null) {
+							List<T> values = new ArrayList<>(matchedArg.getValues().size());
+							for (int v = 0; v < matchedArg.getValues().size(); v++) {
+								try {
+									values.add(argType.parser.parse(matchedArg.getValues().get(v), this));
+								} catch (ParseException e) {
+									throw new IllegalArgumentException(e.getMessage(), e);
+								}
+							}
+							argument = new DefaultArg<>(argType.argument, matchedArg, values);
+						} else
+							throw new IllegalStateException("Values found for flag argument " + argType.argument.getName());
+						if (matches == null)
+							matches = new ArrayList<>(theCLArgs.size());
+						matches.add(argument);
+					}
+				} while (found);
+				if (!foundAny && argType.defaultValue != null) {
+					T defValue;
+					try {
+						defValue = argType.defaultValue.apply(this);
+					} catch (ParseException e) {
+						throw new IllegalArgumentException(e.getMessage(), e);
+					}
+					if (matches == null)
+						matches = new ArrayList<>(theCLArgs.size());
+					matches.add(new DefaultArg<>(argType.argument, null, Arrays.asList(defValue)));
+				}
+				return matches == null ? Collections.emptyList() : matches;
 			}
 		}
 
