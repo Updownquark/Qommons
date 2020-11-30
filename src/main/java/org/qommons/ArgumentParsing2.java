@@ -26,8 +26,6 @@ import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.qommons.ArgumentParsing2.ArgumentPattern.FlagPattern;
-import org.qommons.ArgumentParsing2.ArgumentPattern.ValuePattern;
 import org.qommons.ArgumentParsing2.Impl.ArgumentTypeHolder;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.QuickSet.QuickMap;
@@ -48,7 +46,12 @@ import org.qommons.io.NativeFileSource;
  */
 public class ArgumentParsing2 {
 	/** Default pattern for parsing flag-type arguments */
-	public static final ArgumentPattern.FlagPattern DEFAULT_FLAG_PATTERN = new ArgumentPattern.FlagPattern() {
+	public static final ArgumentPattern DEFAULT_FLAG_PATTERN = new ArgumentPattern() {
+		@Override
+		public int getMaxValues() {
+			return 0;
+		}
+
 		@Override
 		public void validate(String argumentName) {}
 
@@ -63,10 +66,20 @@ public class ArgumentParsing2 {
 		public String print(MatchedArgument argument) {
 			return "--" + argument.getName();
 		}
+
+		@Override
+		public String toString() {
+			return "--flag";
+		}
 	};
 
 	/** Default pattern for parsing single-value arguments */
-	public static final ArgumentPattern.ValuePattern DEFAULT_VALUE_PATTERN = new ArgumentPattern.ValuePattern() {
+	public static final ArgumentPattern DEFAULT_VALUE_PATTERN = new ArgumentPattern() {
+		@Override
+		public int getMaxValues() {
+			return 1;
+		}
+
 		@Override
 		public void validate(String argumentName) {
 			if (argumentName.indexOf('=') >= 0)
@@ -89,8 +102,8 @@ public class ArgumentParsing2 {
 		}
 
 		@Override
-		public boolean isMultiValued() {
-			return false;
+		public String toString() {
+			return "--argument=value";
 		}
 	};
 
@@ -98,7 +111,12 @@ public class ArgumentParsing2 {
 	 * A pattern for parsing single-value arguments that uses 2 actual command-line arguments, the first for the name (as "--name") and the
 	 * second for the value
 	 */
-	public static final ArgumentPattern.ValuePattern SPLIT_VALUE_PATTERN = new ArgumentPattern.ValuePattern() {
+	public static final ArgumentPattern SPLIT_VALUE_PATTERN = new ArgumentPattern() {
+		@Override
+		public int getMaxValues() {
+			return 1;
+		}
+
 		@Override
 		public void validate(String argumentName) {
 		}
@@ -119,52 +137,18 @@ public class ArgumentParsing2 {
 		}
 
 		@Override
-		public boolean isMultiValued() {
-			return false;
-		}
-	};
-
-	/**
-	 * A pattern for parsing multi-value arguments that uses 2 actual command-line arguments, the first for the name (as "--name") and the
-	 * second for the comma-separated values
-	 */
-	public static final ArgumentPattern.ValuePattern SPLIT_MULTI_VALUE_PATTERN = new ArgumentPattern.ValuePattern() {
-		@Override
-		public void validate(String argumentName) {}
-
-		@Override
-		public MatchedArgument match(String argument, Supplier<String> moreArgs) {
-			if (argument.length() < 2 || !argument.startsWith("--"))
-				return null;
-			String nextArg = moreArgs.get();
-			if (nextArg == null)
-				return null;
-			List<String> values = new ArrayList<>(5);
-			int valueStart = 0;
-			for (int i = valueStart; i < nextArg.length(); i++) {
-				if (nextArg.charAt(i) == ',') {
-					values.add(nextArg.substring(valueStart, i));
-					valueStart = i + 1;
-				}
-			}
-			if (valueStart < nextArg.length())
-				values.add(nextArg.substring(valueStart));
-			return new MatchedArgument(argument.substring(2), Collections.unmodifiableList(values));
-		}
-
-		@Override
-		public String print(MatchedArgument argument) {
-			return "--" + argument.getName() + "=" + argument.getValues().get(0);
-		}
-
-		@Override
-		public boolean isMultiValued() {
-			return false;
+		public String toString() {
+			return "--argument value";
 		}
 	};
 
 	/** Default pattern for parsing multi-value arguments */
-	public static final ArgumentPattern.ValuePattern DEFAULT_MULTI_VALUE_PATTERN = new ArgumentPattern.ValuePattern() {
+	public static final ArgumentPattern DEFAULT_MULTI_VALUE_PATTERN = new ArgumentPattern() {
+		@Override
+		public int getMaxValues() {
+			return Integer.MAX_VALUE;
+		}
+
 		@Override
 		public void validate(String argumentName) {
 			if (argumentName.indexOf('=') >= 0)
@@ -202,8 +186,52 @@ public class ArgumentParsing2 {
 		}
 
 		@Override
-		public boolean isMultiValued() {
-			return true;
+		public String toString() {
+			return "--argument=value1,value2,value3";
+		}
+	};
+
+	/**
+	 * A pattern for parsing multi-value arguments that uses 2 actual command-line arguments, the first for the name (as "--name") and the
+	 * second for the comma-separated values
+	 */
+	public static final ArgumentPattern SPLIT_MULTI_VALUE_PATTERN = new ArgumentPattern() {
+		@Override
+		public int getMaxValues() {
+			return Integer.MAX_VALUE;
+		}
+
+		@Override
+		public void validate(String argumentName) {}
+
+		@Override
+		public MatchedArgument match(String argument, Supplier<String> moreArgs) {
+			if (argument.length() < 2 || !argument.startsWith("--"))
+				return null;
+			String nextArg = moreArgs.get();
+			if (nextArg == null)
+				return null;
+			List<String> values = new ArrayList<>(5);
+			int valueStart = 0;
+			for (int i = valueStart; i < nextArg.length(); i++) {
+				if (nextArg.charAt(i) == ',') {
+					values.add(nextArg.substring(valueStart, i));
+					valueStart = i + 1;
+				}
+			}
+			if (valueStart < nextArg.length())
+				values.add(nextArg.substring(valueStart));
+			return new MatchedArgument(argument.substring(2), Collections.unmodifiableList(values));
+		}
+
+		@Override
+		public String print(MatchedArgument argument) {
+			return "--" + argument.getName() + "=" + argument.getValues().get(0);
+		}
+
+		@Override
+		public String toString() {
+			return "--argument value1,value2,value3";
 		}
 	};
 
@@ -214,6 +242,16 @@ public class ArgumentParsing2 {
 
 	/** Parses the structure of an argument */
 	public interface ArgumentPattern {
+		/**
+		 * @return The maximum number of values that can be parsed by this pattern. This will typically be either:
+		 *         <ul>
+		 *         <li>0 for flag patterns</li>
+		 *         <li>1 for single-valued pattern</li>
+		 *         <li>or {@link Integer#MAX_VALUE} for multi-valued patterns</li>
+		 *         </ul>
+		 */
+		int getMaxValues();
+
 		/**
 		 * @param argumentName The name of the argument to test
 		 * @throws IllegalArgumentException If the given argument cannot be used with this pattern
@@ -232,15 +270,6 @@ public class ArgumentParsing2 {
 		 * @return The argument as it would look via command-line for this pattern
 		 */
 		String print(MatchedArgument argument);
-
-		/** An argument pattern for parsing value-less (flag) arguments */
-		public interface FlagPattern extends ArgumentPattern {}
-
-		/** An argument pattern for parsing arguments with one or more values */
-		public interface ValuePattern extends ArgumentPattern {
-			/** @return Whether this pattern supports multiple values per argument */
-			boolean isMultiValued();
-		}
 	}
 
 	/** An argument structure parsed by an {@link ArgumentPattern} */
@@ -643,29 +672,6 @@ public class ArgumentParsing2 {
 		}
 	}
 
-	/** The type of an argument value comparison */
-	public enum ComparisonType {
-		/** Equality test */
-		EQ("="),
-		/** Inequality test */
-		NEQ("!="),
-		/** Exclusive maximum test */
-		LT("<"),
-		/** Inclusive maximum test */
-		LTE("<="),
-		/** Exclusive minimum test */
-		GT(">"),
-		/** Inclusive minimum test */
-		GTE(">=");
-
-		/** The code descriptor of this type (e.g. ">=") */
-		public final String descrip;
-
-		private ComparisonType(String descrip) {
-			this.descrip = descrip;
-		}
-	}
-
 	/**
 	 * A test against an argument's value
 	 * 
@@ -717,6 +723,29 @@ public class ArgumentParsing2 {
 		}
 
 		abstract String toString(String argumentName);
+
+		/** The type of an argument value comparison */
+		public enum ComparisonType {
+			/** Equality test */
+			EQ("="),
+			/** Inequality test */
+			NEQ("!="),
+			/** Exclusive maximum test */
+			LT("<"),
+			/** Inclusive maximum test */
+			LTE("<="),
+			/** Exclusive minimum test */
+			GT(">"),
+			/** Inclusive minimum test */
+			GTE(">=");
+		
+			/** The code descriptor of this type (e.g. ">=") */
+			public final String descrip;
+		
+			private ComparisonType(String descrip) {
+				this.descrip = descrip;
+			}
+		}
 
 		/**
 		 * A comparison test against an argument's value
@@ -1231,13 +1260,19 @@ public class ArgumentParsing2 {
 		ArgumentParser build();
 
 		/**
+		 * @param argName The name of the argument to get
+		 * @return The argument already defined in this parser builder with the given name, or null if no such argument has been defined
+		 */
+		ArgumentType<?> getArgument(String argName);
+
+		/**
 		 * Allows the addition of flag-type arguments with the given pattern
 		 * 
 		 * @param pattern The pattern to match argument strings
 		 * @param args A builder to specify flag arguments
 		 * @return This builder
 		 */
-		ParserBuilder forFlagPattern(ArgumentPattern.FlagPattern pattern, Consumer<FlagArgumentSetBuilder> args);
+		ParserBuilder forFlagPattern(ArgumentPattern pattern, Consumer<FlagArgumentSetBuilder> args);
 
 		/**
 		 * Allows the addition of valued arguments with the given pattern
@@ -1246,7 +1281,7 @@ public class ArgumentParsing2 {
 		 * @param args A builder to specify value arguments
 		 * @return This builder
 		 */
-		ParserBuilder forValuePattern(ArgumentPattern.ValuePattern pattern, Consumer<ValuedArgumentSetBuilder> args);
+		ParserBuilder forValuePattern(ArgumentPattern pattern, Consumer<ValuedArgumentSetBuilder> args);
 
 		/**
 		 * Allows the addition of flag-type arguments with the default flag pattern (--argument)
@@ -1280,10 +1315,17 @@ public class ArgumentParsing2 {
 
 		/**
 		 * @param accept Whether command-line arguments not matching any configured argument type should be acceptable (and included in the
-		 *        result's {@link Arguments#getUnmatched()} field)
+		 *        result's {@link Arguments#getUnmatched()} field). False by default.
 		 * @return This builder
 		 */
 		ParserBuilder acceptUnmatched(boolean accept);
+
+		/**
+		 * @return Whether command-line arguments not matching any configured argument type should be acceptable (and included in the
+		 *         result's {@link Arguments#getUnmatched()} field)
+		 * @see #acceptUnmatched(boolean)
+		 */
+		boolean isAcceptingUnmatched();
 
 		/**
 		 * Copies all argument types from a different parser
@@ -1300,12 +1342,18 @@ public class ArgumentParsing2 {
 		 * @return This builder
 		 */
 		ParserBuilder withDescription(String descrip);
+
+		/**
+		 * @return The description for the parser
+		 * @see #withDescription(String)
+		 */
+		String getDescription();
 	}
 
 	/**
 	 * A builder to configure flag arguments
 	 * 
-	 * @see ParserBuilder#forFlagPattern(FlagPattern, Consumer)
+	 * @see ParserBuilder#forFlagPattern(ArgumentPattern, Consumer)
 	 */
 	public interface FlagArgumentSetBuilder {
 		/**
@@ -1337,7 +1385,7 @@ public class ArgumentParsing2 {
 	/**
 	 * A builder to configure valued arguments
 	 * 
-	 * @see ParserBuilder#forValuePattern(ValuePattern, Consumer)
+	 * @see ParserBuilder#forValuePattern(ArgumentPattern, Consumer)
 	 */
 	public interface ValuedArgumentSetBuilder {
 		/**
@@ -1590,7 +1638,7 @@ public class ArgumentParsing2 {
 	public interface ValuedArgumentBuilder<T, B extends ValuedArgumentBuilder<T, B>> extends ArgumentBuilder<T, B> {
 		/**
 		 * <p>
-		 * This call has slightly different effects when it is called on a {@link ValuePattern#isMultiValued() multi-valued} argument than
+		 * This call has slightly different effects when it is called on a {@link ArgumentPattern#getMaxValues() multi-valued} argument than
 		 * when called on a flag or single-valued argument
 		 * </p>
 		 * <p>
@@ -1605,8 +1653,7 @@ public class ArgumentParsing2 {
 		 * @return This builder
 		 */
 		default B required() {
-			if (getArgument().getPattern() instanceof ArgumentPattern.ValuePattern
-				&& ((ArgumentPattern.ValuePattern) getArgument().getPattern()).isMultiValued())
+			if (getArgument().getPattern().getMaxValues() > 1)
 				return times(1, Integer.MAX_VALUE);
 			else
 				return times(1, 1);
@@ -1614,7 +1661,7 @@ public class ArgumentParsing2 {
 
 		/**
 		 * <p>
-		 * This call has different effects when it is called on a {@link ValuePattern#isMultiValued() multi-valued} argument than when
+		 * This call has different effects when it is called on a {@link ArgumentPattern#getMaxValues() multi-valued} argument than when
 		 * called on a flag or single-valued argument
 		 * </p>
 		 * <p>
@@ -1630,20 +1677,19 @@ public class ArgumentParsing2 {
 		 * @return This builder
 		 */
 		default B optional() {
-			if (!(getArgument().getPattern() instanceof ArgumentPattern.ValuePattern)
-				|| !((ArgumentPattern.ValuePattern) getArgument().getPattern()).isMultiValued())
+			if (getArgument().getPattern().getMaxValues() <= 1)
 				times(0, 1);
 			return (B) this;
 		}
 
 		/**
 		 * Adds limits on the number of times this argument may be specified, or the total number of values if it is
-		 * {@link ValuePattern#isMultiValued() multi-valued}. If the argument is specified fewer times than the given minimum or more times
-		 * than the given maximum, parsing the argument set will throw an exception.
+		 * {@link ArgumentPattern#getMaxValues() multi-valued}. If the argument is specified fewer times than the given minimum or more
+		 * times than the given maximum, parsing the argument set will throw an exception.
 		 * 
-		 * @param minTimes The minimum number of times the argument must be specified or, for a {@link ValuePattern#isMultiValued()
+		 * @param minTimes The minimum number of times the argument must be specified or, for a {@link ArgumentPattern#getMaxValues()
 		 *        multi-valued} argument, the minimum number of values that must be specified for it
-		 * @param maxTimes The maximum number of times the argument may be specified or, for a {@link ValuePattern#isMultiValued()
+		 * @param maxTimes The maximum number of times the argument may be specified or, for a {@link ArgumentPattern#getMaxValues()
 		 *        multi-valued} argument, the maximum number of values that may be specified for it
 		 * @return This builder
 		 */
@@ -1949,7 +1995,7 @@ public class ArgumentParsing2 {
 	public interface ArgumentConditionBuilder<S, T> {
 		/**
 		 * @return An argument condition that is met if the target argument is specified at least once or, in the case of a
-		 *         {@link ArgumentPattern.ValuePattern#isMultiValued() multi-valued} argument, has at least one value. A
+		 *         {@link ArgumentPattern#getMaxValues() multi-valued} argument, has at least one value. A
 		 *         {@link ValuedArgumentBuilder#defaultValue(Supplier) default} value also counts.
 		 */
 		default ArgumentCondition<S> specified() {
@@ -1958,7 +2004,7 @@ public class ArgumentParsing2 {
 
 		/**
 		 * @return An argument condition that is met only if the target argument is not specified, in the case of a
-		 *         {@link ArgumentPattern.ValuePattern#isMultiValued() multi-valued} argument, has no specified values. A
+		 *         {@link ArgumentPattern#getMaxValues() multi-valued} argument, has no specified values. A
 		 *         {@link ValuedArgumentBuilder#defaultValue(Supplier) default} value will also mean the condition is not met.
 		 */
 		default ArgumentCondition<S> missing() {
@@ -1969,9 +2015,8 @@ public class ArgumentParsing2 {
 		 * @param minTimes The minimum number of times the target argument must be specified for the built condition to be met
 		 * @param maxTimes The maximum number of times the target argument may be specified for the built condition to be met
 		 * @return An argument condition that is met if the target argument is specified a number of times between the two given values,
-		 *         inclusively, or, in the case of a {@link ArgumentPattern.ValuePattern#isMultiValued() multi-valued} argument, has a
-		 *         number of arguments between the two given values. A {@link ValuedArgumentBuilder#defaultValue(Supplier) default} value
-		 *         also counts.
+		 *         inclusively, or, in the case of a {@link ArgumentPattern#getMaxValues() multi-valued} argument, has a number of arguments
+		 *         between the two given values. A {@link ValuedArgumentBuilder#defaultValue(Supplier) default} value also counts.
 		 */
 		ArgumentCondition<S> times(int minTimes, int maxTimes);
 
@@ -2006,13 +2051,13 @@ public class ArgumentParsing2 {
 
 		static <T> ArgumentTest.ValueTest<T> testFor(T value, int comp, boolean eq, Comparator<? super T> compare,
 			ArgumentValueParser<? extends T> parser) {
-			ComparisonType type;
+			ArgumentTest.ComparisonType type;
 			if (comp == 0)
-				type = eq ? ComparisonType.EQ : ComparisonType.NEQ;
+				type = eq ? ArgumentTest.ComparisonType.EQ : ArgumentTest.ComparisonType.NEQ;
 			else if (comp < 0)
-				type = eq ? ComparisonType.LTE : ComparisonType.LT;
+				type = eq ? ArgumentTest.ComparisonType.LTE : ArgumentTest.ComparisonType.LT;
 			else
-				type = eq ? ComparisonType.GTE : ComparisonType.GT;
+				type = eq ? ArgumentTest.ComparisonType.GTE : ArgumentTest.ComparisonType.GT;
 			return new ArgumentTest.ValueTest<>(value, type, compare, parser);
 		}
 
@@ -2280,18 +2325,24 @@ public class ArgumentParsing2 {
 			}
 
 			@Override
-			public ParserBuilder forFlagPattern(ArgumentPattern.FlagPattern pattern, Consumer<FlagArgumentSetBuilder> args) {
+			public ParserBuilder forFlagPattern(ArgumentPattern pattern, Consumer<FlagArgumentSetBuilder> args) {
 				args.accept(new DefaultFlagArgSetBuilder(pattern, this));
 				return this;
 			}
 
 			@Override
-			public ParserBuilder forValuePattern(ArgumentPattern.ValuePattern pattern, Consumer<ValuedArgumentSetBuilder> args) {
+			public ParserBuilder forValuePattern(ArgumentPattern pattern, Consumer<ValuedArgumentSetBuilder> args) {
 				args.accept(new DefaultValueArgSetBuilder(pattern, this));
 				return this;
 			}
 
-			ArgumentTypeHolder<?> getArgument(String name) {
+			@Override
+			public ArgumentType<?> getArgument(String argName) {
+				ArgumentTypeHolder<?> arg = theArguments.get(argName);
+				return arg == null ? null : arg.argument;
+			}
+
+			ArgumentTypeHolder<?> getHolder(String name) {
 				ArgumentTypeHolder<?> arg = theArguments.get(name);
 				if (arg == null)
 					throw new IllegalArgumentException("No such argument \"" + name + "\" configured");
@@ -2315,6 +2366,11 @@ public class ArgumentParsing2 {
 			}
 
 			@Override
+			public boolean isAcceptingUnmatched() {
+				return isAcceptingUnmatched;
+			}
+
+			@Override
 			public ParserBuilder copy(ArgumentParser parser) {
 				if (parser instanceof DefaultArgParser) {
 					for (ArgumentType<?> a : parser.getArguments()) {
@@ -2331,6 +2387,11 @@ public class ArgumentParsing2 {
 			public ParserBuilder withDescription(String descrip) {
 				theDescription = descrip;
 				return this;
+			}
+
+			@Override
+			public String getDescription() {
+				return theDescription;
 			}
 		}
 
@@ -2357,10 +2418,12 @@ public class ArgumentParsing2 {
 		}
 
 		static class DefaultFlagArgSetBuilder implements FlagArgumentSetBuilder {
-			private final FlagPattern thePattern;
+			private final ArgumentPattern thePattern;
 			private final DefaultParserBuilder theParser;
 
-			DefaultFlagArgSetBuilder(FlagPattern pattern, DefaultParserBuilder parser) {
+			DefaultFlagArgSetBuilder(ArgumentPattern pattern, DefaultParserBuilder parser) {
+				if (pattern.getMaxValues() != 0)
+					throw new IllegalArgumentException("Cannot call forFlagPattern() with a non-flag argument pattern: " + pattern);
 				thePattern = pattern;
 				theParser = parser;
 			}
@@ -2380,10 +2443,10 @@ public class ArgumentParsing2 {
 		}
 
 		static class DefaultValueArgSetBuilder implements ValuedArgumentSetBuilder {
-			private final ArgumentPattern.ValuePattern thePattern;
+			private final ArgumentPattern thePattern;
 			private final DefaultParserBuilder theParser;
 
-			DefaultValueArgSetBuilder(ArgumentPattern.ValuePattern pattern, DefaultParserBuilder parser) {
+			DefaultValueArgSetBuilder(ArgumentPattern pattern, DefaultParserBuilder parser) {
 				thePattern = pattern;
 				theParser = parser;
 			}
@@ -2460,7 +2523,7 @@ public class ArgumentParsing2 {
 
 			B times(int minTimes, int maxTimes) {
 				return addConstraint(new DefaultArgConstraint<>(
-					new ArgumentCondition.TrueCondition<>(theArgument, theArgParser::getArgument), minTimes, maxTimes, null));
+					new ArgumentCondition.TrueCondition<>(theArgument, theArgParser::getHolder), minTimes, maxTimes, null));
 			}
 
 			@Override
@@ -2482,7 +2545,7 @@ public class ArgumentParsing2 {
 			private final ArgumentValueParser<? extends T> theValueParser;
 			private ExFunction<Arguments, ? extends T, ParseException> theDefault;
 
-			DefaultValuedArgBuilder(String name, ArgumentPattern.ValuePattern pattern, Class<T> type,
+			DefaultValuedArgBuilder(String name, ArgumentPattern pattern, Class<T> type,
 				ArgumentValueParser<? extends T> parser, DefaultParserBuilder argParser) {
 				super(name, pattern, type, argParser);
 				theValueParser = parser;
@@ -2520,19 +2583,19 @@ public class ArgumentParsing2 {
 			public B constrain(Function<ArgumentTestBuilder<T>, ArgumentTest<T>> constraint) {
 				ArgumentTest<T> newConstraint = constraint.apply(new DefaultArgTestBuilder<>(theValueParser));
 				return addConstraint(
-					new DefaultArgConstraint<>(new ArgumentCondition.TrueCondition<>(getArgument(), getArgParser()::getArgument), 0,
+					new DefaultArgConstraint<>(new ArgumentCondition.TrueCondition<>(getArgument(), getArgParser()::getHolder), 0,
 						Integer.MAX_VALUE, newConstraint));
 			}
 
 			@Override
 			public <A> B when(String argument, Class<A> argType,
 				Function<ArgumentConditionBuilder<T, A>, ArgumentConstraint<T>> constraint) {
-				ArgumentTypeHolder<?> target = getArgParser().getArgument(argument);
+				ArgumentTypeHolder<?> target = getArgParser().getHolder(argument);
 				if (argType != null && !argType.equals(target.argument.getType()))
 					throw new ClassCastException("Wrong type (" + argType.getName() + ") for argument " + argument + " ("
 						+ target.argument.getType().getName() + ")");
 				ArgumentConstraint<T> newConstraint = constraint
-					.apply(new DefaultArgConditionBuilder<>(getArgument(), (ArgumentType<A>) target.argument, getArgParser()::getArgument));
+					.apply(new DefaultArgConditionBuilder<>(getArgument(), (ArgumentType<A>) target.argument, getArgParser()::getHolder));
 				return addConstraint(newConstraint);
 			}
 
@@ -2546,7 +2609,7 @@ public class ArgumentParsing2 {
 		static class DefaultInstantArgBuilder extends DefaultValuedArgBuilder<Instant, DefaultInstantArgBuilder>
 			implements InstantArgumentBuilder<DefaultInstantArgBuilder> {
 
-			DefaultInstantArgBuilder(String name, ValuePattern pattern, DefaultParserBuilder argParser) {
+			DefaultInstantArgBuilder(String name, ArgumentPattern pattern, DefaultParserBuilder argParser) {
 				super(name, pattern, Instant.class, new Parser(), argParser);
 			}
 
@@ -2589,7 +2652,7 @@ public class ArgumentParsing2 {
 
 		static abstract class DefaultAbstractFileArgBuilder<F, B extends DefaultAbstractFileArgBuilder<F, B>>
 			extends DefaultValuedArgBuilder<F, B> implements AbstractFileArgumentBuilder<F, B> {
-			DefaultAbstractFileArgBuilder(String name, ValuePattern pattern, Class<F> type, FileParser<F> parser,
+			DefaultAbstractFileArgBuilder(String name, ArgumentPattern pattern, Class<F> type, FileParser<F> parser,
 				DefaultParserBuilder argParser) {
 				super(name, pattern, type, parser, argParser);
 			}
@@ -2645,7 +2708,7 @@ public class ArgumentParsing2 {
 				assertNotBuilt();
 				if (fileArgName.equals(getArgument().getName()))
 					throw new IllegalArgumentException("Self-reference: " + fileArgName);
-				ArgumentTypeHolder<?> relArg = getArgParser().getArgument(fileArgName);
+				ArgumentTypeHolder<?> relArg = getArgParser().getHolder(fileArgName);
 				if (relArg.argument.getType() != getArgument().getType())
 					throw new IllegalArgumentException(
 						getArgument().getType().getName() + " argument cannot be specified relative to argument "
@@ -2744,7 +2807,7 @@ public class ArgumentParsing2 {
 
 		static class DefaultFileArgBuilder extends DefaultAbstractFileArgBuilder<File, DefaultFileArgBuilder>
 			implements FileArgumentBuilder<DefaultFileArgBuilder> {
-			DefaultFileArgBuilder(String name, ValuePattern pattern, DefaultParserBuilder argParser) {
+			DefaultFileArgBuilder(String name, ArgumentPattern pattern, DefaultParserBuilder argParser) {
 				super(name, pattern, File.class, new Parser(name), argParser);
 			}
 
@@ -2796,7 +2859,7 @@ public class ArgumentParsing2 {
 
 		static class DefaultBetterFileArgBuilder extends DefaultAbstractFileArgBuilder<BetterFile, DefaultBetterFileArgBuilder>
 			implements BetterFileArgumentBuilder<DefaultBetterFileArgBuilder> {
-			DefaultBetterFileArgBuilder(String name, ValuePattern pattern, DefaultParserBuilder argParser) {
+			DefaultBetterFileArgBuilder(String name, ArgumentPattern pattern, DefaultParserBuilder argParser) {
 				super(name, pattern, BetterFile.class, new Parser(name), argParser);
 			}
 
@@ -2985,13 +3048,17 @@ public class ArgumentParsing2 {
 					str.append(theDescription);
 				for (ArgumentType<?> arg : theArgumentsList) {
 					MatchedArgument ma;
-					if (arg.getPattern() instanceof ArgumentPattern.ValuePattern) {
-						if (((ArgumentPattern.ValuePattern) arg.getPattern()).isMultiValued())
-							ma = new MatchedArgument(arg.getName(), Arrays.asList("?", "?", "?"));
-						else
-							ma = new MatchedArgument(arg.getName(), Arrays.asList("?"));
-					} else
+					switch (arg.getPattern().getMaxValues()) {
+					case 0:
 						ma = new MatchedArgument(arg.getName(), Collections.emptyList());
+						break;
+					case 1:
+						ma = new MatchedArgument(arg.getName(), Arrays.asList("?"));
+						break;
+					default:
+						ma = new MatchedArgument(arg.getName(), Arrays.asList("?", "?", "?"));
+						break;
+					}
 					if (str.length() > 0)
 						str.append('\n');
 					str.append('\t').append(arg.getPattern().print(ma));
@@ -3073,7 +3140,7 @@ public class ArgumentParsing2 {
 					if (constraint.getCondition() != null && !constraint.getCondition().applies(parsedArgs))
 						continue;
 					int specified;
-					if (argument.getPattern() instanceof ArgumentPattern.FlagPattern)
+					if (argument.getPattern().getMaxValues() == 0)
 						specified = parsedArgs.getArguments(argument).size();
 					else
 						specified = parsedArgs.getAll(argument).size();
