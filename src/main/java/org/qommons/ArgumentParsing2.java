@@ -1374,7 +1374,7 @@ public class ArgumentParsing2 {
 		 * @param text The text representing the value as specified in the command-line argument
 		 * @param otherArgs Other arguments in the argument set. If arguments are requested that have not been parsed yet, they will be
 		 *        parsed upon request. Circularities will result in an exception. Arguments returned from this {@link Arguments} object have
-		 *        <b>NOT</b> been validated against their constraints.
+		 *        <b>NOT</b> been validated against any conditional constraints (those that depend on other argument values).
 		 * @return The parsed value
 		 * @throws ParseException If the value cannot be parsed (either this or {@link IllegalArgumentException} may be thrown)
 		 * @throws IllegalArgumentException If the value cannot be parsed (either this or {@link ParseException} may be thrown)
@@ -3101,7 +3101,7 @@ public class ArgumentParsing2 {
 				try {
 					ParsingArguments parsingArgs = new ParsingArguments(this, theArguments.keySet().createMap(), args);
 					for (ArgumentType<?> at : theArgumentsList) {
-						parsingArgs.getArguments(at);
+						parsingArgs.getArgumentsImpl(at, true);
 					}
 					List<String> errors = new LinkedList<>();
 					List<String> unmatched;
@@ -3122,7 +3122,7 @@ public class ArgumentParsing2 {
 					// Check constraints
 					Arguments parsedArgs = new DefaultArgs(this, parsingArgs.theMatches, unmatched);
 					for (int a = 0; a < theArguments.keySize(); a++) {
-						checkConstraints(theArguments.get(a).argument, parsedArgs, errors);
+						checkConstraints(theArguments.get(a).argument, parsedArgs, errors, true);
 					}
 					if (!errors.isEmpty()) {
 						throw new IllegalArgumentException(StringUtils.print("\n", errors, e -> e).toString());
@@ -3134,52 +3134,52 @@ public class ArgumentParsing2 {
 					throw e;
 				}
 			}
+		}
 
-			private static <T> void checkConstraints(DefaultArgType<T> argument, Arguments parsedArgs, List<String> errors) {
-				for (ArgumentConstraint<T> constraint : argument.getConstraints()) {
-					if (constraint.getCondition() != null && !constraint.getCondition().applies(parsedArgs))
-						continue;
-					int specified;
-					if (argument.getPattern().getMaxValues() == 0)
-						specified = parsedArgs.getArguments(argument).size();
+		static <T> void checkConstraints(DefaultArgType<T> argument, Arguments parsedArgs, List<String> errors, //
+			boolean conditionalConstraints) {
+			for (ArgumentConstraint<T> constraint : argument.getConstraints()) {
+				if (constraint.getCondition() != null && (!conditionalConstraints || !constraint.getCondition().applies(parsedArgs)))
+					continue;
+				int specified;
+				if (argument.getPattern().getMaxValues() == 0)
+					specified = parsedArgs.getArguments(argument).size();
+				else
+					specified = parsedArgs.getAll(argument).size();
+				if (specified < constraint.getMinTimes()) {
+					if (constraint.getMinTimes() == 1)
+						errors.add(argument.getName() + " is required but was not specified" + printCondition(constraint.getCondition()));
+					else if (specified == 0)
+						errors.add(argument.getName() + " is required " + constraint.getMinTimes() + " times but was not specified"
+							+ printCondition(constraint.getCondition()));
 					else
-						specified = parsedArgs.getAll(argument).size();
-					if (specified < constraint.getMinTimes()) {
-						if (constraint.getMinTimes() == 1)
-							errors
-								.add(argument.getName() + " is required but was not specified" + printCondition(constraint.getCondition()));
-						else if (specified == 0)
-							errors.add(argument.getName() + " is required " + constraint.getMinTimes() + " times but was not specified"
-								+ printCondition(constraint.getCondition()));
-						else
-							errors.add(argument.getName() + " was specified " + specified + " time" + (specified == 1 ? "" : "s")
-								+ " but is required " + constraint.getMinTimes() + " times" + printCondition(constraint.getCondition()));
-					} else if (specified > constraint.getMaxTimes()) {
-						if (constraint.getMaxTimes() == 0)
-							errors.add(argument.getName() + " was specified, but is forbidden" + printCondition(constraint.getCondition()));
-						else
-							errors.add(argument.getName() + " was specified " + specified + " times, which is more than the maximum of "
-								+ constraint.getMaxTimes() + printCondition(constraint.getCondition()));
-					}
-					if (constraint.getValueTest() != null && !parsedArgs.getAll(argument).isEmpty()) {
-						for (Argument<T> arg : parsedArgs.getArguments(argument)) {
-							if (arg.getMatch() == null)
-								continue; // Default--don't check against constraints
-							for (int v = 0; v < arg.getValues().size(); v++) {
-								if (!constraint.getValueTest().test(arg.getValues().get(v)))
-									errors.add(argument.getName() + " must obey [" + constraint.getValueTest() + "]: "
-										+ arg.getMatch().getValues().get(v) + printCondition(constraint.getCondition()));
-							}
+						errors.add(argument.getName() + " was specified " + specified + " time" + (specified == 1 ? "" : "s")
+							+ " but is required " + constraint.getMinTimes() + " times" + printCondition(constraint.getCondition()));
+				} else if (specified > constraint.getMaxTimes()) {
+					if (constraint.getMaxTimes() == 0)
+						errors.add(argument.getName() + " was specified, but is forbidden" + printCondition(constraint.getCondition()));
+					else
+						errors.add(argument.getName() + " was specified " + specified + " times, which is more than the maximum of "
+							+ constraint.getMaxTimes() + printCondition(constraint.getCondition()));
+				}
+				if (constraint.getValueTest() != null && !parsedArgs.getAll(argument).isEmpty()) {
+					for (Argument<T> arg : parsedArgs.getArguments(argument)) {
+						if (arg.getMatch() == null)
+							continue; // Default--don't check against constraints
+						for (int v = 0; v < arg.getValues().size(); v++) {
+							if (!constraint.getValueTest().test(arg.getValues().get(v)))
+								errors.add(argument.getName() + " must obey [" + constraint.getValueTest() + "]: "
+									+ arg.getMatch().getValues().get(v) + printCondition(constraint.getCondition()));
 						}
 					}
 				}
 			}
+		}
 
-			private static String printCondition(ArgumentCondition<?> condition) {
-				if (condition instanceof ArgumentCondition.TrueCondition)
-					return "";
-				return " if " + condition.toString();
-			}
+		private static String printCondition(ArgumentCondition<?> condition) {
+			if (condition instanceof ArgumentCondition.TrueCondition)
+				return "";
+			return " if " + condition.toString();
 		}
 
 		static class DefaultArg<T> implements Argument<T> {
@@ -3301,6 +3301,10 @@ public class ArgumentParsing2 {
 
 			@Override
 			public <T> BetterList<Argument<T>> getArguments(ArgumentType<T> type) {
+				return getArgumentsImpl(type, false);
+			}
+
+			<T> BetterList<Argument<T>> getArgumentsImpl(ArgumentType<T> type, boolean fromRootParser) {
 				ArgumentTypeHolder<T> holder = (ArgumentTypeHolder<T>) theParser.getHolder(type.getName());
 				if (holder.argument != type)
 					throw new IllegalArgumentException("Unrecognized argument: " + type);
@@ -3311,6 +3315,15 @@ public class ArgumentParsing2 {
 					matches = parseArgument(holder);
 					theMatches.put(holder.argument.index, matches);
 					theParsingArgs.remove(type.getName());
+					if (!fromRootParser) {
+						// If the arguments are requested by the parser of another argument,
+						// check the unconditional constraints so the other argument parser can use it safely
+						List<String> errors = new LinkedList<>();
+						checkConstraints(holder.argument, this, errors, false);
+						if (!errors.isEmpty()) {
+							throw new IllegalArgumentException(StringUtils.print("\n", errors, e -> e).toString());
+						}
+					}
 				}
 				return BetterList.of((List<Argument<T>>) matches);
 			}
