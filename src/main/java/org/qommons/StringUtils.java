@@ -1183,9 +1183,7 @@ public class StringUtils {
 			while (readyForMore && in.hasNext()) {
 				count++;
 				int nextByte = in.next();
-				readyForMore = out.accumulate(HEX_CHARS.charAt(nextByte >>> 4));
-				if (readyForMore)
-					readyForMore = out.accumulate(HEX_CHARS.charAt(nextByte & 0xf));
+				readyForMore = printHexByte(out, nextByte);
 			}
 			if (byteCount != null)
 				byteCount.accept(count);
@@ -1216,6 +1214,19 @@ public class StringUtils {
 				byteCount.accept(count);
 			return out;
 		}
+	}
+
+	/**
+	 * @param out The accumulator to print the byte to
+	 * @param b The byte to print
+	 * @return Whether the accumulator is ready for more character data
+	 * @throws IOException If the accumulator throws an exception
+	 */
+	public static boolean printHexByte(CharAccumulator out, int b) throws IOException {
+		boolean readyForMore = out.accumulate(HEX_CHARS.charAt(b >>> 4));
+		if (readyForMore)
+			readyForMore = out.accumulate(HEX_CHARS.charAt(b & 0xf));
+		return readyForMore;
 	}
 
 	private static final char A_MINUS_0 = 'A' - '0';

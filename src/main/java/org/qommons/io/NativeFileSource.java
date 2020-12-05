@@ -1,5 +1,6 @@
 package org.qommons.io;
 
+import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -10,8 +11,12 @@ import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 import org.qommons.QommonsUtils;
+import org.qommons.ex.ExBiConsumer;
+import org.qommons.io.BetterFile.FileBacking;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
 import org.qommons.io.FileUtils.DirectorySyncResults;
 
@@ -126,8 +131,13 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public InputStream read() throws IOException {
-			return new FileInputStream(theFile);
+		public InputStream read(long startFrom, BooleanSupplier canceled) throws IOException {
+			if (canceled.getAsBoolean())
+				return null;
+			FileInputStream stream = new FileInputStream(theFile);
+			if (startFrom > 0)
+				stream.skip(startFrom);
+			return new BufferedInputStream(stream);
 		}
 
 		@Override
@@ -136,9 +146,16 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public List<? extends BetterFile.FileBacking> listFiles() {
+		public boolean discoverContents(Consumer<? super FileBacking> onDiscovered, BooleanSupplier canceled) {
 			java.io.File[] list = theFile.listFiles();
-			return list == null ? null : QommonsUtils.map(Arrays.asList(list), f -> new NativeFileBacking(this, f), true);
+			if (list == null)
+				return true;
+			for (java.io.File f : list) {
+				if (canceled.getAsBoolean())
+					return false;
+				onDiscovered.accept(new NativeFileBacking(this, f));
+			}
+			return true;
 		}
 
 		@Override
@@ -204,6 +221,31 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		@Override
 		public boolean move(String newFilePath) {
 			return theFile.renameTo(new File(newFilePath));
+		}
+
+		@Override
+		public void visitAll(ExBiConsumer<? super FileBacking, CharSequence, IOException> forEach, BooleanSupplier canceled)
+			throws IOException {
+			StringBuilder path = new StringBuilder();
+			visitAll(path, forEach, canceled);
+		}
+
+		private void visitAll(StringBuilder path, ExBiConsumer<? super FileBacking, CharSequence, IOException> forEach,
+			BooleanSupplier canceled) throws IOException {
+			if (canceled.getAsBoolean())
+				return;
+			forEach.accept(this, path);
+			java.io.File[] children = theFile.listFiles();
+			if (children == null || children.length == 0)
+				return;
+			int oldLen = path.length();
+			for (java.io.File f : children) {
+				if (canceled.getAsBoolean())
+					return;
+				path.append(getName()).append('/');
+				new NativeFileBacking(this, f).visitAll(path, forEach, canceled);
+				path.setLength(oldLen);
+			}
 		}
 
 		@Override

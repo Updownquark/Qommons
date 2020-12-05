@@ -9,7 +9,10 @@ import java.net.URLConnection;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
+import org.qommons.ex.ExBiConsumer;
 import org.qommons.io.BetterFile.FileBacking;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
 import org.qommons.io.BetterFile.FileDataSource;
@@ -48,6 +51,7 @@ public class UrlFileSource implements FileDataSource {
 		private volatile long theLastCheck;
 		private volatile long theLastModified;
 		private volatile long theLength;
+		private volatile boolean isRangeAccepted;
 
 		UrlFileBacking(UrlFileBacking parent, URL url) {
 			theParent = parent;
@@ -76,6 +80,7 @@ public class UrlFileSource implements FileDataSource {
 				URLConnection conn = theURL.openConnection();
 				theLength = conn.getContentLengthLong();
 				theLastModified = conn.getLastModified();
+				isRangeAccepted = "bytes".equalsIgnoreCase(conn.getHeaderField("Accept-Ranges"));
 			} catch (IOException e) {
 				theLength = 0;
 				theLastModified = -1;
@@ -116,12 +121,8 @@ public class UrlFileSource implements FileDataSource {
 		}
 
 		@Override
-		public List<? extends FileBacking> listFiles() {
-			check();
-			if (theLastModified == -1)
-				return Collections.emptyList();
-			else
-				return null;
+		public boolean discoverContents(Consumer<? super FileBacking> onDiscovered, BooleanSupplier canceled) {
+			return true;
 		}
 
 		@Override
@@ -141,9 +142,40 @@ public class UrlFileSource implements FileDataSource {
 			return theLength;
 		}
 
+		@SuppressWarnings("resource")
 		@Override
-		public InputStream read() throws IOException {
-			return theURL.openStream();
+		public InputStream read(long startFrom, BooleanSupplier canceled) throws IOException {
+			checkData();
+			if (canceled.getAsBoolean())
+				return null;
+			URLConnection conn = theURL.openConnection();
+			InputStream stream;
+			if (canceled.getAsBoolean())
+				return null;
+			if (startFrom > 0) {
+				if (isRangeAccepted) {
+					conn.setRequestProperty("Range", startFrom + "-" + (theLength - 1));
+					stream = conn.getInputStream();
+				} else {
+					stream = conn.getInputStream();
+					long skipped = stream.skip(startFrom);
+					long totalSkipped = skipped;
+					while (skipped >= 0 && totalSkipped < startFrom) {
+						if (canceled.getAsBoolean()) {
+							stream.close();
+							return null;
+						}
+						skipped = stream.skip(startFrom);
+						totalSkipped += skipped;
+					}
+					if (skipped < 0) {
+						stream.close();
+						return null;
+					}
+				}
+			} else
+				stream = conn.getInputStream();
+			return stream;
 		}
 
 		@Override
@@ -177,6 +209,12 @@ public class UrlFileSource implements FileDataSource {
 		@Override
 		public boolean move(String newFilePath) {
 			return false;
+		}
+
+		@Override
+		public void visitAll(ExBiConsumer<? super FileBacking, CharSequence, IOException> forEach, BooleanSupplier canceled)
+			throws IOException {
+			forEach.accept(this, "");
 		}
 	}
 }

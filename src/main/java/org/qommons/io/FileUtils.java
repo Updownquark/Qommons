@@ -17,16 +17,21 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedHashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import org.qommons.ArrayUtils;
+import org.qommons.StringUtils;
+import org.qommons.ex.ExConsumer;
 import org.qommons.ex.ExSupplier;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
 
@@ -77,8 +82,8 @@ public class FileUtils {
 	}
 
 	public static BetterFile.FileDataSource getDefaultFileSource() {
-		return new CompressionEnabledFileSource(new NativeFileSource())//
-			.withCompression(new CompressionEnabledFileSource.ZipCompression());
+		return new ArchiveEnabledFileSource(new NativeFileSource())//
+			.withArchival(new ArchiveEnabledFileSource.ZipCompression());
 	}
 
 	public static BetterFile getClassFile(Class<?> clazz) throws MalformedURLException {
@@ -109,8 +114,8 @@ public class FileUtils {
 			BetterFile jarFile = ofUrl(fileSource, jarUrl);
 			return jarFile.at(path.substring(div + 2));
 		default:
-			return BetterFile.at(new CompressionEnabledFileSource(new UrlFileSource(new URL(url, "/")))//
-				.withCompression(new CompressionEnabledFileSource.ZipCompression()), url.getPath());
+			return BetterFile.at(new ArchiveEnabledFileSource(new UrlFileSource(new URL(url, "/")))//
+				.withArchival(new ArchiveEnabledFileSource.ZipCompression()), url.getPath());
 		}
 	}
 
@@ -131,7 +136,7 @@ public class FileUtils {
 	 *         resource (by name), the first source in the list containing the resource will be considered the authority for it.
 	 */
 	public static BetterFile combine(String name, Iterable<? extends BetterFile> sources) {
-		return new CombinedFileDataSource(name, sources);
+		return new CombinedFile(name, name, sources);
 	}
 
 	/** @return An empty file synchronization operation */
@@ -212,6 +217,46 @@ public class FileUtils {
 		default:
 			return 0;
 		}
+	}
+
+	public static int slashIndex(String path) {
+		int slashIndex = path.indexOf('/');
+		int backSlashIndex = path.indexOf('\\');
+		return Math.min(slashIndex, backSlashIndex);
+	}
+
+	public static String concatPath(String parent, String child) {
+		boolean lastSlash = parent.length() > 0
+			&& (parent.charAt(parent.length() - 1) == '/' || parent.charAt(parent.length() - 1) == '\\');
+		boolean firstSlash = child.length() > 0 && (child.charAt(0) == '/' || child.charAt(0) == '\\');
+		String path = parent;
+		if (lastSlash && firstSlash)
+			path += child.substring(1);
+		else if (!lastSlash && !firstSlash)
+			path += '/' + child;
+		else
+			path += child;
+		return path;
+	}
+
+	public static String[] splitPath(String path) {
+		int slashCount = 0;
+		for (int i = 1; i < path.length() - 1; i++)
+			if (path.charAt(i) == '/' || path.charAt(i) == '\\')
+				slashCount++;
+		String[] splitPath = new String[slashCount + 1];
+		slashCount = 0;
+		int lastSlash = -1;
+		for (int i = 0; i < path.length() - 1; i++) {
+			if (path.charAt(i) == '/' || path.charAt(i) == '\\') {
+				if (i > 0)
+					splitPath[slashCount++] = path.substring(lastSlash + 1, i);
+				lastSlash = i;
+			}
+		}
+		if (lastSlash < path.length() - 1)
+			splitPath[slashCount] = path.substring(lastSlash + 1);
+		return splitPath;
 	}
 
 	/** Possible actions to take for a source-dest resource pair in a {@link FileSyncOperation} */
@@ -839,15 +884,19 @@ public class FileUtils {
 		}
 	}
 
-	static class CombinedFileDataSource implements BetterFile {
+	static class CombinedFile implements BetterFile {
 		private final String theName;
+		private final String thePath;
 		private final Iterable<? extends BetterFile> theSources;
 
-		CombinedFileDataSource(String name, Iterable<? extends BetterFile> sources) {
+		CombinedFile(String name, String path, Iterable<? extends BetterFile> sources) {
 			theName = name;
+			thePath = path;
 			theSources = sources;
-			if (!sources.iterator().hasNext())
-				throw new IllegalArgumentException("No data sources");
+		}
+
+		protected Iterable<? extends BetterFile> getSources() {
+			return theSources;
 		}
 
 		@Override
@@ -857,17 +906,7 @@ public class FileUtils {
 
 		@Override
 		public String getPath() {
-			return theName;
-		}
-
-		@Override
-		public BetterFile getRoot() {
-			return this;
-		}
-
-		@Override
-		public BetterFile getParent() {
-			return null;
+			return thePath;
 		}
 
 		@Override
@@ -884,67 +923,6 @@ public class FileUtils {
 				if (source.exists())
 					return source.getLastModified();
 			return 0;
-		}
-
-		@Override
-		public List<? extends BetterFile> listFiles() {
-			Map<String, List<BetterFile>> names = null;
-			for (BetterFile source : theSources) {
-				List<? extends BetterFile> sourceList = source.listFiles();
-				if (sourceList != null) {
-					if (names == null)
-						names = new LinkedHashMap<>();
-					for (BetterFile s : sourceList)
-						names.computeIfAbsent(s.getName(), __ -> new LinkedList<>()).add(s);
-				}
-			}
-			if (names == null)
-				return null;
-			List<BetterFile> ret = new ArrayList<>(names.size());
-			for (Map.Entry<String, List<BetterFile>> entry : names.entrySet()) {
-				if (entry.getValue().size() == 1)
-					ret.add(entry.getValue().get(0));
-				else
-					ret.add(new CombinedFileDataSource(theName, entry.getValue()));
-			}
-			return Collections.unmodifiableList(ret);
-		}
-
-		@Override
-		public long length() {
-			for (BetterFile source : theSources)
-				if (source.exists())
-					return source.length();
-			return 0;
-		}
-
-		@Override
-		public InputStream read() throws IOException {
-			for (BetterFile source : theSources)
-				if (source.exists())
-					return source.read();
-			throw new FileNotFoundException("No such file found: " + theName);
-		}
-
-		@Override
-		public BetterFile at(String path) {
-			while (path.length() > 0 && (path.charAt(path.length() - 1) == '/' || path.charAt(path.length() - 1) == '\\'))
-				path = path.substring(0, path.length() - 1);
-			if (path.length() == 0)
-				return this;
-			List<BetterFile> sources = new ArrayList<>();
-			for (BetterFile source : theSources)
-				sources.add(source.at(path));
-			String name;
-			int lastSlash = path.lastIndexOf('/');
-			int lastBackSlash = path.lastIndexOf('\\');
-			if (lastBackSlash > lastSlash)
-				lastSlash = lastBackSlash;
-			if (lastSlash < 0)
-				name = path;
-			else
-				name = path.substring(lastSlash + 1);
-			return new CombinedFileDataSource(name, sources);
 		}
 
 		@Override
@@ -976,6 +954,90 @@ public class FileUtils {
 		}
 
 		@Override
+		public long length() {
+			for (BetterFile source : theSources) {
+				long len = source.length();
+				if (len != 0)
+					return len;
+			}
+			return 0;
+		}
+
+		@Override
+		public BetterFile getRoot() {
+			return this;
+		}
+
+		@Override
+		public BetterFile getParent() {
+			return null;
+		}
+
+		@Override
+		public List<? extends BetterFile> discoverContents(Consumer<? super BetterFile> onDiscovered, BooleanSupplier canceled) {
+			Set<String> visited = new HashSet<>();
+			int sourceIndex = 0;
+			List<BetterFile> files = new ArrayList<>();
+			for (BetterFile source : getSources()) {
+				int si = sourceIndex;
+				if (source.discoverContents(f -> {
+					if (visited.add(f.getName())) {
+						List<BetterFile> sourceFiles = new ArrayList<>(5);
+						sourceFiles.add(f);
+						Iterator<? extends BetterFile> sourceIter = getSources().iterator();
+						for (int s = 0; sourceIter.hasNext() && s < si; s++)
+							sourceIter.next();
+						while (sourceIter.hasNext())
+							sourceFiles.add(sourceIter.next().at(f.getName()));
+						CombinedFile cFile = new CombinedFile(f.getName(), f.getPath(), Collections.unmodifiableList(sourceFiles));
+						files.add(cFile);
+						if (onDiscovered != null)
+							onDiscovered.accept(cFile);
+					}
+				}, canceled) == null)
+					return null;
+				sourceIndex++;
+			}
+			return Collections.unmodifiableList(files);
+		}
+
+		@Override
+		public BetterFile at(String path) {
+			while (path.length() > 0 && (path.charAt(path.length() - 1) == '/' || path.charAt(path.length() - 1) == '\\'))
+				path = path.substring(0, path.length() - 1);
+			if (path.length() == 0)
+				return this;
+			List<BetterFile> sources = new ArrayList<>();
+			for (BetterFile source : getSources())
+				sources.add(source.at(path));
+			String name;
+			int lastSlash = path.lastIndexOf('/');
+			int lastBackSlash = path.lastIndexOf('\\');
+			if (lastBackSlash > lastSlash)
+				lastSlash = lastBackSlash;
+			if (lastSlash < 0)
+				name = path;
+			else
+				name = path.substring(lastSlash + 1);
+			String newPath = getPath();
+			if (lastSlash == newPath.length() - 1) {
+				if (path.charAt(0) == '/' || path.charAt(0) == '\\')
+					newPath = newPath.substring(0, newPath.length() - 1);
+			} else if (path.charAt(0) != '/' && path.charAt(0) != '\\')
+				newPath += '/';
+			newPath += path;
+			return new CombinedFile(name, newPath, sources);
+		}
+
+		@Override
+		public InputStream read(long startFrom, BooleanSupplier canceled) throws IOException {
+			for (BetterFile source : theSources)
+				if (source.exists())
+					return source.read(startFrom, canceled);
+			throw new FileNotFoundException("No such file found: " + theName);
+		}
+
+		@Override
 		public boolean delete(DirectorySyncResults results) {
 			return false;
 		}
@@ -1003,6 +1065,61 @@ public class FileUtils {
 		@Override
 		public BetterFile move(BetterFile newFile) {
 			return null;
+		}
+
+		static class VisitedFile {
+			final String name;
+			List<VisitedFile> children;
+
+			VisitedFile(String name) {
+				this.name = name;
+			}
+
+			boolean add(String path, int startIndex) {
+				if (children == null)
+					children = new ArrayList<>(5);
+				int nextSlash = path.indexOf('/', startIndex + 1);
+				String childName = path.substring(startIndex, nextSlash < 0 ? path.length() : nextSlash);
+				int childIndex = ArrayUtils.binarySearch(children, ch -> {
+					return StringUtils.compareNumberTolerant(childName, ch.name, true, true);
+				});
+				boolean addChild = childIndex < 0;
+				VisitedFile child;
+				if (addChild) {
+					child = new VisitedFile(childName);
+					children.add(-childIndex - 1, child);
+				} else
+					child = children.get(childIndex);
+				if (nextSlash >= 0 && nextSlash < path.length() - 1)
+					return child.add(path, nextSlash + 1);
+				return addChild;
+			}
+		}
+
+		@Override
+		public void visitAll(ExConsumer<? super BetterFile, IOException> forEach, BooleanSupplier canceled) throws IOException {
+			VisitedFile root=new VisitedFile("");
+			forEach.accept(this);
+			String path=getPath().replaceAll("\\\\", "/");
+			int pathLength=path.length() + ((path.length()==0 || path.charAt(path.length()-1)!='/') ? 1 : 0);
+			int sourceIndex=0;
+			for (BetterFile source : getSources()) {
+				int si = sourceIndex;
+				source.visitAll(f->{
+					String relPath = f.getPath().substring(pathLength);
+					if (root.add(relPath, 0)) {
+						List<BetterFile> sourceFiles = new ArrayList<>(5);
+						sourceFiles.add(f);
+						Iterator<? extends BetterFile> sourceIter = getSources().iterator();
+						for (int s = 0; sourceIter.hasNext() && s < si; s++)
+							sourceIter.next();
+						while (sourceIter.hasNext())
+							sourceFiles.add(sourceIter.next().at(relPath));
+						forEach.accept(new CombinedFile(f.getName(), f.getPath(), Collections.unmodifiableList(sourceFiles)));
+					}
+				}, canceled);
+				sourceIndex++;
+			}
 		}
 
 		@Override
@@ -1072,11 +1189,18 @@ public class FileUtils {
 		}
 
 		@Override
-		public List<? extends BetterFile> listFiles() {
+		public List<? extends BetterFile> discoverContents(Consumer<? super BetterFile> onDiscovered, BooleanSupplier canceled) {
 			if (thePath.length == 1)
-				return Arrays.asList(theSource);
-			else
-				return Arrays.asList(new SubFile(theSource, ArrayUtils.remove(thePath, 0)));
+				return Collections.emptyList();
+			List<BetterFile> files = Arrays.asList(new SubFile(theSource, ArrayUtils.remove(thePath, 0)));
+			if (onDiscovered != null) {
+				for (BetterFile f : files) {
+					if (canceled != null && canceled.getAsBoolean())
+						return null;
+					onDiscovered.accept(f);
+				}
+			}
+			return files;
 		}
 
 		@Override
@@ -1085,7 +1209,7 @@ public class FileUtils {
 		}
 
 		@Override
-		public InputStream read() throws IOException {
+		public InputStream read(long startFrom, BooleanSupplier canceled) throws IOException {
 			throw new IOException(getName() + " is a directory");
 		}
 
@@ -1124,6 +1248,16 @@ public class FileUtils {
 		@Override
 		public BetterFile move(BetterFile newFile) {
 			return null;
+		}
+
+		@Override
+		public void visitAll(ExConsumer<? super BetterFile, IOException> forEach, BooleanSupplier canceled) throws IOException {
+			forEach.accept(this);
+			for (int i = 1; i < thePath.length; i++) {
+				if (canceled != null && canceled.getAsBoolean())
+					return;
+				forEach.accept(new SubFile(theSource, ArrayUtils.remove(thePath, 0)));
+			}
 		}
 
 		@Override
@@ -1203,7 +1337,7 @@ public class FileUtils {
 		}
 
 		@Override
-		public List<? extends BetterFile> listFiles() {
+		public List<? extends BetterFile> discoverContents(Consumer<? super BetterFile> onDiscovered, BooleanSupplier canceled) {
 			return theData == null ? Collections.emptyList() : null;
 		}
 
@@ -1213,10 +1347,12 @@ public class FileUtils {
 		}
 
 		@Override
-		public InputStream read() throws IOException {
+		public InputStream read(long startFrom, BooleanSupplier canceled) throws IOException {
 			if (theData == null)
 				throw new IOException("Not readable");
 			InputStream data = theData.get();
+			if (startFrom != 0)
+				data.skip(startFrom);
 			if (data == null)
 				throw new IOException("No such data found");
 			return data;
@@ -1257,6 +1393,11 @@ public class FileUtils {
 		@Override
 		public BetterFile move(BetterFile newFile) {
 			return null;
+		}
+
+		@Override
+		public void visitAll(ExConsumer<? super BetterFile, IOException> forEach, BooleanSupplier canceled) throws IOException {
+			forEach.accept(this);
 		}
 
 		@Override

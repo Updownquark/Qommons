@@ -702,6 +702,8 @@ public interface Format<T> {
 
 		@Override
 		public Double parse(CharSequence text) throws ParseException {
+			if (text.length() == 1 && text.charAt(0) == '?')
+				return Double.NaN;
 			StringBuilder prefix = new StringBuilder();
 			int baseIndex = theBaseUnit.length() - 1;
 			int i;
@@ -752,7 +754,7 @@ public interface Format<T> {
 			if (value == null)
 				text.append("");
 			else if (Double.isNaN(value))
-				text.append("NaN");
+				text.append("?");
 			else if (value.doubleValue() == Double.POSITIVE_INFINITY)
 				text.append("Infinity");
 			else if (value.doubleValue() == Double.NEGATIVE_INFINITY)

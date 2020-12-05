@@ -10,10 +10,13 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 import org.qommons.Named;
-import org.qommons.QommonsUtils;
+import org.qommons.ex.ExBiConsumer;
+import org.qommons.ex.ExConsumer;
 import org.qommons.io.FileUtils.DirectorySyncResults;
 
 public interface BetterFile extends Named {
@@ -53,20 +56,16 @@ public interface BetterFile extends Named {
 				try {
 					return BetterFile.at(theFileSource, text.toString());
 				} catch (IllegalArgumentException e) {
-					return theWorkingDir.at(text.toString());
+					if (theWorkingDir != null)
+						return theWorkingDir.at(text.toString());
+					throw e;
 				}
 			}
 		}
 	}
 
-	BetterFile getRoot();
-
-	BetterFile getParent();
-
 	/** @return The path from the file root to this file */
 	String getPath();
-
-	BetterFile at(String path);
 
 	/** @return Whether this file currently exists in the data source */
 	boolean exists();
@@ -81,17 +80,36 @@ public interface BetterFile extends Named {
 
 	boolean get(BetterFile.FileBooleanAttribute attribute);
 
-	/** @return The files contained in this directory, or null if this is not a directory */
-	List<? extends BetterFile> listFiles();
-
-	/** @return The number of bytes in this file, or 0 if it is not a valid, readable file */
+	/** @return The number of bytes in this file; 0 if it is not a valid, readable file; or -1 if the length cannot be quickly accessed */
 	long length();
+
+	BetterFile getRoot();
+
+	BetterFile getParent();
+
+	BetterFile at(String path);
+
+	List<? extends BetterFile> discoverContents(Consumer<? super BetterFile> onDiscovered, BooleanSupplier canceled);
+
+	/** @return The files contained in this directory, or null if this is not a directory */
+	default List<? extends BetterFile> listFiles() {
+		return discoverContents(null, null);
+	}
+
+	/**
+	 * @param startFrom The byte index to start reading from
+	 * @return A stream to read this file's content
+	 * @throws IOException If the content could not be accessed
+	 */
+	InputStream read(long startFrom, BooleanSupplier canceled) throws IOException;
 
 	/**
 	 * @return A stream to read this file's content
 	 * @throws IOException If the content could not be accessed
 	 */
-	InputStream read() throws IOException;
+	default InputStream read() throws IOException {
+		return read(0L, null);
+	}
 
 	/**
 	 * Attempts to delete the file and all its sub-content, if any
@@ -132,6 +150,8 @@ public interface BetterFile extends Named {
 	 */
 	BetterFile move(BetterFile newFile);
 
+	void visitAll(ExConsumer<? super BetterFile, IOException> forEach, BooleanSupplier canceled) throws IOException;
+
 	default BetterFile unmodifiable() {
 		return new UnmodifiableFile(this);
 	}
@@ -140,7 +160,7 @@ public interface BetterFile extends Named {
 	 * @param childFilter The filter to apply
 	 * @return A file identical to this file but whose {@link #listFiles() file list} will exclude files not passing the given filter
 	 */
-	default BetterFile filterContent(Predicate<BetterFile> childFilter) {
+	default BetterFile filterContent(Predicate<? super BetterFile> childFilter) {
 		return new FilteredFile(this, childFilter);
 	}
 
@@ -196,35 +216,42 @@ public interface BetterFile extends Named {
 	}
 
 	public interface FileBacking extends Named {
+		/**
+		 * Performs a check on this file to see if it may have changed.
+		 * 
+		 * @return True if this backing is still consistent with the file, or false if the backing needs to be regenerated
+		 */
 		boolean check();
-	
+
 		boolean isRoot();
-	
+
 		boolean exists();
-	
+
 		long getLastModified();
-	
+
 		boolean get(FileBooleanAttribute attribute);
-	
-		List<? extends FileBacking> listFiles();
-	
+
+		boolean discoverContents(Consumer<? super FileBacking> onDiscovered, BooleanSupplier canceled);
+
 		FileBacking getChild(String fileName);
-	
+
 		long length();
-	
-		InputStream read() throws IOException;
+
+		InputStream read(long startFrom, BooleanSupplier canceled) throws IOException;
 
 		FileBacking createChild(String fileName, boolean directory) throws IOException;
-	
+
 		boolean delete(DirectorySyncResults results);
-	
+
 		OutputStream write() throws IOException;
-	
+
 		boolean set(BetterFile.FileBooleanAttribute attribute, boolean value, boolean ownerOnly);
-	
+
 		boolean setLastModified(long lastModified);
 
 		boolean move(String newFilePath);
+
+		void visitAll(ExBiConsumer<? super FileBacking, CharSequence, IOException> forEach, BooleanSupplier canceled) throws IOException;
 	}
 
 	public interface FileDataSource {
@@ -280,7 +307,7 @@ public interface BetterFile extends Named {
 		}
 	
 		@Override
-		public BetterFile at(String path) {
+		public AbstractWrappingFile at(String path) {
 			StringBuilder name = new StringBuilder();
 			AbstractWrappingFile parent = this;
 			for (int c = 0; c < path.length(); c++) {
@@ -319,16 +346,21 @@ public interface BetterFile extends Named {
 		}
 	
 		@Override
-		public List<? extends BetterFile> listFiles() {
+		public List<? extends BetterFile> discoverContents(Consumer<? super BetterFile> onDiscovered, BooleanSupplier canceled) {
 			FileBacking backing = check();
 			if (backing == null)
+				return Collections.emptyList();
+			List<BetterFile> list = new ArrayList<>();
+			if (!backing.discoverContents(b -> {
+				BetterFile file = createChild(b.getName(), b);
+				list.add(file);
+				if (onDiscovered != null)
+					onDiscovered.accept(file);
+			}, canceled != null ? canceled : () -> false))
 				return null;
-			List<? extends FileBacking> list = backing.listFiles();
-			if (list == null)
-				return null;
-			return QommonsUtils.map(list, b -> createChild(b.getName(), b), true);
+			return Collections.unmodifiableList(list);
 		}
-	
+
 		@Override
 		public long length() {
 			FileBacking backing = check();
@@ -336,11 +368,11 @@ public interface BetterFile extends Named {
 		}
 	
 		@Override
-		public InputStream read() throws IOException {
+		public InputStream read(long startFrom, BooleanSupplier canceled) throws IOException {
 			FileBacking backing = check();
 			if (backing == null)
 				throw new FileNotFoundException(getPath() + " not found");
-			return backing.read();
+			return backing.read(startFrom, canceled != null ? canceled : () -> false);
 		}
 
 		@Override
@@ -388,6 +420,19 @@ public interface BetterFile extends Named {
 			if (backing == null || !backing.move(newFile.getPath()))
 				return null;
 			return at(newFile.getPath());
+		}
+
+		@Override
+		public void visitAll(ExConsumer<? super BetterFile, IOException> forEach, BooleanSupplier canceled) throws IOException {
+			FileBacking backing = check();
+			if (backing == null) {
+				forEach.accept(this);
+				return;
+			}
+			backing.visitAll((f, path) -> {
+				AbstractWrappingFile parent = path.length() > 0 ? at(path.toString()) : this;
+				forEach.accept(parent.createChild(f.getName(), f));
+			}, canceled != null ? canceled : () -> false);
 		}
 
 		@Override
@@ -465,7 +510,6 @@ public interface BetterFile extends Named {
 	public class FileWrapper extends AbstractWrappingFile {
 		private final AbstractWrappingFile theParent;
 		private final String theName;
-		private FileBacking theBacking;
 	
 		public FileWrapper(AbstractWrappingFile parent, String name, FileBacking backing) {
 			theParent = parent;
@@ -517,9 +561,9 @@ public interface BetterFile extends Named {
 
 	class FilteredFile implements BetterFile {
 		private final BetterFile theSource;
-		private final Predicate<BetterFile> theFilter;
+		private final Predicate<? super BetterFile> theFilter;
 	
-		FilteredFile(BetterFile source, Predicate<BetterFile> filter) {
+		FilteredFile(BetterFile source, Predicate<? super BetterFile> filter) {
 			theSource = source;
 			theFilter = filter;
 		}
@@ -560,18 +604,20 @@ public interface BetterFile extends Named {
 		}
 	
 		@Override
-		public List<? extends BetterFile> listFiles() {
-			List<? extends BetterFile> list = theSource.listFiles();
-			if (list == null)
-				return list;
-			List<BetterFile> filtered = new ArrayList<>(list.size());
-			for (BetterFile f : list) {
-				if (theFilter.test(f))
-					filtered.add(f);
-			}
-			return Collections.unmodifiableList(filtered);
+		public List<? extends BetterFile> discoverContents(Consumer<? super BetterFile> onDiscovered, BooleanSupplier canceled) {
+			List<BetterFile> files = new ArrayList<>();
+			if (theSource.discoverContents(file -> {
+				if (theFilter.test(file)) {
+					FilteredFile filteredFile = new FilteredFile(file, theFilter);
+					files.add(filteredFile);
+					if (onDiscovered != null)
+						onDiscovered.accept(filteredFile);
+				}
+			}, canceled) == null)
+				return null;
+			return Collections.unmodifiableList(files);
 		}
-	
+
 		@Override
 		public long length() {
 			return theSource.length();
@@ -583,8 +629,8 @@ public interface BetterFile extends Named {
 		}
 	
 		@Override
-		public InputStream read() throws IOException {
-			return theSource.read();
+		public InputStream read(long startFrom, BooleanSupplier canceled) throws IOException {
+			return theSource.read(startFrom, canceled);
 		}
 	
 		@Override
@@ -628,6 +674,14 @@ public interface BetterFile extends Named {
 			if (newSourceFile == null)
 				return null;
 			return new FilteredFile(newSourceFile, theFilter);
+		}
+
+		@Override
+		public void visitAll(ExConsumer<? super BetterFile, IOException> forEach, BooleanSupplier canceled) throws IOException {
+			theSource.visitAll(f -> {
+				if (theFilter.test(f))
+					forEach.accept(f);
+			}, canceled);
 		}
 
 		@Override
@@ -698,14 +752,16 @@ public interface BetterFile extends Named {
 		}
 
 		@Override
-		public List<? extends BetterFile> listFiles() {
-			List<? extends BetterFile> children = theSource.listFiles();
-			if (children == null)
+		public List<? extends BetterFile> discoverContents(Consumer<? super BetterFile> onDiscovered, BooleanSupplier canceled) {
+			List<BetterFile> files = new ArrayList<>();
+			if (theSource.discoverContents(file -> {
+				UnmodifiableFile umodFile = new UnmodifiableFile(file);
+				files.add(umodFile);
+				if (onDiscovered != null)
+					onDiscovered.accept(umodFile);
+			}, canceled) == null)
 				return null;
-			List<BetterFile> mapped = new ArrayList<>(children.size());
-			for (BetterFile f : children)
-				mapped.add(new UnmodifiableFile(f));
-			return Collections.unmodifiableList(mapped);
+			return Collections.unmodifiableList(files);
 		}
 
 		@Override
@@ -714,8 +770,8 @@ public interface BetterFile extends Named {
 		}
 
 		@Override
-		public InputStream read() throws IOException {
-			return theSource.read();
+		public InputStream read(long startFrom, BooleanSupplier canceled) throws IOException {
+			return theSource.read(startFrom, canceled);
 		}
 
 		@Override
@@ -760,6 +816,13 @@ public interface BetterFile extends Named {
 		@Override
 		public BetterFile unmodifiable() {
 			return this;
+		}
+
+		@Override
+		public void visitAll(ExConsumer<? super BetterFile, IOException> forEach, BooleanSupplier canceled) throws IOException {
+			theSource.visitAll(f -> {
+				forEach.accept(new UnmodifiableFile(f));
+			}, canceled);
 		}
 
 		@Override
