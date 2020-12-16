@@ -302,6 +302,26 @@ public class CollectionUtils {
 		}
 
 		/**
+		 * Specifies that when common elements (in both the left and right lists) are encountered, the left value should be used with no
+		 * update
+		 * 
+		 * @param update Determines whether to fire an update on an element
+		 * @return This synchronizer
+		 */
+		public S commonUsesLeft(BiPredicate<? super L, ? super R> update) {
+			isReplacingCommon = false;
+			theCommonHandler = el -> {
+				if (update.test(el.getLeftValue(), el.getRightValue()))
+					return el.useValue(el.getLeftValue());
+				else
+					return el.preserve();
+			};
+
+			theCommonHandler = (ExFunction<? super ElementSyncInput<L, R>, ElementSyncAction, ? extends X>) PRESERVE_COMMON;
+			return (S) this;
+		}
+
+		/**
 		 * Specifies that when common elements (in both the left and right lists) are encountered, the mapped right value should be used
 		 * 
 		 * @param update Whether to update the left value of common elements when the map of the right value is identical to the left value
@@ -314,6 +334,26 @@ public class CollectionUtils {
 			theCommonHandler = el -> {
 				L mapped = theMap.apply(el.getRightValue());
 				if (update || el.getLeftValue() != mapped)
+					return el.useValue(mapped);
+				else
+					return el.preserve();
+			};
+			return (S) this;
+		}
+
+		/**
+		 * Specifies that when common elements (in both the left and right lists) are encountered, the mapped right value should be used
+		 * 
+		 * @param update Whether to update the left value of common elements when the map of the right value is identical to the left value
+		 * @return This synchronizer
+		 */
+		public S commonUsesRight(BiPredicate<? super L, ? super R> update) {
+			if (theMap == null)
+				throw new IllegalStateException("A mapping must be specified for the synchronizer if right values are to be used");
+			isReplacingCommon = false;
+			theCommonHandler = el -> {
+				L mapped = theMap.apply(el.getRightValue());
+				if (el.getLeftValue() != mapped || update.test(el.getLeftValue(), el.getRightValue()))
 					return el.useValue(mapped);
 				else
 					return el.preserve();
@@ -336,6 +376,19 @@ public class CollectionUtils {
 				} else
 					return commonUsesLeft();
 			} else
+				return commonUsesRight(update);
+		}
+
+		/**
+		 * @param left Whether to use the left or mapped right value when common elements (in both the left and right lists) are encountered
+		 * @param update Whether to update the left value when the map of the right value is identical to the left value (if
+		 *        <code>left==false</code>) or always (if <code>left==true</code>)
+		 * @return This synchronizer
+		 */
+		public S commonUses(boolean left, BiPredicate<? super L, ? super R> update) {
+			if (left)
+				return commonUsesLeft(update);
+			else
 				return commonUsesRight(update);
 		}
 
@@ -593,7 +646,7 @@ public class CollectionUtils {
 		 * @param order The order for the adjusted list
 		 * @throws X If the synchronizer throws an exception
 		 */
-		<X extends Throwable> void adjust(CollectionSynchronizerE<L, R, X> sync, AdjustmentOrder order) throws X;
+		<X extends Throwable> void adjust(CollectionSynchronizerE<L, ? super R, X> sync, AdjustmentOrder order) throws X;
 
 		/**
 		 * @param <X> An exception type that the mapping function may throw
@@ -639,7 +692,7 @@ public class CollectionUtils {
 	 * @param finder The function to find values from the right list in the left list
 	 * @return An adjustment detailing the synchronization goals and the ability to do the adjustment
 	 */
-	public static <L, R> CollectionAdjustment<L, R> synchronize(List<L> left, List<R> right, ElementFinder<L, ? super R> finder) {
+	public static <L, R> CollectionAdjustment<L, R> synchronize(List<L> left, List<? extends R> right, ElementFinder<L, ? super R> finder) {
 		int[] leftToRight = new int[left.size()];
 		int[] rightToLeft = new int[right.size()];
 		Arrays.fill(leftToRight, -1);
@@ -694,7 +747,8 @@ public class CollectionUtils {
 	 * @param equals Tests values from the left and right lists for equality
 	 * @return An adjustment detailing the synchronization goals and the ability to do the adjustment
 	 */
-	public static <L, R> CollectionAdjustment<L, R> synchronize(List<L> left, List<R> right, BiPredicate<? super L, ? super R> equals) {
+	public static <L, R> CollectionAdjustment<L, R> synchronize(List<L> left, List<? extends R> right,
+		BiPredicate<? super L, ? super R> equals) {
 		return synchronize(left, right, new ElementFinder<L, R>() {
 			@Override
 			public int findElement(List<L> list, R value, int after) {
@@ -830,7 +884,7 @@ public class CollectionUtils {
 		};
 
 		final List<L> theLeft;
-		final List<R> theRight;
+		final List<? extends R> theRight;
 		final int[] leftToRight;
 		final int[] rightToLeft;
 		final int rightOnly;
@@ -839,7 +893,8 @@ public class CollectionUtils {
 		private boolean adjusted;
 		boolean debug;
 
-		public AdjustmentImpl(List<L> left, List<R> right, int[] leftToRight, int[] rightToLeft, int add, int remove, int common) {
+		public AdjustmentImpl(List<L> left, List<? extends R> right, int[] leftToRight, int[] rightToLeft, int add, int remove,
+			int common) {
 			theLeft = left;
 			theRight = right;
 			this.leftToRight = leftToRight;
@@ -865,19 +920,20 @@ public class CollectionUtils {
 		}
 
 		@Override
-		public <X extends Throwable> void adjust(CollectionSynchronizerE<L, R, X> sync, AdjustmentOrder order) throws X {
+		public <X extends Throwable> void adjust(CollectionSynchronizerE<L, ? super R, X> sync, AdjustmentOrder order) throws X {
 			debug = Debug.d().debug(this).is("debugging");
 			if (adjusted)
 				throw new IllegalStateException("Adjustment may only be done once");
 			adjusted = true;
 			AdjustmentState state = new AdjustmentState();
-			state.adjust(sync, order);
+			// This cast is safe, because R-typed values are only returned, no accepting methods exist
+			state.adjust((CollectionSynchronizerE<L, R, X>) sync, order);
 		}
 
 		class AdjustmentState {
 			SyncInputImpl<L, R> input;
 			ListIterator<L> leftIter;
-			Iterator<R> rightIter;
+			Iterator<? extends R> rightIter;
 			boolean hasLeft;
 			int leftIndex;
 			L leftVal;
