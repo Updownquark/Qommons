@@ -442,7 +442,8 @@ public class ListenerList<E> {
 		RunLastNode runLast = null;
 		Node remove = theTerminal.next;
 		do {
-			if (remove == theTerminal) {} else if (remove instanceof ListenerList.RunLastNode) {
+			if (remove == theTerminal) {//
+			} else if (remove instanceof ListenerList.RunLastNode) {
 				if (runLast == null)
 					runLast = (RunLastNode) remove;
 				remove = remove.next;
@@ -471,6 +472,7 @@ public class ListenerList<E> {
 					if (System.currentTimeMillis() > start + waitTime)
 						return null;
 				}
+				remove = theTerminal.next;
 			}
 		} while (wait);
 		return null;
