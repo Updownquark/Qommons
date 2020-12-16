@@ -200,8 +200,8 @@ public interface SpinnerFormat<T> extends Format<T> {
 		TimeUtils.DateElementType maxResolution, boolean militaryTime) {
 		return SpinnerFormat.<TimeUtils.ParsedTime, Instant> wrapAdjustable(
 			forAdjustable(text -> TimeUtils.parseFlexFormatTime(text, timeZone, true, true)), //
-			time -> time.evaluate(Instant::now),
-			instant -> TimeUtils.asFlexTime(instant, timeZone, dayFormat, maxResolution, militaryTime));
+			time -> time == null ? null : time.evaluate(Instant::now),
+			instant -> instant == null ? null : TimeUtils.asFlexTime(instant, timeZone, dayFormat, maxResolution, militaryTime));
 	}
 
 	/**
