@@ -2,66 +2,56 @@ package org.qommons.io;
 
 import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
-import java.util.Arrays;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.FileTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
-import org.qommons.QommonsUtils;
 import org.qommons.ex.ExBiConsumer;
 import org.qommons.io.BetterFile.FileBacking;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
 import org.qommons.io.FileUtils.DirectorySyncResults;
 
 public class NativeFileSource implements BetterFile.FileDataSource {
-	private final List<File> theRoots;
+	private final FileSystem theFileSystem;
 
 	public NativeFileSource() {
-		this(File.listRoots());
+		this(FileSystems.getDefault());
 	}
 
-	public NativeFileSource(File... roots) {
-		theRoots = Collections.unmodifiableList(Arrays.asList(roots));
+	public NativeFileSource(FileSystem fileSystem) {
+		theFileSystem = fileSystem;
 	}
 
-	public List<File> getRootFiles() {
-		return theRoots;
+	public FileSystem getFileSystem() {
+		return theFileSystem;
 	}
 
 	@Override
 	public List<BetterFile.FileBacking> getRoots() {
-		return QommonsUtils.map(theRoots, r -> new NativeFileBacking(null, r), true);
+		List<BetterFile.FileBacking> roots = new ArrayList<>();
+		for (Path root : theFileSystem.getRootDirectories())
+			roots.add(new NativeFileBacking(null, root));
+		return Collections.unmodifiableList(roots);
 	}
 
 	public BetterFile toBetter(File file) {
-		for (int r = 0; r < theRoots.size(); r++) {
-			File root = theRoots.get(r);
-			if (!file.getPath().startsWith(root.getPath()))
-				throw new IllegalArgumentException(file + " is not under " + root);
-			BetterFile.FileRoot rootFile = new BetterFile.FileRoot(this, r);
-			if (file.equals(rootFile))
-				return rootFile;
-			else if (file.getPath().charAt(rootFile.getPath().length()) != '/'
-				&& file.getPath().charAt(rootFile.getPath().length()) != '\\')
-				throw new IllegalArgumentException(file + " is not under " + rootFile);
-			return rootFile.at(file.getPath().substring(rootFile.getPath().length() + 1));
-		}
-		throw new IllegalArgumentException("Unrecognized root for " + file);
+		return BetterFile.at(this, file.getAbsolutePath());
 	}
 	
 	public static BetterFile of(File file) {
-		int slash = file.getName().indexOf('/');
-		int otherSlash = file.getName().indexOf('\\');
-		if (slash < 0 || (otherSlash >= 0 && otherSlash < slash))
-			slash = otherSlash;
-		return BetterFile.at(new NativeFileSource(File.listRoots()), file.getAbsolutePath());
+		return of(file.getAbsolutePath());
 	}
 
 	public static BetterFile of(String filePath) {
@@ -70,22 +60,21 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 
 	class NativeFileBacking implements BetterFile.FileBacking {
 		private final NativeFileBacking theParent;
-		private final File theFile;
+		private final Path thePath;
 		private final String theName;
 
-		NativeFileBacking(NativeFileBacking parent, File file) {
+		NativeFileBacking(NativeFileBacking parent, Path path) {
 			theParent = parent;
-			theFile = file;
-			String name = file.getName();
-			if (name.length() == 0)
-				name = file.getPath();
+			thePath = path;
+			Path fileName = path.getFileName();
+			String name = fileName != null ? fileName.toString() : path.toString();
 			if (name.length() > 1 && (name.charAt(name.length() - 1) == '/' || name.charAt(name.length() - 1) == '\\'))
 				name = name.substring(0, name.length() - 1);
 			theName = name;
 		}
 
-		public File getFile() {
-			return theFile;
+		public Path getPath() {
+			return thePath;
 		}
 
 		@Override
@@ -95,46 +84,58 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public boolean isRoot() {
-			return theRoots.contains(theFile);
+			return thePath.getNameCount() == 1;
 		}
 
 		@Override
 		public boolean exists() {
-			return theFile.exists();
+			return Files.exists(thePath);
 		}
 
 		@Override
 		public long getLastModified() {
-			return theFile.lastModified();
+			try {
+				return Files.getLastModifiedTime(thePath).toMillis();
+			} catch (IOException e) {
+				return 0;
+			}
 		}
 
 		@Override
 		public boolean get(FileBooleanAttribute attribute) {
 			switch (attribute) {
 			case Directory:
-				return theFile.isDirectory();
+				return Files.isDirectory(thePath);
 			case Hidden:
-				return theFile.isHidden();
+				try {
+					return Files.isHidden(thePath);
+				} catch (IOException e) {
+					return false;
+				}
 			case Readable:
-				return theFile.canRead();
+				return Files.isReadable(thePath);
 			case Writable:
-				return theFile.canWrite();
+				return Files.isWritable(thePath);
 			case Symbolic:
-				return Files.isSymbolicLink(theFile.toPath());
+				return Files.isSymbolicLink(thePath);
 			}
 			throw new IllegalStateException("" + attribute);
 		}
 
 		@Override
 		public long length() {
-			return theFile.length();
+			try {
+				return Files.size(thePath);
+			} catch (IOException e) {
+				return 0;
+			}
 		}
 
 		@Override
 		public InputStream read(long startFrom, BooleanSupplier canceled) throws IOException {
 			if (canceled.getAsBoolean())
 				return null;
-			FileInputStream stream = new FileInputStream(theFile);
+			InputStream stream = Files.newInputStream(thePath, StandardOpenOption.READ);
 			if (startFrom > 0)
 				stream.skip(startFrom);
 			return new BufferedInputStream(stream);
@@ -147,66 +148,92 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public boolean discoverContents(Consumer<? super FileBacking> onDiscovered, BooleanSupplier canceled) {
-			java.io.File[] list = theFile.listFiles();
-			if (list == null)
-				return true;
-			for (java.io.File f : list) {
-				if (canceled.getAsBoolean())
-					return false;
-				onDiscovered.accept(new NativeFileBacking(this, f));
+			boolean[] canceledB = new boolean[1];
+			try {
+				Files.newDirectoryStream(thePath).forEach(f -> {
+					if (canceled.getAsBoolean()) {
+						canceledB[0] = true;
+						return;
+					}
+					onDiscovered.accept(new NativeFileBacking(this, f));
+				});
+			} catch (IOException e) {
+				e.printStackTrace();
+				return false;
 			}
-			return true;
+			return !canceledB[0];
 		}
 
 		@Override
 		public BetterFile.FileBacking getChild(String fileName) {
-			return new NativeFileBacking(this, new java.io.File(theFile, fileName));
+			return new NativeFileBacking(this, thePath.resolve(fileName));
 		}
 
 		@Override
 		public BetterFile.FileBacking createChild(String fileName, boolean directory) throws IOException {
-			java.io.File file = new java.io.File(theFile, fileName);
-			if (file.exists()) {
-				if (file.isDirectory() != directory)
-					throw new IOException(file.getPath() + " already exists as a " + (directory ? "file" : "directory"));
+			Path file = thePath.resolve(fileName);
+			if (Files.exists(thePath)) {
+				if (Files.isDirectory(thePath) != directory)
+					throw new IOException(file + " already exists as a " + (directory ? "file" : "directory"));
 				return new NativeFileBacking(this, file);
-			} else if (directory && !file.mkdirs())
-				throw new IOException("Could not create " + file.getPath());
-			else if (!directory && !file.createNewFile())
-				throw new IOException("Could not create " + file.getPath());
+			}
+			if (directory)
+				Files.createDirectories(file);
+			else
+				Files.createFile(file);
 			return new NativeFileBacking(this, file);
 		}
 
 		@Override
-		public boolean delete(DirectorySyncResults results) {
-			return NativeFileSource.delete(theFile, results);
+		public void delete(DirectorySyncResults results) throws IOException {
+			Files.deleteIfExists(thePath);
 		}
 
 		@Override
 		public OutputStream write() throws IOException {
-			return new FileOutputStream(theFile);
+			return Files.newOutputStream(thePath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		}
 
 		@Override
 		public boolean set(FileBooleanAttribute attribute, boolean value, boolean ownerOnly) {
 			switch (attribute) {
 			case Directory:
-				if (theFile.exists())
-					return value == theFile.isDirectory();
-				else if (value)
-					return theFile.mkdirs();
-				else
+				if (Files.exists(thePath))
+					return value == Files.isDirectory(thePath);
+				else if (value) {
 					try {
-						return theFile.createNewFile();
+						Files.createDirectories(thePath);
+						return true;
 					} catch (IOException e) {
 						return false;
 					}
+				} else {
+					try {
+						Files.createFile(thePath);
+						return true;
+					} catch (IOException e) {
+						return false;
+					}
+				}
 			case Hidden:
-				return theFile.isHidden() == value;
+				try {
+					if (Files.isHidden(thePath) == value)
+						return true;
+				} catch (IOException e) {
+					return false;
+				}
+				try {
+					Files.setAttribute(thePath, "dos:hidden", true);
+					return true;
+				} catch (IOException e) {
+					return false;
+				}
 			case Readable:
-				return theFile.setReadable(value, ownerOnly);
+				if (Files.isReadable(thePath) == value)
+					return true;
+				return thePath.toFile().setReadable(value, ownerOnly);
 			case Writable:
-				return theFile.setWritable(value, ownerOnly);
+				return thePath.toFile().setWritable(value, ownerOnly);
 			case Symbolic:
 				return false;
 			}
@@ -215,12 +242,17 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public boolean setLastModified(long lastModified) {
-			return theFile.setLastModified(lastModified);
+			try {
+				Files.setLastModifiedTime(thePath, FileTime.fromMillis(lastModified));
+				return true;
+			} catch (IOException e) {
+				return false;
+			}
 		}
 
 		@Override
-		public boolean move(String newFilePath) {
-			return theFile.renameTo(new File(newFilePath));
+		public void move(String newFilePath) throws IOException {
+			Files.move(thePath, Paths.get(newFilePath));
 		}
 
 		@Override
@@ -235,11 +267,10 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 			if (canceled.getAsBoolean())
 				return;
 			forEach.accept(this, path);
-			java.io.File[] children = theFile.listFiles();
-			if (children == null || children.length == 0)
+			if (!Files.exists(thePath))
 				return;
 			int oldLen = path.length();
-			for (java.io.File f : children) {
+			for (Path f : Files.newDirectoryStream(thePath)) {
 				if (canceled.getAsBoolean())
 					return;
 				path.append(getName()).append('/');
@@ -250,37 +281,17 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public int hashCode() {
-			return theFile.hashCode();
+			return thePath.hashCode();
 		}
 
 		@Override
 		public boolean equals(Object obj) {
-			return obj instanceof NativeFileBacking && theFile.equals(((NativeFileBacking) obj).theFile);
+			return obj instanceof NativeFileBacking && thePath.equals(((NativeFileBacking) obj).thePath);
 		}
 
 		@Override
 		public String toString() {
-			return theFile.toString();
+			return thePath.toString();
 		}
-	}
-
-	private static boolean delete(java.io.File file, DirectorySyncResults results) {
-		if (!file.exists()) {
-			return true;
-		}
-		if (file.isDirectory() && !Files.isSymbolicLink(file.toPath())) {
-			if (results != null) {
-				results.deleted(true);
-			}
-			java.io.File[] contents = file.listFiles();
-			for (java.io.File f : contents) {
-				if (!delete(f, results)) {
-					return false;
-				}
-			}
-		} else if (results != null) {
-			results.deleted(false);
-		}
-		return file.delete();
 	}
 }

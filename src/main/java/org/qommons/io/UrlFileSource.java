@@ -187,8 +187,8 @@ public class UrlFileSource implements FileDataSource {
 		}
 
 		@Override
-		public boolean delete(DirectorySyncResults results) {
-			return false;
+		public void delete(DirectorySyncResults results) throws IOException {
+			throw new IOException("Cannot delete a URL");
 		}
 
 		@Override
@@ -207,8 +207,8 @@ public class UrlFileSource implements FileDataSource {
 		}
 
 		@Override
-		public boolean move(String newFilePath) {
-			return false;
+		public void move(String newFilePath) throws IOException {
+			throw new IOException("Cannot move a URL");
 		}
 
 		@Override

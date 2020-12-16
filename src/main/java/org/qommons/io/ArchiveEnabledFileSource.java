@@ -296,8 +296,8 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public boolean delete(DirectorySyncResults results) {
-			return false;
+		public void delete(DirectorySyncResults results) throws IOException {
+			throw new IOException("Cannot delete zip entries this way");
 		}
 
 		@Override
@@ -316,8 +316,8 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public boolean move(String newFilePath) {
-			return false;
+		public void move(String newFilePath) throws IOException {
+			throw new IOException("Cannot move archive entries");
 		}
 
 		@Override
@@ -443,8 +443,8 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public boolean delete(DirectorySyncResults results) {
-			return false;
+		public void delete(DirectorySyncResults results) throws IOException {
+			throw new IOException("Cannot delete zip entries this way");
 		}
 
 		@Override
@@ -463,8 +463,8 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public boolean move(String newFilePath) {
-			return false;
+		public void move(String newFilePath) throws IOException {
+			throw new IOException("Cannot move archive entries");
 		}
 
 		@Override
@@ -573,8 +573,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public boolean delete(DirectorySyncResults results) {
-			return true;
+		public void delete(DirectorySyncResults results) throws IOException {
 		}
 
 		@Override
@@ -593,8 +592,8 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public boolean move(String newFilePath) {
-			return false;
+		public void move(String newFilePath) throws IOException {
+			throw new IOException("No such archive entry");
 		}
 
 		@Override
@@ -1342,7 +1341,18 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		@Override
 		public InputStream read(FileBacking file, ArchiveEntry entry, long startFrom, BooleanSupplier canceled) throws IOException {
 			InputStream fileIn = file.read(0, canceled);
-			return fileIn == null ? null : new GZIPInputStream(fileIn);
+			InputStream gzIn = fileIn == null ? null : new GZIPInputStream(fileIn);
+			if (startFrom > 0) {
+				long skipped = gzIn.skip(startFrom);
+				long totalSkipped = skipped;
+				while (totalSkipped < startFrom && skipped >= 0) {
+					skipped = gzIn.skip(startFrom - totalSkipped);
+					totalSkipped += skipped;
+				}
+				if (skipped < 0)
+					throw new IOException("Could not skip to " + startFrom);
+			}
+			return gzIn;
 		}
 
 		static class GZipRoot implements ArchiveEntry {

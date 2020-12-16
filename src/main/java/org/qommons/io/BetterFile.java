@@ -115,9 +115,9 @@ public interface BetterFile extends Named {
 	 * Attempts to delete the file and all its sub-content, if any
 	 * 
 	 * @param results The results to update with the result of this operation
-	 * @return Whether the deletion succeeded
+	 * @throws IOException If this file could not be deleted
 	 */
-	boolean delete(DirectorySyncResults results);
+	void delete(DirectorySyncResults results) throws IOException;
 
 	/**
 	 * Attempts to create this resource as a file or a directory (and any necessary parent directories)
@@ -146,9 +146,10 @@ public interface BetterFile extends Named {
 	 * Attempts to move and/or rename this file
 	 * 
 	 * @param newFile The new name and location for this file
-	 * @return If the move/rename succeeded, the new file. Otherwise null.
+	 * @return The new file
+	 * @throws IOException If the move did not succeed
 	 */
-	BetterFile move(BetterFile newFile);
+	BetterFile move(BetterFile newFile) throws IOException;
 
 	void visitAll(ExConsumer<? super BetterFile, IOException> forEach, BooleanSupplier canceled) throws IOException;
 
@@ -241,7 +242,7 @@ public interface BetterFile extends Named {
 
 		FileBacking createChild(String fileName, boolean directory) throws IOException;
 
-		boolean delete(DirectorySyncResults results);
+		void delete(DirectorySyncResults results) throws IOException;
 
 		OutputStream write() throws IOException;
 
@@ -249,7 +250,7 @@ public interface BetterFile extends Named {
 
 		boolean setLastModified(long lastModified);
 
-		boolean move(String newFilePath);
+		void move(String newFilePath) throws IOException;
 
 		void visitAll(ExBiConsumer<? super FileBacking, CharSequence, IOException> forEach, BooleanSupplier canceled) throws IOException;
 	}
@@ -282,7 +283,7 @@ public interface BetterFile extends Named {
 		}
 	
 		@Override
-		public abstract AbstractWrappingFile getRoot();
+		public abstract FileRoot getRoot();
 	
 		@Override
 		public abstract AbstractWrappingFile getParent();
@@ -376,11 +377,11 @@ public interface BetterFile extends Named {
 		}
 
 		@Override
-		public boolean delete(DirectorySyncResults results) {
+		public void delete(DirectorySyncResults results) throws IOException {
 			FileBacking backing = check();
 			if (backing == null)
-				return true;
-			return backing.delete(results);
+				return;
+			backing.delete(results);
 		}
 
 		@Override
@@ -413,12 +414,13 @@ public interface BetterFile extends Named {
 		}
 
 		@Override
-		public BetterFile move(BetterFile newFile) {
+		public BetterFile move(BetterFile newFile) throws IOException {
 			if (getPath().equals(newFile))
 				return this;
 			FileBacking backing = check();
-			if (backing == null || !backing.move(newFile.getPath()))
+			if (backing == null)
 				return null;
+			backing.move(newFile.getPath());
 			return at(newFile.getPath());
 		}
 
@@ -468,6 +470,10 @@ public interface BetterFile extends Named {
 			theRootIndex = rootIndex;
 		}
 
+		protected BetterFile.FileDataSource getDataSource() {
+			return theDataSource;
+		}
+
 		@Override
 		protected FileBacking check() {
 			FileBacking backing = super.check();
@@ -497,7 +503,7 @@ public interface BetterFile extends Named {
 		}
 
 		@Override
-		public BetterFile.AbstractWrappingFile getRoot() {
+		public FileRoot getRoot() {
 			return this;
 		}
 
@@ -512,6 +518,8 @@ public interface BetterFile extends Named {
 		private final String theName;
 	
 		public FileWrapper(AbstractWrappingFile parent, String name, FileBacking backing) {
+			if (parent == null)
+				throw new IllegalStateException("This implementation cannot be used for a root");
 			theParent = parent;
 			theName = name;
 			theBacking = backing;
@@ -544,13 +552,11 @@ public interface BetterFile extends Named {
 		}
 	
 		@Override
-		public AbstractWrappingFile getRoot() {
-			if (theParent == null)
-				return this;
+		public FileRoot getRoot() {
 			AbstractWrappingFile parent = theParent;
 			while (parent.getParent() != null)
 				parent = parent.getParent();
-			return parent;
+			return (FileRoot) parent;
 		}
 	
 		@Override
@@ -639,8 +645,8 @@ public interface BetterFile extends Named {
 		}
 
 		@Override
-		public boolean delete(DirectorySyncResults results) {
-			return theSource.delete(results);
+		public void delete(DirectorySyncResults results) throws IOException {
+			theSource.delete(results);
 		}
 
 		@Override
@@ -665,7 +671,7 @@ public interface BetterFile extends Named {
 		}
 
 		@Override
-		public BetterFile move(BetterFile newFile) {
+		public BetterFile move(BetterFile newFile) throws IOException {
 			String path = newFile.getPath();
 			BetterFile newSourceFile = theSource.getParent().at(path);
 			if (!theFilter.test(newFile))
@@ -780,8 +786,9 @@ public interface BetterFile extends Named {
 		}
 
 		@Override
-		public boolean delete(DirectorySyncResults results) {
-			return false;
+		public void delete(DirectorySyncResults results) throws IOException {
+			if (theSource.exists())
+				throw new IOException("Deletion not allowed");
 		}
 
 		@Override

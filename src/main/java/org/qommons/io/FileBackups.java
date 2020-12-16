@@ -171,7 +171,12 @@ public class FileBackups {
 
 		Instant now = Instant.now();
 		while (lastValid >= 0 && needsPurge(count, totalSize, TimeUtils.between(backupTimes[lastValid], now))) {
-			getBackup(backupTimes[lastValid]).delete(null);
+			try {
+				getBackup(backupTimes[lastValid]).delete(null);
+			} catch (IOException e) {
+				System.err.println("Could not delete backup " + getBackup(backupTimes[lastValid]));
+				e.printStackTrace();
+			}
 			totalSize -= sizes[lastValid];
 			lastValid--;
 		}
@@ -222,8 +227,15 @@ public class FileBackups {
 		List<? extends BetterFile> files = theDirectory.listFiles();
 		for (BetterFile file : files) {
 			Instant backupTime = oldBackup.getBackupTime(file.getName());
-			if (backupTime != null)
-				file.move(theDirectory.at(theTargetBackup.getBackupFileName(backupTime)));
+			if (backupTime != null) {
+				BetterFile target = theDirectory.at(theTargetBackup.getBackupFileName(backupTime));
+				try {
+					file.move(target);
+				} catch (IOException e) {
+					System.err.println("Could not move " + file.getPath() + " to " + target.getPath());
+					e.printStackTrace();
+				}
+			}
 		}
 	}
 

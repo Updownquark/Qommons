@@ -247,7 +247,7 @@ public class FileUtils {
 		String[] splitPath = new String[slashCount + 1];
 		slashCount = 0;
 		int lastSlash = -1;
-		for (int i = 0; i < path.length() - 1; i++) {
+		for (int i = 0; i < path.length(); i++) {
 			if (path.charAt(i) == '/' || path.charAt(i) == '\\') {
 				if (i > 0)
 					splitPath[slashCount++] = path.substring(lastSlash + 1, i);
@@ -395,8 +395,14 @@ public class FileUtils {
 			if (copy.exists() && copy.get(FileBooleanAttribute.Symbolic)) {//
 			} else if (authority.isDirectory()) {
 				results.checked(true);
-				if (copy.exists() && !copy.isDirectory() && !copy.delete(results)) {
-					throw new IOException("Could not delete file " + printPath(path) + " to replace it with the directory from OneSAF");
+				if (copy.exists() && !copy.isDirectory()) {
+					try {
+						copy.delete(results);
+					} catch (IOException e) {
+						throw new IOException(
+							"Could not delete file " + printPath(path) + " to replace it with the directory from " + theSource.getPath(),
+							e);
+					}
 				}
 				try {
 					copy.create(true);
@@ -439,8 +445,11 @@ public class FileUtils {
 							case DELETE:
 							case COPY:
 								path.add(o.getName());
-								if (!o.delete(results)) {
-									throw new IOException("Could not delete file " + printPath(path) + " that is not present in OneSAF");
+								try {
+									o.delete(results);
+								} catch (IOException e) {
+									throw new IOException(
+										"Could not delete file " + printPath(path) + " that is not present in " + theSource.getPath(), e);
 								}
 								path.removeLast();
 								break;
@@ -457,8 +466,11 @@ public class FileUtils {
 								break;
 							case DELETE:
 								path.add(o2.getName());
-								if (!o1.delete(results)) {
-									throw new IOException("Could not delete file " + printPath(path) + " that is not present in OneSAF");
+								try {
+									o1.delete(results);
+								} catch (IOException e) {
+									throw new IOException(
+										"Could not delete file " + printPath(path) + " that is not present in " + theSource.getPath(), e);
 								}
 								path.removeLast();
 								break;
@@ -470,8 +482,14 @@ public class FileUtils {
 					}).noCreate().adjust();
 			} else if (!copy.exists() || copy.isDirectory() || authority.getLastModified() != copy.getLastModified()) {
 				results.checked(false);
-				if (copy.isDirectory() && !copy.delete(results)) {
-					throw new IOException("Could not delete directory " + printPath(path) + ", to replace it with the file from OneSAF");
+				if (copy.isDirectory()) {
+					try {
+						copy.delete(results);
+					} catch (IOException e) {
+						throw new IOException(
+							"Could not delete directory " + printPath(path) + ", to replace it with the file from " + theSource.getPath(),
+							e);
+					}
 				} else if (copy.exists()) {
 					results.updated();
 				} else {
@@ -854,7 +872,12 @@ public class FileUtils {
 
 		@Override
 		public boolean delete() {
-			return theFile.delete(null);
+			try {
+				theFile.delete(null);
+				return true;
+			} catch (IOException e) {
+				return false;
+			}
 		}
 
 		@Override
@@ -1038,8 +1061,8 @@ public class FileUtils {
 		}
 
 		@Override
-		public boolean delete(DirectorySyncResults results) {
-			return false;
+		public void delete(DirectorySyncResults results) throws IOException {
+			throw new IOException("Deletion not allowed");
 		}
 
 		@Override
@@ -1220,8 +1243,8 @@ public class FileUtils {
 		}
 
 		@Override
-		public boolean delete(DirectorySyncResults results) {
-			return theSource.delete(results);
+		public void delete(DirectorySyncResults results) throws IOException {
+			theSource.delete(results);
 		}
 
 		@Override
@@ -1364,8 +1387,8 @@ public class FileUtils {
 		}
 
 		@Override
-		public boolean delete(DirectorySyncResults results) {
-			return false;
+		public void delete(DirectorySyncResults results) throws IOException {
+			throw new IOException("Deletion not allowed");
 		}
 
 		@Override
