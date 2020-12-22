@@ -123,7 +123,7 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 	 */
 	public QuickSet(Comparator<? super E> compare, E... keys) {
 		this.compare = compare;
-		theKeys = keys;
+		theKeys = keys.clone();
 		Arrays.sort(theKeys, (o1, o2) -> compare.compare((E) o1, (E) o2));
 		small = keys.length <= 10;
 	}
@@ -1082,6 +1082,21 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 			@Override
 			public V setValue(V value) {
 				return theMap.put(index, value);
+			}
+
+			@Override
+			public int hashCode() {
+				return getKey().hashCode();
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return obj instanceof Map.Entry && getKey().equals(((Map.Entry<?, ?>) obj).getKey());
+			}
+
+			@Override
+			public String toString() {
+				return getKey() + "=" + getValue();
 			}
 		}
 	}
