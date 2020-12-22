@@ -894,27 +894,38 @@ public class QommonsUtils {
 		return StringUtils.compareNumberTolerant(s1, s2, ignoreCase, onlyZeroIfEqual);
 	}
 
-	private static final Method PATTERN_NAMED_GROUPS_GETTER;
-	static {
-		Method getter;
-		try {
-			getter = Pattern.class.getDeclaredMethod("namedGroups");
-			getter.setAccessible(true);
-		} catch (NoSuchMethodException | SecurityException e) {
-			System.err.println("Could not get or access Pattern named group getter");
-			e.printStackTrace();
-			getter = null;
-		}
-		PATTERN_NAMED_GROUPS_GETTER = getter;
-	}
+	private static boolean checkedGroupsGetter;
+	private static Method PATTERN_NAMED_GROUPS_GETTER;
 
 	/**
+	 * <p>
+	 * Gets named capturing groups configured for a pattern.
+	 * </p>
+	 * <p>
+	 * <b>WARNING:</b>{@link Pattern} does not expose this information, so it must be reflected from a package-private method.
+	 * 
+	 * This will fail if security is set up against this. In this case, this method will throw an IlS
+	 * 
 	 * @param pattern The pattern
 	 * @return A map of the names of each named capture group in the pattern to the group index in the matcher
+	 * @throws IllegalStateException If the information cannot be accessed
 	 */
-	public static Map<String, Integer> getCaptureGroupNames(Pattern pattern) {
+	public static Map<String, Integer> getCaptureGroupNames(Pattern pattern) throws IllegalStateException {
 		if (PATTERN_NAMED_GROUPS_GETTER == null) {
-			System.err.println("Could not get or access Pattern named group getter");
+			if (!checkedGroupsGetter) {
+				checkedGroupsGetter = true;
+				Method getter;
+				try {
+					// Yes, I know this causes an "Illegal reflective access" warning. I can't help it.
+					// There's no other way to get this information.
+					getter = Pattern.class.getDeclaredMethod("namedGroups");
+					getter.setAccessible(true);
+				} catch (NoSuchMethodException | SecurityException e) {
+					throw new IllegalStateException("Could not get or access Pattern named group getter", e);
+				}
+				PATTERN_NAMED_GROUPS_GETTER = getter;
+			} else
+				throw new IllegalStateException("Could not get or access Pattern named group getter");
 			return Collections.emptyMap();
 		}
 		try {
