@@ -7,6 +7,7 @@ import java.io.EOFException;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -1562,7 +1563,6 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		@Override
 		public ArchiveEntry parseStructure(FileBacking file, ArchiveEntry existingRoot, Consumer<? super ArchiveEntry> onChild,
 			ExBiConsumer<ArchiveEntry, CharSequence, IOException> forEach, BooleanSupplier canceled) throws IOException {
-			// TODO Parse and interpret extension data
 			long len = file.length();
 			if (len >= 0 && len < 512) // Header is 512 bytes
 				throw new IOException("Not a tar file");
@@ -1570,6 +1570,8 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 			TarHeaderParser parser = new TarHeaderParser();
 			int entryIndex = 0;
 			Set<String> children = onChild != null ? new HashSet<>() : null;
+			ByteArrayOutputStream longNameBuffer = new ByteArrayOutputStream();
+			StringBuilder longName = new StringBuilder();
 			try (InputStream fileIn = file.read(0, canceled); CountingInputStream in = new CountingInputStream(fileIn)) {
 				if (fileIn == null)
 					return null;
@@ -1581,22 +1583,43 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 					if (header == null)
 						break;
 					boolean dir = header.fileType == '5' || header.name.charAt(header.name.length() - 1) == '/';
-					if (dir || header.fileType == 0 || header.fileType == '0') { // Don't deal with the wacky file types
-						String[] path = FileUtils.splitPath(header.name);
+					boolean readLength = false;
+					if (header.fileType == 'L') { // Long name entry
+						longNameBuffer.reset();
+						for (int i = 0, read = in.read(); i < header.size; i++) {
+							if (read < 0)
+								throw new IOException("Bad TAR header: EOF reached");
+							longNameBuffer.write(read);
+							if (i + 1 < header.size)
+								read = in.read();
+						}
+						readLength = true;
+					} else if (dir || header.fileType == 0 || header.fileType == '0') { // Don't deal with the wacky file types
+						String name;
+						if (longNameBuffer.size() > 0) {
+							InputStreamReader reader = new InputStreamReader(new ByteArrayInputStream(longNameBuffer.toByteArray()));
+							for (int read = reader.read(); read >= 0; read = reader.read())
+								longName.append((char) read);
+							name = longName.toString();
+							longName.setLength(0);
+						} else
+							name = header.name;
+						String[] path = FileUtils.splitPath(name);
 						DefaultArchiveEntry newEntry = root.add(path, 0, entryPos + 512, dir).fill(header.size, header.lastModified);
 						if (children != null && children.add(path[0])) {
 							onChild.accept(root.getFile(path[0]));
 						}
 						if (forEach != null) {
 							ArchiveEntry oldEntry = existingRoot != null ? ((DefaultArchiveEntry) existingRoot).at(path, 0) : null;
-							forEach.accept(oldEntry != null ? oldEntry : newEntry, header.name);
+							forEach.accept(oldEntry != null ? oldEntry : newEntry, name);
 						}
+						longNameBuffer.reset();
 					}
 					if (header.size > 0) {
 						if (canceled.getAsBoolean())
 							return null;
-						long toSkip = header.size;
-						int mod512 = (int) (toSkip % 512);
+						long toSkip = readLength ? 0 : header.size;
+						int mod512 = (int) (header.size % 512);
 						if (mod512 != 0)
 							toSkip += (512 - mod512);
 						long s = in.skip(toSkip);
@@ -1626,11 +1649,21 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 					return in;
 			}
 			InputStream fileIn = null;
+			long pos = ((DefaultArchiveEntry) entry).getPosition();
+			long len = entry.length();
+			boolean showFullEntry = false;
+			if (showFullEntry) {
+				pos -= 512;
+				len += 512;
+				long mod512 = len % 512;
+				if (mod512 != 0)
+					len += 512 - mod512;
+			}
 			if (entry instanceof DefaultArchiveEntry)
-				fileIn = file.read(((DefaultArchiveEntry) entry).getPosition(), canceled);
+				fileIn = file.read(pos, canceled);
 			else
 				fileIn = file.read(((VisitingEntry) entry).getPosition(), canceled);
-			return fileIn == null ? null : new CountingInputStream(fileIn, entry.length());
+			return fileIn == null ? null : new CountingInputStream(fileIn, len);
 		}
 	}
 

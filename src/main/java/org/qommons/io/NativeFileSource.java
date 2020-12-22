@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.RandomAccessFile;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -135,9 +136,37 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		public InputStream read(long startFrom, BooleanSupplier canceled) throws IOException {
 			if (canceled.getAsBoolean())
 				return null;
-			InputStream stream = Files.newInputStream(thePath, StandardOpenOption.READ);
-			if (startFrom > 0)
-				stream.skip(startFrom);
+			InputStream stream = null;
+			// More efficient to use RandomAccessFile if we can
+			try {
+				File file = thePath.toFile();
+				RandomAccessFile raf = new RandomAccessFile(file, "r");
+				raf.seek(startFrom);
+				stream = new RandomAccessFileStream(raf);
+			} catch (UnsupportedOperationException e) {
+				// Do it the standard way then
+			}
+			if (stream == null) {
+				stream = Files.newInputStream(thePath, StandardOpenOption.READ);
+				if (startFrom > 0) {
+					boolean success = false;
+					try {
+						long skipped = stream.skip(startFrom);
+						long totalSkipped = skipped;
+						while (skipped >= 0 && totalSkipped < startFrom) {
+							skipped = stream.skip(startFrom - totalSkipped);
+							totalSkipped += skipped;
+						}
+						if (skipped < 0)
+							throw new IOException("File is only " + Files.size(thePath) + " long, can't skip to " + startFrom);
+						else
+							success = true;
+					} finally {
+						if (!success)
+							stream.close();
+					}
+				}
+			}
 			return new BufferedInputStream(stream);
 		}
 
@@ -292,6 +321,84 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		@Override
 		public String toString() {
 			return thePath.toString();
+		}
+	}
+
+	public static class RandomAccessFileStream extends InputStream {
+		private final RandomAccessFile theFile;
+		private long theMark;
+
+		public RandomAccessFileStream(RandomAccessFile file) {
+			theFile = file;
+			theMark = -1;
+		}
+
+		@Override
+		public int read() throws IOException {
+			return theFile.read();
+		}
+
+		@Override
+		public int read(byte[] b) throws IOException {
+			return theFile.read(b);
+		}
+
+		@Override
+		public int read(byte[] b, int off, int len) throws IOException {
+			return theFile.read(b, off, len);
+		}
+
+		@Override
+		public long skip(long n) throws IOException {
+			theFile.seek(theFile.getFilePointer() + n);
+			return n;
+		}
+
+		@Override
+		public int available() throws IOException {
+			return 0;
+		}
+
+		@Override
+		public void close() throws IOException {
+			theFile.close();
+		}
+
+		@Override
+		public synchronized void mark(int readlimit) {
+			try {
+				theMark = theFile.getFilePointer();
+			} catch (IOException e) {
+				// The contract of this method doesn't allow us to throw anything
+				theMark = -1;
+			}
+		}
+
+		@Override
+		public synchronized void reset() throws IOException {
+			if (theMark < 0)
+				throw new IOException("No mark set");
+			theFile.seek(theMark);
+		}
+
+		@Override
+		public boolean markSupported() {
+			return true;
+		}
+
+		@Override
+		public int hashCode() {
+			return theFile.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof RandomAccessFileStream && theFile.equals(((RandomAccessFileStream) obj).theFile);
+		}
+
+		@Override
+		public String toString() {
+			return theFile.toString();
 		}
 	}
 }
