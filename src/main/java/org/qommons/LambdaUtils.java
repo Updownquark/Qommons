@@ -55,6 +55,14 @@ public class LambdaUtils {
 		return (Function<T, T>) IdentityFunction.INSTANCE;
 	}
 
+	public static Runnable printableRunnable(Runnable run, String print, Object identifier) {
+		return printableRunnable(run, print != null ? new ConstantSupply(print) : () -> String.valueOf(run), identifier);
+	}
+
+	public static Runnable printableRunnable(Runnable run, Supplier<String> print, Object identifier) {
+		return new PrintableRunnable(run, print != null ? print : () -> String.valueOf(run), identifier);
+	}
+
 	/**
 	 * @param <T> The type of value to test
 	 * @param pred The predicate doing the testing
@@ -553,6 +561,17 @@ public class LambdaUtils {
 		@Override
 		public String toString() {
 			return thePrint.get();
+		}
+	}
+
+	static class PrintableRunnable extends PrintableLambda<Runnable> implements Runnable {
+		PrintableRunnable(Runnable run, Supplier<String> print, Object identifier) {
+			super(run, print, identifier);
+		}
+
+		@Override
+		public void run() {
+			getLambda().run();
 		}
 	}
 
