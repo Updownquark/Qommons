@@ -19,6 +19,31 @@ public class TextParseException extends ParseException {
 		theColumnNumber = columnNumber;
 	}
 
+	/**
+	 * @param s The message for the exception
+	 * @param errorOffset The character offset of the error in the sequence
+	 * @param lineNumber The line number of the error in the sequence
+	 * @param columnNumber The character number of the error in the line
+	 * @param cause The cause of the exception
+	 */
+	public TextParseException(String s, int errorOffset, int lineNumber, int columnNumber, Throwable cause) {
+		super(s, errorOffset);
+		initCause(cause);
+		theLineNumber = lineNumber;
+		theColumnNumber = columnNumber;
+	}
+
+	/**
+	 * @param s The message for the exception
+	 * @param cause The cause of the exception
+	 */
+	public TextParseException(String s, TextParseException cause) {
+		super(s, cause.getErrorOffset());
+		initCause(cause);
+		theLineNumber = cause.getLineNumber();
+		theColumnNumber = cause.getColumnNumber();
+	}
+
 	/** @return The line number of the error in the sequence */
 	public int getLineNumber() {
 		return theLineNumber;
