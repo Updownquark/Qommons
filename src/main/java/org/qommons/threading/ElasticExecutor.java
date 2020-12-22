@@ -252,17 +252,21 @@ public class ElasticExecutor<T> {
 			theLock.notify();
 		}
 		newQueueSize = theQueueSize.get();
-		if (newQueueSize == 1) {
+		if (newQueueSize > thePreferredQueueSize) {
+			if (getActiveThreads() == getThreadCount()) {
+				int newId = theThreadCount.incrementAndGet();
+				if (newId <= theMaxThreadCount) {
+					if (!startThread(newId) && newId == 1) {
+						throw new IllegalStateException("Could not start first worker thread--task executor returned null");
+					}
+				} else
+					theThreadCount.decrementAndGet();
+			}
+		} else if (newQueueSize == 1) {
 			if (theThreadCount.incrementAndGet() == 1) {// Start the first thread
 				if (!startThread(1))
 					throw new IllegalStateException("Could not start first worker thread--task executor returned null");
 			} else
-				theThreadCount.decrementAndGet();
-		} else if (newQueueSize > thePreferredQueueSize && getActiveThreads() == getThreadCount()) {
-			int newId = theThreadCount.incrementAndGet();
-			if (newId <= theMaxThreadCount)
-				startThread(newId);
-			else
 				theThreadCount.decrementAndGet();
 		}
 		return true;
