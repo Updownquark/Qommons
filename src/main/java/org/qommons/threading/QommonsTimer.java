@@ -109,12 +109,24 @@ public class QommonsTimer {
 		private volatile long theExecCount;
 		private volatile TaskThreading theThreading;
 		private volatile boolean didOffloadFail;
+		final Runnable offloadTask;
 
 		TaskHandle(Runnable task, Duration frequency, boolean consistent) {
 			theTask = task;
 			isActive = new AtomicBoolean();
 			theThreading = TaskThreading.Any;
 			setFrequency(frequency, consistent);
+			offloadTask = new Runnable() {
+				@Override
+				public void run() {
+					execute();
+				}
+
+				@Override
+				public String toString() {
+					return TaskHandle.this.toString();
+				}
+			};
 		}
 
 		/** @return The timer that created this task */
@@ -200,9 +212,10 @@ public class QommonsTimer {
 		public TaskHandle runNextAt(Instant time) {
 			Instant nextRun = theNextRun;
 			theNextRun = time;
-			if (!isActive())
+			if (!isActive()) {
+				theRemainingExecCount = 1;
 				setActive(true);
-			else if (nextRun == null || time.compareTo(nextRun) < 0)
+			} else if (nextRun == null || time.compareTo(nextRun) < 0)
 				interruptScheduler();
 			return this;
 		}
@@ -353,6 +366,11 @@ public class QommonsTimer {
 				}
 			}
 			return this;
+		}
+
+		@Override
+		public String toString() {
+			return theTask.toString();
 		}
 
 		boolean shouldExecute(Instant now, Instant[] minNextRun) {
@@ -651,7 +669,7 @@ public class QommonsTimer {
 						handle.execute();
 						break;
 					case EDT:
-						EventQueue.invokeLater(handle::execute);
+						EventQueue.invokeLater(handle.offloadTask);
 						break;
 					case Any:
 						if (!theAccessoryRunner.apply(handle::execute)) {
