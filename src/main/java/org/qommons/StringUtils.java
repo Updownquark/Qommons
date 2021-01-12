@@ -202,6 +202,36 @@ public class StringUtils {
 		return into;
 	}
 
+	private static final long[] POWERS_OF_10 = new long[] { //
+		1, 10, 100, 1000, 10_000, 100_000, //
+		1_000_000, 10_000_000, 100_000_000, //
+		1_000_000_000, 10_000_000_000L, 100_000_000_000L, //
+		1_000_000_000_000L, 10_000_000_000_000L, 100_000_000_000_000L, //
+		1_000_000_000_000_000L, 10_000_000_000_000_000L, 100_000_000_000_000_000L, //
+		1_000_000_000_000_000_000L//
+	};
+
+	/**
+	 * @param value The value
+	 * @return The number of digits in the 10-base string representation of the given value. This is the same as
+	 *         <code>(long) Math.log10(Math.abs(value))</code> except that <code>digits(0)</code> returns 1 and negative numbers add a digit
+	 *         for the '-' sign.
+	 */
+	public static int getDigits(long value) {
+		if (value == 0)
+			return 1;
+		else if (value == Long.MIN_VALUE)
+			return POWERS_OF_10.length + 2;
+		boolean neg = value < 0;
+		if (neg)
+			value = -value;
+		int index = Arrays.binarySearch(POWERS_OF_10, value);
+		if (index < 0)
+			return -index + (neg ? 1 : 0);
+		else
+			return index + 1 + (neg ? 1 : 0);
+	}
+
 	/**
 	 * Prints a sequence of values to a StringBuilder
 	 * 
