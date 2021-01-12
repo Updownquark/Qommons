@@ -186,6 +186,14 @@ public class TimeUtils {
 			theSeparators = separators;
 		}
 
+		/** @return 0 if this duration is empty, -1 if it is negative, or 1 if it is positive */
+		public int signum() {
+			for (DurationComponent comp : theSequence)
+				if (comp.getValue() != 0)
+					return isNegative ? -1 : 1;
+			return 0;
+		}
+
 		@Override
 		public List<DurationComponent> getComponents() {
 			return theSequence;
@@ -367,6 +375,37 @@ public class TimeUtils {
 			return true;
 		}
 
+		/**
+		 * @param multiple The multiple to multiply this duration by
+		 * @return A new duration that is equal to this duration times the given multiple
+		 */
+		public ParsedDuration times(int multiple) {
+			if (multiple == 1)
+				return this;
+			boolean neg = isNegative;
+			if (multiple < 0) {
+				neg = !neg;
+				multiple = -multiple;
+			}
+
+			if (multiple == 1)
+				return new ParsedDuration(neg, theSequence, theSeparators);
+			List<DurationComponent> newComponents = new ArrayList<>(theSequence.size());
+			int start = 0;
+			for (int i = 0; i < theSequence.size(); i++) {
+				DurationComponent comp = theSequence.get(i);
+				int newVal = comp.getValue() * multiple;
+				if (newVal < 0)
+					throw new IllegalArgumentException("Overflow for " + comp + "x" + multiple);
+				int valueStart = comp.valueStart + start - comp.getStart();
+				int valueEnd = valueStart + StringUtils.getDigits(newVal);
+				String newText = new StringBuilder(comp.toString().substring(0, comp.valueStart - comp.getStart()))//
+					.append(newVal).append(comp.toString().substring(comp.valueEnd - comp.getStart())).toString();
+				newComponents.add(new DurationComponent(start, valueStart, valueEnd, comp.getField(), newVal, newText));
+			}
+			return new ParsedDuration(neg, Collections.unmodifiableList(newComponents), theSeparators);
+		}
+
 		/** @return A duration with this object's magnitude */
 		public Duration asDuration() {
 			Duration d = Duration.ZERO;
@@ -405,6 +444,54 @@ public class TimeUtils {
 				}
 			}
 			return d;
+		}
+
+		/**
+		 * @param time The reference time
+		 * @param timeZone The time zone to use for the evaluation
+		 * @return The reference time plus this duration
+		 */
+		public Instant addTo(Instant time, TimeZone timeZone) {
+			Calendar cal = Calendar.getInstance();
+			cal.setTimeZone(timeZone);
+			cal.setTimeInMillis(time.getEpochSecond() * 1000);
+			int mult = isNegative ? -1 : 1;
+			long nanos = time.getNano() * mult;
+			for (Map.Entry<DurationComponentType, DurationComponent> component : components.entrySet()) {
+				switch (component.getKey()) {
+				case Year:
+					cal.add(Calendar.YEAR, component.getValue().getValue() * mult);
+					break;
+				case Month:
+					cal.add(Calendar.MONTH, component.getValue().getValue() * mult);
+					break;
+				case Week:
+					cal.add(Calendar.DAY_OF_YEAR, component.getValue().getValue() * 7 * mult);
+					break;
+				case Day:
+					cal.add(Calendar.DAY_OF_YEAR, component.getValue().getValue() * mult);
+					break;
+				case Hour:
+					cal.add(Calendar.HOUR_OF_DAY, component.getValue().getValue() * mult);
+					break;
+				case Minute:
+					cal.add(Calendar.MINUTE, component.getValue().getValue() * mult);
+					break;
+				case Second:
+					cal.add(Calendar.SECOND, component.getValue().getValue() * mult);
+					break;
+				case Millisecond:
+					nanos += component.getValue().getValue() * 1_000_000L * mult;
+					break;
+				case Microsecond:
+					nanos += component.getValue().getValue() * 1_000L * mult;
+					break;
+				case Nanosecond:
+					nanos += component.getValue().getValue() * mult;
+					break;
+				}
+			}
+			return Instant.ofEpochSecond(cal.getTimeInMillis() / 1000, nanos);
 		}
 
 		@Override
@@ -953,7 +1040,26 @@ public class TimeUtils {
 					cal.set(Calendar.DAY_OF_MONTH, element.getValue().getValue());
 					break;
 				case Hour:
-					cal.set(Calendar.HOUR_OF_DAY, element.getValue().getValue());
+					TimeComponent comp = getField(DateElementType.AmPm);
+					int hour = element.getValue().getValue();
+					if (comp != null) {
+						if (comp.getValue() == 0) {
+							if (hour == 12)
+								hour = 0;
+						} else {
+							if (hour != 12)
+								hour += 12;
+						}
+					} else if (hour <= 12 && element.getValue().toString().charAt(0) != '0') { // Assume AM/PM time
+						Calendar refCal = Calendar.getInstance();
+						refCal.setTimeZone(getTimeZone());
+						refCal.setTimeInMillis(ref.toEpochMilli());
+						int refHour = refCal.get(Calendar.HOUR_OF_DAY);
+						int amHour = hour == 12 ? 0 : hour, pmHour = hour == 12 ? 12 : (hour + 12);
+						if (Math.abs(pmHour - refHour) < Math.abs(amHour - refHour))
+							hour += 12;
+					}
+					cal.set(Calendar.HOUR_OF_DAY, hour);
 					if (!elements.containsKey(DateElementType.Minute)) {
 						cal.set(Calendar.MINUTE, 0);
 						cal.set(Calendar.SECOND, 0);
@@ -977,7 +1083,7 @@ public class TimeUtils {
 					break;
 				case AmPm:
 				case TimeZone:
-					throw new IllegalStateException();
+					break;
 				}
 			}
 			return Instant.ofEpochSecond(cal.getTimeInMillis() / 1000, nanos);
@@ -1371,7 +1477,7 @@ public class TimeUtils {
 					TIME_ZONES.put(zoneIndex, TimeZone.getTimeZone(zoneId));
 				timeZone = TIME_ZONES.get(zoneIndex);
 			}
-			element = firstInfo.remove(DateElementType.AmPm);
+			element = firstInfo.get(DateElementType.AmPm);
 			if (element != null) {
 				boolean pm = element.type.parse(element.text) > 0;
 				element = firstInfo.get(DateElementType.Hour);
@@ -1386,7 +1492,7 @@ public class TimeUtils {
 				} else if (hour == 12)
 					hour = 0;
 				element.value = hour;
-			}
+			} 
 
 			element = firstInfo.get(DateElementType.Year);
 			if (element != null && element.text.length() >= 4) {
@@ -1451,7 +1557,7 @@ public class TimeUtils {
 		case TimeZone:
 			break;
 		case Month:
-			if (value < 1 || value > 12)
+			if (value < 0 || value > 11)
 				throw new ParseException("Unrecognized month " + element.text, element.index);
 			break;
 		case Day:
