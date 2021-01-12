@@ -218,7 +218,7 @@ public class TestHelper {
 		isCheckingIn = checkIn;
 	}
 
-	private void getBytes(int bytes) {
+	private void advance(int bytes) {
 		theBytes += bytes;
 		if (theBytes >= theNextBreak) {
 			Debug.d().debug(this, true).setField("break", true);
@@ -289,7 +289,7 @@ public class TestHelper {
 
 	/** @return A random integer between {@link Integer#MIN_VALUE} and {@link Integer#MAX_VALUE} */
 	public int getAnyInt() {
-		getBytes(4);
+		advance(4);
 		return theRandomness.nextInt();
 	}
 
@@ -306,7 +306,7 @@ public class TestHelper {
 
 	/** @return A random long between {@link Long#MIN_VALUE} and {@link Long#MAX_VALUE} */
 	public long getAnyLong() {
-		getBytes(8);
+		advance(8);
 		return theRandomness.nextLong();
 	}
 
@@ -321,7 +321,7 @@ public class TestHelper {
 
 	/** @return A random float from a uniform distribution between 0.0 (inclusive) and 1.0 (exclusive) */
 	public float getFloat() {
-		getBytes(4);
+		advance(4);
 		return theRandomness.nextFloat();
 	}
 
@@ -362,13 +362,13 @@ public class TestHelper {
 
 	/** @return A random double from a uniform distribution between 0.0 (inclusive) and 1.0 (exclusive) */
 	public double getDouble() {
-		getBytes(8);
+		advance(8);
 		return theRandomness.nextDouble();
 	}
 
 	/** @return A random float from a normal distribution between 0.0 (inclusive) and 1.0 (exclusive) */
 	public double getGaussian() {
-		getBytes(8);
+		advance(8);
 		return theRandomness.nextGaussian();
 	}
 
@@ -409,7 +409,7 @@ public class TestHelper {
 
 	/** @return A random boolean */
 	public boolean getBoolean() {
-		getBytes(1);
+		advance(1);
 		byte[] bytes = new byte[1];
 		theRandomness.nextBytes(bytes);
 		return bytes[0] >= 0;
@@ -421,6 +421,42 @@ public class TestHelper {
 	 */
 	public boolean getBoolean(double odds) {
 		return getDouble() < odds;
+	}
+
+	/**
+	 * @param bytes The bytes to populate with random data
+	 * @param offset The offset in the array to populate
+	 * @param length The number of bytes to populate
+	 */
+	public void populate(byte[] bytes, int offset, int length) {
+		int r = 0;
+		for (int i = 0; i < length; i++) {
+			switch (i % 4) {
+			case 0:
+				r = getAnyInt();
+				bytes[offset + i] = (byte) (r >>> 24);
+				break;
+			case 1:
+				bytes[offset + i] = (byte) (r >>> 16);
+				break;
+			case 2:
+				bytes[offset + i] = (byte) (r >>> 8);
+				break;
+			case 3:
+				bytes[offset + i] = (byte) r;
+				break;
+			}
+		}
+	}
+
+	/**
+	 * @param numBytes The number of bytes to produce
+	 * @return An array of <code>numBytesrandom
+	 */
+	public byte[] getBytes(int numBytes) {
+		byte[] bytes = new byte[numBytes];
+		populate(bytes, 0, numBytes);
+		return bytes;
 	}
 
 	private static final char[] ALPHA_NUMERIC = new char[62];
