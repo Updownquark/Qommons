@@ -294,15 +294,18 @@ public interface BetterFile extends Named {
 			AbstractWrappingFile file = this;
 			while (file != null) {
 				path.addFirst(file.getName());
-				if (file.check() == null || !file.theBacking.isRoot())
+				if (file.check() == null)
 					file = file.getParent();
 				else
 					file = null;
 			}
 	
 			StringBuilder str = new StringBuilder();
-			for (String p : path)
-				str.append(p).append('/');
+			for (String p : path) {
+				str.append(p);
+				if (!p.equals("/"))
+					str.append('/');
+			}
 			str.deleteCharAt(str.length() - 1);
 			return str.toString();
 		}

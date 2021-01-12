@@ -52,7 +52,7 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 	}
 	
 	public static BetterFile of(File file) {
-		return of(file.getAbsolutePath());
+		return new NativeFileSource().toBetter(file);
 	}
 
 	public static BetterFile of(String filePath) {
@@ -157,9 +157,10 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 							skipped = stream.skip(startFrom - totalSkipped);
 							totalSkipped += skipped;
 						}
-						if (skipped < 0)
+						if (skipped < 0) {
+							stream.close();
 							throw new IOException("File is only " + Files.size(thePath) + " long, can't skip to " + startFrom);
-						else
+						} else
 							success = true;
 					} finally {
 						if (!success)
@@ -177,6 +178,8 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public boolean discoverContents(Consumer<? super FileBacking> onDiscovered, BooleanSupplier canceled) {
+			if (!Files.exists(thePath))
+				return true;
 			boolean[] canceledB = new boolean[1];
 			try {
 				Files.newDirectoryStream(thePath).forEach(f -> {
@@ -201,8 +204,8 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		@Override
 		public BetterFile.FileBacking createChild(String fileName, boolean directory) throws IOException {
 			Path file = thePath.resolve(fileName);
-			if (Files.exists(thePath)) {
-				if (Files.isDirectory(thePath) != directory)
+			if (Files.exists(file)) {
+				if (Files.isDirectory(file) != directory)
 					throw new IOException(file + " already exists as a " + (directory ? "file" : "directory"));
 				return new NativeFileBacking(this, file);
 			}
