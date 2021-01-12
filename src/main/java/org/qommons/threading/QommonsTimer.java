@@ -426,44 +426,49 @@ public class QommonsTimer {
 			if (isActive.get()) {
 				isExecuting = true;
 				try {
+					theExecCount++;
 					thePreviousRun = theClock.now();
-					theTask.run();
-				} catch (RuntimeException | Error e) {
-					e.printStackTrace();
-				}
-				theExecCount++;
-				Instant nextRun;
-				boolean terminate = false;
-				boolean interrupt = false;
-				if (theNextRun == null && theFrequency != null) {
-					interrupt = true;
-					nextRun = thePreviousRun.plus(theFrequency);
-				} else
-					nextRun = theNextRun;
-				Instant lastRun = theLastRun;
-				if (nextRun != null && lastRun != null) {
-					if (thePreviousRun.compareTo(lastRun) >= 0)
-						terminate = true;
-					else if (!shouldRunAfterLast && nextRun.compareTo(lastRun) > 0)
-						terminate = true;
-					if (terminate)
-						theLastRun = null;
-				}
-				long rem = theRemainingExecCount;
-				if (rem > 0) {
-					rem--;
-					theRemainingExecCount = rem;
-					if (rem == 0) {
-						terminate = true;
-						nextRun = null;
+					Instant nextRun;
+					boolean terminate = false;
+					boolean interrupt = false;
+					if (theNextRun == null && theFrequency != null) {
+						interrupt = true;
+						nextRun = thePreviousRun.plus(theFrequency);
+					} else
+						nextRun = theNextRun;
+					Instant lastRun = theLastRun;
+					if (nextRun != null && lastRun != null) {
+						if (thePreviousRun.compareTo(lastRun) >= 0)
+							terminate = true;
+						else if (!shouldRunAfterLast && nextRun.compareTo(lastRun) > 0)
+							terminate = true;
+						if (terminate)
+							theLastRun = null;
 					}
+					long rem = theRemainingExecCount;
+					if (rem > 0) {
+						rem--;
+						theRemainingExecCount = rem;
+						if (rem == 0) {
+							terminate = true;
+							nextRun = null;
+						}
+					}
+					theNextRun = nextRun;
+					if (terminate) {
+						setActive(false);
+						interrupt = false;
+					}
+					try {
+						theTask.run();
+					} catch (RuntimeException | Error e) {
+						e.printStackTrace();
+					}
+					if (interrupt)
+						interruptScheduler();
+				} finally {
+					isExecuting = false;
 				}
-				theNextRun = nextRun;
-				if (terminate)
-					setActive(false);
-				else if (interrupt)
-					interruptScheduler();
-				isExecuting = false;
 			}
 			isWaiting = false;
 		}
