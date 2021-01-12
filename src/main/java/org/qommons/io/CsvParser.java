@@ -1,11 +1,23 @@
 package org.qommons.io;
 
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.io.Reader;
+import java.io.Writer;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
 
+import org.qommons.ArgumentParsing2;
 import org.qommons.IntList;
+import org.qommons.collect.QuickSet;
+import org.qommons.collect.QuickSet.QuickMap;
 
 /**
  * A simple CSV parser. Attempts to be as tolerant and flexible as possible, while adhering closely to the RFC 4180 standard. Some
@@ -64,6 +76,8 @@ public class CsvParser {
 	 * @return This parser
 	 */
 	public CsvParser setTabColumnOffset(int tabOffset) {
+		if (theDelimiter == '\t' && tabOffset != 1)
+			throw new IllegalStateException("tab offset cannot be used with tab-delimited files");
 		theTabColumnOffset = tabOffset;
 		return this;
 	}
@@ -308,6 +322,164 @@ public class CsvParser {
 		@Override
 		public String toString() {
 			return theValue.toString();
+		}
+	}
+
+	public static String toCsv(String string, char delimiter) {
+		if (string.indexOf(delimiter) < 0)
+			return string;
+		StringBuilder str = new StringBuilder().append('"');
+		for (int c = 0; c < string.length(); c++) {
+			if (string.charAt(c) == '"')
+				str.append("\"\"");
+			else
+				str.append(string.charAt(c));
+		}
+		str.append('"');
+		return str.toString();
+	}
+
+	public static void main(String [] args) {
+		ArgumentParsing2.Arguments parsedArgs = ArgumentParsing2.build().forValuePattern(a -> {
+			a.addBetterFileArgument("src", f -> f.required().directory(false).mustExist(true))//
+				.addBetterFileArgument("target", f -> f.required().directory(false).create(true))//
+				.addPatternArgument("filter", "(?<column>.+)=(?<value>.*)", a2 -> a2.times(0, Integer.MAX_VALUE))//
+				.addStringArgument("delimiter", a2 -> a2.defaultValue(","));
+		}).forMultiValuePattern(a -> {
+			a.addStringArgument("include", a2 -> a2.optional())//
+				.addStringArgument("exclude", a2 -> a2.optional().when("include", String.class, b -> b.specified().forbidden()))//
+			;
+		}).build().parse(args);
+
+		String delimiter = parsedArgs.get("delimiter", String.class);
+		Map<String, String> filters = new LinkedHashMap<>();
+		for (Matcher m : parsedArgs.getAll("filter", Matcher.class)) {
+			filters.put(m.group("column"), m.group("value"));
+		}
+		if (delimiter.length() != 1)
+			throw new IllegalArgumentException("Delimiter must be a single character");
+		List<? extends String> include = parsedArgs.getAll("include", String.class);
+		Set<String> exclude = new HashSet<>(parsedArgs.getAll("exclude", String.class));
+		BetterFile src = parsedArgs.get("src", BetterFile.class);
+		long length = src.length();
+		int progress = 0;
+		try (CountingInputStream stream = new CountingInputStream(src.read()); //
+			Reader in = new InputStreamReader(stream); //
+			Writer out = new BufferedWriter(new OutputStreamWriter(parsedArgs.get("target", BetterFile.class).write()))) {
+			CsvParser parser = new CsvParser(in, delimiter.charAt(0));
+			String[] header = parser.parseNextLine();
+			for (String f : filters.keySet()) {
+				boolean found = false;
+				for (String h : header) {
+					if (h.equals(f)) {
+						found = true;
+						break;
+					}
+				}
+				if (!found)
+					throw new IllegalArgumentException("No such header found for filter: " + f);
+			}
+			for (String i : include) {
+				boolean found = false;
+				for (String h : header) {
+					if (h.equals(i)) {
+						found = true;
+						break;
+					}
+				}
+				if (!found)
+					throw new IllegalArgumentException("No such header found for include: " + i);
+			}
+			for (String i : exclude) {
+				boolean found = false;
+				for (String h : header) {
+					if (h.equals(i)) {
+						found = true;
+						break;
+					}
+				}
+				if (!found)
+					throw new IllegalArgumentException("No such header found for exclude: " + i);
+			}
+			QuickMap<String, Integer> columns = QuickSet.of(header).createMap();
+			for (int i = 0; i < header.length; i++)
+				columns.put(header[i], i);
+			if (!include.isEmpty()) {
+				boolean first = true;
+				for (String column : include) {
+					if (first)
+						first = false;
+					else
+						out.append(delimiter.charAt(0));
+					out.append(column);
+				}
+			} else {
+				boolean first = true;
+				for (String column : header) {
+					if (exclude.contains(column))
+						continue;
+					if (first)
+						first = false;
+					else
+						out.append(delimiter.charAt(0));
+					out.append(column);
+				}
+			}
+			out.append('\n');
+			String[] line = new String[header.length];
+			int total = 0, kept = 0;
+			while (parser.parseNextLine(line)) {
+				total++;
+				boolean filterMatch = true;
+				for (Map.Entry<String, String> filter : filters.entrySet()) {
+					if (!filter.getValue().equalsIgnoreCase(line[columns.get(filter.getKey())].trim())) {
+						filterMatch = false;
+						break;
+					}
+				}
+				if (!filterMatch)
+					continue;
+				kept++;
+				if (!include.isEmpty()) {
+					boolean first = true;
+					for (String column : include) {
+						if (first)
+							first = false;
+						else
+							out.append(delimiter.charAt(0));
+						out.append(CsvParser.toCsv(line[columns.get(column)], delimiter.charAt(0)));
+					}
+				} else {
+					boolean first = true;
+					for (int h = 0; h < header.length; h++) {
+						if (exclude.contains(header[h]))
+							continue;
+						if (first)
+							first = false;
+						else
+							out.append(delimiter.charAt(0));
+						out.append(CsvParser.toCsv(line[h], delimiter.charAt(0)));
+					}
+				}
+				out.append('\n');
+				int newProgress = (int) (stream.getPosition() * 100.0 / length);
+				if (newProgress > progress && newProgress != 100) {
+					progress = newProgress;
+					if (progress % 10 == 0) {
+						System.out.print(progress);
+						System.out.print('%');
+					} else
+						System.out.print('.');
+					System.out.flush();
+				}
+			}
+			System.out.println();
+			int percent = (int) Math.round(kept * 1000.0 / total);
+			System.out.println(kept + " of " + total + " lines (" + (percent / 10) + "." + (percent % 10) + "% copied");
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (TextParseException e) {
+			e.printStackTrace();
 		}
 	}
 }
