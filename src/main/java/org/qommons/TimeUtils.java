@@ -1040,7 +1040,25 @@ public class TimeUtils {
 					cal.set(Calendar.DAY_OF_MONTH, element.getValue().getValue());
 					break;
 				case Hour:
+					TimeComponent comp = getField(DateElementType.AmPm);
 					int hour = element.getValue().getValue();
+					if (comp != null) {
+						if (comp.getValue() == 0) {
+							if (hour == 12)
+								hour = 0;
+						} else {
+							if (hour != 12)
+								hour += 12;
+						}
+					} else if (hour <= 12 && element.getValue().toString().charAt(0) != '0') { // Assume AM/PM time
+						Calendar refCal = Calendar.getInstance();
+						refCal.setTimeZone(getTimeZone());
+						refCal.setTimeInMillis(ref.toEpochMilli());
+						int refHour = refCal.get(Calendar.HOUR_OF_DAY);
+						int amHour = hour == 12 ? 0 : hour, pmHour = hour == 12 ? 12 : (hour + 12);
+						if (Math.abs(pmHour - refHour) < Math.abs(amHour - refHour))
+							hour += 12;
+					}
 					cal.set(Calendar.HOUR_OF_DAY, hour);
 					if (!elements.containsKey(DateElementType.Minute)) {
 						cal.set(Calendar.MINUTE, 0);
@@ -1459,8 +1477,9 @@ public class TimeUtils {
 					TIME_ZONES.put(zoneIndex, TimeZone.getTimeZone(zoneId));
 				timeZone = TIME_ZONES.get(zoneIndex);
 			}
+			ParsedDateElement year = firstInfo.get(DateElementType.Year);
 			element = firstInfo.get(DateElementType.AmPm);
-			if (element != null) {
+			if (element != null && year != null && year.text.length() >= 4) {
 				boolean pm = element.type.parse(element.text) > 0;
 				element = firstInfo.get(DateElementType.Hour);
 				int hour = validate(DateElementType.Hour, element);
@@ -1476,13 +1495,12 @@ public class TimeUtils {
 				element.value = hour;
 			} 
 
-			element = firstInfo.get(DateElementType.Year);
-			if (element != null && element.text.length() >= 4) {
+			if (year != null && year.text.length() >= 4) {
 				Calendar cal = CALENDAR.get();
 				cal.clear();
 				cal.setTimeZone(timeZone);
 
-				cal.set(Calendar.YEAR, validate(DateElementType.Year, element));
+				cal.set(Calendar.YEAR, validate(DateElementType.Year, year));
 
 				DateElementType minType = DateElementType.Year;
 				element = firstInfo.get(DateElementType.Month);
