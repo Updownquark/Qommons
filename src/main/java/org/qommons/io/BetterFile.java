@@ -294,7 +294,7 @@ public interface BetterFile extends Named {
 			AbstractWrappingFile file = this;
 			while (file != null) {
 				path.addFirst(file.getName());
-				if (file.check() == null)
+				if (file.check() != null)
 					file = file.getParent();
 				else
 					file = null;
