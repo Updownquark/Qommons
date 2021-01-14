@@ -185,7 +185,7 @@ public class RedBlackTree<E> {
 			// We want to make an effort to move as few as possible.
 			// If using the first such node we came to as the standard causes the move of most of these nodes,
 			// perhaps moving that first node instead and using the second node as the standard would let us remove fewer.
-			// The only way to do be sure we're moving as few nodes as possible
+			// The only way to be sure we're moving as few nodes as possible
 			// is to do this test for every node that belongs in the subtree, which would take O(n^2) time.
 			// This method seems to me a good compromise.
 			// At least it will perform optimally when only a single node in the subtree needs to move.

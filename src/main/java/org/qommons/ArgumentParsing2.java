@@ -2645,7 +2645,7 @@ public class ArgumentParsing2 {
 
 				@Override
 				public Instant parse(String text, Arguments otherArgs) throws ParseException {
-					return TimeUtils.parseFlexFormatTime(text, theTimeZone, true, true).evaluate(theReference);
+					return TimeUtils.parseFlexFormatTime(text, true, true, opts -> opts.withTimeZone(theTimeZone)).evaluate(theReference);
 				}
 			}
 		}

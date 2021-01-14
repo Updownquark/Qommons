@@ -10,7 +10,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TimeZone;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -177,31 +176,16 @@ public interface SpinnerFormat<T> extends Format<T> {
 	 * 
 	 * @param reference The reference time for relative date formats (if null, <code>Instant::now</code> will be used)
 	 * @param dayFormat The format for the day/month/year
-	 * @param timeZone The time zone for the format (may be null)
+	 * @param options The options to use for the parsing
 	 * @return A date format with the given pattern
 	 * @see SimpleDateFormat#SimpleDateFormat(String)
 	 */
-	public static SpinnerFormat<Instant> flexDate(Supplier<Instant> reference, String dayFormat, TimeZone timeZone) {
-		return flexDate(reference, dayFormat, timeZone, TimeUtils.DateElementType.Second, true);
-	}
-
-	/**
-	 * Creates a date format that can increment or decrement the date at integers within the format
-	 * 
-	 * @param reference The reference time for relative date formats (if null, <code>Instant::now</code> will be used)
-	 * @param dayFormat The format for the day/month/year
-	 * @param timeZone The time zone for the format (may be null)
-	 * @param maxResolution The finest time component to print
-	 * @param militaryTime Whether to use military or AM/PM type time
-	 * @return A date format with the given pattern
-	 * @see SimpleDateFormat#SimpleDateFormat(String)
-	 */
-	public static SpinnerFormat<Instant> flexDate(Supplier<Instant> reference, String dayFormat, TimeZone timeZone,
-		TimeUtils.DateElementType maxResolution, boolean militaryTime) {
+	public static SpinnerFormat<Instant> flexDate(Supplier<Instant> reference, String dayFormat,
+		Function<TimeUtils.TimeEvaluationOptions, TimeUtils.TimeEvaluationOptions> options) {
 		return SpinnerFormat.<TimeUtils.ParsedTime, Instant> wrapAdjustable(
-			forAdjustable(text -> TimeUtils.parseFlexFormatTime(text, timeZone, true, true)), //
+			forAdjustable(text -> TimeUtils.parseFlexFormatTime(text, true, true, options)), //
 			time -> time == null ? null : time.evaluate(Instant::now),
-			instant -> instant == null ? null : TimeUtils.asFlexTime(instant, timeZone, dayFormat, maxResolution, militaryTime));
+			instant -> instant == null ? null : TimeUtils.asFlexTime(instant, dayFormat, options));
 	}
 
 	/**

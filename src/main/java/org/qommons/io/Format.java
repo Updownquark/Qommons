@@ -21,6 +21,7 @@ import java.util.regex.Pattern;
 
 import org.qommons.QommonsUtils;
 import org.qommons.TimeUtils;
+import org.qommons.TimeUtils.TimeEvaluationOptions;
 
 /**
  * Knows how to parse a type of value from text and to print a type of value into text
@@ -504,9 +505,7 @@ public interface Format<T> {
 	/** A flexible date format */
 	public static class FlexDateFormat implements Format<Instant> {
 		private final String theDayFormat;
-		private final TimeZone theTimeZone;
-		private TimeUtils.DateElementType theMaxResolution;
-		private boolean isMilitaryTime;
+		private TimeEvaluationOptions theOptions;
 
 		/**
 		 * @param dayFormat The format for the day/month/year
@@ -514,9 +513,7 @@ public interface Format<T> {
 		 */
 		public FlexDateFormat(String dayFormat, TimeZone timeZone) {
 			theDayFormat = dayFormat;
-			theTimeZone = timeZone;
-			theMaxResolution = TimeUtils.DateElementType.Second;
-			isMilitaryTime = true;
+			theOptions = TimeUtils.DEFAULT_OPTIONS.withTimeZone(timeZone);
 		}
 
 		/**
@@ -524,32 +521,31 @@ public interface Format<T> {
 		 * @return This format
 		 */
 		public FlexDateFormat setMaxResolution(TimeUtils.DateElementType maxResolution) {
-			theMaxResolution = maxResolution;
+			theOptions = theOptions.withMaxResolution(maxResolution);
 			return this;
 		}
 
-		/** @return militaryTime Whether to use military or AM/PM type time */
-		public boolean isMilitaryTime() {
-			return isMilitaryTime;
+		public TimeEvaluationOptions getOptions() {
+			return theOptions;
 		}
 
 		/** @param militaryTime Whether to use military or AM/PM type time */
 		public void setMilitaryTime(boolean militaryTime) {
-			isMilitaryTime = militaryTime;
+			theOptions = theOptions.with24HourFormat(militaryTime);
 		}
 
 		@Override
 		public void append(StringBuilder text, Instant value) {
 			if (value == null)
 				return;
-			text.append(TimeUtils.asFlexTime(value, theTimeZone, theDayFormat, theMaxResolution, isMilitaryTime).toString());
+			text.append(TimeUtils.asFlexTime(value, theDayFormat, __ -> theOptions).toString());
 		}
 
 		@Override
 		public Instant parse(CharSequence text) throws ParseException {
 			if (text.length() == 0)
 				return null;
-			return TimeUtils.parseFlexFormatTime(text, theTimeZone, true, true).evaluate(Instant::now);
+			return TimeUtils.parseFlexFormatTime(text, true, true, __ -> theOptions).evaluate(Instant::now);
 		}
 
 		@Override

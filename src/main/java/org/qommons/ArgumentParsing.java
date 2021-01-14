@@ -1773,7 +1773,7 @@ public class ArgumentParsing {
 		@Override
 		protected Instant parseValue(String text, Arguments parsed) throws IllegalArgumentException {
 			try {
-				return TimeUtils.parseFlexFormatTime(text, theTimeZone, true, true).evaluate(Instant::now);
+				return TimeUtils.parseFlexFormatTime(text, true, true, opts -> opts.withTimeZone(theTimeZone)).evaluate(Instant::now);
 			} catch (java.text.ParseException e) {
 				throw new IllegalArgumentException(getName() + " value \"" + text + "\" is not a duration: " + e.getMessage());
 			}
@@ -1864,7 +1864,7 @@ public class ArgumentParsing {
 
 		/**
 		 * Causes file values of this argument to be interpreted as relative to the directory value of another file-type argument. The
-		 * relative argument must be specified in the argument list BEFORE this argument.
+		 * relative argument must be specified in the argument list PAST this argument.
 		 * 
 		 * @param otherFileArgument The name of the file argument whose value will be used as a relative directory
 		 * @return This definition, for chaining
