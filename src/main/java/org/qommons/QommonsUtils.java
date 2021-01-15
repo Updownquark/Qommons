@@ -581,7 +581,7 @@ public class QommonsUtils {
 		if (format.length() > 0)
 			format.append(' ');
 		if (precision.compareTo(TimePrecision.MINUTES) >= 0)
-			format.append(" HH:mm");
+			format.append("HH:mm");
 		if (precision.compareTo(TimePrecision.SECONDS) >= 0)
 			format.append(":ss");
 		if (precision.compareTo(TimePrecision.MILLIS) >= 0)
