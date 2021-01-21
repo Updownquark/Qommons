@@ -89,7 +89,7 @@ public class TimeUtils {
 		}
 	}
 
-	/** A parsed time returned from {@link TimeUtils#parseFlexFormatTime(CharSequence, TimeZone, boolean, boolean)} */
+	/** A parsed time returned from {@link TimeUtils#parseFlexFormatTime(CharSequence, boolean, boolean, Function)} */
 	public interface ParsedTime extends FieldedAdjustable<DateElementType, TimeComponent, ParsedTime> {
 		/** @return The time zone of the parsed time, if specified */
 		TimeZone getTimeZone();
@@ -800,7 +800,7 @@ public class TimeUtils {
 	}
 
 	/**
-	 * A time parsed from {@link TimeUtils#parseFlexFormatTime(CharSequence, TimeZone, boolean, boolean)} for which the year is specified
+	 * A time parsed from {@link TimeUtils#parseFlexFormatTime(CharSequence, boolean, boolean, Function)} for which the year is specified
 	 * with 4 digits, meaning that it represents an absolute instant or a single range in time.
 	 */
 	public static class AbsoluteTime extends ParsedTimeImpl {
@@ -1012,7 +1012,7 @@ public class TimeUtils {
 	}
 
 	/**
-	 * A time parsed from {@link TimeUtils#parseFlexFormatTime(CharSequence, TimeZone, boolean, boolean)} where the year was not specified
+	 * A time parsed from {@link TimeUtils#parseFlexFormatTime(CharSequence, boolean, boolean, Function)} where the year was not specified
 	 * with 4 digits, meaning that this time can represent any number of time ranges depending on a reference point.
 	 */
 	public static class RelativeTime extends ParsedTimeImpl {
@@ -1148,7 +1148,7 @@ public class TimeUtils {
 				break;
 			}
 			if (!evaluationMatches) { // Fix to match the evaluation type
-				if (elements.containsKey(DateElementType.Year)) { // TODO
+				if (elements.containsKey(DateElementType.Year)) {
 					// Again, if the year was absolute, it wouldn't be a relative time
 					// Let's not back up or move forward by centuries--that's probably not the intent. Maybe I'll reconsider later
 				} else if (elements.containsKey(DateElementType.Month)) {
@@ -2060,19 +2060,19 @@ public class TimeUtils {
 				return false;
 			switch (str.subSequence(0, 3).toString().toLowerCase()) {
 			case "sun":
-				return str.length() == 3 || (str.length() == 6 && str.toString().toLowerCase().equals("sunday"));
+				return str.toString().toLowerCase().equals("sunday".substring(0, str.length()));
 			case "mon":
-				return str.length() == 3 || (str.length() == 6 && str.toString().toLowerCase().equals("monday"));
+				return str.toString().toLowerCase().equals("monday".substring(0, str.length()));
 			case "tue":
-				return str.length() == 3 || (str.length() == 7 && str.toString().toLowerCase().equals("tuesday"));
+				return str.toString().toLowerCase().equals("tuesday".substring(0, str.length()));
 			case "wed":
-				return str.length() == 3 || (str.length() == 9 && str.toString().toLowerCase().equals("wednesday"));
+				return str.toString().toLowerCase().equals("wednesday".substring(0, str.length()));
 			case "thu":
-				return str.length() == 3 || (str.length() == 8 && str.toString().toLowerCase().equals("thursday"));
+				return str.toString().toLowerCase().equals("thursday".substring(0, str.length()));
 			case "fri":
-				return str.length() == 3 || (str.length() == 6 && str.toString().toLowerCase().equals("friday"));
+				return str.toString().toLowerCase().equals("friday".substring(0, str.length()));
 			case "sat":
-				return str.length() == 3 || (str.length() == 8 && str.toString().toLowerCase().equals("saturday"));
+				return str.toString().toLowerCase().equals("saturday".substring(0, str.length()));
 			}
 			return false;
 		};
@@ -2150,10 +2150,8 @@ public class TimeUtils {
 
 	/**
 	 * @param time The time
-	 * @param zone The time zone (may be null, will be formatted as GMT)
 	 * @param dayFormat The date format to use to format the year, month, and day
-	 * @param maxResolution The finest-grained date element to print
-	 * @param militaryTime Whether to use military or AM/PM type time
+	 * @param opts Configures parsing options
 	 * @return A parsed time whose minimum resolution may be days, hours, minutes, seconds, or sub-second
 	 */
 	public static ParsedTime asFlexTime(Instant time, String dayFormat, Function<TimeEvaluationOptions, TimeEvaluationOptions> opts) {
