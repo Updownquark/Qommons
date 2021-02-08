@@ -63,6 +63,11 @@ public interface All<E, C extends Condition<E, C, A>, A extends All<E, C, A>> ex
 		return transform.apply((C) this);
 	}
 
+	@Override
+	default boolean contains(Condition<?, ?, ?> other) {
+		return true;
+	}
+
 	/**
 	 * Returned from {@link All#where(ConditionalValueAccess)} to create a value-based condition
 	 *

@@ -10,26 +10,17 @@ import java.util.Objects;
  * @param <A> The sub-type of the {@link All} condition supplied by this condition's {@link #all()} method
  * @param <F> The type of the field
  */
-public abstract class LiteralCondition<E, C extends Condition<E, C, A>, A extends All<E, C, A>, F> extends ValueCondition<E, C, A, F> {
-	private final F theValue;
-
-	LiteralCondition(ConditionalEntity<E> entityType, ConditionalValueAccess<E, F> field, F value, int comparison, boolean isWithEqual) {
-		super(entityType, field, comparison, isWithEqual);
-		theValue = value;
-	}
-
+public interface LiteralCondition<E, C extends Condition<E, C, A>, A extends All<E, C, A>, F> extends ValueCondition<E, C, A, F> {
 	@Override
-	public int getConditionType() {
+	default int getConditionType() {
 		return 1;
 	}
 
 	/** @return The value to compare against */
-	public F getValue() {
-		return theValue;
-	}
+	F getValue();
 
 	@Override
-	public boolean contains(Condition<?, ?, ?> other) {
+	default boolean contains(Condition<?, ?, ?> other) {
 		if (other == this)
 			return true;
 		else if (other instanceof ConditionImpl.AndCondition) {
@@ -79,17 +70,17 @@ public abstract class LiteralCondition<E, C extends Condition<E, C, A>, A extend
 	}
 
 	@Override
-	protected int compareValue(ValueCondition<? super E, ?, ?, ? super F> other) {
-		return getField().compare(theValue, ((LiteralCondition<E, ?, ?, F>) other).getValue());
+	default int compareValue(ValueCondition<? super E, ?, ?, ? super F> other) {
+		return getField().compare(getValue(), ((LiteralCondition<E, ?, ?, F>) other).getValue());
 	}
 
 	@Override
-	public int hashCode() {
-		return Objects.hash(getField(), theValue, getComparison(), isWithEqual());
+	default int _hashCode() {
+		return Objects.hash(getField(), getValue(), getComparison(), isWithEqual());
 	}
 
 	@Override
-	public String toString() {
-		return super.toString() + theValue;
+	default String _toString() {
+		return ValueCondition.super._toString() + getValue();
 	}
 }

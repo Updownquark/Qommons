@@ -3,7 +3,11 @@ package org.qommons.condition;
 import java.util.function.Function;
 
 /**
- * Represents a boolean condition against an entity of some kind
+ * <p>
+ * Represents a boolean condition against an entity of some kind.
+ * </p>
+ * <p>
+ * This API makes it very easy to create conditions
  * 
  * @param <E> The type of the entity against which this condition can be evaluated
  * @param <C> The sub-type of this condition
