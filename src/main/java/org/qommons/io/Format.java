@@ -181,29 +181,6 @@ public interface Format<T> {
 				QommonsUtils.printDuration(value, text, true);
 		}
 
-		private void appendNanos(StringBuilder text, int ns) {
-			if (ns < 1000000)
-				text.append(ns).append("ns");
-			else if (ns % 1000000 == 0)
-				text.append(ns / 1000000).append("ms");
-			else {
-				text.append(ns / 1000000).append('.');
-				buffer(text, ns % 1000000, 6);
-				text.append("ms");
-			}
-		}
-
-		private StringBuilder buffer(StringBuilder text, int value, int length) {
-			int minForLength = 1;
-			for (int i = 0; i < length; i++) {
-				minForLength *= 10;
-				if (value < minForLength)
-					text.append('0');
-			}
-			text.append(value);
-			return text;
-		}
-
 		@Override
 		public Duration parse(CharSequence text) throws ParseException {
 			return QommonsUtils.parseDuration(text);
@@ -528,6 +505,7 @@ public interface Format<T> {
 			return this;
 		}
 
+		/** @return The options on this format */
 		public TimeEvaluationOptions getOptions() {
 			return theOptions;
 		}
