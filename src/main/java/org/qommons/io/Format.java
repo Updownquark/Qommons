@@ -60,7 +60,8 @@ public interface Format<T> {
 	public static final Format<String> TEXT = new Format<String>() {
 		@Override
 		public void append(StringBuilder text, String value) {
-			text.append(value);
+			if (value != null)
+				text.append(value);
 		}
 
 		@Override
@@ -287,18 +288,20 @@ public interface Format<T> {
 	 * @see DecimalFormat#DecimalFormat(String)
 	 */
 	public static Format<Double> doubleFormat(String pattern) {
-		DecimalFormat format = new DecimalFormat(pattern);
+		// DecimalFormat instances are not thread-safe
+		ThreadLocal<DecimalFormat> format = ThreadLocal.withInitial(() -> new DecimalFormat(pattern));
+		format.get(); // Validate the pattern
 		return new Format<Double>() {
 			@Override
 			public void append(StringBuilder text, Double value) {
 				if (value == null)
 					return;
-				text.append(format.format(value.doubleValue()));
+				text.append(format.get().format(value.doubleValue()));
 			}
 
 			@Override
 			public Double parse(CharSequence text) throws ParseException {
-				return parseDouble(text, format);
+				return parseDouble(text, format.get());
 			}
 
 			@Override
@@ -678,6 +681,7 @@ public interface Format<T> {
 		private final boolean arePrefixesCaseSensitive;
 		private final NavigableMap<Integer, String> thePrefixes;
 		private final Map<String, Integer> theReversePrefixes;
+		private final ThreadLocal<NumberFormat> theDoubleFormat; // DecimalFormat instances are not thread-safe
 
 		SuperDoubleFormat(int significantDigits, int maxIntDigits, boolean intWithPrefixes, int maxNormalExp, int minNormalExp,
 			String baseUnit,
@@ -694,6 +698,7 @@ public interface Format<T> {
 			this.arePrefixesCaseSensitive = arePrefixesCaseSensitive;
 			thePrefixes = prefixes;
 			theReversePrefixes = reversePrefixes;
+			theDoubleFormat = ThreadLocal.withInitial(() -> DecimalFormat.getInstance());
 		}
 
 		@Override
@@ -739,7 +744,7 @@ public interface Format<T> {
 				i--;
 			if (i < 0)
 				throw new ParseException("No value given", 0);
-			double num = parseDouble(text.subSequence(0, i + 1), DecimalFormat.getInstance());
+			double num = parseDouble(text.subSequence(0, i + 1), theDoubleFormat.get());
 			if (exp != 0)
 				num *= Math.pow(10, exp);
 			return num;
