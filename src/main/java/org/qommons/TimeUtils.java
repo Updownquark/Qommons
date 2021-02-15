@@ -43,7 +43,7 @@ public class TimeUtils {
 		/** The day of the month, starting at 1 */
 		Day,
 		/** The day of the week, starting at 0=Sunday */
-		WeekDay,
+		Weekday,
 		/** The hour, either 24-hour format or 12-hour, depending on the present of an {@link #AmPm} element */
 		Hour,
 		/** The minute within the hour */
@@ -714,7 +714,7 @@ public class TimeUtils {
 				case Day:
 					newEl = adjust(component.theParsedElement, value.applyAsInt(component.getField()), indexBump);
 					break;
-				case WeekDay:
+				case Weekday:
 					newEl = adjust(component.theParsedElement, value.applyAsInt(component.getField()), indexBump);
 					break;
 				case Hour:
@@ -829,7 +829,7 @@ public class TimeUtils {
 			case Day:
 				max = time.plus(DAY);
 				break;
-			case WeekDay:
+			case Weekday:
 				break; // Week day is ignored
 			case Hour:
 				max = time.plus(HOUR);
@@ -925,7 +925,7 @@ public class TimeUtils {
 				cal.add(Calendar.MONTH, amount);
 				break;
 			case Day:
-			case WeekDay:
+			case Weekday:
 				cal.add(Calendar.DAY_OF_MONTH, amount);
 				break;
 			case Hour:
@@ -964,7 +964,7 @@ public class TimeUtils {
 					return cal.get(Calendar.MONTH) - Calendar.JANUARY;
 				case Day:
 					return cal.get(Calendar.DAY_OF_MONTH);
-				case WeekDay:
+				case Weekday:
 					return cal.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY;
 				case Hour:
 					return elements.containsKey(DateElementType.AmPm) ? cal.get(Calendar.HOUR) : cal.get(Calendar.HOUR_OF_DAY);
@@ -1070,7 +1070,7 @@ public class TimeUtils {
 				case Day:
 					cal.set(Calendar.DAY_OF_MONTH, element.getValue().getValue());
 					break;
-				case WeekDay:
+				case Weekday:
 					if (elements.containsKey(DateElementType.Day))
 						break;
 					if (refCal == null) {
@@ -1181,7 +1181,7 @@ public class TimeUtils {
 							cal.add(Calendar.MONTH, diff < 0 ? -1 : 1);
 						break;
 					}
-				} else if (elements.containsKey(DateElementType.WeekDay)) {
+				} else if (elements.containsKey(DateElementType.Weekday)) {
 					switch (theEvaluationType) {
 					case PAST:
 						cal.add(Calendar.DAY_OF_MONTH, -7);
@@ -1238,7 +1238,7 @@ public class TimeUtils {
 					if (cal.get(Calendar.DAY_OF_MONTH) != element.getValue().getValue())
 						return false;
 					break;
-				case WeekDay:
+				case Weekday:
 					if (getField(DateElementType.Day) == null
 						&& (cal.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY) != element.getValue().getValue())
 						return false;
@@ -1307,7 +1307,7 @@ public class TimeUtils {
 		public ParsedTime add(DateElementType field, int amount) {
 			if (!elements.containsKey(field))
 				throw new IllegalArgumentException("Field " + field + " is not present in this time");
-			if (field == DateElementType.WeekDay && elements.containsKey(DateElementType.Day))
+			if (field == DateElementType.Weekday && elements.containsKey(DateElementType.Day))
 				return add(DateElementType.Day, amount);
 			Map<DateElementType, Integer> newValues = new EnumMap<>(DateElementType.class);
 			for (Map.Entry<DateElementType, TimeComponent> element : elements.entrySet())
@@ -1375,7 +1375,7 @@ public class TimeUtils {
 					}
 				}
 				break;
-			case WeekDay:
+			case Weekday:
 				newValue = newValue % 7;
 				break;
 			case Hour:
@@ -1579,7 +1579,7 @@ public class TimeUtils {
 		int i = 0;
 		boolean found = true;
 		while (found && i < str.length()) {
-			if (Character.isWhitespace(str.charAt(i))) {
+			if (Character.isWhitespace(str.charAt(i)) || str.charAt(i) == ',') {
 				i++;
 				continue;
 			}
@@ -1766,7 +1766,7 @@ public class TimeUtils {
 			if (value < 1 || value > 31)
 				throw new ParseException("Unrecognized day " + element.text, element.index);
 			break;
-		case WeekDay:
+		case Weekday:
 			if (value < 0 || value > 6)
 				throw new ParseException("Unrecognized week day " + element.text, element.index);
 			break;
@@ -2034,14 +2034,7 @@ public class TimeUtils {
 
 		@Override
 		public String toString() {
-			StringBuilder str = new StringBuilder();
-			for (DateFormatComponent component : components) {
-				if (component.dateType != null)
-					str.append(component.dateType);
-				else
-					str.append(component.parsedType);
-			}
-			return str.toString();
+			return theName;
 		}
 	}
 
@@ -2076,8 +2069,8 @@ public class TimeUtils {
 			}
 			return false;
 		};
-		DateFormatComponent weekDayOpt = new DateFormatComponent(DateElementType.WeekDay, ParsedDateElementType.DAY_NAME, weekDay, false);
-		DateFormatComponent weekDayReq = new DateFormatComponent(DateElementType.WeekDay, ParsedDateElementType.DAY_NAME, weekDay, true);
+		DateFormatComponent weekDayOpt = new DateFormatComponent(DateElementType.Weekday, ParsedDateElementType.DAY_NAME, weekDay, false);
+		DateFormatComponent weekDayReq = new DateFormatComponent(DateElementType.Weekday, ParsedDateElementType.DAY_NAME, weekDay, true);
 		DateFormatComponent year2 = new DateFormatComponent(DateElementType.Year, ParsedDateElementType.DIGIT, twoDigits, true);
 		DateFormatComponent year4 = new DateFormatComponent(DateElementType.Year, ParsedDateElementType.DIGIT, fourDigits, true);
 		DateFormatComponent monthDig = new DateFormatComponent(DateElementType.Month, ParsedDateElementType.DIGIT, oneOrTwoDigits, true)
@@ -2106,7 +2099,7 @@ public class TimeUtils {
 			char c = str.charAt(0);
 			return c == '-' || c == '/';
 		}, true);
-		DateFormatComponent optionalonStdDateSep = new DateFormatComponent(null, ParsedDateElementType.SEP, str -> {
+		DateFormatComponent optionalNonStdDateSep = new DateFormatComponent(null, ParsedDateElementType.SEP, str -> {
 			char c = str.charAt(0);
 			return c == '-' || c == '/';
 		}, false);
@@ -2119,18 +2112,21 @@ public class TimeUtils {
 			new DateFormat("Y4MDthZ", year4, stdDateSep, monthDig, stdDateSep, day, stndrdth, timeZone), //
 			new DateFormat("Y4MZ", year4, stdDateSep, monthDig, timeZone), //
 			new DateFormat("Y4Z", year4, timeZone), //
-			new DateFormat("MY4Z", monthCh, optionalonStdDateSep, year4, timeZone), //
-			new DateFormat("DMY4Z", weekDayOpt, day, optionalonStdDateSep, monthCh, optionalonStdDateSep, year4, timeZone), //
-			new DateFormat("DMY2Z", weekDayOpt, day, optionalonStdDateSep, monthCh, optionalonStdDateSep, year2, timeZone), //
-			new DateFormat("DMZ", weekDayOpt, day, optionalonStdDateSep, monthCh, timeZone), //
-			new DateFormat("MDthY4Z", weekDayOpt, monthDig, nonStdDateSep, day, stndrdth, nonStdDateSep, year4, timeZone), //
-			new DateFormat("MDthY2Z", monthDig, nonStdDateSep, day, stndrdth, nonStdDateSep, year2, timeZone), //
-			new DateFormat("MDthZ", weekDayOpt, monthDig, nonStdDateSep, day, stndrdth, timeZone), //
+			new DateFormat("MY4Z", monthCh, optionalNonStdDateSep, year4, timeZone), //
+			new DateFormat("DMY4Z", weekDayOpt, day, optionalNonStdDateSep, monthCh, optionalNonStdDateSep, year4, timeZone), //
+			new DateFormat("DMY2Z", weekDayOpt, day, optionalNonStdDateSep, monthCh, optionalNonStdDateSep, year2, timeZone), //
+			new DateFormat("DMZ", weekDayOpt, day, optionalNonStdDateSep, monthCh, timeZone), //
+			new DateFormat("MdDthY4Z", weekDayOpt, monthDig, nonStdDateSep, day, stndrdth, nonStdDateSep, year4, timeZone), //
+			new DateFormat("MchDthY4Z", weekDayOpt, monthCh, optionalNonStdDateSep, day, stndrdth, optionalNonStdDateSep, year4, timeZone), //
+			new DateFormat("MdDthY2Z", weekDayOpt, monthDig, nonStdDateSep, day, stndrdth, nonStdDateSep, year2, timeZone), //
+			new DateFormat("MchDthY2Z", weekDayOpt, monthCh, optionalNonStdDateSep, day, stndrdth, optionalNonStdDateSep, year2, timeZone), //
+			new DateFormat("MdDthZ", weekDayOpt, monthDig, nonStdDateSep, day, stndrdth, timeZone), //
+			new DateFormat("MchDthZ", weekDayOpt, monthCh, optionalNonStdDateSep, day, stndrdth, timeZone), //
 			new DateFormat("M.Y4Z", weekDayOpt, monthDig, dot, year4, timeZone), //
 			new DateFormat("Dth.M.Y4Z", weekDayOpt, day, stndrdth, dot, monthDig, dot, year4, timeZone), //
 			new DateFormat("Dth.M.Y2Z", weekDayOpt, day, stndrdth, dot, monthDig, dot, year2, timeZone), //
 			new DateFormat("Dth.MZ", weekDayOpt, day, stndrdth, dot, monthDig, timeZone), //
-			new DateFormat("MDZ", weekDayOpt, monthCh, optionalonStdDateSep, day, timeZone), //
+			new DateFormat("MDZ", weekDayOpt, monthCh, optionalNonStdDateSep, day, timeZone), //
 			new DateFormat("WD", weekDayReq), //
 			// Time formats
 			new DateFormat("HMSSaZ", hour, colon, minute, colon, second, dot, subSecond, ampm, timeZone), //
