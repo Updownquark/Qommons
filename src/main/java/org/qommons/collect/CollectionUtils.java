@@ -491,30 +491,38 @@ public class CollectionUtils {
 
 		@Override
 		public ElementSyncAction leftOnly(ElementSyncInput<L, R> element) throws X {
+			ElementSyncAction action;
+			if (theLeftHandler != null)
+				action = theLeftHandler.apply(element);
+			else
+				action = isRemoving ? element.remove() : element.preserve();
 			if (theLeftListener != null)
 				theLeftListener.accept(element);
-			if (theLeftHandler != null)
-				return theLeftHandler.apply(element);
-			return isRemoving ? element.remove() : element.preserve();
+			return action;
 		}
 
 		@Override
 		public ElementSyncAction rightOnly(ElementSyncInput<L, R> element) throws X {
+			ElementSyncAction action;
+			if (theRightHandler != null)
+				action = theRightHandler.apply(element);
+			else
+				action = isAdding ? element.useValue(theMap.apply(element.getRightValue())) : element.preserve();
 			if (theRightListener != null)
 				theRightListener.accept(element);
-			if (theRightHandler != null)
-				return theRightHandler.apply(element);
-			return isAdding ? element.useValue(theMap.apply(element.getRightValue())) : element.preserve();
+			return action;
 		}
 
 		@Override
 		public ElementSyncAction common(ElementSyncInput<L, R> element) throws X {
+			ElementSyncAction action;
+			if (theCommonHandler == null)
+				action = element.remove();
+			else
+				action = theCommonHandler.apply(element);
 			if (theCommonListener != null)
 				theCommonListener.accept(element);
-			if (theCommonHandler == null)
-				return element.remove();
-			else
-				return theCommonHandler.apply(element);
+			return action;
 		}
 
 		@Override
@@ -1498,6 +1506,7 @@ public class CollectionUtils {
 
 			@Override
 			public ElementSyncAction useValue(L newValue) {
+				leftVal = newValue;
 				valueAction.value = newValue;
 				return valueAction;
 			}
