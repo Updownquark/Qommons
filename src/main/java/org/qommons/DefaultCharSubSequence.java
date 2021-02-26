@@ -40,7 +40,7 @@ public class DefaultCharSubSequence implements CharSequence {
 		int length = length();
 		if (index < 0 || index >= length)
 			throw new IndexOutOfBoundsException(index + " of " + length);
-		return theBacking.charAt(index - theStart);
+		return theBacking.charAt(index + theStart);
 	}
 
 	@Override
