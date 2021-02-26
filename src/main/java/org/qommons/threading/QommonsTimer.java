@@ -692,11 +692,12 @@ public class QommonsTimer {
 					try {
 						theClock.sleep(sleepTime);
 					} catch (InterruptedException e) {
+					} finally {
+						isSleeping.set(false);
 					}
 					now = theClock.now();
 				}
 			}
-			isSleeping.set(false);
 			if (theTaskQueue.isEmpty()) {
 				synchronized (this) {
 					if (theTaskQueue.isEmpty()) {
