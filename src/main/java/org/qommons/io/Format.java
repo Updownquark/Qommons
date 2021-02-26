@@ -15,10 +15,15 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TimeZone;
 import java.util.TreeMap;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.qommons.DefaultCharSubSequence;
+import org.qommons.Named;
 import org.qommons.QommonsUtils;
 import org.qommons.TimeUtils;
 import org.qommons.TimeUtils.TimeEvaluationOptions;
@@ -394,6 +399,10 @@ public interface Format<T> {
 	 */
 	public static FlexDateFormat flexibleDate(String dayFormat, TimeZone timeZone) {
 		return new FlexDateFormat(dayFormat, timeZone);
+	}
+
+	public static <E> FieldedFormatBuilder<E> fielded(Supplier<? extends E> creator, String delimiter, Pattern delimiterDetector) {
+		return new FieldedFormatBuilder<>(creator, delimiter, delimiterDetector);
 	}
 
 	/**
@@ -824,6 +833,256 @@ public interface Format<T> {
 				}
 			}
 			return formats.get(decimalDigits);
+		}
+	}
+
+	public static class FieldedFormatBuilder<E> {
+		private final Map<String, FormattedField<E, ?>> theFields;
+		private final Supplier<? extends E> theValueCreator;
+		private final String theDelimiter;
+		private final Pattern theDelimiterDetector;
+		private boolean isDelimitingEmptyFields;
+		private boolean isNullToEmpty;
+
+		FieldedFormatBuilder(Supplier<? extends E> valueCreator, String delimiter, Pattern delimiterDetector) {
+			theValueCreator = valueCreator;
+			theDelimiter = delimiter;
+			theDelimiterDetector = delimiterDetector;
+			theFields = new LinkedHashMap<>();
+		}
+
+		public FieldedFormatBuilder<E> nullToEmpty(boolean nullToEmpty) {
+			this.isNullToEmpty = nullToEmpty;
+			return this;
+		}
+
+		public FieldedFormatBuilder<E> delimitEmptyFields(boolean delimit) {
+			isDelimitingEmptyFields = delimit;
+			return this;
+		}
+
+		public <F> FieldedFormatBuilder<E> withField(String fieldName, Format<F> fieldFormat, Function<? super E, ? extends F> getter,
+			Function<FormattedField.Builder<E, F>, FormattedField<E, F>> builder) {
+			theFields.put(fieldName, //
+				builder.apply(//
+					new FormattedField.Builder<>(fieldName, fieldFormat, getter, theDelimiterDetector, theValueCreator != null)));
+			return this;
+		}
+
+		public FieldedFormat<E> build() {
+			return new FieldedFormat<>(QommonsUtils.unmodifiableCopy(theFields), theValueCreator, theDelimiter, theDelimiterDetector,
+				isDelimitingEmptyFields, isNullToEmpty);
+		}
+	}
+
+	public static class FormattedField<E, F> implements Named {
+		private final String theName;
+		private final Format<F> theFormat;
+		private final Function<CharSequence, Integer> theDetector;
+		private final Function<? super E, ? extends F> theGetter;
+		private final BiFunction<? super E, ? super F, ? extends E> theSetter;
+
+		FormattedField(String name, Format<F> format, Function<CharSequence, Integer> detector, Function<? super E, ? extends F> getter,
+			BiFunction<? super E, ? super F, ? extends E> setter) {
+			theName = name;
+			theFormat = format;
+			theDetector = detector;
+			theGetter = getter;
+			theSetter = setter;
+		}
+
+		@Override
+		public String getName() {
+			return theName;
+		}
+
+		public Format<F> getFormat() {
+			return theFormat;
+		}
+
+		public Function<CharSequence, Integer> getDetector() {
+			return theDetector;
+		}
+
+		public Function<? super E, ? extends F> getGetter() {
+			return theGetter;
+		}
+
+		public BiFunction<? super E, ? super F, ? extends E> getSetter() {
+			return theSetter;
+		}
+
+		public static class Builder<E, F> {
+			private final String theName;
+			private final Format<F> theFormat;
+			private final Function<? super E, ? extends F> theGetter;
+			private final boolean canCreate;
+			private Function<CharSequence, Integer> theDetector;
+
+			Builder(String name, Format<F> format, Function<? super E, ? extends F> getter, Pattern delimiter, boolean canCreate) {
+				theName = name;
+				theFormat = format;
+				theGetter = getter;
+				theDetector = delimiter == null ? null : text -> {
+					Matcher match = delimiter.matcher(text.toString());
+					if (match.find())
+						return match.start();
+					return text.length();
+				};
+				this.canCreate = canCreate;
+			}
+
+			public Builder<E, F> withDetector(Function<CharSequence, Integer> detector) {
+				theDetector = detector;
+				return this;
+			}
+
+			public FormattedField<E, F> build(BiConsumer<? super E, ? super F> setter) {
+				return build2((e, f) -> {
+					setter.accept(e, f);
+					return e;
+				});
+			}
+
+			public FormattedField<E, F> build2(BiFunction<? super E, ? super F, ? extends E> setter) {
+				if (setter == null && canCreate)
+					throw new NullPointerException("setter cannot be null");
+				if (theDetector == null)
+					throw new IllegalStateException("If no delimiter is used, a detector must be provided for field " + theName);
+				return new FormattedField<>(theName, theFormat, theDetector, theGetter, setter);
+			}
+		}
+	}
+
+	public static class FieldedFormat<E> implements Format<E> {
+		private final Map<String, FormattedField<E, ?>> theFields;
+		private final Supplier<? extends E> theValueCreator;
+		private final String theDelimiter;
+		private final Pattern theDelimiterDetector;
+		private final boolean isDelimitingEmptyFields;
+		private final boolean isNullToEmpty;
+
+		FieldedFormat(Map<String, FormattedField<E, ?>> fields, Supplier<? extends E> valueCreator, String delimiter,
+			Pattern delimiterDetector, boolean delimitingEmptyFields, boolean nullToEmpty) {
+			theFields = fields;
+			theValueCreator = valueCreator;
+			theDelimiter = delimiter;
+			theDelimiterDetector = delimiterDetector;
+			isDelimitingEmptyFields = delimitingEmptyFields;
+			isNullToEmpty = nullToEmpty;
+		}
+
+		@Override
+		public void append(StringBuilder text, E value) {
+			if (isNullToEmpty && value == null)
+				return;
+			boolean first = true;
+			boolean lastEmpty = false;
+			for (FormattedField<E, ?> field : theFields.values()) {
+				if (first)
+					first = false;
+				else if (theDelimiter != null && (isDelimitingEmptyFields || !lastEmpty))
+					text.append(theDelimiter);
+				Object fieldValue = field.getGetter().apply(value);
+				((Format<Object>) field.getFormat()).append(text, fieldValue);
+				lastEmpty = fieldValue == null;
+			}
+		}
+
+		@Override
+		public E parse(CharSequence text) throws ParseException {
+			if (isNullToEmpty && text.length() == 0)
+				return null;
+			if (theValueCreator == null)
+				throw new IllegalStateException("This format has not been enabled to parse values");
+			E value = theValueCreator.get();
+			int position = 0;
+			for (FormattedField<E, ?> field : theFields.values()) {
+				Integer found = field.getDetector().apply(new DefaultCharSubSequence(text, position, text.length()));
+				if (found != null && found < 0)
+					found = null;
+				if (found != null) {
+					Object fieldValue = field.getFormat().parse(new DefaultCharSubSequence(text, position, position + found));
+					value = ((FormattedField<E, Object>) field).getSetter().apply(value, fieldValue);
+					if (found > 0) {
+						position += found;
+					}
+				}
+				if (position < text.length() && theDelimiterDetector != null) {
+					Matcher match = theDelimiterDetector.matcher(new DefaultCharSubSequence(text, position, text.length()));
+					if (match.lookingAt())
+						position += match.end();
+					else if (found != null && found.intValue() != 0)
+						throw new ParseException("'" + theDelimiterDetector + "' expected", position);
+				}
+			}
+			return value;
+		}
+	}
+
+	public static class ListFormat<T> implements Format<List<T>> {
+		private final Format<T> theFormat;
+		private final String theDelimiter;
+		private final String postDelimit;
+
+		public ListFormat(Format<T> format, String delimiter, String postDelimit) {
+			theFormat = format;
+			theDelimiter = delimiter;
+			this.postDelimit = postDelimit;
+		}
+
+		public Format<T> getFormat() {
+			return theFormat;
+		}
+
+		public String getDelimiter() {
+			return theDelimiter;
+		}
+
+		public String getPostDelimit() {
+			return postDelimit;
+		}
+
+		@Override
+		public void append(StringBuilder text, List<T> value) {
+			if (value == null)
+				return;
+			boolean first = true;
+			for (T v : value) {
+				if (first)
+					first = false;
+				else {
+					text.append(theDelimiter);
+					if (postDelimit != null)
+						text.append(postDelimit);
+				}
+				theFormat.append(text, v);
+			}
+		}
+
+		@Override
+		public List<T> parse(CharSequence text) throws ParseException {
+			int start = 0;
+			int delimitIdx = 0;
+			List<T> list = new ArrayList<>();
+			for (int i = 0; i < text.length(); i++) {
+				if (text.charAt(i) == theDelimiter.charAt(delimitIdx)) {
+					delimitIdx++;
+					if (delimitIdx == theDelimiter.length()) {
+						delimitIdx = 0;
+						T value = theFormat.parse(text.subSequence(start, i + 1 - theDelimiter.length()));
+						list.add(value);
+						while (i < text.length() - 1 && Character.isWhitespace(text.charAt(i + 1)))
+							i++;
+						start = i + 1;
+					}
+				}
+			}
+			if (start < text.length()) {
+				T value = theFormat.parse(text.subSequence(start, text.length()));
+				list.add(value);
+			}
+			return list;
 		}
 	}
 }
