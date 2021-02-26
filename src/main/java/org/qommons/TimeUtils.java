@@ -2119,7 +2119,7 @@ public class TimeUtils {
 			new DateFormat("MdDthY4Z", weekDayOpt, monthDig, nonStdDateSep, day, stndrdth, nonStdDateSep, year4, timeZone), //
 			new DateFormat("MchDthY4Z", weekDayOpt, monthCh, optionalNonStdDateSep, day, stndrdth, optionalNonStdDateSep, year4, timeZone), //
 			new DateFormat("MdDthY2Z", weekDayOpt, monthDig, nonStdDateSep, day, stndrdth, nonStdDateSep, year2, timeZone), //
-			new DateFormat("MchDthY2Z", weekDayOpt, monthCh, optionalNonStdDateSep, day, stndrdth, optionalNonStdDateSep, year2, timeZone), //
+			new DateFormat("MchDthY2Z", weekDayOpt, monthCh, optionalNonStdDateSep, day, stndrdth, nonStdDateSep, year2, timeZone), //
 			new DateFormat("MdDthZ", weekDayOpt, monthDig, nonStdDateSep, day, stndrdth, timeZone), //
 			new DateFormat("MchDthZ", weekDayOpt, monthCh, optionalNonStdDateSep, day, stndrdth, timeZone), //
 			new DateFormat("M.Y4Z", weekDayOpt, monthDig, dot, year4, timeZone), //
@@ -2545,6 +2545,14 @@ public class TimeUtils {
 		else
 			days += monthDays;
 		return neg ? -days : days;
+	}
+
+	public static List<String> getWeekDays() {
+		return Arrays.asList(DAYS);
+	}
+
+	public static List<String> getWeekDaysAbbrev() {
+		return Arrays.asList(DAYS_ABBREV);
 	}
 
 	public static ParsedDuration flexDuration(int amount, DurationComponentType unit) {
