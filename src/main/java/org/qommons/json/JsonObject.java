@@ -61,6 +61,11 @@ public class JsonObject {
 		return theValues.entrySet();
 	}
 
+	/** @return The map backing this object's values */
+	public Map<String, Object> getMap() {
+		return theValues;
+	}
+
 	@Override
 	public int hashCode() {
 		return theValues.hashCode();

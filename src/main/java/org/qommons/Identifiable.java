@@ -77,6 +77,8 @@ public interface Identifiable {
 
 		@Override
 		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
 			return obj instanceof Identifiable && getIdentity().equals(((Identifiable) obj).getIdentity());
 		}
 
