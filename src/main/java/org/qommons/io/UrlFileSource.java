@@ -43,6 +43,32 @@ public class UrlFileSource implements FileDataSource {
 		return Collections.unmodifiableList(Arrays.asList(new UrlFileBacking(null, theRoot)));
 	}
 
+	@Override
+	public FileBacking getRoot(String name) {
+		URL url;
+		try {
+			url = new URL(theRoot + "/" + name);
+		} catch (MalformedURLException e) {
+			throw new IllegalArgumentException("Bad path: " + name);
+		}
+		return new UrlFileBacking(null, url);
+	}
+
+	@Override
+	public int hashCode() {
+		return theRoot.hashCode();
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		return obj instanceof UrlFileSource && theRoot.equals(((UrlFileSource) obj).theRoot);
+	}
+
+	@Override
+	public String toString() {
+		return theRoot.toString();
+	}
+
 	class UrlFileBacking implements BetterFile.FileBacking {
 		private UrlFileBacking theParent;
 		private final URL theURL;
@@ -95,7 +121,8 @@ public class UrlFileSource implements FileDataSource {
 
 		@Override
 		public boolean exists() {
-			return true;
+			checkData();
+			return theLastModified != -1;
 		}
 
 		@Override
@@ -129,7 +156,7 @@ public class UrlFileSource implements FileDataSource {
 		public UrlFileBacking getChild(String fileName) {
 			URL url;
 			try {
-				url = new URL(theURL, fileName);
+				url = new URL(theURL + "/" + fileName);
 			} catch (MalformedURLException e) {
 				throw new IllegalArgumentException("Bad URL sub-path \"" + fileName + "\"", e);
 			}
@@ -215,6 +242,11 @@ public class UrlFileSource implements FileDataSource {
 		public void visitAll(ExBiConsumer<? super FileBacking, CharSequence, IOException> forEach, BooleanSupplier canceled)
 			throws IOException {
 			forEach.accept(this, "");
+		}
+
+		@Override
+		public String toString() {
+			return theURL.toString();
 		}
 	}
 }

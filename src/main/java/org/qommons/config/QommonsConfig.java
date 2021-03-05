@@ -618,14 +618,14 @@ public abstract class QommonsConfig implements Cloneable {
 				throw new java.io.FileNotFoundException("Classpath configuration URL " + s + " refers to a non-existent resource");
 			}
 			return configURL;
-		} else if(s.contains(":/"))
+		} else if (s.contains("://"))
 			return new java.net.URL(s); // Absolute resource
 		else {
 			// See if it's a file path
 			File file = new File(s);
 			if (file.exists())
 				return file.toURI().toURL();
-			throw new java.io.IOException("Location " + s + " is invalid (" + file.getCanonicalPath() + ")");
+			throw new java.io.IOException("Location " + s + " is invalid or unreachable (" + file.getCanonicalPath() + ")");
 		}
 	}
 

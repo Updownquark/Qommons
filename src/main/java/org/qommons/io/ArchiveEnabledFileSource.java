@@ -131,6 +131,17 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		return QommonsUtils.map(theWrapped.getRoots(), r -> new ArchiveEnabledFileBacking(null, r, 0), true);
 	}
 
+	@Override
+	public FileBacking getRoot(String name) {
+		FileBacking wrapped = theWrapped.getRoot(name);
+		return new ArchiveEnabledFileBacking(null, wrapped, 0);
+	}
+
+	@Override
+	public String toString() {
+		return theWrapped.toString();
+	}
+
 	static final long FILE_CHECK_INTERVAL = 10;
 
 	class ArchiveEnabledFileBacking implements BetterFile.FileBacking {

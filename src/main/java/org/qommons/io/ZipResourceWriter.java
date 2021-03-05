@@ -91,24 +91,37 @@ public class ZipResourceWriter implements HierarchicalResourceWriter, AutoClosea
 	 * @throws IOException If an error occurs reading the data
 	 */
 	public static void doZipTask(File zipFile, ResourceTask zipTask) throws IOException {
+		try (ZipInputStream zin = new ZipInputStream(new BufferedInputStream(new FileInputStream(zipFile)))) {
+			doZipTask(zin, zipTask);
+		}
+	}
+
+	/**
+	 * Unpacks a zip stream to a temporary directory, calls the task on a resource reader pointed at the temp directory, then deletes the
+	 * temp directory when the task finishes
+	 *
+	 * @param zipIn The zip stream to unpack and operate on
+	 * @param zipTask The task to perform on the unpacked archive
+	 * @throws IOException If an error occurs reading the data
+	 */
+	public static void doZipTask(ZipInputStream zipIn, ResourceTask zipTask) throws IOException {
 		File dir = Files.createTempDirectory("export-temp").toFile();
 		try {
 			DefaultFileSource dfs = new DefaultFileSource(dir);
-			ZipInputStream zin = new ZipInputStream(new BufferedInputStream(new FileInputStream(zipFile)));
-			ZipEntry entry = zin.getNextEntry();
+			ZipEntry entry = zipIn.getNextEntry();
 			byte [] buffer = new byte[16 * 1024];
 			while(entry != null) {
 				try (OutputStream writer = dfs.writeResource(entry.getName())) {
-					int read = zin.read(buffer);
+					int read = zipIn.read(buffer);
 					while(read > 0) {
 						writer.write(buffer, 0, read);
-						read = zin.read(buffer);
+						read = zipIn.read(buffer);
 					}
 				}
-				zin.closeEntry();
-				entry = zin.getNextEntry();
+				zipIn.closeEntry();
+				entry = zipIn.getNextEntry();
 			}
-			zin.close();
+			zipIn.close();
 			zipTask.doTask(dfs);
 		} finally {
 			deleteDir(dir, null);

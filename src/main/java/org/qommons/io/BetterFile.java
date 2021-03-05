@@ -166,17 +166,15 @@ public interface BetterFile extends Named {
 	}
 
 	static List<BetterFile> getRoots(FileDataSource dataSource) {
-		List<FileBacking> backing = dataSource.getRoots();
-		List<BetterFile> roots = new ArrayList<>(backing.size());
-		for (int i = 0; i < backing.size(); i++)
-			roots.add(new FileRoot(dataSource, i));
+		List<BetterFile> roots = new ArrayList<>(dataSource.getRoots().size());
+		for (FileBacking root : dataSource.getRoots())
+			roots.add(new FileRoot(dataSource, root));
 		return Collections.unmodifiableList(roots);
 	}
 
 	static BetterFile at(FileDataSource dataSource, String path) {
 		StringBuilder name = new StringBuilder();
 		AbstractWrappingFile parent = null;
-		List<FileBacking> roots = dataSource.getRoots();
 		for (int c = 0; c < path.length(); c++) {
 			if (path.charAt(c) == '/' || path.charAt(c) == '\\') {
 				if (c == 0) {//
@@ -185,14 +183,7 @@ public interface BetterFile extends Named {
 					throw new IllegalArgumentException("Illegal path: " + path);
 				if (parent == null) {
 					String rootName = name.toString();
-					for (int r = 0; r < roots.size(); r++) {
-						if (roots.get(r).getName().equals(rootName)) {
-							parent = new FileRoot(dataSource, r);
-							break;
-						}
-					}
-					if (parent == null)
-						throw new IllegalArgumentException("No such root: " + rootName);
+					parent = new FileRoot(dataSource, dataSource.getRoot(rootName));
 				} else
 					parent = parent.createChild(name.toString(), null);
 				name.setLength(0);
@@ -202,14 +193,7 @@ public interface BetterFile extends Named {
 		if (name.length() > 0) {
 			if (parent == null) {
 				String rootName = name.toString();
-				for (int r = 0; r < roots.size(); r++) {
-					if (roots.get(r).getName().equals(rootName)) {
-						parent = new FileRoot(dataSource, r);
-						break;
-					}
-				}
-				if (parent == null)
-					throw new IllegalArgumentException("No such root: " + rootName);
+				parent = new FileRoot(dataSource, dataSource.getRoot(rootName));
 			} else
 				parent = parent.createChild(name.toString(), null);
 		}
@@ -257,6 +241,13 @@ public interface BetterFile extends Named {
 
 	public interface FileDataSource {
 		List<FileBacking> getRoots();
+
+		default FileBacking getRoot(String name) {
+			for (FileBacking root : getRoots())
+				if (root.getName().equals(name))
+					return root;
+			throw new IllegalArgumentException("No such root: " + name);
+		}
 	}
 
 	public abstract class AbstractWrappingFile implements BetterFile {
@@ -466,11 +457,11 @@ public interface BetterFile extends Named {
 
 	public class FileRoot extends BetterFile.AbstractWrappingFile {
 		private final BetterFile.FileDataSource theDataSource;
-		private final int theRootIndex;
+		private final FileBacking theRoot;
 
-		public FileRoot(BetterFile.FileDataSource dataSource, int rootIndex) {
+		public FileRoot(BetterFile.FileDataSource dataSource, FileBacking root) {
 			theDataSource = dataSource;
-			theRootIndex = rootIndex;
+			theRoot = root;
 		}
 
 		protected BetterFile.FileDataSource getDataSource() {
@@ -492,7 +483,7 @@ public interface BetterFile extends Named {
 
 		@Override
 		protected FileBacking findBacking() {
-			return theDataSource.getRoots().get(theRootIndex);
+			return theRoot;
 		}
 
 		@Override
@@ -544,7 +535,7 @@ public interface BetterFile extends Named {
 			FileBacking parentBacking = theParent.check();
 			if (parentBacking == null)
 				parentBacking = theParent.createBacking(true);
-			else if (!parentBacking.get(BetterFile.FileBooleanAttribute.Directory))
+			else if (parentBacking.exists() && !parentBacking.get(BetterFile.FileBooleanAttribute.Directory))
 				throw new IOException("Cannot create a child of a non-directory file " + theParent);
 			return parentBacking.createChild(theName, directory);
 		}

@@ -686,7 +686,19 @@ public class QommonsTimer {
 				}
 			});
 			now = theClock.now();
-			if (minNextRun[0] != null && minNextRun[0].compareTo(now) > 0) {
+			if (minNextRun[0] == null) {
+				if (isSleeping.compareAndSet(false, true)) {
+					try {
+						Thread.sleep(1_000_000_000L);
+					} catch (InterruptedException e) {
+					} finally {
+						isSleeping.set(false);
+					}
+					now = theClock.now();
+				} else {
+					isSleeping.set(false);
+				}
+			} else if (minNextRun[0].compareTo(now) > 0) {
 				Duration sleepTime = TimeUtils.between(now, minNextRun[0]);
 				if (isSleeping.compareAndSet(false, true)) {
 					try {
@@ -696,6 +708,8 @@ public class QommonsTimer {
 						isSleeping.set(false);
 					}
 					now = theClock.now();
+				} else {
+					isSleeping.set(false);
 				}
 			}
 			if (theTaskQueue.isEmpty()) {

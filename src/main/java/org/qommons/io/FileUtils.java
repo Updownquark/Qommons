@@ -86,7 +86,7 @@ public class FileUtils {
 			.withArchival(new ArchiveEnabledFileSource.ZipCompression());
 	}
 
-	public static BetterFile getClassFile(Class<?> clazz) throws MalformedURLException {
+	public static BetterFile getClassFile(Class<?> clazz) {
 		String classFileName = clazz.getName();
 		int dotIdx = classFileName.lastIndexOf('.');
 		if (dotIdx >= 0)
@@ -98,11 +98,29 @@ public class FileUtils {
 		return ofUrl(resource);
 	}
 
-	public static BetterFile ofUrl(URL url) throws MalformedURLException {
-		return ofUrl(getDefaultFileSource(), url);
+	public static BetterFile ofUrl(URL url) {
+		BetterFile.FileDataSource fileSource;
+		switch (url.getProtocol()) {
+		case "file":
+		case "jar":
+			fileSource = getDefaultFileSource();
+			break;
+		default:
+			String urlStr = url.toString();
+			URL rootURL;
+			try {
+				rootURL = new URL(urlStr.substring(0, urlStr.length() - url.getPath().length()));
+			} catch (MalformedURLException e) {
+				throw new IllegalArgumentException("Unrecognizable URL: " + e);
+			}
+			fileSource = new ArchiveEnabledFileSource(new UrlFileSource(rootURL))
+				.withArchival(new ArchiveEnabledFileSource.ZipCompression());
+			break;
+		}
+		return ofUrl(fileSource, url);
 	}
 
-	public static BetterFile ofUrl(BetterFile.FileDataSource fileSource, URL url) throws MalformedURLException {
+	public static BetterFile ofUrl(BetterFile.FileDataSource fileSource, URL url) {
 		switch (url.getProtocol()) {
 		case "file":
 			// TODO Better escape handling
@@ -110,12 +128,18 @@ public class FileUtils {
 		case "jar":
 			String path = url.getPath();
 			int div = path.indexOf('!');
-			URL jarUrl = new URL(path.substring(0, div));
+			URL jarUrl;
+			try {
+				jarUrl = new URL(path.substring(0, div));
+			} catch (MalformedURLException e) {
+				throw new IllegalStateException("Didn't like the jar subsequence", e);
+			}
 			BetterFile jarFile = ofUrl(fileSource, jarUrl);
 			return jarFile.at(path.substring(div + 2));
 		default:
-			return BetterFile.at(new ArchiveEnabledFileSource(new UrlFileSource(new URL(url, "/")))//
-				.withArchival(new ArchiveEnabledFileSource.ZipCompression()), url.getPath());
+			// Knock off the initial '/' so we know it's a relative path
+			path = url.getPath().substring(1);
+			return BetterFile.at(fileSource, path);
 		}
 	}
 
