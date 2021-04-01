@@ -401,6 +401,15 @@ public interface Format<T> {
 		return new FlexDateFormat(dayFormat, timeZone);
 	}
 
+	/**
+	 * Builds a fielded format, used to persist entity-like objects to a string
+	 * 
+	 * @param <E> The type of value to persist
+	 * @param creator Creates blank values
+	 * @param delimiter The delimiter to insert between fields
+	 * @param delimiterDetector A pattern to find the delimiter in text
+	 * @return The builder for the fielded format
+	 */
 	public static <E> FieldedFormatBuilder<E> fielded(Supplier<? extends E> creator, String delimiter, Pattern delimiterDetector) {
 		return new FieldedFormatBuilder<>(creator, delimiter, delimiterDetector);
 	}
@@ -836,6 +845,11 @@ public interface Format<T> {
 		}
 	}
 
+	/**
+	 * Builds a fielded format, used to persist entity-like objects to a string
+	 * 
+	 * @param <E> The type of value to persist
+	 */
 	public static class FieldedFormatBuilder<E> {
 		private final Map<String, FormattedField<E, ?>> theFields;
 		private final Supplier<? extends E> theValueCreator;
@@ -851,16 +865,34 @@ public interface Format<T> {
 			theFields = new LinkedHashMap<>();
 		}
 
+		/**
+		 * @param nullToEmpty Whether null entity values should be persisted as an empty string
+		 * @return This builder
+		 */
 		public FieldedFormatBuilder<E> nullToEmpty(boolean nullToEmpty) {
 			this.isNullToEmpty = nullToEmpty;
 			return this;
 		}
 
+		/**
+		 * @param delimit Whether a delimiter should be inserted after fields that are formatted as an empty string
+		 * @return This builder
+		 */
 		public FieldedFormatBuilder<E> delimitEmptyFields(boolean delimit) {
 			isDelimitingEmptyFields = delimit;
 			return this;
 		}
 
+		/**
+		 * Configures a field to persist
+		 * 
+		 * @param <F> The type of the field
+		 * @param fieldName The name for the field
+		 * @param fieldFormat The format to use for the field
+		 * @param getter The getter for the field
+		 * @param builder Configures the field
+		 * @return This builder
+		 */
 		public <F> FieldedFormatBuilder<E> withField(String fieldName, Format<F> fieldFormat, Function<? super E, ? extends F> getter,
 			Function<FormattedField.Builder<E, F>, FormattedField<E, F>> builder) {
 			theFields.put(fieldName, //
@@ -869,12 +901,19 @@ public interface Format<T> {
 			return this;
 		}
 
+		/** @return the fielded format */
 		public FieldedFormat<E> build() {
 			return new FieldedFormat<>(QommonsUtils.unmodifiableCopy(theFields), theValueCreator, theDelimiter, theDelimiterDetector,
 				isDelimitingEmptyFields, isNullToEmpty);
 		}
 	}
 
+	/**
+	 * A field in a {@link FieldedFormat fielded format}
+	 * 
+	 * @param <E> The type of the entity
+	 * @param <F> The type of the field
+	 */
 	public static class FormattedField<E, F> implements Named {
 		private final String theName;
 		private final Format<F> theFormat;
@@ -896,22 +935,32 @@ public interface Format<T> {
 			return theName;
 		}
 
+		/** @return The format used for this field */
 		public Format<F> getFormat() {
 			return theFormat;
 		}
 
+		/** @return Detects the presence of the field in a sequence */
 		public Function<CharSequence, Integer> getDetector() {
 			return theDetector;
 		}
 
+		/** @return The getter for the field */
 		public Function<? super E, ? extends F> getGetter() {
 			return theGetter;
 		}
 
+		/** @return The setter for the field */
 		public BiFunction<? super E, ? super F, ? extends E> getSetter() {
 			return theSetter;
 		}
 
+		/**
+		 * Configures a formatted field
+		 * 
+		 * @param <E> The type of the entity
+		 * @param <F> The type of the field
+		 */
 		public static class Builder<E, F> {
 			private final String theName;
 			private final Format<F> theFormat;
@@ -932,11 +981,21 @@ public interface Format<T> {
 				this.canCreate = canCreate;
 			}
 
+			/**
+			 * Overrides the default detector (a simple text search for the entity's delimiter)
+			 * 
+			 * @param detector The function to detect the presence of the field--returns -1 if the field is not present in the sequence
+			 * @return This builder
+			 */
 			public Builder<E, F> withDetector(Function<CharSequence, Integer> detector) {
 				theDetector = detector;
 				return this;
 			}
 
+			/**
+			 * @param setter The setter for the field
+			 * @return The new field
+			 */
 			public FormattedField<E, F> build(BiConsumer<? super E, ? super F> setter) {
 				return build2((e, f) -> {
 					setter.accept(e, f);
@@ -944,6 +1003,10 @@ public interface Format<T> {
 				});
 			}
 
+			/**
+			 * @param setter The setter for the field
+			 * @return The new field
+			 */
 			public FormattedField<E, F> build2(BiFunction<? super E, ? super F, ? extends E> setter) {
 				if (setter == null && canCreate)
 					throw new NullPointerException("setter cannot be null");
@@ -954,6 +1017,11 @@ public interface Format<T> {
 		}
 	}
 
+	/**
+	 * A format used to persist entity-like objects to a string
+	 * 
+	 * @param <E> The type of the entity to persist
+	 */
 	public static class FieldedFormat<E> implements Format<E> {
 		private final Map<String, FormattedField<E, ?>> theFields;
 		private final Supplier<? extends E> theValueCreator;
@@ -1020,25 +1088,38 @@ public interface Format<T> {
 		}
 	}
 
+	/**
+	 * Persists lists of objects to a single string
+	 * 
+	 * @param <T> The type of elements in the list
+	 */
 	public static class ListFormat<T> implements Format<List<T>> {
 		private final Format<T> theFormat;
 		private final String theDelimiter;
 		private final String postDelimit;
 
+		/**
+		 * @param format The format for list elements
+		 * @param delimiter The delimiter between elements
+		 * @param postDelimit An optional sequence to insert after the delimiter (e.g. whitespace in a UI text field)
+		 */
 		public ListFormat(Format<T> format, String delimiter, String postDelimit) {
 			theFormat = format;
 			theDelimiter = delimiter;
 			this.postDelimit = postDelimit;
 		}
 
+		/** @return The format for list elements */
 		public Format<T> getFormat() {
 			return theFormat;
 		}
 
+		/** @return The delimiter between elements */
 		public String getDelimiter() {
 			return theDelimiter;
 		}
 
+		/** @return The optional sequence inserted after the delimiter */
 		public String getPostDelimit() {
 			return postDelimit;
 		}

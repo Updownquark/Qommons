@@ -9,13 +9,24 @@ import java.util.function.BooleanSupplier;
 
 import org.qommons.Named;
 
+/**
+ * The Qonsole class allows callers to monitor a reader (e.g. {@link System#in}) for targeted input without dominating it. Using this class,
+ * A caller can register a {@link QonsolePlugin plugin} to be notified when the user calls it by name from System.in, but code that calls
+ * System.in or uses this class later is not affected.
+ */
 public class Qonsole implements Named, AutoCloseable {
+	/** A plugin to listen for targeted user input in a Qonsole */
 	public interface QonsolePlugin {
+		/**
+		 * @param content The content to parse
+		 * @return True if the content complete, false if more lines are expected
+		 */
 		public boolean input(CharSequence content);
 	}
 
 	private static Qonsole SYSTEM_QONSOLE;
 
+	/** @return A Qonsole monitoring System.in that does not interfere with other (later) users of System.in */
 	public static Qonsole getSystemConsole() {
 		if (SYSTEM_QONSOLE == null) {
 			synchronized (Qonsole.class) {
@@ -41,6 +52,12 @@ public class Qonsole implements Named, AutoCloseable {
 	private QonsolePlugin theCurrentPlugin;
 	private int theCommandOffset;
 
+	/**
+	 * @param name The name of the qonsole
+	 * @param in The reader to monitor
+	 * @param commandSeparator The command separator to watch for
+	 * @param closed Tells this qonsole to stop actively monitoring input
+	 */
 	public Qonsole(String name, Reader in, String commandSeparator, BooleanSupplier closed) {
 		theName = name;
 		theInput = in;
@@ -72,10 +89,16 @@ public class Qonsole implements Named, AutoCloseable {
 		return theName;
 	}
 
+	/** @return The Reader for content not used by any plugin */
 	public Reader read() {
 		return thePublicBuffer.read();
 	}
 
+	/**
+	 * @param pluginName The name of the plugin, by which the user may address content to it
+	 * @param plugin The plugin to receive the content
+	 * @return This Qonsole
+	 */
 	public synchronized Qonsole addPlugin(String pluginName, QonsolePlugin plugin) {
 		QonsolePlugin old = thePlugins.putIfAbsent(pluginName, plugin);
 		if (old != null)
@@ -135,6 +158,7 @@ public class Qonsole implements Named, AutoCloseable {
 		isDone = true;
 	}
 
+	/** @return Whether this Qonsole is closed either due to a {@link #close()} call or because its source reader is exhausted */
 	public boolean isClosed() {
 		return isDone || isClosed.getAsBoolean();
 	}

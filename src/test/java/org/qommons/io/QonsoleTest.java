@@ -1,6 +1,7 @@
 package org.qommons.io;
 
 import java.io.IOException;
+import java.io.Reader;
 import java.time.Duration;
 
 import org.junit.Assert;
@@ -8,7 +9,10 @@ import org.junit.Test;
 import org.qommons.TestHelper;
 import org.qommons.TestHelper.Testable;
 
+/** Tests {@link Qonsole} */
 public class QonsoleTest {
+	/** Random {@link Qonsole} test */
+	@SuppressWarnings("static-method")
 	@Test
 	public void testQonsole() {
 		TestHelper.createTester(QTestable.class).revisitKnownFailures(true).withDebug(true).withFailurePersistence(true)
@@ -20,7 +24,8 @@ public class QonsoleTest {
 		public void accept(TestHelper helper) {
 			BufferedReaderWriter rw = new BufferedReaderWriter();
 			int[] testValues = new int[2];
-			try (Qonsole qonsole = new Qonsole("Test", rw.read(), ":", () -> false)//
+			try (Reader reader = rw.read();
+				Qonsole qonsole = new Qonsole("Test", reader, ":", () -> false)//
 				.addPlugin("test0", content -> {
 					int line = indexOf(content, '\n');
 					String firstLine = line < 0 ? content.toString() : content.subSequence(0, line).toString();
@@ -59,7 +64,7 @@ public class QonsoleTest {
 					default:
 						throw new IllegalArgumentException("Unrecognized command: " + content);
 					}
-				})) {
+					})) {
 				int[] expectedValues = new int[testValues.length];
 
 				for (int i = 0; i < 50; i++) {

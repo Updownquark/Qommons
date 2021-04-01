@@ -12,7 +12,10 @@ import org.junit.Test;
 import org.qommons.TestHelper;
 import org.qommons.TestHelper.Testable;
 
+/** Tests {@link ReaderInputStream} */
 public class ReaderInputStreamTest {
+	/** Random {@link ReaderInputStream} test */
+	@SuppressWarnings("static-method")
 	@Test
 	public void testReaderInputStream() {
 		TestHelper.createTester(RISTestable.class).revisitKnownFailures(true).withDebug(true).withFailurePersistence(true)

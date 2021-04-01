@@ -223,6 +223,13 @@ public interface SpinnerFormat<T> extends Format<T> {
 		};
 	}
 
+	/**
+	 * @param <T> The type of value
+	 * @param format The spinner format to do the parsing and adjustment of values
+	 * @param min The minimum value to allow in the spinner. Adjusting downward from min will produce a value of max.
+	 * @param max THe maximum value to allow in the spinner. Adjusting upward from max will produce a value of min.
+	 * @return The wrapping spinner format
+	 */
 	public static <T> SpinnerFormat<T> wrapAround(SpinnerFormat<T> format, Supplier<T> min, Supplier<T> max) {
 		return new WrappingSpinnerFormat<>(format, min, max);
 	}
@@ -347,12 +354,17 @@ public interface SpinnerFormat<T> extends Format<T> {
 		}
 	}
 
+	/**
+	 * Implements {@link SpinnerFormat#wrapAround(SpinnerFormat, Supplier, Supplier)}
+	 * 
+	 * @param <T> The type of formatted value
+	 */
 	public static class WrappingSpinnerFormat<T> implements SpinnerFormat<T> {
 		private final SpinnerFormat<T> theWrapped;
 		private final Supplier<T> theMinimum;
 		private final Supplier<T> theMaximum;
 
-		public WrappingSpinnerFormat(SpinnerFormat<T> wrapped, Supplier<T> minimum, Supplier<T> maximum) {
+		WrappingSpinnerFormat(SpinnerFormat<T> wrapped, Supplier<T> minimum, Supplier<T> maximum) {
 			theWrapped = wrapped;
 			theMinimum = minimum;
 			theMaximum = maximum;
@@ -386,7 +398,17 @@ public interface SpinnerFormat<T> extends Format<T> {
 		}
 	}
 
+	/**
+	 * Formats lists of values, with each individual element adjustable
+	 * 
+	 * @param <T> The type of value in the list
+	 */
 	public static class ListFormat<T> extends Format.ListFormat<T> implements SpinnerFormat<List<T>> {
+		/**
+		 * @param format The format for list elements
+		 * @param delimiter The delimiter between elements
+		 * @param postDelimit An optional sequence to insert after the delimiter (e.g. whitespace in a UI text field)
+		 */
 		public ListFormat(SpinnerFormat<T> format, String delimiter, String postDelimit) {
 			super(format, delimiter, postDelimit);
 		}
@@ -448,11 +470,21 @@ public interface SpinnerFormat<T> extends Format<T> {
 		}
 	}
 
+	/**
+	 * Similar to SpinnerFormat.ListFormat, but enforces distinctness among the elements
+	 * 
+	 * @param <T> The type of elements in the set
+	 */
 	public static class SetFormat<T> implements SpinnerFormat<Set<T>> {
 		private final SpinnerFormat<T> theFormat;
 		private final String theDelimiter;
 		private final String postDelimit;
 
+		/**
+		 * @param format The format for list elements
+		 * @param delimiter The delimiter between elements
+		 * @param postDelimit An optional sequence to insert after the delimiter (e.g. whitespace in a UI text field)
+		 */
 		public SetFormat(SpinnerFormat<T> format, String delimiter, String postDelimit) {
 			theFormat = format;
 			theDelimiter = delimiter;
@@ -528,8 +560,13 @@ public interface SpinnerFormat<T> extends Format<T> {
 							if (i - cursor < theDelimiter.length())
 								return null; // Adjustment on the delimiter
 							T valueI = valueIter.next();
+							// Find the next value that is NOT already present in the set
 							BiTuple<T, String> adjusted = theFormat.adjust(//
 								valueI, formatted.substring(start, i - theDelimiter.length()), cursor - start, up);
+							while (adjusted != null && value.contains(adjusted.getValue1())) {
+								if (adjusted.getValue1().equals(valueI))
+									return null; // Wrapped around--no distinct values we can move to
+							}
 							if (adjusted == null)
 								return null;
 							newValue.add(adjusted.getValue1());

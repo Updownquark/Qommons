@@ -325,6 +325,11 @@ public class CsvParser {
 		}
 	}
 
+	/**
+	 * @param string The string to format to CSV
+	 * @param delimiter The delimiter of the format
+	 * @return The CSV-formatted cell value
+	 */
 	public static String toCsv(String string, char delimiter) {
 		if (string.indexOf(delimiter) < 0)
 			return string;
@@ -339,6 +344,23 @@ public class CsvParser {
 		return str.toString();
 	}
 
+	/**
+	 * <p>
+	 * A simple program that reads in a CSV file (the "--src=&lt;file>" argument) and prints it to another file (the "--target=&lt;file>"
+	 * argument).
+	 * </p>
+	 * 
+	 * <p>
+	 * The non-trivial part is that this program has the capability to filter columns and rows out of the ouput. Columns can be filtered
+	 * using the "--include=header1,header2..." or "--exclude=header1,header2..." arguments. Rows can be filtered using one or more
+	 * "--filter=column=value" arguments.
+	 * </p>
+	 * <p>
+	 * The delimiter character can be overridden (default is ',') using "--delimiter=?"
+	 * </p>
+	 * 
+	 * @param args Command line arguments determining the location of the source and target files, the filtering, and the delimiter.
+	 */
 	public static void main(String [] args) {
 		ArgumentParsing2.Arguments parsedArgs = ArgumentParsing2.build().forValuePattern(a -> {
 			a.addBetterFileArgument("src", f -> f.required().directory(false).mustExist(true))//
