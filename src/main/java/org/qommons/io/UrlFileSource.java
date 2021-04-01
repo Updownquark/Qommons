@@ -18,21 +18,28 @@ import org.qommons.io.BetterFile.FileBooleanAttribute;
 import org.qommons.io.BetterFile.FileDataSource;
 import org.qommons.io.FileUtils.DirectorySyncResults;
 
+/** A file source that can read from {@link URL}s */
 public class UrlFileSource implements FileDataSource {
 	private static final long DEFAULT_CHECK_INTERVAL = 1000;
 
 	private final URL theRoot;
 	private long theCheckInterval;
 
+	/** @param root The root URL path */
 	public UrlFileSource(URL root) {
 		theRoot = root;
 		theCheckInterval = DEFAULT_CHECK_INTERVAL;
 	}
 
+	/** @return The length (in ms) between when this file source re-checks URLs for changes */
 	public long getCheckInterval() {
 		return theCheckInterval;
 	}
 
+	/**
+	 * @param checkInterval The length (in ms) between when this file source should re-check URLs for changes
+	 * @return This file source
+	 */
 	public UrlFileSource setCheckInterval(long checkInterval) {
 		theCheckInterval = checkInterval;
 		return this;

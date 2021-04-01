@@ -601,7 +601,8 @@ public class TimeUtils {
 				index += valueStr.length() + 1;
 			}
 			int nanos = d.getNano();
-			if (nanos == 0) {} else if (nanos % 1_000_000 == 0) {
+			if (nanos == 0) {
+			} else if (nanos % 1_000_000 == 0) {
 				if (!components.isEmpty()) {
 					separators.add(" ");
 					index++;
@@ -1007,8 +1008,14 @@ public class TimeUtils {
 		}
 	}
 
+	/** Strategies for evaluating relative times */
 	public enum RelativeTimeEvaluation {
-		PAST, FUTURE, CLOSEST
+		/** Chooses the closest time matching the relative time <b>before</b> the reference time */
+		PAST,
+		/** Chooses the closest time matching the relative time <b>after</b> the reference time */
+		FUTURE,
+		/** Chooses the closest time matching the relative time either before or after the reference time */
+		CLOSEST
 	}
 
 	/**
@@ -1039,6 +1046,7 @@ public class TimeUtils {
 			}
 		}
 
+		/** @return The relative time evaluation strategy to use for {@link #evaluate(Supplier) evaluation} */
 		public RelativeTimeEvaluation getEvaluationType() {
 			return theEvaluationType;
 		}
@@ -1462,9 +1470,11 @@ public class TimeUtils {
 		}
 	}
 
+	/** Default time evaluation options */
 	public static final TimeEvaluationOptions DEFAULT_OPTIONS = new TimeEvaluationOptions(TimeZone.getDefault(), DateElementType.SubSecond,
 		false, RelativeTimeEvaluation.CLOSEST);
 
+	/** Different options that can be used when evaluating and parsing times */
 	public static class TimeEvaluationOptions {
 		private final TimeZone theTimeZone;
 		private final DateElementType theMaxResolution;
@@ -1479,40 +1489,60 @@ public class TimeUtils {
 			theEvaluationType = evaluationType;
 		}
 
+		/** @return The time zone to parse/format in */
 		public TimeZone getTimeZone() {
 			return theTimeZone;
 		}
 
+		/** @return The maximum resolution to print times in */
 		public DateElementType getMaxResolution() {
 			return theMaxResolution;
 		}
 
+		/** @return Whether to print in 24-hour or 12-hour format */
 		public boolean is24HourFormat() {
 			return is24HourFormat;
 		}
 
+		/** @return The relative time evaluation strategy to use */
 		public RelativeTimeEvaluation getEvaluationType() {
 			return theEvaluationType;
 		}
 
+		/**
+		 * @param timeZone The time zone to parse/format in
+		 * @return A set of time evaluation options identical to this but with the given time zone
+		 */
 		public TimeEvaluationOptions withTimeZone(TimeZone timeZone) {
 			if (timeZone.equals(theTimeZone))
 				return this;
 			return new TimeEvaluationOptions(timeZone, theMaxResolution, is24HourFormat, theEvaluationType);
 		}
 
+		/**
+		 * @param resolution The maximum resolution to print times in
+		 * @return A set of time evaluation options identical to this but with the given max resolution
+		 */
 		public TimeEvaluationOptions withMaxResolution(DateElementType resolution) {
 			if (theMaxResolution == resolution)
 				return this;
 			return new TimeEvaluationOptions(theTimeZone, resolution, is24HourFormat, theEvaluationType);
 		}
 
+		/**
+		 * @param twentyFourHourFormat Whether to print in 24- or 12-hour format
+		 * @return A set of time evaluation options identical to this but with the given 24-hour format setting
+		 */
 		public TimeEvaluationOptions with24HourFormat(boolean twentyFourHourFormat) {
 			if (is24HourFormat == twentyFourHourFormat)
 				return this;
 			return new TimeEvaluationOptions(theTimeZone, theMaxResolution, twentyFourHourFormat, theEvaluationType);
 		}
 
+		/**
+		 * @param evalutionType The relative time evaluation strategy to use
+		 * @return A set of time evaluation options identical to this but with the given relative time evaluation strategy
+		 */
 		public TimeEvaluationOptions withEvaluationType(RelativeTimeEvaluation evalutionType) {
 			if (theEvaluationType == evalutionType)
 				return this;
@@ -1695,7 +1725,7 @@ public class TimeUtils {
 				} else if (hour == 12)
 					hour = 0;
 				element.value = hour;
-			} 
+			}
 
 			if (year != null && year.text.length() >= 4) {
 				Calendar cal = CALENDAR.get();
@@ -1831,7 +1861,8 @@ public class TimeUtils {
 			int parse(CharSequence match) {
 				for (int m = 0; m < MONTHS.length; m++) {
 					int i;
-					for (i = 0; i < match.length() && Character.toLowerCase(match.charAt(i)) == MONTHS[m].charAt(i); i++) {}
+					for (i = 0; i < match.length() && Character.toLowerCase(match.charAt(i)) == MONTHS[m].charAt(i); i++) {
+					}
 					if (i == match.length())
 						return m;
 				}
@@ -2138,8 +2169,6 @@ public class TimeUtils {
 
 		TIME_ZONES = QuickSet.of(String::compareToIgnoreCase, TimeZone.getAvailableIDs()).createMap();
 	}
-
-	private static final String DAY_FORMAT = "ddMMMyyyy";
 
 	private static final String[] DAYS = new String[] { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
 	private static final String[] DAYS_ABBREV = new String[] { "Sun", "Mon", "Tues", "Wed", "Thurs", "Fri", "Sat" };
@@ -2547,14 +2576,21 @@ public class TimeUtils {
 		return neg ? -days : days;
 	}
 
+	/** @return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] */
 	public static List<String> getWeekDays() {
 		return Arrays.asList(DAYS);
 	}
 
+	/** @return ["Sun", "Mon", "Tues", "Wed", "Thurs", "Fri", "Sat"] */
 	public static List<String> getWeekDaysAbbrev() {
 		return Arrays.asList(DAYS_ABBREV);
 	}
 
+	/**
+	 * @param amount The time amount
+	 * @param unit The time unit
+	 * @return A parsed duration object with the given duration
+	 */
 	public static ParsedDuration flexDuration(int amount, DurationComponentType unit) {
 		StringBuilder str = new StringBuilder().append(Math.abs(amount));
 		int valueEnd = str.length();
@@ -2708,14 +2744,22 @@ public class TimeUtils {
 		DURATION_PRECISION_ABBREVS = Collections.unmodifiableList(abbrevs);
 	}
 
+	/** @see RelativeTimeFormat#withAboveDayStrategy(AboveDaysStrategy) */
 	public enum AboveDaysStrategy {
-		MonthYear, Week, None;
+		/** Prints >1 day time differences in terms of months and years */
+		MonthYear,
+		/** Prints >1 day time differences in terms of weeks */
+		Week,
+		/** Prints >1 day time differences in terms of days */
+		None;
 	}
 
+	/** @return A new relative time format */
 	public static RelativeTimeFormat relativeFormat() {
 		return new RelativeTimeFormat();
 	}
 
+	/** Prints {@link Instant}s to {@link String}s in a custom way */
 	public static class RelativeTimeFormat {
 		private Supplier<Instant> theReference;
 		private TimeZone theTimeZone;
@@ -2737,32 +2781,59 @@ public class TimeUtils {
 			theAgo = "ago";
 		}
 
+		/**
+		 * @param reference The reference time to use when printing
+		 * @return This time format
+		 */
 		public RelativeTimeFormat withReference(Supplier<Instant> reference) {
 			theReference = reference;
 			return this;
 		}
 
+		/**
+		 * @param timeZone The time zone to use
+		 * @return This format
+		 */
 		public RelativeTimeFormat withTimeZone(TimeZone timeZone) {
 			theTimeZone = timeZone;
 			return this;
 		}
 
+		/**
+		 * @param maxPrecision The maximum precision to print
+		 * @return This format
+		 */
 		public RelativeTimeFormat withMaxPrecision(DurationComponentType maxPrecision) {
 			theMaxPrecision = maxPrecision;
 			return this;
 		}
 
+		/**
+		 * @param elements The maximum number of different units to print
+		 * @return This format
+		 */
 		public RelativeTimeFormat withMaxElements(int elements) {
 			theMaxElements = elements;
 			return this;
 		}
 
+		/**
+		 * @param abbrev Whether to abbreviate time units
+		 * @param pluralized Whether to pluralize time units
+		 * @return This format
+		 */
 		public RelativeTimeFormat abbreviated(boolean abbrev, boolean pluralized) {
 			thePrecisionNames = abbrev ? DURATION_PRECISION_ABBREVS : DURATION_PRECISION_NAMES;
 			isPluralized = pluralized;
 			return this;
 		}
 
+		/**
+		 * Sets a custom unit name set. Use {@link #abbreviated(boolean, boolean)} to use standard unit names.
+		 * 
+		 * @param precisionNames The names to use for each of the {@link DurationComponentType}s
+		 * @return This format
+		 */
 		public RelativeTimeFormat withPrecisionNames(List<String> precisionNames) {
 			if (precisionNames.size() != DurationComponentType.values().length)
 				throw new IllegalArgumentException("Precision names must contain " + DurationComponentType.values().length
@@ -2771,29 +2842,59 @@ public class TimeUtils {
 			return this;
 		}
 
+		/**
+		 * @param justNow The string to print if the target instant is equal to the {@link #withReference(Supplier) reference} time within
+		 *        the configured {@link #withMaxPrecision(DurationComponentType) max precision}, or null to just print 0&lt;max prec unit>
+		 * @return This format
+		 */
 		public RelativeTimeFormat withJustNow(String justNow) {
 			theJustNow = justNow;
 			return this;
 		}
 
+		/**
+		 * @param ago The string to print after a formatted time that is before the {@link #withReference(Supplier) reference}
+		 * @return This format
+		 */
 		public RelativeTimeFormat withAgo(String ago) {
 			theAgo = ago;
 			return this;
 		}
 
+		/**
+		 * Sets how to print time differences
+		 * 
+		 * @param ads The strategy to use for printing time differences beyond 1 day
+		 * @return This format
+		 */
 		public RelativeTimeFormat withAboveDayStrategy(AboveDaysStrategy ads) {
 			theAboveDayStrategy = ads;
 			return this;
 		}
 
+		/**
+		 * Uses an {@link #withAboveDayStrategy(AboveDaysStrategy) above day strategy} of {@link AboveDaysStrategy#MonthYear}
+		 * 
+		 * @return This format
+		 */
 		public RelativeTimeFormat withMonthsAndYears() {
 			return withAboveDayStrategy(AboveDaysStrategy.MonthYear);
 		}
 
+		/**
+		 * Uses an {@link #withAboveDayStrategy(AboveDaysStrategy) above day strategy} of {@link AboveDaysStrategy#Week}
+		 * 
+		 * @return This format
+		 */
 		public RelativeTimeFormat withWeeks() {
 			return withAboveDayStrategy(AboveDaysStrategy.Week);
 		}
 
+		/**
+		 * @param time The time to print
+		 * @param str The string builder to print the time to (null to create a new one)
+		 * @return The string builder
+		 */
 		public StringBuilder print(Instant time, StringBuilder str) {
 			Instant ref = theReference.get();
 			Duration d = between(ref, time);
@@ -2884,7 +2985,7 @@ public class TimeUtils {
 				diffs[DurationComponentType.Year.ordinal()] = Math.abs(amt);
 			} else {
 				diffs[0] = diffs[1] = 0;
-				diffs[DurationComponentType.Day.ordinal()] = Math.abs((int) (d.getSeconds() / 24 * 60 * 60));
+				diffs[DurationComponentType.Day.ordinal()] = Math.abs((int) (d.getSeconds() / (24 * 60 * 60)));
 				if (theAboveDayStrategy == AboveDaysStrategy.Week) {
 					threshes[DurationComponentType.Week.ordinal()] = -1;
 					threshes[DurationComponentType.Day.ordinal()] = 7;
@@ -2970,26 +3071,35 @@ public class TimeUtils {
 			}
 		}
 
+		/**
+		 * @param time The time to print
+		 * @return The formatted time
+		 */
 		public String print(Instant time) {
 			return print(time, null).toString();
 		}
 
+		/** @return This format's {@link #withMaxPrecision(DurationComponentType) max precision} */
 		public DurationComponentType getMaxPrecision() {
 			return theMaxPrecision;
 		}
 
+		/** @return This format's {@link #withMaxElements(int) element limit} */
 		public int getMaxElements() {
 			return theMaxElements;
 		}
 
+		/** @return This format's {@link #withPrecisionNames(List) precision names} */
 		public List<String> getPrecisionNames() {
 			return thePrecisionNames;
 		}
 
+		/** @return Whether units are pluralized */
 		public boolean isPluralized() {
 			return isPluralized;
 		}
 
+		/** @return The {@link #withJustNow(String) just now} String */
 		public String getJustNow() {
 			return theJustNow;
 		}

@@ -3,23 +3,51 @@ package org.qommons.io;
 import java.io.IOException;
 import java.io.InputStream;
 
+/** An {@link InputStream} that can be limited and keeps track of its position offset */
 public class CountingInputStream extends InputStream {
 	private final InputStream theWrapped;
 	private final long theLimit;
 	private long thePosition;
 
+	private int theProgress;
+
+	/** @param wrapped The stream to read data from */
 	public CountingInputStream(InputStream wrapped) {
 		theWrapped = wrapped;
 		theLimit = -1;
 	}
 
+	/**
+	 * @param wrapped The stream to read data from
+	 * @param limit The limit to read from this stream (e.g. file size for progress, or compressed size of an entry in an archive file)
+	 */
 	public CountingInputStream(InputStream wrapped, long limit) {
 		theWrapped = wrapped;
 		theLimit = limit;
 	}
 
+	/** @return The number of bytes that have been read from this stream */
 	public long getPosition() {
 		return thePosition;
+	}
+
+	/** Prints a representation of this stream's progress to System.out (console progress user feedback) */
+	public void printProgress() {
+		if (theLimit <= 0)
+			return;
+		int newProgress = (int) Math.floor(thePosition * 100.0 / theLimit);
+		if (newProgress > 100)
+			newProgress = 100;
+		if (newProgress > theProgress) {
+			for (int p = theProgress + 1; p <= newProgress; p++) {
+				if (p % 10 == 0)
+					System.out.print(p + "%");
+				else
+					System.out.print('.');
+			}
+			theProgress = newProgress;
+			System.out.flush();
+		}
 	}
 
 	@Override

@@ -3,26 +3,34 @@ package org.qommons.io;
 import java.io.IOException;
 import java.nio.CharBuffer;
 
+/**
+ * Serves as a pipe between two parts of a process, providing a {@link #read() Reader} that reads data supplied by a {@link #write()
+ * Writer}. The Reader blocks appropriately when there is no content.
+ */
 public class BufferedReaderWriter {
 	private final Reader theReader;
 	private final Writer theWriter;
 	private final CircularCharBuffer theBuffer;
 	private volatile boolean isClosed;
 
+	/** Creates the reader/writer */
 	public BufferedReaderWriter() {
 		theBuffer = new CircularCharBuffer(-1);
 		theReader = new Reader();
 		theWriter = new Writer();
 	}
 
+	/** @return A Reader that reads content written by the {@link #write() Writer} */
 	public java.io.Reader read() {
 		return theReader;
 	}
 
+	/** @return A Writer that writes content for consumption by the {@link #read() Reader} */
 	public java.io.Writer write() {
 		return theWriter;
 	}
 
+	/** @return The buffer used to store written data for consumption by the reader */
 	public CircularCharBuffer getBuffer() {
 		return theBuffer;
 	}

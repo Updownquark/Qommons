@@ -2,6 +2,7 @@ package org.qommons.io;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -9,6 +10,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.CoderResult;
 
+/** The opposite of a {@link InputStreamReader}--formats text from a {@link Reader} into bytes in an {@link InputStream} */
 public class ReaderInputStream extends InputStream {
 	private final Reader theReader;
 
@@ -17,10 +19,15 @@ public class ReaderInputStream extends InputStream {
 	private final CharBuffer theCharBuffer;
 	private final ByteBuffer theBuffer;
 
+	/** @param reader The reader to read character data from */
 	public ReaderInputStream(Reader reader) {
 		this(reader, Charset.defaultCharset().newEncoder());
 	}
 
+	/**
+	 * @param reader The reader to read character data from
+	 * @param encoder The char set encoder to use to convert from character data into binary data
+	 */
 	public ReaderInputStream(Reader reader, CharsetEncoder encoder) {
 		theReader = reader;
 		theEncoder = encoder;
@@ -38,6 +45,7 @@ public class ReaderInputStream extends InputStream {
 			return false;
 		theCharBuffer.rewind();
 		theBuffer.clear();
+		@SuppressWarnings("unused")
 		CoderResult result = theEncoder.encode(theCharBuffer, theBuffer, false);
 		theBuffer.limit(theBuffer.position());
 		theBuffer.rewind();

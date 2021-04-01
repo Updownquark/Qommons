@@ -55,10 +55,22 @@ public class LambdaUtils {
 		return (Function<T, T>) IdentityFunction.INSTANCE;
 	}
 
+	/**
+	 * @param run The runnable to execute
+	 * @param print The toString() value for the runnable
+	 * @param identifier The identifier for the runnable's equality
+	 * @return The printable runnable
+	 */
 	public static Runnable printableRunnable(Runnable run, String print, Object identifier) {
 		return printableRunnable(run, print != null ? new ConstantSupply(print) : () -> String.valueOf(run), identifier);
 	}
 
+	/**
+	 * @param run The runnable to execute
+	 * @param print The toString() implementation for the runnable
+	 * @param identifier The identifier for the runnable's equality
+	 * @return The printable runnable
+	 */
 	public static Runnable printableRunnable(Runnable run, Supplier<String> print, Object identifier) {
 		return new PrintableRunnable(run, print != null ? print : () -> String.valueOf(run), identifier);
 	}

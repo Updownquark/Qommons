@@ -1128,7 +1128,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		 * @return The element ID for the wrapped list
 		 */
 		protected static ElementId unwrap(ElementId wrappedElId) {
-			return ((BetterSubSequence.BoundedElementId) wrappedElId).theSourceId;
+			return ((BetterSubSequence<?>.BoundedElementId) wrappedElId).theSourceId;
 		}
 
 		class BoundedElementId implements ElementId {

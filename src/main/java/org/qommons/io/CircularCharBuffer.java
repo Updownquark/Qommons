@@ -6,11 +6,13 @@ import java.util.Arrays;
 
 import org.qommons.AbstractCharSequence;
 
+/** A character buffer that uses its storage circularly to make for efficient FIFO functionality */
 public class CircularCharBuffer extends AbstractCharSequence implements Appendable {
 	private char[] theBuffer;
 	private int theOffset;
 	private int theLength;
 
+	/** @param initialCapacity The initial capacity for the buffer, or &lt;0 to use a default capacity */
 	public CircularCharBuffer(int initialCapacity) {
 		theBuffer = new char[initialCapacity <= 0 ? 1024 : initialCapacity];
 	}
@@ -47,7 +49,16 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 		return theBuffer[i];
 	}
 
-	public void copyTo(int sourceOffset, char[] buffer, int destOffset, int length) {
+	/**
+	 * Copies data from this buffer into the given character array
+	 * 
+	 * @param sourceOffset The offset in this buffer to copy from
+	 * @param buffer The buffer to copy the data into
+	 * @param destOffset The offset in the destination array
+	 * @param length The number of characters to copy
+	 * @return This buffer
+	 */
+	public CircularCharBuffer copyTo(int sourceOffset, char[] buffer, int destOffset, int length) {
 		if (sourceOffset < 0 || length < 0 || sourceOffset + length > theLength)
 			throw new IndexOutOfBoundsException(sourceOffset + ":" + length + " of " + theLength);
 		if (length > buffer.length - destOffset)
@@ -59,6 +70,7 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 		System.arraycopy(theBuffer, off, buffer, destOffset, firstLen);
 		if (firstLen < length)
 			System.arraycopy(theBuffer, 0, buffer, destOffset + firstLen, length - firstLen);
+		return this;
 	}
 
 	@Override
@@ -71,6 +83,12 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 		return insert(theLength, csq, start, end);
 	}
 
+	/**
+	 * @param csq The character array to append data from
+	 * @param start The offset in the array to copy from (inclusive)
+	 * @param end The offset in the array to copy to (exclusive)
+	 * @return This buffer
+	 */
 	public CircularCharBuffer append(char[] csq, int start, int end) {
 		return insert(theLength, new String(csq), start, end);
 	}
@@ -86,6 +104,12 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 		return this;
 	}
 
+	/**
+	 * Clears this buffer of content
+	 * 
+	 * @param hard Whether to actually erase the content from memory (for security)
+	 * @return This buffer
+	 */
 	public CircularCharBuffer clear(boolean hard) {
 		theOffset = theLength = 0;
 		if (hard)
@@ -93,10 +117,24 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 		return this;
 	}
 
+	/**
+	 * @param atIndex The index in this buffer to insert the content at
+	 * @param csq The character array containing the content to insert
+	 * @param start The start index in the array to copy from (inclusive)
+	 * @param end The end index in the array to copy from (exclusive)
+	 * @return This buffer
+	 */
 	public CircularCharBuffer insert(int atIndex, char[] csq, int start, int end) {
 		return insert(atIndex, new String(csq), start, end);
 	}
 
+	/**
+	 * @param atIndex The index in this buffer to insert the content at
+	 * @param csq The character sequence containing the content to insert
+	 * @param start The start index in the sequence to copy from (inclusive)
+	 * @param end The end index in the sequence to copy from (exclusive)
+	 * @return This buffer
+	 */
 	public CircularCharBuffer insert(int atIndex, CharSequence csq, int start, int end) {
 		if (start < 0 || start > end || end > csq.length())
 			throw new IndexOutOfBoundsException(start + "..." + end + " of " + csq.length());
@@ -119,10 +157,21 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 		return this;
 	}
 
+	/**
+	 * @param start The start position of the range to delete (inclusive)
+	 * @param end The end position of the range to delete (exclusive)
+	 * @return This buffer
+	 */
 	public CircularCharBuffer delete(int start, int end) {
 		return delete(start, end, false);
 	}
 
+	/**
+	 * @param start The start position of the range to delete (inclusive)
+	 * @param end The end position of the range to delete (exclusive)
+	 * @param hard Whether to actually erase the content from memory (for security)
+	 * @return This buffer
+	 */
 	public CircularCharBuffer delete(int start, int end, boolean hard) {
 		if (start < 0 || start > end || end > theLength)
 			throw new IndexOutOfBoundsException(start + "..." + end + " of " + theLength);
@@ -161,7 +210,15 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 		return this;
 	}
 
+	/**
+	 * @param reader The reader to pull character data from
+	 * @param max The maximum number of characters to read, or &lt;0 to read all the content from the reader
+	 * @return The number of bytes read
+	 * @throws IOException If the reader throws an exception
+	 */
 	public int appendFrom(Reader reader, int max) throws IOException {
+		if (max < 0)
+			max = Integer.MAX_VALUE;
 		// Read from the buffer as long as it has more content, up to the max
 		int totalRead = 0;
 		int target, read;
