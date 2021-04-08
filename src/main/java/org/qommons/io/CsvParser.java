@@ -49,8 +49,9 @@ public class CsvParser {
 	int theTabColumnOffset;
 	private final CsvParseState theParseState;
 	private int thePassedBlankLines;
+	private int theEntryNumber;
 	private int theLastLineNumber;
-	private int theLastLineOffset;
+	private long theLastLineOffset;
 	private final IntList theLastLineColumnOffsets;
 
 	/**
@@ -61,6 +62,7 @@ public class CsvParser {
 		theReader = reader;
 		theDelimiter = delimiter;
 		theTabColumnOffset = 1;
+		theEntryNumber = -1;
 		theParseState = new CsvParseState();
 		theLastLineColumnOffsets = new IntList();
 	}
@@ -155,12 +157,13 @@ public class CsvParser {
 
 		int count = 1;
 		onColumn.accept(value);
-		theLastLineColumnOffsets.add(theParseState.getValueOffset());
+		theLastLineColumnOffsets.add((int) (theParseState.getValueOffset() - theParseState.theOffset));
 		do {
 			onColumn.accept(theParseState.parseColumn());
 			count++;
-			theLastLineColumnOffsets.add(theParseState.getValueOffset());
+			theLastLineColumnOffsets.add((int) (theParseState.getValueOffset() - theParseState.theOffset));
 		} while (theParseState.getLastTerminal() == CsvValueTerminal.COLUMN_END);
+		theEntryNumber++;
 		return count;
 	}
 
@@ -169,13 +172,21 @@ public class CsvParser {
 		return thePassedBlankLines;
 	}
 
+	/**
+	 * @return The number of rows (not the same as lines, since newlines within quotes can be part of a CSV column) that have been parsed by
+	 *         this parser, including the current row, or -1 if no entries have been parsed
+	 */
+	public int getEntryNumber() {
+		return theEntryNumber;
+	}
+
 	/** @return The line number that was most recently parsed */
 	public int getLastLineNumber() {
 		return theLastLineNumber;
 	}
 
 	/** @return The overall character offset of the start of the line that was most recently parsed */
-	public int getLastLineOffset() {
+	public long getLastLineOffset() {
 		return theLastLineOffset;
 	}
 
@@ -188,7 +199,7 @@ public class CsvParser {
 	 * @return The overall character offset of the start of the line about to be parsed (or of the end of the file if there are no more
 	 *         lines)
 	 */
-	public int getCurrentOffset() {
+	public long getCurrentOffset() {
 		return theParseState.theOffset;
 	}
 
@@ -197,7 +208,7 @@ public class CsvParser {
 	 * @return The offset of the specified column of the previous line from the beginning of the file
 	 */
 	public int getColumnOffset(int columnIndex) {
-		return theLastLineColumnOffsets.get(columnIndex) - theLastLineOffset;
+		return theLastLineColumnOffsets.get(columnIndex);
 	}
 
 	/**
@@ -206,23 +217,53 @@ public class CsvParser {
 	 * application.
 	 * 
 	 * @param columnIndex The index of the column with bad data
+	 * @param errorOffset The offset of the error within the column text
 	 * @param message The message for the exception
 	 * @throws TextParseException always
 	 */
-	public void throwParseException(int columnIndex, String message) throws TextParseException {
+	public void throwParseException(int columnIndex, int errorOffset, String message) throws TextParseException {
+		throwParseException(columnIndex, errorOffset, message);
 		int colOffset = getColumnOffset(columnIndex);
-		throw new TextParseException(message, colOffset, theLastLineNumber, columnIndex);
+		throw new TextParseException(message, colOffset + errorOffset, theLastLineNumber, columnIndex);
+	}
+
+	/**
+	 * Throws a {@link TextParseException} pointing to the given column of the previously-parsed line in the file. Never called internally,
+	 * this method is useful for when the actual CSV was correctly parsed, but a column's data is malformed for the use of the calling
+	 * application.
+	 * 
+	 * @param columnIndex The index of the column with bad data
+	 * @param errorOffset The offset of the error within the column text
+	 * @param message The message for the exception
+	 * @param cause The cause of the error
+	 * @throws TextParseException always
+	 */
+	public void throwParseException(int columnIndex, int errorOffset, String message, Throwable cause) throws TextParseException {
+		int colOffset = getColumnOffset(columnIndex);
+		throw new TextParseException(message, colOffset + errorOffset, theLastLineNumber, columnIndex, cause);
 	}
 
 	static enum CsvValueTerminal {
 		COLUMN_END, LINE_END, FILE_END;
 	}
 
+	static class QuoteStart {
+		final long theOffset;
+		final int theLineNumber;
+		final int theColumnNumber;
+
+		QuoteStart(long offset, int lineNumber, int columnNumber) {
+			theOffset = offset;
+			theLineNumber = lineNumber;
+			theColumnNumber = columnNumber;
+		}
+	}
+
 	class CsvParseState {
 		private final StringBuilder theValue;
-		private int[] isQuoted;
-		private int theValueOffset;
-		private int theOffset;
+		private QuoteStart isQuoted;
+		private long theValueOffset;
+		private long theOffset;
 		private int theLineNumber;
 		private int theColumnNumber; // Char columns, not CSV columns here
 		private CsvValueTerminal theLastTerminal;
@@ -232,14 +273,14 @@ public class CsvParser {
 		}
 
 		<T> T throwParseException(String message) throws TextParseException {
-			throw new TextParseException(message, theOffset, theLineNumber, theColumnNumber);
+			throw new TextParseException(message, (int) theOffset, theLineNumber, theColumnNumber);
 		}
 
 		CsvValueTerminal getLastTerminal() {
 			return theLastTerminal;
 		}
 
-		int getValueOffset() {
+		long getValueOffset() {
 			return theValueOffset;
 		}
 
@@ -272,7 +313,7 @@ public class CsvParser {
 
 			if (c == '"') {
 				if (columnStart) { // Begin quote
-					isQuoted = new int[] { theOffset, theLineNumber, theColumnNumber };
+					isQuoted = new QuoteStart(theOffset, theLineNumber, theColumnNumber);
 					theValueOffset++;
 					return readContentChar(false);
 				} else if (isQuoted != null) {
@@ -292,7 +333,8 @@ public class CsvParser {
 					return c;
 			} else if (c < 0) { // File end
 				if (isQuoted != null)
-					throw new TextParseException("Unmatched quote", isQuoted[0], isQuoted[1], isQuoted[2]);
+					throw new TextParseException("Unmatched quote", (int) isQuoted.theOffset, isQuoted.theLineNumber,
+						isQuoted.theColumnNumber);
 				theLastTerminal = CsvValueTerminal.FILE_END;
 				return -1;
 			} else if (c == '\t' && theTabColumnOffset != 1) { // Tab
