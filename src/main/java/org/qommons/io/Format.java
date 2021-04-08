@@ -652,6 +652,49 @@ public interface Format<T> {
 			return new SuperDoubleFormat(theSignificantDigits, maxIntDigits, printIntsWithPrefixes, theMaxNormalExp, theMinNormalExp,
 				theBaseUnit, isBaseUnitRequired, isBaseUnitCaseSensitive, arePrefixesCaseSensitive, prefixCopy, reversePrefixes);
 		}
+
+		/** @return A new {@link Float}-typed format configured by this builder */
+		public Format<Float> buildFloat() {
+			class SuperFloatFormat implements Format<Float> {
+				private final SuperDoubleFormat theDoubleFormat;
+
+				SuperFloatFormat(SuperDoubleFormat doubleFormat) {
+					theDoubleFormat = doubleFormat;
+				}
+
+				@Override
+				public void append(StringBuilder text, Float value) {
+					theDoubleFormat.append(text, value == null ? null : Double.valueOf(value.doubleValue()));
+				}
+
+				@Override
+				public Float parse(CharSequence text) throws ParseException {
+					Double parsed = theDoubleFormat.parse(text);
+					return parsed == null ? null : Float.valueOf(parsed.floatValue());
+				}
+
+				@Override
+				public String format(Float value) {
+					return theDoubleFormat.format(value == null ? null : Double.valueOf(value.doubleValue()));
+				}
+
+				@Override
+				public int hashCode() {
+					return theDoubleFormat.hashCode();
+				}
+
+				@Override
+				public boolean equals(Object obj) {
+					return obj instanceof SuperFloatFormat && theDoubleFormat.equals(((SuperFloatFormat) obj).theDoubleFormat);
+				}
+
+				@Override
+				public String toString() {
+					return theDoubleFormat.toString();
+				}
+			}
+			return new SuperFloatFormat(build());
+		}
 	}
 
 	/**
