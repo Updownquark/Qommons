@@ -16,7 +16,7 @@ public class QonsoleTest {
 	@Test
 	public void testQonsole() {
 		TestHelper.createTester(QTestable.class).revisitKnownFailures(true).withDebug(true).withFailurePersistence(true)
-			.withMaxCaseDuration(Duration.ofSeconds(10)).withRandomCases(50).execute();
+			.withMaxCaseDuration(Duration.ofSeconds(10)).withRandomCases(50).execute().throwErrorIfFailed();
 	}
 
 	static class QTestable implements Testable {

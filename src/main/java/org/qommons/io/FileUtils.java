@@ -593,7 +593,7 @@ public class FileUtils {
 			return totalDirectories;
 		}
 
-		/** @return The number of {@link MutableFileDataSource#setLastModified(long)} failures on destination files and directories */
+		/** @return The number of {@link BetterFile#setLastModified(long)} failures on destination files and directories */
 		public int getLastModifyFailures() {
 			return lastModifyFailures;
 		}
@@ -704,20 +704,23 @@ public class FileUtils {
 		if (!file.exists()) {
 			return true;
 		}
-		if (file.isDirectory() && !Files.isSymbolicLink(file.toPath())) {
+		boolean success = true;
+		boolean dir = file.isDirectory();
+		if (dir && !Files.isSymbolicLink(file.toPath())) {
 			if (results != null) {
 				results.deleted(true);
 			}
 			File[] contents = file.listFiles();
 			for (File f : contents) {
-				if (!delete(f, results)) {
-					return false;
-				}
+				if (!delete(f, results))
+					success = false;
 			}
-		} else if (results != null) {
-			results.deleted(false);
 		}
-		return file.delete();
+		if (!file.delete())
+			success = false;
+		else if (results != null)
+			results.deleted(dir);
+		return success;
 	}
 
 	/** A {@link File} backed by a {@link BetterFile} */
