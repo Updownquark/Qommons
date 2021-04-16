@@ -6,6 +6,9 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
+import java.nio.CharBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetEncoder;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -54,6 +57,11 @@ public class CsvParser {
 	private long theLastLineOffset;
 	private final IntList theLastLineColumnOffsets;
 
+	private CharsetEncoder theCharSet;
+	private StringBuilder theCurrentLine;
+	private long theLastLineByteOffset;
+	private long theCurrentByteOffset;
+
 	/**
 	 * @param reader The reader to parse CSV data from
 	 * @param delimiter The delimiter character for the CSV file
@@ -81,6 +89,23 @@ public class CsvParser {
 		if (theDelimiter == '\t' && tabOffset != 1)
 			throw new IllegalStateException("tab offset cannot be used with tab-delimited files");
 		theTabColumnOffset = tabOffset;
+		return this;
+	}
+
+	/**
+	 * This class can account not only for characters, but also for bytes read from the reader. This may be a bit inefficient, as this class
+	 * may have to to re-encode character data into bytes that have already been decoded by the reader.
+	 * 
+	 * @param charSet The character set to use to keep track of bytes read and parsed by this parser
+	 * @return This parser
+	 * @see #getLastLineByteOffset()
+	 * @see #getCurrentByteOffset()
+	 */
+	public CsvParser withCharset(Charset charSet) {
+		if (theEntryNumber > 0 || thePassedBlankLines > 0)
+			throw new IllegalStateException("Cannot start accounting for bytes after reading data");
+		theCharSet = charSet.newEncoder();
+		theCurrentLine = new StringBuilder();
 		return this;
 	}
 
@@ -138,33 +163,41 @@ public class CsvParser {
 		theLastLineColumnOffsets.clear();
 		theLastLineNumber = theParseState.theLineNumber;
 		theLastLineOffset = theParseState.theOffset;
-		String value = theParseState.parseColumn();
-		while (value.length() == 0 && theParseState.getLastTerminal() == CsvValueTerminal.LINE_END) {
-			thePassedBlankLines++;
-			theLastLineNumber = theParseState.theLineNumber;
-			theLastLineOffset = theParseState.theOffset;
-			value = theParseState.parseColumn(); // Move past any blank lines
-		}
-		switch (theParseState.getLastTerminal()) {
-		case COLUMN_END:
-			break;
-		case LINE_END:
-			onColumn.accept(value);
-			return 1;
-		case FILE_END:
-			return 0;
-		}
+		theLastLineByteOffset = theCurrentByteOffset;
+		try {
+			String value = theParseState.parseColumn();
+			while (value.length() == 0 && theParseState.getLastTerminal() == CsvValueTerminal.LINE_END) {
+				thePassedBlankLines++;
+				theLastLineNumber = theParseState.theLineNumber;
+				theLastLineOffset = theParseState.theOffset;
+				value = theParseState.parseColumn(); // Move past any blank lines
+			}
+			switch (theParseState.getLastTerminal()) {
+			case COLUMN_END:
+				break;
+			case LINE_END:
+				onColumn.accept(value);
+				return 1;
+			case FILE_END:
+				return 0;
+			}
 
-		int count = 1;
-		onColumn.accept(value);
-		theLastLineColumnOffsets.add((int) (theParseState.getValueOffset() - theParseState.theOffset));
-		do {
-			onColumn.accept(theParseState.parseColumn());
-			count++;
+			int count = 1;
+			onColumn.accept(value);
 			theLastLineColumnOffsets.add((int) (theParseState.getValueOffset() - theParseState.theOffset));
-		} while (theParseState.getLastTerminal() == CsvValueTerminal.COLUMN_END);
-		theEntryNumber++;
-		return count;
+			do {
+				onColumn.accept(theParseState.parseColumn());
+				count++;
+				theLastLineColumnOffsets.add((int) (theParseState.getValueOffset() - theParseState.theOffset));
+			} while (theParseState.getLastTerminal() == CsvValueTerminal.COLUMN_END);
+			theEntryNumber++;
+			return count;
+		} finally {
+			if (theCharSet != null) {
+				int length = theCharSet.encode(CharBuffer.wrap(theCurrentLine)).limit();
+				theCurrentByteOffset += length;
+			}
+		}
 	}
 
 	/** @return The number of blank lines that were ignored prior to the most recently-parsed line of the file */
@@ -201,6 +234,31 @@ public class CsvParser {
 	 */
 	public long getCurrentOffset() {
 		return theParseState.theOffset;
+	}
+
+	/**
+	 * Gets the number of bytes parsed by this class up to the last line. This feature is only enabled if the {@link #withCharset(Charset)
+	 * char set} is set.
+	 * 
+	 * @return The number of bytes read and parsed by this class at the beginning of the most recently-parsed line, or -1 if the char set
+	 *         was not given
+	 */
+	public long getLastLineByteOffset() {
+		if (theCharSet == null)
+			return -1;
+		return theLastLineByteOffset;
+	}
+
+	/**
+	 * Gets the number of bytes parsed by this class so far. This feature is only enabled if the {@link #withCharset(Charset) char set} is
+	 * set.
+	 * 
+	 * @return The number of bytes read and parsed by this class so far, or -1 if the char set was not given
+	 */
+	public long getCurrentByteOffset() {
+		if (theCharSet == null)
+			return -1;
+		return theCurrentByteOffset;
 	}
 
 	/**
@@ -354,6 +412,8 @@ public class CsvParser {
 
 		private int readStreamChar() throws IOException {
 			int c = theReader.read();
+			if (c >= 0 && theCurrentLine != null)
+				theCurrentLine.append((char) c);
 			if (isQuoted == null) {
 				while (c == '\r') // Ignore stupid DOS CR characters except in quotes
 					c = theReader.read();
@@ -403,7 +463,7 @@ public class CsvParser {
 	 * 
 	 * @param args Command line arguments determining the location of the source and target files, the filtering, and the delimiter.
 	 */
-	public static void main(String [] args) {
+	public static void main(String[] args) {
 		ArgumentParsing2.Arguments parsedArgs = ArgumentParsing2.build().forValuePattern(a -> {
 			a.addBetterFileArgument("src", f -> f.required().directory(false).mustExist(true))//
 				.addBetterFileArgument("target", f -> f.required().directory(false).create(true))//
