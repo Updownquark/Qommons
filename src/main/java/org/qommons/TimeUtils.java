@@ -2027,7 +2027,6 @@ public class TimeUtils {
 	}
 
 	private static class DateFormat {
-		@SuppressWarnings("unused")
 		final String theName;
 		final List<DateFormatComponent> components;
 		final Map<DateElementType, DateFormatComponent> componentsByType;
@@ -2574,6 +2573,18 @@ public class TimeUtils {
 		else
 			days += monthDays;
 		return neg ? -days : days;
+	}
+
+	/**
+	 * @param time The time to query
+	 * @param timeZone The time zone of interest
+	 * @return The day of the week that the given time occurs on in the given time zone--Sunday==0, Saturday=7
+	 */
+	public static int getDayOfWeek(Instant time, TimeZone timeZone) {
+		Calendar cal = CALENDAR.get();
+		cal.setTimeZone(timeZone);
+		cal.setTimeInMillis(time.toEpochMilli());
+		return cal.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY;
 	}
 
 	/** @return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] */
