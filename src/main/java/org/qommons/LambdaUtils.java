@@ -26,6 +26,11 @@ public class LambdaUtils {
 		}
 	};
 
+	/** A {@link Comparator} for any type C that extends Comparable<C> */
+	public static final Comparator<Comparable<?>> COMPARABLE_COMPARE = LambdaUtils.<Comparable<?>> printableComparator(//
+		(v1, v2) -> ((Comparable<Object>) v1).compareTo(v2), //
+		() -> "Comparable::compareTo", "Comparable::compareTo");
+
 	private interface Identity {}
 
 	/**

@@ -27,7 +27,8 @@ import org.qommons.tree.TreeUtilsTest;
 	CollectionUtilsTests.class, //
 	HashSetTest.class, //
 	ListenerListTest.class, //
-	TreeUtilsTest.class //
+	TreeUtilsTest.class, //
+	RangeTest.class
 })
 public class QommonsTests {
 }
