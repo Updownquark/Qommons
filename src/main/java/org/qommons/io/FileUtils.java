@@ -1173,6 +1173,11 @@ public class FileUtils {
 		}
 
 		@Override
+		public StringBuilder toUrl(StringBuilder str) {
+			throw new IllegalStateException("Cannot use this method for a " + getClass().getName());
+		}
+
+		@Override
 		public String toString() {
 			return getPath();
 		}
@@ -1196,7 +1201,6 @@ public class FileUtils {
 		public String getName() {
 			return thePath[0];
 		}
-
 
 		@Override
 		public String getPath() {
@@ -1308,6 +1312,11 @@ public class FileUtils {
 					return;
 				forEach.accept(new SubFile(theSource, ArrayUtils.remove(thePath, 0)));
 			}
+		}
+
+		@Override
+		public StringBuilder toUrl(StringBuilder str) {
+			throw new IllegalStateException("Cannot use this method for a " + getClass().getName());
 		}
 
 		@Override
@@ -1448,6 +1457,11 @@ public class FileUtils {
 		@Override
 		public void visitAll(ExConsumer<? super BetterFile, IOException> forEach, BooleanSupplier canceled) throws IOException {
 			forEach.accept(this);
+		}
+
+		@Override
+		public StringBuilder toUrl(StringBuilder str) {
+			throw new IllegalStateException("Cannot use this method for a " + getClass().getName());
 		}
 
 		@Override

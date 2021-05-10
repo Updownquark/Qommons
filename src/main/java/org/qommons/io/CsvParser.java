@@ -118,8 +118,7 @@ public class CsvParser {
 	 */
 	public String[] parseNextLine() throws IOException, TextParseException {
 		List<String> columns = new LinkedList<>();
-		int count = parseNextLine(columns::add);
-		if (count == 0)
+		if (!parseNextLine(columns::add))
 			return null;
 		return columns.toArray(new String[columns.size()]);
 	}
@@ -158,7 +157,7 @@ public class CsvParser {
 		void accept(String column) throws TextParseException;
 	}
 
-	private int parseNextLine(ColumnAccepter onColumn) throws IOException, TextParseException {
+	private boolean parseNextLine(ColumnAccepter onColumn) throws IOException, TextParseException {
 		thePassedBlankLines = 0;
 		theLastLineColumnOffsets.clear();
 		theLastLineNumber = theParseState.theLineNumber;
@@ -177,21 +176,23 @@ public class CsvParser {
 				break;
 			case LINE_END:
 				onColumn.accept(value);
-				return 1;
+				return true;
 			case FILE_END:
-				return 0;
+				if (value.length() > 0) {
+					onColumn.accept(value);
+					return true;
+				} else
+					return false;
 			}
 
-			int count = 1;
 			onColumn.accept(value);
 			theLastLineColumnOffsets.add((int) (theParseState.getValueOffset() - theParseState.theOffset));
 			do {
 				onColumn.accept(theParseState.parseColumn());
-				count++;
 				theLastLineColumnOffsets.add((int) (theParseState.getValueOffset() - theParseState.theOffset));
 			} while (theParseState.getLastTerminal() == CsvValueTerminal.COLUMN_END);
 			theEntryNumber++;
-			return count;
+			return true;
 		} finally {
 			if (theCharSet != null) {
 				int length = theCharSet.encode(CharBuffer.wrap(theCurrentLine)).limit();

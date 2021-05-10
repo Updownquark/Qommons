@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 public class Version implements Comparable<Version> {
 	/** A pattern to parse semantic version strings */
 	public static final Pattern VERSION_PATTERN = Pattern
-		.compile("(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<qualifier>[a-zA-Z0-9_\\-]+))");
+		.compile("(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<qualifier>[a-zA-Z0-9_\\-]+))?");
 
 	/** The major revision */
 	public final int major;
@@ -90,10 +90,13 @@ public class Version implements Comparable<Version> {
 		Matcher match = VERSION_PATTERN.matcher(version);
 		if (!match.matches())
 			throw new IllegalArgumentException("Version sequence does not match \"XX.YY.ZZ(.QQQ)\": " + version);
+		String qualifier = match.group("qualifier");
+		if (qualifier != null && qualifier.isEmpty())
+			qualifier = null;
 		return new Version(//
 			Integer.parseInt(match.group("major")), //
 			Integer.parseInt(match.group("minor")), //
 			Integer.parseInt(match.group("patch")), //
-			match.group("qualifier"));
+			qualifier);
 	}
 }

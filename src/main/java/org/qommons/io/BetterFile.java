@@ -91,6 +91,8 @@ public interface BetterFile extends Named {
 
 	List<? extends BetterFile> discoverContents(Consumer<? super BetterFile> onDiscovered, BooleanSupplier canceled);
 
+	StringBuilder toUrl(StringBuilder str);
+
 	/** @return The files contained in this directory, or null if this is not a directory */
 	default List<? extends BetterFile> listFiles() {
 		return discoverContents(null, null);
@@ -237,9 +239,15 @@ public interface BetterFile extends Named {
 		void move(String newFilePath) throws IOException;
 
 		void visitAll(ExBiConsumer<? super FileBacking, CharSequence, IOException> forEach, BooleanSupplier canceled) throws IOException;
+
+		default StringBuilder alterUrl(StringBuilder url) {
+			return url;
+		}
 	}
 
 	public interface FileDataSource {
+		String getUrlRoot();
+
 		List<FileBacking> getRoots();
 
 		default FileBacking getRoot(String name) {
@@ -312,13 +320,34 @@ public interface BetterFile extends Named {
 						continue;
 					} else if (name.length() == 0)
 						throw new IllegalArgumentException("Illegal path: " + path);
-					parent = parent.createChild(name.toString(), null);
+					String childName = name.toString();
+					switch (childName) {
+					case ".":
+						break;
+					case "..":
+						parent = parent.getParent();
+						break;
+					default:
+						parent = parent.createChild(childName, null);
+						break;
+					}
 					name.setLength(0);
 				} else
 					name.append(path.charAt(c));
 			}
-			if (name.length() > 0)
-				parent = parent.createChild(name.toString(), null);
+			if (name.length() > 0) {
+				String childName = name.toString();
+				switch (childName) {
+				case ".":
+					break;
+				case "..":
+					parent = parent.getParent();
+					break;
+				default:
+					parent = parent.createChild(childName, null);
+					break;
+				}
+			}
 			return parent;
 		}
 	
@@ -352,7 +381,7 @@ public interface BetterFile extends Named {
 				if (onDiscovered != null)
 					onDiscovered.accept(file);
 			}, canceled != null ? canceled : () -> false))
-				return null;
+				return Collections.emptyList();
 			return Collections.unmodifiableList(list);
 		}
 
@@ -505,6 +534,15 @@ public interface BetterFile extends Named {
 		public BetterFile.AbstractWrappingFile getParent() {
 			return null;
 		}
+
+		@Override
+		public StringBuilder toUrl(StringBuilder str) {
+			if (str == null)
+				str = new StringBuilder();
+			str.append(theDataSource.getUrlRoot());
+			str.append('/').append(theRoot.getName());
+			return theRoot.alterUrl(str);
+		}
 	}
 
 	public class FileWrapper extends AbstractWrappingFile {
@@ -556,6 +594,15 @@ public interface BetterFile extends Named {
 		@Override
 		public AbstractWrappingFile getParent() {
 			return theParent;
+		}
+
+		@Override
+		public StringBuilder toUrl(StringBuilder str) {
+			str = theParent.toUrl(str).append('/').append(theName);
+			FileBacking backing = check();
+			if (backing != null)
+				str = backing.alterUrl(str);
+			return str;
 		}
 	}
 
@@ -682,6 +729,11 @@ public interface BetterFile extends Named {
 				if (theFilter.test(f))
 					forEach.accept(f);
 			}, canceled);
+		}
+
+		@Override
+		public StringBuilder toUrl(StringBuilder str) {
+			return theSource.toUrl(str);
 		}
 
 		@Override
@@ -824,6 +876,11 @@ public interface BetterFile extends Named {
 			theSource.visitAll(f -> {
 				forEach.accept(new UnmodifiableFile(f));
 			}, canceled);
+		}
+
+		@Override
+		public StringBuilder toUrl(StringBuilder str) {
+			return theSource.toUrl(str);
 		}
 
 		@Override

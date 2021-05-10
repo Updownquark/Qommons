@@ -138,6 +138,11 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 	}
 
 	@Override
+	public String getUrlRoot() {
+		return theWrapped.getUrlRoot();
+	}
+
+	@Override
 	public String toString() {
 		return theWrapped.toString();
 	}
@@ -344,6 +349,16 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
+		public StringBuilder alterUrl(StringBuilder url) {
+			if (theArchival != null)
+				return theArchival.alterUrl(url);
+			else if (theBacking != null)
+				return theBacking.alterUrl(url);
+			else
+				return url;
+		}
+
+		@Override
 		public int hashCode() {
 			return theBacking.hashCode();
 		}
@@ -508,6 +523,11 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 			}
 		}
 
+		@Override
+		public StringBuilder alterUrl(StringBuilder url) {
+			return theRoot.getArchival().alterUrl(url);
+		}
+
 		static class IOWrapperException extends RuntimeException {
 			IOWrapperException(IOException wrap) {
 				super(wrap);
@@ -638,6 +658,8 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 			ExBiConsumer<ArchiveEntry, CharSequence, IOException> forEach, BooleanSupplier cancel) throws IOException;
 
 		InputStream read(FileBacking file, ArchiveEntry entry, long startFrom, BooleanSupplier canceled) throws IOException;
+
+		StringBuilder alterUrl(StringBuilder url);
 	}
 
 	static class VisitingEntry implements ArchiveEntry {
@@ -763,6 +785,8 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public DefaultArchiveEntry getFile(String name) {
+			if (theChildren == null)
+				return null;
 			int index = ArrayUtils.binarySearch(theChildren, f -> StringUtils.compareNumberTolerant(name, f.getName(), true, true));
 			return index < 0 ? null : theChildren.get(index);
 		}
@@ -853,7 +877,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 					}
 				}
 				if (eocd == null)
-					throw new IOException("Not actually a ZIP file");
+					throw new IOException("Not actually a ZIP file: " + file.getName());
 				InputStream eocdIn;
 				if (eocd.centralDirOffset >= seekPos) {
 					// We have the central directory in the buffer
@@ -1199,6 +1223,16 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 			}
 		}
 
+		@Override
+		public StringBuilder alterUrl(StringBuilder url) {
+			int idx = url.indexOf(".jar/");
+			if (idx < 0)
+				return url;
+			url.insert(idx + 4, '!');
+			url.insert(0, "jar:");
+			return url;
+		}
+
 		static class EndOfCentralDirectoryRecord {
 			final int diskNumber;
 			final int centralDirCount;
@@ -1365,6 +1399,11 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 					throw new IOException("Could not skip to " + startFrom);
 			}
 			return gzIn;
+		}
+
+		@Override
+		public StringBuilder alterUrl(StringBuilder url) {
+			return url;
 		}
 
 		static class GZipRoot implements ArchiveEntry {
@@ -1675,6 +1714,11 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 			else
 				fileIn = file.read(((VisitingEntry) entry).getPosition(), canceled);
 			return fileIn == null ? null : new CountingInputStream(fileIn, len);
+		}
+
+		@Override
+		public StringBuilder alterUrl(StringBuilder url) {
+			return url;
 		}
 	}
 

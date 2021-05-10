@@ -419,7 +419,7 @@ public class ArgumentParsing2 {
 				throw new ClassCastException(
 					"Wrong type (" + argType.getName() + ") for argument " + argument + " (" + arg.argument.getType().getName() + ")");
 			ArgumentCondition<S> otherCondition = other
-				.apply(new Impl.DefaultArgConditionBuilder<>(getSubject(), (ArgumentType<A2>) arg, theArgGetter));
+				.apply(new Impl.DefaultArgConditionBuilder<>(getSubject(), (ArgumentType<A2>) arg.argument, theArgGetter));
 			if (otherCondition instanceof CompositeArgumentCondition && !((CompositeArgumentCondition<S>) otherCondition).isAnd()) {
 				List<ArgumentCondition<S>> components = new ArrayList<>(
 					((CompositeArgumentCondition<S>) otherCondition).getComponents().size() + 1);
@@ -444,7 +444,7 @@ public class ArgumentParsing2 {
 				throw new ClassCastException(
 					"Wrong type (" + argType.getName() + ") for argument " + argument + " (" + arg.argument.getType().getName() + ")");
 			ArgumentCondition<S> otherCondition = other
-				.apply(new Impl.DefaultArgConditionBuilder<>(getSubject(), (ArgumentType<A2>) arg, theArgGetter));
+				.apply(new Impl.DefaultArgConditionBuilder<>(getSubject(), (ArgumentType<A2>) arg.argument, theArgGetter));
 			if (otherCondition instanceof CompositeArgumentCondition && ((CompositeArgumentCondition<S>) otherCondition).isAnd()) {
 				List<ArgumentCondition<S>> components = new ArrayList<>(
 					((CompositeArgumentCondition<S>) otherCondition).getComponents().size() + 1);
@@ -567,7 +567,11 @@ public class ArgumentParsing2 {
 
 			@Override
 			public boolean applies(Arguments args) {
-				int specified = args.getArguments(theTarget).size();
+				int specified = 0;
+				for (Argument<?> arg : args.getArguments(theTarget)) {
+					if (arg.getMatch() != null)
+						specified++;
+				}
 				return specified >= theMinSpecified && specified <= theMaxSpecified;
 			}
 

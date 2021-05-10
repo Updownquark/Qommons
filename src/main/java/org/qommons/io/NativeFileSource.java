@@ -50,7 +50,12 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 	public BetterFile toBetter(File file) {
 		return BetterFile.at(this, file.getAbsolutePath());
 	}
-	
+
+	@Override
+	public String getUrlRoot() {
+		return "file:///";
+	}
+
 	public static BetterFile of(File file) {
 		return new NativeFileSource().toBetter(file);
 	}
@@ -178,7 +183,7 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public boolean discoverContents(Consumer<? super FileBacking> onDiscovered, BooleanSupplier canceled) {
-			if (!Files.exists(thePath))
+			if (!Files.isDirectory(thePath))
 				return true;
 			boolean[] canceledB = new boolean[1];
 			try {

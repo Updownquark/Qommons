@@ -61,6 +61,13 @@ public class CircularByteBuffer implements StringUtils.BinaryAccumulator {
 		return theBuffer[i];
 	}
 
+	/** @return This buffer's content, as a new byte array */
+	public byte[] toByteArray() {
+		byte[] bytes = new byte[theLength];
+		copyTo(0, bytes, 0, theLength);
+		return bytes;
+	}
+
 	/**
 	 * Copies data from this buffer into the given character array
 	 * 

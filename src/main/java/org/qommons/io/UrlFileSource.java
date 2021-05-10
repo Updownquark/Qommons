@@ -62,6 +62,14 @@ public class UrlFileSource implements FileDataSource {
 	}
 
 	@Override
+	public String getUrlRoot() {
+		String str = theRoot.toString();
+		if (str.charAt(str.length() - 1) == '/')
+			str = str.substring(0, str.length() - 1);
+		return str;
+	}
+
+	@Override
 	public int hashCode() {
 		return theRoot.hashCode();
 	}

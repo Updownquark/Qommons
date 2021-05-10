@@ -618,7 +618,7 @@ public abstract class QommonsConfig implements Cloneable {
 				throw new java.io.FileNotFoundException("Classpath configuration URL " + s + " refers to a non-existent resource");
 			}
 			return configURL;
-		} else if (s.contains("://"))
+		} else if (s.contains("://") || (s.startsWith("file:/")))
 			return new java.net.URL(s); // Absolute resource
 		else {
 			// See if it's a file path
@@ -698,7 +698,7 @@ public abstract class QommonsConfig implements Cloneable {
 	 * @throws java.io.IOException If any of the given paths cannot be interpreted
 	 */
 	public static String resolve(String location, String... relative) throws java.io.IOException {
-		if(location.contains(":/"))
+		if (location.contains("://") || (location.startsWith("file:/")))
 			return location;
 		else if(relative.length > 0) {
 			String resolvedRel = resolve(relative[0], org.qommons.ArrayUtils.remove(relative, 0));
