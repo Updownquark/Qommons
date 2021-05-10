@@ -175,6 +175,11 @@ public interface BetterFile extends Named {
 	}
 
 	static BetterFile at(FileDataSource dataSource, String path) {
+		if (path.isEmpty()) {
+			throw new IllegalArgumentException("Empty path");
+		} else if (path.charAt(0) == '.') {
+			return at(dataSource, System.getProperty("user.dir")).at(path);
+		}
 		StringBuilder name = new StringBuilder();
 		AbstractWrappingFile parent = null;
 		for (int c = 0; c < path.length(); c++) {
@@ -540,7 +545,9 @@ public interface BetterFile extends Named {
 			if (str == null)
 				str = new StringBuilder();
 			str.append(theDataSource.getUrlRoot());
-			str.append('/').append(theRoot.getName());
+			if (str.charAt(str.length() - 1) != '/')
+				str.append('/');
+			str.append(theRoot.getName());
 			return theRoot.alterUrl(str);
 		}
 	}
