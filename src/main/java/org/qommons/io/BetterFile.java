@@ -185,6 +185,15 @@ public interface BetterFile extends Named {
 		for (int c = 0; c < path.length(); c++) {
 			if (path.charAt(c) == '/' || path.charAt(c) == '\\') {
 				if (c == 0) {//
+					for (FileBacking root : dataSource.getRoots()) {
+						if (root.getName().equals("/")) {
+							parent = new FileRoot(dataSource, root);
+							break;
+						} else if (root.getName().charAt(0) == '/') {
+							name.append(path.charAt(c));
+							break;
+						}
+					}
 					continue;
 				} else if (name.length() == 0)
 					throw new IllegalArgumentException("Illegal path: " + path);
@@ -283,7 +292,7 @@ public interface BetterFile extends Named {
 		}
 	
 		protected AbstractWrappingFile createChild(String name, FileBacking backing) {
-			return new BetterFile.FileWrapper(this, name.toString(), backing);
+			return new BetterFile.FileWrapper(this, name, backing);
 		}
 	
 		@Override
@@ -547,7 +556,11 @@ public interface BetterFile extends Named {
 			str.append(theDataSource.getUrlRoot());
 			if (str.charAt(str.length() - 1) != '/')
 				str.append('/');
-			str.append(theRoot.getName());
+			int c = 0;
+			while (c < theRoot.getName().length() && theRoot.getName().charAt(c) == '/')
+				c++;
+			while (c < theRoot.getName().length())
+				str.append(theRoot.getName().charAt(c++));
 			return theRoot.alterUrl(str);
 		}
 	}
@@ -605,7 +618,10 @@ public interface BetterFile extends Named {
 
 		@Override
 		public StringBuilder toUrl(StringBuilder str) {
-			str = theParent.toUrl(str).append('/').append(theName);
+			str = theParent.toUrl(str);
+			if (str.charAt(str.length() - 1) != '/')
+				str.append('/');
+			str.append(theName);
 			FileBacking backing = check();
 			if (backing != null)
 				str = backing.alterUrl(str);

@@ -370,7 +370,7 @@ public class ArgumentParsing2 {
 		 */
 		abstract boolean applies(Arguments args);
 
-		/** @return A constraint that will require the subject argument to be specified if this condition is met */
+		/** @return A constraint that will require the subject argument to be specified exactly once if this condition is met */
 		public ArgumentConstraint<S> required() {
 			return times(1, 1);
 		}
@@ -378,6 +378,11 @@ public class ArgumentParsing2 {
 		/** @return A constraint that will forbid the subject argument being specified if this condition is met */
 		public ArgumentConstraint<S> forbidden() {
 			return times(0, 0);
+		}
+
+		/** @return A constraint that will require the subject argument to be specified at least once if this condition is met */
+		public ArgumentConstraint<S> atLeastOnce() {
+			return times(1, Integer.MAX_VALUE);
 		}
 
 		/**
@@ -1007,7 +1012,7 @@ public class ArgumentParsing2 {
 
 		/**
 		 * @return The command-line argument String that this argument was parsed from, or null if this argument represents a
-		 *         {@link ValuedArgumentBuilder#defaultValue(Supplier) default value}
+		 *         {@link ArgumentBuilder#defaultValue(Supplier) default value}
 		 */
 		MatchedArgument getMatch();
 	}
@@ -1113,8 +1118,7 @@ public class ArgumentParsing2 {
 		 * @param <T> The type of the argument
 		 * @param type The argument type to get the arguments for
 		 * @return All arguments specified in the command-line input that matched the given argument type. If no such command-line arguments
-		 *         were given, this list will be empty or, if {@link ValuedArgumentBuilder#defaultValue(Supplier) defaulted} the default
-		 *         value.
+		 *         were given, this list will be empty or, if {@link ArgumentBuilder#defaultValue(Supplier) defaulted} the default value.
 		 */
 		<T> BetterList<Argument<T>> getArguments(ArgumentType<T> type);
 
@@ -1122,8 +1126,7 @@ public class ArgumentParsing2 {
 		 * @param <T> The type of the argument
 		 * @param type The argument type to get the argument for
 		 * @return The first argument specified in the command-line input that matched the given argument type. If no such command-line
-		 *         arguments were given, this will null or, if {@link ValuedArgumentBuilder#defaultValue(Supplier) defaulted} the default
-		 *         value.
+		 *         arguments were given, this will null or, if {@link ArgumentBuilder#defaultValue(Supplier) defaulted} the default value.
 		 */
 		default <T> Argument<T> getArgument(ArgumentType<T> type) {
 			return getArguments(type).peekFirst();
@@ -1135,8 +1138,7 @@ public class ArgumentParsing2 {
 		/**
 		 * @param argumentName The name of the argument
 		 * @return The first argument specified in the command-line input that matched the given argument type. If no such command-line
-		 *         arguments were given, this will null or, if {@link ValuedArgumentBuilder#defaultValue(Supplier) defaulted} the default
-		 *         value.
+		 *         arguments were given, this will null or, if {@link ArgumentBuilder#defaultValue(Supplier) defaulted} the default value.
 		 * @throws IllegalArgumentException If no such argument has been configured in this parser
 		 */
 		default Argument<?> getArgument(String argumentName) throws IllegalArgumentException {
@@ -1148,8 +1150,7 @@ public class ArgumentParsing2 {
 		 * @param argumentName The name of the argument to get
 		 * @param type The type of the argument to get
 		 * @return The first argument specified in the command-line input that matched the given argument type. If no such command-line
-		 *         arguments were given, this will null or, if {@link ValuedArgumentBuilder#defaultValue(Supplier) defaulted} the default
-		 *         value.
+		 *         arguments were given, this will null or, if {@link ArgumentBuilder#defaultValue(Supplier) defaulted} the default value.
 		 * @throws IllegalArgumentException If no such argument has been configured in this parser
 		 * @throws ClassCastException If the argument does not match the given type
 		 */
@@ -1161,8 +1162,7 @@ public class ArgumentParsing2 {
 		/**
 		 * @param argumentName The name of the argument to get
 		 * @return All arguments specified in the command-line input that matched the given argument type. If no such command-line arguments
-		 *         were given, this list will be empty or, if {@link ValuedArgumentBuilder#defaultValue(Supplier) defaulted} the default
-		 *         value.
+		 *         were given, this list will be empty or, if {@link ArgumentBuilder#defaultValue(Supplier) defaulted} the default value.
 		 * @throws IllegalArgumentException If no such argument has been configured in this parser
 		 */
 		default BetterList<? extends Argument<?>> getArguments(String argumentName) throws IllegalArgumentException {
@@ -1174,8 +1174,7 @@ public class ArgumentParsing2 {
 		 * @param argumentName The name of the argument to get
 		 * @param type The type of the argument to get
 		 * @return All arguments specified in the command-line input that matched the given argument type. If no such command-line arguments
-		 *         were given, this list will be empty or, if {@link ValuedArgumentBuilder#defaultValue(Supplier) defaulted} the default
-		 *         value.
+		 *         were given, this list will be empty or, if {@link ArgumentBuilder#defaultValue(Supplier) defaulted} the default value.
 		 * @throws IllegalArgumentException If no such argument has been configured in this parser
 		 * @throws ClassCastException If the argument does not match the given type
 		 */
@@ -1189,8 +1188,8 @@ public class ArgumentParsing2 {
 		/**
 		 * @param argumentName The name of the argument
 		 * @return The value of the first argument specified in the command-line input that matched the given argument type. If no such
-		 *         command-line arguments were given, this will null or, if {@link ValuedArgumentBuilder#defaultValue(Supplier) defaulted}
-		 *         the default value.
+		 *         command-line arguments were given, this will null or, if {@link ArgumentBuilder#defaultValue(Supplier) defaulted} the
+		 *         default value.
 		 * @throws IllegalArgumentException If no such argument has been configured in this parser
 		 */
 		default Object get(String argumentName) throws IllegalArgumentException {
@@ -1203,8 +1202,8 @@ public class ArgumentParsing2 {
 		 * @param argumentName The name of the argument to get
 		 * @param type The type of the argument to get
 		 * @return The value of the first argument specified in the command-line input that matched the given argument type. If no such
-		 *         command-line arguments were given, this will null or, if {@link ValuedArgumentBuilder#defaultValue(Supplier) defaulted}
-		 *         the default value.
+		 *         command-line arguments were given, this will null or, if {@link ArgumentBuilder#defaultValue(Supplier) defaulted} the
+		 *         default value.
 		 * @throws IllegalArgumentException If no such argument has been configured in this parser
 		 * @throws ClassCastException If the argument does not match the given type
 		 */
@@ -1216,7 +1215,7 @@ public class ArgumentParsing2 {
 		/**
 		 * @param argumentName The name of the argument to get
 		 * @return The value of all arguments specified in the command-line input that matched the given argument type. If no such
-		 *         command-line arguments were given, this list will be empty or, if {@link ValuedArgumentBuilder#defaultValue(Supplier)
+		 *         command-line arguments were given, this list will be empty or, if {@link ArgumentBuilder#defaultValue(Supplier)
 		 *         defaulted} the default value.
 		 * @throws IllegalArgumentException If no such argument has been configured in this parser
 		 */
@@ -1229,7 +1228,7 @@ public class ArgumentParsing2 {
 		 * @param argumentName The name of the argument to get
 		 * @param type The type of the argument to get
 		 * @return The value of all arguments specified in the command-line input that matched the given argument type. If no such
-		 *         command-line arguments were given, this list will be empty or, if {@link ValuedArgumentBuilder#defaultValue(Supplier)
+		 *         command-line arguments were given, this list will be empty or, if {@link ArgumentBuilder#defaultValue(Supplier)
 		 *         defaulted} the default value.
 		 * @throws IllegalArgumentException If no such argument has been configured in this parser
 		 * @throws ClassCastException If the argument does not match the given type
@@ -1242,8 +1241,7 @@ public class ArgumentParsing2 {
 		 * @param <T> The type of the argument
 		 * @param type The argument type to get the values for
 		 * @return All values specified in the command-line input that matched the given argument type. If no such command-line arguments
-		 *         were given, this list will be empty or, if {@link ValuedArgumentBuilder#defaultValue(Supplier) defaulted} the default
-		 *         value.
+		 *         were given, this list will be empty or, if {@link ArgumentBuilder#defaultValue(Supplier) defaulted} the default value.
 		 */
 		default <T> BetterList<T> getAll(ArgumentType<T> type) {
 			return BetterList.of(getArguments(type).stream().flatMap(arg -> arg.getValues().stream()));
@@ -1251,7 +1249,7 @@ public class ArgumentParsing2 {
 
 		/**
 		 * @param argument The name of the argument
-		 * @return Whether the given argument was specified (or {@link ValuedArgumentBuilder#defaultValue(Supplier) defaulted})
+		 * @return Whether the given argument was specified (or {@link ArgumentBuilder#defaultValue(Supplier) defaulted})
 		 */
 		default boolean has(String argument) {
 			return !getArguments(argument).isEmpty();
@@ -1403,7 +1401,7 @@ public class ArgumentParsing2 {
 		 * @return This builder
 		 */
 		<T> ValuedArgumentSetBuilder addArgument(String name, Class<T> type, ArgumentValueParser<? extends T> parser,
-			Consumer<ValuedArgumentBuilder<T, ?>> configure);
+			Consumer<ArgumentBuilder<T, ?>> configure);
 
 		/**
 		 * Adds an argument type for the parser
@@ -1416,7 +1414,7 @@ public class ArgumentParsing2 {
 		 * @return This builder
 		 */
 		default <T> ValuedArgumentSetBuilder addSimpleArgument(String name, Class<T> type, Function<String, T> parser,
-			Consumer<ValuedArgumentBuilder<T, ?>> configure) {
+			Consumer<ArgumentBuilder<T, ?>> configure) {
 			return addArgument(name, type, (text, otherArgs) -> parser.apply(text), configure);
 		}
 
@@ -1427,7 +1425,7 @@ public class ArgumentParsing2 {
 		 * @param configure Configures the argument (optional), adding constraints and/or a default value
 		 * @return This builder
 		 */
-		default ValuedArgumentSetBuilder addStringArgument(String name, Consumer<ValuedArgumentBuilder<String, ?>> configure) {
+		default ValuedArgumentSetBuilder addStringArgument(String name, Consumer<ArgumentBuilder<String, ?>> configure) {
 			return addSimpleArgument(name, String.class, v -> v, configure);
 		}
 
@@ -1438,7 +1436,7 @@ public class ArgumentParsing2 {
 		 * @param configure Configures the argument (optional), adding constraints and/or a default value
 		 * @return This builder
 		 */
-		default ValuedArgumentSetBuilder addIntArgument(String name, Consumer<ValuedArgumentBuilder<Integer, ?>> configure) {
+		default ValuedArgumentSetBuilder addIntArgument(String name, Consumer<ArgumentBuilder<Integer, ?>> configure) {
 			return addSimpleArgument(name, Integer.class, Integer::parseInt, configure);
 		}
 
@@ -1449,7 +1447,7 @@ public class ArgumentParsing2 {
 		 * @param configure Configures the argument (optional), adding constraints and/or a default value
 		 * @return This builder
 		 */
-		default ValuedArgumentSetBuilder addLongArgument(String name, Consumer<ValuedArgumentBuilder<Long, ?>> configure) {
+		default ValuedArgumentSetBuilder addLongArgument(String name, Consumer<ArgumentBuilder<Long, ?>> configure) {
 			return addSimpleArgument(name, Long.class, Long::parseLong, configure);
 		}
 
@@ -1460,7 +1458,7 @@ public class ArgumentParsing2 {
 		 * @param configure Configures the argument (optional), adding constraints and/or a default value
 		 * @return This builder
 		 */
-		default ValuedArgumentSetBuilder addDoubleArgument(String name, Consumer<ValuedArgumentBuilder<Double, ?>> configure) {
+		default ValuedArgumentSetBuilder addDoubleArgument(String name, Consumer<ArgumentBuilder<Double, ?>> configure) {
 			return addSimpleArgument(name, Double.class, Double::parseDouble, configure);
 		}
 
@@ -1471,7 +1469,7 @@ public class ArgumentParsing2 {
 		 * @param configure Configures the argument (optional), adding constraints and/or a default value
 		 * @return This builder
 		 */
-		default ValuedArgumentSetBuilder addBooleanArgument(String name, Consumer<ValuedArgumentBuilder<Boolean, ?>> configure) {
+		default ValuedArgumentSetBuilder addBooleanArgument(String name, Consumer<ArgumentBuilder<Boolean, ?>> configure) {
 			return addArgument(name, Boolean.class, (txt, __) -> {
 				switch (txt.toLowerCase()) {
 				case "t":
@@ -1500,7 +1498,7 @@ public class ArgumentParsing2 {
 		 * @return This builder
 		 */
 		default <E extends Enum<E>> ValuedArgumentSetBuilder addEnumArgument(String name, Class<E> enumType,
-			Consumer<ValuedArgumentBuilder<E, ?>> configure) {
+			Consumer<ArgumentBuilder<E, ?>> configure) {
 			return addSimpleArgument(name, enumType, s -> {
 				for (E value : enumType.getEnumConstants()) {
 					if (value.name().equals(s))
@@ -1524,7 +1522,7 @@ public class ArgumentParsing2 {
 		 * @return This builder
 		 */
 		default ValuedArgumentSetBuilder addPatternArgument(String name, String pattern,
-			Consumer<ValuedArgumentBuilder<Matcher, ?>> configure) {
+			Consumer<ArgumentBuilder<Matcher, ?>> configure) {
 			return addPatternArgument(name, Pattern.compile(pattern), configure);
 		}
 
@@ -1537,7 +1535,7 @@ public class ArgumentParsing2 {
 		 * @return This builder
 		 */
 		default ValuedArgumentSetBuilder addPatternArgument(String name, Pattern pattern,
-			Consumer<ValuedArgumentBuilder<Matcher, ?>> configure) {
+			Consumer<ArgumentBuilder<Matcher, ?>> configure) {
 			return addArgument(name, Matcher.class, new PatternParser(pattern), configure);
 		}
 
@@ -1558,7 +1556,7 @@ public class ArgumentParsing2 {
 		 * @param configure Configures the argument (optional), adding constraints and/or a default value
 		 * @return This builder
 		 */
-		default ValuedArgumentSetBuilder addDurationArgument(String name, Consumer<ValuedArgumentBuilder<Duration, ?>> configure) {
+		default ValuedArgumentSetBuilder addDurationArgument(String name, Consumer<ArgumentBuilder<Duration, ?>> configure) {
 			return addArgument(name, Duration.class, (txt, __) -> {
 				return TimeUtils.parseDuration(txt).asDuration();
 			}, configure);
@@ -1614,9 +1612,9 @@ public class ArgumentParsing2 {
 	}
 
 	/**
-	 * Allows configuration of an argument type
+	 * Allows configuration for an argument type
 	 * 
-	 * @param <T> The type of the argument being configured
+	 * @param <T> The type of the argument
 	 * @param <B> The sub-type of this builder
 	 */
 	public interface ArgumentBuilder<T, B extends ArgumentBuilder<T, B>> {
@@ -1631,15 +1629,7 @@ public class ArgumentParsing2 {
 		 * @return This builder
 		 */
 		B withDescription(String descrip);
-	}
 
-	/**
-	 * Allows configuration for a valued argument type
-	 * 
-	 * @param <T> The type of the argument
-	 * @param <B> The sub-type of this builder
-	 */
-	public interface ValuedArgumentBuilder<T, B extends ValuedArgumentBuilder<T, B>> extends ArgumentBuilder<T, B> {
 		/**
 		 * <p>
 		 * This call has slightly different effects when it is called on a {@link ArgumentPattern#getMaxValues() multi-valued} argument than
@@ -1684,6 +1674,11 @@ public class ArgumentParsing2 {
 			if (getArgument().getPattern().getMaxValues() <= 1)
 				times(0, 1);
 			return (B) this;
+		}
+
+		/** @return Allows this argument to be specified any number of times, or not at all */
+		default B anyTimes() {
+			return times(0, Integer.MAX_VALUE);
 		}
 
 		/**
@@ -1742,7 +1737,7 @@ public class ArgumentParsing2 {
 	 * 
 	 * @param <B> The sub-type of this builder
 	 */
-	public interface InstantArgumentBuilder<B extends InstantArgumentBuilder<B>> extends ValuedArgumentBuilder<Instant, B> {
+	public interface InstantArgumentBuilder<B extends InstantArgumentBuilder<B>> extends ArgumentBuilder<Instant, B> {
 		/**
 		 * @param timeZone The time zone to use while parsing times. The default is local time.
 		 * @return This builder
@@ -1789,7 +1784,7 @@ public class ArgumentParsing2 {
 	 * @param <F> The file type of the argument
 	 * @param <B> The sub-type of this builder
 	 */
-	public interface AbstractFileArgumentBuilder<F, B extends AbstractFileArgumentBuilder<F, B>> extends ValuedArgumentBuilder<F, B> {
+	public interface AbstractFileArgumentBuilder<F, B extends AbstractFileArgumentBuilder<F, B>> extends ArgumentBuilder<F, B> {
 		/**
 		 * Specifies that file values parsed with this type must be either a directory or a file. By default, either is acceptable.
 		 * 
@@ -2000,7 +1995,7 @@ public class ArgumentParsing2 {
 		/**
 		 * @return An argument condition that is met if the target argument is specified at least once or, in the case of a
 		 *         {@link ArgumentPattern#getMaxValues() multi-valued} argument, has at least one value. A
-		 *         {@link ValuedArgumentBuilder#defaultValue(Supplier) default} value also counts.
+		 *         {@link ArgumentBuilder#defaultValue(Supplier) default} value also counts.
 		 */
 		default ArgumentCondition<S> specified() {
 			return times(1, Integer.MAX_VALUE);
@@ -2009,7 +2004,7 @@ public class ArgumentParsing2 {
 		/**
 		 * @return An argument condition that is met only if the target argument is not specified, in the case of a
 		 *         {@link ArgumentPattern#getMaxValues() multi-valued} argument, has no specified values. A
-		 *         {@link ValuedArgumentBuilder#defaultValue(Supplier) default} value will also mean the condition is not met.
+		 *         {@link ArgumentBuilder#defaultValue(Supplier) default} value will also mean the condition is not met.
 		 */
 		default ArgumentCondition<S> missing() {
 			return times(0, 0);
@@ -2020,7 +2015,7 @@ public class ArgumentParsing2 {
 		 * @param maxTimes The maximum number of times the target argument may be specified for the built condition to be met
 		 * @return An argument condition that is met if the target argument is specified a number of times between the two given values,
 		 *         inclusively, or, in the case of a {@link ArgumentPattern#getMaxValues() multi-valued} argument, has a number of arguments
-		 *         between the two given values. A {@link ValuedArgumentBuilder#defaultValue(Supplier) default} value also counts.
+		 *         between the two given values. A {@link ArgumentBuilder#defaultValue(Supplier) default} value also counts.
 		 */
 		ArgumentCondition<S> times(int minTimes, int maxTimes);
 
@@ -2437,7 +2432,7 @@ public class ArgumentParsing2 {
 				if (name == null)
 					throw new NullPointerException("Name must not be null");
 				thePattern.validate(name);
-				DefaultArgBuilder<Void, ?> builder = new DefaultArgBuilder<>(name, thePattern, void.class, theParser);
+				DefaultArgBuilder<Void, ?> builder = new DefaultArgBuilder<>(name, thePattern, void.class, null, theParser);
 				builder.times(0, 1);
 				if (configure != null)
 					configure.accept(builder);
@@ -2457,12 +2452,12 @@ public class ArgumentParsing2 {
 
 			@Override
 			public <T> ValuedArgumentSetBuilder addArgument(String name, Class<T> type, ArgumentValueParser<? extends T> parser,
-				Consumer<ValuedArgumentBuilder<T, ?>> configure) {
-				DefaultValuedArgBuilder<T, ?> builder = new DefaultValuedArgBuilder<>(name, thePattern, type, parser, theParser);
+				Consumer<ArgumentBuilder<T, ?>> configure) {
+				DefaultArgBuilder<T, ?> builder = new DefaultArgBuilder<>(name, thePattern, type, parser, theParser);
 				return add3(builder, configure);
 			}
 
-			<T, B extends DefaultValuedArgBuilder<T, ?>> ValuedArgumentSetBuilder add3(B builder, Consumer<? super B> configure) {
+			<T, B extends DefaultArgBuilder<T, ?>> ValuedArgumentSetBuilder add3(B builder, Consumer<? super B> configure) {
 				if (builder.getArgument().getName() == null)
 					throw new NullPointerException("Name must not be null");
 				if (builder.getArgument().getType() == null || builder.getArgument().getType() == void.class
@@ -2497,12 +2492,16 @@ public class ArgumentParsing2 {
 			private final DefaultParserBuilder theArgParser;
 			private final DefaultArgType<T> theArgument;
 			private final ArrayList<ArgumentConstraint<T>> theConstraints;
+			private final ArgumentValueParser<? extends T> theValueParser;
+			private ExFunction<Arguments, ? extends T, ParseException> theDefault;
 			private boolean isBuilt;
 
-			DefaultArgBuilder(String name, ArgumentPattern pattern, Class<T> type, DefaultParserBuilder argParser) {
+			DefaultArgBuilder(String name, ArgumentPattern pattern, Class<T> type, ArgumentValueParser<? extends T> parser,
+				DefaultParserBuilder argParser) {
 				theArgParser = argParser;
 				theConstraints = new ArrayList<>(3);
 				theArgument = new DefaultArgType<>(name, pattern, type, theConstraints, null);
+				theValueParser = parser;
 			}
 
 			void assertNotBuilt() {
@@ -2525,34 +2524,11 @@ public class ArgumentParsing2 {
 				return (B) this;
 			}
 
-			B times(int minTimes, int maxTimes) {
-				return addConstraint(new DefaultArgConstraint<>(
-					new ArgumentCondition.TrueCondition<>(theArgument, theArgParser::getHolder), minTimes, maxTimes, null));
-			}
-
 			@Override
 			public B withDescription(String descrip) {
 				assertNotBuilt();
 				theArgument.theDescription = descrip;
 				return (B) this;
-			}
-
-			ArgumentTypeHolder<T> build() {
-				assertNotBuilt();
-				isBuilt = true;
-				return new ArgumentTypeHolder<>(getArgument(), null, null);
-			}
-		}
-
-		static class DefaultValuedArgBuilder<T, B extends DefaultValuedArgBuilder<T, B>> extends DefaultArgBuilder<T, B>
-			implements ValuedArgumentBuilder<T, B> {
-			private final ArgumentValueParser<? extends T> theValueParser;
-			private ExFunction<Arguments, ? extends T, ParseException> theDefault;
-
-			DefaultValuedArgBuilder(String name, ArgumentPattern pattern, Class<T> type,
-				ArgumentValueParser<? extends T> parser, DefaultParserBuilder argParser) {
-				super(name, pattern, type, argParser);
-				theValueParser = parser;
 			}
 
 			ArgumentValueParser<? extends T> getValueParser() {
@@ -2561,11 +2537,16 @@ public class ArgumentParsing2 {
 
 			@Override
 			public B times(int minTimes, int maxTimes) {
-				return super.times(minTimes, maxTimes);
+				if (maxTimes > 1 && theValueParser == null)
+					throw new IllegalArgumentException("Flag arguments cannot have multiplicity");
+				return addConstraint(new DefaultArgConstraint<>(new ArgumentCondition.TrueCondition<>(theArgument, theArgParser::getHolder),
+					minTimes, maxTimes, null));
 			}
 
 			@Override
 			public B defaultValue(Supplier<? extends T> value) {
+				if (theValueParser == null)
+					throw new IllegalArgumentException("Flag arguments cannot have a default value");
 				assertNotBuilt();
 				theDefault = __ -> value.get();
 				return (B) this;
@@ -2573,6 +2554,8 @@ public class ArgumentParsing2 {
 
 			@Override
 			public B parseDefaultValue(String value) {
+				if (theValueParser == null)
+					throw new IllegalArgumentException("Flag arguments cannot have a default value");
 				theDefault = args -> theValueParser.parse(value, args);
 				T parsed;
 				try {
@@ -2603,14 +2586,14 @@ public class ArgumentParsing2 {
 				return addConstraint(newConstraint);
 			}
 
-			@Override
 			ArgumentTypeHolder<T> build() {
-				super.build();
+				assertNotBuilt();
+				isBuilt = true;
 				return new ArgumentTypeHolder<>(getArgument(), theValueParser, theDefault);
 			}
 		}
 
-		static class DefaultInstantArgBuilder extends DefaultValuedArgBuilder<Instant, DefaultInstantArgBuilder>
+		static class DefaultInstantArgBuilder extends DefaultArgBuilder<Instant, DefaultInstantArgBuilder>
 			implements InstantArgumentBuilder<DefaultInstantArgBuilder> {
 
 			DefaultInstantArgBuilder(String name, ArgumentPattern pattern, DefaultParserBuilder argParser) {
@@ -2655,7 +2638,7 @@ public class ArgumentParsing2 {
 		}
 
 		static abstract class DefaultAbstractFileArgBuilder<F, B extends DefaultAbstractFileArgBuilder<F, B>>
-			extends DefaultValuedArgBuilder<F, B> implements AbstractFileArgumentBuilder<F, B> {
+			extends DefaultArgBuilder<F, B> implements AbstractFileArgumentBuilder<F, B> {
 			DefaultAbstractFileArgBuilder(String name, ArgumentPattern pattern, Class<F> type, FileParser<F> parser,
 				DefaultParserBuilder argParser) {
 				super(name, pattern, type, parser, argParser);
@@ -3003,7 +2986,7 @@ public class ArgumentParsing2 {
 			}
 
 			ArgumentTypeHolder<?> getHolder(String name) {
-				ArgumentTypeHolder<?> arg = theArguments.get(name);
+				ArgumentTypeHolder<?> arg = theArguments.getIfPresent(name);
 				if (arg == null)
 					throw new IllegalArgumentException("No such argument: \"" + name + "\"");
 				return arg;
@@ -3016,7 +2999,7 @@ public class ArgumentParsing2 {
 
 			@Override
 			public ArgumentType<?> getArgument(String name) throws IllegalArgumentException {
-				ArgumentTypeHolder<?> arg = theArguments.get(name);
+				ArgumentTypeHolder<?> arg = theArguments.getIfPresent(name);
 				if (arg == null)
 					throw new IllegalArgumentException("No such argument: \"" + name + "\"");
 				return arg.argument;
@@ -3024,7 +3007,7 @@ public class ArgumentParsing2 {
 
 			@Override
 			public ArgumentType<?> getArgumentIfExists(String name) {
-				ArgumentTypeHolder<?> arg = theArguments.get(name);
+				ArgumentTypeHolder<?> arg = theArguments.getIfPresent(name);
 				return arg == null ? null : arg.argument;
 			}
 
@@ -3148,8 +3131,13 @@ public class ArgumentParsing2 {
 				int specified;
 				if (argument.getPattern().getMaxValues() == 0)
 					specified = parsedArgs.getArguments(argument).size();
-				else
-					specified = parsedArgs.getAll(argument).size();
+				else {
+					specified = 0;
+					for (Argument<?> arg : parsedArgs.getArguments(argument)) {
+						if (arg.getMatch() != null)
+							specified++;
+					}
+				}
 				if (specified < constraint.getMinTimes()) {
 					if (constraint.getMinTimes() == 1)
 						errors.add(argument.getName() + " is required but was not specified" + printCondition(constraint.getCondition()));

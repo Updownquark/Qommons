@@ -314,12 +314,12 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public void delete(DirectorySyncResults results) throws IOException {
-			throw new IOException("Cannot delete zip entries this way");
+			theBacking.delete(results);
 		}
 
 		@Override
 		public OutputStream write() throws IOException {
-			throw new IOException("Cannot overwrite zip entries");
+			return theBacking.write();
 		}
 
 		@Override
