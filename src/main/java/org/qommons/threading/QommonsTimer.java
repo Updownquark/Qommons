@@ -355,8 +355,6 @@ public class QommonsTimer {
 		public TaskHandle setActive(boolean active) {
 			if (isActive.compareAndSet(!active, active)) {
 				synchronized (this) {
-					if (isActive.get() != active)
-						return this;
 					if (active) {
 						theRemove = schedule(this);
 					} else {
@@ -600,9 +598,9 @@ public class QommonsTimer {
 						if (!handle[0].isActive())
 							theInactityTasks.remove(taskKey);
 					}
-				}, Duration.ofSeconds(1_000_000_000), false).runNextIn(inactiveTime).times(1).setActive(true);
+				}, Duration.ofSeconds(1_000_000_000), false).times(1).runNextIn(inactiveTime);
 			} else {
-				existing.times(1).runNextIn(inactiveTime).setActive(true);
+				existing.times(1).runNextIn(inactiveTime);
 				return existing;
 			}
 		});
@@ -638,7 +636,11 @@ public class QommonsTimer {
 	}
 
 	Runnable schedule(TaskHandle task) {
-		return theTaskQueue.add(task, false);
+		boolean wasEmpty = theTaskQueue.isEmpty();
+		Runnable remove = theTaskQueue.add(task, false);
+		if (!wasEmpty)
+			interruptScheduler();
+		return remove;
 	}
 
 	/** @return Whether there are any tasks scheduled in this timer */
