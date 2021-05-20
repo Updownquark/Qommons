@@ -10,6 +10,7 @@ import org.qommons.collect.HashSetTest;
 import org.qommons.collect.ListenerListTest;
 import org.qommons.io.QonsoleTest;
 import org.qommons.io.ReaderInputStreamTest;
+import org.qommons.threading.QommonsTimerTest;
 import org.qommons.tree.TreeUtilsTest;
 
 /** A suite of tests for the Qommons library */
@@ -28,7 +29,8 @@ import org.qommons.tree.TreeUtilsTest;
 	HashSetTest.class, //
 	ListenerListTest.class, //
 	TreeUtilsTest.class, //
-	RangeTest.class
+	RangeTest.class, //
+	QommonsTimerTest.class
 })
 public class QommonsTests {
 }

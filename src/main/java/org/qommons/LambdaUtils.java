@@ -146,6 +146,17 @@ public class LambdaUtils {
 
 	/**
 	 * @param <T> The type of the supplier
+	 * @param supplier Supplier for the value to supply
+	 * @param print The printed supplier representation
+	 * @param identifier The identifier for the supplier
+	 * @return A supplier that always returns the given value
+	 */
+	public static <T> Supplier<T> printableSupplier(Supplier<T> supplier, Supplier<String> print, Object identifier) {
+		return new PrintableSupplier<>(supplier, print != null ? print : supplier::toString, identifier);
+	}
+
+	/**
+	 * @param <T> The type of the supplier
 	 * @param value The value to supply
 	 * @param print The printed supplier representation
 	 * @param identifier The identifier for the supplier

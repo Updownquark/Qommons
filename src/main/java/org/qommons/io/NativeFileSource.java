@@ -228,7 +228,8 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public OutputStream write() throws IOException {
-			return Files.newOutputStream(thePath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+			return Files.newOutputStream(thePath, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
+				StandardOpenOption.TRUNCATE_EXISTING);
 		}
 
 		@Override
