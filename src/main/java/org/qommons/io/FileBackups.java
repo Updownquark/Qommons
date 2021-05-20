@@ -6,215 +6,133 @@ import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
-import java.util.List;
+import java.util.Map;
 
-import org.qommons.ArrayUtils;
-import org.qommons.TimeUtils;
+import org.qommons.collect.BetterCollections;
+import org.qommons.collect.BetterSortedList.SortedSearchFilter;
+import org.qommons.collect.BetterSortedMap;
 import org.qommons.collect.BetterSortedSet;
+import org.qommons.tree.BetterTreeMap;
 import org.qommons.tree.BetterTreeSet;
 
+/** A backup strategy for frequently-updated files, e.g. application config */
 public class FileBackups {
+	/** The format to store the date of the backup in the file name */
 	public static final ThreadLocal<SimpleDateFormat> DATE_FORMAT = ThreadLocal
 		.withInitial(() -> new SimpleDateFormat("ddMMMyyyy_HHmmss.SSS"));
-
-	private static class BackupFile {
-		final String fileName;
-		final String suffix;
-
-		BackupFile(String fileName) {
-			int lastDot = fileName.lastIndexOf('.');
-			if (lastDot > 0) { // Strictly greater so "hidden" initial-dot files don't look like extensions
-				suffix = fileName.substring(lastDot);
-				fileName = fileName.substring(0, lastDot + 1);
-			} else
-				suffix = "";
-			this.fileName = fileName;
-		}
-
-		public Instant getBackupTime(String backupFileName) {
-			if (backupFileName.startsWith(fileName) && backupFileName.endsWith(suffix)) {
-				try {
-					Instant time = DATE_FORMAT.get()
-						.parse(backupFileName.substring(fileName.length(), backupFileName.length() - suffix.length())).toInstant();
-					return time;
-				} catch (ParseException e) {
-					return null;
-				}
-			} else
-				return null;
-		}
-
-		public String getBackupFileName(Instant backupTime) {
-			return fileName + DATE_FORMAT.get().format(Date.from(backupTime)) + suffix;
-		}
-	}
+	/** The backup times to keep files for */
+	public static final BetterSortedSet<Duration> BACKUP_TIMES = BetterCollections.unmodifiableSortedSet(//
+		BetterTreeSet.buildTreeSet(Duration::compareTo).safe(false).build().with(//
+			Duration.ofSeconds(1), Duration.ofMinutes(5), Duration.ofMinutes(15), Duration.ofMinutes(30), //
+			Duration.ofHours(1), Duration.ofHours(2), Duration.ofHours(3), Duration.ofHours(4), //
+			Duration.ofHours(6), Duration.ofHours(12), Duration.ofHours(18), //
+			Duration.ofDays(1), Duration.ofDays(2), Duration.ofDays(3), Duration.ofDays(4), Duration.ofDays(5), Duration.ofDays(6), //
+			Duration.ofDays(7), Duration.ofDays(10), Duration.ofDays(14), Duration.ofDays(21), Duration.ofDays(30), //
+			Duration.ofDays(60), Duration.ofDays(90), Duration.ofDays(120), Duration.ofDays(180)));
 
 	private final BetterFile theTargetFile;
-	private final BackupFile theTargetBackup;
-	private final BetterFile theDirectory;
-	private final Duration theMinDuration;
-	private final Duration theMaxDuration;
-	private final int theMinBackupCount;
-	private final int theMaxBackupCount;
-	private final long theMinBackupSize;
-	private final long theMaxBackupSize;
+	private final String thePrefix;
+	private final String theSuffix;
 
-	private FileBackups(Builder builder) {
-		theTargetFile = builder.theTargetFile;
-		theTargetBackup = new BackupFile(theTargetFile.getName());
-		theDirectory = builder.theDirectory;
-
-		theMinDuration = builder.theMinDuration;
-		theMaxDuration = builder.theMaxDuration;
-		theMinBackupCount = builder.theMinBackupCount;
-		theMaxBackupCount = builder.theMaxBackupCount;
-		theMinBackupSize = builder.theMinBackupSize;
-		theMaxBackupSize = builder.theMaxBackupSize;
+	/** @param targetFile The file to back up */
+	public FileBackups(BetterFile targetFile) {
+		theTargetFile = targetFile;
+		int dot = targetFile.getName().lastIndexOf('.');
+		thePrefix = dot < 0 ? targetFile.getName() : targetFile.getName().substring(0, dot + 1);
+		theSuffix = dot < 0 ? "" : targetFile.getName().substring(dot);
 	}
 
+	/** @return The file being backed up */
 	public BetterFile getTargetFile() {
 		return theTargetFile;
 	}
 
-	public BetterFile getDirectory() {
-		return theDirectory;
-	}
-
-	public Duration getMinDuration() {
-		return theMinDuration;
-	}
-
-	public Duration getMaxDuration() {
-		return theMaxDuration;
-	}
-
-	public int getMinBackupCount() {
-		return theMinBackupCount;
-	}
-
-	public int getMaxBackupCount() {
-		return theMaxBackupCount;
-	}
-
-	public long getMinBackupSize() {
-		return theMinBackupSize;
-	}
-
-	public long getMaxBackupSize() {
-		return theMaxBackupSize;
-	}
-
-	public void saveLatest(boolean moveOrCopy) throws IOException {
-		if (!theTargetFile.exists())
-			return;
-		purgeIfNeeded(theTargetFile.length());
-		Instant time = Instant.now();
-		BetterFile backupFile = theDirectory.at(theTargetBackup.getBackupFileName(time));
-		if (!theDirectory.exists())
-			theDirectory.create(true);
-		if (!moveOrCopy || theTargetFile.move(backupFile) == null) {
-			FileUtils.sync().from(theTargetFile).to(backupFile).sync();
-		}
-	}
-
-	private void purgeIfNeeded(long addedSize) {
-		int count = 1;
-		long totalSize = addedSize;
-		List<? extends BetterFile> files = theDirectory.listFiles();
-		if (files == null)
-			return;
-		Instant[] backupTimes = new Instant[files.size()];
-		long[] sizes = new long[files.size()];
-		for (int i = 0; i < backupTimes.length; i++) {
-			Instant time = theTargetBackup.getBackupTime(files.get(i).getName());
-			backupTimes[i] = time;
-			if (time != null) {
-				count++;
-				long size = files.get(i).length();
-				sizes[i] = size;
-				totalSize += size;
-			}
-		}
-		// Ignore non-backup files
-		int lastValid = 0;
-		for (int i = 0; i < backupTimes.length; i++) {
-			if (backupTimes[i] != null) {
-				if (i != lastValid) {
-					backupTimes[lastValid] = backupTimes[i];
-					sizes[lastValid] = sizes[i];
-				}
-				lastValid++;
-			}
-		}
-		lastValid--;
-		ArrayUtils.sort(backupTimes, new ArrayUtils.SortListener<Instant>() {
-			@Override
-			public int compare(Instant o1, Instant o2) {
-				if (o1 == null) {
-					if (o2 == null)
-						return 0;
-					else
-						return 1;
-				} else if (o2 == null)
-					return -1;
-				else
-					return -o1.compareTo(o2); // Newest first
-			}
-
-			@Override
-			public void swapped(Instant o1, int idx1, Instant o2, int idx2) {
-				long sz1 = sizes[idx1];
-				sizes[idx1] = sizes[idx2];
-				sizes[idx2] = sz1;
-			}
-		});
-
-		Instant now = Instant.now();
-		while (lastValid >= 0 && needsPurge(count, totalSize, TimeUtils.between(backupTimes[lastValid], now))) {
+	/**
+	 * Tells this backup strategy that the target file has changed, so that it manages and prunes existing backups
+	 * 
+	 * @throws IOException If an exception occurs with the backup operation
+	 */
+	public void fileChanged() throws IOException {
+		BetterSortedMap<Long, BetterFile> backups = BetterTreeMap.build(Long::compareTo).safe(false).buildMap();
+		long now = System.currentTimeMillis();
+		BetterFile newBackup = theTargetFile.getParent().at(//
+			new StringBuilder(thePrefix).append(DATE_FORMAT.get().format(new Date(now))).append(theSuffix).toString());
+		FileUtils.sync().from(theTargetFile).to(newBackup).sync();
+		backups.put(now, theTargetFile);
+		for (BetterFile file : theTargetFile.getParent().listFiles()) {
+			long backupTime;
 			try {
-				getBackup(backupTimes[lastValid]).delete(null);
-			} catch (IOException e) {
-				System.err.println("Could not delete backup " + getBackup(backupTimes[lastValid]));
-				e.printStackTrace();
+				backupTime = getBackupTime(file.getName());
+				if (backupTime >= 0) {
+					backups.put(backupTime, file);
+				}
+			} catch (ParseException e) {
+				System.err.println(thePrefix + " backup " + file.getName() + " not parseable as a backup: " + e);
 			}
-			totalSize -= sizes[lastValid];
-			lastValid--;
+		}
+		Duration lastBackupTime = null;
+		long lastBackup = 0;
+		for (Map.Entry<Long, BetterFile> backup : backups.entrySet()) {
+			Duration time = Duration.ofMillis(now - backup.getKey());
+			Duration backupTime = BACKUP_TIMES.search(time, SortedSearchFilter.PreferGreater).get();
+			if (lastBackupTime != null && backupTime.compareTo(lastBackupTime) > 0)
+				backupTime = lastBackupTime;
+			if (backupTime.equals(lastBackupTime)) {
+				if (Math.abs(now - backup.getKey() - backupTime.toMillis()) < Math.abs(now - lastBackup - backupTime.toMillis()))
+					backups.remove(lastBackup).delete(null);
+				else
+					backupTime = BACKUP_TIMES.lower(backupTime);
+			}
+			lastBackup = backup.getKey();
+			lastBackupTime = backupTime;
 		}
 	}
 
-	private boolean needsPurge(int count, long totalSize, Duration oldestBackup) {
-		if (count <= theMinBackupCount)
-			return false;
-		else if (totalSize <= theMinBackupSize)
-			return false;
-		else if (oldestBackup.compareTo(theMinDuration) <= 0)
-			return false;
-		if (count > theMaxBackupCount)
-			return true;
-		else if (totalSize > theMaxBackupSize)
-			return true;
-		else if (oldestBackup.compareTo(theMaxDuration) > 0)
-			return true;
-		return false;
-	}
-
+	/** @return The times of all current backup files */
 	public BetterSortedSet<Instant> getBackups() {
 		BetterSortedSet<Instant> backups = BetterTreeSet.buildTreeSet(Instant::compareTo).safe(false).build();
-		List<? extends BetterFile> files = theDirectory.listFiles();
-		if (files != null) {
-			for (BetterFile file : files) {
-				Instant time = theTargetBackup.getBackupTime(file.getName());
-				if (time != null)
-					backups.add(time);
+		for (BetterFile file : theTargetFile.getParent().listFiles()) {
+			long backupTime;
+			try {
+				backupTime = getBackupTime(file.getName());
+				if (backupTime >= 0)
+					backups.add(Instant.ofEpochMilli(backupTime));
+			} catch (ParseException e) {
+				System.err.println(thePrefix + " backup " + file.getName() + " not parseable as a backup: " + e);
 			}
 		}
 		return backups;
 	}
 
-	public BetterFile getBackup(Instant backupTime) {
-		return theDirectory.at(theTargetBackup.getBackupFileName(backupTime));
+	/**
+	 * @param fileName The name of a potential backup file
+	 * @return The backup time of the file (millis since epoch) or -1 if the file is not a backup file
+	 * @throws ParseException If the file name has the form of a backup file, but its date cannot be parsed
+	 */
+	public long getBackupTime(String fileName) throws ParseException {
+		if (!fileName.startsWith(thePrefix) || !fileName.endsWith(theSuffix) //
+			|| fileName.length() - thePrefix.length() - theSuffix.length() < 10)
+			return -1;
+		fileName = fileName.substring(thePrefix.length(), fileName.length() - theSuffix.length());
+		return DATE_FORMAT.get().parse(fileName).getTime();
 	}
 
+	/**
+	 * @param backupTime The backup time
+	 * @return The file in this backup set with the given time (whether it exists or not)
+	 */
+	public BetterFile getBackup(Instant backupTime) {
+		return theTargetFile.getParent().at(//
+			new StringBuilder(thePrefix).append(DATE_FORMAT.get().format(new Date(backupTime.toEpochMilli()))).append(theSuffix)
+				.toString());
+	}
+
+	/**
+	 * Backs up the target file to get given time
+	 * 
+	 * @param backupTime The backup time to back up to
+	 * @throws IOException If The backup file does not exist or an error occurs during the backup operation
+	 */
 	public void restore(Instant backupTime) throws IOException {
 		BetterFile backupFile = getBackup(backupTime);
 		if (!backupFile.exists())
@@ -222,127 +140,32 @@ public class FileBackups {
 		FileUtils.sync().from(backupFile).to(theTargetFile).sync();
 	}
 
-	public void renamedFrom(String fileName) {
-		BackupFile oldBackup = new BackupFile(fileName);
-		List<? extends BetterFile> files = theDirectory.listFiles();
-		for (BetterFile file : files) {
-			Instant backupTime = oldBackup.getBackupTime(file.getName());
-			if (backupTime != null) {
-				BetterFile target = theDirectory.at(theTargetBackup.getBackupFileName(backupTime));
+	/** @param file The target file that was being backed up before, before it was renamed to this backup's target file */
+	public void renamedFrom(BetterFile file) {
+		FileBackups oldBackup = new FileBackups(file);
+		try {
+			oldBackup.getTargetFile().move(theTargetFile);
+		} catch (IOException e) {
+			System.err.println("Could not move " + oldBackup.getTargetFile() + " to " + theTargetFile);
+			e.printStackTrace();
+		}
+		for (BetterFile backup : file.getParent().listFiles()) {
+			long backupTime;
+			try {
+				backupTime = oldBackup.getBackupTime(backup.getName());
+			} catch (ParseException e) {
+				backupTime = -1;
+			}
+			if (backupTime >= 0) {
+				BetterFile newBackup = theTargetFile.getParent().at(//
+					new StringBuilder(thePrefix).append(DATE_FORMAT.get().format(new Date(backupTime))).append(theSuffix).toString());
 				try {
-					file.move(target);
+					backup.move(newBackup);
 				} catch (IOException e) {
-					System.err.println("Could not move " + file.getPath() + " to " + target.getPath());
+					System.err.println("Could not move " + backup + " to " + newBackup);
 					e.printStackTrace();
 				}
 			}
-		}
-	}
-
-	public static Builder build(BetterFile targetFile) {
-		return new Builder(targetFile);
-	}
-
-	public static class Builder {
-		private final BetterFile theTargetFile;
-		private BetterFile theDirectory;
-		private Duration theMinDuration;
-		private Duration theMaxDuration;
-		private int theMinBackupCount;
-		private int theMaxBackupCount;
-		private long theMinBackupSize;
-		private long theMaxBackupSize;
-
-		Builder(BetterFile targetFile) {
-			theTargetFile = targetFile;
-			int dotIdx = theTargetFile.getName().lastIndexOf('.');
-			String backupFolderName;
-			if (dotIdx < 0)
-				backupFolderName = theTargetFile.getName() + ".BAK";
-			else
-				backupFolderName = theTargetFile.getName().substring(0, dotIdx) + ".BAK";
-			theDirectory = targetFile.getParent().at(backupFolderName);
-
-			theMinDuration = Duration.ZERO;
-			theMaxDuration = Duration.ofDays(30);
-
-			theMinBackupCount = 1;
-			theMaxBackupCount = 100;
-
-			theMinBackupSize = 0;
-			theMaxBackupSize = 100L * 1024 * 1024;
-		}
-
-		public BetterFile getTargetFile() {
-			return theTargetFile;
-		}
-
-		public BetterFile getBackupDirectory() {
-			return theDirectory;
-		}
-
-		public Builder withBackupDirectory(BetterFile directory) {
-			theDirectory = directory;
-			return this;
-		}
-
-		public Builder all() {
-			withDuration(Duration.ZERO, Duration.ofDays(100_000L * 365));
-			withBackupCount(0, Integer.MAX_VALUE);
-			withBackupSize(0, Long.MAX_VALUE);
-			return this;
-		}
-
-		public Duration getMinDuration() {
-			return theMinDuration;
-		}
-
-		public Duration getMaxDuration() {
-			return theMaxDuration;
-		}
-
-		public Builder withDuration(Duration minDuration, Duration maxDuration) {
-			if (minDuration.compareTo(maxDuration) > 0)
-				throw new IllegalArgumentException(minDuration + ">" + maxDuration);
-			theMinDuration = minDuration;
-			theMaxDuration = maxDuration;
-			return this;
-		}
-
-		public int getMinBackupCount() {
-			return theMinBackupCount;
-		}
-
-		public int getMaxBackupCount() {
-			return theMaxBackupCount;
-		}
-
-		public Builder withBackupCount(int minBackupCount, int maxBackupCount) {
-			if (minBackupCount > maxBackupCount)
-				throw new IllegalArgumentException(minBackupCount + ">" + maxBackupCount);
-			theMinBackupCount = minBackupCount;
-			theMaxBackupCount = maxBackupCount;
-			return this;
-		}
-
-		public long getMinBackupSize() {
-			return theMinBackupSize;
-		}
-
-		public long getMaxBackupSize() {
-			return theMaxBackupSize;
-		}
-
-		public Builder withBackupSize(long minBackupSize, long maxBackupSize) {
-			if (minBackupSize > maxBackupSize)
-				throw new IllegalArgumentException(minBackupSize + ">" + maxBackupSize);
-			theMinBackupSize = minBackupSize;
-			theMaxBackupSize = maxBackupSize;
-			return this;
-		}
-
-		public FileBackups build() {
-			return new FileBackups(this);
 		}
 	}
 }
