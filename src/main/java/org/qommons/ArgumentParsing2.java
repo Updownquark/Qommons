@@ -864,6 +864,11 @@ public class ArgumentParsing2 {
 			public String toString(String argumentName) {
 				return argumentName + " IN(" + StringUtils.print(", ", theValues, String::valueOf) + ")";
 			}
+
+			@Override
+			public String toString() {
+				return "IN(" + StringUtils.print(", ", theValues, String::valueOf) + ")";
+			}
 		}
 
 		/**
