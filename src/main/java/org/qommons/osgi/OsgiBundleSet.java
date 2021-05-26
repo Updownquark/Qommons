@@ -1279,6 +1279,13 @@ public class OsgiBundleSet {
 			if (!args.getUnmatched().isEmpty()) {
 				throw new IllegalStateException("Unrecognized arguments: " + args.getUnmatched());
 			}
+			// All this reflection is because if the class implements ComponentBasedExecutor,
+			// it implements the one from the Qommons library loaded by this bundle set,
+			// not the one on the bootstrap classpath, which is what this one is.
+			// So the 2 interface classes are not the same or even related, they just have the same name.
+			// So we have to assume they'll be using the same version (hopefully it won't ever change) as we have,
+			// and we have to use reflection.
+			// We could improve this code to get the names of the methods we're calling from the class we have some day.
 			Class<?> serviceType;
 			try {
 				serviceType = bundles.loadClass(args.get("start-ds", String.class));
