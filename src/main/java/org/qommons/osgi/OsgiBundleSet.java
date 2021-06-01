@@ -418,6 +418,7 @@ public class OsgiBundleSet {
 						continue;
 					}
 					for (String entryPath : entry.getValue().split(";")) {
+						path.setLength(0);
 						BetterFile location;
 						if (entryPath.equals(".")) {
 							location = theBundle;
@@ -440,13 +441,13 @@ public class OsgiBundleSet {
 							}
 							nativeFile.setLastModified(location.getLastModified());
 						}
-						path.setLength(0);
 					}
 				}
 				for (BetterFile oldNative : oldNatives) {
 					oldNative.delete(null);
 				}
 				deleteEmptyDirs(myNativeDir);
+				path.setLength(0);
 			}
 			if (!force && jarFile.lastModified() >= theLastModified) {
 				return jarFile;
@@ -485,27 +486,29 @@ public class OsgiBundleSet {
 					}
 					compress(location, zip, path, paths, buffer);
 				}
-				for (OsgiManifest.ManifestEntry entry : theManifest.getAll("Bundle-NativeCode")) {
-					String entryOS = entry.getAttributes().get("osname");
-					if (!os.isEmpty() && entryOS != null && !os.contains(entryOS)) {
-						continue;
-					}
-					String entryArch = entry.getAttributes().get("processor");
-					if (!processor.isEmpty() && entryArch != null && !processor.contains(entryArch)) {
-						continue;
-					}
-					for (String entryPath : entry.getValue().split(";")) {
-						BetterFile location;
-						if (entryPath.equals(".")) {
-							location = theBundle;
-						} else {
-							location = theBundle.at(entryPath);
-							path.append(entryPath);
+				if (nativeDir == null) {
+					for (OsgiManifest.ManifestEntry entry : theManifest.getAll("Bundle-NativeCode")) {
+						String entryOS = entry.getAttributes().get("osname");
+						if (!os.isEmpty() && entryOS != null && !os.contains(entryOS)) {
+							continue;
 						}
-						if (location.exists()) {
-							compress(location, zip, path, paths, buffer);
+						String entryArch = entry.getAttributes().get("processor");
+						if (!processor.isEmpty() && entryArch != null && !processor.contains(entryArch)) {
+							continue;
 						}
-						path.setLength(0);
+						for (String entryPath : entry.getValue().split(";")) {
+							BetterFile location;
+							if (entryPath.equals(".")) {
+								location = theBundle;
+							} else {
+								location = theBundle.at(entryPath);
+								path.append(entryPath);
+							}
+							if (location.exists()) {
+								compress(location, zip, path, paths, buffer);
+							}
+							path.setLength(0);
+						}
 					}
 				}
 			}

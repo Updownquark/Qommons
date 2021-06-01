@@ -357,7 +357,7 @@ public class QommonsTimer {
 				synchronized (this) {
 					if (active) {
 						theRemove = schedule(this);
-					} else {
+					} else if (theRemove != null) {
 						theRemove.run();
 						theRemove = null;
 					}
