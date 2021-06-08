@@ -213,7 +213,8 @@ public class QommonsTimer {
 			Instant nextRun = theNextRun;
 			theNextRun = time;
 			if (!isActive()) {
-				theRemainingExecCount = 1;
+				if (theRemainingExecCount <= 0)
+					theRemainingExecCount = 1;
 				setActive(true);
 			} else if (nextRun == null || time.compareTo(nextRun) < 0)
 				interruptScheduler();
@@ -539,7 +540,7 @@ public class QommonsTimer {
 	 * @return The task handle to use to control or stop the task's execution
 	 */
 	public TaskHandle execute(Runnable task, Duration initialDelay, Duration frequency, boolean consistent) {
-		return build(task, frequency, consistent).runNextIn(initialDelay).setActive(true);
+		return build(task, frequency, consistent).times(Long.MAX_VALUE).runNextIn(initialDelay).setActive(true);
 	}
 
 	/**
