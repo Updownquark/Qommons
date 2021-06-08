@@ -6,182 +6,80 @@ import java.io.OutputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import org.qommons.ex.ExBiConsumer;
 import org.qommons.io.BetterFile.FileBacking;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
-import org.qommons.io.BetterFile.FileDataSource;
 import org.qommons.io.FileUtils.DirectorySyncResults;
 
 /** A file source that can read from {@link URL}s */
-public class UrlFileSource implements FileDataSource {
-	private static final long DEFAULT_CHECK_INTERVAL = 1000;
-
-	private final URL theRoot;
-	private long theCheckInterval;
+public class UrlFileSource extends RemoteFileSource {
+	private final URL theRootURL;
+	private UrlFileBacking theRoot;
 
 	/** @param root The root URL path */
 	public UrlFileSource(URL root) {
-		theRoot = root;
-		theCheckInterval = DEFAULT_CHECK_INTERVAL;
+		theRootURL = root;
 	}
 
-	/** @return The length (in ms) between when this file source re-checks URLs for changes */
-	public long getCheckInterval() {
-		return theCheckInterval;
-	}
-
-	/**
-	 * @param checkInterval The length (in ms) between when this file source should re-check URLs for changes
-	 * @return This file source
-	 */
+	@Override
 	public UrlFileSource setCheckInterval(long checkInterval) {
-		theCheckInterval = checkInterval;
+		super.setCheckInterval(checkInterval);
 		return this;
 	}
 
 	@Override
-	public List<FileBacking> getRoots() {
-		return Collections.unmodifiableList(Arrays.asList(new UrlFileBacking(null, theRoot)));
+	protected UrlFileBacking getRoot() {
+		if (theRoot == null) {
+			int lastSlash = theRootURL.getFile().lastIndexOf('/');
+			String name = lastSlash >= 0 ? theRootURL.getFile().substring(lastSlash + 1) : theRootURL.getFile();
+			theRoot = new UrlFileBacking(null, name, theRootURL);
+		}
+		return theRoot;
 	}
 
 	@Override
-	public FileBacking getRoot(String name) {
+	protected RemoteFileBacking createFile(RemoteFileBacking parent, String name) {
 		URL url;
 		try {
-			url = new URL(theRoot + "/" + name);
+			url = new URL(((UrlFileBacking) parent).getURL() + "/" + name);
 		} catch (MalformedURLException e) {
-			throw new IllegalArgumentException("Bad path: " + name);
+			throw new IllegalArgumentException("Illegal file name: " + name, e);
 		}
-		return new UrlFileBacking(null, url);
+		return new UrlFileBacking((UrlFileBacking) parent, name, url);
 	}
 
-	@Override
-	public String getUrlRoot() {
-		String str = theRoot.toString();
-		if (str.charAt(str.length() - 1) == '/')
-			str = str.substring(0, str.length() - 1);
-		return str;
-	}
-
-	@Override
-	public int hashCode() {
-		return theRoot.hashCode();
-	}
-
-	@Override
-	public boolean equals(Object obj) {
-		return obj instanceof UrlFileSource && theRoot.equals(((UrlFileSource) obj).theRoot);
-	}
-
-	@Override
-	public String toString() {
-		return theRoot.toString();
-	}
-
-	class UrlFileBacking implements BetterFile.FileBacking {
-		private UrlFileBacking theParent;
+	class UrlFileBacking extends RemoteFileBacking {
 		private final URL theURL;
-		private final String theName;
 
-		private volatile long theLastCheck;
-		private volatile long theLastModified;
-		private volatile long theLength;
 		private volatile boolean isRangeAccepted;
 
-		UrlFileBacking(UrlFileBacking parent, URL url) {
-			theParent = parent;
+		UrlFileBacking(UrlFileBacking parent, String name, URL url) {
+			super(parent, name);
 			theURL = url;
-			if (parent == null)
-				theName = url.toString();
-			else
-				theName = url.toString().substring(parent.theURL.toString().length());
+		}
+
+		public URL getURL() {
+			return theURL;
 		}
 
 		@Override
-		public String getName() {
-			return theName;
+		protected void queryData() throws IOException {
+			URLConnection conn = theURL.openConnection();
+			isRangeAccepted = "bytes".equalsIgnoreCase(conn.getHeaderField("Accept-Ranges"));
+			setData(conn.getLastModified(), conn.getContentLengthLong());
 		}
 
 		@Override
-		public boolean check() {
-			return true;
-		}
-
-		private void checkData() {
-			long now = System.currentTimeMillis();
-			if (now - theLastCheck < getCheckInterval())
-				return;
-			try {
-				URLConnection conn = theURL.openConnection();
-				theLength = conn.getContentLengthLong();
-				theLastModified = conn.getLastModified();
-				isRangeAccepted = "bytes".equalsIgnoreCase(conn.getHeaderField("Accept-Ranges"));
-			} catch (IOException e) {
-				theLength = 0;
-				theLastModified = -1;
-			}
-			theLastCheck = now;
-		}
-
-		@Override
-		public boolean isRoot() {
-			return theParent == null;
-		}
-
-		@Override
-		public boolean exists() {
-			checkData();
-			return theLastModified != -1;
-		}
-
-		@Override
-		public long getLastModified() {
-			checkData();
-			return theLastModified;
-		}
-
-		@Override
-		public boolean get(FileBooleanAttribute attribute) {
-			switch (attribute) {
-			case Directory:
-				checkData();
-				return theLastModified == -1;
-			case Readable:
-				return true;
-			case Hidden:
-			case Symbolic:
-			case Writable:
-				return false;
-			}
-			throw new IllegalStateException("" + attribute);
+		public UrlFileBacking getChild(String fileName) {
+			return (UrlFileBacking) super.getChild(fileName);
 		}
 
 		@Override
 		public boolean discoverContents(Consumer<? super FileBacking> onDiscovered, BooleanSupplier canceled) {
 			return true;
-		}
-
-		@Override
-		public UrlFileBacking getChild(String fileName) {
-			URL url;
-			try {
-				url = new URL(theURL + "/" + fileName);
-			} catch (MalformedURLException e) {
-				throw new IllegalArgumentException("Bad URL sub-path \"" + fileName + "\"", e);
-			}
-			return new UrlFileBacking(this, url);
-		}
-
-		@Override
-		public long length() {
-			checkData();
-			return theLength;
 		}
 
 		@SuppressWarnings("resource")
@@ -196,7 +94,7 @@ public class UrlFileSource implements FileDataSource {
 				return null;
 			if (startFrom > 0) {
 				if (isRangeAccepted) {
-					conn.setRequestProperty("Range", startFrom + "-" + (theLength - 1));
+					conn.setRequestProperty("Range", startFrom + "-" + (length() - 1));
 					stream = conn.getInputStream();
 				} else {
 					stream = conn.getInputStream();
@@ -257,6 +155,16 @@ public class UrlFileSource implements FileDataSource {
 		public void visitAll(ExBiConsumer<? super FileBacking, CharSequence, IOException> forEach, BooleanSupplier canceled)
 			throws IOException {
 			forEach.accept(this, "");
+		}
+
+		@Override
+		public int hashCode() {
+			return theURL.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof UrlFileBacking && theURL.equals(((UrlFileBacking) obj).theURL);
 		}
 
 		@Override
