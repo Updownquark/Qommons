@@ -26,7 +26,7 @@
             		<attribute name="Implementation-Version" value="${app.version}" />
             	</section>
             </manifest>
-            <fileset dir="${dir.buildfile}/classes"/>
+            <fileset dir="${dir.buildfile}/target/classes"/>
             <fileset dir="${dir.buildfile}/src/main/java"/>
         </jar>
     </target>
