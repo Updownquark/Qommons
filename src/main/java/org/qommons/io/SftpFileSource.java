@@ -133,7 +133,7 @@ public class SftpFileSource extends RemoteFileSource {
 			if (attrs.isDir())
 				setData(0, 0);
 			else
-				setData(attrs.getMTime() * 1000, attrs.getSize());
+				setData(attrs.getMTime() * 1000L, attrs.getSize());
 			return this;
 		}
 
