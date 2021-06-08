@@ -22,7 +22,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-/** Parses a set of command-line arguments passed to a program. */
+/**
+ * Parses a set of command-line arguments passed to a program.
+ * 
+ * @deprecated Use {@link ArgumentParsing2} instead.
+ * @see ArgumentParsing2#build()
+ */
+@Deprecated
 public class ArgumentParsing {
 	/** Matches field1.field2.field3, etc. for referring to sub-fields */
 	public static final Pattern MEMBER_PATTERN = Pattern.compile("([^\\.]*)\\.(.+)");
