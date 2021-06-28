@@ -2162,7 +2162,7 @@ public class ArgumentParsing2 {
 				theCondition = condition;
 				if (minTimes < 0)
 					throw new IllegalArgumentException("Cannot have a minimum count <0: " + minTimes);
-				if (maxTimes < 0)
+				else if (maxTimes < 0)
 					throw new IllegalArgumentException("Cannot have a maximum count <0: " + maxTimes);
 				else if (minTimes > maxTimes)
 					throw new IllegalArgumentException("Cannot have a minimum count>maximum count: " + minTimes + "..." + maxTimes);
@@ -2203,7 +2203,7 @@ public class ArgumentParsing2 {
 						if (!defaulted)
 							str.append("optional");
 					} else if (theMaxTimes == Integer.MAX_VALUE)
-						str.append("0...\\u221E times");
+						str.append("0...\u221E times");
 					else
 						str.append("0...").append(theMaxTimes).append(" times");
 				} else if (theMinTimes == 1) {
@@ -2218,7 +2218,7 @@ public class ArgumentParsing2 {
 					if (theMaxTimes == theMinTimes)
 						str.append("exactly ").append(theMinTimes).append(" times");
 					else {
-						str.append("").append(theMinTimes).append("...");
+						str.append(theMinTimes).append("...");
 						if (theMaxTimes == Integer.MAX_VALUE)
 							str.append('\u221E');
 						else
