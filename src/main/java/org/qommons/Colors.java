@@ -5,14 +5,29 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.text.ParseException;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 import javax.imageio.ImageIO;
 
-/** A utility class for dealing with colors */
+/**
+ * <p>
+ * A utility class for dealing with colors. This class contains constants for all named colors in HTML, the ability to print and parse them
+ * in a friendly way, and a few other miscellaneous utilities.
+ * </p>
+ * <p>
+ * The general parsing ({@link #parseColor(String)}) recognizes colors either by name (the constant name, with camel-case converted to kebab
+ * case, e.g. "dark-green" is specified instead of "darkGreen"), red-green-blue components (e.g. "rgb(0, 100, 0)") or
+ * hue-saturation-brightness components (e.g. "hsb(120, 100, 39)").<br>
+ * rgb values can be specified via hex like "#006400", and hsb values like "$786427".<br>
+ * </p>
+ */
 public class Colors {
 	private Colors() {
 	}
@@ -446,10 +461,10 @@ public class Colors {
 	private static final Map<Color, String> theColorNames;
 
 	static {
-		Map<String, Color> namedColors = new java.util.LinkedHashMap<>();
-		Map<Color, String> colorNames = new java.util.IdentityHashMap<>();
-		java.lang.reflect.Field[] colorFields = Colors.class.getDeclaredFields();
-		for (java.lang.reflect.Field field : colorFields) {
+		Map<String, Color> namedColors = new LinkedHashMap<>();
+		Map<Color, String> colorNames = new HashMap<>();
+		Field[] colorFields = Colors.class.getDeclaredFields();
+		for (Field field : colorFields) {
 			int mods = field.getModifiers();
 			if (!Modifier.isPublic(mods) || !Modifier.isStatic(mods) || Modifier.isTransient(mods)) {
 				continue;
@@ -593,8 +608,8 @@ public class Colors {
 	}
 
 	/** @return The names of all named colors in this class */
-	public static java.util.Set<String> getColorNames() {
-		return NAMED_COLORS.keySet();
+	public static Set<String> getColorNames() {
+		return Collections.unmodifiableSet(NAMED_COLORS.keySet());
 	}
 
 	/**
@@ -632,8 +647,8 @@ public class Colors {
 	}
 
 	/**
-	 * @param c The color to name
-	 * @return The name of the given color
+	 * @param c The color to print
+	 * @return The name of the given color, or its hex RGB value (e.g. "#006400") otherwise
 	 */
 	public static String toString(Color c) {
 		String ret = theColorNames.get(c);
@@ -646,149 +661,6 @@ public class Colors {
 		sb.append(hexDigits.charAt(c.getGreen() >>> 4)).append(hexDigits.charAt(c.getGreen() & 0xf));
 		sb.append(hexDigits.charAt(c.getBlue() >>> 4)).append(hexDigits.charAt(c.getBlue() & 0xf));
 		return sb.toString();
-	}
-
-	private static class ColorMetadata {
-		int height;
-
-		int width;
-
-		float sideLength;
-
-		float sqrt3;
-
-		int background;
-
-		ColorMetadata(int _dim) {
-			height = _dim;
-			width = (int) Math.ceil(_dim * Math.sqrt(3) / 2);
-			sideLength = height / 2.0f;
-			sqrt3 = (float) Math.sqrt(3);
-			background = 0x00000000;
-		}
-
-		int getRGB(int x, int y) {
-			x -= width / 2 + 1;
-			y -= height / 2;
-			y = -y;
-
-			float r, g, b;
-			if (x >= 0) {
-				if (y >= x / sqrt3) {
-					r = 1;
-					g = 1 - (y - x / sqrt3) / sideLength;
-					b = 1 - (y + x / sqrt3) / sideLength;
-				} else {
-					r = 1 - (x / sqrt3 - y) / sideLength;
-					g = 1;
-					b = 1 - 2 * x / sqrt3 / sideLength;
-				}
-			} else {
-				if (y >= -x / sqrt3) {
-					r = 1;
-					g = 1 - (y - x / sqrt3) / sideLength;
-					b = 1 - (y + x / sqrt3) / sideLength;
-				} else {
-					r = 1 + (y + x / sqrt3) / sideLength;
-					g = 1 + 2 * x / sqrt3 / sideLength;
-					b = 1;
-				}
-			}
-
-			if (r < 0 || r > 1 || g < 0 || g > 1 || b < 0 || b > 1)
-				return background;
-			int ret = 0xFF000000;
-			ret |= Math.round(r * 255) << 16;
-			ret |= Math.round(g * 255) << 8;
-			ret |= Math.round(b * 255);
-			return ret;
-		}
-
-		boolean shaded = true;
-
-		int getAlphaHex(int x, int y, int rgb) {
-			if (shaded)
-				return getShadedHex(x, y, rgb);
-			else
-				return getCheckeredHex(x, y, rgb);
-		}
-
-		int mod = 64;
-
-		int getShadedHex(int x, int y, int rgb) {
-			if (rgb == background)
-				return rgb;
-			int r = (rgb & 0xFF0000) >> 16;
-			int g = (rgb & 0xFF00) >> 8;
-			int b = rgb & 0xFF;
-
-			if (r == 255) {
-				if (g == 255 || b == 255)
-					return 0xFF000000;
-				r = mod;
-				g = mod - ((g + 1) % mod);
-				b = mod - ((b + 1) % mod);
-				if (g >= mod / 2)
-					g = mod - g;
-				g *= 2;
-				if (b >= mod / 2)
-					b = mod - b;
-				b *= 2;
-			} else if (g == 255) {
-				if (b == 255)
-					return 0xFF000000;
-				g = mod;
-				r = mod - ((r + 1) % mod);
-				b = mod - ((b + 1) % mod);
-				if (r >= mod / 2)
-					r = mod - r;
-				r *= 2;
-				if (b >= mod / 2)
-					b = mod - b;
-				b *= 2;
-			} else {
-				b = mod;
-				r = mod - ((r + 1) % mod);
-				g = mod - ((g + 1) % mod);
-				if (r >= mod / 2)
-					r = mod - r;
-				r *= 2;
-				if (g >= mod / 2)
-					g = mod - g;
-				g *= 2;
-			}
-			float intens = r * 1.0f * g * b / (float) Math.pow(mod, 3);
-			intens = (float) Math.pow(intens, 0.5);
-			// intens = ((intens + 0.5f) * (intens + 0.5f) - .25f) / 2.25f;
-
-			int dark = Math.round(intens * 255);
-			return 0xFF000000 | (dark << 16) | (dark << 8) | dark;
-		}
-
-		int getCheckeredHex(int x, int y, int rgb) {
-			if (rgb == background)
-				return rgb;
-			int r = (rgb & 0xFF0000) >> 16;
-			int g = (rgb & 0xFF00) >> 8;
-			int b = rgb & 0xFF;
-
-			if (r <= 4 || b <= 4 || g <= 4)
-				return 0xFF000000;
-
-			int bwg;
-			if (r == 255)
-				bwg = ((g / mod) + (b / mod)) % 3;
-			else if (g == 255)
-				bwg = ((r / mod) + (b / mod) + 1) % 3;
-			else
-				bwg = ((r / mod) + (g / mod) + 2) % 3;
-			if (bwg == 0)
-				return 0xFF000000;
-			else if (bwg == 1)
-				return 0xFFFFFFFF;
-			else
-				return 0xFF808080;
-		}
 	}
 
 	/**
@@ -900,6 +772,26 @@ public class Colors {
 	}
 
 	/**
+	 * @param a The first color to merge
+	 * @param b The second color to merge
+	 * @param amount The amount to favor <code>b</code> over <code>a</b>.  A value of zero here (or less) would cause this method to
+	 * return <code>a</code>. A value of one (or greater) would cause it to return <code>b</code>. In between zero and one will create a
+	 *        color somewhere between the two colors.
+	 * @return The merged color
+	 */
+	public static Color merge(Color a, Color b, float amount) {
+		if (amount <= 0)
+			return a;
+		else if (amount >= 1)
+			return b;
+		return new Color(//
+			a.getRed() + Math.round(amount * (b.getRed() - a.getRed())), //
+			a.getGreen() + Math.round(amount * (b.getGreen() - a.getGreen())), //
+			a.getBlue() + Math.round(amount * (b.getBlue() - a.getBlue()))//
+		);
+	}
+
+	/**
 	 * Generates an RGB color hexagon, with tips that are (from left, clockwise) red, yellow, green, cyan, blue, and magenta. The middle of
 	 * the hexagon is white. The purpose of the hexagon is to be placed in a color editor (like prisms.widget.ColorPicker in js) to allow a
 	 * user to choose any color. This method also generates a plain black hexagon and a black-and-white patterned hexagon of the same sizes
@@ -909,6 +801,149 @@ public class Colors {
 	 * @param directory The directory to write the files to
 	 */
 	public static void generateColorHexagons(int dim, File directory) {
+		class ColorMetadata {
+			int height;
+
+			int width;
+
+			float sideLength;
+
+			float sqrt3;
+
+			int background;
+
+			ColorMetadata(int _dim) {
+				height = _dim;
+				width = (int) Math.ceil(_dim * Math.sqrt(3) / 2);
+				sideLength = height / 2.0f;
+				sqrt3 = (float) Math.sqrt(3);
+				background = 0x00000000;
+			}
+
+			int getRGB(int x, int y) {
+				x -= width / 2 + 1;
+				y -= height / 2;
+				y = -y;
+
+				float r, g, b;
+				if (x >= 0) {
+					if (y >= x / sqrt3) {
+						r = 1;
+						g = 1 - (y - x / sqrt3) / sideLength;
+						b = 1 - (y + x / sqrt3) / sideLength;
+					} else {
+						r = 1 - (x / sqrt3 - y) / sideLength;
+						g = 1;
+						b = 1 - 2 * x / sqrt3 / sideLength;
+					}
+				} else {
+					if (y >= -x / sqrt3) {
+						r = 1;
+						g = 1 - (y - x / sqrt3) / sideLength;
+						b = 1 - (y + x / sqrt3) / sideLength;
+					} else {
+						r = 1 + (y + x / sqrt3) / sideLength;
+						g = 1 + 2 * x / sqrt3 / sideLength;
+						b = 1;
+					}
+				}
+
+				if (r < 0 || r > 1 || g < 0 || g > 1 || b < 0 || b > 1)
+					return background;
+				int ret = 0xFF000000;
+				ret |= Math.round(r * 255) << 16;
+				ret |= Math.round(g * 255) << 8;
+				ret |= Math.round(b * 255);
+				return ret;
+			}
+
+			boolean shaded = true;
+
+			int getAlphaHex(int x, int y, int rgb) {
+				if (shaded)
+					return getShadedHex(x, y, rgb);
+				else
+					return getCheckeredHex(x, y, rgb);
+			}
+
+			int mod = 64;
+
+			int getShadedHex(int x, int y, int rgb) {
+				if (rgb == background)
+					return rgb;
+				int r = (rgb & 0xFF0000) >> 16;
+				int g = (rgb & 0xFF00) >> 8;
+				int b = rgb & 0xFF;
+
+				if (r == 255) {
+					if (g == 255 || b == 255)
+						return 0xFF000000;
+					r = mod;
+					g = mod - ((g + 1) % mod);
+					b = mod - ((b + 1) % mod);
+					if (g >= mod / 2)
+						g = mod - g;
+					g *= 2;
+					if (b >= mod / 2)
+						b = mod - b;
+					b *= 2;
+				} else if (g == 255) {
+					if (b == 255)
+						return 0xFF000000;
+					g = mod;
+					r = mod - ((r + 1) % mod);
+					b = mod - ((b + 1) % mod);
+					if (r >= mod / 2)
+						r = mod - r;
+					r *= 2;
+					if (b >= mod / 2)
+						b = mod - b;
+					b *= 2;
+				} else {
+					b = mod;
+					r = mod - ((r + 1) % mod);
+					g = mod - ((g + 1) % mod);
+					if (r >= mod / 2)
+						r = mod - r;
+					r *= 2;
+					if (g >= mod / 2)
+						g = mod - g;
+					g *= 2;
+				}
+				float intens = r * 1.0f * g * b / (float) Math.pow(mod, 3);
+				intens = (float) Math.pow(intens, 0.5);
+				// intens = ((intens + 0.5f) * (intens + 0.5f) - .25f) / 2.25f;
+
+				int dark = Math.round(intens * 255);
+				return 0xFF000000 | (dark << 16) | (dark << 8) | dark;
+			}
+
+			int getCheckeredHex(int x, int y, int rgb) {
+				if (rgb == background)
+					return rgb;
+				int r = (rgb & 0xFF0000) >> 16;
+				int g = (rgb & 0xFF00) >> 8;
+				int b = rgb & 0xFF;
+
+				if (r <= 4 || b <= 4 || g <= 4)
+					return 0xFF000000;
+
+				int bwg;
+				if (r == 255)
+					bwg = ((g / mod) + (b / mod)) % 3;
+				else if (g == 255)
+					bwg = ((r / mod) + (b / mod) + 1) % 3;
+				else
+					bwg = ((r / mod) + (g / mod) + 2) % 3;
+				if (bwg == 0)
+					return 0xFF000000;
+				else if (bwg == 1)
+					return 0xFFFFFFFF;
+				else
+					return 0xFF808080;
+			}
+		}
+
 		ColorMetadata md = new ColorMetadata(dim);
 		BufferedImage colorImg = new BufferedImage(md.height, md.width, BufferedImage.TYPE_INT_ARGB);
 		BufferedImage blackImg = new BufferedImage(md.height, md.width, BufferedImage.TYPE_INT_ARGB);
