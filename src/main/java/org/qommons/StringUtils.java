@@ -769,6 +769,29 @@ public class StringUtils {
 		}
 
 		/**
+		 * @param b The byte to return from the iterator
+		 * @return A ByteIterator over the given byte
+		 */
+		public static ByteIterator of(byte b) {
+			return new ByteIterator() {
+				private boolean supplied;
+
+				@Override
+				public boolean hasNext() throws IOException {
+					return !supplied;
+				}
+
+				@Override
+				public int next() throws IOException {
+					if (supplied)
+						throw new NoSuchElementException();
+					supplied = true;
+					return b;
+				}
+			};
+		}
+
+		/**
 		 * @param bytes The bytes to iterate over
 		 * @param start The start offset in the byte array
 		 * @param end The end offset in the byte array
@@ -783,7 +806,7 @@ public class StringUtils {
 				throw new IndexOutOfBoundsException(start + ">" + bytes.length);
 			int realEnd = Math.min(end, bytes.length);
 			return new ByteIterator() {
-				private int thePosition;
+				private int thePosition = start;
 
 				@Override
 				public boolean hasNext() throws IOException {
@@ -1143,6 +1166,21 @@ public class StringUtils {
 		}
 
 		/**
+		 * @param str The string to format the byte into, or null to create a new one
+		 * @param b The byte to format
+		 * @return The StringBuilder
+		 */
+		default StringBuilder format(StringBuilder str, byte b) {
+			if (str == null)
+				str = new StringBuilder();
+			try {
+				return format(ByteIterator.of(b), new AppendableWriter<>(str), null).getAppendable();
+			} catch (IOException e) {
+				throw new IllegalStateException("WHAT??!!!", e);
+			}
+		}
+
+		/**
 		 * @param str The string builder to format the data into, or null to create a new one
 		 * @param bytes The bytes to format
 		 * @param start The start offset in the bytes array
@@ -1253,6 +1291,13 @@ public class StringUtils {
 	 * @throws IOException If the accumulator throws an exception
 	 */
 	public static boolean printHexByte(CharAccumulator out, int b) throws IOException {
+		if (b < 0) {
+			int newB = b + 0x100;
+			if (newB < 0)
+				throw new IllegalArgumentException(b + " does not fit in 1 byte");
+			b += 0x100;
+		} else if (b >= 0x100)
+			throw new IllegalArgumentException(b + " does not fit in 1 byte");
 		boolean readyForMore = out.accumulate(HEX_CHARS.charAt(b >>> 4));
 		if (readyForMore)
 			readyForMore = out.accumulate(HEX_CHARS.charAt(b & 0xf));
