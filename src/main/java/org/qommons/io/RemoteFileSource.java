@@ -72,6 +72,7 @@ public abstract class RemoteFileSource implements BetterFile.FileDataSource {
 		private final String theName;
 
 		private volatile long theLastCheck;
+		private volatile boolean isDirectory;
 		private volatile long theLastModified;
 		private volatile long theLength;
 
@@ -97,7 +98,7 @@ public abstract class RemoteFileSource implements BetterFile.FileDataSource {
 
 		protected void checkData() {
 			long now = System.currentTimeMillis();
-			if (now - theLastCheck < getCheckInterval())
+			if (!shouldCheckData(now))
 				return;
 			try {
 				queryData();
@@ -108,9 +109,14 @@ public abstract class RemoteFileSource implements BetterFile.FileDataSource {
 			theLastCheck = now;
 		}
 
+		protected boolean shouldCheckData(long now) {
+			return now - theLastCheck >= getCheckInterval();
+		}
+
 		protected abstract void queryData() throws IOException;
 
-		protected void setData(long lastModified, long length) {
+		protected void setData(boolean dir, long lastModified, long length) {
+			isDirectory = dir;
 			theLastModified = lastModified;
 			theLength = length;
 		}
@@ -137,7 +143,7 @@ public abstract class RemoteFileSource implements BetterFile.FileDataSource {
 			switch (attribute) {
 			case Directory:
 				checkData();
-				return theLastModified == -1;
+				return isDirectory;
 			case Readable:
 				return true;
 			case Hidden:

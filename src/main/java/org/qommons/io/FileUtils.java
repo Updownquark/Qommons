@@ -950,6 +950,11 @@ public class FileUtils {
 		}
 
 		@Override
+		public FileDataSource getSource() {
+			throw new UnsupportedOperationException("Source not supported for this type");
+		}
+
+		@Override
 		public String getName() {
 			return theName;
 		}
@@ -1193,6 +1198,11 @@ public class FileUtils {
 		}
 
 		@Override
+		public FileDataSource getSource() {
+			throw new UnsupportedOperationException("Source not supported for this type");
+		}
+
+		@Override
 		public BetterFile getRoot() {
 			return theSource.getRoot();
 		}
@@ -1347,6 +1357,11 @@ public class FileUtils {
 			theData = data;
 			theSize = size;
 			theLastModified = lastModified;
+		}
+
+		@Override
+		public FileDataSource getSource() {
+			throw new UnsupportedOperationException("Source not supported for this type");
 		}
 
 		@Override

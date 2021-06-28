@@ -69,7 +69,7 @@ public class UrlFileSource extends RemoteFileSource {
 		protected void queryData() throws IOException {
 			URLConnection conn = theURL.openConnection();
 			isRangeAccepted = "bytes".equalsIgnoreCase(conn.getHeaderField("Accept-Ranges"));
-			setData(conn.getLastModified(), conn.getContentLengthLong());
+			setData(false, conn.getLastModified(), conn.getContentLengthLong());
 		}
 
 		@Override

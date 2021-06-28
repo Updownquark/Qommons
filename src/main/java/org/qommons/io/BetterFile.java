@@ -64,6 +64,8 @@ public interface BetterFile extends Named {
 		}
 	}
 
+	FileDataSource getSource();
+
 	/** @return The path from the file root to this file */
 	String getPath();
 
@@ -184,7 +186,7 @@ public interface BetterFile extends Named {
 		AbstractWrappingFile parent = null;
 		for (int c = 0; c < path.length(); c++) {
 			if (path.charAt(c) == '/' || path.charAt(c) == '\\') {
-				if (c == 0) {//
+				if (c == 0) { // Initial slash--hopefully a linux path
 					for (FileBacking root : dataSource.getRoots()) {
 						if (root.getName().equals("/")) {
 							parent = new FileRoot(dataSource, root);
@@ -199,7 +201,10 @@ public interface BetterFile extends Named {
 					throw new IllegalArgumentException("Illegal path: " + path);
 				if (parent == null) {
 					String rootName = name.toString();
-					parent = new FileRoot(dataSource, dataSource.getRoot(rootName));
+					if (rootName.indexOf(':') >= 0) // Roots must be '/' or else have a colon in them, e.g. Windows paths or URLs
+						parent = new FileRoot(dataSource, dataSource.getRoot(rootName));
+					else
+						parent = (AbstractWrappingFile) at(dataSource, System.getProperty("user.dir")).at(rootName);
 				} else
 					parent = parent.createChild(name.toString(), null);
 				name.setLength(0);
@@ -499,16 +504,17 @@ public interface BetterFile extends Named {
 	}
 
 	public class FileRoot extends BetterFile.AbstractWrappingFile {
-		private final BetterFile.FileDataSource theDataSource;
+		private final BetterFile.FileDataSource theSource;
 		private final FileBacking theRoot;
 
 		public FileRoot(BetterFile.FileDataSource dataSource, FileBacking root) {
-			theDataSource = dataSource;
+			theSource = dataSource;
 			theRoot = root;
 		}
 
-		protected BetterFile.FileDataSource getDataSource() {
-			return theDataSource;
+		@Override
+		public FileDataSource getSource() {
+			return theSource;
 		}
 
 		@Override
@@ -553,7 +559,7 @@ public interface BetterFile extends Named {
 		public StringBuilder toUrl(StringBuilder str) {
 			if (str == null)
 				str = new StringBuilder();
-			str.append(theDataSource.getUrlRoot());
+			str.append(theSource.getUrlRoot());
 			if (str.charAt(str.length() - 1) != '/')
 				str.append('/');
 			int c = 0;
@@ -599,6 +605,11 @@ public interface BetterFile extends Named {
 		}
 
 		@Override
+		public FileDataSource getSource() {
+			return theParent.getSource();
+		}
+
+		@Override
 		public String getName() {
 			return theName;
 		}
@@ -638,6 +649,11 @@ public interface BetterFile extends Named {
 			theFilter = filter;
 		}
 	
+		@Override
+		public FileDataSource getSource() {
+			throw new UnsupportedOperationException("Source not supported for this type");
+		}
+
 		@Override
 		public BetterFile getRoot() {
 			return theSource.getRoot();
@@ -783,6 +799,11 @@ public interface BetterFile extends Named {
 
 		public UnmodifiableFile(BetterFile source) {
 			theSource = source;
+		}
+
+		@Override
+		public FileDataSource getSource() {
+			throw new UnsupportedOperationException("Source not supported for this type");
 		}
 
 		@Override

@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
+import java.nio.file.DirectoryStream;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -163,7 +164,6 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 							totalSkipped += skipped;
 						}
 						if (skipped < 0) {
-							stream.close();
 							throw new IOException("File is only " + Files.size(thePath) + " long, can't skip to " + startFrom);
 						} else
 							success = true;
@@ -187,13 +187,15 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 				return true;
 			boolean[] canceledB = new boolean[1];
 			try {
-				Files.newDirectoryStream(thePath).forEach(f -> {
-					if (canceled.getAsBoolean()) {
-						canceledB[0] = true;
-						return;
-					}
-					onDiscovered.accept(new NativeFileBacking(this, f));
-				});
+				try (DirectoryStream<Path> dirStream = Files.newDirectoryStream(thePath)) {
+					dirStream.forEach(f -> {
+						if (canceled.getAsBoolean()) {
+							canceledB[0] = true;
+							return;
+						}
+						onDiscovered.accept(new NativeFileBacking(this, f));
+					});
+				}
 			} catch (IOException e) {
 				e.printStackTrace();
 				return false;
@@ -308,12 +310,14 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 			if (!Files.exists(thePath))
 				return;
 			int oldLen = path.length();
-			for (Path f : Files.newDirectoryStream(thePath)) {
-				if (canceled.getAsBoolean())
-					return;
-				path.append(getName()).append('/');
-				new NativeFileBacking(this, f).visitAll(path, forEach, canceled);
-				path.setLength(oldLen);
+			try (DirectoryStream<Path> dirStream = Files.newDirectoryStream(thePath)) {
+				for (Path f : dirStream) {
+					if (canceled.getAsBoolean())
+						return;
+					path.append(getName()).append('/');
+					new NativeFileBacking(this, f).visitAll(path, forEach, canceled);
+					path.setLength(oldLen);
+				}
 			}
 		}
 

@@ -8,7 +8,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Vector;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
@@ -28,15 +28,35 @@ import com.jcraft.jsch.SftpATTRS;
 import com.jcraft.jsch.SftpException;
 
 public class SftpFileSource extends RemoteFileSource {
+	static class ThreadSession {
+		final Session session;
+		ChannelSftp channel;
+		final IOException error;
+		int usage;
+
+		ThreadSession(Session s) {
+			session = s;
+			error = null;
+		}
+
+		ThreadSession(IOException err) {
+			session = null;
+			error = err;
+		}
+
+		ThreadSession use() {
+			usage++;
+			return this;
+		}
+	}
+
 	private final JSch theJSch;
 	private final String theHost;
 	private final String theUser;
 	private final ExConsumer<Session, Exception> theSessionConfiguration;
 	private final String theRootDir;
 
-	private volatile Session theSession;
-	private volatile ChannelSftp theChannel;
-	private final AtomicInteger theSessionUsage;
+	private final ConcurrentHashMap<Thread, ThreadSession> theSessions;
 
 	private SftpFile theRoot;
 
@@ -46,7 +66,7 @@ public class SftpFileSource extends RemoteFileSource {
 		theUser = user;
 		theSessionConfiguration = sessionConfiguration;
 		theRootDir = rootDir;
-		theSessionUsage = new AtomicInteger();
+		theSessions = new ConcurrentHashMap<>();
 	}
 
 	@Override
@@ -78,51 +98,61 @@ public class SftpFileSource extends RemoteFileSource {
 		return new SftpFile((SftpFile) parent, name);
 	}
 
-	synchronized Session getSession() throws IOException {
-		int usage = theSessionUsage.getAndIncrement();
-		if (usage == 0 && theSession == null) {
+	ThreadSession getSession() throws IOException {
+		Thread thread = Thread.currentThread();
+		ThreadSession session = theSessions.computeIfAbsent(thread, __ -> {
 			try {
-				theSession = theJSch.getSession(theUser, theHost);
-				theSessionConfiguration.accept(theSession);
-				theSession.connect();
+				Session s = theJSch.getSession(theUser, theHost);
+				theSessionConfiguration.accept(s);
+				s.connect();
+				return new ThreadSession(s);
 			} catch (Exception e) {
-				throw new IOException("Could not connect to " + theUser + "@" + theHost, e);
+				IOException ex = new IOException("Could not connect to " + theUser + "@" + theHost, e);
+				ex.getStackTrace();
+				return new ThreadSession(ex);
 			}
-		}
-		return theSession;
+		});
+		if (session.error != null)
+			throw session.error;
+		else
+			return session.use();
 	}
 
-	synchronized ChannelSftp getChannel() throws IOException {
-		Session session = getSession();
-		if (theChannel == null) {
+	ChannelSftp getChannel() throws IOException {
+		ThreadSession session = getSession();
+		if (session.channel == null) {
 			try {
-				theChannel = (ChannelSftp) session.openChannel("sftp");
-				theChannel.connect();
+				session.channel = (ChannelSftp) session.session.openChannel("sftp");
+				session.channel.connect();
 			} catch (JSchException e) {
 				throw new IOException("Could not connect to " + theUser + "@" + theHost, e);
 			}
 		}
-		return theChannel;
+		return session.channel;
 	}
 
-	synchronized void disconnect() {
-		if (theSessionUsage.decrementAndGet() == 0)
-			QommonsTimer.getCommonInstance().doAfterInactivity(this, this::reallyDisconnect, Duration.ofMillis(100));
+	void disconnect() {
+		Thread thread = Thread.currentThread();
+		ThreadSession session = theSessions.get(thread);
+		if (session == null)
+			return;
+		if (--session.usage == 0)
+			QommonsTimer.getCommonInstance().doAfterInactivity(this, () -> reallyDisconnect(thread), Duration.ofMillis(100));
 	}
 
-	private synchronized void reallyDisconnect() {
-		if (theSessionUsage.get() == 0) {
-			if (theChannel != null)
-				theChannel.disconnect();
-			theChannel = null;
-			theSession.disconnect();
-			theSession = null;
-		}
+	void reallyDisconnect(Thread thread) {
+		theSessions.compute(thread, (t, session) -> {
+			if (session.usage == 0) {
+				if (session.channel != null)
+					session.channel.disconnect();
+				session.session.disconnect();
+				return null;
+			} else
+				return session;
+		});
 	}
 
 	private class SftpFile extends RemoteFileBacking {
-		private ChannelSftp theChannel;
-		private long theChannelSessionStamp;
 		private String thePath;
 
 		SftpFile(SftpFile parent, String fileName) {
@@ -131,9 +161,9 @@ public class SftpFileSource extends RemoteFileSource {
 
 		SftpFile setAttributes(SftpATTRS attrs) {
 			if (attrs.isDir())
-				setData(0, 0);
+				setData(true, attrs.getMTime() * 1000L, 0);
 			else
-				setData(attrs.getMTime() * 1000L, attrs.getSize());
+				setData(false, attrs.getMTime() * 1000L, attrs.getSize());
 			return this;
 		}
 
@@ -161,8 +191,16 @@ public class SftpFileSource extends RemoteFileSource {
 			try {
 				inChannel(channel -> {
 					String path = getPath();
-					setAttributes(//
-						channel.lstat(path));
+					SftpATTRS attrs;
+					try {
+						attrs = channel.lstat(path);
+						setAttributes(attrs);
+					} catch (SftpException e) {
+						if ("No such file".equals(e.getMessage()))
+							setData(false, -1, 0);
+						else
+							throw e;
+					}
 					return null;
 				});
 			} catch (IOException e) {
@@ -175,10 +213,14 @@ public class SftpFileSource extends RemoteFileSource {
 		@Override
 		public boolean discoverContents(Consumer<? super FileBacking> onDiscovered, BooleanSupplier canceled) {
 			try {
+				if (!get(FileBooleanAttribute.Directory))
+					return true;
 				return inChannel(channel -> {
 					String path = getPath();
 					Vector<ChannelSftp.LsEntry> listing = channel.ls(path);
 					for (ChannelSftp.LsEntry entry : listing) {
+						if (entry.getFilename().equals(".") || entry.getFilename().equals(".."))
+							continue;
 						onDiscovered.accept(new SftpFile(this, entry.getFilename()).setAttributes(entry.getAttrs()));
 					}
 					return true;
@@ -278,12 +320,61 @@ public class SftpFileSource extends RemoteFileSource {
 
 		@Override
 		public FileBacking createChild(String fileName, boolean directory) throws IOException {
-			throw new IOException("Not yet implemented");
+			if (getParent() != null && !getParent().exists())
+				getParent().createChild(getName(), true);
+			try {
+				if (directory) {
+					inChannel(channel -> {
+						String path = getPath() + "/" + fileName;
+						channel.mkdir(path);
+						return null;
+					});
+				} else {
+					inChannel(channel -> {
+						channel.put(new InputStream() {
+							@Override
+							public int read() throws IOException {
+								return -1;
+							}
+						}, getPath() + "/" + fileName);
+						return null;
+					});
+				}
+				return getChild(fileName);
+			} catch (Exception e) {
+				throw new IOException("Could not delete " + getPath(), e);
+			}
 		}
 
 		@Override
 		public void delete(DirectorySyncResults results) throws IOException {
-			throw new IOException("Not yet implemented");
+			try {
+				inChannel(channel -> {
+					String path = getPath();
+					delete(channel, path, channel.lstat(path), results);
+					return null;
+				});
+			} catch (Exception e) {
+				throw new IOException("Could not delete " + getPath(), e);
+			}
+		}
+
+		private void delete(ChannelSftp channel, String path, SftpATTRS attrs, DirectorySyncResults results) throws SftpException {
+			if (attrs.isDir()) {
+				Vector<ChannelSftp.LsEntry> listing = channel.ls(path);
+				for (ChannelSftp.LsEntry entry : listing) {
+					if (entry.getFilename().equals(".") || entry.getFilename().equals(".."))
+						continue;
+					delete(channel, path + "/" + entry.getFilename(), entry.getAttrs(), results);
+				}
+				channel.rmdir(path);
+				if (results != null)
+					results.deleted(true);
+			} else {
+				channel.rm(path);
+				if (results != null)
+					results.deleted(false);
+			}
 		}
 
 		@Override
@@ -291,7 +382,12 @@ public class SftpFileSource extends RemoteFileSource {
 			ChannelSftp channel = getChannel();
 			boolean[] success = new boolean[1];
 			try {
-				OutputStream stream = channel.getOutputStream();
+				OutputStream stream;
+				try {
+					stream = channel.put(getPath());
+				} catch (SftpException e) {
+					throw new IOException("Could not write to " + getPath(), e);
+				}
 				success[0] = true;
 				return new OutputStream() {
 					private boolean isClosed;
@@ -356,7 +452,14 @@ public class SftpFileSource extends RemoteFileSource {
 
 		@Override
 		public void move(String newFilePath) throws IOException {
-			throw new IOException("Not yet implemented");
+			try {
+				inChannel(channel -> {
+					channel.rename(getPath(), newFilePath);
+					return null;
+				});
+			} catch (Exception e) {
+				throw new IOException("Could not rename " + getPath() + " to " + newFilePath, e);
+			}
 		}
 
 		@Override
