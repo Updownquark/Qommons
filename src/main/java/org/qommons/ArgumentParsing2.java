@@ -37,11 +37,96 @@ import org.qommons.io.NativeFileSource;
 
 /**
  * <p>
- * Argument parsing, rethought yet again.
+ * Command-line argument parsing, rethought yet again.
  * </p>
  * <p>
- * This class is the result of using the {@link ArgumentParsing} quite a bit and recognizing some of the problems with its design. This
- * class has improvements in building, parsing, and usability of the parsed results.
+ * This class is the result of using the ArgumentParsing (link removed because it's deprecated and I hate warnings) quite a bit and
+ * recognizing some of the problems with its design. This class has improvements in building, parsing, and usability of the parsed results.
+ * </p>
+ * <p>
+ * To use this class:
+ * <ol>
+ * <li>Call {@link #build()} to get a {@link ParserBuilder} object.</li>
+ * <li>On this object, install an {@link ArgumentPattern}. This determines what the argument specification will look like, independent of
+ * the individual arguments. Several default patterns are provided:
+ * <ul>
+ * <li>{@link #DEFAULT_VALUE_PATTERN} for specifying single-valued arguments, each in a single command-line argument. E.g.
+ * "--argName=value". Specified with {@link ParserBuilder#forValuePattern(Consumer) forValuePattern()}.</li>
+ * <li>{@link #DEFAULT_MULTI_VALUE_PATTERN} for specifying multi-valued arguments, each in a singled command-line arguments. E.g.
+ * "-argName=value1,value2,...". Specified with {@link ParserBuilder#forMultiValuePattern(Consumer) forMultiValuePattern()}.</li>
+ * <li>{@link #DEFAULT_FLAG_PATTERN} for specifying flag-type arguments. E.g. "--flag". Specified with
+ * {@link ParserBuilder#forFlagPattern(Consumer) forFlagPattern()}.</li>
+ * <li>{@link #SPLIT_VALUE_PATTERN} for specifying single-valued arguments across multiple command-line arguments. E.g. "--argName"
+ * "value".</li>
+ * <li>{@link #SPLIT_MULTI_VALUE_PATTERN} for specifying multi-valued arguments across multiple command-line arguments. E.g. "--argName"
+ * "value1" "value2"....</li>
+ * </ul>
+ * Implement the {@link ArgumentPattern} interface to create your own patterns. All non-default patterns are specified with
+ * {@link ParserBuilder#forFlagPattern(ArgumentPattern, Consumer) forFlagPattern(ArgumentPattern, Consumer)} or
+ * {@link ParserBuilder#forValuePattern(ArgumentPattern, Consumer) forValuePattern(ArgumentPattern, Consumer)}</li>
+ * <li>
+ * <p>
+ * In the Consumer's {@link Consumer#accept(Object) accept()} method, call one or more of the <code>addArgument</code> methods on the
+ * argument set builder argument (either {@link FlagArgumentSetBuilder} or {@link ValuedArgumentSetBuilder}) to add arguments. Several
+ * argument types are available by default, and any type of argument can be specified with the
+ * {@link ValuedArgumentSetBuilder#addArgument(String, Class, ArgumentValueParser, Consumer)} method.
+ * </p>
+ * <p>
+ * The last argument to all the addArgument methods is a consumer that allows the caller to build out the argument's options. Some special
+ * argument types (e.g. {@link ValuedArgumentSetBuilder#addFileArgument(String, Consumer) file}- and
+ * {@link ValuedArgumentSetBuilder#addInstantArgument(String, Consumer) date}-type arguments) have special options. All arguments can be
+ * customized for the number of times they may be specified. Valued (non-flag) arguments can have a
+ * {@link ArgumentBuilder#defaultValue(Supplier)}.
+ * </p>
+ * <p>
+ * The number of times an argument may be specified and its value may also be constrained conditionally based on the presence, absence, or
+ * value of other arguments already specified by the developer. Use the {@link ArgumentBuilder#when(String, Class, Function)} method.
+ * </p>
+ * </li>
+ * <li>Call {@link ParserBuilder#build()} to obtain an {@link ArgumentParser}. On that parser, call one of the
+ * {@link ArgumentParser#parse(String...) parse} methods to parse the command-line argument list. The resulting {@link Arguments} object
+ * contains the parsed argument values.</li>
+ * <li>Call {@link Arguments#get(String, Class)} or {@link Arguments#getAll(String, Class)} to get typed argument values specified by the
+ * user.</li>
+ * </ol>
+ * </p>
+ * <p>
+ * <b>Example:</b><br>
+ * <code><pre>
+	static void main(String... clArgs) {
+		ArgumentParsing2.Arguments args = ArgumentParsing2.build()//
+			.forValuePattern(pattern -> pattern//
+				.addIntArgument("a", arg -> arg.required())//
+				.addIntArgument("b", arg -> arg//
+					.when("a", Integer.class, c -> c.matches(v -> v.lt(0)).forbidden())//
+					.when("a", Integer.class, c -> c.matches(v -> v.between(0, 100)).required())//
+					.when("a", Integer.class, c -> c.matches(v -> v.between(0, 100)).then(v -> v.between(0, 100)))//
+					.when("a", Integer.class, c -> c.matches(v -> v.gt(100)).required())//
+					.when("a", Integer.class, c -> c.matches(v -> v.gt(100)).then(v -> v.gt(100)))//
+				)//
+				.addIntArgument("c", arg -> arg.defaultValue(25))//
+			).build().parse(clArgs);
+
+		int a = args.get("a", Integer.class);
+		Integer b = args.get("b", Integer.class);
+		int c = args.get("c", Integer.class);
+
+		System.out.println("a=" + a + ", b=" + b + ", c=" + c);
+	}
+ * </pre></code> In the above example, 3 integer arguments are specified. The first, "a", is required and unconstrained. The second, "b", is
+ * constrained by the value of a. If <code>a&lt;0</code>, b may not be specified. If <code>a>=0 && a&lt;=100</code>, b is required and must
+ * also be between 0 and 100. If <code>a>100</code> b is still required and must also be greater than 100.<br>
+ * The third argument, "c", may or may not be specified by the user. If unspecified, a value of 25 will be used.<br>
+ * The values of each argument are then retrieved. a and c are primitive-typed because they will always have values, either because they are
+ * required or defaulted. b is Integer-typed because if <code>a&lt;0</code> it may not be specified, and hence will be null.
+ * </p>
+ * <p>
+ * An additional feature of this class is documentation. The argument set as a whole as well as each argument may be given a description
+ * (via {@link ParserBuilder#withDescription(String)} and {@link ArgumentBuilder#withDescription(String)} and the built parser may be
+ * configured to print a description of the argument set when the arguments specified by the user violate one or more constraints (this is
+ * enabled by default) or when no arguments are specified (not enabled by default). Besides the configured descriptions (if provided), the
+ * printed "help" message will contain the name and type of each argument as well as descriptions of all their constraints and default
+ * values.
  * </p>
  */
 public class ArgumentParsing2 {
@@ -2106,20 +2191,47 @@ public class ArgumentParsing2 {
 				return theValueTest;
 			}
 
+			public void print(StringBuilder str, boolean defaulted) {
+				if (!(theCondition instanceof ArgumentCondition.TrueCondition))
+					str.append("if(").append(theCondition).append("): ");
+				if (theValueTest != null)
+					str.append(theValueTest.toString(""));
+				else if (theMinTimes == 0) {
+					if (theMaxTimes == 0)
+						str.append("forbidden");
+					else if (theMaxTimes == 1) {
+						if (!defaulted)
+							str.append("optional");
+					} else if (theMaxTimes == Integer.MAX_VALUE)
+						str.append("0...\\u221E times");
+					else
+						str.append("0...").append(theMaxTimes).append(" times");
+				} else if (theMinTimes == 1) {
+					if (theMaxTimes == 1) {
+						if (!defaulted)
+							str.append("required");
+					} else if (theMaxTimes == Integer.MAX_VALUE)
+						str.append("required at least once");
+					else
+						str.append("1...").append(theMaxTimes).append(" times");
+				} else {
+					if (theMaxTimes == theMinTimes)
+						str.append("exactly ").append(theMinTimes).append(" times");
+					else {
+						str.append("").append(theMinTimes).append("...");
+						if (theMaxTimes == Integer.MAX_VALUE)
+							str.append('\u221E');
+						else
+							str.append(theMaxTimes);
+						str.append(" times");
+					}
+				}
+			}
+
 			@Override
 			public String toString() {
 				StringBuilder str = new StringBuilder();
-				if (!(theCondition instanceof ArgumentCondition.TrueCondition))
-					str.append("if(").append(theCondition).append("):");
-				if (theMinTimes > 0 || theMaxTimes < Integer.MAX_VALUE) {
-					str.append('{').append(theMinTimes);
-					if (theMaxTimes == Integer.MAX_VALUE)
-						str.append('+');
-					else
-						str.append(',').append(theMaxTimes);
-					str.append('}');
-				} else
-					str.append(theValueTest.toString(theCondition.getSubject().getName()));
+				print(str, false);
 				return str.toString();
 			}
 		}
@@ -2415,6 +2527,78 @@ public class ArgumentParsing2 {
 				return new ArgumentTypeHolder<>(argument.copy(), parser, defaultValue);
 			}
 
+			void printHelp(StringBuilder str) {
+				MatchedArgument ma;
+				switch (argument.getPattern().getMaxValues()) {
+				case 0:
+					ma = new MatchedArgument(argument.getName(), Collections.emptyList());
+					break;
+				case 1:
+					ma = new MatchedArgument(argument.getName(), Arrays.asList("?"));
+					break;
+				default:
+					ma = new MatchedArgument(argument.getName(), Arrays.asList("?", "?", "?"));
+					break;
+				}
+				if (str.length() > 0)
+					str.append('\n');
+				str.append('\t').append(argument.getPattern().print(ma));
+				boolean printedParen = false;
+				if (!ma.getValues().isEmpty()) {
+					if (!printedParen) {
+						printedParen = true;
+						str.append(" (");
+					} else
+						str.append(", ");
+					Class<T> type = argument.getType();
+					if (type == String.class)
+						str.append("string");
+					else if (type == int.class || type == long.class || type == Integer.class || type == Long.class)
+						str.append("integer");
+					else if (type == double.class || type == Double.class)
+						str.append("number");
+					else if (type == boolean.class || type == Boolean.class)
+						str.append("boolean");
+					else if (type == Matcher.class)
+						str.append("string matching " + parser);
+					else if (type == Instant.class)
+						str.append("date");
+					else if (type == Duration.class)
+						str.append("duration");
+					else if (type == File.class || type == BetterFile.class)
+						str.append(parser);
+					else if (type.isEnum() && type.getEnumConstants().length <= 10) {
+						str.append("one of {");
+						boolean first = true;
+						for (T value : type.getEnumConstants()) {
+							if (first)
+								first = false;
+							else
+								str.append(", ");
+							str.append(value);
+						}
+						str.append('}');
+					} else
+						str.append(type.getName());
+					if (defaultValue instanceof SimpleDefaultValue)
+						str.append(", default ").append(defaultValue);
+					for (ArgumentConstraint<T> constraint : argument.getConstraints()) {
+						if (constraint.getCondition() instanceof ArgumentCondition.TrueCondition) {
+							str.append(", ");
+							((DefaultArgConstraint<T>) constraint).print(str, defaultValue != null);
+						}
+					}
+				}
+				if (printedParen)
+					str.append(')');
+				if (argument.getDescription() != null)
+					str.append("\n\t\t").append(argument.getDescription());
+				for (ArgumentConstraint<T> constraint : argument.getConstraints()) {
+					if (!(constraint.getCondition() instanceof ArgumentCondition.TrueCondition))
+						str.append("\n\t\t").append(constraint);
+				}
+			}
+
 			@Override
 			public String toString() {
 				return argument.toString();
@@ -2553,7 +2737,7 @@ public class ArgumentParsing2 {
 				if (theValueParser == null)
 					throw new IllegalArgumentException("Flag arguments cannot have a default value");
 				assertNotBuilt();
-				theDefault = __ -> value.get();
+				theDefault = new SimpleDefaultValue<>(value);
 				return (B) this;
 			}
 
@@ -2595,6 +2779,38 @@ public class ArgumentParsing2 {
 				assertNotBuilt();
 				isBuilt = true;
 				return new ArgumentTypeHolder<>(getArgument(), theValueParser, theDefault);
+			}
+		}
+
+		static class SimpleDefaultValue<T> implements ExFunction<Arguments, T, ParseException> {
+			private final Supplier<? extends T> theDefaultValue;
+
+			SimpleDefaultValue(Supplier<? extends T> defaultValue) {
+				theDefaultValue = defaultValue;
+			}
+
+			public Supplier<? extends T> getSupplier() {
+				return theDefaultValue;
+			}
+
+			@Override
+			public T apply(Arguments args) {
+				return theDefaultValue.get();
+			}
+
+			@Override
+			public int hashCode() {
+				return theDefaultValue == null ? 0 : theDefaultValue.hashCode();
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return obj instanceof SimpleDefaultValue && theDefaultValue.equals(((SimpleDefaultValue<?>) obj).theDefaultValue);
+			}
+
+			@Override
+			public String toString() {
+				return theDefaultValue.toString();
 			}
 		}
 
@@ -2979,7 +3195,7 @@ public class ArgumentParsing2 {
 				theArgumentsList = QommonsUtils.map(arguments.values(), v -> v.argument, true);
 				isAcceptingUnmatched = acceptUnmatched;
 				theDescription = description;
-				isPrintingHelpOnEmpty = true;
+				isPrintingHelpOnError = true;
 			}
 
 			ArgumentType<?> getArgument(int index) {
@@ -3038,49 +3254,9 @@ public class ArgumentParsing2 {
 				StringBuilder str = new StringBuilder();
 				if (theDescription != null)
 					str.append(theDescription);
-				for (ArgumentType<?> arg : theArgumentsList) {
-					MatchedArgument ma;
-					switch (arg.getPattern().getMaxValues()) {
-					case 0:
-						ma = new MatchedArgument(arg.getName(), Collections.emptyList());
-						break;
-					case 1:
-						ma = new MatchedArgument(arg.getName(), Arrays.asList("?"));
-						break;
-					default:
-						ma = new MatchedArgument(arg.getName(), Arrays.asList("?", "?", "?"));
-						break;
-					}
-					if (str.length() > 0)
-						str.append('\n');
-					str.append('\t').append(arg.getPattern().print(ma));
-					if (!ma.getValues().isEmpty())
-						str.append(" (").append(describeType(arg.getType(), ((DefaultArgType<?>) arg).index)).append(')');
-					if (arg.getDescription() != null)
-						str.append("\n\t\t").append(arg.getDescription());
-				}
+				for (ArgumentType<?> arg : theArgumentsList)
+					theArguments.get(((DefaultArgType<?>) arg).index).printHelp(str);
 				return str.toString();
-			}
-
-			private String describeType(Class<?> type, int index) {
-				if (type == String.class)
-					return "String";
-				else if (type == int.class || type == long.class)
-					return "Long";
-				else if (type == double.class)
-					return "Number";
-				else if (type == boolean.class)
-					return "Boolean";
-				else if (type == Matcher.class)
-					return "String matching " + theArguments.get(index).parser;
-				else if (type == Instant.class)
-					return "Date";
-				else if (type == Duration.class)
-					return "Duration";
-				else if (type == File.class || type == BetterFile.class)
-					return theArguments.get(index).parser.toString();
-				else
-					return type.getName();
 			}
 
 			@Override
@@ -3404,5 +3580,32 @@ public class ArgumentParsing2 {
 				return BetterList.empty();
 			}
 		};
+	}
+
+	/**
+	 * This main method is just to supply the source for the example in the class javadoc. It's here so that any time anything needs to
+	 * change in that description, the compiler will catch it here so I can fix it and update the description.
+	 * 
+	 * @param args Command-line arguments
+	 */
+	static void main(String... clArgs) {
+		ArgumentParsing2.Arguments args = ArgumentParsing2.build()//
+			.forValuePattern(pattern -> pattern//
+				.addIntArgument("a", arg -> arg.required())//
+				.addIntArgument("b", arg -> arg//
+					.when("a", Integer.class, c -> c.matches(v -> v.lt(0)).forbidden())//
+					.when("a", Integer.class, c -> c.matches(v -> v.between(0, 100)).required())//
+					.when("a", Integer.class, c -> c.matches(v -> v.between(0, 100)).then(v -> v.between(0, 100)))//
+					.when("a", Integer.class, c -> c.matches(v -> v.gt(100)).required())//
+					.when("a", Integer.class, c -> c.matches(v -> v.gt(100)).then(v -> v.gt(100)))//
+				)//
+				.addIntArgument("c", arg -> arg.defaultValue(25))//
+			).build().parse(clArgs);
+
+		int a = args.get("a", Integer.class);
+		Integer b = args.get("b", Integer.class);
+		int c = args.get("c", Integer.class);
+
+		System.out.println("a=" + a + ", b=" + b + ", c=" + c);
 	}
 }
