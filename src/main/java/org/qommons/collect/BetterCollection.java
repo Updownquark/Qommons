@@ -18,6 +18,7 @@ import org.qommons.Causable;
 import org.qommons.Identifiable;
 import org.qommons.LambdaUtils;
 import org.qommons.Lockable;
+import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
 import org.qommons.Stamped;
 import org.qommons.Transactable;
@@ -919,6 +920,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
+		public CoreId getCoreId() {
+			return theWrapped.getCoreId();
+		}
+
+		@Override
 		public long getStamp() {
 			return theWrapped.getStamp();
 		}
@@ -1083,6 +1089,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
+		public CoreId getCoreId() {
+			return CoreId.EMPTY;
+		}
+
+		@Override
 		public long getStamp() {
 			return 0;
 		}
@@ -1232,6 +1243,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theCollection.tryLock(write, cause);
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return theCollection.getCoreId();
 		}
 
 		@Override

@@ -2,6 +2,7 @@ package org.qommons.collect;
 
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import org.qommons.Lockable.CoreId;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 
@@ -40,21 +41,28 @@ public class RRWLockingStrategy implements CollectionLockingStrategy {
 	@Override
 	public Transaction lock(boolean write, Object cause) {
 		Transaction lock = theLock.lock(write, cause);
-		theStamp++;
 		return lock;
 	}
 
 	@Override
 	public Transaction tryLock(boolean write, Object cause) {
 		Transaction lock = theLock.tryLock(write, cause);
-		if (lock != null)
-			theStamp++;
 		return lock;
+	}
+
+	@Override
+	public CoreId getCoreId() {
+		return theLock.getCoreId();
 	}
 
 	@Override
 	public long getStamp() {
 		return theStamp;
+	}
+
+	@Override
+	public void modified() {
+		theStamp++;
 	}
 
 	@Override

@@ -6,6 +6,7 @@ import java.util.function.Function;
 import java.util.function.ToIntFunction;
 
 import org.qommons.Identifiable;
+import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
 import org.qommons.Transaction;
 
@@ -298,6 +299,11 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theEntries.tryLock(write, cause);
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return theEntries.getCoreId();
 		}
 
 		@Override

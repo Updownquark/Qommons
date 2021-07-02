@@ -10,6 +10,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.qommons.Identifiable;
+import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterCollection;
@@ -636,6 +637,11 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theEntries.tryLock(write, cause);
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return theEntries.getCoreId();
 		}
 
 		@Override

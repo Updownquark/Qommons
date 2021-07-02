@@ -1,10 +1,14 @@
 package org.qommons;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 import java.util.function.Supplier;
+
+import org.qommons.Lockable.CoreId;
 
 /**
  * Represents a mutable object whose modifications may possibly be batched for increased efficiency.
@@ -28,6 +32,11 @@ public interface Transactable {
 		@Override
 		public boolean isLockSupported() {
 			return false;
+		}
+
+		@Override
+		public Lockable.CoreId getCoreId() {
+			return Lockable.CoreId.EMPTY;
 		}
 
 		@Override
@@ -81,6 +90,9 @@ public interface Transactable {
 	 */
 	Transaction tryLock(boolean write, Object cause);
 
+	/** @return A {@link CoreId} object containing all true locking cores used by this Transactable */
+	Lockable.CoreId getCoreId();
+
 	/** @return Whether this object actually support locking */
 	default boolean isLockSupported() {
 		return true;
@@ -123,6 +135,325 @@ public interface Transactable {
 			return ((Transactable) lockable).tryLock(write, cause);
 		else
 			return Transaction.NONE;
+	}
+
+	/**
+	 * <p>
+	 * Attempts to secure a write lock on a transactable that is owned by a lockable structure.
+	 * </p>
+	 * <p>
+	 * The obvious way of doing this is to just obtain a read lock on the owner, retrieve the target transactable, and lock it for write.
+	 * But this may cause problems if both locks have a common source, because it is not always possible to upgrade a lock from read-only to
+	 * write mode.
+	 * </p>
+	 * <p>
+	 * This method attempts to detect the relation between the two locks (via {@link Transactable#getCoreId()
+	 * CoreId}.{@link CoreId#intersects(CoreId) intersects(CoreId)} , and if so attempts the obvious first, but only with a
+	 * {@link Transactable#tryLock(boolean, Object) tryLock} operation on the inner transactable. If this fails, the outer read-only lock is
+	 * released, and a write lock is obtained on both transactables.
+	 * </p>
+	 * 
+	 * @param owner The owner of the target transactable to lock for write
+	 * @param lock Supplies the target transactable after the owner is locked
+	 * @param cause The cause of the write lock
+	 * @return A transaction to release the locks
+	 */
+	static Transaction writeLockWithOwner(Transactable owner, Supplier<Transactable> lock, Object cause) {
+		Transaction ownerT = owner.lock(false, cause);
+		boolean success = false, ownerTLocked = true;
+		try {
+			Transactable realLock = lock.get();
+			if (realLock == null) {
+				success = true;
+				return ownerT;
+			} else {
+				Transaction innerT;
+				if (!realLock.getCoreId().intersects(owner.getCoreId()))
+					innerT = realLock.lock(true, cause);
+				else
+					innerT = realLock.tryLock(true, cause);
+				if (innerT != null) {
+					success = true;
+					return () -> {
+						innerT.close();
+						ownerT.close();
+					};
+				}
+				ownerTLocked = false;
+				ownerT.close();
+				Transaction ownerT2 = owner.lock(true, cause);
+				realLock = lock.get();
+				if (realLock == null) {
+					success = true;
+					return ownerT2;
+				}
+				Transaction innerT2;
+				try {
+					innerT2 = realLock.lock(true, cause);
+					success = true;
+				} finally {
+					if (!success)
+						ownerT2.close();
+				}
+				return () -> {
+					innerT2.close();
+					ownerT2.close();
+				};
+			}
+		} finally {
+			if (!success && ownerTLocked)
+				ownerT.close();
+		}
+	}
+
+	/**
+	 * Like {@link #writeLockWithOwner(Transactable, Supplier, Object)}, but for the try-only case.
+	 * 
+	 * @param owner The owner of the target transactable to lock for write
+	 * @param lock Supplies the target transactable after the owner is locked
+	 * @param cause The cause of the write lock
+	 * @return A transaction to release the locks, or null if the lock cannot be obtained
+	 */
+	static Transaction tryWriteLockWithOwner(Transactable owner, Supplier<Transactable> lock, Object cause) {
+		Transaction ownerT = owner.tryLock(false, cause);
+		if (ownerT == null)
+			return null;
+		boolean success = false, ownerTLocked = true;
+		try {
+			Transactable realLock = lock.get();
+			if (realLock == null) {
+				success = true;
+				return ownerT;
+			} else {
+				Transaction innerT = realLock.tryLock(true, cause);
+				if (innerT != null) {
+					success = true;
+					return () -> {
+						innerT.close();
+						ownerT.close();
+					};
+				} else if (!realLock.getCoreId().intersects(owner.getCoreId()))
+					return null; // Let the finally block unlock ownerT
+				ownerTLocked = false;
+				ownerT.close();
+				Transaction ownerT2 = owner.tryLock(true, cause);
+				if (ownerT2 == null)
+					return null;
+				realLock = lock.get();
+				if (realLock == null) {
+					success = true;
+					return ownerT2;
+				}
+				Transaction innerT2;
+				try {
+					innerT2 = realLock.tryLock(true, cause);
+					if (innerT2 == null)
+						return null; // Let the finally block unlock ownerT2
+					success = true;
+				} finally {
+					if (!success)
+						ownerT2.close();
+				}
+				return () -> {
+					innerT2.close();
+					ownerT2.close();
+				};
+			}
+		} finally {
+			if (!success && ownerTLocked)
+				ownerT.close();
+		}
+	}
+
+	/**
+	 * Like {@link #writeLockWithOwner(Transactable, Supplier, Object)}, but for the case where the owner cannot be locked for write
+	 * directly.
+	 * 
+	 * @param owner The owner of the target transactable to lock for write
+	 * @param lock Supplies the target transactable after the owner is locked
+	 * @param cause The cause of the write lock
+	 * @return A transaction to release the locks, or null if the lock cannot be obtained
+	 */
+	static Transaction writeLockWithOwner(Lockable owner, Supplier<Transactable> lock, Object cause) {
+		Transaction ownerT = owner.lock();
+		boolean success = false, ownerTLocked = true;
+		try {
+			Transactable realLock = lock.get();
+			if (realLock == null) {
+				success = true;
+				return ownerT;
+			} else {
+				Transaction innerT;
+				if (!realLock.getCoreId().intersects(owner.getCoreId()))
+					innerT = realLock.lock(true, cause);
+				else
+					innerT = realLock.tryLock(true, cause);
+				if (innerT != null) {
+					success = true;
+					return () -> {
+						innerT.close();
+						ownerT.close();
+					};
+				}
+				ownerTLocked = false;
+				ownerT.close();
+				Transaction innerT2 = realLock.lock(true, cause);
+				Transaction ownerT2;
+				try {
+					ownerT2 = owner.lock();
+					success = true;
+				} finally {
+					if (!success)
+						innerT2.close();
+				}
+				return () -> {
+					ownerT2.close();
+					innerT2.close();
+				};
+			}
+		} finally {
+			if (!success && ownerTLocked)
+				ownerT.close();
+		}
+	}
+
+	/**
+	 * Like {@link #writeLockWithOwner(Transactable, Supplier, Object)}, but for the try-only case where the owner cannot be locked for
+	 * write directly.
+	 * 
+	 * @param owner The owner of the target transactable to lock for write
+	 * @param lock Supplies the target transactable after the owner is locked
+	 * @param cause The cause of the write lock
+	 * @return A transaction to release the locks, or null if the lock cannot be obtained
+	 */
+	static Transaction tryWriteLockWithOwner(Lockable owner, Supplier<Transactable> lock, Object cause) {
+		Transaction ownerT = owner.tryLock();
+		if (ownerT == null)
+			return null;
+		boolean success = false, ownerTLocked = true;
+		try {
+			Transactable realLock = lock.get();
+			if (realLock == null) {
+				success = true;
+				return ownerT;
+			} else {
+				Transaction innerT = realLock.tryLock(true, cause);
+				if (innerT != null) {
+					success = true;
+					return () -> {
+						innerT.close();
+						ownerT.close();
+					};
+				} else if (!realLock.getCoreId().intersects(owner.getCoreId()))
+					return null; // Let the finally block unlock ownerT
+				ownerTLocked = false;
+				ownerT.close();
+				Transaction innerT2 = realLock.tryLock(true, cause);
+				if (innerT2 == null)
+					return null;
+				Transaction ownerT2;
+				try {
+					ownerT2 = owner.tryLock();
+					if (ownerT2 == null)
+						return null; // Let the finally block unlock innerT2
+					success = true;
+				} finally {
+					if (!success)
+						innerT2.close();
+				}
+				return () -> {
+					ownerT2.close();
+					innerT2.close();
+				};
+			}
+		} finally {
+			if (!success && ownerTLocked)
+				ownerT.close();
+		}
+	}
+
+	/**
+	 * Gets the core ID for a set of transactables
+	 * 
+	 * @param lockables The transactables
+	 * @return A CoreId containing core information about all transactables
+	 */
+	static CoreId getCoreId(Transactable... lockables) {
+		return getCoreId(Arrays.asList(lockables));
+	}
+
+	/**
+	 * Gets the core ID for a set of transactables
+	 * 
+	 * @param lockables The transactables
+	 * @return A CoreId containing core information about all transactables
+	 */
+	static CoreId getCoreId(Collection<? extends Transactable> lockables) {
+		CoreId first = null;
+		List<CoreId> others = null;
+		for (Transactable lockable : lockables) {
+			if (lockable == null)
+				continue;
+			if (first == null)
+				first = lockable.getCoreId();
+			else {
+				if (others == null)
+					others = new ArrayList<>(lockables.size() - 1);
+				others.add(lockable.getCoreId());
+			}
+		}
+		if (first == null)
+			return CoreId.EMPTY;
+		else if (others == null)
+			return first;
+		else
+			return first.and(others);
+	}
+
+	/**
+	 * Gets the core ID for a couple of transactables
+	 * 
+	 * @param outer The first transactable
+	 * @param lockables Potentially produces another transactable after the first transactable is locked
+	 * @return A CoreId containing core information about both transactables
+	 */
+	static CoreId getCoreId(Transactable outer, Collection<? extends Transactable> lockables) {
+		return getCoreId(outer, () -> lockables, l -> l);
+	}
+
+	/**
+	 * Gets the core ID for a set of transactables
+	 * 
+	 * @param <X> The type of transactable structures
+	 * @param outer The first transactable
+	 * @param lockables The additional transactable structures
+	 * @param map The map to produce transactables from each item in the list
+	 * @return A CoreId containing core information about all given transactables
+	 */
+	static <X> CoreId getCoreId(Transactable outer, Supplier<? extends Collection<? extends X>> lockables,
+		Function<? super X, ? extends Transactable> map) {
+		Transaction outerLock;
+		if (outer != null) {
+			outerLock = outer.tryLock(false, null);
+		} else
+			outerLock = null;
+		try {
+			CoreId core = outer == null ? CoreId.EMPTY : outer.getCoreId();
+			Collection<? extends X> others = lockables.get();
+			if (others == null)
+				return core;
+			CoreId[] otherCores = new CoreId[others.size()];
+			int i = 0;
+			for (X other : others) {
+				Transactable lock = map.apply(other);
+				if (lock != null)
+					otherCores[i++] = lock.getCoreId();
+			}
+			return core.and(otherCores);
+		} finally {
+			if (outerLock != null)
+				outerLock.close();
+		}
 	}
 
 	/**
@@ -190,7 +521,7 @@ public interface Transactable {
 	 */
 	static <X> Transactable combine(Transactable first, Supplier<? extends Collection<? extends X>> others,
 		Function<? super X, ? extends Transactable> map) {
-		return new CombinedTransactable<X>(first, others, map);
+		return new CombinedTransactable<>(first, others, map);
 	}
 
 	/**
@@ -219,6 +550,11 @@ public interface Transactable {
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return Lockable.tryLock(theLock, theDebugInfo, write);
+		}
+
+		@Override
+		public Lockable.CoreId getCoreId() {
+			return new Lockable.CoreId(theLock);
 		}
 	}
 
@@ -262,6 +598,26 @@ public interface Transactable {
 		}
 
 		@Override
+		public Lockable.CoreId getCoreId() {
+			// Best we can do here is capture a snapshot
+			Lockable.CoreId cores = theFirst.getCoreId();
+			try (Transaction t = theFirst.lock(false, null)) {
+				Collection<? extends X> others = theOthers.get();
+				if (others != null) {
+					Lockable.CoreId[] otherCores = new Lockable.CoreId[others.size()];
+					int i = 0;
+					for (X other : others) {
+						Transactable otherT = theMap.apply(other);
+						if (otherT != null)
+							otherCores[i++] = otherT.getCoreId();
+					}
+					cores = cores.and(otherCores);
+				}
+			}
+			return cores;
+		}
+
+		@Override
 		public String toString() {
 			return "transactable(" + theFirst + ", " + theOthers.get() + ")";
 		}
@@ -288,6 +644,11 @@ public interface Transactable {
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theLockable.tryLock();
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return theLockable.getCoreId();
 		}
 	}
 }

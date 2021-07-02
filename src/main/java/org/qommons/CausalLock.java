@@ -3,6 +3,8 @@ package org.qommons;
 import java.util.Collection;
 import java.util.LinkedList;
 
+import org.qommons.Lockable.CoreId;
+
 /** A lock that keeps track of the causes by which it is write-locked for eventing */
 public class CausalLock implements Transactable {
 	private final Transactable theLock;
@@ -66,5 +68,10 @@ public class CausalLock implements Transactable {
 	/** @return The currently active causes of write locks. This value is not unmodifiable for performance purposes. */
 	public Collection<Causable> getCurrentCauses() {
 		return theTransactionCauses;
+	}
+
+	@Override
+	public CoreId getCoreId() {
+		return theLock.getCoreId();
 	}
 }

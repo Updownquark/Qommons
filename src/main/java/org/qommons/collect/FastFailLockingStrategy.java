@@ -2,6 +2,7 @@ package org.qommons.collect;
 
 import java.util.function.LongSupplier;
 
+import org.qommons.Lockable.CoreId;
 import org.qommons.Transaction;
 
 /** A locking strategy that is not thread-safe, but it allows fail-fast behavior; that is, detecting changes in a thread-unsafe manner. */
@@ -15,8 +16,6 @@ public class FastFailLockingStrategy implements CollectionLockingStrategy {
 
 	@Override
 	public Transaction lock(boolean write, Object cause) {
-		if (write)
-			theModCount++;
 		return Transaction.NONE;
 	}
 
@@ -26,8 +25,18 @@ public class FastFailLockingStrategy implements CollectionLockingStrategy {
 	}
 
 	@Override
+	public CoreId getCoreId() {
+		return CoreId.EMPTY;
+	}
+
+	@Override
 	public long getStamp() {
 		return theModCount;
+	}
+
+	@Override
+	public void modified() {
+		theModCount++;
 	}
 
 	@Override

@@ -5,6 +5,7 @@ import java.util.NoSuchElementException;
 import java.util.function.Function;
 
 import org.qommons.Identifiable;
+import org.qommons.Lockable.CoreId;
 import org.qommons.Stamped;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
@@ -312,6 +313,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	}
 
 	@Override
+	public CoreId getCoreId() {
+		return theLocking.getCoreId();
+	}
+
+	@Override
 	public long getStamp() {
 		return theStamp;
 	}
@@ -459,6 +465,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return getBacking().tryLock(write, cause);
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return getBacking().getCoreId();
 		}
 
 		@Override
@@ -680,6 +691,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return AbstractBetterMultiMap.this.tryLock(write, cause);
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return AbstractBetterMultiMap.this.getCoreId();
 		}
 
 		@Override
@@ -916,6 +932,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theWrapped.tryLock(write, cause);
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return theWrapped.getCoreId();
 		}
 
 		@Override

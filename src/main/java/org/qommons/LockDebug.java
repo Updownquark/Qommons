@@ -76,6 +76,7 @@ public class LockDebug {
 		}
 
 		Transaction lock(Object debugInfo, boolean exclusive, boolean justTry, Supplier<Transaction> transaction) {
+			LockHold newHold;
 			synchronized (LockDebug.class) {
 				LockStack stack = theStacks.get();
 				if (!justTry) {
@@ -85,14 +86,14 @@ public class LockDebug {
 						BreakpointHere.breakpoint();
 					}
 				}
-				LockHold newHold = stack.lock(this, debugInfo, exclusive);
+				newHold = stack.lock(this, debugInfo, exclusive);
 				newHold.theLockRef = (exclusive ? theExclusiveHolds : theNonExclusiveHolds).add(newHold, false);
 				if (exclusive)
 					theExclusiveHolder = stack;
 				else
 					theNonExclusiveHolders.computeIfAbsent(stack, __ -> new int[1])[0]++;
-				return newHold.lock(transaction);
 			}
+			return newHold.lock(transaction);
 		}
 
 		void remove(LockHold hold) {

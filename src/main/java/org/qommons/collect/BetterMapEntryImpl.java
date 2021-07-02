@@ -278,6 +278,7 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 		@Override
 		public void set(V value) throws UnsupportedOperationException, IllegalArgumentException {
 			theEntry.theValue = value;
+			theMutableEntryEl.set(theMutableEntryEl.get());
 		}
 
 		@Override

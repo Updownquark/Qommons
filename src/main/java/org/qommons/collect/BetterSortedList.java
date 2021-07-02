@@ -10,6 +10,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.qommons.Identifiable;
+import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
 import org.qommons.Ternian;
 import org.qommons.Transaction;
@@ -674,6 +675,11 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theWrapped.tryLock(write, cause);
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return theWrapped.getCoreId();
 		}
 
 		@Override

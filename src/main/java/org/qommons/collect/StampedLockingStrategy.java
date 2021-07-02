@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.StampedLock;
 
 import org.qommons.LockDebug;
+import org.qommons.Lockable.CoreId;
 import org.qommons.Transaction;
 
 /** A collection-locking strategy using {@link StampedLock} */
@@ -73,8 +74,18 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 	}
 
 	@Override
+	public CoreId getCoreId() {
+		return new CoreId(theUpdateLocker);
+	}
+
+	@Override
 	public long getStamp() {
 		return theModCount.get();
+	}
+
+	@Override
+	public void modified() {
+		theModCount.getAndIncrement();
 	}
 
 	@Override
@@ -230,17 +241,13 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 		}
 
 		Transaction obtain(boolean write) {
-			if (write)
-				theModCount.getAndIncrement();
 			return LockDebug.debug(theUpdateLocker, theOwner, write, false,
 				() -> updateStamp.lock(theUpdateLocker, write));
 		}
 
 		Transaction tryObtain(boolean write) {
 			Transaction updateTrans = LockDebug.debug(theUpdateLocker, theOwner, write, true,
-				() -> updateStamp.lock(theUpdateLocker, write));
-			if (write && updateTrans != null)
-				theModCount.getAndIncrement();
+				() -> updateStamp.tryLock(theUpdateLocker, write));
 			return updateTrans;
 		}
 	}

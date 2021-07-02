@@ -11,6 +11,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 
+import org.qommons.Lockable.CoreId;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -284,6 +285,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		if (tableEntry == null)
 			tableEntry = table[tableIndex] = new HashTableEntry(tableIndex);
 		tableEntry.add(entry, adjacentEntry);
+		theLocker.modified();
 	}
 
 	/**
@@ -367,6 +369,11 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
+	public CoreId getCoreId() {
+		return theLocker.getCoreId();
+	}
+
+	@Override
 	public long getStamp() {
 		return theLocker.getStamp();
 	}
@@ -446,6 +453,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			HashEntry adjacent = entry;
 			entry = linkUp(hashCode, value.get(), after, before, first);
 			theSize++;
+			theLocker.modified();
 			insert(table, entry, tableIndex, adjacent);
 			if (added != null)
 				added.run();
@@ -579,6 +587,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			ElementId added = entry.theTableEntry.entries.addElement(newEntry, prevTreeEntry, null, true).getElementId();
 			newEntry.placedAt(entry.theTableEntry, entry.theTableEntry.entries.mutableElement(added));
 			checkIntegrity();
+			theLocker.modified();
 			return newEntry.immutable();
 		}
 	}
@@ -886,6 +895,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 				if (next != null)
 					next.previous = previous;
 				theSize--;
+				theLocker.modified();
 				checkIntegrity();
 			}
 		}

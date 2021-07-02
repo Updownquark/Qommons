@@ -6,6 +6,7 @@ import java.util.NoSuchElementException;
 import java.util.function.Function;
 
 import org.qommons.Identifiable;
+import org.qommons.Lockable.CoreId;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterCollection;
@@ -157,6 +158,8 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 				theTree.setRoot(RedBlackNode.deepCopy(rbnl.theTree.getRoot(), theTree, map));
 			} else
 				RedBlackNode.build(theTree, values, map);
+			if (theTree.getRoot() != null)
+				theLocker.modified();
 			return theTree.getRoot() != null;
 		}
 	}
@@ -205,6 +208,11 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	@Override
 	public Transaction tryLock(boolean write, Object cause) {
 		return theLocker.tryLock(write, cause);
+	}
+
+	@Override
+	public CoreId getCoreId() {
+		return theLocker.getCoreId();
 	}
 
 	@Override
@@ -328,6 +336,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 				theTree.setRoot(newNode);
 			else
 				theTree.getTerminal(first).add(newNode, first);
+			theLocker.modified();
 		}
 		return wrap(newNode);
 	}
@@ -399,6 +408,8 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 
 	@Override
 	public void clear() {
+		if (theTree.getRoot() != null)
+			theLocker.modified();
 		theTree.setRoot(null);
 	}
 
@@ -442,7 +453,10 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	protected <X> boolean repair(ElementId element, Comparator<? super E> compare, boolean distinct,
 		ValueStoredCollection.RepairListener<E, X> listener) {
 		try (Transaction t = lock(true, null)) {
-			return theTree.repair(checkNode(element, true).theNode, compare, distinct, new TreeRepairListener<>(listener));
+			boolean repaired = theTree.repair(checkNode(element, true).theNode, compare, distinct, new TreeRepairListener<>(listener));
+			if (repaired)
+				theLocker.modified();
+			return repaired;
 		}
 	}
 
@@ -481,7 +495,10 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	 */
 	protected <X> boolean repair(Comparator<? super E> compare, boolean distinct, ValueStoredCollection.RepairListener<E, X> listener) {
 		try (Transaction t = lock(true, null)) {
-			return theTree.repair(compare, distinct, new TreeRepairListener<>(listener));
+			boolean repaired = theTree.repair(compare, distinct, new TreeRepairListener<>(listener));
+			if (repaired)
+				theLocker.modified();
+			return repaired;
 		}
 	}
 
@@ -802,6 +819,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
 				theNode.setValue(value);
+				theLocker.modified();
 			}
 		}
 
@@ -816,6 +834,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
 				theNode.delete();
+				theLocker.modified();
 			}
 		}
 
@@ -831,6 +850,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 					throw new IllegalStateException("This element has been removed");
 				RedBlackNode<E> newNode = new RedBlackNode<>(theTree, value);
 				theNode.add(newNode, onLeft);
+				theLocker.modified();
 				return new NodeId(newNode);
 			}
 		}

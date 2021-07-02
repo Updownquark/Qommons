@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.qommons.Identifiable;
+import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
@@ -688,6 +689,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				};
 			} else
 				return t;
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return theWrapped.getCoreId();
 		}
 
 		void check() {
@@ -1365,6 +1371,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return Transaction.NONE;
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return CoreId.EMPTY;
 		}
 
 		@Override

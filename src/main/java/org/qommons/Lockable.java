@@ -1,8 +1,12 @@
 package org.qommons;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -41,6 +45,26 @@ public interface Lockable {
 		public Transaction tryLock() {
 			return Transaction.NONE;
 		}
+
+		@Override
+		public CoreId getCoreId() {
+			return CoreId.EMPTY;
+		}
+
+		@Override
+		public int hashCode() {
+			return 0;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj == NONE;
+		}
+
+		@Override
+		public String toString() {
+			return "NONE";
+		}
 	};
 
 	/** @return Whether this object actually support locking */
@@ -68,6 +92,9 @@ public interface Lockable {
 	 *         fails
 	 */
 	Transaction tryLock();
+
+	/** @return A {@link CoreId} object containing all true locking cores used by this Lockable */
+	CoreId getCoreId();
 
 	/**
 	 * Obtains a lock on a java {@link Lock} as a Transaction
@@ -152,14 +179,6 @@ public interface Lockable {
 			return Transaction.NONE;
 		else
 			return LockDebug.debug(lock, debugInfo, write, true, () -> tryLock(write ? lock.writeLock() : lock.readLock()));
-	}
-
-	/**
-	 * @param lock The lock to represent--may be null, in which case {@link #NONE} will be returned
-	 * @return A Lockable representing the lock
-	 */
-	static Lockable lockable(Lock lock) {
-		return lock == null ? NONE : new LockLockable(lock);
 	}
 
 	/**
@@ -462,6 +481,101 @@ public interface Lockable {
 	}
 
 	/**
+	 * Gets the core ID for a set of lockables
+	 * 
+	 * @param lockables The lockables
+	 * @return A CoreId containing core information about all lockables
+	 */
+	static CoreId getCoreId(Lockable... lockables) {
+		return getCoreId(Arrays.asList(lockables));
+	}
+
+	/**
+	 * Gets the core ID for a set of lockables
+	 * 
+	 * @param lockables The lockables
+	 * @return A CoreId containing core information about all lockables
+	 */
+	static CoreId getCoreId(Collection<? extends Lockable> lockables) {
+		CoreId first = null;
+		List<CoreId> others = null;
+		for (Lockable lockable : lockables) {
+			if (lockable == null)
+				continue;
+			if (first == null)
+				first = lockable.getCoreId();
+			else {
+				if (others == null)
+					others = new ArrayList<>(lockables.size() - 1);
+				others.add(lockable.getCoreId());
+			}
+		}
+		if (first == null)
+			return CoreId.EMPTY;
+		else if (others == null)
+			return first;
+		else
+			return first.and(others);
+	}
+
+	/**
+	 * Gets the core ID for a couple of lockables
+	 * 
+	 * @param outer The first lockable
+	 * @param inner Potentially produces another lockable after the first lockable is locked
+	 * @return A CoreId containing core information about both lockables
+	 */
+	static CoreId getCoreId(Lockable outer, Supplier<? extends Lockable> inner) {
+		return getCoreId(outer, () -> Arrays.asList(inner.get()), l -> l);
+	}
+
+	/**
+	 * Gets the core ID for a set of lockables
+	 * 
+	 * @param outer The first lockable
+	 * @param lockables The additional lockables
+	 * @return A CoreId containing core information about all given lockables
+	 */
+	static CoreId getCoreId(Lockable outer, Collection<? extends Lockable> lockables) {
+		return getCoreId(outer, () -> lockables, l -> l);
+	}
+
+	/**
+	 * Gets the core ID for a set of lockables
+	 * 
+	 * @param <X> The type of lockable structures
+	 * @param outer The first lockable
+	 * @param lockables The additional lockable structures
+	 * @param map The map to produce Lockables from each item in the list
+	 * @return A CoreId containing core information about all given lockables
+	 */
+	static <X> CoreId getCoreId(Lockable outer, Supplier<? extends Collection<? extends X>> lockables,
+		Function<? super X, ? extends Lockable> map) {
+		Transaction outerLock;
+		if (outer != null) {
+			outerLock = outer.tryLock();
+		} else
+			outerLock = null;
+		try {
+			CoreId core = outer == null ? CoreId.EMPTY : outer.getCoreId();
+			Collection<? extends X> others = lockables.get();
+			if (others == null)
+				return core;
+			CoreId[] otherCores = new CoreId[others.size()];
+			int i = 0;
+			for (X other : others) {
+				Lockable lock = map.apply(other);
+				if (lock != null)
+					otherCores[i++] = lock.getCoreId();
+			}
+			return core.and(otherCores);
+		} finally {
+			if (outerLock != null)
+				outerLock.close();
+		}
+	}
+
+	/**
 	 * Safely locks a pair of lockables, blocking until a lock is obtained for both. If this method fails to lock either of the composite
 	 * locks, all locks will be released and re-tried. This is very effective at preventing deadlock where multiple thread-safe resources
 	 * are needed for an operation.
@@ -516,48 +630,6 @@ public interface Lockable {
 		return Transaction.and(outerLock, innerLock);
 	}
 
-	/** Implements {@link Lockable#lockable(Lock)} */
-	static class LockLockable implements Lockable {
-		private final Lock theLock;
-
-		public LockLockable(Lock lock) {
-			theLock = lock;
-		}
-
-		@Override
-		public boolean isLockSupported() {
-			return true;
-		}
-
-		@Override
-		public Transaction lock() {
-			theLock.lock();
-			return theLock::unlock;
-		}
-
-		@Override
-		public Transaction tryLock() {
-			if (!theLock.tryLock())
-				return null;
-			return theLock::unlock;
-		}
-
-		@Override
-		public int hashCode() {
-			return theLock.hashCode();
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			return obj instanceof LockLockable && theLock.equals(((LockLockable) obj).theLock);
-		}
-
-		@Override
-		public String toString() {
-			return theLock.toString();
-		}
-	}
-
 	/** Implements {@link Lockable#lockable(Transactable)} */
 	static class STLockable implements Lockable {
 		private final Transactable theTransactable;
@@ -583,6 +655,11 @@ public interface Lockable {
 		@Override
 		public Transaction tryLock() {
 			return theTransactable.tryLock(write, cause);
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return theTransactable.getCoreId();
 		}
 
 		@Override
@@ -626,6 +703,25 @@ public interface Lockable {
 		public Transaction tryLock() {
 			return tryLockAll(theFirst, theLocks, l -> l);
 		}
+
+		@Override
+		public Lockable.CoreId getCoreId() {
+			// Best we can do here is capture a snapshot
+			Lockable.CoreId cores = theFirst.getCoreId();
+			try (Transaction t = theFirst.lock()) {
+				Collection<? extends Lockable> others = theLocks.get();
+				if (others != null) {
+					Lockable.CoreId[] otherCores = new Lockable.CoreId[others.size()];
+					int i = 0;
+					for (Lockable other : others) {
+						if (other != null)
+							otherCores[i++] = other.getCoreId();
+					}
+					cores = cores.and(otherCores);
+				}
+			}
+			return cores;
+		}
 	}
 
 	/** Implements {@link Lockable#lockable(ReentrantLock, Object)} */
@@ -651,6 +747,11 @@ public interface Lockable {
 		@Override
 		public Transaction tryLock() {
 			return Lockable.tryLock(theLock, theDebugInfo);
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return new CoreId(theLock);
 		}
 	}
 
@@ -679,6 +780,85 @@ public interface Lockable {
 		@Override
 		public Transaction tryLock() {
 			return Lockable.tryLock(theLock, theDebugInfo, isWrite);
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return new CoreId(theLock);
+		}
+	}
+
+	/** Contains information about the source of a {@link Lockable} or {@link Transactable}'s ability to ensure thread safety */
+	class CoreId {
+		public static final CoreId EMPTY=new CoreId();
+		
+		private final Set<Object> theCores;
+	
+		/** @param cores The cores to wrap */
+		public CoreId(Object... cores) {
+			this(new HashSet<>(Arrays.asList(cores)));
+		}
+	
+		private CoreId(Set<Object> cores) {
+			theCores = cores;
+		}
+
+		public CoreId and(CoreId... others) {
+			return and(Arrays.asList(others));
+		}
+
+		/**
+		 * @param others The other cores to combine
+		 * @return A CoreId containing all information contained in this or any of the other given cores
+		 */
+		public CoreId and(Collection<? extends CoreId> others) {
+			if (others.isEmpty())
+				return this;
+			Set<Object> newCores=null;
+			for(CoreId other : others) {
+				if(other==null)
+					continue;
+				for(Object core : other.theCores) {
+					if(newCores!=null)
+						newCores.add(core);
+					else if(!theCores.contains(core)) {
+						newCores=new HashSet<>(theCores);
+						newCores.add(core);
+					}
+				}
+			}
+			if(newCores==null)
+				return this;
+			else
+				return new CoreId(newCores);
+		}
+	
+		public boolean intersects(CoreId other) {
+			if (theCores.size() <= other.theCores.size()) {
+				for (Object core : theCores)
+					if (other.theCores.contains(core))
+						return true;
+			} else {
+				for (Object core : other.theCores)
+					if (theCores.contains(core))
+						return true;
+			}
+			return false;
+		}
+	
+		@Override
+		public int hashCode() {
+			return theCores.hashCode();
+		}
+	
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof CoreId && theCores.equals(((CoreId) obj).theCores);
+		}
+	
+		@Override
+		public String toString() {
+			return theCores.toString();
 		}
 	}
 }

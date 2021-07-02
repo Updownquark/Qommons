@@ -5,6 +5,9 @@ import org.qommons.Transactable;
 
 /** A strategy for collection thread safety. Some implementations of this class may not be completely thread-safe for performance. */
 public interface CollectionLockingStrategy extends Transactable, Stamped {
+	/** Increments the {@link #getStamp() stamp} */
+	void modified();
+
 	/**
 	 * A read-only operation that can be done optimistically, without obtaining a lock
 	 * 

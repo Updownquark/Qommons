@@ -8,6 +8,7 @@ import java.util.function.Function;
 
 import org.qommons.Identifiable;
 import org.qommons.Lockable;
+import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
 import org.qommons.Stamped;
 import org.qommons.Transactable;
@@ -467,6 +468,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		}
 
 		@Override
+		public CoreId getCoreId() {
+			return getMap().getCoreId();
+		}
+
+		@Override
 		public int size() {
 			return getMap().keySet().size();
 		}
@@ -660,6 +666,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return getMap().tryLock(write, cause);
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return getMap().getCoreId();
 		}
 
 		@Override
@@ -1567,6 +1578,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theSource.tryLock(write, cause);
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return theSource.getCoreId();
 		}
 
 		@Override

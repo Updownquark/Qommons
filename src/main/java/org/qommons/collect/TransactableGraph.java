@@ -1,6 +1,7 @@
 package org.qommons.collect;
 
 import org.qommons.Lockable;
+import org.qommons.Lockable.CoreId;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 
@@ -26,6 +27,12 @@ public interface TransactableGraph<N, E> extends Graph<N, E>, Transactable {
 	default Transaction tryLock(boolean write, Object cause) {
 		return Lockable.tryLockAll(Lockable.lockable(getNodes(), write, cause), //
 			Lockable.lockable(getEdges(), write, cause));
+	}
+
+	@Override
+	default CoreId getCoreId() {
+		return Lockable.getCoreId(Lockable.lockable(getNodes(), false, null), //
+			Lockable.lockable(getEdges(), false, null));
 	}
 
 	@Override
