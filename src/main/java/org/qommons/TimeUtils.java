@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TimeZone;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -169,6 +170,9 @@ public class TimeUtils {
 
 	/** A parsed time returned from {@link TimeUtils#parseDuration(CharSequence)} */
 	public static class ParsedDuration implements FieldedAdjustable<DurationComponentType, DurationComponent, ParsedDuration> {
+		/** An empty duration */
+		public static final ParsedDuration ZERO = new ParsedDuration(false, Collections.emptyList(), Collections.emptyList());
+
 		private final boolean isNegative;
 		private final EnumMap<DurationComponentType, DurationComponent> components;
 		private final List<DurationComponent> theSequence;
@@ -213,7 +217,7 @@ public class TimeUtils {
 		}
 
 		@Override
-		public org.qommons.TimeUtils.ParsedDuration adjust(int position, int amount) {
+		public ParsedDuration adjust(int position, int amount) {
 			return FieldedAdjustable.super.adjust(position, isNegative ? -amount : amount);
 		}
 
@@ -529,6 +533,8 @@ public class TimeUtils {
 				str.append(theSequence.get(i).toString());
 			}
 			str.append(theSeparators.get(theSeparators.size() - 1));
+			if (theSequence.isEmpty())
+				str.append("0s");
 			return str.toString();
 		}
 
@@ -633,9 +639,23 @@ public class TimeUtils {
 				index += valueStr.length() + 2;
 			}
 			separators.add("");
-			if (components.isEmpty())
-				components.add(new DurationComponent(index, index, index + 2, DurationComponentType.Second, 0, "0s"));
 			return new ParsedDuration(neg, components, separators);
+		}
+
+		/**
+		 * @param months The number of months in the duration
+		 * @return A ParsedDuration with its {@link DurationComponentType#Year} and {@link DurationComponentType#Month} components populated
+		 *         according to the <code>months</code> parameter
+		 */
+		public static ParsedDuration ofMonths(int months) {
+			ParsedDuration duration = ParsedDuration.ZERO;
+			if (months >= 12) {
+				duration = duration.with(DurationComponentType.Year, months / 12);
+				months %= 12;
+			}
+			if (months > 0)
+				duration = duration.with(DurationComponentType.Month, months);
+			return duration;
 		}
 	}
 
@@ -3267,5 +3287,358 @@ public class TimeUtils {
 	public static Duration negate(Duration d) {
 		Duration neg = Duration.ofSeconds(-d.getSeconds(), -d.getNano());
 		return neg;
+	}
+
+	/**
+	 * <p>
+	 * Represents an interval between recurrence of some event, which may be based on a constant duration or on calendar months.
+	 * </p>
+	 * <p>
+	 * Examples of non-duration-based intervals are:
+	 * <ul>
+	 * <li>Monthly on the Nth day of the month</li>
+	 * <li>Monthly on the Nth [weekday] of the month</li>
+	 * <li>Monthly on the last day of the month</li>
+	 * </ul>
+	 * The intervals do not necessarily need to recur every month. E.g.
+	 * <ul>
+	 * <li>Annually on the Nth of [month]</li>
+	 * <li>Quarterly on the Nth [weekday] of [month]</li>
+	 * </ul>
+	 * </p>
+	 * <p>
+	 * This class does not contain the anchor determining when exactly the event occurs--only the interval between events. The anchor must
+	 * be passed to all methods of this class.
+	 * </p>
+	 */
+	public static class RecurrenceInterval {
+		private final String theTextRepresentation;
+		private final ParsedDuration theDuration;
+		private final int theMonths;
+		private final int theWeek;
+		private final int theDay;
+
+		private RecurrenceInterval(String text, ParsedDuration duration, int months, int week, int day) {
+			theTextRepresentation = text;
+			theDuration = duration;
+			theMonths = months;
+			theWeek = week;
+			theDay = day;
+		}
+
+		/** @return The text representation of this recurrence interval */
+		public String getTextRepresentation() {
+			return theTextRepresentation;
+		}
+
+		/** @return The duration represented by this recurrence. The duration is only a component of recurrence, and may be an estimate. */
+		public ParsedDuration getDuration() {
+			return theDuration;
+		}
+
+		/**
+		 * Creates a recurrence interval based on a "normal" interpretation of an interval. This can be a constant-duration-based interval,
+		 * or based on calendar months. The {@link DurationComponentType#Year} and {@link DurationComponentType#Month}
+		 * {@link ParsedDuration#getComponents() components} will affect the interval as expected, lengthening and shortening for long and
+		 * short months.
+		 * 
+		 * @param textRepresentation The text representation of this interval. This value is not used by the class only kept for reference.
+		 * @param duration The duration of the interval
+		 * @return The recurrence interval
+		 */
+		public static RecurrenceInterval normal(String textRepresentation, ParsedDuration duration) {
+			return new RecurrenceInterval(textRepresentation, duration, -1, -1, -1);
+		}
+
+		/**
+		 * @param textRepresentation The text representation of this interval. This value is not used by the class only kept for reference.
+		 * @param intervalMonths The number of months between recurrences
+		 * @param daysBeforeLast The number of days before the last day of the month of the occurrence
+		 * @return A recurrence interval that occurs on the [daysBeforeLast]-to-last day of the month every [intervalMonths] month
+		 */
+		public static RecurrenceInterval onLastOfMonth(String textRepresentation, int intervalMonths, int daysBeforeLast) {
+			if (intervalMonths <= 0)
+				throw new IllegalArgumentException("Months must be >0");
+			return new RecurrenceInterval(textRepresentation, ParsedDuration.ofMonths(intervalMonths), intervalMonths, -1, daysBeforeLast);
+		}
+
+		/**
+		 * @param textRepresentation The text representation of this interval. This value is not used by the class only kept for reference.
+		 * @param intervalMonths The number of months between recurrences
+		 * @param weekOfMonth The week of the month of the recurrence, starting at one
+		 * @param dayOfWeek The day of the week of the occurrence, starting at {@link Calendar#SUNDAY}, which is 1
+		 * @return A recurrence interval that occurs on the [weekOfMonth]th [dayOfWeek] every [intervalMonths] month
+		 */
+		public static RecurrenceInterval onDayOfMonthWeek(String textRepresentation, int intervalMonths, int weekOfMonth, int dayOfWeek) {
+			if (intervalMonths <= 0)
+				throw new IllegalArgumentException("Months must be >0");
+			return new RecurrenceInterval(textRepresentation, ParsedDuration.ofMonths(intervalMonths), intervalMonths, weekOfMonth,
+				dayOfWeek);
+		}
+
+		/**
+		 * 
+		 * @param reference Any occurrence time of the event
+		 * @param relative Any arbitrary instant
+		 * @param after Whether to return a time after <code>relative</code> or before
+		 * @param strict Whether to return a time strictly after/before <code>relative</code>. If false, a time equal to
+		 *        <code>reference</code> will be returned if the event occurs at that time.
+		 * @return The occurrence of the event that occurs closest to <code>reference</code> with the given constraints
+		 */
+		public Instant getOccurrence(Instant reference, Instant relative, boolean after, boolean strict) {
+			Instant occur;
+			// First, get an estimate that can't be later than after
+			if (relative == null) {
+				return reference;
+			} else if (theDay >= 0) {
+				Calendar cal = TimeUtils.CALENDAR.get();
+				cal.setTimeZone(TimeZone.getDefault());
+				cal.setTimeInMillis(reference.toEpochMilli());
+				cal.set(Calendar.DAY_OF_MONTH, 1);
+				long afterMillis = relative.toEpochMilli();
+				long intervalMillis = theMonths * 31L * 24 * 60 * 60 * 1000;
+				int div = (int) ((afterMillis - cal.getTimeInMillis()) / intervalMillis);
+				while (div != 0) {
+					cal.add(Calendar.MONTH, div * theMonths);
+					div = (int) ((afterMillis - cal.getTimeInMillis()) / intervalMillis);
+				}
+				if (theWeek >= 0) {
+					int day = cal.get(Calendar.DAY_OF_WEEK);
+					if (day < theDay) {
+						cal.add(Calendar.DAY_OF_MONTH, theDay - day);
+					} else if (day > theDay) {
+						cal.add(Calendar.DAY_OF_MONTH, theDay - day + 7);
+					}
+					cal.add(Calendar.DAY_OF_MONTH, (theWeek - 1) * 7);
+				} else {
+					cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH) - theDay);
+				}
+				occur = Instant.ofEpochMilli(cal.getTimeInMillis());
+			} else {
+				Duration estDuration = theDuration.asDuration();
+				int times = TimeUtils.divide(Duration.between(reference, relative), estDuration);
+				if (times > 1) {
+					occur = theDuration.times(times - 2).addTo(reference, TimeZone.getDefault());
+				} else if (times < 0) {
+					occur = theDuration.times(times - 1).addTo(reference, TimeZone.getDefault());
+				} else {
+					occur = reference;
+				}
+			}
+
+			// Next, enforce the time constraint
+			while (true) {
+				int comp = occur.compareTo(relative);
+				if (comp == 0) {
+					if (!strict) {
+						break;
+					}
+				} else if ((comp > 0) == after) {
+					break;
+				}
+				occur = adjacentOccurrence(occur, after);
+			}
+			return occur;
+		}
+
+		/**
+		 * @param occurrence An occurrence of the event
+		 * @param next Whether to return the next or previous occurrence
+		 * @return The occurrence of the event occurring immediately after/before <code>lastOccurrence</code>
+		 */
+		public Instant adjacentOccurrence(Instant occurrence, boolean next) {
+			if (theWeek >= 0) { // Xth [weekday] of the month
+				long millis = occurrence.toEpochMilli();
+				Calendar cal = TimeUtils.CALENDAR.get();
+				cal.setTimeInMillis(millis);
+				cal.set(Calendar.DAY_OF_MONTH, 1);
+				cal.add(Calendar.MONTH, theMonths * (next ? 1 : -1));
+				int day = cal.get(Calendar.DAY_OF_WEEK);
+				if (day < theDay) {
+					cal.add(Calendar.DAY_OF_MONTH, theDay - day);
+				} else if (day > theDay) {
+					cal.add(Calendar.DAY_OF_MONTH, theDay - day + 7);
+				}
+				cal.add(Calendar.DAY_OF_MONTH, (theWeek - 1) * 7);
+				return Instant.ofEpochMilli(cal.getTimeInMillis());
+			} else if (theDay >= 0) {// X days before the end of the month
+				Calendar cal = TimeUtils.CALENDAR.get();
+				cal.setTimeInMillis(occurrence.toEpochMilli());
+				cal.set(Calendar.DAY_OF_MONTH, 1);
+				cal.add(Calendar.MONTH, theMonths * (next ? 1 : -1));
+				cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH) - theDay);
+				return Instant.ofEpochMilli(cal.getTimeInMillis());
+			} else {
+				if (next) {
+					return theDuration.addTo(occurrence, TimeZone.getDefault());
+				} else {
+					return theDuration.times(-1).addTo(occurrence, TimeZone.getDefault());
+				}
+			}
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(theDuration, theMonths, theWeek, theDay);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof RecurrenceInterval))
+				return false;
+			RecurrenceInterval other = (RecurrenceInterval) obj;
+			return theDuration.equals(other.theDuration)//
+				&& theMonths == other.theMonths//
+				&& theWeek == other.theWeek//
+				&& theDay == other.theDay;
+		}
+
+		@Override
+		public String toString() {
+			if (theMonths > 0) {
+				StringBuilder str = new StringBuilder();
+				switch (theMonths) {
+				case 1:
+					str.append("monthly, ");
+					break;
+				case 2:
+					str.append("every other ");
+					break;
+				case 3:
+					str.append("quarterly, ");
+					break;
+				case 6:
+					str.append("bianually, ");
+					break;
+				case 12:
+					str.append("annually, ");
+					break;
+				default:
+					if (theMonths % 12 == 0) {
+						str.append(" every ").append(theMonths / 12).append(" yrs, ");
+					} else {
+						str.append(" every ").append(theMonths).append(" mos, ");
+					}
+					break;
+				}
+				if (theWeek >= 0) {
+					str.append(theWeek);
+					switch (theWeek) {
+					case 1:
+						str.append("st");
+						break;
+					case 2:
+						str.append("nd");
+						break;
+					case 3:
+						str.append("rd");
+						break;
+					default:
+						str.append("th");
+						break;
+					}
+					str.append(' ').append(TimeUtils.getWeekDaysAbbrev().get(theDay));
+				} else {
+					if (theDay == 0) {
+						str.append(" last day of month");
+					} else {
+						str.append(theDay).append(" days before end of month");
+					}
+				}
+				return str.toString();
+			} else {
+				return theDuration.toString();
+			}
+		}
+	}
+
+	/**
+	 * <p>
+	 * Parses a recurrence interval from text.
+	 * </p>
+	 * <p>
+	 * This method uses '-' and '#' notation to denote the 2 non-{@link RecurrenceInterval#normal(String, ParsedDuration) normal} recurrence
+	 * types. The presence of a '-' terminator is used to denote an interval that occurs on the last Nth day of a month. A '#' terminator
+	 * denotes an interval that occurs on a particular Nth [weekday] of a month. When using these special types, only
+	 * {@link DurationComponentType#Year year} and {@link DurationComponentType#Month month} components may be used for the interval.
+	 * </p>
+	 * <p>
+	 * Examples:
+	 * <ul>
+	 * <li>"1mo-" This recurrence will occur on the same day of the month before the end as the given occurrence. E.g. If the occurrence is
+	 * on the last day of the month, the event will always recur then. If the occurrence is 5 days before the end of its month, the event
+	 * will always recur 5 days before the end of a month</li>
+	 * <li>"1mo#" This recurrence will occur on the same Nth [weekday] of a month as the given occurrence</li>
+	 * </ul>
+	 * </p>
+	 * 
+	 * @param recur The String to parse the recurrence from
+	 * @param occurrence An occurrence time of the vent. This time will be used to determine the week and day of special-type intervals.
+	 * @return The parsed recurrence
+	 * @throws ParseException If the recurrence string could not be parsed
+	 */
+	public static RecurrenceInterval parseRecurrenceInterval(String recur, Instant occurrence) throws ParseException {
+		if (occurrence == null || recur == null || recur.isEmpty()) {
+			return null;
+		}
+
+		char lastChar = recur.charAt(recur.length() - 1);
+		String dStr;
+		int day, week;
+		switch (lastChar) {
+		case '-': // Code for days from the last of the month
+			dStr = recur.substring(0, recur.length() - 1);
+			Calendar cal = TimeUtils.CALENDAR.get();
+			cal.setTimeZone(TimeZone.getDefault());
+			cal.setTimeInMillis(occurrence.toEpochMilli());
+			day = cal.getActualMaximum(Calendar.DAY_OF_MONTH) - cal.get(Calendar.DAY_OF_MONTH);
+			week = -1;
+			break;
+		case '#': // Code for Xth [weekday] of the month
+			dStr = recur.substring(0, recur.length() - 1);
+			cal = TimeUtils.CALENDAR.get();
+			cal.setTimeZone(TimeZone.getDefault());
+			cal.setTimeInMillis(occurrence.toEpochMilli());
+			day = cal.get(Calendar.DAY_OF_WEEK);
+			week = cal.get(Calendar.WEEK_OF_MONTH);
+			break;
+		default: // Normal frequency
+			day = week = -1;
+			dStr = recur;
+		}
+		ParsedDuration duration;
+		if (!dStr.isEmpty()) {
+			duration = TimeUtils.parseDuration(dStr);
+		} else {
+			duration = null;
+		}
+		int months = 0;
+		if (day >= 0) {
+			if (duration != null) {
+				for (DurationComponent component : duration.getComponents()) {
+					switch (component.getField()) {
+					case Year:
+						months += component.getValue() * 12;
+						break;
+					case Month:
+						months += component.getValue();
+						break;
+					default:
+						throw new ParseException("Bad duration--" + lastChar + " notation can only be used with months and years",
+							recur.length() - 1);
+					}
+				}
+			}
+			if (months == 0) {
+				months = 1;
+			}
+			if (week >= 0)
+				return RecurrenceInterval.onDayOfMonthWeek(recur, months, week, day);
+			else
+				return RecurrenceInterval.onLastOfMonth(recur, months, day);
+		}
+		return RecurrenceInterval.normal(recur, duration);
 	}
 }
