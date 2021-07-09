@@ -139,6 +139,41 @@ public class StringUtils {
 	}
 
 	/**
+	 * @param full The character sequence to test
+	 * @param prefix The prefix to look for
+	 * @return Whether the given prefix is at the beginning of the full sequence, regardless of case
+	 */
+	public static boolean startsWithIgnoreCase(CharSequence full, CharSequence prefix) {
+		if (full.length() < prefix.length())
+			return false;
+		for (int i = 0; i < prefix.length(); i++) {
+			char c1 = full.charAt(i);
+			char c2 = prefix.charAt(i);
+			if (c1 != c2 && Character.toLowerCase(c1) != Character.toLowerCase(c2))
+				return false;
+		}
+		return true;
+	}
+
+	/**
+	 * @param full The character sequence to test
+	 * @param suffix The suffix to look for
+	 * @return Whether the given suffix is at the end of the full sequence, regardless of case
+	 */
+	public static boolean endsWithIgnoreCase(CharSequence full, CharSequence suffix) {
+		if (full.length() < suffix.length())
+			return false;
+		int lenDiff = full.length() - suffix.length();
+		for (int i = suffix.length() - 1; i >= 0; i--) {
+			char c1 = full.charAt(i + lenDiff);
+			char c2 = suffix.charAt(i);
+			if (c1 != c2 && Character.toLowerCase(c1) != Character.toLowerCase(c2))
+				return false;
+		}
+		return true;
+	}
+
+	/**
 	 * Adds a number to a String integer
 	 * 
 	 * @param string The String containing a number to add to

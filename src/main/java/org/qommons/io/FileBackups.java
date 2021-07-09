@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
 
+import org.qommons.StringUtils;
 import org.qommons.collect.BetterCollections;
 import org.qommons.collect.BetterSortedList.SortedSearchFilter;
 import org.qommons.collect.BetterSortedMap;
@@ -110,11 +111,12 @@ public class FileBackups {
 	 * @throws ParseException If the file name has the form of a backup file, but its date cannot be parsed
 	 */
 	public long getBackupTime(String fileName) throws ParseException {
-		if (!fileName.startsWith(thePrefix) || !fileName.endsWith(theSuffix) //
+		if (!StringUtils.startsWithIgnoreCase(fileName, thePrefix) || !StringUtils.endsWithIgnoreCase(fileName, theSuffix) //
 			|| fileName.length() - thePrefix.length() - theSuffix.length() < 10)
 			return -1;
 		fileName = fileName.substring(thePrefix.length(), fileName.length() - theSuffix.length());
-		return DATE_FORMAT.get().parse(fileName).getTime();
+		Date date = DATE_FORMAT.get().parse(fileName);
+		return date.getTime();
 	}
 
 	/**
