@@ -20,22 +20,28 @@ import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
+import org.qommons.ex.CheckedExceptionWrapper;
 import org.qommons.ex.ExBiConsumer;
 import org.qommons.io.BetterFile.FileBacking;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
+import org.qommons.io.BetterFile.FileDataSource;
 import org.qommons.io.FileUtils.DirectorySyncResults;
 
+/** {@link FileDataSource} for the local native file system */
 public class NativeFileSource implements BetterFile.FileDataSource {
 	private final FileSystem theFileSystem;
 
+	/** Creates the file source for the default file system */
 	public NativeFileSource() {
 		this(FileSystems.getDefault());
 	}
 
+	/** @param fileSystem The file system to create the file source for */
 	public NativeFileSource(FileSystem fileSystem) {
 		theFileSystem = fileSystem;
 	}
 
+	/** @return The file system backing this file source */
 	public FileSystem getFileSystem() {
 		return theFileSystem;
 	}
@@ -48,6 +54,10 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		return Collections.unmodifiableList(roots);
 	}
 
+	/**
+	 * @param file The native file to convert
+	 * @return The better file under this file source representing the given file
+	 */
 	public BetterFile toBetter(File file) {
 		return BetterFile.at(this, file.getAbsolutePath());
 	}
@@ -57,15 +67,24 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		return "file:///";
 	}
 
+	/**
+	 * @param file The native file to convert
+	 * @return The better file under the default native file source representing the given file
+	 */
 	public static BetterFile of(File file) {
 		return new NativeFileSource().toBetter(file);
 	}
 
+	/**
+	 * @param filePath The file path
+	 * @return The better file under the default native file source representing the given file
+	 */
 	public static BetterFile of(String filePath) {
 		return of(new File(filePath));
 	}
 
 	class NativeFileBacking implements BetterFile.FileBacking {
+		@SuppressWarnings("unused")
 		private final NativeFileBacking theParent;
 		private final Path thePath;
 		private final String theName;
@@ -138,6 +157,7 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 			}
 		}
 
+		@SuppressWarnings("resource")
 		@Override
 		public InputStream read(long startFrom, BooleanSupplier canceled) throws IOException {
 			if (canceled.getAsBoolean())
@@ -225,7 +245,28 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public void delete(DirectorySyncResults results) throws IOException {
-			Files.deleteIfExists(thePath);
+			if (!Files.exists(thePath))
+				return;
+			boolean dir = get(FileBooleanAttribute.Directory);
+			if (dir) {
+				try {
+					discoverContents(child -> {
+						try {
+							child.delete(results);
+						} catch (IOException e) {
+							throw new CheckedExceptionWrapper(e);
+						}
+					}, () -> false);
+				} catch (CheckedExceptionWrapper e) {
+					if (e.getCause() instanceof IOException)
+						throw (IOException) e.getCause();
+					else
+						throw e;
+				}
+			}
+			Files.delete(thePath);
+			if (results != null)
+				results.deleted(dir);
 		}
 
 		@Override
@@ -337,10 +378,12 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		}
 	}
 
+	/** A file stream wrapping a {@link RandomAccessFile} */
 	public static class RandomAccessFileStream extends InputStream {
 		private final RandomAccessFile theFile;
 		private long theMark;
 
+		/** @param file The {@link RandomAccessFile} to wrap */
 		public RandomAccessFileStream(RandomAccessFile file) {
 			theFile = file;
 			theMark = -1;

@@ -1,7 +1,6 @@
 package org.qommons.io;
 
 import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
@@ -35,7 +34,7 @@ import org.qommons.ex.ExConsumer;
 import org.qommons.ex.ExSupplier;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
 
-/** Utilities to use on {@link File}s or similar structures */
+/** Utilities to use on {@link File}s, {@link BetterFile}s, or similar structures */
 public class FileUtils {
 	private FileUtils() {}
 
@@ -60,6 +59,10 @@ public class FileUtils {
 			return new SyntheticFile(file);
 	}
 
+	/**
+	 * @param file The native file object to convert
+	 * @return The BetterFile representing the given file
+	 */
 	public static BetterFile better(File file) {
 		if (file instanceof SyntheticFile)
 			return ((SyntheticFile) file).getFile();
@@ -81,11 +84,22 @@ public class FileUtils {
 		return new SyntheticBetterFile(name, data, size, lastModified);
 	}
 
+	/**
+	 * @return A native file source with zip, gzip, and tar archive interpretation enabled, for use with the BetterFile API
+	 * @see BetterFile#at(org.qommons.io.BetterFile.FileDataSource, String)
+	 */
 	public static BetterFile.FileDataSource getDefaultFileSource() {
 		return new ArchiveEnabledFileSource(new NativeFileSource())//
-			.withArchival(new ArchiveEnabledFileSource.ZipCompression());
+			.withArchival(new ArchiveEnabledFileSource.ZipCompression())//
+			.withArchival(new ArchiveEnabledFileSource.GZipCompression())//
+			.withArchival(new ArchiveEnabledFileSource.TarArchival())//
+		;
 	}
 
+	/**
+	 * @param clazz The class to get the class file of
+	 * @return The ".class" file representing the given class
+	 */
 	public static BetterFile getClassFile(Class<?> clazz) {
 		String classFileName = clazz.getName();
 		int dotIdx = classFileName.lastIndexOf('.');
@@ -98,6 +112,10 @@ public class FileUtils {
 		return ofUrl(resource);
 	}
 
+	/**
+	 * @param url The URL
+	 * @return A BetterFile representing the URL
+	 */
 	public static BetterFile ofUrl(URL url) {
 		BetterFile.FileDataSource fileSource;
 		switch (url.getProtocol()) {
@@ -120,6 +138,11 @@ public class FileUtils {
 		return ofUrl(fileSource, url);
 	}
 
+	/**
+	 * @param fileSource The file source
+	 * @param url The URL
+	 * @return A BetterFile representing the URL under the given file source
+	 */
 	public static BetterFile ofUrl(BetterFile.FileDataSource fileSource, URL url) {
 		switch (url.getProtocol()) {
 		case "file":
@@ -243,12 +266,23 @@ public class FileUtils {
 		}
 	}
 
+	/**
+	 * @param path The path
+	 * @return The index of the first slash ('/' or '\') in the path
+	 */
 	public static int slashIndex(String path) {
 		int slashIndex = path.indexOf('/');
 		int backSlashIndex = path.indexOf('\\');
 		return Math.min(slashIndex, backSlashIndex);
 	}
 
+	/**
+	 * Concatenates two file paths, correctly dealing with any terminal or initial slashes as appropriate
+	 * 
+	 * @param parent The parent path
+	 * @param child The child path
+	 * @return The concatenated path
+	 */
 	public static String concatPath(String parent, String child) {
 		boolean lastSlash = parent.length() > 0
 			&& (parent.charAt(parent.length() - 1) == '/' || parent.charAt(parent.length() - 1) == '\\');
@@ -263,6 +297,10 @@ public class FileUtils {
 		return path;
 	}
 
+	/**
+	 * @param path The path to split
+	 * @return The path, split by slashes ('/' or '\')
+	 */
 	public static String[] splitPath(String path) {
 		int slashCount = 0;
 		for (int i = 1; i < path.length() - 1; i++)
@@ -436,7 +474,7 @@ public class FileUtils {
 				List<? extends BetterFile> authContents = authority.listFiles();
 				List<? extends BetterFile> copyContents = copy.listFiles();
 				new ArrayUtils.ArrayAdjuster<>(copyContents.toArray(new BetterFile[copyContents.size()]), //
-					authContents.toArray(new BetterFile.FilteredFile[authContents.size()]), //
+					authContents.toArray(new BetterFile[authContents.size()]), //
 					new ArrayUtils.DifferenceListenerE<BetterFile, BetterFile, IOException>() {
 						@Override
 						public boolean identity(BetterFile o1, BetterFile o2) {
@@ -519,8 +557,8 @@ public class FileUtils {
 				} else {
 					results.added(false);
 				}
-				try (InputStream in = new BufferedInputStream(authority.read()); //
-					OutputStream out = new BufferedOutputStream(copy.write())) {
+				try (InputStream in = authority.read(); //
+					OutputStream out = copy.write()) {
 					int read = in.read(buffer);
 					while (read > 0) {
 						out.write(buffer, 0, read);

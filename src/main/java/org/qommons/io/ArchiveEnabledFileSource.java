@@ -39,26 +39,37 @@ import org.qommons.io.FileUtils.DirectorySyncResults;
 
 import sun.nio.cs.ArrayDecoder;
 
+/** Enables using archive files as a directory structure within an existing file system */
 public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 	private final BetterFile.FileDataSource theWrapped;
 	private final List<FileArchival> theArchivalMethods;
 	private int theMaxArchiveDepth;
 
+	/** @param wrapped The file source to wrap */
 	public ArchiveEnabledFileSource(BetterFile.FileDataSource wrapped) {
 		theWrapped = wrapped;
 		theArchivalMethods = new ArrayList<>();
 		theMaxArchiveDepth = 10;
 	}
 
+	/**
+	 * @param compression The compression method to enable
+	 * @return This file source
+	 */
 	public ArchiveEnabledFileSource withArchival(ArchiveEnabledFileSource.FileArchival compression) {
 		theArchivalMethods.add(compression);
 		return this;
 	}
 
+	/** @return The maximum depth to descend within archives (e.g. zips inside zips) */
 	public int getMaxArchiveDepth() {
-		return theMaxArchiveDepth;
+		return theMaxArchiveDepth; // Zipception
 	}
 
+	/**
+	 * @param maxZipDepth The maximum depth to descend within archives (e.g. zips inside zips)
+	 * @return This file source
+	 */
 	public ArchiveEnabledFileSource setMaxArchiveDepth(int maxZipDepth) {
 		theMaxArchiveDepth = maxZipDepth;
 		return this;
@@ -635,30 +646,76 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 	}
 
+	/** Represents an entry in an archive */
 	public interface ArchiveEntry {
+		/** @return The name of the entry */
 		String getName();
 
+		/** @return The child entries of this directory entry */
 		List<? extends ArchiveEntry> listFiles();
 
+		/** @return The length of this entry's file content */
 		long length();
 
+		/** @return The last modified time of this entry */
 		long getLastModified();
 
+		/** @return Whether this entry represents a directory */
 		boolean isDirectory();
 
+		/**
+		 * @param name The name of the entry to get (not a full path)
+		 * @return The child of this directory entry with the given name, or null if it does not exist in the archive
+		 */
 		ArchiveEntry getFile(String name);
 	}
 
+	/** Represents a method of archival which can be used to represent a type of archive files as a directory structure */
 	public interface FileArchival {
+		/**
+		 * Performs a first test on a file name to see if it is possibly an archive file recognized by this method
+		 * 
+		 * @param fileName The name of the file to test
+		 * @return Whether the file name is recognized as a potential archive
+		 */
 		boolean detectPossibleCompressedFile(String fileName);
 
+		/**
+		 * A deeper test, where the file's content may be quickly tested to confirm that it is in fact an archive recognized by this method
+		 * 
+		 * @param file The file to test
+		 * @param canceled Returns true if the user cancels the operation
+		 * @return Whether the file is confirmed as an archive
+		 * @throws IOException If the file cannot be read
+		 */
 		boolean detectCompressedFile(FileBacking file, BooleanSupplier canceled) throws IOException;
 
+		/**
+		 * @param file The file to parse
+		 * @param existingRoot The archive entry that was previously parsed as the root of the archive, if any
+		 * @param onChild Accepts each archive entry directly under the root--may be null
+		 * @param forEach Accepts each archive entry found in the archive and its name--may be null
+		 * @param cancel Returns true if the user cancels the operation
+		 * @return The root entry of the archive
+		 * @throws IOException
+		 */
 		ArchiveEntry parseStructure(FileBacking file, ArchiveEntry existingRoot, Consumer<? super ArchiveEntry> onChild,
 			ExBiConsumer<ArchiveEntry, CharSequence, IOException> forEach, BooleanSupplier cancel) throws IOException;
 
+		/**
+		 * @param file The archive file
+		 * @param entry The entry to read
+		 * @param startFrom The offset from the beginning of the entry to start at
+		 * @param canceled Returns true if the user cancels the operation
+		 * @return An input stream to read the entry's contents
+		 * @throws IOException If an error occurs reading the entry
+		 */
 		InputStream read(FileBacking file, ArchiveEntry entry, long startFrom, BooleanSupplier canceled) throws IOException;
 
+		/**
+		 * @param url The string builder containing a URL representing the archive file
+		 * @return The same string builder, altered to represent a prefix addressing an entry inside the archive (e.g. jar://
+		 */
 		StringBuilder alterUrl(StringBuilder url);
 	}
 
@@ -826,6 +883,11 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 	}
 
+	/**
+	 * An archival method for interfacing with ZIP files. Because ZIP files contain their contents in a continuous record at the end of the
+	 * file, this class is able to represent the file structure and access individual files very quickly on file systems where random seek
+	 * is fast.
+	 */
 	public static class ZipCompression implements FileArchival {
 		@Override
 		public boolean detectPossibleCompressedFile(String fileName) {
@@ -1053,6 +1115,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 					int flag = getInt(buffer, theBufferOffset + 8);
 					long modTime = getLong(buffer, theBufferOffset + 12);
 					long lastMod = extendedDosToJavaTime(modTime);
+					@SuppressWarnings("unused")
 					long compressedSize = getLong(buffer, theBufferOffset + 20);
 					long uncompressedSize = getLong(buffer, theBufferOffset + 24);
 					long position = getLong(buffer, theBufferOffset + 42);
@@ -1304,6 +1367,10 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 	}
 
+	/**
+	 * Allows interface with GZIP files as a directory containing a single entry. Because GZIP compression is not seekable, entries within
+	 * archives stored in a .gz file may be slow to access
+	 */
 	public static class GZipCompression implements FileArchival {
 		private static final CharsetDecoder NAME_DECODER = Charset.forName("ISO-8859-1").newDecoder();
 
@@ -1491,6 +1558,11 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 	}
 
+	/**
+	 * Allows interfacing with TAR files as a directory structure. Because there is no continuous directory structure record in a tar file,
+	 * the entire file must be read to understand its structure. Once read, individual entries will remember their location in the file and
+	 * can be accessed quickly if the wrapped file supports fast random seek.
+	 */
 	public static class TarArchival implements FileArchival {
 		@Override
 		public boolean detectPossibleCompressedFile(String fileName) {

@@ -7,11 +7,14 @@ import java.util.List;
 import org.qommons.io.BetterFile.FileBacking;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
 
+/** Abstract file source for remote file systems */
 public abstract class RemoteFileSource implements BetterFile.FileDataSource {
+	/** The default check interval to use between checking the stats of remote files */
 	public static final long DEFAULT_CHECK_INTERVAL = 1000;
 
 	private long theCheckInterval;
 
+	/** Creates the file source */
 	public RemoteFileSource() {
 		theCheckInterval = DEFAULT_CHECK_INTERVAL;
 	}
@@ -30,6 +33,7 @@ public abstract class RemoteFileSource implements BetterFile.FileDataSource {
 		return this;
 	}
 
+	/** @return The root to use for this file source */
 	protected abstract RemoteFileBacking getRoot();
 
 	@Override
@@ -65,8 +69,14 @@ public abstract class RemoteFileSource implements BetterFile.FileDataSource {
 		return getRoot().toString();
 	}
 
+	/**
+	 * @param parent The parent file
+	 * @param name The name of the child
+	 * @return A {@link RemoteFileBacking} representing the child
+	 */
 	protected abstract RemoteFileBacking createFile(RemoteFileBacking parent, String name);
 
+	/** A {@link FileBacking} for a {@link RemoteFileSource} */
 	protected abstract class RemoteFileBacking implements BetterFile.FileBacking {
 		private final RemoteFileBacking theParent;
 		private final String theName;
@@ -76,12 +86,17 @@ public abstract class RemoteFileSource implements BetterFile.FileDataSource {
 		private volatile long theLastModified;
 		private volatile long theLength;
 
+		/**
+		 * @param parent The parent file
+		 * @param name The name of this file
+		 */
 		protected RemoteFileBacking(RemoteFileBacking parent, String name) {
 			theParent = parent;
 			theName = name;
 			theLastCheck = 0;
 		}
 
+		/** @return This file's parent */
 		protected RemoteFileBacking getParent() {
 			return theParent;
 		}
@@ -96,6 +111,7 @@ public abstract class RemoteFileSource implements BetterFile.FileDataSource {
 			return true; // No need to ever regenerate, since this is just a pointer
 		}
 
+		/** Checks this file's status with the server, if configured to */
 		protected void checkData() {
 			long now = System.currentTimeMillis();
 			if (!shouldCheckData(now))
@@ -109,12 +125,28 @@ public abstract class RemoteFileSource implements BetterFile.FileDataSource {
 			theLastCheck = now;
 		}
 
+		/**
+		 * @param now The current time
+		 * @return Whether a check is due for this file's status
+		 */
 		protected boolean shouldCheckData(long now) {
 			return now - theLastCheck >= getCheckInterval();
 		}
 
+		/**
+		 * Calls the server to update this file's status
+		 * 
+		 * @throws IOException If an error occurs retrieving the status
+		 */
 		protected abstract void queryData() throws IOException;
 
+		/**
+		 * Sets this file's status, typically as a result of a {@link #queryData()} call
+		 * 
+		 * @param dir Whether this is a directory
+		 * @param lastModified The last modified time of this file, or -1 if it does not exist
+		 * @param length The content length of this file
+		 */
 		protected void setData(boolean dir, long lastModified, long length) {
 			isDirectory = dir;
 			theLastModified = lastModified;

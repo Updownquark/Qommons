@@ -19,11 +19,24 @@ import org.qommons.ex.ExBiConsumer;
 import org.qommons.ex.ExConsumer;
 import org.qommons.io.FileUtils.DirectorySyncResults;
 
+/**
+ * <p>
+ * The BetterFile API is a way of interfacing with different kinds of file systems in a unified way. Using this API, implementations can
+ * easily be written to access {@link NativeFileSource native} file systems, {@link SftpFileSource SFTP}, {@link ArchiveEnabledFileSource
+ * file archives}, {@link UrlFileSource URLs}, and anything else that resembles a file system.
+ * </p>
+ * <p>
+ * All that needs to be done to implement the API for a new file system is to write a {@link FileDataSource}. The
+ * {@link BetterFile#getRoots(FileDataSource)} and {@link BetterFile#at(FileDataSource, String)} method does the rest.
+ * </p>
+ */
 public interface BetterFile extends Named {
+	/** A boolean attribute on a file */
 	enum FileBooleanAttribute {
 		Readable, Writable, Directory, Hidden, Symbolic
 	}
 
+	/** A format object for parsing/formatting {@link BetterFile}s */
 	class FileFormat implements Format<BetterFile> {
 		private final BetterFile.FileDataSource theFileSource;
 		private final BetterFile theWorkingDir;
@@ -64,6 +77,7 @@ public interface BetterFile extends Named {
 		}
 	}
 
+	/** @return The file source backing this file */
 	FileDataSource getSource();
 
 	/** @return The path from the file root to this file */
@@ -80,19 +94,40 @@ public interface BetterFile extends Named {
 		return get(BetterFile.FileBooleanAttribute.Directory);
 	}
 
+	/**
+	 * @param attribute The attribute to get
+	 * @return The value of the attribute for this file
+	 */
 	boolean get(BetterFile.FileBooleanAttribute attribute);
 
 	/** @return The number of bytes in this file; 0 if it is not a valid, readable file; or -1 if the length cannot be quickly accessed */
 	long length();
 
+	/** @return The root of this file's file source */
 	BetterFile getRoot();
 
+	/** @return The parent of this file */
 	BetterFile getParent();
 
+	/**
+	 * @param path The path to get the file of
+	 * @return The file at the given path under this file
+	 */
 	BetterFile at(String path);
 
+	/**
+	 * Discovers the immediate file children of this file, if it is a directory
+	 * 
+	 * @param onDiscovered Accepts each file discovered
+	 * @param canceled Returns true if the user cancels the operation
+	 * @return The list of discovered files
+	 */
 	List<? extends BetterFile> discoverContents(Consumer<? super BetterFile> onDiscovered, BooleanSupplier canceled);
 
+	/**
+	 * @param str The string builder to append the URL to, or null to create a new one
+	 * @return The string builder with this file appended to it, as a URL
+	 */
 	StringBuilder toUrl(StringBuilder str);
 
 	/** @return The files contained in this directory, or null if this is not a directory */
@@ -102,6 +137,7 @@ public interface BetterFile extends Named {
 
 	/**
 	 * @param startFrom The byte index to start reading from
+	 * @param canceled Returns true if the user cancels the operation
 	 * @return A stream to read this file's content
 	 * @throws IOException If the content could not be accessed
 	 */
@@ -138,6 +174,12 @@ public interface BetterFile extends Named {
 	 */
 	OutputStream write() throws IOException;
 
+	/**
+	 * @param attribute The attribute to set
+	 * @param value The value for the attribute
+	 * @param ownerOnly Whether the attribute is to be set for the file's owner only (e.g. permissions)
+	 * @return Whether the modification was successful, or the attribute was already set to the given value
+	 */
 	boolean set(BetterFile.FileBooleanAttribute attribute, boolean value, boolean ownerOnly);
 
 	/**
@@ -155,8 +197,18 @@ public interface BetterFile extends Named {
 	 */
 	BetterFile move(BetterFile newFile) throws IOException;
 
+	/**
+	 * Visits all files and directories beneath this directory. This has the potential to be much faster than using
+	 * {@link #discoverContents(Consumer, BooleanSupplier)} recursively, e.g. in archives where this would require many seek operations.
+	 * Using this method can result in a single, continuous read operation.
+	 * 
+	 * @param forEach Accepts each file in turn
+	 * @param canceled Returns true if the user cancels the operation
+	 * @throws IOException If an exception occurs reading the contents
+	 */
 	void visitAll(ExConsumer<? super BetterFile, IOException> forEach, BooleanSupplier canceled) throws IOException;
 
+	/** @return A BetterFile identical to this, but unmodifiable */
 	default BetterFile unmodifiable() {
 		return new UnmodifiableFile(this);
 	}
@@ -169,6 +221,10 @@ public interface BetterFile extends Named {
 		return new FilteredFile(this, childFilter);
 	}
 
+	/**
+	 * @param dataSource The file source
+	 * @return The file roots for the file source
+	 */
 	static List<BetterFile> getRoots(FileDataSource dataSource) {
 		List<BetterFile> roots = new ArrayList<>(dataSource.getRoots().size());
 		for (FileBacking root : dataSource.getRoots())
@@ -176,6 +232,11 @@ public interface BetterFile extends Named {
 		return Collections.unmodifiableList(roots);
 	}
 
+	/**
+	 * @param dataSource The file source
+	 * @param path The path under the file source root
+	 * @return A better file at the given path under the file source root
+	 */
 	static BetterFile at(FileDataSource dataSource, String path) {
 		if (path.isEmpty()) {
 			throw new IllegalArgumentException("Empty path");
@@ -221,6 +282,28 @@ public interface BetterFile extends Named {
 		return parent;
 	}
 
+	/** Represents a file system for use with the BetterFile API */
+	public interface FileDataSource {
+		/** @return A URL representing the root of the file source */
+		String getUrlRoot();
+
+		/** @return {@link FileBacking} instances representing each root directory of the file source */
+		List<FileBacking> getRoots();
+
+		/**
+		 * @param name The name of the root to get
+		 * @return The {@link FileBacking} of the root with the given name
+		 * @throws IllegalArgumentException If no such root exists
+		 */
+		default FileBacking getRoot(String name) throws IllegalArgumentException {
+			for (FileBacking root : getRoots())
+				if (root.getName().equals(name))
+					return root;
+			throw new IllegalArgumentException("No such root: " + name);
+		}
+	}
+
+	/** Represents a file--the backing for a BetterFile instance */
 	public interface FileBacking extends Named {
 		/**
 		 * Performs a check on this file to see if it may have changed.
@@ -229,61 +312,130 @@ public interface BetterFile extends Named {
 		 */
 		boolean check();
 
+		/** @return Whether this represents a file {@link FileDataSource#getRoots() root} */
 		boolean isRoot();
 
+		/** @return WHether this file exists on the system */
 		boolean exists();
 
+		/** @return The last modified time of this file */
 		long getLastModified();
 
+		/**
+		 * @param attribute The attribute to get
+		 * @return The value of the attribute for this file
+		 */
 		boolean get(FileBooleanAttribute attribute);
 
+		/**
+		 * Gets the children of this directory, if it is one
+		 * 
+		 * @param onDiscovered Accepts each child as it is discovered
+		 * @param canceled Returns true if the user cancels the operation
+		 * @return Whether all children were discovered successfully (false if canceled)
+		 */
 		boolean discoverContents(Consumer<? super FileBacking> onDiscovered, BooleanSupplier canceled);
 
+		/**
+		 * @param fileName The name of the chid to get
+		 * @return The FileBacking instance representing the given child of this file, or null if it does not exist
+		 */
 		FileBacking getChild(String fileName);
 
+		/** @return The length of this file's content */
 		long length();
 
+		/**
+		 * @param startFrom The initial offset to read from
+		 * @param canceled Returns true if the user cancels the operation
+		 * @return The input stream to use to read the file's content
+		 * @throws IOException If an error occurs reading the file
+		 */
 		InputStream read(long startFrom, BooleanSupplier canceled) throws IOException;
 
+		/**
+		 * @param fileName The name of the child to create
+		 * @param directory Whether to create the child as a directory or a file
+		 * @return The file backing representing the new child
+		 * @throws IOException If the file could not be created
+		 */
 		FileBacking createChild(String fileName, boolean directory) throws IOException;
 
+		/**
+		 * Deletes this file and all its content
+		 * 
+		 * @param results The results to update with the content deleted--may be null
+		 * @throws IOException If an error occurs deleting the files
+		 */
 		void delete(DirectorySyncResults results) throws IOException;
 
+		/**
+		 * @return A stream to write this file's content
+		 * @throws IOException If the file could not be written
+		 */
 		OutputStream write() throws IOException;
 
+		/**
+		 * @param attribute The attribute to set
+		 * @param value The value for the attribute
+		 * @param ownerOnly Whether to set the attribute value for the file's owner only (e.g. permissions)
+		 * @return Whether the operation was successful (or the value was already as given)
+		 */
 		boolean set(BetterFile.FileBooleanAttribute attribute, boolean value, boolean ownerOnly);
 
+		/**
+		 * @param lastModified The last modified time to set for the file
+		 * @return Whether the operation was successful
+		 */
 		boolean setLastModified(long lastModified);
 
+		/**
+		 * @param newFilePath The path to move this file to
+		 * @throws IOException If the move operation fails
+		 */
 		void move(String newFilePath) throws IOException;
 
+		/**
+		 * Visits all of this file's content--may be more efficient than using {@link #visitAll(ExBiConsumer, BooleanSupplier)} recursively,
+		 * especially for archives
+		 * 
+		 * @param forEach Accepts each file as encountered
+		 * @param canceled Returns true if the user cancels the operation
+		 * @throws IOException If an error occurs reading the content
+		 */
 		void visitAll(ExBiConsumer<? super FileBacking, CharSequence, IOException> forEach, BooleanSupplier canceled) throws IOException;
 
+		/**
+		 * @param url A string builer containing a representation of this file as a URL
+		 * @return The string builder modified to represent the file correctly if needed
+		 */
 		default StringBuilder alterUrl(StringBuilder url) {
 			return url;
 		}
 	}
 
-	public interface FileDataSource {
-		String getUrlRoot();
-
-		List<FileBacking> getRoots();
-
-		default FileBacking getRoot(String name) {
-			for (FileBacking root : getRoots())
-				if (root.getName().equals(name))
-					return root;
-			throw new IllegalArgumentException("No such root: " + name);
-		}
-	}
-
+	/** The abstract BetterFile implementation potentially wrapping a {@link FileBacking} instance provided by a {@link FileDataSource} */
 	public abstract class AbstractWrappingFile implements BetterFile {
+		/** The file backing instance, if it exists and has been retrieved from the {@link FileDataSource} */
 		protected volatile FileBacking theBacking;
-	
+
+		/** @return The file backing instance for this file, if it currently exists (null if not) */
 		protected abstract FileBacking findBacking();
 	
+		/**
+		 * Creates a file or directory at this file's path under its data source
+		 * 
+		 * @param directory Whether to create a file or a directory
+		 * @return The file backing representing the new file or directory
+		 * @throws IOException If the file or directory could not be created for any reason
+		 */
 		protected abstract FileBacking createBacking(boolean directory) throws IOException;
 
+		/**
+		 * If {@link #theBacking} has not been retrieved or its {@link FileBacking#check() check} is no longer valid, retrieves it
+		 * 
+		 * @return The file backing instance for this file, if it currently exists (null if not)
+		 */
 		protected FileBacking check() {
 			FileBacking backing = theBacking;
 			if (backing == null) {//
@@ -295,7 +447,12 @@ public interface BetterFile extends Named {
 			theBacking = backing;
 			return backing;
 		}
-	
+
+		/**
+		 * @param name The name of the child to create the wrapper for
+		 * @param backing The file backing of the child to create
+		 * @return The BetterFile wrapper for the file
+		 */
 		protected AbstractWrappingFile createChild(String name, FileBacking backing) {
 			return new BetterFile.FileWrapper(this, name, backing);
 		}
@@ -457,7 +614,7 @@ public interface BetterFile extends Named {
 
 		@Override
 		public BetterFile move(BetterFile newFile) throws IOException {
-			if (getPath().equals(newFile))
+			if (getPath().equals(newFile.getPath()))
 				return this;
 			FileBacking backing = check();
 			if (backing == null)
@@ -474,8 +631,8 @@ public interface BetterFile extends Named {
 				return;
 			}
 			backing.visitAll((f, path) -> {
-				AbstractWrappingFile parent = path.length() > 0 ? at(path.toString()) : this;
-				forEach.accept(parent.createChild(f.getName(), f));
+				AbstractWrappingFile file = path.length() > 0 ? at(path.toString()) : this;
+				forEach.accept(file);
 			}, canceled != null ? canceled : () -> false);
 		}
 
@@ -503,10 +660,15 @@ public interface BetterFile extends Named {
 		}
 	}
 
+	/** A BetterFile representing a {@link FileDataSource#getRoots() root} of a {@link FileDataSource} */
 	public class FileRoot extends BetterFile.AbstractWrappingFile {
 		private final BetterFile.FileDataSource theSource;
 		private final FileBacking theRoot;
 
+		/**
+		 * @param dataSource The data source that this file belongs to
+		 * @param root The file backing representing this file
+		 */
 		public FileRoot(BetterFile.FileDataSource dataSource, FileBacking root) {
 			theSource = dataSource;
 			theRoot = root;
@@ -571,10 +733,16 @@ public interface BetterFile extends Named {
 		}
 	}
 
+	/** Default, non-root BetterFile implementation */
 	public class FileWrapper extends AbstractWrappingFile {
 		private final AbstractWrappingFile theParent;
 		private final String theName;
 	
+		/**
+		 * @param parent The parent of this file
+		 * @param name The name of this file
+		 * @param backing The file backing representing this file, if it has already been retrieved
+		 */
 		public FileWrapper(AbstractWrappingFile parent, String name, FileBacking backing) {
 			if (parent == null)
 				throw new IllegalStateException("This implementation cannot be used for a root");
@@ -640,6 +808,7 @@ public interface BetterFile extends Named {
 		}
 	}
 
+	/** A wrapping BetterFile that selectively filters out some directory content */
 	class FilteredFile implements BetterFile {
 		private final BetterFile theSource;
 		private final Predicate<? super BetterFile> theFilter;
@@ -794,6 +963,7 @@ public interface BetterFile extends Named {
 		}
 	}
 
+	/** Implements {@link BetterFile#unmodifiable()} */
 	static class UnmodifiableFile implements BetterFile {
 		private final BetterFile theSource;
 
