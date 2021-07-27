@@ -3,17 +3,17 @@ package org.qommons.threading;
 import java.awt.EventQueue;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Scanner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
-import org.qommons.ArgumentParsing;
-import org.qommons.ArgumentParsing.Argument;
-import org.qommons.ArgumentParsing.ArgumentParser;
-import org.qommons.ArgumentParsing.Arguments;
-import org.qommons.ArgumentParsing.ValuedArgument;
+import org.qommons.ArgumentParsing2;
+import org.qommons.ArgumentParsing2.Argument;
+import org.qommons.ArgumentParsing2.MatchedArgument;
 import org.qommons.QommonsUtils;
 import org.qommons.TimeUtils;
 import org.qommons.collect.ListenerList;
@@ -752,17 +752,49 @@ public class QommonsTimer {
 			System.out.println("Set frequency to 2 seconds");
 			handle.setFrequency(Duration.ofSeconds(2), false);
 
-			ArgumentParser argParser = ArgumentParsing.create().forPattern("(.+)=(.+)")//
-				.booleanArg("active")//
-				.durationArg("end")//
-				.durationArg("next")//
-				.durationArg("freq")//
-				.intArg("times").between(0, 100)//
-				.getParser().forDefaultFlagPattern()//
-				.flagArg("now")//
-				.flagArg("nextRun")//
-				.flagArg("i")//
-				.getParser();
+			ArgumentParsing2.ArgumentPattern valuePattern = new ArgumentParsing2.ArgumentPattern() {
+				@Override
+				public int getMaxValues() {
+					return 1;
+				}
+
+				@Override
+				public void validate(String argumentName) {
+					if (argumentName.indexOf('=') >= 0)
+						throw new IllegalArgumentException("Argument name cannot contain '='");
+				}
+
+				@Override
+				public MatchedArgument match(String argument, Supplier<String> moreArgs) {
+					int equalIdx = argument.indexOf('=', 2);
+					if (equalIdx < 0)
+						return null;
+					return new MatchedArgument(argument.substring(2, equalIdx), Arrays.asList(argument.substring(equalIdx + 1)));
+				}
+
+				@Override
+				public String print(MatchedArgument argument) {
+					return argument.getName() + "=" + argument.getValues().get(0);
+				}
+
+				@Override
+				public String toString() {
+					return "argument=value";
+				}
+			};
+			ArgumentParsing2.ArgumentParser argParser = ArgumentParsing2.build().forValuePattern(valuePattern, p -> p//
+				.addBooleanArgument("active", null)//
+				.addDurationArgument("end", null)//
+				.addDurationArgument("next", null)//
+				.addDoubleArgument("freq", null)//
+				.addIntArgument("times", arg -> arg.constrain(v -> v.between(0, 100)))//
+			)//
+				.forFlagPattern(p -> p//
+					.add("now", null)//
+					.add("nextRun", null)//
+					.add("i", null)//
+				)//
+				.build();
 
 			while (true) {
 				String line = scanner.nextLine();
@@ -770,34 +802,34 @@ public class QommonsTimer {
 					System.err.println(argParser);
 					continue;
 				}
-				Arguments lineArgs;
+				ArgumentParsing2.Arguments lineArgs;
 				try {
 					lineArgs = argParser.parse(line.split(" "));
 				} catch (IllegalArgumentException e) {
 					System.err.println(e.getMessage());
 					continue;
 				}
-				for(Argument arg : lineArgs.getArguments()){
-					switch(arg.getName()){
+				for (Argument<?> arg : lineArgs.getAllArguments()) {
+					switch (arg.getType().getName()) {
 					case "i":
 						getCommonInstance().doAfterInactivity("test", () -> System.out.println("inactive"), 2000);
 						break;
 					case "active":
 						prev[0] = System.currentTimeMillis();
-						handle.setActive(((ValuedArgument<Boolean>) arg).getValue());
+						handle.setActive((Boolean) arg.getValues().getFirst());
 						break;
 					case "end":
-						handle.endIn(((ValuedArgument<Duration>) arg).getValue(), true);
+						handle.endIn((Duration) arg.getValues().getFirst(), true);
 						break;
 					case "next":
 						prev[0] = System.currentTimeMillis();
-						handle.runNextIn(((ValuedArgument<Duration>) arg).getValue());
+						handle.runNextIn((Duration) arg.getValues().getFirst());
 						break;
 					case "freq":
-						handle.setFrequency(((ValuedArgument<Duration>) arg).getValue(), true);
+						handle.setFrequency((Duration) arg.getValues().getFirst(), true);
 						break;
 					case "times":
-						handle.times(((ValuedArgument<Number>) arg).getValue().intValue());
+						handle.times((Integer) arg.getValues().getFirst());
 						break;
 					case "now":
 						prev[0] = System.currentTimeMillis();
@@ -807,7 +839,7 @@ public class QommonsTimer {
 						System.out.println(QommonsUtils.printDuration(handle.getTimeUntilNextRun(), false));
 						break;
 					default:
-						System.err.println("Unrecognized arg: "+arg.getName());
+						System.err.println("Unrecognized arg: " + arg.getType().getName());
 					}
 				}
 			}
