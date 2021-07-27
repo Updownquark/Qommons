@@ -19,13 +19,17 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.function.ToIntBiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
+import org.qommons.ArgumentParsing2.ArgumentTest.BiArgumentTest;
 import org.qommons.ArgumentParsing2.Impl.ArgumentTypeHolder;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.QuickSet.QuickMap;
@@ -130,6 +134,9 @@ import org.qommons.io.NativeFileSource;
  * </p>
  */
 public class ArgumentParsing2 {
+	private ArgumentParsing2() {
+	}
+
 	/** Default pattern for parsing flag-type arguments */
 	public static final ArgumentPattern DEFAULT_FLAG_PATTERN = new ArgumentPattern() {
 		@Override
@@ -168,7 +175,7 @@ public class ArgumentParsing2 {
 		@Override
 		public void validate(String argumentName) {
 			if (argumentName.indexOf('=') >= 0)
-				throw new IllegalArgumentException("Argument name cannot contain '\"'");
+				throw new IllegalArgumentException("Argument name cannot contain '='");
 		}
 
 		@Override
@@ -237,7 +244,7 @@ public class ArgumentParsing2 {
 		@Override
 		public void validate(String argumentName) {
 			if (argumentName.indexOf('=') >= 0)
-				throw new IllegalArgumentException("Argument name cannot contain '\"'");
+				throw new IllegalArgumentException("Argument name cannot contain '='");
 			else if (argumentName.indexOf(',') >= 0)
 				throw new IllegalArgumentException("Argument name cannot contain ','");
 		}
@@ -436,10 +443,12 @@ public class ArgumentParsing2 {
 	 * @param <S> The type of the argument the constraint with this condition is on
 	 */
 	public static abstract class ArgumentCondition<S> {
+		private final ParserBuilder theBuilder;
 		private final ArgumentType<S> theSubject;
 		private final Function<String, Impl.ArgumentTypeHolder<?>> theArgGetter;
 
-		ArgumentCondition(ArgumentType<S> subject, Function<String, Impl.ArgumentTypeHolder<?>> argGetter) {
+		ArgumentCondition(ParserBuilder builder, ArgumentType<S> subject, Function<String, Impl.ArgumentTypeHolder<?>> argGetter) {
+			theBuilder = builder;
 			theSubject = subject;
 			theArgGetter = argGetter;
 		}
@@ -486,13 +495,13 @@ public class ArgumentParsing2 {
 		 */
 		public ArgumentConstraint<S> then(Function<ArgumentTestBuilder<S>, ArgumentTest<S>> test) {
 			Impl.ArgumentTypeHolder<S> arg = (ArgumentTypeHolder<S>) theArgGetter.apply(theSubject.getName());
-			ArgumentTest<S> argTest = test.apply(new Impl.DefaultArgTestBuilder<>(arg.parser));
+			ArgumentTest<S> argTest = test.apply(new Impl.DefaultArgTestBuilder<>(theBuilder, theSubject, arg.parser));
 			return new Impl.DefaultArgConstraint<>(this, 0, Integer.MAX_VALUE, argTest);
 		}
 
 		/** @return A condition that is true whenever this condition is false and vice versa */
 		public ArgumentCondition<S> not() {
-			return new NotArgumentCondition<>(this);
+			return new NotArgumentCondition<>(theBuilder, this);
 		}
 
 		/**
@@ -509,15 +518,15 @@ public class ArgumentParsing2 {
 				throw new ClassCastException(
 					"Wrong type (" + argType.getName() + ") for argument " + argument + " (" + arg.argument.getType().getName() + ")");
 			ArgumentCondition<S> otherCondition = other
-				.apply(new Impl.DefaultArgConditionBuilder<>(getSubject(), (ArgumentType<A2>) arg.argument, theArgGetter));
+				.apply(new Impl.DefaultArgConditionBuilder<>(theBuilder, getSubject(), (ArgumentType<A2>) arg.argument, theArgGetter));
 			if (otherCondition instanceof CompositeArgumentCondition && !((CompositeArgumentCondition<S>) otherCondition).isAnd()) {
 				List<ArgumentCondition<S>> components = new ArrayList<>(
 					((CompositeArgumentCondition<S>) otherCondition).getComponents().size() + 1);
 				components.add(this);
 				components.addAll(((CompositeArgumentCondition<S>) otherCondition).getComponents());
-				return new CompositeArgumentCondition<>(Collections.unmodifiableList(components), false);
+				return new CompositeArgumentCondition<>(theBuilder, Collections.unmodifiableList(components), false);
 			}
-			return new CompositeArgumentCondition<>(Collections.unmodifiableList(Arrays.asList(this, otherCondition)), false);
+			return new CompositeArgumentCondition<>(theBuilder, Collections.unmodifiableList(Arrays.asList(this, otherCondition)), false);
 		}
 
 		/**
@@ -534,15 +543,15 @@ public class ArgumentParsing2 {
 				throw new ClassCastException(
 					"Wrong type (" + argType.getName() + ") for argument " + argument + " (" + arg.argument.getType().getName() + ")");
 			ArgumentCondition<S> otherCondition = other
-				.apply(new Impl.DefaultArgConditionBuilder<>(getSubject(), (ArgumentType<A2>) arg.argument, theArgGetter));
+				.apply(new Impl.DefaultArgConditionBuilder<>(theBuilder, getSubject(), (ArgumentType<A2>) arg.argument, theArgGetter));
 			if (otherCondition instanceof CompositeArgumentCondition && ((CompositeArgumentCondition<S>) otherCondition).isAnd()) {
 				List<ArgumentCondition<S>> components = new ArrayList<>(
 					((CompositeArgumentCondition<S>) otherCondition).getComponents().size() + 1);
 				components.add(this);
 				components.addAll(((CompositeArgumentCondition<S>) otherCondition).getComponents());
-				return new CompositeArgumentCondition<>(Collections.unmodifiableList(components), true);
+				return new CompositeArgumentCondition<>(theBuilder, Collections.unmodifiableList(components), true);
 			}
-			return new CompositeArgumentCondition<>(Collections.unmodifiableList(Arrays.asList(this, otherCondition)), true);
+			return new CompositeArgumentCondition<>(theBuilder, Collections.unmodifiableList(Arrays.asList(this, otherCondition)), true);
 		}
 
 		/**
@@ -555,9 +564,9 @@ public class ArgumentParsing2 {
 			private final ArgumentType<T> theTarget;
 			private final ArgumentTest<T> theValueTest;
 
-			ArgumentValueCondition(ArgumentType<S> subject, ArgumentType<T> target, ArgumentTest<T> valueTest,
+			ArgumentValueCondition(ParserBuilder builder, ArgumentType<S> subject, ArgumentType<T> target, ArgumentTest<T> valueTest,
 				Function<String, Impl.ArgumentTypeHolder<?>> argGetter) {
-				super(subject, argGetter);
+				super(builder, subject, argGetter);
 				theTarget = target;
 				theValueTest = valueTest;
 			}
@@ -575,7 +584,7 @@ public class ArgumentParsing2 {
 			@Override
 			public boolean applies(Arguments args) {
 				for (T value : args.getAll(theTarget)) {
-					if (theValueTest.test(value))
+					if (theValueTest.test(value, args))
 						return true;
 				}
 				return false;
@@ -593,8 +602,8 @@ public class ArgumentParsing2 {
 		 * @param <S> The type of the argument the constraint with this condition is on
 		 */
 		public static class TrueCondition<S> extends ArgumentCondition<S> {
-			TrueCondition(ArgumentType<S> subject, Function<String, ArgumentTypeHolder<?>> argGetter) {
-				super(subject, argGetter);
+			TrueCondition(ParserBuilder builder, ArgumentType<S> subject, Function<String, ArgumentTypeHolder<?>> argGetter) {
+				super(builder, subject, argGetter);
 			}
 
 			@Override
@@ -626,9 +635,9 @@ public class ArgumentParsing2 {
 			private final int theMinSpecified;
 			private final int theMaxSpecified;
 
-			ArgumentSpecifiedCondition(ArgumentType<S> subject, ArgumentType<T> target, int minSpecified, int maxSpecified,
-				Function<String, Impl.ArgumentTypeHolder<?>> argGetter) {
-				super(subject, argGetter);
+			ArgumentSpecifiedCondition(ParserBuilder builder, ArgumentType<S> subject, ArgumentType<T> target, int minSpecified,
+				int maxSpecified, Function<String, Impl.ArgumentTypeHolder<?>> argGetter) {
+				super(builder, subject, argGetter);
 				theTarget = target;
 				theMinSpecified = minSpecified;
 				theMaxSpecified = maxSpecified;
@@ -679,8 +688,8 @@ public class ArgumentParsing2 {
 		public static class NotArgumentCondition<S> extends ArgumentCondition<S> {
 			private final ArgumentCondition<S> theWrapped;
 
-			NotArgumentCondition(ArgumentCondition<S> wrapped) {
-				super(wrapped.getSubject(), wrapped.theArgGetter);
+			NotArgumentCondition(ParserBuilder builder, ArgumentCondition<S> wrapped) {
+				super(builder, wrapped.getSubject(), wrapped.theArgGetter);
 				theWrapped = wrapped;
 			}
 
@@ -709,8 +718,8 @@ public class ArgumentParsing2 {
 			private final List<ArgumentCondition<S>> theComponents;
 			private final boolean isAnd;
 
-			CompositeArgumentCondition(List<ArgumentCondition<S>> components, boolean and) {
-				super(components.get(0).getSubject(), components.get(0).theArgGetter);
+			CompositeArgumentCondition(ParserBuilder builder, List<ArgumentCondition<S>> components, boolean and) {
+				super(builder, components.get(0).getSubject(), components.get(0).theArgGetter);
 				theComponents = components;
 				isAnd = and;
 			}
@@ -772,14 +781,23 @@ public class ArgumentParsing2 {
 	 * @param <T> The type of the argument whose value to test
 	 */
 	public static abstract class ArgumentTest<T> {
+		final ParserBuilder theBuilder;
+		final ArgumentType<T> theSubject;
 		final ArgumentValueParser<? extends T> theParser;
 
-		ArgumentTest(ArgumentValueParser<? extends T> parser) {
+		ArgumentTest(ParserBuilder builder, ArgumentType<T> subject, ArgumentValueParser<? extends T> parser) {
+			theBuilder = builder;
+			theSubject = subject;
 			theParser = parser;
 		}
 
+		/** @return The argument type that this test is for */
+		public ArgumentType<T> getSubject() {
+			return theSubject;
+		}
+
 		// This interface doesn't extend Predicate because it makes the .and() and .or() syntax confusing
-		abstract boolean test(T value);
+		abstract boolean test(T value, Arguments args);
 
 		/** @return A test that is true when this test is false and vice versa */
 		public ArgumentTest<T> not() {
@@ -791,14 +809,14 @@ public class ArgumentParsing2 {
 		 * @return A test that is true whenever this test or the new test is true
 		 */
 		public ArgumentTest<T> or(Function<ArgumentTestBuilder<T>, ArgumentTest<T>> other) {
-			ArgumentTest<T> otherTest = other.apply(new Impl.DefaultArgTestBuilder<>(theParser));
+			ArgumentTest<T> otherTest = other.apply(new Impl.DefaultArgTestBuilder<>(theBuilder, theSubject, theParser));
 			if (otherTest instanceof CompositeArgumentTest && !((CompositeArgumentTest<T>) otherTest).isAnd()) {
 				List<ArgumentTest<T>> components = new ArrayList<>(((CompositeArgumentTest<T>) otherTest).getComponents().size() + 1);
 				components.add(this);
 				components.addAll(((CompositeArgumentTest<T>) otherTest).getComponents());
-				return new CompositeArgumentTest<>(Collections.unmodifiableList(components), false);
+				return new CompositeArgumentTest<>(theBuilder, theSubject, Collections.unmodifiableList(components), false);
 			}
-			return new CompositeArgumentTest<>(Collections.unmodifiableList(Arrays.asList(this, otherTest)), false);
+			return new CompositeArgumentTest<>(theBuilder, theSubject, Collections.unmodifiableList(Arrays.asList(this, otherTest)), false);
 		}
 
 		/**
@@ -806,14 +824,14 @@ public class ArgumentParsing2 {
 		 * @return A test that is true only when both this test and the new test is true
 		 */
 		public ArgumentTest<T> and(Function<ArgumentTestBuilder<T>, ArgumentTest<T>> other) {
-			ArgumentTest<T> otherTest = other.apply(new Impl.DefaultArgTestBuilder<>(theParser));
+			ArgumentTest<T> otherTest = other.apply(new Impl.DefaultArgTestBuilder<>(theBuilder, theSubject, theParser));
 			if (otherTest instanceof CompositeArgumentTest && ((CompositeArgumentTest<T>) otherTest).isAnd()) {
 				List<ArgumentTest<T>> components = new ArrayList<>(((CompositeArgumentTest<T>) otherTest).getComponents().size() + 1);
 				components.add(this);
 				components.addAll(((CompositeArgumentTest<T>) otherTest).getComponents());
-				return new CompositeArgumentTest<>(Collections.unmodifiableList(components), true);
+				return new CompositeArgumentTest<>(theBuilder, theSubject, Collections.unmodifiableList(components), true);
 			}
-			return new CompositeArgumentTest<>(Collections.unmodifiableList(Arrays.asList(this, otherTest)), true);
+			return new CompositeArgumentTest<>(theBuilder, theSubject, Collections.unmodifiableList(Arrays.asList(this, otherTest)), true);
 		}
 
 		abstract String toString(String argumentName);
@@ -851,8 +869,10 @@ public class ArgumentParsing2 {
 			private final ComparisonType theComparison;
 			private final Comparator<? super T> theComparator;
 
-			ValueTest(T testValue, ComparisonType comparison, Comparator<? super T> comparator, ArgumentValueParser<? extends T> parser) {
-				super(parser);
+			ValueTest(ParserBuilder builder, ArgumentType<T> subject, T testValue, ComparisonType comparison,
+				Comparator<? super T> comparator,
+				ArgumentValueParser<? extends T> parser) {
+				super(builder, subject, parser);
 				theTestValue = testValue;
 				theComparison = comparison;
 
@@ -891,7 +911,7 @@ public class ArgumentParsing2 {
 			}
 
 			@Override
-			public boolean test(T value) {
+			public boolean test(T value, Arguments args) {
 				T testValue = getTestValue();
 				switch (getComparison()) {
 				case EQ:
@@ -930,8 +950,9 @@ public class ArgumentParsing2 {
 		public static class OneOfValueTest<T> extends ArgumentTest<T> {
 			private final Set<T> theValues;
 
-			OneOfValueTest(Collection<? extends T> values, ArgumentValueParser<? extends T> parser) {
-				super(parser);
+			OneOfValueTest(ParserBuilder builder, ArgumentType<T> subject, Collection<? extends T> values,
+				ArgumentValueParser<? extends T> parser) {
+				super(builder, subject, parser);
 				theValues = Collections.unmodifiableSet(new LinkedHashSet<>(values));
 			}
 
@@ -941,7 +962,7 @@ public class ArgumentParsing2 {
 			}
 
 			@Override
-			public boolean test(T value) {
+			public boolean test(T value, Arguments args) {
 				return theValues.contains(value);
 			}
 
@@ -965,13 +986,13 @@ public class ArgumentParsing2 {
 			private final ArgumentTest<T> theWrapped;
 
 			NotArgumentTest(ArgumentTest<T> wrapped) {
-				super(wrapped.theParser);
+				super(wrapped.theBuilder, wrapped.theSubject, wrapped.theParser);
 				theWrapped = wrapped;
 			}
 
 			@Override
-			public boolean test(T value) {
-				return !theWrapped.test(value);
+			public boolean test(T value, Arguments args) {
+				return !theWrapped.test(value, args);
 			}
 
 			@Override
@@ -994,8 +1015,8 @@ public class ArgumentParsing2 {
 			private final List<ArgumentTest<T>> theComponents;
 			private final boolean isAnd;
 
-			CompositeArgumentTest(List<ArgumentTest<T>> components, boolean and) {
-				super(components.get(0).theParser);
+			CompositeArgumentTest(ParserBuilder builder, ArgumentType<T> subject, List<ArgumentTest<T>> components, boolean and) {
+				super(builder, subject, components.get(0).theParser);
 				theComponents = components;
 				isAnd = and;
 			}
@@ -1011,9 +1032,9 @@ public class ArgumentParsing2 {
 			}
 
 			@Override
-			public boolean test(T value) {
+			public boolean test(T value, Arguments args) {
 				for (ArgumentTest<T> component : theComponents) {
-					boolean passes = component.test(value);
+					boolean passes = component.test(value, args);
 					if (isAnd) {
 						if (!passes)
 							return false;
@@ -1030,24 +1051,26 @@ public class ArgumentParsing2 {
 
 			@Override
 			public ArgumentTest<T> or(Function<ArgumentTestBuilder<T>, ArgumentTest<T>> other) {
-				ArgumentTest<T> otherTest = other.apply(new Impl.DefaultArgTestBuilder<>(theParser));
+				ArgumentTest<T> otherTest = other.apply(new Impl.DefaultArgTestBuilder<>(theBuilder, theSubject, theParser));
 				if (isAnd)
-					return new CompositeArgumentTest<>(Collections.unmodifiableList(Arrays.asList(this, otherTest)), false);
+					return new CompositeArgumentTest<>(theBuilder, theSubject, Collections.unmodifiableList(Arrays.asList(this, otherTest)),
+						false);
 				List<ArgumentTest<T>> components = new ArrayList<>(theComponents.size() + 1);
 				components.addAll(theComponents);
 				components.add(otherTest);
-				return new CompositeArgumentTest<>(Collections.unmodifiableList(components), false);
+				return new CompositeArgumentTest<>(theBuilder, theSubject, Collections.unmodifiableList(components), false);
 			}
 
 			@Override
 			public ArgumentTest<T> and(Function<ArgumentTestBuilder<T>, ArgumentTest<T>> other) {
-				ArgumentTest<T> otherTest = other.apply(new Impl.DefaultArgTestBuilder<>(theParser));
+				ArgumentTest<T> otherTest = other.apply(new Impl.DefaultArgTestBuilder<>(theBuilder, theSubject, theParser));
 				if (!isAnd)
-					return new CompositeArgumentTest<>(Collections.unmodifiableList(Arrays.asList(this, otherTest)), true);
+					return new CompositeArgumentTest<>(theBuilder, theSubject, Collections.unmodifiableList(Arrays.asList(this, otherTest)),
+						true);
 				List<ArgumentTest<T>> components = new ArrayList<>(theComponents.size() + 1);
 				components.addAll(theComponents);
 				components.add(otherTest);
-				return new CompositeArgumentTest<>(Collections.unmodifiableList(components), true);
+				return new CompositeArgumentTest<>(theBuilder, theSubject, Collections.unmodifiableList(components), true);
 			}
 
 			@Override
@@ -1084,6 +1107,136 @@ public class ArgumentParsing2 {
 					}
 				}
 				return str.toString();
+			}
+		}
+
+		/**
+		 * An argument test that tests the {@link #getSubject() subject}'s value against that of a {@link #getTarget() target} argument's
+		 * 
+		 * @param <T> The type of the subject argument
+		 * @param <A> The type of the target argument
+		 */
+		public static abstract class BiArgumentTest<T, A> extends ArgumentTest<T> {
+			private final ArgumentType<A> theTarget;
+
+			BiArgumentTest(ParserBuilder builder, ArgumentType<T> subject, ArgumentValueParser<? extends T> parser,
+				ArgumentType<A> otherArg) {
+				super(builder, subject, parser);
+				theTarget = otherArg;
+			}
+
+			/** @return The target argument */
+			public ArgumentType<A> getTarget() {
+				return theTarget;
+			}
+		}
+
+		/**
+		 * Compares the value of the {@link #getSubject() subject} argument against a singular {@link #getTarget() target} argument value
+		 * 
+		 * @param <T> The type of the subject argument
+		 * @param <A> The type of the target argument
+		 */
+		public static class BiArgumentCompareTest<T, A> extends BiArgumentTest<T, A> {
+			private final ComparisonType theComparison;
+			private final ToIntBiFunction<? super T, ? super A> theComparator;
+
+			BiArgumentCompareTest(ParserBuilder builder, ArgumentType<T> subject, ArgumentValueParser<? extends T> parser,
+				ArgumentType<A> otherArg, ComparisonType comparison, ToIntBiFunction<? super T, ? super A> comparator) {
+				super(builder, subject, parser, otherArg);
+				theComparison = comparison;
+				theComparator = comparator;
+			}
+
+			/** @return The function to compare the 2 argument values */
+			public ComparisonType getComparison() {
+				return theComparison;
+			}
+
+			@SuppressWarnings("unlikely-arg-type")
+			@Override
+			boolean test(T value, Arguments args) {
+				Argument<A> testArg = args.getArgument(getTarget());
+				if (testArg == null || testArg.getValues().isEmpty())
+					return true;
+				A testValue = testArg.getValues().getFirst();
+				switch (getComparison()) {
+				case EQ:
+					if (theComparator == null)
+						return Objects.equals(testValue, value);
+					else
+						return theComparator.applyAsInt(value, testValue) == 0;
+				case NEQ:
+					if (theComparator == null)
+						return !Objects.equals(testValue, value);
+					else
+						return theComparator.applyAsInt(value, testValue) != 0;
+				case LT:
+					return theComparator.applyAsInt(value, testValue) < 0;
+				case LTE:
+					return theComparator.applyAsInt(value, testValue) <= 0;
+				case GT:
+					return theComparator.applyAsInt(value, testValue) > 0;
+				case GTE:
+					return theComparator.applyAsInt(value, testValue) >= 0;
+				default:
+					throw new IllegalStateException("Unrecognized comparison: " + getComparison());
+				}
+			}
+
+			@Override
+			String toString(String argumentName) {
+				return argumentName + getComparison().descrip + getTarget().getName();
+			}
+
+			@Override
+			public String toString() {
+				return getComparison().descrip + getTarget().getName();
+			}
+		}
+
+		/**
+		 * Ensures that the value of the {@link #getSubject() subject} argument is contained in the set of {@link #getTarget() target}
+		 * arguments
+		 * 
+		 * @param <T> The type of the subject argument
+		 * @param <A> The type of the target argument
+		 */
+		public static class BiArgumentOneOfTest<T, A> extends BiArgumentTest<T, A> {
+			private final ToIntBiFunction<? super T, ? super A> theEqualsTest;
+
+			BiArgumentOneOfTest(ParserBuilder builder, ArgumentType<T> subject, ArgumentValueParser<? extends T> parser,
+				ArgumentType<A> otherArg, ToIntBiFunction<? super T, ? super A> equalsTest) {
+				super(builder, subject, parser, otherArg);
+				theEqualsTest = equalsTest;
+			}
+
+			@SuppressWarnings("unlikely-arg-type")
+			@Override
+			boolean test(T value, Arguments args) {
+				Argument<A> testArg = args.getArgument(getTarget());
+				if (testArg == null)
+					return false;
+				for (A testValue : testArg.getValues()) {
+					boolean equals;
+					if (theEqualsTest == null)
+						equals = Objects.equals(testValue, value);
+					else
+						equals = theEqualsTest.applyAsInt(value, testValue) == 0;
+					if (equals)
+						return true;
+				}
+				return false;
+			}
+
+			@Override
+			String toString(String argumentName) {
+				return argumentName + " IN " + getTarget().getName() + " values";
+			}
+
+			@Override
+			public String toString() {
+				return "IN " + getTarget().getName() + " values";
 			}
 		}
 	}
@@ -1344,6 +1497,9 @@ public class ArgumentParsing2 {
 		default boolean has(String argument) {
 			return !getArguments(argument).isEmpty();
 		}
+
+		/** @return All arguments in this argument set */
+		BetterList<Argument<?>> getAllArguments();
 	}
 
 	/** Builds an {@link ArgumentParser} */
@@ -2073,6 +2229,95 @@ public class ArgumentParsing2 {
 		 * @return An argument test that passes only for values {@link Object#equals(Object) equal} to one of the given values
 		 */
 		ArgumentTest<T> parseOneOf(String... values);
+
+		/**
+		 * @param <A> The type of the other argument
+		 * @param otherArg The name of the other argument whose value(s) to test against
+		 * @param argType The type of the argument
+		 * @return The builder for the test against the values 2 arguments
+		 */
+		<A> BiArgumentTestBuilder<T, A> against(String otherArg, Class<A> argType);
+	}
+
+	/**
+	 * @param <T> The type of the argument being tested
+	 * @param <A> The type of the argument being tested against
+	 */
+	public interface BiArgumentTestBuilder<T, A> {
+		/**
+		 * Tests the value of the two arguments in a custom way. This test can only be used when the second argument may have at most a
+		 * single value, and the test will <b>PASS</b> if the second argument is <b>NOT</b> specified.
+		 * 
+		 * @param test The arbitrary test against the 2 arguments
+		 * @return The test
+		 */
+		ArgumentTest.BiArgumentTest<T, A> checkAgainst(BiPredicate<? super T, ? super A> test);
+
+		/**
+		 * Requires the value of the first argument to be the same as that of the second. This test can only be used when the second
+		 * argument may have at most a single value, and the test will <b>PASS</b> if the second argument is <b>NOT</b> specified.
+		 * 
+		 * @return An argument test that passes when the value of the first argument is the same as that of the second, if it is specified
+		 */
+		ArgumentTest.BiArgumentCompareTest<T, A> eq();
+
+		/**
+		 * Requires the value of the first argument to be the different from that of the second. This test can only be used when the second
+		 * argument may have at most a single value, and the test will <b>PASS</b> if the second argument is <b>NOT</b> specified.
+		 * 
+		 * @return An argument test that passes when the value of the first argument is not the same as that of the second, if it is
+		 *         specified
+		 */
+		ArgumentTest.BiArgumentCompareTest<T, A> neq();
+
+		/**
+		 * @param compare The comparator to use to compare the 2 argument values. Required for non-equality comparisons on argument with
+		 *        different types.
+		 * @return This builder
+		 */
+		BiArgumentTestBuilder<T, A> compareWith(ToIntBiFunction<? super T, ? super A> compare);
+
+		/**
+		 * Requires the value of the first argument to be less than that of the second. This test can only be used when the second argument
+		 * may have at most a single value, and the test will <b>PASS</b> if the second argument is <b>NOT</b> specified.
+		 * 
+		 * @return An argument test that passes when the value of the first argument is less than that of the second, if it is specified
+		 */
+		ArgumentTest.BiArgumentCompareTest<T, A> lt();
+
+		/**
+		 * Requires the value of the first argument to be less than or equal to that of the second. This test can only be used when the
+		 * second argument may have at most a single value, and the test will <b>PASS</b> if the second argument is <b>NOT</b> specified.
+		 * 
+		 * @return An argument test that passes when the value of the first argument is less than or equal to that of the second, if it is
+		 *         specified
+		 */
+		ArgumentTest.BiArgumentCompareTest<T, A> lte();
+
+		/**
+		 * Requires the value of the first argument to be greater than that of the second. This test can only be used when the second
+		 * argument may have at most a single value, and the test will <b>PASS</b> if the second argument is <b>NOT</b> specified.
+		 * 
+		 * @return An argument test that passes when the value of the first argument is greater than that of the second, if it is specified
+		 */
+		ArgumentTest.BiArgumentCompareTest<T, A> gt();
+
+		/**
+		 * Requires the value of the first argument to be greater than or equal to that of the second. This test can only be used when the
+		 * second argument may have at most a single value, and the test will <b>PASS</b> if the second argument is <b>NOT</b> specified.
+		 * 
+		 * @return An argument test that passes when the value of the first argument is greater than or equal to that of the second, if it
+		 *         is specified
+		 */
+		ArgumentTest.BiArgumentCompareTest<T, A> gte();
+
+		/**
+		 * Requires the value of the first argument to be the same as one of the values of the second. The test will <b>FAIL</b> if the
+		 * second argument is <b>NOT</b> specified.
+		 * 
+		 * @return An argument test that passes when the value of the first argument is the same as one of the values of the second argument
+		 */
+		ArgumentTest.BiArgumentOneOfTest<T, A> oneOf();
 	}
 
 	/**
@@ -2138,7 +2383,8 @@ public class ArgumentParsing2 {
 				return primitive;
 		}
 
-		static <T> ArgumentTest.ValueTest<T> testFor(T value, int comp, boolean eq, Comparator<? super T> compare,
+		static <T> ArgumentTest.ValueTest<T> testFor(ParserBuilder builder, ArgumentType<T> subject, T value, int comp, boolean eq,
+			Comparator<? super T> compare,
 			ArgumentValueParser<? extends T> parser) {
 			ArgumentTest.ComparisonType type;
 			if (comp == 0)
@@ -2147,7 +2393,7 @@ public class ArgumentParsing2 {
 				type = eq ? ArgumentTest.ComparisonType.LTE : ArgumentTest.ComparisonType.LT;
 			else
 				type = eq ? ArgumentTest.ComparisonType.GTE : ArgumentTest.ComparisonType.GT;
-			return new ArgumentTest.ValueTest<>(value, type, compare, parser);
+			return new ArgumentTest.ValueTest<>(builder, subject, value, type, compare, parser);
 		}
 
 		static class DefaultArgConstraint<T> implements ArgumentConstraint<T> {
@@ -2237,10 +2483,14 @@ public class ArgumentParsing2 {
 		}
 
 		static class DefaultArgTestBuilder<T> implements ArgumentTestBuilder<T> {
+			private final ParserBuilder theBuilder;
+			private final ArgumentType<T> theSubject;
 			private final ArgumentValueParser<? extends T> theParser;
 			private Comparator<? super T> theCompare;
 
-			DefaultArgTestBuilder(ArgumentValueParser<? extends T> parser) {
+			DefaultArgTestBuilder(ParserBuilder builder, ArgumentType<T> subject, ArgumentValueParser<? extends T> parser) {
+				theBuilder = builder;
+				theSubject = subject;
 				if (parser == null)
 					throw new IllegalArgumentException("Cannot perform value checks against a flag argument");
 				theParser = parser;
@@ -2248,9 +2498,9 @@ public class ArgumentParsing2 {
 
 			@Override
 			public ArgumentTest<T> check(Predicate<? super T> test) {
-				return new ArgumentTest<T>(theParser) {
+				return new ArgumentTest<T>(theBuilder, theSubject, theParser) {
 					@Override
-					public boolean test(T value) {
+					public boolean test(T value, Arguments args) {
 						return test.test(value);
 					}
 
@@ -2268,12 +2518,12 @@ public class ArgumentParsing2 {
 
 			@Override
 			public ArgumentTest<T> eq(T value) {
-				return testFor(value, 0, true, theCompare, theParser);
+				return testFor(theBuilder, theSubject, value, 0, true, theCompare, theParser);
 			}
 
 			@Override
 			public ArgumentTest<T> neq(T value) {
-				return testFor(value, 0, false, theCompare, theParser);
+				return testFor(theBuilder, theSubject, value, 0, false, theCompare, theParser);
 			}
 
 			@Override
@@ -2282,29 +2532,42 @@ public class ArgumentParsing2 {
 				return this;
 			}
 
+			@SuppressWarnings("rawtypes")
+			private void requireCompare() {
+				if (theCompare == null)
+					return;
+				else if (Comparable.class.isAssignableFrom(theSubject.getType()))
+					theCompare = (Comparator<? super T>) (Comparator<Comparable>) Comparable::compareTo;
+				else
+					throw new IllegalStateException("Cannot create a comparison test against argument " + theSubject.getName() + " ("
+						+ theSubject.getType().getName() + ") without specifying a comparator.  Use compareWith(Comparator<? super "
+						+ theSubject.getType().getName() + ">)");
+			}
+
 			@Override
 			public ArgumentTest<T> lt(T value) {
-				return testFor(value, -1, false, theCompare, theParser);
+				requireCompare();
+				return testFor(theBuilder, theSubject, value, -1, false, theCompare, theParser);
 			}
 
 			@Override
 			public ArgumentTest<T> lte(T value) {
-				return testFor(value, -1, true, theCompare, theParser);
+				return testFor(theBuilder, theSubject, value, -1, true, theCompare, theParser);
 			}
 
 			@Override
 			public ArgumentTest<T> gt(T value) {
-				return testFor(value, 1, false, theCompare, theParser);
+				return testFor(theBuilder, theSubject, value, 1, false, theCompare, theParser);
 			}
 
 			@Override
 			public ArgumentTest<T> gte(T value) {
-				return testFor(value, 1, true, theCompare, theParser);
+				return testFor(theBuilder, theSubject, value, 1, true, theCompare, theParser);
 			}
 
 			@Override
 			public ArgumentTest<T> oneOf(Collection<? extends T> values) {
-				return new ArgumentTest.OneOfValueTest<>(values, theParser);
+				return new ArgumentTest.OneOfValueTest<>(theBuilder, theSubject, values, theParser);
 			}
 
 			@Override
@@ -2396,15 +2659,169 @@ public class ArgumentParsing2 {
 				}
 				return oneOf(parsed);
 			}
+
+			@Override
+			public <A> BiArgumentTestBuilder<T, A> against(String otherArg, Class<A> argType) {
+				ArgumentType<A> otherArgType = (ArgumentType<A>) theBuilder.getArgument(otherArg);
+				if (otherArgType == null)
+					throw new IllegalArgumentException("No such argument: " + otherArg);
+				else if (argType != null && !argType.equals(otherArgType.getType()))
+					throw new ClassCastException(
+						"Wrong type (" + argType.getName() + ") for argument " + otherArg + " (" + otherArgType.getType().getName() + ")");
+				return new DefaultBiArgTestBuilder<>(theBuilder, theSubject, theParser, otherArgType);
+			}
+		}
+
+		static class DefaultBiArgTestBuilder<T, A> implements BiArgumentTestBuilder<T, A> {
+			private final ParserBuilder theBuilder;
+			private final ArgumentType<T> theSubject;
+			private final ArgumentValueParser<? extends T> theParser;
+			private final ArgumentType<A> theTarget;
+			private ToIntBiFunction<? super T, ? super A> theCompare;
+
+			public DefaultBiArgTestBuilder(ParserBuilder builder, ArgumentType<T> subject, ArgumentValueParser<? extends T> parser,
+				ArgumentType<A> secondArg) {
+				theBuilder = builder;
+				theSubject = subject;
+				theParser = parser;
+				theTarget = secondArg;
+			}
+
+			private void requireSingle() {
+				boolean single = false;
+				for (ArgumentConstraint<A> constraint : theTarget.getConstraints()) {
+					if (constraint instanceof DefaultArgConstraint
+						&& ((DefaultArgConstraint<A>) constraint).getCondition() instanceof ArgumentCondition.TrueCondition
+						&& ((DefaultArgConstraint<A>) constraint).getMaxTimes() == 1) {
+						single = true;
+						break;
+					}
+				}
+				if (!single)
+					throw new IllegalArgumentException(
+						"This check cannot be used against an argument that can be specified multiple times: " + theTarget.getName());
+			}
+
+			private void requireCompare() {
+				if (theCompare == null)
+					return;
+				else if (theSubject.getType().isAssignableFrom(theTarget.getType())
+					&& Comparable.class.isAssignableFrom(theSubject.getType()))
+					theCompare = (t, a) -> ((Comparable<? super A>) t).compareTo(a);
+				else if (theTarget.getType().isAssignableFrom(theSubject.getType())
+					&& Comparable.class.isAssignableFrom(theTarget.getType()))
+					theCompare = (t, a) -> ((Comparable<? super T>) a).compareTo(t);
+				else
+					throw new IllegalStateException("Cannot create a comparison test against arguments "//
+						+ theSubject.getName() + " (" + theSubject.getType().getName() + ") and "//
+						+ theTarget.getName() + " (" + theTarget.getType().getName() + ") without specifying a comparator."
+						+ "  Use compareWith(ToIntBiFunction<? super " + theSubject.getType().getName() + ", ? super "
+						+ theTarget.getType().getName() + ">)");
+			}
+
+			@Override
+			public BiArgumentTest<T, A> checkAgainst(BiPredicate<? super T, ? super A> test) {
+				requireSingle();
+				return new ArgumentTest.BiArgumentTest<T, A>(theBuilder, theSubject, theParser, theTarget) {
+					@Override
+					public boolean test(T value, Arguments args) {
+						Argument<A> otherArgInstance = args.getArgument(theTarget);
+						if (otherArgInstance == null || otherArgInstance.getValues().isEmpty())
+							return true;
+						return test.test(value, otherArgInstance.getValues().getFirst());
+					}
+
+					@Override
+					public String toString(String argumentName) {
+						return test.toString() + "(" + argumentName + ")";
+					}
+
+					@Override
+					public String toString() {
+						return test.toString();
+					}
+				};
+			}
+
+			@SuppressWarnings("unlikely-arg-type")
+			@Override
+			public ArgumentTest.BiArgumentCompareTest<T, A> eq() {
+				requireSingle();
+				ToIntBiFunction<? super T, ? super A> compare = theCompare;
+				if (compare == null)
+					compare = (t, a) -> Objects.equals(t, a) ? 0 : 1;
+				return new ArgumentTest.BiArgumentCompareTest<>(theBuilder, theSubject, theParser, theTarget,
+					ArgumentTest.ComparisonType.EQ, compare);
+			}
+
+			@SuppressWarnings("unlikely-arg-type")
+			@Override
+			public ArgumentTest.BiArgumentCompareTest<T, A> neq() {
+				requireSingle();
+				ToIntBiFunction<? super T, ? super A> compare = theCompare;
+				if (compare == null)
+					compare = (t, a) -> Objects.equals(t, a) ? 0 : 1;
+				return new ArgumentTest.BiArgumentCompareTest<>(theBuilder, theSubject, theParser, theTarget,
+					ArgumentTest.ComparisonType.NEQ, compare);
+			}
+
+			@Override
+			public BiArgumentTestBuilder<T, A> compareWith(ToIntBiFunction<? super T, ? super A> compare) {
+				theCompare = compare;
+				return this;
+			}
+
+			@Override
+			public ArgumentTest.BiArgumentCompareTest<T, A> lt() {
+				requireSingle();
+				requireCompare();
+				return new ArgumentTest.BiArgumentCompareTest<>(theBuilder, theSubject, theParser, theTarget,
+					ArgumentTest.ComparisonType.LT, theCompare);
+			}
+
+			@Override
+			public ArgumentTest.BiArgumentCompareTest<T, A> lte() {
+				requireSingle();
+				requireCompare();
+				return new ArgumentTest.BiArgumentCompareTest<>(theBuilder, theSubject, theParser, theTarget,
+					ArgumentTest.ComparisonType.LTE, theCompare);
+			}
+
+			@Override
+			public ArgumentTest.BiArgumentCompareTest<T, A> gt() {
+				requireSingle();
+				requireCompare();
+				return new ArgumentTest.BiArgumentCompareTest<>(theBuilder, theSubject, theParser, theTarget,
+					ArgumentTest.ComparisonType.GT, theCompare);
+			}
+
+			@Override
+			public ArgumentTest.BiArgumentCompareTest<T, A> gte() {
+				requireSingle();
+				requireCompare();
+				return new ArgumentTest.BiArgumentCompareTest<>(theBuilder, theSubject, theParser, theTarget,
+					ArgumentTest.ComparisonType.GTE, theCompare);
+			}
+
+			@SuppressWarnings("unlikely-arg-type")
+			@Override
+			public ArgumentTest.BiArgumentOneOfTest<T, A> oneOf() {
+				ToIntBiFunction<? super T, ? super A> compare = theCompare;
+				if (compare == null)
+					compare = (t, a) -> Objects.equals(t, a) ? 0 : 1;
+				return new ArgumentTest.BiArgumentOneOfTest<>(theBuilder, theSubject, theParser, theTarget, compare);
+			}
 		}
 
 		static class DefaultArgConditionBuilder<S, T> implements ArgumentConditionBuilder<S, T> {
+			private final ParserBuilder theBuilder;
 			private final ArgumentType<S> theSubject;
 			private final ArgumentType<T> theTarget;
 			private final Function<String, ArgumentTypeHolder<?>> theArgGetter;
 
-			DefaultArgConditionBuilder(ArgumentType<S> subject, ArgumentType<T> target,
+			DefaultArgConditionBuilder(ParserBuilder builder, ArgumentType<S> subject, ArgumentType<T> target,
 				Function<String, Impl.ArgumentTypeHolder<?>> argGetter) {
+				theBuilder = builder;
 				theSubject = subject;
 				theTarget = target;
 				theArgGetter = argGetter;
@@ -2412,14 +2829,15 @@ public class ArgumentParsing2 {
 
 			@Override
 			public ArgumentCondition<S> times(int minTimes, int maxTimes) {
-				return new ArgumentCondition.ArgumentSpecifiedCondition<>(theSubject, theTarget, minTimes, maxTimes, theArgGetter);
+				return new ArgumentCondition.ArgumentSpecifiedCondition<>(theBuilder, theSubject, theTarget, minTimes, maxTimes,
+					theArgGetter);
 			}
 
 			@Override
 			public ArgumentCondition<S> matches(Function<ArgumentTestBuilder<T>, ArgumentTest<T>> test) {
 				ArgumentTypeHolder<T> arg = (ArgumentTypeHolder<T>) theArgGetter.apply(theTarget.getName());
-				ArgumentTest<T> newTest = test.apply(new DefaultArgTestBuilder<>(arg.parser));
-				return new ArgumentCondition.ArgumentValueCondition<>(theSubject, theTarget, newTest, theArgGetter);
+				ArgumentTest<T> newTest = test.apply(new DefaultArgTestBuilder<>(theBuilder, theTarget, arg.parser));
+				return new ArgumentCondition.ArgumentValueCondition<>(theBuilder, theSubject, theTarget, newTest, theArgGetter);
 			}
 		}
 
@@ -2728,8 +3146,8 @@ public class ArgumentParsing2 {
 			public B times(int minTimes, int maxTimes) {
 				if (maxTimes > 1 && theValueParser == null)
 					throw new IllegalArgumentException("Flag arguments cannot have multiplicity");
-				return addConstraint(new DefaultArgConstraint<>(new ArgumentCondition.TrueCondition<>(theArgument, theArgParser::getHolder),
-					minTimes, maxTimes, null));
+				return addConstraint(new DefaultArgConstraint<>(
+					new ArgumentCondition.TrueCondition<>(theArgParser, theArgument, theArgParser::getHolder), minTimes, maxTimes, null));
 			}
 
 			@Override
@@ -2757,10 +3175,11 @@ public class ArgumentParsing2 {
 
 			@Override
 			public B constrain(Function<ArgumentTestBuilder<T>, ArgumentTest<T>> constraint) {
-				ArgumentTest<T> newConstraint = constraint.apply(new DefaultArgTestBuilder<>(theValueParser));
+				ArgumentTest<T> newConstraint = constraint.apply(new DefaultArgTestBuilder<>(theArgParser, theArgument, theValueParser));
 				return addConstraint(
-					new DefaultArgConstraint<>(new ArgumentCondition.TrueCondition<>(getArgument(), getArgParser()::getHolder), 0,
-						Integer.MAX_VALUE, newConstraint));
+					new DefaultArgConstraint<>(
+						new ArgumentCondition.TrueCondition<>(theArgParser, getArgument(), getArgParser()::getHolder), 0, Integer.MAX_VALUE,
+						newConstraint));
 			}
 
 			@Override
@@ -2770,8 +3189,8 @@ public class ArgumentParsing2 {
 				if (argType != null && !argType.equals(target.argument.getType()))
 					throw new ClassCastException("Wrong type (" + argType.getName() + ") for argument " + argument + " ("
 						+ target.argument.getType().getName() + ")");
-				ArgumentConstraint<T> newConstraint = constraint
-					.apply(new DefaultArgConditionBuilder<>(getArgument(), (ArgumentType<A>) target.argument, getArgParser()::getHolder));
+				ArgumentConstraint<T> newConstraint = constraint.apply(new DefaultArgConditionBuilder<>(theArgParser, getArgument(),
+					(ArgumentType<A>) target.argument, getArgParser()::getHolder));
 				return addConstraint(newConstraint);
 			}
 
@@ -3340,7 +3759,7 @@ public class ArgumentParsing2 {
 						if (arg.getMatch() == null)
 							continue; // Default--don't check against constraints
 						for (int v = 0; v < arg.getValues().size(); v++) {
-							if (!constraint.getValueTest().test(arg.getValues().get(v)))
+							if (!constraint.getValueTest().test(arg.getValues().get(v), parsedArgs))
 								errors.add(argument.getName() + " must obey [" + constraint.getValueTest() + "]: "
 									+ arg.getMatch().getValues().get(v) + printCondition(constraint.getCondition()));
 						}
@@ -3433,6 +3852,11 @@ public class ArgumentParsing2 {
 			@Override
 			public BetterList<String> getUnmatched() {
 				return theUnmatched;
+			}
+
+			@Override
+			public BetterList<Argument<?>> getAllArguments() {
+				return BetterList.of(theMatches.allValues().stream().flatMap(args -> args.stream()));
 			}
 		}
 
@@ -3562,6 +3986,11 @@ public class ArgumentParsing2 {
 				}
 				return matches == null ? Collections.emptyList() : matches;
 			}
+
+			@Override
+			public BetterList<Argument<?>> getAllArguments() {
+				return BetterList.of(theMatches.allValues().stream().flatMap(args -> args == null ? Stream.empty() : args.stream()));
+			}
 		}
 
 		static final Arguments EMPTY_ARGS = new Arguments() {
@@ -3577,6 +4006,11 @@ public class ArgumentParsing2 {
 
 			@Override
 			public BetterList<String> getUnmatched() {
+				return BetterList.empty();
+			}
+
+			@Override
+			public BetterList<Argument<?>> getAllArguments() {
 				return BetterList.empty();
 			}
 		};
