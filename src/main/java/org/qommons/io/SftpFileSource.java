@@ -27,6 +27,7 @@ import com.jcraft.jsch.Session;
 import com.jcraft.jsch.SftpATTRS;
 import com.jcraft.jsch.SftpException;
 
+/** Facilitates use of the {@link BetterFile} API with a remote file system via SFTP */
 public class SftpFileSource extends RemoteFileSource {
 	static class ThreadSession {
 		final Session session;
@@ -60,6 +61,15 @@ public class SftpFileSource extends RemoteFileSource {
 
 	private SftpFile theRoot;
 
+	/**
+	 * Creates the file source
+	 * 
+	 * @param jSch The JSCH object to use for SFTP communication
+	 * @param host The host to communicate with
+	 * @param user The user to connect as
+	 * @param sessionConfiguration Configures each session as it is needed
+	 * @param rootDir The directory to use as the root of this file source
+	 */
 	public SftpFileSource(JSch jSch, String host, String user, ExConsumer<Session, Exception> sessionConfiguration, String rootDir) {
 		theJSch = jSch == null ? new JSch() : jSch;
 		theHost = host;
@@ -142,9 +152,11 @@ public class SftpFileSource extends RemoteFileSource {
 
 	void reallyDisconnect(Thread thread) {
 		theSessions.compute(thread, (t, session) -> {
-			if (session.usage == 0) {
-				if (session.channel != null)
+			if (session != null && session.usage == 0) {
+				if (session.channel != null) {
 					session.channel.disconnect();
+					session.channel.exit();
+				}
 				session.session.disconnect();
 				return null;
 			} else
@@ -154,12 +166,14 @@ public class SftpFileSource extends RemoteFileSource {
 
 	private class SftpFile extends RemoteFileBacking {
 		private String thePath;
+		private int thePermissions;
 
 		SftpFile(SftpFile parent, String fileName) {
 			super(parent, fileName);
 		}
 
 		SftpFile setAttributes(SftpATTRS attrs) {
+			thePermissions = attrs.getPermissions();
 			if (attrs.isDir())
 				setData(true, attrs.getMTime() * 1000L, 0);
 			else
@@ -232,6 +246,7 @@ public class SftpFileSource extends RemoteFileSource {
 			}
 		}
 
+		/** @return The actual path into the remote file system */
 		private String getPath() {
 			if (getParent() == null)
 				return getName();
@@ -435,7 +450,55 @@ public class SftpFileSource extends RemoteFileSource {
 
 		@Override
 		public boolean set(FileBooleanAttribute attribute, boolean value, boolean ownerOnly) {
-			throw new UnsupportedOperationException("Not yet implemented");
+			checkData();
+			if(!exists())
+				return false;
+			switch(attribute) {
+			case Directory:
+			case Symbolic:
+			case Hidden:
+				return false;
+			case Readable:
+			case Writable:
+				int newPerms=thePermissions;
+				if (attribute == FileBooleanAttribute.Writable) {
+					if (value) {
+						if (ownerOnly)
+							newPerms |= 700;
+						else
+							newPerms |= 777;
+					} else {
+						if (ownerOnly)
+							newPerms &= 477;
+						else
+							newPerms = 444;
+					}
+				} else {
+					if (value) {
+						if (ownerOnly)
+							newPerms |= 400;
+						else
+							newPerms |= 444;
+					} else {
+						if (ownerOnly)
+							newPerms &= 077;
+						else
+							newPerms = 000;
+					}
+				}
+				if (newPerms == thePermissions)
+					return true;
+				int fPerms = newPerms;
+				try {
+					return inChannel(channel -> {
+						channel.chmod(fPerms, getPath());
+						return true;
+					});
+				} catch (Exception e) {
+					return false;
+				}
+			}
+			return false;
 		}
 
 		@Override
