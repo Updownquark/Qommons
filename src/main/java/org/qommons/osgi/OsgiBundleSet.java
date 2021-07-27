@@ -30,7 +30,6 @@ import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import org.jdom2.Element;
 import org.qommons.ArgumentParsing2;
 import org.qommons.Named;
 import org.qommons.Range;
@@ -144,11 +143,14 @@ public class OsgiBundleSet {
 			BetterFile cpFile = theBundle.at(".classpath");
 			if (cpFile.exists()) {
 				try {
-					Element cp = QommonsConfig.getRootElement(cpFile.read());
-					for (Element el : cp.getChildren("classpathentry")) {
-						if ("output".equals(el.getAttributeValue("kind"))) {
+					QommonsConfig cp;
+					try (InputStream in = cpFile.read()) {
+						cp = QommonsConfig.fromXml(QommonsConfig.getRootElement(in));
+					}
+					for (QommonsConfig el : cp.subConfigs("classpathentry")) {
+						if ("output".equals(el.get("kind"))) {
 							findPackages(//
-								theBundle.at(el.getAttributeValue("path")), pkgPath);
+								theBundle.at(el.get("path")), pkgPath);
 						}
 					}
 				} catch (IOException e) {
@@ -465,11 +467,14 @@ public class OsgiBundleSet {
 				BetterFile cpFile = theBundle.at(".classpath");
 				if (cpFile.exists()) {
 					try {
-						Element cp = QommonsConfig.getRootElement(cpFile.read());
-						for (Element el : cp.getChildren("classpathentry")) {
-							if ("output".equals(el.getAttributeValue("kind"))) {
+						QommonsConfig cp;
+						try (InputStream in = cpFile.read()) {
+							cp = QommonsConfig.fromXml(QommonsConfig.getRootElement(in));
+						}
+						for (QommonsConfig el : cp.subConfigs("classpathentry")) {
+							if ("output".equals(el.get("kind"))) {
 								compress(//
-									theBundle.at(el.getAttributeValue("path")), zip, path, paths, buffer);
+									theBundle.at(el.get("path")), zip, path, paths, buffer);
 							}
 						}
 					} catch (IOException e) {

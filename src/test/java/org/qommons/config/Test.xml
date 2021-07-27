@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<test-root>
+	<test-el1 attr1="attr-value">
+	</test-el1>
+	<test-el2 attr1="attr-value1" attr2="attr-value2">
+		<inner-el>Text content</inner-el>
+	</test-el2>
+</test-root>

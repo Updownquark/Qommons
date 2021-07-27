@@ -3,14 +3,19 @@ package org.qommons.config;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.jdom2.Attribute;
-import org.jdom2.Element;
-import org.jdom2.input.SAXBuilder;
-import org.jdom2.input.sax.XMLReaderSAX2Factory;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+
+import org.w3c.dom.Element;
+import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Node;
+import org.xml.sax.SAXException;
 
 /**
  * <p>
@@ -556,13 +561,42 @@ public abstract class QommonsConfig implements Cloneable {
 	 * @return The parsed config
 	 */
 	public static QommonsConfig fromXml(Element xml) {
-		QommonsConfig [] fx = fromXml(xml, null);
-		if(fx.length == 0)
-			return null;
-		else if(fx.length == 1)
-			return fx[0];
-		else
-			return create("none", null, fx);
+		List<QommonsConfig> childConfigs = new ArrayList<>();
+		NamedNodeMap atts = xml.getAttributes();
+		for (int a = 0; a < atts.getLength(); a++) {
+			DefaultConfig childConfig = new DefaultConfig(deXmlIfy(atts.item(a).getNodeName()), atts.item(a).getNodeValue(), null);
+			childConfigs.add(childConfig);
+		}
+		StringBuilder textContent = null, trimmedContent = null;
+		for (int c = 0; c < xml.getChildNodes().getLength(); c++) {
+			Node child = xml.getChildNodes().item(c);
+			QommonsConfig childConfig = null;
+			switch (child.getNodeType()) {
+			case Node.ELEMENT_NODE:
+				childConfig = fromXml((Element) child);
+				break;
+			case Node.CDATA_SECTION_NODE:
+			case Node.TEXT_NODE:
+				if (textContent == null) {
+					textContent = new StringBuilder();
+					trimmedContent = new StringBuilder();
+				}
+				textContent.append(child.getNodeValue());
+				String trim = child.getNodeValue().trim();
+				if (trimmedContent.length() > 0 && trim.length() > 0)
+					trimmedContent.append('\n');
+				trimmedContent.append(trim);
+				break;
+			}
+			if (childConfig != null)
+				childConfigs.add(childConfig);
+		}
+		if (trimmedContent != null && trimmedContent.length() == 0)
+			trimmedContent = null;
+		return create(deXmlIfy(xml.getNodeName()), //
+			trimmedContent == null ? null : trimmedContent.toString(), //
+			textContent == null ? null : textContent.toString(), //
+			childConfigs.toArray(new QommonsConfig[childConfigs.size()]));
 	}
 
 	/**
@@ -596,13 +630,7 @@ public abstract class QommonsConfig implements Cloneable {
 			}
 			throw new java.io.IOException(msg.toString());
 		}
-		QommonsConfig [] fx = fromXml(root, location, relative);
-		if(fx.length == 0)
-			return null;
-		else if(fx.length == 1)
-			return fx[0];
-		else
-			return create("none", null, fx);
+		return fromXml(root);
 	}
 
 	/**
@@ -636,34 +664,27 @@ public abstract class QommonsConfig implements Cloneable {
 	 * @return The root element of the XML
 	 * @throws java.io.IOException If the XML could not be read or parsed
 	 */
-	public static Element getRootElement(java.net.URL url) throws java.io.IOException {
-		Element configEl;
-		try {
-			configEl = new org.jdom2.input.SAXBuilder().build(url).getRootElement();
-		} catch(org.jdom2.JDOMException e) {
-			throw new java.io.IOException("Could not read XML file " + url, e);
+	public static Element getRootElement(java.net.URL url) throws IOException {
+		try (InputStream in = url.openStream()) {
+			return DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in).getDocumentElement();
+		} catch (ParserConfigurationException | SAXException e) {
+			throw new IOException("Could not read XML file " + url, e);
 		}
-		return configEl;
 	}
-
-	private static final ThreadLocal<SAXBuilder> SAX_BUILDERS = ThreadLocal
-		.withInitial(() -> new SAXBuilder(new XMLReaderSAX2Factory(false)));
 
 	/**
 	 * Parses the root element from an XML file
 	 *
 	 * @param stream The input stream of the XML resource to parse
 	 * @return The root element of the XML
-	 * @throws java.io.IOException If the XML could not be read or parsed
+	 * @throws IOException If the XML could not be read or parsed
 	 */
 	public static Element getRootElement(InputStream stream) throws IOException {
-		Element configEl;
 		try {
-			configEl = SAX_BUILDERS.get().build(stream).getRootElement();
-		} catch (org.jdom2.JDOMException e) {
-			throw new java.io.IOException("Could not read XML file " + stream, e);
+			return DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(stream).getDocumentElement();
+		} catch (ParserConfigurationException | SAXException e) {
+			throw new IOException("Could not read XML", e);
 		}
-		return configEl;
 	}
 
 	/**
@@ -672,9 +693,9 @@ public abstract class QommonsConfig implements Cloneable {
 	 * @param location The location of the XML file to parse
 	 * @param relative The locations to which the location may be relative
 	 * @return The root element of the given XMl file
-	 * @throws java.io.IOException If an error occurs finding, reading, or parsing the file
+	 * @throws IOException If an error occurs finding, reading, or parsing the file
 	 */
-	public static Element getRootElement(String location, String... relative) throws java.io.IOException {
+	public static Element getRootElement(String location, String... relative) throws IOException {
 		String newLocation = resolve(location, relative);
 		if(newLocation == null)
 			return null;
@@ -695,9 +716,9 @@ public abstract class QommonsConfig implements Cloneable {
 	 * @param location The path of the resource to find
 	 * @param relative The list of paths that the location is relative to
 	 * @return The path that the given resource should be located ad
-	 * @throws java.io.IOException If any of the given paths cannot be interpreted
+	 * @throws IOException If any of the given paths cannot be interpreted
 	 */
-	public static String resolve(String location, String... relative) throws java.io.IOException {
+	public static String resolve(String location, String... relative) throws IOException {
 		if (location.contains("://") || (location.startsWith("file:/")))
 			return location;
 		else if(relative.length > 0) {
@@ -714,39 +735,15 @@ public abstract class QommonsConfig implements Cloneable {
 						newLocation = newLocation.substring(3);
 				} while(newLocation.startsWith("../"));
 				if(!resolvedRel.contains(":/")) {
-					throw new java.io.IOException(
+					throw new IOException(
 						"Location " + location + " relative to " + org.qommons.ArrayUtils.toString(relative) + " is invalid");
 				}
 				return resolvedRel + "/" + newLocation;
 			} else
 				return null;
 		} else {
-			throw new java.io.IOException("Location " + location + " is invalid");
+			throw new IOException("Location " + location + " is invalid");
 		}
-	}
-
-	private static QommonsConfig [] fromXml(Element xml, String location, String... relative) {
-		String value = xml.getText();
-		String trimmedValue = value == null ? value : value.trim();
-		if (value.length() == 0) {
-			value = null;
-			trimmedValue = null;
-		}
-		java.util.List<Element> children = xml.getChildren();
-		java.util.List<Attribute> atts = xml.getAttributes();
-		int attSize = atts.size();
-		if(children.size() == 0 && attSize == 0)
-			return new QommonsConfig[] { new DefaultConfig(deXmlIfy(xml.getName()), trimmedValue, value, null) };
-		java.util.ArrayList<QommonsConfig> childConfigs = new java.util.ArrayList<>();
-		if(attSize > 0)
-			for(Attribute att : atts)
-				if(!att.getName().equals("if"))
-					childConfigs.add(new DefaultConfig(deXmlIfy(att.getName()), att.getValue(), null));
-		for(Element child : children)
-			for(QommonsConfig toAdd : fromXml(child, location, relative))
-				childConfigs.add(toAdd);
-		return new QommonsConfig[] {
-			create(deXmlIfy(xml.getName()), trimmedValue, value, childConfigs.toArray(new QommonsConfig[childConfigs.size()])) };
 	}
 
 	private static String deXmlIfy(String name) {
