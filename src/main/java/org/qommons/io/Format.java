@@ -293,6 +293,108 @@ public interface Format<T> {
 		};
 	}
 
+	/*public static enum DecimalComponent {
+		WHOLE, DECIMAL, FRACTION, E, EXPONENT
+	}
+	
+	public static FlexibleFormat.FormatToken intToken(boolean withNegative, int separator) {
+		class IntToken implements FlexibleFormat.FormatToken {
+			private boolean neg() {
+				return withNegative;
+			}
+	
+			private int sep() {
+				return separator;
+			}
+	
+			@Override
+			public int find(CharSequence seq, int start) {
+				if (withNegative && seq.charAt(start) == '-') {
+					start++;
+					if (start == seq.length())
+						return -1;
+				}
+				if (seq.charAt(start) < '0' || seq.charAt(start) > '9')
+					return -1;
+				start++;
+				int lastSep = -1;
+				while (start < seq.length()) {
+					if (seq.charAt(start) >= '0' && seq.charAt(start) <= '9')
+						continue;
+					else if (seq.charAt(start) == separator) {
+						if (lastSep >= 0 && start - lastSep != 3)
+							break;
+						lastSep = start;
+					} else
+						return start;
+				}
+				if (lastSep < 0 && separator != 0)
+					return -1;
+				if (lastSep >= 0 && start - lastSep != 3)
+					return lastSep;
+				return start;
+			}
+	
+			@Override
+			public int parse(CharSequence match) {
+				if (separator == 0)
+					return Integer.parseInt(match.toString());
+				else
+					return Integer.parseInt(match.toString().replaceAll("" + (char) separator, ""));
+			}
+	
+			@Override
+			public int hashCode() {
+				return separator & (withNegative ? 0x800 : 0);
+			}
+	
+			@Override
+			public boolean equals(Object obj) {
+				if (obj == this)
+					return true;
+				else if (!(obj instanceof IntToken))
+					return false;
+				return withNegative == ((IntToken) obj).neg() && separator == ((IntToken) obj).sep();
+			}
+	
+			@Override
+			public String toString() {
+				return "int(" + withNegative + ", " + separator + ")";
+			}
+		}
+		return new IntToken();
+	}
+	
+	public static final FlexibleFormat<DecimalComponent> DOUBLE_FORMAT = FlexibleFormat.<DecimalComponent> build()//
+		.withComponent("W", DecimalComponent.WHOLE, intToken(true, 0), null)//
+		.withComponent("WC", DecimalComponent.WHOLE, intToken(true, ','), null)//
+		.withComponent("WD", DecimalComponent.WHOLE, intToken(true, '.'), null)//
+		.withComponent(".", DecimalComponent.DECIMAL, FlexibleFormat.single('.'), null)//
+		.withComponent(",", DecimalComponent.DECIMAL, FlexibleFormat.single(','), null)//
+		.withComponent("F", DecimalComponent.FRACTION, FlexibleFormat.DIGIT, null)//
+		.withComponent("FC", DecimalComponent.FRACTION, intToken(false, ','), null)//
+		.withComponent("FD", DecimalComponent.FRACTION, intToken(false, '.'), null)//
+		.withComponent("E", DecimalComponent.E, FlexibleFormat.single('E', 'e'), null)//
+		.withComponent("X", DecimalComponent.EXPONENT, intToken(true, 0), null)//
+		.withOption("W")//
+		.withOption("WC")//
+		.withOption("WD")//
+		.withOption("W", OPTIONAL, ".", "F")//
+		.withOption("WC", OPTIONAL, ".", "FC")//
+		.withOption("WD", OPTIONAL, ",", "FD")//
+		.withOption("W", OPTIONAL, ".", "F", "E", "X")//
+		.withOption("WC", OPTIONAL, ".", "FC", "E", "X")//
+		.withOption("WD", OPTIONAL, ",", "FD", "E", "X")//
+		.withOption("W", ",", "F")//
+		.withOption("WD", ",", "FD")//
+		.withOption("W", ",", "F", "E", "X")//
+		.withOption("W", ".", OPTIONAL, "E", "X")//
+		.withOption("WC", ".", OPTIONAL, "E", "X")//
+		.withOption("WD", ",", OPTIONAL, "E", "X")//
+		.build();*/
+
+	static final Pattern ALT_DEC_PATTERN = Pattern.compile("\\d*,\\d*[Ee]\\d+");
+
 	/**
 	 * @param text The text to parse
 	 * @param format The number format to do most of the work
@@ -307,10 +409,27 @@ public interface Format<T> {
 			return Double.NEGATIVE_INFINITY;
 		else if ("Inf".equals(str) || "Infinity".equals(str))
 			return Double.POSITIVE_INFINITY;
+		// FlexibleFormat.FormatSolution<DecimalComponent> soln = DOUBLE_FORMAT.parse(text, true, true);
+		// double d = 0;
+		// FlexibleFormat.ParsedElement el = soln.getElements().get(DecimalComponent.FRACTION);
+		// if (el != null)
+		// d = el.getValue() * Math.pow(10, -el.getText().length());
+		// el = soln.getElements().get(DecimalComponent.WHOLE);
+		// if (el != null)
+		// d += el.getValue();
+		// el = soln.getElements().get(DecimalComponent.EXPONENT);
+		// if (el != null)
+		// d *= Math.pow(10, el.getValue());
+		// return d;
+
 		ParsePosition pos = new ParsePosition(0);
 		Number n = format.parse(str, pos);
+		if (pos.getErrorIndex() >= 0 || pos.getIndex() < text.length()) {
+			if (ALT_DEC_PATTERN.matcher(str).matches())
+				n = format.parse(str.replace(',', '.'), pos);
+		}
 		if (pos.getErrorIndex() >= 0 || pos.getIndex() < text.length())
-			throw new ParseException("Invalid number", pos.getIndex());
+			throw new ParseException("Invalid number: " + text, pos.getIndex());
 		if (n instanceof Double)
 			return (Double) n;
 		else
