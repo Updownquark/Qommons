@@ -9,9 +9,9 @@ import org.qommons.Transaction;
 
 /** A collection-locking strategy using {@link StampedLock} */
 public class StampedLockingStrategy implements CollectionLockingStrategy {
-	private final Object theOwner;
+	final Object theOwner;
 	private final ThreadLocal<ThreadState> theStampCollection;
-	private final StampedLock theUpdateLocker;
+	final StampedLock theUpdateLocker;
 	private final AtomicLong theModCount;
 	private int optimisticTries;
 
@@ -165,12 +165,13 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 					// Got lucky
 					lockedWrite();
 					stamp = newStamp;
+					this.write = true;
 					return () -> {
 						unlockedWrite();
 						stamp = locker.tryConvertToReadLock(stamp);
 						this.write = false;
 					};
-				} else
+				} else // Already have what we need
 					return Transaction.NONE;
 			} else {
 				stamp = forWrite ? locker.writeLock() : locker.readLock();
@@ -198,11 +199,12 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 					// Got lucky
 					lockedWrite();
 					stamp = newStamp;
+					this.write = true;
 					return () -> {
 						stamp = locker.tryConvertToReadLock(stamp);
 						this.write = false;
 					};
-				} else
+				} else // Already have what we need
 					return Transaction.NONE;
 			} else {
 				stamp = forWrite ? locker.tryWriteLock() : locker.tryReadLock();
@@ -234,7 +236,7 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 	}
 
 	class ThreadState {
-		private final LockStamp updateStamp;
+		final LockStamp updateStamp;
 
 		ThreadState() {
 			updateStamp = new LockStamp();
