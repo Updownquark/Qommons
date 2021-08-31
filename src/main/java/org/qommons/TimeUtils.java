@@ -2399,9 +2399,11 @@ public class TimeUtils {
 			hadContent = true;
 			int valueStart = c;
 			long value = 0;
+			boolean hasValue = false;
 			while (c < text.length() && text.charAt(c) >= '0' && text.charAt(c) <= '9') {
 				if (c - valueStart > 10)
 					throw new ParseException("Too many digits in value", c);
+				hasValue = true;
 				value = value * 10 + (text.charAt(c) - '0');
 				c++;
 			}
@@ -2414,6 +2416,7 @@ public class TimeUtils {
 				c++;
 				double place = 0.1;
 				while (c < text.length() && text.charAt(c) >= '0' && text.charAt(c) <= '9') {
+					hasValue = true;
 					if (c - decimalStart < 9) {
 						// Only ns precision is supported. Ignore remaining digits.
 						decimal = decimal + (text.charAt(c) - '0') * place;
@@ -2424,6 +2427,8 @@ public class TimeUtils {
 				if (c == decimalStart)
 					throw new ParseException("Unrecognized duration", 0);
 			}
+			if (!hasValue)
+				throw new ParseException("No number value found", valueStart);
 			while (c < text.length() && Character.isWhitespace(text.charAt(c)))
 				c++;
 
@@ -2844,7 +2849,7 @@ public class TimeUtils {
 		 * @return This format
 		 */
 		public RelativeTimeFormat withMaxElements(int elements) {
-			theMaxElements = elements;
+			theMaxElements = Math.min(elements, DurationComponentType.values().length);
 			return this;
 		}
 
@@ -2921,6 +2926,19 @@ public class TimeUtils {
 			return withAboveDayStrategy(AboveDaysStrategy.Week);
 		}
 
+		private static int[] genDefaultThresholds() {
+			int[] threshes = new int[DurationComponentType.values().length];
+			threshes[DurationComponentType.Year.ordinal()] = -1;
+			threshes[DurationComponentType.Month.ordinal()] = 12;
+			threshes[DurationComponentType.Hour.ordinal()] = 24;
+			threshes[DurationComponentType.Minute.ordinal()] = 60;
+			threshes[DurationComponentType.Second.ordinal()] = 60;
+			threshes[DurationComponentType.Millisecond.ordinal()] = 1000;
+			threshes[DurationComponentType.Microsecond.ordinal()] = 1000;
+			threshes[DurationComponentType.Nanosecond.ordinal()] = 1000;
+			return threshes;
+		}
+
 		/**
 		 * @param time The time to print
 		 * @param str The string builder to print the time to (null to create a new one)
@@ -2930,15 +2948,7 @@ public class TimeUtils {
 			Instant ref = theReference.get();
 			Duration d = between(ref, time);
 			int[] diffs = new int[DurationComponentType.values().length];
-			int[] threshes = new int[diffs.length];
-			threshes[DurationComponentType.Year.ordinal()] = -1;
-			threshes[DurationComponentType.Month.ordinal()] = 12;
-			threshes[DurationComponentType.Hour.ordinal()] = 24;
-			threshes[DurationComponentType.Minute.ordinal()] = 60;
-			threshes[DurationComponentType.Second.ordinal()] = 60;
-			threshes[DurationComponentType.Millisecond.ordinal()] = 1000;
-			threshes[DurationComponentType.Microsecond.ordinal()] = 1000;
-			threshes[DurationComponentType.Nanosecond.ordinal()] = 1000;
+			int[] threshes = genDefaultThresholds();
 			boolean neg = d.isNegative();
 			if (neg)
 				d = d.negated();
@@ -3031,6 +3041,77 @@ public class TimeUtils {
 				secs /= 60;
 				diffs[DurationComponentType.Hour.ordinal()] = secs;
 			}
+			return print(d, neg, diffs, threshes, str);
+		}
+
+		/**
+		 * @param d The duration to print
+		 * @param str The string builder to print the duration to (null to create a new one)
+		 * @return The string builder
+		 */
+		public StringBuilder print(Duration d, StringBuilder str) {
+			int[] diffs = new int[DurationComponentType.values().length];
+			int[] threshes = genDefaultThresholds();
+			boolean neg = d.isNegative();
+			if (neg)
+				d = d.negated();
+			if (theAboveDayStrategy == AboveDaysStrategy.MonthYear) {
+				long t = d.getSeconds();
+				diffs[DurationComponentType.Second.ordinal()] = (int) (t % 60);
+				t /= 60;
+				diffs[DurationComponentType.Minute.ordinal()] = (int) (t % 60);
+				t /= 60;
+				diffs[DurationComponentType.Hour.ordinal()] = (int) (t % 24);
+				t /= 24;
+				// T is now days
+				if (t >= 365) {
+					int years = (int) (t / 365L);
+					long yearDays = getDaysInYears(years);
+					if (t - yearDays >= 365) {
+						long yearPlusOneDays = getDaysInYears(years + 1);
+						if (yearPlusOneDays >= t) {
+							years++;
+							yearDays = yearPlusOneDays;
+						}
+					}
+					t -= yearDays;
+					diffs[DurationComponentType.Year.ordinal()] = years;
+				}
+				if (t >= 30) {
+					int months = (int) (t / 30L);
+					long monthDays = getDaysInMonths(months);
+					if (t - monthDays >= 30) {
+						long monthPlusOneDays = getDaysInMonths(months + 1);
+						if (monthPlusOneDays >= t) {
+							months++;
+							monthDays = monthPlusOneDays;
+						}
+					}
+					t -= monthDays;
+					diffs[DurationComponentType.Month.ordinal()] = months;
+				}
+				diffs[DurationComponentType.Day.ordinal()] = (int) t;
+			} else {
+				diffs[0] = diffs[1] = 0;
+				diffs[DurationComponentType.Day.ordinal()] = Math.abs((int) (d.getSeconds() / (24 * 60 * 60)));
+				if (theAboveDayStrategy == AboveDaysStrategy.Week) {
+					threshes[DurationComponentType.Week.ordinal()] = -1;
+					threshes[DurationComponentType.Day.ordinal()] = 7;
+					diffs[DurationComponentType.Week.ordinal()] = diffs[DurationComponentType.Day.ordinal()] / 7;
+					diffs[DurationComponentType.Day.ordinal()] %= 7;
+				} else
+					threshes[DurationComponentType.Day.ordinal()] = -1;
+				int secs = Math.abs((int) (d.getSeconds() % (24 * 60 * 60)));
+				diffs[DurationComponentType.Second.ordinal()] = secs % 60;
+				secs /= 60;
+				diffs[DurationComponentType.Minute.ordinal()] = secs % 60;
+				secs /= 60;
+				diffs[DurationComponentType.Hour.ordinal()] = secs;
+			}
+			return print(d, neg, diffs, threshes, str);
+		}
+
+		private StringBuilder print(Duration d, boolean neg, int[] diffs, int[] threshes, StringBuilder str) {
 			int nano = d.getNano();
 			diffs[DurationComponentType.Millisecond.ordinal()] = nano / 1_000_000;
 			nano %= 1_000_000;
@@ -3055,9 +3136,11 @@ public class TimeUtils {
 			int maxPrecision = minPrecision;
 			for (int i = 1; maxPrecision < diffs.length && i < theMaxElements; i++) {
 				maxPrecision++;
-				while (threshes[maxPrecision] == 0)
+				while (maxPrecision < threshes.length && threshes[maxPrecision] == 0)
 					maxPrecision++;
 			}
+			if (maxPrecision == threshes.length)
+				maxPrecision--;
 			int roundPrecision = maxPrecision + 1;
 			while (roundPrecision < diffs.length && threshes[roundPrecision] == 0)
 				roundPrecision++;
@@ -3108,6 +3191,14 @@ public class TimeUtils {
 		 */
 		public String print(Instant time) {
 			return print(time, null).toString();
+		}
+
+		/**
+		 * @param duration The duration to print
+		 * @return The formatted time
+		 */
+		public String print(Duration duration) {
+			return print(duration, null).toString();
 		}
 
 		/** @return This format's {@link #withMaxPrecision(DurationComponentType) max precision} */
