@@ -1091,9 +1091,11 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 
 			ArchiveEntry readCDR(DefaultArchiveEntry existingRoot, Consumer<? super ArchiveEntry> onChild,
 				ExBiConsumer<ArchiveEntry, CharSequence, IOException> forEach, BooleanSupplier canceled) throws IOException {
+				DefaultArchiveEntry root = new DefaultArchiveEntry("", 0, true);
+				if (theEnd.centralDirSize == 0)
+					return root; // Empty zip file
 				byte[] buffer = new byte[Math.min(64 * 1028, (int) theEnd.centralDirSize)];
 				fillBuffer(theFile, buffer, 0, buffer.length);
-				DefaultArchiveEntry root = new DefaultArchiveEntry("", 0, true);
 				CharsetDecoder utfDecoder = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
 					.onUnmappableCharacter(CodingErrorAction.REPORT);
 				Set<String> children = onChild != null ? new HashSet<>() : null;
