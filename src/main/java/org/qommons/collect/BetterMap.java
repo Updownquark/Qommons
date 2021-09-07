@@ -2,6 +2,7 @@ package org.qommons.collect;
 
 import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -577,6 +578,74 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 					return false;
 			}
 			return true;
+		}
+	}
+
+	/**
+	 * @param <K> The key type for the map
+	 * @param <V> The value type for the map
+	 * @return An immutable, empty BetterMap
+	 */
+	static <K, V> BetterMap<K, V> empty() {
+		return (BetterMap<K, V>) EMPTY;
+	}
+
+	/** Singleton empty better map */
+	static final BetterMap<Object, Object> EMPTY = new EmptyBetterMap<>();
+
+	/**
+	 * Implements {@link BetterMap#empty()}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
+	class EmptyBetterMap<K, V> implements BetterMap<K, V> {
+		private static final Object ID = Identifiable.baseId("Empty map", EmptyBetterMap.class);
+
+		@Override
+		public Object getIdentity() {
+			return ID;
+		}
+
+		@Override
+		public BetterSet<K> keySet() {
+			return BetterSet.empty();
+		}
+
+		@Override
+		public MapEntryHandle<K, V> getEntry(K key) {
+			return null;
+		}
+
+		@Override
+		public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before,
+			boolean first, Runnable added) {
+			return null;
+		}
+
+		@Override
+		public MapEntryHandle<K, V> getEntryById(ElementId entryId) {
+			throw new NoSuchElementException();
+		}
+
+		@Override
+		public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
+			throw new NoSuchElementException();
+		}
+
+		@Override
+		public int hashCode() {
+			return BetterMap.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterMap.equals(this, obj);
+		}
+
+		@Override
+		public String toString() {
+			return "{}";
 		}
 	}
 

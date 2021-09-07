@@ -77,6 +77,12 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 	@Override
 	BetterCollection<V> get(Object key);
 
+	/** @return A collection of all values associated with any key in this map */
+	@Override
+	default BetterCollection<V> values() {
+		return new BetterMultiMapValueCollection<>(this);
+	}
+
 	/**
 	 * @param key The key of the entry
 	 * @return The entry in this map with the given key, or null if no such entry exists
@@ -332,6 +338,18 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		}
 		return str.toString();
 	}
+
+	/**
+	 * @param <K> The key type for the map
+	 * @param <V> The value type for the map
+	 * @return An immutable, empty better multi-map
+	 */
+	public static <K, V> BetterMultiMap<K, V> empty() {
+		return (BetterMultiMap<K, V>) EMPTY;
+	}
+
+	/** Singleton empty better multi-map */
+	static final BetterMultiMap<Object, Object> EMPTY = new EmptyMultiMap<>();
 
 	/**
 	 * Implements {@link BetterMultiMap#entrySet()}
@@ -1114,6 +1132,550 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 	}
 
 	/**
+	 * Implements {@link BetterMultiMap#values()}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
+	class BetterMultiMapValueCollection<K, V> extends AbstractIdentifiable implements BetterCollection<V> {
+		private final BetterMultiMap<K, V> theMap;
+
+		BetterMultiMapValueCollection(BetterMultiMap<K, V> map) {
+			theMap = map;
+		}
+
+		CollectionElement<V> entryFor(MultiEntryValueHandle<K, V> mapEntry) {
+			return mapEntry == null ? null : new ValueElement(mapEntry);
+		}
+
+		CollectionElement<V> entryFor(ElementId keyId, CollectionElement<V> valueEl) {
+			return valueEl == null ? null : new ValueElement(theMap.getEntryById(keyId, valueEl.getElementId()));
+		}
+
+		@Override
+		protected Object createIdentity() {
+			return Identifiable.wrap(theMap, "values");
+		}
+
+		@Override
+		public long getStamp() {
+			return theMap.getStamp();
+		}
+
+		@Override
+		public int size() {
+			return theMap.valueSize();
+		}
+
+		@Override
+		public boolean isEmpty() {
+			return theMap.valueSize() == 0;
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return theMap.lock(write, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, Object cause) {
+			return theMap.tryLock(write, cause);
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return theMap.getCoreId();
+		}
+
+		@Override
+		public boolean belongs(Object o) {
+			return false;
+		}
+
+		@Override
+		public CollectionElement<V> getElement(V value, boolean first) {
+			CollectionElement<V> el = getTerminalElement(first);
+			while (el != null && !Objects.equals(el.get(), value))
+				el = getAdjacentElement(el.getElementId(), first);
+			return el;
+		}
+
+		@Override
+		public CollectionElement<V> getElement(ElementId id) {
+			if (!(id instanceof BetterMultiMapValueCollection.MapValueId))
+				throw new NoSuchElementException();
+			MapValueId mvi = (MapValueId) id;
+			return entryFor(theMap.getEntryById(mvi.keyId, mvi.valueId));
+		}
+
+		@Override
+		public CollectionElement<V> getTerminalElement(boolean first) {
+			MultiEntryHandle<K, V> keyEntry = theMap.getTerminalEntry(first);
+			if (keyEntry == null)
+				return null;
+			return entryFor(keyEntry.getElementId(), keyEntry.getValues().getTerminalElement(first));
+		}
+
+		@Override
+		public CollectionElement<V> getAdjacentElement(ElementId elementId, boolean next) {
+			if (!(elementId instanceof BetterMultiMapValueCollection.MapValueId))
+				throw new NoSuchElementException();
+			MapValueId mvi = (MapValueId) elementId;
+			MultiEntryHandle<K, V> keyEntry = theMap.getEntryById(mvi.keyId);
+			CollectionElement<V> valueEntry = keyEntry.getValues().getAdjacentElement(mvi.valueId, next);
+			if (valueEntry == null) {
+				keyEntry = theMap.getAdjacentEntry(keyEntry.getElementId(), next);
+				if (keyEntry != null)
+					valueEntry = keyEntry.getValues().getTerminalElement(next);
+			}
+			return entryFor(keyEntry.getElementId(), valueEntry);
+		}
+
+		@Override
+		public MutableCollectionElement<V> mutableElement(ElementId id) {
+			if (!(id instanceof BetterMultiMapValueCollection.MapValueId))
+				throw new NoSuchElementException();
+			MapValueId mvi = (MapValueId) id;
+			return new MutableValueElement(theMap.mutableElement(mvi.keyId, mvi.valueId));
+		}
+
+		@Override
+		public BetterList<CollectionElement<V>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this)
+				return BetterList.of(getElement(sourceEl));
+			BetterList<? extends CollectionElement<?>> els;
+			if (sourceEl instanceof BetterMultiMapValueCollection.MapValueId) {
+				MapValueId mvId = (MapValueId) sourceEl;
+				els = theMap.keySet().getElementsBySource(mvId.keyId, sourceCollection);
+				if (!els.isEmpty()) {
+					ElementId keyId = els.getFirst().getElementId();
+					return QommonsUtils.map2(theMap.getEntryById(keyId).getValues().getElementsBySource(mvId.valueId, sourceCollection), //
+						valueEl -> entryFor(theMap.getEntryById(keyId, valueEl.getElementId())));
+				}
+			}
+			els = theMap.keySet().getElementsBySource(sourceEl, sourceCollection);
+			if (!els.isEmpty()) {
+				return BetterList.of(els.stream().flatMap(keyEl -> theMap.getEntryById(keyEl.getElementId()).getValues().elements().stream()//
+					.map(valueEl -> entryFor(theMap.getEntryById(keyEl.getElementId(), valueEl.getElementId())))));
+			}
+			// No choice but to go key-by-key
+			try (Transaction t = lock(false, null)) {
+				CollectionElement<K> keyEl = theMap.keySet().getTerminalElement(true);
+				while (keyEl != null) {
+					MultiEntryHandle<K, V> entry = theMap.getEntryById(keyEl.getElementId());
+					els = entry.getValues().getElementsBySource(sourceEl, sourceCollection);
+					if (!els.isEmpty())
+						return BetterList
+							.of(els.stream().map(valueEl -> entryFor(theMap.getEntryById(entry.getElementId(), valueEl.getElementId()))));
+
+					keyEl = theMap.keySet().getAdjacentElement(keyEl.getElementId(), true);
+				}
+			}
+			return BetterList.empty();
+		}
+
+		@Override
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			if (!(localElement instanceof BetterMultiMapValueCollection.MapValueId))
+				throw new NoSuchElementException();
+			MapValueId mvi = (MapValueId) localElement;
+
+			BetterList<ElementId> els = theMap.keySet().getSourceElements(mvi.keyId, sourceCollection);
+			if (!els.isEmpty())
+				return els;
+			MultiEntryHandle<K, V> entry = theMap.getEntryById(mvi.keyId);
+			return entry.getValues().getSourceElements(mvi.valueId, sourceCollection);
+		}
+
+		@Override
+		public ElementId getEquivalentElement(ElementId equivalentEl) {
+			ElementId keyId = theMap.keySet().getEquivalentElement(equivalentEl);
+			if (keyId != null)
+				return theMap.getEntryById(keyId).getValues().getEquivalentElement(equivalentEl);
+			return null;
+		}
+
+		@Override
+		public String canAdd(V value, ElementId after, ElementId before) {
+			if (after != null && !(after instanceof BetterMultiMapValueCollection.MapValueId))
+				throw new NoSuchElementException();
+			MapValueId mvAfter = (MapValueId) after;
+			if (before != null && !(before instanceof BetterMultiMapValueCollection.MapValueId))
+				throw new NoSuchElementException();
+			MapValueId mvBefore = (MapValueId) before;
+			if (mvAfter != null && mvBefore != null && mvAfter.compareTo(mvBefore) >= 0)
+				throw new IllegalArgumentException(after + ">" + before);
+			boolean currentKey;
+			String msg = null;
+			if (after != null || before == null) {
+				currentKey = mvAfter != null;
+				MultiEntryHandle<K, V> keyEntry = mvAfter == null ? theMap.getTerminalEntry(true) : theMap.getEntryById(mvAfter.keyId);
+				while (keyEntry != null) {
+					msg = keyEntry.getValues().canAdd(value, //
+						currentKey ? mvAfter.valueId : null, //
+						(mvBefore != null && mvBefore.keyId.equals(keyEntry.getElementId())) ? mvBefore.valueId : null);
+					if (msg == null)
+						return null;
+					keyEntry = theMap.getAdjacentEntry(keyEntry.getElementId(), true);
+				}
+			} else {
+				currentKey = mvBefore != null;
+				MultiEntryHandle<K, V> keyEntry = theMap.getEntryById(mvBefore.keyId);
+				while (keyEntry != null) {
+					msg = keyEntry.getValues().canAdd(value, //
+						mvBefore.keyId.equals(keyEntry.getElementId()) ? mvBefore.valueId : null, //
+						currentKey ? mvAfter.valueId : null);
+					if (msg == null)
+						return null;
+					keyEntry = theMap.getAdjacentEntry(keyEntry.getElementId(), false);
+				}
+			}
+			if (msg == null)
+				return StdMsg.UNSUPPORTED_OPERATION;
+			return msg;
+		}
+
+		@Override
+		public CollectionElement<V> addElement(V value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			if (after != null && !(after instanceof BetterMultiMapValueCollection.MapValueId))
+				throw new NoSuchElementException();
+			MapValueId mvAfter = (MapValueId) after;
+			if (before != null && !(before instanceof BetterMultiMapValueCollection.MapValueId))
+				throw new NoSuchElementException();
+			MapValueId mvBefore = (MapValueId) before;
+			if (mvAfter != null && mvBefore != null && mvAfter.compareTo(mvBefore) >= 0)
+				throw new IllegalArgumentException(after + ">" + before);
+			boolean currentKey;
+			String msg = null;
+			if (first) {
+				currentKey = mvAfter != null;
+				MultiEntryHandle<K, V> keyEntry = mvAfter == null ? theMap.getTerminalEntry(true) : theMap.getEntryById(mvAfter.keyId);
+				while (keyEntry != null) {
+					msg = keyEntry.getValues().canAdd(value, //
+						currentKey ? mvAfter.valueId : null, //
+						(mvBefore != null && mvBefore.keyId.equals(keyEntry.getElementId())) ? mvBefore.valueId : null);
+					if (msg == null)
+						return keyEntry.getValues().addElement(value, //
+							currentKey ? mvAfter.valueId : null, //
+							(mvBefore != null && mvBefore.keyId.equals(keyEntry.getElementId())) ? mvBefore.valueId : null, true);
+					keyEntry = theMap.getAdjacentEntry(keyEntry.getElementId(), true);
+				}
+			} else {
+				currentKey = mvBefore != null;
+				MultiEntryHandle<K, V> keyEntry = mvBefore == null ? theMap.getTerminalEntry(false) : theMap.getEntryById(mvBefore.keyId);
+				while (keyEntry != null) {
+					msg = keyEntry.getValues().canAdd(value, //
+						(mvBefore != null && mvBefore.keyId.equals(keyEntry.getElementId())) ? mvBefore.valueId : null, //
+						currentKey ? mvAfter.valueId : null);
+					if (msg == null)
+						return keyEntry.getValues().addElement(value, //
+							(mvBefore != null && mvBefore.keyId.equals(keyEntry.getElementId())) ? mvBefore.valueId : null, //
+							currentKey ? mvAfter.valueId : null, false);
+					keyEntry = theMap.getAdjacentEntry(keyEntry.getElementId(), false);
+				}
+			}
+			if (msg == null || msg.equals(StdMsg.UNSUPPORTED_OPERATION))
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			throw new IllegalArgumentException(msg);
+		}
+
+		@Override
+		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+			if (!(valueEl instanceof BetterMultiMapValueCollection.MapValueId))
+				throw new NoSuchElementException();
+			MapValueId mvi = (MapValueId) valueEl;
+			if (after != null && !(after instanceof BetterMultiMapValueCollection.MapValueId))
+				throw new NoSuchElementException();
+			MapValueId mvAfter = (MapValueId) after;
+			if (before != null && !(before instanceof BetterMultiMapValueCollection.MapValueId))
+				throw new NoSuchElementException();
+			MapValueId mvBefore = (MapValueId) before;
+			if (mvAfter != null && mvBefore != null && mvAfter.compareTo(mvBefore) >= 0)
+				throw new IllegalArgumentException(after + ">" + before);
+
+			int afterKeyComp = after == null ? -1 : mvAfter.keyId.compareTo(mvi.keyId);
+			int beforeKeyComp = before == null ? 1 : mvBefore.keyId.compareTo(mvi.keyId);
+			if ((afterKeyComp < 0 || (afterKeyComp == 0 && mvAfter.valueId.compareTo(mvi.valueId) <= 0))//
+				&& (beforeKeyComp > 0 || (beforeKeyComp == 0 && mvBefore.valueId.compareTo(mvi.valueId) >= 0)))
+				return null; // Staying in the same place satisfies
+
+			// Next, see if we can move it within its key collection
+			String msg = null;
+			if (afterKeyComp <= 0 && beforeKeyComp >= 0)
+				msg = theMap.getEntryById(mvi.keyId).getValues().canMove(mvi.valueId, //
+					afterKeyComp == 0 ? mvAfter.valueId : null, //
+					beforeKeyComp == 0 ? mvBefore.valueId : null);
+			if (msg == null)
+				return null;
+
+			// We'll have to remove the value from its source
+			msg = theMap.getEntryById(mvi.keyId).getValues().canRemove(mvi.valueId);
+			if (msg != null)
+				return msg;
+			V value = theMap.getEntryById(mvi.keyId, mvi.valueId).get();
+			MultiEntryHandle<K, V> entry = after == null ? theMap.getTerminalEntry(true) : theMap.getEntryById(mvAfter.keyId);
+			int entryBefore = 0;
+			while (entry != null && (before == null || (entryBefore = entry.getElementId().compareTo(mvBefore.keyId)) <= 0)) {
+				if (entry.getElementId().equals(mvi.keyId))
+					continue;
+				msg = entry.getValues().canAdd(value, //
+					(after != null && entry.getElementId().equals(mvAfter.keyId)) ? mvAfter.valueId : null, //
+					(before != null && entryBefore == 0) ? mvBefore.valueId : null);
+				if (msg == null)
+					return null;
+			}
+			return msg;
+		}
+
+		@Override
+		public CollectionElement<V> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			if (!(valueEl instanceof BetterMultiMapValueCollection.MapValueId))
+				throw new NoSuchElementException();
+			MapValueId mvi = (MapValueId) valueEl;
+			if (after != null && !(after instanceof BetterMultiMapValueCollection.MapValueId))
+				throw new NoSuchElementException();
+			MapValueId mvAfter = (MapValueId) after;
+			if (before != null && !(before instanceof BetterMultiMapValueCollection.MapValueId))
+				throw new NoSuchElementException();
+			MapValueId mvBefore = (MapValueId) before;
+			if (mvAfter != null && mvBefore != null && mvAfter.compareTo(mvBefore) >= 0)
+				throw new IllegalArgumentException(after + ">" + before);
+
+			MultiEntryHandle<K, V> entry;
+			int afterKeyComp, beforeKeyComp;
+			if (first) {
+				if (after == null) {
+					afterKeyComp = -1;
+					entry = theMap.getTerminalEntry(true);
+				} else {
+					afterKeyComp = 0;
+					entry = theMap.getEntryById(mvAfter.keyId);
+				}
+				beforeKeyComp = 0;
+			} else {
+				if (before == null) {
+					beforeKeyComp = 1;
+					entry = theMap.getTerminalEntry(false);
+				} else {
+					beforeKeyComp = 0;
+					entry = theMap.getEntryById(mvBefore.keyId);
+				}
+				afterKeyComp = 0;
+			}
+			MutableMultiMapHandle<K, V> valueEntry = theMap.mutableElement(mvi.keyId, mvi.valueId);
+			String removable = theMap.mutableElement(mvi.keyId, mvi.valueId).canRemove();
+			String msg = null;
+			if (removable != null) {
+				afterKeyComp = after == null ? -1 : mvAfter.keyId.compareTo(mvi.keyId);
+				beforeKeyComp = before == null ? 1 : mvBefore.keyId.compareTo(mvi.keyId);
+				if (afterKeyComp > 0 || beforeKeyComp < 0) {
+					if (removable.equals(StdMsg.UNSUPPORTED_OPERATION))
+						throw new UnsupportedOperationException(removable);
+					else
+						throw new IllegalArgumentException(removable);
+				}
+				return theMap.getEntryById(mvi.keyId).getValues().move(mvi.valueId, afterKeyComp == 0 ? mvAfter.valueId : null, //
+					beforeKeyComp == 0 ? mvBefore.valueId : null, //
+					first, afterRemove);
+			}
+			V value = valueEntry.get();
+			while (entry != null) {
+				boolean terminal;
+				if (first) {
+					beforeKeyComp = (before != null && entry.getElementId().equals(mvBefore.keyId)) ? 0 : 1;
+					terminal = beforeKeyComp == 0;
+				} else {
+					afterKeyComp = (after != null && entry.getElementId().equals(mvAfter.keyId)) ? 0 : -1;
+					terminal = afterKeyComp == 0;
+				}
+				if (entry.getElementId().equals(mvi.keyId)) {
+					msg = entry.getValues().canMove(mvi.valueId, //
+						afterKeyComp == 0 ? mvAfter.valueId : null, //
+						beforeKeyComp == 0 ? mvBefore.valueId : null);
+					if (msg == null)
+						return entry.getValues().move(mvi.valueId, //
+							afterKeyComp == 0 ? mvAfter.valueId : null, //
+							beforeKeyComp == 0 ? mvBefore.valueId : null, first, afterRemove);
+				} else {
+					msg = entry.getValues().canAdd(value, //
+						afterKeyComp == 0 ? mvAfter.valueId : null, //
+						beforeKeyComp == 0 ? mvBefore.valueId : null);
+					if (msg == null) {
+						theMap.mutableElement(mvi.keyId, mvi.valueId).remove();
+					}
+				}
+				msg = entry.getValues().canAdd(value, //
+					afterKeyComp == 0 ? mvAfter.valueId : null, //
+					beforeKeyComp == 0 ? mvBefore.valueId : null);
+				if (msg == null) {
+					valueEntry.remove();
+					if (afterRemove != null)
+						afterRemove.run();
+					return entry.getValues().addElement(value, //
+						afterKeyComp == 0 ? mvAfter.valueId : null, //
+						beforeKeyComp == 0 ? mvBefore.valueId : null, first);
+				}
+				if (terminal)
+					break;
+				else
+					entry = theMap.getAdjacentEntry(entry.getElementId(), first);
+			}
+			if (msg == null || msg.equals(StdMsg.UNSUPPORTED_OPERATION))
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			throw new IllegalArgumentException(msg);
+		}
+
+		@Override
+		public void clear() {
+			theMap.clear();
+		}
+
+		@Override
+		public int hashCode() {
+			return BetterCollection.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterCollection.equals(this, obj);
+		}
+
+		@Override
+		public String toString() {
+			return BetterCollection.toString(this);
+		}
+
+		class MapValueId implements ElementId {
+			final ElementId keyId;
+			final ElementId valueId;
+
+			MapValueId(ElementId keyId, ElementId valueId) {
+				this.keyId = keyId;
+				this.valueId = valueId;
+			}
+
+			BetterMultiMap<K, V> getMap() {
+				return theMap;
+			}
+
+			@Override
+			public int compareTo(ElementId o) {
+				int comp = keyId.compareTo(((MapValueId) o).keyId);
+				if (comp == 0)
+					comp = valueId.compareTo(((MapValueId) o).valueId);
+				return comp;
+			}
+
+			@Override
+			public boolean isPresent() {
+				return keyId.isPresent() && valueId.isPresent();
+			}
+
+			@Override
+			public int hashCode() {
+				return Objects.hash(keyId, valueId);
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				if (obj == this)
+					return true;
+				else if (!(obj instanceof BetterMultiMapValueCollection.MapValueId))
+					return false;
+				MapValueId other = (MapValueId) obj;
+				return other.getMap().getIdentity().equals(getMap().getIdentity())//
+					&& other.keyId.equals(keyId)//
+					&& other.valueId.equals(valueId);
+			}
+
+			@Override
+			public String toString() {
+				return keyId + "=" + valueId;
+			}
+		}
+
+		protected class ValueElement implements CollectionElement<V> {
+			private final MultiEntryValueHandle<K, V> theMapEntry;
+
+			ValueElement(MultiEntryValueHandle<K, V> mapEntry) {
+				theMapEntry = mapEntry;
+			}
+
+			protected MultiEntryValueHandle<K, V> getMapEntry() {
+				return theMapEntry;
+			}
+
+			@Override
+			public ElementId getElementId() {
+				return new MapValueId(theMapEntry.getKeyId(), theMapEntry.getElementId());
+			}
+
+			@Override
+			public V get() {
+				return theMapEntry.get();
+			}
+
+			@Override
+			public int hashCode() {
+				return getElementId().hashCode();
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return obj instanceof CollectionElement && getElementId().equals(((CollectionElement<?>) obj).getElementId());
+			}
+
+			@Override
+			public String toString() {
+				return theMapEntry.toString();
+			}
+		}
+
+		class MutableValueElement extends ValueElement implements MutableCollectionElement<V> {
+			MutableValueElement(MutableMultiMapHandle<K, V> mapEntry) {
+				super(mapEntry);
+			}
+
+			@Override
+			protected MutableMultiMapHandle<K, V> getMapEntry() {
+				return (MutableMultiMapHandle<K, V>) super.getMapEntry();
+			}
+
+			@Override
+			public BetterCollection<V> getCollection() {
+				return BetterMultiMapValueCollection.this;
+			}
+
+			@Override
+			public String isEnabled() {
+				return getMapEntry().isEnabled();
+			}
+
+			@Override
+			public String isAcceptable(V value) {
+				return getMapEntry().isAcceptable(value);
+			}
+
+			@Override
+			public void set(V value) throws UnsupportedOperationException, IllegalArgumentException {
+				getMapEntry().set(value);
+			}
+
+			@Override
+			public String canRemove() {
+				return getMapEntry().canRemove();
+			}
+
+			@Override
+			public void remove() throws UnsupportedOperationException {
+				getMapEntry().remove();
+			}
+		}
+	}
+
+	/**
 	 * A default implementation of {@link BetterMultiMap#getEntryById(ElementId, ElementId)}
 	 * 
 	 * @param <K> The key type of the map
@@ -1146,6 +1708,87 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		@Override
 		public ElementId getKeyId() {
 			return theMultiEntry.getElementId();
+		}
+	}
+
+	/**
+	 * Implements {@link BetterMultiMap#empty()}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
+	class EmptyMultiMap<K, V> implements BetterMultiMap<K, V> {
+		private static final Object ID = Identifiable.baseId("Empty multi-map", EmptyMultiMap.class);
+
+		@Override
+		public int valueSize() {
+			return 0;
+		}
+
+		@Override
+		public boolean clear() {
+			return false;
+		}
+
+		@Override
+		public Object getIdentity() {
+			return ID;
+		}
+
+		@Override
+		public long getStamp() {
+			return 0;
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return Transaction.NONE;
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, Object cause) {
+			return Transaction.NONE;
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return CoreId.EMPTY;
+		}
+
+		@Override
+		public BetterSet<K> keySet() {
+			return BetterSet.empty();
+		}
+
+		@Override
+		public MultiEntryHandle<K, V> getEntryById(ElementId keyId) {
+			throw new NoSuchElementException();
+		}
+
+		@Override
+		public BetterCollection<V> get(Object key) {
+			return BetterCollection.empty();
+		}
+
+		@Override
+		public MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, ElementId afterKey,
+			ElementId beforeKey, boolean first, Runnable added) {
+			return null;
+		}
+
+		@Override
+		public int hashCode() {
+			return BetterMultiMap.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterMultiMap.equals(this, obj);
+		}
+
+		@Override
+		public String toString() {
+			return BetterMultiMap.toString(this);
 		}
 	}
 

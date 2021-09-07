@@ -821,8 +821,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return An empty {@link BetterCollection}
 	 */
 	public static <E> BetterCollection<E> empty() {
-		return new EmptyCollection<>();
+		return (BetterCollection<E>) EMPTY;
 	}
+
+	/** Singleton empty better collection */
+	static final BetterCollection<Object> EMPTY = new EmptyCollection<>();
 
 	/**
 	 * An {@link Iterator} based on a {@link BetterCollection}'s elements

@@ -134,8 +134,11 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 	 * @return An immutable, empty set
 	 */
 	public static <E> BetterSet<E> empty() {
-		return new EmptySet<>();
+		return (BetterSet<E>) EMPTY;
 	}
+
+	/** Singleton empty better set */
+	static final BetterSet<Object> EMPTY = new EmptySet<>();
 
 	/**
 	 * Implements {@link BetterSet#reverse()}

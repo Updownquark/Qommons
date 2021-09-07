@@ -44,6 +44,9 @@ public interface MultiMap<K, V> {
 	/** @return The number of values in this multi-map */
 	int valueSize();
 
+	/** @return A collection of all values associated with any key in this map */
+	Collection<V> values();
+
 	/**
 	 * Adds a value for the given key
 	 *

@@ -114,7 +114,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	 */
 	public static <V> ValueCollectionSupplier<Object, V> sortedSupplier(Comparator<? super V> sorting, boolean distinct) {
 		return new ValueCollectionSupplier<Object, V>() {
-			private BetterList<V> EMPTY;
+			private BetterList<V> EMPTY_VALUES;
 
 			@Override
 			public <V2 extends V> BetterCollection<V2> createValuesFor(Object key, CollectionLockingStrategy locking) {
@@ -124,13 +124,13 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 
 			@Override
 			public <V2 extends V> BetterCollection<V2> createEmptyValues() {
-				if (EMPTY == null) {
+				if (EMPTY_VALUES == null) {
 					if (distinct)
-						EMPTY = BetterSortedSet.empty(sorting);
+						EMPTY_VALUES = BetterSortedSet.empty(sorting);
 					else
-						EMPTY = BetterSortedList.empty(sorting);
+						EMPTY_VALUES = BetterSortedList.empty(sorting);
 				}
-				return (BetterCollection<V2>) EMPTY;
+				return (BetterCollection<V2>) EMPTY_VALUES;
 			}
 
 			@Override

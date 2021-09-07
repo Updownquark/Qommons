@@ -290,9 +290,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		return new ElementList<>(this, low, lowIncluded, high, highIncluded);
 	}
 
-
-	/** An empty list */
-	public static final EmptyList<Object> EMPTY = new EmptyList<>();
+	/** Singleton empty better list */
+	public static final BetterList<Object> EMPTY = new EmptyList<>();
 
 	/**
 	 * @param <E> The type of the list
