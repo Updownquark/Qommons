@@ -171,7 +171,14 @@ public class TimeUtils {
 	/** A parsed time returned from {@link TimeUtils#parseDuration(CharSequence)} */
 	public static class ParsedDuration implements FieldedAdjustable<DurationComponentType, DurationComponent, ParsedDuration> {
 		/** An empty duration */
-		public static final ParsedDuration ZERO = new ParsedDuration(false, Collections.emptyList(), Collections.emptyList());
+		public static final ParsedDuration ZERO;
+		static {
+			try {
+				ZERO = parseDuration("0s");
+			} catch (ParseException e) {
+				throw new IllegalStateException(e);
+			}
+		}
 
 		private final boolean isNegative;
 		private final EnumMap<DurationComponentType, DurationComponent> components;
