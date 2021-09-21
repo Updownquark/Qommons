@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 public class Version implements Comparable<Version> {
 	/** A pattern to parse semantic version strings */
 	public static final Pattern VERSION_PATTERN = Pattern
-		.compile("(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<qualifier>[a-zA-Z0-9_\\-]+))?");
+		.compile("v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<qualifier>[a-zA-Z0-9_\\-]+))?");
 
 	/** The major revision */
 	public final int major;
