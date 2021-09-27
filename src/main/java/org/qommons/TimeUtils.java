@@ -184,13 +184,15 @@ public class TimeUtils {
 		private final EnumMap<DurationComponentType, DurationComponent> components;
 		private final List<DurationComponent> theSequence;
 		private final List<String> theSeparators;
+		private final RelativeTimeFormat theFormat;
 
 		/**
 		 * @param negative Whether this represents a negative duration
 		 * @param sequence The parsed components composing this duration
 		 * @param separators The whitespace separators between each component
+		 * @param format The format to use for printing the duration
 		 */
-		public ParsedDuration(boolean negative, List<DurationComponent> sequence, List<String> separators) {
+		public ParsedDuration(boolean negative, List<DurationComponent> sequence, List<String> separators, RelativeTimeFormat format) {
 			isNegative = negative;
 			components = new EnumMap<>(DurationComponentType.class);
 			for (DurationComponent c : sequence)
@@ -198,6 +200,7 @@ public class TimeUtils {
 					throw new IllegalArgumentException("Duplicate components of type " + c.getField());
 			this.theSequence = sequence;
 			theSeparators = separators;
+			theFormat = format;
 		}
 
 		/** @return 0 if this duration is empty, -1 if it is negative, or 1 if it is positive */
@@ -206,6 +209,20 @@ public class TimeUtils {
 				if (comp.getValue() != 0)
 					return isNegative ? -1 : 1;
 			return 0;
+		}
+
+		/** @return The format used to print this duration */
+		public RelativeTimeFormat getFormat() {
+			return theFormat;
+		}
+
+		/**
+		 * @param format The format to use for printing the duration
+		 * @return A new duration, identical to this one, that uses the given format
+		 */
+		public ParsedDuration withFormat(RelativeTimeFormat format) {
+			// TODO Re-format the components
+			return new ParsedDuration(isNegative, theSequence, theSeparators, format);
 		}
 
 		@Override
@@ -301,7 +318,7 @@ public class TimeUtils {
 				separators.add(separator);
 				index += text.length() + separator.length();
 			}
-			return new ParsedDuration(isNegative, sequence, separators);
+			return new ParsedDuration(isNegative, sequence, separators, theFormat);
 		}
 
 		private static boolean adjustValues(EnumMap<DurationComponentType, Integer> fieldValues, DurationComponentType type, int amount) {
@@ -403,7 +420,7 @@ public class TimeUtils {
 			}
 
 			if (multiple == 1)
-				return new ParsedDuration(neg, theSequence, theSeparators);
+				return new ParsedDuration(neg, theSequence, theSeparators, theFormat);
 			List<DurationComponent> newComponents = new ArrayList<>(theSequence.size());
 			int start = 0;
 			for (int i = 0; i < theSequence.size(); i++) {
@@ -417,7 +434,7 @@ public class TimeUtils {
 					.append(newVal).append(comp.toString().substring(comp.valueEnd - comp.getStart())).toString();
 				newComponents.add(new DurationComponent(start, valueStart, valueEnd, comp.getField(), newVal, newText));
 			}
-			return new ParsedDuration(neg, Collections.unmodifiableList(newComponents), theSeparators);
+			return new ParsedDuration(neg, Collections.unmodifiableList(newComponents), theSeparators, theFormat);
 		}
 
 		/** @return A duration with this object's magnitude */
@@ -551,6 +568,15 @@ public class TimeUtils {
 		 * @return A parsed duration with the same magnitude as the given duration
 		 */
 		public static ParsedDuration asParsedDuration(Duration d, boolean withWeeks) {
+			return asParsedDuration(d, relativeFormat().withAboveDayStrategy(withWeeks ? AboveDaysStrategy.Week : AboveDaysStrategy.None));
+		}
+
+		/**
+		 * @param d The duration to convert
+		 * @param format The format to use to convert the duration
+		 * @return A parsed duration with the same magnitude as the given duration
+		 */
+		public static ParsedDuration asParsedDuration(Duration d, RelativeTimeFormat format) {
 			boolean neg = d.isNegative();
 			if (neg)
 				d = d.negated();
@@ -559,13 +585,53 @@ public class TimeUtils {
 			separators.add("");
 			int index = 0;
 			long seconds = d.getSeconds();
-			if (seconds > WEEK.getSeconds() && withWeeks) {
-				int weeks = (int) (seconds / WEEK.getSeconds());
-				seconds %= WEEK.getSeconds();
-				String valueStr = String.valueOf(weeks);
-				components
-					.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Week, weeks, valueStr + "w"));
-				index += valueStr.length() + 1;
+			if (seconds > WEEK.getSeconds() && format.getAboveDayStrategy() != AboveDaysStrategy.None) {
+				if (format.getAboveDayStrategy() == AboveDaysStrategy.Week) {
+					int weeks = (int) (seconds / WEEK.getSeconds());
+					seconds %= WEEK.getSeconds();
+					String valueStr = String.valueOf(weeks);
+					String text = format.printComponent(weeks, DurationComponentType.Week, null).toString();
+					components.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Week, weeks, text));
+					index += text.length();
+				} else {
+					long days = seconds / DAY.getSeconds();
+					// T is now days
+					if (days >= 365) {
+						int years = (int) (days / 365L);
+						long yearDays = getDaysInYears(years);
+						if (days - yearDays >= 365) {
+							long yearPlusOneDays = getDaysInYears(years + 1);
+							if (yearPlusOneDays >= days) {
+								years++;
+								yearDays = yearPlusOneDays;
+							}
+						}
+						String valueStr = String.valueOf(years);
+						String text = format.printComponent(years, DurationComponentType.Year, null).toString();
+						days -= yearDays;
+						components
+							.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Year, years, text));
+						index += text.length();
+					}
+					if (days >= 30) {
+						int months = (int) (days / 30L);
+						long monthDays = getDaysInMonths(months);
+						if (days - monthDays >= 30) {
+							long monthPlusOneDays = getDaysInMonths(months + 1);
+							if (monthPlusOneDays >= days) {
+								months++;
+								monthDays = monthPlusOneDays;
+							}
+						}
+						days -= monthDays;
+						String valueStr = String.valueOf(months);
+						String text = format.printComponent(months, DurationComponentType.Month, null).toString();
+						days -= monthDays;
+						components
+							.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Month, months, text));
+						index += text.length();
+					}
+				}
 			}
 			if (seconds >= DAY.getSeconds()) {
 				if (!components.isEmpty()) {
@@ -575,11 +641,12 @@ public class TimeUtils {
 				int days = (int) (seconds / DAY.getSeconds());
 				seconds %= DAY.getSeconds();
 				String valueStr = String.valueOf(days);
+				String text = format.printComponent(days, DurationComponentType.Day, null).toString();
 				components
-					.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Day, days, valueStr + "d"));
-				index += valueStr.length() + 1;
+					.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Day, days, text));
+				index += text.length();
 			}
-			if (seconds >= HOUR.getSeconds()) {
+			if (seconds >= HOUR.getSeconds() && components.size() < format.getMaxElements()) {
 				if (!components.isEmpty()) {
 					separators.add(" ");
 					index++;
@@ -587,11 +654,12 @@ public class TimeUtils {
 				int hours = (int) (seconds / HOUR.getSeconds());
 				seconds %= HOUR.getSeconds();
 				String valueStr = String.valueOf(hours);
+				String text = format.printComponent(hours, DurationComponentType.Hour, null).toString();
 				components
-					.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Hour, hours, valueStr + "h"));
-				index += valueStr.length() + 1;
+					.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Hour, hours, text));
+				index += text.length();
 			}
-			if (seconds >= 60) {
+			if (seconds >= 60 && components.size() < format.getMaxElements()) {
 				if (!components.isEmpty()) {
 					separators.add(" ");
 					index++;
@@ -599,22 +667,24 @@ public class TimeUtils {
 				int minutes = (int) (seconds / 60);
 				seconds %= 60;
 				String valueStr = String.valueOf(minutes);
+				String text = format.printComponent(minutes, DurationComponentType.Minute, null).toString();
 				components.add(
-					new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Minute, minutes, valueStr + "m"));
-				index += valueStr.length() + 1;
+					new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Minute, minutes, text));
+				index += text.length();
 			}
-			if (seconds > 0) {
+			if (seconds > 0 && components.size() < format.getMaxElements()) {
 				if (!components.isEmpty()) {
 					separators.add(" ");
 					index++;
 				}
 				String valueStr = String.valueOf(seconds);
+				String text = format.printComponent((int) seconds, DurationComponentType.Second, null).toString();
 				components.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Second, (int) seconds,
-					valueStr + "s"));
-				index += valueStr.length() + 1;
+					text));
+				index += text.length();
 			}
 			int nanos = d.getNano();
-			if (nanos == 0) {
+			if (nanos == 0 || components.size() >= format.getMaxElements()) { //
 			} else if (nanos % 1_000_000 == 0) {
 				if (!components.isEmpty()) {
 					separators.add(" ");
@@ -622,9 +692,10 @@ public class TimeUtils {
 				}
 				int millis = nanos / 1_000_000;
 				String valueStr = String.valueOf(millis);
+				String text = format.printComponent(millis, DurationComponentType.Millisecond, null).toString();
 				components.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Millisecond, millis,
-					valueStr + "ms"));
-				index += valueStr.length() + 2;
+					text));
+				index += text.length();
 			} else if (nanos % 1_000 == 0) {
 				if (!components.isEmpty()) {
 					separators.add(" ");
@@ -632,21 +703,23 @@ public class TimeUtils {
 				}
 				int micros = nanos / 1_000;
 				String valueStr = String.valueOf(micros);
+				String text = format.printComponent(micros, DurationComponentType.Microsecond, null).toString();
 				components.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Microsecond, micros,
-					valueStr + "us"));
-				index += valueStr.length() + 2;
+					text));
+				index += text.length();
 			} else {
 				if (!components.isEmpty()) {
 					separators.add(" ");
 					index++;
 				}
 				String valueStr = String.valueOf(nanos);
+				String text = format.printComponent(nanos, DurationComponentType.Nanosecond, null).toString();
 				components.add(new DurationComponent(index, index, index + valueStr.length(), DurationComponentType.Nanosecond, nanos,
-					valueStr + "ns"));
-				index += valueStr.length() + 2;
+					text));
+				index += text.length();
 			}
 			separators.add("");
-			return new ParsedDuration(neg, components, separators);
+			return new ParsedDuration(neg, components, separators, format);
 		}
 
 		/**
@@ -2546,7 +2619,7 @@ public class TimeUtils {
 			throw new ParseException("No content to parse", c);
 		if (neg)
 			duration = duration.negated();
-		return new ParsedDuration(neg, components, separators);
+		return new ParsedDuration(neg, components, separators, relativeFormat());
 	}
 
 	/**
@@ -2640,7 +2713,7 @@ public class TimeUtils {
 		str.append(DURATION_PRECISION_ABBREVS.get(unit.ordinal()));
 		return new ParsedDuration(amount < 0,
 			Collections.unmodifiableList(Arrays.asList(new DurationComponent(0, 0, valueEnd, unit, Math.abs(amount), str.toString()))),
-			Collections.emptyList());
+			Collections.emptyList(), relativeFormat());
 	}
 
 	/**
@@ -2713,7 +2786,8 @@ public class TimeUtils {
 
 		components.trimToSize();
 		separators.trimToSize();
-		return new ParsedDuration(neg, Collections.unmodifiableList(components), Collections.unmodifiableList(separators));
+		return new ParsedDuration(neg, Collections.unmodifiableList(components), Collections.unmodifiableList(separators),
+			relativeFormat());
 	}
 
 	private static void addComponent(List<DurationComponent> components, List<String> separators, StringBuilder str, int amount,
@@ -2822,6 +2896,51 @@ public class TimeUtils {
 			thePrecisionNames = DURATION_PRECISION_ABBREVS;
 			theAboveDayStrategy = AboveDaysStrategy.None;
 			theAgo = "ago";
+		}
+
+		/** @return The reference time used to determine how to print instants */
+		public Supplier<Instant> getReference() {
+			return theReference;
+		}
+
+		/** @return The time zone used */
+		public TimeZone getTimeZone() {
+			return theTimeZone;
+		}
+
+		/** @return How to print times with reference to units greater than a day */
+		public AboveDaysStrategy getAboveDayStrategy() {
+			return theAboveDayStrategy;
+		}
+
+		/** @return The "ago" string to use for printing times in the past */
+		public String getAgo() {
+			return theAgo;
+		}
+
+		/** @return This format's {@link #withMaxPrecision(DurationComponentType) max precision} */
+		public DurationComponentType getMaxPrecision() {
+			return theMaxPrecision;
+		}
+
+		/** @return This format's {@link #withMaxElements(int) element limit} */
+		public int getMaxElements() {
+			return theMaxElements;
+		}
+
+		/** @return This format's {@link #withPrecisionNames(List) precision names} */
+		public List<String> getPrecisionNames() {
+			return thePrecisionNames;
+		}
+
+		/** @return Whether units are pluralized */
+		public boolean isPluralized() {
+			return isPluralized;
+		}
+
+		/** @return The {@link #withJustNow(String) just now} String */
+		public String getJustNow() {
+			return theJustNow;
 		}
 
 		/**
@@ -3164,18 +3283,14 @@ public class TimeUtils {
 						firstHit = false;
 					else
 						str.append(' ');
-					str.append(diffs[precision]).append(//
-						(isPluralized && diffs[precision] != 1) ? StringUtils.pluralize(thePrecisionNames.get(precision))
-							: thePrecisionNames.get(precision));
+					printComponent(diffs[precision], DurationComponentType.values()[precision], str);
 				}
 			}
 			if (firstHit) {
 				if (theJustNow != null)
 					str.append(theJustNow);
 				else
-					str.append(diffs[maxPrecision]).append(//
-						(isPluralized && diffs[maxPrecision] != 1) ? StringUtils.pluralize(thePrecisionNames.get(maxPrecision))
-							: thePrecisionNames.get(maxPrecision));
+					printComponent(diffs[maxPrecision], DurationComponentType.values()[maxPrecision], str);
 			}
 
 			if (!firstHit && neg && theAgo != null)
@@ -3208,29 +3323,19 @@ public class TimeUtils {
 			return print(duration, null).toString();
 		}
 
-		/** @return This format's {@link #withMaxPrecision(DurationComponentType) max precision} */
-		public DurationComponentType getMaxPrecision() {
-			return theMaxPrecision;
-		}
-
-		/** @return This format's {@link #withMaxElements(int) element limit} */
-		public int getMaxElements() {
-			return theMaxElements;
-		}
-
-		/** @return This format's {@link #withPrecisionNames(List) precision names} */
-		public List<String> getPrecisionNames() {
-			return thePrecisionNames;
-		}
-
-		/** @return Whether units are pluralized */
-		public boolean isPluralized() {
-			return isPluralized;
-		}
-
-		/** @return The {@link #withJustNow(String) just now} String */
-		public String getJustNow() {
-			return theJustNow;
+		/**
+		 * @param value The duration value
+		 * @param unit The unit of the value
+		 * @param into The StringBuilder to print into
+		 * @return The given string builder
+		 */
+		public StringBuilder printComponent(int value, DurationComponentType unit, StringBuilder into) {
+			if (into == null)
+				into = new StringBuilder();
+			into.append(value).append(//
+				(isPluralized && value != 1) ? StringUtils.pluralize(thePrecisionNames.get(unit.ordinal()))
+					: thePrecisionNames.get(unit.ordinal()));
+			return into;
 		}
 	}
 
