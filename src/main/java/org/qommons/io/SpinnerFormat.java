@@ -198,6 +198,15 @@ public interface SpinnerFormat<T> extends Format<T> {
 	}
 
 	/**
+	 * @param timeFormat The format to use to print durations
+	 * @return A spinner format that parses durations (time lengths) using a flexible format
+	 */
+	public static SpinnerFormat<Duration> flexDuration(TimeUtils.RelativeTimeFormat timeFormat) {
+		return SpinnerFormat.<TimeUtils.ParsedDuration, Duration> wrapAdjustable(forAdjustable(TimeUtils::parseDuration),
+			TimeUtils.ParsedDuration::asDuration, d -> TimeUtils.ParsedDuration.asParsedDuration(d, timeFormat));
+	}
+
+	/**
 	 * Adds validation to a spinner format, creating a format that throws an exception for values parsed by the given format that fail a
 	 * filter
 	 * 
