@@ -1,7 +1,6 @@
 package org.qommons;
 
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -2292,8 +2291,8 @@ public class TimeUtils {
 		{
 			char type = 0;
 			int start = 0;
-			for (int i = 0; i < dayFormat.length(); i++) {
-				char newType = dayFormat.charAt(i);
+			for (int i = 0; i <= dayFormat.length(); i++) {
+				char newType = i < dayFormat.length() ? dayFormat.charAt(i) : 0;
 				switch (newType) {
 				case 'd':
 					foundDay = true;
@@ -2313,7 +2312,7 @@ public class TimeUtils {
 					newType = 1;
 					break;
 				}
-				if (start > 0 && type != newType) {
+				if (type != newType) {
 					int strStart = str.length();
 					switch (type) {
 					case 'd':
@@ -2368,7 +2367,7 @@ public class TimeUtils {
 					start = i;
 				}
 			}
-			str.append(new SimpleDateFormat(dayFormat).format(cal.getTime()));
+			// str.append(new SimpleDateFormat(dayFormat).format(cal.getTime()));
 		}
 		if (foundYear && (!foundMonth || !foundDay)) {
 			throw new IllegalArgumentException("Cannot specify year without month and day");
