@@ -1710,7 +1710,7 @@ public class TestHelper {
 		/**
 		 * The main method to spin up the slave
 		 * 
-		 * @param args Command-line arguments:
+		 * @param clArgs Command-line arguments:
 		 *        <ul>
 		 *        <li><b>--testerID=</b>The ID for this test slave</li>
 		 *        <li><b>--testable=</b>The fully-qualified name of the {@link Testable} implementation to test</li>
@@ -1721,30 +1721,23 @@ public class TestHelper {
 		 *        <li><b>--placemarks=</b>The comma-separated list of placemarks to expect for the test cases</li>
 		 *        </ul>
 		 */
-		public static void main(String[] args) {
-			ArgumentParsing.ArgumentParser argParser = ArgumentParsing.create()//
-				.forDefaultPattern()//
-				.stringArg("testerID").required()//
-				.stringArg("testable").required()//
-				.instantArg("start").required()//
-				.durationArg("max-total-duration").defValue((Duration) null)//
-				.durationArg("max-case-duration").defValue((Duration) null)//
-				.durationArg("max-progress-interval").defValue((Duration) null)//
-				.forDefaultMultiValuePattern()//
-				.stringArg("placemarks").times(0, Integer.MAX_VALUE)//
-				.getParser();
-			ArgumentParsing.Arguments parsedArgs;
-			try {
-				parsedArgs = argParser.parse(args);
-			} catch (RuntimeException e) {
-				e.printStackTrace();
-				System.out.println(Arrays.toString(args));
-				System.out.println(argParser);
-				return;
-			}
+		public static void main(String[] clArgs) {
+			ArgumentParsing2.Arguments args = ArgumentParsing2.build()//
+				.forValuePattern(patt -> patt//
+					.addStringArgument("testerID", a -> a.required())//
+					.addStringArgument("testable", a -> a.required())//
+					.addInstantArgument("start", a -> a.required())//
+					.addDurationArgument("max-total-duration", a -> a.optional())//
+					.addDurationArgument("max-case-duration", a -> a.optional())//
+					.addDurationArgument("max-progress-interval", a -> a.optional())//
+				)//
+				.forMultiValuePattern(patt -> patt//
+					.addStringArgument("placemarks", a -> a.anyTimes())//
+				)//
+				.build().parse(clArgs);
 
-			String testerID = parsedArgs.getString("testerID");
-			String testClassName = parsedArgs.getString("testable");
+			String testerID = args.get("testerID", String.class);
+			String testClassName = args.get("testable", String.class);
 			Class<? extends Testable> testClass;
 			try {
 				testClass = Class.forName(testClassName).asSubclass(Testable.class);
@@ -1765,11 +1758,11 @@ public class TestHelper {
 				System.exit(1);
 				return;
 			}
-			NavigableSet<String> placemarkNames = new TreeSet<>(parsedArgs.getAll("placemarks", String.class));
+			NavigableSet<String> placemarkNames = new TreeSet<>(args.getAll("placemarks", String.class));
 
 			TestExecutionSlave slave = new TestExecutionSlave(testerID, creator, //
-				parsedArgs.getInstant("start", null), parsedArgs.getDuration("max-total-duration", null),
-				parsedArgs.getDuration("max-case-duration", null), parsedArgs.getDuration("max-progress-interval", null));
+				args.get("start", Instant.class), args.get("max-total-duration", Duration.class),
+				args.get("max-case-duration", Duration.class), args.get("max-progress-interval", Duration.class));
 			// Set up a heart beat listener that expects some input from the master every so often.
 			// If no input is received in that interval, the tester is assumed to have been killed and we will exit.
 			boolean[] stopped = new boolean[1];
