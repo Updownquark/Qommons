@@ -1,5 +1,6 @@
 package org.qommons;
 
+import java.io.IOException;
 import java.text.ParseException;
 import java.time.Duration;
 import java.time.Instant;
@@ -12,11 +13,13 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TimeZone;
+import java.util.TreeSet;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
+import java.util.regex.Pattern;
 
 import org.qommons.collect.BetterCollections;
 import org.qommons.collect.BetterSortedSet;
@@ -24,6 +27,10 @@ import org.qommons.collect.QuickSet;
 import org.qommons.collect.QuickSet.QuickMap;
 import org.qommons.io.FieldedAdjustable;
 import org.qommons.io.FieldedComponent;
+import org.qommons.io.Format;
+import org.qommons.io.SimpleSequenceParser;
+import org.qommons.io.SimpleSequenceParser.ParsedElement;
+import org.qommons.io.SimpleSequenceParser.ParsedSequence;
 import org.qommons.tree.BetterTreeSet;
 
 /**
@@ -90,7 +97,7 @@ public class TimeUtils {
 	}
 
 	/** A parsed time returned from {@link TimeUtils#parseFlexFormatTime(CharSequence, boolean, boolean, Function)} */
-	public interface ParsedTime extends FieldedAdjustable<DateElementType, TimeComponent, ParsedTime> {
+	public interface ParsedTime extends FieldedAdjustable<DateElementType, Integer, ParsedElement<DateElementType, Integer>, ParsedTime> {
 		/** @return The time zone of the parsed time, if specified */
 		TimeZone getTimeZone();
 
@@ -123,23 +130,8 @@ public class TimeUtils {
 		boolean isComparable(ParsedTime other);
 	}
 
-	/** A component of a {@link ParsedTime} */
-	public static class TimeComponent extends FieldedComponent<DateElementType> {
-		final ParsedDateElement theParsedElement;
-
-		TimeComponent(DateElementType field, ParsedDateElement element) {
-			super(element.index, element.index + element.text.length(), field, element.value);
-			theParsedElement = element;
-		}
-
-		@Override
-		public String toString() {
-			return theParsedElement.text.toString();
-		}
-	}
-
 	/** A component of a {@link ParsedDuration} */
-	public static class DurationComponent extends FieldedComponent<DurationComponentType> {
+	public static class DurationComponent extends FieldedComponent<DurationComponentType, Integer> {
 		private final String text;
 		final int valueStart;
 		final int valueEnd;
@@ -168,7 +160,7 @@ public class TimeUtils {
 	}
 
 	/** A parsed time returned from {@link TimeUtils#parseDuration(CharSequence)} */
-	public static class ParsedDuration implements FieldedAdjustable<DurationComponentType, DurationComponent, ParsedDuration> {
+	public static class ParsedDuration implements FieldedAdjustable<DurationComponentType, Integer, DurationComponent, ParsedDuration> {
 		/** An empty duration */
 		public static final ParsedDuration ZERO;
 		static {
@@ -241,11 +233,14 @@ public class TimeUtils {
 
 		@Override
 		public ParsedDuration adjust(int position, int amount) {
-			return FieldedAdjustable.super.adjust(position, isNegative ? -amount : amount);
+			DurationComponent component = getComponent(position);
+			if (component == null)
+				return null;
+			return with(component.getField(), component.getValue() + amount);
 		}
 
 		@Override
-		public ParsedDuration with(DurationComponentType type, int value) {
+		public ParsedDuration with(DurationComponentType type, Integer value) {
 			EnumMap<DurationComponentType, Integer> fieldValues = new EnumMap<>(DurationComponentType.class);
 			for (Map.Entry<DurationComponentType, DurationComponent> entry : components.entrySet())
 				fieldValues.put(entry.getKey(), entry.getValue().getValue());
@@ -746,14 +741,15 @@ public class TimeUtils {
 	static abstract class ParsedTimeImpl implements ParsedTime {
 		private final String theText;
 		private final TimeZone theTimeZone;
-		protected final Map<DateElementType, TimeComponent> elements;
-		protected final BetterSortedSet<TimeComponent> sequence;
+		protected final Map<DateElementType, ParsedElement<DateElementType, Integer>> elements;
+		protected final BetterSortedSet<ParsedElement<DateElementType, Integer>> sequence;
 
-		public ParsedTimeImpl(String text, TimeZone timeZone, Map<DateElementType, TimeComponent> elements) {
+		public ParsedTimeImpl(String text, TimeZone timeZone, Map<DateElementType, ParsedElement<DateElementType, Integer>> elements) {
 			theText = text;
 			theTimeZone = timeZone;
 			this.elements = elements;
-			BetterSortedSet<TimeComponent> ebp = new BetterTreeSet<>(false, (t1, t2) -> Integer.compare(t1.getStart(), t2.getStart()));
+			BetterSortedSet<ParsedElement<DateElementType, Integer>> ebp = new BetterTreeSet<>(false,
+				(t1, t2) -> Integer.compare(t1.getStart(), t2.getStart()));
 			ebp.addAll(elements.values());
 			sequence = BetterCollections.unmodifiableSortedSet(ebp);
 		}
@@ -769,17 +765,17 @@ public class TimeUtils {
 		}
 
 		@Override
-		public TimeComponent getField(DateElementType type) {
+		public ParsedElement<DateElementType, Integer> getField(DateElementType type) {
 			return elements.get(type);
 		}
 
 		@Override
-		public List<TimeComponent> getComponents() {
+		public List<ParsedElement<DateElementType, Integer>> getComponents() {
 			return sequence;
 		}
 
 		@Override
-		public ParsedTime with(DateElementType type, int value) {
+		public ParsedTime with(DateElementType type, Integer value) {
 			switch (type) {
 			case AmPm:
 			case TimeZone:
@@ -787,77 +783,108 @@ public class TimeUtils {
 			default:
 				break;
 			}
-			TimeComponent component = elements.get(type);
+			ParsedElement<DateElementType, Integer> component = elements.get(type);
 			if (component == null)
 				throw new IllegalArgumentException("Field " + type + " not present in this parsed time");
 			return add(type, value - component.getValue());
 		}
 
-		protected Map<DateElementType, TimeComponent> adjustElements(StringBuilder str, ToIntFunction<DateElementType> value) {
-			Map<DateElementType, TimeComponent> newElements = new EnumMap<>(DateElementType.class);
+		@Override
+		public ParsedTime adjust(int position, int amount) {
+			ParsedElement<DateElementType, Integer> component = getComponent(position);
+			if (component == null)
+				return null;
+			return with(component.getField(), component.getValue() + amount);
+		}
+
+		protected Map<DateElementType, ParsedElement<DateElementType, Integer>> adjustElements(StringBuilder str,
+			ToIntFunction<DateElementType> value) {
+			Map<DateElementType, ParsedElement<DateElementType, Integer>> newElements = new EnumMap<>(DateElementType.class);
 			newElements.putAll(elements);
 			int indexBump = 0;
-			for (TimeComponent component : sequence) {
-				ParsedDateElement oldEl = elements.get(component.getField()).theParsedElement;
-				ParsedDateElement newEl = null;
+			for (ParsedElement<DateElementType, Integer> component : sequence) {
+				ParsedElement<DateElementType, Integer> oldEl = elements.get(component.getField());
+				ParsedElement<DateElementType, Integer> newEl = null;
 				int newValue;
 				switch (component.getField()) {
 				case Year:
 					newValue = value.applyAsInt(component.getField());
-					if (component.theParsedElement.text.length() == 2)
+					if (component.getText().length() == 2)
 						newValue = newValue % 100;
-					newEl = adjust(component.theParsedElement, newValue, indexBump);
+					newEl = adjust(component, newValue, indexBump);
 					break;
 				case Month:
-					newEl = adjust(component.theParsedElement, value.applyAsInt(component.getField()), indexBump);
+					newEl = adjust(component, value.applyAsInt(component.getField()), indexBump);
 					break;
 				case Day:
-					newEl = adjust(component.theParsedElement, value.applyAsInt(component.getField()), indexBump);
+					newEl = adjust(component, value.applyAsInt(component.getField()), indexBump);
 					break;
 				case Weekday:
-					newEl = adjust(component.theParsedElement, value.applyAsInt(component.getField()), indexBump);
+					newEl = adjust(component, value.applyAsInt(component.getField()), indexBump);
 					break;
 				case Hour:
-					newEl = adjust(component.theParsedElement, value.applyAsInt(component.getField()), indexBump);
+					newEl = adjust(component, value.applyAsInt(component.getField()), indexBump);
 					break;
 				case Minute:
-					newEl = adjust(component.theParsedElement, value.applyAsInt(component.getField()), indexBump);
+					newEl = adjust(component, value.applyAsInt(component.getField()), indexBump);
 					break;
 				case Second:
-					newEl = adjust(component.theParsedElement, value.applyAsInt(component.getField()), indexBump);
+					newEl = adjust(component, value.applyAsInt(component.getField()), indexBump);
 					break;
 				case SubSecond:
-					newEl = adjust(component.theParsedElement, value.applyAsInt(component.getField()), indexBump);
+					newEl = adjust(component, value.applyAsInt(component.getField()), indexBump);
 					break;
 				case AmPm:
-					newEl = adjust(component.theParsedElement, value.applyAsInt(component.getField()), indexBump);
+					newEl = adjust(component, value.applyAsInt(component.getField()), indexBump);
 					break;
 				case TimeZone:
 					break;
 				}
 
-				if (newEl != null && newEl != component.theParsedElement) {
-					newElements.put(component.getField(), new TimeComponent(component.getField(), newEl));
-					str.delete(newEl.index, newEl.index + oldEl.text.length());
-					str.insert(newEl.index, newEl.text);
-					indexBump += newEl.text.length() - oldEl.text.length();
+				if (newEl != null && newEl != component) {
+					newElements.put(component.getField(), newEl);
+					str.delete(newEl.getStart(), newEl.getStart() + oldEl.getText().length());
+					str.insert(newEl.getStart(), newEl.getText());
+					indexBump += newEl.getText().length() - oldEl.getText().length();
+				} else if (indexBump != 0) {
+					newElements.put(component.getField(), oldEl.offset(indexBump));
 				}
 			}
 			return newElements;
 		}
 
-		private static ParsedDateElement adjust(ParsedDateElement element, int newValue, int indexBump) {
-			if (element.value == newValue)
+		private ParsedElement<DateElementType, Integer> adjust(ParsedElement<DateElementType, Integer> element, int newValue,
+			int indexBump) {
+			if (element.getValue() == newValue)
 				return element;
 			String newText = null;
-			switch (element.type) {
-			case AM_PM:
+			if (element.getField() == DateElementType.Hour) {
+				if (elements.containsKey(DateElementType.AmPm))
+					newText = element.getParser().format(newValue);
+				else
+					newText = StringUtils.printInt(newValue, 2, null).toString();
+			} else if (element.getParser() == Format.INT)
+				newText = StringUtils.add(element.getText(), element.getText().length() - 1, newValue - element.getValue());
+			else if (element.getParser() == MONTH_FORMAT) {
+				if (element.getText().length() != 3
+					&& element.getText().toString().toLowerCase().equals(MONTHS[element.getValue() - Calendar.JANUARY]))
+					newText = MONTHS[newValue];
+				else
+					newText = MONTHS[newValue].substring(0, element.getText().length());
+				if (Character.isUpperCase(element.getText().charAt(0)))
+					newText = capitalize(newText);
+			} else if (element.getParser() == WEEKDAY_FORMAT) {
+				if (element.getText().toString().toLowerCase().equals(DAYS[element.getValue() - Calendar.SUNDAY].toLowerCase()))
+					newText = DAYS[newValue];
+				else
+					newText = DAYS_ABBREV[newValue];
+			} else if (element.getField() == DateElementType.AmPm) {
 				boolean lower = true;
-				newText = element.text.toString();
-				int idx = newText.indexOf(element.value == 0 ? 'a' : 'p');
+				newText = element.getText();
+				int idx = newText.indexOf(element.getValue() == Calendar.AM ? 'a' : 'p');
 				if (idx < 0) {
 					lower = false;
-					idx = newText.indexOf(element.value == 0 ? 'A' : 'P');
+					idx = newText.indexOf(element.getValue() == Calendar.AM ? 'A' : 'P');
 				}
 				// Assume it's here, shouldn't have parsed without it
 				char newChar;
@@ -866,30 +893,9 @@ public class TimeUtils {
 				else
 					newChar = lower ? 'p' : 'P';
 				newText = newText.substring(0, idx) + newChar + newText.substring(idx + 1);
-				break;
-			case DIGIT:
-				newText = StringUtils.add(element.text, element.text.length() - 1, newValue - element.value);
-				break;
-			case MONTH:
-				if (element.text.length() != 3 && element.text.toString().toLowerCase().equals(MONTHS[element.value]))
-					newText = MONTHS[newValue];
-				else
-					newText = MONTHS[newValue].substring(0, element.text.length());
-				if (Character.isUpperCase(element.text.charAt(0)))
-					newText = capitalize(newText);
-				break;
-			case DAY_NAME:
-				if (element.text.toString().toLowerCase().equals(DAYS[element.value].toLowerCase()))
-					newText = DAYS[newValue];
-				else
-					newText = DAYS_ABBREV[newValue];
-				break;
-			case SEP:
-			case CHARS:
-				break;
 			}
-			ParsedDateElement newEl = new ParsedDateElement(element.type, element.index + indexBump, newText);
-			newEl.value = newValue;
+			ParsedElement<DateElementType, Integer> newEl = new ParsedElement<>(element.getParser(), element.getStart() + indexBump,
+				element.getField(), newValue, newText);
 			return newEl;
 		}
 
@@ -912,7 +918,7 @@ public class TimeUtils {
 		int nanoDigits;
 
 		AbsoluteTime(String text, Instant time, Calendar cal, TimeZone timeZone, DateElementType lowestResolution, int nanoDigits,
-			Map<DateElementType, TimeComponent> elements) {
+			Map<DateElementType, ParsedElement<DateElementType, Integer>> elements) {
 			super(text, timeZone, elements);
 			this.time = time;
 
@@ -1056,18 +1062,25 @@ public class TimeUtils {
 			}
 			StringBuilder str = new StringBuilder(toString());
 			int fNanos = nanos;
-			Map<DateElementType, TimeComponent> newElements = adjustElements(str, type -> {
+			Map<DateElementType, ParsedElement<DateElementType, Integer>> newElements = adjustElements(str, type -> {
 				switch (type) {
 				case Year:
 					return cal.get(Calendar.YEAR);
 				case Month:
-					return cal.get(Calendar.MONTH) - Calendar.JANUARY;
+					return cal.get(Calendar.MONTH);
 				case Day:
 					return cal.get(Calendar.DAY_OF_MONTH);
 				case Weekday:
 					return cal.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY;
 				case Hour:
-					return elements.containsKey(DateElementType.AmPm) ? cal.get(Calendar.HOUR) : cal.get(Calendar.HOUR_OF_DAY);
+					int hour = cal.get(Calendar.HOUR_OF_DAY);
+					if (elements.containsKey(DateElementType.AmPm)) {
+						if (hour == 0)
+							hour = 12;
+						else if (hour > 12)
+							hour -= 12;
+					}
+					return hour;
 				case Minute:
 					return cal.get(Calendar.MINUTE);
 				case Second:
@@ -1127,14 +1140,15 @@ public class TimeUtils {
 		private final boolean is24Hour;
 		private final RelativeTimeEvaluation theEvaluationType;
 
-		RelativeTime(String text, TimeZone timeZone, Map<DateElementType, TimeComponent> elements, boolean is24Hour,
+		RelativeTime(String text, TimeZone timeZone, Map<DateElementType, ParsedElement<DateElementType, Integer>> elements,
+			boolean is24Hour,
 			RelativeTimeEvaluation evaluationType) {
 			super(text, timeZone, elements);
 			this.is24Hour = is24Hour;
 			theEvaluationType = evaluationType;
-			TimeComponent subSecEl = elements.get(DateElementType.SubSecond);
+			ParsedElement<DateElementType, Integer> subSecEl = elements.get(DateElementType.SubSecond);
 			if (subSecEl != null) {
-				nanoDigits = subSecEl.theParsedElement.text.length();
+				nanoDigits = subSecEl.getText().length();
 				int nanoRes = 1_000_000_000;
 				for (int i = 0; i < nanoDigits; i++)
 					nanoRes /= 10;
@@ -1158,13 +1172,16 @@ public class TimeUtils {
 			cal.setTimeZone(getTimeZone());
 			int nanos = ref.getNano();
 			Calendar refCal = null;
-			for (Map.Entry<DateElementType, TimeComponent> element : elements.entrySet()) {
-				switch (element.getKey()) {
+			DateElementType[] types = elements.keySet().toArray(new DateElementType[elements.size()]);
+			ArrayUtils.reverse(types);
+			for (DateElementType type : types) {
+				ParsedElement<DateElementType, Integer> value = elements.get(type);
+				switch (type) {
 				case Year:
-					// If the year was absolute, it wouldn't be a relative time
+					// If the year was absolute, it wouldn't be a relative time, so it must be a 2-digit year
 					int year = cal.get(Calendar.YEAR);
-					int newYear = (year / 100) * 100 + element.getValue().getValue();
-					int diff = year - newYear;
+					int newYear = (year / 100) * 100 + value.getValue();
+					int diff = newYear - year;
 					if (diff <= -50)
 						newYear += 100;
 					else if (diff > 50)
@@ -1172,10 +1189,10 @@ public class TimeUtils {
 					cal.set(Calendar.YEAR, newYear);
 					break;
 				case Month:
-					cal.set(Calendar.MONTH, element.getValue().getValue());
+					cal.set(Calendar.MONTH, value.getValue());
 					break;
 				case Day:
-					cal.set(Calendar.DAY_OF_MONTH, element.getValue().getValue());
+					cal.set(Calendar.DAY_OF_MONTH, value.getValue());
 					break;
 				case Weekday:
 					if (elements.containsKey(DateElementType.Day))
@@ -1183,10 +1200,10 @@ public class TimeUtils {
 					if (refCal == null) {
 						refCal = Calendar.getInstance();
 						refCal.setTimeZone(getTimeZone());
-						refCal.setTimeInMillis(ref.toEpochMilli());
+						refCal.setTimeInMillis(cal.getTimeInMillis());
 					}
-					int currentDay = refCal.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY;
-					int dayDiff = element.getValue().getValue() - currentDay;
+					int currentDay = refCal.get(Calendar.DAY_OF_WEEK);
+					int dayDiff = value.getValue() - currentDay;
 					if (dayDiff < -3)
 						dayDiff += 7;
 					else if (dayDiff > 3)
@@ -1194,8 +1211,8 @@ public class TimeUtils {
 					cal.add(Calendar.DAY_OF_MONTH, dayDiff);
 					break;
 				case Hour:
-					TimeComponent comp = getField(DateElementType.AmPm);
-					int hour = element.getValue().getValue();
+					ParsedElement<DateElementType, Integer> comp = getField(DateElementType.AmPm);
+					int hour = value.getValue();
 					if (comp != null) {
 						if (comp.getValue() == 0) {
 							if (hour == 12)
@@ -1204,11 +1221,11 @@ public class TimeUtils {
 							if (hour != 12)
 								hour += 12;
 						}
-					} else if (!is24Hour && hour <= 12 && element.getValue().toString().charAt(0) != '0') { // Assume AM/PM time
+					} else if (!is24Hour && hour <= 12 && value.toString().charAt(0) != '0') { // Assume AM/PM time
 						if (refCal == null) {
 							refCal = Calendar.getInstance();
 							refCal.setTimeZone(getTimeZone());
-							refCal.setTimeInMillis(ref.toEpochMilli());
+							refCal.setTimeInMillis(cal.getTimeInMillis());
 						}
 						int refHour = refCal.get(Calendar.HOUR_OF_DAY);
 						int amHour = hour == 12 ? 0 : hour, pmHour = hour == 12 ? 12 : (hour + 12);
@@ -1223,19 +1240,19 @@ public class TimeUtils {
 					}
 					break;
 				case Minute:
-					cal.set(Calendar.MINUTE, element.getValue().getValue());
+					cal.set(Calendar.MINUTE, value.getValue());
 					if (!elements.containsKey(DateElementType.Second)) {
 						cal.set(Calendar.SECOND, 0);
 						nanos = 0;
 					}
 					break;
 				case Second:
-					cal.set(Calendar.SECOND, element.getValue().getValue());
+					cal.set(Calendar.SECOND, value.getValue());
 					if (!elements.containsKey(DateElementType.SubSecond))
 						nanos = 0;
 					break;
 				case SubSecond:
-					nanos = element.getValue().getValue();
+					nanos = value.getValue();
 					break;
 				case AmPm:
 				case TimeZone:
@@ -1256,8 +1273,17 @@ public class TimeUtils {
 			}
 			if (!evaluationMatches) { // Fix to match the evaluation type
 				if (elements.containsKey(DateElementType.Year)) {
-					// Again, if the year was absolute, it wouldn't be a relative time
-					// Let's not back up or move forward by centuries--that's probably not the intent. Maybe I'll reconsider later
+					// Again, if the year was absolute, it wouldn't be a relative time; so this must have a 2-digit year
+					switch (theEvaluationType) {
+					case PAST:
+						cal.add(Calendar.YEAR, -100);
+						break;
+					case FUTURE:
+						cal.add(Calendar.YEAR, 100);
+						break;
+					case CLOSEST:
+						break; // We have logic in the loop above to make this so
+					}
 				} else if (elements.containsKey(DateElementType.Month)) {
 					switch (theEvaluationType) {
 					case PAST:
@@ -1331,7 +1357,7 @@ public class TimeUtils {
 		public boolean mayMatch(Instant time) {
 			Calendar cal = CALENDAR.get();
 			cal.setTimeInMillis(time.getEpochSecond() * 1000);
-			for (Map.Entry<DateElementType, TimeComponent> element : elements.entrySet()) {
+			for (Map.Entry<DateElementType, ParsedElement<DateElementType, Integer>> element : elements.entrySet()) {
 				switch (element.getKey()) {
 				case Year:
 					if (cal.get(Calendar.YEAR) % 100 != element.getValue().getValue())
@@ -1395,8 +1421,8 @@ public class TimeUtils {
 				return -o.compareTo(this);
 			RelativeTime other = (RelativeTime) o;
 			for (DateElementType type : DateElementType.values()) {
-				TimeComponent el = elements.get(type);
-				TimeComponent otherEl = other.elements.get(type);
+				ParsedElement<DateElementType, Integer> el = elements.get(type);
+				ParsedElement<DateElementType, Integer> otherEl = other.elements.get(type);
 				if (el != null) {
 					if (otherEl != null) {
 						int comp = Integer.compare(el.getValue(), otherEl.getValue());
@@ -1417,7 +1443,7 @@ public class TimeUtils {
 			if (field == DateElementType.Weekday && elements.containsKey(DateElementType.Day))
 				return add(DateElementType.Day, amount);
 			Map<DateElementType, Integer> newValues = new EnumMap<>(DateElementType.class);
-			for (Map.Entry<DateElementType, TimeComponent> element : elements.entrySet())
+			for (Map.Entry<DateElementType, ParsedElement<DateElementType, Integer>> element : elements.entrySet())
 				newValues.put(element.getKey(), element.getValue().getValue());
 			DateElementType adjustingField = field;
 			int superAdjust = amount;
@@ -1427,7 +1453,7 @@ public class TimeUtils {
 					adjustingField = DateElementType.values()[adjustingField.ordinal() - 1];
 			}
 			StringBuilder str = new StringBuilder(toString());
-			Map<DateElementType, TimeComponent> newElements = adjustElements(str, newValues::get);
+			Map<DateElementType, ParsedElement<DateElementType, Integer>> newElements = adjustElements(str, newValues::get);
 			return new RelativeTime(str.toString(), getTimeZone(), newElements, is24Hour, theEvaluationType);
 		}
 
@@ -1704,129 +1730,68 @@ public class TimeUtils {
 		TimeEvaluationOptions options = DEFAULT_OPTIONS;
 		if (opts != null)
 			options = opts.apply(options);
-		List<ParsedDateElement> elements = new ArrayList<>();
-		int i = 0;
-		boolean found = true;
-		while (found && i < str.length()) {
-			if (Character.isWhitespace(str.charAt(i)) || str.charAt(i) == ',') {
-				i++;
-				continue;
-			}
-			found = false;
-			for (ParsedDateElementType type : ParsedDateElementType.values()) {
-				int end = type.find(str, i);
-				if (end > i) {
-					found = true;
-					elements.add(new ParsedDateElement(type, i, str.subSequence(i, end)));
-					i = end;
-					break;
-				}
-			}
-		}
-		if (elements.isEmpty() || (wholeText && !found)) {
-			if (throwIfNotFound) {
-				if (i == 0)
-					throw new ParseException("No date/time found", 0);
-				else
-					throw new ParseException("Unrecognized date/time component", i);
-			}
+		ParsedSequence<DateElementType, Integer> firstInfo = DATE_PARSER.parse(str, false, throwIfNotFound);
+		if (firstInfo == null)
 			return null;
-		}
-		String text = str.subSequence(0, elements.get(elements.size() - 1).index + elements.get(elements.size() - 1).text.length())
-			.toString();
+		ParsedSequence<DateElementType, Integer> secondInfo = null;
+		if (firstInfo.getLength() < str.length())
+			secondInfo = DATE_PARSER.parse(str.subSequence(firstInfo.getLength(), str.length()), wholeText, wholeText && throwIfNotFound);
 
-		DateFormat first = null, second = null;
-		EnumMap<DateElementType, ParsedDateElement> firstInfo = new EnumMap<>(DateElementType.class);
-		EnumMap<DateElementType, ParsedDateElement> secondInfo = null;
-		int secondIndex = -1;
-		for (DateFormat format : FLEX_FORMATS) {
-			firstInfo.clear();
-			secondIndex = format.match(firstInfo, elements);
-			if (secondIndex > 0) {
-				first = format;
-				break;
+		Map<DateElementType, ParsedElement<DateElementType, Integer>> components = new EnumMap<>(DateElementType.class);
+		components.putAll(firstInfo.getComponentsByType());
+		if (secondInfo != null) {
+			for (ParsedElement<DateElementType, Integer> comp : secondInfo.getComponents()) {
+				if (comp.getField() != null && components.put(comp.getField(), comp.offset(firstInfo.getLength())) != null)
+					throw new ParseException(
+						"Formats " + firstInfo.getFormat() + " and " + secondInfo.getFormat() + " cannot be used together",
+						firstInfo.getLength());
 			}
-		}
-		if (secondIndex > 0 && secondIndex < elements.size()) {
-			elements.subList(0, secondIndex).clear();
-			if (elements.get(0).type == ParsedDateElementType.SEP && elements.get(0).text.charAt(0) == ' ')
-				elements.remove(0);
-			if (!elements.isEmpty() && elements.get(0).type == ParsedDateElementType.SEP) {
-				char sep = elements.get(0).text.charAt(0);
-				if (sep == 'T' || sep == ':' || sep == '.') {
-					elements.remove(0);
-					secondIndex++;
-				} else if (!wholeText)
-					elements.clear();
-			}
-
-			if (!elements.isEmpty()) {
-				secondInfo = new EnumMap<>(DateElementType.class);
-				int index = -1;
-				for (DateFormat format : FLEX_FORMATS) {
-					secondInfo.clear();
-					index = format.match(secondInfo, elements);
-					if (index > 0) {
-						second = format;
-						break;
-					}
-				}
-			}
-		}
-		if (first == null) {
-			if (throwIfNotFound)
-				throw new ParseException("Unrecognized date/time format", 0);
-			else
-				return null;
-		}
-		if (second != null) {
-			for (Map.Entry<DateElementType, ParsedDateElement> entry : secondInfo.entrySet()) {
-				if (firstInfo.put(entry.getKey(), entry.getValue()) != null) {
-					if (!throwIfNotFound)
-						return null;
-					throw new ParseException("Formats " + first + " and " + second + " may not be used together", entry.getValue().index);
-				}
-			}
-		} else if (firstInfo.size() == 1 && firstInfo.get(DateElementType.Hour) != null) {
-			if (!throwIfNotFound)
-				return null;
-			else
-				throw new ParseException("The hour-only format is not valid without a date", 0);
 		}
 		TimeZone timeZone = options.getTimeZone();
 		try {
-			ParsedDateElement element = firstInfo.remove(DateElementType.TimeZone);
+			ParsedElement<DateElementType, Integer> element = components.get(DateElementType.TimeZone);
 			if (element != null) {
-				String zoneId = element.text.toString();
+				String zoneId = element.getText();
 				int zoneIndex = TIME_ZONES.keyIndexTolerant(zoneId);
 				if (zoneIndex < 0) {
 					if (!throwIfNotFound)
 						return null;
-					throw new ParseException("Unrecognized time zone " + element.text, element.index);
+					throw new ParseException("Unrecognized time zone " + element.getText(), element.getStart());
 				}
 				if (TIME_ZONES.get(zoneIndex) == null)
 					TIME_ZONES.put(zoneIndex, TimeZone.getTimeZone(zoneId));
 				timeZone = TIME_ZONES.get(zoneIndex);
 			}
-			ParsedDateElement year = firstInfo.get(DateElementType.Year);
-			element = firstInfo.get(DateElementType.AmPm);
-			if (element != null && year != null && year.text.length() >= 4) {
-				boolean pm = element.type.parse(element.text) > 0;
-				element = firstInfo.get(DateElementType.Hour);
+			ParsedElement<DateElementType, Integer> year = components.get(DateElementType.Year);
+			element = components.get(DateElementType.AmPm);
+			if (element != null && year != null && year.getText().length() >= 4) {
+				boolean pm = element.getValue() == Calendar.PM;
+				element = components.get(DateElementType.Hour);
 				int hour = validate(DateElementType.Hour, element);
 				if (hour == 0 || hour > 12) {
 					if (!throwIfNotFound)
 						return null;
-					throw new ParseException("Hour must be between 1 and 12 if AM/PM is specified", element.index);
+					throw new ParseException("Hour must be between 1 and 12 if AM/PM is specified", element.getStart());
 				} else if (pm) {
 					if (hour != 12)
 						hour += 12;
 				} else if (hour == 12)
 					hour = 0;
-				element.value = hour;
+				components.put(DateElementType.Hour, new ParsedElement<>(element.getParser(), element.getStart(), DateElementType.Hour,
+					hour, StringUtils.printInt(hour, 2, null).toString()));
 			}
 
-			if (year != null && year.text.length() >= 4) {
+			String text;
+			if (secondInfo != null) {
+				if (secondInfo.getLength() == str.length())
+					text = str.toString();
+				else
+					text = str.subSequence(0, secondInfo.getLength()).toString();
+			} else if (firstInfo.getLength() == str.length())
+				text = str.toString();
+			else
+				text = str.subSequence(0, firstInfo.getLength()).toString();
+			if (year != null && year.getText().length() >= 4) {
 				Calendar cal = CALENDAR.get();
 				cal.clear();
 				cal.setTimeZone(timeZone);
@@ -1834,34 +1799,34 @@ public class TimeUtils {
 				cal.set(Calendar.YEAR, validate(DateElementType.Year, year));
 
 				DateElementType minType = DateElementType.Year;
-				element = firstInfo.get(DateElementType.Month);
+				element = components.get(DateElementType.Month);
 				if (element != null)
 					cal.set(Calendar.MONTH, validate(minType = DateElementType.Month, element));
-				element = firstInfo.get(DateElementType.Day);
+				element = components.get(DateElementType.Day);
 				if (element != null)
 					cal.set(Calendar.DAY_OF_MONTH, validate(minType = DateElementType.Day, element));
-				element = firstInfo.get(DateElementType.Hour);
+				element = components.get(DateElementType.Hour);
 				if (element != null)
 					cal.set(Calendar.HOUR_OF_DAY, validate(minType = DateElementType.Hour, element));
-				element = firstInfo.get(DateElementType.Minute);
+				element = components.get(DateElementType.Minute);
 				if (element != null)
 					cal.set(Calendar.MINUTE, validate(minType = DateElementType.Minute, element));
-				element = firstInfo.get(DateElementType.Second);
+				element = components.get(DateElementType.Second);
 				if (element != null)
 					cal.set(Calendar.SECOND, validate(minType = DateElementType.Second, element));
 				int nanos;
-				element = firstInfo.get(DateElementType.SubSecond);
+				element = components.get(DateElementType.SubSecond);
 				if (element != null)
 					nanos = validate(minType = DateElementType.SubSecond, element);
 				else
 					nanos = 0;
 				Instant time = Instant.ofEpochSecond(cal.getTimeInMillis() / 1000, nanos);
-				return new AbsoluteTime(text, time, cal, timeZone, minType, element == null ? 0 : element.text.length(),
-					toComponents(firstInfo));
+				return new AbsoluteTime(text, time, cal, timeZone, minType, element == null ? 0 : element.getText().length(),
+					components);
 			} else {
-				for (Map.Entry<DateElementType, ParsedDateElement> entry : firstInfo.entrySet())
+				for (Map.Entry<DateElementType, ParsedElement<DateElementType, Integer>> entry : components.entrySet())
 					validate(entry.getKey(), entry.getValue());
-				return new RelativeTime(text, timeZone, toComponents(firstInfo), options.is24HourFormat(), options.getEvaluationType());
+				return new RelativeTime(text, timeZone, components, options.is24HourFormat(), options.getEvaluationType());
 			}
 		} catch (ParseException e) {
 			if (!throwIfNotFound)
@@ -1870,50 +1835,42 @@ public class TimeUtils {
 		}
 	}
 
-	private static Map<DateElementType, TimeComponent> toComponents(EnumMap<DateElementType, ParsedDateElement> fields) {
-		EnumMap<DateElementType, TimeComponent> components = new EnumMap<>(DateElementType.class);
-		for (Map.Entry<DateElementType, ParsedDateElement> entry : fields.entrySet()) {
-			components.put(entry.getKey(), new TimeComponent(entry.getKey(), entry.getValue()));
-		}
-		return components;
-	}
-
-	private static int validate(DateElementType type, ParsedDateElement element) throws ParseException {
-		if (element.value >= 0)
-			return element.value;
-		int value = element.type.parse(element.text) + element.offset;
+	private static int validate(DateElementType type, ParsedElement<DateElementType, Integer> element)
+		throws ParseException {
+		if (element.getValue() >= 0)
+			return element.getValue();
+		int value = element.getParser().parse(element.getText());
 		switch (type) {
 		case Year:
 		case AmPm:
 		case TimeZone:
 			break;
 		case Month:
-			if (value < 0 || value > 11)
-				throw new ParseException("Unrecognized month " + element.text, element.index);
+			if (value < Calendar.JANUARY || value > Calendar.DECEMBER)
+				throw new ParseException("Unrecognized month " + element.getText(), element.getStart());
 			break;
 		case Day:
 			if (value < 1 || value > 31)
-				throw new ParseException("Unrecognized day " + element.text, element.index);
+				throw new ParseException("Unrecognized day " + element.getText(), element.getStart());
 			break;
 		case Weekday:
 			if (value < 0 || value > 6)
-				throw new ParseException("Unrecognized week day " + element.text, element.index);
+				throw new ParseException("Unrecognized week day " + element.getText(), element.getStart());
 			break;
 		case Hour:
 			if (value < 0 || value > 23)
-				throw new ParseException("Unrecognized hour " + element.text, element.index);
+				throw new ParseException("Unrecognized hour " + element.getText(), element.getStart());
 			break;
 		case Minute:
 		case Second:
 			if (value < 0 || value > 59)
-				throw new ParseException("Unrecognized " + type + " " + element.text, element.index);
+				throw new ParseException("Unrecognized " + type + " " + element.getText(), element.getStart());
 			break;
 		case SubSecond:
-			for (int dig = 10; dig > element.text.length(); dig--)
+			for (int dig = 10; dig > element.getText().length(); dig--)
 				value *= 10;
 			break;
 		}
-		element.value = value;
 		return value;
 	}
 
@@ -1923,349 +1880,404 @@ public class TimeUtils {
 	private static final String[] MONTHS = new String[] { "january", "february", "march", "april", "may", "june", "july", "august",
 		"september", "october", "november", "december" };
 
-	private enum ParsedDateElementType {
-		DIGIT {
-			@Override
-			int find(CharSequence seq, int start) {
-				while (start < seq.length()) {
-					char ch = seq.charAt(start);
-					if (ch < '0' || ch > '9')
-						break;
-					start++;
-				}
-				return start;
-			}
-
-			@Override
-			int parse(CharSequence match) {
-				return Integer.parseInt(match.toString());
-			}
-		},
-		MONTH {
-			@Override
-			int find(CharSequence seq, int start) {
-				for (String month : MONTHS) {
-					int i;
-					for (i = 0; i + start < seq.length() && i < month.length(); i++) {
-						if (Character.toLowerCase(seq.charAt(start + i)) != month.charAt(i))
-							break;
-					}
-					if (i >= 3)
-						return start + i;
-				}
-				return start;
-			}
-
-			@Override
-			int parse(CharSequence match) {
-				for (int m = 0; m < MONTHS.length; m++) {
-					int i;
-					for (i = 0; i < match.length() && Character.toLowerCase(match.charAt(i)) == MONTHS[m].charAt(i); i++) {
-					}
-					if (i == match.length())
-						return m;
-				}
-				throw new IllegalStateException();
-			}
-		},
-		DAY_NAME {
-			@Override
-			int find(CharSequence seq, int start) {
-				for (String day : DAYS) {
-					int i;
-					for (i = 0; i + start < seq.length() && i < day.length(); i++) {
-						if (Character.toLowerCase(seq.charAt(start + i)) != Character.toLowerCase(day.charAt(i)))
-							break;
-					}
-					if (i >= 3)
-						return start + i;
-				}
-				return start;
-			}
-
-			@Override
-			int parse(CharSequence match) {
-				for (int d = 0; d < DAYS.length; d++) {
-					int i;
-					for (i = 0; i < match.length()
-						&& Character.toLowerCase(match.charAt(i)) == Character.toLowerCase(DAYS[d].charAt(i)); i++) {
-					}
-					if (i == match.length())
-						return d;
-				}
-				throw new IllegalStateException();
-			}
-		},
-		AM_PM {
-			@Override
-			int find(CharSequence seq, int start) {
-				int c = start;
-				if (seq.length() - start < 2)
-					return start;
-				char ch = seq.charAt(c);
-				if (ch != 'a' && ch != 'A' && ch != 'p' && ch != 'P')
-					return start;
-				ch = seq.charAt(++c);
-				if (ch == '.') {
-					if (seq.length() - start < 3)
-						return start;
-					ch = seq.charAt(++c);
-				}
-				if (ch != 'm' && ch != 'M')
-					return start;
-				c++;
-				if (seq.length() - start > c && seq.charAt(c) == '.')
-					c++;
-				return c;
-			}
-
-			@Override
-			int parse(CharSequence match) {
-				return Character.toLowerCase(match.charAt(0)) == 'p' ? 1 : 0;
-			}
-		},
-		SEP {
-			@Override
-			int find(CharSequence seq, int start) {
-				if (seq.length() == start)
-					return start;
-				char ch = seq.charAt(start);
-				if (ch == ' ') {
-					int end = start + 1;
-					while (end < seq.length() && seq.charAt(end) == ' ')
-						end++;
-					return end;
-				}
-				if (ch == ',' || ch == ':' || ch == '.' || ch == '/' || ch == '-' || ch == '.' || ch == 'T')
-					return start + 1;
-				else
-					return start;
-			}
-
-			@Override
-			int parse(CharSequence match) {
-				return -1;
-			}
-		},
-		CHARS {
-			@Override
-			int find(CharSequence seq, int start) {
-				while (start < seq.length() && Character.isAlphabetic(seq.charAt(start)))
-					start++;
-				return start;
-			}
-
-			@Override
-			int parse(CharSequence match) {
-				return -1;
-			}
-		};
-
-		abstract int find(CharSequence seq, int start);
-
-		abstract int parse(CharSequence match);
-	}
-
-	private static class ParsedDateElement {
-		final ParsedDateElementType type;
-		final int index;
-		final CharSequence text;
-		int offset;
-		int value;
-
-		ParsedDateElement(ParsedDateElementType type, int index, CharSequence text) {
-			this.type = type;
-			this.index = index;
-			this.text = text;
-			value = -1;
-		}
-
-		ParsedDateElement setValue(int value) {
-			this.value = value;
-			return this;
-		}
-
-		@Override
-		public String toString() {
-			return text.toString();
-		}
-	}
-
-	private static class DateFormatComponent {
-		final DateElementType dateType;
-		final ParsedDateElementType parsedType;
-		final Predicate<CharSequence> filter;
-		final boolean required;
-		int theOffset;
-
-		DateFormatComponent(DateElementType dateType, ParsedDateElementType parsedType, Predicate<CharSequence> filter, boolean required) {
-			this.dateType = dateType;
-			this.parsedType = parsedType;
-			this.filter = filter;
-			this.required = required;
-		}
-
-		DateFormatComponent offset(int offset) {
-			this.theOffset = offset;
-			return this;
-		}
-
-		boolean matches(ParsedDateElement element) {
-			if (parsedType != element.type)
-				return false;
-			return filter.test(element.text);
-		}
-
-		@Override
-		public String toString() {
-			if (dateType != null)
-				return dateType.toString();
-			else
-				return parsedType.toString();
-		}
-	}
-
-	private static class DateFormat {
-		final String theName;
-		final List<DateFormatComponent> components;
-		final Map<DateElementType, DateFormatComponent> componentsByType;
-
-		DateFormat(String name, DateFormatComponent... components) {
-			theName = name;
-			this.components = Arrays.asList(components);
-			componentsByType = new EnumMap<>(DateElementType.class);
-			for (DateFormatComponent c : components) {
-				if (c.dateType != null)
-					componentsByType.put(c.dateType, c);
-			}
-		}
-
-		int match(Map<DateElementType, ParsedDateElement> info, List<ParsedDateElement> elements) {
-			int i = 0, j = 0;
-			while (i < elements.size() && j < components.size()) {
-				DateFormatComponent component = components.get(j);
-				ParsedDateElement element = elements.get(i);
-				if (component.matches(element)) {
-					if (component.dateType != null) {
-						element.offset = component.theOffset;
-						info.put(component.dateType, element);
-					}
-					i++;
-				} else if (component.required)
-					return 0;
-				j++;
-			}
-			while (j < components.size())
-				if (components.get(j++).required)
-					return 0;
-			return i;
-		}
-
-		@Override
-		public String toString() {
-			return theName;
-		}
-	}
-
 	// public static final String FLEX_FORMAT_DESCRIP;
 
-	private static final List<DateFormat> FLEX_FORMATS;
+	// private static final List<DateFormat> FLEX_FORMATS;
 	private static final QuickMap<String, TimeZone> TIME_ZONES;
 
+	// static {
+	// Predicate<CharSequence> oneOrTwoDigits = str -> str.length() == 1 || str.length() == 2;
+	// Predicate<CharSequence> twoDigits = str -> str.length() == 2;
+	// Predicate<CharSequence> threeDigits = str -> str.length() == 3;
+	// Predicate<CharSequence> fourDigits = str -> str.length() == 4;
+	// Predicate<CharSequence> weekDay = str -> {
+	// if (str.length() < 3)
+	// return false;
+	// switch (str.subSequence(0, 3).toString().toLowerCase()) {
+	// case "sun":
+	// return str.toString().toLowerCase().equals("sunday".substring(0, str.length()));
+	// case "mon":
+	// return str.toString().toLowerCase().equals("monday".substring(0, str.length()));
+	// case "tue":
+	// return str.toString().toLowerCase().equals("tuesday".substring(0, str.length()));
+	// case "wed":
+	// return str.toString().toLowerCase().equals("wednesday".substring(0, str.length()));
+	// case "thu":
+	// return str.toString().toLowerCase().equals("thursday".substring(0, str.length()));
+	// case "fri":
+	// return str.toString().toLowerCase().equals("friday".substring(0, str.length()));
+	// case "sat":
+	// return str.toString().toLowerCase().equals("saturday".substring(0, str.length()));
+	// }
+	// return false;
+	// };
+	// DateFormatComponent weekDayOpt = new DateFormatComponent(DateElementType.Weekday, ParsedDateElementType.DAY_NAME, weekDay, false);
+	// DateFormatComponent weekDayReq = new DateFormatComponent(DateElementType.Weekday, ParsedDateElementType.DAY_NAME, weekDay, true);
+	// DateFormatComponent year2 = new DateFormatComponent(DateElementType.Year, ParsedDateElementType.DIGIT, twoDigits, true);
+	// DateFormatComponent year4 = new DateFormatComponent(DateElementType.Year, ParsedDateElementType.DIGIT, fourDigits, true);
+	// DateFormatComponent monthDig = new DateFormatComponent(DateElementType.Month, ParsedDateElementType.DIGIT, oneOrTwoDigits, true)
+	// .offset(-1);
+	// DateFormatComponent monthCh = new DateFormatComponent(DateElementType.Month, ParsedDateElementType.MONTH,
+	// str -> Character.isAlphabetic(str.charAt(0)), true);
+	// DateFormatComponent day = new DateFormatComponent(DateElementType.Day, ParsedDateElementType.DIGIT, oneOrTwoDigits, true);
+	// DateFormatComponent hour = new DateFormatComponent(DateElementType.Hour, ParsedDateElementType.DIGIT, oneOrTwoDigits, true);
+	// DateFormatComponent minute = new DateFormatComponent(DateElementType.Minute, ParsedDateElementType.DIGIT, twoDigits, true);
+	// DateFormatComponent second = new DateFormatComponent(DateElementType.Second, ParsedDateElementType.DIGIT, twoDigits, true);
+	// DateFormatComponent subSecond = new DateFormatComponent(DateElementType.SubSecond, ParsedDateElementType.DIGIT, str -> true, false);
+	// DateFormatComponent ampm = new DateFormatComponent(DateElementType.AmPm, ParsedDateElementType.AM_PM, str -> true, false);
+	// DateFormatComponent timeZone = new DateFormatComponent(DateElementType.TimeZone, ParsedDateElementType.CHARS, threeDigits, false);
+	// DateFormatComponent stndrdth = new DateFormatComponent(null, ParsedDateElementType.CHARS, str -> {
+	// if (str.length() != 2)
+	// return false;
+	// String suffix = str.toString().toLowerCase();
+	// return suffix.equals("st") || suffix.equals("nd") || suffix.equals("rd") || suffix.equals("th");
+	// }, false);
+	//
+	// DateFormatComponent stdDateSep = new DateFormatComponent(null, ParsedDateElementType.SEP, str -> {
+	// char c = str.charAt(0);
+	// return c == '-' || c == '/' || c == '.';
+	// }, true);
+	// DateFormatComponent nonStdDateSep = new DateFormatComponent(null, ParsedDateElementType.SEP, str -> {
+	// char c = str.charAt(0);
+	// return c == '-' || c == '/';
+	// }, true);
+	// DateFormatComponent optionalNonStdDateSep = new DateFormatComponent(null, ParsedDateElementType.SEP, str -> {
+	// char c = str.charAt(0);
+	// return c == '-' || c == '/';
+	// }, false);
+	// DateFormatComponent dot = new DateFormatComponent(null, ParsedDateElementType.SEP, str -> str.charAt(0) == '.', true);
+	// DateFormatComponent colon = new DateFormatComponent(null, ParsedDateElementType.SEP, str -> str.charAt(0) == ':', false);
+	//
+	// List<DateFormat> formats = new ArrayList<>();
+	// formats.addAll(Arrays.asList(//
+	// // Date formats
+	// new DateFormat("Y4MDthZ", year4, stdDateSep, monthDig, stdDateSep, day, stndrdth, timeZone), //
+	// new DateFormat("Y4MZ", year4, stdDateSep, monthDig, timeZone), //
+	// new DateFormat("Y4Z", year4, timeZone), //
+	// new DateFormat("MY4Z", monthCh, optionalNonStdDateSep, year4, timeZone), //
+	// new DateFormat("DMY4Z", weekDayOpt, day, optionalNonStdDateSep, monthCh, optionalNonStdDateSep, year4, timeZone), //
+	// new DateFormat("DMY2Z", weekDayOpt, day, optionalNonStdDateSep, monthCh, optionalNonStdDateSep, year2, timeZone), //
+	// new DateFormat("DMZ", weekDayOpt, day, optionalNonStdDateSep, monthCh, timeZone), //
+	// new DateFormat("MdDthY4Z", weekDayOpt, monthDig, nonStdDateSep, day, stndrdth, nonStdDateSep, year4, timeZone), //
+	// new DateFormat("MchDthY4Z", weekDayOpt, monthCh, optionalNonStdDateSep, day, stndrdth, optionalNonStdDateSep, year4, timeZone), //
+	// new DateFormat("MdDthY2Z", weekDayOpt, monthDig, nonStdDateSep, day, stndrdth, nonStdDateSep, year2, timeZone), //
+	// new DateFormat("MchDthY2Z", weekDayOpt, monthCh, optionalNonStdDateSep, day, stndrdth, nonStdDateSep, year2, timeZone), //
+	// new DateFormat("MdDthZ", weekDayOpt, monthDig, nonStdDateSep, day, stndrdth, timeZone), //
+	// new DateFormat("MchDthZ", weekDayOpt, monthCh, optionalNonStdDateSep, day, stndrdth, timeZone), //
+	// new DateFormat("M.Y4Z", weekDayOpt, monthDig, dot, year4, timeZone), //
+	// new DateFormat("Dth.M.Y4Z", weekDayOpt, day, stndrdth, dot, monthDig, dot, year4, timeZone), //
+	// new DateFormat("Dth.M.Y2Z", weekDayOpt, day, stndrdth, dot, monthDig, dot, year2, timeZone), //
+	// new DateFormat("Dth.MZ", weekDayOpt, day, stndrdth, dot, monthDig, timeZone), //
+	// new DateFormat("MDZ", weekDayOpt, monthCh, optionalNonStdDateSep, day, timeZone), //
+	// new DateFormat("WD", weekDayReq), //
+	// // Time formats
+	// new DateFormat("HMSSaZ", hour, colon, minute, colon, second, dot, subSecond, ampm, timeZone), //
+	// new DateFormat("HMSaZ", hour, colon, minute, colon, second, ampm, timeZone), //
+	// new DateFormat("HMaZ", hour, colon, minute, ampm, timeZone), //
+	// new DateFormat("HaZ", hour, ampm, timeZone)//
+	// ));
+	// FLEX_FORMATS = Collections.unmodifiableList(formats);
+	//
+	// Set<String> tzIds = new TreeSet<>();
+	// tzIds.add("Z");
+	// tzIds.addAll(Arrays.asList(TimeZone.getAvailableIDs()));
+	// TIME_ZONES = QuickSet.of(String::compareToIgnoreCase, tzIds).createMap();
+	// }
+
+	private static final SimpleSequenceParser<DateElementType, Integer> DATE_PARSER;
+
+	private static final Format<Integer> WEEKDAY_FORMAT = new Format<Integer>() {
+		@Override
+		public void append(StringBuilder text, Integer value) {
+			switch (value - Calendar.SUNDAY) {
+			case 0:
+				text.append("Sun");
+				break;
+			case 1:
+				text.append("Mon");
+				break;
+			case 2:
+				text.append("Tue");
+				break;
+			case 3:
+				text.append("Wed");
+				break;
+			case 4:
+				text.append("Thu");
+				break;
+			case 5:
+				text.append("Fri");
+				break;
+			case 6:
+				text.append("Sat");
+				break;
+			}
+		}
+
+		@Override
+		public Integer parse(CharSequence text) throws ParseException {
+			switch (text.subSequence(0, 3).toString().toLowerCase()) {
+			case "sun":
+				return Calendar.SUNDAY;
+			case "mon":
+				return Calendar.MONDAY;
+			case "tue":
+				return Calendar.TUESDAY;
+			case "wed":
+				return Calendar.WEDNESDAY;
+			case "thu":
+				return Calendar.THURSDAY;
+			case "fri":
+				return Calendar.FRIDAY;
+			case "sat":
+				return Calendar.SATURDAY;
+			}
+			throw new ParseException("Unrecognized weekday", 0);
+		}
+	};
+	private static final Format<Integer> MONTH_FORMAT = new Format<Integer>() {
+		@Override
+		public void append(StringBuilder text, Integer value) {
+			switch (value - Calendar.JANUARY) {
+			case 0:
+				text.append("Jan");
+				break;
+			case 1:
+				text.append("Feb");
+				break;
+			case 2:
+				text.append("Mar");
+				break;
+			case 3:
+				text.append("Apr");
+				break;
+			case 4:
+				text.append("May");
+				break;
+			case 5:
+				text.append("Jun");
+				break;
+			case 6:
+				text.append("Jul");
+				break;
+			case 7:
+				text.append("Aug");
+				break;
+			case 8:
+				text.append("Sep");
+				break;
+			case 9:
+				text.append("Oct");
+				break;
+			case 10:
+				text.append("Nov");
+				break;
+			case 11:
+				text.append("Dec");
+				break;
+			}
+		}
+
+		@Override
+		public Integer parse(CharSequence text) throws ParseException {
+			switch (text.subSequence(0, 3).toString().toLowerCase()) {
+			case "jan":
+				return Calendar.JANUARY;
+			case "feb":
+				return Calendar.FEBRUARY;
+			case "mar":
+				return Calendar.MARCH;
+			case "apr":
+				return Calendar.APRIL;
+			case "may":
+				return Calendar.MAY;
+			case "jun":
+				return Calendar.JUNE;
+			case "jul":
+				return Calendar.JULY;
+			case "aug":
+				return Calendar.AUGUST;
+			case "sep":
+				return Calendar.SEPTEMBER;
+			case "oct":
+				return Calendar.OCTOBER;
+			case "nov":
+				return Calendar.NOVEMBER;
+			case "dec":
+				return Calendar.DECEMBER;
+			}
+			throw new ParseException("Unrecognized month name", 0);
+		}
+	};
+	private static final Format<Integer> AM_PM_PARSER = new Format<Integer>() {
+		@Override
+		public void append(StringBuilder text, Integer value) {
+			text.append(value == Calendar.AM ? "a.m." : "p.m.");
+		}
+
+		@Override
+		public Integer parse(CharSequence text) throws ParseException {
+			char ch = Character.toLowerCase(text.charAt(0));
+			switch (ch) {
+			case 'a':
+				return Calendar.AM;
+			case 'p':
+				return Calendar.PM;
+			default:
+				throw new ParseException("Expected [ap].?m.?", 0);
+			}
+		}
+	};
+
+	private static final Format<Integer> TIME_ZONE_FORMAT = new Format<Integer>() {
+		@Override
+		public void append(StringBuilder text, Integer value) {
+			text.append(TimeZone.getAvailableIDs(value)[0]);
+		}
+
+		@Override
+		public Integer parse(CharSequence text) throws ParseException {
+			TimeZone zone = TIME_ZONES.getIfPresent(text.toString());
+			if (zone == null)
+				throw new ParseException("Unrecognized time zone", 0);
+			return zone.getRawOffset();
+		}
+	};
+
+	private static class OffsetFormat implements Format<Integer> {
+		private final int theOffset;
+
+		public OffsetFormat(int offset) {
+			theOffset = offset;
+		}
+
+		@Override
+		public void append(StringBuilder text, Integer value) {
+			Format.INT.append(text, value - theOffset);
+		}
+
+		@Override
+		public Integer parse(CharSequence text) throws ParseException {
+			return theOffset + Format.INT.parse(text);
+		}
+	}
+
 	static {
-		Predicate<CharSequence> oneOrTwoDigits = str -> str.length() == 1 || str.length() == 2;
-		Predicate<CharSequence> twoDigits = str -> str.length() == 2;
-		Predicate<CharSequence> threeDigits = str -> str.length() == 3;
-		Predicate<CharSequence> fourDigits = str -> str.length() == 4;
-		Predicate<CharSequence> weekDay = str -> {
+		SimpleSequenceParser.Builder<DateElementType, Integer> parserBuilder = SimpleSequenceParser.build(DateElementType.class, Format.INT,
+			(old, adj) -> old + adj);
+		parserBuilder.withWhiteSpace(Pattern.compile("[\\s\\,]"));
+		parserBuilder.withParser("$weekday", str -> {
 			if (str.length() < 3)
-				return false;
+				return -1;
+			str = str.toString().toLowerCase();
+			String test;
 			switch (str.subSequence(0, 3).toString().toLowerCase()) {
 			case "sun":
-				return str.toString().toLowerCase().equals("sunday".substring(0, str.length()));
+				test = "sunday";
+				break;
 			case "mon":
-				return str.toString().toLowerCase().equals("monday".substring(0, str.length()));
+				test = "monday";
+				break;
 			case "tue":
-				return str.toString().toLowerCase().equals("tuesday".substring(0, str.length()));
+				test = "tuesday";
+				break;
 			case "wed":
-				return str.toString().toLowerCase().equals("wednesday".substring(0, str.length()));
+				test = "wednesday";
+				break;
 			case "thu":
-				return str.toString().toLowerCase().equals("thursday".substring(0, str.length()));
+				test = "thursday";
+				break;
 			case "fri":
-				return str.toString().toLowerCase().equals("friday".substring(0, str.length()));
+				test = "friday";
+				break;
 			case "sat":
-				return str.toString().toLowerCase().equals("saturday".substring(0, str.length()));
+				test = "saturday";
+				break;
+			default:
+				return -1;
 			}
-			return false;
-		};
-		DateFormatComponent weekDayOpt = new DateFormatComponent(DateElementType.Weekday, ParsedDateElementType.DAY_NAME, weekDay, false);
-		DateFormatComponent weekDayReq = new DateFormatComponent(DateElementType.Weekday, ParsedDateElementType.DAY_NAME, weekDay, true);
-		DateFormatComponent year2 = new DateFormatComponent(DateElementType.Year, ParsedDateElementType.DIGIT, twoDigits, true);
-		DateFormatComponent year4 = new DateFormatComponent(DateElementType.Year, ParsedDateElementType.DIGIT, fourDigits, true);
-		DateFormatComponent monthDig = new DateFormatComponent(DateElementType.Month, ParsedDateElementType.DIGIT, oneOrTwoDigits, true)
-			.offset(-1);
-		DateFormatComponent monthCh = new DateFormatComponent(DateElementType.Month, ParsedDateElementType.MONTH,
-			str -> Character.isAlphabetic(str.charAt(0)), true);
-		DateFormatComponent day = new DateFormatComponent(DateElementType.Day, ParsedDateElementType.DIGIT, oneOrTwoDigits, true);
-		DateFormatComponent hour = new DateFormatComponent(DateElementType.Hour, ParsedDateElementType.DIGIT, oneOrTwoDigits, true);
-		DateFormatComponent minute = new DateFormatComponent(DateElementType.Minute, ParsedDateElementType.DIGIT, twoDigits, true);
-		DateFormatComponent second = new DateFormatComponent(DateElementType.Second, ParsedDateElementType.DIGIT, twoDigits, true);
-		DateFormatComponent subSecond = new DateFormatComponent(DateElementType.SubSecond, ParsedDateElementType.DIGIT, str -> true, false);
-		DateFormatComponent ampm = new DateFormatComponent(DateElementType.AmPm, ParsedDateElementType.AM_PM, str -> true, false);
-		DateFormatComponent timeZone = new DateFormatComponent(DateElementType.TimeZone, ParsedDateElementType.CHARS, threeDigits, false);
-		DateFormatComponent stndrdth = new DateFormatComponent(null, ParsedDateElementType.CHARS, str -> {
-			if (str.length() != 2)
-				return false;
+			for (int i = 3; i < str.length(); i++) {
+				if (str.charAt(i) != test.charAt(i))
+					return i;
+			}
+			return str.length();
+		});
+		parserBuilder.withFormat("weekday", WEEKDAY_FORMAT);
+		parserBuilder.withParser("$th", str -> {
+			if (str.length() < 2)
+				return -1;
 			String suffix = str.toString().toLowerCase();
-			return suffix.equals("st") || suffix.equals("nd") || suffix.equals("rd") || suffix.equals("th");
-		}, false);
+			if (suffix.startsWith("st") || suffix.startsWith("nd") || suffix.startsWith("rd") || suffix.startsWith("th"))
+				return 2;
+			else
+				return -1;
+		});
+		parserBuilder.withFormat("ampm", AM_PM_PARSER);
+		parserBuilder.withParser("$month", str -> {
+			if (str.length() < 3)
+				return -1;
+			str = str.toString().toLowerCase();
+			String test;
+			switch (str.subSequence(0, 3).toString().toLowerCase()) {
+			case "jan":
+				test = "january";
+				break;
+			case "feb":
+				test = "february";
+				break;
+			case "mar":
+				test = "march";
+				break;
+			case "apr":
+				test = "april";
+				break;
+			case "may":
+				test = "may";
+				break;
+			case "jun":
+				test = "june";
+				break;
+			case "jul":
+				test = "july";
+				break;
+			case "aug":
+				test = "august";
+				break;
+			case "sep":
+				test = "september";
+				break;
+			case "oct":
+				test = "october";
+				break;
+			case "nov":
+				test = "november";
+				break;
+			case "dec":
+				test = "december";
+				break;
+			default:
+				return -1;
+			}
+			for (int i = 3; i < str.length(); i++) {
+				if (str.charAt(i) != test.charAt(i))
+					return i;
+			}
+			return str.length();
+		});
+		parserBuilder.withFormat("month", MONTH_FORMAT);
+		parserBuilder.withFormat("timeZone", TIME_ZONE_FORMAT);
+		parserBuilder.withFormat("monthDig", new OffsetFormat(-1));
+		try {
+			parserBuilder.parse(TimeUtils.class.getResource("time-formats.xml"));
+		} catch (IOException e) {
+			throw new IllegalStateException("Unable to access included time formats configuration", e);
+		}
+		DATE_PARSER = parserBuilder.build();
 
-		DateFormatComponent stdDateSep = new DateFormatComponent(null, ParsedDateElementType.SEP, str -> {
-			char c = str.charAt(0);
-			return c == '-' || c == '/' || c == '.';
-		}, true);
-		DateFormatComponent nonStdDateSep = new DateFormatComponent(null, ParsedDateElementType.SEP, str -> {
-			char c = str.charAt(0);
-			return c == '-' || c == '/';
-		}, true);
-		DateFormatComponent optionalNonStdDateSep = new DateFormatComponent(null, ParsedDateElementType.SEP, str -> {
-			char c = str.charAt(0);
-			return c == '-' || c == '/';
-		}, false);
-		DateFormatComponent dot = new DateFormatComponent(null, ParsedDateElementType.SEP, str -> str.charAt(0) == '.', true);
-		DateFormatComponent colon = new DateFormatComponent(null, ParsedDateElementType.SEP, str -> str.charAt(0) == ':', false);
-
-		List<DateFormat> formats = new ArrayList<>();
-		formats.addAll(Arrays.asList(//
-			// Date formats
-			new DateFormat("Y4MDthZ", year4, stdDateSep, monthDig, stdDateSep, day, stndrdth, timeZone), //
-			new DateFormat("Y4MZ", year4, stdDateSep, monthDig, timeZone), //
-			new DateFormat("Y4Z", year4, timeZone), //
-			new DateFormat("MY4Z", monthCh, optionalNonStdDateSep, year4, timeZone), //
-			new DateFormat("DMY4Z", weekDayOpt, day, optionalNonStdDateSep, monthCh, optionalNonStdDateSep, year4, timeZone), //
-			new DateFormat("DMY2Z", weekDayOpt, day, optionalNonStdDateSep, monthCh, optionalNonStdDateSep, year2, timeZone), //
-			new DateFormat("DMZ", weekDayOpt, day, optionalNonStdDateSep, monthCh, timeZone), //
-			new DateFormat("MdDthY4Z", weekDayOpt, monthDig, nonStdDateSep, day, stndrdth, nonStdDateSep, year4, timeZone), //
-			new DateFormat("MchDthY4Z", weekDayOpt, monthCh, optionalNonStdDateSep, day, stndrdth, optionalNonStdDateSep, year4, timeZone), //
-			new DateFormat("MdDthY2Z", weekDayOpt, monthDig, nonStdDateSep, day, stndrdth, nonStdDateSep, year2, timeZone), //
-			new DateFormat("MchDthY2Z", weekDayOpt, monthCh, optionalNonStdDateSep, day, stndrdth, nonStdDateSep, year2, timeZone), //
-			new DateFormat("MdDthZ", weekDayOpt, monthDig, nonStdDateSep, day, stndrdth, timeZone), //
-			new DateFormat("MchDthZ", weekDayOpt, monthCh, optionalNonStdDateSep, day, stndrdth, timeZone), //
-			new DateFormat("M.Y4Z", weekDayOpt, monthDig, dot, year4, timeZone), //
-			new DateFormat("Dth.M.Y4Z", weekDayOpt, day, stndrdth, dot, monthDig, dot, year4, timeZone), //
-			new DateFormat("Dth.M.Y2Z", weekDayOpt, day, stndrdth, dot, monthDig, dot, year2, timeZone), //
-			new DateFormat("Dth.MZ", weekDayOpt, day, stndrdth, dot, monthDig, timeZone), //
-			new DateFormat("MDZ", weekDayOpt, monthCh, optionalNonStdDateSep, day, timeZone), //
-			new DateFormat("WD", weekDayReq), //
-			// Time formats
-			new DateFormat("HMSSaZ", hour, colon, minute, colon, second, dot, subSecond, ampm, timeZone), //
-			new DateFormat("HMSaZ", hour, colon, minute, colon, second, ampm, timeZone), //
-			new DateFormat("HMaZ", hour, colon, minute, ampm, timeZone), //
-			new DateFormat("HaZ", hour, ampm, timeZone)//
-		));
-		FLEX_FORMATS = Collections.unmodifiableList(formats);
-
-		TIME_ZONES = QuickSet.of(String::compareToIgnoreCase, TimeZone.getAvailableIDs()).createMap();
+		Set<String> tzIds = new TreeSet<>();
+		tzIds.add("Z");
+		tzIds.addAll(Arrays.asList(TimeZone.getAvailableIDs()));
+		TIME_ZONES = QuickSet.of(String::compareToIgnoreCase, tzIds).createMap();
 	}
 
 	private static final String[] DAYS = new String[] { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
@@ -2281,7 +2293,7 @@ public class TimeUtils {
 		TimeEvaluationOptions options = DEFAULT_OPTIONS;
 		if (opts != null)
 			options = opts.apply(options);
-		EnumMap<DateElementType, ParsedDateElement> elements = new EnumMap<>(DateElementType.class);
+		EnumMap<DateElementType, ParsedElement<DateElementType, Integer>> elements = new EnumMap<>(DateElementType.class);
 		StringBuilder str = new StringBuilder();
 		Calendar cal = TimeUtils.CALENDAR.get();
 		cal.setTimeZone(options.getTimeZone());
@@ -2320,22 +2332,21 @@ public class TimeUtils {
 							str.append(cal.get(Calendar.DAY_OF_MONTH));
 						else
 							StringUtils.printInt(cal.get(Calendar.DAY_OF_MONTH), i - start, str);
-						elements.put(DateElementType.Day,
-							new ParsedDateElement(ParsedDateElementType.DIGIT, strStart, str.substring(strStart))
-								.setValue(cal.get(Calendar.DAY_OF_MONTH)));
+						elements.put(DateElementType.Day, new ParsedElement<>(Format.INT, strStart, DateElementType.Day,
+							cal.get(Calendar.DAY_OF_MONTH), str.substring(strStart)));
 						break;
 					case 'M':
 						if (i - start == 2) {
-							StringUtils.printInt(cal.get(Calendar.DAY_OF_MONTH), 2, str);
-							elements.put(DateElementType.Month,
-								new ParsedDateElement(ParsedDateElementType.DIGIT, strStart, str.substring(strStart)));
+							StringUtils.printInt(cal.get(Calendar.MONTH), 2, str);
+							elements.put(DateElementType.Month, new ParsedElement<>(Format.INT, strStart, DateElementType.Month,
+								cal.get(Calendar.MONTH), str.substring(strStart)));
 						} else {
 							String mo = capitalize(MONTHS[cal.get(Calendar.MONTH) - Calendar.JANUARY]);
 							if (i - start > 1 && mo.length() > i - start)
 								mo = mo.substring(0, i - start);
 							str.append(mo);
 							elements.put(DateElementType.Month,
-								new ParsedDateElement(ParsedDateElementType.MONTH, strStart, mo).setValue(cal.get(Calendar.MONTH)));
+								new ParsedElement<>(MONTH_FORMAT, strStart, DateElementType.Month, cal.get(Calendar.MONTH), mo));
 						}
 						break;
 					case 'y':
@@ -2343,9 +2354,8 @@ public class TimeUtils {
 							str.append(cal.get(Calendar.YEAR));
 						else
 							StringUtils.printInt(cal.get(Calendar.YEAR), i - start, str);
-						elements.put(DateElementType.Year,
-							new ParsedDateElement(ParsedDateElementType.DIGIT, strStart, str.substring(strStart))
-								.setValue(cal.get(Calendar.YEAR)));
+						elements.put(DateElementType.Year, new ParsedElement<>(Format.INT, strStart, DateElementType.Year,
+							cal.get(Calendar.YEAR), str.substring(strStart)));
 						break;
 					case 'E':
 						if (i - start == 3)
@@ -2356,7 +2366,8 @@ public class TimeUtils {
 								day = day.substring(0, i - start);
 							str.append(day);
 						}
-						// Nothing to add to elements, day-of-week is not a field type here
+						elements.put(DateElementType.Weekday, new ParsedElement<>(WEEKDAY_FORMAT, strStart, DateElementType.Weekday,
+							cal.get(Calendar.DAY_OF_WEEK), str.substring(strStart)));
 						break;
 					default:
 						str.append(dayFormat.substring(start, i));
@@ -2399,21 +2410,20 @@ public class TimeUtils {
 				else
 					str.append(hour);
 			}
-			elements.put(DateElementType.Hour, new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index))
-				.setValue(cal.get(Calendar.HOUR_OF_DAY)));
+			elements.put(DateElementType.Hour,
+				new ParsedElement<>(Format.INT, index, DateElementType.Hour, cal.get(Calendar.HOUR_OF_DAY), str.substring(index)));
 			if (resolution.compareTo(DateElementType.Minute) >= 0) {
 				str.append(':');
 				index = str.length();
 				StringUtils.printInt(cal.get(Calendar.MINUTE), 2, str);
-				elements.put(DateElementType.Minute, new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index))
-					.setValue(cal.get(Calendar.MINUTE)));
+				elements.put(DateElementType.Minute, new ParsedElement<>(Format.INT, index, DateElementType.Minute,
+					cal.get(Calendar.MINUTE), str.substring(index)));
 				if (resolution.compareTo(DateElementType.Second) >= 0) {
 					str.append(':');
 					index = str.length();
 					StringUtils.printInt(cal.get(Calendar.SECOND), 2, str);
-					elements.put(DateElementType.Second,
-						new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index))
-							.setValue(cal.get(Calendar.SECOND)));
+					elements.put(DateElementType.Second, new ParsedElement<>(Format.INT, index, DateElementType.Second,
+						cal.get(Calendar.SECOND), str.substring(index)));
 					if (resolution.compareTo(DateElementType.SubSecond) >= 0) {
 						str.append('.');
 						nanoDigits = 9;
@@ -2424,18 +2434,22 @@ public class TimeUtils {
 							str.setLength(str.length() - 1);
 						}
 						elements.put(DateElementType.SubSecond,
-							new ParsedDateElement(ParsedDateElementType.DIGIT, str.length(), str.substring(index))
-								.setValue(time.getNano()));
+							new ParsedElement<>(Format.INT, index, DateElementType.SubSecond,
+							time.getNano(), str.substring(index)));
 					}
 				}
 			}
-			if (!options.is24HourFormat())
-				str.append(am ? "am" : "pm");
+			if (!options.is24HourFormat()) {
+				index = str.length();
+				str.append(am ? 'a' : 'p').append('m');
+				elements.put(DateElementType.AmPm,
+					new ParsedElement<>(AM_PM_PARSER, index, DateElementType.AmPm, cal.get(Calendar.AM_PM), str.substring(index)));
+			}
 		}
 		if (foundYear)
-			return new AbsoluteTime(str.toString(), time, cal, options.getTimeZone(), resolution, nanoDigits, toComponents(elements));
+			return new AbsoluteTime(str.toString(), time, cal, options.getTimeZone(), resolution, nanoDigits, elements);
 		else
-			return new RelativeTime(str.toString(), options.getTimeZone(), toComponents(elements), options.is24HourFormat(),
+			return new RelativeTime(str.toString(), options.getTimeZone(), elements, options.is24HourFormat(),
 				options.getEvaluationType());
 	}
 
