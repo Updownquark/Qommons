@@ -5,8 +5,8 @@ public interface ValueDefModifier {
 	/** @return The sub-type of the value to restrict specified values to. Null means to inherit from the super-specified value. */
 	QonfigValueType getTypeRestriction();
 
-	/** @return The type for the value. Null means to inherit from the super-specified value. */
-	typeType gettype();
+	/** @return The specification for the value. Null means to inherit from the super-specified value. */
+	SpecificationType getSpecification();
 
 	/** @return The default value to use if the value is not specified. Null means to inherit from the super-specified value. */
 	Object getDefaultValue();
@@ -14,18 +14,18 @@ public interface ValueDefModifier {
 	/** Default {@link ValueDefModifier} implementation */
 	public static class Default implements ValueDefModifier {
 		private final QonfigValueType theTypeRestriction;
-		private final typeType thetype;
+		private final SpecificationType thetype;
 		private final Object theDefaultValue;
 
 		/**
 		 * @param typeRestriction The sub-type of the value to restrict specified values to. Null means to inherit from the super-specified
 		 *        value.
-		 * @param type The type for the value. Null means to inherit from the super-specified value.
+		 * @param specify The specification for the value. Null means to inherit from the super-specified value.
 		 * @param defaultValue The default value to use if the value is not specified. Null means to inherit from the super-specified value.
 		 */
-		public Default(QonfigValueType typeRestriction, typeType type, Object defaultValue) {
+		public Default(QonfigValueType typeRestriction, SpecificationType specify, Object defaultValue) {
 			theTypeRestriction = typeRestriction;
-			thetype = type;
+			thetype = specify;
 			theDefaultValue = defaultValue;
 		}
 
@@ -35,7 +35,7 @@ public interface ValueDefModifier {
 		}
 
 		@Override
-		public typeType gettype() {
+		public SpecificationType getSpecification() {
 			return thetype;
 		}
 
