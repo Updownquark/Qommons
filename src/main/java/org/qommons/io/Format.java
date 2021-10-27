@@ -743,7 +743,7 @@ public interface Format<T> {
 
 		/**
 		 * @param prefix The metric-style prefix to modify the unit
-		 * @param exponent The ten-power exponent represented by the prefix
+		 * @param mult The multiple represented by the prefix
 		 * @return This builder
 		 */
 		public SuperDoubleFormatBuilder withPrefix(String prefix, double mult) {
@@ -869,10 +869,12 @@ public interface Format<T> {
 			theDoubleFormat = ThreadLocal.withInitial(() -> DecimalFormat.getInstance());
 		}
 
+		/** @return The base unit of this format */
 		public String getBaseUnit() {
 			return theBaseUnit;
 		}
 
+		/** @return Whether the unit MUST be specified to be parseable */
 		public boolean isBaseUnitRequired() {
 			return isBaseUnitRequired;
 		}

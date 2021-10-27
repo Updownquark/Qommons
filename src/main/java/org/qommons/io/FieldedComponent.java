@@ -4,12 +4,13 @@ package org.qommons.io;
  * A component in a {@link FieldedAdjustable}
  * 
  * @param <F> The field type enum
+ * @param <V> The value type
  */
-public abstract class FieldedComponent<F extends Enum<F>> implements AdjustableComponent {
+public abstract class FieldedComponent<F extends Enum<F>, V extends Comparable<V>> implements AdjustableComponent {
 	private final int theStart;
 	private final int theEnd;
 	private final F theField;
-	private final int theValue;
+	private final V theValue;
 
 	/**
 	 * @param start The start position of this component
@@ -17,7 +18,7 @@ public abstract class FieldedComponent<F extends Enum<F>> implements AdjustableC
 	 * @param field The field type of this component
 	 * @param value The value of this component
 	 */
-	public FieldedComponent(int start, int end, F field, int value) {
+	public FieldedComponent(int start, int end, F field, V value) {
 		theStart = start;
 		theEnd = end;
 		theField = field;
@@ -40,7 +41,7 @@ public abstract class FieldedComponent<F extends Enum<F>> implements AdjustableC
 	}
 
 	/** @return This component's value */
-	public int getValue() {
+	public V getValue() {
 		return theValue;
 	}
 
