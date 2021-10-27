@@ -325,7 +325,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 	 * @return The string representation of the multi-map's contents
 	 */
 	public static String toString(BetterMultiMap<?, ?> map) {
-		StringBuilder str = new StringBuilder();
+		StringBuilder str = new StringBuilder().append('{');
 		try (Transaction t = map.lock(false, null)) {
 			boolean firstEntry = true;
 			for (MultiEntryHandle<?, ?> entry : map.entrySet()) {
@@ -336,7 +336,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 				str.append(entry.getKey()).append('=').append(entry.getValues());
 			}
 		}
-		return str.toString();
+		return str.append('}').toString();
 	}
 
 	/**
@@ -1228,7 +1228,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 				if (keyEntry != null)
 					valueEntry = keyEntry.getValues().getTerminalElement(next);
 			}
-			return entryFor(keyEntry.getElementId(), valueEntry);
+			return valueEntry == null ? null : entryFor(keyEntry.getElementId(), valueEntry);
 		}
 
 		@Override
