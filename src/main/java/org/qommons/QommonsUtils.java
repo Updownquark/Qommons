@@ -13,8 +13,10 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -760,6 +762,19 @@ public class QommonsUtils {
 	}
 
 	/**
+	 * @param <T> The type of values in the set
+	 * @param values The values to include
+	 * @return An unmodifiable set containing all values in the given collection
+	 */
+	public static <T> Set<T> unmodifiableDistinctCopy(Collection<? extends T> values) {
+		if (values == null || values.isEmpty())
+			return Collections.emptySet();
+		LinkedHashSet<T> set = new LinkedHashSet<>(values.size() * 3 / 2 + 1);
+		set.addAll(values);
+		return Collections.unmodifiableSet(set);
+	}
+
+	/**
 	 * @param <T> The type of values in the list
 	 * @param values The values to include
 	 * @return An unmodifiable copy of the given list
@@ -773,6 +788,19 @@ public class QommonsUtils {
 		return Collections.unmodifiableList(list);
 	}
 
+	/**
+	 * @param <T> The type of values in the list
+	 * @param values The values to include
+	 * @return An unmodifiable set containing all values in the given array
+	 */
+	public static <T> Set<T> unmodifiableDistinctCopy(T... values) {
+		if (values == null || values.length == 0)
+			return Collections.emptySet();
+		LinkedHashSet<T> set = new LinkedHashSet<>(values.length * 3 / 2 + 1);
+		for (T v : values)
+			set.add(v);
+		return Collections.unmodifiableSet(set);
+	}
 	/**
 	 * @param <K> The key type of the map
 	 * @param <V> The value type of the map
@@ -967,6 +995,26 @@ public class QommonsUtils {
 		public NamedGroupCapture(int start, String value) {
 			this.start = start;
 			this.value = value;
+		}
+
+		@Override
+		public int hashCode() {
+			return value.hashCode() ^ start;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (obj == this)
+				return true;
+			else if (!(obj instanceof NamedGroupCapture))
+				return false;
+			NamedGroupCapture other = (NamedGroupCapture) obj;
+			return start == other.start && value.equals(other.value);
+		}
+
+		@Override
+		public String toString() {
+			return value;
 		}
 	}
 
