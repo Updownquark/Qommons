@@ -1,0 +1,161 @@
+package org.qommons.config;
+
+import java.util.Map;
+import java.util.Set;
+
+import org.qommons.MultiInheritanceSet;
+import org.qommons.collect.BetterMultiMap;
+import org.qommons.config.QonfigAttributeDef.Declared;
+
+/** The definition of an element that can be declared in a document */
+public class QonfigElementDef extends QonfigElementOrAddOn {
+	private final boolean isOrdered;
+
+	private final Map<QonfigAttributeDef.Declared, QonfigAttributeDef> theCompiledAttributes;
+	private final Map<QonfigChildDef.Declared, QonfigChildDef> theCompiledChildren;
+
+	private final QonfigValueDef theValue;
+
+	private QonfigElementDef(QonfigToolkit declarer, String name, QonfigElementDef superElement, Set<QonfigAddOn> inheritance,
+		boolean isAbstract, boolean ordered, //
+		Map<String, QonfigAttributeDef.Declared> declaredAttributes, Map<QonfigAttributeDef.Declared, ValueDefModifier> attributeModifiers,
+		Map<QonfigAttributeDef.Declared, QonfigAttributeDef> allAttributes, BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
+		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ChildDefModifier> childModifiers,
+		Map<QonfigChildDef.Declared, QonfigChildDef> allChildren, BetterMultiMap<String, QonfigChildDef> childrenByName, //
+		ValueDefModifier valueModifier, MultiInheritanceSet<QonfigAddOn> fullInheritance) {
+		super(declarer, name, isAbstract, superElement, inheritance, fullInheritance, declaredAttributes, attributeModifiers,
+			attributesByName,
+			declaredChildren, childModifiers, childrenByName, valueModifier);
+		isOrdered = ordered;
+		theCompiledAttributes = allAttributes;
+		theCompiledChildren = allChildren;
+
+		if (valueModifier == null)
+			theValue = superElement == null ? null : superElement.getValue();
+		else if (superElement == null || superElement.getValue() == null)
+			theValue = new QonfigValueDef.DeclaredValueDef(this, valueModifier.getTypeRestriction(), valueModifier.getSpecification(),
+				valueModifier.getDefaultValue());
+		else {
+			QonfigValidation.ValueSpec spec = QonfigValidation.validateSpecification(//
+				new QonfigValidation.ValueSpec(superElement.getValue().getType(), superElement.getValue().getSpecification(),
+					superElement.getValue().getDefaultValue()), //
+				new QonfigValidation.ValueSpec(valueModifier.getTypeRestriction(), valueModifier.getSpecification(),
+					valueModifier.getDefaultValue()), //
+				__ -> {
+				}, __ -> {
+				});
+			theValue = new QonfigValueDef.Modified(superElement.getValue(), this, spec.type, spec.specification, spec.defaultValue);
+		}
+	}
+
+	/** @return Whether elements of this type must specify their children in the same order as they are defined */
+	public boolean isOrdered() {
+		return isOrdered;
+	}
+
+	@Override
+	public Map<QonfigAttributeDef.Declared, ValueDefModifier> getAttributeModifiers() {
+		return (Map<Declared, ValueDefModifier>) super.getAttributeModifiers();
+	}
+
+	/**
+	 * @return All attributes defined in this element, its {@link #getSuperElement() super-type}, or its {@link #getInheritance()
+	 *         inheritance}
+	 */
+	public Map<QonfigAttributeDef.Declared, QonfigAttributeDef> getAllAttributes() {
+		return theCompiledAttributes;
+	}
+
+	@Override
+	public Map<QonfigChildDef.Declared, ChildDefModifier> getChildModifiers() {
+		return (Map<org.qommons.config.QonfigChildDef.Declared, ChildDefModifier>) super.getChildModifiers();
+	}
+
+	/**
+	 * @return All children defined in this element, its {@link #getSuperElement() super-type}, or its {@link #getInheritance() inheritance}
+	 */
+	public Map<QonfigChildDef.Declared, QonfigChildDef> getAllChildren() {
+		return theCompiledChildren;
+	}
+
+	/** @return The value specification for elements of this type */
+	public QonfigValueDef getValue() {
+		return theValue;
+	}
+
+	@Override
+	public boolean isAssignableFrom(QonfigElementOrAddOn other) {
+		if (!(other instanceof QonfigElementDef))
+			return false;
+		QonfigElementDef el = (QonfigElementDef) other;
+		while (el != null) {
+			if (equals(el))
+				return true;
+			el = el.getSuperElement();
+		}
+		return false;
+	}
+
+	/**
+	 * @param name The name for the element type
+	 * @param session The session for error reporting
+	 * @return A builder to build an element-def
+	 */
+	public static Builder build(String name, QonfigParseSession session) {
+		return new Builder(name, session);
+	}
+
+	/** Builds element-defs */
+	public static class Builder extends QonfigElementOrAddOn.Builder {
+		private boolean isOrdered;
+
+		Builder(String name, QonfigParseSession session) {
+			super(name, session);
+		}
+
+		@Override
+		public QonfigElementDef get() {
+			return (QonfigElementDef) super.get();
+		}
+
+		/**
+		 * @param ordered Whether elements of this type must specify their children in the same order as they are defined
+		 * @return This builder
+		 */
+		public Builder setOrdered(boolean ordered) {
+			if (!checkStage(Stage.Initial)) {
+				theSession.withError("Ordered cannot be changed at this stage");
+				return this;
+			}
+			isOrdered = ordered;
+			return this;
+		}
+
+		@Override
+		protected ValueDefModifier valueModifier(QonfigValueType type, SpecificationType specification, Object defaultValue) {
+			return new ValueDefModifier.Default(type, specification, defaultValue);
+		}
+
+		@Override
+		protected ChildDefModifier childModifier(QonfigChildDef.Declared child, QonfigElementDef type, Set<QonfigAddOn> inheritance,
+			Integer min, Integer max) {
+			QonfigChildDef override = getCompiledChildren().get(child.getDeclared());
+			if (override instanceof QonfigChildDef.Overridden) {
+				theSession.forChild("child-mod", child.getName())
+					.withError("Child has been overridden by " + ((QonfigChildDef.Overridden) override).getOverriding());
+				return null;
+			}
+			return new ChildDefModifier.Default(type, inheritance, min, max);
+		}
+
+		@Override
+		protected QonfigElementOrAddOn build() {
+			return new QonfigElementDef(theSession.getToolkit(), getName(), getSuperElement(), getInheritance(), isAbstract(), isOrdered, //
+				getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueDefModifier>) getAttributeModifiers(),
+				getCompiledAttributes(), getAttributesByName(), //
+				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildDefModifier>) getChildModifiers(), getCompiledChildren(),
+				getChildrenByName(), //
+				getValueModifier(), getFullInheritance());
+		}
+	}
+}

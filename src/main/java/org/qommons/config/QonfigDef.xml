@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+ <!-- Declare dependencies on root with extends:name="URL" -->
+<!-- root may be inherited from a root dependency if exactly one of those declares a root -->
+<!-- If a root is neither declared nor inherited, this is an "abstract" definition that other definitions could extend -->
+<qonfig-def name="?" extends:name="URL" root="element-def-name">
+	<patterns>
+		<pattern
+			name="pattern name">
+			regex pattern
+		</pattern> <!-- 0... -->
+	</patterns>
+
+	<add-ons> <!-- 0..1 -->
+		<!-- 0... -->
+		<add-on
+			name="add-on name"
+			requires="Reference to an element-def that this add-on requires any element it applies to"
+			inherits="Comma-separated list of references to add-ons that this add-on inherits from"
+			>
+			<!-- 0... -->
+			<!-- specify defaults to required unless a default value is provided, where it is optional -->
+			<!-- If name contains a '.', it will override the referenced attribute in an extended/inherited type.
+				In this case, any of type, specify, and default can be omitted to inherit what is specified by the super type. -->
+			<attribute
+				name="attribute name"
+				type="'string', 'boolean', pattern name, or add-on"
+				specify="'forbidden', 'optional', or 'required'"
+				default="default value for the attribute--required if specify='forbidden'"
+				/>
+			<!-- 0... -->
+			<!-- Unlike element-defs, children of add-ons cannot specify fulfilled roles -->
+			<child-def
+				name="role name--required"
+				type="element-def that the declared child must extend"
+				inherits="comma-separated list of add-ons that the element in this position will inherit from, default empty"
+				min="minimum number of times element can be specified--default 1"
+				max="maximum number of times element can be specified, or 'inf'--default MAXIMUM(1, min)"
+				/>
+			<!-- 0... -->
+			<!-- Modifies an inherited child.  Type here is allowed, but discouraged, as the type of a child cannot be modified by an add-on.
+				If the type is different than what is inherited, it will cause an error. -->
+			<!-- The multiplicity (min/max) of a child cannot be modified by an add-on -->
+			<child-mod
+				name="role name--required"
+				type="element-def that the declared child must extend"
+				inherits="comma-separated list of add-ons that the element in this position will inherit from, default empty"
+				/>
+			<!-- 0..1 -->
+			<!-- Value cannot be *declared* by an add-on, but an inherited value specification from its requirement may be altered here -->
+			<value
+				type="'string', 'boolean', pattern name, or element-def"
+				specify="'forbidden', 'optional', or 'required'"
+				default="default value for text--required if specify='forbidden'"
+				/> 
+		</add-on>
+	</add-ons>
+
+	<elements> <!-- 0..1 -->
+		<!-- 0... -->
+		<element-def
+			name="element-def name"
+			extends="Reference to an element-def to extend"
+			inherits="Comma-separated list of references to add-ons that this element-def inherits"
+			abstract="Whether the element may be instantiated, or must be extended--default false"
+			ordered="Whether the elements specified as children of this element must be given in the same order as the children are declared--default false"
+			>
+			<!-- 0... -->
+			<!-- specify defaults to required unless a default value is provided -->
+			<attribute
+				name="attribute name"
+				type="'string', 'boolean', pattern name, or element-def"
+				specify="'forbidden', 'optional', or 'required'"
+				default="default value for the attribute--required if specify='forbidden'"
+				/>
+			<!-- 0... -->
+			<child-def
+				name="role name--required"
+				type="element-def that the declared child must extend"
+				role="roles of extended elements fulfilled by this element"
+				inherits="comma-separated list of add-ons that the element in this position will inherit from, default empty"
+				min="minimum number of times element can be specified--default 1"
+				max="maximum number of times element can be specified, or 'inf'--default MAXIMUM(1, min)"
+				/>
+			<!-- Modifies an inherited child. -->
+			<child-mod
+				name="role name--required"
+				type="element-def that the declared child must extend"
+				inherits="comma-separated list of add-ons that the element in this position will inherit from, default empty"
+				min="minimum number of times element can be specified--default 1"
+				max="maximum number of times element can be specified, or 'inf'--default MAXIMUM(1, min)"
+				/>
+			<!-- 0..1 -->
+			<text
+				type="'string', 'boolean', pattern name, or element-def"
+				specify="'forbidden', 'optional', or 'required'"
+				default="default value for text--required if specify='forbidden'"
+				/> 
+			<!-- Concrete children can also be specified identically to how they are specified in a document -->
+		</element-def>
+	</elements>
+	
+	<!-- TODO
+		For clarity, an element in a document can inherit element-defs via:
+			* Its declared element-def type
+			* Its role in its parent
+			* add-ons specified as attributes or text
+
+		When specifying children of an element in a document, the "role" attribute is optional if the type of the element is compatible
+			with only a single role among all declared children inherited by the parent.
+			If there is any ambiguity, "role" must be specified.
+
+		Maybe:
+
+		We may need an InheritancePath class, so it can easily be determined how a QonfigElement inherited from any particular type
+			This should probably be dynamically-generated, as keeping a MultiMap<QonfigElementDef, InheritancePath>
+			would consume a lot of memory for each element.
+
+		When extending an element that declares a child with variable multiplicity (min<max), if the extension fulfills that role
+			with fewer children than the maximum, how to prevent a document from specifying more elements in that role?
+		A?: If an element-def specifies anything (abstract or concrete) regarding a role,
+			then children of that role cannot be specified in a document - they must be specified using a role declared by the extension
+			that may fulfill the target role in the parent.
+		
+		Must be able to trace the inheritance path (or paths) that is the reason why an attribute is allowed/required/forbidden
+		
+		Think about allowing custom parseable types (attribute and text) such as date or duration
+			that might be difficult to capture with a regex
+	-->
+</qonfig-def>

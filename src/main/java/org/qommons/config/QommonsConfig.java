@@ -235,23 +235,23 @@ public abstract class QommonsConfig implements Cloneable {
 	public abstract QommonsConfig [] subConfigs();
 
 	/**
-	 * @param type The type of the config to get
+	 * @param name The name of the config to get
 	 * @param props The properties that a config must match to be returned by this method
 	 * @return The first configuration that would be returned from {@link #subConfigs(String, String...)}, or null if no such
 	 *         sub-configuration exists
 	 */
-	public QommonsConfig subConfig(String type, String... props) {
-		int index = type.indexOf('/');
+	public QommonsConfig subConfig(String name, String... props) {
+		int index = name.indexOf('/');
 		if(index >= 0) {
-			QommonsConfig pathEl = subConfig(type.substring(0, index));
-			type = type.substring(index + 1);
+			QommonsConfig pathEl = subConfig(name.substring(0, index));
+			name = name.substring(index + 1);
 			if(pathEl == null)
 				return null;
-			return pathEl.subConfig(type);
+			return pathEl.subConfig(name);
 		}
 
 		for(QommonsConfig config : subConfigs())
-			if(config.getName().equals(type)) {
+			if (config.getName().equals(name)) {
 				boolean propMatch = true;
 				for(int i = 0; i + 2 <= props.length; i += 2) {
 					String value = config.get(props[i]);
@@ -267,20 +267,20 @@ public abstract class QommonsConfig implements Cloneable {
 	}
 
 	/**
-	 * Gets a sub-configurations of a given type and potentially selected by a set of attributes
+	 * Gets a sub-configurations of a given name and potentially selected by a set of attributes
 	 *
-	 * @param type The type of the configs to get
+	 * @param name The name of the configs to get
 	 * @param props The properties (name, value, name, value...) that a config must match to be returned by this method
-	 * @return All configuration in this config's children (or descendants) that match the given type and properties
+	 * @return All configuration in this config's children (or descendants) that match the given name and properties
 	 */
-	public QommonsConfig [] subConfigs(String type, String... props) {
-		int index = type.indexOf('/');
+	public QommonsConfig[] subConfigs(String name, String... props) {
+		int index = name.indexOf('/');
 		if(index >= 0) {
-			QommonsConfig [] pathEls = subConfigs(type.substring(0, index));
-			type = type.substring(index + 1);
+			QommonsConfig[] pathEls = subConfigs(name.substring(0, index));
+			name = name.substring(index + 1);
 			QommonsConfig [] [] ret = new QommonsConfig[pathEls.length][];
 			for(int p = 0; p < pathEls.length; p++)
-				ret[p] = pathEls[p].subConfigs(type, props);
+				ret[p] = pathEls[p].subConfigs(name, props);
 			QommonsConfig [] ret2 = org.qommons.ArrayUtils.mergeInclusive(QommonsConfig.class, ret);
 			if(getClass() != QommonsConfig.class) {
 				QommonsConfig [] ret3 = createConfigArray(ret2.length);
@@ -292,7 +292,7 @@ public abstract class QommonsConfig implements Cloneable {
 
 		java.util.ArrayList<QommonsConfig> ret = new java.util.ArrayList<>();
 		for(QommonsConfig config : subConfigs())
-			if(config.getName().equals(type)) {
+			if (config.getName().equals(name)) {
 				boolean propMatch = true;
 				for(int i = 0; i + 2 <= props.length; i += 2) {
 					String value = config.get(props[i]);
@@ -309,7 +309,7 @@ public abstract class QommonsConfig implements Cloneable {
 
 	/**
 	 * @param size The size of the array to create
-	 * @return A config array whose type is that of this class
+	 * @return A config array whose name is that of this class
 	 */
 	@SuppressWarnings("static-method")
 	protected QommonsConfig [] createConfigArray(int size) {
@@ -728,12 +728,16 @@ public abstract class QommonsConfig implements Cloneable {
 				if(location.startsWith("/"))
 					return resolvedRel.substring(0, protocolIdx) + ":/" + location;
 				String newLocation = location;
-				do {
-					int lastSlash = resolvedRel.lastIndexOf("/");
+				int lastSlash = resolvedRel.lastIndexOf("/");
+				if (lastSlash >= 0) {
 					resolvedRel = resolvedRel.substring(0, lastSlash);
-					if(newLocation.startsWith("../"))
-						newLocation = newLocation.substring(3);
-				} while(newLocation.startsWith("../"));
+					lastSlash = resolvedRel.lastIndexOf("/");
+				}
+				while (lastSlash > 0 && newLocation.startsWith("../")) {
+					resolvedRel = resolvedRel.substring(0, lastSlash);
+					lastSlash = resolvedRel.lastIndexOf("/");
+					newLocation = newLocation.substring(3);
+				}
 				if(!resolvedRel.contains(":/")) {
 					throw new IOException(
 						"Location " + location + " relative to " + org.qommons.ArrayUtils.toString(relative) + " is invalid");

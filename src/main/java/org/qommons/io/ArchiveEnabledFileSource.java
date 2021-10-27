@@ -53,11 +53,26 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 	}
 
 	/**
-	 * @param compression The compression method to enable
+	 * @param compression The compression methods to enable
 	 * @return This file source
 	 */
-	public ArchiveEnabledFileSource withArchival(ArchiveEnabledFileSource.FileArchival compression) {
-		theArchivalMethods.add(compression);
+	public ArchiveEnabledFileSource withArchival(FileArchival... compression) {
+		for (FileArchival arch : compression) {
+			if (!theArchivalMethods.contains(arch))
+				theArchivalMethods.add(arch);
+		}
+		return this;
+	}
+
+	/**
+	 * @param compression The compression methods to enable
+	 * @return This file source
+	 */
+	public ArchiveEnabledFileSource withArchival(Iterable<? extends FileArchival> compression) {
+		for (FileArchival arch : compression) {
+			if (!theArchivalMethods.contains(arch))
+				theArchivalMethods.add(arch);
+		}
 		return this;
 	}
 

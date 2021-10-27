@@ -393,6 +393,7 @@ public interface Format<T> {
 		.withOption("WD", ",", OPTIONAL, "E", "X")//
 		.build();*/
 
+	/** An alternate pattern to use to parse doubles */
 	static final Pattern ALT_DEC_PATTERN = Pattern.compile("\\d*,\\d*[Ee]\\d+");
 
 	/**
