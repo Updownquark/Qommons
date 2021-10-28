@@ -85,6 +85,9 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 
 		/** Removes the key from the map */
 		void remove();
+
+		/** Should be called whenever the collection is changed */
+		void changed();
 	}
 
 	/** A simple {@link ValueCollectionSupplier} that just creates {@link BetterTreeList}s for each value */
@@ -379,6 +382,8 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 				}
 			}
 		}
+		if (removedAny)
+			theStamp++;
 		return removedAny;
 	}
 
@@ -459,7 +464,6 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	/** Implements {@link AbstractBetterMultiMap#keySet()} */
 	protected class BetterMultiMapKeySet extends AbstractIdentifiable implements BetterSet<K> {
 		private final BetterSet<K> theBacking;
-		private long theKeyStamp;
 
 		/** @param backing The key set of the backing multi-map's backing {@link BetterMap} */
 		protected BetterMultiMapKeySet(BetterSet<K> backing) {
@@ -488,7 +492,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 
 		@Override
 		public long getStamp() {
-			return theKeyStamp;
+			return theBacking.getStamp();
 		}
 
 		@Override
@@ -580,6 +584,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 					BetterCollection<V> values = theEntries.getEntryById(id).get();
 					keyEl.remove();
 					theValues.dispose(values);
+					theStamp++;
 				}
 			};
 		}
@@ -623,7 +628,10 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		@Override
 		public CollectionElement<K> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			return getBacking().move(valueEl, after, before, first, afterRemove);
+			CollectionElement<K> moved = getBacking().move(valueEl, after, before, first, afterRemove);
+			if (!valueEl.isPresent())
+				theStamp++;
+			return moved;
 		}
 
 		@Override
@@ -631,7 +639,6 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			try (Transaction t = AbstractBetterMultiMap.this.lock(true, null)) {
 				if (isEmpty())
 					return;
-				theKeyStamp++;
 				AbstractBetterMultiMap.this.clear();
 			}
 		}
@@ -653,12 +660,18 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 
 		@Override
 		public <X> boolean repair(ElementId element, RepairListener<K, X> listener) {
-			return getBacking().repair(element, listener);
+			boolean repaired = getBacking().repair(element, listener);
+			if (repaired)
+				theStamp++;
+			return repaired;
 		}
 
 		@Override
 		public <X> boolean repair(RepairListener<K, X> listener) {
-			return getBacking().repair(listener);
+			boolean repaired = getBacking().repair(listener);
+			if (repaired)
+				theStamp++;
+			return repaired;
 		}
 
 		@Override
@@ -766,6 +779,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 						theEntries.mutableEntry(entry.getElementId()).remove();
 				}
 			}
+		}
+
+		@Override
+		public void changed() {
+			theStamp++;
 		}
 	}
 
@@ -881,6 +899,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 					if (wrapped2 != wrapped)
 						throw new IllegalStateException(StdMsg.ELEMENT_REMOVED);
 					wrappedEl.set(value);
+					theWrapped.changed();
 				}
 
 				@Override
@@ -898,6 +917,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 						if (wrapped2 != wrapped)
 							throw new IllegalStateException(StdMsg.ELEMENT_REMOVED);
 						wrappedEl.remove();
+						theWrapped.changed();
 						if (isEmpty())
 							theWrapped.remove();
 					}
@@ -946,7 +966,10 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			BetterCollection<E> wrapped = theWrapped.getBacking(true);
-			return wrapped.addElement(value, after, before, first);
+			CollectionElement<E> el = wrapped.addElement(value, after, before, first);
+			if (el != null)
+				theWrapped.changed();
+			return el;
 		}
 
 		@Override
@@ -959,7 +982,10 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			BetterCollection<E> wrapped = theWrapped.getBacking(true);
-			return wrapped.move(valueEl, after, before, first, afterRemove);
+			CollectionElement<E> moved = wrapped.move(valueEl, after, before, first, afterRemove);
+			if (!valueEl.isPresent())
+				theWrapped.changed();
+			return moved;
 		}
 
 		@Override
@@ -993,7 +1019,10 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 				BetterCollection<E> wrapped = getWrapped().getBacking(false);
 				if (wrapped == null)
 					return;
+				int preSize = wrapped.size();
 				wrapped.clear();
+				if (preSize != wrapped.size())
+					theWrapped.changed();
 				if (wrapped.isEmpty())
 					getWrapped().remove();
 			}
@@ -1074,7 +1103,12 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			BetterSet<E> wrapped = (BetterSet<E>) getWrapped().getBacking(false);
 			if (wrapped == null)
 				throw new NoSuchElementException();
-			return wrapped.getOrAdd(value, after, before, first, added);
+			Runnable newAdded = () -> {
+				if (added != null)
+					added.run();
+				getWrapped().changed();
+			};
+			return wrapped.getOrAdd(value, after, before, first, newAdded);
 		}
 
 		@Override
@@ -1096,13 +1130,21 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			BetterSet<E> wrapped = (BetterSet<E>) getWrapped().getBacking(false);
 			if (wrapped == null)
 				throw new NoSuchElementException();
-			return wrapped.repair(element, listener);
+			boolean repaired = wrapped.repair(element, listener);
+			if (repaired)
+				getWrapped().changed();
+			return repaired;
 		}
 
 		@Override
 		public <X> boolean repair(RepairListener<E, X> listener) {
 			BetterSet<E> wrapped = (BetterSet<E>) getWrapped().getBacking(false);
-			return wrapped == null ? false : wrapped.repair(listener);
+			if (wrapped == null)
+				return false;
+			boolean repaired = wrapped.repair(listener);
+			if (repaired)
+				getWrapped().changed();
+			return repaired;
 		}
 
 		@Override
@@ -1158,13 +1200,21 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			BetterSortedList<E> wrapped = (BetterSortedList<E>) getWrapped().getBacking(false);
 			if (wrapped == null)
 				throw new NoSuchElementException();
-			return wrapped.repair(element, listener);
+			boolean repaired = wrapped.repair(element, listener);
+			if (repaired)
+				getWrapped().changed();
+			return repaired;
 		}
 
 		@Override
 		public <X> boolean repair(RepairListener<E, X> listener) {
 			BetterSortedList<E> wrapped = (BetterSortedList<E>) getWrapped().getBacking(false);
-			return wrapped == null ? false : wrapped.repair(listener);
+			if (wrapped == null)
+				return false;
+			boolean repaired = wrapped.repair(listener);
+			if (repaired)
+				getWrapped().changed();
+			return repaired;
 		}
 
 		@Override
