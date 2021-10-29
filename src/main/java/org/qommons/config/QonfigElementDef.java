@@ -9,15 +9,13 @@ import org.qommons.config.QonfigAttributeDef.Declared;
 
 /** The definition of an element that can be declared in a document */
 public class QonfigElementDef extends QonfigElementOrAddOn {
-	private final boolean isOrdered;
-
 	private final Map<QonfigAttributeDef.Declared, QonfigAttributeDef> theCompiledAttributes;
 	private final Map<QonfigChildDef.Declared, QonfigChildDef> theCompiledChildren;
 
 	private final QonfigValueDef theValue;
 
 	private QonfigElementDef(QonfigToolkit declarer, String name, QonfigElementDef superElement, Set<QonfigAddOn> inheritance,
-		boolean isAbstract, boolean ordered, //
+		boolean isAbstract, //
 		Map<String, QonfigAttributeDef.Declared> declaredAttributes, Map<QonfigAttributeDef.Declared, ValueDefModifier> attributeModifiers,
 		Map<QonfigAttributeDef.Declared, QonfigAttributeDef> allAttributes, BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
 		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ChildDefModifier> childModifiers,
@@ -26,7 +24,6 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		super(declarer, name, isAbstract, superElement, inheritance, fullInheritance, declaredAttributes, attributeModifiers,
 			attributesByName,
 			declaredChildren, childModifiers, childrenByName, valueModifier);
-		isOrdered = ordered;
 		theCompiledAttributes = allAttributes;
 		theCompiledChildren = allChildren;
 
@@ -46,11 +43,6 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 				});
 			theValue = new QonfigValueDef.Modified(superElement.getValue(), this, spec.type, spec.specification, spec.defaultValue);
 		}
-	}
-
-	/** @return Whether elements of this type must specify their children in the same order as they are defined */
-	public boolean isOrdered() {
-		return isOrdered;
 	}
 
 	@Override
@@ -107,8 +99,6 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 
 	/** Builds element-defs */
 	public static class Builder extends QonfigElementOrAddOn.Builder {
-		private boolean isOrdered;
-
 		Builder(String name, QonfigParseSession session) {
 			super(name, session);
 		}
@@ -116,19 +106,6 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		@Override
 		public QonfigElementDef get() {
 			return (QonfigElementDef) super.get();
-		}
-
-		/**
-		 * @param ordered Whether elements of this type must specify their children in the same order as they are defined
-		 * @return This builder
-		 */
-		public Builder setOrdered(boolean ordered) {
-			if (!checkStage(Stage.Initial)) {
-				theSession.withError("Ordered cannot be changed at this stage");
-				return this;
-			}
-			isOrdered = ordered;
-			return this;
 		}
 
 		@Override
@@ -150,7 +127,7 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 
 		@Override
 		protected QonfigElementOrAddOn build() {
-			return new QonfigElementDef(theSession.getToolkit(), getName(), getSuperElement(), getInheritance(), isAbstract(), isOrdered, //
+			return new QonfigElementDef(theSession.getToolkit(), getName(), getSuperElement(), getInheritance(), isAbstract(), //
 				getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueDefModifier>) getAttributeModifiers(),
 				getCompiledAttributes(), getAttributesByName(), //
 				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildDefModifier>) getChildModifiers(), getCompiledChildren(),

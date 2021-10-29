@@ -816,6 +816,45 @@ public class QommonsUtils {
 	}
 
 	/**
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param map The map to populate (null to create a new one)
+	 * @return A builder to populate the map
+	 */
+	public static <K, V> MapBuilder<K, V> buildMap(Map<K, V> map) {
+		return new MapBuilder<>(map);
+	}
+
+	/**
+	 * Populates a map
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
+	public static class MapBuilder<K, V> {
+		private final Map<K, V> theMap;
+
+		MapBuilder(Map<K, V> map) {
+			theMap = map == null ? new LinkedHashMap<>() : map;
+		}
+
+		/**
+		 * @param key The key to insert
+		 * @param value The value to insert for the key
+		 * @return This builder
+		 */
+		public MapBuilder<K, V> with(K key, V value) {
+			theMap.put(key, value);
+			return this;
+		}
+
+		/** @return The map */
+		public Map<K, V> get() {
+			return theMap;
+		}
+	}
+
+	/**
 	 * @param <T> The type of the source values
 	 * @param <V> The type of the mapped values
 	 * @param values The values to map

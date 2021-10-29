@@ -151,7 +151,6 @@ public class DefaultQonfigParser implements QonfigParser {
 	private static final Pattern USES = Pattern.compile("uses\\:.*");
 
 	QonfigElement parseDocElement(QonfigParseSession session, QonfigElement.Builder builder, StrictXmlReader el) {
-		// TODO Not enforcing order yet
 		if (el.getParent() != null) {
 			for (Map.Entry<String, String> uses : el.findAttributes(USES, 0, -1).entrySet())
 				session.withError("uses attributes may only be used at the root: '" + uses.getKey() + "'", null);
@@ -299,26 +298,22 @@ public class DefaultQonfigParser implements QonfigParser {
 	private class ToolkitParser implements QonfigToolkit.ToolkitBuilder {
 		private final StrictXmlReader root;
 		private final Map<String, QonfigValueType.Declared> declaredTypes;
-		private final Map<String, QonfigAddOn.Builder> addOnBuilders;
-		private final Map<String, QonfigElementDef.Builder> elementBuilders;
+		private final Map<String, QonfigElementOrAddOn.Builder> theBuilders;
 		private QonfigElementDef declaredRoot;
 
 		private final Map<String, QonfigAddOn> declaredAddOns;
 		private final Map<String, QonfigElementDef> declaredElements;
 
 		private String rootName;
-		private final Map<String, StrictXmlReader> addOnNodes;
-		private final Map<String, StrictXmlReader> elementNodes;
+		private final Map<String, StrictXmlReader> theNodes;
 
 		ToolkitParser(StrictXmlReader root) {
 			this.root = root;
 			declaredTypes = new LinkedHashMap<>();
-			addOnBuilders = new LinkedHashMap<>();
-			elementBuilders = new LinkedHashMap<>();
+			theBuilders = new LinkedHashMap<>();
 			declaredAddOns = new LinkedHashMap<>();
 			declaredElements = new LinkedHashMap<>();
-			addOnNodes = new HashMap<>();
-			elementNodes = new HashMap<>();
+			theNodes = new HashMap<>();
 		}
 
 		Map<String, QonfigValueType.Declared> getDeclaredTypes() {
@@ -373,133 +368,85 @@ public class DefaultQonfigParser implements QonfigParser {
 			// Stages 1 and 2 are done here. Stages 3-6 will be done in the fillOutTypes() method
 			QonfigParseSession addOnsSession = session.forChild("add-ons", 1);
 			QonfigParseSession elsSession = session.forChild("elements", 1);
+			// Stage 1: Create a builder for each listed add-on and element with simple properties and text,
+			// and remove unparseable elements
 			StrictXmlReader addOnsEl = root.getElement("add-ons", false);
 			if (addOnsEl != null) {
-				// Stage 1: Create a builder for each listed add-on and element with simple properties and text,
-				// and remove unparseable elements
-				List<StrictXmlReader> elements = addOnsEl.getElements("add-on", 0, -1);
-				Iterator<StrictXmlReader> elIter = elements.iterator();
-				while (elIter.hasNext()) {
-					StrictXmlReader element = elIter.next();
-					String name = element.getAttribute("name", false);
-					QonfigParseSession elSession = addOnsSession.forChild(element.getName(), name);
-					if (name == null) {
-						elSession.withError("No name attribute for add-on");
-						elIter.remove();
-						continue;
-					}
-					if (!checkName(name))
-						elSession.withError("Illegal add-on name: " + name);
-					if (addOnBuilders.containsKey(name))
-						elSession.withError("An add-on named " + name + " has already been declared");
-					QonfigAddOn.Builder builder = QonfigAddOn.build(name, elSession);
-					addOnBuilders.put(name, builder);
-					addOnNodes.put(name, element);
-					String abstS = element.getAttribute("abstract", false);
-					if (abstS != null) {
-						switch (abstS) {
-						case "true":
-							builder.setAbstract(true);
-							break;
-						case "false":
-							builder.setAbstract(false);
-							break;
-						default:
-							elSession.withError("abstract attribute must be \"true\" or \"false\", not \"" + abstS + "\"");
-							break;
-						}
-					}
-					parseText(element, builder, elSession);
+				createElementsOrAddOns(addOnsEl.getElements("add-on", 0, -1), addOnsSession);
+				try {
+					addOnsEl.check();
+				} catch (IllegalArgumentException e) {
+					session.withWarning(e.getMessage());
 				}
 			}
 			StrictXmlReader elementsEl = root.getElement("elements", false);
 			if (elementsEl != null) {
-				// Stage 1: Create a builder for each listed add-on and element with simple properties and text,
-				// and remove unparseable elements
-				List<StrictXmlReader> elements = elementsEl.getElements("element-def", 0, -1);
-				Iterator<StrictXmlReader> elIter = elements.iterator();
-				while (elIter.hasNext()) {
-					StrictXmlReader element = elIter.next();
-					String name = element.getAttribute("name", false);
-					QonfigParseSession elSession = elsSession.forChild(element.getName(), name);
-					if (name == null) {
-						elSession.withError("No name attribute for element-def");
-						elIter.remove();
-						continue;
-					}
-					if (!checkName(name))
-						elSession.withError("Illegal element-def name: " + name);
-					if (elementBuilders.containsKey(name))
-						elSession.withError("An element-def named " + name + " has already been declared");
-					QonfigElementDef.Builder builder = QonfigElementDef.build(name, elSession);
-					elementBuilders.put(name, builder);
-					elementNodes.put(name, element);
-					String abstS = element.getAttribute("abstract", false);
-					if (abstS != null) {
-						switch (abstS) {
-						case "true":
-							builder.setAbstract(true);
-							break;
-						case "false":
-							builder.setAbstract(false);
-							break;
-						default:
-							elSession.withError("abstract attribute must be \"true\" or \"false\", not \"" + abstS + "\"");
-							break;
-						}
-					}
-					String orderedS = element.getAttribute("ordered", false);
-					if (orderedS != null) {
-						switch (orderedS) {
-						case "true":
-							builder.setOrdered(true);
-							break;
-						case "false":
-							builder.setOrdered(false);
-							break;
-						default:
-							elSession.withError("ordered attribute must be \"true\" or \"false\", not \"" + orderedS + "\"");
-							break;
-						}
-					}
-					parseText(element, builder, elSession);
+				createElementsOrAddOns(elementsEl.getElements("element-def", 0, -1), elsSession);
+				try {
+					elementsEl.check();
+				} catch (IllegalArgumentException e) {
+					session.withWarning(e.getMessage());
 				}
 			}
 			// Stage 2: Hook up extensions, checking for recursion
 			LinkedList<String> path = new LinkedList<>();
 			Set<String> completed = new HashSet<>();
-			if (addOnsEl != null) {
-				for (StrictXmlReader element : addOnNodes.values()) {
-					path.clear();
-					parseExtensions(element, path, elsSession, addOnsSession, completed, true);
-				}
+			for (StrictXmlReader element : theNodes.values()) {
+				path.clear();
+				parseExtensions(element, path, elsSession, addOnsSession, completed);
 			}
-			if (elementsEl != null) {
-				for (StrictXmlReader element : elementNodes.values()) {
-					path.clear();
-					parseExtensions(element, path, elsSession, addOnsSession, completed, false);
-				}
-			}
-			for (QonfigAddOn.Builder el : addOnBuilders.values())
-				declaredAddOns.put(el.get().getName(), el.get());
-			for (QonfigElementDef.Builder el : elementBuilders.values())
-				declaredElements.put(el.get().getName(), el.get());
-			try {
-				if (addOnsEl != null)
-					addOnsEl.check();
-			} catch (IllegalArgumentException e) {
-				session.withWarning(e.getMessage());
-			}
-			try {
-				if (elementsEl != null)
-					elementsEl.check();
-			} catch (IllegalArgumentException e) {
-				session.withWarning(e.getMessage());
+			for (QonfigElementOrAddOn.Builder el : theBuilders.values()) {
+				QonfigElementOrAddOn built = el.get();
+				if (built instanceof QonfigAddOn)
+					declaredAddOns.put(built.getName(), (QonfigAddOn) built);
+				else
+					declaredElements.put(built.getName(), (QonfigElementDef) built);
 			}
 			try {
 				root.check();
 			} catch (IllegalArgumentException e) {
 				session.withWarning(e.getMessage());
+			}
+		}
+
+		private void createElementsOrAddOns(List<StrictXmlReader> elements, QonfigParseSession session) {
+			Iterator<StrictXmlReader> elIter = elements.iterator();
+			while (elIter.hasNext()) {
+				StrictXmlReader element = elIter.next();
+				String name = element.getAttribute("name", false);
+				QonfigParseSession elSession = session.forChild(element.getName(), name);
+				if (name == null) {
+					elSession.withError("No name attribute for " + element.getName());
+					elIter.remove();
+					continue;
+				}
+				if (!checkName(name))
+					elSession.withError("Illegal " + element.getName() + " name: " + name);
+				QonfigElementOrAddOn.Builder old = theBuilders.get(name);
+				if (old != null) {
+					elSession.withError("An " + (old instanceof QonfigAddOn.Builder ? "add-on" : "element-def") + " named " + name
+						+ " has already been declared");
+					return;
+				}
+				boolean addOn = element.getName().equals("add-on");
+				QonfigElementOrAddOn.Builder builder = addOn ? QonfigAddOn.build(name, elSession) : QonfigElementDef.build(name, elSession);
+				theBuilders.put(name, builder);
+				theNodes.put(name, element);
+				String abstS = element.getAttribute("abstract", false);
+				if (abstS != null) {
+					switch (abstS) {
+					case "true":
+						builder.setAbstract(true);
+						break;
+					case "false":
+						builder.setAbstract(false);
+						break;
+					default:
+						elSession.withError("abstract attribute must be \"true\" or \"false\", not \"" + abstS + "\"");
+						break;
+					}
+				}
+				parseText(element, builder, elSession);
 			}
 		}
 
@@ -599,62 +546,47 @@ public class DefaultQonfigParser implements QonfigParser {
 		@Override
 		public void fillOutTypes(QonfigParseSession session) {
 			// Second pass to fill out elements and add-ons
-			QonfigParseSession addOnsSession = session.forChild("add-ons", 0);
-			QonfigParseSession elsSession = session.forChild("elements", 0);
 
 			Set<String> completed = new HashSet<>();
 			// Stage 3: Create new attributes and text
-			for (StrictXmlReader element : addOnNodes.values())
-				parseSimpleAttributes(element, elsSession, addOnsSession, completed, true);
-			for (StrictXmlReader element : elementNodes.values())
-				parseSimpleAttributes(element, elsSession, addOnsSession, completed, false);
+			for (StrictXmlReader element : theNodes.values())
+				parseSimpleAttributes(element, session, completed);
 
 			// Stage 4: Override attributes
 			completed.clear();
-			for (StrictXmlReader element : addOnNodes.values())
-				overrideAttributes(element, elsSession, addOnsSession, completed, true);
-			for (StrictXmlReader element : elementNodes.values())
-				overrideAttributes(element, elsSession, addOnsSession, completed, false);
+			for (StrictXmlReader element : theNodes.values())
+				overrideAttributes(element, session, completed);
 
 			// Stage 5: Build content
 			completed.clear();
-			for (StrictXmlReader element : addOnNodes.values())
-				parseChildren(element, elsSession, addOnsSession, completed, true);
-			for (StrictXmlReader element : elementNodes.values())
-				parseChildren(element, elsSession, addOnsSession, completed, false);
+			for (StrictXmlReader element : theNodes.values())
+				parseChildren(element, session, completed);
 
 			// Stage 6: Override children
 			completed.clear();
-			for (StrictXmlReader element : addOnNodes.values())
-				parseChildOverrides(element, elsSession, addOnsSession, completed, true);
-			for (StrictXmlReader element : elementNodes.values())
-				parseChildOverrides(element, elsSession, addOnsSession, completed, false);
+			for (StrictXmlReader element : theNodes.values())
+				parseChildOverrides(element, session, completed);
 
 			// Validate and complete structure compilation
 			completed.clear();
-			for (StrictXmlReader element : addOnNodes.values())
-				validate(element, completed, true);
-			for (StrictXmlReader element : elementNodes.values())
-				validate(element, completed, false);
+			for (StrictXmlReader element : theNodes.values())
+				validate(element, completed);
 
-			for (StrictXmlReader element : addOnNodes.values()) {
+			for (StrictXmlReader element : theNodes.values()) {
 				try {
 					element.check();
 				} catch (IllegalArgumentException e) {
-					elsSession.forChild(element.getName(), element.getAttribute("name", false)).withError(e.getMessage());
-				}
-			}
-			for (StrictXmlReader element : elementNodes.values()) {
-				try {
-					element.check();
-				} catch (IllegalArgumentException e) {
-					elsSession.forChild(element.getName(), element.getAttribute("name", false)).withError(e.getMessage());
+					theBuilders.get(element.getAttribute("name", true)).getSession().withError(e.getMessage());
 				}
 			}
 			if (rootName != null) {
 				declaredRoot = session.getToolkit().getElement(rootName);
-				if (declaredRoot == null)
-					throw new IllegalArgumentException("Unrecognized root element: " + rootName);
+				if (declaredRoot == null) {
+					if (session.getToolkit().getAddOn(rootName) == null)
+						session.withError("Unrecognized root element: " + rootName);
+					else
+						session.withError("Root must be an element-def, not " + rootName);
+				}
 			}
 		}
 
@@ -664,11 +596,12 @@ public class DefaultQonfigParser implements QonfigParser {
 		}
 
 		private QonfigElementOrAddOn parseExtensions(StrictXmlReader element, LinkedList<String> path, QonfigParseSession elsSession,
-			QonfigParseSession addOnsSession, Set<String> completed, boolean addOn) {
+			QonfigParseSession addOnsSession, Set<String> completed) {
 			String name = element.getAttribute("name", false);
+			QonfigElementOrAddOn.Builder builder = theBuilders.get(name);
+			boolean addOn = builder instanceof QonfigAddOn.Builder;
 			String extendsS = element.getAttribute(addOn ? "requires" : "extends", false);
 			String inheritsS = element.getAttribute("inherits", false);
-			QonfigElementOrAddOn.Builder builder = (addOn ? addOnBuilders : elementBuilders).get(name);
 			if (completed.contains(name))
 				return builder.get(); // Already filled out
 			if (extendsS == null && (inheritsS == null || inheritsS.isEmpty())) {
@@ -693,19 +626,20 @@ public class DefaultQonfigParser implements QonfigParser {
 						session.withError("For extension " + extendsS + ": " + e.getMessage());
 					}
 				} else {
-					QonfigElementDef.Builder extBuilder = elementBuilders.get(extendsS);
-					if (extBuilder != null) {
-						el = (QonfigElementDef) parseExtensions(elementNodes.get(extendsS), path, elsSession, addOnsSession, completed,
-							false);
+					QonfigElementOrAddOn.Builder extBuilder = theBuilders.get(extendsS);
+					if (extBuilder == null) {
+						el = session.getToolkit().getElement(extendsS);
+						if (el == null)
+							session.withError("No such element-def found: " + extendsS);
+					} else if (!(extBuilder instanceof QonfigElementDef.Builder)) {
+						session.withError(extendsS + " must refer to an element-def");
+					} else {
+						el = (QonfigElementDef) parseExtensions(theNodes.get(extendsS), path, elsSession, addOnsSession, completed);
 						if (el == null) {
 							session.withError("Circular element inheritance detected: " + path);
 							path.removeLast();
 							return null;
 						}
-					} else {
-						el = session.getToolkit().getElement(extendsS);
-						if (el == null)
-							session.withError("No such element found: " + extendsS);
 					}
 				}
 				if (el != null)
@@ -725,18 +659,22 @@ public class DefaultQonfigParser implements QonfigParser {
 							session.withError("For extension " + inh + ": " + e.getMessage());
 						}
 					} else {
-						QonfigAddOn.Builder extBuilder = addOnBuilders.get(inh);
-						if (extBuilder != null) {
-							el = (QonfigAddOn) parseExtensions(addOnNodes.get(inh), path, elsSession, addOnsSession, completed, true);
+						QonfigElementOrAddOn.Builder extBuilder = theBuilders.get(inh);
+						if (extBuilder == null) {
+							el = session.getToolkit().getAddOn(inh);
+							if (el == null)
+								session.withError("No such add-on found: " + inh);
+						} else if (!(extBuilder instanceof QonfigAddOn.Builder)) {
+							session.withError(inheritsS + " must refer to add-ons");
+						} else {
+							// TODO This throws an error in the case of an element-def specifying as inheritance
+							// an add-on that requires it
+							el = (QonfigAddOn) parseExtensions(theNodes.get(inh), path, elsSession, addOnsSession, completed);
 							if (el == null) {
 								session.withError("Circular inheritance detected: " + path);
 								path.removeLast();
 								return null;
 							}
-						} else {
-							el = session.getToolkit().getAddOn(inh);
-							if (el == null)
-								session.withError("No such add-on found: " + inh);
 						}
 					}
 					if (el != null)
@@ -748,32 +686,31 @@ public class DefaultQonfigParser implements QonfigParser {
 			return builder.get();
 		}
 
-		private void parseSimpleAttributes(StrictXmlReader element, QonfigParseSession elsSession, QonfigParseSession addOnsSession,
-			Set<String> completed, boolean addOn) {
-			QonfigElementOrAddOn.Builder builder = (addOn ? addOnBuilders : elementBuilders).get(element.getAttribute("name", false));
+		private void parseSimpleAttributes(StrictXmlReader element, QonfigParseSession session, Set<String> completed) {
+			QonfigElementOrAddOn.Builder builder = theBuilders.get(element.getAttribute("name", false));
 			if (completed.contains(builder.getName()))
 				return;
-			if (builder.getSuperElement() != null && builder.getSuperElement().getDeclarer() == elsSession.getToolkit())
-				parseSimpleAttributes(elementNodes.get(builder.getSuperElement().getName()), elsSession, addOnsSession, completed, false);
+			completed.add(builder.getName());
+			if (builder.getSuperElement() != null && builder.getSuperElement().getDeclarer() == session.getToolkit())
+				parseSimpleAttributes(theNodes.get(builder.getSuperElement().getName()), session, completed);
 			for (QonfigAddOn inh : builder.getInheritance()) {
-				if (inh.getDeclarer() == elsSession.getToolkit())
-					parseSimpleAttributes(addOnNodes.get(inh.getName()), elsSession, addOnsSession, completed, true);
+				if (inh.getDeclarer() == session.getToolkit())
+					parseSimpleAttributes(theNodes.get(inh.getName()), session, completed);
 			}
-			QonfigParseSession session = (addOn ? addOnsSession : elsSession).forChild(element.getName(), builder.getName());
 			builder.setStage(QonfigElementOrAddOn.Builder.Stage.NewAttributes);
 			for (StrictXmlReader attr : element.getElements("attribute", 0, -1)) {
 				String attrName = attr.getAttribute("name", false);
 				if (attrName == null) {
-					session.withError("No name attribute for attribute definition");
+					builder.getSession().withError("No name attribute for attribute definition");
 					continue;
 				}
 				if (attrName.lastIndexOf('.') >= 0)
 					continue; // Attribute override, not at this stage
 				if (attrName.indexOf(':') >= 0) {
-					session.withError("No such attribute '" + attrName + "'--use '.' instead of ':'");
+					builder.getSession().withError("No such attribute '" + attrName + "'--use '.' instead of ':'");
 					continue;
 				}
-				QonfigParseSession attrSession = session.forChild("attribute", attrName);
+				QonfigParseSession attrSession = builder.getSession().forChild("attribute", attrName);
 				if (!checkName(attrName))
 					attrSession.withError("Illegal attribute name");
 				String typeName = attr.getAttribute("type", false);
@@ -803,31 +740,29 @@ public class DefaultQonfigParser implements QonfigParser {
 					attrSession.withWarning(e.getMessage());
 				}
 			}
-			completed.add(builder.getName());
 		}
 
-		private void overrideAttributes(StrictXmlReader element, QonfigParseSession elsSession, QonfigParseSession addOnsSession,
-			Set<String> completed, boolean addOn) {
-			QonfigElementOrAddOn.Builder builder = (addOn ? addOnBuilders : elementBuilders).get(element.getAttribute("name", false));
+		private void overrideAttributes(StrictXmlReader element, QonfigParseSession session, Set<String> completed) {
+			QonfigElementOrAddOn.Builder builder = theBuilders.get(element.getAttribute("name", false));
 			if (completed.contains(builder.getName()))
 				return;
-			if (builder.getSuperElement() != null && builder.getSuperElement().getDeclarer() == elsSession.getToolkit())
-				overrideAttributes(elementNodes.get(builder.getSuperElement().getName()), elsSession, addOnsSession, completed, false);
+			completed.add(builder.getName());
+			if (builder.getSuperElement() != null && builder.getSuperElement().getDeclarer() == session.getToolkit())
+				overrideAttributes(theNodes.get(builder.getSuperElement().getName()), session, completed);
 			for (QonfigAddOn inh : builder.getInheritance()) {
-				if (inh.getDeclarer() == elsSession.getToolkit())
-					overrideAttributes(addOnNodes.get(inh.getName()), elsSession, addOnsSession, completed, true);
+				if (inh.getDeclarer() == session.getToolkit())
+					overrideAttributes(theNodes.get(inh.getName()), session, completed);
 			}
-			QonfigParseSession session = (addOn ? addOnsSession : elsSession).forChild(element.getName(), builder.getName());
 			builder.setStage(QonfigElementOrAddOn.Builder.Stage.ModifyAttributes);
 			for (StrictXmlReader attr : element.getElements("attribute", 0, -1)) {
 				String attrName = attr.getAttribute("name", false);
 				if (attrName == null) {
-					session.withError("No name attribute for attribute definition");
+					builder.getSession().withError("No name attribute for attribute definition");
 					continue;
 				}
 				if (attrName.lastIndexOf('.') < 0)
 					continue; // Simple attribute, already parsed
-				QonfigParseSession attrSession = session.forChild("attribute", attrName);
+				QonfigParseSession attrSession = builder.getSession().forChild("attribute", attrName);
 				ElementQualifiedParseItem qAttr;
 				qAttr = ElementQualifiedParseItem.parse(attrName, attrSession);
 				if (qAttr == null)
@@ -838,13 +773,13 @@ public class DefaultQonfigParser implements QonfigParser {
 					switch (qualifier.getAttributesByName().get(qAttr.itemName).size()) {
 					case 0:
 						attrSession.withError("No such attribute found");
-						break;
+						return;
 					case 1:
 						overridden = qualifier.getAttributesByName().get(qAttr.itemName).getFirst();
 						break;
 					default:
 						attrSession.withError("Multiple matching attributes found");
-						break;
+						return;
 					}
 				}
 				String typeName = attr.getAttribute("type", false);
@@ -877,30 +812,28 @@ public class DefaultQonfigParser implements QonfigParser {
 					attrSession.withWarning(e.getMessage());
 				}
 			}
-			completed.add(builder.getName());
 		}
 
-		private void parseChildren(StrictXmlReader element, QonfigParseSession elsSession, QonfigParseSession addOnsSession, Set<String> completed,
-			boolean addOn) {
-			QonfigElementOrAddOn.Builder builder = (addOn ? addOnBuilders : elementBuilders).get(element.getAttribute("name", false));
+		private void parseChildren(StrictXmlReader element, QonfigParseSession session, Set<String> completed) {
+			QonfigElementOrAddOn.Builder builder = theBuilders.get(element.getAttribute("name", false));
 			if (completed.contains(builder.getName()))
 				return;
-			if (builder.getSuperElement() != null && builder.getSuperElement().getDeclarer() == elsSession.getToolkit())
-				parseChildren(elementNodes.get(builder.getSuperElement().getName()), elsSession, addOnsSession, completed, false);
+			completed.add(builder.getName());
+			if (builder.getSuperElement() != null && builder.getSuperElement().getDeclarer() == session.getToolkit())
+				parseChildren(theNodes.get(builder.getSuperElement().getName()), session, completed);
 			for (QonfigAddOn inh : builder.getInheritance()) {
-				if (inh.getDeclarer() == elsSession.getToolkit())
-					parseChildren(addOnNodes.get(inh.getName()), elsSession, addOnsSession, completed, true);
+				if (inh.getDeclarer() == session.getToolkit())
+					parseChildren(theNodes.get(inh.getName()), session, completed);
 			}
-			QonfigParseSession session = (addOn ? addOnsSession : elsSession).forChild(element.getName(), builder.getName());
 			builder.setStage(QonfigElementOrAddOn.Builder.Stage.NewChildren);
 			childLoop: //
 			for (StrictXmlReader child : element.getElements("child-def", 0, -1)) {
 				String name = child.getAttribute("name", false);
 				if (name == null) {
-					session.withError("Unnamed child-def");
+					builder.getSession().withError("Unnamed child-def");
 					break;
 				}
-				QonfigParseSession childSession = session.forChild("child-def", name);
+				QonfigParseSession childSession = builder.getSession().forChild("child-def", name);
 				if (!checkName(name))
 					childSession.withError("Bad child-def name");
 				String rolesS = child.getAttribute("role", false);
@@ -909,7 +842,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					roles = new LinkedHashSet<>(7);
 					for (String roleName : rolesS.split(",")) {
 						roleName = roleName.trim();
-						ElementQualifiedParseItem parsedRole = ElementQualifiedParseItem.parse(roleName, session);
+						ElementQualifiedParseItem parsedRole = ElementQualifiedParseItem.parse(roleName, builder.getSession());
 						if (parsedRole == null)
 							continue;
 						QonfigElementDef qualifier;
@@ -947,7 +880,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					elType = null;
 				} else {
 					try {
-						elType = session.getToolkit().getElement(typeName);
+						elType = builder.getSession().getToolkit().getElement(typeName);
 						if (elType == null)
 							childSession.withError("Unrecognized element-def: '" + typeName + "'");
 					} catch (IllegalArgumentException e) {
@@ -987,7 +920,7 @@ public class DefaultQonfigParser implements QonfigParser {
 							continue;
 						QonfigAddOn el;
 						try {
-							el = session.getToolkit().getAddOn(inherit);
+							el = builder.getSession().getToolkit().getAddOn(inherit);
 						} catch (IllegalArgumentException e) {
 							childSession.withError(e.getMessage());
 							continue;
@@ -1000,33 +933,31 @@ public class DefaultQonfigParser implements QonfigParser {
 				if (elType != null)
 					builder.withChild(name, elType, roles, inherits, min, max);
 			}
-			completed.add(builder.getName());
 		}
 
-		private void parseChildOverrides(StrictXmlReader element, QonfigParseSession elsSession, QonfigParseSession addOnsSession,
-			Set<String> completed, boolean addOn) {
-			QonfigElementOrAddOn.Builder builder = (addOn ? addOnBuilders : elementBuilders).get(element.getAttribute("name", false));
+		private void parseChildOverrides(StrictXmlReader element, QonfigParseSession session, Set<String> completed) {
+			QonfigElementOrAddOn.Builder builder = theBuilders.get(element.getAttribute("name", false));
 			if (completed.contains(builder.getName()))
 				return;
-			if (builder.getSuperElement() != null && builder.getSuperElement().getDeclarer() == elsSession.getToolkit())
-				parseChildOverrides(elementNodes.get(builder.getSuperElement().getName()), elsSession, addOnsSession, completed, false);
+			completed.add(builder.getName());
+			if (builder.getSuperElement() != null && builder.getSuperElement().getDeclarer() == session.getToolkit())
+				parseChildOverrides(theNodes.get(builder.getSuperElement().getName()), session, completed);
 			for (QonfigAddOn inh : builder.getInheritance()) {
-				if (inh.getDeclarer() == elsSession.getToolkit())
-					parseChildOverrides(addOnNodes.get(inh.getName()), elsSession, addOnsSession, completed, true);
+				if (inh.getDeclarer() == session.getToolkit())
+					parseChildOverrides(theNodes.get(inh.getName()), session, completed);
 			}
-			QonfigParseSession session = (addOn ? addOnsSession : elsSession).forChild(element.getName(), builder.getName());
 			builder.setStage(QonfigElementOrAddOn.Builder.Stage.ModifyChildren);
 			childLoop: //
 			for (StrictXmlReader child : element.getElements("child-mod", 0, -1)) {
 				String name = child.getAttribute("child", false);
 				if (name == null) {
-					session.forChild("child-mod", null).withError("No child attribute");
+					builder.getSession().forChild("child-mod", null).withError("No child attribute");
 					break;
 				}
-				QonfigParseSession childSession = session.forChild(child.getName(), name);
+				QonfigParseSession childSession = builder.getSession().forChild(child.getName(), name);
 				QonfigChildDef.Declared overridden;
 				{
-					ElementQualifiedParseItem parsedRole = ElementQualifiedParseItem.parse(name, session);
+					ElementQualifiedParseItem parsedRole = ElementQualifiedParseItem.parse(name, builder.getSession());
 					if (parsedRole == null)
 						continue;
 					QonfigElementDef qualifier;
@@ -1063,7 +994,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					elType = null;
 				} else {
 					try {
-						elType = session.getToolkit().getElement(typeName);
+						elType = builder.getSession().getToolkit().getElement(typeName);
 						if (elType == null)
 							childSession.withError("Unrecognized element-def: '" + typeName + "'");
 					} catch (IllegalArgumentException e) {
@@ -1095,7 +1026,7 @@ public class DefaultQonfigParser implements QonfigParser {
 							continue;
 						QonfigAddOn el;
 						try {
-							el = session.getToolkit().getAddOn(inherit);
+							el = builder.getSession().getToolkit().getAddOn(inherit);
 						} catch (IllegalArgumentException e) {
 							childSession.withError(e.getMessage());
 							continue;
@@ -1107,21 +1038,20 @@ public class DefaultQonfigParser implements QonfigParser {
 				}
 				builder.modifyChild(overridden, elType, inherits, min, max);
 			}
-			completed.add(builder.getName());
 		}
 
-		private void validate(StrictXmlReader element, Set<String> completed, boolean addOn) {
-			QonfigElementOrAddOn.Builder builder = (addOn ? addOnBuilders : elementBuilders).get(element.getAttribute("name", true));
+		private void validate(StrictXmlReader element, Set<String> completed) {
+			QonfigElementOrAddOn.Builder builder = theBuilders.get(element.getAttribute("name", true));
 			if (completed.contains(builder.getName()))
 				return;
+			completed.add(builder.getName());
 			if (builder.getSuperElement() != null && builder.getSuperElement().getDeclarer() == builder.get().getDeclarer())
-				validate(elementNodes.get(builder.getSuperElement().getName()), completed, false);
+				validate(theNodes.get(builder.getSuperElement().getName()), completed);
 			for (QonfigAddOn inh : builder.getInheritance()) {
 				if (inh.getDeclarer() == builder.get().getDeclarer())
-					validate(addOnNodes.get(inh.getName()), completed, true);
+					validate(theNodes.get(inh.getName()), completed);
 			}
 			builder.setStage(QonfigElementOrAddOn.Builder.Stage.Built);
-			completed.add(builder.getName());
 		}
 	}
 

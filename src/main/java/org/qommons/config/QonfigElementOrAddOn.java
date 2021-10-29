@@ -206,6 +206,11 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			theStage = Stage.Initial;
 		}
 
+		/** @return This builder's session for error reporting */
+		public QonfigParseSession getSession() {
+			return theSession;
+		}
+
 		/** @return The name for the element-def or add-on */
 		public String getName() {
 			return theName;
@@ -312,21 +317,6 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				break;
 			case ModifyAttributes:
 				// Add declared attributes to compiled
-				for (QonfigAttributeDef.Declared attr : get().getDeclaredAttributes().values()) {
-					theCompiledAttributes.put(attr, attr);
-					theAttributesByName.add(attr.getName(), attr);
-				}
-				break;
-			case NewChildren:
-				// Add modified attributes to compiled
-				for (Map.Entry<QonfigAttributeDef.Declared, ? extends ValueDefModifier> mod : get().getAttributeModifiers().entrySet()) {
-					QonfigAttributeDef.Modified modified = new QonfigAttributeDef.Modified(mod.getKey(), get(), //
-						mod.getValue().getTypeRestriction() != null ? mod.getValue().getTypeRestriction() : mod.getKey().getType(), //
-						mod.getValue().getSpecification() != null ? mod.getValue().getSpecification() : mod.getKey().getSpecification(), //
-						mod.getValue().getDefaultValue() != null ? mod.getValue().getDefaultValue() : mod.getKey().getDefaultValue());
-					theCompiledAttributes.put(mod.getKey(), modified);
-					theAttributesByName.add(mod.getKey().getName(), modified);
-				}
 				// Add inherited attributes to compiled
 				if (theSuperElement != null) {
 					for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : theSuperElement.getAllAttributes().entrySet()) {
@@ -339,6 +329,23 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 						if (theCompiledAttributes.putIfAbsent(attr, attr) == null)
 							theAttributesByName.add(attr.getName(), attr);
 					}
+				}
+				for (QonfigAttributeDef.Declared attr : get().getDeclaredAttributes().values()) {
+					theCompiledAttributes.put(attr, attr);
+					theAttributesByName.add(attr.getName(), attr);
+				}
+				break;
+			case NewChildren:
+				// Add modified attributes to compiled
+				for (Map.Entry<QonfigAttributeDef.Declared, ? extends ValueDefModifier> mod : get().getAttributeModifiers().entrySet()) {
+					QonfigAttributeDef.Modified modified = new QonfigAttributeDef.Modified(mod.getKey(), get(), //
+						mod.getValue().getTypeRestriction() != null ? mod.getValue().getTypeRestriction() : mod.getKey().getType(), //
+						mod.getValue().getSpecification() != null ? mod.getValue().getSpecification() : mod.getKey().getSpecification(), //
+						mod.getValue().getDefaultValue() != null ? mod.getValue().getDefaultValue() : mod.getKey().getDefaultValue());
+					QonfigAttributeDef old = theCompiledAttributes.put(mod.getKey(), modified);
+					theAttributesByName.add(mod.getKey().getName(), modified);
+					if (old != null)
+						theAttributesByName.remove(mod.getKey().getName(), old);
 				}
 				break;
 			case Built:
@@ -395,13 +402,13 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		}
 
 		private String _inherits(QonfigAddOn addOn) {
-			if (theSuperElement == null && addOn.getSuperElement() != null)
-				return "Illegal inheritance: " + theName + " <- " + addOn + ": " + addOn + " requires " + addOn.getSuperElement()
-					+ ", but this add-on does not specify a super element";
-			else if (theSuperElement != null && addOn.getSuperElement() != null
-				&& !addOn.getSuperElement().isAssignableFrom(theSuperElement))
-				return "Illegal inheritance: " + theName + " <- " + addOn + ": super element " + addOn.getSuperElement()
-					+ " incompatible with " + theSuperElement;
+			if (addOn.getSuperElement() != null) {
+				if (addOn.getSuperElement() == theBuilt) {//
+				} else if (theSuperElement != null && addOn.getSuperElement().isAssignableFrom(theSuperElement)) {//
+				} else
+					return "Illegal inheritance: " + theName + " <- " + addOn + ": super element " + addOn.getSuperElement()
+						+ " incompatible with " + theName;
+			}
 			theInheritance.add(addOn);
 			return null;
 		}

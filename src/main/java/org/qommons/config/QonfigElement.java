@@ -227,6 +227,11 @@ public class QonfigElement {
 		return theValue;
 	}
 
+	/** @return The value text specified for this element */
+	public String getValueText() {
+		return theValue == null ? null : theValue.toString();
+	}
+
 	@Override
 	public String toString() {
 		StringBuilder str = new StringBuilder().append('<').append(theType.getName());

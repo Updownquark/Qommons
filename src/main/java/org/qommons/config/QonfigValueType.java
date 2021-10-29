@@ -136,6 +136,8 @@ public interface QonfigValueType extends Named {
 			QonfigParseSession testEnv = QonfigParseSession.forRoot("", tk);
 			QonfigValueType best = null;
 			for (QonfigValueType component : theComponents) {
+				testEnv.getErrors().clear();
+				testEnv.getWarnings().clear();
 				Object parsed = component.parse(value, tk, testEnv);
 				if (testEnv.getErrors().isEmpty() && testEnv.getWarnings().isEmpty())
 					return parsed;
