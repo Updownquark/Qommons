@@ -165,6 +165,46 @@ public interface QonfigValueType extends Named {
 		}
 	}
 
+	/** Wraps a {@link CustomValueType} */
+	public class Custom implements Declared {
+		private final QonfigToolkit theDeclarer;
+		private final CustomValueType theCustomType;
+
+		/**
+		 * @param declarer The toolkit declaring the value type
+		 * @param customType The custom-implemented value type
+		 */
+		public Custom(QonfigToolkit declarer, CustomValueType customType) {
+			theDeclarer = declarer;
+			theCustomType = customType;
+		}
+
+		@Override
+		public QonfigToolkit getDeclarer() {
+			return theDeclarer;
+		}
+
+		@Override
+		public Object parse(String value, QonfigToolkit tk, QonfigParseSession session) {
+			return theCustomType.parse(value, tk, session);
+		}
+
+		@Override
+		public boolean isInstance(Object value) {
+			return theCustomType.isInstance(value);
+		}
+
+		@Override
+		public String getName() {
+			return theCustomType.getName();
+		}
+
+		@Override
+		public String toString() {
+			return theCustomType.toString();
+		}
+	}
+
 	/**
 	 * Parses a value
 	 * 

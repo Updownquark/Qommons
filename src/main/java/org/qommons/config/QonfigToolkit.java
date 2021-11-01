@@ -108,7 +108,8 @@ public class QonfigToolkit {
 
 	/**
 	 * @param toolkit The toolkit to check
-	 * @return Whether this toolkit depends on the given toolkit, either as one of its dependencies or any order deep of its dependencies' dependencies
+	 * @return Whether this toolkit depends on the given toolkit, either as one of its dependencies or any order deep of its dependencies'
+	 *         dependencies
 	 */
 	public boolean dependsOn(QonfigToolkit toolkit) {
 		if (toolkit == this)

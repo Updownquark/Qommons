@@ -17,11 +17,13 @@ public interface QonfigParser {
 	/**
 	 * @param location The location of the toolkit to parse
 	 * @param content The stream content to parse
+	 * @param customValueTypes Custom value types to be used by the toolkit
 	 * @return The parsed toolkit
 	 * @throws IOException If the stream cannot be read
 	 * @throws QonfigParseException If the toolkit cannot be parsed from the stream
 	 */
-	QonfigToolkit parseToolkit(URL location, InputStream content) throws IOException, QonfigParseException;
+	QonfigToolkit parseToolkit(URL location, InputStream content, CustomValueType... customValueTypes)
+		throws IOException, QonfigParseException;
 
 	/**
 	 * @param location The location of the document to parse

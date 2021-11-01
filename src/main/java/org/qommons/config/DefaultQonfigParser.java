@@ -50,8 +50,9 @@ public class DefaultQonfigParser implements QonfigParser {
 	}
 
 	@Override
-	public QonfigToolkit parseToolkit(URL location, InputStream content) throws IOException, QonfigParseException {
-		return _parseToolkitXml(location, content, new LinkedList<>());
+	public QonfigToolkit parseToolkit(URL location, InputStream content, CustomValueType... customValueTypes)
+		throws IOException, QonfigParseException {
+		return _parseToolkitXml(location, content, new LinkedList<>(), customValueTypes);
 	}
 
 	@Override
@@ -93,7 +94,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				throw new IllegalArgumentException("Unrecognized namespace for root: " + rootReader.getPrefix());
 			else if (primary.getRoot() == null)
 				throw new IllegalArgumentException("Toolkit " + rootReader.getPrefix() + "=" + primary.getLocation()
-				+ " declares no root--cannot be uses as the primary for a document");
+					+ " declares no root--cannot be uses as the primary for a document");
 			rootDef = primary.getElement(rootReader.getTagName());
 			if (rootDef == null)
 				throw new IllegalArgumentException(
@@ -247,7 +248,7 @@ public class DefaultQonfigParser implements QonfigParser {
 		}
 	}
 
-	private QonfigToolkit _parseToolkitXml(URL location, InputStream xml, LinkedList<String> path)
+	private QonfigToolkit _parseToolkitXml(URL location, InputStream xml, LinkedList<String> path, CustomValueType... customValueTypes)
 		throws IOException, QonfigParseException {
 		if (theToolkits.containsKey(location) && theToolkits.get(location) != PLACEHOLDER)
 			return theToolkits.get(location);
@@ -283,7 +284,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			} else
 				dependencies.put(name, oldDep);
 		}
-		ToolkitParser parser = new ToolkitParser(rootReader);
+		ToolkitParser parser = new ToolkitParser(rootReader, customValueTypes);
 		QonfigToolkit toolkit = new QonfigToolkit(location, Collections.unmodifiableMap(dependencies),
 			Collections.unmodifiableMap(parser.getDeclaredTypes()), Collections.unmodifiableMap(parser.getDeclaredAddOns()),
 			Collections.unmodifiableMap(parser.getDeclaredElements()), parser);
@@ -305,15 +306,18 @@ public class DefaultQonfigParser implements QonfigParser {
 		private final Map<String, QonfigElementDef> declaredElements;
 
 		private String rootName;
+		private final CustomValueType[] theCustomValueTypes;
 		private final Map<String, StrictXmlReader> theNodes;
 
-		ToolkitParser(StrictXmlReader root) {
+		ToolkitParser(StrictXmlReader root, CustomValueType[] customValueTypes) {
 			this.root = root;
 			declaredTypes = new LinkedHashMap<>();
 			theBuilders = new LinkedHashMap<>();
 			declaredAddOns = new LinkedHashMap<>();
 			declaredElements = new LinkedHashMap<>();
 			theNodes = new HashMap<>();
+
+			theCustomValueTypes = customValueTypes;
 		}
 
 		Map<String, QonfigValueType.Declared> getDeclaredTypes() {
@@ -330,6 +334,9 @@ public class DefaultQonfigParser implements QonfigParser {
 
 		@Override
 		public void parseTypes(QonfigParseSession session) {
+			for (CustomValueType cvt : theCustomValueTypes) {
+				declaredTypes.put(cvt.getName(), new QonfigValueType.Custom(session.getToolkit(), cvt));
+			}
 			// First pass to parse basic definitions
 			rootName = root.getAttribute("root", false);
 			StrictXmlReader patterns = root.getElement("patterns", false);
@@ -803,8 +810,11 @@ public class DefaultQonfigParser implements QonfigParser {
 					if (type2 == null)
 						type2 = overridden.getType();
 					defaultV = type2.parse(defaultS, attrSession.getToolkit(), attrSession);
+					if (defaultV == null)
+						builder.getSession().withError(
+							"Default value '" + defaultS + "' parsed to null by attribute type " + type2 + "--this is not allowed");
 				}
-				if (overridden != null && type != null)
+				if (overridden != null)
 					builder.modifyAttribute(overridden, type, spec, defaultV);
 				try {
 					attr.check();

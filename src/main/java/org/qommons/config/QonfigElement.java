@@ -686,7 +686,6 @@ public class QonfigElement {
 				if (!attrValues.containsKey(attr.getKey())) {
 					switch (attr.getValue().getSpecification()) {
 					case Required:
-						theSession.withError("Attribute " + attr.getKey() + " required by type " + theType);
 						break;
 					default:
 						attrValues.put(attr.getKey(), attr.getValue().getDefaultValue());
@@ -702,7 +701,6 @@ public class QonfigElement {
 					if (!attrValues.containsKey(attr)) {
 						switch (attr.getSpecification()) {
 						case Required:
-							theSession.withError("Attribute " + attr + " required by type " + inh);
 							break;
 						default:
 							attrValues.put(attr, attr.getDefaultValue());
@@ -714,7 +712,7 @@ public class QonfigElement {
 			}
 			// Now for defaulted values, verify that we don't inherit attribute specifications that conflict
 			for (QonfigAddOn inh : theInheritance.getExpanded(QonfigAddOn::getInheritance)) {
-				if (theType.isAssignableFrom(inh))
+				if (inh.isAssignableFrom(theType))
 					continue;
 				for (Map.Entry<QonfigAttributeDef.Declared, ? extends ValueDefModifier> mod : inh.getAttributeModifiers().entrySet()) {
 					Object value = attrValues.get(mod.getKey());
@@ -747,6 +745,22 @@ public class QonfigElement {
 							}
 							break;
 						}
+					}
+				}
+			}
+			for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : theType.getAllAttributes().entrySet()) {
+				if (!attrValues.containsKey(attr.getKey()) && attr.getValue().getSpecification() == SpecificationType.Required) {
+					theSession.withError("Attribute " + attr.getKey() + " required by type " + theType);
+					break;
+				}
+			}
+			for (QonfigAddOn inh : completeInheritance.getExpanded(QonfigAddOn::getInheritance)) {
+				if (theType.isAssignableFrom(inh))
+					continue;
+				for (QonfigAttributeDef.Declared attr : inh.getDeclaredAttributes().values()) {
+					if (!attrValues.containsKey(attr) && attr.getSpecification() == SpecificationType.Required) {
+						theSession.withError("Attribute " + attr + " required by type " + theType);
+						break;
 					}
 				}
 			}

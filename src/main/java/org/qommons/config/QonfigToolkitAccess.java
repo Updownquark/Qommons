@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -16,6 +18,7 @@ public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
 	private URL theLocation;
 
 	private final List<QonfigToolkitAccess> theDependencies;
+	private final List<CustomValueType> theCustomValueTypes;
 
 	private QonfigToolkit theToolkit;
 	private RuntimeException theError;
@@ -31,6 +34,7 @@ public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
 		theResourceClass = resourceClass;
 		theLocationString = location;
 		theDependencies = QommonsUtils.unmodifiableCopy(dependencies);
+		theCustomValueTypes = new ArrayList<>(3);
 	}
 
 	/**
@@ -43,6 +47,7 @@ public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
 		theResourceClass = null;
 		theLocationString = location;
 		theDependencies = QommonsUtils.unmodifiableCopy(dependencies);
+		theCustomValueTypes = new ArrayList<>(3);
 	}
 
 	/**
@@ -56,6 +61,18 @@ public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
 		theLocation = location;
 		theLocationString = location.toString();
 		theDependencies = QommonsUtils.unmodifiableCopy(dependencies);
+		theCustomValueTypes = new ArrayList<>(3);
+	}
+
+	/**
+	 * @param customValueTypes Custom value types for the toolkit to use
+	 * @return This accessor
+	 */
+	public QonfigToolkitAccess withCustomValueType(CustomValueType... customValueTypes) {
+		if (isBuilt())
+			throw new IllegalStateException("The toolkit has already been built");
+		theCustomValueTypes.addAll(Arrays.asList(customValueTypes));
+		return this;
 	}
 
 	/** @return Whether this accessor has at least attempted to build the toolkit */
@@ -118,7 +135,8 @@ public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
 				parser.withToolkit(dep.get());
 			QonfigToolkit tk;
 			try (InputStream in = theLocation.openStream()) {
-				tk = parser.parseToolkit(theLocation, in);
+				tk = parser.parseToolkit(theLocation, in, //
+					theCustomValueTypes.toArray(new CustomValueType[theCustomValueTypes.size()]));
 			} catch (IOException | QonfigParseException e) {
 				tk = null;
 				theError = new IllegalStateException("Unable to parse toolkit " + theLocationString, e);
