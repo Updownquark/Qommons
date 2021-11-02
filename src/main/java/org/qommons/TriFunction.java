@@ -2,6 +2,8 @@ package org.qommons;
 
 import java.util.Objects;
 import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * A function that operates on 3 arguments
@@ -43,6 +45,25 @@ public interface TriFunction<T, U, V, R> {
 	 */
 	default BiFunction<T, U, R> curry3(V arg3) {
 		return new TriFnCurry3<>(this, arg3);
+	}
+
+	/**
+	 * @param arg2 The second argument to this function
+	 * @param arg3 The third argument to this function
+	 * @return A function that calls this ternary function with a constant second and third arguments
+	 */
+	default Function<T, R> curry2And3(U arg2, V arg3) {
+		return new TriFnCurry2And3<>(this, arg2, arg3);
+	}
+
+	/**
+	 * @param arg1 The first argument to this function
+	 * @param arg2 The second argument to this function
+	 * @param arg3 The third argument to this function
+	 * @return A supplier that calls this ternary function with constant arguments
+	 */
+	default Supplier<R> curryAll(T arg1, U arg2, V arg3) {
+		return new TriFnCurryAll<>(this, arg1, arg2, arg3);
 	}
 
 	/**
@@ -195,6 +216,127 @@ public interface TriFunction<T, U, V, R> {
 		@Override
 		public String toString() {
 			return theSource + ".curry3(" + theArg3 + ")";
+		}
+	}
+
+	/**
+	 * Implements {@link TriFunction#curry2And3(Object, Object)}
+	 * 
+	 * @param <T> The type of the first argument to the ternary function
+	 * @param <U> The type of the second argument to the ternary function
+	 * @param <V> The type of the second argument to the ternary function
+	 * @param <R> The return type of the function
+	 */
+	class TriFnCurry2And3<T, U, V, R> implements Function<T, R> {
+		private final TriFunction<T, U, V, R> theSource;
+		private final U theArg2;
+		private final V theArg3;
+
+		TriFnCurry2And3(TriFunction<T, U, V, R> source, U arg2, V arg3) {
+			theSource = source;
+			theArg2 = arg2;
+			theArg3 = arg3;
+		}
+
+		@Override
+		public R apply(T arg1) {
+			return theSource.apply(arg1, theArg2, theArg3);
+		}
+
+		TriFunction<T, U, V, R> getSource() {
+			return theSource;
+		}
+
+		U getArg2() {
+			return theArg2;
+		}
+
+		V getArg3() {
+			return theArg3;
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(theSource, 6, theArg2, theArg3);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (obj == this)
+				return true;
+			else if (!(obj instanceof TriFnCurry2And3))
+				return false;
+			TriFnCurry2And3<?, ?, ?, ?> other = (TriFnCurry2And3<?, ?, ?, ?>) obj;
+			return getSource().equals(other.getSource()) && theArg2.equals(other.getArg2()) && theArg3.equals(other.getArg3());
+		}
+
+		@Override
+		public String toString() {
+			return theSource + ".curry2And3(" + theArg2 + ", " + theArg3 + ")";
+		}
+	}
+
+	/**
+	 * Implements {@link TriFunction#curryAll(Object, Object, Object)}
+	 * 
+	 * @param <T> The type of the first argument to the ternary function
+	 * @param <U> The type of the second argument to the ternary function
+	 * @param <V> The type of the second argument to the ternary function
+	 * @param <R> The return type of the function
+	 */
+	class TriFnCurryAll<T, U, V, R> implements Supplier<R> {
+		private final TriFunction<T, U, V, R> theSource;
+		private final T theArg1;
+		private final U theArg2;
+		private final V theArg3;
+
+		TriFnCurryAll(TriFunction<T, U, V, R> source, T arg1, U arg2, V arg3) {
+			theSource = source;
+			theArg1 = arg1;
+			theArg2 = arg2;
+			theArg3 = arg3;
+		}
+
+		@Override
+		public R get() {
+			return theSource.apply(theArg1, theArg2, theArg3);
+		}
+
+		TriFunction<T, U, V, R> getSource() {
+			return theSource;
+		}
+
+		public T getArg1() {
+			return theArg1;
+		}
+
+		U getArg2() {
+			return theArg2;
+		}
+
+		V getArg3() {
+			return theArg3;
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(theSource, 6, theArg2, theArg3);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (obj == this)
+				return true;
+			else if (!(obj instanceof TriFnCurryAll))
+				return false;
+			TriFnCurryAll<?, ?, ?, ?> other = (TriFnCurryAll<?, ?, ?, ?>) obj;
+			return getSource().equals(other.getSource()) && theArg1.equals(other.getArg1()) && theArg2.equals(other.getArg2())
+				&& theArg3.equals(other.getArg3());
+		}
+
+		@Override
+		public String toString() {
+			return theSource + ".curryAll(" + theArg1 + ", " + theArg2 + ", " + theArg3 + ")";
 		}
 	}
 }
