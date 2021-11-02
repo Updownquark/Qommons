@@ -65,6 +65,14 @@ public class QonfigInterpreter {
 		}
 
 		/**
+		 * @param sessionKey The key to store data for
+		 * @param value The data to store for the given key in this session
+		 */
+		public void putGlobal(String sessionKey, Object value) {
+			theValues.put(sessionKey, value);
+		}
+
+		/**
 		 * @param <T> The type of the data
 		 * @param sessionKey The key to store data for
 		 * @param creator Creates data to store for the given key in this session (if absent)
