@@ -64,7 +64,7 @@ public interface QonfigValueType extends Named {
 	}
 
 	/** A literal value */
-	public static class LiteralAttributeType implements Declared {
+	public static class Literal implements Declared {
 		private final QonfigToolkit theDeclarer;
 		private final String theValue;
 
@@ -72,7 +72,7 @@ public interface QonfigValueType extends Named {
 		 * @param declarer The toolkit that declared the literal
 		 * @param value The literal value to match
 		 */
-		public LiteralAttributeType(QonfigToolkit declarer, String value) {
+		public Literal(QonfigToolkit declarer, String value) {
 			theDeclarer = declarer;
 			theValue = value;
 		}
@@ -108,16 +108,19 @@ public interface QonfigValueType extends Named {
 	}
 
 	/** An attribute type that delegates to others */
-	public class OneOfAttributeType implements Declared {
+	public class OneOf implements Declared {
 		private final QonfigToolkit theDeclarer;
+		private final String theName;
 		private final List<QonfigValueType> theComponents;
 
 		/**
 		 * @param declarer The toolkit that declared the one-of type
+		 * @param name The name for the type
 		 * @param components The components to delegate to
 		 */
-		public OneOfAttributeType(QonfigToolkit declarer, List<QonfigValueType> components) {
+		public OneOf(QonfigToolkit declarer, String name, List<QonfigValueType> components) {
 			theDeclarer = declarer;
+			theName = name;
 			theComponents = components;
 		}
 
@@ -128,7 +131,7 @@ public interface QonfigValueType extends Named {
 
 		@Override
 		public String getName() {
-			return "one-of";
+			return theName;
 		}
 
 		@Override
@@ -202,6 +205,66 @@ public interface QonfigValueType extends Named {
 		@Override
 		public String toString() {
 			return theCustomType.toString();
+		}
+	}
+
+	/** Wraps another type, requiring it to be explicitly specified using a prefix and/or suffix */
+	public class Explicit implements Declared{
+		private final QonfigToolkit theDeclarer;
+		private final String theName;
+		private final QonfigValueType theType;
+		private final String thePrefix;
+		private final String theSuffix;
+
+		/**
+		 * @param declarer The toolkit declaring this type
+		 * @param name The name of the type
+		 * @param type The type to do the parsing
+		 * @param prefix The prefix that must be prepended to values
+		 * @param suffix The suffix that must be appended to values
+		 */
+		public Explicit(QonfigToolkit declarer, String name, QonfigValueType type, String prefix, String suffix) {
+			theDeclarer = declarer;
+			theName = name;
+			theType = type;
+			thePrefix = prefix;
+			theSuffix = suffix;
+		}
+
+		@Override
+		public Object parse(String value, QonfigToolkit tk, QonfigParseSession session) {
+			if (!value.startsWith(thePrefix) || !value.endsWith(theSuffix)) {
+				StringBuilder err = new StringBuilder("Value must ");
+				if (thePrefix.isEmpty()) {
+					err.append("end with '" + theSuffix + "'");
+				} else if (theSuffix.isEmpty()) {
+					err.append("start with '" + thePrefix + "'");
+				} else
+					err.append("start with '" + thePrefix + "' and end with '" + theSuffix + "'");
+				session.withError(err.toString());
+				return null;
+			}
+			return theType.parse(value.substring(thePrefix.length(), value.length() - theSuffix.length()), tk, session);
+		}
+
+		@Override
+		public boolean isInstance(Object value) {
+			return theType.isInstance(value);
+		}
+
+		@Override
+		public QonfigToolkit getDeclarer() {
+			return theDeclarer;
+		}
+
+		@Override
+		public String getName() {
+			return theName;
+		}
+
+		@Override
+		public String toString() {
+			return theName;
 		}
 	}
 

@@ -357,8 +357,11 @@ public class DefaultQonfigParser implements QonfigParser {
 						patternSession.withError("Illegal pattern name: " + name);
 						continue;
 					}
-					QonfigValueType.Declared type = parsePattern(pattern, patternSession);
-					declaredTypes.put(name, type);
+					QonfigValueType type = parsePattern(pattern, patternSession, true);
+					if (type instanceof QonfigValueType.Declared)
+						declaredTypes.put(name, (QonfigValueType.Declared) type);
+					else
+						patternSession.withError("Illegal value type");
 				}
 				try {
 					patterns.check();
@@ -457,10 +460,24 @@ public class DefaultQonfigParser implements QonfigParser {
 			}
 		}
 
-		QonfigValueType.Declared parsePattern(StrictXmlReader pattern, QonfigParseSession session) {
+		QonfigValueType parsePattern(StrictXmlReader pattern, QonfigParseSession session, boolean topLevel) {
+			String name = pattern.getAttribute("name", topLevel);
 			switch (pattern.getName()) {
+			case "string":
+				try {
+					pattern.check();
+				} catch (IllegalArgumentException e) {
+					session.withWarning(e.getMessage());
+				}
+				return QonfigValueType.STRING;
+			case "boolean":
+				try {
+					pattern.check();
+				} catch (IllegalArgumentException e) {
+					session.withWarning(e.getMessage());
+				}
+				return QonfigValueType.BOOLEAN;
 			case "pattern":
-				String name = pattern.getAttribute("name", false);
 				String text = pattern.getTextTrim(false);
 				if (text == null) {
 					if (name != null && declaredTypes.containsKey(name))
@@ -492,23 +509,34 @@ public class DefaultQonfigParser implements QonfigParser {
 				} catch (IllegalArgumentException e) {
 					session.withWarning(e.getMessage());
 				}
-				return new QonfigValueType.LiteralAttributeType(session.getToolkit(), text);
+				return new QonfigValueType.Literal(session.getToolkit(), text);
 			case "one-of":
 				ArrayList<QonfigValueType> components = new ArrayList<>();
 				try {
 					int childIdx = 0;
 					for (StrictXmlReader compEl : pattern.getElements(1, -1)) {
-						QonfigValueType.Declared comp = parsePattern(compEl, session.forChild(compEl.getName(), childIdx));
+						QonfigValueType comp = parsePattern(compEl, session.forChild(compEl.getName(), childIdx), false);
 						if (comp != null)
 							components.add(comp);
 						childIdx++;
+						compEl.check();
 					}
 					pattern.check();
 				} catch (IllegalArgumentException e) {
 					session.withWarning(e.getMessage());
 				}
 				components.trimToSize();
-				return new QonfigValueType.OneOfAttributeType(session.getToolkit(), Collections.unmodifiableList(components));
+				return new QonfigValueType.OneOf(session.getToolkit(), name, Collections.unmodifiableList(components));
+			case "explicit":
+				String prefix = pattern.getAttribute("prefix", false);
+				String suffix = pattern.getAttribute("suffix", false);
+				QonfigValueType wrapped = parsePattern(pattern.getElements(0, 1).get(0), session, false);
+				try {
+					pattern.check();
+				} catch (IllegalArgumentException e) {
+					session.withWarning(e.getMessage());
+				}
+				return new QonfigValueType.Explicit(session.getToolkit(), name, wrapped, prefix, suffix);
 			default:
 				session.withError("Unrecognized pattern specification: " + pattern.getName());
 				return null;
