@@ -87,7 +87,8 @@ public class QonfigToolkit {
 			theDeclaredRoot = builder.getDeclaredRoot(session);
 			if (theDeclaredRoot == null && hasMultiRoot)
 				session.withWarning("Toolkit does not declare a root, but inherits multiple different roots--will not inherit any");
-			session.throwErrors().printWarnings(System.err);
+			session.throwErrors(location == null ? "Document" : location.toString())//
+				.printWarnings(System.err, location == null ? "Document" : location.toString());
 		} else { // PLACEHOLDER
 			theCompiledElements = null;
 			theCompiledAddOns = null;
@@ -323,6 +324,8 @@ public class QonfigToolkit {
 
 	@Override
 	public String toString() {
+		if (theLocation == null)
+			return "PLACEHOLDER";
 		return theLocation.toString();
 	}
 }

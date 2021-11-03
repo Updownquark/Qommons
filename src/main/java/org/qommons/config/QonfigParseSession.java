@@ -79,21 +79,27 @@ public class QonfigParseSession {
 	}
 
 	/**
+	 * @param message The root message for the exception, if any is thrown
 	 * @return This session
 	 * @throws QonfigParseException If any errors have been logged against this session or any of its {@link #forChild(String, Object)
 	 *         children}
 	 */
-	public QonfigParseSession throwErrors() throws QonfigParseException {
+	public QonfigParseSession throwErrors(String message) throws QonfigParseException {
 		if (theErrors.isEmpty())
 			return this;
-		throw new QonfigParseException(theErrors);
+		throw new QonfigParseException(message, theErrors);
 	}
 
 	/**
 	 * @param stream The stream to print the warnings to
+	 * @param message The root message to print if there are any warnings
 	 * @return Whether any warnings had been logged against this session or any of its {@link #forChild(String, Object) children}
 	 */
-	public boolean printWarnings(PrintStream stream) {
+	public boolean printWarnings(PrintStream stream, String message) {
+		if (!theWarnings.isEmpty()) {
+			stream.print(message);
+			stream.print(" WARNING:\n");
+		}
 		for (QonfigParseIssue issue : theWarnings) {
 			stream.print("WARNING: ");
 			issue.print(stream);

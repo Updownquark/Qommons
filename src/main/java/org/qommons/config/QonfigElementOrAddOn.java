@@ -698,13 +698,15 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					max = mod.getMax();
 				}
 			}
-			Iterator<QonfigAddOn> iter = inheritance.iterator();
-			while (iter.hasNext()) {
-				QonfigAddOn inh = iter.next();
-				if (inh.getSuperElement() != null && !inh.getSuperElement().isAssignableFrom(oldChild.getType())) {
-					childSession.withError(
-						"Add-on '" + inh + "' requires " + inh.getSuperElement() + "--" + theSuperElement + " does not fulfill this");
-					iter.remove();
+			if (oldChild != null) {
+				Iterator<QonfigAddOn> iter = inheritance.iterator();
+				while (iter.hasNext()) {
+					QonfigAddOn inh = iter.next();
+					if (inh.getSuperElement() != null && !inh.getSuperElement().isAssignableFrom(oldChild.getType())) {
+						childSession.withError(
+							"Add-on '" + inh + "' requires " + inh.getSuperElement() + "--" + theSuperElement + " does not fulfill this");
+						iter.remove();
+					}
 				}
 			}
 			Set<QonfigAddOn> copy = QommonsUtils.unmodifiableDistinctCopy(inheritance);
@@ -800,11 +802,24 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 							for (QonfigAddOn inh2 : chMod.getInheritance())
 								inheritanceChildren.put(inh, inh.getName() + '/' + inh2.getName());
 					}
+					if (inheritanceChildren.isEmpty() && !theChildModifiers.containsKey(child.getKey()))
+						continue;
+					// Had a StackOverflowError here. Got rid of it, but not sure I actually fixed the underlying problem.
+					// So I'm leaving this debug code here for possible future expedience
+					// try {
 					QonfigValidation.validateChild(//
 						theSuperElement.getAllChildren().get(child.getKey()), //
 						inheritanceChildren, //
 						theChildModifiers.get(child.getKey()),
 						new StringBuilder().append(child.getKey().getOwner() + "." + child.getKey().getName()), theSession);
+					// } catch (Error e) {
+					// theSession.forChild("child", child.getKey().toString()).withError("Error " + e);
+					// try {
+					// theSession.throwErrors();
+					// } catch (QonfigParseException ex) {
+					// throw new IllegalStateException(ex);
+					// }
+					// }
 				}
 			}
 

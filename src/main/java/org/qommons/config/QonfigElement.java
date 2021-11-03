@@ -513,6 +513,7 @@ public class QonfigElement {
 			theChildren.add(builtChild);
 			for (QonfigChildDef.Declared role : realRoles)
 				theChildrenByRole.add(role, builtChild);
+			theChildCount++;
 			return this;
 		}
 
@@ -705,6 +706,18 @@ public class QonfigElement {
 						default:
 							attrValues.put(attr, attr.getDefaultValue());
 							defaultedAttributes.put(attr, attr.getSpecification() == SpecificationType.Forbidden);
+							break;
+						}
+					}
+				}
+				for (Map.Entry<QonfigAttributeDef.Declared, ? extends ValueDefModifier> attr : inh.getAttributeModifiers().entrySet()) {
+					if (!attrValues.containsKey(attr.getKey())) {
+						switch (attr.getValue().getSpecification()) {
+						case Required:
+							break;
+						default:
+							attrValues.put(attr.getKey(), attr.getValue().getDefaultValue());
+							defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
 							break;
 						}
 					}

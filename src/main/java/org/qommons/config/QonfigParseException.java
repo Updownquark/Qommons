@@ -6,9 +6,12 @@ import java.util.List;
 public class QonfigParseException extends Exception {
 	private final List<QonfigParseIssue> theIssues;
 
-	/** @param issues The issues that this exception is for */
-	public QonfigParseException(List<QonfigParseIssue> issues) {
-		super(createMessage(issues));
+	/**
+	 * @param message The root message for the exception
+	 * @param issues The issues that this exception is for
+	 */
+	public QonfigParseException(String message, List<QonfigParseIssue> issues) {
+		super(message + createMessage(issues));
 		theIssues = issues;
 	}
 

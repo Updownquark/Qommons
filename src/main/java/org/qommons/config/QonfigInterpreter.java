@@ -12,6 +12,7 @@ import java.util.function.Supplier;
 import org.qommons.BiTuple;
 import org.qommons.QommonsUtils;
 import org.qommons.StatusReportAccumulator;
+import org.qommons.StatusReportAccumulator.Status;
 import org.qommons.SubClassMap2;
 import org.qommons.Transaction;
 
@@ -440,11 +441,12 @@ public class QonfigInterpreter {
 						usedInh.add(inh);
 					}
 				}
-				for (QonfigAddOn el : tk.getAllAddOns().values()) {
-					if (!usedInh.contains(el) && !theModifiers.containsKey(el))
-						theStatus.warn(el, "No modifier configured for otherwise-unused add-on");
-				}
+				// for (QonfigAddOn el : tk.getAllAddOns().values()) {
+				// if (!usedInh.contains(el) && !theModifiers.containsKey(el))
+				// theStatus.warn(el, "No modifier configured for otherwise-unused add-on");
+				// }
 			}
+			System.err.println(theStatus.print(Status.Warn, Status.Error, StringBuilder::append, 0, null));
 			return new QonfigInterpreter(QommonsUtils.unmodifiableCopy(theCreators), QommonsUtils.unmodifiableCopy(theModifiers));
 		}
 	}

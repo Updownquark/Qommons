@@ -17,6 +17,9 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
+import org.qommons.collect.BetterCollection;
+import org.qommons.collect.BetterHashSet;
+import org.qommons.collect.BetterSet;
 import org.w3c.dom.Element;
 
 /** Default {@link QonfigParser} implementation */
@@ -75,8 +78,9 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				ref = new URL(QommonsConfig.resolve(use.getValue(), location.toString()));
 			} catch (IOException e) {
-				throw new IllegalArgumentException("Bad location for toolkit dependency " + path + "/" + name, e);
+				throw new IllegalArgumentException("Bad location for toolkit dependency " + path + "/" + name + ": " + use.getValue(), e);
 			}
+
 			QonfigToolkit oldDep = parsed.putIfAbsent(ref, PLACEHOLDER);
 			if (oldDep == null) {
 				QonfigToolkit dep = _parseToolkitXml(ref, ref.openStream(), path);
@@ -144,8 +148,8 @@ public class DefaultQonfigParser implements QonfigParser {
 		doc = new QonfigDocument(location, uses);
 		parseDocElement(session, QonfigElement.build(session, doc, null, rootDef), rootReader);
 		rootReader.check();
-		session.printWarnings(System.err);
-		session.throwErrors();
+		session.printWarnings(System.err, location);
+		session.throwErrors(location);
 		return doc;
 	}
 
@@ -480,10 +484,17 @@ public class DefaultQonfigParser implements QonfigParser {
 			case "pattern":
 				String text = pattern.getTextTrim(false);
 				if (text == null) {
-					if (name != null && declaredTypes.containsKey(name))
-						return declaredTypes.get(name);
-					session.withError("Pattern has no value");
-					return null;
+					if (name != null) {
+						if (declaredTypes.containsKey(name))
+							return declaredTypes.get(name);
+						QonfigValueType type = session.getToolkit().getAttributeType(name);
+						if (type == null)
+							session.withError("Pattern '" + name + "' not found");
+						return type;
+					} else {
+						session.withError("Pattern has no value");
+						return null;
+					}
 				}
 				Pattern p;
 				try {
@@ -894,12 +905,14 @@ public class DefaultQonfigParser implements QonfigParser {
 							qualifier = builder.getSuperElement();
 						QonfigChildDef.Declared role = qualifier.getDeclaredChildren().get(parsedRole.itemName);
 						if (role == null) {
-							switch (qualifier.getChildrenByName().get(parsedRole.itemName).size()) {
+							BetterCollection<? extends QonfigChildDef> children = findChildren(qualifier, parsedRole.itemName,
+								session.getToolkit());
+							switch (children.size()) {
 							case 0:
 								childSession.withError("No such role '" + parsedRole.itemName + "' on element " + qualifier);
 								break;
 							case 1:
-								role = qualifier.getChildrenByName().get(parsedRole.itemName).getFirst().getDeclared();
+								role = children.getFirst().getDeclared();
 								break;
 							default:
 								childSession.withError("Multiple roles named '" + parsedRole.itemName + "' on element " + qualifier);
@@ -970,6 +983,11 @@ public class DefaultQonfigParser implements QonfigParser {
 				}
 				if (elType != null)
 					builder.withChild(name, elType, roles, inherits, min, max);
+				try {
+					child.check();
+				} catch (IllegalArgumentException e) {
+					childSession.withError(e.getMessage());
+				}
 			}
 		}
 
@@ -1013,12 +1031,15 @@ public class DefaultQonfigParser implements QonfigParser {
 					}
 					overridden = qualifier.getDeclaredChildren().get(parsedRole.itemName);
 					if (overridden == null) {
-						switch (qualifier.getChildrenByName().get(parsedRole.itemName).size()) {
+						// Can't use getChildrenByName() here because it hasn't been populated at this build stage
+						BetterCollection<? extends QonfigChildDef> allOverridden = findChildren(qualifier, parsedRole.itemName,
+							session.getToolkit());
+						switch (allOverridden.size()) {
 						case 0:
 							childSession.withError("No such child '" + parsedRole.itemName + "' on element " + qualifier);
 							break;
 						case 1:
-							overridden = qualifier.getChildrenByName().get(parsedRole.itemName).getFirst().getDeclared();
+							overridden = allOverridden.getFirst().getDeclared();
 							break;
 						default:
 							childSession.withError("Multiple children named '" + parsedRole.itemName + "' on element " + qualifier);
@@ -1074,7 +1095,41 @@ public class DefaultQonfigParser implements QonfigParser {
 						inherits.add(el);
 					}
 				}
-				builder.modifyChild(overridden, elType, inherits, min, max);
+				if (overridden != null)
+					builder.modifyChild(overridden, elType, inherits, min, max);
+				try {
+					child.check();
+				} catch (IllegalArgumentException e) {
+					childSession.withError(e.getMessage());
+				}
+			}
+		}
+
+		private BetterCollection<? extends QonfigChildDef> findChildren(QonfigElementDef qualifier, String itemName,
+			QonfigToolkit building) {
+			if (qualifier.getDeclarer() != building)
+				return qualifier.getChildrenByName().get(itemName);
+			BetterHashSet<QonfigChildDef.Declared> found = BetterHashSet.build().unsafe().buildSet();
+			findChildren(qualifier, itemName, building, found);
+			return found;
+		}
+
+		private void findChildren(QonfigElementDef qualifier, String itemName, QonfigToolkit building,
+			BetterSet<QonfigChildDef.Declared> found) {
+			if (qualifier.getDeclarer() != building) {
+				for (QonfigChildDef child : qualifier.getChildrenByName().get(itemName))
+					found.add(child.getDeclared());
+				return;
+			}
+			QonfigChildDef.Declared child = qualifier.getDeclaredChildren().get(itemName);
+			if (child != null)
+				found.add(child);
+			if (qualifier.getSuperElement() != null)
+				findChildren(qualifier.getSuperElement(), itemName, building, found);
+			for (QonfigAddOn inh : qualifier.getFullInheritance().getExpanded(QonfigAddOn::getInheritance)) {
+				child = inh.getDeclaredChildren().get(itemName);
+				if (child != null)
+					found.add(child);
 			}
 		}
 
@@ -1112,7 +1167,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				return QonfigValueType.STRING;
 			}
 		}
-		session.withError("Unrecognized value type " + typeName, null);
+		session.withError("Unrecognized value type '" + typeName + "'", null);
 		return QonfigValueType.STRING;
 	}
 
