@@ -8,6 +8,7 @@ import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,10 +22,12 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 import org.qommons.DefaultCharSubSequence;
 import org.qommons.Named;
 import org.qommons.QommonsUtils;
+import org.qommons.StringUtils;
 import org.qommons.TimeUtils;
 import org.qommons.TimeUtils.TimeEvaluationOptions;
 
@@ -80,70 +83,11 @@ public interface Format<T> {
 		}
 	};
 
-	/** Parses integers from text */
-	public static final Format<Integer> INT = new Format<Integer>() {
-		@Override
-		public void append(StringBuilder text, Integer value) {
-			text.append(value);
-		}
-
-		@Override
-		public Integer parse(CharSequence text) throws ParseException {
-			Long parsed = LONG.parse(text);
-			if (parsed.longValue() < Integer.MIN_VALUE || parsed.longValue() > Integer.MAX_VALUE)
-				throw new ParseException("Integer values must be between " + Integer.MIN_VALUE + " and " + Integer.MAX_VALUE + ": " + text,
-					0);
-			return parsed.intValue();
-		}
-
-		@Override
-		public String toString() {
-			return "INT";
-		}
-	};
-
 	/** Parses long integers from text */
-	public static final Format<Long> LONG = new Format<Long>() {
-		private static final String MAX_TEXT = "" + Long.MAX_VALUE;
+	public static final LongFormat LONG = new LongFormat();
 
-		@Override
-		public void append(StringBuilder text, Long value) {
-			text.append(value);
-		}
-
-		@Override
-		public Long parse(CharSequence text) throws ParseException {
-			int i = 0;
-			boolean neg = false;
-			if (i < text.length() && text.charAt(i) == '-') {
-				neg = true;
-				i++;
-			}
-			if (text.length() == i)
-				throw new ParseException("Must be an integer value", i);
-			else if (text.length() - i > MAX_TEXT.length())
-				throw new ParseException("Text is too large to be an integer", 0);
-			long value = 0;
-			while (i < text.length()) {
-				char c = text.charAt(i);
-				if (c >= '0' && c <= '9')
-					value = value * 10 + (c - '0');
-				else
-					throw new ParseException("'" + c + "' is not valid for integer text", i);
-				i++;
-			}
-			if (value < 0)
-				throw new ParseException("Integer value is too large", 0);
-			if (neg)
-				value = -value;
-			return value;
-		}
-
-		@Override
-		public String toString() {
-			return "LONG";
-		}
-	};
+	/** Parses integers from text */
+	public static final IntFormat INT = new IntFormat(LONG);
 
 	/** Formats a boolean value to "true" or "false" (or "null") */
 	public static final Format<Boolean> BOOLEAN = new Format<Boolean>() {
@@ -197,6 +141,27 @@ public interface Format<T> {
 		}
 	};
 
+	/** Parses regex {@link Pattern}s from text */
+	public static final Format<Pattern> PATTERN = new Format<Pattern>() {
+		@Override
+		public void append(StringBuilder text, Pattern value) {
+			if (value != null) {
+				text.append(value.pattern());
+			}
+		}
+
+		@Override
+		public Pattern parse(CharSequence text) throws ParseException {
+			if (text == null || text.length() == 0) {
+				return null;
+			}
+			try {
+				return Pattern.compile(text.toString());
+			} catch (PatternSyntaxException e) {
+				throw new ParseException(e.getMessage(), e.getIndex());
+			}
+		}
+	};
 	/**
 	 * @param pattern Pattern to match
 	 * @param errorText The error message to throw for non-matches
@@ -585,6 +550,134 @@ public interface Format<T> {
 		}
 	}
 
+	public static class IntFormat implements Format<Integer> {
+		private final LongFormat theLongFormat;
+
+		public IntFormat(LongFormat longFormat) {
+			theLongFormat = longFormat;
+		}
+
+		public LongFormat getLongFormat() {
+			return theLongFormat;
+		}
+
+		public IntFormat withGroupingSeparator(char sep) {
+			return new IntFormat(theLongFormat.withGroupingSeparator(sep));
+		}
+
+		@Override
+		public void append(StringBuilder text, Integer value) {
+			text.append(value);
+		}
+
+		@Override
+		public Integer parse(CharSequence text) throws ParseException {
+			Long parsed = theLongFormat.parse(text);
+			if (parsed.longValue() < Integer.MIN_VALUE || parsed.longValue() > Integer.MAX_VALUE)
+				throw new ParseException("Integer values must be between " + Integer.MIN_VALUE + " and " + Integer.MAX_VALUE + ": " + text,
+					0);
+			return parsed.intValue();
+		}
+
+		@Override
+		public String toString() {
+			return "INT";
+		}
+	}
+
+	public static class LongFormat implements Format<Long> {
+		private static final String MAX_TEXT = "" + Long.MAX_VALUE;
+		private static final long[] GROUPS = new long[] { //
+			0, 1_000, 1_000_000, 1_000_000_000, 1_000_000_000_000L, 1_000_000_000_000_000L, 1_000_000_000_000_000_000L };
+
+		private final char theGroupingSeparator;
+
+		public LongFormat() {
+			theGroupingSeparator = 0;
+		}
+
+		public LongFormat(char groupingSeparator) {
+			theGroupingSeparator = groupingSeparator;
+		}
+
+		public char getGroupingSeparator() {
+			return theGroupingSeparator;
+		}
+
+		public LongFormat withGroupingSeparator(char sep) {
+			return new LongFormat(sep);
+		}
+
+		@Override
+		public void append(StringBuilder text, Long value) {
+			if (value == null)
+				return;
+			long val = value.longValue();
+			if (theGroupingSeparator == 0)
+				text.append(val);
+			else {
+				if (val < 0) {
+					text.append('-');
+					val = -val;
+				}
+				int group = Arrays.binarySearch(GROUPS, val);
+				if (group < 0)
+					group = -group - 2;
+				boolean first = true;
+				while (group >= 0) {
+					long dig;
+					if(group==0)
+						dig=val;
+					else{
+						dig = val / GROUPS[group];
+						val %= GROUPS[group];
+					}
+					if (first) {
+						first = false;
+						text.append(dig);
+					} else {
+						text.append(',');
+						StringUtils.printInt(dig, 3, text);
+					}
+					group--;
+				}
+			}
+		}
+
+		@Override
+		public Long parse(CharSequence text) throws ParseException {
+			int i = 0;
+			boolean neg = false;
+			if (i < text.length() && text.charAt(i) == '-') {
+				neg = true;
+				i++;
+			}
+			if (text.length() == i)
+				throw new ParseException("Must be an integer value", i);
+			else if (text.length() - i > MAX_TEXT.length())
+				throw new ParseException("Text is too large to be an integer", 0);
+			long value = 0;
+			while (i < text.length()) {
+				char c = text.charAt(i);
+				if (c >= '0' && c <= '9')
+					value = value * 10 + (c - '0');
+				else if (c != theGroupingSeparator)
+					throw new ParseException("'" + c + "' is not valid for integer text", i);
+				i++;
+			}
+			if (value < 0)
+				throw new ParseException("Integer value is too large", 0);
+			if (neg)
+				value = -value;
+			return value;
+		}
+
+		@Override
+		public String toString() {
+			return "LONG";
+		}
+	}
+
 	/**
 	 * Formats an enumeration
 	 * 
@@ -673,8 +766,56 @@ public interface Format<T> {
 		}
 	}
 
+	/** All standard metric prefixes mapped to their corresponding powers of 10 */
+	public static final Map<String, Integer> METRIC_PREFIXES = QommonsUtils.<String, Integer> buildMap(new LinkedHashMap<>())//
+		.with("y", -24) // yocto
+		.with("z", -21) // zepto
+		.with("a", -18) // atto
+		.with("f", -15) // femto
+		.with("p", -12) // pico
+		.with("n", -9) // nano
+		.with("\03bc", -6) // Greek mu, micro
+		.with("u", -6) // micro
+		.with("m", -3) // milli
+		.with("c", -2) // centi
+		.with("d", -1) // deci
+		.with("da", 1) // deka
+		.with("h", 2) // hecto
+		.with("k", 3) // kilo
+		.with("M", 6) // mega
+		.with("G", 9) // giga
+		.with("T", 12) // tera
+		.with("P", 15) // peta
+		.with("E", 18) // exa
+		.with("Z", 21) // zetta
+		.with("Y", 24) // yotta
+		.getUnmodifiable();
+	/**
+	 * All standard 10^3 metric prefixes mapped to their corresponding multipliers, except that instead of 1000 multipliers, 1024 is used
+	 */
+	public static final Map<String, Double> METRIC_PREFIXES_P2 = QommonsUtils.<String, Double> buildMap(new LinkedHashMap<>())//
+		.with("y", Math.pow(1024, -8)) // yocto
+		.with("z", Math.pow(1024, -7)) // zepto
+		.with("a", Math.pow(1024, -6)) // atto
+		.with("f", Math.pow(1024, -5)) // femto
+		.with("p", Math.pow(1024, -4)) // pico
+		.with("n", Math.pow(1024, -3)) // nano
+		.with("\03bc", Math.pow(1024, -2)) // Greek mu, micro
+		.with("u", Math.pow(1024, -2)) // micro
+		.with("m", Math.pow(1024, -1)) // milli
+		.with("k", Math.pow(1024, 1)) // kilo
+		.with("M", Math.pow(1024, 2)) // mega
+		.with("G", Math.pow(1024, 3)) // giga
+		.with("T", Math.pow(1024, 4)) // tera
+		.with("P", Math.pow(1024, 5)) // peta
+		.with("E", Math.pow(1024, 6)) // exa
+		.with("Z", Math.pow(1024, 7)) // zetta
+		.with("Y", Math.pow(1024, 8)) // yotta
+		.getUnmodifiable();
+
 	/** A builder for a {@link SuperDoubleFormat} */
 	public static class SuperDoubleFormatBuilder {
+
 		private final int theSignificantDigits;
 		private int theMaxIntDigits;
 		private boolean printIntsWithPrefixes;
@@ -749,6 +890,29 @@ public interface Format<T> {
 		 */
 		public SuperDoubleFormatBuilder withPrefix(String prefix, double mult) {
 			thePrefixes.put(mult, prefix);
+			return this;
+		}
+
+		/**
+		 * Adds prefixes for all standard metric prefixes
+		 * 
+		 * @return This builder
+		 */
+		public SuperDoubleFormatBuilder withMetricPrefixes() {
+			for (Map.Entry<String, Integer> prefix : METRIC_PREFIXES.entrySet())
+				withPrefix(prefix.getKey(), prefix.getValue());
+			return this;
+		}
+
+		/**
+		 * Adds prefixes for all standard 10^3 metric prefixes, except that the multipliers are 2^10 (1024) instead of 1000. This is useful
+		 * e.g. for displaying data amounts (bytes)
+		 * 
+		 * @return This builder
+		 */
+		public SuperDoubleFormatBuilder withMetricPrefixesPower2() {
+			for (Map.Entry<String, Double> prefix : METRIC_PREFIXES_P2.entrySet())
+				withPrefix(prefix.getKey(), prefix.getValue());
 			return this;
 		}
 

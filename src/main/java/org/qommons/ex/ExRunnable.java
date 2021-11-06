@@ -6,6 +6,18 @@ package org.qommons.ex;
  * @param <X> The type of exception to throw
  */
 public interface ExRunnable<X extends Throwable> {
+	/** An {@link ExRunnable} that does nothing */
+	public static final ExRunnable<?> NONE = () -> {
+	};
+
+	/**
+	 * @param <X> The type of exception that is not thrown
+	 * @return An {@link ExRunnable} that does nothing
+	 */
+	public static <X extends Throwable> ExRunnable<X> none() {
+		return (ExRunnable<X>) NONE;
+	}
+
 	/**
 	 * Performs an action
 	 * @throws X If an error occurs

@@ -87,7 +87,7 @@ public class QonfigParseSession {
 	public QonfigParseSession throwErrors(String message) throws QonfigParseException {
 		if (theErrors.isEmpty())
 			return this;
-		throw new QonfigParseException(message, theErrors);
+		throw QonfigParseException.forIssues(message, theErrors);
 	}
 
 	/**

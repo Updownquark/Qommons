@@ -1,18 +1,14 @@
 package org.qommons.config;
 
-import java.util.Map;
-
-import org.qommons.QommonsUtils;
-
 /** A parsed Qonfig document */
 public class QonfigDocument {
 	private final String theLocation;
-	private final Map<String, QonfigToolkit> theToolkits;
+	private final QonfigToolkit theToolkit;
 	private QonfigElement theRoot;
 
-	QonfigDocument(String location, Map<String, QonfigToolkit> toolkits) {
+	QonfigDocument(String location, QonfigToolkit toolkit) {
 		theLocation = location;
-		theToolkits = QommonsUtils.unmodifiableCopy(toolkits);
+		theToolkit = toolkit;
 	}
 
 	void setRoot(QonfigElement root) {
@@ -24,9 +20,9 @@ public class QonfigDocument {
 		return theLocation;
 	}
 
-	/** @return The toolkits used by the document */
-	public Map<String, QonfigToolkit> getToolkits() {
-		return theToolkits;
+	/** @return The toolkit representing the types available to this document */
+	public QonfigToolkit getDocToolkit() {
+		return theToolkit;
 	}
 
 	/** @return The content of the document */

@@ -90,6 +90,31 @@ public class SubClassMap2<C, V> {
 	}
 
 	/**
+	 * @param <C2> The type to query with
+	 * @param type The class to query with
+	 * @return All values mapped to the type or any of its super types, coupled with the types each value is mapped to
+	 */
+	public synchronized <C2 extends C> List<BiTuple<Class<? extends C>, V>> getAllEntries(Class<C2> type) {
+		return _getAllEntries(type, null);
+	}
+
+	private <C2 extends C> List<BiTuple<Class<? extends C>, V>> _getAllEntries(Class<C2> type,
+		List<BiTuple<Class<? extends C>, V>> values) {
+		if (!theType.isAssignableFrom(type))
+			return values;
+		if (theValue != null) {
+			if (values == null)
+				values = new ArrayList<>(5);
+			values.add(new BiTuple<>(theType, theValue));
+		}
+		for (SubClassMap2<? extends C, V> child : theSubMaps) {
+			if (child.theType.isAssignableFrom(type))
+				values = ((SubClassMap2<C, V>) child)._getAllEntries(type, values);
+		}
+		return values;
+	}
+
+	/**
 	 * Maps a value to a class
 	 * 
 	 * @param <C2> The type to map the value to

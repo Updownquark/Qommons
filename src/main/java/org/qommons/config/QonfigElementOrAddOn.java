@@ -112,6 +112,25 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		return theAttributesByName;
 	}
 
+	/**
+	 * @param name The name of the attribute
+	 * @return The attribute with the given name in this type, or null if no such attribute is defined throws
+	 * @throws IllegalArgumentException if multiple such attributes are defined
+	 */
+	public QonfigAttributeDef getAttribute(String name) throws IllegalArgumentException {
+		QonfigAttributeDef attr = theDeclaredAttributes.get(name);
+		if (attr != null)
+			return attr;
+		switch (theAttributesByName.get(name).size()) {
+		case 0:
+			return null;
+		case 1:
+			return theAttributesByName.get(name).getFirst();
+		default:
+			throw new IllegalArgumentException("Multiple attributes " + this + "." + name);
+		}
+	}
+
 	/** @return The modification, if specified, to the inherited value */
 	public ValueDefModifier getValueModifier() {
 		return theValueModifier;

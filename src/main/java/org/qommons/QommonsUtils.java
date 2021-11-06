@@ -852,6 +852,11 @@ public class QommonsUtils {
 		public Map<K, V> get() {
 			return theMap;
 		}
+
+		/** @return The unmodifiable map */
+		public Map<K, V> getUnmodifiable() {
+			return Collections.unmodifiableMap(theMap);
+		}
 	}
 
 	/**

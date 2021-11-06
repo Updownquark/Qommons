@@ -61,35 +61,10 @@ public interface SpinnerFormat<T> extends Format<T> {
 		}
 	};
 	/** Integer format with increment/decrement capability */
-	public static final SpinnerFormat<Integer> INT = new AbstractSpinnerFormat<Integer>(Format.INT) {
-		@Override
-		public boolean supportsAdjustment(boolean withContext) {
-			return !withContext;
-		}
+	public static final IntFormat INT = new IntFormat(Format.INT);
 
-		@Override
-		public BiTuple<Integer, String> adjust(Integer value, String formatted, int cursor, boolean up) {
-			int newValue = up ? value + 1 : value - 1;
-			if ((newValue > value) != up)
-				return null; // Wraparound
-			return new BiTuple<>(newValue, format(newValue));
-		}
-	};
 	/** Long format with increment/decrement capability */
-	public static final SpinnerFormat<Long> LONG = new AbstractSpinnerFormat<Long>(Format.LONG) {
-		@Override
-		public boolean supportsAdjustment(boolean withContext) {
-			return !withContext;
-		}
-
-		@Override
-		public BiTuple<Long, String> adjust(Long value, String formatted, int cursor, boolean up) {
-			long newValue = up ? value + 1 : value - 1;
-			if ((newValue > value) != up)
-				return null; // Wraparound
-			return new BiTuple<>(newValue, format(newValue));
-		}
-	};
+	public static final LongFormat LONG = new LongFormat(Format.LONG);
 
 	/**
 	 * @param format The format String to use to format and parse the double value
@@ -122,6 +97,11 @@ public interface SpinnerFormat<T> extends Format<T> {
 		/** @param format The format to do the parsing and formatting */
 		public AbstractSpinnerFormat(Format<T> format) {
 			theFormat = format;
+		}
+
+		/** @return This spinner format's wrapped regular format */
+		public Format<T> getFormat() {
+			return theFormat;
 		}
 
 		@Override
@@ -241,6 +221,62 @@ public interface SpinnerFormat<T> extends Format<T> {
 	 */
 	public static <T> SpinnerFormat<T> wrapAround(SpinnerFormat<T> format, Supplier<T> min, Supplier<T> max) {
 		return new WrappingSpinnerFormat<>(format, min, max);
+	}
+
+	public static class IntFormat extends AbstractSpinnerFormat<Integer> {
+		public IntFormat(Format.IntFormat format) {
+			super(format);
+		}
+
+		@Override
+		public Format.IntFormat getFormat() {
+			return (Format.IntFormat) super.getFormat();
+		}
+
+		public IntFormat withGroupingSeparator(char sep) {
+			return new IntFormat(getFormat().withGroupingSeparator(sep));
+		}
+
+		@Override
+		public boolean supportsAdjustment(boolean withContext) {
+			return !withContext;
+		}
+
+		@Override
+		public BiTuple<Integer, String> adjust(Integer value, String formatted, int cursor, boolean up) {
+			int newValue = up ? value + 1 : value - 1;
+			if ((newValue > value) != up)
+				return null; // Wraparound
+			return new BiTuple<>(newValue, format(newValue));
+		}
+	}
+
+	public static class LongFormat extends AbstractSpinnerFormat<Long> {
+		public LongFormat(Format.LongFormat format) {
+			super(format);
+		}
+
+		@Override
+		public Format.LongFormat getFormat() {
+			return (Format.LongFormat) super.getFormat();
+		}
+
+		public LongFormat withGroupingSeparator(char sep) {
+			return new LongFormat(getFormat().withGroupingSeparator(sep));
+		}
+
+		@Override
+		public boolean supportsAdjustment(boolean withContext) {
+			return !withContext;
+		}
+
+		@Override
+		public BiTuple<Long, String> adjust(Long value, String formatted, int cursor, boolean up) {
+			long newValue = up ? value + 1 : value - 1;
+			if ((newValue > value) != up)
+				return null; // Wraparound
+			return new BiTuple<>(newValue, format(newValue));
+		}
 	}
 
 	/**

@@ -109,30 +109,43 @@ public class QonfigElement {
 	 *         multiple such attributes are defined
 	 */
 	public Object getAttribute(String name) throws IllegalArgumentException {
-		QonfigAttributeDef def = theType.getDeclaredAttributes().get(name);
-		if (def == null) {
-			switch (theType.getAttributesByName().get(name).size()) {
-			case 0:
-				break;
-			case 1:
-				def = theType.getAttributesByName().get(name).getFirst();
-				break;
-			default:
-				throw new IllegalArgumentException(theType + ": Multiple attributes named '" + name + "' defined");
-			}
-		}
-		if (def == null) {
-			for (QonfigAddOn inh : theInheritance.values()) {
-				switch (inh.getAttributesByName().get(name).size()) {
+		QonfigAttributeDef.Declared def;
+		int dot = name.lastIndexOf('.');
+		if (dot >= 0) {
+			String elName = name.substring(0, dot);
+			QonfigElementOrAddOn el = theDocument.getDocToolkit().getElementOrAddOn(elName);
+			if (el == null)
+				throw new IllegalArgumentException("No such element/add-on '" + elName + "'");
+			QonfigAttributeDef attr = el.getAttribute(name.substring(dot + 1));
+			if (attr == null)
+				throw new IllegalArgumentException(theType + ": No such attribute '" + name + "' defined");
+			def = attr.getDeclared();
+		} else {
+			def = theType.getDeclaredAttributes().get(name);
+			if (def == null) {
+				switch (theType.getAttributesByName().get(name).size()) {
 				case 0:
 					break;
 				case 1:
-					if (def != null)
-						throw new IllegalArgumentException(theType + ": Multiple attributes named '" + name + "' defined");
-					def = inh.getAttributesByName().get(name).getFirst();
+					def = theType.getAttributesByName().get(name).getFirst().getDeclared();
 					break;
 				default:
 					throw new IllegalArgumentException(theType + ": Multiple attributes named '" + name + "' defined");
+				}
+			}
+			if (def == null) {
+				for (QonfigAddOn inh : theInheritance.values()) {
+					switch (inh.getAttributesByName().get(name).size()) {
+					case 0:
+						break;
+					case 1:
+						if (def != null)
+							throw new IllegalArgumentException(theType + ": Multiple attributes named '" + name + "' defined");
+						def = inh.getAttributesByName().get(name).getFirst().getDeclared();
+						break;
+					default:
+						throw new IllegalArgumentException(theType + ": Multiple attributes named '" + name + "' defined");
+					}
 				}
 			}
 		}
@@ -154,9 +167,34 @@ public class QonfigElement {
 		Object value = getAttribute(name);
 		if (value == null)
 			return null;
-		else if (!type.isInstance(value))
+		if (type.isInstance(value))
+			return (T) value;
+		else if (type.isPrimitive()) {
+			boolean match;
+			if (type == boolean.class)
+				match = value instanceof Boolean;
+			else if (type == char.class)
+				match = value instanceof Character;
+			else if (type == byte.class)
+				match = value instanceof Byte;
+			else if (type == short.class)
+				match = value instanceof Short;
+			else if (type == int.class)
+				match = value instanceof Integer;
+			else if (type == long.class)
+				match = value instanceof Long;
+			else if (type == float.class)
+				match = value instanceof Float;
+			else if (type == double.class)
+				match = value instanceof Double;
+			else
+				throw new IllegalStateException("Unaccounted primitive type " + type.getName());
+			if (!match)
+				throw new ClassCastException(
+					theType + ": Value " + value + ", type " + value.getClass().getName() + " cannot be cast to " + type.getName());
+		} else
 			throw new ClassCastException(
-				theType + ": Value " + value + ", specification " + value.getClass().getName() + " cannot be cast to " + type.getName());
+				theType + ": Value " + value + ", type " + value.getClass().getName() + " cannot be cast to " + type.getName());
 		return (T) value;
 	}
 
