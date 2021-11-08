@@ -596,6 +596,12 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				theSession.withError("Cannot declare multiple children with the same name: " + name);
 				return this;
 			}
+			for (QonfigAddOn inh : inheritance) {
+				if (inh.getSuperElement() != null && !inh.getSuperElement().isAssignableFrom(type)) {
+					theSession.forChild("child-def", name).withError("Cannot declare inheritance " + inh + ", since it requires "
+						+ inh.getSuperElement() + " which " + type + " does not satisfy");
+				}
+			}
 			QonfigChildDef.Declared child = new QonfigChildDef.DeclaredChildDef(get(), name, type,
 				QommonsUtils.unmodifiableDistinctCopy(fulfillment), QommonsUtils.unmodifiableDistinctCopy(inheritance), min, max);
 			theDeclaredChildren.put(name, child);
@@ -642,6 +648,44 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			if (!inherited) {
 				childSession.withError("Cannot modify child, because its owner is not inherited");
 				return this;
+			}
+			for (QonfigAddOn inh : inheritance) {
+				if (inh.getSuperElement() == null || inh.getSuperElement().isAssignableFrom(child.getType()))
+					continue;
+				QonfigElementDef parent = theSuperElement;
+				QonfigElementDef childType = child.getType();
+				boolean ok = false;
+				while (parent != null) {
+					if (!child.getOwner().isAssignableFrom(parent))
+						break;
+					if (parent.getAllChildren().get(child) != null) {
+						ok = inh.getSuperElement().isAssignableFrom(parent.getAllChildren().get(child).getType());
+						break;
+					}
+					if (parent.getChildModifiers().get(child) != null
+						&& parent.getChildModifiers().get(child).getTypeRestriction() != null) {
+						childType = parent.getChildModifiers().get(child).getTypeRestriction();
+						ok = inh.getSuperElement().isAssignableFrom(childType);
+						break;
+					}
+					parent = parent.getSuperElement();
+				}
+				if (!ok) {
+					for (QonfigAddOn otherInh : theFullInheritance.getExpanded(QonfigAddOn::getInheritance)) {
+						if (!child.getOwner().isAssignableFrom(otherInh))
+							continue;
+						if (otherInh.getChildModifiers().get(child) != null
+							&& otherInh.getChildModifiers().get(child).getTypeRestriction() != null) {
+							childType = otherInh.getChildModifiers().get(child).getTypeRestriction();
+							ok = inh.getSuperElement().isAssignableFrom(childType);
+							break;
+						}
+					}
+				}
+				if (!ok) {
+					theSession.forChild("child-mod", child.getOwner() + "." + child.getName()).withError("Cannot declare inheritance " + inh
+						+ ", since it requires " + inh.getSuperElement() + " which " + childType + " does not satisfy");
+				}
 			}
 			QonfigChildDef override = theCompiledChildren.get(child.getDeclared());
 			if (override instanceof QonfigChildDef.Overridden) {

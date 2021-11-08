@@ -701,6 +701,8 @@ public class LambdaUtils {
 		private final Function<? super T, ? extends X> theMap;
 
 		MappedBiFunction1(Function<? super T, ? extends X> map) {
+			if (map == null)
+				throw new NullPointerException();
 			theMap = map;
 		}
 
