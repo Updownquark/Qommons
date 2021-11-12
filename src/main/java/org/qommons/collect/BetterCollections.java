@@ -609,6 +609,11 @@ public class BetterCollections {
 		}
 
 		@Override
+		public String canPut(K key, V value) {
+			return StdMsg.UNSUPPORTED_OPERATION;
+		}
+
+		@Override
 		public int hashCode() {
 			return BetterMap.hashCode(this);
 		}
@@ -809,8 +814,8 @@ public class BetterCollections {
 		}
 
 		@Override
-		public BetterCollection<V> get(Object key) {
-			return unmodifiableCollection(theWrapped.get(key));
+		public BetterCollection<V> get(K key) {
+			return unmodifiableCollection(((BetterMultiMap<K, ? extends V>) theWrapped).get(key));
 		}
 
 		@Override

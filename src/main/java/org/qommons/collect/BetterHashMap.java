@@ -9,6 +9,7 @@ import org.qommons.Identifiable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
 import org.qommons.Transaction;
+import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
  * A hash-based implementation of {@link BetterMap}
@@ -211,6 +212,14 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	@Override
 	public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
 		return mutableHandleFor(theEntries.mutableElement(entryId));
+	}
+
+	@Override
+	public String canPut(K key, V value) {
+		if (containsKey(key))
+			return StdMsg.ELEMENT_EXISTS;
+		else
+			return null;
 	}
 
 	/**

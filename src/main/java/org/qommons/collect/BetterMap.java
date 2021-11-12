@@ -154,6 +154,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 	MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId);
 
 	/**
+	 * @param key The key to insert the value under
+	 * @param value The value to insert
+	 * @return null if the given key/value entry can be inserted into this map, or a reason why it can't
+	 */
+	String canPut(K key, V value);
+
+	/**
 	 * @param entryId The ID of the entry to operate on
 	 * @param onEntry The action to perform on the mutable entry with the given ID
 	 */
@@ -634,6 +641,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		}
 
 		@Override
+		public String canPut(K key, V value) {
+			return StdMsg.UNSUPPORTED_OPERATION;
+		}
+
+		@Override
 		public int hashCode() {
 			return BetterMap.hashCode(this);
 		}
@@ -704,6 +716,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		@Override
 		public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
 			return theWrapped.mutableEntry(entryId.reverse()).reverse();
+		}
+
+		@Override
+		public String canPut(K key, V value) {
+			return theWrapped.canPut(key, value);
 		}
 
 		@Override

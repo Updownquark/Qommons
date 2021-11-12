@@ -598,6 +598,13 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		@Override
+		public String canPut(K key, V value) {
+			if (!keySet().belongs(key))
+				return StdMsg.ILLEGAL_ELEMENT;
+			return theSource.canPut(key, value);
+		}
+
+		@Override
 		public int hashCode() {
 			return BetterCollection.hashCode(entrySet());
 		}

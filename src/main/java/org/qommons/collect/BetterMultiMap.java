@@ -75,7 +75,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 	}
 
 	@Override
-	BetterCollection<V> get(Object key);
+	BetterCollection<V> get(K key);
 
 	/** @return A collection of all values associated with any key in this map */
 	@Override
@@ -311,7 +311,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 			if (map.keySet().size() != other.keySet().size() || map.valueSize() != other.valueSize())
 				return false;
 			for (MultiEntryHandle<?, ?> entry : map.entrySet()) {
-				if (!entry.getValues().equals(other.get(entry.getKey())))
+				if (!entry.getValues().equals(((BetterMultiMap<Object, ?>) other).get(entry.getKey())))
 					return false;
 			}
 		}
@@ -1846,7 +1846,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 
 		@Override
 		public X get(Object key) {
-			BetterCollection<V> values = getSource().get(key);
+			BetterCollection<V> values = getSource().get((K) key);
 			return map(values);
 		}
 
@@ -1996,6 +1996,17 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 				BetterCollection<V> values = getSource().get(key);
 				return reverse(values, value);
 			}
+		}
+
+		@Override
+		public String canPut(K key, X value) {
+			String msg = canReverse();
+			if (msg != null)
+				return StdMsg.UNSUPPORTED_OPERATION;
+			if (!keySet().belongs(key))
+				return StdMsg.ILLEGAL_ELEMENT;
+			BetterCollection<V> values = theSource.get(key);
+			return canReverse(values, value);
 		}
 
 		@Override
@@ -2244,7 +2255,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		}
 
 		@Override
-		public BetterCollection<V> get(Object key) {
+		public BetterCollection<V> get(K key) {
 			return theSource.get(key).reverse();
 		}
 

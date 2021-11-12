@@ -21,7 +21,7 @@ public interface TransactableMultiMap<K, V> extends MultiMap<K, V>, Transactable
 	TransactableSet<K> keySet();
 
 	@Override
-	TransactableCollection<V> get(Object key);
+	TransactableCollection<V> get(K key);
 
 	@Override
 	default boolean putAll(Map<? extends K, ? extends V> values) {

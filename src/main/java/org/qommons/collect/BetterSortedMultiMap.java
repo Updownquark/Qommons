@@ -346,7 +346,7 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public BetterCollection<V> get(Object key) {
+		public BetterCollection<V> get(K key) {
 			return getSource().get(key).reverse();
 		}
 
@@ -441,7 +441,7 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public BetterCollection<V> get(Object key) {
+		public BetterCollection<V> get(K key) {
 			if (!keySet().belongs(key))
 				return BetterCollection.empty();
 			return theWrapped.get(key);

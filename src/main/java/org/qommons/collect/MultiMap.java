@@ -36,10 +36,11 @@ public interface MultiMap<K, V> {
 	Collection<? extends Map.Entry<K, V>> singleEntries();
 
 	/**
-	 * @param key The key to get values for
+	 * @param key The key to get values for. Though this parameter's type is the key type of the map, this method will not throw exceptions
+	 *        if the key is not actually an instance of that type. An empty collection will be returned.
 	 * @return The collection of values stored for the given key in this map. Never null.
 	 */
-	Collection<V> get(Object key);
+	Collection<V> get(K key);
 
 	/** @return The number of values in this multi-map */
 	int valueSize();

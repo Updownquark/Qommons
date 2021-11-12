@@ -24,6 +24,7 @@ import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement;
+import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.OptimisticContext;
 import org.qommons.collect.SimpleMapEntry;
 import org.qommons.collect.StampedLockingStrategy;
@@ -200,6 +201,16 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	@Override
 	public MutableBinaryTreeEntry<K, V> mutableEntry(ElementId entryId) {
 		return wrapMutable((TreeEntry) theEntries.getElement(entryId).get());
+	}
+
+	@Override
+	public String canPut(K key, V value) {
+		if (!keySet().belongs(key))
+			return StdMsg.ILLEGAL_ELEMENT;
+		else if (containsKey(key))
+			return StdMsg.ELEMENT_EXISTS;
+		else
+			return null;
 	}
 
 	@Override
