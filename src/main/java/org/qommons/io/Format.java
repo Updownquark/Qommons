@@ -1105,16 +1105,21 @@ public interface Format<T> {
 				text.append("-Infinity");
 			else {
 				double abs = Math.abs(value);
-				Map.Entry<Double, String> prefix = abs == 0 ? null : thePrefixes.floorEntry(abs);
-				if (prefix != null && prefix.getKey() < 1 && abs >= 1)
+				Map.Entry<Double, String> prefix;
+				if (abs == 0)
 					prefix = null;
-				boolean printInt;
-				if (prefix == null && abs < 1) {
-					prefix = thePrefixes.firstEntry();
-					if (prefix != null && prefix.getKey().intValue() > 0)
+				else {
+					prefix = thePrefixes.floorEntry(abs);
+					if (prefix != null && prefix.getKey() < 1 && abs >= 1)
 						prefix = null;
+					if (prefix == null && abs < 1) {
+						prefix = thePrefixes.firstEntry();
+						if (prefix != null && prefix.getKey().intValue() > 0)
+							prefix = null;
+					}
 				}
 				int exp;
+				boolean printInt;
 				if (prefix != null && prefix.getKey().intValue() != 0) {
 					value /= prefix.getKey();
 					int sign = Double.compare(value, 0.0);
