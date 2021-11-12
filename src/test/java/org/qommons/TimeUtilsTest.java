@@ -40,19 +40,19 @@ public class TimeUtilsTest {
 				cal.set(2006, 11, 3);
 			});
 		test("Mon 8am", DateElementType.Minute, //
-			teo -> teo.withEvaluationType(RelativeTimeEvaluation.FUTURE), cal -> {
+			teo -> teo.withEvaluationType(RelativeTimeEvaluation.Future), cal -> {
 				cal.set(Calendar.HOUR_OF_DAY, 8);
 				while (cal.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY)
 					cal.add(Calendar.DAY_OF_WEEK, 1);
 			});
 		test("Thurs 1300", DateElementType.Minute, //
-			teo -> teo.withEvaluationType(RelativeTimeEvaluation.FUTURE), cal -> {
+			teo -> teo.withEvaluationType(RelativeTimeEvaluation.Future), cal -> {
 				cal.set(Calendar.HOUR_OF_DAY, 13);
 				while (cal.get(Calendar.DAY_OF_WEEK) != Calendar.THURSDAY)
 					cal.add(Calendar.DAY_OF_WEEK, 1);
 			});
 		test("Jan 15 9am", DateElementType.Minute, //
-			teo -> teo.withEvaluationType(RelativeTimeEvaluation.PAST), cal -> {
+			teo -> teo.withEvaluationType(RelativeTimeEvaluation.Past), cal -> {
 				cal.set(Calendar.HOUR_OF_DAY, 9);
 				cal.set(Calendar.DAY_OF_MONTH, 15);
 				while (cal.get(Calendar.MONTH) != Calendar.JANUARY)
@@ -67,7 +67,7 @@ public class TimeUtilsTest {
 				cal.set(2015, Calendar.DECEMBER, 31, 12, 0, 0);
 			});
 		test("Mon, 8am", DateElementType.Hour, //
-			teo -> teo.withEvaluationType(RelativeTimeEvaluation.FUTURE), //
+			teo -> teo.withEvaluationType(RelativeTimeEvaluation.Future), //
 			cal -> {
 				cal.set(Calendar.HOUR_OF_DAY, 8);
 				while (cal.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY)
@@ -86,12 +86,12 @@ public class TimeUtilsTest {
 				cal.set(1999, Calendar.JUNE, 25);
 			});
 		test("6/25/01", DateElementType.Day, //
-			teo -> teo.withEvaluationType(RelativeTimeEvaluation.PAST), //
+			teo -> teo.withEvaluationType(RelativeTimeEvaluation.Past), //
 			cal -> {
 				cal.set(1901, Calendar.JUNE, 25);
 			});
 		test("6/25/99", DateElementType.Day, //
-			teo -> teo.withEvaluationType(RelativeTimeEvaluation.FUTURE), //
+			teo -> teo.withEvaluationType(RelativeTimeEvaluation.Future), //
 			cal -> {
 				cal.set(1999, Calendar.JUNE, 25);
 			});
@@ -105,7 +105,7 @@ public class TimeUtilsTest {
 			});
 		refCal.set(Calendar.YEAR, 2000);
 		test("8th 10:30", DateElementType.Minute, //
-			teo -> teo.withEvaluationType(RelativeTimeEvaluation.FUTURE), //
+			teo -> teo.withEvaluationType(RelativeTimeEvaluation.Future), //
 			cal -> {
 				cal.set(2000, Calendar.AUGUST, 8, 10, 30, 0);
 			});

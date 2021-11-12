@@ -1123,11 +1123,11 @@ public class TimeUtils {
 	/** Strategies for evaluating relative times */
 	public enum RelativeTimeEvaluation {
 		/** Chooses the closest time matching the relative time <b>before</b> the reference time */
-		PAST,
+		Past,
 		/** Chooses the closest time matching the relative time <b>after</b> the reference time */
-		FUTURE,
+		Future,
 		/** Chooses the closest time matching the relative time either before or after the reference time */
-		CLOSEST
+		Closest
 	}
 
 	/**
@@ -1261,10 +1261,10 @@ public class TimeUtils {
 			}
 			boolean evaluationMatches = true;
 			switch (theEvaluationType) {
-			case PAST:
+			case Past:
 				evaluationMatches = cal.getTimeInMillis() <= ref.toEpochMilli();
 				break;
-			case FUTURE:
+			case Future:
 				evaluationMatches = cal.getTimeInMillis() >= ref.toEpochMilli();
 				break;
 			default:
@@ -1275,24 +1275,24 @@ public class TimeUtils {
 				if (elements.containsKey(DateElementType.Year)) {
 					// Again, if the year was absolute, it wouldn't be a relative time; so this must have a 2-digit year
 					switch (theEvaluationType) {
-					case PAST:
+					case Past:
 						cal.add(Calendar.YEAR, -100);
 						break;
-					case FUTURE:
+					case Future:
 						cal.add(Calendar.YEAR, 100);
 						break;
-					case CLOSEST:
+					case Closest:
 						break; // We have logic in the loop above to make this so
 					}
 				} else if (elements.containsKey(DateElementType.Month)) {
 					switch (theEvaluationType) {
-					case PAST:
+					case Past:
 						cal.add(Calendar.YEAR, -1);
 						break;
-					case FUTURE:
+					case Future:
 						cal.add(Calendar.YEAR, 1);
 						break;
-					case CLOSEST:
+					case Closest:
 						long diff = cal.getTimeInMillis() - ref.toEpochMilli();
 						if (Math.abs(diff) > 365L * 24 * 60 * 60 * 1000 / 2)
 							cal.add(Calendar.YEAR, diff < 0 ? 1 : -1);
@@ -1300,13 +1300,13 @@ public class TimeUtils {
 					}
 				} else if (elements.containsKey(DateElementType.Day)) {
 					switch (theEvaluationType) {
-					case PAST:
+					case Past:
 						cal.add(Calendar.MONTH, -1);
 						break;
-					case FUTURE:
+					case Future:
 						cal.add(Calendar.MONTH, 1);
 						break;
-					case CLOSEST:
+					case Closest:
 						long diff = cal.getTimeInMillis() - ref.toEpochMilli();
 						cal.add(Calendar.MONTH, diff < 0 ? 1 : -1);
 						long postDiff = cal.getTimeInMillis() - ref.toEpochMilli();
@@ -1316,13 +1316,13 @@ public class TimeUtils {
 					}
 				} else if (elements.containsKey(DateElementType.Weekday)) {
 					switch (theEvaluationType) {
-					case PAST:
+					case Past:
 						cal.add(Calendar.DAY_OF_MONTH, -7);
 						break;
-					case FUTURE:
+					case Future:
 						cal.add(Calendar.DAY_OF_MONTH, 7);
 						break;
-					case CLOSEST:
+					case Closest:
 						long diff = cal.getTimeInMillis() - ref.toEpochMilli();
 						if (Math.abs(diff) > 7L * 24 * 60 * 60 * 1000 / 2)
 							cal.add(Calendar.DAY_OF_MONTH, diff < 0 ? 7 : -7);
@@ -1336,13 +1336,13 @@ public class TimeUtils {
 						threshHours = 12;
 					}
 					switch (theEvaluationType) {
-					case PAST:
+					case Past:
 						cal.add(Calendar.HOUR_OF_DAY, -threshHours);
 						break;
-					case FUTURE:
+					case Future:
 						cal.add(Calendar.HOUR_OF_DAY, threshHours);
 						break;
-					case CLOSEST:
+					case Closest:
 						long diff = cal.getTimeInMillis() - ref.toEpochMilli();
 						if (Math.abs(diff) > threshHours * 60L * 60 * 1000 / 2)
 							cal.add(Calendar.HOUR_OF_DAY, diff < 0 ? threshHours : -threshHours);
@@ -1597,7 +1597,7 @@ public class TimeUtils {
 
 	/** Default time evaluation options */
 	public static final TimeEvaluationOptions DEFAULT_OPTIONS = new TimeEvaluationOptions(TimeZone.getDefault(), DateElementType.SubSecond,
-		false, RelativeTimeEvaluation.CLOSEST);
+		false, RelativeTimeEvaluation.Closest);
 
 	/** Different options that can be used when evaluating and parsing times */
 	public static class TimeEvaluationOptions {
