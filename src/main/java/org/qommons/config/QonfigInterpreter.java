@@ -446,6 +446,10 @@ public class QonfigInterpreter {
 			theModifiers = modifiers;
 		}
 
+		public QonfigToolkit getToolkit() {
+			return theToolkit;
+		}
+
 		/**
 		 * @param toolkit The toolkit to test
 		 * @return Whether this interpreter can interpret elements for types declared by the given toolkit

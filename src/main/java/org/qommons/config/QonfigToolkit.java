@@ -322,6 +322,50 @@ public class QonfigToolkit {
 		return root;
 	}
 
+	private volatile QonfigElementOrAddOn theCachedElement;
+
+	public QonfigAttributeDef.Declared getAttribute(String elementOrAddOnName, String attributeName) {
+		QonfigElementOrAddOn el = null;
+		boolean cache = elementOrAddOnName.indexOf(':') < 0;
+		if (cache) {
+			el = theCachedElement;
+			if (el != null && !el.getName().equals(elementOrAddOnName))
+				el = null;
+		}
+		if (el == null) {
+			el = getElementOrAddOn(elementOrAddOnName);
+			if (cache && el != null)
+				theCachedElement = el;
+		}
+		if (el == null)
+			throw new IllegalArgumentException("No such element or add-on '" + elementOrAddOnName + "'");
+		QonfigAttributeDef attr = el.getAttribute(attributeName);
+		if (attr == null)
+			throw new IllegalArgumentException("No such attribute " + elementOrAddOnName + "." + attributeName);
+		return attr.getDeclared();
+	}
+
+	public QonfigChildDef getChild(String elementOrAddOnName, String roleName) {
+		QonfigElementOrAddOn el = null;
+		boolean cache = elementOrAddOnName.indexOf(':') < 0;
+		if (cache) {
+			el = theCachedElement;
+			if (el != null && !el.getName().equals(elementOrAddOnName))
+				el = null;
+		}
+		if (el == null) {
+			el = getElementOrAddOn(elementOrAddOnName);
+			if (cache && el != null)
+				theCachedElement = el;
+		}
+		if (el == null)
+			throw new IllegalArgumentException("No such element or add-on '" + elementOrAddOnName + "'");
+		QonfigChildDef child = el.getChild(roleName);
+		if (child == null)
+			throw new IllegalArgumentException("No such child " + elementOrAddOnName + "." + roleName);
+		return child;
+	}
+
 	@Override
 	public String toString() {
 		if (theLocation == null)

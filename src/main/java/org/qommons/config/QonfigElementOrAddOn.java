@@ -114,8 +114,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 
 	/**
 	 * @param name The name of the attribute
-	 * @return The attribute with the given name in this type, or null if no such attribute is defined throws
-	 * @throws IllegalArgumentException if multiple such attributes are defined
+	 * @return The attribute with the given name in this type, or null if no such attribute is defined
+	 * @throws IllegalArgumentException if multiple such attributes are defined in the hierarchy
 	 */
 	public QonfigAttributeDef getAttribute(String name) throws IllegalArgumentException {
 		QonfigAttributeDef attr = theDeclaredAttributes.get(name);
@@ -149,6 +149,25 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 	/** @return All children declared or inherited by this item */
 	public BetterMultiMap<String, QonfigChildDef> getChildrenByName() {
 		return theChildrenByName;
+	}
+
+	/**
+	 * @param name The role name of the child
+	 * @return The child with the given role name in this type, or null if no such child is defined
+	 * @throws IllegalArgumentException if multiple such roles are defined in the hierarchy
+	 */
+	public QonfigChildDef getChild(String name) throws IllegalArgumentException {
+		QonfigChildDef child = theDeclaredChildren.get(name);
+		if (child != null)
+			return child;
+		switch (theChildrenByName.get(name).size()) {
+		case 0:
+			return null;
+		case 1:
+			return theChildrenByName.get(name).getFirst();
+		default:
+			throw new IllegalArgumentException("Multiple children " + this + "." + name);
+		}
 	}
 
 	/**
