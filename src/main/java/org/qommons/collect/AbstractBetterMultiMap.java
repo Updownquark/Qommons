@@ -379,6 +379,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 					entry.remove();
 					theValues.dispose(value);
 					removedAny = true;
+					keyEl = theEntries.keySet().getAdjacentElement(keyEl.getElementId(), true);
 				}
 			}
 		}
