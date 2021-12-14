@@ -326,7 +326,7 @@ public class QonfigInterpreter {
 			session.withError(msg);
 			sessionClose.run();
 			throw new IllegalStateException(msg);
-		} else if (!asType.isAssignableFrom(creator.type)) {
+		} else if (asType != null && !asType.isAssignableFrom(creator.type)) {
 			String msg = "Element " + element.getType().getName() + " is parsed as " + creator.type.getName() + ", not " + asType.getName();
 			session.withError(msg);
 			sessionClose.run();

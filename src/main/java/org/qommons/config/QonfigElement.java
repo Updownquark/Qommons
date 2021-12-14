@@ -78,11 +78,13 @@ public class QonfigElement {
 	 * @return Whether this element extends or inherits the given element-def or add-on
 	 */
 	public boolean isInstance(QonfigElementOrAddOn el) {
-		if (el instanceof QonfigElementDef)
-			return theType.isAssignableFrom(el);
-		for (QonfigAddOn inh : theInheritance.values())
-			if (inh.isAssignableFrom(el))
-				return true;
+		if (el.isAssignableFrom(theType))
+			return true;
+		if (el instanceof QonfigAddOn) {
+			for (QonfigAddOn inh : theInheritance.values())
+				if (el.isAssignableFrom(inh))
+					return true;
+		}
 		return false;
 	}
 
@@ -165,8 +167,11 @@ public class QonfigElement {
 	 */
 	public <T> T getAttribute(QonfigAttributeDef attr, Class<T> type) throws IllegalArgumentException, ClassCastException {
 		Object value = theAttributes.get(attr);
-		if (value == null)
+		if (value == null) {
+			if (!isInstance(attr.getOwner()))
+				throw new IllegalArgumentException("Attribute " + attr + " mis-applied to " + theType.getName());
 			return null;
+		}
 		if (type.isInstance(value))
 			return (T) value;
 		else if (type.isPrimitive()) {
@@ -206,8 +211,11 @@ public class QonfigElement {
 	 */
 	public String getAttributeText(QonfigAttributeDef attr) throws IllegalArgumentException {
 		Object value = theAttributes.get(attr);
-		if (value == null)
+		if (value == null) {
+			if (!isInstance(attr.getOwner()))
+				throw new IllegalArgumentException("Attribute " + attr + " mis-applied to " + theType.getName());
 			return null;
+		}
 		return value.toString();
 	}
 

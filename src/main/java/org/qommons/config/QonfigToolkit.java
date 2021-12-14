@@ -324,7 +324,14 @@ public class QonfigToolkit {
 
 	private volatile QonfigElementOrAddOn theCachedElement;
 
-	public QonfigAttributeDef.Declared getAttribute(String elementOrAddOnName, String attributeName) {
+	/**
+	 * @param elementOrAddOnName The name of the element or add-on that defined the attribute, or an extension of it
+	 * @param attributeName The name of the attribute to get
+	 * @return The attribute definition
+	 * @throws IllegalArgumentException If no such element/add-on is defined under this toolkit, no such attribute is defined on it, or
+	 *         multiple matching attributes are defined on it
+	 */
+	public QonfigAttributeDef.Declared getAttribute(String elementOrAddOnName, String attributeName) throws IllegalArgumentException {
 		QonfigElementOrAddOn el = null;
 		boolean cache = elementOrAddOnName.indexOf(':') < 0;
 		if (cache) {
@@ -345,7 +352,14 @@ public class QonfigToolkit {
 		return attr.getDeclared();
 	}
 
-	public QonfigChildDef getChild(String elementOrAddOnName, String roleName) {
+	/**
+	 * @param elementOrAddOnName The name of the element or add-on that defined the attribute, or an extension of it
+	 * @param roleName The role name of the child to get
+	 * @return The child definition
+	 * @throws IllegalArgumentException If no such element/add-on is defined under this toolkit, no such role is defined on it, or multiple
+	 *         matching roles are defined on it
+	 */
+	public QonfigChildDef getChild(String elementOrAddOnName, String roleName) throws IllegalArgumentException {
 		QonfigElementOrAddOn el = null;
 		boolean cache = elementOrAddOnName.indexOf(':') < 0;
 		if (cache) {
