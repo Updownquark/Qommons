@@ -2128,6 +2128,23 @@ public class TimeUtils {
 			}
 		}
 	};
+	private static final Format<Integer> SUB_SECOND_FORMAT = new Format<Integer>() {
+		@Override
+		public void append(StringBuilder text, Integer value) {
+			if (value != null)
+				StringUtils.printInt(value, 9, text);
+		}
+
+		@Override
+		public Integer parse(CharSequence text) throws ParseException {
+			int value = Integer.parseInt(text.toString());
+			if (value == 0)
+				return value;
+			for (int dig = 9; dig > text.length(); dig--)
+				value *= 10;
+			return value;
+		}
+	};
 
 	private static final Format<Integer> TIME_ZONE_FORMAT = new Format<Integer>() {
 		@Override
@@ -2197,7 +2214,7 @@ public class TimeUtils {
 				return -1;
 			}
 			for (int i = 3; i < str.length(); i++) {
-				if (str.charAt(i) != test.charAt(i))
+				if (i == test.length() || str.charAt(i) != test.charAt(i))
 					return i;
 			}
 			return str.length();
@@ -2267,6 +2284,7 @@ public class TimeUtils {
 		parserBuilder.withFormat("month", MONTH_FORMAT);
 		parserBuilder.withFormat("timeZone", TIME_ZONE_FORMAT);
 		parserBuilder.withFormat("monthDig", new OffsetFormat(-1));
+		parserBuilder.withFormat("subSecond", SUB_SECOND_FORMAT);
 		try {
 			parserBuilder.parse(TimeUtils.class.getResource("time-formats.xml"));
 		} catch (IOException e) {

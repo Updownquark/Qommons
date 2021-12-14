@@ -15,7 +15,7 @@
 		<component name="HH" component-type="Hour" parser="\d{2}" />
 		<component name="m" component-type="Minute" parser="\d{2}" />
 		<component name="s" component-type="Second" parser="\d{2}" />
-		<component name="S" component-type="SubSecond" parser="\d+" />
+		<component name="S" component-type="SubSecond" parser="\d+" value-type="subSecond" />
 		<component name="a" component-type="AmPm" parser="(?i)[ap]\.?m\.?" value-type="ampm"/>
 		<component name="Z" component-type="TimeZone" parser="[a-zA-Z]{1,3}" value-type="timeZone" />
 		<component name="t" component-type="None" parser="$th" />
@@ -30,6 +30,7 @@
 		<format>YYYY/M/Dt?Z?</format>
 		<format>YYYY/M/DZ?</format>
 		<format>YYYYMMDDZ?</format>
+		<!--<format>DDMMYYYYZ?</format>-->
 		<!--
 			Including a year-only format here frequently got it conflated with military time (e.g. "1300")
 			It also just seems to me that we should always require a minimum resolution of a day
@@ -38,9 +39,9 @@
 		<format>MMM-YYYYZ?</format>-->
 		<format>YYYY-?MMM-?DZ?</format>
 		<format>YYYY-?MM-?DZ?</format>
-		<format>W?D-MMM-YYYYZ?</format>
-		<format>W?D-MMM-YYZ?</format>
-		<format>W?D-MMMZ?</format>
+		<format>W?D-?MMM-?YYYYZ?</format>
+		<format>W?D-?MMM-?YYZ?</format>
+		<format>W?D-?MMMZ?</format>
 		<format>W?M-Dt?-YYYYZ?</format>
 		<format>W?M-Dt?-YYZ?</format>
 		<format>W?M-Dt?-YYZ?</format>

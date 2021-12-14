@@ -121,6 +121,11 @@ public class TimeUtilsTest {
 			cal -> {
 				cal.set(2019, Calendar.FEBRUARY, 19);
 			});
+		test("20210206 08:00:17.600", DateElementType.SubSecond, null, //
+			cal -> {
+				cal.set(2021, Calendar.FEBRUARY, 6, 8, 0, 17);
+				cal.set(Calendar.MILLISECOND, 600);
+			});
 	}
 
 	private void test(String text, DateElementType resolution, Function<TimeEvaluationOptions, TimeEvaluationOptions> opts,
