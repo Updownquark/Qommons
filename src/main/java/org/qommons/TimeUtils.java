@@ -2182,7 +2182,7 @@ public class TimeUtils {
 	static {
 		SimpleSequenceParser.Builder<DateElementType, Integer> parserBuilder = SimpleSequenceParser.build(DateElementType.class, Format.INT,
 			(old, adj) -> old + adj);
-		parserBuilder.withWhiteSpace(Pattern.compile("[\\s\\,]"));
+		parserBuilder.withWhiteSpace(Pattern.compile("[\\s\\,\\-\\_]"));
 		parserBuilder.withParser("$weekday", str -> {
 			if (str.length() < 3)
 				return -1;
@@ -2276,7 +2276,7 @@ public class TimeUtils {
 				return -1;
 			}
 			for (int i = 3; i < str.length(); i++) {
-				if (str.charAt(i) != test.charAt(i))
+				if (i == test.length() || str.charAt(i) != test.charAt(i))
 					return i;
 			}
 			return str.length();
@@ -2483,6 +2483,16 @@ public class TimeUtils {
 	 * @throws ParseException If the duration cannot be parsed
 	 */
 	public static ParsedDuration parseDuration(CharSequence text) throws ParseException {
+		return parseDuration(text, true);
+	}
+
+	/**
+	 * @param text The text to parse
+	 * @param throwIfNotFound If true, this method will throw an exception if a duration cannot be parsed. Otherwise null will be returned.
+	 * @return A duration parsed from the text
+	 * @throws ParseException If the duration cannot be parsed and <code>throwIfNotFount</code> is true
+	 */
+	public static ParsedDuration parseDuration(CharSequence text, boolean throwIfNotFound) throws ParseException {
 		ArrayList<DurationComponent> components = new ArrayList<>();
 		ArrayList<String> separators = new ArrayList<>();
 		Duration duration = Duration.ZERO;
@@ -2512,8 +2522,12 @@ public class TimeUtils {
 			long value = 0;
 			boolean hasValue = false;
 			while (c < text.length() && text.charAt(c) >= '0' && text.charAt(c) <= '9') {
-				if (c - valueStart > 10)
-					throw new ParseException("Too many digits in value", c);
+				if (c - valueStart > 10) {
+					if (throwIfNotFound)
+						throw new ParseException("Too many digits in value", c);
+					else
+						return null;
+				}
 				hasValue = true;
 				value = value * 10 + (text.charAt(c) - '0');
 				c++;
@@ -2535,8 +2549,12 @@ public class TimeUtils {
 					}
 					c++;
 				}
-				if (c == decimalStart)
-					throw new ParseException("Unrecognized duration", 0);
+				if (c == decimalStart) {
+					if (throwIfNotFound)
+						throw new ParseException("Unrecognized duration", 0);
+					else
+						return null;
+				}
 			}
 			if (!hasValue)
 				throw new ParseException("No number value found", valueStart);
@@ -2549,8 +2567,12 @@ public class TimeUtils {
 				unit.append(text.charAt(c));
 				c++;
 			}
-			if (unit.length() == 0)
-				throw new ParseException("Unit expected", unitStart);
+			if (unit.length() == 0) {
+				if (throwIfNotFound)
+					throw new ParseException("Unit expected", unitStart);
+				else
+					return null;
+			}
 			if (unit.length() > 2 && unit.charAt(unit.length() - 1) == 's')
 				unit.deleteCharAt(unit.length() - 1); // Remove the plural
 			String unitStr = unit.toString().toLowerCase();
@@ -2564,7 +2586,10 @@ public class TimeUtils {
 				case "millisecond":
 					break;
 				default:
-					throw new ParseException("Decimal values are only permitted for unit 'second' and 'millisecond'", decimalStart);
+					if (throwIfNotFound)
+						throw new ParseException("Decimal values are only permitted for unit 'second' and 'millisecond'", decimalStart);
+					else
+						return null;
 				}
 			}
 			switch (unit.toString()) {
@@ -2643,11 +2668,18 @@ public class TimeUtils {
 					text.subSequence(valueStart, c).toString()));
 				break;
 			default:
-				throw new ParseException("Unrecognized unit: " + unitStr, unitStart);
+				if (throwIfNotFound)
+					throw new ParseException("Unrecognized unit: " + unitStr, unitStart);
+				else
+					return null;
 			}
 		}
-		if (!hadContent)
-			throw new ParseException("No content to parse", c);
+		if (!hadContent) {
+			if (throwIfNotFound)
+				throw new ParseException("No content to parse", c);
+			else
+				return null;
+		}
 		if (neg)
 			duration = duration.negated();
 		return new ParsedDuration(neg, components, separators, relativeFormat());

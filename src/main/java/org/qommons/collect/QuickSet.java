@@ -284,6 +284,10 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		}
 	}
 
+	public Set<E> asJavaSet() {
+		return new JavaSet<>(this);
+	}
+
 	@Override
 	public int compareTo(QuickSet<E> o) {
 		int comp = theKeys.length - o.theKeys.length;
@@ -945,6 +949,24 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 			public V setValue(V value) {
 				return theMap.put(index, value);
 			}
+		}
+	}
+
+	static final class JavaSet<E> extends AbstractSet<E> {
+		private final QuickSet<E> theSet;
+
+		public JavaSet(QuickSet<E> set) {
+			theSet = set;
+		}
+
+		@Override
+		public Iterator<E> iterator() {
+			return theSet.iterator();
+		}
+
+		@Override
+		public int size() {
+			return theSet.size();
 		}
 	}
 

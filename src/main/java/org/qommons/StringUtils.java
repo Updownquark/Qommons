@@ -616,6 +616,37 @@ public class StringUtils {
 			return "a";
 	}
 
+	public static CharSequence cheapSubSequence(CharSequence seq, int start, int end) {
+		return new DefaultCharSubSequence(seq, start, end);
+	}
+
+	public static int subSequenceMatches(CharSequence seq1, int off1, CharSequence seq2, int off2, int maxLen, boolean ignoreCase) {
+		if (maxLen < 0)
+			maxLen = Integer.MAX_VALUE;
+		int len = 0;
+		boolean match = true;
+		for (int c1 = off1, c2 = off2; match && c1 < seq1.length() && c2 < seq2.length() && len < maxLen; c1++, c2++) {
+			char ch1 = seq1.charAt(c1);
+			int diff = ch1 - seq2.charAt(c2);
+			switch (diff) {
+			case 0:
+				break;
+			case a_MINUS_A:
+				match = ignoreCase && ch1 >= 'a' && ch1 <= 'z';
+				break;
+			case -a_MINUS_A:
+				match = ignoreCase && ch1 >= 'A' && ch1 <= 'Z';
+				break;
+			default:
+				match = false;
+				break;
+			}
+			if (match)
+				len++;
+		}
+		return len;
+	}
+
 	/**
 	 * A naming scheme to detect and produce duplicate names for
 	 * {@link StringUtils#getNewItemName(Iterable, Function, String, DuplicateItemNamer) getNewItemName}
@@ -1340,7 +1371,8 @@ public class StringUtils {
 	}
 
 	private static final char A_MINUS_0 = 'A' - '0';
-	private static final char a_MINUS_A = 'a' - 'A';
+	/** <code>'a' - 'A' */
+	public static final char a_MINUS_A = 'a' - 'A';
 
 	/**
 	 * @param ch The hex character to parse
