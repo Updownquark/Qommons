@@ -114,11 +114,13 @@ public abstract class RemoteFileSource implements BetterFile.FileDataSource {
 		/** Checks this file's status with the server, if configured to */
 		protected void checkData() {
 			long now = System.currentTimeMillis();
-			if (!shouldCheckData(now))
+			boolean shouldCheck = shouldCheckData(now);
+			if (!shouldCheck)
 				return;
 			try {
 				queryData();
 			} catch (IOException e) {
+				// System.err.println("Metadata Query failed: " + e.getMessage());
 				theLength = 0;
 				theLastModified = -1;
 			}
