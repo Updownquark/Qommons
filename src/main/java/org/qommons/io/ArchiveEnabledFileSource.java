@@ -1300,6 +1300,12 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 				if (fileIn != null)
 					fileIn.close();
 				throw e;
+			} catch (RuntimeException e) {
+				if (zip != null)
+					zip.close();
+				if (fileIn != null)
+					fileIn.close();
+				throw new IOException(e);
 			}
 		}
 
