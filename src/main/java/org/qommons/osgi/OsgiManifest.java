@@ -244,6 +244,7 @@ public class OsgiManifest {
 			List<ManifestEntry> currentEntry = null;
 			Map<String, String> attributes = new LinkedHashMap<>();
 			BufferedReader br = manifest instanceof BufferedReader ? (BufferedReader) manifest : new BufferedReader(manifest);
+			String lastEntryName = null;
 			int lineNumber = 1, lastNonEmptyLine = 0;
 			for (String line = br.readLine(); line != null; line = br.readLine(), lineNumber++) {
 				int lastCh = line.length();
@@ -274,7 +275,8 @@ public class OsgiManifest {
 				String entryValue;
 				if (currentEntry == null) { // New entry
 					if (Character.isWhitespace(line.charAt(0))) {
-						throw new IllegalArgumentException("Missing ',' on non-terminal entry at line " + lastNonEmptyLine);
+						throw new IllegalArgumentException(
+							"Missing ',' on non-terminal entry '" + lastEntryName + "' at line " + lastNonEmptyLine);
 					}
 					int colon = line.indexOf(':');
 					if (colon < 0) {
@@ -282,6 +284,7 @@ public class OsgiManifest {
 					}
 					String entryName = line.substring(0, colon).trim();
 					int size = terminal ? 1 : 5;
+					lastEntryName = entryName;
 					currentEntry = theEntries.computeIfAbsent(entryName, __ -> new ArrayList<>(size));
 					entryValue = parseEntry(//
 						line.substring(colon + 1, line.length() - (terminal ? 0 : 1)).trim(), attributes, lineNumber);

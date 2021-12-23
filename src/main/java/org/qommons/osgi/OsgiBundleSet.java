@@ -1235,6 +1235,7 @@ public class OsgiBundleSet {
 				.addStringArgument("processor", arg -> arg.optional().constrain(c -> c.oneOf("x86", "x86-64"))//
 					.when("jar", void.class, c -> c.missing().forbidden()))//
 					.addStringArgument("start-components", a -> a.when("start-ds", String.class, c -> c.missing().forbidden()))//
+					.addStringArgument("pre-init", arg -> arg.optional())//
 				;
 			})//
 			.acceptUnmatched(true)//
@@ -1257,6 +1258,14 @@ public class OsgiBundleSet {
 			throw new IllegalStateException("Misconfigured bundle set", e);
 		}
 		bundles.init();
+
+		for (String preInit : args.getAll("pre-init", String.class)) {
+			try {
+				bundles.loadClass(preInit);
+			} catch (ClassNotFoundException e) {
+				System.err.println("No such class found: " + preInit);
+			}
+		}
 
 		if (args.has("jar")) {
 			long now = System.currentTimeMillis();
