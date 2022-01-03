@@ -752,7 +752,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 						max = min;
 					}
 				}
-				if (min < oldChild.getMin()) {
+				if (oldChild != null && min < oldChild.getMin()) {
 					childSession
 						.withError("min (" + min + ") is less than declared by " + oldChild.getOwner() + " (" + oldChild.getMin() + ")");
 					min = oldChild.getMin();
@@ -760,7 +760,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 						max = min;
 				}
 			}
-			if (max != null && max > oldChild.getMax()) {
+			if (max != null && oldChild != null && max > oldChild.getMax()) {
 				childSession
 					.withError("max (" + max + ") is greater than declared by " + oldChild.getOwner() + " (" + oldChild.getMax() + ")");
 				max = oldChild.getMax();

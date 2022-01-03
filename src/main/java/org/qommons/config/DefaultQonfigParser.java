@@ -875,7 +875,6 @@ public class DefaultQonfigParser implements QonfigParser {
 					parseChildren(theNodes.get(inh.getName()), session, completed);
 			}
 			builder.setStage(QonfigElementOrAddOn.Builder.Stage.NewChildren);
-			childLoop: //
 			for (StrictXmlReader child : element.getElements("child-def", 0, -1)) {
 				String name = child.getAttribute("name", false);
 				if (name == null) {
@@ -894,14 +893,10 @@ public class DefaultQonfigParser implements QonfigParser {
 						ElementQualifiedParseItem parsedRole = ElementQualifiedParseItem.parse(roleName, builder.getSession());
 						if (parsedRole == null)
 							continue;
-						QonfigElementDef qualifier;
-						if (parsedRole.declaredElement instanceof QonfigElementDef)
-							qualifier = (QonfigElementDef) parsedRole.declaredElement;
-						else if (parsedRole.declaredElement != null) {
-							childSession
-								.withError(parsedRole.printQualifier() + " is an add-on--children must be qualified by an element-def");
-							continue childLoop;
-						} else
+						QonfigElementOrAddOn qualifier;
+						if (parsedRole.declaredElement != null)
+							qualifier = parsedRole.declaredElement;
+						else
 							qualifier = builder.getSuperElement();
 						QonfigChildDef.Declared role = qualifier.getDeclaredChildren().get(parsedRole.itemName);
 						if (role == null) {
@@ -1016,13 +1011,10 @@ public class DefaultQonfigParser implements QonfigParser {
 					ElementQualifiedParseItem parsedRole = ElementQualifiedParseItem.parse(name, builder.getSession());
 					if (parsedRole == null)
 						continue;
-					QonfigElementDef qualifier;
-					if (parsedRole.declaredElement instanceof QonfigElementDef)
-						qualifier = (QonfigElementDef) parsedRole.declaredElement;
-					else if (parsedRole.declaredElement != null) {
-						childSession.withError(parsedRole.printQualifier() + " is an add-on--children must be qualified by an element-def");
-						continue childLoop;
-					} else {
+					QonfigElementOrAddOn qualifier;
+					if (parsedRole.declaredElement != null)
+						qualifier = parsedRole.declaredElement;
+					else {
 						qualifier = builder.getSuperElement();
 						if (qualifier == null) {
 							childSession.withError("No requires, so no children");
@@ -1105,7 +1097,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			}
 		}
 
-		private BetterCollection<? extends QonfigChildDef> findChildren(QonfigElementDef qualifier, String itemName,
+		private BetterCollection<? extends QonfigChildDef> findChildren(QonfigElementOrAddOn qualifier, String itemName,
 			QonfigToolkit building) {
 			if (qualifier.getDeclarer() != building)
 				return qualifier.getChildrenByName().get(itemName);
@@ -1114,7 +1106,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			return found;
 		}
 
-		private void findChildren(QonfigElementDef qualifier, String itemName, QonfigToolkit building,
+		private void findChildren(QonfigElementOrAddOn qualifier, String itemName, QonfigToolkit building,
 			BetterSet<QonfigChildDef.Declared> found) {
 			if (qualifier.getDeclarer() != building) {
 				for (QonfigChildDef child : qualifier.getChildrenByName().get(itemName))

@@ -104,6 +104,63 @@ public class QonfigElement {
 		return theAttributes;
 	}
 
+	/**
+	 * A shortcut for <code>getAttribute(toolkit.getAttribute(elementOrAddOnName, attributeName), type)</code>
+	 * 
+	 * @param <T> The type of the value to get
+	 * @param toolkit The toolkit that defines the target attribute
+	 * @param elementOrAddOnName The name of the element/add-on that declares the target attribute
+	 * @param attributeName The name of the target attribute
+	 * @param type The type of the value to get, or null if no check is to be done
+	 * @return The value of the target attribute
+	 * @throws IllegalArgumentException If:
+	 *         <ul>
+	 *         <li>No such attribute exists in the toolkit</li>
+	 *         <li>The owner element/add-on of the target attribute is not inherited/extended by this element</li>
+	 *         <li>The value for the attribute does not match the given type</li>
+	 *         </ul>
+	 */
+	public <T> T getAttribute(QonfigToolkit toolkit, String elementOrAddOnName, String attributeName, Class<T> type)
+		throws IllegalArgumentException {
+		QonfigAttributeDef attr = toolkit.getAttribute(elementOrAddOnName, attributeName);
+		Object value = theAttributes.get(attr.getDeclared());
+		if (value == null) {
+			if (!isInstance(attr.getDeclared().getOwner()))
+				throw new IllegalArgumentException("This element (type " + theType.getName() + ") does not "
+					+ (attr.getDeclared().getOwner() instanceof QonfigAddOn ? "inherit add-on" : "extend element-def") + " '"
+					+ attr.getDeclared().getOwner().getName() + "' and cannot have a value for attribute " + attr);
+			return null;
+		} else if (type != null && !type.isInstance(value))
+			throw new IllegalArgumentException(
+				"Value '" + value + "' for attribute " + attr + " is typed " + value.getClass().getName() + ", not " + type.getName());
+		return (T) value;
+	}
+
+	/**
+	 * A shortcut for <code>(BetterList<QonfigElement>) getChildrenByRole().get(toolkit.getChild(elementOrAddOnName, childName))</code> that
+	 * additionally throws an exception if the given child is declared by a type that this element does not extend/inherit.
+	 * 
+	 * @param toolkit The toolkit that defines the target child
+	 * @param elementOrAddOnName The name of the element/add-on that declares the target child
+	 * @param childName The name of the target child
+	 * @return All children in this element that fulfill the given child role
+	 * @throws IllegalArgumentException If:
+	 *         <ul>
+	 *         <li>No such child exists in the toolkit</li>
+	 *         <li>The owner element/add-on of the target child is not inherited/extended by this element</li>
+	 *         </ul>
+	 */
+	public BetterList<QonfigElement> getChildrenInRole(QonfigToolkit toolkit, String elementOrAddOnName, String childName)
+		throws IllegalArgumentException {
+		QonfigChildDef child = toolkit.getChild(elementOrAddOnName, childName);
+		BetterList<QonfigElement> children = (BetterList<QonfigElement>) theChildrenByRole.get(child.getDeclared());
+		if (children.isEmpty() && !isInstance(child.getDeclared().getOwner()))
+			throw new IllegalArgumentException("This element (type " + theType.getName() + ") does not "
+				+ (child.getDeclared().getOwner() instanceof QonfigAddOn ? "inherit add-on" : "extend element-def") + " '"
+				+ child.getDeclared().getOwner().getName() + "' and cannot have a value for attribute " + child);
+		return children;
+	}
+
 	// /**Commenting this out, because this method is unreliable in general--the namespaces are document-specific
 	// * @param name The name of the attribute to get
 	// * @return The value of the given attribute, or null if it was not specified
@@ -166,7 +223,7 @@ public class QonfigElement {
 	 * @throws ClassCastException If the attribute was specified, but is not of the given type
 	 */
 	public <T> T getAttribute(QonfigAttributeDef attr, Class<T> type) throws IllegalArgumentException, ClassCastException {
-		Object value = theAttributes.get(attr);
+		Object value = theAttributes.get(attr.getDeclared());
 		if (value == null) {
 			if (!isInstance(attr.getOwner()))
 				throw new IllegalArgumentException("Attribute " + attr + " mis-applied to " + theType.getName());
@@ -210,7 +267,7 @@ public class QonfigElement {
 	 *         multiple such attributes are defined
 	 */
 	public String getAttributeText(QonfigAttributeDef attr) throws IllegalArgumentException {
-		Object value = theAttributes.get(attr);
+		Object value = theAttributes.get(attr.getDeclared());
 		if (value == null) {
 			if (!isInstance(attr.getOwner()))
 				throw new IllegalArgumentException("Attribute " + attr + " mis-applied to " + theType.getName());
@@ -818,7 +875,7 @@ public class QonfigElement {
 					continue;
 				for (QonfigAttributeDef.Declared attr : inh.getDeclaredAttributes().values()) {
 					if (!attrValues.containsKey(attr) && attr.getSpecification() == SpecificationType.Required) {
-						theSession.withError("Attribute " + attr + " required by type " + theType);
+						theSession.withError("Attribute " + attr + " required by type " + inh);
 						break;
 					}
 				}

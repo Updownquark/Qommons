@@ -14,6 +14,8 @@ import org.qommons.QommonsUtils;
 import org.qommons.StatusReportAccumulator;
 import org.qommons.StatusReportAccumulator.Status;
 import org.qommons.SubClassMap2;
+import org.qommons.collect.BetterList;
+import org.qommons.ex.ExFunction;
 import org.qommons.ex.ExRunnable;
 
 /** A class for interpreting parsed {@link QonfigDocument}s into useful structures */
@@ -37,12 +39,14 @@ public class QonfigInterpreter {
 		private class StackElement {
 			final QonfigElement element;
 			final QonfigParseSession session;
+			final QonfigElementOrAddOn type;
 			private final int childIndex;
 			private Map<String, Object> thePreviousValues;
 
-			StackElement(QonfigElement element, QonfigParseSession sesson) {
+			StackElement(QonfigElement element, QonfigParseSession sesson, QonfigElementOrAddOn type) {
 				this.element = element;
 				this.session = sesson;
+				this.type = type;
 				this.childIndex = theNextChildIndex;
 			}
 
@@ -57,7 +61,8 @@ public class QonfigInterpreter {
 					for (Map.Entry<String, Object> pv : thePreviousValues.entrySet())
 						theValues.put(pv.getKey(), pv.getValue());
 				}
-				theNextChildIndex = childIndex + 1;
+				if (type instanceof QonfigElementDef)
+					theNextChildIndex = childIndex + 1;
 				theStack.removeLast();
 			}
 		}
@@ -67,20 +72,32 @@ public class QonfigInterpreter {
 		private int theNextChildIndex;
 		Throwable loggedThrowable;
 
-		QonfigInterpretingSession(QonfigInterpreter interpreter, QonfigElement root) {
+		QonfigInterpretingSession(QonfigInterpreter interpreter, QonfigElement root, QonfigElementDef type) {
 			theInterpreter = interpreter;
 			theValues = new HashMap<>();
 			theStack = new LinkedList<>();
-			theStack.add(new StackElement(root, QonfigParseSession.forRoot(root.getType().getName(), null)));
+			theStack.add(new StackElement(root, QonfigParseSession.forRoot(root.getType().getName(), null), type));
 		}
 
-		ExRunnable<QonfigInterpretationException> mark(QonfigElement element) {
-			if (theStack.getLast().element == element)
+		ExRunnable<QonfigInterpretationException> mark(QonfigElement element, QonfigElementDef type) {
+			if (theStack.getLast().element == element && theStack.getLast().type == type)
 				return ExRunnable.none();
 			QonfigParseSession session = theStack.getLast().session.forChild(element.getType().getName(), theNextChildIndex);
-			StackElement stackEl = new StackElement(element, session);
+			StackElement stackEl = new StackElement(element, session, type);
 			theStack.add(stackEl);
 			theNextChildIndex = 0;
+			return stackEl::rollBack;
+		}
+
+		static Runnable NO_RUN = () -> {
+		};
+
+		Runnable markAddOn(QonfigElement element, QonfigAddOn type) {
+			if (theStack.getLast().element == element && theStack.getLast().type == type)
+				return NO_RUN;
+			QonfigParseSession session = theStack.getLast().session.forChild(element.getType().getName(), theNextChildIndex);
+			StackElement stackEl = new StackElement(element, session, type);
+			theStack.add(stackEl);
 			return stackEl::rollBack;
 		}
 
@@ -99,6 +116,133 @@ public class QonfigInterpreter {
 		/** @return The active interpreter */
 		public QonfigInterpreter getInterpreter() {
 			return theInterpreter;
+		}
+
+		/**
+		 * @param <T> The type of the attribute value to get
+		 * @param attributeName The name of the attribute on the element-def/add-on associated with the current creator/modifier
+		 * @param type The type of the attribute value to get
+		 * @return The value of the target attribute
+		 * @throws IllegalArgumentException If:
+		 *         <ul>
+		 *         <li>No such attribute exists on the element/add-on</li>
+		 *         <li>The value for the attribute does not match the given type</li>
+		 *         </ul>
+		 */
+		public <T> T getAttribute(String attributeName, Class<T> type) throws IllegalArgumentException {
+			return getAttribute(attributeName, type, null);
+		}
+
+		/**
+		 * @param <T> The type of the attribute value to get
+		 * @param attributeName The name of the attribute on the element-def/add-on associated with the current creator/modifier
+		 * @param type The type of the attribute value to get
+		 * @param defaultValue The value to return if the given attribute was not specified
+		 * @return The value of the target attribute
+		 * @throws IllegalArgumentException If:
+		 *         <ul>
+		 *         <li>No such attribute exists on the element/add-on</li>
+		 *         <li>The value for the attribute does not match the given type</li>
+		 *         </ul>
+		 */
+		public <T> T getAttribute(String attributeName, Class<T> type, T defaultValue) throws IllegalArgumentException {
+			StackElement el = theStack.getLast();
+			QonfigAttributeDef attr = el.type.getAttribute(attributeName);
+			if (attr == null)
+				throw new IllegalArgumentException("No such attribute " + el.type + "." + attributeName);
+			T value = el.element.getAttribute(attr, type);
+			if (value == null)
+				return defaultValue;
+			return value;
+		}
+
+		/**
+		 * @param attributeName The name of the attribute on the element-def/add-on associated with the current creator/modifier
+		 * @return The value of the target attribute
+		 * @throws IllegalArgumentException If no such attribute exists on the element/add-on
+		 */
+		public String getAttributeText(String attributeName) throws IllegalArgumentException {
+			StackElement el = theStack.getLast();
+			QonfigAttributeDef attr = el.type.getAttribute(attributeName);
+			if (attr == null)
+				throw new IllegalArgumentException("No such attribute " + el.type + "." + attributeName);
+			return el.element.getAttributeText(attr);
+		}
+
+		/**
+		 * @param <S> The type of the attribute value to get
+		 * @param <T> The type of the mapped value
+		 * @param attributeName The name of the attribute on the element-def/add-on associated with the current creator/modifier
+		 * @param sourceType The type of the attribute value to get
+		 * @param nullToNull Whether, if the given attribute was not specified, to return null without applying the map function
+		 * @param map The function to produce the target value
+		 * @return The mapped attribute value
+		 * @throws IllegalArgumentException If:
+		 *         <ul>
+		 *         <li>No such attribute exists on the element/add-on</li>
+		 *         <li>The value for the attribute does not match the given source type</li>
+		 *         </ul>
+		 * @throws QonfigInterpretationException If the map function throws an exception
+		 */
+		public <S, T> T interpretAttribute(String attributeName, Class<S> sourceType, boolean nullToNull,
+			ExFunction<? super S, ? extends T, QonfigInterpretationException> map)
+			throws IllegalArgumentException, QonfigInterpretationException {
+			StackElement el = theStack.getLast();
+			QonfigAttributeDef attr = el.type.getAttribute(attributeName);
+			if (attr == null)
+				throw new IllegalArgumentException("No such attribute " + el.type + "." + attributeName);
+			S attrValue=el.element.getAttribute(attr, sourceType);
+			if (nullToNull && attrValue == null)
+				return null;
+			return map.apply(attrValue);
+		}
+
+		public <S, T> T interpretValue(Class<S> sourceType, boolean nullToNull,
+			ExFunction<? super S, ? extends T, QonfigInterpretationException> map)
+			throws IllegalArgumentException, QonfigInterpretationException {
+			StackElement el = theStack.getLast();
+			Object value = el.element.getValue();
+			if (value == null && el.type.getValueModifier() == null)
+				throw new IllegalArgumentException("No value defined for " + el.type);
+			else if (nullToNull && value == null)
+				return null;
+			else if (value != null && !sourceType.isInstance(value))
+				throw new IllegalArgumentException("Value " + value + " of element (type " + el.element.getType() + ") is typed "
+					+ value.getClass().getName() + ", not " + sourceType.getName());
+			return map.apply((S) value);
+		}
+
+		/**
+		 * @param childName The name of the child on the element-def/add-on associated with the current creator/modifier
+		 * @return All children in this element that fulfill the given child role
+		 * @throws IllegalArgumentException If no such child exists on the element/add-on
+		 */
+		public BetterList<QonfigElement> getChildren(String childName) throws IllegalArgumentException {
+			StackElement el = theStack.getLast();
+			QonfigChildDef child = el.type.getChild(childName);
+			if (child == null)
+				throw new IllegalArgumentException("No such child " + el.type + "." + childName);
+			return (BetterList<QonfigElement>) el.element.getChildrenByRole().get(child.getDeclared());
+		}
+
+		/**
+		 * @param <T> The type of value to interpret
+		 * @param childName The name of the child on the element-def/add-on associated with the current creator/modifier
+		 * @param asType The type of value to interpret the element as
+		 * @return The interpreted values for each child in this element that fulfill the given child role
+		 * @throws IllegalArgumentException If no such child exists on the element/add-on
+		 * @throws QonfigInterpretationException If the value cannot be interpreted
+		 */
+		public <T> BetterList<T> interpretChildren(String childName, Class<T> asType)
+			throws IllegalArgumentException, QonfigInterpretationException {
+			BetterList<QonfigElement> children = getChildren(childName);
+			if (children.isEmpty())
+				return BetterList.empty();
+			Object[] interpreted = new Object[children.size()];
+			int i = 0;
+			for (QonfigElement child : children)
+				interpreted[i++] = getInterpreter().interpret(child, asType);
+			return (BetterList<T>) (BetterList<?>) BetterList.of(interpreted);
 		}
 
 		/**
@@ -302,25 +446,33 @@ public class QonfigInterpreter {
 	 * @param element The element to interpret
 	 * @param asType The type of value to interpret the element as
 	 * @return The interpreted value
-	 * @throws ParseException If the value cannot be interpreted
+	 * @throws QonfigInterpretationException If the value cannot be interpreted
 	 */
 	public <T> T interpret(QonfigElement element, Class<T> asType) throws QonfigInterpretationException {
 		return parseAs(element, element.getType(), asType);
 	}
 
-	<T> T parseAs(QonfigElement element, QonfigElementDef as, Class<T> asType) throws QonfigInterpretationException {
+	/**
+	 * @param <T> The type of value to interpret
+	 * @param element The element to interpret
+	 * @param as The element type to interpret the element as
+	 * @param asType The type of value to interpret the element as
+	 * @return The interpreted value
+	 * @throws QonfigInterpretationException If the value cannot be interpreted
+	 */
+	public <T> T parseAs(QonfigElement element, QonfigElementDef as, Class<T> asType) throws QonfigInterpretationException {
 		QonfigCreatorHolder<T> creator = (QonfigCreatorHolder<T>) theCreators.get(as);
 		QonfigInterpretingSession session = theSessions.get();
 		ExRunnable<QonfigInterpretationException> sessionClose;
 		if (session == null) {
-			theSessions.set(session = new QonfigInterpretingSession(this, element));
+			theSessions.set(session = new QonfigInterpretingSession(this, element, as));
 			QonfigInterpretingSession fSession = session;
 			sessionClose = () -> {
 				fSession.finish();
 				theSessions.set(null);
 			};
 		} else
-			sessionClose = session.mark(element);
+			sessionClose = session.mark(element, as);
 		if (creator == null) {
 			String msg = "No creator registered for element " + as.getName();
 			session.withError(msg);
@@ -379,13 +531,13 @@ public class QonfigInterpreter {
 		return value;
 	}
 
-	private <T> T modifyWith(Class<T> type, T value, QonfigElement element, QonfigAddOn el, Set<QonfigAddOn> inh,
+	private <T> T modifyWith(Class<T> type, T value, QonfigElement element, QonfigAddOn addOn, Set<QonfigAddOn> inh,
 		Set<QonfigValueModifier<?>> modified, QonfigInterpretingSession session) throws QonfigInterpretationException {
-		for (QonfigAddOn ext : el.getFullInheritance().getExpanded(QonfigAddOn::getInheritance)) {
+		for (QonfigAddOn ext : addOn.getFullInheritance().getExpanded(QonfigAddOn::getInheritance)) {
 			if (inh.add(ext))
 				value = modifyWith(type, value, element, ext, inh, modified, session);
 		}
-		SubClassMap2<Object, QonfigModifierHolder<?>> modifiers = theModifiers.get(el);
+		SubClassMap2<Object, QonfigModifierHolder<?>> modifiers = theModifiers.get(addOn);
 		if (modifiers == null)
 			return value;
 		List<BiTuple<Class<?>, QonfigModifierHolder<?>>> typeModifiers = modifiers.getAllEntries(type);
@@ -393,15 +545,18 @@ public class QonfigInterpreter {
 			return value;
 		for (BiTuple<Class<?>, QonfigModifierHolder<?>> modifier : typeModifiers) {
 			if (modified.add(modifier.getValue2().modifier)) {
+				Runnable sessionClose = session.markAddOn(element, addOn);
 				try {
 					value = ((QonfigModifierHolder<T>) modifier.getValue2()).modifier.modifyValue(value, element, session);
 				} catch (QonfigInterpretationException | RuntimeException e) {
 					if (session.loggedThrowable != e) {
 						session.loggedThrowable = e;
-						session.withError("Modifier " + modifier.getValue2().modifier + " for add-on " + el + " on type "
+						session.withError("Modifier " + modifier.getValue2().modifier + " for add-on " + addOn + " on type "
 							+ modifier.getValue1().getName() + " failed to modify value " + value + " for element " + element, e);
 					}
 					throw e;
+				} finally {
+					sessionClose.run();
 				}
 			}
 		}
