@@ -393,7 +393,7 @@ public class StringUtils {
 			public <T> void printValue(StringBuilder into, T value, BiConsumer<? super StringBuilder, ? super T> format, int before,
 				boolean last) {
 				boolean first = before == 0;
-				boolean delimit = delimiter != null && !first && (!last || before > 1);
+				boolean delimit = delimiter != null && !first && (!last || before > 1 || preTerminal == null);
 				if (delimit)
 					into.append(delimiter);
 				if (last && !first && preTerminal != null) {

@@ -4,6 +4,7 @@ import java.util.Comparator;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -78,6 +79,14 @@ public class LambdaUtils {
 	 */
 	public static Runnable printableRunnable(Runnable run, Supplier<String> print, Object identifier) {
 		return new PrintableRunnable(run, print != null ? print : () -> String.valueOf(run), identifier);
+	}
+
+	public static <T> Consumer<T> printableConsumer(Consumer<T> consumer, String print, Object identifier) {
+		return printableConsumer(consumer, print != null ? new ConstantSupply(print) : () -> String.valueOf(consumer), identifier);
+	}
+
+	public static <T> Consumer<T> printableConsumer(Consumer<T> consumer, Supplier<String> print, Object identifier) {
+		return new PrintableConsumer(consumer, print != null ? print : () -> String.valueOf(consumer), identifier);
 	}
 
 	/**
@@ -600,6 +609,21 @@ public class LambdaUtils {
 		@Override
 		public void run() {
 			getLambda().run();
+		}
+	}
+
+	static class PrintableConsumer<T> extends PrintableLambda<Consumer<T>> implements Consumer<T> {
+		PrintableConsumer(Consumer<T> lambda, Supplier<String> print, Object identifier) {
+			super(lambda, print, identifier);
+		}
+
+		PrintableConsumer(Consumer<T> lambda, Supplier<String> print) {
+			super(lambda, print);
+		}
+
+		@Override
+		public void accept(T t) {
+			getLambda().accept(t);
 		}
 	}
 
