@@ -81,12 +81,26 @@ public class LambdaUtils {
 		return new PrintableRunnable(run, print != null ? print : () -> String.valueOf(run), identifier);
 	}
 
+	/**
+	 * @param <T> The type of value to accept
+	 * @param consumer The consumer doing the action
+	 * @param print The printed consumer representation
+	 * @param identifier An identifier for the consumer
+	 * @return The printable consumer
+	 */
 	public static <T> Consumer<T> printableConsumer(Consumer<T> consumer, String print, Object identifier) {
 		return printableConsumer(consumer, print != null ? new ConstantSupply(print) : () -> String.valueOf(consumer), identifier);
 	}
 
+	/**
+	 * @param <T> The type of value to accept
+	 * @param consumer The consumer doing the action
+	 * @param print The printed consumer representation
+	 * @param identifier An identifier for the consumer
+	 * @return The printable consumer
+	 */
 	public static <T> Consumer<T> printableConsumer(Consumer<T> consumer, Supplier<String> print, Object identifier) {
-		return new PrintableConsumer(consumer, print != null ? print : () -> String.valueOf(consumer), identifier);
+		return new PrintableConsumer<>(consumer, print != null ? print : () -> String.valueOf(consumer), identifier);
 	}
 
 	/**

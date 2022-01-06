@@ -284,6 +284,7 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 		}
 	}
 
+	/** @return This set as a {@link java.util.Set} */
 	public Set<E> asJavaSet() {
 		return new JavaSet<>(this);
 	}

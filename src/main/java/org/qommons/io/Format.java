@@ -550,17 +550,24 @@ public interface Format<T> {
 		}
 	}
 
+	/** Default {@link Integer} format */
 	public static class IntFormat implements Format<Integer> {
 		private final LongFormat theLongFormat;
 
+		/** @param longFormat The {@link Long} format to wrap */
 		public IntFormat(LongFormat longFormat) {
 			theLongFormat = longFormat;
 		}
 
+		/** @return The wrapped {@link Long} format */
 		public LongFormat getLongFormat() {
 			return theLongFormat;
 		}
 
+		/**
+		 * @param sep The grouping separator for this format
+		 * @return This format
+		 */
 		public IntFormat withGroupingSeparator(char sep) {
 			return new IntFormat(theLongFormat.withGroupingSeparator(sep));
 		}
@@ -585,6 +592,7 @@ public interface Format<T> {
 		}
 	}
 
+	/** Default {@link Long} format */
 	public static class LongFormat implements Format<Long> {
 		private static final String MAX_TEXT = "" + Long.MAX_VALUE;
 		private static final long[] GROUPS = new long[] { //
@@ -592,18 +600,25 @@ public interface Format<T> {
 
 		private final char theGroupingSeparator;
 
+		/** Creates a new Long format */
 		public LongFormat() {
 			theGroupingSeparator = 0;
 		}
 
+		/** @param groupingSeparator The grouping separator for this format */
 		public LongFormat(char groupingSeparator) {
 			theGroupingSeparator = groupingSeparator;
 		}
 
+		/** @return The grouping separator used by this format */
 		public char getGroupingSeparator() {
 			return theGroupingSeparator;
 		}
 
+		/**
+		 * @param sep The grouping separator for this format
+		 * @return This format
+		 */
 		public LongFormat withGroupingSeparator(char sep) {
 			return new LongFormat(sep);
 		}

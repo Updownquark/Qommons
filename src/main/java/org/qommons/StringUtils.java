@@ -616,10 +616,25 @@ public class StringUtils {
 			return "a";
 	}
 
+	/**
+	 * @param seq The character sequence to make a sub-sequence of
+	 * @param start The start (inclusive) of the sub-sequence
+	 * @param end The end (exclusive) of the sub-sequence
+	 * @return The sub-sequence
+	 */
 	public static CharSequence cheapSubSequence(CharSequence seq, int start, int end) {
 		return new DefaultCharSubSequence(seq, start, end);
 	}
 
+	/**
+	 * @param seq1 The first sequence to test
+	 * @param off1 The start offset in the first sequence
+	 * @param seq2 The second sequence to test
+	 * @param off2 The start offset in the second sequence
+	 * @param maxLen The maximum length to test (or negative to match as many characters as there are)
+	 * @param ignoreCase Whether to ignore case when matching
+	 * @return The number of matching characters in the sequences starting at the given offsets, up to a maximum of maxLen
+	 */
 	public static int subSequenceMatches(CharSequence seq1, int off1, CharSequence seq2, int off2, int maxLen, boolean ignoreCase) {
 		if (maxLen < 0)
 			maxLen = Integer.MAX_VALUE;

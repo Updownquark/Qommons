@@ -223,7 +223,9 @@ public interface SpinnerFormat<T> extends Format<T> {
 		return new WrappingSpinnerFormat<>(format, min, max);
 	}
 
+	/** Default spinner format for {@link Integer}s */
 	public static class IntFormat extends AbstractSpinnerFormat<Integer> {
+		/** @param format The non-spinner format to wrap */
 		public IntFormat(Format.IntFormat format) {
 			super(format);
 		}
@@ -233,6 +235,10 @@ public interface SpinnerFormat<T> extends Format<T> {
 			return (Format.IntFormat) super.getFormat();
 		}
 
+		/**
+		 * @param sep The grouping separator to use
+		 * @return A new format with the given grouping separator
+		 */
 		public IntFormat withGroupingSeparator(char sep) {
 			return new IntFormat(getFormat().withGroupingSeparator(sep));
 		}
@@ -251,7 +257,9 @@ public interface SpinnerFormat<T> extends Format<T> {
 		}
 	}
 
+	/** Default spinner format for {@link Long}s */
 	public static class LongFormat extends AbstractSpinnerFormat<Long> {
+		/** @param format The non-spinner format to wrap */
 		public LongFormat(Format.LongFormat format) {
 			super(format);
 		}
@@ -261,6 +269,10 @@ public interface SpinnerFormat<T> extends Format<T> {
 			return (Format.LongFormat) super.getFormat();
 		}
 
+		/**
+		 * @param sep The grouping separator to use
+		 * @return A new format with the given grouping separator
+		 */
 		public LongFormat withGroupingSeparator(char sep) {
 			return new LongFormat(getFormat().withGroupingSeparator(sep));
 		}
