@@ -57,11 +57,11 @@
 		<format>W</format>
 		<!-- Time formats -->
 		<format>HaZ?</format>
+		<format>H:m:s.Sa?Z?</format>
+		<format>H:m:sa?Z?</format>
+		<format>HHms.SZ?</format>
+		<format>HHmsZ?</format>
 		<format>H:ma?Z?</format>
 		<format>HHma?Z?</format>
-		<format>H:m:sa?Z?</format>
-		<format>HHmsZ?</format>
-		<format>H:m:s.Sa?Z?</format>
-		<format>HHms.SZ?</format>
 	</formats>
 </time-formats>

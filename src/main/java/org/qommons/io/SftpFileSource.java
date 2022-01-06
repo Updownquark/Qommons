@@ -3,13 +3,11 @@ package org.qommons.io;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.security.PublicKey;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
@@ -27,7 +25,7 @@ import net.schmizz.sshj.sftp.OpenMode;
 import net.schmizz.sshj.sftp.RemoteFile;
 import net.schmizz.sshj.sftp.RemoteResourceInfo;
 import net.schmizz.sshj.sftp.SFTPClient;
-import net.schmizz.sshj.transport.verification.HostKeyVerifier;
+import net.schmizz.sshj.transport.verification.PromiscuousVerifier;
 
 /** Facilitates use of the {@link BetterFile} API with a remote file system via SFTP */
 public class SftpFileSource extends RemoteFileSource {
@@ -85,10 +83,15 @@ public class SftpFileSource extends RemoteFileSource {
 		theSessions = new ConcurrentHashMap<>();
 	}
 
+	/** @return The number of times this file source will re-attempt a connection before failing an operation */
 	public int getRetryCount() {
 		return theRetryCount;
 	}
 
+	/**
+	 * @param retryCount The number of times this file source should re-attempt a connection before failing an operation
+	 * @return This file source
+	 */
 	public SftpFileSource setRetryCount(int retryCount) {
 		if (retryCount < 0)
 			retryCount = 0;
@@ -158,12 +161,7 @@ public class SftpFileSource extends RemoteFileSource {
 			try {
 				SSHClient s = new SSHClient();
 				s.loadKnownHosts();
-				s.addHostKeyVerifier(new HostKeyVerifier() {
-					@Override
-					public boolean verify(String arg0, int arg1, PublicKey arg2) {
-						return true; // Cheap, I know
-					}
-				});
+				s.addHostKeyVerifier(new PromiscuousVerifier());
 				theSessionConfiguration.accept(s);
 				s.connect(theHost);
 				theSessionConnection.accept(s);
@@ -212,44 +210,22 @@ public class SftpFileSource extends RemoteFileSource {
 	private class SftpFile extends RemoteFileBacking {
 		private String thePath;
 		private int thePermissions;
-		private volatile AtomicReference<CachedFile> theCachedFile;
 
 		SftpFile(SftpFile parent, String fileName) {
 			super(parent, fileName);
-			theCachedFile = new AtomicReference<>();
 		}
 
 		SftpFile setAttributes(FileAttributes attrs) {
+			if (attrs == null) {
+				setData(false, -1, 0);
+				return this;
+			}
 			thePermissions = attrs.getMode().getPermissionsMask();
 			if (attrs.getType() == FileMode.Type.DIRECTORY)
 				setData(true, attrs.getMtime() * 1000L, 0);
 			else
 				setData(false, attrs.getMtime() * 1000L, attrs.getSize());
 			return this;
-		}
-
-		RemoteFile getRemoteFile() throws IOException {
-			Thread th = Thread.currentThread();
-			CachedFile cacheFile = theCachedFile.getAndUpdate(cf -> {
-				if (cf == null || cf.thread != th)
-					return null;
-				return cf;
-			});
-			if (cacheFile != null && cacheFile.thread != th) {
-				cacheFile.file.close();
-				cacheFile = null;
-			}
-			boolean newCacheFile = cacheFile == null;
-			if (newCacheFile) {
-				cacheFile = new CachedFile(th, getSession().session.open(getPath()));
-			}
-			if (newCacheFile) {
-				CachedFile replaced = theCachedFile.getAndSet(cacheFile);
-				if (replaced != null) {
-					replaced.file.close();
-				}
-			}
-			return cacheFile.file;
 		}
 
 		@Override
@@ -265,7 +241,7 @@ public class SftpFileSource extends RemoteFileSource {
 		@Override
 		protected void queryData() throws IOException {
 			try {
-				setAttributes(getSession().session.lstat(getPath()));
+				setAttributes(getSession().session.statExistence(getPath()));
 			} catch (Exception e) {
 				throw new IOException(e);
 			}

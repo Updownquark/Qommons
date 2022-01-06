@@ -1735,16 +1735,20 @@ public class TimeUtils {
 			return null;
 		ParsedSequence<DateElementType, Integer> secondInfo = null;
 		if (firstInfo.getLength() < str.length())
-			secondInfo = DATE_PARSER.parse(str.subSequence(firstInfo.getLength(), str.length()), wholeText, wholeText && throwIfNotFound);
+			secondInfo = DATE_PARSER.parse(//
+				str.subSequence(firstInfo.getLength(), str.length()), wholeText, wholeText && throwIfNotFound);
 
 		Map<DateElementType, ParsedElement<DateElementType, Integer>> components = new EnumMap<>(DateElementType.class);
 		components.putAll(firstInfo.getComponentsByType());
 		if (secondInfo != null) {
 			for (ParsedElement<DateElementType, Integer> comp : secondInfo.getComponents()) {
-				if (comp.getField() != null && components.put(comp.getField(), comp.offset(firstInfo.getLength())) != null)
+				if (comp.getField() != null && components.put(comp.getField(), comp.offset(firstInfo.getLength())) != null) {
+					if (!throwIfNotFound)
+						return null;
 					throw new ParseException(
 						"Formats " + firstInfo.getFormat() + " and " + secondInfo.getFormat() + " cannot be used together",
 						firstInfo.getLength());
+				}
 			}
 		}
 		TimeZone timeZone = options.getTimeZone();
@@ -1783,10 +1787,11 @@ public class TimeUtils {
 
 			String text;
 			if (secondInfo != null) {
-				if (secondInfo.getLength() == str.length())
+				int len = firstInfo.getLength() + secondInfo.getLength();
+				if (len == str.length())
 					text = str.toString();
 				else
-					text = str.subSequence(0, secondInfo.getLength()).toString();
+					text = str.subSequence(0, len).toString();
 			} else if (firstInfo.getLength() == str.length())
 				text = str.toString();
 			else
@@ -1821,8 +1826,7 @@ public class TimeUtils {
 				else
 					nanos = 0;
 				Instant time = Instant.ofEpochSecond(cal.getTimeInMillis() / 1000, nanos);
-				return new AbsoluteTime(text, time, cal, timeZone, minType, element == null ? 0 : element.getText().length(),
-					components);
+				return new AbsoluteTime(text, time, cal, timeZone, minType, element == null ? 0 : element.getText().length(), components);
 			} else {
 				for (Map.Entry<DateElementType, ParsedElement<DateElementType, Integer>> entry : components.entrySet())
 					validate(entry.getKey(), entry.getValue());
@@ -1835,8 +1839,7 @@ public class TimeUtils {
 		}
 	}
 
-	private static int validate(DateElementType type, ParsedElement<DateElementType, Integer> element)
-		throws ParseException {
+	private static int validate(DateElementType type, ParsedElement<DateElementType, Integer> element) throws ParseException {
 		if (element.getValue() >= 0)
 			return element.getValue();
 		int value = element.getParser().parse(element.getText());
@@ -2434,14 +2437,14 @@ public class TimeUtils {
 				str.append(':');
 				index = str.length();
 				StringUtils.printInt(cal.get(Calendar.MINUTE), 2, str);
-				elements.put(DateElementType.Minute, new ParsedElement<>(Format.INT, index, DateElementType.Minute,
-					cal.get(Calendar.MINUTE), str.substring(index)));
+				elements.put(DateElementType.Minute,
+					new ParsedElement<>(Format.INT, index, DateElementType.Minute, cal.get(Calendar.MINUTE), str.substring(index)));
 				if (resolution.compareTo(DateElementType.Second) >= 0) {
 					str.append(':');
 					index = str.length();
 					StringUtils.printInt(cal.get(Calendar.SECOND), 2, str);
-					elements.put(DateElementType.Second, new ParsedElement<>(Format.INT, index, DateElementType.Second,
-						cal.get(Calendar.SECOND), str.substring(index)));
+					elements.put(DateElementType.Second,
+						new ParsedElement<>(Format.INT, index, DateElementType.Second, cal.get(Calendar.SECOND), str.substring(index)));
 					if (resolution.compareTo(DateElementType.SubSecond) >= 0) {
 						str.append('.');
 						nanoDigits = 9;
@@ -2452,8 +2455,7 @@ public class TimeUtils {
 							str.setLength(str.length() - 1);
 						}
 						elements.put(DateElementType.SubSecond,
-							new ParsedElement<>(Format.INT, index, DateElementType.SubSecond,
-							time.getNano(), str.substring(index)));
+							new ParsedElement<>(Format.INT, index, DateElementType.SubSecond, time.getNano(), str.substring(index)));
 					}
 				}
 			}
