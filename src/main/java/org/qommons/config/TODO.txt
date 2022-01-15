@@ -1,0 +1,14 @@
+
+Things left to do on Qonfig:
+
+When an add-on specifies no requirement, but it specifies only one inheritance with a requirement
+	(or it specifies multiple inheritance, all of which extend one of their requirements),
+	the add-on should inherit it instead of giving an error
+Think of more constraints we're not yet enforcing
+Add QonfigElement.getAttribute/getChildrenInRole methods that allow specification of the toolkit and qualified names
+	In all interpreter configuration, use these methods instead of the unqualified ones
+Better error reporting for document parsing, like toolkit parsing
+Allow modifications for abstract element-defs in addition to add-ons
+Comment everything
+Write a wiki
+Think about version control, interaction between toolkit and interpreter versions

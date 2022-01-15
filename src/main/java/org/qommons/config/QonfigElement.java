@@ -130,9 +130,32 @@ public class QonfigElement {
 					+ (attr.getDeclared().getOwner() instanceof QonfigAddOn ? "inherit add-on" : "extend element-def") + " '"
 					+ attr.getDeclared().getOwner().getName() + "' and cannot have a value for attribute " + attr);
 			return null;
-		} else if (type != null && !type.isInstance(value))
-			throw new IllegalArgumentException(
-				"Value '" + value + "' for attribute " + attr + " is typed " + value.getClass().getName() + ", not " + type.getName());
+		} else if (type != null && !type.isInstance(value)) {
+			boolean match = false;
+			if (type.isPrimitive()) {
+				if (type == boolean.class)
+					match = value instanceof Boolean;
+				else if (type == char.class)
+					match = value instanceof Character;
+				else if (type == byte.class)
+					match = value instanceof Byte;
+				else if (type == short.class)
+					match = value instanceof Short;
+				else if (type == int.class)
+					match = value instanceof Integer;
+				else if (type == long.class)
+					match = value instanceof Long;
+				else if (type == float.class)
+					match = value instanceof Float;
+				else if (type == double.class)
+					match = value instanceof Double;
+				else
+					throw new IllegalStateException("Unaccounted primitive type " + type.getName());
+			}
+			if (!match)
+				throw new IllegalArgumentException(
+					"Value '" + value + "' for attribute " + attr + " is typed " + value.getClass().getName() + ", not " + type.getName());
+		}
 		return (T) value;
 	}
 

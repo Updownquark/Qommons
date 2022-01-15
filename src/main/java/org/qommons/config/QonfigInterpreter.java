@@ -786,8 +786,8 @@ public class QonfigInterpreter {
 						if (superHolder == null) {
 							// If the super element is not abstract, there will be a separate error for its not having a creator
 							// If it is abstract, we need one here
-							if (ext.theSuperElement.isAbstract())
-								theStatus.error(el, "No creator configured for element");
+							// if (ext.theSuperElement.isAbstract())
+							// theStatus.error(el, "No creator configured for element");
 						} else if (!ext.theSuperType.isAssignableFrom(superHolder.type))
 							theStatus.warn(el, "Extension of " + ext.theSuperType.getName() + " is parsed as " + superHolder.type.getName()
 								+ ", not " + ext.theSuperType.getName());
