@@ -26,7 +26,7 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 	 * @param keyCompare The key comparator for the map
 	 * @return A builder that can be used to build a {@link BetterTreeMultiMap}
 	 */
-	public static <K, V> Builder<K, V> build(Comparator<? super K> keyCompare) {
+	public static <K, V> Builder<K, V, ?> build(Comparator<? super K> keyCompare) {
 		return new Builder<>(keyCompare);
 	}
 
@@ -35,43 +35,14 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 	 * 
 	 * @param <K> The key type for the map
 	 * @param <V> The value type for the map
+	 * @param <B> The sub-type of this builder
 	 */
-	public static class Builder<K, V> extends AbstractBetterMultiMap.Builder<K, V> {
+	public static class Builder<K, V, B extends Builder<K, V, ? extends B>> extends AbstractBetterMultiMap.Builder<K, V, B> {
 		private final Comparator<? super K> theKeyCompare;
 
 		private Builder(Comparator<? super K> keyCompare) {
 			super("BetterTreeMultiMap");
 			theKeyCompare = keyCompare;
-		}
-
-		@Override
-		public Builder<K, V> safe(boolean safe) {
-			super.safe(safe);
-			return this;
-		}
-
-		@Override
-		public Builder<K, V> withLocking(CollectionLockingStrategy locking) {
-			super.withLocking(locking);
-			return this;
-		}
-
-		@Override
-		public Builder<K, V> withLocking(Function<Object, CollectionLockingStrategy> locking) {
-			super.withLocking(locking);
-			return this;
-		}
-
-		@Override
-		public Builder<K, V> withSortedValues(Comparator<? super V> valueCompare, boolean distinctValues) {
-			super.withSortedValues(valueCompare, distinctValues);
-			return this;
-		}
-
-		@Override
-		public Builder<K, V> withValues(ValueCollectionSupplier<? super K, ? super V> values) {
-			super.withValues(values);
-			return this;
 		}
 
 		/** @return The key comparator for the map */
@@ -80,9 +51,15 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 		}
 
 		@Override
+		protected Function<Object, CollectionLockingStrategy> getLocker() {
+			// TODO Auto-generated method stub
+			return super.getLocker();
+		}
+
+		@Override
 		public BetterTreeMultiMap<K, V> buildMultiMap() {
 			return new BetterTreeMultiMap<>(//
-				this::getLocking, getKeyCompare(), getValues(), getDescription());
+				getLocker(), getKeyCompare(), getValues(), getDescription());
 		}
 	}
 

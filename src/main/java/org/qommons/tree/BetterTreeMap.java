@@ -42,35 +42,12 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	 * Builds a {@link BetterTreeMap}
 	 * 
 	 * @param <K> The key type for the map
+	 * @param <B> The sub-type of this builder
 	 */
-	public static class Builder<K> extends BetterTreeSet.Builder<K, BetterTreeSet<K>> {
+	public static class Builder<K, B extends Builder<K, ? extends B>> extends BetterTreeSet.Builder<K, BetterTreeSet<K>, B> {
 		Builder(Comparator<? super K> compare) {
 			super(compare);
 			withDescription(DEFAULT_DESCRIPTION);
-		}
-
-		@Override
-		public Builder<K> withDescription(String descrip) {
-			super.withDescription(descrip);
-			return this;
-		}
-
-		@Override
-		public Builder<K> safe(boolean safe) {
-			super.safe(safe);
-			return this;
-		}
-
-		@Override
-		public Builder<K> withLocker(CollectionLockingStrategy locker) {
-			super.withLocker(locker);
-			return this;
-		}
-
-		@Override
-		public Builder<K> withLocker(Function<Object, CollectionLockingStrategy> locker) {
-			super.withLocker(locker);
-			return this;
 		}
 
 		/**
@@ -78,7 +55,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		 * @return The new map
 		 */
 		public <V> BetterTreeMap<K, V> buildMap() {
-			return new BetterTreeMap<>(this::getLocker, getDescription(), getCompare());
+			return new BetterTreeMap<>(getLocker(), getDescription(), getCompare());
 		}
 
 		/**
@@ -96,7 +73,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	 * @param keyCompare The key comparator for the map
 	 * @return A builder to build a tree map
 	 */
-	public static <K> Builder<K> build(Comparator<? super K> keyCompare) {
+	public static <K> Builder<K, ?> build(Comparator<? super K> keyCompare) {
 		return new Builder<>(keyCompare);
 	}
 

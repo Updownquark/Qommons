@@ -44,7 +44,7 @@ public class StatusReportAccumulator<T> {
 	private final BetterMultiMap<Status, StatusReport<T>> theReports;
 
 	public StatusReportAccumulator() {
-		theReports = BetterTreeMultiMap.<Status, StatusReport<T>> build(Status::compareTo).safe(false).buildMultiMap();
+		theReports = BetterTreeMultiMap.<Status, StatusReport<T>> build(Status::compareTo).buildMultiMap();
 	}
 
 	public BetterCollection<StatusReport<T>> get(Status status) {

@@ -30,8 +30,9 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 	/**
 	 * @param <E> The type of elements in the list
 	 * @param <L> The sub-type of the list
+	 * @param <B> The sub-type of this builder
 	 */
-	public static class Builder<E, L extends SortedTreeList<E>> extends RBNLBuilder<E, L> {
+	public static class Builder<E, L extends SortedTreeList<E>, B extends Builder<E, L, ? extends B>> extends RBNLBuilder<E, L, B> {
 		private final Comparator<? super E> theCompare;
 
 		/** @param compare The comparator for the list's ordering */
@@ -46,26 +47,8 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 		}
 
 		@Override
-		public Builder<E, L> withDescription(String descrip) {
-			super.withDescription(descrip);
-			return this;
-		}
-
-		@Override
-		public Builder<E, L> safe(boolean safe) {
-			super.safe(safe);
-			return this;
-		}
-
-		@Override
-		public Builder<E, L> withLocker(CollectionLockingStrategy locker) {
-			super.withLocker(locker);
-			return this;
-		}
-
-		@Override
 		public L build() {
-			return (L) new SortedTreeList<>(this::getLocker, getDescription(), theCompare);
+			return (L) new SortedTreeList<>(getLocker(), getDescription(), theCompare);
 		}
 
 		/**
@@ -94,7 +77,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 	 * @param compare The comparator for the list's ordering
 	 * @return The builder for the list
 	 */
-	public static <E> Builder<E, SortedTreeList<E>> buildTreeList(Comparator<? super E> compare) {
+	public static <E> Builder<E, SortedTreeList<E>, ?> buildTreeList(Comparator<? super E> compare) {
 		return new Builder<>(compare);
 	}
 

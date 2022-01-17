@@ -34,39 +34,18 @@ import org.qommons.collect.ValueStoredCollection.RepairListener;
 public class BetterTreeList<E> extends RedBlackNodeList<E> {
 	private static final String DEFAULT_DESCRIPTION = "better-tree-list";
 
-	/** @param <E> The type of elements for the list */
-	public static class Builder<E> extends RBNLBuilder<E, BetterTreeList<E>> {
+	/**
+	 * @param <E> The type of elements for the list
+	 * @param <B> The sub-type of this builder
+	 */
+	public static class Builder<E, B extends Builder<E, ? extends B>> extends RBNLBuilder<E, BetterTreeList<E>, B> {
 		Builder() {
 			super(DEFAULT_DESCRIPTION);
 		}
 
 		@Override
-		public Builder<E> withDescription(String descrip) {
-			super.withDescription(descrip);
-			return this;
-		}
-
-		@Override
-		public Builder<E> safe(boolean safe) {
-			super.safe(safe);
-			return this;
-		}
-
-		@Override
-		public Builder<E> withLocker(CollectionLockingStrategy locker) {
-			super.withLocker(locker);
-			return this;
-		}
-
-		@Override
-		public Builder<E> withLocker(Function<Object, CollectionLockingStrategy> locker) {
-			super.withLocker(locker);
-			return this;
-		}
-
-		@Override
 		public BetterTreeList<E> build() {
-			return new BetterTreeList<>(this::getLocker, getDescription());
+			return new BetterTreeList<>(getLocker(), getDescription());
 		}
 	}
 
@@ -74,7 +53,7 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 	 * @param <E> The type of elements for the list
 	 * @return A builder for the new list
 	 */
-	public static <E> Builder<E> build() {
+	public static <E> Builder<E, ?> build() {
 		return new Builder<>();
 	}
 

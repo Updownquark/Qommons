@@ -35,59 +35,28 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	 */
 	static final int MAXIMUM_CAPACITY = 1 << 30;
 
-	/** A builder to use to create {@link BetterHashSet}s */
-	public static class HashSetBuilder {
-		private boolean isSafe;
+	/**
+	 * A builder to use to create {@link BetterHashSet}s
+	 * 
+	 * @param <B> The sub-type of this builder
+	 */
+	public static class HashSetBuilder<B extends HashSetBuilder<? extends B>> extends CollectionBuilder.Default<B> {
 		private ToIntFunction<Object> theHasher;
 		private BiFunction<Object, Object, Boolean> theEquals;
 		private int theInitExpectedSize;
 		private double theLoadFactor;
-		private Function<Object, CollectionLockingStrategy> theLocker;
-		private String theDescription;
 
 		/**
 		 * Creates the builder
 		 * 
-		 * @param initDescrip An initial (defaul) description of the builder
+		 * @param initDescrip An initial (default) description of the builder
 		 */
 		protected HashSetBuilder(String initDescrip) {
-			isSafe = true;
+			super(initDescrip);
 			theHasher = Objects::hashCode;
 			theEquals = Objects::equals;
 			theInitExpectedSize = 10;
 			theLoadFactor = .75;
-			theDescription = initDescrip;
-		}
-
-		/**
-		 * Causes this builder to build a set that is not internally thread-safe
-		 * 
-		 * @return This builder
-		 */
-		public HashSetBuilder unsafe() {
-			isSafe = false;
-			return this;
-		}
-
-		/**
-		 * Specifies a locking strategy for the hash set
-		 * 
-		 * @param locker The locking strategy
-		 * @return This builder
-		 */
-		public HashSetBuilder withLocking(CollectionLockingStrategy locker) {
-			return withLocking(__ -> locker);
-		}
-
-		/**
-		 * Specifies a locking strategy for the hash set
-		 * 
-		 * @param locker The locking strategy
-		 * @return This builder
-		 */
-		public HashSetBuilder withLocking(Function<Object, CollectionLockingStrategy> locker) {
-			theLocker = locker;
-			return this;
 		}
 
 		/**
@@ -97,10 +66,10 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		 * @param equals The equivalence check for values in the set
 		 * @return This builder
 		 */
-		public HashSetBuilder withEquivalence(ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals) {
+		public B withEquivalence(ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals) {
 			theHasher = hasher;
 			theEquals = equals;
-			return this;
+			return (B) this;
 		}
 
 		/**
@@ -108,7 +77,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		 * 
 		 * @return This builder
 		 */
-		public HashSetBuilder identity() {
+		public B identity() {
 			return withEquivalence(System::identityHashCode, (o1, o2) -> o1 == o2);
 		}
 
@@ -116,34 +85,20 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		 * @param loadFactor The load factor for the set that this builder creates
 		 * @return This builder
 		 */
-		public HashSetBuilder withLoadFactor(double loadFactor) {
+		public B withLoadFactor(double loadFactor) {
 			if (loadFactor < MIN_LOAD_FACTOR || loadFactor > MAX_LOAD_FACTOR)
 				throw new IllegalArgumentException("Load factor must be between " + MIN_LOAD_FACTOR + " and " + MAX_LOAD_FACTOR);
 			theLoadFactor = loadFactor;
-			return this;
+			return (B) this;
 		}
 
 		/**
 		 * @param initExpectedSize The number of values that the set created by this builder should accommodate without re-hashing the table
 		 * @return This builder
 		 */
-		public HashSetBuilder withInitialCapacity(int initExpectedSize) {
+		public B withInitialCapacity(int initExpectedSize) {
 			theInitExpectedSize = initExpectedSize;
-			return this;
-		}
-
-		/** @return The description for the hash set */
-		protected String getDescription() {
-			return theDescription;
-		}
-
-		/**
-		 * @param descrip A description for the hash set built with this builder
-		 * @return This builder
-		 */
-		public HashSetBuilder withDescription(String descrip) {
-			theDescription = descrip;
-			return this;
+			return (B) this;
 		}
 
 		/**
@@ -151,10 +106,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		 * @return An empty {@link BetterHashSet} built according to this builder's settings
 		 */
 		public <E> BetterHashSet<E> buildSet() {
-			Function<Object, CollectionLockingStrategy> locking = theLocker;
-			if (locking == null)
-				locking = s -> isSafe ? new StampedLockingStrategy(s) : new FastFailLockingStrategy();
-			return new BetterHashSet<>(locking, theHasher, theEquals, theInitExpectedSize, theLoadFactor, theDescription);
+			return new BetterHashSet<>(getLocker(), theHasher, theEquals, theInitExpectedSize, theLoadFactor, getDescription());
 		}
 
 		/**
@@ -179,8 +131,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	/** @return A builder to create a {@link BetterHashSet} */
-	public static HashSetBuilder build() {
-		return new HashSetBuilder("better-hash-set");
+	public static HashSetBuilder<?> build() {
+		return new HashSetBuilder<>("better-hash-set");
 	}
 
 	private final CollectionLockingStrategy theLocker;

@@ -1024,9 +1024,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 					}
 				}
 
-				if (msg == null)
-					return null;
-				else if (firstMsg == null)
+				if (firstMsg == null)
 					firstMsg = msg;
 			}
 			if (firstMsg == null || firstMsg.equals(StdMsg.UNSUPPORTED_OPERATION))

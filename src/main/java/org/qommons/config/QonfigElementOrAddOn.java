@@ -230,14 +230,14 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 
 			theDeclaredAttributes = new LinkedHashMap<>();
 			theAttributeModifiers = new LinkedHashMap<>();
-			theAttributesByName = BetterHashMultiMap.<String, QonfigAttributeDef> build().safe(false).buildMultiMap();
+			theAttributesByName = BetterHashMultiMap.<String, QonfigAttributeDef> build().buildMultiMap();
 			theCompiledAttributes = new LinkedHashMap<>();
 			theAttributeModifierOrigSpecs = new HashMap<>();
 
 			theDeclaredChildren = new LinkedHashMap<>();
 			theChildModifiers = new LinkedHashMap<>();
 			theCompiledChildren = new LinkedHashMap<>();
-			theChildrenByName = BetterHashMultiMap.<String, QonfigChildDef> build().safe(false).buildMultiMap();
+			theChildrenByName = BetterHashMultiMap.<String, QonfigChildDef> build().buildMultiMap();
 
 			theFullInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
 

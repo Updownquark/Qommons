@@ -120,7 +120,7 @@ public class OsgiBundleSet {
 			thePackagesByName = new HashMap<>();
 			theClassPath = new HashMap<>();
 			theAvailablePackages = new HashMap<>();
-			theLoadedClasses = BetterHashSet.build().unsafe().buildSet();
+			theLoadedClasses = BetterHashSet.build().buildSet();
 			theLoadedPackages = new HashSet<>();
 			theNativeLibraries = new LinkedHashMap<>();
 

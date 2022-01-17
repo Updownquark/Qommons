@@ -13,13 +13,12 @@ import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.BetterSortedList;
 import org.qommons.collect.BetterSortedSet;
+import org.qommons.collect.CollectionBuilder;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
-import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.OptimisticContext;
-import org.qommons.collect.StampedLockingStrategy;
 import org.qommons.collect.ValueStoredCollection;
 import org.qommons.collect.ValueStoredCollection.RepairListener;
 
@@ -32,64 +31,14 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	/**
 	 * @param <E> The type of elements for the list
 	 * @param <L> The type of the list
+	 * @param <B> The sub-type of this builder
 	 */
-	public static abstract class RBNLBuilder<E, L extends RedBlackNodeList<E>> {
-		private Function<Object, CollectionLockingStrategy> theLocker;
-		private String theDescription;
+	public static abstract class RBNLBuilder<E, L extends RedBlackNodeList<E>, B extends RBNLBuilder<E, L, ? extends B>>
+		extends CollectionBuilder.Default<B> {
 
 		/** @param initDescrip The initial (default) description for the list */
 		protected RBNLBuilder(String initDescrip) {
-			theDescription = initDescrip;
-			theLocker = v -> new StampedLockingStrategy(v);
-		}
-
-		/**
-		 * @param built The built list
-		 * @return The locker for the list
-		 */
-		protected CollectionLockingStrategy getLocker(Object built) {
-			return theLocker.apply(built);
-		}
-
-		/** @return The description for the list */
-		protected String getDescription() {
-			return theDescription;
-		}
-
-		/**
-		 * @param descrip The description for the list
-		 * @return This builder
-		 */
-		public RBNLBuilder<E, L> withDescription(String descrip) {
-			theDescription = descrip;
-			return this;
-		}
-
-		/**
-		 * Specifies the thread safety of the list
-		 * 
-		 * @param safe Whether the list should be thread-safe
-		 * @return This builder
-		 */
-		public RBNLBuilder<E, L> safe(boolean safe) {
-			return withLocker(v -> safe ? new StampedLockingStrategy(v) : new FastFailLockingStrategy());
-		}
-
-		/**
-		 * @param locker The locking strategy for the new list
-		 * @return This builder
-		 */
-		public RBNLBuilder<E, L> withLocker(CollectionLockingStrategy locker) {
-			return withLocker(__ -> locker);
-		}
-
-		/**
-		 * @param locker The locking strategy for the new list
-		 * @return This builder
-		 */
-		public RBNLBuilder<E, L> withLocker(Function<Object, CollectionLockingStrategy> locker) {
-			theLocker = locker;
-			return this;
+			super(initDescrip);
 		}
 
 		/**

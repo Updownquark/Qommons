@@ -94,7 +94,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	public static final ValueCollectionSupplier<Object, Object> LIST_SUPPLIER = new ValueCollectionSupplier<Object, Object>() {
 		@Override
 		public <V2> BetterCollection<V2> createValuesFor(Object key, CollectionLockingStrategy locking) {
-			return BetterTreeList.<V2>build().withLocker(locking).build();
+			return BetterTreeList.<V2> build().withLocking(locking).build();
 		}
 
 		@Override
@@ -121,8 +121,8 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 
 			@Override
 			public <V2 extends V> BetterCollection<V2> createValuesFor(Object key, CollectionLockingStrategy locking) {
-				return distinct ? BetterTreeSet.<V2> buildTreeSet(sorting).withLocker(locking).build()
-					: SortedTreeList.<V2> buildTreeList(sorting).withLocker(locking).build();
+				return distinct ? BetterTreeSet.<V2> buildTreeSet(sorting).withLocking(locking).build()
+					: SortedTreeList.<V2> buildTreeList(sorting).withLocking(locking).build();
 			}
 
 			@Override
@@ -170,7 +170,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	 * @param keyCompare The key sorting for the map
 	 * @return A builder to build a tree-based, {@link BetterSortedMultiMap}
 	 */
-	public static <K, V> BetterTreeMultiMap.Builder<K, V> buildSorted(Comparator<? super K> keyCompare) {
+	public static <K, V> BetterTreeMultiMap.Builder<K, V, ?> buildSorted(Comparator<? super K> keyCompare) {
 		return BetterTreeMultiMap.build(keyCompare);
 	}
 
@@ -179,7 +179,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	 * @param <V> The value type for the map
 	 * @return A builder to build a hash-based {@link BetterMultiMap}
 	 */
-	public static <K, V> BetterHashMultiMap.Builder<K, V> buildHashed() {
+	public static <K, V> BetterHashMultiMap.Builder<K, V, ?> buildHashed() {
 		return BetterHashMultiMap.build();
 	}
 
@@ -188,43 +188,15 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	 * 
 	 * @param <K> The key type for the map
 	 * @param <V> The value type for the map
+	 * @param <B> The sub-type of this builder
 	 */
-	public static abstract class Builder<K, V> {
-		private Function<Object, CollectionLockingStrategy> theLocking;
+	public static abstract class Builder<K, V, B extends Builder<K, V, ? extends B>> extends CollectionBuilder.Default<B> {
 		private ValueCollectionSupplier<? super K, ? super V> theValues;
-		private String theDescription;
 
 		/** @param initDescription The initial description for the map */
 		protected Builder(String initDescription) {
+			super(initDescription);
 			theValues = LIST_SUPPLIER;
-			theDescription = initDescription;
-		}
-
-		/**
-		 * @param safe Whether the multi-map should be thread-safe
-		 * @return This builder
-		 */
-		public Builder<K, V> safe(boolean safe) {
-			return withLocking(v -> safe ? new StampedLockingStrategy(v) : new FastFailLockingStrategy());
-		}
-
-		/**
-		 * @param locking The locking strategy for the multi-map
-		 * @return This builder
-		 * @see AbstractBetterMultiMap#LIST_SUPPLIER
-		 */
-		public Builder<K, V> withLocking(CollectionLockingStrategy locking) {
-			return withLocking(__ -> locking);
-		}
-
-		/**
-		 * @param locking The locking strategy for the multi-map
-		 * @return This builder
-		 * @see AbstractBetterMultiMap#LIST_SUPPLIER
-		 */
-		public Builder<K, V> withLocking(Function<Object, CollectionLockingStrategy> locking) {
-			theLocking = locking;
-			return this;
 		}
 
 		/**
@@ -235,9 +207,9 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		 * @return This builder
 		 * @see AbstractBetterMultiMap#sortedSupplier(Comparator, boolean)
 		 */
-		public Builder<K, V> withSortedValues(Comparator<? super V> valueCompare, boolean distinctValues) {
+		public B withSortedValues(Comparator<? super V> valueCompare, boolean distinctValues) {
 			theValues = sortedSupplier(valueCompare, distinctValues);
-			return this;
+			return (B) this;
 		}
 
 		/**
@@ -246,48 +218,28 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		 * @return This builder
 		 * @see AbstractBetterMultiMap#DISTINCT_SUPPLIER
 		 */
-		public Builder<K, V> withDistinctValues() {
+		public B withDistinctValues() {
 			theValues = DISTINCT_SUPPLIER;
-			return this;
+			return (B) this;
 		}
 
 		/**
 		 * @param values The value supplier for the multi-map
 		 * @return This builder
 		 */
-		public Builder<K, V> withValues(ValueCollectionSupplier<? super K, ? super V> values) {
+		public B withValues(ValueCollectionSupplier<? super K, ? super V> values) {
 			theValues = values;
-			return this;
+			return (B) this;
 		}
 
-		/**
-		 * @param description The description for the multi-map's {@link BetterMultiMap#getIdentity() identity}
-		 * @return This builder
-		 */
-		public Builder<K, V> withDescription(String description) {
-			theDescription = description;
-			return this;
-		}
-
-		/**
-		 * @param built The built multi map
-		 * @return The locking for the multi-map
-		 */
-		protected CollectionLockingStrategy getLocking(Object built) {
-			if (theLocking != null)
-				return theLocking.apply(built);
-			else
-				return new StampedLockingStrategy(built);
+		@Override
+		protected Function<Object, CollectionLockingStrategy> getLocker() {
+			return super.getLocker();
 		}
 
 		/** @return The value supplier for the multi-map */
 		protected ValueCollectionSupplier<? super K, ? super V> getValues() {
 			return theValues;
-		}
-
-		/** @return The description for the multi-map */
-		protected String getDescription() {
-			return theDescription;
 		}
 
 		/** @return The new multi-map */

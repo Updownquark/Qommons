@@ -422,7 +422,7 @@ public class QonfigElement {
 			theDeclaredAttributes = new ArrayList<>();
 			theDeclaredAttributeValues = new ArrayList<>();
 			theChildren = new ArrayList<>();
-			theChildrenByRole = BetterHashMultiMap.<QonfigChildDef.Declared, QonfigElement> build().safe(false).buildMultiMap();
+			theChildrenByRole = BetterHashMultiMap.<QonfigChildDef.Declared, QonfigElement> build().buildMultiMap();
 			theInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
 			for (QonfigChildDef.Declared role : parentRoles) {
 				QonfigChildDef child = parent.getType().getAllChildren().get(role);
@@ -682,7 +682,7 @@ public class QonfigElement {
 					} else {
 						attr = theType.getDeclaredAttributes().get(attrDef.itemName);
 						if (attr == null) {
-							attrs = BetterHashSet.build().unsafe().buildSet();
+							attrs = BetterHashSet.build().buildSet();
 							attrs.addAll(theType.getAttributesByName().get(attrDef.itemName));
 							for (QonfigAddOn inh : completeInheritance.getExpanded(QonfigAddOn::getInheritance)) {
 								attr = inh.getDeclaredAttributes().get(attrDef.itemName);
@@ -753,7 +753,7 @@ public class QonfigElement {
 				} else {
 					attr = theType.getDeclaredAttributes().get(attrDef.itemName);
 					if (attr == null) {
-						attrs = BetterHashSet.build().unsafe().buildSet();
+						attrs = BetterHashSet.build().buildSet();
 						attr = theType.getDeclaredAttributes().get(attrDef.itemName);
 						if (attr != null) {
 							attrs.add(attr);

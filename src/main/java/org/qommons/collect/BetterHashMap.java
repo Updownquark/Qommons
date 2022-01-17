@@ -18,32 +18,18 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * @param <V> The type of values for the map
  */
 public class BetterHashMap<K, V> implements BetterMap<K, V> {
-	/** Builds a {@link BetterHashMap} */
-	public static class HashMapBuilder extends BetterHashSet.HashSetBuilder {
+	/**
+	 * Builds a {@link BetterHashMap}
+	 * 
+	 * @param <B> The sub-type of this builder
+	 */
+	public static class HashMapBuilder<B extends HashMapBuilder<? extends B>> extends BetterHashSet.HashSetBuilder<B> {
 		HashMapBuilder(String initDescrip) {
 			super(initDescrip);
 		}
 
 		@Override
-		public HashMapBuilder unsafe() {
-			super.unsafe();
-			return this;
-		}
-
-		@Override
-		public HashMapBuilder withLocking(CollectionLockingStrategy locker) {
-			super.withLocking(locker);
-			return this;
-		}
-
-		@Override
-		public HashMapBuilder withLocking(Function<Object, CollectionLockingStrategy> locker) {
-			super.withLocking(locker);
-			return this;
-		}
-
-		@Override
-		public HashMapBuilder withEquivalence(ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals) {
+		public B withEquivalence(ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals) {
 			super.withEquivalence(//
 				entry -> {
 					if (entry instanceof Map.Entry)
@@ -56,31 +42,7 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 					else
 						return equals.apply(entry1, entry2);
 				});
-			return this;
-		}
-
-		@Override
-		public HashMapBuilder identity() {
-			super.identity();
-			return this;
-		}
-
-		@Override
-		public HashMapBuilder withLoadFactor(double loadFactor) {
-			super.withLoadFactor(loadFactor);
-			return this;
-		}
-
-		@Override
-		public HashMapBuilder withInitialCapacity(int initExpectedSize) {
-			super.withInitialCapacity(initExpectedSize);
-			return this;
-		}
-
-		@Override
-		public HashMapBuilder withDescription(String descrip) {
-			super.withDescription(descrip);
-			return this;
+			return (B) this;
 		}
 
 		/**
@@ -106,8 +68,8 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	}
 
 	/** @return A builder to create a new {@link BetterHashMap} */
-	public static HashMapBuilder build() {
-		return new HashMapBuilder("better-hash-map");
+	public static HashMapBuilder<?> build() {
+		return new HashMapBuilder<>("better-hash-map");
 	}
 
 	private final BetterHashSet<Map.Entry<K, V>> theEntries;

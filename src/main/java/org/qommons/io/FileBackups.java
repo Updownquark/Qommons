@@ -23,7 +23,7 @@ public class FileBackups {
 		.withInitial(() -> new SimpleDateFormat("ddMMMyyyy_HHmmss.SSS"));
 	/** The backup times to keep files for */
 	public static final BetterSortedSet<Duration> BACKUP_TIMES = BetterCollections.unmodifiableSortedSet(//
-		BetterTreeSet.buildTreeSet(Duration::compareTo).safe(false).build().with(//
+		BetterTreeSet.buildTreeSet(Duration::compareTo).build().with(//
 			Duration.ofSeconds(1), Duration.ofMinutes(5), Duration.ofMinutes(15), Duration.ofMinutes(30), //
 			Duration.ofHours(1), Duration.ofHours(2), Duration.ofHours(3), Duration.ofHours(4), //
 			Duration.ofHours(6), Duration.ofHours(12), Duration.ofHours(18), //
@@ -54,7 +54,7 @@ public class FileBackups {
 	 * @throws IOException If an exception occurs with the backup operation
 	 */
 	public void fileChanged() throws IOException {
-		BetterSortedMap<Long, BetterFile> backups = BetterTreeMap.build(Long::compareTo).safe(false).buildMap();
+		BetterSortedMap<Long, BetterFile> backups = BetterTreeMap.build(Long::compareTo).buildMap();
 		long now = System.currentTimeMillis();
 		BetterFile newBackup = theTargetFile.getParent().at(//
 			new StringBuilder(thePrefix).append(DATE_FORMAT.get().format(new Date(now))).append(theSuffix).toString());
@@ -91,7 +91,7 @@ public class FileBackups {
 
 	/** @return The times of all current backup files */
 	public BetterSortedSet<Instant> getBackups() {
-		BetterSortedSet<Instant> backups = BetterTreeSet.buildTreeSet(Instant::compareTo).safe(false).build();
+		BetterSortedSet<Instant> backups = BetterTreeSet.buildTreeSet(Instant::compareTo).build();
 		for (BetterFile file : theTargetFile.getParent().listFiles()) {
 			long backupTime;
 			try {

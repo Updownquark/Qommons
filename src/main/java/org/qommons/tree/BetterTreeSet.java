@@ -22,8 +22,10 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 	/**
 	 * @param <E> The type of elements for the set
 	 * @param <L> The sub-type of set
+	 * @param <B> The sub-type of this builder
 	 */
-	public static class Builder<E, L extends BetterTreeSet<E>> extends SortedTreeList.Builder<E, L> {
+	public static class Builder<E, L extends BetterTreeSet<E>, B extends Builder<E, L, ? extends B>>
+		extends SortedTreeList.Builder<E, L, B> {
 		/** @param compare The comparator for the new set */
 		protected Builder(Comparator<? super E> compare) {
 			super(compare);
@@ -31,32 +33,8 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 		}
 
 		@Override
-		public Builder<E, L> withDescription(String descrip) {
-			super.withDescription(descrip);
-			return this;
-		}
-
-		@Override
-		public Builder<E, L> safe(boolean safe) {
-			super.safe(safe);
-			return this;
-		}
-
-		@Override
-		public Builder<E, L> withLocker(CollectionLockingStrategy locker) {
-			super.withLocker(locker);
-			return this;
-		}
-
-		@Override
-		public Builder<E, L> withLocker(Function<Object, CollectionLockingStrategy> locker) {
-			super.withLocker(locker);
-			return this;
-		}
-
-		@Override
 		public L build() {
-			return (L) new BetterTreeSet<>(this::getLocker, getDescription(), getCompare());
+			return (L) new BetterTreeSet<>(getLocker(), getDescription(), getCompare());
 		}
 	}
 
@@ -65,7 +43,7 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 	 * @param compare The comparator for the set's ordering
 	 * @return A builder for the set
 	 */
-	public static <E> Builder<E, BetterTreeSet<E>> buildTreeSet(Comparator<? super E> compare) {
+	public static <E> Builder<E, BetterTreeSet<E>, ?> buildTreeSet(Comparator<? super E> compare) {
 		return new Builder<>(compare);
 	}
 

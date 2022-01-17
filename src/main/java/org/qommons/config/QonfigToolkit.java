@@ -47,9 +47,9 @@ public class QonfigToolkit {
 
 			Map<String, QonfigValueType.Declared> compiledTypes = new HashMap<>(theDeclaredAttributeTypes);
 			Set<String> conflictedTypeNames = new HashSet<>();
-			BetterMultiMap<String, QonfigAddOn> compiledAddOns = BetterHashMultiMap.<String, QonfigAddOn> build().safe(false)
-				.withDistinctValues().buildMultiMap();
-			BetterMultiMap<String, QonfigElementDef> compiledElements = BetterHashMultiMap.<String, QonfigElementDef> build().safe(false)
+			BetterMultiMap<String, QonfigAddOn> compiledAddOns = BetterHashMultiMap.<String, QonfigAddOn> build().withDistinctValues()
+				.buildMultiMap();
+			BetterMultiMap<String, QonfigElementDef> compiledElements = BetterHashMultiMap.<String, QonfigElementDef> build()
 				.withDistinctValues().buildMultiMap();
 			for (QonfigAddOn el : theDeclaredAddOns.values())
 				compiledAddOns.add(el.getName(), el);

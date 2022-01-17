@@ -591,7 +591,7 @@ public final class ArrayUtils {
 				return Integer.compare(position, o.position);
 			}
 		}
-		BetterTreeSet<PositionMeasure> values = BetterTreeSet.buildTreeSet(PositionMeasure::compareTo).safe(false).build();
+		BetterTreeSet<PositionMeasure> values = BetterTreeSet.buildTreeSet(PositionMeasure::compareTo).build();
 		return binarySearch(min, max, pos -> {
 			double posValue, adjValue;
 			boolean adjIsLess;
