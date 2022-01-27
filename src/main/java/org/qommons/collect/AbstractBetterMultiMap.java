@@ -16,7 +16,10 @@ import org.qommons.tree.BetterTreeSet;
 import org.qommons.tree.SortedTreeList;
 
 /**
- * An abstract {@link BetterMultiMap} implementation based on a {@link BetterMap}
+ * An abstract {@link BetterMultiMap} implementation based on a {@link BetterMap}. This class is backed by a {@link ValueCollectionSupplier}
+ * that supplies value collections for each key. For performance reasons, this class assumes that all modifications to collections supplied
+ * by the {@link ValueCollectionSupplier} are done via the multi-map. If a {@link ValueCollectionSupplier} implementation supplies
+ * collections that can be modified externally, some methods in this class may be incorrect.
  * 
  * @param <K> The key type of the map
  * @param <V> The value type of the map
@@ -64,6 +67,23 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	}
 
 	/**
+	 * A sub-type of {@link ValueCollectionSupplier} that supplies {@link BetterList} instances
+	 * 
+	 * @param <K> The key super-type of the maps this supplier can support
+	 * @param <V> The value super-type of the maps this supplier can support
+	 */
+	public interface ValueListSupplier<K, V> extends ValueCollectionSupplier<K, V> {
+		@Override
+		<V2 extends V> BetterList<V2> createValuesFor(K key, CollectionLockingStrategy locking);
+
+		@Override
+		<V2 extends V> BetterList<V2> createEmptyValues();
+
+		@Override
+		<V2 extends V> BetterList<V2> createWrapperCollection(ValueCollectionBacking<V2> backing);
+	}
+
+	/**
 	 * An implementation in {@link AbstractBetterMultiMap} used by
 	 * {@link AbstractBetterMultiMap.ValueCollectionSupplier#createWrapperCollection(ValueCollectionBacking)}. It represents the state of a
 	 * particular key in the multi-map.
@@ -86,24 +106,28 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		/** Removes the key from the map */
 		void remove();
 
-		/** Should be called whenever the collection is changed */
-		void changed();
+		/**
+		 * Should be called whenever the collection is changed
+		 * 
+		 * @param sizeDiff The number of elements added (positive) or removed (negative) as a result of the change that occurred
+		 */
+		void changed(int sizeDiff);
 	}
 
 	/** A simple {@link ValueCollectionSupplier} that just creates {@link BetterTreeList}s for each value */
-	public static final ValueCollectionSupplier<Object, Object> LIST_SUPPLIER = new ValueCollectionSupplier<Object, Object>() {
+	public static final ValueListSupplier<Object, Object> LIST_SUPPLIER = new ValueListSupplier<Object, Object>() {
 		@Override
-		public <V2> BetterCollection<V2> createValuesFor(Object key, CollectionLockingStrategy locking) {
+		public <V2> BetterList<V2> createValuesFor(Object key, CollectionLockingStrategy locking) {
 			return BetterTreeList.<V2> build().withLocking(locking).build();
 		}
 
 		@Override
-		public <V2> BetterCollection<V2> createEmptyValues() {
+		public <V2> BetterList<V2> createEmptyValues() {
 			return BetterList.empty();
 		}
 
 		@Override
-		public <V2 extends Object> BetterCollection<V2> createWrapperCollection(ValueCollectionBacking<V2> backing) {
+		public <V2 extends Object> BetterList<V2> createWrapperCollection(ValueCollectionBacking<V2> backing) {
 			return new WrappingBetterList<>(backing);
 		}
 	};
@@ -115,29 +139,29 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	 *        opposed to {@link BetterSortedList}s)
 	 * @return A supplier that creates {@link BetterSortedList}s or {@link BetterSortedSet}s for each key
 	 */
-	public static <V> ValueCollectionSupplier<Object, V> sortedSupplier(Comparator<? super V> sorting, boolean distinct) {
-		return new ValueCollectionSupplier<Object, V>() {
+	public static <V> ValueListSupplier<Object, V> sortedSupplier(Comparator<? super V> sorting, boolean distinct) {
+		return new ValueListSupplier<Object, V>() {
 			private BetterList<V> EMPTY_VALUES;
 
 			@Override
-			public <V2 extends V> BetterCollection<V2> createValuesFor(Object key, CollectionLockingStrategy locking) {
+			public <V2 extends V> BetterList<V2> createValuesFor(Object key, CollectionLockingStrategy locking) {
 				return distinct ? BetterTreeSet.<V2> buildTreeSet(sorting).withLocking(locking).build()
 					: SortedTreeList.<V2> buildTreeList(sorting).withLocking(locking).build();
 			}
 
 			@Override
-			public <V2 extends V> BetterCollection<V2> createEmptyValues() {
+			public <V2 extends V> BetterList<V2> createEmptyValues() {
 				if (EMPTY_VALUES == null) {
 					if (distinct)
 						EMPTY_VALUES = BetterSortedSet.empty(sorting);
 					else
 						EMPTY_VALUES = BetterSortedList.empty(sorting);
 				}
-				return (BetterCollection<V2>) EMPTY_VALUES;
+				return (BetterList<V2>) EMPTY_VALUES;
 			}
 
 			@Override
-			public <V2 extends V> BetterCollection<V2> createWrapperCollection(ValueCollectionBacking<V2> backing) {
+			public <V2 extends V> BetterList<V2> createWrapperCollection(ValueCollectionBacking<V2> backing) {
 				if (distinct)
 					return new WrappingSortedSet<>(backing, sorting);
 				else
@@ -253,8 +277,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	private final BetterSet<K> theKeySet;
 
 	private long theStamp;
-	private long theLastCountStamp;
-	private int theLastCountedValueSize;
+	private int theValueSize;
 
 	/**
 	 * @param locking The locking for the map
@@ -268,7 +291,6 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		theLocking = locking.apply(this);
 		theEntries = entries;
 		theValues = values;
-		theLastCountStamp = -1;
 
 		theKeySet = createKeySet(theEntries.keySet());
 	}
@@ -308,15 +330,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 
 	@Override
 	public int valueSize() {
-		if (theLastCountStamp == getStamp())
-			return theLastCountedValueSize;
-		try (Transaction t = lock(false, null)) {
-			theLastCountStamp = getStamp();
-			theLastCountedValueSize = 0;
-			for (BetterCollection<V> values : theEntries.values())
-				theLastCountedValueSize += values.size();
-		}
-		return theLastCountedValueSize;
+		return theValueSize;
 	}
 
 	@Override
@@ -328,10 +342,16 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 				MutableMapEntryHandle<K, BetterCollection<V>> entry = theEntries.mutableEntry(keyEl.getElementId());
 				if (entry.canRemove() == null) {
 					BetterCollection<V> value = entry.getValue();
+					int size = value.size();
 					entry.remove();
+					theValueSize -= size;
 					theValues.dispose(value);
 					removedAny = true;
 					keyEl = theEntries.keySet().getAdjacentElement(keyEl.getElementId(), true);
+				} else {
+					int preSize = entry.getValue().size();
+					entry.getValue().clear();
+					theValueSize -= preSize - entry.getValue().size();
 				}
 			}
 		}
@@ -346,6 +366,14 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	}
 
 	@Override
+	public BetterCollection<V> values() {
+		if (theValues instanceof ValueListSupplier)
+			return new BetterMultiMapValueList<>(this);
+		else
+			return BetterMultiMap.super.values();
+	}
+
+	@Override
 	public MultiEntryHandle<K, V> getEntryById(ElementId keyId) {
 		return entryFor(theEntries.getEntryById(keyId));
 	}
@@ -354,7 +382,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	public BetterCollection<V> get(Object key) {
 		if (!theEntries.keySet().belongs(key))
 			return theValues.createEmptyValues();
-		return theValues.createWrapperCollection(new ValueBacking((K) key, null));
+		return theValues.createWrapperCollection(createBacking((K) key, null));
 	}
 
 	@Override
@@ -365,7 +393,13 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			if (entry == null)
 				return null;
 			CollectionElement<V> valueEl = entry.getValue().addElement(value, first);
-			return valueEl == null ? null : getEntryById(entry.getElementId(), valueEl.getElementId());
+			if (valueEl == null) {
+				theValues.dispose(entry.getValue());
+				return null;
+			}
+			theValueSize++;
+			theStamp++;
+			return getEntryById(entry.getElementId(), valueEl.getElementId());
 		}
 	}
 
@@ -376,6 +410,12 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			BetterCollection<V> values = theValues.createValuesFor(k, theLocking);
 			for (V v : value.apply(k))
 				values.add(v);
+			if (values.isEmpty()) {
+				theValues.dispose(values);
+				return null;
+			}
+			theValueSize += values.size();
+			theStamp++;
 			return values;
 		}, afterKey, beforeKey, first, added));
 	}
@@ -395,23 +435,50 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		return BetterMultiMap.toString(this);
 	}
 
+	/**
+	 * Creates a backing for a user-facing values collection
+	 * 
+	 * @param <V2> The value type of the collection
+	 * @param key The key to provide values for
+	 * @param keyId The element id of the key in the key set if currently present and known
+	 * @return The collection backing
+	 */
+	protected <V2 extends V> ValueCollectionBacking<V> createBacking(K key, ElementId keyId) {
+		return new ValueBacking(key, keyId);
+	}
+
+	/** Default handle implementation */
+	protected class DefaultEntryHandle implements MultiEntryHandle<K, V> {
+		private final MapEntryHandle<K, BetterCollection<V>> theMapEntry;
+
+		/** @param mapEntry The key/values entry to wrap */
+		public DefaultEntryHandle(MapEntryHandle<K, BetterCollection<V>> mapEntry) {
+			theMapEntry = mapEntry;
+		}
+
+		/** @return The wrapped key/values entry */
+		protected MapEntryHandle<K, BetterCollection<V>> getMapEntry() {
+			return theMapEntry;
+		}
+
+		@Override
+		public K getKey() {
+			return theMapEntry.getKey();
+		}
+
+		@Override
+		public ElementId getElementId() {
+			return theMapEntry.getElementId();
+		}
+
+		@Override
+		public BetterCollection<V> getValues() {
+			return theValues.createWrapperCollection(createBacking(theMapEntry.getKey(), theMapEntry.getElementId()));
+		}
+	}
+
 	private MultiEntryHandle<K, V> entryFor(MapEntryHandle<K, BetterCollection<V>> mapEntry) {
-		return new MultiEntryHandle<K, V>() {
-			@Override
-			public K getKey() {
-				return mapEntry.getKey();
-			}
-
-			@Override
-			public ElementId getElementId() {
-				return mapEntry.getElementId();
-			}
-
-			@Override
-			public BetterCollection<V> getValues() {
-				return theValues.createWrapperCollection(new ValueBacking(mapEntry.getKey(), mapEntry.getElementId()));
-			}
-		};
+		return new DefaultEntryHandle(mapEntry);
 	}
 
 	/** Implements {@link AbstractBetterMultiMap#keySet()} */
@@ -536,6 +603,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 				public void remove() throws UnsupportedOperationException {
 					BetterCollection<V> values = theEntries.getEntryById(id).get();
 					keyEl.remove();
+					theValueSize -= values.size();
 					theValues.dispose(values);
 					theStamp++;
 				}
@@ -581,6 +649,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		@Override
 		public CollectionElement<K> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 			throws UnsupportedOperationException, IllegalArgumentException {
+			// TODO should probably put code here to modify the value size if the move goes awry
 			CollectionElement<K> moved = getBacking().move(valueEl, after, before, first, afterRemove);
 			if (!valueEl.isPresent())
 				theStamp++;
@@ -735,7 +804,8 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 
 		@Override
-		public void changed() {
+		public void changed(int sizeDiff) {
+			theValueSize += sizeDiff;
 			theStamp++;
 		}
 	}
@@ -852,7 +922,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 					if (wrapped2 != wrapped)
 						throw new IllegalStateException(StdMsg.ELEMENT_REMOVED);
 					wrappedEl.set(value);
-					theWrapped.changed();
+					theWrapped.changed(0);
 				}
 
 				@Override
@@ -870,7 +940,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 						if (wrapped2 != wrapped)
 							throw new IllegalStateException(StdMsg.ELEMENT_REMOVED);
 						wrappedEl.remove();
-						theWrapped.changed();
+						theWrapped.changed(-1);
 						if (isEmpty())
 							theWrapped.remove();
 					}
@@ -921,7 +991,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			BetterCollection<E> wrapped = theWrapped.getBacking(true);
 			CollectionElement<E> el = wrapped.addElement(value, after, before, first);
 			if (el != null)
-				theWrapped.changed();
+				theWrapped.changed(1);
 			return el;
 		}
 
@@ -937,7 +1007,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			BetterCollection<E> wrapped = theWrapped.getBacking(true);
 			CollectionElement<E> moved = wrapped.move(valueEl, after, before, first, afterRemove);
 			if (!valueEl.isPresent())
-				theWrapped.changed();
+				theWrapped.changed(0);
 			return moved;
 		}
 
@@ -975,7 +1045,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 				int preSize = wrapped.size();
 				wrapped.clear();
 				if (preSize != wrapped.size())
-					theWrapped.changed();
+					theWrapped.changed(wrapped.size() - preSize);
 				if (wrapped.isEmpty())
 					getWrapped().remove();
 			}
@@ -996,10 +1066,10 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 
 		@Override
 		public CollectionElement<E> getElement(int index) throws IndexOutOfBoundsException {
-			BetterCollection<E> wrapped = getWrapped().getBacking(false);
+			BetterList<E> wrapped = (BetterList<E>) getWrapped().getBacking(false);
 			if (wrapped == null)
 				throw new NoSuchElementException();
-			return ((BetterList<E>) wrapped).getElement(index);
+			return wrapped.getElement(index);
 		}
 
 		@Override
@@ -1009,18 +1079,18 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 
 		@Override
 		public int getElementsBefore(ElementId id) {
-			BetterCollection<E> wrapped = getWrapped().getBacking(false);
+			BetterList<E> wrapped = (BetterList<E>) getWrapped().getBacking(false);
 			if (wrapped == null)
 				throw new NoSuchElementException();
-			return ((BetterList<E>) wrapped).getElementsBefore(id);
+			return wrapped.getElementsBefore(id);
 		}
 
 		@Override
 		public int getElementsAfter(ElementId id) {
-			BetterCollection<E> wrapped = getWrapped().getBacking(false);
+			BetterList<E> wrapped = (BetterList<E>) getWrapped().getBacking(false);
 			if (wrapped == null)
 				throw new NoSuchElementException();
-			return ((BetterList<E>) wrapped).getElementsAfter(id);
+			return wrapped.getElementsAfter(id);
 		}
 
 		@Override
@@ -1059,7 +1129,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			Runnable newAdded = () -> {
 				if (added != null)
 					added.run();
-				getWrapped().changed();
+				getWrapped().changed(1);
 			};
 			return wrapped.getOrAdd(value, after, before, first, newAdded);
 		}
@@ -1083,9 +1153,10 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			BetterSet<E> wrapped = (BetterSet<E>) getWrapped().getBacking(false);
 			if (wrapped == null)
 				throw new NoSuchElementException();
+			int preSize = wrapped.size();
 			boolean repaired = wrapped.repair(element, listener);
 			if (repaired)
-				getWrapped().changed();
+				getWrapped().changed(wrapped.size() - preSize);
 			return repaired;
 		}
 
@@ -1094,9 +1165,10 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			BetterSet<E> wrapped = (BetterSet<E>) getWrapped().getBacking(false);
 			if (wrapped == null)
 				return false;
+			int preSize = wrapped.size();
 			boolean repaired = wrapped.repair(listener);
 			if (repaired)
-				getWrapped().changed();
+				getWrapped().changed(wrapped.size() - preSize);
 			return repaired;
 		}
 
@@ -1153,9 +1225,10 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			BetterSortedList<E> wrapped = (BetterSortedList<E>) getWrapped().getBacking(false);
 			if (wrapped == null)
 				throw new NoSuchElementException();
+			int preSize = wrapped.size();
 			boolean repaired = wrapped.repair(element, listener);
 			if (repaired)
-				getWrapped().changed();
+				getWrapped().changed(wrapped.size() - preSize);
 			return repaired;
 		}
 
@@ -1164,9 +1237,10 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			BetterSortedList<E> wrapped = (BetterSortedList<E>) getWrapped().getBacking(false);
 			if (wrapped == null)
 				return false;
+			int preSize = wrapped.size();
 			boolean repaired = wrapped.repair(listener);
 			if (repaired)
-				getWrapped().changed();
+				getWrapped().changed(wrapped.size() - preSize);
 			return repaired;
 		}
 
@@ -1201,6 +1275,68 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		@Override
 		public <T> T[] toArray(T[] a) {
 			return super.toArray(a);
+		}
+	}
+
+	/**
+	 * Implements {@link AbstractBetterMultiMap#values()} when the values are always lists
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
+	protected static class BetterMultiMapValueList<K, V> extends BetterMultiMapValueCollection<K, V> implements BetterList<V> {
+		/** @param map The map to provide values of */
+		public BetterMultiMapValueList(AbstractBetterMultiMap<K, V> map) {
+			super(map);
+		}
+
+		@Override
+		public boolean isContentControlled() {
+			return true;
+		}
+
+		@Override
+		public int getElementsBefore(ElementId id) {
+			int count = 0;
+			MultiEntryHandle<K, V> entry;
+			if (id.isPresent()) {
+				entry = getMap().getEntryById(((MapValueId) id).getKeyId());
+				count = ((BetterList<V>) entry.getValues()).getElementsBefore(((MapValueId) id).getValueId());
+			}
+			entry = getMap().getAdjacentEntry(((MapValueId) id).getKeyId(), false);
+			while (entry != null) {
+				count += entry.getValues().size();
+				entry = getMap().getAdjacentEntry(entry.getElementId(), false);
+			}
+			return count;
+		}
+
+		@Override
+		public int getElementsAfter(ElementId id) {
+			int count = 0;
+			MultiEntryHandle<K, V> entry;
+			if (id.isPresent()) {
+				entry = getMap().getEntryById(((MapValueId) id).getKeyId());
+				count = ((BetterList<V>) entry.getValues()).getElementsAfter(((MapValueId) id).getValueId());
+			}
+			entry = getMap().getAdjacentEntry(((MapValueId) id).getKeyId(), true);
+			while (entry != null) {
+				count += entry.getValues().size();
+				entry = getMap().getAdjacentEntry(entry.getElementId(), true);
+			}
+			return count;
+		}
+
+		@Override
+		public CollectionElement<V> getElement(int index) throws IndexOutOfBoundsException {
+			int remaining = index;
+			for (MultiEntryHandle<K, V> entry : getMap().entrySet()) {
+				int valueSize = entry.getValues().size();
+				if (remaining < valueSize)
+					return entryFor(entry.getElementId(), ((BetterList<V>) entry.getValues()).getElement(remaining));
+				remaining -= valueSize;
+			}
+			throw new IndexOutOfBoundsException(index + " of " + (index - remaining));
 		}
 	}
 }

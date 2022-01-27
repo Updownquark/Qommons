@@ -1138,15 +1138,19 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 	class BetterMultiMapValueCollection<K, V> extends AbstractIdentifiable implements BetterCollection<V> {
 		private final BetterMultiMap<K, V> theMap;
 
-		BetterMultiMapValueCollection(BetterMultiMap<K, V> map) {
+		protected BetterMultiMapValueCollection(BetterMultiMap<K, V> map) {
 			theMap = map;
+		}
+
+		protected BetterMultiMap<K, V> getMap() {
+			return theMap;
 		}
 
 		CollectionElement<V> entryFor(MultiEntryValueHandle<K, V> mapEntry) {
 			return mapEntry == null ? null : new ValueElement(mapEntry);
 		}
 
-		CollectionElement<V> entryFor(ElementId keyId, CollectionElement<V> valueEl) {
+		protected CollectionElement<V> entryFor(ElementId keyId, CollectionElement<V> valueEl) {
 			return valueEl == null ? null : new ValueElement(theMap.getEntryById(keyId, valueEl.getElementId()));
 		}
 
@@ -1545,7 +1549,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 			return BetterCollection.toString(this);
 		}
 
-		class MapValueId implements ElementId {
+		protected class MapValueId implements ElementId {
 			final ElementId keyId;
 			final ElementId valueId;
 
@@ -1556,6 +1560,14 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 
 			BetterMultiMap<K, V> getMap() {
 				return theMap;
+			}
+
+			public ElementId getKeyId() {
+				return keyId;
+			}
+
+			public ElementId getValueId() {
+				return valueId;
 			}
 
 			@Override
