@@ -519,14 +519,27 @@ public class ListenerList<E> {
 				if (node instanceof ListenerList.TempNode) {
 					if (node.isInAddFiringRound(iterId)) {
 						node.remove();
-						action.accept(node.theListener);
+						try {
+							action.accept(node.theListener);
+						} catch (RuntimeException e) {
+							// If the listener throws an exception, we can't have that gumming up the works
+							// If they want better handling, they can try/catch their own code
+							e.printStackTrace();
+						}
 					}
 				} else if (node.isInAddFiringRound(iterId)) { // Don't execute the same round it was added, if so configured
 				} else if (node instanceof ListenerList.RunLastNode) {
 					TempNode tempNode = new TempNode(node.theListener, iterId);
 					addNode(tempNode);
-				} else
-					action.accept(node.theListener);
+				} else {
+					try {
+						action.accept(node.theListener);
+					} catch (RuntimeException e) {
+						// If the listener throws an exception, we can't have that gumming up the works
+						// If they want better handling, they can try/catch their own code
+						e.printStackTrace();
+					}
+				}
 
 				node = nextNode;
 			}
