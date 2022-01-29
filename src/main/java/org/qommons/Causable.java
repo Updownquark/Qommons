@@ -56,7 +56,7 @@ public interface Causable {
 	 */
 	public interface ChainBreak {
 		/** @return The wrapped cause */
-		Object getCauses();
+		BetterList<Object> getCauses();
 	}
 
 	/**
@@ -68,7 +68,7 @@ public interface Causable {
 	 * Use {@link Causable#key(TerminalAction)} to create a key
 	 * </p>
 	 */
-	public static class CausableKey {
+	public static final class CausableKey {
 		private final Map<Object, Object> theValues;
 		private final AtomicInteger theCauseCount;
 		private final TerminalAction theAction;
@@ -115,7 +115,7 @@ public interface Causable {
 	public static class AbstractCausable implements Causable {
 		private final BetterList<Object> theCauses;
 		private final Causable theRootCausable;
-		private LinkedHashMap<IdentityKey<CausableKey>, Supplier<Transaction>> theKeys;
+		private LinkedHashMap<CausableKey, Supplier<Transaction>> theKeys;
 		private boolean isStarted;
 		private boolean isFinished;
 		private boolean isTerminated;
@@ -128,7 +128,7 @@ public interface Causable {
 			else {
 				Causable root = this;
 				for (Object cause : causes) {
-					if (cause instanceof Causable) {
+					if (cause instanceof Causable && !(cause instanceof ChainBreak)) {
 						if (((Causable) cause).isTerminated())
 							throw new IllegalStateException("Cannot use a finished Causable as a cause");
 						root = ((Causable) cause).getRootCausable();
@@ -164,7 +164,7 @@ public interface Causable {
 				throw new IllegalStateException("This cause has already terminated");
 			if (theKeys == null)
 				theKeys = new LinkedHashMap<>();
-			theKeys.computeIfAbsent(new IdentityKey<>(key), k -> k.value.use(this));
+			theKeys.computeIfAbsent(key, k -> k.use(this));
 			return key.theValues;
 		}
 
@@ -229,6 +229,21 @@ public interface Causable {
 		}
 	}
 
+	/** Simple {@link ChainBreak} implementation */
+	public static class SimpleChainBreak implements ChainBreak {
+		private final BetterList<Object> theCauses;
+
+		/** @param causes The causes for this chain break */
+		public SimpleChainBreak(Object... causes) {
+			theCauses = BetterList.of(causes);
+		}
+
+		@Override
+		public BetterList<Object> getCauses() {
+			return theCauses;
+		}
+	}
+
 	/**
 	 * Creates a CausableKey to use with {@link Causable#onFinish(CausableKey)}. The key is not re-usable or thread-safe; a new one for each
 	 * use.
@@ -266,7 +281,18 @@ public interface Causable {
 	 * @return A simple Causable
 	 */
 	public static Causable simpleCause(Collection<?> causes) {
-		return new AbstractCausable.SimpleCause(causes);
+		return new AbstractCausable.SimpleCause(causes.toArray());
+	}
+
+	/**
+	 * Used to break the chain for {@link #getRootCausable()}
+	 * 
+	 * @param causes The causes of the causable
+	 * @return A simple broken-chain causable
+	 * @see ChainBreak
+	 */
+	public static ChainBreak broken(Object... causes) {
+		return new SimpleChainBreak(causes);
 	}
 
 	/** @return The causes of this event or thing--typically another event or null */
@@ -312,7 +338,7 @@ public interface Causable {
 			if (cause instanceof Causable)
 				causes.addAll(((Causable) cause).getCauses());
 			else if (cause instanceof ChainBreak)
-				causes.add(((ChainBreak) cause).getCauses());
+				causes.addAll(((ChainBreak) cause).getCauses());
 		}
 		return value;
 	}

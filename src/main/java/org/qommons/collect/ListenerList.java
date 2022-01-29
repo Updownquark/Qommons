@@ -594,6 +594,15 @@ public class ListenerList<E> {
 	}
 
 	/**
+	 * Adds all of this list's content into a new list (without removing it from this one)
+	 * 
+	 * @return The list
+	 */
+	public List<E> dump() {
+		return dumpInto(new ArrayList<>(theSize == null ? 10 : theSize.get() + 3));
+	}
+
+	/**
 	 * Adds all of this list's content into the given collection (without removing it from this one)
 	 * 
 	 * @param <C> The type of the collection
