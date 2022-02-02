@@ -70,22 +70,35 @@ public class QommonsTimer {
 		}
 	}
 
-	/** Different threading schemes that tasks can use to run */
-	public enum TaskThreading {
+	/** Dictates the thread that a task executes in */
+	public interface TaskThreading {
 		/**
 		 * Specifies that a task should be run on the main timer thread. This scheme is only appropriate for very short tasks. Long-running
 		 * tasks run on the timer thread risk delaying the execution other tasks.
 		 */
-		Timer,
+		public static TaskThreading Timer = (task, timer) -> {
+			task.run();
+			return false;
+		};
 		/**
 		 * Specifies that a task should be run on the AWT/Swing Event Dispatch Thread (EDT)
 		 */
-		EDT,
+		public static TaskThreading EDT = (task, timer) -> {
+			EventQueue.invokeLater(task);
+			return true;
+		};
 		/**
 		 * Specifies that a task may be run on any thread. This is the default. Tasks of this type will be offloaded to a separate thread
 		 * pool to prevent any possibility of interfering with the scheduling or execution of other tasks.
 		 */
-		Any;
+		public static TaskThreading Any = (task, timer) -> timer.tryOffload(task);
+
+		/**
+		 * @param task The task to execute
+		 * @param timer The timer the task is running in
+		 * @return Whether the task was successfully executed or scheduled for execution
+		 */
+		boolean execute(Runnable task, QommonsTimer timer);
 	}
 
 	/** A handle on a scheduled task that allows for control of the task's execution */
@@ -636,6 +649,16 @@ public class QommonsTimer {
 		}
 	}
 
+	/**
+	 * Executes a task one time in a different thread as soon as possible
+	 * 
+	 * @param task The task to execute
+	 * @return If the task could not be executed because the timer's accessory executor is full
+	 */
+	public boolean tryOffload(Runnable task) {
+		return theAccessoryRunner.apply(task);
+	}
+
 	Runnable schedule(TaskHandle task) {
 		boolean wasEmpty = theTaskQueue.isEmpty();
 		Runnable remove = theTaskQueue.add(task, false);
@@ -672,19 +695,9 @@ public class QommonsTimer {
 			Instant fNow = now;
 			theTaskQueue.forEach(handle -> {
 				if (handle.shouldExecute(fNow, minNextRun)) {
-					switch (handle.getThreading()) {
-					case Timer:
-						handle.execute();
-						break;
-					case EDT:
-						EventQueue.invokeLater(handle.offloadTask);
-						break;
-					case Any:
-						if (!theAccessoryRunner.apply(handle::execute)) {
-							handle.offloadFailed();
-							minNextRun[0] = Instant.MIN;
-						}
-						break;
+					if (!handle.getThreading().execute(handle::execute, this)) {
+						handle.offloadFailed();
+						minNextRun[0] = Instant.MIN;
 					}
 				}
 			});
