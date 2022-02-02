@@ -141,6 +141,8 @@ public class Debug {
 	}
 
 	public DebugData with(String path, boolean create, Consumer<DebugData> action) {
+		if (!isActive())
+			return INACTIVE;
 		try (Transaction t = lock(true)) {
 			return _with(path, create, action);
 		}
@@ -182,6 +184,8 @@ public class Debug {
 	}
 
 	public DebugData debug(Object value, boolean create) {
+		if (!isActive())
+			return INACTIVE;
 		try (Transaction t = lock(create)) {
 			return debug(value, create, d -> {});
 		}
