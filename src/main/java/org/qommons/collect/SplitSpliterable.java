@@ -16,8 +16,8 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 	/**
 	 * Quickly obtains an element that is well-spaced between two other elements
 	 * 
-	 * @param element1 The ID of one element
-	 * @param element2 The ID of the other element
+	 * @param element1 The ID of one element (may not be null)
+	 * @param element2 The ID of the other element (may not be null)
 	 * @return An element in this list that is between the given elements with a spacing suitable for double-bounded binary search; or null
 	 *         if the elements are the same or adjacent
 	 */
