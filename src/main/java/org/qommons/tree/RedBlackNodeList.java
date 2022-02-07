@@ -317,9 +317,40 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 			return null;
 		return getLocker().doOptimistically(null, //
 			(init, ctx) -> {
-				BinaryTreeNode<E> root = getRoot();
-				if (root == null)
+				BinaryTreeNode<E> end = getTerminalElement(false);
+				if (end == null)
 					return null;
+				int comp = search.compareTo(end.get());
+				if (comp == 0)
+					return end;
+				else if (comp > 0) {
+					switch (filter) {
+					case Less:
+					case PreferLess:
+					case PreferGreater:
+						return end;
+					case Greater:
+					case OnlyMatch:
+						return null;
+					}
+				}
+				BinaryTreeNode<E> begin = getTerminalElement(true);
+				if (!begin.equals(end))
+					comp = search.compareTo(begin.get());
+				if (comp == 0)
+					return begin;
+				else if (comp < 0) {
+					switch (filter) {
+					case Greater:
+					case PreferGreater:
+					case PreferLess:
+						return begin;
+					case Less:
+					case OnlyMatch:
+						return null;
+					}
+				}
+				BinaryTreeNode<E> root = getRoot();
 				BinaryTreeNode<E> node = root.findClosest(//
 					n -> search.compareTo(n.get()), filter.less.withDefault(true), filter.strict, ctx);
 				if (node != null) {
@@ -560,6 +591,11 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 					if (id.isPresent()) {
 						return RedBlackNode.compare(theNode, nodeId.theNode, ctx);
 					} else {
+						// A couple little optimizations for common uses
+						if (nodeId.theNode.getClosest(true) == theNode)
+							return -1;
+						else if (nodeId.theNode.getClosest(false) == theNode)
+							return 1;
 						int compare = theNode.getNodesBefore(ctx) - nodeId.theNode.getNodesBefore(ctx);
 						compare = compare + 1;
 						if (compare == 0)
@@ -567,6 +603,11 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 						return compare;
 					}
 				} else {
+					// A couple little optimizations for common uses
+					if (theNode.getClosest(true) == nodeId.theNode)
+						return 1;
+					else if (theNode.getClosest(false) == nodeId.theNode)
+						return -1;
 					int compare = theNode.getNodesBefore(ctx) - nodeId.theNode.getNodesBefore(ctx);
 					// We can assume the other ID is present, because tree nodes cannot be compared
 					// if the tree has been changed since the node was removed.

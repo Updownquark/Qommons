@@ -152,9 +152,23 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 			return -1;
 		return getLocker().doOptimistically(-1, //
 			(init, ctx) -> {
-				BinaryTreeNode<E> root = getRoot();
-				if (root == null)
+				BinaryTreeNode<E> end = getTerminalElement(false);
+				if (end == null)
 					return -1;
+				int comp = search.compareTo(end.get());
+				if (comp == 0)
+					return size() - 1;
+				else if (comp > 0)
+					return -(size() - 1);
+				BinaryTreeNode<E> begin = getTerminalElement(true);
+				if (begin.equals(end))
+					return -1;
+				comp = search.compareTo(begin.get());
+				if (comp == 0)
+					return 0;
+				else if (comp < 0)
+					return -1;
+				BinaryTreeNode<E> root = getRoot();
 				return root.indexFor(node -> search.compareTo(node.get()), ctx);
 			});
 	}

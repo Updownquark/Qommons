@@ -60,6 +60,7 @@ public final class RedBlackNode<E> {
 
 	private E theValue;
 	Object wrapper;
+	private int hashCode;
 
 	/**
 	 * @param tree The tree structure that this node shall belong to
@@ -223,6 +224,18 @@ public final class RedBlackNode<E> {
 		return theSize;
 	}
 
+	@Override
+	public int hashCode() {
+		if (hashCode == 0)
+			hashCode = super.hashCode();
+		return hashCode;
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		return this == o;
+	}
+
 	/**
 	 * @param node The node to get the size of
 	 * @return The size of the node, or 0 if node is null
@@ -356,6 +369,11 @@ public final class RedBlackNode<E> {
 				return aIdx.index - bIdx.index;
 			}
 		}
+		// Comparing adjacent nodes is a very common case, so optimize for it
+		if (a.theNext == b)
+			return -1;
+		else if (b.theNext == a)
+			return 1;
 		/* Finding the index of both requires complete ascension of the tree from both nodes.
 		 * But if the common ancestor of the nodes is not the root, we can avoid ascending all the way by using the size field.
 		 *
