@@ -13,6 +13,7 @@ import org.qommons.LambdaUtils;
 import org.qommons.Lockable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.ValueHolder;
@@ -44,6 +45,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 	@Override
 	default boolean isLockSupported() {
 		return keySet().isLockSupported();
+	}
+
+	@Override
+	default ThreadConstraint getThreadConstraint() {
+		return keySet().getThreadConstraint();
 	}
 
 	@Override
@@ -615,6 +621,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		}
 
 		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return ThreadConstraint.NONE;
+		}
+
+		@Override
 		public BetterSet<K> keySet() {
 			return BetterSet.empty();
 		}
@@ -677,6 +688,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 
 		protected BetterMap<K, V> getWrapped() {
 			return theWrapped;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theWrapped.getThreadConstraint();
 		}
 
 		@Override
@@ -781,6 +797,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 
 		protected BetterMap<K, V> getMap() {
 			return theMap;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theMap.getThreadConstraint();
 		}
 
 		@Override
@@ -1134,6 +1155,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 
 		protected BetterMap<K, V> getMap() {
 			return theMap;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theMap.getThreadConstraint();
 		}
 
 		@Override

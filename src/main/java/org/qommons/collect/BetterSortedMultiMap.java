@@ -8,6 +8,7 @@ import java.util.function.Function;
 
 import org.qommons.Identifiable;
 import org.qommons.Lockable.CoreId;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterSortedList.SortedSearchFilter;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -406,6 +407,11 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 			if (theIdentity == null)
 				theIdentity = Identifiable.wrap(theWrapped.getIdentity(), "subMap", theLowerBound, theUpperBound);
 			return theIdentity;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theWrapped.getThreadConstraint();
 		}
 
 		@Override

@@ -12,6 +12,7 @@ import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 
 import org.qommons.Lockable.CoreId;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -303,6 +304,11 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	@Override
 	public boolean belongs(Object o) {
 		return true;
+	}
+
+	@Override
+	public ThreadConstraint getThreadConstraint() {
+		return theLocker.getThreadConstraint();
 	}
 
 	@Override
@@ -883,7 +889,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 		HashTableEntry(int index) {
 			theTableIndex = index;
-			entries = new BetterTreeList<>(false);
+			entries = BetterTreeList.<HashEntry> build().build();
 		}
 
 		void add(HashEntry entry, HashEntry adjacentEntry) {

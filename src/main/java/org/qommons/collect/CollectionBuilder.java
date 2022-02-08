@@ -3,6 +3,7 @@ package org.qommons.collect;
 import java.util.function.Function;
 
 import org.qommons.LambdaUtils;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
 import org.qommons.TransactableBuilder;
 
@@ -38,7 +39,7 @@ public interface CollectionBuilder<B extends CollectionBuilder<? extends B>> ext
 	 */
 	public abstract class Default<B extends Default<? extends B>> implements CollectionBuilder<B> {
 		private static final Function<Object, CollectionLockingStrategy> DEFAULT_LOCKER = LambdaUtils
-			.printableFn(__ -> new FastFailLockingStrategy(), "fast-fail", "fast-fail-collection-locker");
+			.printableFn(__ -> new FastFailLockingStrategy(ThreadConstraint.ANY), "fast-fail", "fast-fail-collection-locker");
 
 		private Function<Object, CollectionLockingStrategy> theLocker;
 		private String theDescription;
@@ -55,6 +56,14 @@ public interface CollectionBuilder<B extends CollectionBuilder<? extends B>> ext
 				theLocker = DEFAULT_LOCKER;
 			else
 				theLocker = locker;
+			return (B) this;
+		}
+
+		@Override
+		public B withThreadConstraint(ThreadConstraint threadConstraint) {
+			if (theLocker != DEFAULT_LOCKER)
+				System.err.println("WARNING: Using withThreadConstraint() after modifying the locking--locking policy will be reset");
+			theLocker = LambdaUtils.constantFn(new FastFailLockingStrategy(threadConstraint), "fast-fail on " + threadConstraint, null);
 			return (B) this;
 		}
 

@@ -748,8 +748,8 @@ public class TimeUtils {
 			theText = text;
 			theTimeZone = timeZone;
 			this.elements = elements;
-			BetterSortedSet<ParsedElement<DateElementType, Integer>> ebp = new BetterTreeSet<>(false,
-				(t1, t2) -> Integer.compare(t1.getStart(), t2.getStart()));
+			BetterSortedSet<ParsedElement<DateElementType, Integer>> ebp = BetterTreeSet
+				.<ParsedElement<DateElementType, Integer>> buildTreeSet((t1, t2) -> Integer.compare(t1.getStart(), t2.getStart())).build();
 			ebp.addAll(elements.values());
 			sequence = BetterCollections.unmodifiableSortedSet(ebp);
 		}

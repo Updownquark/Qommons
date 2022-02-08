@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.SortedSet;
 import java.util.function.Function;
 
+import org.qommons.ThreadConstraint;
 import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
@@ -47,20 +48,14 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 		return new Builder<>(compare);
 	}
 
-	/**
-	 * @param safe Whether the set should be thread-safe or fail-fast
-	 * @param compare The comparator to order the set's values
-	 */
-	public BetterTreeSet(boolean safe, Comparator<? super E> compare) {
-		this(v -> safe ? new StampedLockingStrategy(v) : new FastFailLockingStrategy(), DEFAULT_DESCRIPTION, compare);
+	BetterTreeSet(boolean safe, Comparator<? super E> compare, ThreadConstraint threadConstraint) {
+		this(v -> safe ? new StampedLockingStrategy(v, threadConstraint) : new FastFailLockingStrategy(threadConstraint),
+			DEFAULT_DESCRIPTION, compare);
 	}
 
-	/**
-	 * @param safe Whether the set should be thread-safe
-	 * @param values The initial values for the set
-	 */
-	public BetterTreeSet(boolean safe, SortedSet<E> values) {
-		this(v -> safe ? new StampedLockingStrategy(v) : new FastFailLockingStrategy(), DEFAULT_DESCRIPTION, values.comparator());
+	BetterTreeSet(boolean safe, SortedSet<E> values, ThreadConstraint threadConstraint) {
+		this(v -> safe ? new StampedLockingStrategy(v, threadConstraint) : new FastFailLockingStrategy(threadConstraint),
+			DEFAULT_DESCRIPTION, values.comparator());
 		initialize(values, v -> v);
 	}
 

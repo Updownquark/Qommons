@@ -7,7 +7,7 @@ import java.util.function.Function;
  * 
  * @param <B> The sub-type of the builder
  */
-public interface TransactableBuilder<B extends TransactableBuilder<? extends B>> {
+public interface TransactableBuilder<B extends TransactableBuilder<? extends B>> extends ThreadConstrained.Builder<B> {
 	/**
 	 * @param locker The transactable to use to thread-secure objects built with this builder
 	 * @return This builder
@@ -61,6 +61,14 @@ public interface TransactableBuilder<B extends TransactableBuilder<? extends B>>
 		/** @return The function to produce lockers for objects built with this builder */
 		protected Function<Object, Transactable> getLocker() {
 			return theLocker;
+		}
+
+		@Override
+		public B withThreadConstraint(ThreadConstraint threadConstraint) {
+			if (theLocker != DEFAULT_LOCKER)
+				System.err.println("WARNING: Using withThreadConstraint() after modifying the locking--locking policy will be reset");
+			theLocker = LambdaUtils.constantFn(Transactable.noLock(threadConstraint), "UNSAFE on " + threadConstraint, null);
+			return (B) this;
 		}
 
 		@Override

@@ -19,53 +19,26 @@ import java.util.function.Supplier;
  * </p>
  * <p>
  * The meaning of the lock is context-dependent. For example, the Lockable obtained from
- * {@link #lockable(ReentrantReadWriteLock, Object, boolean)} with an argument of true will only allow a single thread to obtain a lock at
- * any given time. But with an argument of false, any number of threads may obtain a lock simultaneously, as long as no thread holds a write
- * lock on the lock argument. Interfaces exposing or implementing Lockables should generally advertise the purpose and behavior of the lock
- * in the documentation.
+ * {@link #lockable(ReentrantReadWriteLock, Object, boolean, ThreadConstraint)} with an argument of true will only allow a single thread to
+ * obtain a lock at any given time. But with an argument of false, any number of threads may obtain a lock simultaneously, as long as no
+ * thread holds a write lock on the lock argument. Interfaces exposing or implementing Lockables should generally advertise the purpose and
+ * behavior of the lock in the documentation.
  * </p>
  * <p>
  * Instances of this class may not actually support thread-safe locking (see {@link #isLockSupported()}).
  * </p>
  */
-public interface Lockable {
-	/** A do-nothing lockable that always returns {@link Transaction#NONE} */
-	static Lockable NONE = new Lockable() {
-		@Override
-		public boolean isLockSupported() {
-			return false;
-		}
+public interface Lockable extends ThreadConstrained {
+	/**
+	 * A do-nothing lockable that always returns {@link Transaction#NONE} and has no thread constraint ({@link ThreadConstraint#ANY ANY})
+	 */
+	static Lockable NONE = noLock(ThreadConstraint.ANY, false);
 
-		@Override
-		public Transaction lock() {
-			return Transaction.NONE;
-		}
-
-		@Override
-		public Transaction tryLock() {
-			return Transaction.NONE;
-		}
-
-		@Override
-		public CoreId getCoreId() {
-			return CoreId.EMPTY;
-		}
-
-		@Override
-		public int hashCode() {
-			return 0;
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			return obj == NONE;
-		}
-
-		@Override
-		public String toString() {
-			return "NONE";
-		}
-	};
+	/**
+	 * A do-nothing lockable that always returns {@link Transaction#NONE} and represents an eventable that cannot fire events
+	 * ({@link ThreadConstraint#NONE NONE})
+	 */
+	static Lockable IMMUTABLE = noLock(ThreadConstraint.NONE, false);
 
 	/** @return Whether this object actually support locking */
 	boolean isLockSupported();
@@ -184,26 +157,28 @@ public interface Lockable {
 	/**
 	 * @param lock The lock to represent
 	 * @param debugInfo Information to make available with debugging
+	 * @param threadConstraint The thread constraint for the lockable
 	 * @return A Lockable representing the lock
 	 */
-	static Lockable lockable(ReentrantLock lock, Object debugInfo) {
+	static Lockable lockable(ReentrantLock lock, Object debugInfo, ThreadConstraint threadConstraint) {
 		if (lock == null)
-			return NONE;
+			return noLock(threadConstraint, true);
 		else
-			return new ReentrantLockLockable(lock, debugInfo);
+			return new ReentrantLockLockable(lock, debugInfo, threadConstraint);
 	}
 
 	/**
 	 * @param lock The lock to represent
 	 * @param debugInfo Information to make available with debugging
 	 * @param write Whether the Lockable should lock the lock for write or read--may be null, in which case {@link #NONE} will be returned
+	 * @param threadConstraint The thread constraint for the lockable
 	 * @return A Lockable representing the lock
 	 */
-	static Lockable lockable(ReentrantReadWriteLock lock, Object debugInfo, boolean write) {
+	static Lockable lockable(ReentrantReadWriteLock lock, Object debugInfo, boolean write, ThreadConstraint threadConstraint) {
 		if (lock == null)
-			return NONE;
+			return noLock(threadConstraint, write);
 		else
-			return new RRWLLockable(lock, debugInfo, write);
+			return new RRWLLockable(lock, debugInfo, write, threadConstraint);
 	}
 
 	/**
@@ -233,7 +208,7 @@ public interface Lockable {
 	 * @return A lockable that can safely lock all the given locks
 	 */
 	static Lockable collapse(Collection<? extends Lockable> locks) {
-		return new CollapsedLockable(null, () -> locks);
+		return new CollapsedLockable(null, () -> locks, true);
 	}
 
 	/**
@@ -246,7 +221,7 @@ public interface Lockable {
 	 * @return A lockable that can safely lock all the given locks
 	 */
 	static Lockable collapse(Lockable first, Supplier<? extends Collection<? extends Lockable>> locks) {
-		return new CollapsedLockable(first, locks);
+		return new CollapsedLockable(first, locks, false);
 	}
 
 	/**
@@ -630,6 +605,76 @@ public interface Lockable {
 		return Transaction.and(outerLock, innerLock);
 	}
 
+	/**
+	 * @param threadConstraint The thread constraint for the lockable to obey
+	 * @param write Whether exclusive locks attempted away from the thread constraint's event thread should throw an
+	 *        {@link UnsupportedOperationException}
+	 * @return A lockable that obeys the given thread constraint but provides no thread safety and always returns {@link Transaction#NONE}
+	 */
+	static Lockable noLock(ThreadConstraint threadConstraint, boolean write) {
+		return new NullLockable(threadConstraint, write);
+	}
+
+	/** Implements {@link Lockable#noLock(ThreadConstraint, boolean)} */
+	static class NullLockable implements Lockable {
+		private final ThreadConstraint theThreadConstraint;
+		private final boolean isWrite;
+
+		NullLockable(ThreadConstraint threadConstraint, boolean write) {
+			theThreadConstraint = threadConstraint;
+			isWrite = write;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theThreadConstraint;
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return false;
+		}
+
+		@Override
+		public Transaction lock() {
+			if (isWrite && !theThreadConstraint.isEventThread())
+				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+			return Transaction.NONE;
+		}
+
+		@Override
+		public Transaction tryLock() {
+			if (isWrite && !theThreadConstraint.isEventThread())
+				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+			return Transaction.NONE;
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return null;
+		}
+
+		@Override
+		public int hashCode() {
+			return theThreadConstraint.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof NullLockable && theThreadConstraint.equals(((NullLockable) obj).theThreadConstraint);
+		}
+
+		@Override
+		public String toString() {
+			if (theThreadConstraint == ThreadConstraint.NONE)
+				return "IMMUTABLE";
+			else if (theThreadConstraint == ThreadConstraint.ANY)
+				return "NONE";
+			else
+				return "lockable(" + theThreadConstraint + ")";
+		}
+	}
+
 	/** Implements {@link Lockable#lockable(Transactable)} */
 	static class STLockable implements Lockable {
 		private final Transactable theTransactable;
@@ -640,6 +685,11 @@ public interface Lockable {
 			theTransactable = transactable;
 			this.write = write;
 			this.cause = cause;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theTransactable.getThreadConstraint();
 		}
 
 		@Override
@@ -683,10 +733,19 @@ public interface Lockable {
 	static class CollapsedLockable implements Lockable {
 		private final Lockable theFirst;
 		private final Supplier<? extends Collection<? extends Lockable>> theLocks;
+		private final boolean isConstant;
 
-		public CollapsedLockable(Lockable first, Supplier<? extends Collection<? extends Lockable>> locks) {
+		public CollapsedLockable(Lockable first, Supplier<? extends Collection<? extends Lockable>> locks, boolean constant) {
 			theFirst = first;
 			theLocks = locks;
+			isConstant = constant;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			if (!isConstant)
+				return ThreadConstraint.ANY; // Can't know
+			return ThreadConstrained.getThreadConstraint(theFirst, theLocks.get(), LambdaUtils.identity());
 		}
 
 		@Override
@@ -724,14 +783,21 @@ public interface Lockable {
 		}
 	}
 
-	/** Implements {@link Lockable#lockable(ReentrantLock, Object)} */
+	/** Implements {@link Lockable#lockable(ReentrantLock, Object, ThreadConstraint)} */
 	static class ReentrantLockLockable implements Lockable {
 		private final ReentrantLock theLock;
 		private final Object theDebugInfo;
+		private final ThreadConstraint theThreadConstraint;
 
-		public ReentrantLockLockable(ReentrantLock lock, Object debugInfo) {
+		public ReentrantLockLockable(ReentrantLock lock, Object debugInfo, ThreadConstraint threadConstraint) {
 			theLock = lock;
 			theDebugInfo = debugInfo;
+			theThreadConstraint = threadConstraint;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theThreadConstraint;
 		}
 
 		@Override
@@ -741,11 +807,15 @@ public interface Lockable {
 
 		@Override
 		public Transaction lock() {
+			if (!theThreadConstraint.isEventThread())
+				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
 			return Lockable.lock(theLock, theDebugInfo);
 		}
 
 		@Override
 		public Transaction tryLock() {
+			if (!theThreadConstraint.isEventThread())
+				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
 			return Lockable.tryLock(theLock, theDebugInfo);
 		}
 
@@ -755,16 +825,23 @@ public interface Lockable {
 		}
 	}
 
-	/** Implements {@link Lockable#lockable(ReentrantReadWriteLock, Object, boolean)} */
+	/** Implements {@link Lockable#lockable(ReentrantReadWriteLock, Object, boolean, ThreadConstraint)} */
 	static class RRWLLockable implements Lockable {
 		private final ReentrantReadWriteLock theLock;
+		private final ThreadConstraint theThreadConstraint;
 		private final Object theDebugInfo;
 		private final boolean isWrite;
 
-		public RRWLLockable(ReentrantReadWriteLock lock, Object debugInfo, boolean write) {
+		public RRWLLockable(ReentrantReadWriteLock lock, Object debugInfo, boolean write, ThreadConstraint threadConstraint) {
 			theLock = lock;
 			theDebugInfo = debugInfo;
 			isWrite = write;
+			theThreadConstraint = threadConstraint;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theThreadConstraint;
 		}
 
 		@Override
@@ -774,12 +851,18 @@ public interface Lockable {
 
 		@Override
 		public Transaction lock() {
-			return Lockable.lock(theLock, theDebugInfo, isWrite);
+			if (isWrite && !theThreadConstraint.isEventThread())
+				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+			else
+				return Lockable.lock(theLock, theDebugInfo, isWrite);
 		}
 
 		@Override
 		public Transaction tryLock() {
-			return Lockable.tryLock(theLock, theDebugInfo, isWrite);
+			if (isWrite && !theThreadConstraint.isEventThread())
+				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+			else
+				return Lockable.tryLock(theLock, theDebugInfo, isWrite);
 		}
 
 		@Override

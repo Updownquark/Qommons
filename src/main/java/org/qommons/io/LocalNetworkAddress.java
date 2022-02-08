@@ -60,7 +60,7 @@ public interface LocalNetworkAddress extends Named {
 		if (cached && Internal.CACHED != null) {
 			addresses = Internal.CACHED;
 		} else {
-			addresses = new BetterTreeList<>(false);
+			addresses = BetterTreeList.<LocalNetworkAddress> build().build();
 			Enumeration<NetworkInterface> intfs = NetworkInterface.getNetworkInterfaces();
 			boolean excludedByVersion = false;
 			while (intfs.hasMoreElements()) {

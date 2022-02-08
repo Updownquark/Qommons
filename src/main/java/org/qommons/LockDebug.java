@@ -213,14 +213,14 @@ public class LockDebug {
 
 		LockStack() {
 			theThread = Thread.currentThread();
-			theStack = new BetterTreeList<>(false);
+			theStack = BetterTreeList.<LockHold> build().build();
 			theHeldLocks = BetterHashMap.build().buildMap();
 		}
 
 		LockHold lock(LockInfo lock, Object debugInfo, boolean exclusive) {
 			ElementId stackEl = theStack.addElement(null, false).getElementId();
 			MapEntryHandle<LockInfo, BetterList<LockHold>> stackHoldEntry = theHeldLocks.getOrPutEntry(lock,
-				__ -> new BetterTreeList<>(false), null, null, false, null);
+				__ -> BetterTreeList.<LockHold> build().build(), null, null, false, null);
 			ElementId holdListEl = stackHoldEntry.get().addElement(null, false).getElementId();
 			LockHold hold = new LockHold(lock, debugInfo, exclusive, this, stackEl, stackHoldEntry.getElementId(), holdListEl);
 			theStack.mutableElement(stackEl).set(hold);

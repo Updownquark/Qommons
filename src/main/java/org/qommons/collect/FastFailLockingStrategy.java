@@ -3,11 +3,23 @@ package org.qommons.collect;
 import java.util.function.LongSupplier;
 
 import org.qommons.Lockable.CoreId;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 
 /** A locking strategy that is not thread-safe, but it allows fail-fast behavior; that is, detecting changes in a thread-unsafe manner. */
 public class FastFailLockingStrategy implements CollectionLockingStrategy {
+	private final ThreadConstraint theThreadConstraint;
 	private volatile long theModCount = 0;
+
+	/** @param threadConstraint The thread constraint for this lock to obey */
+	public FastFailLockingStrategy(ThreadConstraint threadConstraint) {
+		theThreadConstraint = threadConstraint;
+	}
+
+	@Override
+	public ThreadConstraint getThreadConstraint() {
+		return theThreadConstraint;
+	}
 
 	@Override
 	public boolean isLockSupported() {
@@ -16,11 +28,15 @@ public class FastFailLockingStrategy implements CollectionLockingStrategy {
 
 	@Override
 	public Transaction lock(boolean write, Object cause) {
+		if (write && !theThreadConstraint.isEventThread())
+			throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
 		return Transaction.NONE;
 	}
 
 	@Override
 	public Transaction tryLock(boolean write, Object cause) {
+		if (write && !theThreadConstraint.isEventThread())
+			throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
 		return lock(write, cause);
 	}
 

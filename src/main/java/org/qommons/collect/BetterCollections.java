@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 import org.qommons.Lockable.CoreId;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
@@ -183,6 +184,11 @@ public class BetterCollections {
 		@Override
 		public Object getIdentity() {
 			return theWrapped.getIdentity();
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theWrapped.getThreadConstraint();
 		}
 
 		@Override
@@ -571,6 +577,11 @@ public class BetterCollections {
 		}
 
 		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theWrapped.getThreadConstraint();
+		}
+
+		@Override
 		public Object getIdentity() {
 			return theWrapped.getIdentity();
 		}
@@ -774,6 +785,11 @@ public class BetterCollections {
 		@Override
 		public long getStamp() {
 			return theWrapped.getStamp();
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theWrapped.getThreadConstraint();
 		}
 
 		@Override

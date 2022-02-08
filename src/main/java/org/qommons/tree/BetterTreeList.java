@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.Objects;
 import java.util.function.Function;
 
+import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.CollectionLockingStrategy;
@@ -57,9 +58,9 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 		return new Builder<>();
 	}
 
-	/** @param safe Whether to secure this collection for thread-safety */
-	public BetterTreeList(boolean safe) {
-		this(v -> safe ? new StampedLockingStrategy(v) : new FastFailLockingStrategy(), DEFAULT_DESCRIPTION);
+	BetterTreeList(boolean safe, ThreadConstraint threadConstraint) {
+		this(v -> safe ? new StampedLockingStrategy(v, threadConstraint) : new FastFailLockingStrategy(threadConstraint),
+			DEFAULT_DESCRIPTION);
 	}
 
 	/**

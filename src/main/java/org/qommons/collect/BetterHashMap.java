@@ -8,6 +8,7 @@ import java.util.function.ToIntFunction;
 import org.qommons.Identifiable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
@@ -99,6 +100,11 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	@Override
 	public Object getIdentity() {
 		return theEntries.getIdentity();
+	}
+
+	@Override
+	public ThreadConstraint getThreadConstraint() {
+		return theEntries.getThreadConstraint();
 	}
 
 	@Override
@@ -255,6 +261,11 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		@Override
 		public boolean belongs(Object o) {
 			return true;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return BetterHashMap.this.getThreadConstraint();
 		}
 
 		@Override

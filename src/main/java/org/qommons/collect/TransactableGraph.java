@@ -2,6 +2,7 @@ package org.qommons.collect;
 
 import org.qommons.Lockable;
 import org.qommons.Lockable.CoreId;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 
@@ -12,6 +13,11 @@ import org.qommons.Transaction;
  * @param <E> The type of edge values for the graph
  */
 public interface TransactableGraph<N, E> extends Graph<N, E>, Transactable {
+	@Override
+	default ThreadConstraint getThreadConstraint() {
+		return getNodes().getThreadConstraint();
+	}
+
 	@Override
 	default boolean isLockSupported() {
 		return getNodes().isLockSupported();

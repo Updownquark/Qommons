@@ -7,6 +7,7 @@ import java.util.function.Function;
 
 import org.qommons.Identifiable;
 import org.qommons.Lockable.CoreId;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterCollection;
@@ -142,6 +143,11 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	public void checkValid() {
 		if (theTree.getRoot() != null)
 			theTree.getRoot().checkValid();
+	}
+
+	@Override
+	public ThreadConstraint getThreadConstraint() {
+		return theLocker.getThreadConstraint();
 	}
 
 	@Override

@@ -16,44 +16,18 @@ import org.qommons.Lockable.CoreId;
  * Some interfaces may extend this interface, but support implementations that do not support locking. Hence the {@link #isLockSupported()}.
  * Such implementations should return a {@link Transaction#NONE none} transaction or some such non-null transaction.
  */
-public interface Transactable {
-	/** A do-nothing transactable that always returns {@link Transaction#NONE} */
-	static Transactable NONE = new Transactable() {
-		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return Transaction.NONE;
-		}
+public interface Transactable extends ThreadConstrained {
+	/**
+	 * A do-nothing transactable that always returns {@link Transaction#NONE} and has no thread constraint ({@link ThreadConstraint#ANY
+	 * ANY})
+	 */
+	static Transactable NONE = noLock(ThreadConstraint.ANY);
 
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return Transaction.NONE;
-		}
-
-		@Override
-		public boolean isLockSupported() {
-			return false;
-		}
-
-		@Override
-		public Lockable.CoreId getCoreId() {
-			return Lockable.CoreId.EMPTY;
-		}
-
-		@Override
-		public int hashCode() {
-			return 0;
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			return obj == NONE;
-		}
-
-		@Override
-		public String toString() {
-			return "NONE";
-		}
-	};
+	/**
+	 * A do-nothing transactable that always returns {@link Transaction#NONE} and represents an eventable that cannot fire events
+	 * ({@link ThreadConstraint#NONE NONE})
+	 */
+	static Transactable IMMUTABLE = noLock(ThreadConstraint.NONE);
 
 	/**
 	 * <p>
@@ -472,10 +446,11 @@ public interface Transactable {
 	 * 
 	 * @param lock The lock to represent
 	 * @param debugInfo Information to use to debug locking
+	 * @param constraint The thread constraint for the transactable to obey
 	 * @return A {@link Transactable} backed by the lock
 	 */
-	static Transactable transactable(ReentrantReadWriteLock lock, Object debugInfo) {
-		return new RRWLTransactable(lock, debugInfo);
+	static Transactable transactable(ReentrantReadWriteLock lock, Object debugInfo, ThreadConstraint constraint) {
+		return new RRWLTransactable(lock, debugInfo, constraint);
 	}
 
 	/**
@@ -485,7 +460,8 @@ public interface Transactable {
 	 * @return The combined transactable
 	 */
 	static Transactable combine(Collection<? extends Transactable> transactables) {
-		return combine(null, () -> transactables, x -> x);
+		return new CombinedTransactable<>(null, LambdaUtils.constantSupplier(transactables, transactables::toString, null),
+			LambdaUtils.identity(), true);
 	}
 
 	/**
@@ -496,7 +472,8 @@ public interface Transactable {
 	 * @return The combined transactable
 	 */
 	static Transactable combine(Transactable first, Transactable... others) {
-		return combine(first, () -> Arrays.asList(others), x -> x);
+		return new CombinedTransactable<>(first, LambdaUtils.constantSupplier(Arrays.asList(others), () -> Arrays.toString(others), null),
+			LambdaUtils.identity(), true);
 	}
 
 	/**
@@ -507,7 +484,8 @@ public interface Transactable {
 	 * @return The combined transactable
 	 */
 	static Transactable combine(Transactable first, Collection<? extends Transactable> others) {
-		return combine(first, () -> others, t -> t);
+		return new CombinedTransactable<>(first, LambdaUtils.constantSupplier(others, others::toString, others), LambdaUtils.identity(),
+			true);
 	}
 
 	/**
@@ -517,11 +495,12 @@ public interface Transactable {
 	 * @param first The first transactable to lock collectively
 	 * @param others The other transactables to lock collectively
 	 * @param map The function to supply a Transactable for each non-null item among <code>first</code> and <code>others</code>
+	 * @param constant Whether the <code>others</code> and <code>map</code> parameters always return the same values with the same input
 	 * @return The combined transactable
 	 */
 	static <X> Transactable combine(Transactable first, Supplier<? extends Collection<? extends X>> others,
 		Function<? super X, ? extends Transactable> map) {
-		return new CombinedTransactable<>(first, others, map);
+		return new CombinedTransactable<>(first, others, map, false);
 	}
 
 	/**
@@ -532,23 +511,96 @@ public interface Transactable {
 		return new LockableTransactable(lockable);
 	}
 
-	/** Implements {@link Transactable#transactable(ReentrantReadWriteLock, Object)} */
-	static class RRWLTransactable implements Transactable {
-		private final ReentrantReadWriteLock theLock;
-		private final Object theDebugInfo;
+	/**
+	 * @param threadConstraint The thread constraint for the transactable to obey
+	 * @return A transactable that obeys the given thread constraint but provides no thread safety and always returns
+	 *         {@link Transaction#NONE}
+	 */
+	static Transactable noLock(ThreadConstraint threadConstraint) {
+		return new NullTransactable(threadConstraint);
+	}
 
-		RRWLTransactable(ReentrantReadWriteLock lock, Object debugInfo) {
-			theLock = lock;
-			theDebugInfo = debugInfo;
+	/** Implements {@link Transactable#noLock(ThreadConstraint)} */
+	static class NullTransactable implements Transactable {
+		private final ThreadConstraint theThreadConstraint;
+
+		public NullTransactable(ThreadConstraint threadConstraint) {
+			theThreadConstraint = threadConstraint;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theThreadConstraint;
 		}
 
 		@Override
 		public Transaction lock(boolean write, Object cause) {
+			if (write && !theThreadConstraint.isEventThread())
+				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+			return Transaction.NONE;
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, Object cause) {
+			if (write && !theThreadConstraint.isEventThread())
+				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+			return Transaction.NONE;
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return null;
+		}
+
+		@Override
+		public int hashCode() {
+			return theThreadConstraint.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof NullTransactable && theThreadConstraint.equals(((NullTransactable) obj).theThreadConstraint);
+		}
+
+		@Override
+		public String toString() {
+			if (theThreadConstraint == ThreadConstraint.NONE)
+				return "IMMUTABLE";
+			else if (theThreadConstraint == ThreadConstraint.ANY)
+				return "NONE";
+			else
+				return "transactable(" + theThreadConstraint + ")";
+		}
+	}
+
+	/** Implements {@link Transactable#transactable(ReentrantReadWriteLock, Object, ThreadConstraint)} */
+	static class RRWLTransactable implements Transactable {
+		private final ReentrantReadWriteLock theLock;
+		private final Object theDebugInfo;
+		private final ThreadConstraint theThreadConstraint;
+
+		RRWLTransactable(ReentrantReadWriteLock lock, Object debugInfo, ThreadConstraint threadConstraint) {
+			theLock = lock;
+			theDebugInfo = debugInfo;
+			theThreadConstraint = threadConstraint;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theThreadConstraint;
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			if (write && !theThreadConstraint.isEventThread())
+				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
 			return Lockable.lock(theLock, theDebugInfo, write);
 		}
 
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
+			if (write && !theThreadConstraint.isEventThread())
+				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
 			return Lockable.tryLock(theLock, theDebugInfo, write);
 		}
 
@@ -567,12 +619,21 @@ public interface Transactable {
 		private final Transactable theFirst;
 		private final Supplier<? extends Collection<? extends X>> theOthers;
 		private final Function<? super X, ? extends Transactable> theMap;
+		private final boolean isConstant;
 
 		public CombinedTransactable(Transactable first, Supplier<? extends Collection<? extends X>> others,
-			Function<? super X, ? extends Transactable> map) {
+			Function<? super X, ? extends Transactable> map, boolean constant) {
 			theFirst = first;
 			theOthers = others;
 			theMap = map;
+			isConstant = constant;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			if (!isConstant)
+				return ThreadConstraint.NONE; // Can't know
+			return ThreadConstrained.getThreadConstraint(theFirst, theOthers.get(), theMap);
 		}
 
 		@Override
@@ -629,6 +690,11 @@ public interface Transactable {
 
 		public LockableTransactable(Lockable lockable) {
 			theLockable = lockable;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theLockable.getThreadConstraint();
 		}
 
 		@Override

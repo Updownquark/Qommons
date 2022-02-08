@@ -17,6 +17,11 @@ public class CausalLock implements Transactable {
 	}
 
 	@Override
+	public ThreadConstraint getThreadConstraint() {
+		return theLock.getThreadConstraint();
+	}
+
+	@Override
 	public boolean isLockSupported() {
 		return theLock.isLockSupported();
 	}

@@ -13,6 +13,7 @@ import org.qommons.Identifiable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
 import org.qommons.Ternian;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
@@ -660,6 +661,11 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		/** @return The sorted list that this is a sub-sequence of */
 		public BetterSortedList<E> getWrapped() {
 			return theWrapped;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theWrapped.getThreadConstraint();
 		}
 
 		@Override

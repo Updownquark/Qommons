@@ -3,6 +3,7 @@ package org.qommons.collect;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.qommons.Lockable.CoreId;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 
@@ -15,22 +16,29 @@ public class RRWLockingStrategy implements CollectionLockingStrategy {
 	 * Creates the locking strategy
 	 * 
 	 * @param owner The owner of the lock, for debugging
+	 * @param threadConstraint The thread constraint for the lock to obey
 	 */
-	public RRWLockingStrategy(Object owner) {
-		this(new ReentrantReadWriteLock(), owner);
+	public RRWLockingStrategy(Object owner, ThreadConstraint threadConstraint) {
+		this(new ReentrantReadWriteLock(), owner, threadConstraint);
 	}
 
 	/**
 	 * @param lock The lock to use
 	 * @param owner The owner of the lock, for debugging
+	 * @param threadConstraint The thread constraint for the lock to obey
 	 */
-	public RRWLockingStrategy(ReentrantReadWriteLock lock, Object owner) {
-		this(Transactable.transactable(lock, owner));
+	public RRWLockingStrategy(ReentrantReadWriteLock lock, Object owner, ThreadConstraint threadConstraint) {
+		this(Transactable.transactable(lock, owner, threadConstraint));
 	}
 
 	/** @param lock The lock to use */
 	public RRWLockingStrategy(Transactable lock) {
 		theLock = lock;
+	}
+
+	@Override
+	public ThreadConstraint getThreadConstraint() {
+		return theLock.getThreadConstraint();
 	}
 
 	@Override

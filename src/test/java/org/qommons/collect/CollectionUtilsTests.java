@@ -256,7 +256,7 @@ public class CollectionUtilsTests {
 			List<String> adjusted;
 			// Use BetterList implementation sometimes because it's handled a little differently in some cases
 			if (helper.getBoolean())
-				adjusted = new BetterTreeList<>(false);
+				adjusted = BetterTreeList.<String> build().build();
 			else
 				adjusted = new ArrayList<>(originalLength);
 			adjusted.addAll(original);

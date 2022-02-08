@@ -5,10 +5,12 @@ import java.util.concurrent.locks.StampedLock;
 
 import org.qommons.LockDebug;
 import org.qommons.Lockable.CoreId;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 
 /** A collection-locking strategy using {@link StampedLock} */
 public class StampedLockingStrategy implements CollectionLockingStrategy {
+	private final ThreadConstraint theThreadConstraint;
 	final Object theOwner;
 	private final ThreadLocal<ThreadState> theStampCollection;
 	final StampedLock theUpdateLocker;
@@ -27,25 +29,29 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 	 * Creates the locking strategy
 	 * 
 	 * @param owner The owner of this lock, for debugging
+	 * @param threadConstraint The thread constraint for this lock to obey
 	 */
-	public StampedLockingStrategy(Object owner) {
-		this(1, owner);
+	public StampedLockingStrategy(Object owner, ThreadConstraint threadConstraint) {
+		this(1, owner, threadConstraint);
 	}
 
 	/**
 	 * @param optimisticTries The number of optimistic tries to use in the optimistic methods before obtaining a lock
 	 * @param owner The owner of this lock, for debugging
+	 * @param threadConstraint The thread constraint for this lock to obey
 	 */
-	public StampedLockingStrategy(int optimisticTries, Object owner) {
-		this(new StampedLock(), optimisticTries, owner);
+	public StampedLockingStrategy(int optimisticTries, Object owner, ThreadConstraint threadConstraint) {
+		this(new StampedLock(), optimisticTries, owner, threadConstraint);
 	}
 
 	/**
 	 * @param lock The stamped lock to use
 	 * @param optimisticTries The number of optimistic tries to use in the optimistic methods before obtaining a lock
 	 * @param owner The owner of this lock, for debugging
+	 * @param threadConstraint The thread constraint for this lock to obey
 	 */
-	public StampedLockingStrategy(StampedLock lock, int optimisticTries, Object owner) {
+	public StampedLockingStrategy(StampedLock lock, int optimisticTries, Object owner, ThreadConstraint threadConstraint) {
+		theThreadConstraint = threadConstraint;
 		theOwner = owner;
 		theStampCollection = new ThreadLocal<ThreadState>() {
 			@Override
@@ -59,17 +65,26 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 	}
 
 	@Override
+	public ThreadConstraint getThreadConstraint() {
+		return theThreadConstraint;
+	}
+
+	@Override
 	public boolean isLockSupported() {
 		return true;
 	}
 
 	@Override
 	public Transaction lock(boolean write, Object cause) {
+		if (write && !theThreadConstraint.isEventThread())
+			throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
 		return theStampCollection.get().obtain(write);
 	}
 
 	@Override
 	public Transaction tryLock(boolean write, Object cause) {
+		if (write && !theThreadConstraint.isEventThread())
+			throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
 		return theStampCollection.get().tryObtain(write);
 	}
 

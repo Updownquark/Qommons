@@ -11,6 +11,7 @@ import org.qommons.Lockable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
 import org.qommons.Stamped;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -377,6 +378,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		}
 
 		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theMap.getThreadConstraint();
+		}
+
+		@Override
 		public boolean belongs(Object o) {
 			return o instanceof BetterMultiMapEntrySet.EntrySetElement && ((EntrySetElement) o).getCollection() == this;
 		}
@@ -659,6 +665,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 
 		protected BetterMultiMap<K, V> getMap() {
 			return theMap;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theMap.getThreadConstraint();
 		}
 
 		@Override
@@ -1157,6 +1168,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		@Override
 		protected Object createIdentity() {
 			return Identifiable.wrap(theMap, "values");
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theMap.getThreadConstraint();
 		}
 
 		@Override
@@ -1731,6 +1747,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		private static final Object ID = Identifiable.baseId("Empty multi-map", EmptyMultiMap.class);
 
 		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return ThreadConstraint.NONE;
+		}
+
+		@Override
 		public int valueSize() {
 			return 0;
 		}
@@ -1822,6 +1843,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		}
 
 		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theSource.getThreadConstraint();
+		}
+
+		@Override
 		public Object getIdentity() {
 			if (theIdentity == null)
 				theIdentity = Identifiable.wrap(theSource.getIdentity(), "single");
@@ -1874,7 +1900,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 			try (Transaction t = lock(true, null)) {
 				boolean[] added = new boolean[1];
 				MultiEntryHandle<K, V> entry = getSource().getOrPutEntry(key, k -> {
-					BetterList<V> values = new BetterTreeList<>(false);
+					BetterList<V> values = BetterTreeList.<V> build().build();
 					reverse(values, value);
 					return values;
 				}, after, before, first,
@@ -1891,7 +1917,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		public MapEntryHandle<K, X> getOrPutEntry(K key, Function<? super K, ? extends X> value, ElementId afterKey, ElementId beforeKey,
 			boolean first, Runnable added) {
 			return entryFor(getSource().getOrPutEntry(key, k -> {
-				BetterList<V> values = new BetterTreeList<>(false);
+				BetterList<V> values = BetterTreeList.<V> build().build();
 				reverse(values, value.apply(k));
 				return values;
 			}, afterKey, beforeKey, first, added));
@@ -2232,6 +2258,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 			if (theIdentity == null)
 				theIdentity = Identifiable.wrap(theSource.getIdentity(), "reverse");
 			return theIdentity;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theSource.getThreadConstraint();
 		}
 
 		@Override

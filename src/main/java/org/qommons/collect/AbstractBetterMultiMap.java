@@ -7,6 +7,7 @@ import java.util.function.Function;
 import org.qommons.Identifiable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.Stamped;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -309,6 +310,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	}
 
 	@Override
+	public ThreadConstraint getThreadConstraint() {
+		return theLocking.getThreadConstraint();
+	}
+
+	@Override
 	public Transaction lock(boolean write, Object cause) {
 		return theLocking.lock(write, cause);
 	}
@@ -498,6 +504,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		@Override
 		public boolean belongs(Object o) {
 			return getBacking().belongs(o);
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return getBacking().getThreadConstraint();
 		}
 
 		@Override
@@ -758,6 +769,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 
 		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return AbstractBetterMultiMap.this.getThreadConstraint();
+		}
+
+		@Override
 		public boolean isLockSupported() {
 			return AbstractBetterMultiMap.this.isLockSupported();
 		}
@@ -826,6 +842,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		/** @return The backing from the map for the key */
 		protected ValueCollectionBacking<E> getWrapped() {
 			return theWrapped;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theWrapped.getThreadConstraint();
 		}
 
 		@Override

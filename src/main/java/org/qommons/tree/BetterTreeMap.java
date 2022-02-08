@@ -12,6 +12,7 @@ import java.util.function.Supplier;
 import org.qommons.Identifiable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterList;
@@ -84,20 +85,13 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	private final EntrySet theEntrySet;
 	private final Object theIdentity;
 
-	/**
-	 * @param threadSafe Whether to secure this collection for thread-safety
-	 * @param compare The comparator to use to sort the keys
-	 */
-	public BetterTreeMap(boolean threadSafe, Comparator<? super K> compare) {
-		this(v -> threadSafe ? new StampedLockingStrategy(v) : new FastFailLockingStrategy(), DEFAULT_DESCRIPTION, compare);
+	BetterTreeMap(boolean threadSafe, Comparator<? super K> compare, ThreadConstraint threadConstraint) {
+		this(v -> threadSafe ? new StampedLockingStrategy(v, threadConstraint) : new FastFailLockingStrategy(threadConstraint),
+			DEFAULT_DESCRIPTION, compare);
 	}
 
-	/**
-	 * @param threadSafe Whether the map should be thread-safe
-	 * @param map The initial values for the map
-	 */
-	public BetterTreeMap(boolean threadSafe, SortedMap<K, ? extends V> map) {
-		this(v -> threadSafe ? new StampedLockingStrategy(v) : new FastFailLockingStrategy(), map);
+	BetterTreeMap(boolean threadSafe, SortedMap<K, ? extends V> map, ThreadConstraint threadConstraint) {
+		this(v -> threadSafe ? new StampedLockingStrategy(v, threadConstraint) : new FastFailLockingStrategy(threadConstraint), map);
 	}
 
 	/**
@@ -610,6 +604,11 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		@Override
 		public boolean belongs(Object o) {
 			return true;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theEntries.getThreadConstraint();
 		}
 
 		@Override

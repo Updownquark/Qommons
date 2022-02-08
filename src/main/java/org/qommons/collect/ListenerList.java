@@ -279,19 +279,6 @@ public class ListenerList<E> {
 		}
 	}
 
-	/**
-	 * Thrown from {@link ListenerList#forEach(Consumer)} if the method is called recursively and reentrant notification is not allowed
-	 * 
-	 * @see ListenerList#ListenerList(String)
-	 * @see ListenerList.Builder#reentrancyError(String)
-	 */
-	public static class ReentrantNotificationException extends IllegalStateException {
-		/** @param message The message for the exception */
-		public ReentrantNotificationException(String message) {
-			super(message);
-		}
-	}
-
 	private final ThreadLocal<Object> isFiringSafe;
 	final Node theTerminal;
 	private final String theReentrancyError;
@@ -534,6 +521,8 @@ public class ListenerList<E> {
 				} else {
 					try {
 						action.accept(node.theListener);
+					} catch (ReentrantNotificationException e) {
+						throw e;
 					} catch (RuntimeException e) {
 						// If the listener throws an exception, we can't have that gumming up the works
 						// If they want better handling, they can try/catch their own code
@@ -591,6 +580,11 @@ public class ListenerList<E> {
 			node = node.next;
 		}
 		return sz;
+	}
+
+	/** @return Whether this listener list is currently notifying its listeners on the current thread */
+	public boolean isFiring() {
+		return isFiringSafe != null && isFiringSafe.get() != null;
 	}
 
 	/**

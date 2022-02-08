@@ -283,7 +283,7 @@ public class TreeUtilsTest {
 		@Override
 		public void accept(TestHelper t) {
 			// Build a random tree set
-			BetterTreeSet<IntHolder> set = new BetterTreeSet<>(false, IntHolder::compareTo);
+			BetterTreeSet<IntHolder> set = BetterTreeSet.<IntHolder> buildTreeSet(IntHolder::compareTo).build();
 			int length = t.getInt(2, 10);
 			// int length = t.getInt(2, 10000);
 			for (int i = 0; i < length; i++)
@@ -384,7 +384,7 @@ public class TreeUtilsTest {
 	static class TreeSetTester implements TestHelper.Testable {
 		@Override
 		public void accept(TestHelper helper) {
-			BetterTreeSet<Integer> set = new BetterTreeSet<>(false, Integer::compareTo);
+			BetterTreeSet<Integer> set = BetterTreeSet.<Integer> buildTreeSet(Integer::compareTo).build();
 			testCollection(set, s -> s.checkValid(), null, helper);
 		}
 	}
@@ -408,26 +408,26 @@ public class TreeUtilsTest {
 	@Test
 	@SuppressWarnings("static-method")
 	public void testTreeMap() {
-		BetterTreeMap<Integer, Integer> map = new BetterTreeMap<>(false, new Comparator<Integer>() {
+		BetterTreeMap<Integer, Integer> map = BetterTreeMap.<Integer> build(new Comparator<Integer>() {
 			@Override
 			public int compare(Integer o1, Integer o2) {
 				return o1.compareTo(o2);
 			}
-		});
+		}).buildMap();
 		testMap(map, s -> s.checkValid(), null);
 	}
 
 	static class TreeListTester implements TestHelper.Testable {
 		@Override
 		public void accept(TestHelper helper) {
-			BetterTreeList<Integer> list = new BetterTreeList<>(false);
+			BetterTreeList<Integer> list = BetterTreeList.<Integer> build().build();
 			testCollection(list, l -> list.checkValid(), null, helper);
 
 			// I want the tree list to tolerate appending to the list during iteration.
 			// In particular, I want to make sure that if a value is added to the list on the last value iterated, then the iteration will
 			// continue with the new value. This property is important for the listener list in SimpleObservable
 			testIterationAdd(list);
-			testIterationAdd(new BetterTreeList<>(true));
+			testIterationAdd(BetterTreeList.<Integer> build().build());
 		}
 	}
 

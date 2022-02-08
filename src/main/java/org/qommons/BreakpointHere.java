@@ -205,10 +205,19 @@ public class BreakpointHere {
 	 *         info is not available to the VM.
 	 */
 	public static StackTraceElement getCodeLine() {
+		return getCodeLine(0);
+	}
+
+	/**
+	 * @param level The number of levels up the stack to get
+	 * @return The StackTraceElement representing the line of code <code>level</code> calls up the stack from the line that this method was
+	 *         called from. May be null if the necessary debugging info is not available to the VM.
+	 */
+	public static StackTraceElement getCodeLine(int level) {
 		StackTraceElement[] stack = Thread.currentThread().getStackTrace();
 		if (stack == null || stack.length < 2)
 			return null;
-		return stack[1];
+		return stack[2 + level];
 	}
 
 	private static class AsyncInputReader {

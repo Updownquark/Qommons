@@ -1211,7 +1211,7 @@ public class TestHelper {
 		 * @return This master
 		 */
 		public TestExecutionMaster start() {
-			BetterList<String> args = new BetterTreeList<String>(false).with("java");
+			BetterList<String> args = BetterTreeList.<String> build().build().with("java");
 			if (DEBUG_CONCURRENT)
 				args.add("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000");
 			args.with("-classpath", System.getProperty("java.class.path"), //

@@ -17,6 +17,7 @@ import java.util.stream.Stream;
 import org.qommons.Identifiable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -644,6 +645,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		/** @return The BetterList that this is a sub-list of */
 		protected BetterList<E> getWrapped() {
 			return theWrapped;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theWrapped.getThreadConstraint();
 		}
 
 		@Override
@@ -1355,6 +1361,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public boolean belongs(Object o) {
 			return true;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return ThreadConstraint.NONE;
 		}
 
 		@Override

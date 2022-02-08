@@ -6,6 +6,7 @@ import java.util.NavigableSet;
 import java.util.SortedSet;
 import java.util.function.Function;
 
+import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterSortedList;
@@ -84,12 +85,9 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 	private final Comparator<? super E> theCompare;
 	private final boolean isDistinct;
 
-	/**
-	 * @param safe Whether the list should be thread-safe or fail-fast
-	 * @param compare The comparator to order the values
-	 */
-	public SortedTreeList(boolean safe, Comparator<? super E> compare) {
-		this(v -> safe ? new StampedLockingStrategy(v) : new FastFailLockingStrategy(), DEFAULT_DESCRIP, compare);
+	SortedTreeList(boolean safe, Comparator<? super E> compare, ThreadConstraint threadConstraint) {
+		this(v -> safe ? new StampedLockingStrategy(v, threadConstraint) : new FastFailLockingStrategy(threadConstraint), DEFAULT_DESCRIP,
+			compare);
 	}
 
 	/**

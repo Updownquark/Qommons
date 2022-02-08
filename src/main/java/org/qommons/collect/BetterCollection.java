@@ -21,6 +21,7 @@ import org.qommons.Lockable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
 import org.qommons.Stamped;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -901,6 +902,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theWrapped.getThreadConstraint();
+		}
+
+		@Override
 		public Object getIdentity() {
 			if (theIdentity == null)
 				theIdentity = Identifiable.wrap(theWrapped.getIdentity(), "reverse");
@@ -1077,6 +1083,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return ThreadConstraint.NONE;
+		}
+
+		@Override
 		public boolean isLockSupported() {
 			return true;
 		}
@@ -1221,6 +1232,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		/** @return The collection that this element collection is backed by */
 		protected BetterCollection<E> getCollection() {
 			return theCollection;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theCollection.getThreadConstraint();
 		}
 
 		@Override
