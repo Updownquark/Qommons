@@ -549,7 +549,7 @@ public interface Transactable extends ThreadConstrained {
 
 		@Override
 		public CoreId getCoreId() {
-			return null;
+			return CoreId.EMPTY;
 		}
 
 		@Override

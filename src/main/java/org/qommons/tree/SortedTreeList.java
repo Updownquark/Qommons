@@ -141,7 +141,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 	 *         <ul>
 	 *         <li>The index of some value <code>v</code> in this list for which <code>search.compareTo(v)==0</code> if such a value
 	 *         exists</li>
-	 *         <li>or <code>-(i-1)</code> where <code>i</code> is the index at which such a value would be inserted in this list</li>
+	 *         <li>or <code>-i-1</code> where <code>i</code> is the index at which such a value would be inserted in this list</li>
 	 *         </ul>
 	 */
 	@Override
@@ -157,7 +157,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 				if (comp == 0)
 					return size() - 1;
 				else if (comp > 0)
-					return -(size() - 1);
+					return -size() - 1;
 				BinaryTreeNode<E> begin = getTerminalElement(true);
 				if (begin.equals(end))
 					return -1;

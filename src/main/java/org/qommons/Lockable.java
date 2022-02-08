@@ -651,7 +651,7 @@ public interface Lockable extends ThreadConstrained {
 
 		@Override
 		public CoreId getCoreId() {
-			return null;
+			return CoreId.EMPTY;
 		}
 
 		@Override
