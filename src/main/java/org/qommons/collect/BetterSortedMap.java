@@ -236,7 +236,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 	}
 
 	@Override
-	default Map.Entry<K, V> ceilingEntry(K key) {
+	default MapEntryHandle<K, V> ceilingEntry(K key) {
 		return search(keySet().searchFor(key, 0), BetterSortedList.SortedSearchFilter.Greater);
 	}
 
