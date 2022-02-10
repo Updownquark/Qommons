@@ -508,6 +508,8 @@ public class ListenerList<E> {
 						node.remove();
 						try {
 							action.accept(node.theListener);
+						} catch (ReentrantNotificationException e) {
+							throw e;
 						} catch (RuntimeException e) {
 							// If the listener throws an exception, we can't have that gumming up the works
 							// If they want better handling, they can try/catch their own code
