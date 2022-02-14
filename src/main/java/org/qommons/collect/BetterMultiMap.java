@@ -1735,6 +1735,21 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		public ElementId getKeyId() {
 			return theMultiEntry.getElementId();
 		}
+
+		@Override
+		public int hashCode() {
+			return theValueId.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof DefaultValueHandle && theValueId.equals(((DefaultValueHandle<?, ?>) obj).theValueId);
+		}
+
+		@Override
+		public String toString() {
+			return theValueId.toString();
+		}
 	}
 
 	/**

@@ -54,8 +54,6 @@
 
 package org.qommons.config;
 
-import com.sun.xml.internal.ws.util.xml.CDATA;
-
 /**
  * This is shamelessly copied from JDOM
  * 
