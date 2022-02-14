@@ -3,8 +3,10 @@ package org.qommons.tree;
 import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Set;
 import java.util.Spliterator;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -1028,6 +1030,19 @@ public final class RedBlackNode<E> {
 	private static Field JAVA_TREE_ENTRY_LEFT;
 	private static Field JAVA_TREE_ENTRY_RIGHT;
 	private static Field JAVA_TREE_ENTRY_COLOR;
+	private static Set<Class<?>> JAVA_TREE_ROOT_KEYS;
+	static {
+		Set<Class<?>> javaTreeRootKeys = new HashSet<>();
+		JAVA_TREE_ROOT_KEYS = Collections.unmodifiableSet(javaTreeRootKeys);
+		try {
+			javaTreeRootKeys.add(TreeSet.class);
+			javaTreeRootKeys.add(Class.forName(TreeMap.class.getName() + "$Entry"));
+			javaTreeRootKeys.add(Class.forName(TreeMap.class.getName() + "$EntrySet"));
+			javaTreeRootKeys.add(Class.forName(TreeMap.class.getName() + "$KeySet"));
+			javaTreeRootKeys.add(Class.forName(TreeMap.class.getName() + "$Values"));
+		} catch (Throwable e) {
+		}
+	}
 	private static Map<Class<?>, TreeMapRootAccess> JAVA_TREE_ROOT_GETTERS;
 
 	private static boolean initJavaTreeHack() {
@@ -1155,13 +1170,15 @@ public final class RedBlackNode<E> {
 	 */
 	public static <T, E> boolean build(RedBlackTree<T> tree, Iterable<E> values, Function<? super E, ? extends T> mapFn) {
 		Class<?> type = values.getClass();
-		TreeMapRootAccess rootGetter;
-		if (!initJavaTreeHack())
-			rootGetter = null;
-		else if (values instanceof TreeSet)
-			rootGetter = JAVA_TREE_ROOT_GETTERS.get(TreeSet.class);
-		else
-			rootGetter = JAVA_TREE_ROOT_GETTERS.get(type);
+		TreeMapRootAccess rootGetter = null;
+		for (Class<?> rootKey : JAVA_TREE_ROOT_KEYS) {
+			if (rootKey.isAssignableFrom(type)) {
+				if (!initJavaTreeHack())
+					break;
+				rootGetter = JAVA_TREE_ROOT_GETTERS.get(type);
+				break;
+			}
+		}
 		if (rootGetter != null) {
 			TreeMap<?, ?> map = rootGetter.getMap(values);
 			if (map != null) {
@@ -1172,7 +1189,8 @@ public final class RedBlackNode<E> {
 					throw new IllegalStateException(e);
 				}
 				if (root != null) {
-					tree.setRoot(buildNode(tree, null, root, entry -> rootGetter.makeValue(entry, mapFn)));
+					TreeMapRootAccess fRootGetter = rootGetter;
+					tree.setRoot(buildNode(tree, null, root, entry -> fRootGetter.makeValue(entry, mapFn)));
 					RedBlackNode<T>[] bounds = new RedBlackNode[2];
 					tree.getRoot()._hookUpAdjacentLinks(bounds);
 					tree.theFirst = bounds[0];
