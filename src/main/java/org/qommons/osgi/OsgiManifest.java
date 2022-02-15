@@ -338,9 +338,8 @@ public class OsgiManifest {
 						throw new IllegalArgumentException("Manifest attributes beginning with '\"' must also end with '\"'");
 					}
 					attrValue = attrValue.substring(1, attrValue.length() - 1);
-				} else {
-					attributes.put(attrMatch.group(1).trim(), attrValue);
 				}
+				attributes.put(attrMatch.group(1).trim(), attrValue);
 			}
 			return value;
 		}

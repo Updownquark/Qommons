@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
@@ -1033,8 +1034,13 @@ public class OsgiBundleSet {
 		if (bundles == null) {
 			return null;
 		}
+		boolean qualified = (version.getLowerBound().isPresent() && version.getLowerBound().getValue().qualifier != null)
+			|| (version.getUpperBound().isPresent() && version.getUpperBound().getValue().qualifier != null);
 		for (Bundle bundle : bundles) {
-			if (version.contains(bundle.getVersion())) {
+			Version bundleVersion = bundle.getVersion();
+			if (!qualified)
+				bundleVersion = bundleVersion.unqualified();
+			if (version.contains(bundleVersion)) {
 				return bundle;
 			}
 		}
@@ -1095,8 +1101,12 @@ public class OsgiBundleSet {
 		if (test == null || test.test(newBundle)) {
 			theBundles.compute(newBundle.getName(), (name, old) -> {
 				if (old == null) {
-					old = new ArrayList<>(3);
+					old = new ArrayList<>(2);
 				}
+				// Latest version first
+				int index = Collections.binarySearch(old, newBundle, (b1, b2) -> -b1.getVersion().compareTo(b2.getVersion()));
+				if (index < 0)
+					index = -index - 1;
 				old.add(newBundle);
 				return old;
 			});
@@ -1236,6 +1246,7 @@ public class OsgiBundleSet {
 					.when("jar", void.class, c -> c.missing().forbidden()))//
 					.addStringArgument("start-components", a -> a.when("start-ds", String.class, c -> c.missing().forbidden()))//
 					.addStringArgument("pre-init", arg -> arg.optional())//
+				.addStringArgument("ds-configuration", arg->arg.optional().when("start-ds", String.class, c->c.missing().forbidden()))//
 				;
 			})//
 			.acceptUnmatched(true)//
@@ -1311,8 +1322,10 @@ public class OsgiBundleSet {
 			}
 			Object service;
 			try {
-				service = serviceType.newInstance();
-			} catch (InstantiationException | IllegalAccessException e) {
+				Constructor<?> c = serviceType.getConstructor();
+				service = c.newInstance();
+			} catch (InstantiationException | IllegalAccessException | NoSuchMethodException | SecurityException | IllegalArgumentException
+				| InvocationTargetException e) {
 				throw new IllegalArgumentException("Could not instantiate DS service " + serviceType.getName(), e);
 			}
 			Class<?> executorIntf = getExecutorIntf(serviceType);
@@ -1326,10 +1339,39 @@ public class OsgiBundleSet {
 			} catch (NoSuchMethodException | SecurityException e) {
 				throw new IllegalStateException("Bad signatures coded for " + ComponentBasedExecutor.class.getName() + " reflection", e);
 			}
-			Set<String> startBundles = new HashSet<>(args.getAll("start-components", String.class));
+			Set<String> configuration = new LinkedHashSet<>(args.getAll("ds-configuration", String.class));
+			Set<String> startBundles = new LinkedHashSet<>(args.getAll("start-components", String.class));
 			for (Bundle bundle : bundles.getBundles()) {
 				for (OsgiManifest.ManifestEntry component : bundle.getManifest().getAll("Service-Component")) {
 					String componentName = component.getValue();
+					if (configuration != null) {
+						String excludes=component.getAttributes().get("exclude-configurations");
+						if (excludes != null) {
+							boolean found = false;
+							for (String cfg : excludes.split(",")) {
+								if (configuration.contains(cfg)) {
+									found = true;
+									break;
+								}
+							}
+							if (found)
+								continue;
+						}
+					}
+					String includes = component.getAttributes().get("include-configurations");
+					if (includes != null) {
+						if (configuration == null)
+							continue;
+						boolean found = false;
+						for (String cfg : includes.split(",")) {
+							if (configuration.contains(cfg)) {
+								found = true;
+								break;
+							}
+						}
+						if (!found)
+							continue;
+					}
 					if (componentName.endsWith(".xml")) {
 						System.err.println("Unconverted service component: " + componentName);
 						continue;

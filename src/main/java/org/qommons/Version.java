@@ -52,6 +52,14 @@ public class Version implements Comparable<Version> {
 		return comp;
 	}
 
+	/** @return A {@link Version} that is the same as this, but with no {@link #qualifier} */
+	public Version unqualified() {
+		if (qualifier == null)
+			return this;
+		else
+			return new Version(major, minor, patch, null);
+	}
+
 	@Override
 	public int hashCode() {
 		return (major << 24) ^ (minor << 16) ^ (patch << 8) ^ (qualifier == null ? 0 : qualifier.hashCode());
