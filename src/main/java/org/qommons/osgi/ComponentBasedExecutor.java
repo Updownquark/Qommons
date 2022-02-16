@@ -16,6 +16,16 @@ public interface ComponentBasedExecutor {
 	<C> Object loadComponent(Class<C> componentType);
 
 	/**
+	 * @param componentTypes The component classes
+	 * @return This executor
+	 */
+	default ComponentBasedExecutor loadComponents(Class<?>... componentTypes) {
+		for (Class<?> componentType : componentTypes)
+			loadComponent(componentType);
+		return this;
+	}
+
+	/**
 	 * Called after all initial components have been {@link #loadComponent(Class) loaded}
 	 * 
 	 * @param startComponents The names of the set of components to activate initially
