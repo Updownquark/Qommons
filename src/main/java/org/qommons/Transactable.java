@@ -536,14 +536,14 @@ public interface Transactable extends ThreadConstrained {
 		@Override
 		public Transaction lock(boolean write, Object cause) {
 			if (write && !theThreadConstraint.isEventThread())
-				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
 			return Transaction.NONE;
 		}
 
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			if (write && !theThreadConstraint.isEventThread())
-				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
 			return Transaction.NONE;
 		}
 
@@ -593,14 +593,14 @@ public interface Transactable extends ThreadConstrained {
 		@Override
 		public Transaction lock(boolean write, Object cause) {
 			if (write && !theThreadConstraint.isEventThread())
-				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
 			return Lockable.lock(theLock, theDebugInfo, write);
 		}
 
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			if (write && !theThreadConstraint.isEventThread())
-				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
 			return Lockable.tryLock(theLock, theDebugInfo, write);
 		}
 

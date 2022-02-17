@@ -638,14 +638,14 @@ public interface Lockable extends ThreadConstrained {
 		@Override
 		public Transaction lock() {
 			if (isWrite && !theThreadConstraint.isEventThread())
-				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
 			return Transaction.NONE;
 		}
 
 		@Override
 		public Transaction tryLock() {
 			if (isWrite && !theThreadConstraint.isEventThread())
-				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
 			return Transaction.NONE;
 		}
 
@@ -808,14 +808,14 @@ public interface Lockable extends ThreadConstrained {
 		@Override
 		public Transaction lock() {
 			if (!theThreadConstraint.isEventThread())
-				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
 			return Lockable.lock(theLock, theDebugInfo);
 		}
 
 		@Override
 		public Transaction tryLock() {
 			if (!theThreadConstraint.isEventThread())
-				throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
 			return Lockable.tryLock(theLock, theDebugInfo);
 		}
 

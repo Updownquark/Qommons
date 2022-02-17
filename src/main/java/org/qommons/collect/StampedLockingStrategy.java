@@ -77,14 +77,14 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 	@Override
 	public Transaction lock(boolean write, Object cause) {
 		if (write && !theThreadConstraint.isEventThread())
-			throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+			throw new IllegalStateException(WRONG_THREAD_MESSAGE);
 		return theStampCollection.get().obtain(write);
 	}
 
 	@Override
 	public Transaction tryLock(boolean write, Object cause) {
 		if (write && !theThreadConstraint.isEventThread())
-			throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+			throw new IllegalStateException(WRONG_THREAD_MESSAGE);
 		return theStampCollection.get().tryObtain(write);
 	}
 

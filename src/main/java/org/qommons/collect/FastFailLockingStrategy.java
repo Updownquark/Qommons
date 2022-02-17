@@ -29,14 +29,14 @@ public class FastFailLockingStrategy implements CollectionLockingStrategy {
 	@Override
 	public Transaction lock(boolean write, Object cause) {
 		if (write && !theThreadConstraint.isEventThread())
-			throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+			throw new IllegalStateException(WRONG_THREAD_MESSAGE);
 		return Transaction.NONE;
 	}
 
 	@Override
 	public Transaction tryLock(boolean write, Object cause) {
 		if (write && !theThreadConstraint.isEventThread())
-			throw new UnsupportedOperationException(WRONG_THREAD_MESSAGE);
+			throw new IllegalStateException(WRONG_THREAD_MESSAGE);
 		return lock(write, cause);
 	}
 
