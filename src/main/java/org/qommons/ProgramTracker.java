@@ -3,6 +3,7 @@ package org.qommons;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -266,7 +267,7 @@ public class ProgramTracker implements Cloneable {
 		TrackNode parent;
 
 		/** The subroutines of this routine */
-		java.util.ArrayList<TrackNode> children;
+		Map<String, TrackNode> children;
 
 		/**
 		 * The number of times that this routine was {@link ProgramTracker#start(String) start}ed but not explicitly
@@ -277,7 +278,7 @@ public class ProgramTracker implements Cloneable {
 		boolean isReleased;
 
 		TrackNode(TrackNode aParent, String aName, boolean withStats) {
-			children = new java.util.ArrayList<>();
+			children = new LinkedHashMap<>();
 			init(aParent, aName, withStats);
 		}
 
@@ -380,7 +381,7 @@ public class ProgramTracker implements Cloneable {
 
 		/** @return The subroutines of this routine */
 		public TrackNode [] getChildren() {
-			return children.toArray(new TrackNode[children.size()]);
+			return children.values().toArray(new TrackNode[children.size()]);
 		}
 
 		void clear() {
@@ -396,10 +397,10 @@ public class ProgramTracker implements Cloneable {
 		public long getLocalLength(PrintConfig config) {
 			long ret = getRealLength();
 			if(config == null || !config.isAsync())
-				for(TrackNode ch : children)
+				for(TrackNode ch : children.values())
 					ret -= ch.runLength;
 			else
-				for(Object ch : children.toArray())
+				for(Object ch : children.values().toArray())
 					ret -= ((TrackNode) ch).runLength;
 			return ret;
 		}
@@ -432,7 +433,7 @@ public class ProgramTracker implements Cloneable {
 					accent = true;
 				else if(realLength >= thresholdTime) {
 					long length2 = realLength;
-					for(TrackNode child : children) {
+					for(TrackNode child : children.values()) {
 						if(child.getRealLength() >= thresholdTime)
 							length2 -= child.getRealLength();
 					}
@@ -450,12 +451,7 @@ public class ProgramTracker implements Cloneable {
 		 * @return The subtask with the given name
 		 */
 		public TrackNode create(String task) {
-			for(TrackNode child : children)
-				if(child.getName().equals(task))
-					return child;
-			TrackNode ret = newNode(this, task);
-			children.add(ret);
-			return ret;
+			return children.computeIfAbsent(task, __->newNode(this, task));
 		}
 
 		/**
@@ -497,16 +493,13 @@ public class ProgramTracker implements Cloneable {
 			unfinished += node.unfinished;
 			if(lengthStats != null && node.lengthStats != null)
 				lengthStats.merge(node.lengthStats);
-			for(TrackNode child : node.children) {
-				boolean found = false;
-				for(TrackNode thisChild : children)
-					if(thisChild.name.equals(child.name)) {
-						thisChild.merge(child);
-						found = true;
-						break;
-					}
-				if(!found)
-					children.add(child.clone());
+			for(TrackNode child : node.children.values()) {
+				children.compute(child.getName(), (__, old)->{
+					if(old==null)
+						return child.clone();
+					old.merge(child);
+					return old;
+				});
 			}
 		}
 
@@ -541,11 +534,11 @@ public class ProgramTracker implements Cloneable {
 			if(lengthStats != null)
 				ret.lengthStats = lengthStats.clone();
 			ret.parent = null;
-			ret.children = new java.util.ArrayList<>();
-			for(TrackNode child : children) {
+			ret.children = new LinkedHashMap<>();
+			for(TrackNode child : children.values()) {
 				TrackNode childClone = child.clone();
 				childClone.parent = this;
-				ret.children.add(childClone);
+				ret.children.put(child.getName(), childClone);
 			}
 			return ret;
 		}
@@ -590,7 +583,7 @@ public class ProgramTracker implements Cloneable {
 						accent = true;
 					else if(realLength >= thresholdTime) {
 						long length2 = realLength;
-						for(TrackNode child : children) {
+						for(TrackNode child : children.values()) {
 							if(child.getRealLength() >= thresholdTime)
 								length2 -= child.getRealLength();
 						}
@@ -666,7 +659,7 @@ public class ProgramTracker implements Cloneable {
 				ret.with("lengthStats", lengthStats.toJson());
 			List<Object> jsonChildren = new ArrayList<>(children.size());
 			ret.with("children", jsonChildren);
-			for(TrackNode child : children)
+			for(TrackNode child : children.values())
 				jsonChildren.add(child.toJson());
 			return ret;
 		}
@@ -674,9 +667,9 @@ public class ProgramTracker implements Cloneable {
 
 	private String theName;
 
-	private java.util.ArrayList<TrackNode> theCacheNodes;
+	private List<TrackNode> theCacheNodes;
 
-	private java.util.ArrayList<TrackNode> theNodes;
+	private Map<String, TrackNode> theNodes;
 
 	boolean isWithRTStats;
 
@@ -706,7 +699,7 @@ public class ProgramTracker implements Cloneable {
 	public ProgramTracker(String name, boolean withStats) {
 		theName = name;
 		theCacheNodes = new java.util.ArrayList<>();
-		theNodes = new java.util.ArrayList<>();
+		theNodes = new LinkedHashMap<>();
 		isOn = true;
 		isWithRTStats = withStats;
 	}
@@ -796,7 +789,7 @@ public class ProgramTracker implements Cloneable {
 			return;
 		theCacheNodes.add(node);
 		node.isReleased = true;
-		for(TrackNode child : node.children)
+		for(TrackNode child : node.children.values())
 			releaseNode(child);
 		node.clear();
 	}
@@ -809,7 +802,7 @@ public class ProgramTracker implements Cloneable {
 	public ProgramTracker clear() {
 		theCurrentNode = null;
 		if(!theNodes.isEmpty()) {
-			for(TrackNode node : theNodes)
+			for(TrackNode node : theNodes.values())
 				releaseNode(node);
 			theNodes.clear();
 		}
@@ -836,17 +829,9 @@ public class ProgramTracker implements Cloneable {
 			throw new IllegalStateException("Program Trackers may not be used by multiple threads!");
 		 */
 		TrackNode ret = null;
-		if(theCurrentNode == null) {
-			for(TrackNode node : theNodes)
-				if(node.getName().equals(routine)) {
-					ret = node;
-					break;
-				}
-			if(ret == null) {
-				ret = newNode(null, routine);
-				theNodes.add(ret);
-			}
-		} else
+		if(theCurrentNode == null)
+			ret=theNodes.computeIfAbsent(routine, __->newNode(null, routine));
+		else
 			ret = theCurrentNode.create(routine);
 		ret.start();
 		theCurrentNode = ret;
@@ -867,9 +852,11 @@ public class ProgramTracker implements Cloneable {
 			throw new IllegalStateException("Program Trackers may not be used by multiple threads!");
 		 */
 		long time = System.currentTimeMillis();
-		long nanos = -1;
-		if(isWithRTStats)
+		long nanos = -1, nanoCost = -1;
+		if (isWithRTStats) {
 			nanos = System.nanoTime();
+			nanoCost = nanos - theCurrentNode.latestStartNanos;
+		}
 		if(theCurrentNode == null || theCurrentNode != routine) {
 			TrackNode cn = theCurrentNode;
 			while(cn != null && cn != routine)
@@ -880,7 +867,7 @@ public class ProgramTracker implements Cloneable {
 					cn.unfinished++;
 					cn.runLength += time - theCurrentNode.latestStartTime;
 					if(isWithRTStats && theCurrentNode.lengthStats != null)
-						cn.runLengthNanos += nanos - theCurrentNode.latestStartNanos;
+						cn.runLengthNanos += nanoCost;
 					cn.endTime = time;
 					// But don't pollute the statistics
 					cn = cn.parent;
@@ -903,14 +890,14 @@ public class ProgramTracker implements Cloneable {
 		}
 		if(theCurrentNode != null) {
 			if(isWithRTStats && theCurrentNode.lengthStats != null) {
-				theCurrentNode.lengthStats.add((nanos - theCurrentNode.latestStartNanos) / 1.0e9f);
-				theCurrentNode.runLengthNanos += nanos - theCurrentNode.latestStartNanos;
+				theCurrentNode.lengthStats.add(nanoCost / 1.0e9f);
+				theCurrentNode.runLengthNanos += nanoCost;
 			}
 			theCurrentNode.runLength += time - theCurrentNode.latestStartTime;
 			theCurrentNode.endTime = time;
 			theCurrentNode = theCurrentNode.parent;
 		}
-		for (TrackNode child : routine.children)
+		for (TrackNode child : routine.children.values())
 			child.latestCount = 0;
 	}
 
@@ -921,7 +908,7 @@ public class ProgramTracker implements Cloneable {
 
 	/** @return The raw data gathered by this tracker */
 	public final TrackNode [] getData() {
-		return theNodes.toArray(new TrackNode[theNodes.size()]);
+		return theNodes.values().toArray(new TrackNode[theNodes.size()]);
 	}
 
 	/**
@@ -997,9 +984,10 @@ public class ProgramTracker implements Cloneable {
 		if(config.isWithIntro())
 			sb.append("Profiling data for tracker " + theName + ":");
 		long totalTime = 0;
-		for(TrackNode node : theNodes)
+		for (TrackNode node : theNodes.values()) {
 			totalTime += node.getRealLength();
-		for(TrackNode node : theNodes)
+		}
+		for(TrackNode node : theNodes.values())
 			print(node, sb, 0, totalTime, 0, config);
 		return sb;
 	}
@@ -1030,11 +1018,11 @@ public class ProgramTracker implements Cloneable {
 			throw new IllegalStateException("Clone not supported", e);
 		}
 		ret.theCacheNodes = new java.util.ArrayList<>();
-		ret.theNodes = new java.util.ArrayList<>();
+		ret.theNodes = new LinkedHashMap<>();
 		ret.theCurrentNode = null;
-		for(TrackNode node : theNodes) {
+		for(TrackNode node : theNodes.values()) {
 			TrackNode clone = node.clone();
-			ret.theNodes.add(clone);
+			ret.theNodes.put(node.getName(), clone);
 			if(node == theCurrentNode)
 				ret.theCurrentNode = clone;
 		}
@@ -1052,7 +1040,7 @@ public class ProgramTracker implements Cloneable {
 		ret.with("withStats", Boolean.valueOf(isWithRTStats));
 		List<Object> nodes = new ArrayList<>();
 		ret.with("nodes", nodes);
-		for(TrackNode node : theNodes)
+		for(TrackNode node : theNodes.values())
 			nodes.add(node.toJson());
 		return ret;
 	}
@@ -1063,16 +1051,13 @@ public class ProgramTracker implements Cloneable {
 	 * @param tracker The tracker whose data to merge
 	 */
 	public void merge(ProgramTracker tracker) {
-		for(TrackNode node : tracker.theNodes) {
-			boolean found = false;
-			for(TrackNode thisNode : theNodes)
-				if(thisNode.name.equals(node.name)) {
-					thisNode.merge(node);
-					found = true;
-					break;
-				}
-			if(!found)
-				theNodes.add(node.clone());
+		for(TrackNode node : tracker.theNodes.values()) {
+			theNodes.compute(node.getName(), (__, old)->{
+				if(old==null)
+					return node.clone();
+				old.merge(node);
+				return old;
+			});
 		}
 	}
 
@@ -1082,10 +1067,10 @@ public class ProgramTracker implements Cloneable {
 		sb.append('\n');
 		node.write(indent, lastTime, totalTime, sb, config);
 		if(!config.isAsync())
-			for(TrackNode ch : node.children)
+			for(TrackNode ch : node.children.values())
 				print(ch, sb, lastTime, totalTime, indent + 1, config);
 		else
-			for(Object ch : node.children.toArray())
+			for(Object ch : node.children.values().toArray())
 				print((TrackNode) ch, sb, lastTime, totalTime, indent + 1, config);
 	}
 
@@ -1142,8 +1127,10 @@ public class ProgramTracker implements Cloneable {
 	 */
 	public static ProgramTracker fromJson(JsonObject json) {
 		ProgramTracker ret = new ProgramTracker((String) json.get("name"), ((Boolean) json.get("withStats")).booleanValue());
-		for (JsonObject node : (java.util.List<JsonObject>) json.get("nodes"))
-			ret.theNodes.add(ret.nodeFromJson(null, node));
+		for (JsonObject jsonNode : (java.util.List<JsonObject>) json.get("nodes")) {
+			TrackNode node=ret.nodeFromJson(null, jsonNode);
+			ret.theNodes.put(node.getName(), node);
+		}
 		return ret;
 	}
 
@@ -1166,8 +1153,10 @@ public class ProgramTracker implements Cloneable {
 		ret.unfinished = ((Number) json.get("unfinished")).intValue();
 		if(json.get("lengthStats") != null)
 			ret.lengthStats = RunningStatistic.fromJson((JsonObject) json.get("lengthStats"));
-		for (JsonObject node : (java.util.List<JsonObject>) json.get("children"))
-			ret.children.add(nodeFromJson(ret, node));
+		for (JsonObject jsonNode : (java.util.List<JsonObject>) json.get("children")) {
+			TrackNode node=nodeFromJson(null, jsonNode);
+			ret.children.put(node.getName(), node);
+		}
 		return ret;
 	}
 }
