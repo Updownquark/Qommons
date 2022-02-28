@@ -22,7 +22,7 @@ import java.util.regex.Pattern;
 /** Common utilities for dealing with Strings */
 public class StringUtils {
 	/**
-	 * A comparator that returns the result of {@link #compareNumberTolerant(String, String, boolean, boolean)
+	 * A comparator that returns the result of {@link #compareNumberTolerant(CharSequence, CharSequence, boolean, boolean)
 	 * compareNumberTolerant}<code>(s1, s2, true, true)</code>
 	 */
 	public static final Comparator<String> DISTINCT_NUMBER_TOLERANT = (s1, s2) -> compareNumberTolerant(s1, s2, true, true);
@@ -43,7 +43,7 @@ public class StringUtils {
 	 *         <li><b>0</b> if <code>s1 == s2</code></li>
 	 *         </ul>
 	 */
-	public static int compareNumberTolerant(String s1, String s2, boolean ignoreCase, boolean onlyZeroIfEqual) {
+	public static int compareNumberTolerant(CharSequence s1, CharSequence s2, boolean ignoreCase, boolean onlyZeroIfEqual) {
 		if (s1 == s2) {
 			return 0;
 		} else if (s1 == null)

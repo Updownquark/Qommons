@@ -765,14 +765,14 @@ public interface Format<T> {
 		public void append(StringBuilder text, Instant value) {
 			if (value == null)
 				return;
-			text.append(TimeUtils.asFlexTime(value, theDayFormat, __ -> theOptions).toString());
+			text.append(TimeUtils.asFlexInstant(value, theDayFormat, __ -> theOptions).toString());
 		}
 
 		@Override
 		public Instant parse(CharSequence text) throws ParseException {
 			if (text.length() == 0)
 				return null;
-			return TimeUtils.parseFlexFormatTime(text, true, true, __ -> theOptions).evaluate(Instant::now);
+			return TimeUtils.parseInstant(text, true, true, __ -> theOptions).evaluate(Instant::now);
 		}
 
 		@Override

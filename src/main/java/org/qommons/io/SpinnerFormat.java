@@ -162,10 +162,10 @@ public interface SpinnerFormat<T> extends Format<T> {
 	 */
 	public static SpinnerFormat<Instant> flexDate(Supplier<Instant> reference, String dayFormat,
 		Function<TimeUtils.TimeEvaluationOptions, TimeUtils.TimeEvaluationOptions> options) {
-		return SpinnerFormat.<TimeUtils.ParsedTime, Instant> wrapAdjustable(
-			forAdjustable(text -> TimeUtils.parseFlexFormatTime(text, true, true, options)), //
+		return SpinnerFormat.<TimeUtils.ParsedInstant, Instant> wrapAdjustable(
+			forAdjustable(text -> TimeUtils.parseInstant(text, true, true, options)), //
 			time -> time == null ? null : time.evaluate(Instant::now),
-			instant -> instant == null ? null : TimeUtils.asFlexTime(instant, dayFormat, options));
+			instant -> instant == null ? null : TimeUtils.asFlexInstant(instant, dayFormat, options));
 	}
 
 	/**

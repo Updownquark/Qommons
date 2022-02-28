@@ -12,7 +12,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.qommons.TimeUtils.DateElementType;
-import org.qommons.TimeUtils.RelativeTimeEvaluation;
+import org.qommons.TimeUtils.RelativeInstantEvaluation;
 import org.qommons.TimeUtils.TimeEvaluationOptions;
 
 /** Tests for {@link TimeUtils} */
@@ -29,7 +29,7 @@ public class TimeUtilsTest {
 	}
 
 	/**
-	 * Tests {@link TimeUtils#parseFlexFormatTime(CharSequence, boolean, boolean, Function)}
+	 * Tests {@link TimeUtils#parseInstant(CharSequence, boolean, boolean, Function)}
 	 * 
 	 * @throws ParseException If one of the format tests fails
 	 */
@@ -40,19 +40,19 @@ public class TimeUtilsTest {
 				cal.set(2006, 11, 3);
 			});
 		test("Mon 8am", DateElementType.Minute, //
-			teo -> teo.withEvaluationType(RelativeTimeEvaluation.Future), cal -> {
+			teo -> teo.withEvaluationType(RelativeInstantEvaluation.Future), cal -> {
 				cal.set(Calendar.HOUR_OF_DAY, 8);
 				while (cal.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY)
 					cal.add(Calendar.DAY_OF_WEEK, 1);
 			});
 		test("Thurs 1300", DateElementType.Minute, //
-			teo -> teo.withEvaluationType(RelativeTimeEvaluation.Future), cal -> {
+			teo -> teo.withEvaluationType(RelativeInstantEvaluation.Future), cal -> {
 				cal.set(Calendar.HOUR_OF_DAY, 13);
 				while (cal.get(Calendar.DAY_OF_WEEK) != Calendar.THURSDAY)
 					cal.add(Calendar.DAY_OF_WEEK, 1);
 			});
 		test("Jan 15 9am", DateElementType.Minute, //
-			teo -> teo.withEvaluationType(RelativeTimeEvaluation.Past), cal -> {
+			teo -> teo.withEvaluationType(RelativeInstantEvaluation.Past), cal -> {
 				cal.set(Calendar.HOUR_OF_DAY, 9);
 				cal.set(Calendar.DAY_OF_MONTH, 15);
 				while (cal.get(Calendar.MONTH) != Calendar.JANUARY)
@@ -67,7 +67,7 @@ public class TimeUtilsTest {
 				cal.set(2015, Calendar.DECEMBER, 31, 12, 0, 0);
 			});
 		test("Mon, 8am", DateElementType.Hour, //
-			teo -> teo.withEvaluationType(RelativeTimeEvaluation.Future), //
+			teo -> teo.withEvaluationType(RelativeInstantEvaluation.Future), //
 			cal -> {
 				cal.set(Calendar.HOUR_OF_DAY, 8);
 				while (cal.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY)
@@ -86,12 +86,12 @@ public class TimeUtilsTest {
 				cal.set(1999, Calendar.JUNE, 25);
 			});
 		test("6/25/01", DateElementType.Day, //
-			teo -> teo.withEvaluationType(RelativeTimeEvaluation.Past), //
+			teo -> teo.withEvaluationType(RelativeInstantEvaluation.Past), //
 			cal -> {
 				cal.set(1901, Calendar.JUNE, 25);
 			});
 		test("6/25/99", DateElementType.Day, //
-			teo -> teo.withEvaluationType(RelativeTimeEvaluation.Future), //
+			teo -> teo.withEvaluationType(RelativeInstantEvaluation.Future), //
 			cal -> {
 				cal.set(1999, Calendar.JUNE, 25);
 			});
@@ -105,7 +105,7 @@ public class TimeUtilsTest {
 			});
 		refCal.set(Calendar.YEAR, 2000);
 		test("8th 10:30", DateElementType.Minute, //
-			teo -> teo.withEvaluationType(RelativeTimeEvaluation.Future), //
+			teo -> teo.withEvaluationType(RelativeInstantEvaluation.Future), //
 			cal -> {
 				cal.set(2000, Calendar.AUGUST, 8, 10, 30, 0);
 			});
@@ -156,7 +156,7 @@ public class TimeUtilsTest {
 		}
 		Instant ref = Instant.ofEpochMilli(refCal.getTimeInMillis());
 		Supplier<Instant> refS = () -> ref;
-		Instant parsed = TimeUtils.parseFlexFormatTime(text, true, true, //
+		Instant parsed = TimeUtils.parseInstant(text, true, true, //
 			teo -> {
 				teo = teo.withTimeZone(gmt);
 				if (opts != null)

@@ -19,6 +19,7 @@ import java.util.regex.PatternSyntaxException;
 
 import org.qommons.Named;
 import org.qommons.QommonsUtils;
+import org.qommons.StringUtils;
 import org.qommons.config.QommonsConfig;
 
 /**
@@ -32,10 +33,11 @@ public class SimpleSequenceParser<E extends Enum<E>, V extends Comparable<V>> {
 	public interface ComponentParser {
 		/**
 		 * @param str The character sequence to look at
+		 * @param start The start index to search at
 		 * @return The end of the sub-sequence matching this parser's format at the beginning of the string, or -1 if it is not found at the
 		 *         beginning of the string
 		 */
-		int find(CharSequence str);
+		int find(CharSequence str, int start);
 	}
 
 	/** A regex-based parser */
@@ -48,8 +50,8 @@ public class SimpleSequenceParser<E extends Enum<E>, V extends Comparable<V>> {
 		}
 
 		@Override
-		public int find(CharSequence str) {
-			Matcher m = thePattern.matcher(str);
+		public int find(CharSequence str, int start) {
+			Matcher m = thePattern.matcher(StringUtils.cheapSubSequence(str, start, str.length()));
 			if (m.lookingAt())
 				return m.end();
 			else
@@ -389,6 +391,54 @@ public class SimpleSequenceParser<E extends Enum<E>, V extends Comparable<V>> {
 		return format;
 	}
 
+	static class MatchSet {
+		private int[] theMatches;
+		private int theSize; // This is double the number of matches in the set, as each match takes two spots
+
+		public MatchSet() {
+			this(10);
+		}
+
+		public MatchSet(int capacity) {
+			theMatches = new int[capacity << 1];
+		}
+
+		public MatchSet add(int start, int end) {
+			if (theMatches.length == theSize) {
+				int[] newMatches = new int[theSize * 2];
+				System.arraycopy(theMatches, 0, newMatches, 0, theSize);
+				theMatches = newMatches;
+			}
+			theMatches[theSize] = start;
+			theMatches[theSize + 1] = end;
+			theSize += 2;
+			return this;
+		}
+
+		public MatchSet clear() {
+			theSize = 0;
+			return this;
+		}
+
+		public int size() {
+			return theSize >>> 1;
+		}
+
+		public int getStart(int i) {
+			int idx = i << 1;
+			if (idx >= theSize)
+				throw new IndexOutOfBoundsException(i + " of " + (theSize / 2));
+			return theMatches[idx];
+		}
+
+		public int getEnd(int i) {
+			int idx = i << 1;
+			if (idx >= theSize)
+				throw new IndexOutOfBoundsException(i + " of " + (theSize / 2));
+			return theMatches[idx + 1];
+		}
+	}
+
 	/**
 	 * @param seq The text to parse
 	 * @param wholeText Whether the entire text must be parsed as part of a single sequence
@@ -401,7 +451,7 @@ public class SimpleSequenceParser<E extends Enum<E>, V extends Comparable<V>> {
 	@SuppressWarnings({ "unused", "null" }) // I do not understand why I need these, but eclipse complains
 	public ParsedSequence<E, V> parse(CharSequence seq, boolean wholeText, boolean throwIfNotFound) throws ParseException {
 		TreeMap<Integer, Map<ComponentParser, Integer>> componentsByPosition = new TreeMap<>();
-		List<int[]> components = new ArrayList<>();
+		MatchSet components = new MatchSet();
 		ParseException valueEx = null;
 		for (ParserFormat<E, V> format : theParserFormats) {
 			components.clear();
@@ -427,12 +477,12 @@ public class SimpleSequenceParser<E extends Enum<E>, V extends Comparable<V>> {
 						c = oldC;
 				}
 				if (end >= 0) {
-					end += c;
 					componentCount++;
-					components.add(new int[] { c, end });
+					end += c;
+					components.add(c, end);
 					c = end;
 				} else if (!component.isRequired())
-					components.add(null);
+					components.add(-1, -1);
 				else
 					break;
 			}
@@ -441,11 +491,12 @@ public class SimpleSequenceParser<E extends Enum<E>, V extends Comparable<V>> {
 				List<ParsedElement<E, V>> sequence = new ArrayList<>(componentCount);
 				List<String> separators = new ArrayList<>(componentCount - 1);
 				for (int i = 0; i < components.size(); i++) {
-					int[] comp = components.get(i);
-					if (comp == null)
+					int compStart = components.getStart(i);
+					if (compStart < 0)
 						continue;
+					int compEnd = components.getEnd(i);
 					E type = format.getComponents().get(i).getType();
-					String text = seq.subSequence(comp[0], comp[1]).toString();
+					String text = seq.subSequence(compStart, compEnd).toString();
 					V value;
 					if (type == null)
 						value = null;
@@ -454,23 +505,23 @@ public class SimpleSequenceParser<E extends Enum<E>, V extends Comparable<V>> {
 							value = format.getComponents().get(i).getFormat().parse(text);
 						} catch (ParseException e) {
 							if (valueEx == null)
-								valueEx = new ParseException(e.getMessage(), e.getErrorOffset() + comp[0]);
+								valueEx = new ParseException(e.getMessage(), e.getErrorOffset() + compStart);
 							continue;
 						}
 					}
-					ParsedElement<E, V> pc = new ParsedElement<>(format.getComponents().get(i).getFormat(), comp[0], type, value, text);
+					ParsedElement<E, V> pc = new ParsedElement<>(format.getComponents().get(i).getFormat(), compStart, type, value, text);
 					sequence.add(pc);
 					if (type != null)
 						componentsByType.put(type, pc);
-					int[] nextComp = null;
-					for (int j = i + 1; nextComp == null && j < components.size(); j++)
-						nextComp = components.get(j);
-					if (comp[1] == seq.length() || (nextComp != null && comp[1] == nextComp[0]))
+					int nextComp = -1;
+					for (int j = i + 1; nextComp < 0 && j < components.size(); j++)
+						nextComp = components.getStart(j);
+					if (compEnd == seq.length() || (nextComp < 0 && compEnd == nextComp))
 						separators.add("");
-					else if (nextComp != null)
-						separators.add(seq.subSequence(comp[1], nextComp[0]).toString());
+					else if (nextComp >= 0)
+						separators.add(seq.subSequence(compEnd, nextComp).toString());
 					else
-						separators.add(seq.subSequence(comp[1], c).toString());
+						separators.add(seq.subSequence(compEnd, c).toString());
 				}
 				return new ParsedSequence<>(this, format, Collections.unmodifiableList(sequence), Collections.unmodifiableList(separators),
 					Collections.unmodifiableMap(componentsByType));
@@ -487,7 +538,7 @@ public class SimpleSequenceParser<E extends Enum<E>, V extends Comparable<V>> {
 	private static int matches(ComponentParser parser, CharSequence seq, int c,
 		TreeMap<Integer, Map<ComponentParser, Integer>> componentsByPosition) {
 		return componentsByPosition.computeIfAbsent(c, __ -> new HashMap<>()).computeIfAbsent(parser, __ -> {
-			return parser.find(seq.subSequence(c, seq.length()));
+			return parser.find(seq, c);
 		});
 	}
 
@@ -520,6 +571,8 @@ public class SimpleSequenceParser<E extends Enum<E>, V extends Comparable<V>> {
 	 * @param <V> The value type of the parser to build
 	 */
 	public static class Builder<E extends Enum<E>, V extends Comparable<V>> {
+		private static final Pattern DIGIT_PARSER = Pattern.compile("\\\\d(?<plus>\\+)?(\\{(?<min>\\d+)(\\s*,\\s*(?<max>\\d+))?\\})?");
+
 		private final Class<E> theType;
 		private final List<ParserFormat<E, V>> theParserFormats;
 		private final Map<String, ComponentParser> theParsers;
@@ -690,6 +743,20 @@ public class SimpleSequenceParser<E extends Enum<E>, V extends Comparable<V>> {
 				ComponentParser parser = theParsers.get(parserName);
 				if (parser == null) {
 					parser = patternParsers.computeIfAbsent(parserName, __ -> {
+						Matcher digitMatcher = DIGIT_PARSER.matcher(parserName);
+						if (digitMatcher.matches()) {
+							if (digitMatcher.group("plus") != null)
+								return new DigitParser(1, Integer.MAX_VALUE);
+							else if (digitMatcher.group("max") != null)
+								return new DigitParser(//
+									Integer.parseInt(digitMatcher.group("min")), //
+									Integer.parseInt(digitMatcher.group("max")));
+							else if (digitMatcher.group("min") != null) {
+								int num = Integer.parseInt(digitMatcher.group("min"));
+								return new DigitParser(num, num);
+							} else
+								return new DigitParser(1, 1);
+						}
 						try {
 							Pattern patt = Pattern.compile(parserName);
 							return new PatternParser(patt);
@@ -765,6 +832,34 @@ public class SimpleSequenceParser<E extends Enum<E>, V extends Comparable<V>> {
 			return new SimpleSequenceParser<>(theType, QommonsUtils.unmodifiableCopy(theParserFormats),
 				QommonsUtils.unmodifiableCopy(theWhitespace), theDefaultFormat, QommonsUtils.unmodifiableCopy(theSpecificFormats), //
 				theDefaultAdjuster, QommonsUtils.unmodifiableCopy(theSpecificAdjusters));
+		}
+	}
+
+	/** A component parser that matches a sequence of decimal digits */
+	public static class DigitParser implements ComponentParser {
+		private final int theMin;
+		private final int theMax;
+
+		/**
+		 * @param min The minimum number of digits in a matched sequence
+		 * @param max The maximum number of digits in a matched sequence
+		 */
+		public DigitParser(int min, int max) {
+			theMin = min;
+			theMax = max;
+		}
+
+		@Override
+		public int find(CharSequence str, int start) {
+			int end = start + Math.min(str.length() - start, theMax);
+			int i;
+			for (i = start; i < end; i++) {
+				char ch = str.charAt(i);
+				if (ch < '0' || ch > '9')
+					break;
+			}
+			i -= start;
+			return i < theMin ? -1 : i;
 		}
 	}
 }

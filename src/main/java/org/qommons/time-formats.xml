@@ -5,7 +5,7 @@
 	<components>
 		<component name="W" component-type="Weekday" parser="$weekday" value-type="weekday" />
 		<component name="YY" component-type="Year" parser="\d{2}" />
-		<component name="YYYY" component-type="Year" parser="\d{4}" />
+		<component name="YYYY" component-type="Year" parser="\d{4,8}" /> <!-- Allow for dates beyond 9999 -->
 		<component name="M" component-type="Month" parser="\d{1,2}"  value-type="monthDig" />
 		<component name="MM" component-type="Month" parser="\d{2}" value-type="monthDig" />
 		<component name="MMM" component-type="Month" parser="$month" value-type="month"/>
@@ -43,7 +43,6 @@
 		<format>W?D-?MMM-?YYZ?</format>
 		<format>W?D-?MMMZ?</format>
 		<format>W?M-Dt?-YYYYZ?</format>
-		<format>W?M-Dt?-YYZ?</format>
 		<format>W?M-Dt?-YYZ?</format>
 		<format>W?MMM-Dt?-YYYYZ?</format>
 		<format>W?MMM-Dt?-YYZ?</format>

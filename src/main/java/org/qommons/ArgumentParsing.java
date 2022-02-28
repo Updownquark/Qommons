@@ -1779,7 +1779,7 @@ public class ArgumentParsing {
 		@Override
 		protected Instant parseValue(String text, Arguments parsed) throws IllegalArgumentException {
 			try {
-				return TimeUtils.parseFlexFormatTime(text, true, true, opts -> opts.withTimeZone(theTimeZone)).evaluate(Instant::now);
+				return TimeUtils.parseInstant(text, true, true, opts -> opts.withTimeZone(theTimeZone)).evaluate(Instant::now);
 			} catch (java.text.ParseException e) {
 				throw new IllegalArgumentException(getName() + " value \"" + text + "\" is not a duration: " + e.getMessage());
 			}

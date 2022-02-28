@@ -19,7 +19,6 @@ import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
-import java.util.regex.Pattern;
 
 import org.qommons.collect.BetterCollections;
 import org.qommons.collect.BetterSortedSet;
@@ -29,6 +28,7 @@ import org.qommons.io.FieldedAdjustable;
 import org.qommons.io.FieldedComponent;
 import org.qommons.io.Format;
 import org.qommons.io.SimpleSequenceParser;
+import org.qommons.io.SimpleSequenceParser.ComponentParser;
 import org.qommons.io.SimpleSequenceParser.ParsedElement;
 import org.qommons.io.SimpleSequenceParser.ParsedSequence;
 import org.qommons.tree.BetterTreeSet;
@@ -96,8 +96,8 @@ public class TimeUtils {
 		}
 	}
 
-	/** A parsed time returned from {@link TimeUtils#parseFlexFormatTime(CharSequence, boolean, boolean, Function)} */
-	public interface ParsedTime extends FieldedAdjustable<DateElementType, Integer, ParsedElement<DateElementType, Integer>, ParsedTime> {
+	/** A parsed instant returned from {@link TimeUtils#parseInstant(CharSequence, boolean, boolean, Function)} */
+	public interface ParsedInstant extends FieldedAdjustable<DateElementType, Integer, ParsedElement<DateElementType, Integer>, ParsedInstant> {
 		/** @return The time zone of the parsed time, if specified */
 		TimeZone getTimeZone();
 
@@ -106,7 +106,7 @@ public class TimeUtils {
 		 * @param amount The amount to increment the date by
 		 * @return The incremented time
 		 */
-		ParsedTime add(DateElementType field, int amount);
+		ParsedInstant add(DateElementType field, int amount);
 
 		/**
 		 * @param reference The reference time that the parsed time may be relative to
@@ -121,13 +121,13 @@ public class TimeUtils {
 		boolean mayMatch(Instant time);
 
 		/**
-		 * Whether this time can be {@link #compareTo(ParsedTime) compared} to the given time. E.g. relative times cannot be compared if the
+		 * Whether this time can be {@link #compareTo(ParsedInstant) compared} to the given time. E.g. relative times cannot be compared if the
 		 * largest time granularity they specify is not the same, like ("18May" and "12:15").
 		 * 
 		 * @param other The time to compare to
-		 * @return Whether the result of {@link #compareTo(ParsedTime)} will have meaning for the given time
+		 * @return Whether the result of {@link #compareTo(ParsedInstant)} will have meaning for the given time
 		 */
-		boolean isComparable(ParsedTime other);
+		boolean isComparable(ParsedInstant other);
 	}
 
 	/** A component of a {@link ParsedDuration} */
@@ -171,6 +171,7 @@ public class TimeUtils {
 			}
 		}
 
+		private final String theText;
 		private final boolean isNegative;
 		private final EnumMap<DurationComponentType, DurationComponent> components;
 		private final List<DurationComponent> theSequence;
@@ -178,12 +179,14 @@ public class TimeUtils {
 		private final RelativeTimeFormat theFormat;
 
 		/**
+		 * @param text The text this duration was parsed from, or null if not parsed from text
 		 * @param negative Whether this represents a negative duration
 		 * @param sequence The parsed components composing this duration
 		 * @param separators The whitespace separators between each component
 		 * @param format The format to use for printing the duration
 		 */
-		public ParsedDuration(boolean negative, List<DurationComponent> sequence, List<String> separators, RelativeTimeFormat format) {
+		public ParsedDuration(String text, boolean negative, List<DurationComponent> sequence, List<String> separators,
+			RelativeTimeFormat format) {
 			isNegative = negative;
 			components = new EnumMap<>(DurationComponentType.class);
 			for (DurationComponent c : sequence)
@@ -192,6 +195,20 @@ public class TimeUtils {
 			this.theSequence = sequence;
 			theSeparators = separators;
 			theFormat = format;
+			if (text == null) {
+				StringBuilder str = new StringBuilder();
+				if (isNegative)
+					str.append('-');
+				for (int i = 0; i < theSequence.size(); i++) {
+					str.append(theSeparators.get(i));
+					str.append(theSequence.get(i).toString());
+				}
+				str.append(theSeparators.get(theSeparators.size() - 1));
+				if (theSequence.isEmpty())
+					str.append("0s");
+				text = str.toString();
+			}
+			theText = text;
 		}
 
 		/** @return 0 if this duration is empty, -1 if it is negative, or 1 if it is positive */
@@ -213,7 +230,7 @@ public class TimeUtils {
 		 */
 		public ParsedDuration withFormat(RelativeTimeFormat format) {
 			// TODO Re-format the components
-			return new ParsedDuration(isNegative, theSequence, theSeparators, format);
+			return new ParsedDuration(theText, isNegative, theSequence, theSeparators, format);
 		}
 
 		@Override
@@ -312,7 +329,7 @@ public class TimeUtils {
 				separators.add(separator);
 				index += text.length() + separator.length();
 			}
-			return new ParsedDuration(isNegative, sequence, separators, theFormat);
+			return new ParsedDuration(null, isNegative, sequence, separators, theFormat);
 		}
 
 		private static boolean adjustValues(EnumMap<DurationComponentType, Integer> fieldValues, DurationComponentType type, int amount) {
@@ -414,7 +431,7 @@ public class TimeUtils {
 			}
 
 			if (multiple == 1)
-				return new ParsedDuration(neg, theSequence, theSeparators, theFormat);
+				return new ParsedDuration(null, neg, theSequence, theSeparators, theFormat);
 			List<DurationComponent> newComponents = new ArrayList<>(theSequence.size());
 			int start = 0;
 			for (int i = 0; i < theSequence.size(); i++) {
@@ -428,7 +445,7 @@ public class TimeUtils {
 					.append(newVal).append(comp.toString().substring(comp.valueEnd - comp.getStart())).toString();
 				newComponents.add(new DurationComponent(start, valueStart, valueEnd, comp.getField(), newVal, newText));
 			}
-			return new ParsedDuration(neg, Collections.unmodifiableList(newComponents), theSeparators, theFormat);
+			return new ParsedDuration(null, neg, Collections.unmodifiableList(newComponents), theSeparators, theFormat);
 		}
 
 		/** @return A duration with this object's magnitude */
@@ -543,17 +560,7 @@ public class TimeUtils {
 
 		@Override
 		public String toString() {
-			StringBuilder str = new StringBuilder();
-			if (isNegative)
-				str.append('-');
-			for (int i = 0; i < theSequence.size(); i++) {
-				str.append(theSeparators.get(i));
-				str.append(theSequence.get(i).toString());
-			}
-			str.append(theSeparators.get(theSeparators.size() - 1));
-			if (theSequence.isEmpty())
-				str.append("0s");
-			return str.toString();
+			return theText;
 		}
 
 		/**
@@ -713,7 +720,7 @@ public class TimeUtils {
 				index += text.length();
 			}
 			separators.add("");
-			return new ParsedDuration(neg, components, separators, format);
+			return new ParsedDuration(null, neg, components, separators, format);
 		}
 
 		/**
@@ -738,13 +745,13 @@ public class TimeUtils {
 	private static final Duration HOUR = Duration.ofHours(1);
 	private static final Duration MINUTE = Duration.ofMinutes(1);
 
-	static abstract class ParsedTimeImpl implements ParsedTime {
+	static abstract class ParsedInstantImpl implements ParsedInstant {
 		private final String theText;
 		private final TimeZone theTimeZone;
 		protected final Map<DateElementType, ParsedElement<DateElementType, Integer>> elements;
 		protected final BetterSortedSet<ParsedElement<DateElementType, Integer>> sequence;
 
-		public ParsedTimeImpl(String text, TimeZone timeZone, Map<DateElementType, ParsedElement<DateElementType, Integer>> elements) {
+		public ParsedInstantImpl(String text, TimeZone timeZone, Map<DateElementType, ParsedElement<DateElementType, Integer>> elements) {
 			theText = text;
 			theTimeZone = timeZone;
 			this.elements = elements;
@@ -775,7 +782,7 @@ public class TimeUtils {
 		}
 
 		@Override
-		public ParsedTime with(DateElementType type, Integer value) {
+		public ParsedInstant with(DateElementType type, Integer value) {
 			switch (type) {
 			case AmPm:
 			case TimeZone:
@@ -790,7 +797,7 @@ public class TimeUtils {
 		}
 
 		@Override
-		public ParsedTime adjust(int position, int amount) {
+		public ParsedInstant adjust(int position, int amount) {
 			ParsedElement<DateElementType, Integer> component = getComponent(position);
 			if (component == null)
 				return null;
@@ -906,10 +913,10 @@ public class TimeUtils {
 	}
 
 	/**
-	 * A time parsed from {@link TimeUtils#parseFlexFormatTime(CharSequence, boolean, boolean, Function)} for which the year is specified
-	 * with 4 digits, meaning that it represents an absolute instant or a single range in time.
+	 * A time parsed from {@link TimeUtils#parseInstant(CharSequence, boolean, boolean, Function)} for which the year is specified in full,
+	 * meaning that it represents an absolute instant or a single range in time.
 	 */
-	public static class AbsoluteTime extends ParsedTimeImpl {
+	public static class AbsoluteInstant extends ParsedInstantImpl {
 		/** The lower bound of the range represented by this time */
 		public final Instant time;
 		/** The upper bound of the range represented by this time */
@@ -917,7 +924,7 @@ public class TimeUtils {
 
 		int nanoDigits;
 
-		AbsoluteTime(String text, Instant time, Calendar cal, TimeZone timeZone, DateElementType lowestResolution, int nanoDigits,
+		AbsoluteInstant(String text, Instant time, Calendar cal, TimeZone timeZone, DateElementType lowestResolution, int nanoDigits,
 			Map<DateElementType, ParsedElement<DateElementType, Integer>> elements) {
 			super(text, timeZone, elements);
 			this.time = time;
@@ -971,14 +978,14 @@ public class TimeUtils {
 		}
 
 		@Override
-		public boolean isComparable(ParsedTime other) {
+		public boolean isComparable(ParsedInstant other) {
 			return true;
 		}
 
 		@Override
-		public int compareTo(ParsedTime o) {
-			if (o instanceof AbsoluteTime) {
-				AbsoluteTime other = (AbsoluteTime) o;
+		public int compareTo(ParsedInstant o) {
+			if (o instanceof AbsoluteInstant) {
+				AbsoluteInstant other = (AbsoluteInstant) o;
 				int comp = other.time.compareTo(time);
 				if (comp == 0)
 					return 0;
@@ -1009,7 +1016,7 @@ public class TimeUtils {
 		}
 
 		@Override
-		public ParsedTime add(DateElementType field, int amount) {
+		public ParsedInstant add(DateElementType field, int amount) {
 			switch (field) {
 			case AmPm:
 			case TimeZone:
@@ -1098,7 +1105,7 @@ public class TimeUtils {
 				return 0;
 			});
 			Instant newTime = Instant.ofEpochSecond(cal.getTimeInMillis() / 1000, nanos);
-			return new AbsoluteTime(str.toString(), newTime, cal, getTimeZone(), getLowestResolution(), nanoDigits, newElements);
+			return new AbsoluteInstant(str.toString(), newTime, cal, getTimeZone(), getLowestResolution(), nanoDigits, newElements);
 		}
 
 		private DateElementType getLowestResolution() {
@@ -1120,29 +1127,29 @@ public class TimeUtils {
 		}
 	}
 
-	/** Strategies for evaluating relative times */
-	public enum RelativeTimeEvaluation {
-		/** Chooses the closest time matching the relative time <b>before</b> the reference time */
+	/** Strategies for evaluating relative instants */
+	public enum RelativeInstantEvaluation {
+		/** Chooses the closest time matching the relative instant <b>before</b> the reference time */
 		Past,
-		/** Chooses the closest time matching the relative time <b>after</b> the reference time */
+		/** Chooses the closest time matching the relative instant <b>after</b> the reference time */
 		Future,
-		/** Chooses the closest time matching the relative time either before or after the reference time */
+		/** Chooses the closest time matching the relative instant either before or after the reference time */
 		Closest
 	}
 
 	/**
-	 * A time parsed from {@link TimeUtils#parseFlexFormatTime(CharSequence, boolean, boolean, Function)} where the year was not specified
-	 * with 4 digits, meaning that this time can represent any number of time ranges depending on a reference point.
+	 * A time parsed from {@link TimeUtils#parseInstant(CharSequence, boolean, boolean, Function)} where the year was not specified in full,
+	 * meaning that this time can represent any number of time ranges depending on a reference point.
 	 */
-	public static class RelativeTime extends ParsedTimeImpl {
+	public static class RelativeInstant extends ParsedInstantImpl {
 		private final int nanoResolution;
 		private final int nanoDigits;
 		private final boolean is24Hour;
-		private final RelativeTimeEvaluation theEvaluationType;
+		private final RelativeInstantEvaluation theEvaluationType;
 
-		RelativeTime(String text, TimeZone timeZone, Map<DateElementType, ParsedElement<DateElementType, Integer>> elements,
+		RelativeInstant(String text, TimeZone timeZone, Map<DateElementType, ParsedElement<DateElementType, Integer>> elements,
 			boolean is24Hour,
-			RelativeTimeEvaluation evaluationType) {
+			RelativeInstantEvaluation evaluationType) {
 			super(text, timeZone, elements);
 			this.is24Hour = is24Hour;
 			theEvaluationType = evaluationType;
@@ -1160,7 +1167,7 @@ public class TimeUtils {
 		}
 
 		/** @return The relative time evaluation strategy to use for {@link #evaluate(Supplier) evaluation} */
-		public RelativeTimeEvaluation getEvaluationType() {
+		public RelativeInstantEvaluation getEvaluationType() {
 			return theEvaluationType;
 		}
 
@@ -1402,10 +1409,10 @@ public class TimeUtils {
 		}
 
 		@Override
-		public boolean isComparable(ParsedTime o) {
-			if (o instanceof AbsoluteTime)
+		public boolean isComparable(ParsedInstant o) {
+			if (o instanceof AbsoluteInstant)
 				return true;
-			RelativeTime other = (RelativeTime) o;
+			RelativeInstant other = (RelativeInstant) o;
 			for (DateElementType type : DateElementType.values()) {
 				if (elements.containsKey(type))
 					return other.elements.containsKey(type);
@@ -1416,10 +1423,10 @@ public class TimeUtils {
 		}
 
 		@Override
-		public int compareTo(ParsedTime o) {
-			if (o instanceof AbsoluteTime)
+		public int compareTo(ParsedInstant o) {
+			if (o instanceof AbsoluteInstant)
 				return -o.compareTo(this);
-			RelativeTime other = (RelativeTime) o;
+			RelativeInstant other = (RelativeInstant) o;
 			for (DateElementType type : DateElementType.values()) {
 				ParsedElement<DateElementType, Integer> el = elements.get(type);
 				ParsedElement<DateElementType, Integer> otherEl = other.elements.get(type);
@@ -1437,7 +1444,7 @@ public class TimeUtils {
 		}
 
 		@Override
-		public ParsedTime add(DateElementType field, int amount) {
+		public ParsedInstant add(DateElementType field, int amount) {
 			if (!elements.containsKey(field))
 				throw new IllegalArgumentException("Field " + field + " is not present in this time");
 			if (field == DateElementType.Weekday && elements.containsKey(DateElementType.Day))
@@ -1454,7 +1461,7 @@ public class TimeUtils {
 			}
 			StringBuilder str = new StringBuilder(toString());
 			Map<DateElementType, ParsedElement<DateElementType, Integer>> newElements = adjustElements(str, newValues::get);
-			return new RelativeTime(str.toString(), getTimeZone(), newElements, is24Hour, theEvaluationType);
+			return new RelativeInstant(str.toString(), getTimeZone(), newElements, is24Hour, theEvaluationType);
 		}
 
 		private int adjustValues(Map<DateElementType, Integer> values, DateElementType field, int amount) {
@@ -1597,17 +1604,17 @@ public class TimeUtils {
 
 	/** Default time evaluation options */
 	public static final TimeEvaluationOptions DEFAULT_OPTIONS = new TimeEvaluationOptions(TimeZone.getDefault(), DateElementType.SubSecond,
-		false, RelativeTimeEvaluation.Closest);
+		false, RelativeInstantEvaluation.Closest);
 
 	/** Different options that can be used when evaluating and parsing times */
 	public static class TimeEvaluationOptions {
 		private final TimeZone theTimeZone;
 		private final DateElementType theMaxResolution;
 		private final boolean is24HourFormat;
-		private final RelativeTimeEvaluation theEvaluationType;
+		private final RelativeInstantEvaluation theEvaluationType;
 
 		private TimeEvaluationOptions(TimeZone timeZone, DateElementType resolution, boolean is24HourFormat,
-			RelativeTimeEvaluation evaluationType) {
+			RelativeInstantEvaluation evaluationType) {
 			theTimeZone = timeZone;
 			theMaxResolution = resolution;
 			this.is24HourFormat = is24HourFormat;
@@ -1630,7 +1637,7 @@ public class TimeUtils {
 		}
 
 		/** @return The relative time evaluation strategy to use */
-		public RelativeTimeEvaluation getEvaluationType() {
+		public RelativeInstantEvaluation getEvaluationType() {
 			return theEvaluationType;
 		}
 
@@ -1668,7 +1675,7 @@ public class TimeUtils {
 		 * @param evalutionType The relative time evaluation strategy to use
 		 * @return A set of time evaluation options identical to this but with the given relative time evaluation strategy
 		 */
-		public TimeEvaluationOptions withEvaluationType(RelativeTimeEvaluation evalutionType) {
+		public TimeEvaluationOptions withEvaluationType(RelativeInstantEvaluation evalutionType) {
 			if (theEvaluationType == evalutionType)
 				return this;
 			return new TimeEvaluationOptions(theTimeZone, theMaxResolution, is24HourFormat, evalutionType);
@@ -1725,7 +1732,7 @@ public class TimeUtils {
 	 * @return A ParsedTime evaluated from the text
 	 * @throws ParseException If <code>throwIfNotFound</code> and the string cannot be parsed
 	 */
-	public static ParsedTime parseFlexFormatTime(CharSequence str, boolean wholeText, boolean throwIfNotFound,
+	public static ParsedInstant parseInstant(CharSequence str, boolean wholeText, boolean throwIfNotFound,
 		Function<TimeEvaluationOptions, TimeEvaluationOptions> opts) throws ParseException {
 		TimeEvaluationOptions options = DEFAULT_OPTIONS;
 		if (opts != null)
@@ -1826,11 +1833,11 @@ public class TimeUtils {
 				else
 					nanos = 0;
 				Instant time = Instant.ofEpochSecond(cal.getTimeInMillis() / 1000, nanos);
-				return new AbsoluteTime(text, time, cal, timeZone, minType, element == null ? 0 : element.getText().length(), components);
+				return new AbsoluteInstant(text, time, cal, timeZone, minType, element == null ? 0 : element.getText().length(), components);
 			} else {
 				for (Map.Entry<DateElementType, ParsedElement<DateElementType, Integer>> entry : components.entrySet())
 					validate(entry.getKey(), entry.getValue());
-				return new RelativeTime(text, timeZone, components, options.is24HourFormat(), options.getEvaluationType());
+				return new RelativeInstant(text, timeZone, components, options.is24HourFormat(), options.getEvaluationType());
 			}
 		} catch (ParseException e) {
 			if (!throwIfNotFound)
@@ -1989,6 +1996,137 @@ public class TimeUtils {
 
 	private static final SimpleSequenceParser<DateElementType, Integer> DATE_PARSER;
 
+	private static int parseWeekday(CharSequence text, int start) {
+		switch (text.charAt(start)) {
+		case 's':
+		case 'S':
+			switch (text.charAt(start + 1)) {
+			case 'u':
+			case 'U':
+				return Calendar.SUNDAY;
+			case 'a':
+			case 'A':
+				return Calendar.SATURDAY;
+			}
+			break;
+		case 'm':
+		case 'M':
+			return Calendar.MONDAY;
+		case 't':
+		case 'T':
+			switch (text.charAt(start + 1)) {
+			case 'u':
+			case 'U':
+				return Calendar.TUESDAY;
+			case 'h':
+			case 'H':
+				return Calendar.THURSDAY;
+			}
+			break;
+		case 'w':
+		case 'W':
+			return Calendar.WEDNESDAY;
+		case 'f':
+		case 'F':
+			return Calendar.FRIDAY;
+		}
+		return -1;
+	}
+
+	private static int parseMonth(CharSequence text, int start) {
+		switch (text.charAt(start)) {
+		case 'j':
+		case 'J':
+			switch (text.charAt(start + 1)) {
+			case 'a':
+			case 'A':
+				return Calendar.JANUARY;
+			case 'u':
+			case 'U':
+				switch (text.charAt(start + 2)) {
+				case 'n':
+				case 'N':
+					return Calendar.JUNE;
+				case 'l':
+				case 'L':
+					return Calendar.JULY;
+				}
+			}
+			break;
+		case 'f':
+		case 'F':
+			return Calendar.FEBRUARY;
+		case 'm':
+		case 'M':
+			switch (text.charAt(start + 1)) {
+			case 'a':
+			case 'A':
+				switch (text.charAt(start + 2)) {
+				case 'r':
+				case 'R':
+					return Calendar.MARCH;
+				case 'y':
+				case 'Y':
+					return Calendar.MAY;
+				}
+			}
+			break;
+		case 'a':
+		case 'A':
+			switch (text.charAt(start + 1)) {
+			case 'p':
+			case 'P':
+				return Calendar.APRIL;
+			case 'u':
+			case 'U':
+				return Calendar.AUGUST;
+			}
+			break;
+		case 's':
+		case 'S':
+			return Calendar.SEPTEMBER;
+		case 'o':
+		case 'O':
+			return Calendar.OCTOBER;
+		case 'n':
+		case 'N':
+			return Calendar.NOVEMBER;
+		case 'd':
+		case 'D':
+			return Calendar.DECEMBER;
+		}
+		return -1;
+	}
+
+	private static int parseTh(CharSequence str, int start) {
+		switch (str.charAt(start)) {
+		case 's':
+		case 'S':
+			return 1;
+		case 'n':
+		case 'N':
+			return 2;
+		case 'r':
+		case 'R':
+			return 3;
+		case 't':
+		case 'T':
+			return 4;
+		}
+		return -1;
+	}
+
+	private static int startsWithLowerCase(CharSequence str, String test, int strStart, int testStart) {
+		int len = Math.min(str.length() - strStart, test.length());
+		for (int i = testStart; i < len; i++) {
+			char ch1 = str.charAt(strStart + i);
+			char ch2 = test.charAt(i);
+			if (ch1 != ch2 && ch1 + StringUtils.a_MINUS_A != ch2)
+				return i;
+		}
+		return len;
+	}
+
 	private static final Format<Integer> WEEKDAY_FORMAT = new Format<Integer>() {
 		@Override
 		public void append(StringBuilder text, Integer value) {
@@ -2019,23 +2157,8 @@ public class TimeUtils {
 
 		@Override
 		public Integer parse(CharSequence text) throws ParseException {
-			switch (text.subSequence(0, 3).toString().toLowerCase()) {
-			case "sun":
-				return Calendar.SUNDAY;
-			case "mon":
-				return Calendar.MONDAY;
-			case "tue":
-				return Calendar.TUESDAY;
-			case "wed":
-				return Calendar.WEDNESDAY;
-			case "thu":
-				return Calendar.THURSDAY;
-			case "fri":
-				return Calendar.FRIDAY;
-			case "sat":
-				return Calendar.SATURDAY;
-			}
-			throw new ParseException("Unrecognized weekday", 0);
+			// This should only be called if there is, in fact, a match
+			return parseWeekday(text, 0);
 		}
 	};
 	private static final Format<Integer> MONTH_FORMAT = new Format<Integer>() {
@@ -2083,33 +2206,8 @@ public class TimeUtils {
 
 		@Override
 		public Integer parse(CharSequence text) throws ParseException {
-			switch (text.subSequence(0, 3).toString().toLowerCase()) {
-			case "jan":
-				return Calendar.JANUARY;
-			case "feb":
-				return Calendar.FEBRUARY;
-			case "mar":
-				return Calendar.MARCH;
-			case "apr":
-				return Calendar.APRIL;
-			case "may":
-				return Calendar.MAY;
-			case "jun":
-				return Calendar.JUNE;
-			case "jul":
-				return Calendar.JULY;
-			case "aug":
-				return Calendar.AUGUST;
-			case "sep":
-				return Calendar.SEPTEMBER;
-			case "oct":
-				return Calendar.OCTOBER;
-			case "nov":
-				return Calendar.NOVEMBER;
-			case "dec":
-				return Calendar.DECEMBER;
-			}
-			throw new ParseException("Unrecognized month name", 0);
+			// This should only be called if there is, in fact, a match
+			return parseMonth(text, 0);
 		}
 	};
 	private static final Format<Integer> AM_PM_PARSER = new Format<Integer>() {
@@ -2182,107 +2280,137 @@ public class TimeUtils {
 		}
 	}
 
+	private static final ComponentParser WHITESPACE_PARSER = (str, start) -> {
+		// Whitespace parsers must parse only a single character at a time,
+		// since whitespace is sometimes specified and required in the format
+		if (str.length() == start)
+			return -1;
+		switch (str.charAt(start)) {
+		case ' ':
+		case '\n':
+		case '\t':
+		case ',':
+		case '-':
+		case '_':
+			return 1;
+		default:
+			return -1;
+		}
+	};
+
 	static {
 		SimpleSequenceParser.Builder<DateElementType, Integer> parserBuilder = SimpleSequenceParser.build(DateElementType.class, Format.INT,
 			(old, adj) -> old + adj);
-		parserBuilder.withWhiteSpace(Pattern.compile("[\\s\\,\\-\\_]"));
-		parserBuilder.withParser("$weekday", str -> {
-			if (str.length() < 3)
+		parserBuilder.withWhiteSpace(WHITESPACE_PARSER);
+		parserBuilder.withParser("$weekday", (str, start) -> {
+			if (str.length() < start + 3)
 				return -1;
-			str = str.toString().toLowerCase();
 			String test;
-			switch (str.subSequence(0, 3).toString().toLowerCase()) {
-			case "sun":
+			switch (parseWeekday(str, start)) {
+			case Calendar.SUNDAY:
 				test = "sunday";
 				break;
-			case "mon":
+			case Calendar.MONDAY:
 				test = "monday";
 				break;
-			case "tue":
+			case Calendar.TUESDAY:
 				test = "tuesday";
 				break;
-			case "wed":
+			case Calendar.WEDNESDAY:
 				test = "wednesday";
 				break;
-			case "thu":
+			case Calendar.THURSDAY:
 				test = "thursday";
 				break;
-			case "fri":
+			case Calendar.FRIDAY:
 				test = "friday";
 				break;
-			case "sat":
+			case Calendar.SATURDAY:
 				test = "saturday";
 				break;
 			default:
 				return -1;
 			}
-			for (int i = 3; i < str.length(); i++) {
-				if (i == test.length() || str.charAt(i) != test.charAt(i))
-					return i;
-			}
-			return str.length();
+			int len = startsWithLowerCase(str, test, start, 1);
+			if (len < 3)
+				return -1;
+			return len;
 		});
 		parserBuilder.withFormat("weekday", WEEKDAY_FORMAT);
-		parserBuilder.withParser("$th", str -> {
-			if (str.length() < 2)
+		parserBuilder.withParser("$th", (str, start) -> {
+			if (str.length() < start + 2)
 				return -1;
-			String suffix = str.toString().toLowerCase();
-			if (suffix.startsWith("st") || suffix.startsWith("nd") || suffix.startsWith("rd") || suffix.startsWith("th"))
-				return 2;
-			else
+			String test;
+			switch (parseTh(str, start)) {
+			case 1:
+				test = "st";
+				break;
+			case 2:
+				test = "nd";
+				break;
+			case 3:
+				test = "rd";
+				break;
+			case 4:
+				test = "th";
+				break;
+			default:
 				return -1;
+			}
+			int len = startsWithLowerCase(str, test, start, 1);
+			if (len < 2)
+				return -1;
+			return len;
 		});
 		parserBuilder.withFormat("ampm", AM_PM_PARSER);
-		parserBuilder.withParser("$month", str -> {
-			if (str.length() < 3)
+		parserBuilder.withParser("$month", (str, start) -> {
+			if (str.length() < start + 3)
 				return -1;
-			str = str.toString().toLowerCase();
 			String test;
-			switch (str.subSequence(0, 3).toString().toLowerCase()) {
-			case "jan":
+			switch (parseMonth(str, start)) {
+			case Calendar.JANUARY:
 				test = "january";
 				break;
-			case "feb":
+			case Calendar.FEBRUARY:
 				test = "february";
 				break;
-			case "mar":
+			case Calendar.MARCH:
 				test = "march";
 				break;
-			case "apr":
+			case Calendar.APRIL:
 				test = "april";
 				break;
-			case "may":
+			case Calendar.MAY:
 				test = "may";
 				break;
-			case "jun":
+			case Calendar.JUNE:
 				test = "june";
 				break;
-			case "jul":
+			case Calendar.JULY:
 				test = "july";
 				break;
-			case "aug":
+			case Calendar.AUGUST:
 				test = "august";
 				break;
-			case "sep":
+			case Calendar.SEPTEMBER:
 				test = "september";
 				break;
-			case "oct":
+			case Calendar.OCTOBER:
 				test = "october";
 				break;
-			case "nov":
+			case Calendar.NOVEMBER:
 				test = "november";
 				break;
-			case "dec":
+			case Calendar.DECEMBER:
 				test = "december";
 				break;
 			default:
 				return -1;
 			}
-			for (int i = 3; i < str.length(); i++) {
-				if (i == test.length() || str.charAt(i) != test.charAt(i))
-					return i;
-			}
-			return str.length();
+			int len = startsWithLowerCase(str, test, start, 1);
+			if (len < 3)
+				return -1;
+			return len;
 		});
 		parserBuilder.withFormat("month", MONTH_FORMAT);
 		parserBuilder.withFormat("timeZone", TIME_ZONE_FORMAT);
@@ -2310,7 +2438,7 @@ public class TimeUtils {
 	 * @param opts Configures parsing options
 	 * @return A parsed time whose minimum resolution may be days, hours, minutes, seconds, or sub-second
 	 */
-	public static ParsedTime asFlexTime(Instant time, String dayFormat, Function<TimeEvaluationOptions, TimeEvaluationOptions> opts) {
+	public static ParsedInstant asFlexInstant(Instant time, String dayFormat, Function<TimeEvaluationOptions, TimeEvaluationOptions> opts) {
 		TimeEvaluationOptions options = DEFAULT_OPTIONS;
 		if (opts != null)
 			options = opts.apply(options);
@@ -2467,9 +2595,9 @@ public class TimeUtils {
 			}
 		}
 		if (foundYear)
-			return new AbsoluteTime(str.toString(), time, cal, options.getTimeZone(), resolution, nanoDigits, elements);
+			return new AbsoluteInstant(str.toString(), time, cal, options.getTimeZone(), resolution, nanoDigits, elements);
 		else
-			return new RelativeTime(str.toString(), options.getTimeZone(), elements, options.is24HourFormat(),
+			return new RelativeInstant(str.toString(), options.getTimeZone(), elements, options.is24HourFormat(),
 				options.getEvaluationType());
 	}
 
@@ -2495,6 +2623,17 @@ public class TimeUtils {
 	 * @throws ParseException If the duration cannot be parsed and <code>throwIfNotFount</code> is true
 	 */
 	public static ParsedDuration parseDuration(CharSequence text, boolean throwIfNotFound) throws ParseException {
+		return parseDuration(text, true, throwIfNotFound);
+	}
+
+	/**
+	 * @param text The text to parse
+	 * @param fullText Whether the entire string must be parseable as a duration, or only the first part
+	 * @param throwIfNotFound If true, this method will throw an exception if a duration cannot be parsed. Otherwise null will be returned.
+	 * @return A duration parsed from the text
+	 * @throws ParseException If the duration cannot be parsed and <code>throwIfNotFount</code> is true
+	 */
+	public static ParsedDuration parseDuration(CharSequence text, boolean fullText, boolean throwIfNotFound) throws ParseException {
 		ArrayList<DurationComponent> components = new ArrayList<>();
 		ArrayList<String> separators = new ArrayList<>();
 		Duration duration = Duration.ZERO;
@@ -2510,6 +2649,7 @@ public class TimeUtils {
 			c++;
 		StringBuilder unit = new StringBuilder();
 		boolean hadContent = false;
+		int parsed = c;
 		while (true) {
 			while (c < text.length() && Character.isWhitespace(text.charAt(c))) {
 				spacer.append(text.charAt(c));
@@ -2517,9 +2657,9 @@ public class TimeUtils {
 			}
 			separators.add(spacer.toString());
 			spacer.setLength(0);
+			parsed = c;
 			if (c == text.length())
 				break;
-			hadContent = true;
 			int valueStart = c;
 			long value = 0;
 			boolean hasValue = false;
@@ -2527,15 +2667,23 @@ public class TimeUtils {
 				if (c - valueStart > 10) {
 					if (throwIfNotFound)
 						throw new ParseException("Too many digits in value", c);
-					else
+					else if (fullText || !hadContent)
 						return null;
+					else
+						break;
 				}
 				hasValue = true;
 				value = value * 10 + (text.charAt(c) - '0');
 				c++;
 			}
-			if (value > Integer.MAX_VALUE)
-				throw new ParseException("Too many digits in value", c);
+			if (value > Integer.MAX_VALUE) {
+				if (throwIfNotFound)
+					throw new ParseException("Too many digits in value", c);
+				else if (fullText || !hadContent)
+					return null;
+				else
+					break;
+			}
 			int decimalStart = c;
 			double decimal = Double.NaN;
 			if (c < text.length() && text.charAt(c) == '.') {
@@ -2554,12 +2702,20 @@ public class TimeUtils {
 				if (c == decimalStart) {
 					if (throwIfNotFound)
 						throw new ParseException("Unrecognized duration", 0);
-					else
+					else if (fullText || !hadContent)
 						return null;
+					else
+						break;
 				}
 			}
-			if (!hasValue)
-				throw new ParseException("No number value found", valueStart);
+			if (!hasValue) {
+				if (throwIfNotFound)
+					throw new ParseException("No number value found", valueStart);
+				else if (fullText || !hadContent)
+					return null;
+				else
+					break;
+			}
 			while (c < text.length() && Character.isWhitespace(text.charAt(c)))
 				c++;
 
@@ -2572,8 +2728,10 @@ public class TimeUtils {
 			if (unit.length() == 0) {
 				if (throwIfNotFound)
 					throw new ParseException("Unit expected", unitStart);
-				else
+				else if (fullText || !hadContent)
 					return null;
+				else
+					break;
 			}
 			if (unit.length() > 2 && unit.charAt(unit.length() - 1) == 's')
 				unit.deleteCharAt(unit.length() - 1); // Remove the plural
@@ -2590,8 +2748,10 @@ public class TimeUtils {
 				default:
 					if (throwIfNotFound)
 						throw new ParseException("Decimal values are only permitted for unit 'second' and 'millisecond'", decimalStart);
-					else
+					else if (fullText || !hadContent)
 						return null;
+					else
+						break;
 				}
 			}
 			switch (unit.toString()) {
@@ -2672,9 +2832,12 @@ public class TimeUtils {
 			default:
 				if (throwIfNotFound)
 					throw new ParseException("Unrecognized unit: " + unitStr, unitStart);
-				else
+				else if (fullText || !hadContent)
 					return null;
+				else
+					break;
 			}
+			hadContent = true;
 		}
 		if (!hadContent) {
 			if (throwIfNotFound)
@@ -2684,7 +2847,7 @@ public class TimeUtils {
 		}
 		if (neg)
 			duration = duration.negated();
-		return new ParsedDuration(neg, components, separators, relativeFormat());
+		return new ParsedDuration(text.subSequence(0, parsed).toString(), neg, components, separators, relativeFormat());
 	}
 
 	/**
@@ -2776,7 +2939,7 @@ public class TimeUtils {
 		StringBuilder str = new StringBuilder().append(Math.abs(amount));
 		int valueEnd = str.length();
 		str.append(DURATION_PRECISION_ABBREVS.get(unit.ordinal()));
-		return new ParsedDuration(amount < 0,
+		return new ParsedDuration(null, amount < 0,
 			Collections.unmodifiableList(Arrays.asList(new DurationComponent(0, 0, valueEnd, unit, Math.abs(amount), str.toString()))),
 			Collections.emptyList(), relativeFormat());
 	}
@@ -2851,7 +3014,7 @@ public class TimeUtils {
 
 		components.trimToSize();
 		separators.trimToSize();
-		return new ParsedDuration(neg, Collections.unmodifiableList(components), Collections.unmodifiableList(separators),
+		return new ParsedDuration(null, neg, Collections.unmodifiableList(components), Collections.unmodifiableList(separators),
 			relativeFormat());
 	}
 
@@ -3324,14 +3487,7 @@ public class TimeUtils {
 			while (diffs[minPrecision] == 0 && minPrecision < theMaxPrecision.ordinal() - theMaxElements + 1) {
 				minPrecision++;
 			}
-			int maxPrecision = minPrecision;
-			for (int i = 1; maxPrecision < diffs.length && i < theMaxElements; i++) {
-				maxPrecision++;
-				while (maxPrecision < threshes.length && threshes[maxPrecision] == 0)
-					maxPrecision++;
-			}
-			if (maxPrecision == threshes.length)
-				maxPrecision--;
+			int maxPrecision = Math.min(diffs.length - 1, minPrecision + theMaxElements - 1);
 			int roundPrecision = maxPrecision + 1;
 			while (roundPrecision < diffs.length && threshes[roundPrecision] == 0)
 				roundPrecision++;
