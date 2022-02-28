@@ -20,8 +20,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -33,6 +35,7 @@ import org.qommons.ArrayUtils;
 import org.qommons.QommonsUtils;
 import org.qommons.StringUtils;
 import org.qommons.ex.ExBiConsumer;
+import org.qommons.io.BetterFile.CheckSumType;
 import org.qommons.io.BetterFile.FileBacking;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
 import org.qommons.io.FileUtils.DirectorySyncResults;
@@ -321,6 +324,11 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
+		public String getCheckSum(CheckSumType type, BooleanSupplier canceled) throws IOException {
+			return theBacking.getCheckSum(type, canceled);
+		}
+
+		@Override
 		public InputStream read(long startFrom, BooleanSupplier canceled) throws IOException {
 			return theBacking.read(startFrom, canceled);
 		}
@@ -455,6 +463,15 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 			if (!theRoot.check())
 				return 0;
 			return theEntry.length();
+		}
+
+		@Override
+		public String getCheckSum(CheckSumType type, BooleanSupplier canceled) throws IOException {
+			String checkSum = theEntry.getCheckSum(type);
+			if (checkSum != null)
+				return checkSum;
+			else
+				return FileUtils.getCheckSum(() -> read(0, canceled), type, canceled);
 		}
 
 		@Override
@@ -606,6 +623,11 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
+		public String getCheckSum(CheckSumType type, BooleanSupplier canceled) throws IOException {
+			throw new FileNotFoundException("No such entry");
+		}
+
+		@Override
 		public InputStream read(long startFrom, BooleanSupplier canceled) throws IOException {
 			throw new FileNotFoundException("No such entry");
 		}
@@ -677,6 +699,12 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 
 		/** @return Whether this entry represents a directory */
 		boolean isDirectory();
+
+		/**
+		 * @param type The type of the checksum to get
+		 * @return The check sum value of the entry, if it was available from the header
+		 */
+		String getCheckSum(CheckSumType type);
 
 		/**
 		 * @param name The name of the entry to get (not a full path)
@@ -779,6 +807,11 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
+		public String getCheckSum(CheckSumType type) {
+			return theWrapped.getCheckSum(type);
+		}
+
+		@Override
 		public List<? extends ArchiveEntry> listFiles() {
 			if (theWrapped != null)
 				return theWrapped.listFiles();
@@ -810,6 +843,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		private long theSize;
 		private long theLastModified;
 		private final List<DefaultArchiveEntry> theChildren;
+		private Map<CheckSumType, String> theHashes;
 
 		DefaultArchiveEntry(String name, long position, boolean directory) {
 			theName = name;
@@ -820,6 +854,13 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		DefaultArchiveEntry fill(long size, long lastModified) {
 			theSize = size;
 			theLastModified = lastModified;
+			return this;
+		}
+
+		DefaultArchiveEntry withHash(CheckSumType type, String hash) {
+			if (theHashes != null)
+				theHashes = new HashMap<>(3);
+			theHashes.put(type, hash);
 			return this;
 		}
 
@@ -840,6 +881,11 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		@Override
 		public long getLastModified() {
 			return theLastModified;
+		}
+
+		@Override
+		public String getCheckSum(CheckSumType type) {
+			return theHashes == null ? null : theHashes.get(type);
 		}
 
 		@Override
@@ -1001,7 +1047,10 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 						long modTime = in.read() | (in.read() << 8) | (in.read() << 16) | (((long) in.read()) << 24);
 						pos += 4;
 						modTime = dosToJavaTime(modTime);
-						in.skip(4); // CRC32
+						BetterFile.Hasher crc = CheckSumType.CRC32.hasher();
+						for (int i = 0; i < 4; i++)
+							crc.update((byte) in.read());
+						String crc32 = StringUtils.encodeHex().format(crc.getHash());
 						pos += 4;
 						long compressedSize = in.read() | (in.read() << 8) | (in.read() << 16) | (((long) in.read()) << 24);
 						pos += 4;
@@ -1020,7 +1069,8 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 							in.skip(extraLen);
 						pos += extraLen;
 						String[] path = FileUtils.splitPath(fileName);
-						DefaultArchiveEntry newEntry = root.add(path, 0, entryPos, fileName.endsWith("/")).fill(uncompressedSize, modTime);
+						DefaultArchiveEntry newEntry = root.add(path, 0, entryPos, fileName.endsWith("/")).fill(uncompressedSize, modTime)
+							.withHash(CheckSumType.CRC32, crc32);
 						if (forEach != null) {
 							ArchiveEntry oldEntry = existingRoot != null ? ((DefaultArchiveEntry) existingRoot).at(path, 0) : null;
 							forEach.accept(oldEntry != null ? oldEntry : newEntry, fileName);
@@ -1523,6 +1573,11 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 			}
 
 			@Override
+			public String getCheckSum(CheckSumType type) {
+				return null;
+			}
+
+			@Override
 			public boolean isDirectory() {
 				return true;
 			}
@@ -1562,6 +1617,11 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 			@Override
 			public long getLastModified() {
 				return theModTime;
+			}
+
+			@Override
+			public String getCheckSum(CheckSumType type) {
+				return null;
 			}
 
 			@Override
@@ -1668,6 +1728,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 					else
 						return null;
 				}
+				// This checkSum is ONLY for the header record, not for the entry contents itself, so I can't use it
 				long checkSum = 0;
 				for (int i = 0; i < header.length; i++) {
 					if (i >= 148 && i < 156)

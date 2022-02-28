@@ -22,6 +22,7 @@ import java.util.function.Consumer;
 
 import org.qommons.ex.CheckedExceptionWrapper;
 import org.qommons.ex.ExBiConsumer;
+import org.qommons.io.BetterFile.CheckSumType;
 import org.qommons.io.BetterFile.FileBacking;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
 import org.qommons.io.BetterFile.FileDataSource;
@@ -155,6 +156,11 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 			} catch (IOException e) {
 				return 0;
 			}
+		}
+
+		@Override
+		public String getCheckSum(CheckSumType type, BooleanSupplier canceled) throws IOException {
+			return FileUtils.getCheckSum(() -> read(0, canceled), type, canceled);
 		}
 
 		@SuppressWarnings("resource")

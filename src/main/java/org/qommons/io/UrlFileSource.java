@@ -10,6 +10,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import org.qommons.ex.ExBiConsumer;
+import org.qommons.io.BetterFile.CheckSumType;
 import org.qommons.io.BetterFile.FileBacking;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
 import org.qommons.io.FileUtils.DirectorySyncResults;
@@ -80,6 +81,11 @@ public class UrlFileSource extends RemoteFileSource {
 		@Override
 		public boolean discoverContents(Consumer<? super FileBacking> onDiscovered, BooleanSupplier canceled) {
 			return true;
+		}
+
+		@Override
+		public String getCheckSum(CheckSumType type, BooleanSupplier canceled) throws IOException {
+			return FileUtils.getCheckSum(() -> read(0, canceled), type, canceled);
 		}
 
 		@SuppressWarnings("resource")

@@ -32,6 +32,7 @@ import org.qommons.ArrayUtils;
 import org.qommons.StringUtils;
 import org.qommons.ex.ExConsumer;
 import org.qommons.ex.ExSupplier;
+import org.qommons.io.BetterFile.CheckSumType;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
 
 /** Utilities to use on {@link File}s, {@link BetterFile}s, or similar structures */
@@ -319,6 +320,31 @@ public class FileUtils {
 		if (lastSlash < path.length() - 1)
 			splitPath[slashCount] = path.substring(lastSlash + 1);
 		return splitPath;
+	}
+
+	/**
+	 * Creates a checksum from a stream
+	 * 
+	 * @param stream Supplies the stream to hash
+	 * @param type The checksum type to compute
+	 * @param canceled Returns true if the user cancels the operation
+	 * @return The hex-encoded checksum value, or null if the operation was canceled
+	 * @throws IOException If the stream could not be obtained or read
+	 */
+	public static String getCheckSum(ExSupplier<InputStream, IOException> stream, CheckSumType type, BooleanSupplier canceled)
+		throws IOException {
+		BetterFile.Hasher hasher = type.hasher();
+		byte[] buffer = new byte[16 * 1024];
+		try (InputStream in = stream.get()) {
+			for (int read = in.read(buffer); //
+				read >= 0//
+					&& (canceled == null || !canceled.getAsBoolean()); //
+				read = in.read(buffer))
+				hasher.update(buffer, 0, read);
+		}
+		if (canceled.getAsBoolean())
+			return null;
+		return StringUtils.encodeHex().format(hasher.getHash());
 	}
 
 	/** Possible actions to take for a source-dest resource pair in a {@link FileSyncOperation} */
@@ -1057,6 +1083,15 @@ public class FileUtils {
 		}
 
 		@Override
+		public String getCheckSum(CheckSumType type, BooleanSupplier canceled) throws IOException {
+			for (BetterFile source : theSources) {
+				if (source.exists() && !source.isDirectory())
+					return source.getCheckSum(type, canceled);
+			}
+			return null;
+		}
+
+		@Override
 		public BetterFile getRoot() {
 			return this;
 		}
@@ -1311,6 +1346,11 @@ public class FileUtils {
 		}
 
 		@Override
+		public String getCheckSum(CheckSumType type, BooleanSupplier canceled) throws IOException {
+			throw new IOException(getName() + " is a directory");
+		}
+
+		@Override
 		public InputStream read(long startFrom, BooleanSupplier canceled) throws IOException {
 			throw new IOException(getName() + " is a directory");
 		}
@@ -1456,6 +1496,11 @@ public class FileUtils {
 		@Override
 		public long length() {
 			return theSize.getAsLong();
+		}
+
+		@Override
+		public String getCheckSum(CheckSumType type, BooleanSupplier canceled) throws IOException {
+			return FileUtils.getCheckSum(theData, type, canceled);
 		}
 
 		@Override

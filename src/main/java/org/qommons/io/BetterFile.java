@@ -4,6 +4,9 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -13,6 +16,7 @@ import java.util.Objects;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import org.qommons.Named;
 import org.qommons.ex.ExBiConsumer;
@@ -34,6 +38,154 @@ public interface BetterFile extends Named {
 	/** A boolean attribute on a file */
 	enum FileBooleanAttribute {
 		Readable, Writable, Directory, Hidden, Symbolic
+	}
+
+	/** Produces hash values from binary input */
+	public interface Hasher {
+		/** @param b The byte to add to the hash */
+		void update(byte b);
+
+		/**
+		 * @param input The buffer containing bytes to add to the hash
+		 * @param offset The start offset in the buffer of the content to add
+		 * @param len The number of bytes to add
+		 */
+		void update(byte[] input, int offset, int len);
+
+		/** @param buffer The byte content to add to the hash */
+		void update(ByteBuffer buffer);
+
+		/** @return The hashed bytes */
+		byte[] getHash();
+
+		/** Resets this hasher to be used again fresh */
+		void reset();
+
+		/** A hasher that works with a standard java {@link MessageDigest} */
+		public static class MessageDigestHasher implements Hasher {
+			private final MessageDigest digest;
+
+			/** @param digest The MessageDigest to wrap */
+			public MessageDigestHasher(MessageDigest digest) {
+				this.digest = digest;
+			}
+
+			@Override
+			public void update(byte b) {
+				digest.update(b);
+			}
+
+			@Override
+			public void update(byte[] input, int offset, int len) {
+				digest.update(input, offset, len);
+			}
+
+			@Override
+			public void update(ByteBuffer buffer) {
+				digest.update(buffer);
+			}
+
+			@Override
+			public byte[] getHash() {
+				return digest.digest();
+			}
+
+			@Override
+			public void reset() {
+				digest.reset();
+			}
+		}
+
+		/** A hasher that computes a CRC-32 hash value */
+		public static class CRC32 implements Hasher {
+			private final java.util.zip.CRC32 theHash = new java.util.zip.CRC32();
+
+			@Override
+			public void update(byte b) {
+				theHash.update(b);
+			}
+
+			@Override
+			public void update(byte[] input, int offset, int len) {
+				theHash.update(input, offset, len);
+			}
+
+			@Override
+			public void update(ByteBuffer buffer) {
+				theHash.update(buffer);
+			}
+
+			@Override
+			public byte[] getHash() {
+				long hash = theHash.getValue();
+				byte[] byteHash = new byte[4];
+				for (int i = 0; i < byteHash.length; i++) {
+					byteHash[byteHash.length - i - 1] = (byte) hash;
+					hash >>= 8;
+				}
+				return byteHash;
+			}
+
+			@Override
+			public void reset() {
+				theHash.reset();
+			}
+		}
+	}
+
+	/** The type of a {@link BetterFile#getCheckSum(CheckSumType, BooleanSupplier) check sum} */
+	enum CheckSumType {
+		/** 32-bit cyclic redundancy check */
+		CRC32(32, () -> new Hasher.CRC32()),
+		/** MD5. Cryptographically broken, but still widely used. */
+		MD5(128, () -> {
+			try {
+				return new Hasher.MessageDigestHasher(MessageDigest.getInstance("MD5"));
+			} catch (NoSuchAlgorithmException e) {
+				throw new IllegalStateException("No MD5?", e);
+			}
+		}),
+		/** SHA-1. Cryptographically broken, but still widely used. */
+		SHA1(160, () -> {
+			try {
+				return new Hasher.MessageDigestHasher(MessageDigest.getInstance("SHA-1"));
+			} catch (NoSuchAlgorithmException e) {
+				throw new IllegalStateException("No SHA-1?", e);
+			}
+		}),
+		/** 256-bit version of NSA's SHA-2 cryptographic algorithm. */
+		SHA256(256, () -> {
+			try {
+				return new Hasher.MessageDigestHasher(MessageDigest.getInstance("SHA-256"));
+			} catch (NoSuchAlgorithmException e) {
+				throw new IllegalStateException("No SHA-256?", e);
+			}
+		}),
+		/** 512-bit version of NSA's SHA-2 cryptographic algorithm. */
+		SHA512(512, () -> {
+			try {
+				return new Hasher.MessageDigestHasher(MessageDigest.getInstance("SHA-512"));
+			} catch (NoSuchAlgorithmException e) {
+				throw new IllegalStateException("No SHA-512?", e);
+			}
+		});
+
+		public final int bits;
+		public final int hexChars;
+		private Supplier<Hasher> hasher;
+
+		private CheckSumType(int bits, Supplier<Hasher> hasher) {
+			this.bits = bits;
+			int hex = bits / 4;
+			if (hex * 4 < bits)
+				hex++;
+			hexChars = hex;
+			this.hasher = hasher;
+		}
+
+		public Hasher hasher() {
+			return hasher.get();
+		}
 	}
 
 	/** A format object for parsing/formatting {@link BetterFile}s */
@@ -102,6 +254,14 @@ public interface BetterFile extends Named {
 
 	/** @return The number of bytes in this file; 0 if it is not a valid, readable file; or -1 if the length cannot be quickly accessed */
 	long length();
+
+	/**
+	 * @param type The hash type for the check sum
+	 * @param canceled Returns true if the user cancels the operation
+	 * @return The hex-encoded checksum of the file, or null if the operation was canceled
+	 * @throws IOException If this is not a valid, readable file, or an error occurred reading the file
+	 */
+	String getCheckSum(CheckSumType type, BooleanSupplier canceled) throws IOException;
 
 	/** @return The root of this file's file source */
 	BetterFile getRoot();
@@ -346,6 +506,14 @@ public interface BetterFile extends Named {
 		long length();
 
 		/**
+		 * @param type The hash type for the check sum
+		 * @param canceled Returns true if the user cancels the operation
+		 * @return The hex-encoded checksum of the file, or null if the operation was canceled
+		 * @throws IOException If this is not a valid, readable file, or an error occurred reading the file
+		 */
+		String getCheckSum(CheckSumType type, BooleanSupplier canceled) throws IOException;
+
+		/**
 		 * @param startFrom The initial offset to read from
 		 * @param canceled Returns true if the user cancels the operation
 		 * @return The input stream to use to read the file's content
@@ -567,6 +735,12 @@ public interface BetterFile extends Named {
 			return backing == null ? 0 : backing.length();
 		}
 	
+		@Override
+		public String getCheckSum(CheckSumType type, BooleanSupplier canceled) throws IOException {
+			FileBacking backing = check();
+			return backing == null ? null : backing.getCheckSum(type, canceled);
+		}
+
 		@Override
 		public InputStream read(long startFrom, BooleanSupplier canceled) throws IOException {
 			FileBacking backing = check();
@@ -879,6 +1053,11 @@ public interface BetterFile extends Named {
 		}
 	
 		@Override
+		public String getCheckSum(CheckSumType type, BooleanSupplier canceled) throws IOException {
+			return theSource.getCheckSum(type, canceled);
+		}
+
+		@Override
 		public boolean get(FileBooleanAttribute attribute) {
 			return theSource.get(attribute);
 		}
@@ -1033,6 +1212,11 @@ public interface BetterFile extends Named {
 		@Override
 		public long length() {
 			return theSource.length();
+		}
+
+		@Override
+		public String getCheckSum(CheckSumType type, BooleanSupplier canceled) throws IOException {
+			return theSource.getCheckSum(type, canceled);
 		}
 
 		@Override
