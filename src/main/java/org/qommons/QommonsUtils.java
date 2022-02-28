@@ -24,6 +24,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.qommons.collect.BetterList;
+import org.qommons.collect.SimpleImmutableList;
 import org.qommons.ex.ExFunction;
 import org.qommons.ex.ExPredicate;
 
@@ -756,9 +757,9 @@ public class QommonsUtils {
 	public static <T> List<T> unmodifiableCopy(Collection<? extends T> values) {
 		if (values == null || values.isEmpty())
 			return Collections.emptyList();
-		ArrayList<T> list = new ArrayList<>(values.size());
-		list.addAll(values);
-		return Collections.unmodifiableList(list);
+		else if (values.size() == 1)
+			return Collections.singletonList(values.iterator().next());
+		return new SimpleImmutableList<>(values);
 	}
 
 	/**
@@ -769,6 +770,8 @@ public class QommonsUtils {
 	public static <T> Set<T> unmodifiableDistinctCopy(Collection<? extends T> values) {
 		if (values == null || values.isEmpty())
 			return Collections.emptySet();
+		else if (values.size() == 1)
+			return Collections.singleton(values.iterator().next());
 		LinkedHashSet<T> set = new LinkedHashSet<>(values.size() * 3 / 2 + 1);
 		set.addAll(values);
 		return Collections.unmodifiableSet(set);
@@ -782,10 +785,7 @@ public class QommonsUtils {
 	public static <T> List<T> unmodifiableCopy(T... values) {
 		if (values == null || values.length == 0)
 			return Collections.emptyList();
-		ArrayList<T> list = new ArrayList<>(values.length);
-		for (T v : values)
-			list.add(v);
-		return Collections.unmodifiableList(list);
+		return new SimpleImmutableList<>(values);
 	}
 
 	/**
