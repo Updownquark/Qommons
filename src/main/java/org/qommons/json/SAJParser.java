@@ -1311,7 +1311,7 @@ public class SAJParser {
 				state.backUp();
 			if(useFormalJson)
 				state.error("Infinite values not allowed in formal JSON");
-			return new Float(neg ? Float.NEGATIVE_INFINITY : Float.POSITIVE_INFINITY);
+			return Float.valueOf(neg ? Float.NEGATIVE_INFINITY : Float.POSITIVE_INFINITY);
 		}
 		if(ch == 'N') {
 			ch = state.nextChar();
@@ -1322,7 +1322,7 @@ public class SAJParser {
 				state.error("Invalid NaN");
 			if(useFormalJson)
 				state.error("NaN not allowed in formal JSON");
-			return new Float(Float.NaN);
+			return Float.valueOf(Float.NaN);
 		}
 		int radix = ch == '0' ? 8 : 10;
 		if(radix == 8) {
