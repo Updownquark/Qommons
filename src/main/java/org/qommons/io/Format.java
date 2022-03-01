@@ -574,7 +574,7 @@ public interface Format<T> {
 
 		@Override
 		public void append(StringBuilder text, Integer value) {
-			text.append(value);
+			theLongFormat.append(text, value.longValue());
 		}
 
 		@Override
