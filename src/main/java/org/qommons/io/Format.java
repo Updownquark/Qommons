@@ -556,6 +556,8 @@ public interface Format<T> {
 
 		/** @param longFormat The {@link Long} format to wrap */
 		public IntFormat(LongFormat longFormat) {
+			if (longFormat == null)
+				throw new NullPointerException();
 			theLongFormat = longFormat;
 		}
 
@@ -574,7 +576,8 @@ public interface Format<T> {
 
 		@Override
 		public void append(StringBuilder text, Integer value) {
-			theLongFormat.append(text, value.longValue());
+			if (value != null)
+				theLongFormat.append(text, value.longValue());
 		}
 
 		@Override
