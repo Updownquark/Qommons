@@ -160,12 +160,15 @@ public interface MultiInheritanceSet<T> {
 			int size = theNodes.size();
 			for (int i = 0; i < size; i++) {
 				if (theInheritance.isExtension(value, theNodes.get(i))) {
-					if (added >= 0)
+					if (added >= 0) {
 						theNodes.remove(added);
+						size--;
+					}
 					return false;
 				} else if (theInheritance.isExtension(theNodes.get(i), value)) {
 					if (added >= 0) {
 						theNodes.remove(i);
+						size--;
 						i--;
 					} else {
 						added = i;

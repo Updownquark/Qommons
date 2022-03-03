@@ -338,27 +338,24 @@ public class DefaultQonfigParser implements QonfigParser {
 
 		@Override
 		public void parseTypes(QonfigParseSession session) {
-			for (CustomValueType cvt : theCustomValueTypes) {
-				declaredTypes.put(cvt.getName(), new QonfigValueType.Custom(session.getToolkit(), cvt));
-			}
 			// First pass to parse basic definitions
 			rootName = root.getAttribute("root", false);
-			StrictXmlReader patterns = root.getElement("patterns", false);
+			StrictXmlReader patterns = root.getElement("value-types", false);
 			if (patterns != null) {
 				QonfigParseSession patternsSession = session.forChild(patterns.getName(), 0);
 				for (StrictXmlReader pattern : patterns.getElements(0, -1)) {
 					String name = pattern.getAttribute("name", false);
 					if (name == null) {
-						patternsSession.withError("Pattern declared with no name");
+						patternsSession.withError("Value type declared with no name");
 						continue;
 					}
 					QonfigParseSession patternSession = patternsSession.forChild(name, 0);
 					if (declaredTypes.containsKey(name)) {
-						patternSession.withError("A pattern named " + name + " has already been declared");
+						patternSession.withError("A value type named " + name + " has already been declared");
 						continue;
 					}
 					if (!checkName(name)) {
-						patternSession.withError("Illegal pattern name: " + name);
+						patternSession.withError("Illegal value type name: " + name);
 						continue;
 					}
 					QonfigValueType type = parsePattern(pattern, patternSession, true);
@@ -372,6 +369,10 @@ public class DefaultQonfigParser implements QonfigParser {
 				} catch (IllegalArgumentException e) {
 					patternsSession.withWarning(e.getMessage());
 				}
+			}
+			for (CustomValueType cvt : theCustomValueTypes) {
+				if (!declaredTypes.containsKey(cvt.getName()))
+					session.withWarning("Custom value type '" + cvt.getName() + "' provided, but not expected by toolkit");
 			}
 			// Element/add-on parsing is in several stages:
 			// Stage 1: Create a builder for each listed element with simple properties and text, and remove unparseable elements
@@ -493,7 +494,7 @@ public class DefaultQonfigParser implements QonfigParser {
 						return type;
 					} else {
 						session.withError("Pattern has no value");
-						return null;
+						return new ErrorValueType(session.getToolkit(), name);
 					}
 				}
 				Pattern p;
@@ -501,7 +502,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					p = Pattern.compile(text);
 				} catch (PatternSyntaxException e) {
 					session.withError("Bad pattern : " + text);
-					return null;
+					return new ErrorValueType(session.getToolkit(), name);
 				}
 				try {
 					pattern.check();
@@ -513,7 +514,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				text = pattern.getTextTrim(false);
 				if (text == null) {
 					session.withError("Literal has no value");
-					return null;
+					return new ErrorValueType(session.getToolkit(), name);
 				}
 				try {
 					pattern.check();
@@ -548,6 +549,13 @@ public class DefaultQonfigParser implements QonfigParser {
 					session.withWarning(e.getMessage());
 				}
 				return new QonfigValueType.Explicit(session.getToolkit(), name, wrapped, prefix, suffix);
+			case "external":
+				for (CustomValueType vt : theCustomValueTypes) {
+					if (vt.getName().equals(name))
+						return new QonfigValueType.Custom(session.getToolkit(), vt);
+				}
+				session.withError("Expected external value type '" + name + "', but none supplied");
+				return new ErrorValueType(session.getToolkit(), name);
 			default:
 				session.withError("Unrecognized pattern specification: " + pattern.getName());
 				return null;
@@ -1137,6 +1145,41 @@ public class DefaultQonfigParser implements QonfigParser {
 					validate(theNodes.get(inh.getName()), completed);
 			}
 			builder.setStage(QonfigElementOrAddOn.Builder.Stage.Built);
+		}
+	}
+
+	/** A placeholder for when a value type cannot be parsed */
+	static class ErrorValueType implements QonfigValueType.Declared {
+		private final QonfigToolkit theDeclarer;
+		private final String theName;
+
+		/**
+		 * @param declarer The toolkit declaring the value type
+		 * @param name The name for the value type
+		 */
+		public ErrorValueType(QonfigToolkit declarer, String name) {
+			theDeclarer = declarer;
+			theName = name;
+		}
+
+		@Override
+		public QonfigToolkit getDeclarer() {
+			return theDeclarer;
+		}
+
+		@Override
+		public String getName() {
+			return theName;
+		}
+
+		@Override
+		public Object parse(String value, QonfigToolkit tk, QonfigParseSession session) {
+			return value;
+		}
+
+		@Override
+		public boolean isInstance(Object value) {
+			return false;
 		}
 	}
 

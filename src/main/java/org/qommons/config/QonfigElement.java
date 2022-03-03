@@ -684,13 +684,8 @@ public class QonfigElement {
 						if (attr == null) {
 							attrs = BetterHashSet.build().buildSet();
 							attrs.addAll(theType.getAttributesByName().get(attrDef.itemName));
-							for (QonfigAddOn inh : completeInheritance.getExpanded(QonfigAddOn::getInheritance)) {
-								attr = inh.getDeclaredAttributes().get(attrDef.itemName);
-								if (attr != null) {
-									attrs.add(attr);
-									attr = null;
-								}
-							}
+							for (QonfigAddOn inh : theInheritance.values())
+								attrs.addAll(inh.getAttributesByName().get(attrDef.itemName));
 						}
 					}
 					if (attr == null) {
@@ -761,13 +756,8 @@ public class QonfigElement {
 						}
 					}
 					if (attr == null && attrs.isEmpty()) {
-						for (QonfigAddOn inh : completeInheritance.getExpanded(QonfigAddOn::getInheritance)) {
-							attr = inh.getDeclaredAttributes().get(attrDef.itemName);
-							if (attr != null) {
-								attrs.add(attr);
-								attr = null;
-							}
-						}
+						for (QonfigAddOn inh : theInheritance.values())
+							attrs.addAll(inh.getAttributesByName().get(attrDef.itemName));
 					}
 				}
 				if (attr == null) {
@@ -810,7 +800,7 @@ public class QonfigElement {
 			// Now populate default values for optional/forbidden attributes
 			Map<QonfigAttributeDef.Declared, Boolean> defaultedAttributes = new HashMap<>();
 			for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : theType.getAllAttributes().entrySet()) {
-				if (!attrValues.containsKey(attr.getKey())) {
+				if (attrValues.get(attr.getKey()) == null) {
 					switch (attr.getValue().getSpecification()) {
 					case Required:
 						break;
@@ -825,7 +815,7 @@ public class QonfigElement {
 				if (theType.isAssignableFrom(inh))
 					continue;
 				for (QonfigAttributeDef.Declared attr : inh.getDeclaredAttributes().values()) {
-					if (!attrValues.containsKey(attr)) {
+					if (attrValues.get(attr) == null) {
 						switch (attr.getSpecification()) {
 						case Required:
 							break;
@@ -837,7 +827,7 @@ public class QonfigElement {
 					}
 				}
 				for (Map.Entry<QonfigAttributeDef.Declared, ? extends ValueDefModifier> attr : inh.getAttributeModifiers().entrySet()) {
-					if (!attrValues.containsKey(attr.getKey())) {
+					if (attrValues.get(attr.getKey()) == null) {
 						switch (attr.getValue().getSpecification()) {
 						case Required:
 							break;
@@ -888,7 +878,7 @@ public class QonfigElement {
 				}
 			}
 			for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : theType.getAllAttributes().entrySet()) {
-				if (!attrValues.containsKey(attr.getKey()) && attr.getValue().getSpecification() == SpecificationType.Required) {
+				if (attrValues.get(attr.getKey()) == null && attr.getValue().getSpecification() == SpecificationType.Required) {
 					theSession.withError("Attribute " + attr.getKey() + " required by type " + theType);
 					break;
 				}
@@ -897,7 +887,7 @@ public class QonfigElement {
 				if (theType.isAssignableFrom(inh))
 					continue;
 				for (QonfigAttributeDef.Declared attr : inh.getDeclaredAttributes().values()) {
-					if (!attrValues.containsKey(attr) && attr.getSpecification() == SpecificationType.Required) {
+					if (attrValues.get(attr) == null && attr.getSpecification() == SpecificationType.Required) {
 						theSession.withError("Attribute " + attr + " required by type " + inh);
 						break;
 					}
