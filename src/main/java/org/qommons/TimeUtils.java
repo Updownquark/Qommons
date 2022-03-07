@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -2432,6 +2433,203 @@ public class TimeUtils {
 	private static final String[] DAYS = new String[] { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
 	private static final String[] DAYS_ABBREV = new String[] { "Sun", "Mon", "Tues", "Wed", "Thurs", "Fri", "Sat" };
 
+	/** Parses the day format for {@link TimeUtils#asFlexInstant(Instant, String, Function)} */
+	public static class DayFormat {
+		/** A component of a {@link DayFormat} */
+		public static class DayComponent {
+			/** The component as specified in the input text */
+			public final String spec;
+			/** The date type of this component */
+			public final DateElementType type;
+			/** The text format for this component */
+			public final Format<Integer> format;
+
+			/**
+			 * @param spec The component as specified in the input text
+			 * @param type The date type for the component
+			 * @param format The text format for the component
+			 */
+			public DayComponent(String spec, DateElementType type, Format<Integer> format) {
+				this.spec = spec;
+				this.type = type;
+				this.format = format;
+			}
+
+			/**
+			 * Appends this component's value in the calendar to the string
+			 * 
+			 * @param cal The calendar whose time to print
+			 * @param str The string to print the value to
+			 */
+			public void append(Calendar cal, StringBuilder str) {
+				switch (type) {
+				case Day:
+					StringUtils.printInt(cal.get(Calendar.DAY_OF_MONTH), spec.length(), str);
+					break;
+				case Month:
+					if (spec.length() == 3)
+						format.append(str, cal.get(Calendar.MONTH - Calendar.JANUARY));
+					else
+						StringUtils.printInt(cal.get(Calendar.MONTH) - Calendar.JANUARY, spec.length(), str);
+					break;
+				case Year:
+					StringUtils.printInt(cal.get(Calendar.YEAR), spec.length(), str);
+					break;
+				case Weekday:
+					if (spec.length() == 3)
+						str.append(DAYS_ABBREV[cal.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY]);
+					else
+						str.append(DAYS[cal.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY]);
+					break;
+				default:
+					throw new IllegalStateException("Unrecognized day component: " + type);
+				}
+			}
+
+			@Override
+			public int hashCode() {
+				return Objects.hash(type, spec.length());
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				if (obj == this)
+					return true;
+				else if (!(obj instanceof DayComponent))
+					return false;
+				return type == ((DayComponent) obj).type && spec.equals(((DayComponent) obj).spec);
+			}
+
+			@Override
+			public String toString() {
+				return spec;
+			}
+		}
+
+		/** This format's components */
+		public final List<DayComponent> components;
+		/** This format's components by type */
+		public final Map<DateElementType, DayComponent> componentsByType;
+		/** The separators between each component */
+		public final List<String> separators;
+
+		/**
+		 * @param components The components for the format
+		 * @param separators The separators between each component
+		 */
+		public DayFormat(List<DayComponent> components, List<String> separators) {
+			this.components = components;
+			Map<DateElementType, DayComponent> cbt = new EnumMap<>(DateElementType.class);
+			for (DayComponent comp : components)
+				cbt.put(comp.type, comp);
+			componentsByType = Collections.unmodifiableMap(cbt);
+			this.separators = separators;
+		}
+
+		/**
+		 * @param dayFormat The string to pares the day format from
+		 * @return The parsed day format
+		 * @throws IllegalArgumentException If the format could not be parsed
+		 */
+		public static DayFormat parse(String dayFormat) throws IllegalArgumentException {
+			List<DayComponent> components = new ArrayList<>(5);
+			List<String> separators = new ArrayList<>(6);
+			StringBuilder separator = new StringBuilder();
+			boolean foundDay = false, foundMonth = false, foundYear = false;
+			{
+				char type = 0;
+				int start = 0;
+				for (int i = 0; i <= dayFormat.length(); i++) {
+					char newType = i < dayFormat.length() ? dayFormat.charAt(i) : 0;
+					switch (newType) {
+					case 'd':
+						foundDay = true;
+						break;
+					case 'M':
+					case 'L':
+						newType = 'M';
+						foundMonth = true;
+						break;
+					case 'y':
+					case 'Y':
+						foundYear = true;
+						break;
+					case 'E':
+						break;
+					default:
+						newType = 1;
+						break;
+					}
+					if (type != newType) {
+						switch (type) {
+						case 'd':
+							separators.add(separator.toString());
+							separator.setLength(0);
+							components.add(new DayComponent(dayFormat.substring(start, i), DateElementType.Day, Format.INT));
+							break;
+						case 'M':
+							separators.add(separator.toString());
+							separator.setLength(0);
+							if (i - start == 2)
+								components.add(new DayComponent(dayFormat.substring(start, i), DateElementType.Month, Format.INT));
+							else
+								components.add(new DayComponent(dayFormat.substring(start, i), DateElementType.Month, MONTH_FORMAT));
+							break;
+						case 'y':
+							separators.add(separator.toString());
+							separator.setLength(0);
+							components.add(new DayComponent(dayFormat.substring(start, i), DateElementType.Year, Format.INT));
+							break;
+						case 'E':
+							separators.add(separator.toString());
+							separator.setLength(0);
+							components.add(new DayComponent(dayFormat.substring(start, i), DateElementType.Weekday, WEEKDAY_FORMAT));
+							break;
+						default:
+							separator.append(dayFormat.substring(start, i));
+							break;
+						}
+
+						type = newType;
+						start = i;
+					}
+				}
+				// str.append(new SimpleDateFormat(dayFormat).format(cal.getTime()));
+			}
+			separators.add(separator.toString());
+			if (foundYear && (!foundMonth || !foundDay)) {
+				throw new IllegalArgumentException("Cannot specify year without month and day");
+			} else if (foundMonth && !foundDay)
+				throw new IllegalArgumentException("Cannot specify month without day");
+			return new DayFormat(Collections.unmodifiableList(components), Collections.unmodifiableList(separators));
+		}
+
+		@Override
+		public int hashCode() {
+			return components.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (obj == this)
+				return true;
+			else if (!(obj instanceof DayFormat))
+				return false;
+			return components.equals(((DayFormat) obj).components);
+		}
+
+		@Override
+		public String toString() {
+			StringBuilder str = new StringBuilder();
+			str.append(separators.get(0));
+			for (int i = 0; i < components.size(); i++) {
+				str.append(components.get(i).spec);
+				str.append(separators.get(i + 1));
+			}
+			return str.toString();
+		}
+	}
+
 	/**
 	 * @param time The time
 	 * @param dayFormat The date format to use to format the year, month, and day
@@ -2448,91 +2646,14 @@ public class TimeUtils {
 		cal.setTimeZone(options.getTimeZone());
 		cal.setTimeInMillis(time.toEpochMilli());
 
-		boolean foundDay = false, foundMonth = false, foundYear = false;
-		{
-			char type = 0;
-			int start = 0;
-			for (int i = 0; i <= dayFormat.length(); i++) {
-				char newType = i < dayFormat.length() ? dayFormat.charAt(i) : 0;
-				switch (newType) {
-				case 'd':
-					foundDay = true;
-					break;
-				case 'M':
-				case 'L':
-					newType = 'M';
-					foundMonth = true;
-					break;
-				case 'y':
-				case 'Y':
-					foundYear = true;
-					break;
-				case 'E':
-					break;
-				default:
-					newType = 1;
-					break;
-				}
-				if (type != newType) {
-					int strStart = str.length();
-					switch (type) {
-					case 'd':
-						if (i - start == 1)
-							str.append(cal.get(Calendar.DAY_OF_MONTH));
-						else
-							StringUtils.printInt(cal.get(Calendar.DAY_OF_MONTH), i - start, str);
-						elements.put(DateElementType.Day, new ParsedElement<>(Format.INT, strStart, DateElementType.Day,
-							cal.get(Calendar.DAY_OF_MONTH), str.substring(strStart)));
-						break;
-					case 'M':
-						if (i - start == 2) {
-							StringUtils.printInt(cal.get(Calendar.MONTH), 2, str);
-							elements.put(DateElementType.Month, new ParsedElement<>(Format.INT, strStart, DateElementType.Month,
-								cal.get(Calendar.MONTH), str.substring(strStart)));
-						} else {
-							String mo = capitalize(MONTHS[cal.get(Calendar.MONTH) - Calendar.JANUARY]);
-							if (i - start > 1 && mo.length() > i - start)
-								mo = mo.substring(0, i - start);
-							str.append(mo);
-							elements.put(DateElementType.Month,
-								new ParsedElement<>(MONTH_FORMAT, strStart, DateElementType.Month, cal.get(Calendar.MONTH), mo));
-						}
-						break;
-					case 'y':
-						if (i - start == 1)
-							str.append(cal.get(Calendar.YEAR));
-						else
-							StringUtils.printInt(cal.get(Calendar.YEAR), i - start, str);
-						elements.put(DateElementType.Year, new ParsedElement<>(Format.INT, strStart, DateElementType.Year,
-							cal.get(Calendar.YEAR), str.substring(strStart)));
-						break;
-					case 'E':
-						if (i - start == 3)
-							str.append(DAYS_ABBREV[cal.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY]);
-						else {
-							String day = DAYS[cal.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY];
-							if (i - start > 1 && day.length() > i - start)
-								day = day.substring(0, i - start);
-							str.append(day);
-						}
-						elements.put(DateElementType.Weekday, new ParsedElement<>(WEEKDAY_FORMAT, strStart, DateElementType.Weekday,
-							cal.get(Calendar.DAY_OF_WEEK), str.substring(strStart)));
-						break;
-					default:
-						str.append(dayFormat.substring(start, i));
-						break;
-					}
+		DayFormat df = DayFormat.parse(dayFormat);
 
-					type = newType;
-					start = i;
-				}
-			}
-			// str.append(new SimpleDateFormat(dayFormat).format(cal.getTime()));
+		for (int i = 0; i < df.components.size(); i++) {
+			str.append(df.separators.get(i));
+			df.components.get(i).append(cal, str);
 		}
-		if (foundYear && (!foundMonth || !foundDay)) {
-			throw new IllegalArgumentException("Cannot specify year without month and day");
-		} else if (foundMonth && !foundDay)
-			throw new IllegalArgumentException("Cannot specify month without day");
+		str.append(df.separators.get(df.components.size()));
+
 		DateElementType resolution;
 		int nanoDigits = 0;
 		DateElementType maxResolution = options.getMaxResolution();
@@ -2594,7 +2715,7 @@ public class TimeUtils {
 					new ParsedElement<>(AM_PM_PARSER, index, DateElementType.AmPm, cal.get(Calendar.AM_PM), str.substring(index)));
 			}
 		}
-		if (foundYear)
+		if (df.componentsByType.containsKey(DateElementType.Year))
 			return new AbsoluteInstant(str.toString(), time, cal, options.getTimeZone(), resolution, nanoDigits, elements);
 		else
 			return new RelativeInstant(str.toString(), options.getTimeZone(), elements, options.is24HourFormat(),
@@ -3106,7 +3227,6 @@ public class TimeUtils {
 
 	/** Prints {@link Instant}s to {@link String}s in a custom way */
 	public static class RelativeTimeFormat {
-		private Supplier<Instant> theReference;
 		private TimeZone theTimeZone;
 		private DurationComponentType theMaxPrecision;
 		private int theMaxElements;
@@ -3115,20 +3235,15 @@ public class TimeUtils {
 		private boolean isPluralized;
 		private String theJustNow;
 		private String theAgo;
+		private boolean is24HourFormat;
 
 		RelativeTimeFormat() {
-			theReference = Instant::now;
 			theTimeZone = TimeZone.getDefault();
 			theMaxPrecision = DurationComponentType.Minute;
 			theMaxElements = 1;
 			thePrecisionNames = DURATION_PRECISION_ABBREVS;
 			theAboveDayStrategy = AboveDaysStrategy.None;
 			theAgo = "ago";
-		}
-
-		/** @return The reference time used to determine how to print instants */
-		public Supplier<Instant> getReference() {
-			return theReference;
 		}
 
 		/** @return The time zone used */
@@ -3169,15 +3284,6 @@ public class TimeUtils {
 		/** @return The {@link #withJustNow(String) just now} String */
 		public String getJustNow() {
 			return theJustNow;
-		}
-
-		/**
-		 * @param reference The reference time to use when printing
-		 * @return This time format
-		 */
-		public RelativeTimeFormat withReference(Supplier<Instant> reference) {
-			theReference = reference;
-			return this;
 		}
 
 		/**
@@ -3233,8 +3339,8 @@ public class TimeUtils {
 		}
 
 		/**
-		 * @param justNow The string to print if the target instant is equal to the {@link #withReference(Supplier) reference} time within
-		 *        the configured {@link #withMaxPrecision(DurationComponentType) max precision}, or null to just print 0&lt;max prec unit>
+		 * @param justNow The string to print if the duration is zero within the configured {@link #withMaxPrecision(DurationComponentType)
+		 *        max precision}, or null to just print 0&lt;max prec unit>
 		 * @return This format
 		 */
 		public RelativeTimeFormat withJustNow(String justNow) {
@@ -3243,7 +3349,7 @@ public class TimeUtils {
 		}
 
 		/**
-		 * @param ago The string to print after a formatted time that is before the {@link #withReference(Supplier) reference}
+		 * @param ago The string to print after a negative duration
 		 * @return This format
 		 */
 		public RelativeTimeFormat withAgo(String ago) {
@@ -3280,6 +3386,20 @@ public class TimeUtils {
 			return withAboveDayStrategy(AboveDaysStrategy.Week);
 		}
 
+		/** @return Whether {@link #relative(Instant, Instant, String)} should use 24-hour format or not */
+		public boolean is24HourFormat() {
+			return is24HourFormat;
+		}
+
+		/**
+		 * @param twentyFour Whether {@link #relative(Instant, Instant, String)} should use 24-hour format or not
+		 * @return This format
+		 */
+		public RelativeTimeFormat with24HourFormat(boolean twentyFour) {
+			this.is24HourFormat = twentyFour;
+			return this;
+		}
+
 		private static int[] genDefaultThresholds() {
 			int[] threshes = new int[DurationComponentType.values().length];
 			threshes[DurationComponentType.Year.ordinal()] = -1;
@@ -3293,33 +3413,37 @@ public class TimeUtils {
 			return threshes;
 		}
 
-		/**
-		 * @param time The time to print
-		 * @param str The string builder to print the time to (null to create a new one)
-		 * @return The string builder
-		 */
-		public StringBuilder print(Instant time, StringBuilder str) {
-			Instant ref = theReference.get();
-			Duration d = between(ref, time);
-			int[] diffs = new int[DurationComponentType.values().length];
-			int[] threshes = genDefaultThresholds();
-			boolean neg = d.isNegative();
-			if (neg)
-				d = d.negated();
+		static class DurationComponents {
+			final Duration duration;
+			final boolean negative;
+			final int[] diffs;
+			final int[] threshes;
+			int minPrecision;
+			int maxPrecision;
+
+			DurationComponents(Duration d) {
+				this.negative = d.isNegative();
+				duration = negative ? d.negated() : d;
+				diffs = new int[DurationComponentType.values().length];
+				threshes = genDefaultThresholds();
+			}
+		}
+
+		private void fill(DurationComponents comps, Instant time, Instant reference) {
 			if (theAboveDayStrategy == AboveDaysStrategy.MonthYear) {
-				Instant t1 = neg ? time : ref;
-				Instant t2 = neg ? ref : time;
+				Instant t1 = comps.negative ? time : reference;
+				Instant t2 = comps.negative ? reference : time;
 				Calendar cal = CALENDAR.get();
 				cal.setTimeZone(theTimeZone);
 				cal.setTimeInMillis(t1.toEpochMilli());
-				diffs[DurationComponentType.Year.ordinal()] = cal.get(Calendar.YEAR);
-				diffs[DurationComponentType.Month.ordinal()] = cal.get(Calendar.MONTH);
-				diffs[DurationComponentType.Day.ordinal()] = cal.get(Calendar.DAY_OF_MONTH);
-				diffs[DurationComponentType.Hour.ordinal()] = cal.get(Calendar.HOUR_OF_DAY);
-				diffs[DurationComponentType.Minute.ordinal()] = cal.get(Calendar.MINUTE);
-				diffs[DurationComponentType.Second.ordinal()] = cal.get(Calendar.SECOND);
+				comps.diffs[DurationComponentType.Year.ordinal()] = cal.get(Calendar.YEAR);
+				comps.diffs[DurationComponentType.Month.ordinal()] = cal.get(Calendar.MONTH);
+				comps.diffs[DurationComponentType.Day.ordinal()] = cal.get(Calendar.DAY_OF_MONTH);
+				comps.diffs[DurationComponentType.Hour.ordinal()] = cal.get(Calendar.HOUR_OF_DAY);
+				comps.diffs[DurationComponentType.Minute.ordinal()] = cal.get(Calendar.MINUTE);
+				comps.diffs[DurationComponentType.Second.ordinal()] = cal.get(Calendar.SECOND);
 				cal.setTimeInMillis(t2.toEpochMilli());
-				int amt = cal.get(Calendar.SECOND) - diffs[DurationComponentType.Second.ordinal()];
+				int amt = cal.get(Calendar.SECOND) - comps.diffs[DurationComponentType.Second.ordinal()];
 				int carry;
 				if (amt < 0) {
 					amt += 60;
@@ -3329,9 +3453,9 @@ public class TimeUtils {
 					carry = 1;
 				} else
 					carry = 0;
-				diffs[DurationComponentType.Second.ordinal()] = amt;
+				comps.diffs[DurationComponentType.Second.ordinal()] = amt;
 
-				amt = cal.get(Calendar.MINUTE) - diffs[DurationComponentType.Minute.ordinal()] + carry;
+				amt = cal.get(Calendar.MINUTE) - comps.diffs[DurationComponentType.Minute.ordinal()] + carry;
 				if (amt < 0) {
 					amt += 60;
 					carry = -1;
@@ -3340,9 +3464,9 @@ public class TimeUtils {
 					carry = 1;
 				} else
 					carry = 0;
-				diffs[DurationComponentType.Minute.ordinal()] = amt;
+				comps.diffs[DurationComponentType.Minute.ordinal()] = amt;
 
-				amt = cal.get(Calendar.HOUR_OF_DAY) - diffs[DurationComponentType.Hour.ordinal()] + carry;
+				amt = cal.get(Calendar.HOUR_OF_DAY) - comps.diffs[DurationComponentType.Hour.ordinal()] + carry;
 				if (amt < 0) {
 					amt += 24;
 					carry = -1;
@@ -3351,21 +3475,21 @@ public class TimeUtils {
 					carry = 1;
 				} else
 					carry = 0;
-				diffs[DurationComponentType.Hour.ordinal()] = amt;
+				comps.diffs[DurationComponentType.Hour.ordinal()] = amt;
 
-				amt = cal.get(Calendar.DAY_OF_MONTH) - diffs[DurationComponentType.Day.ordinal()] + carry;
-				threshes[DurationComponentType.Day.ordinal()] = cal.getActualMaximum(Calendar.DAY_OF_MONTH);
+				amt = cal.get(Calendar.DAY_OF_MONTH) - comps.diffs[DurationComponentType.Day.ordinal()] + carry;
+				comps.threshes[DurationComponentType.Day.ordinal()] = cal.getActualMaximum(Calendar.DAY_OF_MONTH);
 				if (amt < 0) {
-					amt += threshes[DurationComponentType.Day.ordinal()];
+					amt += comps.threshes[DurationComponentType.Day.ordinal()];
 					carry = -1;
-				} else if (amt >= threshes[DurationComponentType.Day.ordinal()]) {
-					amt -= threshes[DurationComponentType.Day.ordinal()];
+				} else if (amt >= comps.threshes[DurationComponentType.Day.ordinal()]) {
+					amt -= comps.threshes[DurationComponentType.Day.ordinal()];
 					carry = 1;
 				} else
 					carry = 0;
-				diffs[DurationComponentType.Day.ordinal()] = amt;
+				comps.diffs[DurationComponentType.Day.ordinal()] = amt;
 
-				amt = cal.get(Calendar.MONTH) - diffs[DurationComponentType.Month.ordinal()] + carry;
+				amt = cal.get(Calendar.MONTH) - comps.diffs[DurationComponentType.Month.ordinal()] + carry;
 				if (amt < 0) {
 					amt += 12;
 					carry = -1;
@@ -3374,28 +3498,177 @@ public class TimeUtils {
 					carry = 1;
 				} else
 					carry = 0;
-				diffs[DurationComponentType.Month.ordinal()] = amt;
+				comps.diffs[DurationComponentType.Month.ordinal()] = amt;
 
-				amt = cal.get(Calendar.YEAR) - diffs[DurationComponentType.Year.ordinal()] + carry;
-				diffs[DurationComponentType.Year.ordinal()] = Math.abs(amt);
+				amt = cal.get(Calendar.YEAR) - comps.diffs[DurationComponentType.Year.ordinal()] + carry;
+				comps.diffs[DurationComponentType.Year.ordinal()] = Math.abs(amt);
 			} else {
-				diffs[0] = diffs[1] = 0;
-				diffs[DurationComponentType.Day.ordinal()] = Math.abs((int) (d.getSeconds() / (24 * 60 * 60)));
+				comps.diffs[0] = comps.diffs[1] = 0;
+				comps.diffs[DurationComponentType.Day.ordinal()] = Math.abs((int) (comps.duration.getSeconds() / (24 * 60 * 60)));
 				if (theAboveDayStrategy == AboveDaysStrategy.Week) {
-					threshes[DurationComponentType.Week.ordinal()] = -1;
-					threshes[DurationComponentType.Day.ordinal()] = 7;
-					diffs[DurationComponentType.Week.ordinal()] = diffs[DurationComponentType.Day.ordinal()] / 7;
-					diffs[DurationComponentType.Day.ordinal()] %= 7;
+					comps.threshes[DurationComponentType.Week.ordinal()] = -1;
+					comps.threshes[DurationComponentType.Day.ordinal()] = 7;
+					comps.diffs[DurationComponentType.Week.ordinal()] = comps.diffs[DurationComponentType.Day.ordinal()] / 7;
+					comps.diffs[DurationComponentType.Day.ordinal()] %= 7;
 				} else
-					threshes[DurationComponentType.Day.ordinal()] = -1;
-				int secs = Math.abs((int) (d.getSeconds() % (24 * 60 * 60)));
-				diffs[DurationComponentType.Second.ordinal()] = secs % 60;
+					comps.threshes[DurationComponentType.Day.ordinal()] = -1;
+				int secs = Math.abs((int) (comps.duration.getSeconds() % (24 * 60 * 60)));
+				comps.diffs[DurationComponentType.Second.ordinal()] = secs % 60;
 				secs /= 60;
-				diffs[DurationComponentType.Minute.ordinal()] = secs % 60;
+				comps.diffs[DurationComponentType.Minute.ordinal()] = secs % 60;
 				secs /= 60;
-				diffs[DurationComponentType.Hour.ordinal()] = secs;
+				comps.diffs[DurationComponentType.Hour.ordinal()] = secs;
 			}
-			return print(d, neg, diffs, threshes, str);
+		}
+
+		void computePrecision(DurationComponents comps) {
+			int nano = comps.duration.getNano();
+			comps.diffs[DurationComponentType.Millisecond.ordinal()] = nano / 1_000_000;
+			nano %= 1_000_000;
+			comps.diffs[DurationComponentType.Microsecond.ordinal()] = nano / 1000;
+			nano %= 1000;
+			comps.diffs[DurationComponentType.Nanosecond.ordinal()] = nano;
+			switch (theAboveDayStrategy) {
+			case MonthYear:
+				comps.minPrecision = 0;
+				break;
+			case Week:
+				comps.minPrecision = DurationComponentType.Week.ordinal();
+				break;
+			default:
+				comps.minPrecision = DurationComponentType.Day.ordinal();
+				break;
+			}
+			while (comps.minPrecision < theMaxPrecision.ordinal() && comps.diffs[comps.minPrecision] == 0)
+				comps.minPrecision++;
+			comps.maxPrecision = comps.minPrecision;
+			int nonZeroEls = 0;
+			while (comps.maxPrecision < theMaxPrecision.ordinal() && nonZeroEls < theMaxElements) {
+				if (comps.diffs[comps.maxPrecision] != 0)
+					nonZeroEls++;
+				comps.maxPrecision++;
+			}
+			int roundPrecision = comps.maxPrecision + 1;
+			while (roundPrecision < comps.diffs.length && comps.threshes[roundPrecision] == 0)
+				roundPrecision++;
+			if (roundPrecision < comps.diffs.length && comps.diffs[roundPrecision] >= comps.threshes[roundPrecision] / 2.0)
+				increment(comps.diffs, comps.threshes, comps.maxPrecision);
+		}
+
+		/**
+		 * @param time The time to print
+		 * @param reference The reference time to print the given time relative to
+		 * @param str The string builder to print the time to (null to create a new one)
+		 * @return The string builder
+		 */
+		public StringBuilder printAsDuration(Instant time, Instant reference, StringBuilder str) {
+			DurationComponents comps = new DurationComponents(between(reference, time));
+			fill(comps, time, reference);
+			return printDuration(comps, str);
+		}
+
+		/**
+		 * @param time The time to turn into an instant
+		 * @param reference The reference time to determine the precision of the result
+		 * @param dayFormat The day format to use if the time difference is >= 1 day
+		 * @return The instant
+		 */
+		public ParsedInstant relative(Instant time, Instant reference, String dayFormat) {
+			DurationComponents comps = new DurationComponents(between(reference, time));
+			fill(comps, time, reference);
+			computePrecision(comps);
+			Calendar cal = CALENDAR.get();
+			cal.setTimeZone(theTimeZone);
+			cal.setTimeInMillis(time.toEpochMilli());
+			Map<DateElementType, ParsedElement<DateElementType, Integer>> components = new LinkedHashMap<>();
+
+			String lastSep = "";
+			StringBuilder str = new StringBuilder();
+			if (comps.minPrecision <= DurationComponentType.Day.ordinal()) {
+				DayFormat df = DayFormat.parse(dayFormat);
+				str.append(df.separators.get(0));
+				for (int c = 0; c < df.components.size(); c++) {
+					DayFormat.DayComponent comp = df.components.get(c);
+					DurationComponentType durationType = null;
+					switch (comp.type) {
+					case Year:
+						durationType = DurationComponentType.Year;
+						break;
+					case Month:
+						durationType = DurationComponentType.Day; // Not a typo--if we include the day, also include the month
+						break;
+					case Day:
+						durationType = DurationComponentType.Day;
+						break;
+					case Weekday:
+						durationType = DurationComponentType.Day;
+						break;
+					default:
+						break;
+					}
+					if (durationType == null || durationType.ordinal() < comps.minPrecision)
+						continue;
+					comp.append(cal, str);
+					lastSep = df.separators.get(c + 1);
+					str.append(lastSep);
+				}
+			}
+			StringBuilder text = new StringBuilder();
+			int nanoDigits = 0;
+			for (int i = DurationComponentType.Hour.ordinal(); i <= theMaxPrecision.ordinal(); i++) {
+				DateElementType type = DateElementType.values()[i];
+				int value = 0;
+				text.setLength(0);
+				switch (type) {
+				case Hour:
+					if (str.length() > 0 && lastSep.length() == 0)
+						str.append(' ');
+					value = cal.get(Calendar.HOUR_OF_DAY);
+					if (is24HourFormat) {
+						StringUtils.printInt(value, 2, text);
+					} else if (value == 0) {
+						value = 12;
+						text.append("12a.m.");
+					} else if (value <= 12)
+						text.append(value).append("a.m.");
+					else {
+						value -= 12;
+						text.append(value).append("p.m.");
+					}
+					break;
+				case Minute:
+					str.append(':');
+					value = cal.get(Calendar.MINUTE);
+					StringUtils.printInt(value, 2, text);
+					break;
+				case Second:
+					str.append(':');
+					value = cal.get(Calendar.SECOND);
+					StringUtils.printInt(value, 2, text);
+					break;
+				case SubSecond:
+					str.append('.');
+					value = reference.getNano();
+					nanoDigits = 9;
+
+					StringUtils.printInt(time.getNano(), nanoDigits, text);
+					while (text.charAt(text.length() - 1) == '0') {
+						nanoDigits--;
+						text.setLength(text.length() - 1);
+					}
+					break;
+				default:
+					break;
+				}
+				components.put(type, new ParsedElement<>(Format.INT, str.length(), type, value, text.toString()));
+				str.append(text);
+			}
+			if (components.containsKey(DateElementType.Year))
+				return new AbsoluteInstant(str.toString(), time, cal, theTimeZone, DateElementType.values()[comps.maxPrecision], nanoDigits,
+					components);
+			else
+				return new RelativeInstant(str.toString(), theTimeZone, components, is24HourFormat, RelativeInstantEvaluation.Closest);
+
 		}
 
 		/**
@@ -3404,18 +3677,14 @@ public class TimeUtils {
 		 * @return The string builder
 		 */
 		public StringBuilder print(Duration d, StringBuilder str) {
-			int[] diffs = new int[DurationComponentType.values().length];
-			int[] threshes = genDefaultThresholds();
-			boolean neg = d.isNegative();
-			if (neg)
-				d = d.negated();
+			DurationComponents comps = new DurationComponents(d);
 			if (theAboveDayStrategy == AboveDaysStrategy.MonthYear) {
 				long t = d.getSeconds();
-				diffs[DurationComponentType.Second.ordinal()] = (int) (t % 60);
+				comps.diffs[DurationComponentType.Second.ordinal()] = (int) (t % 60);
 				t /= 60;
-				diffs[DurationComponentType.Minute.ordinal()] = (int) (t % 60);
+				comps.diffs[DurationComponentType.Minute.ordinal()] = (int) (t % 60);
 				t /= 60;
-				diffs[DurationComponentType.Hour.ordinal()] = (int) (t % 24);
+				comps.diffs[DurationComponentType.Hour.ordinal()] = (int) (t % 24);
 				t /= 24;
 				// T is now days
 				if (t >= 365) {
@@ -3429,7 +3698,7 @@ public class TimeUtils {
 						}
 					}
 					t -= yearDays;
-					diffs[DurationComponentType.Year.ordinal()] = years;
+					comps.diffs[DurationComponentType.Year.ordinal()] = years;
 				}
 				if (t >= 30) {
 					int months = (int) (t / 30L);
@@ -3442,79 +3711,53 @@ public class TimeUtils {
 						}
 					}
 					t -= monthDays;
-					diffs[DurationComponentType.Month.ordinal()] = months;
+					comps.diffs[DurationComponentType.Month.ordinal()] = months;
 				}
-				diffs[DurationComponentType.Day.ordinal()] = (int) t;
+				comps.diffs[DurationComponentType.Day.ordinal()] = (int) t;
 			} else {
-				diffs[0] = diffs[1] = 0;
-				diffs[DurationComponentType.Day.ordinal()] = Math.abs((int) (d.getSeconds() / (24 * 60 * 60)));
+				comps.diffs[0] = comps.diffs[1] = 0;
+				comps.diffs[DurationComponentType.Day.ordinal()] = Math.abs((int) (d.getSeconds() / (24 * 60 * 60)));
 				if (theAboveDayStrategy == AboveDaysStrategy.Week) {
-					threshes[DurationComponentType.Week.ordinal()] = -1;
-					threshes[DurationComponentType.Day.ordinal()] = 7;
-					diffs[DurationComponentType.Week.ordinal()] = diffs[DurationComponentType.Day.ordinal()] / 7;
-					diffs[DurationComponentType.Day.ordinal()] %= 7;
+					comps.threshes[DurationComponentType.Week.ordinal()] = -1;
+					comps.threshes[DurationComponentType.Day.ordinal()] = 7;
+					comps.diffs[DurationComponentType.Week.ordinal()] = comps.diffs[DurationComponentType.Day.ordinal()] / 7;
+					comps.diffs[DurationComponentType.Day.ordinal()] %= 7;
 				} else
-					threshes[DurationComponentType.Day.ordinal()] = -1;
+					comps.threshes[DurationComponentType.Day.ordinal()] = -1;
 				int secs = Math.abs((int) (d.getSeconds() % (24 * 60 * 60)));
-				diffs[DurationComponentType.Second.ordinal()] = secs % 60;
+				comps.diffs[DurationComponentType.Second.ordinal()] = secs % 60;
 				secs /= 60;
-				diffs[DurationComponentType.Minute.ordinal()] = secs % 60;
+				comps.diffs[DurationComponentType.Minute.ordinal()] = secs % 60;
 				secs /= 60;
-				diffs[DurationComponentType.Hour.ordinal()] = secs;
+				comps.diffs[DurationComponentType.Hour.ordinal()] = secs;
 			}
-			return print(d, neg, diffs, threshes, str);
+			computePrecision(comps);
+			return printDuration(comps, str);
 		}
 
-		private StringBuilder print(Duration d, boolean neg, int[] diffs, int[] threshes, StringBuilder str) {
-			int nano = d.getNano();
-			diffs[DurationComponentType.Millisecond.ordinal()] = nano / 1_000_000;
-			nano %= 1_000_000;
-			diffs[DurationComponentType.Microsecond.ordinal()] = nano / 1000;
-			nano %= 1000;
-			diffs[DurationComponentType.Nanosecond.ordinal()] = nano;
-			int minPrecision;
-			switch (theAboveDayStrategy) {
-			case MonthYear:
-				minPrecision = 0;
-				break;
-			case Week:
-				minPrecision = DurationComponentType.Week.ordinal();
-				break;
-			default:
-				minPrecision = DurationComponentType.Day.ordinal();
-				break;
-			}
-			while (diffs[minPrecision] == 0 && minPrecision < theMaxPrecision.ordinal() - theMaxElements + 1) {
-				minPrecision++;
-			}
-			int maxPrecision = Math.min(diffs.length - 1, minPrecision + theMaxElements - 1);
-			int roundPrecision = maxPrecision + 1;
-			while (roundPrecision < diffs.length && threshes[roundPrecision] == 0)
-				roundPrecision++;
-			if (roundPrecision < diffs.length && diffs[roundPrecision] >= threshes[roundPrecision] / 2.0)
-				increment(diffs, threshes, maxPrecision);
+		private StringBuilder printDuration(DurationComponents comps, StringBuilder str) {
 			if (str == null)
 				str = new StringBuilder();
-			if (neg && theAgo == null)
+			if (comps.negative && theAgo == null)
 				str.append('-');
 			boolean firstHit = true;
-			for (int precision = minPrecision; precision <= maxPrecision; precision++) {
-				if (diffs[precision] != 0) {
+			for (int precision = comps.minPrecision; precision <= comps.maxPrecision; precision++) {
+				if (comps.diffs[precision] != 0) {
 					if (firstHit)
 						firstHit = false;
 					else
 						str.append(' ');
-					printComponent(diffs[precision], DurationComponentType.values()[precision], str);
+					printComponent(comps.diffs[precision], DurationComponentType.values()[precision], str);
 				}
 			}
 			if (firstHit) {
 				if (theJustNow != null)
 					str.append(theJustNow);
 				else
-					printComponent(diffs[maxPrecision], DurationComponentType.values()[maxPrecision], str);
+					printComponent(comps.diffs[comps.maxPrecision], DurationComponentType.values()[comps.maxPrecision], str);
 			}
 
-			if (!firstHit && neg && theAgo != null)
+			if (!firstHit && comps.negative && theAgo != null)
 				str.append(' ').append(theAgo);
 			return str;
 		}
@@ -3530,10 +3773,11 @@ public class TimeUtils {
 
 		/**
 		 * @param time The time to print
+		 * @param reference The reference time to print the given time relative to
 		 * @return The formatted time
 		 */
-		public String print(Instant time) {
-			return print(time, null).toString();
+		public String printAsDuration(Instant time, Instant reference) {
+			return printAsDuration(time, reference, null).toString();
 		}
 
 		/**

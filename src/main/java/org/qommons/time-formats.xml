@@ -5,7 +5,8 @@
 	<components>
 		<component name="W" component-type="Weekday" parser="$weekday" value-type="weekday" />
 		<component name="YY" component-type="Year" parser="\d{2}" />
-		<component name="YYYY" component-type="Year" parser="\d{4,8}" /> <!-- Allow for dates beyond 9999 -->
+		<component name="YYYY" component-type="Year" parser="\d{4}" />
+		<component name="Y" component-type="Year" parser="\d{4,8}" /> <!-- Allow for dates beyond 9999 -->
 		<component name="M" component-type="Month" parser="\d{1,2}"  value-type="monthDig" />
 		<component name="MM" component-type="Month" parser="\d{2}" value-type="monthDig" />
 		<component name="MMM" component-type="Month" parser="$month" value-type="month"/>
@@ -27,8 +28,8 @@
 	<!-- Time formats to support -->
 	<formats>
 		<!-- Date formats -->
-		<format>YYYY/M/Dt?Z?</format>
-		<format>YYYY/M/DZ?</format>
+		<format>Y/M/Dt?Z?</format>
+		<format>Y/M/DZ?</format>
 		<format>YYYYMMDDZ?</format>
 		<!--<format>DDMMYYYYZ?</format>-->
 		<!--
@@ -37,18 +38,18 @@
 		-->
 		<!-- <format>YYYYZ?</format>
 		<format>MMM-YYYYZ?</format>-->
-		<format>YYYY-?MMM-?DZ?</format>
+		<format>Y-?MMM-?DZ?</format>
 		<format>YYYY-?MM-?DZ?</format>
-		<format>W?D-?MMM-?YYYYZ?</format>
+		<format>W?D-?MMM-?YZ?</format>
 		<format>W?D-?MMM-?YYZ?</format>
 		<format>W?D-?MMMZ?</format>
-		<format>W?M-Dt?-YYYYZ?</format>
+		<format>W?M-Dt?-YZ?</format>
 		<format>W?M-Dt?-YYZ?</format>
-		<format>W?MMM-Dt?-YYYYZ?</format>
+		<format>W?MMM-Dt?-YZ?</format>
 		<format>W?MMM-Dt?-YYZ?</format>
 		<format>W?M-Dt?Z?</format>
-		<format>W?M.YYYYZ?</format>
-		<format>W?Dt?.M.YYYYZ?</format>
+		<format>W?M.YZ?</format>
+		<format>W?Dt?.M.YZ?</format>
 		<format>W?Dt?.M.YYZ?</format>
 		<format>W?Dt?.MZ?</format>
 		<format>W?MMM-?DZ?</format>
