@@ -1,8 +1,12 @@
 package org.qommons.tree;
 
 import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
+import org.qommons.ThreadConstraint;
+import org.qommons.Transaction;
 import org.qommons.collect.AbstractBetterMultiMap;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterSet;
@@ -10,6 +14,7 @@ import org.qommons.collect.BetterSortedList;
 import org.qommons.collect.BetterSortedMultiMap;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
+import org.qommons.collect.FastFailLockingStrategy;
 import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.OptimisticContext;
 
@@ -51,23 +56,18 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 		}
 
 		@Override
-		protected Function<Object, CollectionLockingStrategy> getLocker() {
-			// TODO Auto-generated method stub
-			return super.getLocker();
-		}
-
-		@Override
 		public BetterTreeMultiMap<K, V> buildMultiMap() {
 			return new BetterTreeMultiMap<>(//
-				getLocker(), getKeyCompare(), getValues(), getDescription());
+				getLocker(), getKeyCompare(), getValues(), getDescription(), getInitialValues());
 		}
 	}
 
 	private final Comparator<? super K> theKeyCompare;
 
 	private BetterTreeMultiMap(Function<Object, CollectionLockingStrategy> locking, Comparator<? super K> keyCompare,
-		ValueCollectionSupplier<? super K, ? super V> values, String description) {
-		super(locking, new BetterTreeMap<>(locking, description, keyCompare), values, description);
+		ValueCollectionSupplier<? super K, ? super V> values, String description, Map<K, List<V>> initialValues) {
+		super(locking, new BetterTreeMap<>(__ -> new FastFailLockingStrategy(ThreadConstraint.ANY), description, keyCompare), values,
+			description, initialValues);
 		theKeyCompare = keyCompare;
 	}
 
@@ -98,17 +98,23 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 
 		@Override
 		public BinaryTreeNode<K> getElement(int index) {
-			return getBacking().getElement(index);
+			try (Transaction t = lock(false, null)) {
+				return getBacking().getElement(index);
+			}
 		}
 
 		@Override
 		public int getElementsBefore(ElementId id) {
-			return getBacking().getElementsBefore(id);
+			try (Transaction t = lock(false, null)) {
+				return getBacking().getElementsBefore(id);
+			}
 		}
 
 		@Override
 		public int getElementsAfter(ElementId id) {
-			return getBacking().getElementsAfter(id);
+			try (Transaction t = lock(false, null)) {
+				return getBacking().getElementsAfter(id);
+			}
 		}
 
 		@Override
@@ -118,12 +124,16 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 
 		@Override
 		public BinaryTreeNode<K> splitBetween(ElementId element1, ElementId element2) {
-			return getBacking().splitBetween(element1, element2);
+			try (Transaction t = lock(false, null)) {
+				return getBacking().splitBetween(element1, element2);
+			}
 		}
 
 		@Override
 		public BinaryTreeNode<K> search(Comparable<? super K> search, BetterSortedList.SortedSearchFilter filter) {
-			return getBacking().search(search, filter);
+			try (Transaction t = lock(false, null)) {
+				return getBacking().search(search, filter);
+			}
 		}
 
 		@Override
@@ -204,12 +214,16 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 
 				@Override
 				public int getNodesBefore() {
-					return treeNode.getNodesBefore();
+					try (Transaction t = lock(false, null)) {
+						return treeNode.getNodesBefore();
+					}
 				}
 
 				@Override
 				public int getNodesAfter() {
-					return treeNode.getNodesAfter();
+					try (Transaction t = lock(false, null)) {
+						return treeNode.getNodesAfter();
+					}
 				}
 
 				@Override
@@ -242,8 +256,10 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 
 				@Override
 				public MutableBinaryTreeNode<K> getClosest(boolean left) {
-					BinaryTreeNode<K> relative = treeNode.getClosest(left);
-					return relative == null ? null : mutableElement(relative.getElementId());
+					try (Transaction t = lock(false, null)) {
+						BinaryTreeNode<K> relative = treeNode.getClosest(left);
+						return relative == null ? null : mutableElement(relative.getElementId());
+					}
 				}
 
 				@Override
@@ -254,21 +270,27 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 
 				@Override
 				public MutableBinaryTreeNode<K> getSibling() {
-					BinaryTreeNode<K> relative = treeNode.getSibling();
-					return relative == null ? null : mutableElement(relative.getElementId());
+					try (Transaction t = lock(false, null)) {
+						BinaryTreeNode<K> relative = treeNode.getSibling();
+						return relative == null ? null : mutableElement(relative.getElementId());
+					}
 				}
 
 				@Override
 				public MutableBinaryTreeNode<K> get(int index, OptimisticContext ctx) {
-					BinaryTreeNode<K> relative = treeNode.get(index, ctx);
-					return relative == null ? null : mutableElement(relative.getElementId());
+					try (Transaction t = lock(false, null)) {
+						BinaryTreeNode<K> relative = treeNode.get(index, ctx);
+						return relative == null ? null : mutableElement(relative.getElementId());
+					}
 				}
 
 				@Override
 				public MutableBinaryTreeNode<K> findClosest(Comparable<BinaryTreeNode<K>> finder, boolean lesser, boolean strictly,
 					OptimisticContext ctx) {
-					BinaryTreeNode<K> relative = treeNode.findClosest(finder, lesser, strictly, ctx);
-					return relative == null ? null : mutableElement(relative.getElementId());
+					try (Transaction t = lock(false, null)) {
+						BinaryTreeNode<K> relative = treeNode.findClosest(finder, lesser, strictly, ctx);
+						return relative == null ? null : mutableElement(relative.getElementId());
+					}
 				}
 			};
 		}

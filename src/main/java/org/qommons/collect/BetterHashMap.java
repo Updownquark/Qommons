@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
+import java.util.stream.Collectors;
 
 import org.qommons.Identifiable;
 import org.qommons.Lockable.CoreId;
@@ -24,14 +25,22 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	 * 
 	 * @param <B> The sub-type of this builder
 	 */
-	public static class HashMapBuilder<B extends HashMapBuilder<? extends B>> extends BetterHashSet.HashSetBuilder<B> {
-		HashMapBuilder(String initDescrip) {
-			super(initDescrip);
+	public static class HashMapBuilder<B extends HashMapBuilder<? extends B>> implements CollectionBuilder<B> {
+		private final BetterHashSet.HashSetBuilder<?> theSetBuilder;
+
+		HashMapBuilder() {
+			theSetBuilder = BetterHashSet.build().withDescription("better-hash-map");
 		}
 
-		@Override
+		/**
+		 * Causes this builder to build a map whose hash and comparison are defined externally
+		 * 
+		 * @param hasher The hash function for values in the map
+		 * @param equals The equivalence check for values in the map
+		 * @return This builder
+		 */
 		public B withEquivalence(ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals) {
-			super.withEquivalence(//
+			theSetBuilder.withEquivalence(//
 				entry -> {
 					if (entry instanceof Map.Entry)
 						return hasher.applyAsInt(((Map.Entry<?, ?>) entry).getKey());
@@ -47,12 +56,62 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		/**
+		 * Causes this builder to build a set whose values are stored by identity, instead of notional equivalence
+		 * 
+		 * @return This builder
+		 */
+		public B identity() {
+			return withEquivalence(System::identityHashCode, (o1, o2) -> o1 == o2);
+		}
+
+		/**
+		 * @param loadFactor The load factor for the set that this builder creates
+		 * @return This builder
+		 */
+		public B withLoadFactor(double loadFactor) {
+			theSetBuilder.withLoadFactor(loadFactor);
+			return (B) this;
+		}
+
+		/**
+		 * @param initExpectedSize The number of values that the set created by this builder should accommodate without re-hashing the table
+		 * @return This builder
+		 */
+		public B withInitialCapacity(int initExpectedSize) {
+			theSetBuilder.withInitialCapacity(initExpectedSize);
+			return (B) this;
+		}
+
+		@Override
+		public B withDescription(String descrip) {
+			theSetBuilder.withDescription(descrip);
+			return (B) this;
+		}
+
+		@Override
+		public String getDescription() {
+			return theSetBuilder.getDescription();
+		}
+
+		@Override
+		public B withThreadConstraint(ThreadConstraint threadConstraint) {
+			theSetBuilder.withThreadConstraint(threadConstraint);
+			return (B) this;
+		}
+
+		@Override
+		public B withCollectionLocking(Function<Object, CollectionLockingStrategy> locker) {
+			theSetBuilder.withCollectionLocking(locker);
+			return (B) this;
+		}
+
+		/**
 		 * @param <K> The key type for the map
 		 * @param <V> The value type for the map
 		 * @return The new map
 		 */
-		public <K, V> BetterHashMap<K, V> buildMap() {
-			return new BetterHashMap<>(buildSet());
+		public <K, V> BetterHashMap<K, V> build() {
+			return build(null);
 		}
 
 		/**
@@ -61,23 +120,22 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		 * @param values The initial key-value pairs to insert into the map
 		 * @return A {@link BetterHashMap} built according to this builder's settings, with the given initial content
 		 */
-		public <K, V> BetterHashMap<K, V> buildMap(Map<? extends K, ? extends V> values) {
-			BetterHashMap<K, V> map = new BetterHashMap<>(buildSet());
-			map.putAll(values);
-			return map;
+		public <K, V> BetterHashMap<K, V> build(Map<? extends K, ? extends V> values) {
+			return new BetterHashMap<>(theSetBuilder, values);
 		}
 	}
 
 	/** @return A builder to create a new {@link BetterHashMap} */
 	public static HashMapBuilder<?> build() {
-		return new HashMapBuilder<>("better-hash-map");
+		return new HashMapBuilder<>();
 	}
 
 	private final BetterHashSet<Map.Entry<K, V>> theEntries;
 	private final KeySet theKeySet;
 
-	private BetterHashMap(BetterHashSet<Map.Entry<K, V>> entries) {
-		theEntries = entries;
+	private BetterHashMap(BetterHashSet.HashSetBuilder<?> entryBuilder, Map<? extends K, ? extends V> values) {
+		theEntries = entryBuilder.build(values == null ? null : values.entrySet().stream()//
+		.<Map.Entry<K, V>> map(entry -> newEntry(entry.getKey(), entry.getValue())).collect(Collectors.toSet()));
 		theKeySet = new KeySet();
 	}
 

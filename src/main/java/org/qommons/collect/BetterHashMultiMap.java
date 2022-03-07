@@ -1,5 +1,7 @@
 package org.qommons.collect;
 
+import java.util.List;
+import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
@@ -50,16 +52,43 @@ public class BetterHashMultiMap<K, V> extends AbstractBetterMultiMap<K, V> {
 			return (B) this;
 		}
 
+		/**
+		 * Causes this builder to build a map whose values are stored by identity, instead of notional equivalence
+		 * 
+		 * @return This builder
+		 */
+		public B identity() {
+			return withEquivalence(System::identityHashCode, (o1, o2) -> o1 == o2);
+		}
+
+		/**
+		 * @param loadFactor The load factor for the map that this builder creates
+		 * @return This builder
+		 */
+		public B withLoadFactor(double loadFactor) {
+			theMapBuilder.withLoadFactor(loadFactor);
+			return (B) this;
+		}
+
+		/**
+		 * @param initExpectedSize The number of values that the set created by this builder should accommodate without re-hashing the table
+		 * @return This builder
+		 */
+		public B withInitialCapacity(int initExpectedSize) {
+			theMapBuilder.withInitialCapacity(initExpectedSize);
+			return (B) this;
+		}
+
 		@Override
 		public BetterMultiMap<K, V> buildMultiMap() {
 			return new BetterHashMultiMap<>(getLocker(), getValues(), getDescription(), //
-				theMapBuilder.withCollectionLocking(getLocker()).withDescription(getDescription() + " entries").buildMap());
+				theMapBuilder.withCollectionLocking(getLocker()).withDescription(getDescription() + " entries").build(),
+				getInitialValues());
 		}
 	}
 
 	private BetterHashMultiMap(Function<Object, CollectionLockingStrategy> locking, ValueCollectionSupplier<? super K, ? super V> values,
-		String description,
-		BetterMap<K, BetterCollection<V>> entries) {
-		super(locking, entries, values, description);
+		String description, BetterMap<K, BetterCollection<V>> entries, Map<K, List<V>> initialValues) {
+		super(locking, entries, values, description, initialValues);
 	}
 }

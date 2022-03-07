@@ -1109,7 +1109,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			QonfigToolkit building) {
 			if (qualifier.getDeclarer() != building)
 				return qualifier.getChildrenByName().get(itemName);
-			BetterHashSet<QonfigChildDef.Declared> found = BetterHashSet.build().buildSet();
+			BetterHashSet<QonfigChildDef.Declared> found = BetterHashSet.build().build();
 			findChildren(qualifier, itemName, building, found);
 			return found;
 		}

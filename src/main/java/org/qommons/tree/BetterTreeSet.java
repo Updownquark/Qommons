@@ -2,15 +2,11 @@ package org.qommons.tree;
 
 import java.util.Collection;
 import java.util.Comparator;
-import java.util.SortedSet;
 import java.util.function.Function;
 
-import org.qommons.ThreadConstraint;
 import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.CollectionLockingStrategy;
 import org.qommons.collect.ElementId;
-import org.qommons.collect.FastFailLockingStrategy;
-import org.qommons.collect.StampedLockingStrategy;
 
 /**
  * A {@link BetterSortedSet} backed by a tree structure.
@@ -46,26 +42,6 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 	 */
 	public static <E> Builder<E, BetterTreeSet<E>, ?> buildTreeSet(Comparator<? super E> compare) {
 		return new Builder<>(compare);
-	}
-
-	BetterTreeSet(boolean safe, Comparator<? super E> compare, ThreadConstraint threadConstraint) {
-		this(v -> safe ? new StampedLockingStrategy(v, threadConstraint) : new FastFailLockingStrategy(threadConstraint),
-			DEFAULT_DESCRIPTION, compare);
-	}
-
-	BetterTreeSet(boolean safe, SortedSet<E> values, ThreadConstraint threadConstraint) {
-		this(v -> safe ? new StampedLockingStrategy(v, threadConstraint) : new FastFailLockingStrategy(threadConstraint),
-			DEFAULT_DESCRIPTION, values.comparator());
-		initialize(values, v -> v);
-	}
-
-	/**
-	 * @param locker The locking strategy for the set
-	 * @param values The initial values for the set
-	 */
-	public BetterTreeSet(Function<Object, CollectionLockingStrategy> locker, SortedSet<E> values) {
-		this(locker, DEFAULT_DESCRIPTION, values.comparator());
-		initialize(values, v -> v);
 	}
 
 	/**

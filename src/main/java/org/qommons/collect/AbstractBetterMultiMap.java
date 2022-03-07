@@ -1,6 +1,13 @@
 package org.qommons.collect;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.function.Function;
 
@@ -37,9 +44,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		 * @param <V2> The sub-type of value collection to create
 		 * @param key The key to create the value collection for
 		 * @param locking The locking strategy for the collection to use
+		 * @param initialValues The initial values for the collection
 		 * @return The value collection to store values for the given key in the multi-map
 		 */
-		<V2 extends V> BetterCollection<V2> createValuesFor(K key, CollectionLockingStrategy locking);
+		<V2 extends V> BetterCollection<V2> createValuesFor(K key, CollectionLockingStrategy locking,
+			Iterable<? extends V2> initialValues);
 
 		/**
 		 * @param <V2> The sub-type of value collection to create
@@ -59,8 +68,8 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		<V2 extends V> BetterCollection<V2> createWrapperCollection(ValueCollectionBacking<V2> backing);
 
 		/**
-		 * Called when a collection created with {@link #createValuesFor(Object, CollectionLockingStrategy)} is no longer needed due to all
-		 * its values being removed (an entry in a multi-map cannot exist with no values)
+		 * Called when a collection created with {@link #createValuesFor(Object, CollectionLockingStrategy, Collection)} is no longer needed
+		 * due to all its values being removed (an entry in a multi-map cannot exist with no values)
 		 * 
 		 * @param unused The unused collection
 		 */
@@ -75,7 +84,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	 */
 	public interface ValueListSupplier<K, V> extends ValueCollectionSupplier<K, V> {
 		@Override
-		<V2 extends V> BetterList<V2> createValuesFor(K key, CollectionLockingStrategy locking);
+		<V2 extends V> BetterList<V2> createValuesFor(K key, CollectionLockingStrategy locking, Iterable<? extends V2> initialValues);
 
 		@Override
 		<V2 extends V> BetterList<V2> createEmptyValues();
@@ -118,8 +127,8 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	/** A simple {@link ValueCollectionSupplier} that just creates {@link BetterTreeList}s for each value */
 	public static final ValueListSupplier<Object, Object> LIST_SUPPLIER = new ValueListSupplier<Object, Object>() {
 		@Override
-		public <V2> BetterList<V2> createValuesFor(Object key, CollectionLockingStrategy locking) {
-			return BetterTreeList.<V2> build().withLocking(locking).build();
+		public <V2> BetterList<V2> createValuesFor(Object key, CollectionLockingStrategy locking, Iterable<? extends V2> initialValues) {
+			return BetterTreeList.<V2> build().withLocking(locking).build(initialValues);
 		}
 
 		@Override
@@ -145,9 +154,10 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			private BetterList<V> EMPTY_VALUES;
 
 			@Override
-			public <V2 extends V> BetterList<V2> createValuesFor(Object key, CollectionLockingStrategy locking) {
-				return distinct ? BetterTreeSet.<V2> buildTreeSet(sorting).withLocking(locking).build()
-					: SortedTreeList.<V2> buildTreeList(sorting).withLocking(locking).build();
+			public <V2 extends V> BetterList<V2> createValuesFor(Object key, CollectionLockingStrategy locking,
+				Iterable<? extends V2> initialValues) {
+				return distinct ? BetterTreeSet.<V2> buildTreeSet(sorting).withLocking(locking).build(initialValues)
+					: SortedTreeList.<V2> buildTreeList(sorting).withLocking(locking).build(initialValues);
 			}
 
 			@Override
@@ -174,8 +184,9 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	/** A simple {@link ValueCollectionSupplier} that just creates {@link BetterHashSet}s for each value */
 	public static ValueCollectionSupplier<Object, Object> DISTINCT_SUPPLIER = new ValueCollectionSupplier<Object, Object>() {
 		@Override
-		public <V2> BetterCollection<V2> createValuesFor(Object key, CollectionLockingStrategy locking) {
-			return BetterHashSet.build().withLocking(locking).buildSet();
+		public <V2> BetterCollection<V2> createValuesFor(Object key, CollectionLockingStrategy locking,
+			Iterable<? extends V2> initialValues) {
+			return BetterHashSet.build().withLocking(locking).build(initialValues);
 		}
 
 		@Override
@@ -217,6 +228,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	 */
 	public static abstract class Builder<K, V, B extends Builder<K, V, ? extends B>> extends CollectionBuilder.Default<B> {
 		private ValueCollectionSupplier<? super K, ? super V> theValues;
+		private Map<K, List<V>> theInitialValues;
 
 		/** @param initDescription The initial description for the map */
 		protected Builder(String initDescription) {
@@ -257,6 +269,27 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			return (B) this;
 		}
 
+		/**
+		 * @param key The key to insert values for
+		 * @param values The initial values for the given key
+		 * @return This builder
+		 */
+		public B withInitial(K key, V... values) {
+			return withInitial(key, Arrays.asList(values));
+		}
+
+		/**
+		 * @param key The key to insert values for
+		 * @param values The initial values for the given key
+		 * @return This builder
+		 */
+		public B withInitial(K key, Collection<? extends V> values) {
+			if (theInitialValues == null)
+				theInitialValues = new IdentityHashMap<>();
+			theInitialValues.computeIfAbsent(key, __ -> new ArrayList<>()).addAll(values);
+			return (B) this;
+		}
+
 		@Override
 		protected Function<Object, CollectionLockingStrategy> getLocker() {
 			return super.getLocker();
@@ -265,6 +298,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		/** @return The value supplier for the multi-map */
 		protected ValueCollectionSupplier<? super K, ? super V> getValues() {
 			return theValues;
+		}
+
+		/** @return The initial values to put into the multi map */
+		protected Map<K, List<V>> getInitialValues() {
+			return theInitialValues == null ? Collections.emptyMap() : theInitialValues;
 		}
 
 		/** @return The new multi-map */
@@ -285,15 +323,31 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	 * @param entries The backing {@link BetterMap} for the map
 	 * @param values The value supplier for the map
 	 * @param description The description for the map's {@link #getIdentity() identity}
+	 * @param initialValues The initial values for the map
 	 */
 	protected AbstractBetterMultiMap(Function<Object, CollectionLockingStrategy> locking, BetterMap<K, BetterCollection<V>> entries,
-		ValueCollectionSupplier<? super K, ? super V> values, String description) {
+		ValueCollectionSupplier<? super K, ? super V> values, String description, Map<K, List<V>> initialValues) {
 		theIdentity = Identifiable.baseId(description, this);
 		theLocking = locking.apply(this);
 		theEntries = entries;
 		theValues = values;
 
 		theKeySet = createKeySet(theEntries.keySet());
+		if (initialValues != null) {
+			// Have to hack this a bit. The keys in the initial values map may not be stored the same as they will in this map.
+			// So if we naively add them to theEntries, the value collections may throw thread constraint exceptions.
+			// We need to create simple collections initially, then replace them with those built by the value creator.
+			for (Map.Entry<K, List<V>> entry : initialValues.entrySet()) {
+				MapEntryHandle<K, BetterCollection<V>> myEntry = theEntries.getOrPutEntry(entry.getKey(),
+					k -> BetterTreeList.<V> build().build(), null, null, false, null);
+				if (myEntry != null)
+					myEntry.getValue().addAll(entry.getValue());
+			}
+			for (CollectionElement<K> keyEl : theEntries.keySet().elements()) {
+				MutableMapEntryHandle<K, BetterCollection<V>> entry = theEntries.mutableEntry(keyEl.getElementId());
+				entry.set(theValues.createValuesFor(keyEl.get(), theLocking, entry.getValue()));
+			}
+		}
 	}
 
 	/**
@@ -394,8 +448,8 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	@Override
 	public MultiEntryValueHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first) {
 		try (Transaction t = lock(true, null)) {
-			MapEntryHandle<K, BetterCollection<V>> entry = theEntries.getOrPutEntry(key, k -> theValues.createValuesFor(k, theLocking),
-				afterKey, beforeKey, first, null);
+			MapEntryHandle<K, BetterCollection<V>> entry = theEntries.getOrPutEntry(key,
+				k -> theValues.createValuesFor(k, theLocking, null), afterKey, beforeKey, first, null);
 			if (entry == null)
 				return null;
 			CollectionElement<V> valueEl = entry.getValue().addElement(value, first);
@@ -413,9 +467,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	public MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, ElementId afterKey,
 		ElementId beforeKey, boolean first, Runnable added) {
 		return entryFor(theEntries.getOrPutEntry(key, k -> {
-			BetterCollection<V> values = theValues.createValuesFor(k, theLocking);
-			for (V v : value.apply(k))
-				values.add(v);
+			BetterCollection<V> values = theValues.createValuesFor(k, theLocking, value.apply(k));
 			if (values.isEmpty()) {
 				theValues.dispose(values);
 				return null;
@@ -508,7 +560,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 
 		@Override
 		public ThreadConstraint getThreadConstraint() {
-			return getBacking().getThreadConstraint();
+			return AbstractBetterMultiMap.this.getThreadConstraint();
 		}
 
 		@Override
@@ -533,22 +585,22 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 
 		@Override
 		public boolean isLockSupported() {
-			return getBacking().isLockSupported();
+			return AbstractBetterMultiMap.this.isLockSupported();
 		}
 
 		@Override
 		public Transaction lock(boolean write, Object cause) {
-			return getBacking().lock(write, cause);
+			return AbstractBetterMultiMap.this.lock(write, cause);
 		}
 
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
-			return getBacking().tryLock(write, cause);
+			return AbstractBetterMultiMap.this.tryLock(write, cause);
 		}
 
 		@Override
 		public CoreId getCoreId() {
-			return getBacking().getCoreId();
+			return AbstractBetterMultiMap.this.getCoreId();
 		}
 
 		@Override
@@ -607,16 +659,20 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 
 				@Override
 				public String canRemove() {
-					return keyEl.canRemove();
+					try (Transaction t = lock(false, null)) {
+						return keyEl.canRemove();
+					}
 				}
 
 				@Override
 				public void remove() throws UnsupportedOperationException {
-					BetterCollection<V> values = theEntries.getEntryById(id).get();
-					keyEl.remove();
-					theValueSize -= values.size();
-					theValues.dispose(values);
-					theStamp++;
+					try (Transaction t = lock(true, null)) {
+						BetterCollection<V> values = theEntries.getEntryById(id).get();
+						keyEl.remove();
+						theValueSize -= values.size();
+						theValues.dispose(values);
+						theStamp++;
+					}
 				}
 			};
 		}
@@ -625,20 +681,27 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		public BetterList<CollectionElement<K>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
 			if (sourceCollection == this)
 				return BetterList.of(getElement(sourceEl));
-			return getBacking().getElementsBySource(sourceEl, sourceCollection);
+			try (Transaction t = lock(false, null)) {
+				return getBacking().getElementsBySource(sourceEl, sourceCollection);
+			}
 		}
 
 		@Override
 		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
 			if (sourceCollection == this)
 				return BetterList.of(localElement);
-			else
-				return getBacking().getSourceElements(localElement, sourceCollection);
+			else {
+				try (Transaction t = lock(false, null)) {
+					return getBacking().getSourceElements(localElement, sourceCollection);
+				}
+			}
 		}
 
 		@Override
 		public ElementId getEquivalentElement(ElementId equivalentEl) {
-			return getBacking().getEquivalentElement(equivalentEl);
+			try (Transaction t = lock(false, null)) {
+				return getBacking().getEquivalentElement(equivalentEl);
+			}
 		}
 
 		@Override
@@ -654,22 +717,26 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 
 		@Override
 		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
-			return theBacking.canMove(valueEl, after, before);
+			try (Transaction t = lock(false, null)) {
+				return theBacking.canMove(valueEl, after, before);
+			}
 		}
 
 		@Override
 		public CollectionElement<K> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			// TODO should probably put code here to modify the value size if the move goes awry
-			CollectionElement<K> moved = getBacking().move(valueEl, after, before, first, afterRemove);
-			if (!valueEl.isPresent())
-				theStamp++;
-			return moved;
+			try (Transaction t = lock(true, null)) {
+				// TODO should probably put code here to modify the value size if the move goes awry
+				CollectionElement<K> moved = getBacking().move(valueEl, after, before, first, afterRemove);
+				if (!valueEl.isPresent())
+					theStamp++;
+				return moved;
+			}
 		}
 
 		@Override
 		public void clear() {
-			try (Transaction t = AbstractBetterMultiMap.this.lock(true, null)) {
+			try (Transaction t = lock(true, null)) {
 				if (isEmpty())
 					return;
 				AbstractBetterMultiMap.this.clear();
@@ -678,38 +745,50 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 
 		@Override
 		public CollectionElement<K> getOrAdd(K value, ElementId after, ElementId before, boolean first, Runnable added) {
-			return getBacking().getElement(value, first);
+			try (Transaction t = lock(true, null)) {
+				return getBacking().getElement(value, first);
+			}
 		}
 
 		@Override
 		public boolean isConsistent(ElementId element) {
-			return getBacking().isConsistent(element);
+			try (Transaction t = lock(false, null)) {
+				return getBacking().isConsistent(element);
+			}
 		}
 
 		@Override
 		public boolean checkConsistency() {
-			return getBacking().checkConsistency();
+			try (Transaction t = lock(false, null)) {
+				return getBacking().checkConsistency();
+			}
 		}
 
 		@Override
 		public <X> boolean repair(ElementId element, RepairListener<K, X> listener) {
-			boolean repaired = getBacking().repair(element, listener);
-			if (repaired)
-				theStamp++;
-			return repaired;
+			try (Transaction t = lock(true, null)) {
+				boolean repaired = getBacking().repair(element, listener);
+				if (repaired)
+					theStamp++;
+				return repaired;
+			}
 		}
 
 		@Override
 		public <X> boolean repair(RepairListener<K, X> listener) {
-			boolean repaired = getBacking().repair(listener);
-			if (repaired)
-				theStamp++;
-			return repaired;
+			try (Transaction t = lock(true, null)) {
+				boolean repaired = getBacking().repair(listener);
+				if (repaired)
+					theStamp++;
+				return repaired;
+			}
 		}
 
 		@Override
 		public <T> T[] toArray(T[] a) {
-			return BetterSet.super.toArray(a);
+			try (Transaction t = lock(false, null)) {
+				return BetterSet.super.toArray(a);
+			}
 		}
 
 		@Override
@@ -760,7 +839,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			}
 			try (Transaction t = lock(true, null)) {
 				MapEntryHandle<K, BetterCollection<V>> entry = theEntries.getOrPutEntry(theKey,
-					k -> theValues.createValuesFor(k, theLocking), //
+					k -> theValues.createValuesFor(k, theLocking, null), //
 					null, null, false, null);
 				if (entry == null)
 					throw new UnsupportedOperationException("Could not add map entry for " + theKey);

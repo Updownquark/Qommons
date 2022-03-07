@@ -63,7 +63,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		/**
 		 * Causes this builder to build a set whose hash and comparison are defined externally
 		 * 
-		 * @param hasher The has function for values in the set
+		 * @param hasher The hash function for values in the set
 		 * @param equals The equivalence check for values in the set
 		 * @return This builder
 		 */
@@ -106,8 +106,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		 * @param <E> The value type for the set
 		 * @return An empty {@link BetterHashSet} built according to this builder's settings
 		 */
-		public <E> BetterHashSet<E> buildSet() {
-			return new BetterHashSet<>(getLocker(), theHasher, theEquals, theInitExpectedSize, theLoadFactor, getDescription());
+		public <E> BetterHashSet<E> build() {
+			return build((Collection<? extends E>) null);
 		}
 
 		/**
@@ -115,8 +115,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		 * @param values The initial values to insert into the set
 		 * @return A {@link BetterHashSet} built according to this builder's settings, with the given initial content
 		 */
-		public <E> BetterHashSet<E> buildSet(E... values) {
-			return buildSet(Arrays.asList(values));
+		public <E> BetterHashSet<E> build(E... values) {
+			return build(Arrays.asList(values));
 		}
 
 		/**
@@ -124,10 +124,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		 * @param values The initial values to insert into the set
 		 * @return A {@link BetterHashSet} built according to this builder's settings, with the given initial content
 		 */
-		public <E> BetterHashSet<E> buildSet(Collection<? extends E> values) {
-			BetterHashSet<E> set = buildSet();
-			set.addAll(values);
-			return set;
+		public <E> BetterHashSet<E> build(Iterable<? extends E> values) {
+			return new BetterHashSet<>(getLocker(), theHasher, theEquals, theInitExpectedSize, theLoadFactor, getDescription(), values);
 		}
 	}
 
@@ -150,20 +148,25 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	private HashEntry theLast;
 	private int theSize;
 
-	private BetterHashSet(Function<Object, CollectionLockingStrategy> locker, ToIntFunction<Object> hasher,
-		BiFunction<Object, Object, Boolean> equals,
-		int initExpectedSize, double loadFactor, Object identity) {
+	private BetterHashSet(Function<Object, CollectionLockingStrategy> locker, //
+		ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals, //
+		int initExpectedSize, double loadFactor, Object identity, //
+		Iterable<? extends E> initialValues) {
 		theHasher = hasher;
 		theEquals = equals;
 		theFirstIdCreator = new AtomicLong(-1);
 		theLastIdCreator = new AtomicLong(0);
 		theIdentity = identity;
-		theLocker = locker.apply(this);
 
 		if (loadFactor < MIN_LOAD_FACTOR || loadFactor > MAX_LOAD_FACTOR)
 			throw new IllegalArgumentException("Load factor must be between " + MIN_LOAD_FACTOR + " and " + MAX_LOAD_FACTOR);
 		theLoadFactor = loadFactor;
 		rehash(initExpectedSize);
+		// Add initial values before creating the lock. Initial values are always thread-safe, since nothing else can possibly
+		// have a reference to this collection yet.
+		if (initialValues != null)
+			addAll(initialValues);
+		theLocker = locker.apply(this);
 	}
 
 	@Override
@@ -318,11 +321,15 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 	@Override
 	public Transaction lock(boolean write, Object cause) {
+		if (theLocker == null)
+			return Transaction.NONE;
 		return theLocker.lock(write, cause);
 	}
 
 	@Override
 	public Transaction tryLock(boolean write, Object cause) {
+		if (theLocker == null)
+			return Transaction.NONE;
 		return theLocker.tryLock(write, cause);
 	}
 
@@ -625,10 +632,20 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 	@Override
 	public boolean addAll(Collection<? extends E> c) {
+		return addAll((Iterable<? extends E>) c);
+	}
+
+	/**
+	 * @param c The values to add to the set
+	 * @return Whether any values were added to the et
+	 */
+	public boolean addAll(Iterable<? extends E> c) {
 		try (Transaction t = lock(true, null); Transaction ct = Transactable.lock(c, false, null)) {
-			for (E e : c)
-				add(e);
-			return !c.isEmpty();
+			boolean added = false;
+			for (E e : c) {
+				added |= add(e);
+			}
+			return added;
 		}
 	}
 

@@ -55,8 +55,10 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 		 * @param values The initial values for the new list
 		 * @return The new list
 		 */
-		public L build(Collection<? extends E> values) {
-			return (L) build().withAll(values);
+		public L build(Iterable<? extends E> values) {
+			L built = build();
+			built.initialize(values, v -> v, false);
+			return built;
 		}
 	}
 
@@ -95,12 +97,13 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	 * @param <E2> The type of values to initialize the collection with
 	 * @param values The values to initialize this list with
 	 * @param map The map to apply to the values before insertion
+	 * @param lock Whether to lock this collection for the operation
 	 * @return Whether the list now has values
 	 */
-	protected <E2 extends E> boolean initialize(Iterable<E2> values, Function<? super E2, ? extends E> map) {
+	protected <E2 extends E> boolean initialize(Iterable<E2> values, Function<? super E2, ? extends E> map, boolean lock) {
 		if (theTree.getRoot() != null)
 			throw new IllegalStateException("Cannot initialize a non-empty list");
-		try (Transaction t = Transactable.lock(values, false, null)) {
+		try (Transaction t = lock ? Transactable.lock(values, false, null) : Transaction.NONE) {
 			if (values instanceof RedBlackNodeList) {
 				RedBlackNodeList<E2> rbnl = (RedBlackNodeList<E2>) values;
 				if (rbnl.theTree.getRoot() == null)
@@ -108,7 +111,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 				theTree.setRoot(RedBlackNode.deepCopy(rbnl.theTree.getRoot(), theTree, map));
 			} else
 				RedBlackNode.build(theTree, values, map);
-			if (theTree.getRoot() != null)
+			if (lock && theTree.getRoot() != null)
 				theLocker.modified();
 			return theTree.getRoot() != null;
 		}
@@ -380,7 +383,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	public boolean addAll(Collection<? extends E> c) {
 		try (Transaction t = lock(true, null)) {
 			if (theTree.getRoot() == null && !isContentControlled()) {
-				return initialize(c, e -> e);
+				return initialize(c, e -> e, true); // Already locked, but apply the stamp
 			} else
 				return TreeBasedList.super.addAll(c);
 		}

@@ -682,7 +682,7 @@ public class QonfigElement {
 					} else {
 						attr = theType.getDeclaredAttributes().get(attrDef.itemName);
 						if (attr == null) {
-							attrs = BetterHashSet.build().buildSet();
+							attrs = BetterHashSet.build().build();
 							attrs.addAll(theType.getAttributesByName().get(attrDef.itemName));
 							for (QonfigAddOn inh : theInheritance.values())
 								attrs.addAll(inh.getAttributesByName().get(attrDef.itemName));
@@ -748,7 +748,7 @@ public class QonfigElement {
 				} else {
 					attr = theType.getDeclaredAttributes().get(attrDef.itemName);
 					if (attr == null) {
-						attrs = BetterHashSet.build().buildSet();
+						attrs = BetterHashSet.build().build();
 						attr = theType.getDeclaredAttributes().get(attrDef.itemName);
 						if (attr != null) {
 							attrs.add(attr);

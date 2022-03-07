@@ -3,7 +3,6 @@ package org.qommons.tree;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.NavigableSet;
-import java.util.SortedSet;
 import java.util.function.Function;
 
 import org.qommons.ThreadConstraint;
@@ -50,26 +49,6 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 		@Override
 		public L build() {
 			return (L) new SortedTreeList<>(getLocker(), getDescription(), theCompare);
-		}
-
-		/**
-		 * @param values The initial values for the list
-		 * @return The new list
-		 */
-		public L build(SortedSet<? extends E> values) {
-			SortedTreeList<E> list = build();
-			list.initialize(values, v -> v);
-			return (L) list;
-		}
-
-		/**
-		 * @param values The initial values for the list
-		 * @return The new list
-		 */
-		public L build(BetterSortedList<? extends E> values) {
-			SortedTreeList<E> list = build();
-			list.initialize(values, v -> v);
-			return (L) list;
 		}
 	}
 

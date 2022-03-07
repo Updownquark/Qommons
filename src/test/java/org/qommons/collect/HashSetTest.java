@@ -17,7 +17,7 @@ public class HashSetTest {
 	static class HashSetTester implements TestHelper.Testable {
 		@Override
 		public void accept(TestHelper helper) {
-			QommonsTestUtils.testCollection(BetterHashSet.build().buildSet(), null, null, helper);
+			QommonsTestUtils.testCollection(BetterHashSet.build().build(), null, null, helper);
 		}
 	}
 
@@ -32,7 +32,7 @@ public class HashSetTest {
 	static class HashMapTester implements TestHelper.Testable {
 		@Override
 		public void accept(TestHelper helper) {
-			QommonsTestUtils.testMap(BetterHashMap.build().buildMap(), null, null);
+			QommonsTestUtils.testMap(BetterHashMap.build().build(), null, null);
 		}
 	}
 }

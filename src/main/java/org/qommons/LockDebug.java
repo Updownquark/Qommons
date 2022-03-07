@@ -214,7 +214,7 @@ public class LockDebug {
 		LockStack() {
 			theThread = Thread.currentThread();
 			theStack = BetterTreeList.<LockHold> build().build();
-			theHeldLocks = BetterHashMap.build().buildMap();
+			theHeldLocks = BetterHashMap.build().build();
 		}
 
 		LockHold lock(LockInfo lock, Object debugInfo, boolean exclusive) {

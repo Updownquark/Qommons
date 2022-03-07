@@ -501,7 +501,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		BetterTreeEntrySet(Function<Object, CollectionLockingStrategy> locker, Object mapId, SortedMap<K, ? extends V> map,
 			BiFunction<K, V, Map.Entry<K, V>> creator) {
 			this(locker, Identifiable.wrap(mapId, "entrySet"), map.comparator());
-			initialize((Set<? extends Map.Entry<K, V>>) map.entrySet(), entry -> creator.apply(entry.getKey(), entry.getValue()));
+			initialize((Set<? extends Map.Entry<K, V>>) map.entrySet(), entry -> creator.apply(entry.getKey(), entry.getValue()), false);
 		}
 
 		@Override
