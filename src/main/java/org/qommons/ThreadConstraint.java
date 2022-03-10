@@ -1,8 +1,11 @@
 package org.qommons;
 
 import java.awt.EventQueue;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 /**
  * <p>
@@ -17,6 +20,11 @@ public interface ThreadConstraint {
 	public static final ThreadConstraint ANY = new ThreadConstraint() {
 		@Override
 		public boolean isEventThread() {
+			return true;
+		}
+
+		@Override
+		public boolean supportsInvoke() {
 			return true;
 		}
 
@@ -38,13 +46,18 @@ public interface ThreadConstraint {
 		}
 
 		@Override
+		public boolean supportsInvoke() {
+			return false;
+		}
+
+		@Override
 		public void invoke(Runnable task) {
 			throw new UnsupportedOperationException();
 		}
 
 		@Override
 		public String toString() {
-			return "Not ThreadConstrained";
+			return "Uneventable";
 		}
 	};
 	/** Thread constraint for the AWT {@link EventQueue} thread */
@@ -52,6 +65,11 @@ public interface ThreadConstraint {
 		@Override
 		public boolean isEventThread() {
 			return EventQueue.isDispatchThread();
+		}
+
+		@Override
+		public boolean supportsInvoke() {
+			return true;
 		}
 
 		@Override
@@ -69,12 +87,57 @@ public interface ThreadConstraint {
 	boolean isEventThread();
 
 	/**
+	 * @return Whether this thread constraint supports the {@link #invoke(Runnable)} method. A thread constraint can serve as merely an
+	 *         indicator, without supporting some operations that require invocation. Invocation may be unsupported, for example, by
+	 *         {@link #dedicated(Thread, Consumer) dedicated} constraints.
+	 */
+	boolean supportsInvoke();
+
+	/**
 	 * Performs the task on an acceptable thread. If the current thread is acceptable, the task will be executed inline. Otherwise, the task
 	 * will be queued to be executed on an acceptable thread and this method will return immediately, likely before the task is executed.
 	 * 
 	 * @param task The task to execute
 	 */
 	void invoke(Runnable task);
+
+	/**
+	 * @param thread The thread that updates will be executed on
+	 * @param invoke Supports {@link ThreadConstraint#invoke(Runnable)}, or null if invocation is not to be supported.
+	 * @return A {@link ThreadConstraint} that prevents modification off of the given thread.
+	 */
+	public static DedicatedThreaded dedicated(Thread thread, Consumer<Runnable> invoke) {
+		return new DedicatedThreaded(thread, invoke);
+	}
+
+	/**
+	 * @param constraints The thread constraints to determine whether a thread is an {@link #isEventThread() event thread}.
+	 * @return A constraint that supports modification to any of the given constraints' event threads, and uses the first
+	 *         invocation-supporting constraint to support invocation (if any).
+	 */
+	public static ThreadConstraint union(ThreadConstraint... constraints) {
+		List<ThreadConstraint> cs = new ArrayList<>(constraints.length - 1);
+		for (ThreadConstraint c : constraints) {
+			if (c == ThreadConstraint.NONE)
+				continue;
+			else if (c == ThreadConstraint.ANY)
+				return c;
+			boolean found = false;
+			for (int i = 0; i < cs.size(); i++) {
+				if (cs.get(i).equals(c)) {
+					found = true;
+					break;
+				}
+			}
+			if (!found)
+				cs.add(c);
+		}
+		if (cs.isEmpty())
+			return ThreadConstraint.NONE;
+		if (cs.size() == 1)
+			return cs.get(0);
+		return new UnionConstraint(QommonsUtils.unmodifiableCopy(cs));
+	}
 
 	/**
 	 * A partial implementation of ThreadConstraint that implements caching. This can be handy when calls to an
@@ -128,6 +191,112 @@ public interface ThreadConstraint {
 				task = theEventCache.poll();
 			} while (task != null);
 			return true;
+		}
+	}
+
+	/** Implements {@link ThreadConstraint#dedicated(Thread, Consumer)} */
+	static class DedicatedThreaded implements ThreadConstraint {
+		private final Thread theThread;
+		private final Consumer<Runnable> theInvoke;
+
+		DedicatedThreaded(Thread thread, Consumer<Runnable> invoke) {
+			theThread = thread;
+			theInvoke = invoke;
+		}
+
+		@Override
+		public boolean isEventThread() {
+			return Thread.currentThread() == theThread;
+		}
+
+		@Override
+		public boolean supportsInvoke() {
+			return theInvoke != null;
+		}
+
+		@Override
+		public void invoke(Runnable task) {
+			if (theInvoke == null)
+				throw new UnsupportedOperationException();
+			theInvoke.accept(task);
+		}
+
+		@Override
+		public int hashCode() {
+			return theThread.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof DedicatedThreaded && theThread.equals(((DedicatedThreaded) obj).theThread);
+		}
+
+		@Override
+		public String toString() {
+			return "Dedicated@" + theThread.getName();
+		}
+	}
+
+	/** Implements {@link ThreadConstraint#union(ThreadConstraint...)} */
+	static class UnionConstraint implements ThreadConstraint {
+		private final List<ThreadConstraint> theConstraints;
+		private final ThreadConstraint theInvocationSupport;
+
+		UnionConstraint(List<ThreadConstraint> constraints) {
+			theConstraints = constraints;
+			ThreadConstraint invocationSupport = null;
+			for (ThreadConstraint tc : theConstraints) {
+				if (tc.supportsInvoke()) {
+					invocationSupport = tc;
+					break;
+				}
+			}
+			theInvocationSupport = invocationSupport;
+		}
+
+		@Override
+		public boolean isEventThread() {
+			for (ThreadConstraint constraint : theConstraints) {
+				if (constraint.isEventThread())
+					return true;
+			}
+			return false;
+		}
+
+		@Override
+		public boolean supportsInvoke() {
+			// We already checked that it supports invocation, but I dunno, maybe there's a reason this could be dynamic
+			return theInvocationSupport != null && theInvocationSupport.supportsInvoke();
+		}
+
+		@Override
+		public void invoke(Runnable task) {
+			theConstraints.get(0).invoke(task);
+		}
+
+		@Override
+		public int hashCode() {
+			return theConstraints.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof UnionConstraint))
+				return false;
+			return theConstraints.equals(((UnionConstraint) obj).theConstraints);
+		}
+
+		@Override
+		public String toString() {
+			StringBuilder str = new StringBuilder("union(");
+			for (int i = 0; i < theConstraints.size(); i++) {
+				if (i > 0)
+					str.append(',');
+				str.append(theConstraints.get(i));
+			}
+			return str.append(')').toString();
 		}
 	}
 }
