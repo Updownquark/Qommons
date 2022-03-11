@@ -2543,6 +2543,8 @@ public class TimeUtils {
 					char newType = i < dayFormat.length() ? dayFormat.charAt(i) : 0;
 					switch (newType) {
 					case 'd':
+					case 'D':
+						newType = 'D';
 						foundDay = true;
 						break;
 					case 'M':
@@ -2552,9 +2554,12 @@ public class TimeUtils {
 						break;
 					case 'y':
 					case 'Y':
+						newType = 'Y';
 						foundYear = true;
 						break;
 					case 'E':
+					case 'e':
+						newType = 'E';
 						break;
 					default:
 						newType = 1;
@@ -2562,7 +2567,7 @@ public class TimeUtils {
 					}
 					if (type != newType) {
 						switch (type) {
-						case 'd':
+						case 'D':
 							separators.add(separator.toString());
 							separator.setLength(0);
 							components.add(new DayComponent(dayFormat.substring(start, i), DateElementType.Day, Format.INT));
@@ -2575,7 +2580,7 @@ public class TimeUtils {
 							else
 								components.add(new DayComponent(dayFormat.substring(start, i), DateElementType.Month, MONTH_FORMAT));
 							break;
-						case 'y':
+						case 'Y':
 							separators.add(separator.toString());
 							separator.setLength(0);
 							components.add(new DayComponent(dayFormat.substring(start, i), DateElementType.Year, Format.INT));
