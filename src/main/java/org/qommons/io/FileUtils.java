@@ -336,6 +336,8 @@ public class FileUtils {
 		BetterFile.Hasher hasher = type.hasher();
 		byte[] buffer = new byte[16 * 1024];
 		try (InputStream in = stream.get()) {
+			if (in == null) // Canceled
+				return null;
 			for (int read = in.read(buffer); //
 				read >= 0//
 					&& (canceled == null || !canceled.getAsBoolean()); //
