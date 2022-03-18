@@ -358,9 +358,11 @@ public class StrictXmlReader implements Named {
 			case '\n':
 			case '\r':
 			case '\t':
-				return true;
+				break;
+			default:
+				return false;
 			}
 		}
-		return false;
+		return true;
 	}
 }
