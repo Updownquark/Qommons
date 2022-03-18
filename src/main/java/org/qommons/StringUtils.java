@@ -56,8 +56,9 @@ public class StringUtils {
 		for (i1 = 0, i2 = 0; i1 < s1.length() && i2 < s2.length(); i1++, i2++) {
 			char ch1 = s1.charAt(i1);
 			char ch2 = s2.charAt(i2);
+			int diff = ch1 - ch2;
 			if (onlyZeroIfEqual && intolerantResult == 0)
-				intolerantResult = ch2 - ch1;
+				intolerantResult = diff;
 			boolean firstIsDigit = ch1 >= '0' && ch1 <= '9';
 			boolean secondIsDigit = ch2 >= '0' && ch2 <= '9';
 			if (firstIsDigit && secondIsDigit) {
@@ -116,16 +117,11 @@ public class StringUtils {
 					break; // We've advanced past the number (which was the same in both strings) now and ch1 and ch2 are now
 			}
 			if (ignoreCase) {
-				boolean upper1 = Character.isUpperCase(ch1);
-				boolean upper2 = Character.isUpperCase(ch2);
-				if (upper1 != upper2) {
-					if (upper1)
-						ch1 = Character.toLowerCase(ch1);
-					else
-						ch2 = Character.toLowerCase(ch2);
-				}
+				if (ch1 >= 'A' && ch2 <= 'Z')
+					diff += a_MINUS_A;
+				if (ch2 >= 'A' && ch2 <= 'Z')
+					diff -= a_MINUS_A;
 			}
-			int diff = ch1 - ch2;
 			if (diff < 0)
 				return -1;
 			else if (diff > 0)
@@ -144,15 +140,7 @@ public class StringUtils {
 	 * @return Whether the given prefix is at the beginning of the full sequence, regardless of case
 	 */
 	public static boolean startsWithIgnoreCase(CharSequence full, CharSequence prefix) {
-		if (full.length() < prefix.length())
-			return false;
-		for (int i = 0; i < prefix.length(); i++) {
-			char c1 = full.charAt(i);
-			char c2 = prefix.charAt(i);
-			if (c1 != c2 && Character.toLowerCase(c1) != Character.toLowerCase(c2))
-				return false;
-		}
-		return true;
+		return subSequenceMatches(full, 0, prefix, 0, -1, true) == prefix.length();
 	}
 
 	/**
@@ -163,14 +151,7 @@ public class StringUtils {
 	public static boolean endsWithIgnoreCase(CharSequence full, CharSequence suffix) {
 		if (full.length() < suffix.length())
 			return false;
-		int lenDiff = full.length() - suffix.length();
-		for (int i = suffix.length() - 1; i >= 0; i--) {
-			char c1 = full.charAt(i + lenDiff);
-			char c2 = suffix.charAt(i);
-			if (c1 != c2 && Character.toLowerCase(c1) != Character.toLowerCase(c2))
-				return false;
-		}
-		return true;
+		return subSequenceMatches(full, full.length() - suffix.length(), suffix, 0, -1, true) == suffix.length();
 	}
 
 	/**
@@ -533,16 +514,17 @@ public class StringUtils {
 		StringBuilder comp = new StringBuilder();
 		boolean hadLower = false;
 		for (int c = 0; c < name.length(); c++) {
-			if (Character.isUpperCase(name.charAt(c))) {
+			char ch = name.charAt(c);
+			if (ch >= 'A' && ch <= 'Z') {
 				boolean newComponent = c > 0 && (hadLower || !ignoreRepeatCapitals);
 				if (newComponent) {
 					components.add(comp.toString());
 					comp.setLength(0);
 					hadLower = false;
 				}
-				comp.append(Character.toLowerCase(name.charAt(c)));
+				comp.append(ch + a_MINUS_A);
 			} else {
-				comp.append(name.charAt(c));
+				comp.append(ch);
 				hadLower = true;
 			}
 		}
@@ -609,7 +591,9 @@ public class StringUtils {
 	public static String getIndefiniteArticle(String str) {
 		if (str.isEmpty())
 			return "";
-		char init = Character.toLowerCase(str.charAt(0));
+		char init = str.charAt(0);
+		if (init >= 'A' && init < 'Z')
+			init += a_MINUS_A;
 		if (init == 'a' || init == 'e' || init == 'i' || init == 'o' || init == 'u')
 			return "an";
 		else
@@ -1385,8 +1369,9 @@ public class StringUtils {
 		return readyForMore;
 	}
 
-	private static final char A_MINUS_0 = 'A' - '0';
-	/** <code>'a' - 'A' */
+	/** <code>'A' - '0'</code> */
+	public static final char A_MINUS_0 = 'A' - '0';
+	/** <code>'a' - 'A'</code> */
 	public static final char a_MINUS_A = 'a' - 'A';
 
 	/**
