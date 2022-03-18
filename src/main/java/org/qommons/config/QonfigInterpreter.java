@@ -92,7 +92,7 @@ public class QonfigInterpreter {
 		static Runnable NO_RUN = () -> {
 		};
 
-		Runnable markAddOn(QonfigElement element, QonfigAddOn type) {
+		Runnable markModifier(QonfigElement element, QonfigElementOrAddOn type) {
 			if (theStack.getLast().element == element && theStack.getLast().type == type)
 				return NO_RUN;
 			QonfigParseSession session = theStack.getLast().session.forChild(element.getType().getName(), theNextChildIndex);
@@ -431,11 +431,11 @@ public class QonfigInterpreter {
 	}
 
 	private final Map<QonfigElementDef, QonfigCreatorHolder<?>> theCreators;
-	private final Map<QonfigAddOn, SubClassMap2<Object, QonfigModifierHolder<?>>> theModifiers;
+	private final Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<?>>> theModifiers;
 	private final ThreadLocal<QonfigInterpretingSession> theSessions;
 
 	QonfigInterpreter(Map<QonfigElementDef, QonfigCreatorHolder<?>> creators,
-		Map<QonfigAddOn, SubClassMap2<Object, QonfigModifierHolder<?>>> modifiers) {
+		Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<?>>> modifiers) {
 		theCreators = creators;
 		theModifiers = modifiers;
 		theSessions = new ThreadLocal<>();
@@ -518,8 +518,9 @@ public class QonfigInterpreter {
 	}
 
 	<T> T modify(Class<T> type, T value, QonfigElement element, QonfigInterpretingSession session) throws QonfigInterpretationException {
-		Set<QonfigAddOn> inh = new HashSet<>();
 		Set<QonfigValueModifier<?>> modified = new HashSet<>();
+		value = modifyWith(type, value, element, element.getType().getSuperElement(), modified, session);
+		Set<QonfigAddOn> inh = new HashSet<>();
 		for (QonfigAddOn el : element.getType().getFullInheritance().values()) {
 			if (inh.add(el))
 				value = modifyWith(type, value, element, el, inh, modified, session);
@@ -531,13 +532,28 @@ public class QonfigInterpreter {
 		return value;
 	}
 
+	private <T> T modifyWith(Class<T> type, T value, QonfigElement element, QonfigElementDef superType,
+		Set<QonfigValueModifier<?>> modified, QonfigInterpretingSession session) throws QonfigInterpretationException {
+		if (superType == null)
+			return value;
+		value = modifyWith(type, value, element, superType.getSuperElement(), modified, session);
+		return doModify(type, value, element, superType, modified, session);
+	}
+
 	private <T> T modifyWith(Class<T> type, T value, QonfigElement element, QonfigAddOn addOn, Set<QonfigAddOn> inh,
 		Set<QonfigValueModifier<?>> modified, QonfigInterpretingSession session) throws QonfigInterpretationException {
 		for (QonfigAddOn ext : addOn.getFullInheritance().getExpanded(QonfigAddOn::getInheritance)) {
 			if (inh.add(ext))
 				value = modifyWith(type, value, element, ext, inh, modified, session);
 		}
-		SubClassMap2<Object, QonfigModifierHolder<?>> modifiers = theModifiers.get(addOn);
+		return doModify(type, value, element, addOn, modified, session);
+	}
+
+	private <T> T doModify(Class<T> type, T value, QonfigElement element, QonfigElementOrAddOn modifierType,
+		Set<QonfigValueModifier<?>> modified, QonfigInterpretingSession session) throws QonfigInterpretationException {
+		if (modifierType == null)
+			return value;
+		SubClassMap2<Object, QonfigModifierHolder<?>> modifiers = theModifiers.get(modifierType);
 		if (modifiers == null)
 			return value;
 		List<BiTuple<Class<?>, QonfigModifierHolder<?>>> typeModifiers = modifiers.getAllEntries(type);
@@ -545,13 +561,14 @@ public class QonfigInterpreter {
 			return value;
 		for (BiTuple<Class<?>, QonfigModifierHolder<?>> modifier : typeModifiers) {
 			if (modified.add(modifier.getValue2().modifier)) {
-				Runnable sessionClose = session.markAddOn(element, addOn);
+				Runnable sessionClose = session.markModifier(element, modifierType);
 				try {
 					value = ((QonfigModifierHolder<T>) modifier.getValue2()).modifier.modifyValue(value, element, session);
 				} catch (QonfigInterpretationException | RuntimeException e) {
 					if (session.loggedThrowable != e) {
 						session.loggedThrowable = e;
-						session.withError("Modifier " + modifier.getValue2().modifier + " for add-on " + addOn + " on type "
+						session.withError("Modifier " + modifier.getValue2().modifier + " for "//
+							+ (modifierType instanceof QonfigElementDef ? "super type" : "add-on") + modifierType + " on type "
 							+ modifier.getValue1().getName() + " failed to modify value " + value + " for element " + element, e);
 					}
 					throw e;
@@ -579,7 +596,7 @@ public class QonfigInterpreter {
 		private final QonfigToolkit theToolkit;
 		private final StatusReportAccumulator<QonfigElementOrAddOn> theStatus;
 		private final Map<QonfigElementDef, QonfigCreatorHolder<?>> theCreators;
-		private final Map<QonfigAddOn, SubClassMap2<Object, QonfigModifierHolder<?>>> theModifiers;
+		private final Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<?>>> theModifiers;
 
 		Builder(QonfigToolkit... toolkits) {
 			theToolkits = QommonsUtils.unmodifiableDistinctCopy(toolkits);
@@ -593,7 +610,7 @@ public class QonfigInterpreter {
 
 		Builder(Set<QonfigToolkit> toolkits, QonfigToolkit toolkit, StatusReportAccumulator<QonfigElementOrAddOn> status,
 			Map<QonfigElementDef, QonfigCreatorHolder<?>> creators,
-			Map<QonfigAddOn, SubClassMap2<Object, QonfigModifierHolder<?>>> modifiers) {
+			Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<?>>> modifiers) {
 			theToolkits = toolkits;
 			theToolkit = toolkit;
 			theStatus = status;
@@ -739,35 +756,37 @@ public class QonfigInterpreter {
 
 		/**
 		 * @param <T> The type to modify
-		 * @param addOn The add-on to modify values for
+		 * @param elementOrAddOn The element or add-on add-on to modify values for
 		 * @param type The type to modify
-		 * @param modifier The modifier to modify values for the given add-on
+		 * @param modifier The modifier to modify values for the given element or add-on
 		 * @return This builder
 		 */
-		public <T> Builder modifyWith(QonfigAddOn addOn, Class<T> type, QonfigValueModifier<T> modifier) {
-			if (!dependsOn(addOn.getDeclarer()))
-				throw new IllegalArgumentException("Element " + addOn.getName() + " is from a toolkit not included in " + theToolkits);
-			if (theModifiers.containsKey(addOn))
-				theStatus.warn(addOn, "Replacing modifier");
-			theModifiers.computeIfAbsent(addOn, __ -> new SubClassMap2<>(Object.class)).with(type,
+		public <T> Builder modifyWith(QonfigElementOrAddOn elementOrAddOn, Class<T> type, QonfigValueModifier<T> modifier) {
+			if (!dependsOn(elementOrAddOn.getDeclarer()))
+				throw new IllegalArgumentException(
+					"Element " + elementOrAddOn.getName() + " is from a toolkit not included in " + theToolkits);
+			if (theModifiers.containsKey(elementOrAddOn))
+				theStatus.warn(elementOrAddOn, "Replacing modifier");
+			theModifiers.computeIfAbsent(elementOrAddOn, __ -> new SubClassMap2<>(Object.class)).with(type,
 				new QonfigModifierHolder<>(type, modifier));
 			return this;
 		}
 
 		/**
 		 * @param <T> The type to modify
-		 * @param addOnName The name of the add-on to modify values for
+		 * @param elementOrAddOnName The name of the element or add-on to modify values for
 		 * @param type The type to modify
-		 * @param modifier The modifier to modify values for the given add-on
+		 * @param modifier The modifier to modify values for the given element or add-on
 		 * @return This builder
 		 */
-		public <T> Builder modifyWith(String addOnName, Class<T> type, QonfigValueModifier<T> modifier) {
+		public <T> Builder modifyWith(String elementOrAddOnName, Class<T> type, QonfigValueModifier<T> modifier) {
 			if (theToolkit == null)
 				throw new IllegalStateException("Use forToolkit(QonfigToolkit) first to get an interpreter for a toolkit");
-			QonfigAddOn addOn = theToolkit.getAddOn(addOnName);
-			if (addOn == null)
-				throw new IllegalArgumentException("No such add-on '" + addOnName + "' in toolkit " + theToolkit.getLocation());
-			return modifyWith(addOn, type, modifier);
+			QonfigElementOrAddOn element = theToolkit.getElementOrAddOn(elementOrAddOnName);
+			if (element == null)
+				throw new IllegalArgumentException(
+					"No such element or add-on '" + elementOrAddOnName + "' in toolkit " + theToolkit.getLocation());
+			return modifyWith(element, type, modifier);
 		}
 
 		/** @return The built interpreter */
