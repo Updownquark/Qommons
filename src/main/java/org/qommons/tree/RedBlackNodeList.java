@@ -109,7 +109,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 				if (rbnl.theTree.getRoot() == null)
 					return false;
 				theTree.setRoot(RedBlackNode.deepCopy(rbnl.theTree.getRoot(), theTree, map));
-			} else
+			} else if (values != null)
 				RedBlackNode.build(theTree, values, map);
 			if (lock && theTree.getRoot() != null)
 				theLocker.modified();
