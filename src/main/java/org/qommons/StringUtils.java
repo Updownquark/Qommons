@@ -522,7 +522,7 @@ public class StringUtils {
 					comp.setLength(0);
 					hadLower = false;
 				}
-				comp.append(ch + a_MINUS_A);
+				comp.append((char) (ch + a_MINUS_A));
 			} else {
 				comp.append(ch);
 				hadLower = true;
