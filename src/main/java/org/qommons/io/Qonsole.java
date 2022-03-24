@@ -3,10 +3,15 @@ package org.qommons.io;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.text.ParseException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
 
+import org.qommons.ArgumentParsing2;
+import org.qommons.ArgumentParsing2.ArgumentParser;
 import org.qommons.Named;
 
 /**
@@ -19,9 +24,123 @@ public class Qonsole implements Named, AutoCloseable {
 	public interface QonsolePlugin {
 		/**
 		 * @param content The content to parse
-		 * @return True if the content complete, false if more lines are expected
+		 * @return True if the given content is complete, false if more lines are expected
+		 * @throws ParseException If the content could not be parsed
 		 */
-		public boolean input(CharSequence content);
+		public boolean input(CharSequence content) throws ParseException;
+	}
+
+	/** Handles command-line argument-style plugin input */
+	public interface QonsoleArgsHandler {
+		/**
+		 * @param args The parsed arguments given by the user
+		 * @throws ParseException If the input could not be handled
+		 */
+		public void input(ArgumentParsing2.Arguments args) throws ParseException;
+	}
+
+	/**
+	 * A plugin to handle command-line argument-style plugin input
+	 * 
+	 * @see Qonsole#addPlugin(String, ArgumentParser, QonsoleArgsHandler)
+	 */
+	public class QonsoleArgsPlugin implements QonsolePlugin {
+		private final ArgumentParsing2.ArgumentParser theParser;
+		private final QonsoleArgsHandler theHandler;
+
+		/**
+		 * @param parser The parser to parse the command-line-style arguments
+		 * @param handler The handler to handle the parsed input
+		 */
+		public QonsoleArgsPlugin(ArgumentParser parser, QonsoleArgsHandler handler) {
+			theParser = parser;
+			theHandler = handler;
+		}
+
+		@Override
+		public boolean input(CharSequence content) throws ParseException {
+			List<String> argList = new ArrayList<>(5);
+			StringBuilder currentArg = new StringBuilder();
+			boolean quoted = false;
+			boolean escaped = false;
+			for (int i = 0; i < content.length(); i++) {
+				char ch = content.charAt(i);
+				switch (ch) {
+				case '"':
+					if (escaped) {
+						currentArg.append(ch);
+						escaped = false;
+					}
+					if (quoted && !escaped) {
+						quoted = false;
+						argList.add(currentArg.toString());
+						currentArg.setLength(0);
+					} else if (currentArg.length() == 0)
+						quoted = true;
+					break;
+				case ' ':
+				case '\t':
+					if (escaped) {
+						currentArg.append(ch);
+						escaped = false;
+					} else if (quoted)
+						currentArg.append(ch);
+					else {
+						argList.add(currentArg.toString());
+						currentArg.setLength(0);
+					}
+					break;
+				case '\r':
+					break;
+				case '\\':
+					if (escaped) {
+						currentArg.append(ch);
+						escaped = false;
+					} else
+						escaped = true;
+					break;
+				case 't':
+					if (escaped) {
+						currentArg.append('\t');
+						escaped = false;
+					} else
+						currentArg.append(ch);
+					break;
+				case 'n':
+					if (escaped) {
+						currentArg.append('\n');
+						escaped = false;
+					} else
+						currentArg.append(ch);
+					break;
+				case 'r':
+					if (escaped) {
+						currentArg.append('\r');
+						escaped = false;
+					} else
+						currentArg.append(ch);
+					break;
+				default:
+					if (escaped)
+						throw new ParseException("Cannot escape '" + ch + "'", i - 1);
+					else
+						currentArg.append(ch);
+					break;
+				}
+			}
+			if (quoted || escaped)
+				return false;
+			if (currentArg.length() > 0)
+				argList.add(currentArg.toString());
+			ArgumentParsing2.Arguments args;
+			try {
+				args = theParser.parse(argList);
+			} catch (IllegalArgumentException e) {
+				throw new ParseException(e.getMessage(), 0);
+			}
+			theHandler.input(args);
+			return true;
+		}
 	}
 
 	private static Qonsole SYSTEM_QONSOLE;
@@ -106,6 +225,16 @@ public class Qonsole implements Named, AutoCloseable {
 		return this;
 	}
 
+	/**
+	 * @param pluginName The name of the plugin, by which the user may address arguments to it
+	 * @param parser The argument parser to structure the plugin's input
+	 * @param handler The handler to receive the parsed arguments
+	 * @return This Qonsole
+	 */
+	public Qonsole addPlugin(String pluginName, ArgumentParsing2.ArgumentParser parser, QonsoleArgsHandler handler) {
+		return addPlugin(pluginName, new QonsoleArgsPlugin(parser, handler));
+	}
+
 	private void check() throws IOException {
 		if (isDone)
 			return;
@@ -123,6 +252,14 @@ public class Qonsole implements Named, AutoCloseable {
 						boolean done;
 						try {
 							done = theCurrentPlugin.input(command);
+						} catch (ParseException e) {
+							if (e.getErrorOffset() > 0) {
+								for (int off = 0; off < e.getErrorOffset(); off++)
+									System.out.print(' ');
+								System.out.println("^");
+							}
+							System.err.println(e.getMessage());
+							done = true;
 						} catch (RuntimeException | Error e) {
 							System.err.println("Error from plugin " + theCurrentPlugin + " for command \"" + command + "\"");
 							e.printStackTrace();
