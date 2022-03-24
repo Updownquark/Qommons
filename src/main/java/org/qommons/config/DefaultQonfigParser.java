@@ -178,6 +178,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					}
 					builder.inherits(addOn);
 				}
+			} else if ("role".equals(attr.getKey())) {//
 			} else {
 				ElementQualifiedParseItem qAttr = ElementQualifiedParseItem.parse(attr.getKey(), session);
 				builder.withAttribute(qAttr, new AttParser(attr.getValue()));
