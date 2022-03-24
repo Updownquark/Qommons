@@ -86,10 +86,10 @@ public class StringUtils {
 				boolean secondGreater = false;
 				while (firstIsDigit && secondIsDigit) {
 					if (!firstGreater && !secondGreater) {
-						int comp = ch1 - ch2;
-						if (comp < 0)
+						diff = ch1 - ch2;
+						if (diff < 0)
 							secondGreater = true;
-						else if (comp > 0)
+						else if (diff > 0)
 							firstGreater = true;
 					}
 					i1++;
@@ -115,7 +115,12 @@ public class StringUtils {
 					return -1;
 				if (i1 == s1.length() || i2 == s2.length())
 					break; // We've advanced past the number (which was the same in both strings) now and ch1 and ch2 are now
+				diff = ch1 - ch2;
+				if (onlyZeroIfEqual && intolerantResult == 0)
+					intolerantResult = diff;
 			}
+			if (diff == 0)
+				continue;
 			if (ignoreCase) {
 				if (ch1 >= 'A' && ch2 <= 'Z')
 					diff += a_MINUS_A;
