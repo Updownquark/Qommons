@@ -465,6 +465,17 @@ public class ListenerList<E> {
 		return null;
 	}
 	
+	/**
+	 * Removes and returns the first value (the head) in this list, if the list is not empty
+	 * 
+	 * @param waitTime If &gt;0, how long to wait in this method until a value is available
+	 * @return The removed value, or null if the list was empty
+	 */
+	public E pollValue(long waitTime) {
+		Element<E> polled = poll(waitTime);
+		return polled == null ? null : polled.get();
+	}
+
 	/** @return The first element in this list, or null if the list is empty */
 	public Element<E> peekFirst(){
 		RunLastNode runLast = null;
