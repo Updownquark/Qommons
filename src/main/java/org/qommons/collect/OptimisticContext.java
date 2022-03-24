@@ -5,12 +5,8 @@ import java.util.function.BooleanSupplier;
 /** Provides feedback to an {@link CollectionLockingStrategy.OptimisticIntOperation} about whether the operation is still valid */
 public interface OptimisticContext extends BooleanSupplier {
 	/** @return Whether the current operation is still valid */
-	boolean check();
-
 	@Override
-	default boolean getAsBoolean() {
-		return check();
-	}
+	boolean getAsBoolean();
 
 	/** A context that is always valid */
 	OptimisticContext TRUE = () -> true;
@@ -22,7 +18,7 @@ public interface OptimisticContext extends BooleanSupplier {
 	default OptimisticContext and(OptimisticContext other) {
 		if (other == null)
 			return this;
-		return () -> this.check() && other.check();
+		return () -> this.getAsBoolean() && other.getAsBoolean();
 	}
 
 	/**

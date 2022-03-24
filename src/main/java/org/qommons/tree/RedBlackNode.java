@@ -790,8 +790,6 @@ public final class RedBlackNode<E> {
 			newRoot.setRed(false); // Root is black
 		theTree.setRoot(newRoot);
 		theCachedIndex = new CachedIndex(preDeleteIndex, theTree.theStructureStamp);
-		if (theCachedIndex.index > theTree.size())
-			throw new IllegalStateException("BUG!!!"); // TODO DELETE ME
 	}
 
 	void markDeleted() {

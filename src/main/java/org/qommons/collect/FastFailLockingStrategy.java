@@ -1,7 +1,5 @@
 package org.qommons.collect;
 
-import java.util.function.LongSupplier;
-
 import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
@@ -58,10 +56,10 @@ public class FastFailLockingStrategy implements CollectionLockingStrategy {
 	@Override
 	public <T> T doOptimistically(T init, OptimisticOperation<T> operation) {
 		T res = init;
-		long[] stamp = new long[] { getStamp() };
-		FFLSOptimisticContext ctx;
-		do { // This locker does not have any way of preventing other threads from modifying, so this loop does not terminate until
-			ctx = new FFLSOptimisticContext(() -> getStamp(), stamp);
+		FFLSOptimisticContext ctx = new FFLSOptimisticContext(getStamp());
+		// This locker does not have any way of preventing other threads from modifying, so this loop does not terminate until it succeeds
+		do {
+			ctx.failed = false;
 			res = operation.apply(res, ctx);
 		} while (ctx.failed);
 		return res;
@@ -70,32 +68,30 @@ public class FastFailLockingStrategy implements CollectionLockingStrategy {
 	@Override
 	public int doOptimistically(int init, OptimisticIntOperation operation) {
 		int res = init;
-		long[] stamp = new long[] { getStamp() };
-		FFLSOptimisticContext ctx;
-		do { // This locker does not have any way of preventing other threads from modifying, so this loop does not terminate until
-			ctx = new FFLSOptimisticContext(() -> getStamp(), stamp);
+		FFLSOptimisticContext ctx = new FFLSOptimisticContext(getStamp());
+		// This locker does not have any way of preventing other threads from modifying, so this loop does not terminate until it succeeds
+		do {
+			ctx.failed = false;
 			res = operation.apply(res, ctx);
 		} while (ctx.failed);
 		return res;
 	}
 
-	static class FFLSOptimisticContext implements OptimisticContext {
-		private final LongSupplier stampGetter;
-		private final long[] stamp;
+	class FFLSOptimisticContext implements OptimisticContext {
+		private long stamp;
 		boolean failed;
 
-		FFLSOptimisticContext(LongSupplier stampGetter, long[] stamp) {
-			this.stampGetter = stampGetter;
+		FFLSOptimisticContext(long stamp) {
 			this.stamp = stamp;
 		}
 
 		@Override
-		public boolean check() {
+		public boolean getAsBoolean() {
 			if (failed)
 				return false;
-			long newStamp = stampGetter.getAsLong();
-			if (newStamp != stamp[0]) {
-				stamp[0] = newStamp;
+			long newStamp = getStamp();
+			if (newStamp != stamp) {
+				stamp = newStamp;
 				failed = true;
 				return false;
 			}

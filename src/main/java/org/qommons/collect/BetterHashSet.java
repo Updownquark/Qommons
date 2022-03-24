@@ -936,18 +936,18 @@ public class BetterHashSet<E> implements BetterSet<E> {
 				else
 					return 0;
 			}, true, false, ctx);
-			if (!ctx.check() || node == null || node.get().hashCode() != hashCode)
+			if (!ctx.getAsBoolean() || node == null || node.get().hashCode() != hashCode)
 				return null;
 			BinaryTreeNode<HashEntry> node2 = node;
-			while (ctx.check() && node2 != null && node2.get().hashCode() == hashCode) {
+			while (ctx.getAsBoolean() && node2 != null && node2.get().hashCode() == hashCode) {
 				if (equals.test(node2.get().get()))
 					return node2.get();
 				node2 = node2.getClosest(true);
 			}
-			if (!ctx.check())
+			if (!ctx.getAsBoolean())
 				return null;
 			node2 = node.getClosest(false);
-			while (ctx.check() && node2 != null && node2.get().hashCode() == hashCode) {
+			while (ctx.getAsBoolean() && node2 != null && node2.get().hashCode() == hashCode) {
 				if (equals.test(node2.get().get()))
 					return node2.get();
 				node2 = node2.getClosest(false);
