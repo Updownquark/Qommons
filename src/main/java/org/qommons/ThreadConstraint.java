@@ -149,20 +149,24 @@ public interface ThreadConstraint {
 		private final ConcurrentLinkedQueue<Runnable> theEventCache = new ConcurrentLinkedQueue<>();
 		private final AtomicInteger theQueuedRuns = new AtomicInteger();
 		private int theEmptyRuns;
+		// private final ListenerList<Runnable> theEventCache = ListenerList.build().allowReentrant().forEachSafe(false).withInUse(inUse ->
+		// {
+		// if (inUse)
+		// reallyInvokeLater(this::runCache);
+		// }).build();
 
 		protected abstract void reallyInvokeLater(Runnable task);
 
 		@Override
 		public void invoke(Runnable task) {
 			// If the queue is not empty, we need to add the task to the queue instead of running it inline to avoid ordering problems
-			if (!isEventThread()) {
+			if (theQueuedRuns.get() > 0 || !theEventCache.isEmpty() || !isEventThread()) {
 				theEventCache.add(task);
+				// theEventCache.add(task, false);
 				if (theQueuedRuns.compareAndSet(0, 1))
 					reallyInvokeLater(this::emptyEdtEvents);
-			} else {
-				runCache();
+			} else
 				task.run();
-			}
 		}
 
 		private void emptyEdtEvents() {
