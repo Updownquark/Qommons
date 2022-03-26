@@ -14,7 +14,7 @@ public interface ValueDefModifier {
 	/** Default {@link ValueDefModifier} implementation */
 	public static class Default implements ValueDefModifier {
 		private final QonfigValueType theTypeRestriction;
-		private final SpecificationType thetype;
+		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
 
 		/**
@@ -25,7 +25,7 @@ public interface ValueDefModifier {
 		 */
 		public Default(QonfigValueType typeRestriction, SpecificationType specify, Object defaultValue) {
 			theTypeRestriction = typeRestriction;
-			thetype = specify;
+			theSpecification = specify;
 			theDefaultValue = defaultValue;
 		}
 
@@ -36,12 +36,30 @@ public interface ValueDefModifier {
 
 		@Override
 		public SpecificationType getSpecification() {
-			return thetype;
+			return theSpecification;
 		}
 
 		@Override
 		public Object getDefaultValue() {
 			return theDefaultValue;
+		}
+
+		@Override
+		public String toString() {
+			StringBuilder str = new StringBuilder();
+			if (theTypeRestriction != null)
+				str.append("type ").append(theTypeRestriction);
+			if (theSpecification != null) {
+				if (str.length() > 0)
+					str.append(", ");
+				str.append("specify " + theSpecification);
+			}
+			if (theDefaultValue != null) {
+				if (str.length() > 0)
+					str.append(", ");
+				str.append("default " + theDefaultValue);
+			}
+			return str.toString();
 		}
 	}
 }
