@@ -162,6 +162,7 @@ public interface Format<T> {
 			}
 		}
 	};
+
 	/**
 	 * @param pattern Pattern to match
 	 * @param errorText The error message to throw for non-matches
