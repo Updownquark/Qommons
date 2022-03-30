@@ -998,6 +998,14 @@ public class FileUtils {
 		public boolean setLastModified(long time) {
 			return theFile.setLastModified(time);
 		}
+
+		@Override
+		public int compareTo(File pathname) {
+			// Need to override this, because otherwise the name is compared with the default path separator
+			String path = pathname.getAbsolutePath();
+			path = path.replace(File.separatorChar, '/');
+			return getPath().compareTo(path);
+		}
 	}
 
 	static class CombinedFile implements BetterFile {
