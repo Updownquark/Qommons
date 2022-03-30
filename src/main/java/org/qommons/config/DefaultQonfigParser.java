@@ -43,11 +43,24 @@ public class DefaultQonfigParser implements QonfigParser {
 		theToolkits = new HashMap<>();
 	}
 
+	/**
+	 * @param toolkit The toolkit URL to check
+	 * @return Whether this parser has been configured {@link #withToolkit(QonfigToolkit...) with} the given toolkit
+	 */
+	public boolean usesToolkit(URL toolkit) {
+		QonfigToolkit tk = theToolkits.get(toolkit);
+		return tk != null && tk != PLACEHOLDER;
+	}
+
 	@Override
 	public DefaultQonfigParser withToolkit(QonfigToolkit... toolkits) {
 		for (QonfigToolkit toolkit : toolkits) {
-			if (toolkit != null)
-				theToolkits.put(toolkit.getLocation(), toolkit);
+			if (toolkit != null) {
+				if (theToolkits.put(toolkit.getLocation(), toolkit) != toolkit) {
+					for (QonfigToolkit dep : toolkit.getDependencies().values())
+						withToolkit(dep);
+				}
+			}
 		}
 		return this;
 	}

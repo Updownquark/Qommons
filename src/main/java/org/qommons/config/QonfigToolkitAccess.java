@@ -132,7 +132,7 @@ public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
 
 			DefaultQonfigParser parser = new DefaultQonfigParser();
 			for (QonfigToolkitAccess dep : theDependencies)
-				parser.withToolkit(dep.get());
+				addDependency(parser, dep.get());
 			QonfigToolkit tk;
 			try (InputStream in = theLocation.openStream()) {
 				tk = parser.parseToolkit(theLocation, in, //
@@ -145,6 +145,14 @@ public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
 			theToolkit = tk;
 			return tk;
 		}
+	}
+
+	private void addDependency(DefaultQonfigParser parser, QonfigToolkit toolkit) {
+		if (parser.usesToolkit(toolkit.getLocation()))
+			return;
+		parser.withToolkit(toolkit);
+		for (QonfigToolkit dep : toolkit.getDependencies().values())
+			addDependency(parser, dep);
 	}
 
 	@Override
