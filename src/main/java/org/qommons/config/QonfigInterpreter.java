@@ -2,7 +2,6 @@ package org.qommons.config;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -15,111 +14,71 @@ import org.qommons.StatusReportAccumulator.Status;
 import org.qommons.SubClassMap2;
 import org.qommons.collect.BetterList;
 import org.qommons.ex.ExFunction;
-import org.qommons.ex.ExRunnable;
 
 /** A class for interpreting parsed {@link QonfigDocument}s into useful structures */
-public class QonfigInterpreter {
-	public static class QonfigInterpretationException extends Exception {
-		public QonfigInterpretationException(String message, Throwable cause) {
-			super(message, cause);
-		}
-
-		public QonfigInterpretationException(String message) {
-			super(message);
-		}
-
-		public QonfigInterpretationException(Throwable cause) {
-			super(cause);
-		}
-	}
-
+public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInterpretingSession<QIS>> {
 	/** Holds values for communication between parsing components */
-	public static class QonfigInterpretingSession {
-		private class StackElement {
-			final QonfigElement element;
-			final QonfigParseSession session;
-			final QonfigElementOrAddOn type;
-			private final int childIndex;
-			private Map<String, Object> thePreviousValues;
-
-			StackElement(QonfigElement element, QonfigParseSession sesson, QonfigElementOrAddOn type) {
-				this.element = element;
-				this.session = sesson;
-				this.type = type;
-				this.childIndex = theNextChildIndex;
-			}
-
-			void putPreValue(String name, Object oldValue) {
-				if (thePreviousValues == null)
-					thePreviousValues = new HashMap<>();
-				thePreviousValues.putIfAbsent(name, oldValue);
-			}
-
-			void rollBack() {
-				if (thePreviousValues != null) {
-					for (Map.Entry<String, Object> pv : thePreviousValues.entrySet())
-						theValues.put(pv.getKey(), pv.getValue());
-				}
-				if (type instanceof QonfigElementDef)
-					theNextChildIndex = childIndex + 1;
-				theStack.removeLast();
-			}
-
-			@Override
-			public String toString() {
-				return element + " with " + type;
-			}
-		}
-		private final QonfigInterpreter theInterpreter;
+	public static class QonfigInterpretingSession<QIS extends QonfigInterpretingSession<QIS>> {
+		private final QonfigInterpreter<QIS> theInterpreter;
+		private final QIS theParent;
+		private final QonfigParseSession theParseSession;
+		private final QonfigElement theElement;
+		private final QonfigElementOrAddOn theType;
+		private final int theChildIndex;
 		private final Map<String, Object> theValues;
-		private final LinkedList<StackElement> theStack;
-		private int theNextChildIndex;
 		Throwable loggedThrowable;
 
-		QonfigInterpretingSession(QonfigInterpreter interpreter, QonfigElement root, QonfigElementOrAddOn type) {
+		protected QonfigInterpretingSession(QonfigInterpreter<QIS> interpreter, QonfigElement root) {
 			theInterpreter = interpreter;
+			theParent = null;
+			theParseSession = QonfigParseSession.forRoot(root.getType().getName(), null);
+			theElement = root;
+			theType = root.getType();
 			theValues = new HashMap<>();
-			theStack = new LinkedList<>();
-			theStack.add(new StackElement(root, QonfigParseSession.forRoot(root.getType().getName(), null), type));
+			theChildIndex = 0;
 		}
 
-		ExRunnable<QonfigInterpretationException> mark(QonfigElement element, QonfigElementOrAddOn type) {
-			if (theStack.getLast().element == element && theStack.getLast().type == type)
-				return ExRunnable.none();
-			QonfigParseSession session = theStack.getLast().session.forChild(element.getType().getName(), theNextChildIndex);
-			StackElement stackEl = new StackElement(element, session, type);
-			theStack.add(stackEl);
-			theNextChildIndex = 0;
-			return stackEl::rollBack;
+		protected QonfigInterpretingSession(QIS parent, QonfigElement element, QonfigElementOrAddOn type, int childIndex) {
+			QonfigInterpretingSession<QIS> parent2 = parent;
+			theInterpreter = parent2.theInterpreter;
+			theParent = parent;
+			theParseSession = parent2.theParseSession.forChild(element.getType().getName(), childIndex);
+			theElement = element;
+			theType = type;
+			theValues = new HashMap<>(parent2.theValues);
+			theChildIndex = childIndex;
 		}
 
-		static Runnable NO_RUN = () -> {
-		};
-
-		Runnable markModifier(QonfigElement element, QonfigElementOrAddOn type) {
-			if (theStack.getLast().element == element && theStack.getLast().type == type)
-				return NO_RUN;
-			QonfigParseSession session = theStack.getLast().session.forChild(element.getType().getName(), theNextChildIndex);
-			StackElement stackEl = new StackElement(element, session, type);
-			theStack.add(stackEl);
-			return stackEl::rollBack;
+		public QonfigElement getElement() {
+			return theElement;
 		}
 
-		void finish() throws QonfigInterpretationException {
-			theStack.getFirst().session.printWarnings(System.err, "");
-			try {
-				theStack.getFirst().session.throwErrors("Errors interpreting document");
-			} catch (QonfigParseException e) {
-				if (e.getCause() != null && e.getCause() != e)
-					throw new QonfigInterpretationException(e.getMessage(), e.getCause());
-				else
-					throw new QonfigInterpretationException(e.getMessage());
+		public int getChildIndex() {
+			return theChildIndex;
+		}
+
+		public QonfigInterpreter<QIS> getInterpreter() {
+			return theInterpreter;
+		}
+
+		public QIS as(QonfigElementOrAddOn type) {
+			if (theType == type)
+				return (QIS) this;
+			else if (theElement.isInstance(type)) {
+				return theInterpreter.interpret((QIS) this, theElement, type, theChildIndex);
+			} else {
+				String msg = "Element " + theElement + " is not an instance of " + type;
+				withError(msg);
+				throw new IllegalStateException(msg);
 			}
 		}
 
-		/** @return The active interpreter */
-		public QonfigInterpreter getInterpreter() {
-			return theInterpreter;
+		public QIS as(String typeName) {
+			QonfigElementOrAddOn type = theType.getDeclarer().getElementOrAddOn(typeName);
+			if (type == null)
+				throw new IllegalArgumentException(
+					"No such element or add-on '" + typeName + "' in toolkit " + theType.getDeclaredChildren());
+			return as(type);
 		}
 
 		/**
@@ -150,11 +109,10 @@ public class QonfigInterpreter {
 		 *         </ul>
 		 */
 		public <T> T getAttribute(String attributeName, Class<T> type, T defaultValue) throws IllegalArgumentException {
-			StackElement el = theStack.getLast();
-			QonfigAttributeDef attr = el.type.getAttribute(attributeName);
+			QonfigAttributeDef attr = theType.getAttribute(attributeName);
 			if (attr == null)
-				throw new IllegalArgumentException("No such attribute " + el.type + "." + attributeName);
-			T value = el.element.getAttribute(attr, type);
+				throw new IllegalArgumentException("No such attribute " + theType + "." + attributeName);
+			T value = theElement.getAttribute(attr, type);
 			if (value == null)
 				return defaultValue;
 			return value;
@@ -166,15 +124,89 @@ public class QonfigInterpreter {
 		 * @throws IllegalArgumentException If no such attribute exists on the element/add-on
 		 */
 		public String getAttributeText(String attributeName) throws IllegalArgumentException {
-			StackElement el = theStack.getLast();
-			QonfigAttributeDef attr = el.type.getAttribute(attributeName);
+			QonfigAttributeDef attr = theType.getAttribute(attributeName);
 			if (attr == null)
-				throw new IllegalArgumentException("No such attribute " + el.type + "." + attributeName);
-			return el.element.getAttributeText(attr);
+				throw new IllegalArgumentException("No such attribute " + theType + "." + attributeName);
+			return theElement.getAttributeText(attr);
+		}
+
+		public <T> T getValue(Class<T> type, T defaultValue) {
+			Object value = theElement.getValue();
+			if (value == null)
+				return defaultValue;
+			return type.cast(value);
+		}
+
+		public String getValueText() {
+			return theElement.getValueText();
 		}
 
 		/**
-		 * @param <S> The type of the attribute value to get
+		 * @param <T> The type of value to interpret
+		 * @param asType The type of value to interpret the element as
+		 * @return The interpreted value
+		 * @throws QonfigInterpretationException If the value cannot be interpreted
+		 */
+		public <T> T interpret(Class<T> asType) throws QonfigInterpretationException {
+			return interpret(theType, asType);
+		}
+
+		/**
+		 * @param <T> The type of value to interpret
+		 * @param as The element type to interpret the element as
+		 * @param asType The type of value to interpret the element as
+		 * @return The interpreted value
+		 * @throws QonfigInterpretationException If the value cannot be interpreted
+		 */
+		public <T> T interpret(QonfigElementOrAddOn as, Class<T> asType) throws QonfigInterpretationException {
+			QonfigCreatorHolder<? super QIS, T> creator = (QonfigCreatorHolder<? super QIS, T>) theInterpreter.theCreators.get(as);
+			if (creator == null) {
+				String msg = "No creator registered for element " + as.getName();
+				withError(msg);
+				throw new IllegalStateException(msg);
+			} else if (asType != null && !asType.isAssignableFrom(creator.type)) {
+				String msg = "Element " + theElement.getType().getName() + " is parsed as " + creator.type.getName() + ", not "
+					+ asType.getName();
+				withError(msg);
+				throw new IllegalStateException(msg);
+			}
+			QIS session;
+			if (theType == creator.element)
+				session = (QIS) this;
+			else if (theElement.isInstance(creator.element)) {
+				session = theInterpreter.interpret((QIS) this, theElement, as, theChildIndex);
+			} else {
+				String msg = "Element " + theElement + " is not an instance of " + as;
+				withError(msg);
+				throw new IllegalStateException(msg);
+			}
+			T value;
+			try {
+				value = creator.creator.createValue(session);
+			} catch (QonfigInterpretationException | RuntimeException e) {
+				if (session.loggedThrowable != e) {
+					session.loggedThrowable = e;
+					session.withError(
+						"Creator " + creator.creator + " for element " + as + " failed to create value for element " + theElement, e);
+				}
+				throw e;
+			}
+			value = session.modify(creator.type, value);
+			try {
+				value = creator.creator.postModification(value, session);
+			} catch (QonfigInterpretationException | RuntimeException e) {
+				if (session.loggedThrowable != e) {
+					session.loggedThrowable = e;
+					session.withError("Creator " + creator.creator + " for element " + as + " post-modification failed for value " + value
+						+ " for element " + theElement, e);
+				}
+				throw e;
+			}
+			return value;
+		}
+
+		/**
+		 * @param <C> The type of the attribute value to get
 		 * @param <T> The type of the mapped value
 		 * @param attributeName The name of the attribute on the element-def/add-on associated with the current creator/modifier
 		 * @param sourceType The type of the attribute value to get
@@ -188,32 +220,30 @@ public class QonfigInterpreter {
 		 *         </ul>
 		 * @throws QonfigInterpretationException If the map function throws an exception
 		 */
-		public <S, T> T interpretAttribute(String attributeName, Class<S> sourceType, boolean nullToNull,
-			ExFunction<? super S, ? extends T, QonfigInterpretationException> map)
+		public <C, T> T interpretAttribute(String attributeName, Class<C> sourceType, boolean nullToNull,
+			ExFunction<? super C, ? extends T, QonfigInterpretationException> map)
 			throws IllegalArgumentException, QonfigInterpretationException {
-			StackElement el = theStack.getLast();
-			QonfigAttributeDef attr = el.type.getAttribute(attributeName);
+			QonfigAttributeDef attr = theType.getAttribute(attributeName);
 			if (attr == null)
-				throw new IllegalArgumentException("No such attribute " + el.type + "." + attributeName);
-			S attrValue = el.element.getAttribute(attr, sourceType);
+				throw new IllegalArgumentException("No such attribute " + theType + "." + attributeName);
+			C attrValue = theElement.getAttribute(attr, sourceType);
 			if (nullToNull && attrValue == null)
 				return null;
 			return map.apply(attrValue);
 		}
 
-		public <S, T> T interpretValue(Class<S> sourceType, boolean nullToNull,
-			ExFunction<? super S, ? extends T, QonfigInterpretationException> map)
+		public <C, T> T interpretValue(Class<C> sourceType, boolean nullToNull,
+			ExFunction<? super C, ? extends T, QonfigInterpretationException> map)
 			throws IllegalArgumentException, QonfigInterpretationException {
-			StackElement el = theStack.getLast();
-			Object value = el.element.getValue();
-			if (value == null && el.type.getValueModifier() == null)
-				throw new IllegalArgumentException("No value defined for " + el.type);
+			Object value = theElement.getValue();
+			if (value == null && theType.getValueModifier() == null)
+				throw new IllegalArgumentException("No value defined for " + theType);
 			else if (nullToNull && value == null)
 				return null;
 			else if (value != null && !sourceType.isInstance(value))
-				throw new IllegalArgumentException("Value " + value + " of element (type " + el.element.getType() + ") is typed "
+				throw new IllegalArgumentException("Value " + value + " of element (type " + theElement.getType() + ") is typed "
 					+ value.getClass().getName() + ", not " + sourceType.getName());
-			return map.apply((S) value);
+			return map.apply((C) value);
 		}
 
 		/**
@@ -222,11 +252,39 @@ public class QonfigInterpreter {
 		 * @throws IllegalArgumentException If no such child exists on the element/add-on
 		 */
 		public BetterList<QonfigElement> getChildren(String childName) throws IllegalArgumentException {
-			StackElement el = theStack.getLast();
-			QonfigChildDef child = el.type.getChild(childName);
+			QonfigChildDef child = theType.getChild(childName);
 			if (child == null)
-				throw new IllegalArgumentException("No such child " + el.type + "." + childName);
-			return (BetterList<QonfigElement>) el.element.getChildrenByRole().get(child.getDeclared());
+				throw new IllegalArgumentException("No such child " + theType + "." + childName);
+			return (BetterList<QonfigElement>) theElement.getChildrenByRole().get(child.getDeclared());
+		}
+
+		public BetterList<QIS> forChildren(String childName) throws IllegalArgumentException {
+			QonfigChildDef child = theType.getChild(childName);
+			if (child == null)
+				throw new IllegalArgumentException("No such child " + theType + "." + childName);
+			BetterList<QonfigElement> children = (BetterList<QonfigElement>) theElement.getChildrenByRole().get(child.getDeclared());
+			if (children.isEmpty())
+				return BetterList.empty();
+			QonfigInterpretingSession<QIS>[] sessions = new QonfigInterpretingSession[children.size()];
+			int i = 0;
+			for (QonfigElement ch : children) {
+				sessions[i] = theInterpreter.interpret((QIS) this, ch, ch.getType(), i);
+				i++;
+			}
+			return BetterList.of((QIS[]) sessions);
+		}
+
+		public BetterList<QIS> forChildren() throws IllegalArgumentException {
+			List<QonfigElement> children = getElement().getChildren();
+			if (children.isEmpty())
+				return BetterList.empty();
+			QonfigInterpretingSession<QIS>[] sessions = new QonfigInterpretingSession[children.size()];
+			int i = 0;
+			for (QonfigElement child : children) {
+				sessions[i] = theInterpreter.interpret((QIS) this, child, child.getType(), i);
+				i++;
+			}
+			return BetterList.of((QIS[]) sessions);
 		}
 
 		/**
@@ -244,8 +302,10 @@ public class QonfigInterpreter {
 				return BetterList.empty();
 			Object[] interpreted = new Object[children.size()];
 			int i = 0;
-			for (QonfigElement child : children)
-				interpreted[i++] = getInterpreter().interpret(child, asType);
+			for (QonfigElement child : children) {
+				interpreted[i] = theInterpreter.interpret((QIS) this, child, child.getType(), i).interpret(asType);
+				i++;
+			}
 			return (BetterList<T>) (BetterList<?>) BetterList.of(interpreted);
 		}
 
@@ -261,17 +321,22 @@ public class QonfigInterpreter {
 		 * @param sessionKey The key to store data for
 		 * @param value The data to store for the given key in this session
 		 */
-		public void put(String sessionKey, Object value) {
-			Object old = theValues.put(sessionKey, value);
-			theStack.getLast().putPreValue(sessionKey, old);
+		public QIS put(String sessionKey, Object value) {
+			theValues.put(sessionKey, value);
+			return (QIS) this;
 		}
 
 		/**
 		 * @param sessionKey The key to store data for
 		 * @param value The data to store for the given key in this session
 		 */
-		public void putGlobal(String sessionKey, Object value) {
-			theValues.put(sessionKey, value);
+		public QIS putGlobal(String sessionKey, Object value) {
+			QonfigInterpretingSession<QIS> session = this;
+			while (session != null) {
+				session.theValues.put(sessionKey, value);
+				session = session.theParent;
+			}
+			return (QIS) this;
 		}
 
 		/**
@@ -288,7 +353,7 @@ public class QonfigInterpreter {
 		 * @param message The warning message to log
 		 * @return This session
 		 */
-		public QonfigInterpretingSession withWarning(String message) {
+		public QIS withWarning(String message) {
 			return withWarning(message, null);
 		}
 
@@ -297,16 +362,16 @@ public class QonfigInterpreter {
 		 * @param cause The cause of the warning, if any
 		 * @return This session
 		 */
-		public QonfigInterpretingSession withWarning(String message, Throwable cause) {
-			theStack.getLast().session.withWarning(message, cause);
-			return this;
+		public QIS withWarning(String message, Throwable cause) {
+			theParseSession.withWarning(message, cause);
+			return (QIS) this;
 		}
 
 		/**
 		 * @param message The error message to log
 		 * @return This session
 		 */
-		public QonfigInterpretingSession withError(String message) {
+		public QIS withError(String message) {
 			return withError(message, null);
 		}
 
@@ -315,14 +380,76 @@ public class QonfigInterpreter {
 		 * @param cause The cause of the error, if any
 		 * @return This session
 		 */
-		public QonfigInterpretingSession withError(String message, Throwable cause) {
-			theStack.getLast().session.withError(message, cause);
-			return this;
+		public QIS withError(String message, Throwable cause) {
+			theParseSession.withError(message, cause);
+			return (QIS) this;
+		}
+
+		<T> T modify(Class<T> type, T value) throws QonfigInterpretationException {
+			Set<QonfigValueModifier<? super QIS, ?>> modified = new HashSet<>();
+			value = modifyWith(type, value, theElement.getType().getSuperElement(), modified);
+			Set<QonfigAddOn> inh = new HashSet<>();
+			for (QonfigAddOn el : theElement.getType().getFullInheritance().values()) {
+				if (inh.add(el))
+					value = modifyWith(type, value, el, inh, modified);
+			}
+			for (QonfigAddOn el : theElement.getInheritance().values()) {
+				if (inh.add(el))
+					value = modifyWith(type, value, el, inh, modified);
+			}
+			return value;
+		}
+
+		private <T> T modifyWith(Class<T> type, T value, QonfigElementDef superType,
+			Set<QonfigValueModifier<? super QIS, ?>> modified) throws QonfigInterpretationException {
+			if (superType == null)
+				return value;
+			value = modifyWith(type, value, superType.getSuperElement(), modified);
+			return doModify(type, value, superType, modified);
+		}
+
+		private <T> T modifyWith(Class<T> type, T value, QonfigAddOn addOn, Set<QonfigAddOn> inh,
+			Set<QonfigValueModifier<? super QIS, ?>> modified) throws QonfigInterpretationException {
+			for (QonfigAddOn ext : addOn.getFullInheritance().getExpanded(QonfigAddOn::getInheritance)) {
+				if (inh.add(ext))
+					value = modifyWith(type, value, ext, inh, modified);
+			}
+			return doModify(type, value, addOn, modified);
+		}
+
+		private <T> T doModify(Class<T> type, T value, QonfigElementOrAddOn modifierType,
+			Set<QonfigValueModifier<? super QIS, ?>> modified) throws QonfigInterpretationException {
+			if (modifierType == null)
+				return value;
+			SubClassMap2<Object, QonfigModifierHolder<QIS, ?>> modifiers = theInterpreter.theModifiers.get(modifierType);
+			if (modifiers == null)
+				return value;
+			List<BiTuple<Class<?>, QonfigModifierHolder<QIS, ?>>> typeModifiers = modifiers.getAllEntries(type);
+			if (typeModifiers == null)
+				return value;
+			for (BiTuple<Class<?>, QonfigModifierHolder<QIS, ?>> modifier : typeModifiers) {
+				if (modified.add(modifier.getValue2().modifier)) {
+					QIS modSession = theInterpreter.interpret((QIS) this, theElement, modifier.getValue2().element, theChildIndex);
+					try {
+						value = ((QonfigModifierHolder<? super QIS, T>) modifier.getValue2()).modifier.modifyValue(value,
+							modSession);
+					} catch (QonfigInterpretationException | RuntimeException e) {
+						if (modSession.loggedThrowable != e) {
+							modSession.loggedThrowable = e;
+							modSession.withError("Modifier " + modifier.getValue2().modifier + " for "//
+								+ (modifierType instanceof QonfigElementDef ? "super type" : "add-on") + modifierType + " on type "
+								+ modifier.getValue1().getName() + " failed to modify value " + value + " for element ", e);
+						}
+						throw e;
+					}
+				}
+			}
+			return value;
 		}
 
 		@Override
 		public String toString() {
-			return "Interpreting " + theStack.getLast();
+			return "Interpreting " + theElement + " with " + theType;
 		}
 	}
 
@@ -331,16 +458,16 @@ public class QonfigInterpreter {
 	 * 
 	 * @param <T> The type of value created
 	 */
-	public interface QonfigValueCreator<T> {
+	public interface QonfigValueCreator<QIS extends QonfigInterpretingSession<?>, T> {
 		/**
 		 * @param element The element to create the value for
 		 * @param session The active interpreter session
 		 * @return The created value
 		 * @throws QonfigInterpretationException If the value could not be created
 		 */
-		T createValue(QonfigElement element, QonfigInterpretingSession session) throws QonfigInterpretationException;
+		T createValue(QIS session) throws QonfigInterpretationException;
 
-		default T postModification(T value, QonfigElement element, QonfigInterpretingSession session) throws QonfigInterpretationException {
+		default T postModification(T value, QIS session) throws QonfigInterpretationException {
 			return value;
 		}
 	}
@@ -351,15 +478,14 @@ public class QonfigInterpreter {
 	 * @param <S> The type of value interpreted by the super-creator
 	 * @param <T> The type of value created by this extension
 	 */
-	public interface QonfigValueExtension<S, T> {
+	public interface QonfigValueExtension<QIS extends QonfigInterpretingSession<?>, S, T> {
 		/**
 		 * @param superValue The value created by the super-creator
-		 * @param element The element to interpret the value for
 		 * @param session The active interpreter session
 		 * @return The value for the element
 		 * @throws QonfigInterpretationException If the value could not be created or modified
 		 */
-		T createValue(S superValue, QonfigElement element, QonfigInterpretingSession session) throws QonfigInterpretationException;
+		T createValue(S superValue, QIS session) throws QonfigInterpretationException;
 	}
 
 	/**
@@ -367,36 +493,35 @@ public class QonfigInterpreter {
 	 * 
 	 * @param <T> The type of value to modify
 	 */
-	public interface QonfigValueModifier<T> {
+	public interface QonfigValueModifier<QIS extends QonfigInterpretingSession<?>, T> {
 		/**
 		 * @param value The value created for the element
-		 * @param element The element to modify the value for
 		 * @param session The active interpreter session
 		 * @return The modified value
 		 * @throws QonfigInterpretationException If the value could not be modified
 		 */
-		T modifyValue(T value, QonfigElement element, QonfigInterpretingSession session) throws QonfigInterpretationException;
+		T modifyValue(T value, QIS session) throws QonfigInterpretationException;
 	}
 
-	static class QonfigExtensionCreator<S, T> implements QonfigValueCreator<T> {
+	static class QonfigExtensionCreator<QIS extends QonfigInterpretingSession<QIS>, S, T> implements QonfigValueCreator<QIS, T> {
 		final QonfigElementOrAddOn theSuperElement;
 		final Class<S> theSuperType;
-		final QonfigValueExtension<S, T> theExtension;
+		final QonfigValueExtension<? super QIS, S, T> theExtension;
 
-		QonfigExtensionCreator(QonfigElementOrAddOn superElement, Class<S> superType, QonfigValueExtension<S, T> extension) {
+		QonfigExtensionCreator(QonfigElementOrAddOn superElement, Class<S> superType, QonfigValueExtension<? super QIS, S, T> extension) {
 			theSuperElement = superElement;
 			theSuperType = superType;
 			theExtension = extension;
 		}
 
 		@Override
-		public T createValue(QonfigElement element, QonfigInterpretingSession session) throws QonfigInterpretationException {
-			S superValue = session.getInterpreter().parseAs(element, theSuperElement, theSuperType);
-			return theExtension.createValue(superValue, element, session);
+		public T createValue(QIS session) throws QonfigInterpretationException {
+			S superValue = session.as(theSuperElement).interpret(theSuperType);
+			return theExtension.createValue(superValue, session);
 		}
 	}
 
-	static class QonfigCreationDelegator<T> implements QonfigValueCreator<T> {
+	static class QonfigCreationDelegator<QIS extends QonfigInterpretingSession<QIS>, T> implements QonfigValueCreator<QIS, T> {
 		private final QonfigAttributeDef.Declared theTypeAttribute;
 
 		public QonfigCreationDelegator(QonfigAttributeDef.Declared typeAttribute) {
@@ -404,14 +529,14 @@ public class QonfigInterpreter {
 		}
 
 		@Override
-		public T createValue(QonfigElement element, QonfigInterpretingSession session) throws QonfigInterpretationException {
+		public T createValue(QIS session) throws QonfigInterpretationException {
 			return null;
 		}
 
 		@Override
-		public T postModification(T value, QonfigElement element, QonfigInterpretingSession session) throws QonfigInterpretationException {
+		public T postModification(T value, QIS session) throws QonfigInterpretationException {
 			if (value == null) {
-				QonfigAddOn type = (QonfigAddOn) element.getAttributes().get(theTypeAttribute);
+				QonfigAddOn type = (QonfigAddOn) session.getElement().getAttributes().get(theTypeAttribute);
 				throw new QonfigInterpretationException(
 					"Delegated creator " + theTypeAttribute + "(" + type + ") is not registered or did not create a value");
 			}
@@ -419,37 +544,39 @@ public class QonfigInterpreter {
 		}
 	}
 
-	static class QonfigCreatorHolder<T> {
+	protected static class QonfigCreatorHolder<QIS extends QonfigInterpretingSession<QIS>, T> {
+		final QonfigElementOrAddOn element;
 		final Class<T> type;
-		final QonfigValueCreator<T> creator;
+		final QonfigValueCreator<? super QIS, T> creator;
 
-		QonfigCreatorHolder(Class<T> type, QonfigValueCreator<T> creator) {
+		QonfigCreatorHolder(QonfigElementOrAddOn element, Class<T> type, QonfigValueCreator<? super QIS, T> creator) {
+			this.element = element;
 			this.type = type;
 			this.creator = creator;
 		}
 	}
 
-	static class QonfigModifierHolder<T> {
+	protected static class QonfigModifierHolder<QIS extends QonfigInterpretingSession<QIS>, T> {
+		final QonfigElementOrAddOn element;
 		final Class<T> type;
-		final QonfigValueModifier<T> modifier;
+		final QonfigValueModifier<? super QIS, T> modifier;
 
-		QonfigModifierHolder(Class<T> type, QonfigValueModifier<T> creator) {
+		QonfigModifierHolder(QonfigElementOrAddOn element, Class<T> type, QonfigValueModifier<? super QIS, T> creator) {
+			this.element = element;
 			this.type = type;
 			this.modifier = creator;
 		}
 	}
 
 	private final Class<?> theCallingClass;
-	private final Map<QonfigElementOrAddOn, QonfigCreatorHolder<?>> theCreators;
-	private final Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<?>>> theModifiers;
-	private final ThreadLocal<QonfigInterpretingSession> theSessions;
+	private final Map<QonfigElementOrAddOn, QonfigCreatorHolder<QIS, ?>> theCreators;
+	private final Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<QIS, ?>>> theModifiers;
 
-	QonfigInterpreter(Class<?> callingClass, Map<QonfigElementOrAddOn, QonfigCreatorHolder<?>> creators,
-		Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<?>>> modifiers) {
+	protected QonfigInterpreter(Class<?> callingClass, Map<QonfigElementOrAddOn, QonfigCreatorHolder<QIS, ?>> creators,
+		Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<QIS, ?>>> modifiers) {
 		theCallingClass = callingClass;
 		theCreators = creators;
 		theModifiers = modifiers;
-		theSessions = new ThreadLocal<>();
 	}
 
 	/** @return The class invoking this interpretation--may be needed to access resources on the classpath */
@@ -457,166 +584,20 @@ public class QonfigInterpreter {
 		return theCallingClass;
 	}
 
-	/**
-	 * @param <T> The type of value to interpret
-	 * @param element The element to interpret
-	 * @param asType The type of value to interpret the element as
-	 * @return The interpreted value
-	 * @throws QonfigInterpretationException If the value cannot be interpreted
-	 */
-	public <T> T interpret(QonfigElement element, Class<T> asType) throws QonfigInterpretationException {
-		return parseAs(element, element.getType(), asType);
-	}
+	public abstract QIS interpret(QonfigElement element);
 
-	/**
-	 * @param <T> The type of value to interpret
-	 * @param element The element to interpret
-	 * @param as The element type to interpret the element as
-	 * @param asType The type of value to interpret the element as
-	 * @return The interpreted value
-	 * @throws QonfigInterpretationException If the value cannot be interpreted
-	 */
-	public <T> T parseAs(QonfigElement element, QonfigElementOrAddOn as, Class<T> asType) throws QonfigInterpretationException {
-		QonfigCreatorHolder<T> creator = (QonfigCreatorHolder<T>) theCreators.get(as);
-		QonfigInterpretingSession session = theSessions.get();
-		ExRunnable<QonfigInterpretationException> sessionClose;
-		if (session == null) {
-			theSessions.set(session = new QonfigInterpretingSession(this, element, as));
-			QonfigInterpretingSession fSession = session;
-			sessionClose = () -> {
-				fSession.finish();
-				theSessions.set(null);
-			};
-		} else
-			sessionClose = session.mark(element, as);
-		if (creator == null) {
-			String msg = "No creator registered for element " + as.getName();
-			session.withError(msg);
-			sessionClose.run();
-			throw new IllegalStateException(msg);
-		} else if (asType != null && !asType.isAssignableFrom(creator.type)) {
-			String msg = "Element " + element.getType().getName() + " is parsed as " + creator.type.getName() + ", not " + asType.getName();
-			session.withError(msg);
-			sessionClose.run();
-			throw new IllegalStateException(msg);
-		}
-		T value;
-		try {
-			value = creator.creator.createValue(element, session);
-		} catch (QonfigInterpretationException | RuntimeException e) {
-			if (session.loggedThrowable != e) {
-				session.loggedThrowable = e;
-				session.withError("Creator " + creator.creator + " for element " + as + " failed to create value for element " + element,
-					e);
-			}
-			sessionClose.run();
-			throw e;
-		}
-		try {
-			value = modify(creator.type, value, element, session);
-		} catch (QonfigInterpretationException | RuntimeException e) {
-			sessionClose.run();
-			throw e;
-		}
-		try {
-			value = creator.creator.postModification(value, element, session);
-		} catch (QonfigInterpretationException | RuntimeException e) {
-			if (session.loggedThrowable != e) {
-				session.loggedThrowable = e;
-				session.withError("Creator " + creator.creator + " for element " + as + " post-modification failed for value " + value
-					+ " for element " + element, e);
-			}
-			throw e;
-		} finally {
-			sessionClose.run();
-		}
-		return value;
-	}
-
-	<T> T modify(Class<T> type, T value, QonfigElement element, QonfigInterpretingSession session) throws QonfigInterpretationException {
-		Set<QonfigValueModifier<?>> modified = new HashSet<>();
-		value = modifyWith(type, value, element, element.getType().getSuperElement(), modified, session);
-		Set<QonfigAddOn> inh = new HashSet<>();
-		for (QonfigAddOn el : element.getType().getFullInheritance().values()) {
-			if (inh.add(el))
-				value = modifyWith(type, value, element, el, inh, modified, session);
-		}
-		for (QonfigAddOn el : element.getInheritance().values()) {
-			if (inh.add(el))
-				value = modifyWith(type, value, element, el, inh, modified, session);
-		}
-		return value;
-	}
-
-	private <T> T modifyWith(Class<T> type, T value, QonfigElement element, QonfigElementDef superType,
-		Set<QonfigValueModifier<?>> modified, QonfigInterpretingSession session) throws QonfigInterpretationException {
-		if (superType == null)
-			return value;
-		value = modifyWith(type, value, element, superType.getSuperElement(), modified, session);
-		return doModify(type, value, element, superType, modified, session);
-	}
-
-	private <T> T modifyWith(Class<T> type, T value, QonfigElement element, QonfigAddOn addOn, Set<QonfigAddOn> inh,
-		Set<QonfigValueModifier<?>> modified, QonfigInterpretingSession session) throws QonfigInterpretationException {
-		for (QonfigAddOn ext : addOn.getFullInheritance().getExpanded(QonfigAddOn::getInheritance)) {
-			if (inh.add(ext))
-				value = modifyWith(type, value, element, ext, inh, modified, session);
-		}
-		return doModify(type, value, element, addOn, modified, session);
-	}
-
-	private <T> T doModify(Class<T> type, T value, QonfigElement element, QonfigElementOrAddOn modifierType,
-		Set<QonfigValueModifier<?>> modified, QonfigInterpretingSession session) throws QonfigInterpretationException {
-		if (modifierType == null)
-			return value;
-		SubClassMap2<Object, QonfigModifierHolder<?>> modifiers = theModifiers.get(modifierType);
-		if (modifiers == null)
-			return value;
-		List<BiTuple<Class<?>, QonfigModifierHolder<?>>> typeModifiers = modifiers.getAllEntries(type);
-		if (typeModifiers == null)
-			return value;
-		for (BiTuple<Class<?>, QonfigModifierHolder<?>> modifier : typeModifiers) {
-			if (modified.add(modifier.getValue2().modifier)) {
-				Runnable sessionClose = session.markModifier(element, modifierType);
-				try {
-					value = ((QonfigModifierHolder<T>) modifier.getValue2()).modifier.modifyValue(value, element, session);
-				} catch (QonfigInterpretationException | RuntimeException e) {
-					if (session.loggedThrowable != e) {
-						session.loggedThrowable = e;
-						session.withError("Modifier " + modifier.getValue2().modifier + " for "//
-							+ (modifierType instanceof QonfigElementDef ? "super type" : "add-on") + modifierType + " on type "
-							+ modifier.getValue1().getName() + " failed to modify value " + value + " for element " + element, e);
-					}
-					throw e;
-				} finally {
-					sessionClose.run();
-				}
-			}
-		}
-		return value;
-	}
-
-	/**
-	 * Builds an interpreter
-	 * 
-	 * @param callingClass The class invoking this interpretation--may be needed to access resources on the classpath
-	 * @param toolkits The toolkits that the interpreter will be able to interpret documents of
-	 * @return A builder
-	 */
-	public static Builder build(Class<?> callingClass, QonfigToolkit... toolkits) {
-		return new Builder(callingClass, toolkits);
-	}
+	protected abstract QIS interpret(QIS parent, QonfigElement element, QonfigElementOrAddOn type, int childIndex);
 
 	/** Builds {@link QonfigInterpreter}s */
-	public static class Builder {
+	public abstract static class Builder<QIS extends QonfigInterpretingSession<QIS>, B extends Builder<QIS, B>> {
 		private final Class<?> theCallingClass;
 		private final Set<QonfigToolkit> theToolkits;
 		private final QonfigToolkit theToolkit;
 		private final StatusReportAccumulator<QonfigElementOrAddOn> theStatus;
-		private final Map<QonfigElementOrAddOn, QonfigCreatorHolder<?>> theCreators;
-		private final Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<?>>> theModifiers;
+		private final Map<QonfigElementOrAddOn, QonfigCreatorHolder<QIS, ?>> theCreators;
+		private final Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<QIS, ?>>> theModifiers;
 
-		Builder(Class<?> callingClass, QonfigToolkit... toolkits) {
+		protected Builder(Class<?> callingClass, QonfigToolkit... toolkits) {
 			theCallingClass = callingClass;
 			theToolkits = QommonsUtils.unmodifiableDistinctCopy(toolkits);
 			if (toolkits == null)
@@ -627,9 +608,9 @@ public class QonfigInterpreter {
 			theStatus = new StatusReportAccumulator<>();
 		}
 
-		Builder(Class<?> callingClass, Set<QonfigToolkit> toolkits, QonfigToolkit toolkit,
-			StatusReportAccumulator<QonfigElementOrAddOn> status, Map<QonfigElementOrAddOn, QonfigCreatorHolder<?>> creators,
-			Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<?>>> modifiers) {
+		protected Builder(Class<?> callingClass, Set<QonfigToolkit> toolkits, QonfigToolkit toolkit,
+			StatusReportAccumulator<QonfigElementOrAddOn> status, Map<QonfigElementOrAddOn, QonfigCreatorHolder<QIS, ?>> creators,
+			Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<QIS, ?>>> modifiers) {
 			theCallingClass = callingClass;
 			theToolkits = toolkits;
 			theToolkit = toolkit;
@@ -638,8 +619,26 @@ public class QonfigInterpreter {
 			theModifiers = modifiers;
 		}
 
+		protected abstract B builderFor(Class<?> callingClass, Set<QonfigToolkit> toolkits, QonfigToolkit toolkit,
+			StatusReportAccumulator<QonfigElementOrAddOn> status, Map<QonfigElementOrAddOn, QonfigCreatorHolder<QIS, ?>> creators,
+			Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<QIS, ?>>> modifiers);
+
+		public abstract QonfigInterpreter<QIS> create();
+
 		public QonfigToolkit getToolkit() {
 			return theToolkit;
+		}
+
+		public Class<?> getCallingClass() {
+			return theCallingClass;
+		}
+
+		protected Map<QonfigElementOrAddOn, QonfigCreatorHolder<QIS, ?>> getCreators() {
+			return QommonsUtils.unmodifiableCopy(theCreators);
+		}
+
+		protected Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<QIS, ?>>> getModifiers() {
+			return QommonsUtils.unmodifiableCopy(theModifiers);
 		}
 
 		/**
@@ -660,10 +659,10 @@ public class QonfigInterpreter {
 		 * @param toolkit The toolkit
 		 * @return A builder whose name-typed methods consider the given toolkit first
 		 */
-		public Builder forToolkit(QonfigToolkit toolkit) {
+		public B forToolkit(QonfigToolkit toolkit) {
 			if (!dependsOn(toolkit))
 				throw new IllegalArgumentException("Toolkit " + toolkit.getLocation() + " is not used by toolkits " + theToolkits);
-			return new Builder(theCallingClass, theToolkits, toolkit, theStatus, theCreators, theModifiers);
+			return builderFor(theCallingClass, theToolkits, toolkit, theStatus, theCreators, theModifiers);
 		}
 
 		/**
@@ -673,13 +672,14 @@ public class QonfigInterpreter {
 		 * @param creator The creator to interpret elements of the given type
 		 * @return This builder
 		 */
-		public <T> Builder createWith(QonfigElementOrAddOn element, Class<T> type, QonfigValueCreator<T> creator) {
+		public <T> B createWith(QonfigElementOrAddOn element, Class<T> type, QonfigValueCreator<? super QIS, T> creator) {
 			if (!dependsOn(element.getDeclarer()))
 				throw new IllegalArgumentException("Element " + element.getName() + " is from a toolkit not included in " + theToolkits);
 			if (theCreators.containsKey(element))
-				theStatus.warn(element, "Replacing creator");
-			theCreators.put(element, new QonfigCreatorHolder<>(type, creator));
-			return this;
+				return (B) this; // Assume it's the same caller
+			QonfigCreatorHolder<QIS, T> holder = new QonfigCreatorHolder<QIS, T>(element, type, creator);
+			theCreators.put(element, holder);
+			return (B) this;
 		}
 
 		/**
@@ -689,7 +689,7 @@ public class QonfigInterpreter {
 		 * @param creator The creator to interpret elements of the given type
 		 * @return This builder
 		 */
-		public <T> Builder createWith(String elementName, Class<T> type, QonfigValueCreator<T> creator) {
+		public <T> B createWith(String elementName, Class<T> type, QonfigValueCreator<? super QIS, T> creator) {
 			if (theToolkit == null)
 				throw new IllegalStateException("Use forToolkit(QonfigToolkit) first to get an interpreter for a toolkit");
 			QonfigElementOrAddOn element = theToolkit.getElementOrAddOn(elementName);
@@ -708,13 +708,13 @@ public class QonfigInterpreter {
 		 * @param extension The creator to interpret elements of the given type, given values interpreted by the super creator
 		 * @return This builder
 		 */
-		public <T, S> Builder extend(QonfigElementOrAddOn superElement, QonfigElementOrAddOn targetElement, Class<S> superType,
-			Class<T> targetType, QonfigValueExtension<S, T> extension) {
+		public <T, S> B extend(QonfigElementOrAddOn superElement, QonfigElementOrAddOn targetElement, Class<S> superType,
+			Class<T> targetType, QonfigValueExtension<? super QIS, S, T> extension) {
 			if (!superElement.isAssignableFrom(targetElement))
 				throw new IllegalArgumentException(targetElement + " does not extend " + superElement.getName());
 			else if (superElement.equals(targetElement))
 				throw new IllegalArgumentException("Super element is the same as the target: " + targetElement);
-			return createWith(targetElement, targetType, new QonfigExtensionCreator<>(superElement, superType, extension));
+			return createWith(targetElement, targetType, new QonfigExtensionCreator<QIS, S, T>(superElement, superType, extension));
 		}
 
 		/**
@@ -727,8 +727,8 @@ public class QonfigInterpreter {
 		 * @param extension The creator to interpret elements of the given type, given values interpreted by the super creator
 		 * @return This builder
 		 */
-		public <T, S> Builder extend(String superElementName, String targetElementName, Class<S> superType, Class<T> targetType,
-			QonfigValueExtension<S, T> extension) {
+		public <T, S> B extend(String superElementName, String targetElementName, Class<S> superType, Class<T> targetType,
+			QonfigValueExtension<? super QIS, S, T> extension) {
 			if (theToolkit == null)
 				throw new IllegalStateException("Use forToolkit(QonfigToolkit) first to get an interpreter for a toolkit");
 			QonfigElementOrAddOn superElement = theToolkit.getElementOrAddOn(superElementName);
@@ -740,7 +740,7 @@ public class QonfigInterpreter {
 			return extend(superElement, targetElement, superType, targetType, extension);
 		}
 
-		public <T> Builder delegateToType(QonfigElementOrAddOn element, QonfigAttributeDef.Declared typeAttribute, Class<T> type) {
+		public <T> B delegateToType(QonfigElementOrAddOn element, QonfigAttributeDef.Declared typeAttribute, Class<T> type) {
 			if (!typeAttribute.getOwner().isAssignableFrom(element))
 				throw new IllegalArgumentException("Element " + element + " does not declare attribute " + typeAttribute);
 			else if (!(typeAttribute.getType() instanceof QonfigAddOn))
@@ -752,7 +752,7 @@ public class QonfigInterpreter {
 			return createWith(element, type, new QonfigCreationDelegator<>(typeAttribute));
 		}
 
-		public <T> Builder delegateToType(String elementName, String typeAttributeName, Class<T> type) {
+		public <T> B delegateToType(String elementName, String typeAttributeName, Class<T> type) {
 			if (theToolkit == null)
 				throw new IllegalStateException("Use forToolkit(QonfigToolkit) first to get an interpreter for a toolkit");
 			QonfigElementOrAddOn element = theToolkit.getElementOrAddOn(elementName);
@@ -771,7 +771,7 @@ public class QonfigInterpreter {
 				}
 			}
 			delegateToType(element, attr.getDeclared(), type);
-			return this;
+			return (B) this;
 		}
 
 		/**
@@ -781,15 +781,15 @@ public class QonfigInterpreter {
 		 * @param modifier The modifier to modify values for the given element or add-on
 		 * @return This builder
 		 */
-		public <T> Builder modifyWith(QonfigElementOrAddOn elementOrAddOn, Class<T> type, QonfigValueModifier<T> modifier) {
+		public <T> B modifyWith(QonfigElementOrAddOn elementOrAddOn, Class<T> type, QonfigValueModifier<? super QIS, T> modifier) {
 			if (!dependsOn(elementOrAddOn.getDeclarer()))
 				throw new IllegalArgumentException(
 					"Element " + elementOrAddOn.getName() + " is from a toolkit not included in " + theToolkits);
 			if (theModifiers.containsKey(elementOrAddOn))
-				theStatus.warn(elementOrAddOn, "Replacing modifier");
+				return (B) this; // Assume it's the same caller
 			theModifiers.computeIfAbsent(elementOrAddOn, __ -> new SubClassMap2<>(Object.class)).with(type,
-				new QonfigModifierHolder<>(type, modifier));
-			return this;
+				new QonfigModifierHolder<QIS, T>(elementOrAddOn, type, modifier));
+			return (B) this;
 		}
 
 		/**
@@ -799,7 +799,7 @@ public class QonfigInterpreter {
 		 * @param modifier The modifier to modify values for the given element or add-on
 		 * @return This builder
 		 */
-		public <T> Builder modifyWith(String elementOrAddOnName, Class<T> type, QonfigValueModifier<T> modifier) {
+		public <T> B modifyWith(String elementOrAddOnName, Class<T> type, QonfigValueModifier<? super QIS, T> modifier) {
 			if (theToolkit == null)
 				throw new IllegalStateException("Use forToolkit(QonfigToolkit) first to get an interpreter for a toolkit");
 			QonfigElementOrAddOn element = theToolkit.getElementOrAddOn(elementOrAddOnName);
@@ -810,18 +810,18 @@ public class QonfigInterpreter {
 		}
 
 		/** @return The built interpreter */
-		public QonfigInterpreter build() {
+		public QonfigInterpreter<QIS> build() {
 			Set<QonfigAddOn> usedInh = new HashSet<>();
 			for (QonfigToolkit tk : theToolkits) {
 				for (QonfigElementDef el : tk.getAllElements().values()) {
 					if (el.isAbstract())
 						continue;
-					QonfigCreatorHolder<?> holder = theCreators.get(el);
-					if (holder == null)
-						theStatus.error(el, "No creator configured for element");
-					else if (holder.creator instanceof QonfigExtensionCreator) {
-						QonfigExtensionCreator<?, ?> ext = (QonfigExtensionCreator<?, ?>) holder.creator;
-						QonfigCreatorHolder<?> superHolder = theCreators.get(ext.theSuperElement);
+					QonfigCreatorHolder<? super QIS, ?> holder = theCreators.get(el);
+					if (holder == null) {
+						// theStatus.error(el, "No creator configured for element");
+					} else if (holder.creator instanceof QonfigExtensionCreator) {
+						QonfigExtensionCreator<? super QIS, ?, ?> ext = (QonfigExtensionCreator<? super QIS, ?, ?>) holder.creator;
+						QonfigCreatorHolder<? super QIS, ?> superHolder = theCreators.get(ext.theSuperElement);
 						if (superHolder == null) {
 							// If the super element is not abstract, there will be a separate error for its not having a creator
 							// If it is abstract, we need one here
@@ -841,8 +841,7 @@ public class QonfigInterpreter {
 				// }
 			}
 			System.err.println(theStatus.print(Status.Warn, Status.Error, StringBuilder::append, 0, null));
-			return new QonfigInterpreter(theCallingClass, QommonsUtils.unmodifiableCopy(theCreators),
-				QommonsUtils.unmodifiableCopy(theModifiers));
+			return create();
 		}
 	}
 }
