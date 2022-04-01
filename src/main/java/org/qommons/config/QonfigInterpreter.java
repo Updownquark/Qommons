@@ -26,7 +26,6 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		private final QonfigElementOrAddOn theType;
 		private final int theChildIndex;
 		private final Map<String, Object> theValues;
-		Throwable loggedThrowable;
 
 		protected QonfigInterpretingSession(QonfigInterpreter<QIS> interpreter, QonfigElement root) {
 			theInterpreter = interpreter;
@@ -184,23 +183,29 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			try {
 				value = creator.creator.createValue(session);
 			} catch (QonfigInterpretationException | RuntimeException e) {
-				if (session.loggedThrowable != e) {
-					session.loggedThrowable = e;
+				if (theInterpreter.loggedThrowable != e) {
+					theInterpreter.loggedThrowable = e;
 					session.withError(
 						"Creator " + creator.creator + " for element " + as + " failed to create value for element " + theElement, e);
 				}
-				throw e;
+				if (theParent != null)
+					throw e;
+				else
+					throw new QonfigInterpretationException(theParseSession.createException(e.getMessage()));
 			}
 			value = session.modify(creator.type, value);
 			try {
 				value = creator.creator.postModification(value, session);
 			} catch (QonfigInterpretationException | RuntimeException e) {
-				if (session.loggedThrowable != e) {
-					session.loggedThrowable = e;
+				if (theInterpreter.loggedThrowable != e) {
+					theInterpreter.loggedThrowable = e;
 					session.withError("Creator " + creator.creator + " for element " + as + " post-modification failed for value " + value
 						+ " for element " + theElement, e);
 				}
-				throw e;
+				if (theParent != null)
+					throw e;
+				else
+					throw new QonfigInterpretationException(theParseSession.createException(e.getMessage()));
 			}
 			return value;
 		}
@@ -434,8 +439,8 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 						value = ((QonfigModifierHolder<? super QIS, T>) modifier.getValue2()).modifier.modifyValue(value,
 							modSession);
 					} catch (QonfigInterpretationException | RuntimeException e) {
-						if (modSession.loggedThrowable != e) {
-							modSession.loggedThrowable = e;
+						if (theInterpreter.loggedThrowable != e) {
+							theInterpreter.loggedThrowable = e;
 							modSession.withError("Modifier " + modifier.getValue2().modifier + " for "//
 								+ (modifierType instanceof QonfigElementDef ? "super type" : "add-on") + modifierType + " on type "
 								+ modifier.getValue1().getName() + " failed to modify value " + value + " for element ", e);
@@ -571,6 +576,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 	private final Class<?> theCallingClass;
 	private final Map<QonfigElementOrAddOn, QonfigCreatorHolder<QIS, ?>> theCreators;
 	private final Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<QIS, ?>>> theModifiers;
+	Throwable loggedThrowable;
 
 	protected QonfigInterpreter(Class<?> callingClass, Map<QonfigElementOrAddOn, QonfigCreatorHolder<QIS, ?>> creators,
 		Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<QIS, ?>>> modifiers) {

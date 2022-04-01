@@ -2,6 +2,7 @@ package org.qommons.config;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -893,7 +894,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 						theSuperElement.getAllChildren().get(child.getKey()), //
 						inheritanceChildren, //
 						theChildModifiers.get(child.getKey()),
-						new StringBuilder().append(child.getKey().getOwner() + "." + child.getKey().getName()), theSession);
+						new StringBuilder().append(child.getKey().getOwner() + "." + child.getKey().getName()), theSession,
+						new HashSet<>());
 					// } catch (Error e) {
 					// theSession.forChild("child", child.getKey().toString()).withError("Error " + e);
 					// try {

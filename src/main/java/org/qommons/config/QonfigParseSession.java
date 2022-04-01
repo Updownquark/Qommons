@@ -87,7 +87,15 @@ public class QonfigParseSession {
 	public QonfigParseSession throwErrors(String message) throws QonfigParseException {
 		if (theErrors.isEmpty())
 			return this;
-		throw QonfigParseException.forIssues(message, theErrors);
+		throw createException(message);
+	}
+
+	/**
+	 * @param message The root message for the exception, if any is thrown
+	 * @return An exception for errors that have logged against this session or any of its {@link #forChild(String, Object) children}
+	 */
+	public QonfigParseException createException(String message) {
+		return QonfigParseException.forIssues(message, theErrors);
 	}
 
 	/**

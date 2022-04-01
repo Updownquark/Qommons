@@ -3,6 +3,7 @@ package org.qommons.config;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import org.qommons.config.QonfigAddOn.ChildModifier;
@@ -97,9 +98,10 @@ public class QonfigValidation {
 	 * @param finalWord The modifier specified by the owner calling this method
 	 * @param path The child path for tracing
 	 * @param session The session for error/warning reporting
+	 * @param noRecurse Prevents recursion
 	 */
 	public static void validateChild(QonfigChildDef root, Map<QonfigAddOn, String> inheritance, ChildDefModifier finalWord,
-		StringBuilder path, QonfigParseSession session) {
+		StringBuilder path, QonfigParseSession session, Set<QonfigChildDef> noRecurse) {
 		boolean valueModified = finalWord != null && finalWord.getValueModifier() != null;
 		String textModSource = null;
 		Map<QonfigAttributeDef.Declared, String> attrModSource = new HashMap<>();
@@ -152,11 +154,14 @@ public class QonfigValidation {
 						inheritanceChildren.put(inh.getKey(), inh.getValue() + '/' + inh2.getName());
 			}
 			int preLen = path.length();
+			QonfigChildDef childRoot = root.getType().getAllChildren().get(child.getKey());
+			if (!noRecurse.add(childRoot))
+				continue;
 			validateChild(//
-				root.getType().getAllChildren().get(child.getKey()), //
+				childRoot, //
 				inheritanceChildren, //
 				null, // Child modifiers can't specify recursive constraints
-				path.append(child.getKey().getName()), session);
+				path.append('.').append(child.getKey().getName()), session, noRecurse);
 			path.setLength(preLen);
 		}
 	}
