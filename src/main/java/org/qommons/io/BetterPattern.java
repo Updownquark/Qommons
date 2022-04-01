@@ -25,6 +25,12 @@ public interface BetterPattern {
 
 		/** @return The next match in the target sequence, if any */
 		Match find();
+
+		/**
+		 * @param start The starting index in the sequence to start searching at
+		 * @return The next match in the target sequence, if any
+		 */
+		Match find(int start);
 	}
 
 	/** A match of a pattern against a particular sub-sequence of a target character sequence */
@@ -181,6 +187,13 @@ public interface BetterPattern {
 					return new JPMatch(theMatcher);
 				return null;
 			}
+
+			@Override
+			public Match find(int start) {
+				if (theMatcher.find(start))
+					return new JPMatch(theMatcher);
+				return null;
+			}
 		}
 
 		class JPMatch implements Match {
@@ -333,6 +346,12 @@ public interface BetterPattern {
 					}
 				}
 				return null;
+			}
+
+			@Override
+			public Match find(int start) {
+				theIndex = start;
+				return find();
 			}
 
 			Match check(int start) {
