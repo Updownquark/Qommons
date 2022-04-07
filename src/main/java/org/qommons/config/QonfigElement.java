@@ -26,14 +26,16 @@ public class QonfigElement {
 	private final QonfigElement theParent;
 	private final QonfigElementDef theType;
 	private final MultiInheritanceSet<QonfigAddOn> theInheritance;
-	private final Set<QonfigChildDef.Declared> theParentRoles;
+	private final Set<QonfigChildDef> theParentRoles;
+	private final Set<QonfigChildDef.Declared> theDeclaredRoles;
 	private final Map<QonfigAttributeDef.Declared, Object> theAttributes;
 	private final List<QonfigElement> theChildren;
 	private final BetterMultiMap<QonfigChildDef.Declared, QonfigElement> theChildrenByRole;
 	private final Object theValue;
 
 	private QonfigElement(QonfigDocument doc, QonfigElement parent, QonfigElementDef type, MultiInheritanceSet<QonfigAddOn> inheritance,
-		Set<QonfigChildDef.Declared> parentRoles, Map<QonfigAttributeDef.Declared, Object> attributes, List<QonfigElement> children,
+		Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles, Map<QonfigAttributeDef.Declared, Object> attributes,
+		List<QonfigElement> children,
 		BetterMultiMap<QonfigChildDef.Declared, QonfigElement> childrenByRole, Object value) {
 		if (doc.getRoot() == null)
 			doc.setRoot(this);
@@ -42,6 +44,7 @@ public class QonfigElement {
 		theType = type;
 		theInheritance = inheritance;
 		theParentRoles = parentRoles;
+		theDeclaredRoles = declaredRoles;
 		theAttributes = attributes;
 		theChildren = children;
 		theChildrenByRole = childrenByRole;
@@ -63,9 +66,14 @@ public class QonfigElement {
 		return theType;
 	}
 
-	/** @return The roles that this element fulfills in its {@link #getParent() parent} */
-	public Set<QonfigChildDef.Declared> getParentRoles() {
+	/** @return The declared roles that this element fulfills in its {@link #getParent() parent} */
+	public Set<QonfigChildDef> getParentRoles() {
 		return theParentRoles;
+	}
+
+	/** @return The roles that this element fulfills in its {@link #getParent() parent} */
+	public Set<QonfigChildDef.Declared> getDeclaredRoles() {
+		return theDeclaredRoles;
 	}
 
 	/** @return All add-ons that this element inherits */
@@ -378,7 +386,7 @@ public class QonfigElement {
 	 * @return A builder for an element
 	 */
 	public static Builder build(QonfigParseSession session, QonfigDocument doc, QonfigElement parent, QonfigElementDef type) {
-		return new Builder(session, doc, parent, type, Collections.emptySet());
+		return new Builder(session, doc, parent, type, Collections.emptySet(), Collections.emptySet());
 	}
 
 	/** Represents an attribute value before it is parsed */
@@ -402,7 +410,8 @@ public class QonfigElement {
 		private final MultiInheritanceSet<QonfigAddOn> theInheritance;
 		private final List<ElementQualifiedParseItem> theDeclaredAttributes;
 		private final List<AttributeValue> theDeclaredAttributeValues;
-		private final Set<QonfigChildDef.Declared> theParentRoles;
+		private final Set<QonfigChildDef> theParentRoles;
+		private final Set<QonfigChildDef.Declared> theDeclaredRoles;
 		private final List<QonfigElement> theChildren;
 		private final BetterMultiMap<QonfigChildDef.Declared, QonfigElement> theChildrenByRole;
 		private Object theValue;
@@ -411,7 +420,7 @@ public class QonfigElement {
 		private int theChildCount;
 
 		Builder(QonfigParseSession session, QonfigDocument doc, QonfigElement parent, QonfigElementDef type,
-			Set<QonfigChildDef.Declared> parentRoles) {
+			Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles) {
 			if (type.isAbstract())
 				session.withError("Elements cannot be declared directly for abstract type " + type);
 			theSession = session;
@@ -419,34 +428,28 @@ public class QonfigElement {
 			theType = type;
 			theParent = parent;
 			theParentRoles = parentRoles;
+			theDeclaredRoles = declaredRoles;
 			theDeclaredAttributes = new ArrayList<>();
 			theDeclaredAttributeValues = new ArrayList<>();
 			theChildren = new ArrayList<>();
 			theChildrenByRole = BetterHashMultiMap.<QonfigChildDef.Declared, QonfigElement> build().buildMultiMap();
 			theInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
-			for (QonfigChildDef.Declared role : parentRoles) {
-				QonfigChildDef child = parent.getType().getAllChildren().get(role);
-				if (child != null) {
-					if (!child.getType().isAssignableFrom(type))
-						session.withError(
-							"This element (" + theType + ") does not inherit " + child.getType() + "--cannot fulfill role " + child);
-					theInheritance.addAll(child.getInheritance());
-				} else {
-					if (!role.getType().isAssignableFrom(type))
-						session.withError(
-							"This element (" + theType + ") does not inherit " + role.getType() + "--cannot fulfill role " + child);
-					theInheritance.addAll(role.getInheritance());
-				}
+			for (QonfigChildDef child : parentRoles) {
+				if (!child.getType().isAssignableFrom(type))
+					session
+						.withError("This element (" + theType + ") does not inherit " + child.getType() + "--cannot fulfill role " + child);
+				theInheritance.addAll(child.getInheritance());
 				for (QonfigAddOn inh : parent.getInheritance().getExpanded(QonfigAddOn::getInheritance)) {
-					ChildDefModifier mod = inh.getChildModifiers().get(role);
+					ChildDefModifier mod = inh.getChildModifiers().get(child.getDeclared());
 					if (mod != null) {
 						if (mod.getTypeRestriction() != null && !mod.getTypeRestriction().isAssignableFrom(type))
 							session.withError("This element (" + theType + ") does not inherit " + mod.getTypeRestriction()
-								+ " specified by inheritance " + inh + "--cannot fulfill role " + role);
+								+ " specified by inheritance " + inh + "--cannot fulfill role " + child);
 						theInheritance.addAll(mod.getInheritance());
 					}
 				}
 			}
+			theInheritance.addAll(session.getToolkit().getAutoInheritance(theType, theParentRoles).values());
 		}
 
 		/** @return The declared type of the element */
@@ -544,11 +547,12 @@ public class QonfigElement {
 			// At this stage, we have all the information we need to determine the complete inheritance of the element
 			create();
 			QonfigParseSession session = theSession.forChild(type.toString(), theChildCount);
+			Set<QonfigChildDef> roles = new LinkedHashSet<>(declaredRoles.size() * 3 / 2 + 1);
 			Set<QonfigChildDef.Declared> realRoles = new LinkedHashSet<>(declaredRoles.size() * 3 / 2 + 1);
 			if (!declaredRoles.isEmpty()) {
 				roleLoop: //
 				for (ElementQualifiedParseItem roleDef : declaredRoles) {
-					QonfigChildDef.Declared role;
+					QonfigChildDef role;
 					if (roleDef.declaredElement != null) {
 						if (!(roleDef.declaredElement instanceof QonfigElementDef)) {
 							session.withError(roleDef.printQualifier() + " is an add-on--roles must be qualified with element-defs");
@@ -576,9 +580,10 @@ public class QonfigElement {
 									"Element " + roleDef.declaredElement + " inherits multiple roles named " + roleDef.itemName, null);
 								continue;
 							} else
-								role = elRoles.getFirst().getDeclared();
+								role = elRoles.getFirst();
 						}
-						realRoles.add(role);
+						roles.add(role);
+						realRoles.add(role.getDeclared());
 					} else {
 						role = null;
 						BetterList<QonfigChildDef> inhRoles = (BetterList<QonfigChildDef>) theType.getChildrenByName()
@@ -589,21 +594,22 @@ public class QonfigElement {
 							session.withError("Multiple roles named " + roleDef.itemName + " found", null);
 							continue roleLoop;
 						} else
-							role = inhRoles.getFirst().getDeclared();
+							role = inhRoles.getFirst();
 						if (role == null)
 							session.withError("No such role \"" + roleDef.itemName + "\" found", null);
-						realRoles.add(role);
+						roles.add(role);
+						realRoles.add(role.getDeclared());
 					}
 				}
 			} else { // Alright, we have to guess
-				QonfigChildDef.Declared role = null;
+				QonfigChildDef role = null;
 				for (Map.Entry<QonfigChildDef.Declared, QonfigChildDef> childDef : theType.getAllChildren().entrySet()) {
 					if (childDef.getValue().getType().isAssignableFrom(type)) {
 						if (role != null) {
 							session.withError("Child of type " + type + " is compatible with multiple roles--role must be specified");
 							return this;
 						}
-						role = childDef.getKey();
+						role = childDef.getValue();
 					}
 				}
 				for (QonfigAddOn inh : theInheritance.getExpanded(QonfigAddOn::getInheritance)) {
@@ -620,10 +626,11 @@ public class QonfigElement {
 					session.withError("Child of type " + type + " is not compatible with any roles of parent " + theType);
 					return this;
 				}
-				realRoles.add(role);
+				roles.add(role);
+				realRoles.add(role.getDeclared());
 			}
 			Set<QonfigChildDef> children = new HashSet<>();
-			for (QonfigChildDef.Declared role : realRoles) {
+			for (QonfigChildDef role : roles) {
 				if (role instanceof QonfigChildDef.Overridden)
 					session.withError("Role " + role.getDeclared() + " is overridden by "
 						+ ((QonfigChildDef.Overridden) role).getOverriding() + " and cannot be fulfilled directly");
@@ -633,7 +640,8 @@ public class QonfigElement {
 				else
 					children.add(role);
 			}
-			Builder childBuilder = new Builder(session, theDocument, theElement, type, Collections.unmodifiableSet(realRoles));
+			Builder childBuilder = new Builder(session, theDocument, theElement, type, Collections.unmodifiableSet(roles),
+				Collections.unmodifiableSet(realRoles));
 			child.accept(childBuilder);
 			QonfigElement builtChild = childBuilder.build();
 			theChildren.add(builtChild);
@@ -648,8 +656,8 @@ public class QonfigElement {
 				return;
 			// Since attribute values can affect inheritance, we need to iterate through this loop as long as inheritance keeps changing
 			Map<QonfigAttributeDef.Declared, Object> attrValues = new LinkedHashMap<>();
-			theElement = new QonfigElement(theDocument, theParent, theType, theInheritance, theParentRoles, attrValues, theChildren,
-				theChildrenByRole, theValue);
+			theElement = new QonfigElement(theDocument, theParent, theType, theInheritance, theParentRoles, theDeclaredRoles, attrValues,
+				theChildren, theChildrenByRole, theValue);
 			MultiInheritanceSet<QonfigAddOn> completeInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
 			completeInheritance.addAll(theType.getInheritance());
 			completeInheritance.addAll(theInheritance.values());

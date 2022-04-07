@@ -30,7 +30,7 @@ public class DefaultQonfigParser implements QonfigParser {
 	private static final QonfigToolkit PLACEHOLDER;
 	static {
 		try {
-			PLACEHOLDER = new QonfigToolkit(null, null, null, null, null, null);
+			PLACEHOLDER = new QonfigToolkit(null, null, null, null, null, null, null);
 		} catch (QonfigParseException e) {
 			throw new IllegalStateException("This should not happen", e);
 		}
@@ -143,7 +143,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			rootDef = rootDef2;
 		}
 		QonfigToolkit docToolkit = new QonfigToolkit(null, Collections.unmodifiableMap(uses), Collections.emptyMap(),
-			Collections.emptyMap(), Collections.emptyMap(), new QonfigToolkit.ToolkitBuilder() {
+			Collections.emptyMap(), Collections.emptyMap(), Collections.emptyList(), new QonfigToolkit.ToolkitBuilder() {
 				@Override
 				public void parseTypes(QonfigParseSession s) {
 				}
@@ -305,7 +305,8 @@ public class DefaultQonfigParser implements QonfigParser {
 		ToolkitParser parser = new ToolkitParser(rootReader, customValueTypes);
 		QonfigToolkit toolkit = new QonfigToolkit(location, Collections.unmodifiableMap(dependencies),
 			Collections.unmodifiableMap(parser.getDeclaredTypes()), Collections.unmodifiableMap(parser.getDeclaredAddOns()),
-			Collections.unmodifiableMap(parser.getDeclaredElements()), parser);
+			Collections.unmodifiableMap(parser.getDeclaredElements()), Collections.unmodifiableList(parser.getDeclaredAutoInheritance()),
+			parser);
 		rootReader.check();
 		// TODO Verify
 		theToolkits.put(location, toolkit);
@@ -322,6 +323,7 @@ public class DefaultQonfigParser implements QonfigParser {
 
 		private final Map<String, QonfigAddOn> declaredAddOns;
 		private final Map<String, QonfigElementDef> declaredElements;
+		private final List<QonfigAutoInheritance> declaredAutoInheritance;
 
 		private String rootName;
 		private final CustomValueType[] theCustomValueTypes;
@@ -333,6 +335,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			theBuilders = new LinkedHashMap<>();
 			declaredAddOns = new LinkedHashMap<>();
 			declaredElements = new LinkedHashMap<>();
+			declaredAutoInheritance = new ArrayList<>();
 			theNodes = new HashMap<>();
 
 			theCustomValueTypes = customValueTypes;
@@ -348,6 +351,10 @@ public class DefaultQonfigParser implements QonfigParser {
 
 		Map<String, QonfigElementDef> getDeclaredElements() {
 			return declaredElements;
+		}
+
+		List<QonfigAutoInheritance> getDeclaredAutoInheritance() {
+			return declaredAutoInheritance;
 		}
 
 		@Override
@@ -431,6 +438,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				else
 					declaredElements.put(built.getName(), (QonfigElementDef) built);
 			}
+			root.getElement("auto-inheritance", false);
 			try {
 				root.check();
 			} catch (IllegalArgumentException e) {
@@ -562,7 +570,8 @@ public class DefaultQonfigParser implements QonfigParser {
 				} catch (IllegalArgumentException e) {
 					session.withWarning(e.getMessage());
 				}
-				return new QonfigValueType.Explicit(session.getToolkit(), name, wrapped, prefix, suffix);
+				return new QonfigValueType.Explicit(session.getToolkit(), name, wrapped, //
+					prefix == null ? "" : prefix, suffix == null ? "" : suffix);
 			case "external":
 				for (CustomValueType vt : theCustomValueTypes) {
 					if (vt.getName().equals(name))
@@ -634,6 +643,20 @@ public class DefaultQonfigParser implements QonfigParser {
 			completed.clear();
 			for (StrictXmlReader element : theNodes.values())
 				parseChildOverrides(element, session, completed);
+
+			// Stage 7: Parse auto-inheritance
+			StrictXmlReader autoInheritEl = root.getElement("auto-inheritance", false);
+			if (autoInheritEl != null) {
+				QonfigParseSession autoInheritSession = session.forChild("auto-inheritance", 1);
+				int i = 0;
+				for (StrictXmlReader ai : autoInheritEl.getElements("auto-inherit", 0, -1))
+					parseAutoInheritance(ai, autoInheritSession.forChild("auto-inherit", i++));
+				try {
+					autoInheritEl.check();
+				} catch (IllegalArgumentException e) {
+					session.withWarning(e.getMessage());
+				}
+			}
 
 			// Validate and complete structure compilation
 			completed.clear();
@@ -1145,6 +1168,65 @@ public class DefaultQonfigParser implements QonfigParser {
 				if (child != null)
 					found.add(child);
 			}
+		}
+
+		private void parseAutoInheritance(StrictXmlReader element, QonfigParseSession session) {
+			QonfigAutoInheritance.Builder builder = QonfigAutoInheritance.build(session);
+			String inhStr = element.getAttribute("inheritance", false);
+			if (inhStr == null || inhStr.isEmpty())
+				session.withError("No inheritance");
+			String[] inheritance = inhStr.split(",");
+			for (String inh : inheritance) {
+				QonfigAddOn addOn = session.getToolkit().getAddOn(inh);
+				if (addOn == null)
+					session.withError("No such add-on found: " + inh);
+				else
+					builder.inherits(addOn);
+			}
+			List<StrictXmlReader> targets = element.getElements(0, -1);
+			if (targets.isEmpty()) {
+				session.withError("No targets");
+				return;
+			}
+			int i = 0;
+			for (StrictXmlReader target : targets) {
+				QonfigParseSession targetSession = session.forChild("target", i++);
+				String typeStr = target.getAttribute("element", false);
+				QonfigElementOrAddOn type;
+				if (typeStr == null)
+					type = null;
+				else {
+					type = targetSession.getToolkit().getElementOrAddOn(typeStr);
+					if (type == null)
+						targetSession.withError("No such element or add-on found: " + typeStr);
+					continue;
+				}
+				String roleStr = target.getAttribute("role", false);
+				QonfigChildDef child;
+				if (roleStr == null)
+					child = null;
+				else {
+					int dot = roleStr.indexOf('.');
+					if (dot < 0) {
+						targetSession.withError("role name must be qualified with the element or add-on type that declares it");
+						continue;
+					}
+					QonfigElementOrAddOn owner = session.getToolkit().getElementOrAddOn(roleStr.substring(0, dot));
+					if (owner == null) {
+						targetSession.withError("No such element or add-on found: " + roleStr.substring(0, dot));
+						continue;
+					}
+					child = owner.getChild(roleStr.substring(dot + 1));
+					if (child == null) {
+						targetSession.withError("No such child '" + roleStr.substring(dot + 1) + " of " + owner);
+						continue;
+					}
+				}
+				builder.withTarget(type, child);
+				target.check();
+			}
+			declaredAutoInheritance.add(builder.build());
+			element.check();
 		}
 
 		private void validate(StrictXmlReader element, Set<String> completed) {

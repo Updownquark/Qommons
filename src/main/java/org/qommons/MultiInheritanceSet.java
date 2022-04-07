@@ -91,6 +91,9 @@ public interface MultiInheritanceSet<T> {
 		return added;
 	}
 
+	/** @return An independent copy of this set */
+	MultiInheritanceSet<T> copy();
+
 	/**
 	 * Creates a new inheritance set
 	 * 
@@ -109,6 +112,50 @@ public interface MultiInheritanceSet<T> {
 	 */
 	public static <T> MultiInheritanceSet<T> unmodifiable(MultiInheritanceSet<T> set) {
 		return set instanceof Unmodifiable ? set : new Unmodifiable<>(set);
+	}
+
+	/**
+	 * @param <T> The type for the set
+	 * @return A empty multi-inheritance set
+	 */
+	public static <T> MultiInheritanceSet<T> empty() {
+		class EmptyInheritanceSet implements MultiInheritanceSet<T> {
+			@Override
+			public int size() {
+				return 0;
+			}
+
+			@Override
+			public Collection<T> values() {
+				return Collections.emptyList();
+			}
+
+			@Override
+			public boolean contains(T value) {
+				return false;
+			}
+
+			@Override
+			public T getAnyExtension(T value) {
+				return null;
+			}
+
+			@Override
+			public Iterable<T> getExpanded(InheritanceEnumerator<T> enumerator) {
+				return Collections.emptyList();
+			}
+
+			@Override
+			public boolean add(T value) {
+				throw new UnsupportedOperationException();
+			}
+
+			@Override
+			public MultiInheritanceSet<T> copy() {
+				return this;
+			}
+		}
+		return new EmptyInheritanceSet();
 	}
 
 	/**
@@ -179,6 +226,13 @@ public interface MultiInheritanceSet<T> {
 			if (added < 0)
 				theNodes.add(value);
 			return true;
+		}
+
+		@Override
+		public MultiInheritanceSet<T> copy() {
+			Default<T> copy = new Default<>(theInheritance);
+			copy.addAll(values());
+			return copy;
 		}
 
 		@Override
@@ -261,6 +315,11 @@ public interface MultiInheritanceSet<T> {
 		@Override
 		public boolean add(T value) {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public MultiInheritanceSet<T> copy() {
+			return new Unmodifiable<>(theBacking.copy());
 		}
 
 		@Override

@@ -114,6 +114,20 @@ public class SubClassMap2<C, V> {
 		return values;
 	}
 
+	/** @return All entries in this map */
+	public synchronized List<BiTuple<Class<? extends C>, V>> getAllEntries() {
+		return _getAllEntries(new ArrayList<>());
+	}
+
+	private List<BiTuple<Class<? extends C>, V>> _getAllEntries(List<BiTuple<Class<? extends C>, V>> values) {
+		if (theValue != null)
+			values.add(new BiTuple<>(theType, theValue));
+		for (SubClassMap2<? extends C, V> subMap : theSubMaps) {
+			((SubClassMap2<C, V>) subMap)._getAllEntries(values);
+		}
+		return values;
+	}
+
 	/**
 	 * Maps a value to a class
 	 * 

@@ -4,9 +4,12 @@ import java.net.URL;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.qommons.MultiInheritanceMap;
+import org.qommons.MultiInheritanceSet;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterCollections;
 import org.qommons.collect.BetterHashMultiMap;
@@ -30,16 +33,21 @@ public class QonfigToolkit {
 	private final BetterMultiMap<String, QonfigElementDef> theCompiledElements;
 	private final Map<String, QonfigAddOn> theDeclaredAddOns;
 	private final BetterMultiMap<String, QonfigAddOn> theCompiledAddOns;
+	private final List<QonfigAutoInheritance> theDeclaredAutoInheritance;
+	private final MultiInheritanceMap<QonfigElementOrAddOn, MultiInheritanceSet<QonfigAddOn>> theTypeAutoInheritance;
+	private final MultiInheritanceMap<QonfigChildDef, MultiInheritanceSet<QonfigAddOn>> theRoleAutoInheritance;
+	private final MultiInheritanceMap<QonfigElementOrAddOn, MultiInheritanceMap<QonfigChildDef, MultiInheritanceSet<QonfigAddOn>>> theTypeAndRoleAutoInheritance;
 	private final QonfigElementDef theDeclaredRoot;
 
 	public QonfigToolkit(URL location, Map<String, QonfigToolkit> dependencies, Map<String, QonfigValueType.Declared> declaredTypes,
-		Map<String, QonfigAddOn> declaredAddOns, Map<String, QonfigElementDef> declaredElements, ToolkitBuilder builder)
-		throws QonfigParseException {
+		Map<String, QonfigAddOn> declaredAddOns, Map<String, QonfigElementDef> declaredElements,
+		List<QonfigAutoInheritance> autoInheritance, ToolkitBuilder builder) throws QonfigParseException {
 		theLocation = location;
 		theDependencies = dependencies;
 		theDeclaredAttributeTypes = declaredTypes;
 		theDeclaredAddOns = declaredAddOns;
 		theDeclaredElements = declaredElements;
+		theDeclaredAutoInheritance = autoInheritance;
 
 		if (builder != null) {
 			QonfigParseSession session = QonfigParseSession.forRoot("qonfig-def", this);
@@ -89,11 +97,85 @@ public class QonfigToolkit {
 				session.withWarning("Toolkit does not declare a root, but inherits multiple different roots--will not inherit any");
 			session.throwErrors(location == null ? "Document" : location.toString())//
 				.printWarnings(System.err, location == null ? "Document" : location.toString());
+
+			theTypeAutoInheritance = MultiInheritanceMap.create(QonfigElementOrAddOn::isAssignableFrom);
+			theRoleAutoInheritance = MultiInheritanceMap.create(QonfigChildDef::isFulfilledBy);
+			theTypeAndRoleAutoInheritance = MultiInheritanceMap.create(QonfigElementOrAddOn::isAssignableFrom);
+			for (QonfigToolkit dep : theDependencies.values()) {
+				for (Map.Entry<QonfigElementOrAddOn, MultiInheritanceSet<QonfigAddOn>> typeInh : dep.theTypeAutoInheritance.entrySet()) {
+					theTypeAutoInheritance.compute(typeInh.getKey(), (t, old) -> {
+						if (old == null)
+							old = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+						old.addAll(typeInh.getValue().values());
+						return old;
+					});
+				}
+				for (Map.Entry<QonfigChildDef, MultiInheritanceSet<QonfigAddOn>> roleInh : dep.theRoleAutoInheritance.entrySet()) {
+					theRoleAutoInheritance.compute(roleInh.getKey(), (r, old) -> {
+						if (old == null)
+							old = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+						old.addAll(roleInh.getValue().values());
+						return old;
+					});
+				}
+				for (Map.Entry<QonfigElementOrAddOn, MultiInheritanceMap<QonfigChildDef, MultiInheritanceSet<QonfigAddOn>>> typeRoleInh : dep.theTypeAndRoleAutoInheritance
+					.entrySet()) {
+					theTypeAndRoleAutoInheritance.compute(typeRoleInh.getKey(), (t, roleInh) -> {
+						if (roleInh == null)
+							roleInh = MultiInheritanceMap
+								.<QonfigChildDef, MultiInheritanceSet<QonfigAddOn>> create(QonfigChildDef::isFulfilledBy);
+						for (Map.Entry<QonfigChildDef, MultiInheritanceSet<QonfigAddOn>> roleInhEntry : typeRoleInh.getValue().entrySet()) {
+							roleInh.compute(roleInhEntry.getKey(), (r, old) -> {
+								if (old == null)
+									old = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+								old.addAll(roleInhEntry.getValue().values());
+								return old;
+							});
+						}
+						return roleInh;
+					});
+				}
+			}
+			for (QonfigAutoInheritance autoInherit : theDeclaredAutoInheritance) {
+				for (QonfigAutoInheritance.AutoInheritTarget target : autoInherit.getTargets()) {
+					if (target.getTarget() != null) {
+						if (target.getRole() != null) {
+							theTypeAndRoleAutoInheritance.compute(target.getTarget(), (t, roleInh) -> {
+								if (roleInh == null)
+									roleInh = MultiInheritanceMap
+										.<QonfigChildDef, MultiInheritanceSet<QonfigAddOn>> create(QonfigChildDef::isFulfilledBy);
+								roleInh.compute(target.getRole(), (r, old) -> {
+									if (old == null)
+										old = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+									old.addAll(autoInherit.getInheritance().values());
+									return old;
+								});
+								return roleInh;
+							});
+						} else
+							theTypeAutoInheritance.compute(target.getTarget(), (t, old) -> {
+								if (old == null)
+									old = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+								old.addAll(autoInherit.getInheritance().values());
+								return old;
+							});
+					} else
+						theRoleAutoInheritance.compute(target.getRole(), (r, old) -> {
+							if (old == null)
+								old = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+							old.addAll(autoInherit.getInheritance().values());
+							return old;
+						});
+				}
+			}
 		} else { // PLACEHOLDER
 			theCompiledElements = null;
 			theCompiledAddOns = null;
 			theCompiledAttributeTypes = null;
 			theDeclaredRoot = null;
+			theTypeAutoInheritance = null;
+			theRoleAutoInheritance = null;
+			theTypeAndRoleAutoInheritance = null;
 		}
 	}
 
@@ -296,6 +378,41 @@ public class QonfigToolkit {
 				return found;
 		}
 		return null;
+	}
+
+	/** @return All auto-inheritance conditions declared by this toolkit */
+	public List<QonfigAutoInheritance> getDeclaredAutoInheritance() {
+		return theDeclaredAutoInheritance;
+	}
+
+	/**
+	 * @param target
+	 * @param roles
+	 * @return
+	 */
+	public MultiInheritanceSet<QonfigAddOn> getAutoInheritance(QonfigElementOrAddOn target, Set<QonfigChildDef> roles) {
+		MultiInheritanceSet<QonfigAddOn> inheritance = null;
+		for (MultiInheritanceSet<QonfigAddOn> autoInherit : theTypeAutoInheritance.getAll(target)) {
+			if (inheritance == null)
+				inheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+			inheritance.addAll(autoInherit.values());
+		}
+		for (QonfigChildDef role : roles) {
+			for (MultiInheritanceSet<QonfigAddOn> autoInherit : theRoleAutoInheritance.getAll(role)) {
+				if (inheritance == null)
+					inheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+				inheritance.addAll(autoInherit.values());
+			}
+			for (MultiInheritanceMap<QonfigChildDef, MultiInheritanceSet<QonfigAddOn>> typeRoleInh : theTypeAndRoleAutoInheritance
+				.getAll(target)) {
+				for (MultiInheritanceSet<QonfigAddOn> autoInherit : typeRoleInh.getAll(role)) {
+					if (inheritance == null)
+						inheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+					inheritance.addAll(autoInherit.values());
+				}
+			}
+		}
+		return inheritance == null ? MultiInheritanceSet.empty() : inheritance;
 	}
 
 	/** @return The root element declared for documents of this toolkit */

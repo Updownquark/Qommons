@@ -33,6 +33,8 @@ public interface QonfigChildDef extends QonfigElementOwned {
 	/** @return The maximum number of elements that may be specified for this role */
 	int getMax();
 
+	boolean isFulfilledBy(QonfigChildDef child);
+
 	/** Abstract {@link QonfigChildDef} implementation */
 	public static abstract class Abstract implements QonfigChildDef {
 		private final QonfigElementOrAddOn theOwner;
@@ -146,6 +148,16 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		public String getName() {
 			return theName;
 		}
+
+		@Override
+		public boolean isFulfilledBy(QonfigChildDef child) {
+			if (equals(child))
+				return true;
+			for (QonfigChildDef fulfills : child.getFulfillment())
+				if (isFulfilledBy(fulfills))
+					return true;
+			return false;
+		}
 	}
 
 	/** An inherited or modified child definition */
@@ -176,9 +188,21 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		public String getName() {
 			return theDeclared.getName();
 		}
+
+		@Override
+		public boolean isFulfilledBy(QonfigChildDef child) {
+			if (equals(child))
+				return true;
+			for (QonfigChildDef fulfills : child.getFulfillment())
+				if (isFulfilledBy(fulfills))
+					return true;
+			return false;
+		}
 	}
 
-	/** An inherited child that is fulfilled by another child definition. The declared child may not be specified directly for the owner. */
+	/**
+	 * An inherited child that is fulfilled by another child definition. The declared child shall not be specified directly for the owner.
+	 */
 	public static class Overridden extends Abstract {
 		private final QonfigChildDef.Declared theDeclared;
 		private final Set<QonfigChildDef.Declared> theOverriding;
@@ -207,6 +231,11 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		/** @return The declared children fulfilling the role, overriding it */
 		public Set<QonfigChildDef.Declared> getOverriding() {
 			return theOverriding;
+		}
+
+		@Override
+		public boolean isFulfilledBy(QonfigChildDef child) {
+			return false;
 		}
 	}
 }

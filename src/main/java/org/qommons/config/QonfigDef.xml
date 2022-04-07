@@ -1,15 +1,126 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
- <!-- Declare dependencies on root with extends:name="URL" -->
-<!-- root may be inherited from a root dependency if exactly one of those declares a root -->
-<!-- If a root is neither declared nor inherited, this is an "abstract" definition that other definitions could extend -->
-<qonfig-def name="?" extends:name="URL" root="element-def-name">
-	<patterns>
-		<pattern
-			name="pattern name">
-			regex pattern
-		</pattern> <!-- 0... -->
-	</patterns>
+<qonfig-def name="qonfig-toolkit-def" root="qonfig-def">
+	<value-types>
+		<pattern name="url">(https?|file)://[-a-zA-Z0-9+&amp;@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&amp;@#/%=~_|]</pattern>
+		<pattern name="element-name">([a-zA-Z_][a-zA-Z0-9\-_]*\:)?[a-zA-Z_][a-zA-Z0-9\-_]*</pattern>
+		<pattern name="qualified-element-name">([a-zA-Z_][a-zA-Z0-9\-_]*\:)?[a-zA-Z_][a-zA-Z0-9\-_]*\.[a-zA-Z_][a-zA-Z0-9\-_]*</pattern>
+		<pattern name="optionally-qualified-element-name">([a-zA-Z_][a-zA-Z0-9\-_]*\:)?[a-zA-Z_][a-zA-Z0-9\-_]*(\.[a-zA-Z_][a-zA-Z0-9\-_]*)?</pattern>
+		<pattern name="element-list">([a-zA-Z_][a-zA-Z0-9\-_]*\:)?[a-zA-Z_][a-zA-Z0-9\-_]*(,([a-zA-Z_][a-zA-Z0-9\-_]*\:)?[a-zA-Z_][a-zA-Z0-9\-_]*)*</pattern>
+		<pattern name="optionally-qualified-element-list">
+			([a-zA-Z_][a-zA-Z0-9\-_]*\:)?[a-zA-Z_][a-zA-Z0-9\-_]*(\.[a-zA-Z_][a-zA-Z0-9\-_]*)?(,([a-zA-Z_][a-zA-Z0-9\-_]*\:)?[a-zA-Z_][a-zA-Z0-9\-_]*(\.[a-zA-Z_][a-zA-Z0-9\-_]*)?)*
+		</pattern>
+		<pattern name="int">[0-9]{1,7}</pattern>
+		<one-of name="specify">
+			<literal>required</literal>
+			<literal>optional</literal>
+			<literal>forbidden</literal>
+		</one-of>
+	</value-types>
+
+	<add-ons>
+		<add-on name="qonfig-named">
+			<attribute name="name" type="element-name" specify="required" />
+		</add-on>
+	</add-ons>
+
+	<elements>
+		<element-def name="qonfig-def">
+			<!-- root may be inherited from a root dependency if exactly one of those declares a root -->
+			<!-- If a root is neither declared nor inherited, this is an "abstract" definition that other definitions could extend -->
+			<attribute name="root" type="element-name" specify="optional" />
+			<child-def name="extends" type="qonfig-extends" min="0" max="inf" />
+			<child-def name="value-types" type="value-types" min="0" />
+			<child-def name="add-ons" type="add-ons" min="0" />
+			<child-def name="elements" type="elements" min="0" />
+			<child-def name="auto-inheritance" type="auto-inheritance" min="0" />
+		</element-def>
+		<element-def name="qonfig-extends">
+			<value type="url" specify="required" />
+		</element-def>
+
+		<element-def name="value-types">
+			<child-def name="value-types" type="qonfig-value-type" inherits="qonfig-named" min="0" max="1" />
+		</element-def>
+		<element-def name="qonfig-value-type" abstract="true">
+			<attribute name="name" type="element-name" specify="required" />
+		</element-def>
+		<element-def name="pattern" extends="qonfig-value-type">
+			<value type="string" specify="required" />
+		</element-def>
+		<element-def name="literal" extends="qonfig-value-type">
+			<value type="string" specify="required" />
+		</element-def>
+		<element-def name="external" extends="qonfig-value-type" />
+		<element-def name="explicit" extends="qonfig-value-type">
+			<attribute name="prefix" type="string" specify="optional" />
+			<attribute name="suffix" type="string" specify="optional" />
+			<child-def name="wrapped" type="qonfig-value-type" />
+		</element-def>
+		<element-def name="one-of" extends="qonfig-value-type">
+			<child-def name="option" type="qonfig-value-type" max="inf" />
+		</element-def>
+
+		<element-def name="qonfig-value" abstract="true">
+			<!-- Type here is "string", "boolean", or a reference to a value-type or add-on -->
+			<attribute name="type" type="element-name" specify="required" />
+		</element-def>
+		<element-def name="attribute-or-value" extends="qonfig-value" abstract="true">
+			<!-- Actually, if the "default" attribute is specified, then the default for the "specify" attribute is "optional" -->
+			<attribute name="specify" type="specify" default="required" />
+			<attribute name="default" type="string" specify="optional" />
+		</element-def>
+		<element-def name="attribute" extends="attribute-or-value">
+			<!-- If the attribute name is qualified, it is treated as a modification of the attribute of an extended or inherited type,
+				 similar to the child-mod element -->
+			<attribute name="optionally-qualified-element-name" specify="required" />
+		</element-def>
+		<element-def name="value" extends="attribute-or-value" />
+		<element-def name="qonfig-child" extends="qonfig-value" inherits="qonfig-named">
+			<!-- The type attribute for qonfig-child is a reference to an element-def -->
+			<attribute name="min" type="int" default="1" />
+			<!-- If min is specified and is greater than zero, the default for max is actually equal to min -->
+			<attribute name="max" type="int" default="1" />
+			<attribute name="inherits" type="element-list" specify="optional" />
+		</element-def>
+		<element-def name="child-def" extends="qonfig-child">
+			<attribute name="role" type="optionally-qualified-element-list" />
+		</element-def>
+		<element-def name="child-mod" extends="qonfig-child" />
+
+		<element-def name="element-or-add-on" inherits="qonfig-named" abstract="true">
+			<child-def name="inherits" type="element-list" />
+			<child-def name="attribute" type="attribute" min="0" max="inf" />
+			<child-def name="child-def" type="child-def" min="0" max="inf" />
+			<child-def name="child-mod" type="child-mod" min="0" max="inf" />
+			<child-def name="value-mod" type="value-mod" min="0" />
+		</element-def>
+		<element-def name="qonfig-add-ons">
+			<child-def name="add-on" type="add-on" min="0" max="inf" />
+		</element-def>
+		<element-def name="add-on" extends="element-or-add-on">
+			<attribute name="requires" type="element-name" specify="optional" />
+		</element-def>
+		<element-def name="elements">
+			<child-def name="element-def" type="element-def" min="0" max="inf" />
+		</element-def>
+		<element-def name="element-def" extends="element-or-add-on">
+			<attribute name="extends" type="element-name" specify="optional" />
+			<child-def name="value" type="qonfig-value" min="0" />
+		</element-def>
+
+		<element-def name="auto-inheritance">
+			<child-def name="auto-inherit" min="0" max="inf" />
+		</element-def>
+		<element-def name="auto-inherit">
+			<attribute name="inherits" type="element-list" specify="required" />
+			<child-def name="target" type="target" max="inf" />
+		</element-def>
+		<element-def name="target">
+			<attribute name="element" type="element-name" specify="optional" />
+			<attribute name="role" type="qualified-element-name" specify="optional" />
+		</element-def>
+	</elements>
 
 	<add-ons> <!-- 0..1 -->
 		<!-- 0... -->
