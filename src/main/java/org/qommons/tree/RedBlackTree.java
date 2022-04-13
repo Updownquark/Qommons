@@ -181,6 +181,8 @@ public class RedBlackTree<E> {
 			}
 		}
 		if (moveWithinSubTree > 0) {
+			n = leftMost;
+			index = 0;
 			// Some nodes which belong in the subtree will need to be rearranged.
 			// We want to make an effort to move as few as possible.
 			// If using the first such node we came to as the standard causes the move of most of these nodes,
@@ -189,10 +191,14 @@ public class RedBlackTree<E> {
 			// is to do this test for every node that belongs in the subtree, which would take O(n^2) time.
 			// This method seems to me a good compromise.
 			// At least it will perform optimally when only a single node in the subtree needs to move.
-			boolean movePrimary = moveWithinSubTree > (node.size() - removeFromSubTree) / 2;
 			// Now mark the subtree-valid nodes that need to be moved
-			n = leftMost;
-			index = 0;
+			boolean movePrimary = moveWithinSubTree > (node.size() - removeFromSubTree) / 2;
+			if (movePrimary) {
+				n = n.getClosest(false);
+				index = 1;
+				if (!toMove.get(0) && !check(leftMost.getValue(), n.getValue(), compare, distinct))
+					toMove.set(0);
+			}
 			hasInnerLeftBound = false;
 			while (true) {
 				if (toMove.get(index)) {// Doesn't belong in the subtree; ignore
@@ -201,9 +207,6 @@ public class RedBlackTree<E> {
 						toMove.set(index);
 					else
 						innerLeftBound = n.getValue();
-				} else if (movePrimary) {
-					// First subtree-valid node, which we've decided to move
-					movePrimary = false; // Use the next subtree-valid node as the left bound
 				} else {
 					hasInnerLeftBound = true;
 					innerLeftBound = n.getValue();

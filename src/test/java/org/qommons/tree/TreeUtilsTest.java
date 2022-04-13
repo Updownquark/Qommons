@@ -14,6 +14,7 @@ import java.util.TreeSet;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.qommons.LambdaUtils;
 import org.qommons.QommonsTestUtils;
 import org.qommons.TestHelper;
 import org.qommons.collect.CollectionElement;
@@ -280,78 +281,106 @@ public class TreeUtilsTest {
 	}
 
 	static class TreeRepairTester implements TestHelper.Testable {
+		private static Comparator<? super IntHolder>[] SORT_STRATEGIES = new Comparator[] {
+			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> Integer.compare(h1.value, h2.value), () -> "asc"), //
+			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> -Integer.compare(h1.value, h2.value), () -> "desc"), //
+			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> Integer.compare(Math.abs(h1.value), Math.abs(h2.value)),
+				() -> "abs asc"), //
+			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> -Integer.compare(Math.abs(h1.value), Math.abs(h2.value)),
+				() -> "abs desc")//
+		};
+
 		@Override
 		public void accept(TestHelper t) {
+			int[] sortType = new int[] { t.getInt(0, SORT_STRATEGIES.length) };
 			// Build a random tree set
-			BetterTreeSet<IntHolder> set = BetterTreeSet.<IntHolder> buildTreeSet(IntHolder::compareTo).build();
+			BetterTreeSet<IntHolder> set = BetterTreeSet.<IntHolder> buildTreeSet((h1, h2) -> SORT_STRATEGIES[sortType[0]].compare(h1, h2))
+				.build();
 			int length = t.getInt(2, 10);
 			// int length = t.getInt(2, 10000);
 			for (int i = 0; i < length; i++)
 				set.add(new IntHolder(t.getInt(-100, 100)));
+			if (t.isReproducing())
+				System.out.println("Original: " + set);
 			List<Integer> copy = new ArrayList<>(set.size());
 			for (IntHolder v : set)
 				copy.add(v.value);
+			ValueStoredCollection.RepairListener<IntHolder, Void> repair = new ValueStoredCollection.RepairListener<IntHolder, Void>() {
+				@Override
+				public Void removed(CollectionElement<IntHolder> element) {
+					copy.remove(set.getElementsBefore(element.getElementId()));
+					return null;
+				}
 
-			// Update some elements with random values, storing the element IDs updated
-			int updates = t.getInt(1, Math.min(length - 1, 2));
-			// int updates = t.getInt(1, length);
-			List<ElementId> toUpdate = new ArrayList<>(updates);
-			for (int i = 0; i < updates; i++) {
-				int index = t.getInt(0, set.size());
-				int newValue = t.getInt(-100, 100);
-				ElementId el = set.getElement(index).getElementId();
-				set.getElement(el).get().value = newValue;
-				copy.set(index, newValue);
-				toUpdate.add(el);
+				@Override
+				public void disposed(IntHolder value, Void data) {
+				}
+
+				@Override
+				public void transferred(CollectionElement<IntHolder> element, Void data) {
+					copy.add(set.getElementsBefore(element.getElementId()), element.get().value);
+				}
+			};
+
+			if (t.getBoolean()) {
+				// Update some elements with random values, storing the element IDs updated
+				int updates = t.getInt(1, Math.min(length - 1, 2));
+				if (t.isReproducing())
+					System.out.println("Updating " + updates + " random element(s)");
+				// int updates = t.getInt(1, length);
+				List<ElementId> toUpdate = new ArrayList<>(updates);
+				for (int i = 0; i < updates; i++) {
+					int index = t.getInt(0, set.size());
+					int newValue = t.getInt(-100, 100);
+					ElementId el = set.getElement(index).getElementId();
+					set.getElement(el).get().value = newValue;
+					copy.set(index, newValue);
+					toUpdate.add(el);
+				}
+				if (t.isReproducing())
+					System.out.println("Updated:  " + set);
+
+				// Inform the set that the updated elements have changed and allow it to fix itself
+				// Fix the copy in tandem
+				for (ElementId el : toUpdate) {
+					t.placemark();
+					// The element may have been removed due to previous operations
+					if (!el.isPresent())
+						continue;
+					set.repair(el, repair);
+				}
+			} else {
+				// Completely switch out the sort strategy to ensure repair can fix anything
+				int oldSort = sortType[0];
+				do {
+					sortType[0] = t.getInt(0, SORT_STRATEGIES.length);
+				} while (sortType[0] == oldSort);
+				if (t.isReproducing())
+					System.out.println("Switch sorting from " + SORT_STRATEGIES[oldSort] + " to " + SORT_STRATEGIES[sortType[0]]);
+				// Use the element-less repair method
+				set.repair(repair);
 			}
-
-			// Inform the set that the updated elements have changed and allow it to fix itself
-			// Fix the copy in tandem
-			for (ElementId el : toUpdate) {
-				t.placemark();
-				// The element may have been removed due to previous operations
-				if (!el.isPresent())
-					continue;
-				set.repair(el, new ValueStoredCollection.RepairListener<IntHolder, Void>() {
-					@Override
-					public Void removed(CollectionElement<IntHolder> element) {
-						copy.remove(set.getElementsBefore(element.getElementId()));
-						return null;
-					}
-
-					@Override
-					public void disposed(IntHolder value, Void data) {}
-
-					@Override
-					public void transferred(CollectionElement<IntHolder> element, Void data) {
-						copy.add(set.getElementsBefore(element.getElementId()), element.get().value);
-					}
-				});
-			}
+			if (t.isReproducing())
+				System.out.println("Repaired: " + set);
 
 			t.placemark();
-			// Verify that the copy and the set have the same values and that they are sorted
+			// Verify that the copy and the set have the same values and that they are sorted correctly
 			Assert.assertEquals(set.size(), copy.size());
 			int i = 0;
-			int prev = 0;
+			IntHolder prev = null;
 			for (IntHolder v : set) {
-				if (i > 0)
-					Assert.assertTrue(v.value > prev);
-				prev = v.value;
+				if (i > 0 && SORT_STRATEGIES[sortType[0]].compare(prev, v) > 0)
+					throw new AssertionError("Tree repair falure at " + i + ": " + set);
+				prev = v;
 				Assert.assertEquals(v.value, copy.get(i++).intValue());
 			}
 		}
 
-		static class IntHolder implements Comparable<IntHolder> {
+		static class IntHolder {
 			int value;
 
 			IntHolder(int value) {
 				this.value = value;
-			}
-
-			@Override
-			public int compareTo(IntHolder o) {
-				return Integer.compare(value, o.value);
 			}
 
 			@Override
@@ -377,7 +406,7 @@ public class TreeUtilsTest {
 	public void testTreeRepair() {
 		TestHelper.createTester(TreeRepairTester.class).withDebug(true)
 			.withPersistenceDir(new File("src/test/java/org/qommons/tree"), false).revisitKnownFailures(true)//
-			.withRandomCases(1000).withMaxFailures(10)//
+			.withRandomCases(1000).withMaxFailures(1)//
 			.execute().throwErrorIfFailed();
 	}
 
