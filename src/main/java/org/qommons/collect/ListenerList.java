@@ -30,6 +30,24 @@ import java.util.function.Consumer;
  * @param <E> The type of value that this list can store
  */
 public class ListenerList<E> {
+	private static boolean SWALLOW_EXCEPTIONS = true;
+
+	/**
+	 * @return Whether instances of this class (and others who use this flag) will swallow {@link RuntimeException} thrown by a listener
+	 *         (printing their stack traces first) in order that later listeners remain unaffected
+	 */
+	public static boolean isSwallowingExceptions() {
+		return SWALLOW_EXCEPTIONS;
+	}
+
+	/**
+	 * @param swallowExceptions Whether instances of this class (and others who use this flag) should swallow {@link RuntimeException}
+	 *        thrown by a listener (printing their stack traces first) in order that later listeners remain unaffected
+	 */
+	public static void setSwallowExceptions(boolean swallowExceptions) {
+		SWALLOW_EXCEPTIONS = swallowExceptions;
+	}
+
 	/**
 	 * An element containing a value in a {@link ListenerList}
 	 * 
@@ -522,9 +540,12 @@ public class ListenerList<E> {
 						} catch (ReentrantNotificationException e) {
 							throw e;
 						} catch (RuntimeException e) {
-							// If the listener throws an exception, we can't have that gumming up the works
-							// If they want better handling, they can try/catch their own code
-							e.printStackTrace();
+							if (SWALLOW_EXCEPTIONS) {
+								// If the listener throws an exception, we can't have that gumming up the works
+								// If they want better handling, they can try/catch their own code
+								e.printStackTrace();
+							} else
+								throw e;
 						}
 					}
 				} else if (node.isInAddFiringRound(iterId)) { // Don't execute the same round it was added, if so configured
@@ -537,9 +558,12 @@ public class ListenerList<E> {
 					} catch (ReentrantNotificationException e) {
 						throw e;
 					} catch (RuntimeException e) {
-						// If the listener throws an exception, we can't have that gumming up the works
-						// If they want better handling, they can try/catch their own code
-						e.printStackTrace();
+						if (SWALLOW_EXCEPTIONS) {
+							// If the listener throws an exception, we can't have that gumming up the works
+							// If they want better handling, they can try/catch their own code
+							e.printStackTrace();
+						} else
+							throw e;
 					}
 				}
 

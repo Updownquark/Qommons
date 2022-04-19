@@ -284,17 +284,37 @@ public class TreeUtilsTest {
 		private static Comparator<? super IntHolder>[] SORT_STRATEGIES = new Comparator[] {
 			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> Integer.compare(h1.value, h2.value), () -> "asc"), //
 			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> -Integer.compare(h1.value, h2.value), () -> "desc"), //
-			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> Integer.compare(Math.abs(h1.value), Math.abs(h2.value)),
-				() -> "abs asc"), //
-			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> -Integer.compare(Math.abs(h1.value), Math.abs(h2.value)),
-				() -> "abs desc")//
+			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> compareIntAbs(h1.value, h2.value), () -> "abs asc"), //
+			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> -compareIntAbs(h1.value, h2.value), () -> "abs desc"), //
+			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> compareIntStr(h1.value, h2.value), () -> "str"), //
+			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> -compareIntStr(h1.value, h2.value), () -> "str desc")//
 		};
+
+		// This differs from just comparing the absolute values in that if the absolute values are equal but the values themselves aren't,
+		// this method returns non-zero.
+		private static int compareIntAbs(int i1, int i2) {
+			boolean i1Neg = i1 < 0;
+			if (i1Neg)
+				i1 = -i1;
+			boolean i2Neg = i2 < 0;
+			if (i2Neg)
+				i2 = -i2;
+			int comp = Integer.compare(i1, i2);
+			if (comp == 0 && i1Neg != i2Neg)
+				return i1Neg ? -1 : 1;
+			return comp;
+		}
+
+		private static int compareIntStr(int i1, int i2) {
+			return String.valueOf(i1).compareTo(String.valueOf(i2));
+		}
 
 		@Override
 		public void accept(TestHelper t) {
 			int[] sortType = new int[] { t.getInt(0, SORT_STRATEGIES.length) };
 			// Build a random tree set
-			BetterTreeSet<IntHolder> set = BetterTreeSet.<IntHolder> buildTreeSet((h1, h2) -> SORT_STRATEGIES[sortType[0]].compare(h1, h2))
+			BetterTreeSet<IntHolder> set = BetterTreeSet.<IntHolder> buildTreeSet(LambdaUtils.<IntHolder> printableComparator(//
+				(h1, h2) -> SORT_STRATEGIES[sortType[0]].compare(h1, h2), () -> SORT_STRATEGIES[sortType[0]].toString()))
 				.build();
 			int length = t.getInt(2, 10);
 			// int length = t.getInt(2, 10000);

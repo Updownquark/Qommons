@@ -399,6 +399,19 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 	}
 
+	/**
+	 * <p>
+	 * Removes all values in this collection that are equivalent to any values in the given collection.
+	 * </p>
+	 * <p>
+	 * Importantly, if the notion of element "equivalence" differs between the two collections, the equivalence of the parameter collection
+	 * will be used. While it would perhaps be more intuitive to use this collection's equivalence, this decision is to align with the
+	 * functionality of {@link #retainAll(Collection)}, for which using this collection's equivalence would be prohibitively expensive.
+	 * </p>
+	 * 
+	 * @param c The collection whose values to remove from this collection
+	 * @return Whether any values were removed from this collection
+	 */
 	@Override
 	default boolean removeAll(Collection<?> c) {
 		if (c.isEmpty())
@@ -407,6 +420,19 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 			LambdaUtils.printablePred(c::contains, () -> "in" + c, null));
 	}
 
+	/**
+	 * <p>
+	 * Removes all values in this collection that are NOT equivalent to any values in the given collection.
+	 * </p>
+	 * <p>
+	 * Importantly, if the notion of element "equivalence" differs between the two collections, the equivalence of the parameter collection
+	 * will be used. While it would perhaps be more intuitive to use this collection's equivalence, to do so would require the creation of a
+	 * temporary set populated with the given collection's values, which would be prohibitively expensive.
+	 * </p>
+	 * 
+	 * @param c The collection whose values to keep in this collection
+	 * @return Whether any values were removed from this collection
+	 */
 	@Override
 	default boolean retainAll(Collection<?> c) {
 		if (isEmpty())

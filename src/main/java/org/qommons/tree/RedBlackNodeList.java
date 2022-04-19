@@ -442,7 +442,8 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	protected <X> boolean repair(ElementId element, Comparator<? super E> compare, boolean distinct,
 		ValueStoredCollection.RepairListener<E, X> listener) {
 		try (Transaction t = lock(true, null)) {
-			boolean repaired = theTree.repair(checkNode(element, true).theNode, compare, distinct, new TreeRepairListener<>(listener));
+			boolean repaired = theTree.repair(//
+				checkNode(element, true).theNode, compare, distinct, new TreeRepairListener<>(listener));
 			if (repaired)
 				theLocker.modified();
 			return repaired;

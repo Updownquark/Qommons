@@ -109,9 +109,7 @@ public class RedBlackTree<E> {
 	}
 
 	/**
-	 * <p>
-	 * Searches for and fixes any inconsistencies in the tree's storage structure at the given node.
-	 * </p>
+	 * Searches for and fixes any inconsistencies in the tree's storage structure at or around the given node.
 	 * 
 	 * @param <X> The type of the data transferred for the listener
 	 * @param node The node at which to repair the structure
@@ -121,6 +119,61 @@ public class RedBlackTree<E> {
 	 * @return Whether any inconsistencies were found
 	 */
 	public <X> boolean repair(RedBlackNode<E> node, Comparator<? super E> compare, boolean distinct, RepairListener<E, X> listener) {
+		if (check(node, compare, distinct))
+			return false;
+		// Ok, something's wrong. Remove the node, call the repair listener, and save the data for later.
+		// We do this first because if the given node is out of place, we want to make sure it is one of the ones that is moved.
+		// E.g. if there are 2 nodes in the tree, they are mis-ordered, and the user calls repair on one of them,
+		// it should be that one which is moved, not the other.
+		node.delete();
+		X nodeData = listener == null ? null : listener.removed(node);
+		// Now figure out if the rest of the tree seems ok. We won't check every single node, but just the node's immediate surroundings.
+		// If more than one node is out of place, we need to do a full tree repair to be safe.
+		RedBlackNode<E> closest = node.getClosest(true);
+		if (closest == null) {
+			RedBlackNode<E> other = node.getClosest(false);
+			if (other != null)
+				closest = other;
+		}
+		RedBlackNode<E> left = closest.getClosest(true);
+		RedBlackNode<E> right = closest.getClosest(false);
+		if ((left == null || check(left.getValue(), closest.getValue(), compare, distinct))//
+			&& (right == null || check(closest.getValue(), right.getValue(), compare, distinct))) {
+			// Looks like it was just the single node that was corrupt, so we're done
+		} else
+			repairSubTree(theRoot, compare, distinct, listener); // Full tree repair
+
+		// Attempt to re-add the original node
+		E nodeValue = node.getValue();
+		node = insert(nodeValue, compare, distinct);
+		if (listener != null) {
+			if (node != null)
+				listener.transferred(node, nodeData);
+			else
+				listener.disposed(nodeValue, nodeData);
+		}
+		return true;
+	}
+
+	/**
+	 * <p>
+	 * Searches for and fixes any inconsistencies in the entire tree's storage structure.
+	 * </p>
+	 * 
+	 * @param <X> The type of the data transferred for the listener
+	 * @param compare The ordering of the values in the tree
+	 * @param distinct Whether the values in the tree should be distinct
+	 * @param listener The listener to monitor repairs. May be null.
+	 * @return Whether any inconsistencies were found
+	 */
+	public <X> boolean repair(Comparator<? super E> compare, boolean distinct, RepairListener<E, X> listener) {
+		if (size() <= 1)
+			return false;
+		return repairSubTree(theRoot, compare, distinct, listener);
+	}
+
+	private <X> boolean repairSubTree(RedBlackNode<E> node, Comparator<? super E> compare, boolean distinct,
+		RepairListener<E, X> listener) {
 		if (node.size() == 1) {
 			boolean valid = check(node, compare, distinct);
 			if (!valid) {
@@ -263,25 +316,6 @@ public class RedBlackTree<E> {
 			}
 		}
 		return true; // If we made it this far, that means we actually did to repair work
-	}
-
-	/**
-	 * <p>
-	 * Searches for and fixes any inconsistencies in the entire tree's storage structure.
-	 * </p>
-	 * 
-	 * @param <X> The type of the data transferred for the listener
-	 * @param compare The ordering of the values in the tree
-	 * @param distinct Whether the values in the tree should be distinct
-	 * @param listener The listener to monitor repairs. May be null.
-	 * @return Whether any inconsistencies were found
-	 */
-	public <X> boolean repair(Comparator<? super E> compare, boolean distinct, RepairListener<E, X> listener) {
-		RedBlackNode<E> root = theRoot;
-		if (root == null)
-			return false;
-		else
-			return repair(root, compare, distinct, listener);
 	}
 
 	private static <E> boolean check(RedBlackNode<E> node, Comparator<? super E> compare, boolean distinct) {
