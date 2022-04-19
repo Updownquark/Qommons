@@ -37,11 +37,14 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
+import org.qommons.TimeUtils.RelativeInstantEvaluation;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.ListenerList;
 import org.qommons.collect.ListenerList.Element;
 import org.qommons.debug.Debug;
+import org.qommons.io.CsvParser;
 import org.qommons.io.Format;
+import org.qommons.io.TextParseException;
 import org.qommons.tree.BetterTreeList;
 
 /**
@@ -124,6 +127,10 @@ public class TestHelper {
 
 	/** Represents a test failure */
 	public static class TestFailure implements Comparable<TestFailure> {
+		/** The date that the test first encountered this failed test case */
+		public final Instant failed;
+		/** The date that the test case was fixed (or null if it is still broken) */
+		public Instant fixed;
 		/** The seed of the test case that failed */
 		public final long seed;
 		/** The random generation sequence position of the failure */
@@ -132,11 +139,15 @@ public class TestHelper {
 		public final NavigableMap<String, Long> placemarks;
 
 		/**
+		 * @param failed The date that the test first encountered this failed test case
+		 * @param fixed The date that the test case was fixed (or null if it is still broken)
 		 * @param seed The seed of the test case that failed
 		 * @param bytes The random generation sequence position of the failure
 		 * @param placemarks The random generation sequence position of the failure
 		 */
-		public TestFailure(long seed, long bytes, NavigableMap<String, Long> placemarks) {
+		public TestFailure(Instant failed, Instant fixed, long seed, long bytes, NavigableMap<String, Long> placemarks) {
+			this.failed = failed;
+			this.fixed = fixed;
 			this.seed = seed;
 			this.bytes = bytes;
 			TreeMap<String, Long> ps = new TreeMap<>();
@@ -624,6 +635,7 @@ public class TestHelper {
 		private boolean isDebugging = false;
 		private int theMaxRandomCases = 0;
 		private int theMaxFailures = 1;
+		private int theMaxRememberedFixes = 5;
 		private Duration theMaxTotalDuration;
 		private Duration theMaxCaseDuration;
 		private Duration theMaxProgressInterval;
@@ -669,7 +681,7 @@ public class TestHelper {
 		 * @return This configuration
 		 */
 		public TestConfig withCase(long hash, NavigableMap<String, Long> placemarks) {
-			theSpecifiedCases.add(new TestFailure(hash, 0, placemarks));
+			theSpecifiedCases.add(new TestFailure(Instant.now(), null, hash, 0, placemarks));
 			return this;
 		}
 
@@ -688,6 +700,15 @@ public class TestHelper {
 		 */
 		public TestConfig withMaxFailures(int failures) {
 			theMaxFailures = failures;
+			return this;
+		}
+
+		/**
+		 * @param maxRememberedFixes The number of recent fixed failures to remember and re-attempt
+		 * @return This configuration
+		 */
+		public TestConfig withMaxRememberedFixes(int maxRememberedFixes) {
+			theMaxRememberedFixes = maxRememberedFixes;
 			return this;
 		}
 
@@ -820,11 +841,15 @@ public class TestHelper {
 						for (int i = 0; i < knownFailures.size() && failures < maxFailures
 							&& Instant.now().compareTo(termination) < 0; i++) {
 							TestFailure failure = knownFailures.get(i);
-							TestHelper helper = new TestHelper(true, theMaxProgressInterval != null, failure.seed, 0,
-								isDebugging ? failure.getBreakpoints() : Collections.emptyNavigableSet(), thePlacemarkNames);
-							Throwable err = exec.executeTestCase(i + 1, helper, true);
+							boolean repo = failure.fixed == null;
+							TestHelper helper = new TestHelper(repo, theMaxProgressInterval != null, failure.seed, 0,
+								(repo && isDebugging) ? failure.getBreakpoints() : Collections.emptyNavigableSet(), thePlacemarkNames);
+							Throwable err = exec.executeTestCase(i + 1, helper, repo);
 							if (err != null) {
-								TestFailure newFailure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.thePlacemarks);
+								if (failure.fixed != null)
+									System.err.print("Test fix regressed: ");
+								TestFailure newFailure = new TestFailure(failure.failed, null, helper.getSeed(), helper.getPosition(),
+									helper.thePlacemarks);
 								if (!newFailure.equals(failure)) {
 									if (newFailure.bytes != failure.bytes)
 										System.err.println("Test failed "//
@@ -842,12 +867,19 @@ public class TestHelper {
 									firstError = err;
 								failures++;
 							} else {
-								System.out.println("Test failure fixed");
-								successes++;
-								knownFailures.remove(i);
-								i--;
-								if (isPersistingFailures)
-									writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames, knownFailures);
+								if (failure.fixed == null) {
+									System.out.println("Test failure fixed");
+									successes++;
+									failure.fixed = Instant.now();
+									if (tooManyFixedFailures(knownFailures, theMaxRememberedFixes)) {
+										knownFailures.remove(i);
+										i--;
+									}
+									if (isPersistingFailures)
+										writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames,
+											knownFailures);
+								} else
+									System.out.println("Test failure still fixed");
 							}
 						}
 					}
@@ -859,15 +891,21 @@ public class TestHelper {
 					Throwable err = exec.executeTestCase(i + 1, helper, false);
 					if (err != null) {
 						if (isPersistingFailures) {
-							TestFailure failure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.thePlacemarks);
+							TestFailure failure = new TestFailure(test.failed, test.fixed, helper.getSeed(), helper.getPosition(),
+								helper.thePlacemarks);
 							knownFailures.add(failure);
 							writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames, knownFailures);
 						}
 						if (firstError == null)
 							firstError = err;
 						failures++;
-					} else
+					} else {
 						successes++;
+						if (test.fixed == null) {
+							test.fixed = Instant.now();
+							writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames, knownFailures);
+						}
+					}
 					i++;
 				}
 				TestSummary summary;
@@ -882,16 +920,25 @@ public class TestHelper {
 			}
 		}
 
+		private static boolean tooManyFixedFailures(List<TestFailure> knownFailures, int max) {
+			int fixed = 0;
+			for (TestFailure tf : knownFailures) {
+				if (tf.fixed != null)
+					fixed++;
+			}
+			return fixed > max;
+		}
+
 		private TestSummary executeLinear(TestSetExecution exec, List<TestFailure> knownFailures, int cases, int successes, int failures,
-			int maxCases,
-			int maxFailures, Instant termination, Throwable firstError) {
+			int maxCases, int maxFailures, Instant termination, Throwable firstError) {
 			for (int i = cases; i < maxCases && failures < maxFailures && Instant.now().compareTo(termination) < 0; i++) {
 				TestHelper helper = new TestHelper(false, theMaxProgressInterval != null, Double.doubleToLongBits(Math.random()), 0,
 					Collections.emptyNavigableSet(), thePlacemarkNames);
 				Throwable err = exec.executeTestCase(i + 1, helper, false);
 				if (err != null) {
 					if (isPersistingFailures) {
-						TestFailure failure = new TestFailure(helper.getSeed(), helper.getPosition(), helper.thePlacemarks);
+						TestFailure failure = new TestFailure(Instant.now(), null, helper.getSeed(), helper.getPosition(),
+							helper.thePlacemarks);
 						knownFailures.add(failure);
 						writeTestFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames, knownFailures);
 					}
@@ -1526,7 +1573,7 @@ public class TestHelper {
 							position = parseHexLong(request.substring(start, nextColon));
 							placemarks.put(placemark, position);
 						}
-						TestFailure failure = new TestFailure(theSeed, position, placemarks);
+						TestFailure failure = new TestFailure(Instant.now(), null, theSeed, position, placemarks);
 						endTestCase(endTime, failure, new AssertionError("\n" + request.substring(nextColon + 1).replaceAll("\\n", "\n")),
 							position);
 					}
@@ -1940,46 +1987,66 @@ public class TestHelper {
 			return new ArrayList<>();
 
 		try (BufferedReader reader = new BufferedReader(new FileReader(testFile))) {
+			CsvParser parser = new CsvParser(reader, ',');
+			String[] headers = parser.parseNextLine();
+			if (headers.length < 4 || !headers[0].equals("Failed") || !headers[1].equals("Fixed") || !headers[2].equals("Seed")
+				|| !headers[3].equals("Position")) {
+				System.err.println("Unrecognized test file: Expected Failed,Fixed,Seed,Position for first 4 column headers");
+				return new ArrayList<>();
+			}
+			String[] line = new String[headers.length];
 			List<TestFailure> failures = new ArrayList<>();
-			// Read the header
-			String line = reader.readLine();
-			if (line == null)
-				return failures;
-			String[] split = line.split(",");
-			List<String> filePlacemarks = new ArrayList<>(split.length - 2);
-			for (int i = 2; i < split.length; i++)
-				filePlacemarks.add(split[i]);
-			line = reader.readLine();
-			NavigableMap<String, Long> placemarks = new TreeMap<>();
-			while (line != null) {
-				placemarks.clear();
-				String splitLine = line;
-				int column = 0;
-				int comma = splitLine.indexOf(',');
-				while (comma >= 0) {
-					split[column++] = splitLine.substring(0, comma);
-					splitLine = splitLine.substring(comma + 1);
-					comma = splitLine.indexOf(',');
+
+			while (parser.parseNextLine(line)) {
+				Instant failed, fixed;
+				long seed = -1, position = -1;
+				NavigableMap<String, Long> placemarks = null;
+				try {
+					failed = TimeUtils.parseInstant(line[0], true, true, teo -> teo.withEvaluationType(RelativeInstantEvaluation.Past))
+						.evaluate(Instant::now);
+				} catch (ParseException e) {
+					System.err.println("Could not parse failure time '" + line[0] + "'");
+					e.printStackTrace();
+					failed = Instant.now();
 				}
-				split[column++] = splitLine;
-				if (column != filePlacemarks.size() + 2)
-					throw new IllegalStateException("Need " + (filePlacemarks.size() + 2) + " columns, not " + column);
-				long seed = parseHexLong(split[0]);
-				long bytes = Long.parseLong(split[1]);
-				for (int i = 2; i < split.length; i++) {
-					if (split[i].length() == 0)
-						continue;
-					String pn = filePlacemarks.get(i - 2);
-					if (placemarkNames.contains(pn)) {
-						if (split[i].length() > 0)
-							placemarks.put(pn, Long.parseLong(split[i]));
+				fixed = null;
+				if (line[1].length() > 0) {
+					try {
+						fixed = TimeUtils.parseInstant(line[1], true, true, teo -> teo.withEvaluationType(RelativeInstantEvaluation.Past))
+							.evaluate(Instant::now);
+					} catch (ParseException e) {
+						System.err.println("Could not parse fix time '" + line[0] + "' on line " + (parser.getCurrentLineNumber() + 1));
+						e.printStackTrace();
+						failed = Instant.now();
 					}
 				}
-				failures.add(new TestFailure(seed, bytes, placemarks));
-				line = reader.readLine();
+				try {
+					seed = parseHexLong(line[2]);
+					position = Long.parseLong(line[3]);
+				} catch (NumberFormatException e) {
+					System.err.println("Could not parse failure on line " + (parser.getCurrentLineNumber() + 1));
+					e.printStackTrace();
+					continue;
+				}
+				if (headers.length == 4)
+					placemarks = Collections.emptyNavigableMap();
+				else {
+					placemarks = new TreeMap<>();
+					for (int h = 4; h < headers.length; h++) {
+						try {
+							placemarks.put(headers[h], Long.parseLong(line[h]));
+						} catch (NumberFormatException e) {
+							System.err.println("Could not parse placemark " + headers[h] + " position '" + line[h] + "' on line "
+								+ (parser.getCurrentLineNumber() + 1));
+							placemarks.put(headers[h], -1L);
+						}
+					}
+					placemarks = Collections.unmodifiableNavigableMap(placemarks);
+				}
+				failures.add(new TestFailure(failed, fixed, seed, position, placemarks));
 			}
 			return failures;
-		} catch (IOException e) {
+		} catch (IOException | TextParseException e) {
 			e.printStackTrace();
 			return new ArrayList<>();
 		}
@@ -1988,7 +2055,7 @@ public class TestHelper {
 	private static File getFailureFile(File failureDir, Class<? extends Testable> testable, boolean qualifiedName, boolean create) {
 		File testFile = null;
 		if (failureDir != null)
-			return new File(failureDir, (qualifiedName ? testable.getName() : testable.getSimpleName()) + ".broken");
+			return new File(failureDir, (qualifiedName ? testable.getName() : testable.getSimpleName()) + ".test");
 
 		// Attempt to co-locate the failure file with the class file
 		String classFileName = testable.getName();
@@ -2029,19 +2096,37 @@ public class TestHelper {
 		return testFile;
 	}
 
+	private static final SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("ddMMMyyyy HH:mm:ss");
+
 	private static void writeTestFailures(File failureDir, Class<? extends Testable> testable, boolean qualifiedName,
 		NavigableSet<String> placemarkNames, List<TestFailure> failures) {
 		File testFile = getFailureFile(failureDir, testable, qualifiedName, true);
 		if (testFile == null)
 			return;
+		// Write unfixed failures first, fixed ones last
+		Collections.sort(failures, (f1, f2) -> {
+			if (f1.fixed == null) {
+				if (f2.fixed == null)
+					return f1.failed.compareTo(f2.failed);
+				else
+					return -1;
+			} else if (f2.fixed == null)
+				return 1;
+			else
+				return f1.fixed.compareTo(f2.fixed);
+		});
 		try (BufferedWriter writer = new BufferedWriter(new java.io.FileWriter(testFile))) {
-			writer.write("Seed,Position");
+			writer.write("Failed,Fixed,Seed,Position");
 			for (String pn : placemarkNames)
 				writer.write("," + pn);
 			writer.write("\n");
 			StringBuilder csvLine = new StringBuilder();
 			for (TestFailure failure : failures) {
 				csvLine.setLength(0);
+				csvLine.append(TIME_FORMAT.format(new Date(failure.failed.toEpochMilli()))).append(',');
+				if (failure.fixed != null)
+					csvLine.append(TIME_FORMAT.format(new Date(failure.fixed.toEpochMilli())));
+				csvLine.append(',');
 				csvLine.append(Long.toHexString(failure.seed)).append(',').append(failure.bytes);
 				for (String pn : placemarkNames) {
 					csvLine.append(',');
