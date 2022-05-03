@@ -1,6 +1,7 @@
 package org.qommons.config;
 
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 
@@ -24,6 +25,9 @@ public interface QonfigChildDef extends QonfigElementOwned {
 	/** @return The inherited roles that elements of this role fulfill in inherited element-defs and add-ons */
 	Set<QonfigChildDef.Declared> getFulfillment();
 
+	/** @return {@link QonfigAddOn#isAbstract()} add-ons that an element must inherit from elsewhere in order to fulfill this role */
+	Set<QonfigAddOn> getRequirement();
+
 	/** @return Add-ons that elements fulfilling this role will inherit */
 	Set<QonfigAddOn> getInheritance();
 
@@ -41,6 +45,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		private final QonfigElementDef theType;
 		private final Set<QonfigChildDef.Declared> theFulfillment;
 		private final Set<QonfigAddOn> theInheritance;
+		private final Set<QonfigAddOn> theRequirement;
 		private final int theMin;
 		private final int theMax;
 
@@ -49,15 +54,18 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param type The super-type of elements that may be declared to fulfill this role
 		 * @param fulfillment The inherited roles that elements of this role fulfill in inherited element-defs and add-ons
 		 * @param inheritance Add-ons that elements fulfilling this role will inherit
+		 * @param requirement {@link QonfigAddOn#isAbstract()} add-ons that an element must inherit from elsewhere in order to fulfill this
+		 *        role
 		 * @param min The minimum number of elements that may be specified for this role
 		 * @param max The maximum number of elements that may be specified for this role
 		 */
 		public Abstract(QonfigElementOrAddOn owner, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment,
-			Set<QonfigAddOn> inheritance, int min, int max) {
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max) {
 			theOwner = owner;
 			theType = type;
 			theFulfillment = fulfillment;
 			theInheritance = inheritance;
+			theRequirement = requirement;
 			theMin = min;
 			theMax = max;
 		}
@@ -88,6 +96,11 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		@Override
 		public Set<QonfigAddOn> getInheritance() {
 			return theInheritance;
+		}
+
+		@Override
+		public Set<QonfigAddOn> getRequirement() {
+			return theRequirement;
 		}
 
 		@Override
@@ -130,12 +143,14 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param type The super-type of elements that may be declared to fulfill this role
 		 * @param fulfillment The inherited roles that elements of this role fulfill in inherited element-defs and add-ons
 		 * @param inheritance Add-ons that elements fulfilling this role will inherit
+		 * @param requirement {@link QonfigAddOn#isAbstract()} add-ons that an element must inherit from elsewhere in order to fulfill this
+		 *        role
 		 * @param min The minimum number of elements that may be specified for this role
 		 * @param max The maximum number of elements that may be specified for this role
 		 */
 		public DeclaredChildDef(QonfigElementOrAddOn owner, String name, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment,
-			Set<QonfigAddOn> inheritance, int min, int max) {
-			super(owner, type, fulfillment, inheritance, min, max);
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max) {
+			super(owner, type, fulfillment, inheritance, requirement, min, max);
 			theName = name;
 		}
 
@@ -163,20 +178,35 @@ public interface QonfigChildDef extends QonfigElementOwned {
 	/** An inherited or modified child definition */
 	public static class Modified extends Abstract {
 		private final QonfigChildDef.Declared theDeclared;
+		private final Set<QonfigAddOn> theDeclaredInheritance;
 
 		/**
 		 * @param declared The inherited child
 		 * @param owner The element-def or add-on that this child belongs to
 		 * @param type The super-type of elements that may be declared to fulfill this role
 		 * @param inheritance Additional add-ons that elements fulfilling this role will inherit
+		 * @param requirement {@link QonfigAddOn#isAbstract()} add-ons that an element must inherit from elsewhere in order to fulfill this
+		 *        role
 		 * @param min The minimum number of elements that may be specified for this role
 		 * @param max The maximum number of elements that may be specified for this role
 		 */
-		public Modified(QonfigChildDef declared, QonfigElementOrAddOn owner, QonfigElementDef type, Set<QonfigAddOn> inheritance, int min,
-			int max) {
-			super(owner, type, Collections.emptySet(), inheritance, min, max);
+		public Modified(QonfigChildDef declared, QonfigElementOrAddOn owner, QonfigElementDef type, Set<QonfigAddOn> inheritance,
+			Set<QonfigAddOn> requirement, int min, int max) {
+			super(owner, type, Collections.emptySet(), combine(declared.getInheritance(), inheritance), requirement, min, max);
 			theDeclared = declared instanceof QonfigChildDef.Declared ? (QonfigChildDef.Declared) declared
 				: ((QonfigChildDef.Modified) declared).getDeclared();
+			theDeclaredInheritance = inheritance;
+		}
+
+		private static Set<QonfigAddOn> combine(Set<QonfigAddOn> inh1, Set<QonfigAddOn> inh2) {
+			if (inh2.isEmpty())
+				return inh1;
+			else if (inh1.isEmpty())
+				return inh2;
+			Set<QonfigAddOn> combined = new LinkedHashSet<>((inh1.size() + inh2.size()) * 3 / 2);
+			combined.addAll(inh1);
+			combined.addAll(inh2);
+			return Collections.unmodifiableSet(combined);
 		}
 
 		@Override
@@ -187,6 +217,11 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		@Override
 		public String getName() {
 			return theDeclared.getName();
+		}
+
+		/** @return Additional add-ons that elements fulfilling this role will inherit over and above the parent's role */
+		public Set<QonfigAddOn> getDeclaredInheritance() {
+			return theDeclaredInheritance;
 		}
 
 		@Override
@@ -213,7 +248,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param overriding The new children that fulfill the role, overriding it
 		 */
 		public Overridden(QonfigElementOrAddOn owner, QonfigChildDef.Declared declared, Set<QonfigChildDef.Declared> overriding) {
-			super(owner, declared.getType(), Collections.emptySet(), Collections.emptySet(), 0, 0);
+			super(owner, declared.getType(), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), 0, 0);
 			theDeclared = declared;
 			theOverriding = overriding;
 		}

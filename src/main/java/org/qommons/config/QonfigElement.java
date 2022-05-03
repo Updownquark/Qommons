@@ -640,6 +640,12 @@ public class QonfigElement {
 				else
 					children.add(role);
 			}
+			for (QonfigChildDef ch : children) {
+				for (QonfigAddOn req : ch.getRequirement()) {
+					if (!req.isAssignableFrom(type))
+						session.withError("Element " + type + " does not inherit " + req + ", which is required by role " + ch);
+				}
+			}
 			Builder childBuilder = new Builder(session, theDocument, theElement, type, Collections.unmodifiableSet(roles),
 				Collections.unmodifiableSet(realRoles));
 			child.accept(childBuilder);
@@ -708,9 +714,21 @@ public class QonfigElement {
 							// May be parseable after inheritance is more filled in
 							continue;
 						default:
-							parsedAttrs.set(i);
-							theSession.forChild("attribute", attrDef.toString()).withError("Multiple matching attributes inherited");
-							continue;
+							boolean resolved = true;
+							for (QonfigAttributeDef a : attrs) {
+								if (attr == null)
+									attr = a;
+								else if (a.getDeclared() != attr.getDeclared()) {
+									resolved = false;
+									break;
+								} else if (attr.getOwner().isAssignableFrom(a.getOwner()))
+									attr = a;
+							}
+							if (!resolved) {
+								theSession.forChild("attribute", attrDef.toString()).withError("Multiple matching attributes inherited");
+								continue;
+							}
+							break;
 						}
 					}
 					parsedAttrs.set(i);
@@ -780,8 +798,20 @@ public class QonfigElement {
 						attr = attrs.getFirst();
 						break;
 					default:
-						theSession.forChild("attribute", attrDef.toString()).withError("Multiple matching attributes inherited");
-						continue;
+						boolean resolved = true;
+						for (QonfigAttributeDef a : attrs) {
+							if (attr == null)
+								attr = a;
+							else if (a.getDeclared() != attr.getDeclared()) {
+								resolved = false;
+								break;
+							} else if (attr.getOwner().isAssignableFrom(a.getOwner()))
+								attr = a;
+						}
+						if (!resolved) {
+							theSession.forChild("attribute", attrDef.toString()).withError("Multiple matching attributes inherited");
+							continue;
+						}
 					}
 				}
 				Object value = attrValues.get(attr.getDeclared());

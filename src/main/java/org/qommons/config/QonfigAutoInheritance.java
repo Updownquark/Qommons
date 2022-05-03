@@ -76,6 +76,11 @@ public class QonfigAutoInheritance {
 		return theTargets;
 	}
 
+	@Override
+	public String toString() {
+		return theTargets + "<-" + theInheritance;
+	}
+
 	public static Builder build(QonfigParseSession session) {
 		return new Builder(session);
 	}
@@ -92,6 +97,8 @@ public class QonfigAutoInheritance {
 		}
 
 		public Builder inherits(QonfigAddOn inheritance) {
+			if (inheritance.isAbstract())
+				theSession.withError(inheritance + " is abstract and cannot be inherited automatically");
 			if (inheritance.getSuperElement() != null) {
 				for (AutoInheritTarget target : theTargets)
 					checkInheritance(target, inheritance, theSession);
@@ -122,11 +129,11 @@ public class QonfigAutoInheritance {
 		private void checkInheritance(AutoInheritTarget ait, QonfigAddOn inheritance, QonfigParseSession session) {
 			if (inheritance.getSuperElement() == null)
 				return;
-			if (ait.getTarget() != null && !inheritance.getSuperElement().isAssignableFrom(ait.getTarget()))
-				session.withError("Cannot target " + ait.getTarget() + " to inherit " + inheritance + ", which requires "
-					+ inheritance.getSuperElement());
-			else if (ait.getRole() != null && !inheritance.getSuperElement().isAssignableFrom(ait.getRole().getType()))
-				session.withError("Cannot target " + ait.getTarget() + " to inherit " + inheritance + ", which requires "
+			if (ait.getTarget() != null && inheritance.getSuperElement().isAssignableFrom(ait.getTarget())) {//
+			} else if (ait.getRole() != null && inheritance.getSuperElement().isAssignableFrom(ait.getRole().getType())) {//
+			} else
+				session
+					.withError("Cannot target " + ait + " to inherit " + inheritance + ", which requires "
 					+ inheritance.getSuperElement());
 		}
 

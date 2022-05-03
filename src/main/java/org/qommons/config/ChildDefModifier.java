@@ -36,18 +36,23 @@ public interface ChildDefModifier extends ElementDefModifier {
 	public static class Default implements ChildDefModifier {
 		private final QonfigElementDef theTypeRestriction;
 		private final Set<QonfigAddOn> theInheritance;
+		private final Set<QonfigAddOn> theRequirement;
 		private final Integer theMin;
 		private final Integer theMax;
 
 		/**
 		 * @param typeRestriction The type restriction for the child, or null to inherit it
 		 * @param inheritance The additional inheritance for the child
+		 * @param requirement {@link QonfigAddOn#isAbstract()} add-ons that an element must inherit from elsewhere in order to fulfill this
+		 *        role
 		 * @param min The minimum number of times the child must be specified, or null to inherit it
 		 * @param max The maximum number of times the child may be specified, or null to inherit it
 		 */
-		public Default(QonfigElementDef typeRestriction, Set<QonfigAddOn> inheritance, Integer min, Integer max) {
+		public Default(QonfigElementDef typeRestriction, Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, Integer min,
+			Integer max) {
 			theTypeRestriction = typeRestriction;
 			theInheritance = inheritance;
+			theRequirement = requirement;
 			theMin = min;
 			theMax = max;
 		}
@@ -60,6 +65,11 @@ public interface ChildDefModifier extends ElementDefModifier {
 		@Override
 		public Set<QonfigAddOn> getInheritance() {
 			return theInheritance;
+		}
+
+		@Override
+		public Set<QonfigAddOn> getRequirement() {
+			return theRequirement;
 		}
 
 		@Override

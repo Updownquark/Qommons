@@ -6,16 +6,19 @@ import java.io.PrintStream;
 public class QonfigParseIssue {
 	private final ElementPath thePath;
 	private final String theMessage;
+	private final StackTraceElement theLocation;
 	private final Throwable theCause;
 
 	/**
 	 * @param path The path detailing where the error is located
 	 * @param message The error/warning message
+	 * @param location The line number where the error occurred
 	 * @param cause The cause of the error or warning, if any
 	 */
-	public QonfigParseIssue(ElementPath path, String message, Throwable cause) {
+	public QonfigParseIssue(ElementPath path, String message, StackTraceElement location, Throwable cause) {
 		thePath = path;
 		theMessage = message;
+		theLocation = location;
 		theCause = cause;
 	}
 
@@ -39,6 +42,7 @@ public class QonfigParseIssue {
 		stream.print(thePath.toString());
 		stream.print(": ");
 		stream.println(theMessage);
+		stream.println(" ( " + theLocation + " )");
 		if (theCause != null)
 			theCause.printStackTrace(stream);
 	}
@@ -49,6 +53,7 @@ public class QonfigParseIssue {
 		str.append(thePath.toString());
 		str.append(": ");
 		str.append(theMessage);
+		str.append(" ( ").append(theLocation).append(" )");
 		if (theCause != null)
 			str.append(": ").append(theCause);
 		return str.toString();

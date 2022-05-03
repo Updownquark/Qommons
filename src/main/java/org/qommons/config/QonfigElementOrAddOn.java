@@ -35,7 +35,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 	private final Map<QonfigChildDef.Declared, ? extends ChildDefModifier> theChildModifiers;
 	private final BetterMultiMap<String, QonfigChildDef> theChildrenByName;
 
-	private final ValueDefModifier theValueModifier;
+	private final ValueDefModifier theValue;
 
 	/**
 	 * @param declarer The toolkit declaring the item (element-def or add-on)
@@ -50,14 +50,14 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 	 * @param declaredChildren The declared children for the item
 	 * @param childModifiers The child modifiers for the item
 	 * @param childrenByName Declared and inherited children for the item
-	 * @param valueModifier The value definition or modifier for the item
+	 * @param value The value definition or modifier for the item
 	 */
 	protected QonfigElementOrAddOn(QonfigToolkit declarer, String name, boolean isAbstract, //
 		QonfigElementDef superElement, Set<QonfigAddOn> inheritance, MultiInheritanceSet<QonfigAddOn> fullInheritance, //
 		Map<String, Declared> declaredAttributes, Map<Declared, ? extends ValueDefModifier> attributeModifiers,
 		BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
 		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ? extends ChildDefModifier> childModifiers,
-		BetterMultiMap<String, QonfigChildDef> childrenByName, ValueDefModifier valueModifier) {
+		BetterMultiMap<String, QonfigChildDef> childrenByName, ValueDefModifier value) {
 		super(declarer, name);
 		this.isAbstract = isAbstract;
 		theSuperElement = superElement;
@@ -72,7 +72,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		theChildModifiers = childModifiers;
 		theChildrenByName = childrenByName;
 
-		theValueModifier = valueModifier;
+		theValue = value;
 	}
 
 	/** @return False if this type can be instantiated directly, true if it can only be extended/inherited */
@@ -132,9 +132,9 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		}
 	}
 
-	/** @return The modification, if specified, to the inherited value */
-	public ValueDefModifier getValueModifier() {
-		return theValueModifier;
+	/** @return If specified, the value or modification to the inherited value */
+	public ValueDefModifier getValueSpec() {
+		return theValue;
 	}
 
 	/** @return All children declared by this item */
@@ -213,7 +213,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		private final Map<QonfigChildDef.Declared, ChildDefModifier> theChildModifiers;
 		private final Map<QonfigChildDef.Declared, QonfigChildDef> theCompiledChildren;
 		private final BetterMultiMap<String, QonfigChildDef> theChildrenByName;
-		private ValueDefModifier theValueModifier;
+		private ValueDefModifier theValue;
 
 		private final MultiInheritanceSet<QonfigAddOn> theFullInheritance;
 		private Stage theStage;
@@ -311,8 +311,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		}
 
 		/** @return The value definition or modification declared by this item */
-		protected ValueDefModifier getValueModifier() {
-			return theValueModifier;
+		protected ValueDefModifier getValue() {
+			return theValue;
 		}
 
 		/**
@@ -400,7 +400,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 */
 		public Builder setAbstract(boolean abst) {
 			if (!checkStage(Stage.Initial)) {
-				theSession.withError("Abstract cannot be changed at this stage");
+				theSession.withError("Abstract cannot be changed at this stage: " + theStage);
 				return this;
 			}
 			isAbstract = abst;
@@ -418,7 +418,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 */
 		public Builder setSuperElement(QonfigElementDef superElement) {
 			if (!checkStage(Stage.Initial))
-				throw new IllegalStateException("Super element cannot be set at this stage");
+				throw new IllegalStateException("Super element cannot be set at this stage: " + theStage);
 			else if (theSuperElement != null)
 				throw new IllegalStateException("Super element has already been set");
 			theSuperElement = superElement;
@@ -433,7 +433,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			// Inheritance doesn't have its own stage.
 			// This call can be mingled with withAttribute(), since that call can also affect inheritance
 			if (!checkStage(Stage.Initial))
-				throw new IllegalStateException("Inheritance cannot be modified at this stage");
+				throw new IllegalStateException("Inheritance cannot be modified at this stage: " + theStage);
 			String msg = _inherits(addOn);
 			if (msg != null)
 				theSession.withError(msg);
@@ -453,43 +453,61 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		}
 
 		/**
-		 * Declares or modifies the value definition for this item
+		 * Declares a value for this item
+		 * 
+		 * @param type The type for the value
+		 * @param specification The specification for the value
+		 * @param defaultValue The value to use if not specified
+		 * @return This builder
+		 */
+		public Builder withValue(QonfigValueType type, SpecificationType specification, Object defaultValue) {
+			if (!checkStage(Stage.Initial))
+				throw new IllegalStateException("Value cannot be specified at this stage: " + theStage);
+			else if (theValue != null)
+				throw new IllegalStateException("Value has already been specified");
+
+			if (getSuperElement() != null && getSuperElement().getValue() != null)
+				throw new IllegalStateException("Value is inherited--cannot declare a new one");
+			if (type == null) {
+				theSession.forChild("value", null).withError("No type specified");
+				type = QonfigValueType.STRING;
+			} else if (defaultValue != null && !type.isInstance(defaultValue))
+				theSession.forChild("value", null).withError(defaultValue + " is not an instance of " + type);
+			if (specification == null) {
+				if (defaultValue != null)
+					specification = SpecificationType.Optional;
+				else
+					specification = SpecificationType.Required;
+			} else if (specification == SpecificationType.Forbidden && defaultValue == null)
+				theSession.forChild("value", null).withError("No default specified");
+			theValue = valueModifier(type, specification, defaultValue);
+			return this;
+		}
+
+		/**
+		 * Modifies the value definition for this item
 		 * 
 		 * @param type The type for the value (or null to inherit it)
 		 * @param specification The specification for the value (or null to inherit it)
 		 * @param defaultValue The value to use if the value is not specified (or null to inherit it)
 		 * @return This builder
 		 */
-		public Builder withValue(QonfigValueType type, SpecificationType specification, Object defaultValue) {
-			if (!checkStage(Stage.Initial))
-				throw new IllegalStateException("Value cannot be specified or modified at this stage");
-			else if (theValueModifier != null)
-				throw new IllegalStateException("Value has already been specified or modified");
+		public Builder modifyValue(QonfigValueType type, SpecificationType specification, Object defaultValue) {
+			if (!checkStage(Stage.ModifyAttributes))
+				throw new IllegalStateException("Value cannot be modified at this stage: " + theStage);
+			else if (theValue != null)
+				throw new IllegalStateException("Value has already been modified");
 
-			if (getSuperElement() != null && getSuperElement().getValue() != null) {
-				ValueSpec newSpec = QonfigValidation.validateSpecification(//
-					new ValueSpec(theSuperElement.getValue().getType(), theSuperElement.getValue().getSpecification(),
-						theSuperElement.getValue().getDefaultValue()), //
-					new ValueSpec(type, specification, defaultValue), //
-					err -> theSession.forChild("text", null).withError(err), warn -> theSession.forChild("text", null).withWarning(warn));
-				if (newSpec.specification != theSuperElement.getValue().getSpecification()
-					|| !Objects.equals(newSpec.defaultValue, theSuperElement.getValue().getDefaultValue()))
-					theValueModifier = valueModifier(type, specification, defaultValue);
-			} else {
-				if (type == null)
-					theSession.forChild("value", null).withError("No type specified");
-				else if (defaultValue != null && !type.isInstance(defaultValue))
-					theSession.forChild("value", null).withError(defaultValue + " is not an instance of " + type);
-				if (specification == null) {
-					if (defaultValue != null)
-						specification = SpecificationType.Optional;
-					else
-						specification = SpecificationType.Required;
-				} else if (specification == SpecificationType.Forbidden && defaultValue == null)
-					theSession.forChild("value", null).withError("No default specified");
-				if (type != null)
-					theValueModifier = valueModifier(type, specification, defaultValue);
-			}
+			if (getSuperElement() == null || getSuperElement().getValue() == null)
+				throw new IllegalStateException(this + ": No inherited value to modify");
+			ValueSpec newSpec = QonfigValidation.validateSpecification(//
+				new ValueSpec(theSuperElement.getValue().getType(), theSuperElement.getValue().getSpecification(),
+					theSuperElement.getValue().getDefaultValue()), //
+				new ValueSpec(type, specification, defaultValue), //
+				err -> theSession.forChild("text", null).withError(err), warn -> theSession.forChild("text", null).withWarning(warn));
+			if (newSpec.specification != theSuperElement.getValue().getSpecification()
+				|| !Objects.equals(newSpec.defaultValue, theSuperElement.getValue().getDefaultValue()))
+				theValue = valueModifier(type, specification, defaultValue);
 			return this;
 		}
 
@@ -514,7 +532,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 */
 		public Builder withAttribute(String name, QonfigValueType type, SpecificationType specify, Object defaultValue) {
 			if (!checkStage(Stage.NewAttributes))
-				throw new IllegalStateException("Attributes cannot be added at this stage");
+				throw new IllegalStateException("Attributes cannot be added at this stage: " + theStage);
 			else if (theDeclaredAttributes.containsKey(name)) {
 				theSession.withError("Cannot declare multiple attributes with the same name: " + name);
 				return this;
@@ -553,7 +571,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		public Builder modifyAttribute(QonfigAttributeDef attribute, QonfigValueType type, SpecificationType specification,
 			Object defaultValue) {
 			if (!checkStage(Stage.ModifyAttributes))
-				throw new IllegalStateException("Attributes cannot be added at this stage");
+				throw new IllegalStateException("Attributes cannot be added at this stage: " + theStage);
 			else if (theAttributeModifiers.containsKey(attribute)) {
 				theSession.withError("Attribute " + attribute + " is already modified here");
 				return this;
@@ -604,14 +622,16 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param type The super type for children of the child
 		 * @param fulfillment The inherited child roles that the new child fulfills
 		 * @param inheritance The add-ons inherited by the child
+		 * @param requirement {@link QonfigAddOn#isAbstract()} add-ons that an element must inherit from elsewhere in order to fulfill this
+		 *        role
 		 * @param min The minimum number of children of the given role that must be specified for {@link QonfigElement}s of this item's type
 		 * @param max The maximum number of children of the given role that may be specified for {@link QonfigElement}s of this item's type
 		 * @return This builder
 		 */
 		public Builder withChild(String name, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment, Set<QonfigAddOn> inheritance,
-			int min, int max) {
+			Set<QonfigAddOn> requirement, int min, int max) {
 			if (!checkStage(Stage.NewChildren))
-				throw new IllegalStateException("Attributes cannot be added at this stage");
+				throw new IllegalStateException("Attributes cannot be added at this stage: " + theStage);
 			else if (theDeclaredChildren.containsKey(name)) {
 				theSession.withError("Cannot declare multiple children with the same name: " + name);
 				return this;
@@ -622,8 +642,18 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 						+ inh.getSuperElement() + " which " + type + " does not satisfy");
 				}
 			}
+			for (QonfigAddOn req : requirement) {
+				if (!req.isAbstract())
+					theSession.forChild("child-def", name).withError(req + " cannot be declared as a requirement since it is not abstract");
+				if (req.getSuperElement() != null && !req.getSuperElement().isAssignableFrom(type)
+					&& !type.isAssignableFrom(req.getSuperElement())) {
+					theSession.forChild("child-def", name).withError("Cannot declare requirement " + req + ", since it requires "
+						+ req.getSuperElement() + " which cannot be an instance of " + type);
+				}
+			}
 			QonfigChildDef.Declared child = new QonfigChildDef.DeclaredChildDef(get(), name, type,
-				QommonsUtils.unmodifiableDistinctCopy(fulfillment), QommonsUtils.unmodifiableDistinctCopy(inheritance), min, max);
+				QommonsUtils.unmodifiableDistinctCopy(fulfillment), QommonsUtils.unmodifiableDistinctCopy(inheritance),
+				QommonsUtils.unmodifiableDistinctCopy(requirement), min, max);
 			theDeclaredChildren.put(name, child);
 			theCompiledChildren.put(child, child);
 			for (QonfigChildDef.Declared fulfilled : fulfillment)
@@ -645,14 +675,17 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param child The inherited child definition to modify
 		 * @param type The type restriction for the child
 		 * @param inheritance Additional add-ons to be inherited by the child
+		 * @param requirement {@link QonfigAddOn#isAbstract()} add-ons that an element must inherit from elsewhere in order to fulfill this
+		 *        role
 		 * @param min The minimum number of children of the given role that must be specified for {@link QonfigElement}s of this item's type
 		 * @param max The maximum number of children of the given role that may be specified for {@link QonfigElement}s of this item's type
 		 * @return This builder
 		 */
-		public Builder modifyChild(QonfigChildDef.Declared child, QonfigElementDef type, Set<QonfigAddOn> inheritance, Integer min,
+		public Builder modifyChild(QonfigChildDef.Declared child, QonfigElementDef type, Set<QonfigAddOn> inheritance,
+			Set<QonfigAddOn> requirement, Integer min,
 			Integer max) {
 			if (!checkStage(Stage.ModifyChildren))
-				throw new IllegalStateException("Children cannot be modified at this stage");
+				throw new IllegalStateException("Children cannot be modified at this stage: " + theStage);
 			else if (child.getDeclared().getOwner().getDeclaredChildren().get(child.getName()) != child.getDeclared())
 				throw new IllegalStateException(
 					"Bad child " + child + ": owner " + child.getDeclared().getOwner() + " does not recognize it");
@@ -705,6 +738,50 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				if (!ok) {
 					theSession.forChild("child-mod", child.getOwner() + "." + child.getName()).withError("Cannot declare inheritance " + inh
 						+ ", since it requires " + inh.getSuperElement() + " which " + childType + " does not satisfy");
+				}
+			}
+			for (QonfigAddOn req : requirement) {
+				if (!req.isAbstract())
+					theSession.forChild("child-def", child.getOwner() + "." + child.getName())
+						.withError(req + " cannot be declared as a requirement since it is not abstract");
+				if (req.getSuperElement() == null || req.getSuperElement().isAssignableFrom(child.getType())
+					|| child.getType().isAssignableFrom(req.getSuperElement()))
+					continue;
+				QonfigElementDef parent = theSuperElement;
+				QonfigElementDef childType = child.getType();
+				boolean ok = false;
+				while (parent != null) {
+					if (!child.getOwner().isAssignableFrom(parent))
+						break;
+					if (parent.getAllChildren().get(child) != null) {
+						QonfigChildDef parentChild = parent.getAllChildren().get(child);
+						ok = req.getSuperElement().isAssignableFrom(parentChild.getType())
+							|| parentChild.getType().isAssignableFrom(req.getSuperElement());
+						break;
+					}
+					if (parent.getChildModifiers().get(child) != null
+						&& parent.getChildModifiers().get(child).getTypeRestriction() != null) {
+						childType = parent.getChildModifiers().get(child).getTypeRestriction();
+						ok = req.getSuperElement().isAssignableFrom(childType) || childType.isAssignableFrom(req.getSuperElement());
+						break;
+					}
+					parent = parent.getSuperElement();
+				}
+				if (!ok) {
+					for (QonfigAddOn otherInh : theFullInheritance.getExpanded(QonfigAddOn::getInheritance)) {
+						if (!child.getOwner().isAssignableFrom(otherInh))
+							continue;
+						if (otherInh.getChildModifiers().get(child) != null
+							&& otherInh.getChildModifiers().get(child).getTypeRestriction() != null) {
+							childType = otherInh.getChildModifiers().get(child).getTypeRestriction();
+							ok = req.getSuperElement().isAssignableFrom(childType) || childType.isAssignableFrom(req.getSuperElement());
+							break;
+						}
+					}
+				}
+				if (!ok) {
+					theSession.forChild("child-mod", child.getOwner() + "." + child.getName()).withError("Cannot declare requirement " + req
+						+ ", since it requires " + req.getSuperElement() + " which cannot be an instance of " + childType);
 				}
 			}
 			QonfigChildDef override = theCompiledChildren.get(child.getDeclared());
@@ -792,8 +869,9 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					}
 				}
 			}
-			Set<QonfigAddOn> copy = QommonsUtils.unmodifiableDistinctCopy(inheritance);
-			theChildModifiers.put(child.getDeclared(), childModifier(child, type, copy, min, max));
+			Set<QonfigAddOn> inhCopy = QommonsUtils.unmodifiableDistinctCopy(inheritance);
+			Set<QonfigAddOn> reqCopy = QommonsUtils.unmodifiableDistinctCopy(requirement);
+			theChildModifiers.put(child.getDeclared(), childModifier(child, type, inhCopy, reqCopy, min, max));
 			return this;
 		}
 
@@ -803,12 +881,14 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param child The child to modify
 		 * @param type The type restriction for the child
 		 * @param inheritance The additional inheritance for the child
+		 * @param requirement {@link QonfigAddOn#isAbstract()} add-ons that an element must inherit from elsewhere in order to fulfill the
+		 *        role
 		 * @param min The minimum number of children of the given role that must be specified for {@link QonfigElement}s of this item's type
 		 * @param max The maximum number of children of the given role that may be specified for {@link QonfigElement}s of this item's type
 		 * @return The child modifier to use
 		 */
 		protected abstract ChildDefModifier childModifier(QonfigChildDef.Declared child, QonfigElementDef type,
-			Set<QonfigAddOn> inheritance, Integer min, Integer max);
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, Integer min, Integer max);
 
 		/** @return The built item. The item may not be completely filled-in. */
 		public QonfigElementOrAddOn get() {
@@ -828,25 +908,24 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		protected abstract QonfigElementOrAddOn build();
 
 		private void validate() {
-			boolean valueModified = theValueModifier != null;
+			boolean valueModified = theValue != null;
 			QonfigAddOn textModSource = null;
 			Map<QonfigAttributeDef.Declared, QonfigAddOn> attrModSource = new HashMap<>();
 			for (QonfigAddOn inh : theInheritance) {
 				// Validate value
 				if (inh.getValueModifier() != null) {
-					if (theValueModifier == null) {
+					if (theValue == null) {
 						textModSource = inh;
-						theValueModifier = inh.getValueModifier();
+						theValue = inh.getValueModifier();
 					} else if (valueModified) {
 						QonfigValidation.validateSpecification( //
 							new ValueSpec(theSuperElement.getValue().getType(), inh.getValueModifier().getSpecification(),
 								inh.getValueModifier().getDefaultValue()), //
-							new ValueSpec(theValueModifier.getTypeRestriction(), theValueModifier.getSpecification(),
-								theValueModifier.getDefaultValue()), //
+							new ValueSpec(theValue.getTypeRestriction(), theValue.getSpecification(), theValue.getDefaultValue()), //
 							err -> theSession.forChild("text", null).withError(err), //
 							warn -> theSession.forChild("text", null).withWarning(warn));
-					} else if (theValueModifier.getSpecification() != inh.getValueModifier().getSpecification()
-						|| !Objects.equals(theValueModifier.getDefaultValue(), inh.getValueModifier().getDefaultValue())) {
+					} else if (theValue.getSpecification() != inh.getValueModifier().getSpecification()
+						|| !Objects.equals(theValue.getDefaultValue(), inh.getValueModifier().getDefaultValue())) {
 						theSession.forChild("text", null).withError("Inherited add-ons " + textModSource + " and " + inh
 							+ " specify different text modifications. " + theName + " must specify text modification explicitly.");
 					}
@@ -910,7 +989,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			for (Map.Entry<QonfigChildDef.Declared, ? extends ChildDefModifier> mod : get().getChildModifiers().entrySet()) {
 				QonfigChildDef.Modified modified = new QonfigChildDef.Modified(mod.getKey(), get(), //
 					mod.getValue().getTypeRestriction() != null ? mod.getValue().getTypeRestriction() : mod.getKey().getType(), //
-					mod.getValue().getInheritance(), //
+					mod.getValue().getInheritance(), mod.getValue().getRequirement(), //
 					mod.getValue().getMin() != null ? mod.getValue().getMin() : mod.getKey().getMin(), //
 					mod.getValue().getMax() != null ? mod.getValue().getMax() : mod.getKey().getMax());
 				theCompiledChildren.put(mod.getKey(), modified);
@@ -922,6 +1001,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 						continue;
 					QonfigElementDef type = child.getValue().getType();
 					Set<QonfigAddOn> inheritance = new LinkedHashSet<>(child.getValue().getInheritance());
+					Set<QonfigAddOn> requirement = new LinkedHashSet<>(child.getValue().getRequirement());
 					int min = child.getValue().getMin();
 					int max = child.getValue().getMax();
 					boolean modified = false;
@@ -956,7 +1036,35 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 								}
 							}
 							if (newInh) {
+								for (QonfigAddOn childReq2 : requirement) {
+									newInh = !childReq2.isAssignableFrom(childInh);
+									if (!newInh)
+										break;
+								}
+							}
+							if (newInh) {
 								inheritance.add(childInh);
+								modified = true;
+							}
+						}
+						for (QonfigAddOn childReq : mod.getRequirement()) {
+							boolean newReq = !type.isAssignableFrom(childReq);
+							if (newReq) {
+								for (QonfigAddOn childInh2 : inheritance) {
+									newReq = !childInh2.isAssignableFrom(childReq);
+									if (!newReq)
+										break;
+								}
+							}
+							if (newReq) {
+								for (QonfigAddOn childReq2 : requirement) {
+									newReq = !childReq2.isAssignableFrom(childReq);
+									if (!newReq)
+										break;
+								}
+							}
+							if (newReq) {
+								requirement.add(childReq);
 								modified = true;
 							}
 						}
@@ -968,7 +1076,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 						theCompiledChildren.put(child.getKey(), child.getValue());
 					else
 						theCompiledChildren.put(child.getKey(),
-							new QonfigChildDef.Modified(child.getKey(), get(), type, inheritance, min, max));
+							new QonfigChildDef.Modified(child.getKey(), get(), type, inheritance, requirement, min, max));
 					theChildrenByName.add(child.getKey().getName(), theCompiledChildren.get(child.getKey()));
 				}
 			}
@@ -978,6 +1086,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 						continue;
 					QonfigElementDef type = child.getType();
 					Set<QonfigAddOn> inheritance = new LinkedHashSet<>(child.getInheritance());
+					Set<QonfigAddOn> requirement = new LinkedHashSet<>(child.getRequirement());
 					int min = child.getMin();
 					int max = child.getMax();
 					boolean modified = false;
@@ -1012,7 +1121,35 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 								}
 							}
 							if (newInh) {
+								for (QonfigAddOn childReq2 : requirement) {
+									newInh = !childReq2.isAssignableFrom(childInh);
+									if (!newInh)
+										break;
+								}
+							}
+							if (newInh) {
 								inheritance.add(childInh);
+								modified = true;
+							}
+						}
+						for (QonfigAddOn childReq : mod.getRequirement()) {
+							boolean newReq = !type.isAssignableFrom(childReq);
+							if (newReq) {
+								for (QonfigAddOn childInh2 : inheritance) {
+									newReq = !childInh2.isAssignableFrom(childReq);
+									if (!newReq)
+										break;
+								}
+							}
+							if (newReq) {
+								for (QonfigAddOn childReq2 : requirement) {
+									newReq = !childReq2.isAssignableFrom(childReq);
+									if (!newReq)
+										break;
+								}
+							}
+							if (newReq) {
+								requirement.add(childReq);
 								modified = true;
 							}
 						}
@@ -1052,12 +1189,26 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 								modified = true;
 							}
 						}
+						for (QonfigAddOn childReq : mod.getRequirement()) {
+							boolean newInh = !type.isAssignableFrom(childReq);
+							if (newInh) {
+								for (QonfigAddOn childInh2 : inheritance) {
+									newInh = !childInh2.isAssignableFrom(childReq);
+									if (!newInh)
+										break;
+								}
+							}
+							if (newInh) {
+								inheritance.add(childReq);
+								modified = true;
+							}
+						}
 					}
 					if (min > max) {
 						theSession.withError(
 							"Inherited child " + child + " has incompatible inherited min/max restrictions: " + min + "..." + max);
 					} else if (modified)
-						theCompiledChildren.put(child, new QonfigChildDef.Modified(child, get(), type, inheritance, min, max));
+						theCompiledChildren.put(child, new QonfigChildDef.Modified(child, get(), type, inheritance, requirement, min, max));
 					else
 						theCompiledChildren.put(child, child);
 					theChildrenByName.add(child.getName(), theCompiledChildren.get(child));

@@ -32,6 +32,20 @@ public class QonfigParseSession {
 		return new QonfigParseSession(theToolkit, thePath.forChild(childName, identifier), theWarnings, theErrors);
 	}
 
+	private static StackTraceElement getLocation() {
+		StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+		if (stack == null)
+			return null;
+		int i;
+		for (i = 1; i < stack.length && (//
+		stack[i].getClassName().equals(QonfigParseSession.class.getName())//
+			|| stack[i].getClassName().equals(QonfigInterpreter.class.getName())//
+			|| stack[i].getClassName().equals(QonfigInterpreter.QonfigInterpretingSession.class.getName())//
+		); i++) {//
+		}
+		return i < stack.length ? stack[i] : null;
+	}
+
 	/**
 	 * @param message The warning message to log
 	 * @return This session
@@ -46,7 +60,7 @@ public class QonfigParseSession {
 	 * @return This session
 	 */
 	public QonfigParseSession withWarning(String message, Throwable cause) {
-		theWarnings.add(new QonfigParseIssue(thePath, message, cause));
+		theWarnings.add(new QonfigParseIssue(thePath, message, getLocation(), cause));
 		return this;
 	}
 
@@ -64,7 +78,7 @@ public class QonfigParseSession {
 	 * @return This session
 	 */
 	public QonfigParseSession withError(String message, Throwable cause) {
-		theErrors.add(new QonfigParseIssue(thePath, message, cause));
+		theErrors.add(new QonfigParseIssue(thePath, message, getLocation(), cause));
 		return this;
 	}
 

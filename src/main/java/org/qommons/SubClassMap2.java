@@ -1,6 +1,7 @@
 package org.qommons;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.function.Function;
@@ -16,6 +17,62 @@ import org.qommons.collect.BetterList;
  * @param <V> The type of values in the map
  */
 public class SubClassMap2<C, V> {
+	public interface MapEntryAction<C, V> {
+		boolean onEntry(SubClassMap2<? extends C, V> entry, TypeMatch match);
+	}
+
+	public enum TypeMatch {
+		/** The entry's type is the same as the target type */
+		EXACT,
+		/** The entry's type is a sub-type of the target type */
+		SUB_TYPE,
+		/** The entry's type is a super-type of the target type */
+		SUPER_TYPE;
+	}
+
+	static class MatchAcceptingAction<C, V> implements MapEntryAction<C, V> {
+		private final TypeMatch theAcceptType;
+		private final boolean isWithValueOnly;
+		private final MapEntryAction<C, V> theAction;
+
+		public MatchAcceptingAction(TypeMatch acceptType, boolean withValueOnly, MapEntryAction<C, V> action) {
+			theAcceptType = acceptType;
+			isWithValueOnly = withValueOnly;
+			theAction = action;
+		}
+
+		@Override
+		public boolean onEntry(SubClassMap2<? extends C, V> entry, TypeMatch match) {
+			boolean descend = false;
+			switch (match) {
+			case EXACT:
+				if (!isWithValueOnly || entry.getLocalValue() != null)
+					descend = theAction.onEntry(entry, match);
+				else
+					descend = true;
+				if (descend)
+					descend = theAcceptType == TypeMatch.SUB_TYPE;
+				break;
+			case SUB_TYPE:
+				if (theAcceptType == TypeMatch.SUB_TYPE) {
+					if (!isWithValueOnly || entry.getLocalValue() != null)
+						descend = theAction.onEntry(entry, match);
+					else
+						descend = true;
+				} else
+					descend = false;
+				break;
+			case SUPER_TYPE:
+				if (theAcceptType == TypeMatch.SUPER_TYPE && !isWithValueOnly || entry.getLocalValue() != null)
+					descend = theAction.onEntry(entry, match);
+				else
+					descend = true;
+				break;
+			}
+			return descend;
+		}
+	}
+
 	private final Class<C> theType;
 	private final List<SubClassMap2<? extends C, V>> theSubMaps;
 	private V theValue;
@@ -42,90 +99,102 @@ public class SubClassMap2<C, V> {
 		return theSize;
 	}
 
+	public <C2 extends C> void descend(Class<C2> targetType, MapEntryAction<? super C, V> action) {
+		if (!theType.isAssignableFrom(targetType))
+			throw new IllegalArgumentException("Cannot query descend() with a target type that does not extend " + theType);
+		_descend(targetType, action, false);
+	}
+
+	private <C2> void _descend(Class<C2> targetType, MapEntryAction<? super C, V> action, boolean subTarget) {
+		boolean descend;
+		if (subTarget)
+			descend = action.onEntry(this, TypeMatch.SUB_TYPE);
+		else if (targetType == theType) {
+			subTarget = true;
+			descend = action.onEntry(this, TypeMatch.EXACT);
+		} else if (targetType.isAssignableFrom(theType)) {
+			subTarget = true;
+			descend = action.onEntry(this, TypeMatch.SUB_TYPE);
+		} else if (theType.isAssignableFrom(targetType))
+			descend = action.onEntry(this, TypeMatch.SUPER_TYPE);
+		else
+			descend = false;
+		if (descend) {
+			for (SubClassMap2<? extends C, V> subMap : theSubMaps)
+				subMap._descend(targetType, action, subTarget);
+		}
+	}
+
 	/**
 	 * @param <C2> The type to query with
 	 * @param type The class to query with
-	 * @param exactMatchOnly Whether to search for a value mapped to the exact type, or to allow that mapped to the most specific super-type
+	 * @param acceptMatches The type of type-match to accept:
+	 *        <ul>
+	 *        <li>{@link TypeMatch#EXACT} to return only the value for exactly the given type (if it exists)</li>
+	 *        <li>{@link TypeMatch#SUB_TYPE} to return the value for the given type or its least specific sub-type</li>
+	 *        <li>{@link TypeMatch#SUPER_TYPE} to return the value for the given type or its most specific super-type</li>
+	 *        </ul>
 	 * @return The value for the queried type
 	 */
-	public synchronized <C2 extends C> V get(Class<C2> type, boolean exactMatchOnly) {
-		return _get(type, exactMatchOnly);
-	}
-
-	private <C2 extends C> V _get(Class<C2> type, boolean exactMatchOnly) {
-		if (type == theType)
-			return theValue;
-		for (SubClassMap2<? extends C, V> subMap : theSubMaps) {
-			if (subMap.theType.isAssignableFrom(type)) {
-				V value = ((SubClassMap2<? super C2, V>) subMap)._get(type, exactMatchOnly);
-				if (value != null || !exactMatchOnly)
-					return value;
-			}
-		}
-		return exactMatchOnly ? null : theValue;
+	public synchronized <C2 extends C> V get(Class<C2> type, TypeMatch acceptMatches) {
+		Object[] found = new Object[1];
+		descend(type, //
+			new MatchAcceptingAction<>(acceptMatches, true, (entry, match) -> {
+				found[0] = entry.getLocalValue();
+				return match == TypeMatch.SUPER_TYPE;
+			}));
+		return (V) found[0];
 	}
 
 	/**
 	 * @param <C2> The type to query with
 	 * @param type The class to query with
-	 * @return All values mapped to the type or any of its super types
+	 * @param acceptMatches The type of type-matches to accept:
+	 *        <ul>
+	 *        <li>{@link TypeMatch#EXACT} to return only the value for exactly the given type (if it exists)</li>
+	 *        <li>{@link TypeMatch#SUB_TYPE} to return values for the given type and all sub-types</li>
+	 *        <li>{@link TypeMatch#SUPER_TYPE} to return values for the given type and all super-types</li>
+	 *        </ul>
+	 * @return All values mapped to types matching the query
 	 */
-	public synchronized <C2 extends C> List<V> getAll(Class<C2> type) {
-		return _getAll(type, null);
-	}
-
-	private <C2 extends C> List<V> _getAll(Class<C2> type, List<V> values) {
-		if (!theType.isAssignableFrom(type))
-			return values;
-		if (theValue != null) {
-			if (values == null)
-				values = new ArrayList<>(5);
-			values.add(theValue);
-		}
-		for (SubClassMap2<? extends C, V> child : theSubMaps) {
-			if (child.theType.isAssignableFrom(type))
-				values = ((SubClassMap2<C, V>) child)._getAll(type, values);
-		}
-		return values;
+	public synchronized <C2 extends C> List<V> getAll(Class<C2> type, TypeMatch acceptMatches) {
+		List<V>[] values = new List[1];
+		descend(type, //
+			new MatchAcceptingAction<>(acceptMatches, true, (entry, match) -> {
+				if (values[0] == null)
+					values[0] = new ArrayList<>(5);
+				values[0].add(entry.getLocalValue());
+				return true;
+			}));
+		return values[0] == null ? Collections.emptyList() : values[0];
 	}
 
 	/**
 	 * @param <C2> The type to query with
 	 * @param type The class to query with
-	 * @return All values mapped to the type or any of its super types, coupled with the types each value is mapped to
+	 * @param acceptMatches The type of type-matches to accept:
+	 *        <ul>
+	 *        <li>{@link TypeMatch#EXACT} to return only the entries for exactly the given type (if it exists)</li>
+	 *        <li>{@link TypeMatch#SUB_TYPE} to return entries for the given type and all sub-types</li>
+	 *        <li>{@link TypeMatch#SUPER_TYPE} to return entries for the given type and all super-types</li>
+	 *        </ul>
+	 * @return All entries mapped to types matching the query
 	 */
-	public synchronized <C2 extends C> List<BiTuple<Class<? extends C>, V>> getAllEntries(Class<C2> type) {
-		return _getAllEntries(type, null);
-	}
-
-	private <C2 extends C> List<BiTuple<Class<? extends C>, V>> _getAllEntries(Class<C2> type,
-		List<BiTuple<Class<? extends C>, V>> values) {
-		if (!theType.isAssignableFrom(type))
-			return values;
-		if (theValue != null) {
-			if (values == null)
-				values = new ArrayList<>(5);
-			values.add(new BiTuple<>(theType, theValue));
-		}
-		for (SubClassMap2<? extends C, V> child : theSubMaps) {
-			if (child.theType.isAssignableFrom(type))
-				values = ((SubClassMap2<C, V>) child)._getAllEntries(type, values);
-		}
-		return values;
+	public synchronized <C2 extends C> List<BiTuple<Class<? extends C>, V>> getAllEntries(Class<C2> type, TypeMatch acceptMatches) {
+		List<BiTuple<Class<? extends C>, V>>[] entries = new List[1];
+		descend(type, //
+			new MatchAcceptingAction<>(acceptMatches, true, (entry, match) -> {
+				if (entries[0] == null)
+					entries[0] = new ArrayList<>(5);
+				entries[0].add(new BiTuple<>(entry.getType(), entry.getLocalValue()));
+				return true;
+			}));
+		return entries[0] == null ? Collections.emptyList() : entries[0];
 	}
 
 	/** @return All entries in this map */
 	public synchronized List<BiTuple<Class<? extends C>, V>> getAllEntries() {
-		return _getAllEntries(new ArrayList<>());
-	}
-
-	private List<BiTuple<Class<? extends C>, V>> _getAllEntries(List<BiTuple<Class<? extends C>, V>> values) {
-		if (theValue != null)
-			values.add(new BiTuple<>(theType, theValue));
-		for (SubClassMap2<? extends C, V> subMap : theSubMaps) {
-			((SubClassMap2<C, V>) subMap)._getAllEntries(values);
-		}
-		return values;
+		return getAllEntries(theType, TypeMatch.SUB_TYPE);
 	}
 
 	/**
@@ -185,14 +254,11 @@ public class SubClassMap2<C, V> {
 				found = true;
 				int preSize = subMap.size();
 				newValue = ((SubClassMap2<? super C2, V>) subMap)._compute(type, value);
-				if (subMap.size() == 1) {
+				theSize += subMap.size() - preSize;
+				if (subMap.size() == 0)
 					subMapIter.remove();
-					theSize--;
-				} else {
-					theSize += subMap.size() - preSize;
-					if (subMap.theValue == null && subMap.theSubMaps.size() == 1)
-						subMapIter.set(subMap.theSubMaps.get(0));
-				}
+				else if (subMap.theValue == null && subMap.theSubMaps.size() == 1)
+					subMapIter.set(subMap.theSubMaps.get(0));
 				break;
 			}
 		}

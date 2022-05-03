@@ -4,6 +4,7 @@ import java.net.URL;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -22,7 +23,7 @@ public class QonfigToolkit {
 
 		void fillOutTypes(QonfigParseSession session);
 
-		QonfigElementDef getDeclaredRoot(QonfigParseSession session);
+		Set<QonfigElementDef> getDeclaredRoots(QonfigParseSession session);
 	}
 
 	private final URL theLocation;
@@ -37,7 +38,8 @@ public class QonfigToolkit {
 	private final MultiInheritanceMap<QonfigElementOrAddOn, MultiInheritanceSet<QonfigAddOn>> theTypeAutoInheritance;
 	private final MultiInheritanceMap<QonfigChildDef, MultiInheritanceSet<QonfigAddOn>> theRoleAutoInheritance;
 	private final MultiInheritanceMap<QonfigElementOrAddOn, MultiInheritanceMap<QonfigChildDef, MultiInheritanceSet<QonfigAddOn>>> theTypeAndRoleAutoInheritance;
-	private final QonfigElementDef theDeclaredRoot;
+	private final Set<QonfigElementDef> theDeclaredRoots;
+	private final Set<QonfigElementDef> theRoots;
 
 	public QonfigToolkit(URL location, Map<String, QonfigToolkit> dependencies, Map<String, QonfigValueType.Declared> declaredTypes,
 		Map<String, QonfigAddOn> declaredAddOns, Map<String, QonfigElementDef> declaredElements,
@@ -63,14 +65,9 @@ public class QonfigToolkit {
 				compiledAddOns.add(el.getName(), el);
 			for (QonfigElementDef el : theDeclaredElements.values())
 				compiledElements.add(el.getName(), el);
-			QonfigElementDef root = null;
-			boolean hasMultiRoot = false;
+			Set<QonfigElementDef> depRoots = new LinkedHashSet<>();
 			for (QonfigToolkit dep : dependencies.values()) {
-				if (dep.getRoot() != null) {
-					if (root != null)
-						hasMultiRoot |= !root.equals(dep.getRoot());
-					root = dep.getRoot();
-				}
+				depRoots.addAll(dep.getRoots());
 				for (QonfigElementDef e : dep.theCompiledElements.values())
 					compiledElements.add(e.getName(), e);
 				for (QonfigAddOn e : dep.theCompiledAddOns.values())
@@ -92,9 +89,11 @@ public class QonfigToolkit {
 			theCompiledAttributeTypes = Collections.unmodifiableMap(compiledTypes);
 
 			builder.fillOutTypes(session);
-			theDeclaredRoot = builder.getDeclaredRoot(session);
-			if (theDeclaredRoot == null && hasMultiRoot)
-				session.withWarning("Toolkit does not declare a root, but inherits multiple different roots--will not inherit any");
+			theDeclaredRoots = builder.getDeclaredRoots(session);
+			Set<QonfigElementDef> allRoots = new LinkedHashSet<>();
+			allRoots.addAll(theDeclaredRoots);
+			allRoots.addAll(depRoots);
+			theRoots = Collections.unmodifiableSet(allRoots);
 			session.throwErrors(location == null ? "Document" : location.toString())//
 				.printWarnings(System.err, location == null ? "Document" : location.toString());
 
@@ -152,27 +151,30 @@ public class QonfigToolkit {
 								});
 								return roleInh;
 							});
-						} else
+						} else {
 							theTypeAutoInheritance.compute(target.getTarget(), (t, old) -> {
 								if (old == null)
 									old = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
 								old.addAll(autoInherit.getInheritance().values());
 								return old;
 							});
-					} else
+						}
+					} else {
 						theRoleAutoInheritance.compute(target.getRole(), (r, old) -> {
 							if (old == null)
 								old = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
 							old.addAll(autoInherit.getInheritance().values());
 							return old;
 						});
+					}
 				}
 			}
 		} else { // PLACEHOLDER
 			theCompiledElements = null;
 			theCompiledAddOns = null;
 			theCompiledAttributeTypes = null;
-			theDeclaredRoot = null;
+			theDeclaredRoots = null;
+			theRoots = null;
 			theTypeAutoInheritance = null;
 			theRoleAutoInheritance = null;
 			theTypeAndRoleAutoInheritance = null;
@@ -386,9 +388,9 @@ public class QonfigToolkit {
 	}
 
 	/**
-	 * @param target
-	 * @param roles
-	 * @return
+	 * @param target The element or add-on type to check for auto-inheritance
+	 * @param roles The child roles that the element fulfills
+	 * @return The additional add-ons that the element should inherit from automatic inheritance
 	 */
 	public MultiInheritanceSet<QonfigAddOn> getAutoInheritance(QonfigElementOrAddOn target, Set<QonfigChildDef> roles) {
 		MultiInheritanceSet<QonfigAddOn> inheritance = null;
@@ -415,28 +417,14 @@ public class QonfigToolkit {
 		return inheritance == null ? MultiInheritanceSet.empty() : inheritance;
 	}
 
-	/** @return The root element declared for documents of this toolkit */
-	public QonfigElementDef getDeclaredRoot() {
-		return theDeclaredRoot;
+	/** @return The available root elements declared for documents of this toolkit */
+	public Set<QonfigElementDef> getDeclaredRoots() {
+		return theDeclaredRoots;
 	}
 
-	/** @return The root element to use for documents of this toolkit */
-	public QonfigElementDef getRoot() {
-		if (theDeclaredRoot != null)
-			return theDeclaredRoot;
-		else if (theDependencies.isEmpty())
-			return null;
-		QonfigElementDef root = null;
-		for (QonfigToolkit dep : theDependencies.values()) {
-			QonfigElementDef depRoot = dep.getRoot();
-			if (depRoot != null) {
-				if (root == null)
-					root = depRoot;
-				else if (!root.equals(depRoot))
-					return null; // As warned in the constructor, we won't inherit a root if multiple distinct ones would be inherited
-			}
-		}
-		return root;
+	/** @return The root elements usable for documents of this toolkit */
+	public Set<QonfigElementDef> getRoots() {
+		return theRoots;
 	}
 
 	private volatile QonfigElementOrAddOn theCachedElement;

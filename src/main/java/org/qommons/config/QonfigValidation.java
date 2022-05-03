@@ -42,7 +42,7 @@ public class QonfigValidation {
 	public static ValueSpec validateSpecification(ValueSpec old, ValueSpec override, //
 		Consumer<String> onError, Consumer<String> onWarning) {
 		QonfigValueType type = old.type;
-		if (override.type != null) {
+		if (override.type != null && !override.type.equals(old.type)) {
 			if (!(type instanceof QonfigAddOn) || !(override.type instanceof QonfigAddOn)
 				|| !((QonfigAddOn) type).isAssignableFrom((QonfigAddOn) override.type))
 				onError.accept("Type " + old.type + " cannot be overridden with type " + override.type);
@@ -81,8 +81,8 @@ public class QonfigValidation {
 				break;
 			case Optional:
 			case Forbidden:
-				if (newDefaultValue == null) {
-					onError.accept("Default value required if value may be unspecified");
+				if (oldSpec == SpecificationType.Required && newDefaultValue == null) {
+					onError.accept("Default value required to fulfill inherited requirement if value may be unspecified");
 					newSpec = oldSpec;
 				}
 				break;
