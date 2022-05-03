@@ -122,7 +122,7 @@ public class StringUtils {
 			if (diff == 0)
 				continue;
 			if (ignoreCase) {
-				if (ch1 >= 'A' && ch2 <= 'Z')
+				if (ch1 >= 'A' && ch1 <= 'Z')
 					diff += a_MINUS_A;
 				if (ch2 >= 'A' && ch2 <= 'Z')
 					diff -= a_MINUS_A;
