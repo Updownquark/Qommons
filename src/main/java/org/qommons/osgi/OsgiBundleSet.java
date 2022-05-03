@@ -49,6 +49,11 @@ import org.qommons.io.NativeFileSource;
 public class OsgiBundleSet {
 	/** The path to the manifest file in a bundle */
 	public static final String MANIFEST_PATH = "META-INF/MANIFEST.MF";
+	/**
+	 * The system property for the OSGi configuration to use to filter component loading for DS. If the command-line argument is specified
+	 * instead, this property will be populated with that value.
+	 */
+	public static final String CONFIGURATION_SYSTEM_PROPERTY = "qommons.osgi.configuration";
 
 	/** An item that has (or may have) a name and a version */
 	public interface VersionedItem extends Named {
@@ -1340,6 +1345,17 @@ public class OsgiBundleSet {
 				throw new IllegalStateException("Bad signatures coded for " + ComponentBasedExecutor.class.getName() + " reflection", e);
 			}
 			Set<String> configuration = new LinkedHashSet<>(args.getAll("ds-configuration", String.class));
+			if (configuration.isEmpty()) {
+				// See if the system property is set instead
+				String systemProp = System.getProperty(CONFIGURATION_SYSTEM_PROPERTY);
+				if (systemProp != null && !systemProp.isEmpty()) {
+					for (String config : systemProp.split(","))
+						configuration.add(config.trim());
+				}
+			} else {
+				// Populate the system property
+				System.setProperty(CONFIGURATION_SYSTEM_PROPERTY, StringUtils.print(",", configuration, v -> v).toString());
+			}
 			Set<String> startBundles = new LinkedHashSet<>(args.getAll("start-components", String.class));
 			for (Bundle bundle : bundles.getBundles()) {
 				for (OsgiManifest.ManifestEntry component : bundle.getManifest().getAll("Service-Component")) {
