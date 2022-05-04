@@ -16,11 +16,28 @@ import org.qommons.collect.BetterList;
  * @param <C> The super-type of classes that this subclass map can support
  * @param <V> The type of values in the map
  */
-public class SubClassMap2<C, V> {
+public class ClassMap<C, V> {
+	/**
+	 * An action to perform on a node in the map tree
+	 * 
+	 * @param <C> The super-type of class keys in the map
+	 * @param <V> The type of values in the map
+	 */
 	public interface MapEntryAction<C, V> {
-		boolean onEntry(SubClassMap2<? extends C, V> entry, TypeMatch match);
+		/**
+		 * @param entry The encountered entry
+		 * @param match The relationship of the entry's key with the target type of the query:
+		 *        <ul>
+		 *        <li>{@link TypeMatch#EXACT} if the entry's type and the target type are the same</li>
+		 *        <li>{@link TypeMatch#SUB_TYPE} if the entry's type is a sub-type of the target type</li>
+		 *        <li>{@link TypeMatch#SUPER_TYPE} if the entry's type is a super-type of the target type</li>
+		 *        </ul>
+		 * @return Whether the sub-maps of the given entry are of interest and should be descended into
+		 */
+		boolean onEntry(ClassMap<? extends C, V> entry, TypeMatch match);
 	}
 
+	/** An enum for the relationship between the type of a map entry and a specified target type */
 	public enum TypeMatch {
 		/** The entry's type is the same as the target type */
 		EXACT,
@@ -42,7 +59,7 @@ public class SubClassMap2<C, V> {
 		}
 
 		@Override
-		public boolean onEntry(SubClassMap2<? extends C, V> entry, TypeMatch match) {
+		public boolean onEntry(ClassMap<? extends C, V> entry, TypeMatch match) {
 			boolean descend = false;
 			switch (match) {
 			case EXACT:
@@ -74,12 +91,12 @@ public class SubClassMap2<C, V> {
 	}
 
 	private final Class<C> theType;
-	private final List<SubClassMap2<? extends C, V>> theSubMaps;
+	private final List<ClassMap<? extends C, V>> theSubMaps;
 	private V theValue;
 	private int theSize;
 
 	/** @param type The super-type of classes that this subclass map can support */
-	public SubClassMap2(Class<C> type) {
+	public ClassMap(Class<C> type) {
 		theType = type;
 		theSubMaps = new ArrayList<>(3);
 	}
@@ -99,13 +116,19 @@ public class SubClassMap2<C, V> {
 		return theSize;
 	}
 
-	public <C2 extends C> void descend(Class<C2> targetType, MapEntryAction<? super C, V> action) {
+	/**
+	 * A generalized query method into the map tree
+	 * 
+	 * @param targetType The type to query for
+	 * @param action The action to perform on map entries whose type has an inheritance relationship to the target type
+	 */
+	public void descend(Class<?> targetType, MapEntryAction<? super C, V> action) {
 		if (!theType.isAssignableFrom(targetType))
 			throw new IllegalArgumentException("Cannot query descend() with a target type that does not extend " + theType);
 		_descend(targetType, action, false);
 	}
 
-	private <C2> void _descend(Class<C2> targetType, MapEntryAction<? super C, V> action, boolean subTarget) {
+	private void _descend(Class<?> targetType, MapEntryAction<? super C, V> action, boolean subTarget) {
 		boolean descend;
 		if (subTarget)
 			descend = action.onEntry(this, TypeMatch.SUB_TYPE);
@@ -120,7 +143,7 @@ public class SubClassMap2<C, V> {
 		else
 			descend = false;
 		if (descend) {
-			for (SubClassMap2<? extends C, V> subMap : theSubMaps)
+			for (ClassMap<? extends C, V> subMap : theSubMaps)
 				subMap._descend(targetType, action, subTarget);
 		}
 	}
@@ -205,7 +228,7 @@ public class SubClassMap2<C, V> {
 	 * @param value The value to map to the class
 	 * @return This map
 	 */
-	public synchronized <C2 extends C> SubClassMap2<C, V> with(Class<C2> type, V value) {
+	public synchronized <C2 extends C> ClassMap<C, V> with(Class<C2> type, V value) {
 		_compute(type, old -> value);
 		return this;
 	}
@@ -247,13 +270,13 @@ public class SubClassMap2<C, V> {
 		}
 		V newValue = null;
 		boolean found = false;
-		ListIterator<SubClassMap2<? extends C, V>> subMapIter = theSubMaps.listIterator();
+		ListIterator<ClassMap<? extends C, V>> subMapIter = theSubMaps.listIterator();
 		while (subMapIter.hasNext()) {
-			SubClassMap2<? extends C, V> subMap = subMapIter.next();
+			ClassMap<? extends C, V> subMap = subMapIter.next();
 			if (subMap.theType.isAssignableFrom(type)) {
 				found = true;
 				int preSize = subMap.size();
-				newValue = ((SubClassMap2<? super C2, V>) subMap)._compute(type, value);
+				newValue = ((ClassMap<? super C2, V>) subMap)._compute(type, value);
 				theSize += subMap.size() - preSize;
 				if (subMap.size() == 0)
 					subMapIter.remove();
@@ -266,12 +289,12 @@ public class SubClassMap2<C, V> {
 			newValue = value.apply(null);
 			if (newValue == null)
 				return null;
-			SubClassMap2<C2, V> newSubMap = new SubClassMap2<C2, V>(type).with(type, newValue);
+			ClassMap<C2, V> newSubMap = new ClassMap<C2, V>(type).with(type, newValue);
 			subMapIter = theSubMaps.listIterator();
 			while (subMapIter.hasNext()) {
-				SubClassMap2<? extends C, V> subMap = subMapIter.next();
+				ClassMap<? extends C, V> subMap = subMapIter.next();
 				if (type.isAssignableFrom(subMap.theType)) {
-					newSubMap.theSubMaps.add((SubClassMap2<? extends C2, V>) subMap);
+					newSubMap.theSubMaps.add((ClassMap<? extends C2, V>) subMap);
 					subMapIter.remove();
 				}
 			}
@@ -283,13 +306,13 @@ public class SubClassMap2<C, V> {
 	}
 
 	/** @param other Another subclass map whose values to put in this map */
-	public void putAll(SubClassMap2<? extends C, ? extends V> other) {
+	public void putAll(ClassMap<? extends C, ? extends V> other) {
 		_putAll(other);
 	}
 
-	private void _putAll(SubClassMap2<? extends C, ? extends V> other) {
+	private void _putAll(ClassMap<? extends C, ? extends V> other) {
 		with(other.theType, other.theValue);
-		for (SubClassMap2<? extends C, ? extends V> child : other.theSubMaps)
+		for (ClassMap<? extends C, ? extends V> child : other.theSubMaps)
 			_putAll(child);
 	}
 
@@ -298,17 +321,17 @@ public class SubClassMap2<C, V> {
 	 * @param type The class to query for
 	 * @return The path in this map to the most specific super-class of the given class
 	 */
-	public synchronized <C2 extends C> BetterList<SubClassMap2<? extends C, V>> pathTo(Class<C2> type) {
-		return BetterList.of((List<SubClassMap2<? extends C, V>>) _pathTo(type, new ArrayList<>()));
+	public synchronized <C2 extends C> BetterList<ClassMap<? extends C, V>> pathTo(Class<C2> type) {
+		return BetterList.of((List<ClassMap<? extends C, V>>) _pathTo(type, new ArrayList<>()));
 	}
 
-	private <C2 extends C> List<? extends SubClassMap2<?, V>> _pathTo(Class<C2> type, List<SubClassMap2<?, V>> list) {
+	private <C2 extends C> List<? extends ClassMap<?, V>> _pathTo(Class<C2> type, List<ClassMap<?, V>> list) {
 		list.add(this);
 		if (type == theType)
 			return list;
-		for (SubClassMap2<? extends C, V> subMap : theSubMaps) {
+		for (ClassMap<? extends C, V> subMap : theSubMaps) {
 			if (subMap.theType.isAssignableFrom(type))
-				return ((SubClassMap2<? super C2, V>) subMap)._pathTo(type, list);
+				return ((ClassMap<? super C2, V>) subMap)._pathTo(type, list);
 		}
 		return list;
 	}
@@ -333,7 +356,7 @@ public class SubClassMap2<C, V> {
 		str.append(theType.getName());
 		if (theValue != null)
 			str.append('=').append(theValue);
-		for (SubClassMap2<? extends C, V> child : theSubMaps)
+		for (ClassMap<? extends C, V> child : theSubMaps)
 			child.append(str.append('\n'), indent + 1);
 	}
 }

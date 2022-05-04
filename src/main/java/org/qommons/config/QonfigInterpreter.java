@@ -10,17 +10,17 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 import org.qommons.BiTuple;
+import org.qommons.ClassMap;
 import org.qommons.QommonsUtils;
 import org.qommons.StatusReportAccumulator;
 import org.qommons.StatusReportAccumulator.Status;
-import org.qommons.SubClassMap2;
 import org.qommons.collect.BetterList;
 import org.qommons.ex.ExFunction;
 
 /**
  * A class for interpreting parsed {@link QonfigDocument}s into useful structures
  * 
- * @param <QIS> The session type created by this interpreter
+ * @param <QIS> The session type provided by this interpreter
  */
 public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInterpretingSession<QIS>> {
 	/**
@@ -37,6 +37,12 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		private final int theChildIndex;
 		private final Map<String, Object> theValues;
 
+		/**
+		 * Creates the root session for interpretation
+		 * 
+		 * @param interpreter The interpreter this session is for
+		 * @param root The root element of the interpretation
+		 */
 		protected QonfigInterpretingSession(QonfigInterpreter<QIS> interpreter, QonfigElement root) {
 			theInterpreter = interpreter;
 			theParent = null;
@@ -47,6 +53,14 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			theChildIndex = 0;
 		}
 
+		/**
+		 * Creates a sub-session for interpretation
+		 * 
+		 * @param parent The parent session
+		 * @param element The element to interpret
+		 * @param type The element/add-on type to interpret as (affects what attributes and children are available by name)
+		 * @param childIndex The index of the child in its parent, for improved visibility of errors
+		 */
 		protected QonfigInterpretingSession(QIS parent, QonfigElement element, QonfigElementOrAddOn type, int childIndex) {
 			QonfigInterpretingSession<QIS> parent2 = parent;
 			theInterpreter = parent2.theInterpreter;
@@ -63,18 +77,20 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			}
 		}
 
+		/** @return The element being interpreted */
 		public QonfigElement getElement() {
 			return theElement;
 		}
 
-		public int getChildIndex() {
-			return theChildIndex;
-		}
-
+		/** @return The interpreter this session is for */
 		public QonfigInterpreter<QIS> getInterpreter() {
 			return theInterpreter;
 		}
 
+		/**
+		 * @param type The element/add-on type to interpret the element as
+		 * @return A session based off this session but being interpreted as the given element
+		 */
 		public QIS as(QonfigElementOrAddOn type) {
 			if (theType == type)
 				return (QIS) this;
@@ -87,6 +103,10 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			}
 		}
 
+		/**
+		 * @param typeName The name of the element/add-on type to interpret the element as
+		 * @return A session based off this session but being interpreted as the given element
+		 */
 		public QIS as(String typeName) {
 			QonfigElementOrAddOn type = theType.getDeclarer().getElementOrAddOn(typeName);
 			if (type == null)
@@ -207,22 +227,47 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			return theElement.getAttributeText(attr);
 		}
 
-		public <T> T getValue(Class<T> type, T defaultValue) {
+		/**
+		 * Retrieves the element's value
+		 * 
+		 * @param <T> The expected type of the value
+		 * @param type The expected type of the value
+		 * @param defaultValue The value to return if the element's value is not specified
+		 * @return The element's value
+		 * @throws IllegalArgumentException If this element's type has no value definition
+		 * @throws ClassCastException If the element's value is not of the expected type
+		 */
+		public <T> T getValue(Class<T> type, T defaultValue) throws IllegalArgumentException, ClassCastException {
 			Object value = theElement.getValue();
+			if (value == null && theType.getValueSpec() == null)
+				throw new IllegalArgumentException("No value defined for " + theType);
 			if (value == null)
 				return defaultValue;
 			return type.cast(value);
 		}
 
+		/** @return The element's value as text */
 		public String getValueText() {
 			return theElement.getValueText();
 		}
 
-		public QonfigChildDef getRole(String roleName) {
+		/**
+		 * @param roleName The name of the role to get
+		 * @return The role for the given name
+		 * @throws IllegalArgumentException If the given role does not exist
+		 */
+		public QonfigChildDef getRole(String roleName) throws IllegalArgumentException {
 			return getRole(null, roleName);
 		}
 
-		public QonfigChildDef getRole(String asElement, String roleName) {
+		/**
+		 * @param asElement The name of the element or add-on type to interpret the element as
+		 * @param roleName The name of the role to get
+		 * @return The role with the given name
+		 * @throws IllegalArgumentException If the given element type or role does not exist, or this element is not an instance of the
+		 *         given type
+		 */
+		public QonfigChildDef getRole(String asElement, String roleName) throws IllegalArgumentException {
 			QonfigElementOrAddOn element;
 			if (asElement == null || theType.getName().equals(asElement))
 				element = theType;
@@ -239,10 +284,18 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			return role;
 		}
 
+		/**
+		 * @param role The role to check
+		 * @return Whether this element fulfills the given role in its parent
+		 */
 		public boolean fulfills(QonfigChildDef role) {
 			return theElement.getDeclaredRoles().contains(role.getDeclared());
 		}
 
+		/**
+		 * @param elementName The name of the element/add-on type to test
+		 * @return Whether the element is an instance of the given type
+		 */
 		public boolean isInstance(String elementName) {
 			if (theType.getName().equals(elementName))
 				return true;
@@ -273,9 +326,9 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		 * @throws QonfigInterpretationException If the value cannot be interpreted
 		 */
 		public <T> T interpret(QonfigElementOrAddOn as, Class<T> asType) throws QonfigInterpretationException {
-			SubClassMap2<Object, QonfigCreatorHolder<QIS, ?>> creators = theInterpreter.theCreators.get(as);
+			ClassMap<Object, QonfigCreatorHolder<QIS, ?>> creators = theInterpreter.theCreators.get(as);
 			QonfigCreatorHolder<? super QIS, T> creator = creators == null ? null
-				: (QonfigCreatorHolder<? super QIS, T>) creators.get(asType, SubClassMap2.TypeMatch.SUB_TYPE);
+				: (QonfigCreatorHolder<? super QIS, T>) creators.get(asType, ClassMap.TypeMatch.SUB_TYPE);
 			if (creator == null) {
 				String msg = "No creator registered for element " + as.getName() + " and target type " + asType.getName();
 				withError(msg);
@@ -378,18 +431,29 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			return map.apply(attrValue);
 		}
 
+		/**
+		 * Interprets the element's value
+		 * 
+		 * @param <C> The expected type of the element's value
+		 * @param <T> The type to interpret the value as
+		 * @param sourceType The expected type of the element's value
+		 * @param nullToNull Whether to return null if the element's value was not specified instead of passing null to the given
+		 *        interpreter function
+		 * @param map Function to interpret the element's value
+		 * @return The interpreted value
+		 * @throws IllegalArgumentException If this element has no value definition
+		 * @throws ClassCastException If the value is not of the expected type
+		 * @throws QonfigInterpretationException If the given interpreter function throws it
+		 */
 		public <C, T> T interpretValue(Class<C> sourceType, boolean nullToNull,
 			ExFunction<? super C, ? extends T, QonfigInterpretationException> map)
-			throws IllegalArgumentException, QonfigInterpretationException {
+			throws IllegalArgumentException, ClassCastException, QonfigInterpretationException {
 			Object value = theElement.getValue();
 			if (value == null && theType.getValueSpec() == null)
 				throw new IllegalArgumentException("No value defined for " + theType);
 			else if (nullToNull && value == null)
 				return null;
-			else if (value != null && !sourceType.isInstance(value))
-				throw new IllegalArgumentException("Value " + value + " of element (type " + theElement.getType() + ") is typed "
-					+ value.getClass().getName() + ", not " + sourceType.getName());
-			return map.apply((C) value);
+			return map.apply(sourceType.cast(value));
 		}
 
 		/**
@@ -404,6 +468,11 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			return (BetterList<QonfigElement>) theElement.getChildrenByRole().get(child.getDeclared());
 		}
 
+		/**
+		 * @param childName The name of the child role to interpret the children for
+		 * @return A list of interpretation sessions for each child in this element with the given role
+		 * @throws IllegalArgumentException If no such child role exists
+		 */
 		public BetterList<QIS> forChildren(String childName) throws IllegalArgumentException {
 			QonfigChildDef child = theType.getChild(childName);
 			if (child == null)
@@ -420,7 +489,8 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			return BetterList.of((QIS[]) sessions);
 		}
 
-		public BetterList<QIS> forChildren() throws IllegalArgumentException {
+		/** @return A list of interpretation sessions for each child in this element */
+		public BetterList<QIS> forChildren() {
 			List<QonfigElement> children = getElement().getChildren();
 			if (children.isEmpty())
 				return BetterList.empty();
@@ -581,11 +651,11 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			Map<QonfigValueModifier<? super QIS, T>, QonfigModifierHolder<QIS, T>> modifiers2) throws QonfigInterpretationException {
 			if (modifierType == null)
 				return;
-			SubClassMap2<Object, QonfigModifierHolder<QIS, ?>> modifiers = theInterpreter.theModifiers.get(modifierType);
+			ClassMap<Object, QonfigModifierHolder<QIS, ?>> modifiers = theInterpreter.theModifiers.get(modifierType);
 			if (modifiers == null)
 				return;
 			List<BiTuple<Class<?>, QonfigModifierHolder<QIS, ?>>> typeModifiers = modifiers.getAllEntries(type,
-				SubClassMap2.TypeMatch.SUPER_TYPE);
+				ClassMap.TypeMatch.SUPER_TYPE);
 			if (typeModifiers == null)
 				return;
 			for (BiTuple<Class<?>, QonfigModifierHolder<QIS, ?>> modifier : typeModifiers) {
@@ -615,6 +685,14 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		 */
 		T createValue(QIS session) throws QonfigInterpretationException;
 
+		/**
+		 * Potentially modifies and/or inspects the value after all modification
+		 * 
+		 * @param value The interpreted value so far
+		 * @param session The interpretation session
+		 * @return The final interpreted value
+		 * @throws QonfigInterpretationException If an error occurs
+		 */
 		default T postModification(T value, QIS session) throws QonfigInterpretationException {
 			return value;
 		}
@@ -699,6 +777,12 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		}
 	}
 
+	/**
+	 * Class holding information regarding creation of a value for Qonfig interpretation
+	 * 
+	 * @param <QIS> The sub-type of session provided by the interpreter this holder is for
+	 * @param <T> The type of value to create
+	 */
 	protected static class QonfigCreatorHolder<QIS extends QonfigInterpretingSession<QIS>, T> {
 		final QonfigElementOrAddOn element;
 		final Class<T> type;
@@ -716,6 +800,12 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		}
 	}
 
+	/**
+	 * Class holding information regarding modification of a value for Qonfig interpretation
+	 * 
+	 * @param <QIS> The sub-type of session provided by the interpreter this holder is for
+	 * @param <T> The type of value to modify
+	 */
 	protected static class QonfigModifierHolder<QIS extends QonfigInterpretingSession<QIS>, T> {
 		final QonfigElementOrAddOn element;
 		final Class<T> type;
@@ -734,13 +824,18 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 	}
 
 	private final Class<?> theCallingClass;
-	private final Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigCreatorHolder<QIS, ?>>> theCreators;
-	private final Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<QIS, ?>>> theModifiers;
+	private final Map<QonfigElementOrAddOn, ClassMap<Object, QonfigCreatorHolder<QIS, ?>>> theCreators;
+	private final Map<QonfigElementOrAddOn, ClassMap<Object, QonfigModifierHolder<QIS, ?>>> theModifiers;
 	Throwable loggedThrowable;
 
+	/**
+	 * @param callingClass The class building the interpreter
+	 * @param creators The set of value creators for interpretation
+	 * @param modifiers The set of value modifiers for interpretation
+	 */
 	protected QonfigInterpreter(Class<?> callingClass,
-		Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigCreatorHolder<QIS, ?>>> creators,
-		Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<QIS, ?>>> modifiers) {
+		Map<QonfigElementOrAddOn, ClassMap<Object, QonfigCreatorHolder<QIS, ?>>> creators,
+		Map<QonfigElementOrAddOn, ClassMap<Object, QonfigModifierHolder<QIS, ?>>> modifiers) {
 		theCallingClass = callingClass;
 		theCreators = creators;
 		theModifiers = modifiers;
@@ -751,19 +846,43 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		return theCallingClass;
 	}
 
+	/**
+	 * Commences interpretation of a Qonfig element
+	 * 
+	 * @param element The root element to interpret
+	 * @return The session to do the interpretation
+	 */
 	public abstract QIS interpret(QonfigElement element);
 
+	/**
+	 * Creates an interpretation sub-session
+	 * 
+	 * @param parent The parent session
+	 * @param element The element to interpret
+	 * @param type The element/add-on type to interpret as (affects what attributes and children are available by name)
+	 * @param childIndex The index of the child in its parent, for improved visibility of errors
+	 * @return The session to interpret the element
+	 */
 	protected abstract QIS interpret(QIS parent, QonfigElement element, QonfigElementOrAddOn type, int childIndex);
 
-	/** Builds {@link QonfigInterpreter}s */
+	/**
+	 * Builds {@link QonfigInterpreter}s
+	 * 
+	 * @param <QIS> The sub-type of session that interpreters built from this builder will provide
+	 * @param <B> The sub-type of this builder
+	 */
 	public abstract static class Builder<QIS extends QonfigInterpretingSession<QIS>, B extends Builder<QIS, B>> {
 		private final Class<?> theCallingClass;
 		private final Set<QonfigToolkit> theToolkits;
 		private final QonfigToolkit theToolkit;
 		private final StatusReportAccumulator<QonfigElementOrAddOn> theStatus;
-		private final Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigCreatorHolder<QIS, ?>>> theCreators;
-		private final Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<QIS, ?>>> theModifiers;
+		private final Map<QonfigElementOrAddOn, ClassMap<Object, QonfigCreatorHolder<QIS, ?>>> theCreators;
+		private final Map<QonfigElementOrAddOn, ClassMap<Object, QonfigModifierHolder<QIS, ?>>> theModifiers;
 
+		/**
+		 * @param callingClass The class building the interpreter
+		 * @param toolkits The toolkits to interpret documents for
+		 */
 		protected Builder(Class<?> callingClass, QonfigToolkit... toolkits) {
 			theCallingClass = callingClass;
 			theToolkits = QommonsUtils.unmodifiableDistinctCopy(toolkits);
@@ -775,10 +894,18 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			theStatus = new StatusReportAccumulator<>();
 		}
 
+		/**
+		 * @param callingClass The class building the interpreter
+		 * @param toolkits The toolkits to interpret documents for
+		 * @param toolkit The toolkit to get elements/add-ons for when only names are specified
+		 * @param status The error reporting for the interpretation
+		 * @param creators The set of value creators for interpretation so far
+		 * @param modifiers The set of value modifiers for interpretation so far
+		 */
 		protected Builder(Class<?> callingClass, Set<QonfigToolkit> toolkits, QonfigToolkit toolkit,
 			StatusReportAccumulator<QonfigElementOrAddOn> status,
-			Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigCreatorHolder<QIS, ?>>> creators,
-			Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<QIS, ?>>> modifiers) {
+			Map<QonfigElementOrAddOn, ClassMap<Object, QonfigCreatorHolder<QIS, ?>>> creators,
+			Map<QonfigElementOrAddOn, ClassMap<Object, QonfigModifierHolder<QIS, ?>>> modifiers) {
 			theCallingClass = callingClass;
 			theToolkits = toolkits;
 			theToolkit = toolkit;
@@ -787,26 +914,40 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			theModifiers = modifiers;
 		}
 
+		/**
+		 * @param callingClass The class building the interpreter
+		 * @param toolkits The toolkits to interpret documents for
+		 * @param toolkit The toolkit to get elements/add-ons for when only names are specified
+		 * @param status The error reporting for the interpretation
+		 * @param creators The set of value creators for interpretation so far
+		 * @param modifiers The set of value modifiers for interpretation so far
+		 * @return A new builder with the given data
+		 */
 		protected abstract B builderFor(Class<?> callingClass, Set<QonfigToolkit> toolkits, QonfigToolkit toolkit,
 			StatusReportAccumulator<QonfigElementOrAddOn> status,
-			Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigCreatorHolder<QIS, ?>>> creators,
-			Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<QIS, ?>>> modifiers);
+			Map<QonfigElementOrAddOn, ClassMap<Object, QonfigCreatorHolder<QIS, ?>>> creators,
+			Map<QonfigElementOrAddOn, ClassMap<Object, QonfigModifierHolder<QIS, ?>>> modifiers);
 
+		/** @return A new interpreter with this builder's configuration */
 		public abstract QonfigInterpreter<QIS> create();
 
+		/** @return The toolkit that will be used to get elements/add-ons when only names are specified */
 		public QonfigToolkit getToolkit() {
 			return theToolkit;
 		}
 
+		/** @return The class building the interpreter */
 		public Class<?> getCallingClass() {
 			return theCallingClass;
 		}
 
-		protected Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigCreatorHolder<QIS, ?>>> getCreators() {
+		/** @return The value creators configured in this builder */
+		protected Map<QonfigElementOrAddOn, ClassMap<Object, QonfigCreatorHolder<QIS, ?>>> getCreators() {
 			return QommonsUtils.unmodifiableCopy(theCreators);
 		}
 
-		protected Map<QonfigElementOrAddOn, SubClassMap2<Object, QonfigModifierHolder<QIS, ?>>> getModifiers() {
+		/** @return The value modifiers configured in this builder */
+		protected Map<QonfigElementOrAddOn, ClassMap<Object, QonfigModifierHolder<QIS, ?>>> getModifiers() {
 			return QommonsUtils.unmodifiableCopy(theModifiers);
 		}
 
@@ -846,7 +987,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 				throw new IllegalArgumentException("Element " + element.getName() + " is from a toolkit not included in " + theToolkits);
 			theCreators.compute(element, (el, old) -> {
 				if (old == null)
-					old = new SubClassMap2<>(Object.class);
+					old = new ClassMap<>(Object.class);
 				// If it already exists, assume this just called twice via dependencies
 				old.computeIfAbsent(type, () -> new QonfigCreatorHolder<QIS, T>(element, type, creator));
 				return old;
@@ -912,6 +1053,13 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			return extend(superElement, targetElement, superType, targetType, extension);
 		}
 
+		/**
+		 * @param <T> The type of value to interpret
+		 * @param element The element to interpret
+		 * @param typeAttribute The add-on-typed attribute to delegate interpretation to for the element
+		 * @param type The type of the value to interpret
+		 * @return This builder
+		 */
 		public <T> B delegateToType(QonfigElementOrAddOn element, QonfigAttributeDef.Declared typeAttribute, Class<T> type) {
 			if (!typeAttribute.getOwner().isAssignableFrom(element))
 				throw new IllegalArgumentException("Element " + element + " does not declare attribute " + typeAttribute);
@@ -924,6 +1072,13 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			return createWith(element, type, new QonfigCreationDelegator<>(typeAttribute, type));
 		}
 
+		/**
+		 * @param <T> The type of value to interpret
+		 * @param elementName The name of the element to interpret
+		 * @param typeAttributeName The name of the add-on-typed attribute to delegate interpretation to for the element
+		 * @param type The type of the value to interpret
+		 * @return This builder
+		 */
 		public <T> B delegateToType(String elementName, String typeAttributeName, Class<T> type) {
 			if (theToolkit == null)
 				throw new IllegalStateException("Use forToolkit(QonfigToolkit) first to get an interpreter for a toolkit");
@@ -959,7 +1114,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 					"Element " + elementOrAddOn.getName() + " is from a toolkit not included in " + theToolkits);
 			if (theModifiers.containsKey(elementOrAddOn))
 				return (B) this; // Assume it's the same caller
-			theModifiers.computeIfAbsent(elementOrAddOn, __ -> new SubClassMap2<>(Object.class)).with(type,
+			theModifiers.computeIfAbsent(elementOrAddOn, __ -> new ClassMap<>(Object.class)).with(type,
 				new QonfigModifierHolder<QIS, T>(elementOrAddOn, type, modifier));
 			return (B) this;
 		}
@@ -988,7 +1143,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 				for (QonfigElementDef el : tk.getAllElements().values()) {
 					if (el.isAbstract())
 						continue;
-					SubClassMap2<Object, QonfigCreatorHolder<QIS, ?>> creators = theCreators.get(el);
+					ClassMap<Object, QonfigCreatorHolder<QIS, ?>> creators = theCreators.get(el);
 					if (creators == null) {
 						// theStatus.error(el, "No creator configured for element");
 					} else {
@@ -996,9 +1151,9 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 							if (holder.getValue2().creator instanceof QonfigExtensionCreator) {
 								QonfigExtensionCreator<? super QIS, ?, ?> ext = (QonfigExtensionCreator<? super QIS, ?, ?>) holder
 									.getValue2().creator;
-								SubClassMap2<Object, QonfigCreatorHolder<QIS, ?>> superHolders = theCreators.get(ext.theSuperElement);
+								ClassMap<Object, QonfigCreatorHolder<QIS, ?>> superHolders = theCreators.get(ext.theSuperElement);
 								QonfigCreatorHolder<? super QIS, ?> superHolder = superHolders == null ? null
-									: superHolders.get(holder.getValue1(), SubClassMap2.TypeMatch.SUB_TYPE);
+									: superHolders.get(holder.getValue1(), ClassMap.TypeMatch.SUB_TYPE);
 								if (superHolder == null) {
 									// If the super element is not abstract, there will be a separate error for its not having a creator
 									// If it is abstract, we need one here

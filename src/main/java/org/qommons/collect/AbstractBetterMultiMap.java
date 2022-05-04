@@ -68,7 +68,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		<V2 extends V> BetterCollection<V2> createWrapperCollection(ValueCollectionBacking<V2> backing);
 
 		/**
-		 * Called when a collection created with {@link #createValuesFor(Object, CollectionLockingStrategy, Collection)} is no longer needed
+		 * Called when a collection created with {@link #createValuesFor(Object, CollectionLockingStrategy, Iterable)} is no longer needed
 		 * due to all its values being removed (an entry in a multi-map cannot exist with no values)
 		 * 
 		 * @param unused The unused collection
