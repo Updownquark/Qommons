@@ -37,6 +37,10 @@ public interface QonfigChildDef extends QonfigElementOwned {
 	/** @return The maximum number of elements that may be specified for this role */
 	int getMax();
 
+	/**
+	 * @param child The child to test
+	 * @return Whether the given child also fulfills this role
+	 */
 	boolean isFulfilledBy(QonfigChildDef child);
 
 	/** Abstract {@link QonfigChildDef} implementation */

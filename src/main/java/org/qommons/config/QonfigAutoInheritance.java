@@ -7,7 +7,9 @@ import java.util.Set;
 import org.qommons.MultiInheritanceSet;
 import org.qommons.QommonsUtils;
 
+/** A set of add-ons that shall be inherited automatically by elements matching a condition */
 public class QonfigAutoInheritance {
+	/** A condition determining what elements shall inherit from a {@link QonfigAutoInheritance} specification */
 	public static class AutoInheritTarget {
 		private final QonfigElementOrAddOn theTarget;
 		private final QonfigChildDef theRole;
@@ -17,10 +19,12 @@ public class QonfigAutoInheritance {
 			theRole = role;
 		}
 
+		/** @return The element or add-on type to target--may be null if this target is role-only */
 		public QonfigElementOrAddOn getTarget() {
 			return theTarget;
 		}
 
+		/** @return The role to target--may be null if this target is type-only */
 		public QonfigChildDef getRole() {
 			return theRole;
 		}
@@ -64,14 +68,17 @@ public class QonfigAutoInheritance {
 		theTargets = targets;
 	}
 
+	/** @return The toolkit that declared this auto-inheritance */
 	public QonfigToolkit getDeclarer() {
 		return theDeclarer;
 	}
 
+	/** @return The add-ons for the targets to inherit */
 	public MultiInheritanceSet<QonfigAddOn> getInheritance() {
 		return theInheritance;
 	}
 
+	/** @return The targets for this auto-inheritance */
 	public Set<AutoInheritTarget> getTargets() {
 		return theTargets;
 	}
@@ -81,10 +88,15 @@ public class QonfigAutoInheritance {
 		return theTargets + "<-" + theInheritance;
 	}
 
+	/**
+	 * @param session The parse session to build auto-inheritance within
+	 * @return An auto-inheritance builder
+	 */
 	public static Builder build(QonfigParseSession session) {
 		return new Builder(session);
 	}
 
+	/** Builds a {@link QonfigAutoInheritance} instance */
 	public static class Builder {
 		private final QonfigParseSession theSession;
 		private final MultiInheritanceSet<QonfigAddOn> theInheritance;
@@ -96,6 +108,12 @@ public class QonfigAutoInheritance {
 			theTargets = new LinkedHashSet<>();
 		}
 
+		/**
+		 * Adds an add-on for targets to inherit automatically
+		 * 
+		 * @param inheritance The add-on for targets to inherit
+		 * @return This builder
+		 */
 		public Builder inherits(QonfigAddOn inheritance) {
 			if (inheritance.isAbstract())
 				theSession.withError(inheritance + " is abstract and cannot be inherited automatically");
@@ -107,6 +125,13 @@ public class QonfigAutoInheritance {
 			return this;
 		}
 
+		/**
+		 * Adds a target to inherit the add-ons automatically
+		 * 
+		 * @param target The element or add-on type to target--may be null if the target is to be role-only
+		 * @param role The role to target--may be null if the target is type-only
+		 * @return This builder
+		 */
 		public Builder withTarget(QonfigElementOrAddOn target, QonfigChildDef role) {
 			if (target == null && role == null) {
 				theSession.forChild("target", "(empty)")
@@ -126,7 +151,7 @@ public class QonfigAutoInheritance {
 			return this;
 		}
 
-		private void checkInheritance(AutoInheritTarget ait, QonfigAddOn inheritance, QonfigParseSession session) {
+		private static void checkInheritance(AutoInheritTarget ait, QonfigAddOn inheritance, QonfigParseSession session) {
 			if (inheritance.getSuperElement() == null)
 				return;
 			if (ait.getTarget() != null && inheritance.getSuperElement().isAssignableFrom(ait.getTarget())) {//
@@ -137,6 +162,7 @@ public class QonfigAutoInheritance {
 					+ inheritance.getSuperElement());
 		}
 
+		/** @return The new auto-inheritance object */
 		public QonfigAutoInheritance build() {
 			return new QonfigAutoInheritance(theSession.getToolkit(), MultiInheritanceSet.unmodifiable(theInheritance.copy()),
 				QommonsUtils.unmodifiableDistinctCopy(theTargets));

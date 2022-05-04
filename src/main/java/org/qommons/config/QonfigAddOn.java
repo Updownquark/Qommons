@@ -15,7 +15,10 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		private final Set<QonfigAddOn> theInheritance;
 		private final Set<QonfigAddOn> theRequirement;
 
-		/** @param inheritance The add-ons inherited by the child */
+		/**
+		 * @param inheritance The add-ons inherited by the child
+		 * @param requirement The set of add-ons that an element must inherit to fulfill this role
+		 */
 		public ChildModifier(Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement) {
 			theInheritance = inheritance;
 			theRequirement = requirement;
