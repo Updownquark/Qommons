@@ -187,6 +187,47 @@ public class FileUtils {
 		return new CombinedFile(name, name, sources);
 	}
 
+	private static final int BUFFER_SIZE = 1024 * 1024; // 1MB
+
+	private static final ThreadLocal<byte[]> BUFFERS = ThreadLocal.withInitial(() -> new byte[BUFFER_SIZE]);
+
+	/**
+	 * Simple stream copy utility
+	 * 
+	 * @param from Creates the input stream to copy from
+	 * @param to Creates the output stream to copy to
+	 * @return The number of bytes copied
+	 * @throws IOException If an error occurs reading or writing the data
+	 */
+	public static long copy(ExSupplier<InputStream, IOException> from, ExSupplier<OutputStream, IOException> to) throws IOException {
+		try (InputStream in = from.get(); //
+			OutputStream out = to.get()) {
+			return copy(in, out);
+		}
+	}
+
+	/**
+	 * Simple stream copy utility
+	 * 
+	 * @param from The input stream to copy from
+	 * @param to The output stream to copy to
+	 * @return The number of bytes copied
+	 * @throws IOException If an error occurs reading or writing the data
+	 */
+	public static long copy(InputStream from, OutputStream to) throws IOException {
+		byte[] buffer = BUFFERS.get();
+		long total = 0;
+		int read = from.read(buffer);
+		while (read >= 0) {
+			if (read > 0) {
+				total += read;
+				to.write(buffer, 0, read);
+			}
+			read = from.read(buffer);
+		}
+		return total;
+	}
+
 	/** @return An empty file synchronization operation */
 	public static FileSyncOperation sync() {
 		return new FileSyncOperation();
@@ -474,7 +515,7 @@ public class FileUtils {
 				throw new IllegalStateException("No source configured");
 			if (theDest == null)
 				throw new IllegalStateException("No destination configured");
-			byte[] buffer = new byte[1024 * 1024];
+			byte[] buffer = BUFFERS.get();
 			sync(theSource, theDest, buffer, results, new LinkedList<>());
 			return results;
 		}
