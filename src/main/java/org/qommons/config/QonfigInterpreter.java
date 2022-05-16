@@ -326,7 +326,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		 * @throws QonfigInterpretationException If the value cannot be interpreted
 		 */
 		public <T> T interpret(QonfigElementOrAddOn as, Class<T> asType) throws QonfigInterpretationException {
-			ClassMap<Object, QonfigCreatorHolder<QIS, ?>> creators = theInterpreter.theCreators.get(as);
+			ClassMap<QonfigCreatorHolder<QIS, ?>> creators = theInterpreter.theCreators.get(as);
 			QonfigCreatorHolder<? super QIS, T> creator = creators == null ? null
 				: (QonfigCreatorHolder<? super QIS, T>) creators.get(asType, ClassMap.TypeMatch.SUB_TYPE);
 			if (creator == null) {
@@ -651,7 +651,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			Map<QonfigValueModifier<? super QIS, T>, QonfigModifierHolder<QIS, T>> modifiers2) throws QonfigInterpretationException {
 			if (modifierType == null)
 				return;
-			ClassMap<Object, QonfigModifierHolder<QIS, ?>> modifiers = theInterpreter.theModifiers.get(modifierType);
+			ClassMap<QonfigModifierHolder<QIS, ?>> modifiers = theInterpreter.theModifiers.get(modifierType);
 			if (modifiers == null)
 				return;
 			List<BiTuple<Class<?>, QonfigModifierHolder<QIS, ?>>> typeModifiers = modifiers.getAllEntries(type,
@@ -824,8 +824,8 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 	}
 
 	private final Class<?> theCallingClass;
-	private final Map<QonfigElementOrAddOn, ClassMap<Object, QonfigCreatorHolder<QIS, ?>>> theCreators;
-	private final Map<QonfigElementOrAddOn, ClassMap<Object, QonfigModifierHolder<QIS, ?>>> theModifiers;
+	private final Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<QIS, ?>>> theCreators;
+	private final Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<QIS, ?>>> theModifiers;
 	Throwable loggedThrowable;
 
 	/**
@@ -834,8 +834,8 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 	 * @param modifiers The set of value modifiers for interpretation
 	 */
 	protected QonfigInterpreter(Class<?> callingClass,
-		Map<QonfigElementOrAddOn, ClassMap<Object, QonfigCreatorHolder<QIS, ?>>> creators,
-		Map<QonfigElementOrAddOn, ClassMap<Object, QonfigModifierHolder<QIS, ?>>> modifiers) {
+		Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<QIS, ?>>> creators,
+		Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<QIS, ?>>> modifiers) {
 		theCallingClass = callingClass;
 		theCreators = creators;
 		theModifiers = modifiers;
@@ -876,8 +876,8 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		private final Set<QonfigToolkit> theToolkits;
 		private final QonfigToolkit theToolkit;
 		private final StatusReportAccumulator<QonfigElementOrAddOn> theStatus;
-		private final Map<QonfigElementOrAddOn, ClassMap<Object, QonfigCreatorHolder<QIS, ?>>> theCreators;
-		private final Map<QonfigElementOrAddOn, ClassMap<Object, QonfigModifierHolder<QIS, ?>>> theModifiers;
+		private final Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<QIS, ?>>> theCreators;
+		private final Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<QIS, ?>>> theModifiers;
 
 		/**
 		 * @param callingClass The class building the interpreter
@@ -904,8 +904,8 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		 */
 		protected Builder(Class<?> callingClass, Set<QonfigToolkit> toolkits, QonfigToolkit toolkit,
 			StatusReportAccumulator<QonfigElementOrAddOn> status,
-			Map<QonfigElementOrAddOn, ClassMap<Object, QonfigCreatorHolder<QIS, ?>>> creators,
-			Map<QonfigElementOrAddOn, ClassMap<Object, QonfigModifierHolder<QIS, ?>>> modifiers) {
+			Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<QIS, ?>>> creators,
+			Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<QIS, ?>>> modifiers) {
 			theCallingClass = callingClass;
 			theToolkits = toolkits;
 			theToolkit = toolkit;
@@ -925,8 +925,8 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		 */
 		protected abstract B builderFor(Class<?> callingClass, Set<QonfigToolkit> toolkits, QonfigToolkit toolkit,
 			StatusReportAccumulator<QonfigElementOrAddOn> status,
-			Map<QonfigElementOrAddOn, ClassMap<Object, QonfigCreatorHolder<QIS, ?>>> creators,
-			Map<QonfigElementOrAddOn, ClassMap<Object, QonfigModifierHolder<QIS, ?>>> modifiers);
+			Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<QIS, ?>>> creators,
+			Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<QIS, ?>>> modifiers);
 
 		/** @return A new interpreter with this builder's configuration */
 		public abstract QonfigInterpreter<QIS> create();
@@ -942,12 +942,12 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		}
 
 		/** @return The value creators configured in this builder */
-		protected Map<QonfigElementOrAddOn, ClassMap<Object, QonfigCreatorHolder<QIS, ?>>> getCreators() {
+		protected Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<QIS, ?>>> getCreators() {
 			return QommonsUtils.unmodifiableCopy(theCreators);
 		}
 
 		/** @return The value modifiers configured in this builder */
-		protected Map<QonfigElementOrAddOn, ClassMap<Object, QonfigModifierHolder<QIS, ?>>> getModifiers() {
+		protected Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<QIS, ?>>> getModifiers() {
 			return QommonsUtils.unmodifiableCopy(theModifiers);
 		}
 
@@ -987,7 +987,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 				throw new IllegalArgumentException("Element " + element.getName() + " is from a toolkit not included in " + theToolkits);
 			theCreators.compute(element, (el, old) -> {
 				if (old == null)
-					old = new ClassMap<>(Object.class);
+					old = new ClassMap<>();
 				// If it already exists, assume this just called twice via dependencies
 				old.computeIfAbsent(type, () -> new QonfigCreatorHolder<QIS, T>(element, type, creator));
 				return old;
@@ -1114,7 +1114,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 					"Element " + elementOrAddOn.getName() + " is from a toolkit not included in " + theToolkits);
 			if (theModifiers.containsKey(elementOrAddOn))
 				return (B) this; // Assume it's the same caller
-			theModifiers.computeIfAbsent(elementOrAddOn, __ -> new ClassMap<>(Object.class)).with(type,
+			theModifiers.computeIfAbsent(elementOrAddOn, __ -> new ClassMap<>()).with(type,
 				new QonfigModifierHolder<QIS, T>(elementOrAddOn, type, modifier));
 			return (B) this;
 		}
@@ -1143,7 +1143,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 				for (QonfigElementDef el : tk.getAllElements().values()) {
 					if (el.isAbstract())
 						continue;
-					ClassMap<Object, QonfigCreatorHolder<QIS, ?>> creators = theCreators.get(el);
+					ClassMap<QonfigCreatorHolder<QIS, ?>> creators = theCreators.get(el);
 					if (creators == null) {
 						// theStatus.error(el, "No creator configured for element");
 					} else {
@@ -1151,7 +1151,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 							if (holder.getValue2().creator instanceof QonfigExtensionCreator) {
 								QonfigExtensionCreator<? super QIS, ?, ?> ext = (QonfigExtensionCreator<? super QIS, ?, ?>) holder
 									.getValue2().creator;
-								ClassMap<Object, QonfigCreatorHolder<QIS, ?>> superHolders = theCreators.get(ext.theSuperElement);
+								ClassMap<QonfigCreatorHolder<QIS, ?>> superHolders = theCreators.get(ext.theSuperElement);
 								QonfigCreatorHolder<? super QIS, ?> superHolder = superHolders == null ? null
 									: superHolders.get(holder.getValue1(), ClassMap.TypeMatch.SUB_TYPE);
 								if (superHolder == null) {
