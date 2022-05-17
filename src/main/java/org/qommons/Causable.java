@@ -86,7 +86,11 @@ public interface Causable {
 			return Collections.unmodifiableMap(theValues);
 		}
 
-		Supplier<Transaction> use(Causable cause) {
+		/**
+		 * @param cause The cause to use this key for
+		 * @return procedure to run on this key when the cause finishes
+		 */
+		public Supplier<Transaction> use(Causable cause) {
 			theCauseCount.getAndIncrement();
 			boolean[] closed = new boolean[1];
 			return () -> {

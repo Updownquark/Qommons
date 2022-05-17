@@ -193,7 +193,8 @@ public class ClassMap<V> {
 		}
 
 		void _putAll(ClassMapEntry<? extends C, ? extends V> other) {
-			with(other.theType, other.theValue);
+			if (other.theValue != null)
+				with(other.theType, other.theValue);
 			for (ClassMapEntry<? extends C, ? extends V> child : other.theSubMaps)
 				_putAll(child);
 		}
@@ -283,6 +284,24 @@ public class ClassMap<V> {
 				return match == TypeMatch.SUPER_TYPE;
 			}));
 		return (V) found[0];
+	}
+
+	/**
+	 * @param type The class to query with
+	 * @param acceptMatches The type of type-match to accept:
+	 *        <ul>
+	 *        <li>{@link TypeMatch#EXACT} to return only the value for exactly the given type (if it exists)</li>
+	 *        <li>{@link TypeMatch#SUB_TYPE} to return the value for the given type or its least specific sub-type</li>
+	 *        <li>{@link TypeMatch#SUPER_TYPE} to return the value for the given type or its most specific super-type</li>
+	 *        <li><code>null</code> to return the first encountered value for a type that is related to the given type in either
+	 *        direction</li>
+	 *        </ul>
+	 * @param defaultValue The value to return if no matching value is stored in this map
+	 * @return The value for the queried type
+	 */
+	public synchronized V getOrDefault(Class<?> type, TypeMatch acceptMatches, V defaultValue) {
+		V value = get(type, acceptMatches);
+		return value != null ? value : defaultValue;
 	}
 
 	/**

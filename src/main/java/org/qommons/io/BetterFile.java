@@ -422,6 +422,8 @@ public interface BetterFile extends Named {
 					throw new IllegalArgumentException("Illegal path: " + path);
 				if (parent == null) {
 					String rootName = name.toString();
+					if (rootName.equals(".")) // Start at current directory
+						return at(dataSource, System.getProperty("user.dir")).at(path.substring(c + 1));
 					if (rootName.indexOf(':') >= 0) // Roots must be '/' or else have a colon in them, e.g. Windows paths or URLs
 						parent = new FileRoot(dataSource, dataSource.getRoot(rootName));
 					else
@@ -435,6 +437,8 @@ public interface BetterFile extends Named {
 		if (name.length() > 0) {
 			if (parent == null) {
 				String rootName = name.toString();
+				if (rootName.equals("."))
+					return at(dataSource, System.getProperty("user.dir")); // Current directory
 				parent = new FileRoot(dataSource, dataSource.getRoot(rootName));
 			} else
 				parent = parent.createChild(name.toString(), null);
@@ -460,6 +464,14 @@ public interface BetterFile extends Named {
 				if (root.getName().equals(name))
 					return root;
 			throw new IllegalArgumentException("No such root: " + name);
+		}
+
+		/**
+		 * @param path The path to the file to get
+		 * @return The BetterFile at the given path in this file source
+		 */
+		default BetterFile at(String path) {
+			return BetterFile.at(this, path);
 		}
 	}
 

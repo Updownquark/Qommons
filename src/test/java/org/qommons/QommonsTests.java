@@ -31,7 +31,8 @@ import org.qommons.tree.TreeUtilsTest;
 	TreeUtilsTest.class, //
 	RangeTest.class, //
 	QommonsTimerTest.class, //
-	TimeUtilsTest.class
+	TimeUtilsTest.class, //
+	ClassMapTest.class
 })
 public class QommonsTests {
 }

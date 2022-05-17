@@ -1411,7 +1411,7 @@ public class OsgiBundleSet {
 			} catch (IllegalAccessException | IllegalArgumentException e) {
 				throw new IllegalStateException("Could not access " + completeMethod.getName(), e);
 			} catch (InvocationTargetException e) {
-				System.err.println("Exception initialing DS service " + serviceType.getName());
+				System.err.println("Exception initializing DS service " + serviceType.getName());
 				e.printStackTrace();
 			}
 		} else {
