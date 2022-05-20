@@ -3,7 +3,7 @@ package org.qommons;
 import java.util.Arrays;
 import java.util.function.Function;
 
-/** Anything that may fire events of some kind */
+/** Anything that may restrict modifications based on the identity of the thread it is called from */
 public interface ThreadConstrained {
 	/**
 	 * The message for an {@link UnsupportedOperationException} to be fired when an attempt is made to write-lock or modify a constraint

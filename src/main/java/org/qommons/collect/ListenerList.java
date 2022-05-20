@@ -619,9 +619,18 @@ public class ListenerList<E> {
 		return sz;
 	}
 
-	/** @return Whether this listener list is currently notifying its listeners on the current thread */
+	/**
+	 * @return Whether {@link #forEach(Consumer)} is currently being called. If this list uses {@link Builder#forEachSafe(boolean) safe
+	 *         iteration}, this will only return true in the case that iteration is happening on the current thread. Otherwise, it will
+	 *         return true during iteration on any thread.
+	 */
 	public boolean isFiring() {
-		return isFiringSafe != null && isFiringSafe.get() != null;
+		Object reentrant;
+		if (isFiringSafe != null)
+			reentrant = isFiringSafe.get();
+		else
+			reentrant = unsafeIterId;
+		return reentrant != null && theReentrancyError != null;
 	}
 
 	/**
