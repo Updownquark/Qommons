@@ -3569,6 +3569,7 @@ public class TimeUtils {
 		public StringBuilder printAsDuration(Instant time, Instant reference, StringBuilder str) {
 			DurationComponents comps = new DurationComponents(between(reference, time));
 			fill(comps, time, reference);
+			computePrecision(comps);
 			return printDuration(comps, str);
 		}
 

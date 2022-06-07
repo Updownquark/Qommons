@@ -193,7 +193,7 @@ public class CollectionUtils {
 	}
 
 	/**
-	 * A simple synchronizer (for any of the {@link CollectionUtils#synchronize(List, List, ElementFinder) synchronize} methods) whose
+	 * A simple synchronizer (for any of the {@link CollectionUtils#synchronize2(List, List, ElementFinder) synchronize} methods) whose
 	 * left-only and right-only behaviors (i.e. whether an element will be in the left list) does not depend on element value or position.
 	 * 
 	 * @param <L> The type of the list to adjust
@@ -700,7 +700,8 @@ public class CollectionUtils {
 	 * @param finder The function to find values from the right list in the left list
 	 * @return An adjustment detailing the synchronization goals and the ability to do the adjustment
 	 */
-	public static <L, R> CollectionAdjustment<L, R> synchronize(List<L> left, List<? extends R> right, ElementFinder<L, ? super R> finder) {
+	public static <L, R> CollectionAdjustment<L, R> synchronize2(List<L> left, List<? extends R> right,
+		ElementFinder<L, ? super R> finder) {
 		int[] leftToRight = new int[left.size()];
 		int[] rightToLeft = new int[right.size()];
 		Arrays.fill(leftToRight, -1);
@@ -736,7 +737,7 @@ public class CollectionUtils {
 	 * @return An adjustment detailing the synchronization goals and the ability to do the adjustment
 	 */
 	public static <L, R extends L> CollectionAdjustment<L, R> synchronize(List<L> left, List<R> right) {
-		return synchronize(left, right, new ElementFinder<L, R>() {
+		return synchronize2(left, right, new ElementFinder<L, R>() {
 			@Override
 			public int findElement(List<L> list, R value, int after) {
 				List<L> search = after < 0 ? list : list.subList(after + 1, list.size());
@@ -757,7 +758,7 @@ public class CollectionUtils {
 	 */
 	public static <L, R> CollectionAdjustment<L, R> synchronize(List<L> left, List<? extends R> right,
 		BiPredicate<? super L, ? super R> equals) {
-		return synchronize(left, right, new ElementFinder<L, R>() {
+		return synchronize2(left, right, new ElementFinder<L, R>() {
 			@Override
 			public int findElement(List<L> list, R value, int after) {
 				int index = after + 1;
@@ -1224,11 +1225,15 @@ public class CollectionUtils {
 							input.rightVal = rightVal;
 							action = sync.common(input);
 						}
+						if (action == null)
+							throw new IllegalArgumentException("Synchronizer returned null sync action for common value " + input);
 					} else {
 						if (universalLeft != null)
 							action = universalLeft;
 						else
 							action = sync.leftOnly(input);
+						if (action == null)
+							throw new IllegalArgumentException("Synchronizer returned null sync action for left-only value " + input);
 					}
 
 					if (action == REMOVE) {

@@ -1,5 +1,7 @@
 package org.qommons.osgi;
 
+import java.awt.EventQueue;
+import java.awt.SplashScreen;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -16,6 +18,7 @@ import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -27,11 +30,19 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+import javax.swing.ImageIcon;
+import javax.swing.JDialog;
+import javax.swing.JLabel;
+import javax.swing.JProgressBar;
+import javax.swing.Timer;
+
 import org.qommons.ArgumentParsing2;
+import org.qommons.BiTuple;
 import org.qommons.Named;
 import org.qommons.Range;
 import org.qommons.StringUtils;
@@ -43,6 +54,7 @@ import org.qommons.ex.CheckedExceptionWrapper;
 import org.qommons.io.ArchiveEnabledFileSource;
 import org.qommons.io.BetterFile;
 import org.qommons.io.CircularByteBuffer;
+import org.qommons.io.FileUtils;
 import org.qommons.io.NativeFileSource;
 
 /** A utility capable of loading classes according to the OSGi specification */
@@ -63,6 +75,12 @@ public class OsgiBundleSet {
 
 	/** Represents an OSGi bundle */
 	public static class Bundle extends URLClassLoader implements VersionedItem {
+		/** A list of patterns for files to exclude from an exported bundle */
+		public static final List<Pattern> EXPORT_EXCLUDE_PATTERN = Collections.unmodifiableList(Arrays.asList(//
+			Pattern.compile("META\\-INF/[a-zA-Z0-9_\\-]*\\.DSA"), //
+			Pattern.compile("META\\-INF/[a-zA-Z0-9_\\-]*\\.SF")//
+		));
+
 		private static class LoadedClass {
 			final Class<?> clazz;
 			final Bundle owner;
@@ -458,7 +476,9 @@ public class OsgiBundleSet {
 				path.setLength(0);
 			}
 			if (!force && jarFile.lastModified() >= theLastModified) {
-				return jarFile;
+				BetterFile betterJar = BetterFile.at(FileUtils.getDefaultFileSource(), jarFile.getAbsolutePath());
+				if (!betterJar.listFiles().isEmpty())// Make sure the zip is not corrupted
+					return jarFile;
 			}
 			try (ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(jarFile)))) {
 				{
@@ -558,12 +578,23 @@ public class OsgiBundleSet {
 					compress(child, zip, path, paths, buffer);
 					path.setLength(preLen);
 				}
-			} else if (file.exists() && !".classpath".equals(file.getName()) && !".java".equals(file.getName())) {
-				String newPath = path.toString();
-				if (paths.add(newPath)) {
-					zip.putNextEntry(new ZipEntry(path.toString()));
-					try (InputStream in = file.read()) {
-						copy(file.length(), in, zip, buffer);
+			} else if (!file.exists()) {//
+			} else if (".classpath".equals(file.getName()) || ".java".equals(file.getName())) { //
+			} else {
+				boolean exclude = false;
+				for (Pattern p : EXPORT_EXCLUDE_PATTERN) {
+					if (p.matcher(path).matches()) {
+						exclude = true;
+						break;
+					}
+				}
+				if (!exclude) {
+					String newPath = path.toString();
+					if (paths.add(newPath)) {
+						zip.putNextEntry(new ZipEntry(path.toString()));
+						try (InputStream in = file.read()) {
+							copy(file.length(), in, zip, buffer);
+						}
 					}
 				}
 			}
@@ -1149,6 +1180,24 @@ public class OsgiBundleSet {
 	}
 
 	/**
+	 * @param <C> The type of the collection
+	 * @param bundleDir The directory to search in
+	 * @param recursive Whether to descend into the directory's contents recursively to look for bundles
+	 * @param files The collection to add found bundle directories into
+	 * @return The collection
+	 */
+	public <C extends Collection<BetterFile>> C findBundleFilesIn(BetterFile bundleDir, boolean recursive, C files) {
+		for (BetterFile bundle : bundleDir.listFiles()) {
+			if (bundle.at(MANIFEST_PATH).exists()) {
+				files.add(bundle);
+			} else if (recursive) {
+				findBundleFilesIn(bundle, recursive, files);
+			}
+		}
+		return files;
+	}
+
+	/**
 	 * @param className The name of the class to load
 	 * @return The loaded class
 	 * @throws ClassNotFoundException If no bundle in this bundle set contains the definition of the given class
@@ -1218,179 +1267,284 @@ public class OsgiBundleSet {
 	 *        </ul>
 	 */
 	public static void main(String[] clArgs) {
-		BetterFile.FileDataSource fds = new ArchiveEnabledFileSource(new NativeFileSource())//
-			.withArchival(new ArchiveEnabledFileSource.ZipCompression());
-		ArgumentParsing2.Arguments args = ArgumentParsing2.build()//
-			.forFlagPattern(argSet->{
-				argSet.add("jar", null)//
-				;
-			})//
-			.forValuePattern(argSet -> {
-				argSet//
-					.addStringArgument("start-ds", arg -> arg.when("jar", void.class, c -> c.specified().forbidden()))//
-					.addStringArgument("osgi-main-class", m -> m//
-					.when("jar", void.class, c -> c.specified().forbidden())//
-						.when("start-ds", String.class, c -> c.specified().forbidden())
-						.when("jar", void.class, c -> c.missing().and("start-ds", String.class, c2 -> c2.missing()).required()))//
-				.addFileArgument("jar-dir", arg -> arg.optional().directory(true).create(true)//
-					.when("jar", void.class, c -> c.missing().forbidden()))//
-				.addBetterFileArgument("native-dir", arg -> arg.optional().directory(true))//
-				.addBooleanArgument("force",
-					arg -> arg.defaultValue(true).when("jar", void.class, c -> c.missing().forbidden()))//
-				;
-			})//
-			.forMultiValuePattern(argSet -> {
-				argSet.addBetterFileArgument("osgi-bundle", f -> f.fromSource(fds).anyTimes().directory(true))
-				.addBetterFileArgument("osgi-bundles-in", f -> f.fromSource(fds).anyTimes().directory(true)//
-					.when("osgi-bundle", BetterFile.class, c -> c.missing().atLeastOnce()))//
-				.addStringArgument("exclude-bundles", a -> a.anyTimes()//
-					.when("osgi-bundles-in", BetterFile.class, c -> c.missing().forbidden()))//
-				.addStringArgument("os", arg -> arg.optional().constrain(c -> c.oneOf("win32", "linux", "macosx"))//
-					.when("jar", void.class, c -> c.missing().forbidden()))//
-				.addStringArgument("processor", arg -> arg.optional().constrain(c -> c.oneOf("x86", "x86-64"))//
-					.when("jar", void.class, c -> c.missing().forbidden()))//
-					.addStringArgument("start-components", a -> a.when("start-ds", String.class, c -> c.missing().forbidden()))//
-					.addStringArgument("pre-init", arg -> arg.optional())//
-				.addStringArgument("ds-configuration", arg->arg.optional().when("start-ds", String.class, c->c.missing().forbidden()))//
-				;
-			})//
-			.acceptUnmatched(true)//
-			.build()//
-			.parse(clArgs);
-		BetterFile nativeDir = args.get("native-dir", BetterFile.class);
-		OsgiBundleSet bundles = new OsgiBundleSet();
-		if (!args.has("jar")) {
-			bundles.withNativeDir(nativeDir);
+		JDialog dialog;
+		JProgressBar progress;
+		SplashScreen splashScreen = SplashScreen.getSplashScreen();
+		if (splashScreen != null && splashScreen.isVisible()) {
+			progress = new JProgressBar();
+			dialog = new JDialog();
+			try {
+				EventQueue.invokeAndWait(() -> {
+					int progressH = progress.getPreferredSize().height;
+					dialog.setUndecorated(true);
+					dialog.setBounds(splashScreen.getBounds().x, splashScreen.getBounds().y, //
+						splashScreen.getSize().width, splashScreen.getSize().height + progressH);
+					JLabel image = new JLabel(new ImageIcon(splashScreen.getImageURL()));
+					image.setSize(splashScreen.getSize());
+					progress.setBounds(0, splashScreen.getSize().height, splashScreen.getSize().width, progressH);
+					dialog.getContentPane().setLayout(null);
+					dialog.getContentPane().add(image);
+					dialog.getContentPane().add(progress);
+
+					progress.setIndeterminate(true);
+					progress.setStringPainted(true);
+					progress.setString("Parsing Application Configuration");
+
+					dialog.setVisible(true);
+				});
+			} catch (InvocationTargetException | InterruptedException e) {
+				e.printStackTrace();
+				return;
+			}
+		} else {
+			dialog = null;
+			progress = null;
 		}
-		Set<String> excludeBundles = new HashSet<>(args.getAll("exclude-bundles", String.class));
+		boolean success = false;
 		try {
-			for (BetterFile file : args.getAll("osgi-bundle", BetterFile.class)) {
-				bundles.addBundle(file);
+			BetterFile.FileDataSource fds = new ArchiveEnabledFileSource(new NativeFileSource())//
+				.withArchival(new ArchiveEnabledFileSource.ZipCompression());
+			ArgumentParsing2.Arguments args = ArgumentParsing2.build()//
+				.forFlagPattern(argSet -> {
+					argSet.add("jar", null)//
+					;
+				})//
+				.forValuePattern(argSet -> {
+					argSet//
+						.addStringArgument("start-ds", arg -> arg.when("jar", void.class, c -> c.specified().forbidden()))//
+						.addStringArgument("osgi-main-class", m -> m//
+							.when("jar", void.class, c -> c.specified().forbidden())//
+							.when("start-ds", String.class, c -> c.specified().forbidden())
+							.when("jar", void.class, c -> c.missing().and("start-ds", String.class, c2 -> c2.missing()).required()))//
+						.addFileArgument("jar-dir", arg -> arg.optional().directory(true).create(true)//
+							.when("jar", void.class, c -> c.missing().forbidden()))//
+						.addBetterFileArgument("native-dir", arg -> arg.optional().directory(true))//
+						.addBooleanArgument("force", arg -> arg.defaultValue(true).when("jar", void.class, c -> c.missing().forbidden()))//
+					;
+				})//
+				.forMultiValuePattern(argSet -> {
+					argSet.addBetterFileArgument("osgi-bundle", f -> f.fromSource(fds).anyTimes().directory(true))
+						.addBetterFileArgument("osgi-bundles-in", f -> f.fromSource(fds).anyTimes().directory(true)//
+							.when("osgi-bundle", BetterFile.class, c -> c.missing().atLeastOnce()))//
+						.addStringArgument("exclude-bundles", a -> a.anyTimes()//
+							.when("osgi-bundles-in", BetterFile.class, c -> c.missing().forbidden()))//
+						.addStringArgument("os", arg -> arg.optional().constrain(c -> c.oneOf("win32", "linux", "macosx"))//
+							.when("jar", void.class, c -> c.missing().forbidden()))//
+						.addStringArgument("processor", arg -> arg.optional().constrain(c -> c.oneOf("x86", "x86-64"))//
+							.when("jar", void.class, c -> c.missing().forbidden()))//
+						.addStringArgument("start-components", a -> a.when("start-ds", String.class, c -> c.missing().forbidden()))//
+						.addStringArgument("pre-init", arg -> arg.optional())//
+						.addStringArgument("ds-configuration",
+							arg -> arg.optional().when("start-ds", String.class, c -> c.missing().forbidden()))//
+					;
+				})//
+				.acceptUnmatched(true)//
+				.build()//
+				.parse(clArgs);
+			BetterFile nativeDir = args.get("native-dir", BetterFile.class);
+			OsgiBundleSet bundles = new OsgiBundleSet();
+			if (!args.has("jar")) {
+				bundles.withNativeDir(nativeDir);
 			}
-			for (BetterFile file : args.getAll("osgi-bundles-in", BetterFile.class)) {
-				bundles.addBundlesIn(file, false, bundle -> !excludeBundles.contains(bundle.getName()));
-			}
-		} catch (IOException e) {
-			throw new IllegalStateException("Misconfigured bundle set", e);
-		}
-		bundles.init();
-
-		for (String preInit : args.getAll("pre-init", String.class)) {
+			Set<String> excludeBundles = new HashSet<>(args.getAll("exclude-bundles", String.class));
 			try {
-				bundles.loadClass(preInit);
-			} catch (ClassNotFoundException e) {
-				System.err.println("No such class found: " + preInit);
+				if (progress != null)
+					progress.setString("Searching for application bundles");
+				Set<BetterFile> bundleFiles = new LinkedHashSet<>();
+				for (BetterFile file : args.getAll("osgi-bundles-in", BetterFile.class))
+					bundles.findBundleFilesIn(file, false, bundleFiles);
+				List<? extends BetterFile> firstBundles = args.getAll("osgi-bundle", BetterFile.class);
+				if (progress != null) {
+					progress.setMaximum(firstBundles.size() + bundleFiles.size());
+					progress.setValue(0);
+					progress.setIndeterminate(false);
+				}
+				for (BetterFile file : firstBundles) {
+					String bundleName = file.getName();
+					if (bundleName.endsWith(".jar"))
+						bundleName = bundleName.substring(0, bundleName.length() - 4);
+					if (progress != null)
+						progress.setString("Loading " + bundleName);
+					bundles.addBundle(file);
+					if (progress != null)
+						progress.setValue(progress.getValue() + 1);
+				}
+				for (BetterFile file : bundleFiles) {
+					String bundleName = file.getName();
+					if (bundleName.endsWith(".jar"))
+						bundleName = bundleName.substring(0, bundleName.length() - 4);
+					if (progress != null)
+						progress.setString("Loading " + bundleName);
+					bundles.maybeAddBundle(file, bundle -> !excludeBundles.contains(bundle.getName()));
+					if (progress != null)
+						progress.setValue(progress.getValue() + 1);
+				}
+			} catch (IOException e) {
+				throw new IllegalStateException("Misconfigured bundle set", e);
 			}
-		}
+			if (progress != null) {
+				progress.setIndeterminate(true);
+				progress.setString("Initializing bundle dependencies");
+			}
+			bundles.init();
 
-		if (args.has("jar")) {
-			long now = System.currentTimeMillis();
-			boolean force = args.get("force", Boolean.class);
-			File jarDir = args.get("jar-dir", File.class);
-			Set<String> os = new HashSet<>(args.getAll("os", String.class));
-			Set<String> processor = new HashSet<>(args.getAll("processor", String.class));
-			System.out.println("Exporting bundle jars to " + (jarDir == null ? "each bundle" : jarDir.getPath()));
-			for (Bundle bundle : bundles.getBundles()) {
-				System.out.print("Exporting jar for " + bundle + "...");
-				System.out.flush();
+			List<? extends String> preInits = args.getAll("pre-init", String.class);
+			if (progress != null && !preInits.isEmpty()) {
+				progress.setMaximum(preInits.size());
+				progress.setValue(0);
+				progress.setIndeterminate(false);
+			}
+			for (String preInit : preInits) {
+				if (progress != null)
+					progress.setString("Initializing " + preInit);
 				try {
-					File exported = bundle.exportJar(
-						jarDir == null ? null : new File(jarDir, bundle.getName() + "_" + bundle.getVersion() + ".jar"), //
+					bundles.loadClass(preInit);
+				} catch (ClassNotFoundException e) {
+					System.err.println("No such class found: " + preInit);
+				}
+				if (progress != null)
+					progress.setValue(progress.getValue() + 1);
+			}
+
+			if (args.has("jar")) {
+				long now = System.currentTimeMillis();
+				boolean force = args.get("force", Boolean.class);
+				File jarDir = args.get("jar-dir", File.class);
+				Set<String> os = new HashSet<>(args.getAll("os", String.class));
+				Set<String> processor = new HashSet<>(args.getAll("processor", String.class));
+				System.out.println("Exporting bundle jars to " + (jarDir == null ? "each bundle" : jarDir.getPath()));
+				for (Bundle bundle : bundles.getBundles()) {
+					System.out.println("Exporting jar for " + bundle + "...");
+					try {
+						File exported = bundle.exportJar(
+							jarDir == null ? null : new File(jarDir, bundle.getName() + "_" + bundle.getVersion() + ".jar"), //
 							nativeDir, force, os, processor);
-					if (exported.lastModified() > now) {
-						System.out.print("Exported");
-					} else {
-						System.out.print("Preserved");
+						if (exported.lastModified() > now) {
+							System.out.print("\tExported");
+						} else {
+							System.out.print("\tPreserved");
+						}
+						System.out.println(" " + exported.getName());
+					} catch (IOException e) {
+						System.err.println("Export failed");
+						e.printStackTrace();
 					}
-					System.out.println(" " + exported.getName());
-				} catch (IOException e) {
-					System.err.println("Export failed");
-					e.printStackTrace();
 				}
-			}
-		} else if (args.get("start-ds") != null) {
-			if (!args.getUnmatched().isEmpty()) {
-				throw new IllegalStateException("Unrecognized arguments: " + args.getUnmatched());
-			}
-			// All this reflection is because if the class implements ComponentBasedExecutor,
-			// it implements the one from the Qommons library loaded by this bundle set,
-			// not the one on the bootstrap classpath, which is what this one is.
-			// So the 2 interface classes are not the same or even related, they just have the same name.
-			// So we have to assume they'll be using the same version (hopefully it won't ever change) as we have,
-			// and we have to use reflection.
-			// We could improve this code to get the names of the methods we're calling from the class we have some day.
-			Class<?> serviceType;
-			try {
-				serviceType = bundles.loadClass(args.get("start-ds", String.class));
-			} catch (ClassNotFoundException e) {
-				throw new IllegalArgumentException("No such DS service type found: " + args.get("start-ds", String.class), e);
-			}
-			Object service;
-			try {
-				Constructor<?> c = serviceType.getConstructor();
-				service = c.newInstance();
-			} catch (InstantiationException | IllegalAccessException | NoSuchMethodException | SecurityException | IllegalArgumentException
-				| InvocationTargetException e) {
-				throw new IllegalArgumentException("Could not instantiate DS service " + serviceType.getName(), e);
-			}
-			Class<?> executorIntf = getExecutorIntf(serviceType);
-			if (executorIntf == null)
-				throw new IllegalStateException(
-					"DS service " + serviceType.getName() + " must implement " + ComponentBasedExecutor.class.getName());
-			Method loadComponentMethod, completeMethod;
-			try {
-				loadComponentMethod = executorIntf.getMethod("loadComponent", Class.class);
-				completeMethod = executorIntf.getMethod("loadingComplete", Set.class);
-			} catch (NoSuchMethodException | SecurityException e) {
-				throw new IllegalStateException("Bad signatures coded for " + ComponentBasedExecutor.class.getName() + " reflection", e);
-			}
-			Set<String> configuration = new LinkedHashSet<>(args.getAll("ds-configuration", String.class));
-			if (configuration.isEmpty()) {
-				// See if the system property is set instead
-				String systemProp = System.getProperty(CONFIGURATION_SYSTEM_PROPERTY);
-				if (systemProp != null && !systemProp.isEmpty()) {
-					for (String config : systemProp.split(","))
-						configuration.add(config.trim());
+				if (dialog != null)
+					System.exit(0); // Process won't die by itself if we've started the EDT
+			} else if (args.get("start-ds") != null) {
+				if (!args.getUnmatched().isEmpty()) {
+					throw new IllegalStateException("Unrecognized arguments: " + args.getUnmatched());
 				}
-			} else {
-				// Populate the system property
-				System.setProperty(CONFIGURATION_SYSTEM_PROPERTY, StringUtils.print(",", configuration, v -> v).toString());
-			}
-			Set<String> startBundles = new LinkedHashSet<>(args.getAll("start-components", String.class));
-			for (Bundle bundle : bundles.getBundles()) {
-				for (OsgiManifest.ManifestEntry component : bundle.getManifest().getAll("Service-Component")) {
-					String componentName = component.getValue();
-					if (configuration != null) {
-						String excludes=component.getAttributes().get("exclude-configurations");
-						if (excludes != null) {
+				if (progress != null) {
+					progress.setIndeterminate(true);
+					progress.setString("Loading Service Component Manager");
+				}
+				// All this reflection is because if the class implements ComponentBasedExecutor,
+				// it implements the one from the Qommons library loaded by this bundle set,
+				// not the one on the bootstrap classpath, which is what this one is.
+				// So the 2 interface classes are not the same or even related, they just have the same name.
+				// So we have to assume they'll be using the same version (hopefully it won't ever change) as we have,
+				// and we have to use reflection.
+				// We could improve this code to get the names of the methods we're calling from the class we have some day.
+				Class<?> serviceType;
+				try {
+					serviceType = bundles.loadClass(args.get("start-ds", String.class));
+				} catch (ClassNotFoundException e) {
+					throw new IllegalArgumentException("No such DS service type found: " + args.get("start-ds", String.class), e);
+				}
+				Object service;
+				try {
+					Constructor<?> c = serviceType.getConstructor();
+					service = c.newInstance();
+				} catch (InstantiationException | IllegalAccessException | NoSuchMethodException | SecurityException
+					| IllegalArgumentException | InvocationTargetException e) {
+					throw new IllegalArgumentException("Could not instantiate DS service " + serviceType.getName(), e);
+				}
+				Class<?> executorIntf = getExecutorIntf(serviceType);
+				if (executorIntf == null)
+					throw new IllegalStateException(
+						"DS service " + serviceType.getName() + " must implement " + ComponentBasedExecutor.class.getName());
+				Method loadComponentMethod, completeMethod, statusMethod;
+				try {
+					loadComponentMethod = executorIntf.getMethod("loadComponent", Class.class);
+					completeMethod = executorIntf.getMethod("loadingComplete", Set.class);
+					statusMethod = executorIntf.getMethod("getLoadStatus");
+				} catch (NoSuchMethodException | SecurityException e) {
+					throw new IllegalStateException("Bad signatures coded for " + ComponentBasedExecutor.class.getName() + " reflection",
+						e);
+				}
+				Set<String> configuration = new LinkedHashSet<>(args.getAll("ds-configuration", String.class));
+				if (configuration.isEmpty()) {
+					// See if the system property is set instead
+					String systemProp = System.getProperty(CONFIGURATION_SYSTEM_PROPERTY);
+					if (systemProp != null && !systemProp.isEmpty()) {
+						for (String config : systemProp.split(","))
+							configuration.add(config.trim());
+					}
+				} else {
+					// Populate the system property
+					System.setProperty(CONFIGURATION_SYSTEM_PROPERTY, StringUtils.print(",", configuration, v -> v).toString());
+				}
+				if (progress != null) {
+					progress.setIndeterminate(true);
+					progress.setString("Searching for Service Components");
+				}
+				List<BiTuple<Bundle, String>> components = new ArrayList<>();
+				Set<String> startBundles = new LinkedHashSet<>(args.getAll("start-components", String.class));
+				for (Bundle bundle : bundles.getBundles()) {
+					for (OsgiManifest.ManifestEntry component : bundle.getManifest().getAll("Service-Component")) {
+						String componentName = component.getValue();
+						if (configuration != null) {
+							String excludes = component.getAttributes().get("exclude-configurations");
+							if (excludes != null) {
+								boolean found = false;
+								for (String cfg : excludes.split(",")) {
+									if (configuration.contains(cfg)) {
+										found = true;
+										break;
+									}
+								}
+								if (found)
+									continue;
+							}
+						}
+						String includes = component.getAttributes().get("include-configurations");
+						if (includes != null) {
+							if (configuration == null)
+								continue;
 							boolean found = false;
-							for (String cfg : excludes.split(",")) {
+							for (String cfg : includes.split(",")) {
 								if (configuration.contains(cfg)) {
 									found = true;
 									break;
 								}
 							}
-							if (found)
+							if (!found)
 								continue;
 						}
-					}
-					String includes = component.getAttributes().get("include-configurations");
-					if (includes != null) {
-						if (configuration == null)
+						if (componentName.endsWith(".xml")) {
+							System.err.println("Unconverted service component: " + componentName);
 							continue;
-						boolean found = false;
-						for (String cfg : includes.split(",")) {
-							if (configuration.contains(cfg)) {
-								found = true;
-								break;
-							}
 						}
-						if (!found)
-							continue;
+						components.add(new BiTuple<>(bundle, componentName));
 					}
-					if (componentName.endsWith(".xml")) {
-						System.err.println("Unconverted service component: " + componentName);
-						continue;
+				}
+
+				if (progress != null) {
+					progress.setMaximum(components.size());
+					progress.setValue(0);
+					progress.setIndeterminate(false);
+				}
+				for (BiTuple<Bundle, String> component : components) {
+					Bundle bundle = component.getValue1();
+					String componentName = component.getValue2();
+					if (progress != null) {
+						String name = componentName;
+						int dot = name.lastIndexOf('.');
+						if (dot >= 0)
+							name = name.substring(dot + 1);
+						progress.setString("Loading " + name);
 					}
 					Class<?> componentType;
 					try {
@@ -1404,42 +1558,71 @@ public class OsgiBundleSet {
 					} catch (IllegalAccessException | IllegalArgumentException e) {
 						throw new IllegalStateException("Could not access " + loadComponentMethod.getName(), e);
 					}
+					if (progress != null)
+						progress.setValue(progress.getValue() + 1);
 				}
-			}
-			try {
-				completeMethod.invoke(service, startBundles);
-			} catch (IllegalAccessException | IllegalArgumentException e) {
-				throw new IllegalStateException("Could not access " + completeMethod.getName(), e);
-			} catch (InvocationTargetException e) {
-				System.err.println("Exception initializing DS service " + serviceType.getName());
-				e.printStackTrace();
-			}
-		} else {
-			String mainClassName = args.get("osgi-main-class", String.class);
-			Class<?> mainClass;
-			try {
-				mainClass = bundles.loadClass(mainClassName);
-			} catch (ClassNotFoundException e) {
-				throw new IllegalStateException(e.getMessage(), e);
-			}
+				if (progress != null) {
+					progress.setIndeterminate(true);
+					progress.setString("Initializing Service Component Manager");
+				}
+				Timer[] timer = new Timer[1];
+				timer[0] = new Timer(250, __ -> {
+					try {
+						progress.setString((String) statusMethod.invoke(service));
+					} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+						e.printStackTrace();
+						timer[0].stop();
+					}
+				});
+				timer[0].start();
+				try {
+					completeMethod.invoke(service, startBundles);
+				} catch (IllegalAccessException | IllegalArgumentException e) {
+					throw new IllegalStateException("Could not access " + completeMethod.getName(), e);
+				} catch (InvocationTargetException e) {
+					System.err.println("Exception initializing DS service " + serviceType.getName());
+					e.printStackTrace();
+				} finally {
+					timer[0].stop();
+				}
+			} else {
+				if (progress != null) {
+					progress.setIndeterminate(true);
+					progress.setString("Starting application");
+				}
+				String mainClassName = args.get("osgi-main-class", String.class);
+				Class<?> mainClass;
+				try {
+					mainClass = bundles.loadClass(mainClassName);
+				} catch (ClassNotFoundException e) {
+					throw new IllegalStateException(e.getMessage(), e);
+				}
 
-			String[] mainArgs = args.getUnmatched().toArray(new String[args.getUnmatched().size()]);
-			try {
-				mainClass.getMethod("main", String[].class).invoke(null, new Object[] { mainArgs });
-			} catch (NoSuchMethodException e) {
-				throw new IllegalStateException("Class contains no main method " + mainClassName, e);
-			} catch (IllegalAccessException | SecurityException e) {
-				throw new IllegalStateException("Could not access main method of class " + mainClassName, e);
-			} catch (IllegalArgumentException e) {
-				throw new IllegalStateException("Error invoking main method of class " + mainClassName, e);
-			} catch (InvocationTargetException e) {
-				if (e.getTargetException() instanceof RuntimeException) {
-					throw (RuntimeException) e.getTargetException();
-				} else if (e.getTargetException() instanceof Error) {
-					throw (Error) e.getTargetException();
-				} else {
-					throw new CheckedExceptionWrapper(e.getTargetException());
+				String[] mainArgs = args.getUnmatched().toArray(new String[args.getUnmatched().size()]);
+				try {
+					mainClass.getMethod("main", String[].class).invoke(null, new Object[] { mainArgs });
+				} catch (NoSuchMethodException e) {
+					throw new IllegalStateException("Class contains no main method " + mainClassName, e);
+				} catch (IllegalAccessException | SecurityException e) {
+					throw new IllegalStateException("Could not access main method of class " + mainClassName, e);
+				} catch (IllegalArgumentException e) {
+					throw new IllegalStateException("Error invoking main method of class " + mainClassName, e);
+				} catch (InvocationTargetException e) {
+					if (e.getTargetException() instanceof RuntimeException) {
+						throw (RuntimeException) e.getTargetException();
+					} else if (e.getTargetException() instanceof Error) {
+						throw (Error) e.getTargetException();
+					} else {
+						throw new CheckedExceptionWrapper(e.getTargetException());
+					}
 				}
+			}
+			success = true;
+		} finally {
+			if (dialog != null) {
+				dialog.setVisible(false);
+				if (!success)
+					System.exit(1);
 			}
 		}
 	}

@@ -32,4 +32,7 @@ public interface ComponentBasedExecutor {
 	 * @return Something or null, doesn't matter
 	 */
 	Object loadingComplete(Set<String> startComponents);
+
+	/** @return The current status to display to the user while loading */
+	String getLoadStatus();
 }

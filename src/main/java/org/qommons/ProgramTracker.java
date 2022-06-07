@@ -2,15 +2,18 @@
 package org.qommons;
 
 import java.text.SimpleDateFormat;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.log4j.Logger;
 import org.qommons.json.JsonObject;
+import org.qommons.threading.QommonsTimer;
 
 /** A simple utility to help in finding performance bottlenecks in a program */
 public class ProgramTracker implements Cloneable {
@@ -41,7 +44,7 @@ public class ProgramTracker implements Cloneable {
 	public static final java.text.NumberFormat NANO_FORMAT = new java.text.DecimalFormat("0.00E0");
 
 	/**
-	 * This static variable is to be used for <b>temporary</b> debugging purposes only. It allows for easier profiling of applications
+	 * This singleton variable is to be used for <b>temporary</b> debugging purposes only. It allows for easier profiling of applications
 	 * without extensive code changes to access the correct tracker. However, if this variable is used in more than one place, it may lead
 	 * to unpredictable results and thrown exceptions. A different mechanism MUST be developed to access a tracker if profiling is to be
 	 * integrated into the application permanently.
@@ -50,21 +53,12 @@ public class ProgramTracker implements Cloneable {
 	 */
 	public static ProgramTracker instance;
 
-	private static final ThreadLocal<ProgramTracker> theThreadTrackers;
-	private static final Map<Thread, ProgramTracker> theThreadTrackerMap;
+	private static boolean THREAD_TRACKING_ACTIVE = "true".equalsIgnoreCase(System.getProperty("qommons.thread.tracking"));
+	private static final Map<Thread, ProgramTracker> theThreadTrackers;
 	private static ProgramTracker ignoring;
 
 	static {
-		theThreadTrackers = new ThreadLocal<ProgramTracker>() {
-			@Override
-			protected ProgramTracker initialValue() {
-				Thread currentThread = Thread.currentThread();
-				ProgramTracker newTracker = new ProgramTracker(currentThread.getName() + " Tracking");
-				theThreadTrackerMap.put(currentThread, newTracker);
-				return newTracker;
-			}
-		};
-		theThreadTrackerMap = new WeakHashMap<>();
+		theThreadTrackers = new ConcurrentHashMap<>();
 		ignoring = new ProgramTracker("ignoring") {
 			@Override
 			public ProgramTracker setOn(boolean on) {
@@ -74,20 +68,45 @@ public class ProgramTracker implements Cloneable {
 	}
 
 	/**
+	 * Begins thread tracking, such that {@link #getThreadTracker()} will always return an active tracker, initializing new ones as needed.
+	 * 
+	 * @return A transaction that, when called, will print the tracking results, clear all thread trackers, and revert thread tracking to
+	 *         false.
+	 */
+	public static Transaction startThreadTracking() {
+		THREAD_TRACKING_ACTIVE = true;
+		return () -> {
+			THREAD_TRACKING_ACTIVE = false;
+			printThreadTrackers(true);
+		};
+	}
+
+	/**
+	 * @param threadTracking Whether thread tracking should be active, such that {@link #getThreadTracker()} will always return an active
+	 *        tracker, initializing new ones as needed.
+	 */
+	public static void setThreadTracking(boolean threadTracking) {
+		THREAD_TRACKING_ACTIVE = threadTracking;
+	}
+
+	/**
 	 * Sets a tracker as the tracker for the current thread
 	 *
 	 * @param tracker The tracker to set as a tracker thread
 	 */
 	public static void setThreadTracker(ProgramTracker tracker) {
-		if (tracker == null)
-			throw new IllegalArgumentException("Cannot set a null tracker for the current thread");
-		theThreadTrackers.set(tracker);
-		theThreadTrackerMap.put(Thread.currentThread(), tracker);
+		theThreadTrackers.put(Thread.currentThread(), tracker);
 	}
 
 	/** @return The tracker for the current thread, initialized if none has been previously set */
 	public static ProgramTracker getThreadTracker() {
-		return theThreadTrackers.get();
+		ProgramTracker tracker = theThreadTrackers.computeIfAbsent(Thread.currentThread(), thread -> {
+			if (THREAD_TRACKING_ACTIVE)
+				return new ProgramTracker(thread.getName());
+			else
+				return null;
+		});
+		return tracker == null ? ignoring : tracker;
 	}
 
 	/**
@@ -95,12 +114,49 @@ public class ProgramTracker implements Cloneable {
 	 * @return The tracker assigned to the given thread, or null if none has been initialized
 	 */
 	public static ProgramTracker getThreadTracker(Thread thread) {
-		return theThreadTrackerMap.get(thread);
+		return theThreadTrackers.get(thread);
 	}
 
 	/** @return All threads for which {@link #setThreadTracker(ProgramTracker)} or {@link #getThreadTracker()} has been called */
 	public static Thread [] getTrackedThreads() {
-		return theThreadTrackerMap.keySet().toArray(new Thread[0]);
+		return theThreadTrackers.keySet().toArray(new Thread[0]);
+	}
+
+	/**
+	 * @param routine The routine to start on the tracker for this thread. Use {@link #setThreadTracker(ProgramTracker)} to initialize the
+	 *        tracker.
+	 * @return The track node for the routine
+	 */
+	public static TrackNode threadStart(String routine) {
+		return getThreadTracker().start(routine);
+	}
+
+	/**
+	 * Prints the data from all thread trackers and, if specified, removes them
+	 * 
+	 * @param andClear Whether to remove the thread trackers
+	 */
+	public static void printThreadTrackers(boolean andClear) {
+		Iterator<ProgramTracker> trackerIter = theThreadTrackers.values().iterator();
+		while (trackerIter.hasNext()) {
+			ProgramTracker tracker = trackerIter.next();
+			if (andClear)
+				trackerIter.remove();
+			tracker.printData();
+		}
+	}
+
+	/**
+	 * Starts a listener that, after this method is not called for a certain period of time, prints the data from all thread trackers and,
+	 * if specified, removes them
+	 * 
+	 * @param andClear Whether to remove the thread trackers
+	 * @param inactiveTime The amount of time to wait before printing the data
+	 */
+	public static void printThreadTrackersAfterInactive(boolean andClear, long inactiveTime) {
+		QommonsTimer.getCommonInstance().doAfterInactivity("ProgramTracker.printAfterInactive:" + andClear, () -> {
+			printThreadTrackers(andClear);
+		}, Duration.ofMillis(inactiveTime));
 	}
 
 	/**
@@ -121,15 +177,6 @@ public class ProgramTracker implements Cloneable {
 	 */
 	public static TrackNode singletonStart(String routine) {
 		return start(instance, routine);
-	}
-
-	/**
-	 * @param routine The routine to start on the tracker for this thread. Use {@link #setThreadTracker(ProgramTracker)} to initialize the
-	 *        tracker.
-	 * @return The track node for the routine
-	 */
-	public static TrackNode threadStart(String routine) {
-		return start(theThreadTrackerMap.get(Thread.currentThread()), routine);
 	}
 
 	/** A configuration class that allows the printing of results of a tracking session to be customized */

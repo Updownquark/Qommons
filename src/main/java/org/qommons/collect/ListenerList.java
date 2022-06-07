@@ -537,7 +537,7 @@ public class ListenerList<E> {
 						node.remove();
 						try {
 							action.accept(node.theListener);
-						} catch (ReentrantNotificationException e) {
+						} catch (ReentrantNotificationException | AssertionError e) {
 							throw e;
 						} catch (RuntimeException e) {
 							if (SWALLOW_EXCEPTIONS) {
@@ -555,7 +555,7 @@ public class ListenerList<E> {
 				} else {
 					try {
 						action.accept(node.theListener);
-					} catch (ReentrantNotificationException e) {
+					} catch (ReentrantNotificationException | AssertionError e) {
 						throw e;
 					} catch (RuntimeException e) {
 						if (SWALLOW_EXCEPTIONS) {
