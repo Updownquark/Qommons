@@ -39,7 +39,7 @@ public class ListenerListTest {
 		private static final int THREAD_COUNT = 20;
 		private static final int TEST_ACTIONS = 10_000;
 
-		private final ListenerList<Integer> list = new ListenerList<>(null);
+		private final ListenerList<Integer> list = ListenerList.build().allowReentrant().build();
 		/**
 		 * This array functions to cap the size of the list being operated on. In particular, the indexes of the nodes will NOT typically
 		 * correspond to the position of the node in the list.

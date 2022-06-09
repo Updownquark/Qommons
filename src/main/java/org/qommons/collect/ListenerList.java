@@ -85,18 +85,20 @@ public class ListenerList<E> {
 		private boolean isForEachSafe;
 		private InUseListener theInUseListener;
 		private boolean fastSize;
-		private SynchronizationType theSynchronizationType;
+		private boolean isSynchronized;
 
 		Builder() {
 			// Initialize with defaults, which mostly lean toward safety and functionality, away from performance
 			theReentrancyError = "Reentrancy not allowed";
 			isForEachSafe = true;
 			fastSize = true;
-			theSynchronizationType = SynchronizationType.ELEMENT;
+			isSynchronized = true;
 		}
 
 		/**
-		 * Configures the list to be built to allow listeners to invoke {@link ListenerList#forEach(Consumer)}, directly or indirectly
+		 * Configures the list to be built to allow listeners to invoke {@link ListenerList#forEach(Consumer)}, directly or indirectly.
+		 * Using this will improve the performance of {@link ListenerList#forEach(Consumer)} by avoiding the need to keep track of call
+		 * status for each thread.
 		 * 
 		 * @return This builder
 		 */
@@ -148,14 +150,11 @@ public class ListenerList<E> {
 		}
 
 		/**
-		 * @param type The synchronization type to use to thread-secure the list
+		 * @param sync Whether the list should be synchronized to prevent loss of data
 		 * @return This builder
-		 * @see SynchronizationType#NONE
-		 * @see SynchronizationType#LIST
-		 * @see SynchronizationType#ELEMENT
 		 */
-		public Builder withSyncType(SynchronizationType type) {
-			theSynchronizationType = type;
+		public Builder withSync(boolean sync) {
+			isSynchronized = sync;
 			return this;
 		}
 
@@ -165,7 +164,7 @@ public class ListenerList<E> {
 		 * @return This builder
 		 */
 		public Builder unsafe() {
-			return allowReentrant().forEachSafe(false).withFastSize(false).withSyncType(SynchronizationType.NONE);
+			return allowReentrant().forEachSafe(false).withFastSize(false).withSync(false);
 		}
 
 		/**
@@ -173,34 +172,8 @@ public class ListenerList<E> {
 		 * @return The new list
 		 */
 		public <E> ListenerList<E> build() {
-			return new ListenerList<>(theReentrancyError, isForEachSafe, theInUseListener, fastSize, theSynchronizationType);
+			return new ListenerList<>(theReentrancyError, isForEachSafe, theInUseListener, fastSize, isSynchronized);
 		}
-	}
-
-	/** Several different synchronization types that can be used to thread-secure this class */
-	public enum SynchronizationType {
-		/** With this synchronization type, the list will be more performant, but not thread-safe */
-		NONE,
-		/**
-		 * <p>
-		 * With this synchronization type, all add/remove operations will synchronize on the whole list, allowing only a single such
-		 * operation at a time.
-		 * </p>
-		 * <p>
-		 * This type of synchronization may perform better than {@link #ELEMENT}-level synchronization for very small lists.
-		 * </p>
-		 */
-		LIST,
-		/**
-		 * <p>
-		 * With this synchronization type, add/remove operations occur within 2 monitor holds, representing the link before and after the
-		 * node.
-		 * </p>
-		 * <p>
-		 * This type of synchronization may perform better than {@link #LIST} for lists that have more than 2 elements.
-		 * </p>
-		 */
-		ELEMENT;
 	}
 
 	/** @return A builder to build a {@link ListenerList} by option */
@@ -241,21 +214,12 @@ public class ListenerList<E> {
 			if (previous.next != this)
 				return false;
 
-			switch (theSyncType) {
-			case NONE:
-				return _remove();
-			case LIST:
+			if (isSynchronized) {
 				synchronized (theTerminal) {
 					return _remove();
 				}
-			case ELEMENT:
-				synchronized (this) {
-					synchronized (this.next) { // End sync method 2
-						return _remove();
-					}
-				}
-			}
-			throw new IllegalStateException("Unrecognized sync type " + theSyncType);
+			} else
+				return _remove();
 		}
 
 		private boolean _remove() {
@@ -301,41 +265,13 @@ public class ListenerList<E> {
 	final Node theTerminal;
 	private final String theReentrancyError;
 	private final InUseListener theInUseListener;
-	final SynchronizationType theSyncType;
+	final boolean isSynchronized;
 
 	private final AtomicInteger theSize;
 	private volatile Object unsafeIterId;
 
-	/**
-	 * Creates the listener list
-	 * 
-	 * @param reentrancyError The message to throw in an {@link ReentrantNotificationException} from {@link #forEach(Consumer)} if the
-	 *        method is called as a result of the action being invoked from a higher {@link #forEach(Consumer) forEach} call. Or null if
-	 *        such reentrancy is to be allowed.
-	 */
-	public ListenerList(String reentrancyError) {
-		this(reentrancyError, true, null);
-	}
-
-	/**
-	 * Creates the listener list
-	 * 
-	 * @param reentrancyError The message to throw in an {@link ReentrantNotificationException} from {@link #forEach(Consumer)} if the
-	 *        method is called as a result of the action being invoked from a higher {@link #forEach(Consumer) forEach} call. Or null if
-	 *        such reentrancy is to be allowed.
-	 * @param safeForEach If the reentrancy and {@link #add(Object, boolean) skipCurrent} features are not thread-safe, this class can
-	 *        perform much better. This is safe if the {@link #forEach(Consumer)} method is never called from multiple threads
-	 *        simultaneously OR if reentrancy is enabled AND the skipCurrent feature need not be reliable.
-	 * @param inUseListener A listener to be notified when this list goes in (true) and out (false) of use (i.e. just before a listener is
-	 *        added to the empty list or just after the last listener is removed, respectively). This listener MAY NOT add listeners itself.
-	 *        Such an attempt will result in deadlock.
-	 */
-	public ListenerList(String reentrancyError, boolean safeForEach, InUseListener inUseListener) {
-		this(reentrancyError, safeForEach, inUseListener, true, SynchronizationType.ELEMENT);
-	}
-
 	ListenerList(String reentrancyError, boolean safeForEach, InUseListener inUseListener, boolean fastSize,
-		SynchronizationType synchronizationType) {
+		boolean sync) {
 		// The code is simpler if all the real listeners can know that there's a non-null node before and after them.
 		// The first node's previous pointer and the last node's next pointer would always be null,
 		// so there's no need to have different nodes for first and last.
@@ -348,7 +284,7 @@ public class ListenerList<E> {
 		if (inUseListener != null)
 			fastSize = true;
 		theSize = fastSize ? new AtomicInteger() : null;
-		theSyncType = synchronizationType;
+		isSynchronized = sync;
 	}
 
 	/**
@@ -394,22 +330,12 @@ public class ListenerList<E> {
 	private Element<E> addNode(Node newNode) {
 		newNode.next = theTerminal;// We know we'll be adding this node as the last node (excluding the terminal)
 		// The next part affects the list's state, so only one at a time
-		switch (theSyncType) {
-		case NONE:
-			_add(newNode);
-			break;
-		case LIST:
+		if (isSynchronized) {
 			synchronized (theTerminal) {
 				_add(newNode);
 			}
-			break;
-		case ELEMENT:
-			synchronized (newNode) {
-				synchronized (theTerminal) {
-					_add(newNode);
-				}
-			}
-		}
+		} else
+			_add(newNode);
 		return newNode;
 	}
 

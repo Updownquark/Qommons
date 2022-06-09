@@ -69,8 +69,8 @@ public class Debug {
 				return debug(thread, true);
 			}
 		};
-		theChecks = new ListenerList<>(null);
-		theWatchers = new ListenerList<>(null);
+		theChecks = ListenerList.build().allowReentrant().build();
+		theWatchers = ListenerList.build().allowReentrant().build();
 		theData = new TreeMap<>();
 		theDataByValue = new IdentityHashMap<>();
 		theLock = new ReentrantLock();
@@ -279,8 +279,8 @@ public class Debug {
 				theRefs = new TreeMap<>();
 				theReverseRefs = new TreeMap<>();
 				theFields = new TreeMap<>();
-				theChecks = new ListenerList<>(null);
-				theActionListeners = new ListenerList<>(null);
+				theChecks = ListenerList.build().allowReentrant().build();
+				theActionListeners = ListenerList.build().allowReentrant().build();
 				theCheckRemove = debug.addCheck(() -> check());
 			} else {
 				theRootNames = null;
