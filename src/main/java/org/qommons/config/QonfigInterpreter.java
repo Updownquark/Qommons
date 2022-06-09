@@ -22,7 +22,7 @@ import org.qommons.ex.ExFunction;
  * 
  * @param <QIS> The session type provided by this interpreter
  */
-public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInterpretingSession<QIS>> {
+public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInterpretingSession<?>> {
 	/**
 	 * Holds values for communication between parsing components
 	 * 
@@ -85,6 +85,16 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		/** @return The interpreter this session is for */
 		public QonfigInterpreter<QIS> getInterpreter() {
 			return theInterpreter;
+		}
+
+		/** @return The element or add-on type that the element is being interpreted as */
+		public QonfigElementOrAddOn getType() {
+			return theType;
+		}
+
+		/** @return This session's parent */
+		protected QIS getParent() {
+			return theParent;
 		}
 
 		/**
@@ -738,7 +748,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		T modifyValue(T value, QIS session) throws QonfigInterpretationException;
 	}
 
-	static class QonfigExtensionCreator<QIS extends QonfigInterpretingSession<QIS>, S, T> implements QonfigValueCreator<QIS, T> {
+	static class QonfigExtensionCreator<QIS extends QonfigInterpretingSession<?>, S, T> implements QonfigValueCreator<QIS, T> {
 		final QonfigElementOrAddOn theSuperElement;
 		final Class<S> theSuperType;
 		final QonfigValueExtension<? super QIS, S, T> theExtension;
@@ -756,7 +766,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		}
 	}
 
-	static class QonfigCreationDelegator<QIS extends QonfigInterpretingSession<QIS>, T> implements QonfigValueCreator<QIS, T> {
+	static class QonfigCreationDelegator<QIS extends QonfigInterpretingSession<?>, T> implements QonfigValueCreator<QIS, T> {
 		private final QonfigAttributeDef.Declared theTypeAttribute;
 		private final Class<T> theType;
 
@@ -783,7 +793,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 	 * @param <QIS> The sub-type of session provided by the interpreter this holder is for
 	 * @param <T> The type of value to create
 	 */
-	protected static class QonfigCreatorHolder<QIS extends QonfigInterpretingSession<QIS>, T> {
+	protected static class QonfigCreatorHolder<QIS extends QonfigInterpretingSession<?>, T> {
 		final QonfigElementOrAddOn element;
 		final Class<T> type;
 		final QonfigValueCreator<? super QIS, ? extends T> creator;
@@ -806,7 +816,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 	 * @param <QIS> The sub-type of session provided by the interpreter this holder is for
 	 * @param <T> The type of value to modify
 	 */
-	protected static class QonfigModifierHolder<QIS extends QonfigInterpretingSession<QIS>, T> {
+	protected static class QonfigModifierHolder<QIS extends QonfigInterpretingSession<?>, T> {
 		final QonfigElementOrAddOn element;
 		final Class<T> type;
 		final QonfigValueModifier<? super QIS, T> modifier;
@@ -871,7 +881,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 	 * @param <QIS> The sub-type of session that interpreters built from this builder will provide
 	 * @param <B> The sub-type of this builder
 	 */
-	public abstract static class Builder<QIS extends QonfigInterpretingSession<QIS>, B extends Builder<QIS, B>> {
+	public abstract static class Builder<QIS extends QonfigInterpretingSession<?>, B extends Builder<QIS, B>> {
 		private final Class<?> theCallingClass;
 		private final Set<QonfigToolkit> theToolkits;
 		private final QonfigToolkit theToolkit;
@@ -989,7 +999,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 				if (old == null)
 					old = new ClassMap<>();
 				// If it already exists, assume this just called twice via dependencies
-				old.computeIfAbsent(type, () -> new QonfigCreatorHolder<QIS, T>(element, type, creator));
+				old.computeIfAbsent(type, () -> new QonfigCreatorHolder<>(element, type, creator));
 				return old;
 			});
 			return (B) this;
@@ -1136,6 +1146,18 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			return modifyWith(element, type, modifier);
 		}
 
+		/**
+		 * Adds a set of interpretation solutions to this interpreter
+		 * 
+		 * @param interpretation The interpretations to configure
+		 * @return This builder
+		 */
+		public B configure(QonfigInterpretation<? super QIS>... interpretation) {
+			for (QonfigInterpretation<? super QIS> interp : interpretation)
+				interp.configureInterpreter((B) this);
+			return (B) this;
+		}
+
 		/** @return The built interpreter */
 		public QonfigInterpreter<QIS> build() {
 			Set<QonfigAddOn> usedInh = new HashSet<>();
@@ -1176,6 +1198,56 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			}
 			System.err.println(theStatus.print(Status.Warn, Status.Error, StringBuilder::append, 0, null));
 			return create();
+		}
+	}
+
+	/**
+	 * @param callingClass The calling class
+	 * @param toolkits The toolkits to interpret
+	 * @return A builder to create an interpreter
+	 */
+	public static Builder<?, ?> build(Class<?> callingClass, QonfigToolkit... toolkits) {
+		return new DefaultBuilder<>(callingClass, toolkits);
+	}
+
+	static class Default<S extends QonfigInterpretingSession<S>> extends QonfigInterpreter<S> {
+		Default(Class<?> callingClass, Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<S, ?>>> creators,
+			Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<S, ?>>> modifiers) {
+			super(callingClass, creators, modifiers);
+		}
+
+		@Override
+		public S interpret(QonfigElement element) {
+			return (S) new QonfigInterpretingSession<>(this, element);
+		}
+
+		@Override
+		protected S interpret(S parent, QonfigElement element, QonfigElementOrAddOn type, int childIndex) {
+			return (S) new QonfigInterpretingSession<>(parent, element, type, childIndex);
+		}
+	}
+
+	static class DefaultBuilder<S extends QonfigInterpretingSession<S>> extends Builder<S, DefaultBuilder<S>> {
+		DefaultBuilder(Class<?> callingClass, QonfigToolkit... toolkits) {
+			super(callingClass, toolkits);
+		}
+
+		DefaultBuilder(Class<?> callingClass, Set<QonfigToolkit> toolkits, QonfigToolkit toolkit,
+			StatusReportAccumulator<QonfigElementOrAddOn> status, Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<S, ?>>> creators,
+			Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<S, ?>>> modifiers) {
+			super(callingClass, toolkits, toolkit, status, creators, modifiers);
+		}
+
+		@Override
+		protected DefaultBuilder<S> builderFor(Class<?> callingClass, Set<QonfigToolkit> toolkits, QonfigToolkit toolkit,
+			StatusReportAccumulator<QonfigElementOrAddOn> status, Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<S, ?>>> creators,
+			Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<S, ?>>> modifiers) {
+			return new DefaultBuilder<>(callingClass, toolkits, toolkit, status, creators, modifiers);
+		}
+
+		@Override
+		public QonfigInterpreter<S> create() {
+			return new Default<>(getCallingClass(), getCreators(), getModifiers());
 		}
 	}
 }
