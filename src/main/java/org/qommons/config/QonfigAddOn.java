@@ -117,9 +117,9 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
 		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ChildModifier> childModifiers,
 		BetterMultiMap<String, QonfigChildDef> childrenByName, //
-		ValueModifier value, MultiInheritanceSet<QonfigAddOn> fullInheritance) {
+		ValueModifier value, MultiInheritanceSet<QonfigAddOn> fullInheritance, QonfigAddOn metaSpec) {
 		super(declarer, name, isAbstract, requirement, inheritance, fullInheritance, declaredAttributes, attributeModifiers,
-			attributesByName, declaredChildren, childModifiers, childrenByName, value);
+			attributesByName, declaredChildren, childModifiers, childrenByName, value, metaSpec);
 	}
 
 	/**
@@ -154,6 +154,11 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 	@Override
 	public Map<QonfigChildDef.Declared, ChildModifier> getChildModifiers() {
 		return (Map<QonfigChildDef.Declared, ChildModifier>) super.getChildModifiers();
+	}
+
+	@Override
+	public QonfigAddOn getMetaSpec() {
+		return (QonfigAddOn) super.getMetaSpec();
 	}
 
 	@Override
@@ -252,7 +257,8 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 			return new QonfigAddOn(theSession.getToolkit(), getName(), isAbstract(), getSuperElement(), getInheritance(), //
 				getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueModifier>) getAttributeModifiers(), getAttributesByName(), //
 				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildModifier>) getChildModifiers(), getChildrenByName(), //
-				getValue(), getFullInheritance());
+				getValue(), getFullInheritance(), //
+				getMetaSpec() == null ? null : (QonfigAddOn) getMetaSpec().get());
 		}
 
 		@Override

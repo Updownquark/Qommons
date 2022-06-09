@@ -66,12 +66,12 @@ public class QonfigElement {
 		return theType;
 	}
 
-	/** @return The declared roles that this element fulfills in its {@link #getParent() parent} */
+	/** @return The roles that this element fulfills in its {@link #getParent() parent} */
 	public Set<QonfigChildDef> getParentRoles() {
 		return theParentRoles;
 	}
 
-	/** @return The roles that this element fulfills in its {@link #getParent() parent} */
+	/** @return The declared roles that this element fulfills in its {@link #getParent() parent} */
 	public Set<QonfigChildDef.Declared> getDeclaredRoles() {
 		return theDeclaredRoles;
 	}
@@ -93,17 +93,6 @@ public class QonfigElement {
 				if (el.isAssignableFrom(inh))
 					return true;
 		}
-		return false;
-	}
-
-	/**
-	 * @param addOn The add-on to test
-	 * @return Whether this element inherits the given add-on
-	 */
-	public boolean isInstance(QonfigAddOn addOn) {
-		for (QonfigAddOn inh : theInheritance.values())
-			if (inh.isAssignableFrom(addOn))
-				return true;
 		return false;
 	}
 

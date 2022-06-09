@@ -9,6 +9,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import org.qommons.MultiInheritanceSet;
 import org.qommons.QommonsUtils;
@@ -37,6 +38,9 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 
 	private final ValueDefModifier theValue;
 
+	private final QonfigElementOrAddOn theMetaSpec;
+	private QonfigMetadata theMetadata;
+
 	/**
 	 * @param declarer The toolkit declaring the item (element-def or add-on)
 	 * @param name The name of the item
@@ -51,13 +55,14 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 	 * @param childModifiers The child modifiers for the item
 	 * @param childrenByName Declared and inherited children for the item
 	 * @param value The value definition or modifier for the item
+	 * @param metaSpec The metadata specification for the element
 	 */
 	protected QonfigElementOrAddOn(QonfigToolkit declarer, String name, boolean isAbstract, //
 		QonfigElementDef superElement, Set<QonfigAddOn> inheritance, MultiInheritanceSet<QonfigAddOn> fullInheritance, //
 		Map<String, Declared> declaredAttributes, Map<Declared, ? extends ValueDefModifier> attributeModifiers,
 		BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
 		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ? extends ChildDefModifier> childModifiers,
-		BetterMultiMap<String, QonfigChildDef> childrenByName, ValueDefModifier value) {
+		BetterMultiMap<String, QonfigChildDef> childrenByName, ValueDefModifier value, QonfigElementOrAddOn metaSpec) {
 		super(declarer, name);
 		this.isAbstract = isAbstract;
 		theSuperElement = superElement;
@@ -73,6 +78,12 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		theChildrenByName = childrenByName;
 
 		theValue = value;
+
+		theMetaSpec = metaSpec;
+	}
+
+	private void setMetadata(QonfigMetadata metadata) {
+		theMetadata = metadata;
 	}
 
 	/** @return False if this type can be instantiated directly, true if it can only be extended/inherited */
@@ -172,6 +183,19 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 	}
 
 	/**
+	 * @return The metadata specification for the element, determining what metadata elements it and any sub-elements or inherited elements
+	 *         may specify
+	 */
+	public QonfigElementOrAddOn getMetaSpec() {
+		return theMetaSpec;
+	}
+
+	/** @return The metadata specified on this element */
+	public QonfigMetadata getMetadata() {
+		return theMetadata;
+	}
+
+	/**
 	 * @param other The other element-def or add-on
 	 * @return Whether the given element-def or add-on inherits or extends this element-def or add-on
 	 */
@@ -191,6 +215,10 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			NewChildren,
 			/** Inherited child modification */
 			ModifyChildren,
+			/** Metadata specification */
+			MetaSpec,
+			/** Metadata content */
+			MetaData,
 			/** Final state, no further modifications allowed */
 			Built
 		}
@@ -214,6 +242,10 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		private final Map<QonfigChildDef.Declared, QonfigChildDef> theCompiledChildren;
 		private final BetterMultiMap<String, QonfigChildDef> theChildrenByName;
 		private ValueDefModifier theValue;
+
+		private final QonfigElementOrAddOn.Builder theMetaSpec;
+		private QonfigMetadata theMetadata;
+		private QonfigElement.Builder theMetadataBuilder;
 
 		private final MultiInheritanceSet<QonfigAddOn> theFullInheritance;
 		private Stage theStage;
@@ -241,6 +273,13 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			theChildrenByName = BetterHashMultiMap.<String, QonfigChildDef> build().buildMultiMap();
 
 			theFullInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+
+			if ("element-meta".equals(name)) {
+				theMetaSpec = null;
+			} else if (this instanceof QonfigElementDef.Builder)
+				theMetaSpec = QonfigElementDef.build("element-meta", session);
+			else
+				theMetaSpec = QonfigAddOn.build("element-meta", session);
 
 			theStage = Stage.Initial;
 		}
@@ -315,6 +354,11 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			return theValue;
 		}
 
+		/** @return The metadata specification for the element */
+		protected QonfigElementOrAddOn.Builder getMetaSpec() {
+			return theMetaSpec;
+		}
+
 		/**
 		 * Advances the stage of the builder, potentially performing intermediate build steps
 		 * 
@@ -387,8 +431,30 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 						theAttributesByName.remove(mod.getKey().getName(), old);
 				}
 				break;
-			case Built:
+			case MetaData:
 				validate();
+				if (theMetaSpec != null) {
+					theMetaSpec.setStage(Stage.Built);
+					theMetadata = new QonfigMetadata(theBuilt);
+					theBuilt.setMetadata(theMetadata);
+					QonfigElementDef mdType;
+					if (theMetaSpec.get() instanceof QonfigElementDef)
+						mdType = (QonfigElementDef) theMetaSpec.get();
+					else if (theMetaSpec.getSuperElement() != null)
+						mdType = (QonfigElementDef) QonfigElementDef.build("element-meta", theSession)//
+							.setSuperElement(theMetaSpec.getSuperElement())//
+							.inherits((QonfigAddOn) theMetaSpec.get())//
+							.build();
+					else
+						mdType = (QonfigElementDef) QonfigElementDef.build("element-meta", theSession)//
+							.inherits((QonfigAddOn) theMetaSpec.get())//
+							.build();
+					theMetadataBuilder = QonfigElement.build(theSession, theMetadata, null, mdType);
+				}
+				break;
+			case Built:
+				if (theMetaSpec != null)
+					theMetadata.setRoot(theMetadataBuilder.build());
 				break;
 			default:
 			}
@@ -422,6 +488,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			else if (theSuperElement != null)
 				throw new IllegalStateException("Super element has already been set");
 			theSuperElement = superElement;
+			if (theMetaSpec != null)
+				theMetaSpec.setSuperElement(superElement.getMetaSpec());
 			return this;
 		}
 
@@ -449,6 +517,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 						+ " incompatible with " + theName;
 			}
 			theInheritance.add(addOn);
+			if (theMetaSpec != null)
+				theMetaSpec._inherits(addOn.getMetaSpec());
 			return null;
 		}
 
@@ -537,10 +607,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				theSession.withError("Cannot declare multiple attributes with the same name: " + name);
 				return this;
 			} else if (specify == SpecificationType.Forbidden) {
-				if (defaultValue == null) {
-					theSession.withError("A default value must be specified for an attribute that is forbidden: " + name);
-					return this;
-				} else if (type instanceof QonfigAddOn) {
+				if (type instanceof QonfigAddOn) {
 					String msg = _inherits((QonfigAddOn) defaultValue);
 					if (msg != null) {
 						theSession.withError("Attribute '" + name + "' requires inheritance of " + defaultValue + ": " + msg);
@@ -889,6 +956,38 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 */
 		protected abstract ChildDefModifier childModifier(QonfigChildDef.Declared child, QonfigElementDef type,
 			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, Integer min, Integer max);
+
+		/**
+		 * Declares a metadata element that extensions can use to document themselves
+		 * 
+		 * @param name The role name for the metadata definition
+		 * @param type The super type for metadata of the element
+		 * @param inheritance The add-ons inherited by the metadata
+		 * @param requirement {@link QonfigAddOn#isAbstract()} add-ons that an element must inherit from elsewhere in order to fulfill this
+		 *        role
+		 * @param min The minimum number of metadata elements of the given role that must be specified for extensions of this element
+		 * @param max The maximum number of metadata elements of the given role that may be specified for extensions of this element
+		 * @return This builder
+		 */
+		public Builder withMetaSpec(String name, QonfigElementDef type, Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min,
+			int max) {
+			if (!checkStage(Stage.MetaSpec))
+				throw new IllegalStateException("Metadata specifications cannot be added at this stage: " + theStage);
+			theMetaSpec.withChild(name, type, Collections.emptySet(), inheritance, requirement, min, max);
+			return this;
+		}
+
+		/**
+		 * @param metadata Accepts an element builder to which children can be
+		 *        {@link QonfigElement.Builder#withChild(java.util.List, QonfigElementDef, Consumer) added}
+		 * @return This builder
+		 */
+		public Builder withMetaData(Consumer<QonfigElement.Builder> metadata) {
+			if (!checkStage(Stage.MetaData))
+				throw new IllegalStateException("Metadata cannot be added at this stage: " + theStage);
+			metadata.accept(theMetadataBuilder);
+			return this;
+		}
 
 		/** @return The built item. The item may not be completely filled-in. */
 		public QonfigElementOrAddOn get() {

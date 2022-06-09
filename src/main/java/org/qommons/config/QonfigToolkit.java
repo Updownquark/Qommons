@@ -393,6 +393,8 @@ public class QonfigToolkit {
 	 * @return The additional add-ons that the element should inherit from automatic inheritance
 	 */
 	public MultiInheritanceSet<QonfigAddOn> getAutoInheritance(QonfigElementOrAddOn target, Set<QonfigChildDef> roles) {
+		if (theTypeAutoInheritance == null)
+			return MultiInheritanceSet.empty(); // Normal, happens during building
 		MultiInheritanceSet<QonfigAddOn> inheritance = null;
 		for (MultiInheritanceSet<QonfigAddOn> autoInherit : theTypeAutoInheritance.getAll(target)) {
 			if (inheritance == null)

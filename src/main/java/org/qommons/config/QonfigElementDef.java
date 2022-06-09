@@ -20,9 +20,9 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		Map<QonfigAttributeDef.Declared, QonfigAttributeDef> allAttributes, BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
 		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ChildDefModifier> childModifiers,
 		Map<QonfigChildDef.Declared, QonfigChildDef> allChildren, BetterMultiMap<String, QonfigChildDef> childrenByName, //
-		ValueDefModifier value, MultiInheritanceSet<QonfigAddOn> fullInheritance) {
+		ValueDefModifier value, MultiInheritanceSet<QonfigAddOn> fullInheritance, QonfigElementDef metaSpec) {
 		super(declarer, name, isAbstract, superElement, inheritance, fullInheritance, declaredAttributes, attributeModifiers,
-			attributesByName, declaredChildren, childModifiers, childrenByName, value);
+			attributesByName, declaredChildren, childModifiers, childrenByName, value, metaSpec);
 		theCompiledAttributes = allAttributes;
 		theCompiledChildren = allChildren;
 
@@ -71,6 +71,11 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 	/** @return The value specification for elements of this type */
 	public QonfigValueDef getValue() {
 		return theValue;
+	}
+
+	@Override
+	public QonfigElementDef getMetaSpec() {
+		return (QonfigElementDef) super.getMetaSpec();
 	}
 
 	@Override
@@ -130,7 +135,8 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 				getCompiledAttributes(), getAttributesByName(), //
 				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildDefModifier>) getChildModifiers(), getCompiledChildren(),
 				getChildrenByName(), //
-				getValue(), getFullInheritance());
+				getValue(), getFullInheritance(), //
+				getMetaSpec() == null ? null : (QonfigElementDef) getMetaSpec().get());
 		}
 	}
 }

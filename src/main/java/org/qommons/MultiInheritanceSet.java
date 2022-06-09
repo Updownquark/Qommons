@@ -91,6 +91,9 @@ public interface MultiInheritanceSet<T> {
 		return added;
 	}
 
+	/** Removes all values from this set */
+	void clear();
+
 	/** @return An independent copy of this set */
 	MultiInheritanceSet<T> copy();
 
@@ -148,6 +151,10 @@ public interface MultiInheritanceSet<T> {
 			@Override
 			public boolean add(T value) {
 				throw new UnsupportedOperationException();
+			}
+
+			@Override
+			public void clear() {
 			}
 
 			@Override
@@ -226,6 +233,11 @@ public interface MultiInheritanceSet<T> {
 			if (added < 0)
 				theNodes.add(value);
 			return true;
+		}
+
+		@Override
+		public void clear() {
+			theNodes.clear();
 		}
 
 		@Override
@@ -315,6 +327,12 @@ public interface MultiInheritanceSet<T> {
 		@Override
 		public boolean add(T value) {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public void clear() {
+			if (!theBacking.isEmpty())
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
 
 		@Override
