@@ -28,6 +28,10 @@ import org.w3c.dom.Element;
 public class DefaultQonfigParser implements QonfigParser {
 	/** The name of the attribute to use todirectly specify inheritance in Qonfig documents */
 	public static final String DOC_ELEMENT_INHERITANCE_ATTR = "with-extension";
+	/** Names that cannot be used for Qonfig attributes */
+	public static final Set<String> RESERVED_ATTR_NAMES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(//
+		DOC_ELEMENT_INHERITANCE_ATTR, "role"//
+	)));
 
 	private static final QonfigToolkit PLACEHOLDER;
 	static {
@@ -783,6 +787,9 @@ public class DefaultQonfigParser implements QonfigParser {
 					continue; // Attribute override, not at this stage
 				if (attrName.indexOf(':') >= 0) {
 					builder.getSession().withError("No such attribute '" + attrName + "'--use '.' instead of ':'");
+					continue;
+				} else if (RESERVED_ATTR_NAMES.contains(attrName)) {
+					builder.getSession().withError("Attribute name '" + attrName + "' is reserved");
 					continue;
 				}
 				QonfigParseSession attrSession = builder.getSession().forChild("attribute", attrName);
