@@ -2,8 +2,10 @@ package org.qommons;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -217,6 +219,16 @@ public class ClassMap<V> {
 			return list;
 		}
 
+		Set<Class<?>> getTopLevelKeys(Set<Class<?>> keys) {
+			if (theValue != null)
+				keys.add(theType);
+			else {
+				for (ClassMapEntry<? extends C, V> subMap : theSubMaps)
+					subMap.getTopLevelKeys(keys);
+			}
+			return keys;
+		}
+
 		void append(StringBuilder str, int indent) {
 			for (int i = 0; i < indent; i++)
 				str.append('\t');
@@ -262,6 +274,11 @@ public class ClassMap<V> {
 	public void descend(Class<?> targetType, MapEntryAction<V> action) {
 		targetType = wrap(targetType);
 		theRoot.descend(targetType, action, false);
+	}
+
+	/** @return Whether this map has no values in it */
+	public boolean isEmpty() {
+		return theRoot.getLocalValue() == null && theRoot.size() == 0;
 	}
 
 	/**
@@ -325,6 +342,13 @@ public class ClassMap<V> {
 				return true;
 			}));
 		return values[0] == null ? Collections.emptyList() : values[0];
+	}
+
+	/** @return A set containing all top-level classes with values in this map */
+	public synchronized Set<Class<?>> getTopLevelKeys() {
+		if (isEmpty())
+			return Collections.emptySet();
+		return theRoot.getTopLevelKeys(new LinkedHashSet<>());
 	}
 
 	/**
@@ -407,9 +431,13 @@ public class ClassMap<V> {
 		return theRoot.compute(type, value);
 	}
 
-	/** @param other Another subclass map whose values to put in this map */
-	public void putAll(ClassMap<? extends V> other) {
+	/**
+	 * @param other Another subclass map whose values to put in this map
+	 * @return This ClassMap
+	 */
+	public ClassMap<V> putAll(ClassMap<? extends V> other) {
 		theRoot._putAll(other.theRoot);
+		return this;
 	}
 
 	/**
@@ -424,6 +452,11 @@ public class ClassMap<V> {
 	/** Removes all values from this map */
 	public void clear() {
 		theRoot.clear();
+	}
+
+	/** @return An independent copy of this class map */
+	public ClassMap<V> copy() {
+		return new ClassMap<V>().putAll(this);
 	}
 
 	@Override
