@@ -253,7 +253,7 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		}
 
 		@Override
-		protected QonfigAddOn build() {
+		protected QonfigAddOn create() {
 			return new QonfigAddOn(theSession.getToolkit(), getName(), isAbstract(), getSuperElement(), getInheritance(), //
 				getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueModifier>) getAttributeModifiers(), getAttributesByName(), //
 				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildModifier>) getChildModifiers(), getChildrenByName(), //

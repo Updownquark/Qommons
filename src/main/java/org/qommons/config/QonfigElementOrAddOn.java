@@ -994,7 +994,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			if (theBuilt != null)
 				return theBuilt;
 			checkStage(Stage.NewAttributes);
-			theBuilt = build();
+			theBuilt = create();
 			return theBuilt;
 		}
 
@@ -1004,7 +1004,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * 
 		 * @return The built item
 		 */
-		protected abstract QonfigElementOrAddOn build();
+		protected abstract QonfigElementOrAddOn create();
 
 		private void validate() {
 			boolean valueModified = theValue != null;
@@ -1313,6 +1313,12 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					theChildrenByName.add(child.getName(), theCompiledChildren.get(child));
 				}
 			}
+		}
+
+		/** @return The built element or add-on */
+		public QonfigElementOrAddOn build() {
+			checkStage(Stage.Built);
+			return get();
 		}
 
 		@Override

@@ -1,5 +1,6 @@
 package org.qommons.config;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -43,7 +44,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		 * @param interpreter The interpreter this session is for
 		 * @param root The root element of the interpretation
 		 */
-		protected QonfigInterpretingSession(QonfigInterpreter<QIS> interpreter, QonfigElement root) {
+		protected QonfigInterpretingSession(QonfigInterpreter<QIS> interpreter, QonfigElement root) throws QonfigInterpretationException {
 			theInterpreter = interpreter;
 			theParent = null;
 			theParseSession = QonfigParseSession.forRoot(root.getType().getName(), null);
@@ -61,7 +62,8 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		 * @param type The element/add-on type to interpret as (affects what attributes and children are available by name)
 		 * @param childIndex The index of the child in its parent, for improved visibility of errors
 		 */
-		protected QonfigInterpretingSession(QIS parent, QonfigElement element, QonfigElementOrAddOn type, int childIndex) {
+		protected QonfigInterpretingSession(QIS parent, QonfigElement element, QonfigElementOrAddOn type, int childIndex)
+			throws QonfigInterpretationException {
 			QonfigInterpretingSession<QIS> parent2 = parent;
 			theInterpreter = parent2.theInterpreter;
 			theParent = parent;
@@ -105,7 +107,11 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			if (theType == type)
 				return (QIS) this;
 			else if (theElement.isInstance(type)) {
-				return theInterpreter.interpret((QIS) this, theElement, type, theChildIndex);
+				try {
+					return theInterpreter.interpret((QIS) this, theElement, type, theChildIndex);
+				} catch (QonfigInterpretationException e) {
+					throw new IllegalStateException("Initialization failure for same-element session?", e);
+				}
 			} else {
 				String msg = "Element " + theElement + " is not an instance of " + type;
 				withError(msg);
@@ -482,8 +488,9 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		 * @param childName The name of the child role to interpret the children for
 		 * @return A list of interpretation sessions for each child in this element with the given role
 		 * @throws IllegalArgumentException If no such child role exists
+		 * @throws QonfigInterpretationException If an error occurs initializing the children's interpretation
 		 */
-		public BetterList<QIS> forChildren(String childName) throws IllegalArgumentException {
+		public BetterList<QIS> forChildren(String childName) throws IllegalArgumentException, QonfigInterpretationException {
 			QonfigChildDef child = theType.getChild(childName);
 			if (child == null)
 				throw new IllegalArgumentException("No such child " + theType + "." + childName);
@@ -499,8 +506,11 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			return BetterList.of((QIS[]) sessions);
 		}
 
-		/** @return A list of interpretation sessions for each child in this element */
-		public BetterList<QIS> forChildren() {
+		/**
+		 * @return A list of interpretation sessions for each child in this element
+		 * @throws QonfigInterpretationException If an error occurs initializing the children's interpretation
+		 */
+		public BetterList<QIS> forChildren() throws QonfigInterpretationException {
 			List<QonfigElement> children = getElement().getChildren();
 			if (children.isEmpty())
 				return BetterList.empty();
@@ -531,6 +541,65 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 			for (QonfigElement child : children) {
 				interpreted[i] = theInterpreter.interpret((QIS) this, child, child.getType(), i).interpret(asType);
 				i++;
+			}
+			return (BetterList<T>) (BetterList<?>) BetterList.of(interpreted);
+		}
+
+		/**
+		 * @param metadataName The name of the metadata child on this session's element type to interpret the children for
+		 * @return A list of interpretation sessions for each metadata on all types in this element with the given metadata role
+		 * @throws IllegalArgumentException If no such metadata role exists
+		 * @throws QonfigInterpretationException If an error occurs initializing the metadata's interpretation
+		 */
+		public BetterList<QIS> forMetadata(String metadataName) throws IllegalArgumentException, QonfigInterpretationException {
+			QonfigChildDef child = theType.getMetaSpec().getChild(metadataName);
+			if (child == null)
+				throw new IllegalArgumentException("No such metadata " + theType + "." + metadataName);
+			List<QonfigElement> metadata = new ArrayList<>();
+			Set<QonfigAddOn> addOns = new HashSet<>();
+			addMetadata(child, metadata, addOns, theElement.getType());
+			for (QonfigAddOn inh : theElement.getInheritance().getExpanded(QonfigAddOn::getInheritance))
+				addMetadata(child, metadata, addOns, inh);
+			if (metadata.isEmpty())
+				return BetterList.empty();
+			QonfigInterpretingSession<QIS>[] sessions = new QonfigInterpretingSession[metadata.size()];
+			int i = 0;
+			for (QonfigElement ch : metadata) {
+				sessions[i] = theInterpreter.interpret((QIS) this, ch, ch.getType(), i);
+				i++;
+			}
+			return BetterList.of((QIS[]) sessions);
+		}
+
+		private void addMetadata(QonfigChildDef child, List<QonfigElement> metadata, Set<QonfigAddOn> addOns, QonfigElementOrAddOn type) {
+			if (!child.getOwner().isAssignableFrom(type.getMetaSpec()))
+				return;
+			else if (type instanceof QonfigAddOn && !addOns.add((QonfigAddOn) type))
+				return;
+			if (type instanceof QonfigElementDef && type.getSuperElement() != null)
+				addMetadata(child, metadata, addOns, type.getSuperElement());
+			metadata.addAll(type.getMetadata().getRoot().getChildrenByRole().get(child.getDeclared()));
+			for (QonfigAddOn inh : type.getInheritance())
+				addMetadata(child, metadata, addOns, inh);
+		}
+
+		/**
+		 * @param <T> The type of value to interpret
+		 * @param metadataName The name of the metadata child on the element-def/add-on associated with the current creator/modifier
+		 * @param asType The type of value to interpret the element as. The super wildcard is to allow for generics.
+		 * @return The interpreted values for each metadata in all types on this element that fulfill the given metadata role
+		 * @throws IllegalArgumentException If no such metadata exists on the type
+		 * @throws QonfigInterpretationException If the value cannot be interpreted
+		 */
+		public <T> BetterList<T> interpretMetadata(String metadataName, Class<? super T> asType)
+			throws IllegalArgumentException, QonfigInterpretationException {
+			BetterList<QIS> md = forMetadata(metadataName);
+			if (md.isEmpty())
+				return BetterList.empty();
+			Object[] interpreted = new Object[md.size()];
+			int i = 0;
+			for (QIS child : md) {
+				interpreted[i] = child.interpret(asType);
 			}
 			return (BetterList<T>) (BetterList<?>) BetterList.of(interpreted);
 		}
@@ -861,8 +930,9 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 	 * 
 	 * @param element The root element to interpret
 	 * @return The session to do the interpretation
+	 * @throws QonfigInterpretationException If an error occurs initializing the interpretation
 	 */
-	public abstract QIS interpret(QonfigElement element);
+	public abstract QIS interpret(QonfigElement element) throws QonfigInterpretationException;
 
 	/**
 	 * Creates an interpretation sub-session
@@ -872,8 +942,10 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 	 * @param type The element/add-on type to interpret as (affects what attributes and children are available by name)
 	 * @param childIndex The index of the child in its parent, for improved visibility of errors
 	 * @return The session to interpret the element
+	 * @throws QonfigInterpretationException If an error occurs initializing the interpretation
 	 */
-	protected abstract QIS interpret(QIS parent, QonfigElement element, QonfigElementOrAddOn type, int childIndex);
+	protected abstract QIS interpret(QIS parent, QonfigElement element, QonfigElementOrAddOn type, int childIndex)
+		throws QonfigInterpretationException;
 
 	/**
 	 * Builds {@link QonfigInterpreter}s
@@ -1217,12 +1289,13 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		}
 
 		@Override
-		public S interpret(QonfigElement element) {
+		public S interpret(QonfigElement element) throws QonfigInterpretationException {
 			return (S) new QonfigInterpretingSession<>(this, element);
 		}
 
 		@Override
-		protected S interpret(S parent, QonfigElement element, QonfigElementOrAddOn type, int childIndex) {
+		protected S interpret(S parent, QonfigElement element, QonfigElementOrAddOn type, int childIndex)
+			throws QonfigInterpretationException {
 			return (S) new QonfigInterpretingSession<>(parent, element, type, childIndex);
 		}
 	}

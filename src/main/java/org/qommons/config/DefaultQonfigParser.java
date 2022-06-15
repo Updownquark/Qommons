@@ -250,7 +250,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				}
 			}
 			builder.withChild(roles, childType, cb -> {
-				parseDocElement(childSession, cb, child, true, childApplies);
+				parseDocElement(childSession, cb, child, true, __ -> true);
 			});
 		}
 		return builder.build();
@@ -666,6 +666,10 @@ public class DefaultQonfigParser implements QonfigParser {
 				}
 				declaredRoots.add(declaredRoot);
 			}
+
+			// Finish build
+			for (QonfigElementOrAddOn.Builder builder : theBuilders.values())
+				builder.build();
 		}
 
 		@Override

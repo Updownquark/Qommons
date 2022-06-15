@@ -129,7 +129,7 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		}
 
 		@Override
-		protected QonfigElementOrAddOn build() {
+		protected QonfigElementOrAddOn create() {
 			return new QonfigElementDef(theSession.getToolkit(), getName(), getSuperElement(), getInheritance(), isAbstract(), //
 				getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueDefModifier>) getAttributeModifiers(),
 				getCompiledAttributes(), getAttributesByName(), //
