@@ -392,12 +392,6 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 */
 		protected void newStage(Stage stage) {
 			switch (stage) {
-			case NewAttributes:
-				// Fill out inheritance
-				if (theSuperElement != null)
-					theFullInheritance.addAll(theSuperElement.getFullInheritance().values());
-				theFullInheritance.addAll(theInheritance);
-				break;
 			case ModifyAttributes:
 				// Add declared attributes to compiled
 				// Add inherited attributes to compiled
@@ -488,6 +482,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			else if (theSuperElement != null)
 				throw new IllegalStateException("Super element has already been set");
 			theSuperElement = superElement;
+			theFullInheritance.addAll(theSuperElement.getFullInheritance().values());
 			if (theMetaSpec != null)
 				theMetaSpec.setSuperElement(superElement.getMetaSpec());
 			return this;
@@ -517,6 +512,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 						+ " incompatible with " + theName;
 			}
 			theInheritance.add(addOn);
+			theFullInheritance.add(addOn);
 			if (theMetaSpec != null)
 				theMetaSpec._inherits(addOn.getMetaSpec());
 			return null;

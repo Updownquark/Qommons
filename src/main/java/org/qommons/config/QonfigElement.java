@@ -355,6 +355,18 @@ public class QonfigElement {
 		return theValue == null ? null : theValue.toString();
 	}
 
+	/**
+	 * Creates a child of this element. However, the child will not be added to this element's {@link #getChildren() children}.
+	 * 
+	 * @param child The role for the new child to fill
+	 * @param type The element type of the new child
+	 * @param session The parse session for the builder
+	 * @return A builder for a new, disconnected child of this element
+	 */
+	public Builder synthesizeChild(QonfigChildDef child, QonfigElementDef type, QonfigParseSession session) {
+		return new Builder(session, getDocument(), this, type, Collections.singleton(child), Collections.emptySet());
+	}
+
 	@Override
 	public String toString() {
 		StringBuilder str = new StringBuilder().append('<').append(theType.getName());
@@ -829,18 +841,6 @@ public class QonfigElement {
 			}
 			// Now populate default values for optional/forbidden attributes
 			Map<QonfigAttributeDef.Declared, Boolean> defaultedAttributes = new HashMap<>();
-			for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : theType.getAllAttributes().entrySet()) {
-				if (attrValues.get(attr.getKey()) == null) {
-					switch (attr.getValue().getSpecification()) {
-					case Required:
-						break;
-					default:
-						attrValues.put(attr.getKey(), attr.getValue().getDefaultValue());
-						defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
-						break;
-					}
-				}
-			}
 			for (QonfigAddOn inh : completeInheritance.getExpanded(QonfigAddOn::getInheritance)) {
 				if (theType.isAssignableFrom(inh))
 					continue;
@@ -866,6 +866,18 @@ public class QonfigElement {
 							defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
 							break;
 						}
+					}
+				}
+			}
+			for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : theType.getAllAttributes().entrySet()) {
+				if (attrValues.get(attr.getKey()) == null) {
+					switch (attr.getValue().getSpecification()) {
+					case Required:
+						break;
+					default:
+						attrValues.put(attr.getKey(), attr.getValue().getDefaultValue());
+						defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
+						break;
 					}
 				}
 			}

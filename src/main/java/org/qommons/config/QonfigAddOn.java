@@ -165,15 +165,8 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 	public boolean isAssignableFrom(QonfigElementOrAddOn other) {
 		if (equals(other))
 			return true;
-		else if (other.getFullInheritance().contains(this))
-			return true;
-		if (other.getFullInheritance().isEmpty()) { // Not filled out with, gotta do it the long way
-			for (QonfigAddOn inh : other.getInheritance()) {
-				if (isAssignableFrom(inh))
-					return true;
-			}
-		}
-		return getSuperElement() != null && getSuperElement().isAssignableFrom(other);
+		else
+			return other.getFullInheritance().contains(this);
 	}
 
 	@Override

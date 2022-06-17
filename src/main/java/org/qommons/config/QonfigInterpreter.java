@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import org.qommons.BiTuple;
@@ -43,11 +44,12 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		 * 
 		 * @param interpreter The interpreter this session is for
 		 * @param root The root element of the interpretation
+		 * @throws QonfigInterpretationException If an error occurs initializing this session
 		 */
 		protected QonfigInterpretingSession(QonfigInterpreter<QIS> interpreter, QonfigElement root) throws QonfigInterpretationException {
 			theInterpreter = interpreter;
 			theParent = null;
-			theParseSession = QonfigParseSession.forRoot(root.getType().getName(), null);
+			theParseSession = QonfigParseSession.forRoot(root.getType().getName(), root.getDocument().getDocToolkit());
 			theElement = root;
 			theType = root.getType();
 			theValues = new HashMap<>();
@@ -61,6 +63,7 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 		 * @param element The element to interpret
 		 * @param type The element/add-on type to interpret as (affects what attributes and children are available by name)
 		 * @param childIndex The index of the child in its parent, for improved visibility of errors
+		 * @throws QonfigInterpretationException If an error occurs initializing this session
 		 */
 		protected QonfigInterpretingSession(QIS parent, QonfigElement element, QonfigElementOrAddOn type, int childIndex)
 			throws QonfigInterpretationException {
@@ -504,6 +507,37 @@ public abstract class QonfigInterpreter<QIS extends QonfigInterpreter.QonfigInte
 				i++;
 			}
 			return BetterList.of((QIS[]) sessions);
+		}
+
+		/**
+		 * @param childName The name of the child role to interpret the children for
+		 * @param defaultChild The type of child to use as a default if no children are specified for the given role
+		 * @param builder Configures the synthetic default child element to use
+		 * @return A list of interpretation sessions for each child in this element with the given role, or a list with the single default
+		 *         session
+		 * @throws IllegalArgumentException If no such child role exists
+		 * @throws QonfigInterpretationException If an error occurs initializing the children's interpretation
+		 */
+		public BetterList<QIS> forChildren(String childName, QonfigElementDef defaultChild, Consumer<QonfigElement.Builder> builder)
+			throws IllegalArgumentException, QonfigInterpretationException {
+			QonfigChildDef child = theType.getChild(childName);
+			if (child == null)
+				throw new IllegalArgumentException("No such child " + theType + "." + childName);
+			BetterList<QonfigElement> children = (BetterList<QonfigElement>) theElement.getChildrenByRole().get(child.getDeclared());
+			if (!children.isEmpty()) {
+				QonfigInterpretingSession<QIS>[] sessions = new QonfigInterpretingSession[children.size()];
+				int i = 0;
+				for (QonfigElement ch : children) {
+					sessions[i] = theInterpreter.interpret((QIS) this, ch, ch.getType(), i);
+					i++;
+				}
+				return BetterList.of((QIS[]) sessions);
+			}
+			QonfigElement.Builder b = theElement.synthesizeChild(child, defaultChild, theParseSession);
+			if (builder != null)
+				builder.accept(b);
+			QonfigElement element = b.doneWithAttributes().build();
+			return BetterList.of(theInterpreter.interpret((QIS) this, element, defaultChild, 0));
 		}
 
 		/**
