@@ -666,6 +666,8 @@ public class Colors {
 	 * @return The name of the given color, or its hex RGB value (e.g. "#006400") otherwise
 	 */
 	public static String toString(Color c) {
+		if (c == null)
+			return "null";
 		String ret = theColorNames.get(c);
 		if (ret != null) {
 			return ret;

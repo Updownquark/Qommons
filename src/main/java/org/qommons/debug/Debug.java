@@ -1,10 +1,12 @@
 package org.qommons.debug;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.NavigableSet;
 import java.util.Set;
@@ -39,6 +41,43 @@ import org.qommons.collect.ListenerList;
  * More features to be added later.
  */
 public class Debug {
+	static class StackOverflowDebugging {
+		final Map<String, Integer> theHitCount = new HashMap<>();
+		final LinkedList<String> theStack = new LinkedList<>();
+
+		Transaction debug(String pointName, int limit) {
+			theStack.add(pointName);
+			int count = theHitCount.compute(pointName, (__, old) -> old == null ? 1 : old + 1);
+			if (count >= limit) {
+				System.out.println("Reached " + count + " recursive hits at " + pointName);
+				BreakpointHere.breakpoint();
+			}
+			return () -> {
+				theHitCount.compute(pointName, (__, old) -> old.intValue() == 1 ? null : old - 1);
+				if (!pointName.equals(theStack.removeLast()))
+					throw new IllegalStateException("Stack overflow debugging state is corrupted--someone didn't close a transaction");
+			};
+		}
+	}
+
+	private static final ThreadLocal<StackOverflowDebugging> STACK_OVERFLOW_DEBUGGER = ThreadLocal.withInitial(() -> {
+		// Printout so we don't leave the debugging in accidentally
+		System.out.println("Debugging stack overflow on " + Thread.currentThread());
+		return new StackOverflowDebugging();
+	});
+
+	/**
+	 * This call is to assist in debugging stack overflow errors that may be intermittent. This call will trigger a {@link BreakpointHere}
+	 * breakpoint when the number of recursive hits to the given spot meets or exceeds the given limit. This call is thread-safe.
+	 * 
+	 * @param pointName A name for the calling point in the code before a recursive call
+	 * @param limit The limit at which a break point shall be called
+	 * @return A transaction to close after the recursive call
+	 */
+	public static Transaction debugStackOverflow(String pointName, int limit) {
+		return STACK_OVERFLOW_DEBUGGER.get().debug(pointName, limit);
+	}
+
 	private static final char DIV = '.';
 	private static final Debug singleton = new Debug(false);
 	private static final DebugData INACTIVE = new DebugData(null);
