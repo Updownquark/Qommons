@@ -33,16 +33,7 @@ public class DefaultQonfigParser implements QonfigParser {
 		DOC_ELEMENT_INHERITANCE_ATTR, "role"//
 	)));
 
-	private static final QonfigToolkit PLACEHOLDER;
-	static {
-		try {
-			PLACEHOLDER = new QonfigToolkit(null, null, null, null, null, null, null);
-		} catch (QonfigParseException e) {
-			throw new IllegalStateException("This should not happen", e);
-		}
-	}
-
-	private final Map<URL, QonfigToolkit> theToolkits;
+	private final Map<String, QonfigToolkit> theToolkits;
 
 	/** Creates the parser */
 	public DefaultQonfigParser() {
@@ -53,16 +44,15 @@ public class DefaultQonfigParser implements QonfigParser {
 	 * @param toolkit The toolkit URL to check
 	 * @return Whether this parser has been configured {@link #withToolkit(QonfigToolkit...) with} the given toolkit
 	 */
-	public boolean usesToolkit(URL toolkit) {
-		QonfigToolkit tk = theToolkits.get(toolkit);
-		return tk != null && tk != PLACEHOLDER;
+	public boolean usesToolkit(String toolkit) {
+		return theToolkits.containsKey(toolkit);
 	}
 
 	@Override
 	public DefaultQonfigParser withToolkit(QonfigToolkit... toolkits) {
 		for (QonfigToolkit toolkit : toolkits) {
 			if (toolkit != null) {
-				if (theToolkits.put(toolkit.getLocation(), toolkit) != toolkit) {
+				if (theToolkits.put(toolkit.getName(), toolkit) != toolkit) {
 					for (QonfigToolkit dep : toolkit.getDependencies().values())
 						withToolkit(dep);
 				}
@@ -84,29 +74,20 @@ public class DefaultQonfigParser implements QonfigParser {
 		QonfigParseSession session;
 		QonfigDocument doc;
 		StrictXmlReader rootReader = new StrictXmlReader(root);
-		Map<URL, QonfigToolkit> parsed = new LinkedHashMap<>();
 		LinkedList<String> path = new LinkedList<>();
 		Map<String, QonfigToolkit> uses = new LinkedHashMap<>();
 		for (Map.Entry<String, String> use : rootReader.findAttributes(USES, 0, -1).entrySet()) {
-			String name = use.getKey().substring(5);
-			if (name.isEmpty())
+			String refName = use.getKey().substring(5);
+			if (refName.isEmpty())
 				throw new IllegalArgumentException("Empty toolkit name");
-			checkName(name);
-			path.add(name);
-			URL ref;
-			try {
-				ref = new URL(QommonsConfig.resolve(use.getValue(), location.toString()));
-			} catch (IOException e) {
-				throw new IllegalArgumentException("Bad location for toolkit dependency " + path + "/" + name + ": " + use.getValue(), e);
-			}
+			checkName(refName);
+			path.add(refName);
+			String id = use.getValue();
 
-			QonfigToolkit oldDep = parsed.putIfAbsent(ref, PLACEHOLDER);
-			if (oldDep == null) {
-				QonfigToolkit dep = _parseToolkitXml(ref, ref.openStream(), path);
-				parsed.put(ref, dep);
-				uses.put(name, dep);
-			} else
-				uses.put(name, oldDep);
+			QonfigToolkit dep = theToolkits.get(id);
+			if (dep == null)
+				throw new IllegalArgumentException("No such dependency named " + id + " registered");
+			uses.put(refName, dep);
 		}
 		if (uses.isEmpty())
 			throw new IllegalArgumentException("No toolkit uses declared");
@@ -145,7 +126,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				throw new IllegalArgumentException("Element '" + rootReader.getName() + "' is not declared as the root of any toolkit");
 			rootDef = rootDef2;
 		}
-		QonfigToolkit docToolkit = new QonfigToolkit(null, Collections.unmodifiableMap(uses), Collections.emptyMap(),
+		QonfigToolkit docToolkit = new QonfigToolkit(location, null, Collections.unmodifiableMap(uses), Collections.emptyMap(),
 			Collections.emptyMap(), Collections.emptyMap(), Collections.emptyList(), new QonfigToolkit.ToolkitBuilder() {
 				@Override
 				public void parseTypes(QonfigParseSession s) {
@@ -276,8 +257,6 @@ public class DefaultQonfigParser implements QonfigParser {
 
 	private QonfigToolkit _parseToolkitXml(URL location, InputStream xml, LinkedList<String> path, CustomValueType... customValueTypes)
 		throws IOException, QonfigParseException {
-		if (theToolkits.containsKey(location) && theToolkits.get(location) != PLACEHOLDER)
-			return theToolkits.get(location);
 		Element root;
 		try {
 			root = QommonsConfig.getRootElement(xml);
@@ -286,38 +265,32 @@ public class DefaultQonfigParser implements QonfigParser {
 		}
 		xml.close();
 		StrictXmlReader rootReader = new StrictXmlReader(root);
+		String name = rootReader.getAttribute("name", true);
+		if (theToolkits.containsKey(name))
+			throw new IllegalArgumentException("A toolkit named " + name + " is already registered");
 		if (!rootReader.getTagName().equals("qonfig-def"))
 			throw new IllegalArgumentException("Expected 'qonfig-def' for root element, not " + root.getNodeName());
 		Map<String, QonfigToolkit> dependencies = new LinkedHashMap<>();
 		for (Map.Entry<String, String> ext : rootReader.findAttributes(EXTENDS, 0, -1).entrySet()) {
-			String name = ext.getKey().substring("extends:".length());
-			if (name.isEmpty())
+			String refName = ext.getKey().substring("extends:".length());
+			if (refName.isEmpty())
 				throw new IllegalArgumentException(path + ": Empty dependency name");
-			checkName(name);
-			path.add(name);
-			URL ref;
-			try {
-				ref = new URL(QommonsConfig.resolve(ext.getValue(), location.toString()));
-			} catch (IOException e) {
-				throw new IllegalArgumentException("Bad location for toolkit dependency " + path + "/" + name, e);
-			}
-			QonfigToolkit oldDep = theToolkits.putIfAbsent(ref, PLACEHOLDER);
-			if (oldDep == PLACEHOLDER)
-				throw new IllegalArgumentException("Circular or unresolvable toolkit dependency: " + path);
-			else if (oldDep == null) {
-				QonfigToolkit dep = _parseToolkitXml(ref, ref.openStream(), path);
-				dependencies.put(name, dep);
-			} else
-				dependencies.put(name, oldDep);
+			checkName(refName);
+			path.add(refName);
+			String ref = ext.getValue();
+			QonfigToolkit dep = theToolkits.get(ref);
+			if (dep == null)
+				throw new IllegalArgumentException("No such dependency named " + ref + " registered");
+			dependencies.put(refName, dep);
 		}
 		ToolkitParser parser = new ToolkitParser(rootReader, customValueTypes);
-		QonfigToolkit toolkit = new QonfigToolkit(location, Collections.unmodifiableMap(dependencies),
+		QonfigToolkit toolkit = new QonfigToolkit(name, location, Collections.unmodifiableMap(dependencies),
 			Collections.unmodifiableMap(parser.getDeclaredTypes()), Collections.unmodifiableMap(parser.getDeclaredAddOns()),
 			Collections.unmodifiableMap(parser.getDeclaredElements()), Collections.unmodifiableList(parser.getDeclaredAutoInheritance()),
 			parser);
 		rootReader.check();
 		// TODO Verify
-		theToolkits.put(location, toolkit);
+		theToolkits.put(name, toolkit);
 		return toolkit;
 	}
 

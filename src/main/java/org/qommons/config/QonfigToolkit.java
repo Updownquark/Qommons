@@ -11,13 +11,14 @@ import java.util.Set;
 
 import org.qommons.MultiInheritanceMap;
 import org.qommons.MultiInheritanceSet;
+import org.qommons.Named;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterCollections;
 import org.qommons.collect.BetterHashMultiMap;
 import org.qommons.collect.BetterMultiMap;
 
 /** A structure containing a set of types that can be used to parsed highly-structured and validated {@link QonfigDocument}s */
-public class QonfigToolkit {
+public class QonfigToolkit implements Named {
 	public interface ToolkitBuilder {
 		void parseTypes(QonfigParseSession session);
 
@@ -26,6 +27,7 @@ public class QonfigToolkit {
 		Set<QonfigElementDef> getDeclaredRoots(QonfigParseSession session);
 	}
 
+	private final String theName;
 	private final URL theLocation;
 	private final Map<String, QonfigToolkit> theDependencies;
 	private final Map<String, QonfigValueType.Declared> theDeclaredAttributeTypes;
@@ -41,9 +43,11 @@ public class QonfigToolkit {
 	private final Set<QonfigElementDef> theDeclaredRoots;
 	private final Set<QonfigElementDef> theRoots;
 
-	public QonfigToolkit(URL location, Map<String, QonfigToolkit> dependencies, Map<String, QonfigValueType.Declared> declaredTypes,
+	public QonfigToolkit(String name, URL location, Map<String, QonfigToolkit> dependencies,
+		Map<String, QonfigValueType.Declared> declaredTypes,
 		Map<String, QonfigAddOn> declaredAddOns, Map<String, QonfigElementDef> declaredElements,
 		List<QonfigAutoInheritance> autoInheritance, ToolkitBuilder builder) throws QonfigParseException {
+		theName = name;
 		theLocation = location;
 		theDependencies = dependencies;
 		theDeclaredAttributeTypes = declaredTypes;
@@ -179,6 +183,11 @@ public class QonfigToolkit {
 			theRoleAutoInheritance = null;
 			theTypeAndRoleAutoInheritance = null;
 		}
+	}
+
+	@Override
+	public String getName() {
+		return theName;
 	}
 
 	/** @return The resource location defining the toolkit */
@@ -489,8 +498,6 @@ public class QonfigToolkit {
 
 	@Override
 	public String toString() {
-		if (theLocation == null)
-			return "PLACEHOLDER";
-		return theLocation.toString();
+		return theName;
 	}
 }

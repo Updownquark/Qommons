@@ -148,7 +148,7 @@ public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
 	}
 
 	private void addDependency(DefaultQonfigParser parser, QonfigToolkit toolkit) {
-		if (parser.usesToolkit(toolkit.getLocation()))
+		if (parser.usesToolkit(toolkit.getName()))
 			return;
 		parser.withToolkit(toolkit);
 		for (QonfigToolkit dep : toolkit.getDependencies().values())
