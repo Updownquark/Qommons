@@ -28,6 +28,8 @@ public class QonfigToolkit implements Named {
 	}
 
 	private final String theName;
+	private final int theMajorVersion;
+	private final int theMinorVersion;
 	private final URL theLocation;
 	private final Map<String, QonfigToolkit> theDependencies;
 	private final Map<String, QonfigValueType.Declared> theDeclaredAttributeTypes;
@@ -43,11 +45,13 @@ public class QonfigToolkit implements Named {
 	private final Set<QonfigElementDef> theDeclaredRoots;
 	private final Set<QonfigElementDef> theRoots;
 
-	public QonfigToolkit(String name, URL location, Map<String, QonfigToolkit> dependencies,
+	public QonfigToolkit(String name, int majorVersion, int minorVersion, URL location, Map<String, QonfigToolkit> dependencies,
 		Map<String, QonfigValueType.Declared> declaredTypes,
 		Map<String, QonfigAddOn> declaredAddOns, Map<String, QonfigElementDef> declaredElements,
 		List<QonfigAutoInheritance> autoInheritance, ToolkitBuilder builder) throws QonfigParseException {
 		theName = name;
+		theMajorVersion = majorVersion;
+		theMinorVersion = minorVersion;
 		theLocation = location;
 		theDependencies = dependencies;
 		theDeclaredAttributeTypes = declaredTypes;
@@ -188,6 +192,16 @@ public class QonfigToolkit implements Named {
 	@Override
 	public String getName() {
 		return theName;
+	}
+
+	/** @return The major version of this toolkit */
+	public int getMajorVersion() {
+		return theMajorVersion;
+	}
+
+	/** @return The minor version of this toolkit */
+	public int getMinorVersion() {
+		return theMinorVersion;
 	}
 
 	/** @return The resource location defining the toolkit */
@@ -498,6 +512,6 @@ public class QonfigToolkit implements Named {
 
 	@Override
 	public String toString() {
-		return theName;
+		return theName + " " + theMajorVersion + "." + theMinorVersion;
 	}
 }

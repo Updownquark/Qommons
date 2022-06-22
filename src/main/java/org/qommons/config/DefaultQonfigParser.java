@@ -14,8 +14,10 @@ import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
@@ -33,7 +35,45 @@ public class DefaultQonfigParser implements QonfigParser {
 		DOC_ELEMENT_INHERITANCE_ATTR, "role"//
 	)));
 
-	private final Map<String, QonfigToolkit> theToolkits;
+	static class ToolkitDef {
+		public final String name;
+		public final int majorVersion;
+		public final int minorVersion;
+
+		ToolkitDef(String name, int majorVersion, int minorVersion) {
+			this.name = name;
+			this.majorVersion = majorVersion;
+			this.minorVersion = minorVersion;
+		}
+
+		ToolkitDef(QonfigToolkit toolkit) {
+			name = toolkit.getName();
+			majorVersion = toolkit.getMajorVersion();
+			minorVersion = toolkit.getMinorVersion();
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(name, majorVersion);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof ToolkitDef))
+				return false;
+			ToolkitDef other = (ToolkitDef) obj;
+			return name.equals(other.name) && majorVersion == other.majorVersion;
+		}
+
+		@Override
+		public String toString() {
+			return name + " " + majorVersion + "." + minorVersion;
+		}
+	}
+
+	private final Map<ToolkitDef, QonfigToolkit> theToolkits;
 
 	/** Creates the parser */
 	public DefaultQonfigParser() {
@@ -41,22 +81,29 @@ public class DefaultQonfigParser implements QonfigParser {
 	}
 
 	/**
-	 * @param toolkit The toolkit URL to check
+	 * @param toolkitName The toolkit name to check
+	 * @param majorVersion The major version of the toolkit
 	 * @return Whether this parser has been configured {@link #withToolkit(QonfigToolkit...) with} the given toolkit
 	 */
-	public boolean usesToolkit(String toolkit) {
-		return theToolkits.containsKey(toolkit);
+	public boolean usesToolkit(String toolkitName, int majorVersion) {
+		return theToolkits.containsKey(new ToolkitDef(toolkitName, majorVersion, 0));
 	}
 
 	@Override
 	public DefaultQonfigParser withToolkit(QonfigToolkit... toolkits) {
 		for (QonfigToolkit toolkit : toolkits) {
-			if (toolkit != null) {
-				if (theToolkits.put(toolkit.getName(), toolkit) != toolkit) {
-					for (QonfigToolkit dep : toolkit.getDependencies().values())
-						withToolkit(dep);
-				}
+			if (toolkit == null)
+				continue;
+			ToolkitDef def = new ToolkitDef(toolkit);
+			QonfigToolkit found = theToolkits.putIfAbsent(def, toolkit);
+			if (found != null) {
+				int vComp = Integer.compare(def.minorVersion, found.getMinorVersion());
+				if (vComp <= 0)
+					continue;
+				theToolkits.put(def, toolkit);
 			}
+			for (QonfigToolkit dep : toolkit.getDependencies().values())
+				withToolkit(dep);
 		}
 		return this;
 	}
@@ -82,11 +129,15 @@ public class DefaultQonfigParser implements QonfigParser {
 				throw new IllegalArgumentException("Empty toolkit name");
 			checkName(refName);
 			path.add(refName);
-			String id = use.getValue();
+			Matcher match = TOOLKIT_REF.matcher(use.getValue());
+			if (!match.matches())
+				throw new IllegalArgumentException(location + ": Bad toolkit reference.  Expected 'name vM.m' but found " + use.getValue());
+			ToolkitDef def = new ToolkitDef(match.group("name"), Integer.parseInt(match.group("major")),
+				Integer.parseInt(match.group("minor")));
 
-			QonfigToolkit dep = theToolkits.get(id);
+			QonfigToolkit dep = theToolkits.get(def);
 			if (dep == null)
-				throw new IllegalArgumentException("No such dependency named " + id + " registered");
+				throw new IllegalArgumentException("No such dependency " + def + " registered");
 			uses.put(refName, dep);
 		}
 		if (uses.isEmpty())
@@ -126,7 +177,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				throw new IllegalArgumentException("Element '" + rootReader.getName() + "' is not declared as the root of any toolkit");
 			rootDef = rootDef2;
 		}
-		QonfigToolkit docToolkit = new QonfigToolkit(location, null, Collections.unmodifiableMap(uses), Collections.emptyMap(),
+		QonfigToolkit docToolkit = new QonfigToolkit(location, 1, 0, null, Collections.unmodifiableMap(uses), Collections.emptyMap(),
 			Collections.emptyMap(), Collections.emptyMap(), Collections.emptyList(), new QonfigToolkit.ToolkitBuilder() {
 				@Override
 				public void parseTypes(QonfigParseSession s) {
@@ -151,6 +202,7 @@ public class DefaultQonfigParser implements QonfigParser {
 	}
 
 	private static final Pattern USES = Pattern.compile("uses\\:.*");
+	private static final Pattern TOOLKIT_REF = Pattern.compile("(?<name>[^\\s]+)\\s*v?(?<major>\\d+)\\.(?<minor>\\d+)");
 
 	QonfigElement parseDocElement(QonfigParseSession session, QonfigElement.Builder builder, StrictXmlReader el, boolean withAttrs,
 		Predicate<StrictXmlReader> childApplies) {
@@ -266,7 +318,15 @@ public class DefaultQonfigParser implements QonfigParser {
 		xml.close();
 		StrictXmlReader rootReader = new StrictXmlReader(root);
 		String name = rootReader.getAttribute("name", true);
-		if (theToolkits.containsKey(name))
+		if (!TOOLKIT_NAME.matcher(name).matches())
+			throw new IllegalArgumentException("Invalid toolkit name: " + name);
+		Matcher version = TOOLKIT_VERSION.matcher(rootReader.getAttribute("version", true));
+		if (!version.matches())
+			throw new IllegalArgumentException("Illegal toolkit version.  Expected 'M.m' but found " + version.group());
+		int major = Integer.parseInt(version.group("major"));
+		int minor = Integer.parseInt(version.group("minor"));
+		ToolkitDef def = new ToolkitDef(name, major, minor);
+		if (theToolkits.containsKey(def))
 			throw new IllegalArgumentException("A toolkit named " + name + " is already registered");
 		if (!rootReader.getTagName().equals("qonfig-def"))
 			throw new IllegalArgumentException("Expected 'qonfig-def' for root element, not " + root.getNodeName());
@@ -277,24 +337,31 @@ public class DefaultQonfigParser implements QonfigParser {
 				throw new IllegalArgumentException(path + ": Empty dependency name");
 			checkName(refName);
 			path.add(refName);
-			String ref = ext.getValue();
-			QonfigToolkit dep = theToolkits.get(ref);
+			Matcher match = TOOLKIT_REF.matcher(ext.getValue());
+			if (!match.matches())
+				throw new IllegalArgumentException(def + ": Bad toolkit reference.  Expected 'name vM.m' but found " + ext.getValue());
+			ToolkitDef depDef = new ToolkitDef(match.group("name"), Integer.parseInt(match.group("major")),
+				Integer.parseInt(match.group("minor")));
+
+			QonfigToolkit dep = theToolkits.get(depDef);
 			if (dep == null)
-				throw new IllegalArgumentException("No such dependency named " + ref + " registered");
+				throw new IllegalArgumentException("No such dependency named " + depDef + " registered");
 			dependencies.put(refName, dep);
 		}
 		ToolkitParser parser = new ToolkitParser(rootReader, customValueTypes);
-		QonfigToolkit toolkit = new QonfigToolkit(name, location, Collections.unmodifiableMap(dependencies),
+		QonfigToolkit toolkit = new QonfigToolkit(name, major, minor, location, Collections.unmodifiableMap(dependencies),
 			Collections.unmodifiableMap(parser.getDeclaredTypes()), Collections.unmodifiableMap(parser.getDeclaredAddOns()),
 			Collections.unmodifiableMap(parser.getDeclaredElements()), Collections.unmodifiableList(parser.getDeclaredAutoInheritance()),
 			parser);
 		rootReader.check();
 		// TODO Verify
-		theToolkits.put(name, toolkit);
+		theToolkits.put(def, toolkit);
 		return toolkit;
 	}
 
 	private static final Pattern EXTENDS = Pattern.compile("extends\\:.*");
+	private static final Pattern TOOLKIT_NAME = Pattern.compile("[^\\s]+");
+	private static final Pattern TOOLKIT_VERSION = Pattern.compile("(?<major>\\d+)\\.(?<minor>\\d+)");
 
 	static final Set<String> TOOLKIT_EL_NAMES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(//
 		"attribute", "child-def", "child-mod", "value", "value-mod", "element-meta")));
