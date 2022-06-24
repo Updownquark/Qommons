@@ -364,7 +364,7 @@ public class DefaultQonfigParser implements QonfigParser {
 	private static final Pattern TOOLKIT_VERSION = Pattern.compile("(?<major>\\d+)\\.(?<minor>\\d+)");
 
 	static final Set<String> TOOLKIT_EL_NAMES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(//
-		"attribute", "child-def", "child-mod", "value", "value-mod", "element-meta")));
+		"attribute", "child-def", "attr-mod", "child-mod", "value", "value-mod", "element-meta")));
 
 	private class ToolkitParser implements QonfigToolkit.ToolkitBuilder {
 		private final StrictXmlReader root;
@@ -922,7 +922,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					overrideAttributes(theNodes.get(inh.getName()), session, completed);
 			}
 			builder.setStage(QonfigElementOrAddOn.Builder.Stage.ModifyAttributes);
-			for (StrictXmlReader attr : element.getElements("attribute", 0, -1)) {
+			for (StrictXmlReader attr : element.getElements("attr-mod", 0, -1)) {
 				String attrName = attr.getAttribute("name", false);
 				if (attrName == null) {
 					builder.getSession().withError("No name attribute for attribute definition");
@@ -930,7 +930,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				}
 				if (attrName.lastIndexOf('.') < 0)
 					continue; // Simple attribute, already parsed
-				QonfigParseSession attrSession = builder.getSession().forChild("attribute", attrName);
+				QonfigParseSession attrSession = builder.getSession().forChild("attr-mod", attrName);
 				ElementQualifiedParseItem qAttr;
 				qAttr = ElementQualifiedParseItem.parse(attrName, attrSession);
 				if (qAttr == null)
