@@ -7,6 +7,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
@@ -114,7 +115,9 @@ public interface MultiInheritanceSet<T> {
 	 * @return An inheritance set with the same content as the one given, but that cannot be modified
 	 */
 	public static <T> MultiInheritanceSet<T> unmodifiable(MultiInheritanceSet<T> set) {
-		return set instanceof Unmodifiable ? set : new Unmodifiable<>(set);
+		if (set instanceof Unmodifiable || set == EMPTY || set instanceof Singleton)
+			return set;
+		return new Unmodifiable<>(set);
 	}
 
 	/**
@@ -122,47 +125,64 @@ public interface MultiInheritanceSet<T> {
 	 * @return A empty multi-inheritance set
 	 */
 	public static <T> MultiInheritanceSet<T> empty() {
-		class EmptyInheritanceSet implements MultiInheritanceSet<T> {
-			@Override
-			public int size() {
-				return 0;
-			}
+		return (MultiInheritanceSet<T>) EMPTY;
+	}
 
-			@Override
-			public Collection<T> values() {
-				return Collections.emptyList();
-			}
-
-			@Override
-			public boolean contains(T value) {
-				return false;
-			}
-
-			@Override
-			public T getAnyExtension(T value) {
-				return null;
-			}
-
-			@Override
-			public Iterable<T> getExpanded(InheritanceEnumerator<T> enumerator) {
-				return Collections.emptyList();
-			}
-
-			@Override
-			public boolean add(T value) {
-				throw new UnsupportedOperationException();
-			}
-
-			@Override
-			public void clear() {
-			}
-
-			@Override
-			public MultiInheritanceSet<T> copy() {
-				return this;
-			}
+	/** Implements {@link MultiInheritanceSet#empty()} */
+	public static final MultiInheritanceSet<?> EMPTY = new MultiInheritanceSet<Object>() {
+		@Override
+		public int size() {
+			return 0;
 		}
-		return new EmptyInheritanceSet();
+
+		@Override
+		public Collection<Object> values() {
+			return Collections.emptyList();
+		}
+
+		@Override
+		public boolean contains(Object value) {
+			return false;
+		}
+
+		@Override
+		public Object getAnyExtension(Object value) {
+			return null;
+		}
+
+		@Override
+		public Iterable<Object> getExpanded(InheritanceEnumerator<Object> enumerator) {
+			return Collections.emptyList();
+		}
+
+		@Override
+		public boolean add(Object value) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public void clear() {
+		}
+
+		@Override
+		public MultiInheritanceSet<Object> copy() {
+			return this;
+		}
+
+		@Override
+		public String toString() {
+			return "[]";
+		}
+	};
+
+	/**
+	 * @param <T> The type of the value
+	 * @param value The value for the set
+	 * @param inheritance The inheritance scheme for the set
+	 * @return An immutable {@link MultiInheritanceSet} containing only the given element
+	 */
+	public static <T> Singleton<T> singleton(T value, Inheritance<T> inheritance) {
+		return new Singleton<>(inheritance, value);
 	}
 
 	/**
@@ -251,38 +271,43 @@ public interface MultiInheritanceSet<T> {
 		public String toString() {
 			return theNodes.toString();
 		}
+	}
 
-		static class InheritanceIterator<T> implements Iterator<T> {
-			private final InheritanceEnumerator<T> theEnumerator;
-			private final LinkedList<Iterator<? extends T>> theIterStack;
-			private boolean hasNext;
+	/**
+	 * Default implementation of {@link MultiInheritanceSet#getExpanded(InheritanceEnumerator)}
+	 * 
+	 * @param <T> The type of values in the iterator
+	 */
+	class InheritanceIterator<T> implements Iterator<T> {
+		private final InheritanceEnumerator<T> theEnumerator;
+		private final LinkedList<Iterator<? extends T>> theIterStack;
+		private boolean hasNext;
 
-			InheritanceIterator(InheritanceEnumerator<T> enumerator, Iterator<T> init) {
-				theEnumerator = enumerator;
-				theIterStack = new LinkedList<>();
-				theIterStack.add(init);
-			}
+		InheritanceIterator(InheritanceEnumerator<T> enumerator, Iterator<T> init) {
+			theEnumerator = enumerator;
+			theIterStack = new LinkedList<>();
+			theIterStack.add(init);
+		}
 
-			@Override
-			public boolean hasNext() {
-				if (hasNext)
-					return true;
-				while (!theIterStack.isEmpty() && !theIterStack.getLast().hasNext())
-					theIterStack.removeLast();
-				hasNext = !theIterStack.isEmpty();
-				return hasNext;
-			}
+		@Override
+		public boolean hasNext() {
+			if (hasNext)
+				return true;
+			while (!theIterStack.isEmpty() && !theIterStack.getLast().hasNext())
+				theIterStack.removeLast();
+			hasNext = !theIterStack.isEmpty();
+			return hasNext;
+		}
 
-			@Override
-			public T next() {
-				if (!hasNext())
-					throw new NoSuchElementException();
-				hasNext = false;
-				T next = theIterStack.getLast().next();
-				Iterable<? extends T> supers = theEnumerator.getSupers(next);
-				theIterStack.add(supers.iterator());
-				return next;
-			}
+		@Override
+		public T next() {
+			if (!hasNext())
+				throw new NoSuchElementException();
+			hasNext = false;
+			T next = theIterStack.getLast().next();
+			Iterable<? extends T> supers = theEnumerator.getSupers(next);
+			theIterStack.add(supers.iterator());
+			return next;
 		}
 	}
 
@@ -337,7 +362,7 @@ public interface MultiInheritanceSet<T> {
 
 		@Override
 		public MultiInheritanceSet<T> copy() {
-			return new Unmodifiable<>(theBacking.copy());
+			return theBacking.copy();
 		}
 
 		@Override
@@ -356,4 +381,72 @@ public interface MultiInheritanceSet<T> {
 		}
 	}
 
+	/**
+	 * An immutable {@link MultiInheritanceSet} containing a single value
+	 * 
+	 * @param <T> The type of the set
+	 */
+	public class Singleton<T> implements MultiInheritanceSet<T> {
+		private final Inheritance<T> theInheritance;
+		private final T theValue;
+
+		/**
+		 * @param inheritance The inheritance for this set
+		 * @param value The value for this set
+		 */
+		public Singleton(Inheritance<T> inheritance, T value) {
+			theInheritance = inheritance;
+			theValue = value;
+		}
+
+		@Override
+		public int size() {
+			return 1;
+		}
+
+		@Override
+		public Collection<T> values() {
+			return Collections.singleton(theValue);
+		}
+
+		@Override
+		public boolean contains(T value) {
+			return Objects.equals(theValue, value) //
+				|| theInheritance.isExtension(theValue, value);
+		}
+
+		@Override
+		public T getAnyExtension(T value) {
+			if (Objects.equals(theValue, value) || theInheritance.isExtension(value, theValue))
+				return theValue;
+			return null;
+		}
+
+		@Override
+		public Iterable<T> getExpanded(InheritanceEnumerator<T> enumerator) {
+			return () -> new InheritanceIterator<>(enumerator, Collections.singleton(theValue).iterator());
+		}
+
+		@Override
+		public boolean add(T value) {
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public void clear() {
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public MultiInheritanceSet<T> copy() {
+			MultiInheritanceSet<T> copy = create(theInheritance);
+			copy.add(theValue);
+			return copy;
+		}
+
+		@Override
+		public String toString() {
+			return "{" + theValue + "}";
+		}
+	}
 }
