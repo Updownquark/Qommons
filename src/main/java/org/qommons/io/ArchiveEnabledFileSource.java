@@ -1237,6 +1237,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		private static final int UTF_FLAG = 0x800;
+		private static boolean OPTIMIZE_ARRAY_DECODER = true;
 
 		private static String read(byte[] buffer, int offset, int length) {
 			char[] ch = new char[length];
@@ -1254,11 +1255,16 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 			// UTF-8 only for now. Other ArrayDeocder only handles
 			// CodingErrorAction.REPLACE mode. ZipCoder uses
 			// REPORT mode.
-			if (cd instanceof ArrayDecoder) {
-				int clen = ((ArrayDecoder) cd).decode(buffer, offset, length, ca);
-				if (clen == -1) // malformed
-					throw new IllegalArgumentException("MALFORMED");
-				return new String(ca, 0, clen);
+			try {
+				if (OPTIMIZE_ARRAY_DECODER && cd instanceof ArrayDecoder) {
+					int clen = ((ArrayDecoder) cd).decode(buffer, offset, length, ca);
+					if (clen == -1) // malformed
+						throw new IllegalArgumentException("MALFORMED");
+					return new String(ca, 0, clen);
+				}
+			} catch (IllegalAccessError e) {
+				// Later VMs don't let me do this
+				OPTIMIZE_ARRAY_DECODER = false;
 			}
 			ByteBuffer bb = ByteBuffer.wrap(buffer, offset, length);
 			CharBuffer cb = CharBuffer.wrap(ca);

@@ -504,6 +504,25 @@ public class StringUtils {
 		public StringBuilder toKebabCase(StringBuilder str) {
 			return toCaseScheme(str, false, false, "-");
 		}
+
+		/**
+		 * Same as {@link #toCaseScheme(StringBuilder, boolean, boolean, CharSequence) toCaseScheme(true, true, " ")}
+		 * 
+		 * @return The capitalized string
+		 */
+		public String toCapitalized() {
+			return toCapitalized(new StringBuilder()).toString();
+		}
+
+		/**
+		 * Same as {@link #toCaseScheme(StringBuilder, boolean, boolean, CharSequence) toCaseScheme(str, true, true, " ")}
+		 * 
+		 * @param str The StringBuilder to print to
+		 * @return The capitalized StringBuilder
+		 */
+		public StringBuilder toCapitalized(StringBuilder str) {
+			return toCaseScheme(str, true, true, " ");
+		}
 	}
 
 	/**
@@ -545,7 +564,6 @@ public class StringUtils {
 	 * @return The parsed name
 	 */
 	public static Name split(String str, char delimiter) {
-
 		List<String> components = new LinkedList<>();
 		int start = 0;
 		for (int c = 0; c < str.length(); c++) {
@@ -556,6 +574,14 @@ public class StringUtils {
 		}
 		components.add(str.substring(start));
 		return new Name(components.toArray(new String[components.size()]));
+	}
+
+	/**
+	 * @param str The string to capitalize
+	 * @return The same string, but with every word capitalized
+	 */
+	public static String capitalize(String str) {
+		return split(str, ' ').toCapitalized();
 	}
 
 	/**

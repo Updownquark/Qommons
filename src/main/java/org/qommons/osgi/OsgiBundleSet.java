@@ -1381,6 +1381,9 @@ public class OsgiBundleSet {
 				}
 			} catch (IOException e) {
 				throw new IllegalStateException("Misconfigured bundle set", e);
+			} catch (RuntimeException | Error e) {
+				e.printStackTrace(); // If I don't do it here, the VM may die without ever printing why
+				throw e;
 			}
 			if (progress != null) {
 				progress.setIndeterminate(true);
