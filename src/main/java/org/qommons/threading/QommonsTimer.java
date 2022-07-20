@@ -363,13 +363,19 @@ public class QommonsTimer {
 		/**
 		 * Causes this task to begin or cease executing
 		 * 
-		 * @param active Whether the task should execut or not
-		 * @return This tak handle
+		 * @param active Whether the task should execute or not
+		 * @return This task handle
 		 */
 		public TaskHandle setActive(boolean active) {
 			if (isActive.compareAndSet(!active, active)) {
 				synchronized (this) {
 					if (active) {
+						if (theNextRun == null) {
+							if (theFrequency != null)
+								theNextRun = theClock.now().plus(theFrequency);
+							else
+								theNextRun = theClock.now();
+						}
 						theRemove = schedule(this);
 					} else if (theRemove != null) {
 						theRemove.run();

@@ -55,8 +55,13 @@ public class CausalLock implements Transactable {
 				if (isClosed)
 					return;
 				isClosed = true;
-				if (causeFinish != null)
-					causeFinish.close();
+				if (causeFinish != null) {
+					try {
+						causeFinish.close();
+					} catch (RuntimeException | Error e) {
+						e.printStackTrace();
+					}
+				}
 				if (write && tCause != null)
 					theTransactionCauses.removeLastOccurrence(tCause);
 				valueLock.close();

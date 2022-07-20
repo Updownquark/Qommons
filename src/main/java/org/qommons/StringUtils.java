@@ -16,6 +16,7 @@ import java.util.NoSuchElementException;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.LongConsumer;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -761,30 +762,20 @@ public class StringUtils {
 	public static DuplicateItemNamer SIMPLE_DUPLICATES = duplicateAppending(" ", null);
 
 	/**
-	 * Gets unique name for a new item in a named item list
+	 * Gets unique name for a new item
 	 * 
-	 * @param <E> The type of the list items
-	 * @param items The list of items
-	 * @param itemName The item name function
+	 * @param existingTest Determines whether an item with any given name is already present
 	 * @param firstTry The default new item name
 	 * @param namer A scheme for modifying a name with a try number (starting with 2) in a user-friendly format.
 	 * @return The name for a new list item that is not the same as that of any existing item in the list
 	 * @see #PAREN_DUPLICATES
 	 * @see #SIMPLE_DUPLICATES
 	 */
-	public static <E> String getNewItemName(Iterable<? extends E> items, Function<? super E, String> itemName, String firstTry,
-		DuplicateItemNamer namer) {
+	public static String getNewItemName(Predicate<String> existingTest, String firstTry, DuplicateItemNamer namer) {
 		if (namer == null)
 			namer = PAREN_DUPLICATES;
 		String name = firstTry;
-		boolean nameExists = false;
-		for (E item : items) {
-			String name_i = itemName.apply(item);
-			if (name.equals(name_i)) {
-				nameExists = true;
-				break;
-			}
-		}
+		boolean nameExists = existingTest.test(name);
 		if (!nameExists)
 			return name;
 		String original;
@@ -810,18 +801,35 @@ public class StringUtils {
 				throw new IllegalStateException("Suffix is not working properly");
 			name = newNameStr;
 
-			nameExists = false;
-			for (E item : items) {
-				String name_i = itemName.apply(item);
-				if (name.equals(name_i)) {
-					nameExists = true;
-					break;
-				}
-			}
+			nameExists = existingTest.test(name);
 			if (!nameExists)
 				return name;
 			tryNumber++;
 		}
+	}
+
+	/**
+	 * Gets unique name for a new item in a named item list
+	 * 
+	 * @param <E> The type of the list items
+	 * @param items The list of items
+	 * @param itemName The item name function
+	 * @param firstTry The default new item name
+	 * @param namer A scheme for modifying a name with a try number (starting with 2) in a user-friendly format.
+	 * @return The name for a new list item that is not the same as that of any existing item in the list
+	 * @see #PAREN_DUPLICATES
+	 * @see #SIMPLE_DUPLICATES
+	 */
+	public static <E> String getNewItemName(Iterable<? extends E> items, Function<? super E, String> itemName, String firstTry,
+		DuplicateItemNamer namer) {
+		return getNewItemName(name -> {
+			for (E item : items) {
+				String name_i = itemName.apply(item);
+				if (name.equals(name_i))
+					return true;
+			}
+			return false;
+		}, firstTry, namer);
 	}
 
 	/**
