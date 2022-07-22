@@ -1,7 +1,9 @@
 package org.qommons.threading;
 
+import java.util.Arrays;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -55,6 +57,7 @@ public class ElasticExecutor<T> {
 	private final AtomicInteger theThreadCount;
 	private final AtomicInteger theActiveThreads;
 	private volatile ConcurrentLinkedQueue<TaskExecutor<? super T>> theCachedWorkers;
+	private final AtomicReference<int[]> theNextWorkerId;
 
 	private final Object theLock;
 
@@ -78,6 +81,8 @@ public class ElasticExecutor<T> {
 		theRunner = new DefaultRunner();
 		theThreadCount = new AtomicInteger();
 		theActiveThreads = new AtomicInteger();
+
+		theNextWorkerId = new AtomicReference<>(new int[] { 0 });
 
 		theLock = new Object();
 	}
@@ -359,18 +364,58 @@ public class ElasticExecutor<T> {
 			return true;
 		}
 	}
+	private static final char[] WORKER_ID_CHAR_SEQ;
+	static {
+		String workerCharSeq = "0123456789"//
+			+ "ABCDEFGHJKLMNPQRSTUVWXYZ" // No "O" or "1" so they're not confused with "0" and "1"
+		;
+		WORKER_ID_CHAR_SEQ = workerCharSeq.toCharArray();
+	}
+
+	private String getNextWorkerId() {
+		int[] workerId = theNextWorkerId.getAndUpdate(ElasticExecutor::incrementWorkerId);
+		char[] workerIdChars = new char[workerId.length];
+		for (int i = 0; i < workerId.length; i++)
+			workerIdChars[i] = WORKER_ID_CHAR_SEQ[workerId[i]];
+		return new String(workerIdChars);
+	}
+
+	static int[] incrementWorkerId(int[] previous) {
+		int idx = previous.length - 1;
+		int dig = previous[idx] + 1;
+		while (dig == WORKER_ID_CHAR_SEQ.length) {
+			idx--;
+			if (idx < 0)
+				break;
+			dig = previous[idx];
+		}
+		int[] newId;
+		if (idx < 0)
+			newId = new int[previous.length + 1];
+		else {
+			newId = new int[previous.length];
+			if (idx > 0)
+				System.arraycopy(previous, 0, newId, 0, idx);
+			newId[idx] = dig;
+			if (idx < previous.length - 1)
+				Arrays.fill(newId, idx + 1, newId.length, 0);
+		}
+		return newId;
+	}
 
 	private class ElasticExecutorWorker implements Runnable {
-		private final int theId;
+		private final String theWorkerId;
+		private final int theThreadNumber;
 		private final TaskExecutor<? super T> theTaskExecutor;
 
-		ElasticExecutorWorker(int id, TaskExecutor<? super T> taskExecutor) {
-			theId = id;
+		ElasticExecutorWorker(int threadNumber, TaskExecutor<? super T> taskExecutor) {
+			theWorkerId = getNextWorkerId();
+			theThreadNumber = threadNumber;
 			theTaskExecutor = taskExecutor;
 		}
 
 		void start() {
-			theRunner.execute(this, theName);
+			theRunner.execute(this, theName + " " + theWorkerId);
 		}
 
 		@Override
@@ -413,9 +458,9 @@ public class ElasticExecutor<T> {
 				}
 				if (task != null)
 					die = false;
-				else if (theId <= theMinThreadCount)
+				else if (theThreadNumber <= theMinThreadCount)
 					die = false;// We stay alive forever
-				else if (theId > theMaxThreadCount)
+				else if (theThreadNumber > theMaxThreadCount)
 					die = true;
 				else if ((now - lastUsed) >= theUnusedThreadLifetime)
 					die = true;
