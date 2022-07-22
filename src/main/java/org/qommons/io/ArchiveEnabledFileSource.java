@@ -981,21 +981,29 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 			if (len >= 0) {
 				byte[] buffer = new byte[(int) Math.min(len, 64 * 1024)];
 				long seekPos = len - buffer.length;
+				boolean zip64 = false;
 				EndOfCentralDirectoryRecord eocd = null;
-				while (eocd == null) {
+				// Although it's allowed in the spec for the terminal comment to be arbitrarily long (which I think it stupid),
+				// allowing it here could cause some pretty severe performance problems for very large corrupted zip files.
+				// This cap allows for a terminal comment that's 6.4MB long.
+				for (int tryCount = 0; eocd == null && tryCount < 100; tryCount++) {
 					if (canceled.getAsBoolean())
 						return null;
 					try (InputStream in = file.read(seekPos, canceled)) {
 						if (in == null)
 							return null;
 						fillBuffer(in, buffer, 0, buffer.length);
-						eocd = findEOCD(buffer);
+						eocd = zip64 ? findZip64EOCD(buffer) : findEOCD(buffer);
 						if (eocd == null) {
 							if (seekPos < 46) {
 								// Central directory header has minimum size 46 bytes. If we haven't found the ECOD yet, it doesn't exist.
 								break;
 							}
 							seekPos = Math.max(0, seekPos - buffer.length);
+						} else if (!zip64 && (eocd.diskNumber == 0xffff || eocd.centralDirCount == 0xffff
+							|| eocd.centralDirSize == 0xffffffffL || eocd.centralDirOffset == 0xffffffffL)) {
+							zip64 = true;
+							eocd = findZip64EOCD(buffer);
 						}
 					}
 				}
@@ -1116,15 +1124,18 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 			}
 		}
 
-		static void fillBuffer(InputStream in, byte[] buffer, int offset, int length) throws IOException {
+		static int fillBuffer(InputStream in, byte[] buffer, int offset, int length) throws IOException {
 			int read = in.read(buffer, offset, length);
+			int total = 0;
 			while (read >= 0 && read < length) {
+				total += read;
 				offset += read;
 				length -= read;
 				read = in.read(buffer, offset, length);
 			}
 			if (read < 0)
 				throw new EOFException();
+			return total;
 		}
 
 		static EndOfCentralDirectoryRecord findEOCD(byte[] buffer) {
@@ -1137,10 +1148,28 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 			}
 			if (eocd < 0)
 				return null;
-			return new EndOfCentralDirectoryRecord(getInt(buffer, eocd + 4), //
-				getInt(buffer, eocd + 8), //
-				getLong(buffer, eocd + 12), //
-				getLong(buffer, eocd + 16));
+			int disk = getInt(buffer, eocd + 4);
+			int count = getInt(buffer, eocd + 8);
+			long size = getLong(buffer, eocd + 12);
+			long offset = getLong(buffer, eocd + 16);
+			return new EndOfCentralDirectoryRecord(false, disk, count, size, offset);
+		}
+
+		static EndOfCentralDirectoryRecord findZip64EOCD(byte[] buffer) {
+			int eocd = -1;
+			for (int i = buffer.length - 20; i >= 0; i--) {
+				if (buffer[i] == 0x50 && buffer[i + 1] == 0x4b && buffer[i + 2] == 0x06 && buffer[i + 3] == 0x06) {
+					eocd = i;
+					break;
+				}
+			}
+			if (eocd < 0)
+				return null;
+			int disk = getInt(buffer, eocd + 20);
+			long count = getLong8(buffer, eocd + 32);
+			long size = getLong8(buffer, eocd + 40);
+			long offset = getLong8(buffer, eocd + 48);
+			return new EndOfCentralDirectoryRecord(true, disk, count, size, offset);
 		}
 
 		static class CDRReader {
@@ -1173,24 +1202,69 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 					int nameLen = getInt(buffer, theBufferOffset + 28);
 					int extraLen = getInt(buffer, theBufferOffset + 30);
 					int commentLen = getInt(buffer, theBufferOffset + 32);
-					int disk = getInt(buffer, 34);
-					if (disk != theEnd.diskNumber) {
-						if (!advance(buffer, 46 + nameLen + extraLen + commentLen, canceled))
-							return null;
-						continue;
-					}
+
 					int flag = getInt(buffer, theBufferOffset + 8);
-					long modTime = getLong(buffer, theBufferOffset + 12);
-					long lastMod = extendedDosToJavaTime(modTime);
-					@SuppressWarnings("unused")
-					long compressedSize = getLong(buffer, theBufferOffset + 20);
-					long uncompressedSize = getLong(buffer, theBufferOffset + 24);
-					long position = getLong(buffer, theBufferOffset + 42);
 					String name;
 					if ((flag & UTF_FLAG) != 0)
 						name = readUtf(buffer, theBufferOffset + 46, nameLen, utfDecoder);
 					else
 						name = read(buffer, theBufferOffset + 46, nameLen);
+					int disk = getInt(buffer, 34);
+					long modTime = getLong(buffer, theBufferOffset + 12);
+					long compressedSize = getLong(buffer, theBufferOffset + 20);
+					long uncompressedSize = getLong(buffer, theBufferOffset + 24);
+					long position = getLong(buffer, theBufferOffset + 42);
+
+					int headerLength = 46 + nameLen + extraLen + commentLen;
+					if (disk == 0xffff || uncompressedSize == 0xffffffffL || uncompressedSize == 0xffffffffL || position == 0xffffffffL) {
+						// Zip64, need to find and apply the special Zip64 header extension
+						boolean foundZipHeader = false;
+						int extraOffset = theBufferOffset + 46 + nameLen;
+						int fieldOffset = 0;
+						while (!foundZipHeader && fieldOffset < extraLen) {
+							if (buffer[extraOffset + fieldOffset] == 1 && buffer[extraOffset + fieldOffset + 1] == 0)
+								foundZipHeader = true;
+							else {
+								int fieldLen = getInt(buffer, extraOffset + fieldOffset + 2);
+								if (fieldLen < 0 || fieldLen > extraLen - fieldOffset - 4)
+									throw new IOException("Could not read Zip file");
+								fieldOffset += fieldLen + 4;
+							}
+						}
+						if (!foundZipHeader)
+							throw new IOException("Could not read Zip file");
+						int z64HeaderSize = getInt(buffer, extraOffset + fieldOffset + 2);
+						extraOffset += fieldOffset + 4;
+						fieldOffset = 0;
+						if (uncompressedSize == 0xffffffffL) {
+							uncompressedSize = getLong8(buffer, extraOffset + fieldOffset);
+							fieldOffset += 8;
+						}
+						if (compressedSize == 0xffffffffL) {
+							if (z64HeaderSize - fieldOffset < 8)
+								throw new IOException("Could not read Zip file");
+							compressedSize = getLong8(buffer, extraOffset + fieldOffset);
+							fieldOffset += 8;
+						}
+						if (position == 0xffffffffL) {
+							if (z64HeaderSize - fieldOffset < 8)
+								throw new IOException("Could not read Zip file");
+							position = getLong8(buffer, extraOffset + fieldOffset);
+							fieldOffset += 8;
+						}
+						if (disk == 0xffff) {
+							if (z64HeaderSize - fieldOffset != 4)
+								throw new IOException("Could not read Zip file");
+							disk = getInt(buffer, extraOffset + fieldOffset);
+						}
+					}
+
+					if (disk != theEnd.diskNumber) {
+						if (!advance(buffer, headerLength, canceled))
+							return null;
+						continue;
+					}
+					long lastMod = extendedDosToJavaTime(modTime);
 					String[] path = name.split("/");
 					DefaultArchiveEntry newEntry = root.add(path, 0, position, name.endsWith("/")).fill(uncompressedSize, lastMod);
 					if (children != null && children.add(path[0]))
@@ -1201,7 +1275,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 					}
 
 					try {
-						if (!advance(buffer, 46 + nameLen + extraLen + commentLen, canceled))
+						if (!advance(buffer, headerLength, canceled))
 							return null;
 					} catch (RuntimeException | IOException e) {
 						throw e;
@@ -1286,6 +1360,17 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 				| ((long) unsigned(buffer[offset + 1])) << 8//
 				| ((long) unsigned(buffer[offset + 2])) << 16//
 				| ((long) unsigned(buffer[offset + 3])) << 24;
+		}
+
+		private static long getLong8(byte[] buffer, int offset) {
+			return unsigned(buffer[offset])//
+				| ((long) unsigned(buffer[offset + 1])) << 8//
+				| ((long) unsigned(buffer[offset + 2])) << 16//
+				| ((long) unsigned(buffer[offset + 3])) << 24//
+				| ((long) unsigned(buffer[offset + 4])) << 32//
+				| ((long) unsigned(buffer[offset + 5])) << 40//
+				| ((long) unsigned(buffer[offset + 6])) << 48//
+				| ((long) unsigned(buffer[offset + 7])) << 56;
 		}
 
 		/**
@@ -1376,12 +1461,14 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		static class EndOfCentralDirectoryRecord {
+			final boolean isZip64;
 			final int diskNumber;
-			final int centralDirCount;
+			final long centralDirCount;
 			final long centralDirSize;
 			final long centralDirOffset;
 
-			EndOfCentralDirectoryRecord(int diskNumber, int centralDirCount, long centralDirSize, long centralDirOffset) {
+			EndOfCentralDirectoryRecord(boolean zip64, int diskNumber, long centralDirCount, long centralDirSize, long centralDirOffset) {
+				isZip64 = zip64;
 				this.diskNumber = diskNumber;
 				this.centralDirCount = centralDirCount;
 				this.centralDirSize = centralDirSize;
