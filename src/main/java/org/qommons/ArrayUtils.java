@@ -1176,7 +1176,7 @@ public final class ArrayUtils {
 	 */
 	public static String toString(Object array) {
 		if(array == null)
-			return "" + null;
+			return String.valueOf(null);
 		else if(array instanceof Object []) {
 			Object [] oa = (Object []) array;
 			StringBuffer ret = new StringBuffer("[");
@@ -1184,6 +1184,18 @@ public final class ArrayUtils {
 				ret.append(toString(oa[i]));
 				if(i < oa.length - 1)
 					ret.append(", ");
+			}
+			ret.append("]");
+			return ret.toString();
+		} else if (array instanceof Iterable) {
+			StringBuffer ret = new StringBuffer("[");
+			boolean first = true;
+			for (Object obj : ((Iterable<?>) array)) {
+				if (first)
+					first = false;
+				else
+					ret.append(", ");
+				ret.append(toString(obj));
 			}
 			ret.append("]");
 			return ret.toString();
