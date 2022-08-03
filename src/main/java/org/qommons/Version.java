@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 public class Version implements Comparable<Version> {
 	/** A pattern to parse semantic version strings */
 	public static final Pattern VERSION_PATTERN = Pattern
-		.compile("v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<qualifier>[a-zA-Z0-9_\\-]+))?");
+		.compile("v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:(?<join>[\\.\\-_])?(?<qualifier>[a-zA-Z0-9_\\-\\.]+))?");
 
 	/** The major revision */
 	public final int major;
@@ -18,18 +18,38 @@ public class Version implements Comparable<Version> {
 	public final int patch;
 	/** The version qualifier */
 	public final String qualifier;
+	/** A joiner character for the qualifier */
+	public final char qualifierJoin;
 
 	/**
+	 * Creates a (potentially) qualified version
+	 * 
 	 * @param major The major revision
 	 * @param minor The minor revision
 	 * @param patch The patch revision
+	 * @param qualifierJoin A join character for the qualifier
 	 * @param qualifier The version qualifier
 	 */
-	public Version(int major, int minor, int patch, String qualifier) {
+	public Version(int major, int minor, int patch, char qualifierJoin, String qualifier) {
 		this.major = major;
 		this.minor = minor;
 		this.patch = patch;
-		this.qualifier = qualifier;
+		this.qualifierJoin = qualifierJoin;
+		if (qualifier == null || qualifier.trim().isEmpty())
+			this.qualifier = null;
+		else
+			this.qualifier = qualifier;
+	}
+
+	/**
+	 * Creates an unqualified version
+	 * 
+	 * @param major The major revision
+	 * @param minor The minor revision
+	 * @param patch The patch revision
+	 */
+	public Version(int major, int minor, int patch) {
+		this(major, minor, patch, (char) 0, null);
 	}
 
 	@Override
@@ -57,7 +77,7 @@ public class Version implements Comparable<Version> {
 		if (qualifier == null)
 			return this;
 		else
-			return new Version(major, minor, patch, null);
+			return new Version(major, minor, patch);
 	}
 
 	@Override
@@ -82,8 +102,11 @@ public class Version implements Comparable<Version> {
 	public String toString() {
 		StringBuilder str = new StringBuilder();
 		str.append(major).append('.').append(minor).append('.').append(patch);
-		if (qualifier != null)
-			str.append('.').append(qualifier);
+		if (qualifier != null) {
+			if (qualifierJoin != 0)
+				str.append(qualifierJoin);
+			str.append(qualifier);
+		}
 		return str.toString();
 	}
 
@@ -95,16 +118,28 @@ public class Version implements Comparable<Version> {
 	 * @throws IllegalArgumentException If the text does not match the form "XX.YY.ZZ(.QQQ)"
 	 */
 	public static Version parse(CharSequence version) throws IllegalArgumentException {
-		Matcher match = VERSION_PATTERN.matcher(version);
-		if (!match.matches())
+		Matcher versionMatch = VERSION_PATTERN.matcher(version);
+		if (!versionMatch.matches())
 			throw new IllegalArgumentException("Version sequence does not match \"XX.YY.ZZ(.QQQ)\": " + version);
-		String qualifier = match.group("qualifier");
-		if (qualifier != null && qualifier.isEmpty())
-			qualifier = null;
+		return parse(versionMatch);
+	}
+
+	/**
+	 * Parses a version from a {@link #VERSION_PATTERN} match
+	 * 
+	 * @param versionMatch The {@link #VERSION_PATTERN} match for the text to parse
+	 * @return The version corresponding to the text match, or null if the pattern does not match
+	 */
+	public static Version parse(Matcher versionMatch) {
+		if (!versionMatch.matches())
+			return null;
+		String qualifier = versionMatch.group("qualifier");
+		String join = versionMatch.group("join");
 		return new Version(//
-			Integer.parseInt(match.group("major")), //
-			Integer.parseInt(match.group("minor")), //
-			Integer.parseInt(match.group("patch")), //
+			Integer.parseInt(versionMatch.group("major")), //
+			Integer.parseInt(versionMatch.group("minor")), //
+			Integer.parseInt(versionMatch.group("patch")), //
+			(join == null || join.isEmpty()) ? (char) 0 : join.charAt(0), //
 			qualifier);
 	}
 }
