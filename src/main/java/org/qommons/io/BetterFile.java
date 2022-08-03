@@ -459,12 +459,7 @@ public interface BetterFile extends Named {
 		 * @return The {@link FileBacking} of the root with the given name
 		 * @throws IllegalArgumentException If no such root exists
 		 */
-		default FileBacking getRoot(String name) throws IllegalArgumentException {
-			for (FileBacking root : getRoots())
-				if (root.getName().equals(name))
-					return root;
-			throw new IllegalArgumentException("No such root: " + name);
-		}
+		FileBacking getRoot(String name) throws IllegalArgumentException;
 
 		/**
 		 * @param path The path to the file to get

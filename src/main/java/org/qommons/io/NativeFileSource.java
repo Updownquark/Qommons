@@ -55,6 +55,14 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		return Collections.unmodifiableList(roots);
 	}
 
+	@Override
+	public FileBacking getRoot(String name) throws IllegalArgumentException {
+		Path path = theFileSystem.getPath(name);
+		if (!Files.exists(path))
+			throw new IllegalArgumentException("No such file root: '" + name + "'");
+		return new NativeFileBacking(null, path);
+	}
+
 	/**
 	 * @param file The native file to convert
 	 * @return The better file under this file source representing the given file
@@ -231,7 +239,16 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public BetterFile.FileBacking getChild(String fileName) {
-			return new NativeFileBacking(this, thePath.resolve(fileName));
+			Path childPath = thePath.resolve(fileName);
+			// There's a weird issue which I think is a java bug, but I'm not sure:
+			// When using resolve on a root path, java doesn't add the backslash after the root name (e.g. C:),
+			// so the child path ends up being something like "C:blah" with no separator, which doesn't work.
+			if (theParent == null && childPath.toString().startsWith(thePath.toString())) {
+				char sep = childPath.toString().charAt(thePath.toString().length());
+				if (sep != '/' && sep != '\\')
+					childPath = Paths.get(thePath + File.separator, fileName);
+			}
+			return new NativeFileBacking(this, childPath);
 		}
 
 		@Override
