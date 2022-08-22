@@ -1,13 +1,19 @@
 package org.qommons.config;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 
 import org.qommons.Named;
+import org.qommons.Transaction;
+import org.qommons.ex.ExSupplier;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 
@@ -15,11 +21,14 @@ import org.w3c.dom.Node;
  * Wraps an XML element and allows easier access to its structure. This class also checks the structure as it is used as well as afterward
  * to verify that the element was specified as intended.
  */
-public class StrictXmlReader implements Named {
+public class StrictXmlReader implements Named, Transaction {
+	/** Returned from {@link #getElementOrMissing(String)} if the element is not present */
+	public static final StrictXmlReader MISSING = new StrictXmlReader(null);
+
 	private final StrictXmlReader theParent;
 	private final Element theElement;
-	private final BitSet theUsedElements;
-	private boolean isClosed;
+	private final BitSet theUsedNodes;
+	private StrictXmlReader[] theChildren;
 
 	/** @param element The XML element to wrap */
 	public StrictXmlReader(Element element) {
@@ -27,11 +36,11 @@ public class StrictXmlReader implements Named {
 	}
 
 	private StrictXmlReader(StrictXmlReader parent, Element element) {
-		if (element == null)
+		if (element == null && MISSING != null)
 			throw new NullPointerException();
 		theParent = parent;
 		theElement = element;
-		theUsedElements = new BitSet();
+		theUsedNodes = new BitSet();
 	}
 
 	/** @return This element's parent reader */
@@ -73,13 +82,35 @@ public class StrictXmlReader implements Named {
 			Node attr = theElement.getAttributes().item(i);
 			if (name.equals(attr.getNodeName())) {
 				value = attr.getNodeValue();
-				theUsedElements.set(i);
+				theUsedNodes.set(i);
 				break;
 			}
 		}
 		if (value == null && required)
 			throw new IllegalArgumentException(getPath() + ": No attribute '" + name + "' specified on element " + getPath());
 		return value;
+	}
+
+	/**
+	 * @param name The name of the attribute to get
+	 * @param defaultValue The value to return if the attribute is not specified
+	 * @return The value of the attribute, or the given default if it is missing
+	 */
+	public String getAttribute(String name, String defaultValue) {
+		String val = getAttribute(name, false);
+		return val == null ? defaultValue : val;
+	}
+
+	/**
+	 * @param <T> The type to interpret the attribute as
+	 * @param name The name of the attribute to get
+	 * @param parser The parser for the attribute value, if present
+	 * @param defaultValue The value to return if the attribute is not specified
+	 * @return The parsed value of the attribute, or the given default if it is missing
+	 */
+	public <T> T getAttribute(String name, Function<String, ? extends T> parser, T defaultValue) {
+		String val = getAttribute(name, false);
+		return val == null ? defaultValue : parser.apply(val);
 	}
 
 	/**
@@ -96,7 +127,7 @@ public class StrictXmlReader implements Named {
 			if (!pattern.matcher(n.getNodeName()).matches())
 				continue;
 			found.put(n.getNodeName(), n.getNodeValue());
-			theUsedElements.set(i);
+			theUsedNodes.set(i);
 		}
 		if (found.size() < min || (max >= 0 && found.size() > max))
 			throw new IllegalArgumentException(getPath() + ": Between " + min + " and " + max + " attribute"
@@ -110,7 +141,7 @@ public class StrictXmlReader implements Named {
 		for (int i = 0; i < theElement.getAttributes().getLength(); i++) {
 			Node n = theElement.getAttributes().item(i);
 			found.put(n.getNodeName(), n.getNodeValue());
-			theUsedElements.set(i);
+			theUsedNodes.set(i);
 		}
 		return found;
 	}
@@ -124,6 +155,7 @@ public class StrictXmlReader implements Named {
 	 */
 	public StrictXmlReader getElement(String name, boolean required) throws IllegalArgumentException {
 		Element found = null;
+		int foundIdx = -1;
 		for (int i = 0; i < theElement.getChildNodes().getLength(); i++) {
 			Node n = theElement.getChildNodes().item(i);
 			if (!(n instanceof Element) || !((Element) n).getTagName().equals(name))
@@ -131,14 +163,28 @@ public class StrictXmlReader implements Named {
 			if (found != null)
 				throw new IllegalArgumentException(getPath() + ": Multiple '" + name + "' elements specified under parent " + getPath());
 			found = (Element) n;
-			theUsedElements.set(i + theElement.getAttributes().getLength());
+			foundIdx = i;
+			theUsedNodes.set(i + theElement.getAttributes().getLength());
 		}
-		if (found != null)
-			return new StrictXmlReader(this, found);
-		else if (required)
+		if (found != null) {
+			if (theChildren == null)
+				theChildren = new StrictXmlReader[theElement.getChildNodes().getLength()];
+			if (theChildren[foundIdx] == null)
+				theChildren[foundIdx] = new StrictXmlReader(this, found);
+			return theChildren[foundIdx];
+		} else if (required)
 			throw new IllegalArgumentException(getPath() + ": No element '" + name + "' specified under parent " + getPath());
 		else
 			return null;
+	}
+
+	/**
+	 * @param name The name of the child element to get
+	 * @return The first child element with the given name, or {@link #MISSING} if there was no such child
+	 */
+	public StrictXmlReader getElementOrMissing(String name) {
+		StrictXmlReader found = getElement(name, false);
+		return found == null ? MISSING : found;
 	}
 
 	/**
@@ -156,7 +202,7 @@ public class StrictXmlReader implements Named {
 			if (!(n instanceof Element) || !((Element) n).getTagName().equals(name))
 				continue;
 			found.add(new StrictXmlReader(this, (Element) n));
-			theUsedElements.set(i + attLen);
+			theUsedNodes.set(i + attLen);
 		}
 		if (found.size() < min || (max >= 0 && found.size() > max))
 			throw new IllegalArgumentException(getPath() + ": Between " + min + " and " + max + " '" + name + "' element"
@@ -178,7 +224,7 @@ public class StrictXmlReader implements Named {
 			if (!(n instanceof Element))
 				continue;
 			found.add(new StrictXmlReader(this, (Element) n));
-			theUsedElements.set(i + attLen);
+			theUsedNodes.set(i + attLen);
 		}
 		if (found.size() < min || (max >= 0 && found.size() > max))
 			throw new IllegalArgumentException(getPath() + ": Between " + min + " and " + max + " element"
@@ -206,7 +252,7 @@ public class StrictXmlReader implements Named {
 							getPath() + ": Multiple text/CDATA sections specified under parent " + getPath());
 					found = n.getNodeValue();
 				}
-				theUsedElements.set(i + attLen);
+				theUsedNodes.set(i + attLen);
 			}
 		}
 		if (!anyText) {
@@ -241,7 +287,7 @@ public class StrictXmlReader implements Named {
 					found.append(n.getNodeValue().trim());
 				} else
 					found.append(n.getNodeValue());
-				theUsedElements.set(i + attLen);
+				theUsedNodes.set(i + attLen);
 			}
 		}
 		if (!anyText && required)
@@ -262,7 +308,7 @@ public class StrictXmlReader implements Named {
 		for (int i = 0; i < theElement.getChildNodes().getLength(); i++) {
 			Node n = theElement.getChildNodes().item(i);
 			if ((n.getNodeType() == Node.TEXT_NODE || n.getNodeType() == Node.CDATA_SECTION_NODE)) {
-				theUsedElements.set(i + attLen);
+				theUsedNodes.set(i + attLen);
 				if (trim && isWhiteSpace(n.getNodeValue()))
 					continue;
 				found.add(trim ? n.getNodeValue().trim() : n.getNodeValue());
@@ -293,6 +339,13 @@ public class StrictXmlReader implements Named {
 		return str.append('>').toString();
 	}
 
+	/** Resets this reader's record of retrieving/checking its content */
+	public void clearChecks() {
+		theUsedNodes.clear();
+		if (theChildren != null)
+			Arrays.fill(theChildren, null);
+	}
+
 	/**
 	 * Goes through all this element's content and throws an exception if any of it was not used
 	 * 
@@ -300,34 +353,18 @@ public class StrictXmlReader implements Named {
 	 *         any methods)
 	 */
 	public void check() throws IllegalArgumentException {
-		if (isClosed)
-			return;
-		isClosed = true;
+		check(false);
+	}
+
+	/**
+	 * Goes through all this element's content and throws an exception if any of it was not used
+	 * 
+	 * @param deep Whether to also check the content of child elements
+	 * @throws IllegalArgumentException If there was any unexpected content in this element
+	 */
+	public void check(boolean deep) throws IllegalArgumentException {
 		Map<String, Integer> errs = null;
-		int attLen = theElement.getAttributes().getLength();
-		for (int i = theUsedElements.nextClearBit(0); i >= 0
-			&& i < attLen + theElement.getChildNodes().getLength(); i = theUsedElements.nextClearBit(i + 1)) {
-			if (errs == null)
-				errs = new LinkedHashMap<>();
-			Node n = i < attLen ? theElement.getAttributes().item(i) : theElement.getChildNodes().item(i - attLen);
-			switch (n.getNodeType()) {
-			case Node.ELEMENT_NODE:
-				errs.compute("element '" + ((Element) n).getTagName() + "'", (__, ct) -> ct == null ? 1 : ct + 1);
-				break;
-			case Node.ATTRIBUTE_NODE:
-				errs.compute("attribute '" + n.getNodeName() + "'", (__, ct) -> ct == null ? 1 : ct + 1);
-				break;
-			case Node.TEXT_NODE:
-				if (!isWhiteSpace(n.getNodeValue()))
-					errs.compute("text", (__, ct) -> ct == null ? 1 : ct + 1);
-				break;
-			case Node.CDATA_SECTION_NODE:
-				errs.compute("CDATA", (__, ct) -> ct == null ? 1 : ct + 1);
-				break;
-			default:
-				continue;
-			}
-		}
+		errs = check(new StringBuilder(), deep, errs);
 		if (errs == null)
 			return;
 		switch (errs.size()) {
@@ -339,7 +376,7 @@ public class StrictXmlReader implements Named {
 					getPath() + ": Illegal content on element " + getPath() + ": " + errs.keySet().iterator().next());
 			//$FALL-THROUGH$
 		default:
-			StringBuilder str = new StringBuilder(getPath() + ": Illegal content on element ").append(':');
+			StringBuilder str = new StringBuilder(getPath() + ": Illegal content on element ").append(getPath()).append(':');
 			for (Map.Entry<String, Integer> err : errs.entrySet()) {
 				str.append("\n\t").append(err.getKey());
 				if (err.getValue() > 1)
@@ -347,6 +384,51 @@ public class StrictXmlReader implements Named {
 			}
 			throw new IllegalArgumentException(str.toString());
 		}
+	}
+
+	private Map<String, Integer> check(StringBuilder path, boolean deep, Map<String, Integer> errs) {
+		if (theElement == null)
+			return errs;
+		int attLen = theElement.getAttributes().getLength();
+		for (int i = theUsedNodes.nextClearBit(0); i >= 0
+			&& i < attLen + theElement.getChildNodes().getLength(); i = theUsedNodes.nextClearBit(i + 1)) {
+			if (errs == null)
+				errs = new LinkedHashMap<>();
+			Node n = i < attLen ? theElement.getAttributes().item(i) : theElement.getChildNodes().item(i - attLen);
+			switch (n.getNodeType()) {
+			case Node.ELEMENT_NODE:
+				errs.compute(path + ((Element) n).getTagName(), (__, ct) -> ct == null ? 1 : ct + 1);
+				break;
+			case Node.ATTRIBUTE_NODE:
+				errs.compute(path + n.getNodeName(), (__, ct) -> ct == null ? 1 : ct + 1);
+				break;
+			case Node.TEXT_NODE:
+				if (!isWhiteSpace(n.getNodeValue()))
+					errs.compute(path + "text", (__, ct) -> ct == null ? 1 : ct + 1);
+				break;
+			case Node.CDATA_SECTION_NODE:
+				errs.compute(path + "CDATA", (__, ct) -> ct == null ? 1 : ct + 1);
+				break;
+			default:
+				continue;
+			}
+		}
+		if (deep && theChildren != null) {
+			int preLen = path.length();
+			for (StrictXmlReader child : theChildren) {
+				if (child != null) {
+					path.append(child.getTagName()).append('.');
+					errs = child.check(path, true, errs);
+					path.setLength(preLen);
+				}
+			}
+		}
+		return errs;
+	}
+
+	@Override
+	public void close() {
+		check(true);
 	}
 
 	private static boolean isWhiteSpace(String nodeValue) {
@@ -364,5 +446,25 @@ public class StrictXmlReader implements Named {
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * @param in The input stream containing the XML to parse
+	 * @return The strict reader to parse the XML with
+	 * @throws IOException If an error occurs reading or parsing the stream
+	 */
+	public static StrictXmlReader read(InputStream in) throws IOException {
+		return new StrictXmlReader(QommonsConfig.getRootElement(in));
+	}
+
+	/**
+	 * @param in Supplies the input stream containing the XML to parse
+	 * @return The strict reader to parse the XML with
+	 * @throws IOException If an error occurs creating, reading, or parsing the stream
+	 */
+	public static StrictXmlReader read(ExSupplier<InputStream, IOException> in) throws IOException {
+		try (InputStream stream = in.get()) {
+			return read(stream);
+		}
 	}
 }

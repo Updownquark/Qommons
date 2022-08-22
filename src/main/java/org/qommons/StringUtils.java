@@ -771,7 +771,7 @@ public class StringUtils {
 	 * @see #PAREN_DUPLICATES
 	 * @see #SIMPLE_DUPLICATES
 	 */
-	public static String getNewItemName(Predicate<String> existingTest, String firstTry, DuplicateItemNamer namer) {
+	public static String getNewItemName(Predicate<? super String> existingTest, String firstTry, DuplicateItemNamer namer) {
 		if (namer == null)
 			namer = PAREN_DUPLICATES;
 		String name = firstTry;
@@ -822,14 +822,8 @@ public class StringUtils {
 	 */
 	public static <E> String getNewItemName(Iterable<? extends E> items, Function<? super E, String> itemName, String firstTry,
 		DuplicateItemNamer namer) {
-		return getNewItemName(name -> {
-			for (E item : items) {
-				String name_i = itemName.apply(item);
-				if (name.equals(name_i))
-					return true;
-			}
-			return false;
-		}, firstTry, namer);
+		return getNewItemName(//
+			name -> !isUniqueName(items, itemName, name, null), firstTry, namer);
 	}
 
 	/**

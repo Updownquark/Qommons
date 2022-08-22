@@ -556,7 +556,7 @@ public class ListenerList<E> {
 			reentrant = isFiringSafe.get();
 		else
 			reentrant = unsafeIterId;
-		return reentrant != null && theReentrancyError != null;
+		return reentrant != null;
 	}
 
 	/**

@@ -20,6 +20,8 @@ public class QonfigParseIssue {
 		theMessage = message;
 		theLocation = location;
 		theCause = cause;
+		if (cause != null)
+			cause.getStackTrace(); // Need to initialize it now
 	}
 
 	/** @return The path detailing where the error is located */
@@ -54,8 +56,15 @@ public class QonfigParseIssue {
 		str.append(": ");
 		str.append(theMessage);
 		str.append(" ( ").append(theLocation).append(" )");
-		if (theCause != null)
+		if (theCause != null) {
 			str.append(": ").append(theCause);
+			int i = 0;
+			for (StackTraceElement stack : theCause.getStackTrace()) {
+				str.append('\n').append(stack);
+				if (++i == 10)
+					break;
+			}
+		}
 		return str.toString();
 	}
 }

@@ -152,6 +152,11 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 	}
 
 	@Override
+	public QonfigValueDef getValue() {
+		return getSuperElement() == null ? null : getSuperElement().getValue();
+	}
+
+	@Override
 	public Map<QonfigChildDef.Declared, ChildModifier> getChildModifiers() {
 		return (Map<QonfigChildDef.Declared, ChildModifier>) super.getChildModifiers();
 	}

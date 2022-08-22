@@ -10,6 +10,8 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.qommons.collect.BetterList;
+import org.qommons.ex.ExFunction;
+import org.qommons.ex.ExSupplier;
 
 /**
  * A map of values to classes. This structure is hierarchical, allowing query of either the most-specific or all values mapped to classes
@@ -146,10 +148,14 @@ public class ClassMap<V> {
 		}
 
 		<C2 extends C> V compute(Class<C2> type, Function<? super V, ? extends V> value) {
+			return computeEx(type, ExFunction.of(value));
+		}
+
+		<C2 extends C, E extends Throwable> V computeEx(Class<C2> type, ExFunction<? super V, ? extends V, E> value) throws E {
 			type = wrap(type);
 			if (type == theType) {
 				boolean wasNull = theValue == null;
-				theValue = value.apply(theValue);
+				theValue = value == null ? null : value.apply(theValue);
 				if (wasNull) {
 					if (theValue != null)
 						theSize++;
@@ -165,7 +171,7 @@ public class ClassMap<V> {
 				if (subMap.theType.isAssignableFrom(type)) {
 					found = true;
 					int preSize = subMap.size();
-					newValue = ((ClassMapEntry<? super C2, V>) subMap).compute(type, value);
+					newValue = ((ClassMapEntry<? super C2, V>) subMap).computeEx(type, value);
 					theSize += subMap.size() - preSize;
 					if (subMap.size() == 0)
 						subMapIter.remove();
@@ -175,7 +181,7 @@ public class ClassMap<V> {
 				}
 			}
 			if (!found) {
-				newValue = value.apply(null);
+				newValue = value == null ? null : value.apply(null);
 				if (newValue == null)
 					return null;
 				ClassMapEntry<C2, V> newSubMap = new ClassMapEntry<C2, V>(type).with(type, newValue);
@@ -229,14 +235,20 @@ public class ClassMap<V> {
 			return keys;
 		}
 
-		void append(StringBuilder str, int indent) {
+		StringBuilder append(StringBuilder str, int indent) {
 			for (int i = 0; i < indent; i++)
 				str.append('\t');
-			str.append(theType.getName());
+			str.append(theType == null ? "<root>" : theType.getName());
 			if (theValue != null)
 				str.append('=').append(theValue);
 			for (ClassMapEntry<? extends C, V> child : theSubMaps)
 				child.append(str.append('\n'), indent + 1);
+			return str;
+		}
+
+		@Override
+		public String toString() {
+			return append(new StringBuilder(), 0).toString();
 		}
 	}
 
@@ -301,6 +313,29 @@ public class ClassMap<V> {
 				return match == TypeMatch.SUPER_TYPE;
 			}));
 		return (V) found[0];
+	}
+
+	/**
+	 * @param type The class to query with
+	 * @param acceptMatches The type of type-match to accept:
+	 *        <ul>
+	 *        <li>{@link TypeMatch#EXACT} to return only the value for exactly the given type (if it exists)</li>
+	 *        <li>{@link TypeMatch#SUB_TYPE} to return the value for the given type or its least specific sub-type</li>
+	 *        <li>{@link TypeMatch#SUPER_TYPE} to return the value for the given type or its most specific super-type</li>
+	 *        <li><code>null</code> to return the first encountered value for a type that is related to the given type in either
+	 *        direction</li>
+	 *        </ul>
+	 * @return The value for the queried type (as {@link BiTuple#getValue2() value 2} with the actual class the value was stored under (as
+	 *         {@link BiTuple#getValue1() value 1}
+	 */
+	public synchronized BiTuple<Class<?>, V> getEntry(Class<?> type, TypeMatch acceptMatches) {
+		BiTuple<Class<?>, V>[] found = new BiTuple[1];
+		descend(type, //
+			new MatchAcceptingAction<>(acceptMatches, true, (type2, value, match) -> {
+				found[0] = new BiTuple<>(type2, value);
+				return match == TypeMatch.SUPER_TYPE;
+			}));
+		return found[0];
 	}
 
 	/**
@@ -410,6 +445,17 @@ public class ClassMap<V> {
 	}
 
 	/**
+	 * Synonym for {@link #with(Class, Object)}
+	 * 
+	 * @param type The class to map the value to
+	 * @param value The value to map to the class
+	 * @return This map
+	 */
+	public synchronized ClassMap<V> put(Class<?> type, V value) {
+		return with(type, value);
+	}
+
+	/**
 	 * Maps a value to the class unless one is already mapped
 	 * 
 	 * @param type The class to map the value to
@@ -418,6 +464,19 @@ public class ClassMap<V> {
 	 */
 	public synchronized V computeIfAbsent(Class<?> type, Supplier<V> value) {
 		return theRoot.compute(type, old -> old != null ? old : value.get());
+	}
+
+	/**
+	 * Maps a value to the class unless one is already mapped
+	 * 
+	 * @param <E> The type of exception that the supplier may throw
+	 * @param type The class to map the value to
+	 * @param value The value to map to the class if one is not already mapped
+	 * @return The new value mapped to the class
+	 * @throws E If the supplier throws an exception when attempting to supply the missing value
+	 */
+	public synchronized <E extends Throwable> V computeIfAbsentEx(Class<?> type, ExSupplier<V, E> value) throws E {
+		return theRoot.computeEx(type, old -> old != null ? old : value.get());
 	}
 
 	/**

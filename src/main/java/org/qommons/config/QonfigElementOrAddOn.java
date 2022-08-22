@@ -148,6 +148,9 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		return theValue;
 	}
 
+	/** @return The value specification for elements of this type */
+	public abstract QonfigValueDef getValue();
+
 	/** @return All children declared by this item */
 	public Map<String, QonfigChildDef.Declared> getDeclaredChildren() {
 		return theDeclaredChildren;

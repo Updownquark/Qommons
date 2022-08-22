@@ -120,82 +120,83 @@ public class DefaultQonfigParser implements QonfigParser {
 		content.close();
 		QonfigParseSession session;
 		QonfigDocument doc;
-		StrictXmlReader rootReader = new StrictXmlReader(root);
-		LinkedList<String> path = new LinkedList<>();
-		Map<String, QonfigToolkit> uses = new LinkedHashMap<>();
-		for (Map.Entry<String, String> use : rootReader.findAttributes(USES, 0, -1).entrySet()) {
-			String refName = use.getKey().substring(5);
-			if (refName.isEmpty())
-				throw new IllegalArgumentException("Empty toolkit name");
-			checkName(refName);
-			path.add(refName);
-			Matcher match = TOOLKIT_REF.matcher(use.getValue());
-			if (!match.matches())
-				throw new IllegalArgumentException(location + ": Bad toolkit reference.  Expected 'name vM.m' but found " + use.getValue());
-			ToolkitDef def = new ToolkitDef(match.group("name"), Integer.parseInt(match.group("major")),
-				Integer.parseInt(match.group("minor")));
+		try (StrictXmlReader rootReader = new StrictXmlReader(root)) {
+			LinkedList<String> path = new LinkedList<>();
+			Map<String, QonfigToolkit> uses = new LinkedHashMap<>();
+			for (Map.Entry<String, String> use : rootReader.findAttributes(USES, 0, -1).entrySet()) {
+				String refName = use.getKey().substring(5);
+				if (refName.isEmpty())
+					throw new IllegalArgumentException("Empty toolkit name");
+				checkName(refName);
+				path.add(refName);
+				Matcher match = TOOLKIT_REF.matcher(use.getValue());
+				if (!match.matches())
+					throw new IllegalArgumentException(
+						location + ": Bad toolkit reference.  Expected 'name vM.m' but found " + use.getValue());
+				ToolkitDef def = new ToolkitDef(match.group("name"), Integer.parseInt(match.group("major")),
+					Integer.parseInt(match.group("minor")));
 
-			QonfigToolkit dep = theToolkits.get(def);
-			if (dep == null)
-				throw new IllegalArgumentException("No such dependency " + def + " registered");
-			uses.put(refName, dep);
-		}
-		if (uses.isEmpty())
-			throw new IllegalArgumentException("No toolkit uses declared");
-		QonfigElementDef rootDef;
-		if (rootReader.getPrefix() != null) {
-			QonfigToolkit primary = uses.get(rootReader.getPrefix());
-			if (primary == null)
-				throw new IllegalArgumentException("Unrecognized namespace for root: " + rootReader.getPrefix());
-			rootDef = primary.getElement(rootReader.getTagName());
-			if (rootDef == null)
-				throw new IllegalArgumentException(
-					"No such element '" + rootReader.getTagName() + "' found in toolkit " + rootReader.getPrefix() + " (" + primary + ")");
-			else if (!primary.getRoots().contains(rootDef))
-				throw new IllegalArgumentException(
-					rootReader.getName() + " is not a root of toolkit " + rootReader.getPrefix() + " (" + primary + ")");
-		} else {
-			QonfigElementDef rootDef2 = null;
-			for (QonfigToolkit tk : uses.values()) {
-				QonfigElementDef found = tk.getElement(rootReader.getName());
-				if (found != null) {
-					if (rootDef2 == null)
-						rootDef2 = found;
-					else if (found != rootDef2)
-						throw new IllegalArgumentException("Multiple element-defs found matching " + rootReader.getName());
-				}
+				QonfigToolkit dep = theToolkits.get(def);
+				if (dep == null)
+					throw new IllegalArgumentException("No such dependency " + def + " registered");
+				uses.put(refName, dep);
 			}
-			if (rootDef2 == null)
-				throw new IllegalArgumentException("No such element-def: '" + rootReader.getName() + "'");
-			boolean isRoot = false;
-			for (QonfigToolkit tk : uses.values()) {
-				isRoot = tk.getRoots().contains(rootDef2);
-				if (isRoot)
-					break;
+			if (uses.isEmpty())
+				throw new IllegalArgumentException("No toolkit uses declared");
+			QonfigElementDef rootDef;
+			if (rootReader.getPrefix() != null) {
+				QonfigToolkit primary = uses.get(rootReader.getPrefix());
+				if (primary == null)
+					throw new IllegalArgumentException("Unrecognized namespace for root: " + rootReader.getPrefix());
+				rootDef = primary.getElement(rootReader.getTagName());
+				if (rootDef == null)
+					throw new IllegalArgumentException("No such element '" + rootReader.getTagName() + "' found in toolkit "
+						+ rootReader.getPrefix() + " (" + primary + ")");
+				else if (!primary.getRoots().contains(rootDef))
+					throw new IllegalArgumentException(
+						rootReader.getName() + " is not a root of toolkit " + rootReader.getPrefix() + " (" + primary + ")");
+			} else {
+				QonfigElementDef rootDef2 = null;
+				for (QonfigToolkit tk : uses.values()) {
+					QonfigElementDef found = tk.getElement(rootReader.getName());
+					if (found != null) {
+						if (rootDef2 == null)
+							rootDef2 = found;
+						else if (found != rootDef2)
+							throw new IllegalArgumentException("Multiple element-defs found matching " + rootReader.getName());
+					}
+				}
+				if (rootDef2 == null)
+					throw new IllegalArgumentException("No such element-def: '" + rootReader.getName() + "'");
+				boolean isRoot = false;
+				for (QonfigToolkit tk : uses.values()) {
+					isRoot = tk.getRoots().contains(rootDef2);
+					if (isRoot)
+						break;
+				}
+				if (!isRoot)
+					throw new IllegalArgumentException("Element '" + rootReader.getName() + "' is not declared as the root of any toolkit");
+				rootDef = rootDef2;
 			}
-			if (!isRoot)
-				throw new IllegalArgumentException("Element '" + rootReader.getName() + "' is not declared as the root of any toolkit");
-			rootDef = rootDef2;
+			QonfigToolkit docToolkit = new QonfigToolkit(location, 1, 0, null, Collections.unmodifiableMap(uses), Collections.emptyMap(),
+				Collections.emptyMap(), Collections.emptyMap(), Collections.emptyList(), new QonfigToolkit.ToolkitBuilder() {
+					@Override
+					public void parseTypes(QonfigParseSession s) {
+					}
+
+					@Override
+					public void fillOutTypes(QonfigParseSession s) {
+					}
+
+					@Override
+					public Set<QonfigElementDef> getDeclaredRoots(QonfigParseSession s) {
+						return Collections.singleton(rootDef);
+					}
+				});
+			session = QonfigParseSession.forRoot(rootReader.getName(), docToolkit);
+			doc = new QonfigDocument(location, docToolkit);
+			parseDocElement(session, QonfigElement.build(session, doc, null, rootDef), rootReader, true, el -> true);
 		}
-		QonfigToolkit docToolkit = new QonfigToolkit(location, 1, 0, null, Collections.unmodifiableMap(uses), Collections.emptyMap(),
-			Collections.emptyMap(), Collections.emptyMap(), Collections.emptyList(), new QonfigToolkit.ToolkitBuilder() {
-				@Override
-				public void parseTypes(QonfigParseSession s) {
-				}
-
-				@Override
-				public void fillOutTypes(QonfigParseSession s) {
-				}
-
-				@Override
-				public Set<QonfigElementDef> getDeclaredRoots(QonfigParseSession s) {
-					return Collections.singleton(rootDef);
-				}
-			});
-		session = QonfigParseSession.forRoot(rootReader.getName(), docToolkit);
-		doc = new QonfigDocument(location, docToolkit);
-		parseDocElement(session, QonfigElement.build(session, doc, null, rootDef), rootReader, true, el -> true);
-		rootReader.check();
 		session.printWarnings(System.err, location);
 		session.throwErrors(location);
 		return doc;
@@ -316,44 +317,46 @@ public class DefaultQonfigParser implements QonfigParser {
 			throw new IOException("For toolkit " + location, e);
 		}
 		xml.close();
-		StrictXmlReader rootReader = new StrictXmlReader(root);
-		String name = rootReader.getAttribute("name", true);
-		if (!TOOLKIT_NAME.matcher(name).matches())
-			throw new IllegalArgumentException("Invalid toolkit name: " + name);
-		Matcher version = TOOLKIT_VERSION.matcher(rootReader.getAttribute("version", true));
-		if (!version.matches())
-			throw new IllegalArgumentException("Illegal toolkit version.  Expected 'M.m' but found " + version.group());
-		int major = Integer.parseInt(version.group("major"));
-		int minor = Integer.parseInt(version.group("minor"));
-		ToolkitDef def = new ToolkitDef(name, major, minor);
-		if (theToolkits.containsKey(def))
-			throw new IllegalArgumentException("A toolkit named " + name + " is already registered");
-		if (!rootReader.getTagName().equals("qonfig-def"))
-			throw new IllegalArgumentException("Expected 'qonfig-def' for root element, not " + root.getNodeName());
-		Map<String, QonfigToolkit> dependencies = new LinkedHashMap<>();
-		for (Map.Entry<String, String> ext : rootReader.findAttributes(EXTENDS, 0, -1).entrySet()) {
-			String refName = ext.getKey().substring("extends:".length());
-			if (refName.isEmpty())
-				throw new IllegalArgumentException(path + ": Empty dependency name");
-			checkName(refName);
-			path.add(refName);
-			Matcher match = TOOLKIT_REF.matcher(ext.getValue());
-			if (!match.matches())
-				throw new IllegalArgumentException(def + ": Bad toolkit reference.  Expected 'name vM.m' but found " + ext.getValue());
-			ToolkitDef depDef = new ToolkitDef(match.group("name"), Integer.parseInt(match.group("major")),
-				Integer.parseInt(match.group("minor")));
+		ToolkitDef def;
+		QonfigToolkit toolkit;
+		try (StrictXmlReader rootReader = new StrictXmlReader(root)) {
+			String name = rootReader.getAttribute("name", true);
+			if (!TOOLKIT_NAME.matcher(name).matches())
+				throw new IllegalArgumentException("Invalid toolkit name: " + name);
+			Matcher version = TOOLKIT_VERSION.matcher(rootReader.getAttribute("version", true));
+			if (!version.matches())
+				throw new IllegalArgumentException("Illegal toolkit version.  Expected 'M.m' but found " + version.group());
+			int major = Integer.parseInt(version.group("major"));
+			int minor = Integer.parseInt(version.group("minor"));
+			def = new ToolkitDef(name, major, minor);
+			if (theToolkits.containsKey(def))
+				throw new IllegalArgumentException("A toolkit named " + name + " is already registered");
+			if (!rootReader.getTagName().equals("qonfig-def"))
+				throw new IllegalArgumentException("Expected 'qonfig-def' for root element, not " + root.getNodeName());
+			Map<String, QonfigToolkit> dependencies = new LinkedHashMap<>();
+			for (Map.Entry<String, String> ext : rootReader.findAttributes(EXTENDS, 0, -1).entrySet()) {
+				String refName = ext.getKey().substring("extends:".length());
+				if (refName.isEmpty())
+					throw new IllegalArgumentException(path + ": Empty dependency name");
+				checkName(refName);
+				path.add(refName);
+				Matcher match = TOOLKIT_REF.matcher(ext.getValue());
+				if (!match.matches())
+					throw new IllegalArgumentException(def + ": Bad toolkit reference.  Expected 'name vM.m' but found " + ext.getValue());
+				ToolkitDef depDef = new ToolkitDef(match.group("name"), Integer.parseInt(match.group("major")),
+					Integer.parseInt(match.group("minor")));
 
-			QonfigToolkit dep = theToolkits.get(depDef);
-			if (dep == null)
-				throw new IllegalArgumentException("No such dependency named " + depDef + " registered");
-			dependencies.put(refName, dep);
+				QonfigToolkit dep = theToolkits.get(depDef);
+				if (dep == null)
+					throw new IllegalArgumentException("No such dependency named " + depDef + " registered");
+				dependencies.put(refName, dep);
+			}
+			ToolkitParser parser = new ToolkitParser(rootReader, customValueTypes);
+			toolkit = new QonfigToolkit(name, major, minor, location, Collections.unmodifiableMap(dependencies),
+				Collections.unmodifiableMap(parser.getDeclaredTypes()), Collections.unmodifiableMap(parser.getDeclaredAddOns()),
+				Collections.unmodifiableMap(parser.getDeclaredElements()),
+				Collections.unmodifiableList(parser.getDeclaredAutoInheritance()), parser);
 		}
-		ToolkitParser parser = new ToolkitParser(rootReader, customValueTypes);
-		QonfigToolkit toolkit = new QonfigToolkit(name, major, minor, location, Collections.unmodifiableMap(dependencies),
-			Collections.unmodifiableMap(parser.getDeclaredTypes()), Collections.unmodifiableMap(parser.getDeclaredAddOns()),
-			Collections.unmodifiableMap(parser.getDeclaredElements()), Collections.unmodifiableList(parser.getDeclaredAutoInheritance()),
-			parser);
-		rootReader.check();
 		// TODO Verify
 		theToolkits.put(def, toolkit);
 		return toolkit;

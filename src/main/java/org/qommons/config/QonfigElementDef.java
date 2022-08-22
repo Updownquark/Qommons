@@ -68,7 +68,7 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		return theCompiledChildren;
 	}
 
-	/** @return The value specification for elements of this type */
+	@Override
 	public QonfigValueDef getValue() {
 		return theValue;
 	}

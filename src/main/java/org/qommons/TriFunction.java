@@ -67,6 +67,15 @@ public interface TriFunction<T, U, V, R> {
 	}
 
 	/**
+	 * @param <X> The return type of the transformed function
+	 * @param tx The transform function for results of this function
+	 * @return A tri-function with the same arguments as this, but which transforms its end result with the given function
+	 */
+	default <X> TriFunction<T, U, V, X> andThen(Function<? super R, ? extends X> tx) {
+		return new AndThenTriFn<>(this, tx);
+	}
+
+	/**
 	 * Implements {@link TriFunction#curry1(Object)}
 	 * 
 	 * @param <T> The type of the first argument to the ternary function
@@ -337,6 +346,55 @@ public interface TriFunction<T, U, V, R> {
 		@Override
 		public String toString() {
 			return theSource + ".curryAll(" + theArg1 + ", " + theArg2 + ", " + theArg3 + ")";
+		}
+	}
+
+	/**
+	 * Implements {@link TriFunction#andThen(Function)}
+	 * 
+	 * @param <T> The first argument type
+	 * @param <U> The second argument type
+	 * @param <V> The third argument type
+	 * @param <R> The return type of the source function
+	 * @param <X> The return type of the transformed function
+	 */
+	class AndThenTriFn<T, U, V, R, X> implements TriFunction<T, U, V, X> {
+		private final TriFunction<T, U, V, R> theSource;
+		private final Function<? super R, ? extends X> theTransform;
+
+		/**
+		 * @param source The tri-function to transform
+		 * @param transform The transformation for the result of the source function
+		 */
+		public AndThenTriFn(TriFunction<T, U, V, R> source, Function<? super R, ? extends X> transform) {
+			theSource = source;
+			theTransform = transform;
+		}
+
+		@Override
+		public X apply(T arg1, U arg2, V arg3) {
+			R sourceRes = theSource.apply(arg1, arg2, arg3);
+			return theTransform.apply(sourceRes);
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(theSource, theTransform);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (obj == this)
+				return true;
+			if (!(obj instanceof AndThenTriFn))
+				return false;
+			return theSource.equals(((AndThenTriFn<?, ?, ?, ?, ?>) obj).theSource)
+				&& theTransform.equals(((AndThenTriFn<?, ?, ?, ?, ?>) obj).theTransform);
+		}
+
+		@Override
+		public String toString() {
+			return theSource + ".andThen(" + theTransform + ")";
 		}
 	}
 }

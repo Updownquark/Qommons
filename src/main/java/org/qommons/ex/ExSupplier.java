@@ -34,7 +34,9 @@ public interface ExSupplier<T, E extends Throwable> {
 	 * @param s The supplier to wrap
 	 * @return An {@link ExSupplier} that calls the given supplier and never throws any checked exceptions
 	 */
-	static <T, E extends Throwable> ExSupplier<T, E> wrap(Supplier<T> s) {
+	static <T, E extends Throwable> ExSupplier<T, E> of(Supplier<T> s) {
+		if (s == null)
+			return null;
 		return () -> s.get();
 	}
 }

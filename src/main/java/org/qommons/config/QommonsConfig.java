@@ -12,7 +12,6 @@ import java.util.regex.Pattern;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
-import org.qommons.ArrayUtils;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
@@ -282,7 +281,7 @@ public abstract class QommonsConfig implements Cloneable {
 			QommonsConfig [] [] ret = new QommonsConfig[pathEls.length][];
 			for(int p = 0; p < pathEls.length; p++)
 				ret[p] = pathEls[p].subConfigs(name, props);
-			QommonsConfig[] ret2 = ArrayUtils.mergeInclusive(QommonsConfig.class, ret);
+			QommonsConfig [] ret2 = org.qommons.ArrayUtils.mergeInclusive(QommonsConfig.class, ret);
 			if(getClass() != QommonsConfig.class) {
 				QommonsConfig [] ret3 = createConfigArray(ret2.length);
 				System.arraycopy(ret2, 0, ret3, 0, ret2.length);
@@ -720,10 +719,10 @@ public abstract class QommonsConfig implements Cloneable {
 	 * @throws IOException If any of the given paths cannot be interpreted
 	 */
 	public static String resolve(String location, String... relative) throws IOException {
-		if (location.contains("://") || (location.contains("file:/")))
+		if (location.contains("://") || location.startsWith("file:/") || location.startsWith("jar:file:/"))
 			return location;
 		else if(relative.length > 0) {
-			String resolvedRel = resolve(relative[0], ArrayUtils.remove(relative, 0));
+			String resolvedRel = resolve(relative[0], org.qommons.ArrayUtils.remove(relative, 0));
 			int protocolIdx = resolvedRel.indexOf(":/");
 			if(protocolIdx >= 0) {
 				if(location.startsWith("/"))
@@ -741,13 +740,13 @@ public abstract class QommonsConfig implements Cloneable {
 				}
 				if(!resolvedRel.contains(":/")) {
 					throw new IOException(
-						"Location " + location + " relative to " + ArrayUtils.toString(relative) + " is invalid");
+						"Location " + location + " relative to " + org.qommons.ArrayUtils.toString(relative) + " is invalid");
 				}
 				return resolvedRel + "/" + newLocation;
 			} else
 				return null;
 		} else {
-			throw new IOException("Location " + location + " relative to " + ArrayUtils.toString(relative) + " is invalid");
+			throw new IOException("Location " + location + " is invalid");
 		}
 	}
 

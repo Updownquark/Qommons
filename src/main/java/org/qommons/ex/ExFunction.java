@@ -44,6 +44,8 @@ public interface ExFunction<F, T, E extends Throwable> {
 	 * @return An {@link ExFunction} that calls the given function and does not actually throw any checked exceptions
 	 */
 	static <F, T, E extends Throwable> ExFunction<F, T, E> of(Function<F, T> f) {
+		if (f == null)
+			return null;
 		if (LambdaUtils.getIdentifier(f) == LambdaUtils.IDENTITY)
 			return (ExFunction<F, T, E>) IDENTITY;
 		return value -> f.apply(value);

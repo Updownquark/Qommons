@@ -39,8 +39,9 @@ public class QonfigParseSession {
 		int i;
 		for (i = 1; i < stack.length && (//
 		stack[i].getClassName().equals(QonfigParseSession.class.getName())//
-			|| stack[i].getClassName().equals(QonfigInterpreter.class.getName())//
-			|| stack[i].getClassName().equals(QonfigInterpreter.QonfigInterpretingSession.class.getName())//
+			|| stack[i].getClassName().equals(QonfigInterpreterCore.class.getName())//
+			|| stack[i].getClassName().equals(QonfigInterpreterCore.CoreSession.class.getName())//
+			|| stack[i].getClassName().equals(AbstractQIS.class.getName())//
 		); i++) {//
 		}
 		return i < stack.length ? stack[i] : null;
