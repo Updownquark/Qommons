@@ -335,13 +335,14 @@ public interface Lockable extends ThreadConstrained {
 			Collection<? extends X> coll = lockables.get();
 			if (coll == null || coll.isEmpty())
 				return outerLock == null ? Transaction.NONE : outerLock;
-			Transaction[] locks = new Transaction[coll.size() + (outer == null ? 0 : 1)];
+			Object[] lockablesCopy = coll.toArray();
+			Transaction[] locks = new Transaction[lockablesCopy.length + (outer == null ? 0 : 1)];
 			if (outerLock != null)
 				locks[0] = outerLock;
 			try {
 				int i = outerLock == null ? 0 : 1;
-				for (X value : lockables.get()) {
-					Lockable lockable = map.apply(value);
+				for (Object value : lockablesCopy) {
+					Lockable lockable = map.apply((X) value);
 					if (lockable == null) {//
 					} else if (!hasLock) {
 						hasLock = true;

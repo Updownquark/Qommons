@@ -60,6 +60,10 @@ public class ProgramTracker implements Cloneable {
 	static {
 		theThreadTrackers = new ConcurrentHashMap<>();
 		ignoring = new ProgramTracker("ignoring") {
+			{
+				setOn(false);
+			}
+
 			@Override
 			public ProgramTracker setOn(boolean on) {
 				return super.setOn(false);
@@ -100,13 +104,9 @@ public class ProgramTracker implements Cloneable {
 
 	/** @return The tracker for the current thread, initialized if none has been previously set */
 	public static ProgramTracker getThreadTracker() {
-		ProgramTracker tracker = theThreadTrackers.computeIfAbsent(Thread.currentThread(), thread -> {
-			if (THREAD_TRACKING_ACTIVE)
-				return new ProgramTracker(thread.getName());
-			else
-				return null;
-		});
-		return tracker == null ? ignoring : tracker;
+		if (!THREAD_TRACKING_ACTIVE)
+			return ignoring;
+		return theThreadTrackers.computeIfAbsent(Thread.currentThread(), thread -> new ProgramTracker(thread.getName()));
 	}
 
 	/**
@@ -181,46 +181,49 @@ public class ProgramTracker implements Cloneable {
 
 	/** A configuration class that allows the printing of results of a tracking session to be customized */
 	public static class PrintConfig implements Cloneable {
-		private float theAccentThreshold;
-
+		private float theDisplayThreshold;
+		private float theHighlightThreshold;
 		private boolean isAsync;
-
-		private long theTaskDisplayThreshold;
-
 		private String theIndent;
-
 		private String theInitialIndent;
-
 		private boolean isWithIntro;
 
 		/** Creates a print config */
 		public PrintConfig() {
-			theAccentThreshold = 0;
+			theDisplayThreshold = 0;
+			theHighlightThreshold = 0;
 			isAsync = false;
-			theTaskDisplayThreshold = 0;
 			theIndent = DEFAULT_INDENT_INCREMENT;
 			theInitialIndent = "";
 			isWithIntro = true;
 		}
 
-		/** @return The threshold below which tasks will be omitted from the results */
-		public long getTaskDisplayThreshold() {
-			return theTaskDisplayThreshold;
+		/** @return The threshold percent below which a task will not be printed in the result */
+		public float getDisplayThreshold() {
+			return theDisplayThreshold;
 		}
 
-		/** @param thresh The threshold below which tasks will be omitted from the results */
-		public void setTaskDisplayThreshold(long thresh) {
-			theTaskDisplayThreshold = thresh;
+		/**
+		 * @param displayThreshold The threshold percent below which a task will not be printed in the result
+		 * @return This print config
+		 */
+		public PrintConfig setDisplayThreshold(float displayThreshold) {
+			theDisplayThreshold = displayThreshold;
+			return this;
 		}
 
-		/** @return The threshold percent above which a task will be accented in the result */
-		public float getAccentThreshold() {
-			return theAccentThreshold;
+		/** @return The threshold percent above which a task will be highlighted in the result */
+		public float getHighlightThreshold() {
+			return theHighlightThreshold;
 		}
 
-		/** @param thresh The threshold percent above which a task will be accented in the result */
-		public void setAccentThreshold(float thresh) {
-			theAccentThreshold = thresh;
+		/**
+		 * @param thresh The threshold percent above which a task will be highlighted in the result
+		 * @return This print config
+		 */
+		public PrintConfig setHighlightThreshold(float thresh) {
+			theHighlightThreshold = thresh;
+			return this;
 		}
 
 		/** @return Whether the printing is being done concurrently with the tracker's run */
@@ -228,9 +231,13 @@ public class ProgramTracker implements Cloneable {
 			return isAsync;
 		}
 
-		/** @param async Whether the printing is being done concurrently with the tracker's run */
-		public void setAsync(boolean async) {
+		/**
+		 * @param async Whether the printing is being done concurrently with the tracker's run
+		 * @return This print config
+		 */
+		public PrintConfig setAsync(boolean async) {
 			isAsync = async;
+			return this;
 		}
 
 		/** @return The string to indent nested tasks with */
@@ -238,9 +245,13 @@ public class ProgramTracker implements Cloneable {
 			return theIndent;
 		}
 
-		/** @param indent The string to indent nested tasks with */
-		public void setIndent(String indent) {
+		/**
+		 * @param indent The string to indent nested tasks with
+		 * @return This print config
+		 */
+		public PrintConfig setIndent(String indent) {
 			theIndent = indent;
+			return this;
 		}
 
 		/** @return The number of spaces to start the indentation of with */
@@ -248,9 +259,13 @@ public class ProgramTracker implements Cloneable {
 			return theInitialIndent;
 		}
 
-		/** @param indent The number of spaces to start the indentation of with */
-		public void setInitialIndent(String indent) {
+		/**
+		 * @param indent The number of spaces to start the indentation of with
+		 * @return This print config
+		 */
+		public PrintConfig setInitialIndent(String indent) {
 			theInitialIndent = indent;
+			return this;
 		}
 
 		/** @return Whether program trackers printed with this config will also print a description of the tracker */
@@ -258,9 +273,13 @@ public class ProgramTracker implements Cloneable {
 			return isWithIntro;
 		}
 
-		/** @param wi Whether program trackers printed with this config should also print a description of the tracker */
-		public void setWithIntro(boolean wi) {
+		/**
+		 * @param wi Whether program trackers printed with this config should also print a description of the tracker
+		 * @return This print config
+		 */
+		public PrintConfig setWithIntro(boolean wi) {
 			isWithIntro = wi;
+			return this;
 		}
 
 		@Override
@@ -609,25 +628,22 @@ public class ProgramTracker implements Cloneable {
 			return sb.toString();
 		}
 
-		void write(int indent, long lastTime, long totalTime, StringBuilder sb, PrintConfig config) {
-			if(config != null) {
-				sb.append(config.getInitialIndent());
-				for(int i = 0; i < indent; i++)
-					sb.append(config.getIndent());
-			}
+		boolean write(int indent, long lastTime, long totalTime, StringBuilder sb, PrintConfig config) {
 			long localLength = getLocalLength(config);
 			float localPercent = 0;
 			float totalPercent = 0;
-			boolean accent = false;
+			boolean highlight = false;
 			long realLength = getRealLength();
-			float accentThresh = config == null ? 0 : config.getAccentThreshold();
+			float accentThresh = config == null ? 0 : config.getHighlightThreshold();
 			if(totalTime > 0) {
 				localPercent = localLength * 100.0f / totalTime;
 				totalPercent = realLength * 100.0f / totalTime;
+				if (config != null && config.getDisplayThreshold() > 0.0f && totalPercent < config.getDisplayThreshold())
+					return false;
 				if(accentThresh > 0) {
 					long thresholdTime = (long) (accentThresh / 100.0f * totalTime);
 					if(localPercent >= accentThresh)
-						accent = true;
+						highlight = true;
 					else if(realLength >= thresholdTime) {
 						long length2 = realLength;
 						for(TrackNode child : children.values()) {
@@ -635,11 +651,17 @@ public class ProgramTracker implements Cloneable {
 								length2 -= child.getRealLength();
 						}
 						if(length2 >= thresholdTime)
-							accent = true;
+							highlight = true;
 					}
 				}
 			}
-			if(accent)
+
+			if (config != null) {
+				sb.append(config.getInitialIndent());
+				for (int i = 0; i < indent; i++)
+					sb.append(config.getIndent());
+			}
+			if (highlight)
 				sb.append("* ");
 			sb.append(name);
 			if(unfinished > 0 || endTime < latestStartTime) {
@@ -677,12 +699,13 @@ public class ProgramTracker implements Cloneable {
 				}
 				sb.append(" total)");
 			}
-			if(accent && lengthStats != null && lengthStats.isInteresting()) {
+			if (highlight && lengthStats != null && lengthStats.isInteresting()) {
 				sb.append("        ");
 				sb.append(lengthStats.toString(NANO_FORMAT));
 			}
-			if(accent)
+			if (highlight)
 				sb.append(" *");
+			return true;
 		}
 
 		/**
@@ -727,6 +750,8 @@ public class ProgramTracker implements Cloneable {
 	private boolean isOn;
 
 	private java.lang.management.ThreadMXBean theThreadBean;
+
+	private TrackNode INACTIVE = new TrackNode(null, "INACTIVE", false);
 
 	/**
 	 * Creates a ProgramTracker
@@ -864,7 +889,7 @@ public class ProgramTracker implements Cloneable {
 	 */
 	public final TrackNode start(String routine) {
 		if(!isOn)
-			return new TrackNode(null, routine, false);
+			return INACTIVE;
 		/* This code may be quite expensive, since this method is used very often and the call to
 		 * Thread.currentThread() is supposed to be fairly expensive. This code may be useful for
 		 * debugging in some situations, but it is not worth keeping it here to degrade performance
@@ -964,27 +989,31 @@ public class ProgramTracker implements Cloneable {
 	 * @see #printData(StringBuilder)
 	 */
 	public final void printData() {
-		printData(0);
+		printData(0, 0);
 	}
 
 	/**
 	 * Prints the data gathered by this tracker to {@link System#out}
 	 *
-	 * @param threshold The threshold above which percent items in the profiling will be highlighted
+	 * @param displayThreshold The threshold below which percent items in the profiling will not be printed
+	 * @param highlightThreshold The threshold above which percent items in the profiling will be highlighted
 	 */
-	public final void printData(float threshold) {
-		printData(System.out, threshold);
+	public final void printData(float displayThreshold, float highlightThreshold) {
+		printData(System.out, displayThreshold, highlightThreshold);
 	}
 
 	/**
 	 * Prints the data gathered by this tracker to the given stream
 	 *
 	 * @param out The stream to print this tracker's compiled information to
-	 * @param threshold The threshold above which percent items in the profiling will be highlighted
+	 * @param displayThreshold The threshold below which percent items in the profiling will not be printed
+	 * @param highlightTreshold The threshold above which percent items in the profiling will be highlighted
 	 */
-	public final void printData(java.io.PrintStream out, float threshold) {
+	public final void printData(java.io.PrintStream out, float displayThreshold, float highlightTreshold) {
+		if (!isOn)
+			return;
 		PrintConfig config = new PrintConfig();
-		config.setAccentThreshold(threshold);
+		config.setDisplayThreshold(displayThreshold).setHighlightThreshold(highlightTreshold);
 		StringBuilder sb = new StringBuilder();
 		printData(sb, config);
 		out.println(sb.toString());
@@ -1004,12 +1033,13 @@ public class ProgramTracker implements Cloneable {
 	 * Prints the data gathered by this tracker to a string builder
 	 *
 	 * @param sb The string builder to append this tracker's compiled information to
-	 * @param threshold The threshold above which percent items in the profiling will be highlighted
+	 * @param displayThreshold The threshold below which percent items in the profiling will not be printed
+	 * @param highlightThreshold The threshold above which percent items in the profiling will be highlighted
 	 * @return The string builder passed in
 	 */
-	public final StringBuilder printData(StringBuilder sb, float threshold) {
+	public final StringBuilder printData(StringBuilder sb, float displayThreshold, float highlightThreshold) {
 		PrintConfig config = new PrintConfig();
-		config.setAccentThreshold(threshold);
+		config.setDisplayThreshold(displayThreshold).setHighlightThreshold(highlightThreshold);
 		return printData(sb, config);
 	}
 
@@ -1041,18 +1071,19 @@ public class ProgramTracker implements Cloneable {
 
 	/** Prints the data gathered by this tracker this class's log with debug priority */
 	public final void logDebug() {
-		logDebug(0);
+		logDebug(0, 0);
 	}
 
 	/**
 	 * Prints the data gathered by this tracker this class's log with debug priority
 	 *
-	 * @param threshold The threshold above which percent items in the profiling will be highlighted
+	 * @param displayThreshold The threshold below which percent items in the profiling will not be printed
+	 * @param hightlightThreshold The threshold above which percent items in the profiling will be highlighted
 	 */
-	public final void logDebug(float threshold) {
+	public final void logDebug(float displayThreshold, float hightlightThreshold) {
 		java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
 		java.io.PrintStream stream = new java.io.PrintStream(baos);
-		printData(stream, threshold);
+		printData(stream, displayThreshold, hightlightThreshold);
 		log.debug("\n" + new String(baos.toByteArray()));
 	}
 
@@ -1109,16 +1140,16 @@ public class ProgramTracker implements Cloneable {
 	}
 
 	private void print(TrackNode node, StringBuilder sb, long lastTime, long totalTime, int indent, PrintConfig config) {
-		if(node.parent != null && node.getRealLength() < config.getTaskDisplayThreshold())
-			return;
 		sb.append('\n');
-		node.write(indent, lastTime, totalTime, sb, config);
-		if(!config.isAsync())
-			for(TrackNode ch : node.children.values())
-				print(ch, sb, lastTime, totalTime, indent + 1, config);
-		else
-			for(Object ch : node.children.values().toArray())
-				print((TrackNode) ch, sb, lastTime, totalTime, indent + 1, config);
+		if (node.write(indent, lastTime, totalTime, sb, config)) {
+			if (!config.isAsync())
+				for (TrackNode ch : node.children.values())
+					print(ch, sb, lastTime, totalTime, indent + 1, config);
+			else
+				for (Object ch : node.children.values().toArray())
+					print((TrackNode) ch, sb, lastTime, totalTime, indent + 1, config);
+		} else
+			sb.deleteCharAt(sb.length() - 1); // Remove the \n
 	}
 
 	/**
