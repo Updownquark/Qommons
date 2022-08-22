@@ -24,6 +24,9 @@ public interface SpecialSessionImplementation<QIS extends SpecialSession<QIS>> {
 	 */
 	Version getVersion();
 
+	/** @return The type of special session provided by this implementation */
+	Class<QIS> getProvidedAPI();
+
 	/** @return Any other special session APIs this implementation depends on */
 	Set<Class<? extends SpecialSession<?>>> getExpectedAPIs();
 
