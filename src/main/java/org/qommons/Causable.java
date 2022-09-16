@@ -1,11 +1,13 @@
 package org.qommons;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -57,6 +59,10 @@ public interface Causable {
 	public interface ChainBreak {
 		/** @return The wrapped cause */
 		BetterList<Object> getCauses();
+	}
+
+	/** A {@link Causable} that is already in use and can be {@link #close() closed} */
+	public interface CausableInUse extends Causable, Transaction {
 	}
 
 	/**
@@ -377,5 +383,51 @@ public interface Causable {
 			return ((Causable) cause).use();
 		else
 			return Transaction.NONE;
+	}
+
+	/**
+	 * A nice little method that allows causes to be created as a resource in a try-resources statement for brevity.
+	 * 
+	 * @param causes The causes for the new causable
+	 * @return A {@link CausableInUse}, a cause that is already in use and implements {@link Transaction} so it can be closed
+	 */
+	static CausableInUse cause(Object... causes) {
+		return Impl.cause(causes);
+	}
+
+	/** Implementation details for static methods of this class */
+	class Impl {
+		private static class CauseInUseImpl extends AbstractCausable implements CausableInUse {
+			private final Transaction theInUseT;
+			private final AtomicInteger theDepth;
+
+			CauseInUseImpl(Object... causes) {
+				super(causes);
+				theInUseT = super.use();
+				theDepth = new AtomicInteger();
+			}
+
+			CauseInUseImpl descend() {
+				theDepth.incrementAndGet();
+				return this;
+			}
+
+			@Override
+			public void close() {
+				if (theDepth.decrementAndGet() == 0) {
+					theInUseT.close();
+					CAUSES.remove(getCauses());
+				}
+			}
+		}
+
+		private static final ConcurrentHashMap<Object, CauseInUseImpl> CAUSES = new ConcurrentHashMap<>();
+
+		private Impl() {
+		}
+
+		static CausableInUse cause(Object... causes) {
+			return CAUSES.computeIfAbsent(Arrays.asList(causes), __ -> new CauseInUseImpl(causes)).descend();
+		}
 	}
 }
