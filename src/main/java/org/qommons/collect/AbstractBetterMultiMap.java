@@ -9,6 +9,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.function.Function;
 
 import org.qommons.Identifiable;
@@ -532,6 +533,21 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		@Override
 		public BetterCollection<V> getValues() {
 			return theValues.createWrapperCollection(createBacking(theMapEntry.getKey(), theMapEntry.getElementId()));
+		}
+
+		@Override
+		public int hashCode() {
+			return theMapEntry.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof MultiEntryHandle && Objects.equals(getElementId(), ((MultiEntryHandle<?, ?>) obj).getElementId());
+		}
+
+		@Override
+		public String toString() {
+			return getKey() + "=" + getValues();
 		}
 	}
 

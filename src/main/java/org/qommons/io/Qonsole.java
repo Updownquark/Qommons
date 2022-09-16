@@ -145,7 +145,7 @@ public class Qonsole implements Named, AutoCloseable {
 
 	private static Qonsole SYSTEM_QONSOLE;
 
-	/** @return A Qonsole monitoring System.in that does not interfere with other (later) users of System.in */
+	/** @return A colon-delimited Qonsole monitoring System.in that does not interfere with other (later) users of System.in */
 	public static Qonsole getSystemConsole() {
 		if (SYSTEM_QONSOLE == null) {
 			synchronized (Qonsole.class) {
