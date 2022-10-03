@@ -1213,11 +1213,10 @@ public class OsgiBundleSet {
 		if (bundles == null) {
 			throw new ClassNotFoundException("No such package found: " + pkgName);
 		}
+		classPath += ".class";
 		for (Bundle bundle : bundles) {
-			Class<?> clazz = bundle.findClassIfAvailable(className);
-			if (clazz != null) {
-				return clazz;
-			}
+			if (bundle.findResource(classPath) != null)
+				return bundle.loadClass(className);
 		}
 		throw new ClassNotFoundException(className);
 	}
@@ -1244,6 +1243,159 @@ public class OsgiBundleSet {
 			}
 		}
 		return this;
+	}
+
+	/**
+	 * Loads, configures, and starts an instance of {@link ComponentBasedExecutor}
+	 * 
+	 * @param dsClassName The name of the {@link ComponentBasedExecutor} implementation to load
+	 * @param configuration The configuration names to use to determine which components are loaded
+	 * @param startComponents The names of the set of components to activate initially
+	 * @param progress An optional progress bar to update for user feedback as this method works
+	 */
+	public void startDS(String dsClassName, Set<String> configuration, Set<String> startComponents, JProgressBar progress) {
+		// All this reflection is because if the class implements ComponentBasedExecutor,
+		// it implements the one from the Qommons library loaded by this bundle set,
+		// not the one on the bootstrap classpath, which is what this one is.
+		// So the 2 interface classes are not the same or even related, they just have the same name.
+		// So we have to assume they'll be using the same version (hopefully it won't ever change) as we have,
+		// and we have to use reflection.
+		// We could improve this code to get the names of the methods we're calling from the class we have some day.
+		Class<?> serviceType;
+		try {
+			serviceType = loadClass(dsClassName);
+		} catch (ClassNotFoundException e) {
+			throw new IllegalArgumentException("No such DS service type found: " + dsClassName, e);
+		}
+		Object service;
+		try {
+			Constructor<?> c = serviceType.getConstructor();
+			service = c.newInstance();
+		} catch (InstantiationException | IllegalAccessException | NoSuchMethodException | SecurityException | IllegalArgumentException
+			| InvocationTargetException e) {
+			throw new IllegalArgumentException("Could not instantiate DS service " + serviceType.getName(), e);
+		}
+		Class<?> executorIntf = getExecutorIntf(serviceType);
+		if (executorIntf == null)
+			throw new IllegalStateException(
+				"DS service " + serviceType.getName() + " must implement " + ComponentBasedExecutor.class.getName());
+		Method loadComponentMethod, completeMethod, statusMethod;
+		try {
+			loadComponentMethod = executorIntf.getMethod("loadComponent", Class.class);
+			completeMethod = executorIntf.getMethod("loadingComplete", Set.class);
+			statusMethod = executorIntf.getMethod("getLoadStatus");
+		} catch (NoSuchMethodException | SecurityException e) {
+			throw new IllegalStateException("Bad signatures coded for " + ComponentBasedExecutor.class.getName() + " reflection", e);
+		}
+		if (configuration.isEmpty()) {
+			// See if the system property is set instead
+			String systemProp = System.getProperty(CONFIGURATION_SYSTEM_PROPERTY);
+			if (systemProp != null && !systemProp.isEmpty()) {
+				for (String config : systemProp.split(","))
+					configuration.add(config.trim());
+			}
+		} else {
+			// Populate the system property
+			System.setProperty(CONFIGURATION_SYSTEM_PROPERTY, StringUtils.print(",", configuration, v -> v).toString());
+		}
+		if (progress != null) {
+			progress.setIndeterminate(true);
+			progress.setString("Searching for Service Components");
+		}
+		List<BiTuple<Bundle, String>> components = new ArrayList<>();
+		for (Bundle bundle : getBundles()) {
+			for (OsgiManifest.ManifestEntry component : bundle.getManifest().getAll("Service-Component")) {
+				String componentName = component.getValue();
+				if (configuration != null) {
+					String excludes = component.getAttributes().get("exclude-configurations");
+					if (excludes != null) {
+						boolean found = false;
+						for (String cfg : excludes.split(",")) {
+							if (configuration.contains(cfg)) {
+								found = true;
+								break;
+							}
+						}
+						if (found)
+							continue;
+					}
+				}
+				String includes = component.getAttributes().get("include-configurations");
+				if (includes != null) {
+					if (configuration == null)
+						continue;
+					boolean found = false;
+					for (String cfg : includes.split(",")) {
+						if (configuration.contains(cfg)) {
+							found = true;
+							break;
+						}
+					}
+					if (!found)
+						continue;
+				}
+				if (componentName.endsWith(".xml")) {
+					System.err.println("Unconverted service component: " + componentName);
+					continue;
+				}
+				components.add(new BiTuple<>(bundle, componentName));
+			}
+		}
+
+		if (progress != null) {
+			progress.setMaximum(components.size());
+			progress.setValue(0);
+			progress.setIndeterminate(false);
+		}
+		for (BiTuple<Bundle, String> component : components) {
+			Bundle bundle = component.getValue1();
+			String componentName = component.getValue2();
+			if (progress != null) {
+				String name = componentName;
+				int dot = name.lastIndexOf('.');
+				if (dot >= 0)
+					name = name.substring(dot + 1);
+				progress.setString("Loading " + name);
+			}
+			Class<?> componentType;
+			try {
+				componentType = bundle.loadClass(componentName);
+				loadComponentMethod.invoke(service, componentType);
+			} catch (ClassNotFoundException e) {
+				System.err.println("Could not find class " + componentName + ": " + e.getMessage());
+			} catch (InvocationTargetException e) {
+				System.err.println("Exception loading component " + componentName);
+				e.getTargetException().printStackTrace();
+			} catch (IllegalAccessException | IllegalArgumentException e) {
+				throw new IllegalStateException("Could not access " + loadComponentMethod.getName(), e);
+			}
+			if (progress != null)
+				progress.setValue(progress.getValue() + 1);
+		}
+		if (progress != null) {
+			progress.setIndeterminate(true);
+			progress.setString("Initializing Service Component Manager");
+		}
+		Timer[] timer = new Timer[1];
+		timer[0] = new Timer(250, __ -> {
+			try {
+				progress.setString((String) statusMethod.invoke(service));
+			} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+				e.printStackTrace();
+				timer[0].stop();
+			}
+		});
+		timer[0].start();
+		try {
+			completeMethod.invoke(service, startComponents);
+		} catch (IllegalAccessException | IllegalArgumentException e) {
+			throw new IllegalStateException("Could not access " + completeMethod.getName(), e);
+		} catch (InvocationTargetException e) {
+			System.err.println("Exception initializing DS service " + serviceType.getName());
+			e.printStackTrace();
+		} finally {
+			timer[0].stop();
+		}
 	}
 
 	/**
@@ -1443,151 +1595,9 @@ public class OsgiBundleSet {
 					progress.setIndeterminate(true);
 					progress.setString("Loading Service Component Manager");
 				}
-				// All this reflection is because if the class implements ComponentBasedExecutor,
-				// it implements the one from the Qommons library loaded by this bundle set,
-				// not the one on the bootstrap classpath, which is what this one is.
-				// So the 2 interface classes are not the same or even related, they just have the same name.
-				// So we have to assume they'll be using the same version (hopefully it won't ever change) as we have,
-				// and we have to use reflection.
-				// We could improve this code to get the names of the methods we're calling from the class we have some day.
-				Class<?> serviceType;
-				try {
-					serviceType = bundles.loadClass(args.get("start-ds", String.class));
-				} catch (ClassNotFoundException e) {
-					throw new IllegalArgumentException("No such DS service type found: " + args.get("start-ds", String.class), e);
-				}
-				Object service;
-				try {
-					Constructor<?> c = serviceType.getConstructor();
-					service = c.newInstance();
-				} catch (InstantiationException | IllegalAccessException | NoSuchMethodException | SecurityException
-					| IllegalArgumentException | InvocationTargetException e) {
-					throw new IllegalArgumentException("Could not instantiate DS service " + serviceType.getName(), e);
-				}
-				Class<?> executorIntf = getExecutorIntf(serviceType);
-				if (executorIntf == null)
-					throw new IllegalStateException(
-						"DS service " + serviceType.getName() + " must implement " + ComponentBasedExecutor.class.getName());
-				Method loadComponentMethod, completeMethod, statusMethod;
-				try {
-					loadComponentMethod = executorIntf.getMethod("loadComponent", Class.class);
-					completeMethod = executorIntf.getMethod("loadingComplete", Set.class);
-					statusMethod = executorIntf.getMethod("getLoadStatus");
-				} catch (NoSuchMethodException | SecurityException e) {
-					throw new IllegalStateException("Bad signatures coded for " + ComponentBasedExecutor.class.getName() + " reflection",
-						e);
-				}
 				Set<String> configuration = new LinkedHashSet<>(args.getAll("ds-configuration", String.class));
-				if (configuration.isEmpty()) {
-					// See if the system property is set instead
-					String systemProp = System.getProperty(CONFIGURATION_SYSTEM_PROPERTY);
-					if (systemProp != null && !systemProp.isEmpty()) {
-						for (String config : systemProp.split(","))
-							configuration.add(config.trim());
-					}
-				} else {
-					// Populate the system property
-					System.setProperty(CONFIGURATION_SYSTEM_PROPERTY, StringUtils.print(",", configuration, v -> v).toString());
-				}
-				if (progress != null) {
-					progress.setIndeterminate(true);
-					progress.setString("Searching for Service Components");
-				}
-				List<BiTuple<Bundle, String>> components = new ArrayList<>();
-				Set<String> startBundles = new LinkedHashSet<>(args.getAll("start-components", String.class));
-				for (Bundle bundle : bundles.getBundles()) {
-					for (OsgiManifest.ManifestEntry component : bundle.getManifest().getAll("Service-Component")) {
-						String componentName = component.getValue();
-						if (configuration != null) {
-							String excludes = component.getAttributes().get("exclude-configurations");
-							if (excludes != null) {
-								boolean found = false;
-								for (String cfg : excludes.split(",")) {
-									if (configuration.contains(cfg)) {
-										found = true;
-										break;
-									}
-								}
-								if (found)
-									continue;
-							}
-						}
-						String includes = component.getAttributes().get("include-configurations");
-						if (includes != null) {
-							if (configuration == null)
-								continue;
-							boolean found = false;
-							for (String cfg : includes.split(",")) {
-								if (configuration.contains(cfg)) {
-									found = true;
-									break;
-								}
-							}
-							if (!found)
-								continue;
-						}
-						if (componentName.endsWith(".xml")) {
-							System.err.println("Unconverted service component: " + componentName);
-							continue;
-						}
-						components.add(new BiTuple<>(bundle, componentName));
-					}
-				}
-
-				if (progress != null) {
-					progress.setMaximum(components.size());
-					progress.setValue(0);
-					progress.setIndeterminate(false);
-				}
-				for (BiTuple<Bundle, String> component : components) {
-					Bundle bundle = component.getValue1();
-					String componentName = component.getValue2();
-					if (progress != null) {
-						String name = componentName;
-						int dot = name.lastIndexOf('.');
-						if (dot >= 0)
-							name = name.substring(dot + 1);
-						progress.setString("Loading " + name);
-					}
-					Class<?> componentType;
-					try {
-						componentType = bundle.loadClass(componentName);
-						loadComponentMethod.invoke(service, componentType);
-					} catch (ClassNotFoundException e) {
-						System.err.println("Could not find class " + componentName + ": " + e.getMessage());
-					} catch (InvocationTargetException e) {
-						System.err.println("Exception loading component " + componentName);
-						e.getTargetException().printStackTrace();
-					} catch (IllegalAccessException | IllegalArgumentException e) {
-						throw new IllegalStateException("Could not access " + loadComponentMethod.getName(), e);
-					}
-					if (progress != null)
-						progress.setValue(progress.getValue() + 1);
-				}
-				if (progress != null) {
-					progress.setIndeterminate(true);
-					progress.setString("Initializing Service Component Manager");
-				}
-				Timer[] timer = new Timer[1];
-				timer[0] = new Timer(250, __ -> {
-					try {
-						progress.setString((String) statusMethod.invoke(service));
-					} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-						e.printStackTrace();
-						timer[0].stop();
-					}
-				});
-				timer[0].start();
-				try {
-					completeMethod.invoke(service, startBundles);
-				} catch (IllegalAccessException | IllegalArgumentException e) {
-					throw new IllegalStateException("Could not access " + completeMethod.getName(), e);
-				} catch (InvocationTargetException e) {
-					System.err.println("Exception initializing DS service " + serviceType.getName());
-					e.printStackTrace();
-				} finally {
-					timer[0].stop();
-				}
+				Set<String> startComponents = new LinkedHashSet<>(args.getAll("start-components", String.class));
+				bundles.startDS(args.get("start-ds", String.class), configuration, startComponents, progress);
 			} else {
 				if (progress != null) {
 					progress.setIndeterminate(true);
