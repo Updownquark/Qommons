@@ -345,7 +345,9 @@ public interface Causable {
 			value = test.apply(cause);
 			if (value != null)
 				return value;
-			if (cause instanceof Causable)
+			if (cause instanceof Collection)
+				causes.addAll(0, (Collection<?>) cause);
+			else if (cause instanceof Causable)
 				causes.addAll(((Causable) cause).getCauses());
 			else if (cause instanceof ChainBreak)
 				causes.addAll(((ChainBreak) cause).getCauses());
@@ -395,6 +397,10 @@ public interface Causable {
 		return Impl.cause(causes);
 	}
 
+	static Causable simpleDelegate(Object... causes) {
+		return new SimpleDelegate(causes);
+	}
+
 	/** Implementation details for static methods of this class */
 	class Impl {
 		private static class CauseInUseImpl extends AbstractCausable implements CausableInUse {
@@ -428,6 +434,58 @@ public interface Causable {
 
 		static CausableInUse cause(Object... causes) {
 			return CAUSES.computeIfAbsent(Arrays.asList(causes), __ -> new CauseInUseImpl(causes)).descend();
+		}
+	}
+
+	/** A simple cause that wraps another */
+	class SimpleDelegate implements Causable {
+		private final Causable theDelegate;
+		private final BetterList<Object> theCauses;
+
+		SimpleDelegate(Object... causes) {
+			if (causes == null || causes.length == 0 || !(causes[0] instanceof Causable))
+				throw new IllegalArgumentException("Delegation must have a causable to delegate to");
+			for (Object cause : causes) {
+				if (cause instanceof Causable && !(cause instanceof ChainBreak)) {
+					if (((Causable) cause).isTerminated())
+						throw new IllegalStateException("Cannot use a finished Causable as a cause");
+					if (((Causable) cause).getRootCausable().isTerminated())
+						throw new IllegalStateException("Cannot use a finished Causable as a cause");
+					break;
+				}
+			}
+			theDelegate = (Causable) causes[0];
+			theCauses = BetterList.of(causes);
+		}
+
+		@Override
+		public BetterList<Object> getCauses() {
+			return theCauses;
+		}
+
+		@Override
+		public Causable getRootCausable() {
+			return theDelegate.getRootCausable();
+		}
+
+		@Override
+		public Map<Object, Object> onFinish(CausableKey key) {
+			return theDelegate.onFinish(key);
+		}
+
+		@Override
+		public boolean isFinished() {
+			return theDelegate.isFinished();
+		}
+
+		@Override
+		public boolean isTerminated() {
+			return theDelegate.isTerminated();
+		}
+
+		@Override
+		public Transaction use() {
+			return Transaction.NONE;
 		}
 	}
 }
