@@ -643,6 +643,11 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 
 		@Override
 		public void release() {}
+
+		@Override
+		public String toString() {
+			return "{}";
+		}
 	}
 
 	/**
