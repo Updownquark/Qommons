@@ -1,6 +1,7 @@
 package org.qommons;
 
 import java.awt.Color;
+import java.awt.Point;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -13,8 +14,12 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
+
+import org.qommons.io.Format;
 
 /**
  * <p>
@@ -30,6 +35,27 @@ import javax.imageio.ImageIO;
  */
 public class Colors {
 	private Colors() {
+	}
+
+	private static final Pattern HTML_RGB;
+	private static final Pattern HTML_HSB;
+	private static final Pattern RGB_FN;
+	private static final Pattern HSB_FN;
+	static {
+		HTML_RGB = Pattern.compile("\\#(?<hex>[0-9a-fA-F]{6,8})");
+		HTML_HSB = Pattern.compile("\\$(?<hex>[0-9a-fA-F]{6,8})");
+		RGB_FN = Pattern.compile("[rR][gG][bB]\\(\\s*"//
+			+ "(?<r>\\d{1,3})\\s*,"//
+			+ "\\s*(?<g>\\d{1,3})\\s*,"//
+			+ "\\s*(?<b>\\d{1,3})\\s*" //
+			+ "(?:,\\s*(?<a>\\d{1,3})\\s*)?"//
+			+ "\\)");
+		HSB_FN = Pattern.compile("[hH][sS][bB]\\(\\s*"//
+			+ "(?<h>\\d*\\.?\\d*\\%?)\\s*,"//
+			+ "\\s*(?<s>\\d*\\.?\\d*\\%?)\\s*,"//
+			+ "\\s*(?<b>\\d*\\.?\\d*\\%?)\\s*" //
+			+ "(?:,\\s*(?<a>\\d*\\.?\\d*\\%?)\\s*)?"//
+			+ "\\)");
 	}
 
 	/** Not available via {@link #parseColor(String)}, this is a code utility constant representing a completely transparent color */
@@ -470,12 +496,12 @@ public class Colors {
 	/** #9acd32 <span style="font-weight:bolder;color:#9acd32">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
 	public static final Color yellowGreen = _parseColor("#9acd32");
 
-	/** All named colors in this class */
-	public static final Map<String, Color> NAMED_COLORS;
+	private static final Map<String, Color> NAMED_COLORS;
 
-	private static final Map<Color, String> theColorNames;
+	private static final Map<Color, String> COLOR_NAMES;
 
 	static {
+		// This code needs to live below all the color constants so they have values when this runs
 		Map<String, Color> namedColors = new LinkedHashMap<>();
 		Map<Color, String> colorNames = new HashMap<>();
 		Field[] colorFields = Colors.class.getDeclaredFields();
@@ -489,15 +515,64 @@ public class Colors {
 			}
 			try {
 				Color value = (Color) field.get(null);
-				namedColors.put(StringUtils.parseByCase(field.getName(), true).toKebabCase(), value);
-				colorNames.put(value, field.getName());
+				String colorName = StringUtils.parseByCase(field.getName(), true).toKebabCase();
+				namedColors.put(colorName, value);
+				colorNames.put(value, colorName);
 			} catch (IllegalAccessException e) {
 				e.printStackTrace();
 			}
 		}
 		NAMED_COLORS = Collections.unmodifiableMap(namedColors);
-		theColorNames = Collections.unmodifiableMap(colorNames);
+		COLOR_NAMES = Collections.unmodifiableMap(colorNames);
 	}
+
+	/** A Format to parse/format colors */
+	public static final Format<Color> FORMAT = new Format<Color>() {
+		@Override
+		public void append(StringBuilder text, Color value) {
+			if (value != null)
+				text.append(Colors.toString(value));
+		}
+
+		@Override
+		public Color parse(CharSequence text) throws ParseException {
+			return Colors.parseColor(text.toString());
+		}
+	};
+
+	/** A Format to parse/format colors as HTML hex representation */
+	public static final Format<Color> HTML_FORMAT = new Format<Color>() {
+		@Override
+		public void append(StringBuilder text, Color value) {
+			if (value != null)
+				text.append(Colors.toHTML(value));
+		}
+
+		@Override
+		public Color parse(CharSequence text) throws ParseException {
+			return Colors.fromHTML(text.toString());
+		}
+	};
+
+	/** A Format to parse/format colors by name */
+	public static final Format<Color> NAME_FORMAT = new Format<Color>() {
+		@Override
+		public void append(StringBuilder text, Color value) {
+			if (value != null) {
+				String name = getColorName(value);
+				if (name != null)
+					text.append(name);
+			}
+		}
+
+		@Override
+		public Color parse(CharSequence text) throws ParseException {
+			Color color = getColorByName(text.toString());
+			if (color == null)
+				throw new ParseException("Unrecognized color name: " + text, 0);
+			return Colors.fromHTML(text.toString());
+		}
+	};
 
 	/** An internal method to swallow the exception from {@link #parseColor(String)} */
 	private static Color _parseColor(String str) {
@@ -525,85 +600,123 @@ public class Colors {
 	 * @throws ParseException If the color cannot be parsed
 	 */
 	public static Color parseIfColor(String str) throws ParseException {
-		final String original = str;
-		str = str.toLowerCase();
-		if (str.startsWith("#")) {
-			str = str.substring(1);
-			if (!str.matches("[0-9a-f]{6}")) {
-				throw new ParseException("RGB colors must be in the form of #XXXXXX where X is 0-9 or a-f: \"" + original + "\"", 0);
+		Matcher m = HTML_RGB.matcher(str);
+		if (m.matches()) {
+			int value = Integer.parseUnsignedInt(m.group("hex"), 16);
+			switch (m.group("hex").length()) {
+			case 6:
+				return new Color(value);
+			case 8:
+				value = Integer.rotateRight(value, 8);
+				return new Color(value, true);
+			default:
+				throw new ParseException("HTML color must be specified with either six or eight hexadecimal digits", m.end("hex"));
 			}
-			return rgb(hexInt(str, 0), hexInt(str, 2), hexInt(str, 4));
-		} else if (str.startsWith("$")) {
-			str = str.substring(1);
-			if (!str.matches("[0-9a-f]{6}")) {
-				throw new ParseException("HSB colors must be in the form of #XXXXXX where X is 0-9 or a-f: \"" + original + "\"", 0);
-			}
-			return Color.getHSBColor(hexInt(str, 0) / 255f, hexInt(str, 2) / 255f, hexInt(str, 4) / 255f);
-		} else if (str.startsWith("rgb(")) {
-			if (str.charAt(str.length() - 1) != ')') {
-				throw new ParseException("Colors that start with 'rgb(' must end with ')': \"" + original + "\"", 0);
-			}
-			str = str.substring(4, str.length() - 1);
-			int r, g, b;
-			try {
-				int idx = str.indexOf(',');
-				if (idx < 0) {
-					throw new ParseException(
-						"Colors that start with 'rgb('" + " must have 3 integers separated by commas: \"" + original + "\"", 0);
-				}
-				r = Integer.parseInt(str.substring(0, idx));
-				str = str.substring(idx + 1).trim();
-				idx = str.indexOf(',');
-				if (idx < 0) {
-					throw new ParseException(
-						"Colors that start with 'rgb('" + " must have 3 integers separated by commas: \"" + original + "\"", 0);
-				}
-				g = Integer.parseInt(str.substring(0, idx));
-				str = str.substring(idx + 1).trim();
-				b = Integer.parseInt(str);
-			} catch (NumberFormatException e) {
-				throw new ParseException(
-					"Colors that start with 'rgb('" + " must have 3 integers separated by commas: \"" + original + "\"", 0);
-			}
-			if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) {
-				throw new ParseException("Colors that start with 'rgb('"
-					+ " must have three integers between 0 and 255 separated by commas: \"" + original + "\"", 0);
-			}
-			return rgb(r, g, b);
-		} else if (str.startsWith("hsb(")) {
-			if (str.charAt(str.length() - 1) != ')') {
-				throw new ParseException("Colors that start with 'hsb(' must end with ')': \"" + original + "\"", 0);
-			}
-			str = str.substring(4, str.length() - 1);
-			float h, s, b;
-			try {
-				int idx = str.indexOf(',');
-				if (idx < 0) {
-					throw new ParseException(
-						"Colors that start with 'hsb('" + " must have 3 float values separated by commas: \"" + original + "\"", 0);
-				}
-				h = Float.parseFloat(str.substring(0, idx));
-				str = str.substring(idx + 1).trim();
-				idx = str.indexOf(',');
-				if (idx < 0) {
-					throw new ParseException(
-						"Colors that start with 'hsb('" + " must have 3 float values separated by commas: \"" + original + "\"", 0);
-				}
-				s = Float.parseFloat(str.substring(0, idx));
-				str = str.substring(idx + 1).trim();
-				b = Float.parseFloat(str);
-			} catch (NumberFormatException e) {
-				throw new ParseException(
-					"Colors that start with 'hsb('" + " must have 3 float values separated by commas: \"" + original + "\"", 0);
-			}
-			if (h < 0 || h > 255 || s < 0 || s > 255 || b < 0 || b > 255) {
-				throw new ParseException("Colors that start with 'hsb('"
-					+ " must have three float values between 0 and 255 separated by commas: \"" + original + "\"", 0);
-			}
-			return Color.getHSBColor(h, s, b);
-		} else {
-			return NAMED_COLORS.get(str);
 		}
+
+		m = HTML_HSB.matcher(str);
+		if (m.matches()) {
+			int value = Integer.parseUnsignedInt(m.group("hex"), 16);
+			boolean withAlpha = false;
+			switch (m.group("hex").length()) {
+			case 6:
+				value <<= 8;
+				break;
+			case 8:
+				withAlpha = true;
+				break;
+			default:
+				throw new ParseException("HTML HSB color must be specified with either six or eight hexadecimal digits", m.end("hex"));
+			}
+			Color color = Color.getHSBColor(//
+				((value >> 24) & 0xff) * 1.0f / 255, //
+				((value >> 16) & 0xff) * 1.0f / 255, //
+				((value >> 8) & 0xff) * 1.0f / 255);
+			if (withAlpha)
+				color = new Color((color.getRGB() & 0x00ffffff) | (value << 24), true);
+			return color;
+		}
+
+		m = RGB_FN.matcher(str);
+		if (m.matches()) {
+			int r = Integer.parseInt(m.group("r"));
+			if (r > 255)
+				throw new ParseException("RGB values must be between 0 and 255", m.start("r"));
+
+			int g = Integer.parseInt(m.group("g"));
+			if (g > 255)
+				throw new ParseException("RGB values must be between 0 and 255", m.start("g"));
+
+			int b = Integer.parseInt(m.group("b"));
+			if (b > 255)
+				throw new ParseException("RGB values must be between 0 and 255", m.start("b"));
+
+			Color color = new Color(r, g, b);
+
+			String aStr = m.group("a");
+			if (aStr != null) {
+				int a = Integer.parseInt(aStr);
+				if (a > 255)
+					throw new ParseException("RGB values must be between 0 and 255", m.start("a"));
+				color = new Color((color.getRGB() & 0x00ffffff) | (a << 24), true);
+			}
+
+			return color;
+		}
+
+		m = HSB_FN.matcher(str);
+		if (m.matches()) {
+			String fs = m.group("h");
+			boolean percent = fs.endsWith("%");
+			if (percent)
+				fs = fs.substring(0, fs.length() - 1);
+			float h = Float.parseFloat(fs);
+			if (percent)
+				h /= 100;
+			if (h > 1.0f)
+				throw new ParseException("HSB values must be between 0 and 1", m.start("h"));
+
+			fs = m.group("s");
+			percent = fs.endsWith("%");
+			if (percent)
+				fs = fs.substring(0, fs.length() - 1);
+			float s = Float.parseFloat(fs);
+			if (percent)
+				s /= 100;
+			if (s > 1.0f)
+				throw new ParseException("HSB values must be between 0 and 1", m.start("s"));
+
+			fs = m.group("b");
+			percent = fs.endsWith("%");
+			if (percent)
+				fs = fs.substring(0, fs.length() - 1);
+			float b = Float.parseFloat(fs);
+			if (percent)
+				b /= 100;
+			if (b > 1.0f)
+				throw new ParseException("HSB values must be between 0 and 1", m.start("b"));
+
+			Color color = Color.getHSBColor(h, s, b);
+
+			String aStr = m.group("a");
+			if (aStr != null) {
+				percent = aStr.endsWith("%");
+				if (percent)
+					aStr = aStr.substring(0, aStr.length() - 1);
+				float a = Float.parseFloat(aStr);
+				if (percent)
+					a /= 100;
+				if (a > 1.0f)
+					throw new ParseException("HSB values must be between 0 and 1", m.start("a"));
+				color = new Color((color.getRGB() & 0x00ffffff) | (Math.round(a * 255) << 24), true);
+			}
+
+			return color;
+		}
+
+		if (NAMED_COLORS != null) // Will be null while parsing all the static field colors during class initialization
+			return NAMED_COLORS.get(str);
+		return null;
 	}
 
 	/**
@@ -658,7 +771,15 @@ public class Colors {
 	 * @return The name of the given color, or null if the color is not named
 	 */
 	public static String getColorName(Color c) {
-		return theColorNames.get(c);
+		return COLOR_NAMES.get(c);
+	}
+
+	/**
+	 * @param name The name of the color to get
+	 * @return The color with the given name, or null if the name is not known as a color by this class
+	 */
+	public static Color getColorByName(String name) {
+		return NAMED_COLORS.get(name);
 	}
 
 	/**
@@ -668,7 +789,7 @@ public class Colors {
 	public static String toString(Color c) {
 		if (c == null)
 			return "null";
-		String ret = theColorNames.get(c);
+		String ret = COLOR_NAMES.get(c);
 		if (ret != null) {
 			return ret;
 		}
@@ -809,6 +930,247 @@ public class Colors {
 	}
 
 	/**
+	 * <p>
+	 * A color that is stored with its hue/saturation/brightness components.
+	 * </p>
+	 * <p>
+	 * This class allows modification of each component independently without affecting the others. This allows for optimum preservation of
+	 * information, as well as maximum utility.
+	 * </p>
+	 */
+	public static class HsbColor {
+		private final float hue;
+		private final float saturation;
+		private final float brightness;
+		private final int color;
+
+		/**
+		 * @param hue The color's hue
+		 * @param saturation The color's saturation
+		 * @param brightness The color's brightness
+		 * @param alpha The color's alpha value
+		 */
+		public HsbColor(float hue, float saturation, float brightness, int alpha) {
+			this.hue = hue;
+			this.saturation = saturation;
+			this.brightness = brightness;
+			color = (Color.HSBtoRGB(hue, saturation, brightness) & 0x00ffffff) | (alpha << 24);
+		}
+
+		/**
+		 * @param color The color to represent
+		 * @param withAlpha Whether to use the given color's alpha value, or default it to 255
+		 * @see Color#Color(int, boolean)
+		 */
+		public HsbColor(Color color, boolean withAlpha) {
+			float[] hsb = Color.RGBtoHSB(color.getRed(), color.getGreen(), color.getBlue(), null);
+			hue = hsb[0];
+			saturation = hsb[1];
+			brightness = hsb[2];
+			this.color = withAlpha ? color.getRGB() : (color.getRGB() | 0xff000000);
+		}
+
+		/** @return The java color represented by this HSB color */
+		public Color toColor() {
+			return new Color(color, true);
+		}
+
+		/** @return The java color represented by this HSB color, disregarding alpha */
+		public Color toOpaqueColor() {
+			return new Color(color);
+		}
+
+		/** @return This color's red component */
+		public int getRed() {
+			return (color >> 16) & 0xff;
+		}
+
+		/** @return This color's green component */
+		public int getGreen() {
+			return (color >> 8) & 0xff;
+		}
+
+		/** @return This color's blue component */
+		public int getBlue() {
+			return color & 0xff;
+		}
+
+		/** @return This color's alpha value */
+		public int getAlpha() {
+			return color >>> 24;
+		}
+
+		/**
+		 * @return This color's red/green/blue value, with alpha. (Bits 24-31 are alpha, 16-23 are red, 8-15 are green, 0-7 are blue).
+		 * @see Color#getRGB()
+		 */
+		public int getRGB() {
+			return color;
+		}
+
+		/** @return This color's hue */
+		public float getHue() {
+			return hue;
+		}
+
+		/** @return This color's saturation */
+		public float getSaturation() {
+			return saturation;
+		}
+
+		/** @return This color's brightness */
+		public float getBrightness() {
+			return brightness;
+		}
+
+		/**
+		 * @param hue The hue for the new color
+		 * @return A new color identical to this one except for the hue
+		 */
+		public HsbColor setHue(float hue) {
+			if (hue == this.hue)
+				return this;
+			return new HsbColor(hue, saturation, brightness, getAlpha());
+		}
+
+		/**
+		 * @param saturation The saturation for the new color
+		 * @return A new color identical to this one except for the saturation
+		 */
+		public HsbColor setSaturation(float saturation) {
+			if (saturation == this.saturation)
+				return this;
+			return new HsbColor(hue, saturation, brightness, getAlpha());
+		}
+
+		/**
+		 * @param brightness The brightness for the new color
+		 * @return A new color identical to this one except for the brightness
+		 */
+		public HsbColor setBrightness(float brightness) {
+			if (brightness == this.brightness)
+				return this;
+			return new HsbColor(hue, saturation, brightness, getAlpha());
+		}
+
+		/**
+		 * @param red The red component for the new color
+		 * @return A new color identical to this one except for the red component
+		 */
+		public HsbColor setRed(int red) {
+			if (getRed() == red)
+				return this;
+			float[] hsb = Color.RGBtoHSB(//
+				red, //
+				getGreen(), //
+				getBlue(), //
+				null);
+			return new HsbColor(hsb[0], hsb[1], hsb[2], getAlpha());
+		}
+
+		/**
+		 * @param green The green component for the new color
+		 * @return A new color identical to this one except for the green component
+		 */
+		public HsbColor setGreen(int green) {
+			if (green == getGreen())
+				return this;
+			float[] hsb = Color.RGBtoHSB(//
+				getRed(), //
+				green, //
+				getBlue(), //
+				null);
+			return new HsbColor(hsb[0], hsb[1], hsb[2], getAlpha());
+		}
+
+		/**
+		 * @param blue The blue component for the new color
+		 * @return A new color identical to this one except for the blue component
+		 */
+		public HsbColor setBlue(int blue) {
+			if (blue == getBlue())
+				return this;
+			float[] hsb = Color.RGBtoHSB(//
+				getRed(), //
+				getGreen(), //
+				blue, //
+				null);
+			return new HsbColor(hsb[0], hsb[1], hsb[2], getAlpha());
+		}
+
+		/**
+		 * @param alpha The alpha value for the new color
+		 * @return A new color identical to this one except for the alpha value
+		 */
+		public HsbColor setAlpha(int alpha) {
+			if (alpha == getAlpha())
+				return this;
+			return new HsbColor(hue, saturation, brightness, alpha);
+		}
+
+		/** @return Whether this component has any transparency (i.e. whether it's {@link #getAlpha() alpha value} is less than 255) */
+		public boolean isTransparent() {
+			return (color & 0xff000000) != 0xff000000;
+		}
+
+		/**
+		 * @param red The red component for the new color
+		 * @param green The green component for the new color
+		 * @param blue The blue component for the new color
+		 * @return A new color with the given red/green/blue components and this color's {@link #getAlpha() alpha value}
+		 */
+		public HsbColor setRGB(int red, int green, int blue) {
+			if (red == getRed() && green == getGreen() && blue == getBlue())
+				return this;
+			float[] hsb = Color.RGBtoHSB(red, green, blue, null);
+			return new HsbColor(hsb[0], hsb[1], hsb[2], getAlpha());
+		}
+
+		/**
+		 * @param color The RGB value of the color to set
+		 * @return A new color whose {@link #getHue() hue} and {@link #getSaturation() saturation} are defined by the given color, but with
+		 *         this color's {@link #getBrightness() brightness} and {@link #getAlpha() alpha value}
+		 */
+		public HsbColor setHueAndSaturationFrom(int color) {
+			int r = (color >> 16) & 0xff;
+			int g = (color >> 8) & 0xff;
+			int b = color & 0xff;
+			float[] hsb = Color.RGBtoHSB(r, g, b, null);
+			if (hsb[0] == hue && hsb[1] == saturation)
+				return this;
+			return new HsbColor(hsb[0], hsb[1], brightness, getAlpha());
+		}
+
+		/**
+		 * @param otherColor The color to apply this color's {@link #getAlpha() alpha value} to
+		 * @return A new color identical to the given color but with this color's {@link #getAlpha() alpha value}
+		 */
+		public Color applyAlpha(Color otherColor) {
+			if (otherColor.getAlpha() == getAlpha())
+				return otherColor;
+			return new Color(otherColor.getRed(), otherColor.getGreen(), otherColor.getBlue(), getAlpha());
+		}
+
+		@Override
+		public int hashCode() {
+			return color;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (!(obj instanceof HsbColor))
+				return false;
+			HsbColor other = (HsbColor) obj;
+			return color == other.color;
+		}
+
+		@Override
+		public String toString() {
+			return Colors.toString(new Color(color, true));
+		}
+	}
+
+	/**
 	 * Generates an RGB color hexagon, with tips that are (from left, clockwise) red, yellow, green, cyan, blue, and magenta. The middle of
 	 * the hexagon is white. The purpose of the hexagon is to be placed in a color editor (like prisms.widget.ColorPicker in js) to allow a
 	 * user to choose any color. This method also generates a plain black hexagon and a black-and-white patterned hexagon of the same sizes
@@ -818,167 +1180,11 @@ public class Colors {
 	 * @param directory The directory to write the files to
 	 */
 	public static void generateColorHexagons(int dim, File directory) {
-		class ColorMetadata {
-			int height;
-
-			int width;
-
-			float sideLength;
-
-			float sqrt3;
-
-			int background;
-
-			ColorMetadata(int _dim) {
-				height = _dim;
-				width = (int) Math.ceil(_dim * Math.sqrt(3) / 2);
-				sideLength = height / 2.0f;
-				sqrt3 = (float) Math.sqrt(3);
-				background = 0x00000000;
-			}
-
-			int getRGB(int x, int y) {
-				x -= width / 2 + 1;
-				y -= height / 2;
-				y = -y;
-
-				float r, g, b;
-				if (x >= 0) {
-					if (y >= x / sqrt3) {
-						r = 1;
-						g = 1 - (y - x / sqrt3) / sideLength;
-						b = 1 - (y + x / sqrt3) / sideLength;
-					} else {
-						r = 1 - (x / sqrt3 - y) / sideLength;
-						g = 1;
-						b = 1 - 2 * x / sqrt3 / sideLength;
-					}
-				} else {
-					if (y >= -x / sqrt3) {
-						r = 1;
-						g = 1 - (y - x / sqrt3) / sideLength;
-						b = 1 - (y + x / sqrt3) / sideLength;
-					} else {
-						r = 1 + (y + x / sqrt3) / sideLength;
-						g = 1 + 2 * x / sqrt3 / sideLength;
-						b = 1;
-					}
-				}
-
-				if (r < 0 || r > 1 || g < 0 || g > 1 || b < 0 || b > 1)
-					return background;
-				int ret = 0xFF000000;
-				ret |= Math.round(r * 255) << 16;
-				ret |= Math.round(g * 255) << 8;
-				ret |= Math.round(b * 255);
-				return ret;
-			}
-
-			boolean shaded = true;
-
-			int getAlphaHex(int x, int y, int rgb) {
-				if (shaded)
-					return getShadedHex(x, y, rgb);
-				else
-					return getCheckeredHex(x, y, rgb);
-			}
-
-			int mod = 64;
-
-			int getShadedHex(int x, int y, int rgb) {
-				if (rgb == background)
-					return rgb;
-				int r = (rgb & 0xFF0000) >> 16;
-				int g = (rgb & 0xFF00) >> 8;
-				int b = rgb & 0xFF;
-
-				if (r == 255) {
-					if (g == 255 || b == 255)
-						return 0xFF000000;
-					r = mod;
-					g = mod - ((g + 1) % mod);
-					b = mod - ((b + 1) % mod);
-					if (g >= mod / 2)
-						g = mod - g;
-					g *= 2;
-					if (b >= mod / 2)
-						b = mod - b;
-					b *= 2;
-				} else if (g == 255) {
-					if (b == 255)
-						return 0xFF000000;
-					g = mod;
-					r = mod - ((r + 1) % mod);
-					b = mod - ((b + 1) % mod);
-					if (r >= mod / 2)
-						r = mod - r;
-					r *= 2;
-					if (b >= mod / 2)
-						b = mod - b;
-					b *= 2;
-				} else {
-					b = mod;
-					r = mod - ((r + 1) % mod);
-					g = mod - ((g + 1) % mod);
-					if (r >= mod / 2)
-						r = mod - r;
-					r *= 2;
-					if (g >= mod / 2)
-						g = mod - g;
-					g *= 2;
-				}
-				float intens = r * 1.0f * g * b / (float) Math.pow(mod, 3);
-				intens = (float) Math.pow(intens, 0.5);
-				// intens = ((intens + 0.5f) * (intens + 0.5f) - .25f) / 2.25f;
-
-				int dark = Math.round(intens * 255);
-				return 0xFF000000 | (dark << 16) | (dark << 8) | dark;
-			}
-
-			int getCheckeredHex(int x, int y, int rgb) {
-				if (rgb == background)
-					return rgb;
-				int r = (rgb & 0xFF0000) >> 16;
-				int g = (rgb & 0xFF00) >> 8;
-				int b = rgb & 0xFF;
-
-				if (r <= 4 || b <= 4 || g <= 4)
-					return 0xFF000000;
-
-				int bwg;
-				if (r == 255)
-					bwg = ((g / mod) + (b / mod)) % 3;
-				else if (g == 255)
-					bwg = ((r / mod) + (b / mod) + 1) % 3;
-				else
-					bwg = ((r / mod) + (g / mod) + 2) % 3;
-				if (bwg == 0)
-					return 0xFF000000;
-				else if (bwg == 1)
-					return 0xFFFFFFFF;
-				else
-					return 0xFF808080;
-			}
-		}
-
-		ColorMetadata md = new ColorMetadata(dim);
-		BufferedImage colorImg = new BufferedImage(md.height, md.width, BufferedImage.TYPE_INT_ARGB);
-		BufferedImage blackImg = new BufferedImage(md.height, md.width, BufferedImage.TYPE_INT_ARGB);
-		BufferedImage bwImg = new BufferedImage(md.height, md.width, BufferedImage.TYPE_INT_ARGB);
-		for (int y = 0; y < md.width; y++)
-			for (int x = 0; x < md.height; x++) {
-				int rgb = md.getRGB(md.width - y, x);
-				colorImg.setRGB(x, y, rgb);
-				if (rgb != md.background)
-					blackImg.setRGB(x, y, 0xFF000000);
-				else
-					blackImg.setRGB(x, y, rgb);
-				if (rgb == md.background)
-					bwImg.setRGB(x, y, rgb);
-				else {
-					bwImg.setRGB(x, y, md.getAlphaHex(md.width - y, x, rgb));
-				}
-			}
+		ColorHex md = new ColorHex(dim);
+		BufferedImage[] images = md.genColorHexImages();
+		BufferedImage colorImg = images[0];
+		BufferedImage blackImg = images[1];
+		BufferedImage bwImg = images[2];
 		try {
 			FileOutputStream out = new FileOutputStream(new File(directory, "ColorHexagon.png"));
 			ImageIO.write(colorImg, "png", out);
@@ -993,6 +1199,262 @@ public class Colors {
 			out.close();
 		} catch (IOException e) {
 			throw new IllegalStateException("Could not write image files to " + directory.getPath(), e);
+		}
+	}
+
+	/**
+	 * <p>
+	 * Represents a 2D hexagonal image that is a continuum of colors from red (left corner) to yellow (top-left corner) to green (top-right
+	 * corner) to cyan (right corner) to blue (bottom-right corner) to magenta (bottom-left corner.
+	 * </p>
+	 * <p>
+	 * This class is intended to support a color chooser user interface.
+	 * </p>
+	 */
+	public static class ColorHex {
+		private static final float SQRT3 = (float) Math.sqrt(3);
+		private static final int CHECKER_SIZE = 64;
+
+		private final int theWidth;
+		private final int theHeight;
+
+		private final float sideLength;
+
+		private int theBackground;
+		private boolean isShaded;
+
+		/** @param width The width for the hexagon */
+		public ColorHex(int width) {
+			this.theWidth = width;
+			theHeight = (int) Math.ceil(width * Math.sqrt(3) / 2);
+			sideLength = width / 2.0f;
+			theBackground = 0;
+			isShaded = true;
+		}
+
+		/** @return The {@link Color#getRGB() RGB} value of the color to paint outside the hexagon */
+		public int getBackground() {
+			return theBackground;
+		}
+
+		/**
+		 * @param background The {@link Color#getRGB() RGB} value of the color to paint outside the hexagon
+		 * @return This color hex
+		 */
+		public ColorHex setBackground(int background) {
+			this.theBackground = background;
+			return this;
+		}
+
+		/** @return The hexagon's width */
+		public int getWidth() {
+			return theWidth;
+		}
+
+		/** @return The hexagon's height */
+		public int getHeight() {
+			return theHeight;
+		}
+
+		/** @return The length of one side of the hexagon */
+		public float getSideLength() {
+			return sideLength;
+		}
+
+		/**
+		 * @return Whether the {@link #getAlphaHex(int, int, int)} method assumes a shading continuum or a simple checker pattern. The
+		 *         default is true and this is recommended, as otherwise colors in front of the dark checker spots will appear starkly
+		 *         different than those in front of light spots.
+		 */
+		public boolean isShaded() {
+			return isShaded;
+		}
+
+		/**
+		 * @param shaded Whether the {@link #getAlphaHex(int, int, int)} method assumes a shading continuum or a simple checker pattern
+		 * @see #isShaded()
+		 */
+		public void setShaded(boolean shaded) {
+			isShaded = shaded;
+		}
+
+		/**
+		 * @param x The x coordinate in the image from the left
+		 * @param y The y coordinate in the image <b>from the bottom</b>
+		 * @return The color to paint for the colored hexagon at the given pixel
+		 */
+		public int getRGB(int x, int y) {
+			float xf = -(x - theWidth / 2.0f), yf = y - theHeight / 2.0f;
+			float r, g, b;
+			if (yf >= 0) {
+				if (xf >= yf / SQRT3) {
+					r = 1;
+					g = 1 - (xf - yf / SQRT3) / sideLength;
+					b = 1 - (xf + yf / SQRT3) / sideLength;
+				} else {
+					r = 1 - (yf / SQRT3 - xf) / sideLength;
+					g = 1;
+					b = 1 - 2 * yf / SQRT3 / sideLength;
+				}
+			} else {
+				if (xf >= -yf / SQRT3) {
+					r = 1;
+					g = 1 - (xf - yf / SQRT3) / sideLength;
+					b = 1 - (xf + yf / SQRT3) / sideLength;
+				} else {
+					r = 1 + (xf + yf / SQRT3) / sideLength;
+					g = 1 + 2 * yf / SQRT3 / sideLength;
+					b = 1;
+				}
+			}
+
+			int ri = Math.round(r * 255);
+			int gi = Math.round(g * 255);
+			int bi = Math.round(b * 255);
+			if (ri < 0 || ri > 255 || gi < 0 || gi > 255 || bi < 0 || bi > 255)
+				return theBackground;
+			int ret = 0xFF000000;
+			ret |= ri << 16;
+			ret |= gi << 8;
+			ret |= bi;
+			return ret;
+		}
+
+		/**
+		 * @param x The x coordinate in the image from the left
+		 * @param y The y coordinate in the image <b>from the bottom</b>
+		 * @param rgb The color of the colored hexagon at the given pixel
+		 * @return The color to paint for the alpha hexagon at the given pixel
+		 */
+		public int getAlphaHex(int x, int y, int rgb) {
+			if (isShaded)
+				return getShadedHex(y, x, rgb);
+			else
+				return getCheckeredHex(y, x, rgb);
+		}
+
+		private int getShadedHex(int x, int y, int rgb) {
+			if (rgb == theBackground)
+				return rgb;
+			int r = (rgb & 0xFF0000) >> 16;
+			int g = (rgb & 0xFF00) >> 8;
+			int b = rgb & 0xFF;
+
+			if (r == 255) {
+				if (g == 255 || b == 255)
+					return 0xFF000000;
+				r = CHECKER_SIZE;
+				g = CHECKER_SIZE - ((g + 1) % CHECKER_SIZE);
+				b = CHECKER_SIZE - ((b + 1) % CHECKER_SIZE);
+				if (g >= CHECKER_SIZE / 2)
+					g = CHECKER_SIZE - g;
+				g *= 2;
+				if (b >= CHECKER_SIZE / 2)
+					b = CHECKER_SIZE - b;
+				b *= 2;
+			} else if (g == 255) {
+				if (b == 255)
+					return 0xFF000000;
+				g = CHECKER_SIZE;
+				r = CHECKER_SIZE - ((r + 1) % CHECKER_SIZE);
+				b = CHECKER_SIZE - ((b + 1) % CHECKER_SIZE);
+				if (r >= CHECKER_SIZE / 2)
+					r = CHECKER_SIZE - r;
+				r *= 2;
+				if (b >= CHECKER_SIZE / 2)
+					b = CHECKER_SIZE - b;
+				b *= 2;
+			} else {
+				b = CHECKER_SIZE;
+				r = CHECKER_SIZE - ((r + 1) % CHECKER_SIZE);
+				g = CHECKER_SIZE - ((g + 1) % CHECKER_SIZE);
+				if (r >= CHECKER_SIZE / 2)
+					r = CHECKER_SIZE - r;
+				r *= 2;
+				if (g >= CHECKER_SIZE / 2)
+					g = CHECKER_SIZE - g;
+				g *= 2;
+			}
+			float intens = r * 1.0f * g * b / (float) Math.pow(CHECKER_SIZE, 3);
+			intens = (float) Math.pow(intens, 0.5);
+			// intens = ((intens + 0.5f) * (intens + 0.5f) - .25f) / 2.25f;
+
+			int dark = Math.round(intens * 255);
+			return 0xFF000000 | (dark << 16) | (dark << 8) | dark;
+		}
+
+		private int getCheckeredHex(int y, int x, int rgb) {
+			if (rgb == theBackground)
+				return rgb;
+			int r = (rgb & 0xFF0000) >> 16;
+			int g = (rgb & 0xFF00) >> 8;
+			int b = rgb & 0xFF;
+
+			if (r <= 4 || b <= 4 || g <= 4)
+				return 0xFF000000;
+
+			int bwg;
+			if (r == 255)
+				bwg = ((g / CHECKER_SIZE) + (b / CHECKER_SIZE)) % 3;
+			else if (g == 255)
+				bwg = ((r / CHECKER_SIZE) + (b / CHECKER_SIZE) + 1) % 3;
+			else
+				bwg = ((r / CHECKER_SIZE) + (g / CHECKER_SIZE) + 2) % 3;
+			if (bwg == 0)
+				return 0xFF000000;
+			else if (bwg == 1)
+				return 0xFFFFFFFF;
+			else
+				return 0xFF808080;
+		}
+
+		/**
+		 * @param color The color to get the location of
+		 * @return The pixel on this image whose color is closest to the given color
+		 */
+		public Point getLocation(Color color) {
+			int x = theWidth / 2, y = theHeight / 2;
+			int brightness = Math.max(color.getRed(), Math.max(color.getGreen(), color.getBlue()));
+			if (color.getRed() < brightness)
+				x += Math.round(sideLength * (brightness - color.getRed()) / brightness);
+			if (color.getGreen() < brightness) {
+				float greenDist = sideLength * (brightness - color.getGreen()) / brightness;
+				x -= Math.round(greenDist / 2);
+				y += Math.round(greenDist * SQRT3 / 2);
+			}
+			if (color.getBlue() < brightness) {
+				float blueDist = sideLength * (brightness - color.getBlue()) / brightness;
+				x -= Math.round(blueDist / 2);
+				y -= Math.round(blueDist * SQRT3 / 2);
+			}
+			return new Point(x, y);
+		}
+
+		/**
+		 * Generates color, shading (black), and alpha hexagon images according to this hex's settings
+		 * 
+		 * @return The 3 images
+		 */
+		public BufferedImage[] genColorHexImages() {
+			BufferedImage colorImg = new BufferedImage(theWidth, theHeight, BufferedImage.TYPE_INT_ARGB);
+			BufferedImage blackImg = new BufferedImage(theWidth, theHeight, BufferedImage.TYPE_INT_ARGB);
+			BufferedImage bwImg = new BufferedImage(theWidth, theHeight, BufferedImage.TYPE_INT_ARGB);
+			for (int y = 0; y < theHeight; y++) {
+				for (int x = 0; x < theWidth; x++) {
+					int rgb = getRGB(x, theHeight - y);
+					colorImg.setRGB(x, y, rgb);
+					if (rgb != theBackground)
+						blackImg.setRGB(x, y, 0xFF000000);
+					else
+						blackImg.setRGB(x, y, rgb);
+					if (rgb == theBackground)
+						bwImg.setRGB(x, y, rgb);
+					else {
+						bwImg.setRGB(x, y, getAlphaHex(x, theHeight - y, rgb));
+					}
+				}
+			}
+			return new BufferedImage[] { colorImg, blackImg, bwImg };
 		}
 	}
 
