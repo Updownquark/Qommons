@@ -17,6 +17,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.TreeSet;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
@@ -259,15 +260,26 @@ public class TimeUtils {
 
 		@Override
 		public ParsedDuration with(DurationComponentType type, Integer value) {
+			return adjust((dct, found) -> {
+				if (dct == type)
+					return value - found;
+				else
+					return found;
+			});
+		}
+
+		public ParsedDuration adjust(BiFunction<DurationComponentType, Integer, Integer> adjustment) {
 			EnumMap<DurationComponentType, Integer> fieldValues = new EnumMap<>(DurationComponentType.class);
 			for (Map.Entry<DurationComponentType, DurationComponent> entry : components.entrySet())
 				fieldValues.put(entry.getKey(), entry.getValue().getValue());
-			DurationComponent found = getField(type);
-			boolean adjusted;
-			if (found == null)
-				adjusted = adjustValues(fieldValues, type, value);
-			else
-				adjusted = adjustValues(fieldValues, type, value - found.getValue());
+			boolean adjusted = false;
+			for (DurationComponentType type : DurationComponentType.values()) {
+				DurationComponent found = getField(type);
+				int oldValue = found == null ? 0 : found.getValue();
+				int newValue = adjustment.apply(type, oldValue);
+				if (newValue != oldValue)
+					adjusted |= adjustValues(fieldValues, type, newValue);
+			}
 			if (!adjusted)
 				return null;
 			List<DurationComponent> sequence = new ArrayList<>();
@@ -418,6 +430,19 @@ public class TimeUtils {
 			return true;
 		}
 
+		public ParsedDuration plus(ParsedDuration duration) {
+			boolean neg = isNegative != duration.isNegative;
+			return adjust((type, found) -> {
+				DurationComponent comp = duration.getField(type);
+				if (comp == null)
+					return found;
+				else if (neg)
+					return found - comp.getValue();
+				else
+					return found + comp.getValue();
+			});
+		}
+
 		/**
 		 * @param multiple The multiple to multiply this duration by
 		 * @return A new duration that is equal to this duration times the given multiple
@@ -447,6 +472,274 @@ public class TimeUtils {
 				newComponents.add(new DurationComponent(start, valueStart, valueEnd, comp.getField(), newVal, newText));
 			}
 			return new ParsedDuration(null, neg, Collections.unmodifiableList(newComponents), theSeparators, theFormat);
+		}
+
+		public ParsedDuration times(double multiple) {
+			if (multiple == 1)
+				return this;
+			boolean neg = multiple < 0;
+			if (neg)
+				multiple = -multiple;
+
+			final double mult = multiple;
+			double[] remainder = new double[1];
+			ParsedDuration product = adjust((type, found) -> {
+				double compProduct = found * mult + remainder[0];
+				double rem = compProduct - (int) compProduct;
+				switch (type) {
+				case Year:
+					remainder[0] = rem * 12;
+					if (Math.abs(rem * 12 - Math.round(rem * 12)) <= 1 / 28)
+						remainder[DurationComponentType.Month.ordinal()] = (int) Math.round(rem * 12);
+					else
+						remainder[DurationComponentType.Day.ordinal()] = rem * 365.25;
+					break;
+				case Month:
+					// If we're less than about a day off, round to the month
+					if (rem <= 1 / 28)
+						remainder[0] = 0;
+					else
+						remainder[0] = rem * 365.25 / 12 / 7;
+					break;
+				case Week:
+					remainder[0] = rem * 7;
+					break;
+				case Day:
+					remainder[0] = rem * 24;
+					break;
+				case Hour:
+				case Minute:
+					remainder[0] = rem * 60;
+					break;
+				case Second:
+				case Millisecond:
+				case Microsecond:
+					remainder[0] = rem * 1000;
+					break;
+				case Nanosecond:
+					if (remainder[0] > 500)
+						compProduct++;
+					break;
+				}
+				return (int) compProduct;
+			});
+			return neg ? product.negate() : product;
+		}
+
+		public double divide(ParsedDuration duration) {
+			if (components.isEmpty())
+				return 0;
+			else if (duration.components.isEmpty())
+				return Double.NaN;
+			else if (components.size() == 1 && duration.components.size() == 1) {
+				DurationComponent comp1 = components.get(components.keySet().iterator().next());
+				DurationComponent comp2 = duration.components.get(duration.components.keySet().iterator().next());
+				if (comp1.getField() == comp2.getField())
+					return comp1.getValue() * 1.0 / comp2.getValue();
+				else if (comp1.getField().compareTo(comp2.getField()) > 0)
+					return duration.divide(this);
+				switch (comp1.getField()) {
+				case Year:
+					switch (comp2.getField()) {
+					case Year:
+						throw new IllegalStateException();
+					case Month:
+						return comp1.getValue() * 12.0 / comp2.getValue();
+					case Week:
+						return getDaysInYears(comp1.getValue()) / 7.0 / comp2.getValue();
+					case Day:
+						return getDaysInYears(comp1.getValue()) * 1.0 / comp2.getValue();
+					case Hour:
+						return getDaysInYears(comp1.getValue()) * 24.0 / comp2.getValue();
+					case Minute:
+						return getDaysInYears(comp1.getValue()) * 24.0 * 60.0 / comp2.getValue();
+					case Second:
+						return getDaysInYears(comp1.getValue()) * 24.0 * 60.0 * 60.0 / comp2.getValue();
+					case Millisecond:
+						return getDaysInYears(comp1.getValue()) * 24.0 * 60.0 * 6E4 / comp2.getValue();
+					case Microsecond:
+						return getDaysInYears(comp1.getValue()) * 24.0 * 60.0 * 6E7 / comp2.getValue();
+					case Nanosecond:
+						return getDaysInYears(comp1.getValue()) * 24.0 * 60.0 * 6E10 / comp2.getValue();
+					}
+					throw new IllegalStateException();
+				case Month:
+					switch (comp2.getField()) {
+					case Year:
+					case Month:
+						throw new IllegalStateException();
+					case Week:
+						return getDaysInMonths(comp1.getValue()) / 7.0 / comp2.getValue();
+					case Day:
+						return getDaysInMonths(comp1.getValue()) * 1.0 / comp2.getValue();
+					case Hour:
+						return getDaysInMonths(comp1.getValue()) * 24.0 / comp2.getValue();
+					case Minute:
+						return getDaysInMonths(comp1.getValue()) * 24.0 * 60.0 / comp2.getValue();
+					case Second:
+						return getDaysInMonths(comp1.getValue()) * 24.0 * 60.0 * 60.0 / comp2.getValue();
+					case Millisecond:
+						return getDaysInMonths(comp1.getValue()) * 24.0 * 60.0 * 6E4 / comp2.getValue();
+					case Microsecond:
+						return getDaysInMonths(comp1.getValue()) * 24.0 * 60.0 * 6E7 / comp2.getValue();
+					case Nanosecond:
+						return getDaysInMonths(comp1.getValue()) * 24.0 * 60.0 * 6E10 / comp2.getValue();
+					}
+					throw new IllegalStateException();
+				case Week:
+					switch (comp2.getField()) {
+					case Year:
+					case Month:
+					case Week:
+						throw new IllegalStateException();
+					case Day:
+						return comp1.getValue() * 7.0 / comp2.getValue();
+					case Hour:
+						return comp1.getValue() * 7.0 * 24.0 / comp2.getValue();
+					case Minute:
+						return comp1.getValue() * 7.0 * 24.0 * 60.0 / comp2.getValue();
+					case Second:
+						return comp1.getValue() * 7.0 * 24.0 * 60.0 * 60.0 / comp2.getValue();
+					case Millisecond:
+						return comp1.getValue() * 7.0 * 24.0 * 60.0 * 6E4 / comp2.getValue();
+					case Microsecond:
+						return comp1.getValue() * 7.0 * 24.0 * 60.0 * 6E7 / comp2.getValue();
+					case Nanosecond:
+						return comp1.getValue() * 7.0 * 24.0 * 60.0 * 6E10 / comp2.getValue();
+					}
+					throw new IllegalStateException();
+				case Day:
+					switch (comp2.getField()) {
+					case Year:
+					case Month:
+					case Week:
+					case Day:
+						throw new IllegalStateException();
+					case Hour:
+						return comp1.getValue() * 24.0 / comp2.getValue();
+					case Minute:
+						return comp1.getValue() * 24.0 * 60.0 / comp2.getValue();
+					case Second:
+						return comp1.getValue() * 24.0 * 60.0 * 60.0 / comp2.getValue();
+					case Millisecond:
+						return comp1.getValue() * 24.0 * 60.0 * 6E4 / comp2.getValue();
+					case Microsecond:
+						return comp1.getValue() * 24.0 * 60.0 * 6E7 / comp2.getValue();
+					case Nanosecond:
+						return comp1.getValue() * 24.0 * 60.0 * 6E10 / comp2.getValue();
+					}
+					throw new IllegalStateException();
+				case Hour:
+					switch (comp2.getField()) {
+					case Year:
+					case Month:
+					case Week:
+					case Day:
+					case Hour:
+						throw new IllegalStateException();
+					case Minute:
+						return comp1.getValue() * 60.0 / comp2.getValue();
+					case Second:
+						return comp1.getValue() * 60.0 * 60.0 / comp2.getValue();
+					case Millisecond:
+						return comp1.getValue() * 60.0 * 6E4 / comp2.getValue();
+					case Microsecond:
+						return comp1.getValue() * 60.0 * 6E7 / comp2.getValue();
+					case Nanosecond:
+						return comp1.getValue() * 60.0 * 6E10 / comp2.getValue();
+					}
+					throw new IllegalStateException();
+				case Minute:
+					switch (comp2.getField()) {
+					case Year:
+					case Month:
+					case Week:
+					case Day:
+					case Hour:
+					case Minute:
+						throw new IllegalStateException();
+					case Second:
+						return comp1.getValue() * 60.0 / comp2.getValue();
+					case Millisecond:
+						return comp1.getValue() * 6E4 / comp2.getValue();
+					case Microsecond:
+						return comp1.getValue() * 6E7 / comp2.getValue();
+					case Nanosecond:
+						return comp1.getValue() * 6E10 / comp2.getValue();
+					}
+					throw new IllegalStateException();
+				case Second:
+					switch (comp2.getField()) {
+					case Year:
+					case Month:
+					case Week:
+					case Day:
+					case Hour:
+					case Minute:
+					case Second:
+						throw new IllegalStateException();
+					case Millisecond:
+						return comp1.getValue() * 1E3 / comp2.getValue();
+					case Microsecond:
+						return comp1.getValue() * 1E6 / comp2.getValue();
+					case Nanosecond:
+						return comp1.getValue() * 1E9 / comp2.getValue();
+					}
+					throw new IllegalStateException();
+				case Millisecond:
+					switch (comp2.getField()) {
+					case Year:
+					case Month:
+					case Week:
+					case Day:
+					case Hour:
+					case Minute:
+					case Second:
+					case Millisecond:
+						throw new IllegalStateException();
+					case Microsecond:
+						return comp1.getValue() * 1E3 / comp2.getValue();
+					case Nanosecond:
+						return comp1.getValue() * 1E6 / comp2.getValue();
+					}
+					throw new IllegalStateException();
+				case Microsecond:
+					switch (comp2.getField()) {
+					case Year:
+					case Month:
+					case Week:
+					case Day:
+					case Hour:
+					case Minute:
+					case Second:
+					case Millisecond:
+					case Microsecond:
+						throw new IllegalStateException();
+					case Nanosecond:
+						return comp1.getValue() * 1E3 / comp2.getValue();
+					}
+					throw new IllegalStateException();
+				case Nanosecond:
+					throw new IllegalStateException();
+				}
+				throw new IllegalStateException();
+			} else {
+				Duration d1 = asDuration();
+				Duration d2 = duration.asDuration();
+				double s1 = toSeconds(d1);
+				double s2 = toSeconds(d2);
+				return s1 / s2;
+			}
+		}
+
+		public ParsedDuration negate() {
+			String text = theText;
+			if (isNegative) {
+				if (text.startsWith("-"))
+					text = text.substring(1);
+			} else
+				text = "-" + text;
+			return new ParsedDuration(text, !isNegative, theSequence, theSeparators, theFormat);
 		}
 
 		/** @return A duration with this object's magnitude */
@@ -3067,7 +3360,7 @@ public class TimeUtils {
 		str.append(DURATION_PRECISION_ABBREVS.get(unit.ordinal()));
 		return new ParsedDuration(null, amount < 0,
 			Collections.unmodifiableList(Arrays.asList(new DurationComponent(0, 0, valueEnd, unit, Math.abs(amount), str.toString()))),
-			Collections.emptyList(), relativeFormat());
+			Collections.singletonList(""), relativeFormat());
 	}
 
 	/**
@@ -3080,6 +3373,7 @@ public class TimeUtils {
 			d = d.negated();
 		ArrayList<DurationComponent> components = new ArrayList<>();
 		ArrayList<String> separators = new ArrayList<>();
+		separators.add("");
 		long seconds = d.getSeconds();
 		StringBuilder str = new StringBuilder();
 		if (seconds > 0) {
@@ -3103,6 +3397,7 @@ public class TimeUtils {
 
 				int months = (int) (days / 30);
 				long daysInMonths = getDaysInMonths(months);
+				days -= daysInMonths;
 				if (days < 0) {
 					months--;
 					days += daysInMonths - getDaysInMonths(months);
@@ -3150,14 +3445,14 @@ public class TimeUtils {
 			return;
 		int start = str.length();
 		if (start > 0) {
+			str.append(' ');
 			separators.add(" ");
 			start++;
-			str.append(' ');
 		}
 		str.append(amount);
 		int valueEnd = str.length();
 		str.append(DURATION_PRECISION_ABBREVS.get(type.ordinal()));
-		components.add(new DurationComponent(start, start, valueEnd, type, amount, str.substring(start, valueEnd)));
+		components.add(new DurationComponent(start, start, valueEnd, type, amount, str.substring(start)));
 	}
 
 	private static final List<String> DURATION_PRECISION_NAMES;
@@ -3820,11 +4115,7 @@ public class TimeUtils {
 	public static Duration between(Instant t1, Instant t2) {
 		long seconds = t2.getEpochSecond() - t1.getEpochSecond();
 		long nanos = t2.getNano() - t1.getNano();
-		Duration d = Duration.ofSeconds(seconds, nanos);
-		if (!d.equals(Duration.between(t1, t2))) {
-			throw new IllegalStateException("Bad logic here");
-		}
-		return d;
+		return Duration.ofSeconds(seconds, nanos);
 	}
 
 	/**
@@ -3904,6 +4195,39 @@ public class TimeUtils {
 			return neg ? Integer.MIN_VALUE : Integer.MAX_VALUE;
 		}
 		return applyNeg((int) res, neg);
+	}
+
+	/**
+	 * @param d The duration to multiply
+	 * @param mult The multiplier
+	 * @return A duration that is the product of the given duration and the scalar multiplier
+	 */
+	public static Duration multiply(Duration d, double mult) {
+		if (d.isZero())
+			return d;
+		else if (mult == 0)
+			return Duration.ZERO;
+		boolean neg;
+		if (d.isNegative()) {
+			d = negate(d);
+			neg = mult > 0;
+			if (!neg)
+				mult = -mult;
+		} else if (mult < 0) {
+			neg = true;
+			mult = -mult;
+		} else {
+			neg = false;
+		}
+
+		long nano = Math.round(d.getNano() * mult);
+		double secsD = d.getSeconds() * mult;
+		nano += Math.round((secsD - (long) secsD) * 1E9);
+		long secs = Math.round(secsD) + nano / 1_000_000_000;
+		nano %= 1_000_000_000;
+		if (neg)
+			secs = -secs;
+		return Duration.ofSeconds(secs, nano);
 	}
 
 	private static int applyNeg(int v, boolean neg) {
