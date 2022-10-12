@@ -963,11 +963,17 @@ public class Colors {
 		 * @see Color#Color(int, boolean)
 		 */
 		public HsbColor(Color color, boolean withAlpha) {
-			float[] hsb = Color.RGBtoHSB(color.getRed(), color.getGreen(), color.getBlue(), null);
+			float[] hsb = color == null ? new float[] { 1.0f, 0.0f, 1.0f }
+				: Color.RGBtoHSB(color.getRed(), color.getGreen(), color.getBlue(), null);
 			hue = hsb[0];
 			saturation = hsb[1];
 			brightness = hsb[2];
-			this.color = withAlpha ? color.getRGB() : (color.getRGB() | 0xff000000);
+			if (color == null)
+				this.color = Color.white.getRGB();
+			else if (withAlpha)
+				this.color = color.getRGB();
+			else
+				this.color = (color.getRGB() | 0xff000000);
 		}
 
 		/** @return The java color represented by this HSB color */
