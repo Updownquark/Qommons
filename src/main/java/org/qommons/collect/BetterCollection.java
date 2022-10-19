@@ -725,7 +725,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		try (Transaction t = coll.lock(false, null)) {
 			int hashCode = 1;
 			for (Object e : coll)
-				hashCode += e.hashCode();
+				hashCode = 31 * hashCode + (e == null ? 0 : e.hashCode());
 			return hashCode;
 		}
 	}
