@@ -329,6 +329,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	public static <E> BetterList<E> of(Stream<? extends E> values) {
 		ArrayList<E> list = new ArrayList<>();
 		values.collect(Collectors.toCollection(() -> list));
+		if (list.isEmpty())
+			return empty();
 		list.trimToSize();
 		return new ConstantList<>(list);
 	}

@@ -963,7 +963,7 @@ public class Colors {
 		 * @see Color#Color(int, boolean)
 		 */
 		public HsbColor(Color color, boolean withAlpha) {
-			float[] hsb = color == null ? new float[] { 1.0f, 0.0f, 1.0f }
+			float[] hsb = color == null ? new float[] { 1.0f, 0.0f, 0.0f }
 				: Color.RGBtoHSB(color.getRed(), color.getGreen(), color.getBlue(), null);
 			hue = hsb[0];
 			saturation = hsb[1];
