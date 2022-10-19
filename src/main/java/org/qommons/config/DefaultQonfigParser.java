@@ -1244,7 +1244,8 @@ public class DefaultQonfigParser implements QonfigParser {
 						}
 						if (el == null)
 							childSession.withError("Unrecognized add-on \"" + inherit + "\" as inheritance");
-						inherits.add(el);
+						else
+							inherits.add(el);
 					}
 				}
 				String requiresS = child.getAttribute("requires", false);
@@ -1354,6 +1355,8 @@ public class DefaultQonfigParser implements QonfigParser {
 						continue;
 					}
 					child = owner.getChild(roleStr.substring(dot + 1));
+					if (child == null)
+						child = owner.getMetaSpec().getChild(roleStr.substring(dot + 1));
 					if (child == null) {
 						targetSession.withError("No such child '" + roleStr.substring(dot + 1) + "' of " + owner);
 						continue;

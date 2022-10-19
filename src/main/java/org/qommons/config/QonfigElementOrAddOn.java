@@ -204,6 +204,9 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 	 */
 	public abstract boolean isAssignableFrom(QonfigElementOrAddOn other);
 
+	static final String ELEMENT_METADATA_SUFFIX = "$META";
+	static final String ADD_ON_METADATA_ELEMENT = "$ELEMENT";
+
 	/** Abstract builder for element-defs or add-ons */
 	protected static abstract class Builder {
 		/** Stage enum for element-def/add-on builder */
@@ -277,12 +280,12 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 
 			theFullInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
 
-			if ("element-meta".equals(name)) {
+			if (name.endsWith(ELEMENT_METADATA_SUFFIX) || name.endsWith(ELEMENT_METADATA_SUFFIX + ADD_ON_METADATA_ELEMENT)) {
 				theMetaSpec = null;
 			} else if (this instanceof QonfigElementDef.Builder)
-				theMetaSpec = QonfigElementDef.build("element-meta", session);
+				theMetaSpec = QonfigElementDef.build(name + ELEMENT_METADATA_SUFFIX, session);
 			else
-				theMetaSpec = QonfigAddOn.build("element-meta", session);
+				theMetaSpec = QonfigAddOn.build(name + ELEMENT_METADATA_SUFFIX, session);
 
 			theStage = Stage.Initial;
 		}
@@ -438,12 +441,14 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					if (theMetaSpec.get() instanceof QonfigElementDef)
 						mdType = (QonfigElementDef) theMetaSpec.get();
 					else if (theMetaSpec.getSuperElement() != null)
-						mdType = (QonfigElementDef) QonfigElementDef.build("element-meta", theSession)//
+						mdType = (QonfigElementDef) QonfigElementDef
+							.build(theMetaSpec.get().getName() + ADD_ON_METADATA_ELEMENT, theSession)//
 							.setSuperElement(theMetaSpec.getSuperElement())//
 							.inherits((QonfigAddOn) theMetaSpec.get())//
 							.build();
 					else
-						mdType = (QonfigElementDef) QonfigElementDef.build("element-meta", theSession)//
+						mdType = (QonfigElementDef) QonfigElementDef
+							.build(theMetaSpec.get().getName() + ADD_ON_METADATA_ELEMENT, theSession)//
 							.inherits((QonfigAddOn) theMetaSpec.get())//
 							.build();
 					theMetadataBuilder = QonfigElement.build(theSession, theMetadata, null, mdType);
@@ -510,7 +515,9 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			if (addOn.getSuperElement() != null) {
 				if (addOn.getSuperElement() == theBuilt) {//
 				} else if (theSuperElement != null && addOn.getSuperElement().isAssignableFrom(theSuperElement)) {//
-				} else
+				} else if (theSuperElement == null)
+					theSuperElement = addOn.getSuperElement();
+				else
 					return "Illegal inheritance: " + theName + " <- " + addOn + ": super element " + addOn.getSuperElement()
 						+ " incompatible with " + theName;
 			}
@@ -1171,7 +1178,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 						theSession.withError(
 							"Inherited child " + child.getKey() + " has incompatible inherited min/max restrictions: " + min + "..." + max);
 					} else if (!modified)
-						theCompiledChildren.put(child.getKey(), child.getValue());
+						theCompiledChildren.put(child.getKey(), new QonfigChildDef.Inherited(get(), child.getValue()));
 					else
 						theCompiledChildren.put(child.getKey(),
 							new QonfigChildDef.Modified(child.getKey(), get(), type, inheritance, requirement, min, max));
@@ -1308,7 +1315,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					} else if (modified)
 						theCompiledChildren.put(child, new QonfigChildDef.Modified(child, get(), type, inheritance, requirement, min, max));
 					else
-						theCompiledChildren.put(child, child);
+						theCompiledChildren.put(child, new QonfigChildDef.Inherited(get(), child));
 					theChildrenByName.add(child.getName(), theCompiledChildren.get(child));
 				}
 			}

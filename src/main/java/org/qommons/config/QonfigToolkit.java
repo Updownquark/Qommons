@@ -16,6 +16,7 @@ import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterCollections;
 import org.qommons.collect.BetterHashMultiMap;
 import org.qommons.collect.BetterMultiMap;
+import org.qommons.config.QonfigAutoInheritance.AutoInheritTarget;
 
 /** A structure containing a set of types that can be used to parsed highly-structured and validated {@link QonfigDocument}s */
 public class QonfigToolkit implements Named {
@@ -416,26 +417,41 @@ public class QonfigToolkit implements Named {
 	 * @return The additional add-ons that the element should inherit from automatic inheritance
 	 */
 	public MultiInheritanceSet<QonfigAddOn> getAutoInheritance(QonfigElementOrAddOn target, Set<QonfigChildDef> roles) {
-		if (theTypeAutoInheritance == null)
-			return MultiInheritanceSet.empty(); // Normal, happens during building
 		MultiInheritanceSet<QonfigAddOn> inheritance = null;
-		for (MultiInheritanceSet<QonfigAddOn> autoInherit : theTypeAutoInheritance.getAll(target)) {
-			if (inheritance == null)
-				inheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
-			inheritance.addAll(autoInherit.values());
-		}
-		for (QonfigChildDef role : roles) {
-			for (MultiInheritanceSet<QonfigAddOn> autoInherit : theRoleAutoInheritance.getAll(role)) {
+		if (theTypeAutoInheritance == null) {
+			// Normal, happens during building. Means we have to do this the slow way.
+			inheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+			for (QonfigAutoInheritance inh : theDeclaredAutoInheritance) {
+				for (AutoInheritTarget aiTarget : inh.getTargets()) {
+					if (aiTarget.applies(target, roles)) {
+						inheritance.addAll(inh.getInheritance().values());
+						break;
+					}
+				}
+			}
+			for (QonfigToolkit dep : getDependencies().values()) {
+				inheritance.addAll(dep.getAutoInheritance(target, roles).values());
+			}
+			return MultiInheritanceSet.unmodifiable(inheritance);
+		} else {
+			for (MultiInheritanceSet<QonfigAddOn> autoInherit : theTypeAutoInheritance.getAll(target)) {
 				if (inheritance == null)
 					inheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
 				inheritance.addAll(autoInherit.values());
 			}
-			for (MultiInheritanceMap<QonfigChildDef, MultiInheritanceSet<QonfigAddOn>> typeRoleInh : theTypeAndRoleAutoInheritance
-				.getAll(target)) {
-				for (MultiInheritanceSet<QonfigAddOn> autoInherit : typeRoleInh.getAll(role)) {
+			for (QonfigChildDef role : roles) {
+				for (MultiInheritanceSet<QonfigAddOn> autoInherit : theRoleAutoInheritance.getAll(role)) {
 					if (inheritance == null)
 						inheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
 					inheritance.addAll(autoInherit.values());
+				}
+				for (MultiInheritanceMap<QonfigChildDef, MultiInheritanceSet<QonfigAddOn>> typeRoleInh : theTypeAndRoleAutoInheritance
+					.getAll(target)) {
+					for (MultiInheritanceSet<QonfigAddOn> autoInherit : typeRoleInh.getAll(role)) {
+						if (inheritance == null)
+							inheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+						inheritance.addAll(autoInherit.values());
+					}
 				}
 			}
 		}

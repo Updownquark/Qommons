@@ -25,7 +25,7 @@ public class QonfigApp {
 			appSetupFile = "/" + appSetupFile;
 		URL appDefUrl = QonfigApp.class.getResource(appSetupFile);
 		if (appDefUrl == null)
-			throw new IllegalArgumentException("Could not locate Quick-App definition file: " + appSetupFile);
+			throw new IllegalArgumentException("Could not locate Qonfig-App definition file: " + appSetupFile);
 		return interpretApp(appDefUrl, type);
 	}
 
@@ -55,14 +55,14 @@ public class QonfigApp {
 		try (InputStream appDefIn = appDefUrl.openStream()) {
 			appDef = qonfigParser.parseDocument(appDefUrl.toString(), appDefIn).getRoot();
 		} catch (IOException e) {
-			throw new IllegalArgumentException("Could not read Quick-App definition: " + appDefUrl, e);
+			throw new IllegalArgumentException("Could not read Qonfig-App definition: " + appDefUrl, e);
 		} catch (QonfigParseException e) {
-			throw new IllegalArgumentException("Could not parse Quick-App definition: " + appDefUrl, e);
+			throw new IllegalArgumentException("Could not parse Qonfig-App definition: " + appDefUrl, e);
 		}
 
 		String appDefLoc = appDefUrl.toString();
 
-		// Ensure the Quick file exists
+		// Ensure the Qonfig file exists
 		String appFile = appDef.getAttributeText(appTK.getAttribute("qonfig-app", "app-file"));
 		URL appFileURL = QonfigApp.class.getResource(appFile);
 		if (appFileURL == null) {
@@ -128,7 +128,7 @@ public class QonfigApp {
 			appValue = interpreter.interpret(qonfigDoc.getRoot())//
 				.interpret(type);
 		} catch (QonfigInterpretationException e) {
-			throw new IllegalStateException("Could not interpret Quick file at " + appFile, e);
+			throw new IllegalStateException("Could not interpret Qonfig file at " + appFile, e);
 		}
 		return appValue;
 	}

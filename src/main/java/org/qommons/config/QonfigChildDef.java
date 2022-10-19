@@ -277,4 +277,82 @@ public interface QonfigChildDef extends QonfigElementOwned {
 			return false;
 		}
 	}
+
+	public static class Inherited implements QonfigChildDef {
+		private final QonfigElementOrAddOn theOwner;
+		private final QonfigChildDef theInherited;
+
+		public Inherited(QonfigElementOrAddOn owner, QonfigChildDef inherited) {
+			theOwner = owner;
+			theInherited = inherited;
+		}
+
+		@Override
+		public QonfigElementOrAddOn getOwner() {
+			return theOwner;
+		}
+
+		public QonfigChildDef getInherited() {
+			return theInherited;
+		}
+
+		@Override
+		public String getName() {
+			return theInherited.getName();
+		}
+
+		@Override
+		public Declared getDeclared() {
+			return theInherited.getDeclared();
+		}
+
+		@Override
+		public QonfigElementDef getType() {
+			return theInherited.getType();
+		}
+
+		@Override
+		public Set<Declared> getFulfillment() {
+			return theInherited.getFulfillment();
+		}
+
+		@Override
+		public Set<QonfigAddOn> getRequirement() {
+			return theInherited.getRequirement();
+		}
+
+		@Override
+		public Set<QonfigAddOn> getInheritance() {
+			return theInherited.getInheritance();
+		}
+
+		@Override
+		public int getMin() {
+			return theInherited.getMin();
+		}
+
+		@Override
+		public int getMax() {
+			return theInherited.getMax();
+		}
+
+		@Override
+		public boolean isFulfilledBy(QonfigChildDef child) {
+			if (equals(child))
+				return true;
+			else if (child instanceof Inherited) {
+				Inherited inh = (Inherited) child;
+				return theOwner.isAssignableFrom(inh.theOwner) && isFulfilledBy(inh.theInherited);
+			}
+			for (QonfigChildDef fulfills : child.getFulfillment())
+				if (isFulfilledBy(fulfills))
+					return true;
+			return false;
+		}
+
+		@Override
+		public String toString() {
+			return theOwner + "." + getName() + "(" + getType() + ")";
+		}
+	}
 }

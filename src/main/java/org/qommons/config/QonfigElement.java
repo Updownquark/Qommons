@@ -181,58 +181,6 @@ public class QonfigElement {
 		return children;
 	}
 
-	// /**Commenting this out, because this method is unreliable in general--the namespaces are document-specific
-	// * @param name The name of the attribute to get
-	// * @return The value of the given attribute, or null if it was not specified
-	// * @throws IllegalArgumentException If no attribute with the given name is defined for this element's extended/inherited types, or if
-	// * multiple such attributes are defined
-	// */
-	// public Object getAttribute(String name) throws IllegalArgumentException {
-	// QonfigAttributeDef.Declared def;
-	// int dot = name.lastIndexOf('.');
-	// if (dot >= 0) {
-	// String elName = name.substring(0, dot);
-	// QonfigElementOrAddOn el = theDocument.getDocToolkit().getElementOrAddOn(elName);
-	// if (el == null)
-	// throw new IllegalArgumentException("No such element/add-on '" + elName + "'");
-	// QonfigAttributeDef attr = el.getAttribute(name.substring(dot + 1));
-	// if (attr == null)
-	// throw new IllegalArgumentException(theType + ": No such attribute '" + name + "' defined");
-	// def = attr.getDeclared();
-	// } else {
-	// def = theType.getDeclaredAttributes().get(name);
-	// if (def == null) {
-	// switch (theType.getAttributesByName().get(name).size()) {
-	// case 0:
-	// break;
-	// case 1:
-	// def = theType.getAttributesByName().get(name).getFirst().getDeclared();
-	// break;
-	// default:
-	// throw new IllegalArgumentException(theType + ": Multiple attributes named '" + name + "' defined");
-	// }
-	// }
-	// if (def == null) {
-	// for (QonfigAddOn inh : theInheritance.values()) {
-	// switch (inh.getAttributesByName().get(name).size()) {
-	// case 0:
-	// break;
-	// case 1:
-	// if (def != null)
-	// throw new IllegalArgumentException(theType + ": Multiple attributes named '" + name + "' defined");
-	// def = inh.getAttributesByName().get(name).getFirst().getDeclared();
-	// break;
-	// default:
-	// throw new IllegalArgumentException(theType + ": Multiple attributes named '" + name + "' defined");
-	// }
-	// }
-	// }
-	// }
-	// if (def == null)
-	// throw new IllegalArgumentException(theType + ": No such attribute '" + name + "' defined");
-	// return theAttributes.get(def.getDeclared());
-	// }
-
 	/**
 	 * @param <T> The type of the attribute
 	 * @param attr The attribute to get the value of
@@ -305,45 +253,6 @@ public class QonfigElement {
 	public BetterMultiMap<QonfigChildDef.Declared, QonfigElement> getChildrenByRole() {
 		return theChildrenByRole;
 	}
-
-	// /**Commenting this out, because this method is unreliable in general--the namespaces are document-specific
-	// * @param roleName The name of the role to get the children for
-	// * @return All children specified for this element fulfilling the given role
-	// * @throws IllegalArgumentException If no child with the given name is defined for this element's extended/inherited types, or if
-	// * multiple such children are defined
-	// */
-	// public BetterList<QonfigElement> getChildrenInRole(String roleName) {
-	// QonfigChildDef def = theType.getDeclaredChildren().get(roleName);
-	// if (def == null) {
-	// switch (theType.getChildrenByName().get(roleName).size()) {
-	// case 0:
-	// break;
-	// case 1:
-	// def = theType.getChildrenByName().get(roleName).getFirst();
-	// break;
-	// default:
-	// throw new IllegalArgumentException(theType + ": Multiple children named '" + roleName + "' defined");
-	// }
-	// }
-	// if (def == null) {
-	// for (QonfigAddOn inh : theInheritance.values()) {
-	// switch (inh.getChildrenByName().get(roleName).size()) {
-	// case 0:
-	// break;
-	// case 1:
-	// if (def != null)
-	// throw new IllegalArgumentException(theType + ": Multiple children named '" + roleName + "' defined");
-	// def = inh.getChildrenByName().get(roleName).getFirst();
-	// break;
-	// default:
-	// throw new IllegalArgumentException(theType + ": Multiple children named '" + roleName + "' defined");
-	// }
-	// }
-	// }
-	// if (def == null)
-	// throw new IllegalArgumentException(theType + ": No such child '" + roleName + "' defined");
-	// return (BetterList<QonfigElement>) theChildrenByRole.get(def.getDeclared());
-	// }
 
 	/** @return The value specified for this element */
 	public Object getValue() {

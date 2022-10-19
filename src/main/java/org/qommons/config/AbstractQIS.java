@@ -482,6 +482,8 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 		return (BetterList<T>) (BetterList<?>) BetterList.of(interpreted);
 	}
 
+	boolean supportsInterpretation(Class<?> asType);
+
 	/**
 	 * @param sessionKey The key to get data for
 	 * @return Data stored for the given key in this session

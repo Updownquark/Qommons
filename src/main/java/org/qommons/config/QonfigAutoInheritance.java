@@ -29,6 +29,24 @@ public class QonfigAutoInheritance {
 			return theRole;
 		}
 
+		/**
+		 * @param element The element to test
+		 * @param roles The set of roles fulfilled by an element
+		 * @return Whether an element of the given type, fulfilling the given roles, matches this inheritance target
+		 */
+		public boolean applies(QonfigElementOrAddOn element, Set<QonfigChildDef> roles) {
+			if (theTarget != null && !theTarget.isAssignableFrom(element))
+				return false;
+			if (theRole != null) {
+				for (QonfigChildDef role : roles) {
+					if (theRole.getOwner().isAssignableFrom(role.getOwner()) && theRole.isFulfilledBy(role))
+						return true;
+				}
+				return false;
+			}
+			return true;
+		}
+
 		@Override
 		public int hashCode() {
 			return Objects.hash(theTarget, theRole);

@@ -229,6 +229,10 @@ public class QonfigInterpreterCore {
 					}
 					throw e;
 				}
+				if (!theParseSession.getErrors().isEmpty()) {
+					String msg = "Could not interpret " + getElement() + " as " + asType;
+					throw new QonfigInterpretationException(msg, theParseSession.createException(msg));
+				}
 			}
 			T value;
 			try {
@@ -244,6 +248,10 @@ public class QonfigInterpreterCore {
 				else
 					throw new QonfigInterpretationException(theParseSession.createException(e.getMessage()));
 			}
+			if (!theParseSession.getErrors().isEmpty()) {
+				String msg = "Could not interpret " + getElement() + " as " + asType;
+				throw new QonfigInterpretationException(msg, theParseSession.createException(msg));
+			}
 			for (QonfigModifierHolder<T> modifier : modifiers) {
 				try {
 					if (theElement.isInstance(modifier.element))
@@ -256,6 +264,10 @@ public class QonfigInterpreterCore {
 							+ modifier.type.getName() + " failed to modify value " + value + " for element", e);
 					}
 					throw e;
+				}
+				if (!theParseSession.getErrors().isEmpty()) {
+					String msg = "Could not interpret " + getElement() + " as " + asType;
+					throw new QonfigInterpretationException(msg, theParseSession.createException(msg));
 				}
 			}
 			try {
@@ -272,7 +284,18 @@ public class QonfigInterpreterCore {
 				else
 					throw new QonfigInterpretationException(theParseSession.createException(e.getMessage()));
 			}
+			if (!theParseSession.getErrors().isEmpty()) {
+				String msg = "Could not interpret " + getElement() + " as " + asType;
+				throw new QonfigInterpretationException(msg, theParseSession.createException(msg));
+			}
 			return value;
+		}
+
+		@Override
+		public boolean supportsInterpretation(Class<?> asType) {
+			ClassMap<QonfigCreatorHolder<?>> creators = theInterpreter.theCreators.get(theType);
+			QonfigCreatorHolder<?> creator = creators == null ? null : creators.get(asType, ClassMap.TypeMatch.SUB_TYPE);
+			return creator != null;
 		}
 
 		/**
@@ -938,6 +961,7 @@ public class QonfigInterpreterCore {
 						&& tk.getMajorVersion() == interp.getVersion().major//
 						&& tk.getMinorVersion() == interp.getVersion().minor) {
 						interpTK = tk;
+						interp.init(interpTK);
 						break;
 					}
 				}

@@ -28,6 +28,14 @@ public interface QonfigInterpretation {
 	Version getVersion();
 
 	/**
+	 * Initializes this interpretation with its toolkit
+	 * 
+	 * @param toolkit The toolkit identified by the {@link #getToolkitName() name} and {@link Version#major major}/{@link Version#minor
+	 *        minor} {@link #getVersion() version}
+	 */
+	void init(QonfigToolkit toolkit);
+
+	/**
 	 * Populates interpretation solutions into an interpreter builder. The interpreter's {@link QonfigInterpreterCore.Builder#getToolkit()
 	 * toolkit} will be the one indicated by this interpretation's {@link #getToolkitName() toolkit name} and {@link #getVersion() version}.
 	 * 
