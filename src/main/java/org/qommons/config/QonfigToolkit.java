@@ -86,7 +86,7 @@ public class QonfigToolkit implements Named {
 						continue;
 					QonfigValueType.Declared found = compiledTypes.putIfAbsent(type.getKey(), type.getValue());
 					if (found != null) {
-						if (found.getDeclarer() != this) {
+						if (found != type.getValue()) {
 							conflictedTypeNames.add(type.getKey());
 							compiledTypes.remove(type.getKey());
 						}
