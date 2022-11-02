@@ -367,7 +367,7 @@ public class DefaultQonfigParser implements QonfigParser {
 	private static final Pattern TOOLKIT_VERSION = Pattern.compile("(?<major>\\d+)\\.(?<minor>\\d+)");
 
 	static final Set<String> TOOLKIT_EL_NAMES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(//
-		"attribute", "child-def", "attr-mod", "child-mod", "value", "value-mod", "element-meta")));
+		"attribute", "child-def", "attr-mod", "child-mod", "value", "value-mod", "element-meta", "element-meta-mod")));
 
 	private class ToolkitParser implements QonfigToolkit.ToolkitBuilder {
 		private final StrictXmlReader root;
@@ -662,12 +662,17 @@ public class DefaultQonfigParser implements QonfigParser {
 			// Stage 6: Override children
 			completed.clear();
 			for (StrictXmlReader element : theNodes.values())
-				parseChildOverrides(element, session, completed);
+				parseChildOverrides(element, session, completed, false);
 
 			// Stage 7: Parse metadata specs
 			completed.clear();
 			for (StrictXmlReader element : theNodes.values())
 				parseChildren(element, session, completed, true);
+
+			// Stage 8: Override metadata
+			completed.clear();
+			for (StrictXmlReader element : theNodes.values())
+				parseChildOverrides(element, session, completed, true);
 
 			// Validate and complete structure compilation
 			completed.clear();
@@ -1143,26 +1148,29 @@ public class DefaultQonfigParser implements QonfigParser {
 			}
 		}
 
-		private void parseChildOverrides(StrictXmlReader element, QonfigParseSession session, Set<String> completed) {
+		private void parseChildOverrides(StrictXmlReader element, QonfigParseSession session, Set<String> completed, boolean metadata) {
 			QonfigElementOrAddOn.Builder builder = theBuilders.get(element.getAttribute("name", false));
 			if (completed.contains(builder.getName()))
 				return;
 			completed.add(builder.getName());
 			if (builder.getSuperElement() != null && builder.getSuperElement().getDeclarer() == session.getToolkit())
-				parseChildOverrides(theNodes.get(builder.getSuperElement().getName()), session, completed);
+				parseChildOverrides(theNodes.get(builder.getSuperElement().getName()), session, completed, metadata);
 			for (QonfigAddOn inh : builder.getInheritance()) {
 				if (inh.getDeclarer() == session.getToolkit())
-					parseChildOverrides(theNodes.get(inh.getName()), session, completed);
+					parseChildOverrides(theNodes.get(inh.getName()), session, completed, metadata);
 			}
-			builder.setStage(QonfigElementOrAddOn.Builder.Stage.ModifyChildren);
+			builder
+				.setStage(metadata ? QonfigElementOrAddOn.Builder.Stage.ModifyMetaSpec : QonfigElementOrAddOn.Builder.Stage.ModifyChildren);
+			String elementName = metadata ? "element-meta-mod" : "child-mod";
+			String childAttrName = metadata ? "meta" : "child";
 			childLoop: //
-			for (StrictXmlReader child : element.getElements("child-mod", 0, -1)) {
-				String name = child.getAttribute("child", false);
+			for (StrictXmlReader child : element.getElements(elementName, 0, -1)) {
+				String name = child.getAttribute(childAttrName, false);
 				if (name == null) {
 					if (child.getAttribute("name", false) != null)
-						builder.getSession().forChild("child-mod", null).withError("Use 'child=' instead of 'name='");
+						builder.getSession().forChild(elementName, null).withError("Use '" + childAttrName + "=' instead of 'name='");
 					else
-						builder.getSession().forChild("child-mod", null).withError("No child attribute");
+						builder.getSession().forChild(elementName, null).withError("No " + childAttrName + " attribute");
 					break;
 				}
 				QonfigParseSession childSession = builder.getSession().forChild(child.getName(), name);
@@ -1181,20 +1189,24 @@ public class DefaultQonfigParser implements QonfigParser {
 							continue childLoop;
 						}
 					}
-					overridden = qualifier.getDeclaredChildren().get(parsedRole.itemName);
+					if (metadata)
+						overridden = qualifier.getMetaSpec().getDeclaredChildren().get(parsedRole.itemName);
+					else
+						overridden = qualifier.getDeclaredChildren().get(parsedRole.itemName);
 					if (overridden == null) {
 						// Can't use getChildrenByName() here because it hasn't been populated at this build stage
-						BetterCollection<? extends QonfigChildDef> allOverridden = findChildren(qualifier, parsedRole.itemName,
-							session.getToolkit());
+						BetterCollection<? extends QonfigChildDef> allOverridden = findChildren(
+							metadata ? qualifier.getMetaSpec() : qualifier, parsedRole.itemName, session.getToolkit());
 						switch (allOverridden.size()) {
 						case 0:
-							childSession.withError("No such child '" + parsedRole.itemName + "' on element " + qualifier);
+							childSession.withError("No such " + childAttrName + " '" + parsedRole.itemName + "' on element " + qualifier);
 							break;
 						case 1:
 							overridden = allOverridden.getFirst().getDeclared();
 							break;
 						default:
-							childSession.withError("Multiple children named '" + parsedRole.itemName + "' on element " + qualifier);
+							childSession.withError("Multiple " + (metadata ? "metas" : "children") + " named '" + parsedRole.itemName
+								+ "' on element " + qualifier);
 							break;
 						}
 					}
@@ -1267,8 +1279,12 @@ public class DefaultQonfigParser implements QonfigParser {
 						requires.add(el);
 					}
 				}
-				if (overridden != null)
-					builder.modifyChild(overridden, elType, inherits, requires, min, max);
+				if (overridden != null) {
+					if (metadata)
+						builder.getMetaSpec().modifyChild(overridden, elType, inherits, requires, min, max);
+					else
+						builder.modifyChild(overridden, elType, inherits, requires, min, max);
+				}
 				try {
 					child.check();
 				} catch (IllegalArgumentException e) {

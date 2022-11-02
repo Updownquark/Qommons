@@ -223,6 +223,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			ModifyChildren,
 			/** Metadata specification */
 			MetaSpec,
+			/** Metadata specification modification */
+			ModifyMetaSpec,
 			/** Metadata content */
 			MetaData,
 			/** Final state, no further modifications allowed */
@@ -1185,9 +1187,9 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					theChildrenByName.add(child.getKey().getName(), theCompiledChildren.get(child.getKey()));
 				}
 			}
-			for (QonfigAddOn inh : theFullInheritance.getExpanded(QonfigAddOn::getInheritance)) {
-				for (QonfigChildDef.Declared child : inh.getDeclaredChildren().values()) {
-					if (theCompiledChildren.containsKey(child))
+			for (QonfigAddOn inh : theInheritance) {
+				for (QonfigChildDef child : inh.getChildrenByName().values()) {
+					if (theCompiledChildren.containsKey(child.getDeclared()))
 						continue;
 					QonfigElementDef type = child.getType();
 					Set<QonfigAddOn> inheritance = new LinkedHashSet<>(child.getInheritance());
@@ -1260,7 +1262,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 						}
 					}
 					for (QonfigAddOn inh2 : theInheritance) {
-						ChildDefModifier mod = inh2.getChildModifiers().get(child);
+						ChildDefModifier mod = inh2.getChildModifiers().get(child.getDeclared());
 						if (mod == null)
 							continue;
 						if (mod.getTypeRestriction() != null && !mod.getTypeRestriction().isAssignableFrom(type)) {
@@ -1313,10 +1315,11 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 						theSession.withError(
 							"Inherited child " + child + " has incompatible inherited min/max restrictions: " + min + "..." + max);
 					} else if (modified)
-						theCompiledChildren.put(child, new QonfigChildDef.Modified(child, get(), type, inheritance, requirement, min, max));
+						theCompiledChildren.put(child.getDeclared(),
+							new QonfigChildDef.Modified(child, get(), type, inheritance, requirement, min, max));
 					else
-						theCompiledChildren.put(child, new QonfigChildDef.Inherited(get(), child));
-					theChildrenByName.add(child.getName(), theCompiledChildren.get(child));
+						theCompiledChildren.put(child.getDeclared(), new QonfigChildDef.Inherited(get(), child));
+					theChildrenByName.add(child.getName(), theCompiledChildren.get(child.getDeclared()));
 				}
 			}
 		}

@@ -130,6 +130,11 @@ public class QonfigParseSession {
 		return !theWarnings.isEmpty();
 	}
 
+	@Override
+	public String toString() {
+		return theToolkit + ":" + thePath;
+	}
+
 	/**
 	 * Creates a root session
 	 * 
