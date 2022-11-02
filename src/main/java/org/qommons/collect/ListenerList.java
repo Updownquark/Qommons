@@ -594,6 +594,32 @@ public class ListenerList<E> {
 	}
 
 	/**
+	 * Clears this list, providing each value to a consumer before it is removed
+	 * 
+	 * @param consumer The consumer to accept each value in this list
+	 * @return The number of items that were found in the list
+	 */
+	public int dumpAndClear(Consumer<E> consumer) {
+		Node node = theTerminal.next;
+		List<E> lastNodes = null;
+		int count = 0;
+		while (node != theTerminal) {
+			count++;
+			if (node instanceof ListenerList.RunLastNode) {
+				if (lastNodes == null)
+					lastNodes = new ArrayList<>();
+				lastNodes.add(node.theListener);
+			} else if (consumer != null)
+				consumer.accept(node.theListener);
+			node.remove();
+			node = node.next;
+		}
+		if (lastNodes != null)
+			lastNodes.forEach(consumer);
+		return count;
+	}
+
+	/**
 	 * Removes this list's content and returns it in a new list. If items are added to this list externally during this call, the list may
 	 * contain the added items after this call returns.
 	 * 
