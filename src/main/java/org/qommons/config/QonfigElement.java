@@ -318,6 +318,7 @@ public class QonfigElement {
 		private final QonfigElement theParent;
 		private final QonfigElementDef theType;
 		private final MultiInheritanceSet<QonfigAddOn> theInheritance;
+		private final QonfigAutoInheritance.Compiler theAutoInheritance;
 		private final List<ElementQualifiedParseItem> theDeclaredAttributes;
 		private final List<AttributeValue> theDeclaredAttributeValues;
 		private final Set<QonfigChildDef> theParentRoles;
@@ -359,7 +360,17 @@ public class QonfigElement {
 					}
 				}
 			}
+			theAutoInheritance = new QonfigAutoInheritance.Compiler(Collections.singleton(doc.getDocToolkit()), theParentRoles,
+				theInheritance::add);
+			theAutoInheritance.add(type, theInheritance::add);
 			theInheritance.addAll(session.getToolkit().getAutoInheritance(theType, theParentRoles).values());
+
+			for (QonfigChildDef ch : parentRoles) {
+				for (QonfigAddOn req : ch.getRequirement()) {
+					if (!req.isAssignableFrom(type) && !theInheritance.contains(req))
+						session.withError("Element " + type + " does not inherit " + req + ", which is required by role " + ch);
+				}
+			}
 		}
 
 		/** @return The declared type of the element */
@@ -391,8 +402,10 @@ public class QonfigElement {
 					ok = false;
 				}
 			}
-			if (ok)
+			if (ok) {
 				theInheritance.add(addOn);
+				theAutoInheritance.add(addOn, theInheritance::add);
+			}
 			return this;
 		}
 
@@ -549,12 +562,6 @@ public class QonfigElement {
 					children.add(ch);
 				else
 					children.add(role);
-			}
-			for (QonfigChildDef ch : children) {
-				for (QonfigAddOn req : ch.getRequirement()) {
-					if (!req.isAssignableFrom(type))
-						session.withError("Element " + type + " does not inherit " + req + ", which is required by role " + ch);
-				}
 			}
 			Builder childBuilder = new Builder(session, theDocument, theElement, type, Collections.unmodifiableSet(roles),
 				Collections.unmodifiableSet(realRoles));

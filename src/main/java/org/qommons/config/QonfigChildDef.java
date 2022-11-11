@@ -278,10 +278,15 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		}
 	}
 
+	/** An inherited child that further inherits other add-ons */
 	public static class Inherited implements QonfigChildDef {
 		private final QonfigElementOrAddOn theOwner;
 		private final QonfigChildDef theInherited;
 
+		/**
+		 * @param owner The owner of this child (not the definer)
+		 * @param inherited The child inherited by this child
+		 */
 		public Inherited(QonfigElementOrAddOn owner, QonfigChildDef inherited) {
 			theOwner = owner;
 			theInherited = inherited;
@@ -292,6 +297,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 			return theOwner;
 		}
 
+		/** @return The child inherited by this child */
 		public QonfigChildDef getInherited() {
 			return theInherited;
 		}

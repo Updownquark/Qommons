@@ -7,6 +7,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import org.qommons.MultiInheritanceSet;
 import org.qommons.collect.BetterList;
 import org.qommons.ex.ExFunction;
 
@@ -19,24 +20,47 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	/** @return The element being interpreted */
 	QonfigElement getElement();
 
-	/** @return The element or add-on type that the element is being interpreted as */
-	QonfigElementOrAddOn getType();
+	/**
+	 * @return The element or add-on type that the element is being interpreted as. Attributes and children of this type may always be
+	 *         referred to by name only (e.g. from {@link #getAttribute(String, Class)} or {@link #interpretChildren(String, Class)}), as
+	 *         long as there are no name conflicts within this element/add-on.
+	 */
+	QonfigElementOrAddOn getFocusType();
 
 	/**
-	 * @param type The element/add-on type to interpret the element as
-	 * @return A session based off this session but being interpreted as the given element
+	 * @return All types that this session is aware (excluding the {@link #getFocusType()}) of the element being an instance of. Attributes
+	 *         and children of these types may be referred to by name only (e.g. from {@link #getAttribute(String, Class)} or
+	 *         {@link #interpretChildren(String, Class)}), as long as there are no name conflicts within these elements/add-ons.
 	 */
-	QIS asElement(QonfigElementOrAddOn type);
+	MultiInheritanceSet<QonfigElementOrAddOn> getTypes();
 
 	/**
-	 * @param typeName The name of the element/add-on type to interpret the element as
+	 * @param focusType The element/add-on type to interpret the element as (the new {@link #getFocusType()} focus type)
 	 * @return A session based off this session but being interpreted as the given element
 	 */
-	default QIS asElement(String typeName) {
-		QonfigElementOrAddOn type = getType().getDeclarer().getElementOrAddOn(typeName);
-		if (type == null)
-			throw new IllegalArgumentException(
-				"No such element or add-on '" + typeName + "' in toolkit " + getType().getDeclaredChildren());
+	QIS asElement(QonfigElementOrAddOn focusType);
+
+	/**
+	 * @param type The element/add-on type to interpret the element as (the new {@link #getFocusType()} focus type)
+	 * @return A session based off this session, but being interpreted as the given element, with no other {@link #getTypes()} known to it
+	 */
+	QIS asElementOnly(QonfigElementOrAddOn type);
+
+	/**
+	 * @param focusTypeName The name of the element/add-on type to interpret the element as (the new {@link #getFocusType()} focus type)
+	 * @return A session based off this session but being interpreted as the given element
+	 */
+	default QIS asElement(String focusTypeName) {
+		return asElement(null, focusTypeName);
+	}
+
+	/**
+	 * @param toolkit The toolkit of the element to focus on
+	 * @param focusTypeName The name of the element to focus on
+	 * @return A session based off this session but being interpreted as the given element
+	 */
+	default QIS asElement(QonfigToolkit toolkit, String focusTypeName) {
+		QonfigElementOrAddOn type = Impl.getTargetElement(this, toolkit, focusTypeName);
 		return asElement(type);
 	}
 
@@ -122,23 +146,73 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	 *         </ul>
 	 */
 	default <T> T getAttribute(String asElement, String attributeName, Class<T> type, T defaultValue) throws IllegalArgumentException {
-		QonfigElementOrAddOn element;
-		if (asElement == null || getType().getName().equals(asElement))
-			element = getType();
-		else {
-			element = getType().getDeclarer().getElementOrAddOn(asElement);
-			if (element == null)
-				throw new IllegalArgumentException("No such element or add-on " + asElement + " in toolkit " + getType().getDeclarer());
-			else if (!getElement().isInstance(element))
-				throw new IllegalArgumentException("Element is not an instance of " + element);
-		}
-		QonfigAttributeDef attr = element.getAttribute(attributeName);
-		if (attr == null)
-			throw new IllegalArgumentException("No such attribute " + element + "." + attributeName);
-		T value = getElement().getAttribute(attr, type);
+		return getAttribute(null, asElement, attributeName, type, defaultValue);
+	}
+
+	/**
+	 * @param <T> The type of the attribute value to get
+	 * @param toolkit The toolkit that defines the element that the target attribute belongs to, or null to use the definer of the
+	 *        {@link #getFocusType() focus type}
+	 * @param asElement The name of the element type containing the attribute
+	 * @param attributeName The name of the attribute on the element-def/add-on associated with the current creator/modifier
+	 * @param type The type of the attribute value to get
+	 * @param defaultValue The value to return if the given attribute was not specified
+	 * @return The value of the target attribute
+	 * @throws IllegalArgumentException If:
+	 *         <ul>
+	 *         <li>No such attribute exists on the element/add-on</li>
+	 *         <li>The value for the attribute does not match the given type</li>
+	 *         </ul>
+	 */
+	default <T> T getAttribute(QonfigToolkit toolkit, String asElement, String attributeName, Class<T> type, T defaultValue)
+		throws IllegalArgumentException {
+		return getAttribute(getAttributeDef(toolkit, asElement, attributeName), type, defaultValue);
+	}
+
+	/**
+	 * @param <T> The type of the attribute value to get
+	 * @param attribute The attribute whose value to get
+	 * @param type The type of the attribute value to get
+	 * @param defaultValue The value to return if the attribute is not specified on this element
+	 * @return The value of the attribute on this element, or the default value if not specified
+	 * @throws IllegalArgumentException If the given attribute is owned by a type that this element does not extend/inhert
+	 */
+	default <T> T getAttribute(QonfigAttributeDef attribute, Class<T> type, T defaultValue) throws IllegalArgumentException {
+		T value = getElement().getAttribute(attribute, type);
 		if (value == null)
 			return defaultValue;
 		return value;
+	}
+
+	/**
+	 * @param toolkit The toolkit that defines the element that the target attribute belongs to, or null to use the definer of the
+	 *        {@link #getFocusType() focus type}
+	 * @param asElement The name of the element type containing the attribute
+	 * @param attributeName The name of the attribute on the element-def/add-on associated with the current creator/modifier
+	 * @return The attribute of the given name on the element
+	 * @throws IllegalArgumentException If no such element exists, no such attribute exists on the given element, or multiple attributes of
+	 *         equal standing with the given name exist on the element
+	 */
+	default QonfigAttributeDef getAttributeDef(QonfigToolkit toolkit, String asElement, String attributeName)
+		throws IllegalArgumentException {
+		if (toolkit == null)
+			toolkit = getFocusType().getDeclarer();
+		QonfigElementOrAddOn element = Impl.getTargetElement(this, toolkit, asElement);
+		QonfigAttributeDef attr = element.getAttribute(attributeName);
+		if (attr == null) {
+			for (QonfigElementOrAddOn type : getTypes().values()) {
+				QonfigAttributeDef typeAttr = type.getAttribute(attributeName);
+				if (typeAttr != null) {
+					if (attr != null)
+						throw new IllegalArgumentException("Multiple attributes named '" + attributeName + "' available, including for "
+							+ attr.getOwner() + " and " + type);
+					attr = typeAttr;
+				}
+			}
+		}
+		if (attr == null)
+			throw new IllegalArgumentException("No such attribute " + element + "." + attributeName);
+		return attr;
 	}
 
 	/**
@@ -148,20 +222,7 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	 * @throws IllegalArgumentException If no such attribute exists on the element/add-on
 	 */
 	default String getAttributeText(String asElement, String attributeName) throws IllegalArgumentException {
-		QonfigElementOrAddOn element;
-		if (asElement == null || getType().getName().equals(asElement))
-			element = getType();
-		else {
-			element = getType().getDeclarer().getElementOrAddOn(asElement);
-			if (element == null)
-				throw new IllegalArgumentException("No such element or add-on " + asElement + " in toolkit " + getType().getDeclarer());
-			else if (!getElement().isInstance(element))
-				throw new IllegalArgumentException("Element is not an instance of " + element);
-		}
-		QonfigAttributeDef attr = element.getAttribute(attributeName);
-		if (attr == null)
-			throw new IllegalArgumentException("No such attribute " + element + "." + attributeName);
-		return getElement().getAttributeText(attr);
+		return getElement().getAttributeText(getAttributeDef(null, asElement, attributeName));
 	}
 
 	/**
@@ -176,8 +237,18 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	 */
 	default <T> T getValue(Class<T> type, T defaultValue) throws IllegalArgumentException, ClassCastException {
 		Object value = getElement().getValue();
-		if (value == null && getType().getValue() == null)
-			throw new IllegalArgumentException("No value defined for " + getType());
+		if (value == null) {
+			boolean hasValue = getFocusType().getValue() != null;
+			if (!hasValue) {
+				for (QonfigElementOrAddOn elType : getTypes().values()) {
+					hasValue = elType.getValue() != null;
+					if (hasValue)
+						break;
+				}
+			}
+			if (!hasValue)
+				throw new IllegalArgumentException("No value defined for " + getFocusType());
+		}
 		if (value == null)
 			return defaultValue;
 		return type.cast(value);
@@ -205,17 +276,34 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	 *         type
 	 */
 	default QonfigChildDef getRole(String asElement, String roleName) throws IllegalArgumentException {
-		QonfigElementOrAddOn element;
-		if (asElement == null || getType().getName().equals(asElement))
-			element = getType();
-		else {
-			element = getType().getDeclarer().getElementOrAddOn(asElement);
-			if (element == null)
-				throw new IllegalArgumentException("No such element or add-on " + asElement + " in toolkit " + getType().getDeclarer());
-			else if (!getElement().isInstance(element))
-				throw new IllegalArgumentException("Element is not an instance of " + element);
-		}
+		return getRole(null, asElement, roleName);
+	}
+
+	/**
+	 * @param toolkit The toolkit that defines the element that the target child belongs to, or null to use the definer of the
+	 *        {@link #getFocusType() focus type}
+	 * @param asElement The name of the element type containing the child
+	 * @param roleName The name of the child on the element-def/add-on associated with the current creator/modifier
+	 * @return The child role of the given name on the element
+	 * @throws IllegalArgumentException If no such element exists, no such child exists on the given element, or multiple child roles of
+	 *         equal standing with the given name exist on the element
+	 */
+	default QonfigChildDef getRole(QonfigToolkit toolkit, String asElement, String roleName) throws IllegalArgumentException {
+		if (toolkit == null)
+			toolkit = getFocusType().getDeclarer();
+		QonfigElementOrAddOn element = Impl.getTargetElement(this, toolkit, asElement);
 		QonfigChildDef role = element.getChild(roleName);
+		if (role == null) {
+			for (QonfigElementOrAddOn type : getTypes().values()) {
+				QonfigChildDef typeRole = type.getChild(roleName);
+				if (typeRole != null) {
+					if (role != null)
+						throw new IllegalArgumentException(
+							"Multiple children named '" + roleName + "' available, including for " + role.getOwner() + " and " + type);
+					role = typeRole;
+				}
+			}
+		}
 		if (role == null)
 			throw new IllegalArgumentException("No such role " + element + "." + roleName);
 		return role;
@@ -234,12 +322,25 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	 * @return Whether the element is an instance of the given type
 	 */
 	default boolean isInstance(String elementName) {
-		if (getType().getName().equals(elementName))
+		return isInstance(null, elementName);
+	}
+
+	/**
+	 * @param toolkit The name of the toolkit defining the element to test, or null to use the definer of the {@link #getFocusType() focus
+	 *        type}
+	 * @param elementName The name of the element to test
+	 * @return Whether this element is an instance of the given element
+	 * @throws IllegalArgumentException If no such element exists
+	 */
+	default boolean isInstance(QonfigToolkit toolkit, String elementName) throws IllegalArgumentException {
+		if (toolkit == null)
+			toolkit = getFocusType().getDeclarer();
+		if (getFocusType().getName().equals(elementName))
 			return true;
 		else {
-			QonfigElementOrAddOn element = getType().getDeclarer().getElementOrAddOn(elementName);
+			QonfigElementOrAddOn element = toolkit.getElementOrAddOn(elementName);
 			if (element == null)
-				throw new IllegalArgumentException("No such element or add-on " + elementName + " in toolkit " + getType().getDeclarer());
+				throw new IllegalArgumentException("No such element or add-on " + elementName + " in toolkit " + toolkit);
 			else
 				return getElement().isInstance(element);
 		}
@@ -252,7 +353,7 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	 * @throws QonfigInterpretationException If the value cannot be interpreted
 	 */
 	default <T> T interpret(Class<T> asType) throws QonfigInterpretationException {
-		return interpret(getType(), asType);
+		return interpret(getFocusType(), asType);
 	}
 
 	/**
@@ -282,10 +383,31 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	default <C, T> T interpretAttribute(String attributeName, Class<C> sourceType, boolean nullToNull,
 		ExFunction<? super C, ? extends T, QonfigInterpretationException> map)
 		throws IllegalArgumentException, QonfigInterpretationException {
-		QonfigAttributeDef attr = getType().getAttribute(attributeName);
-		if (attr == null)
-			throw new IllegalArgumentException("No such attribute " + getType() + "." + attributeName);
-		C attrValue = getElement().getAttribute(attr, sourceType);
+		C attrValue = getAttribute(attributeName, sourceType, null);
+		if (nullToNull && attrValue == null)
+			return null;
+		return map.apply(attrValue);
+	}
+
+	/**
+	 * @param <C> The type of the attribute value to get
+	 * @param <T> The type of the mapped value
+	 * @param attr The attribute on the element-def/add-on associated with the current creator/modifier
+	 * @param sourceType The type of the attribute value to get
+	 * @param nullToNull Whether, if the given attribute was not specified, to return null without applying the map function
+	 * @param map The function to produce the target value
+	 * @return The mapped attribute value
+	 * @throws IllegalArgumentException If:
+	 *         <ul>
+	 *         <li>No such attribute exists on the element/add-on</li>
+	 *         <li>The value for the attribute does not match the given source type</li>
+	 *         </ul>
+	 * @throws QonfigInterpretationException If the map function throws an exception
+	 */
+	default <C, T> T interpretAttribute(QonfigAttributeDef attr, Class<C> sourceType, boolean nullToNull,
+		ExFunction<? super C, ? extends T, QonfigInterpretationException> map)
+		throws IllegalArgumentException, QonfigInterpretationException {
+		C attrValue = getAttribute(attr, sourceType, null);
 		if (nullToNull && attrValue == null)
 			return null;
 		return map.apply(attrValue);
@@ -308,10 +430,8 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	default <C, T> T interpretValue(Class<C> sourceType, boolean nullToNull,
 		ExFunction<? super C, ? extends T, QonfigInterpretationException> map)
 		throws IllegalArgumentException, ClassCastException, QonfigInterpretationException {
-		Object value = getElement().getValue();
-		if (value == null && getType().getValueSpec() == null)
-			throw new IllegalArgumentException("No value defined for " + getType());
-		else if (nullToNull && value == null)
+		Object value = getValue(sourceType, null);
+		if (nullToNull && value == null)
 			return null;
 		return map.apply(sourceType.cast(value));
 	}
@@ -322,9 +442,7 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	 * @throws IllegalArgumentException If no such child exists on the element/add-on
 	 */
 	default BetterList<QonfigElement> getChildren(String childName) throws IllegalArgumentException {
-		QonfigChildDef child = getType().getChild(childName);
-		if (child == null)
-			throw new IllegalArgumentException("No such child " + getType() + "." + childName);
+		QonfigChildDef child = getRole(childName);
 		return (BetterList<QonfigElement>) getElement().getChildrenByRole().get(child.getDeclared());
 	}
 
@@ -350,9 +468,7 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	 * @throws QonfigInterpretationException If an error occurs initializing the children's interpretation
 	 */
 	default BetterList<QIS> forChildren(String childName) throws IllegalArgumentException, QonfigInterpretationException {
-		QonfigChildDef child = getType().getChild(childName);
-		if (child == null)
-			throw new IllegalArgumentException("No such child " + getType() + "." + childName);
+		QonfigChildDef child = getRole(childName);
 		BetterList<QonfigElement> children = (BetterList<QonfigElement>) getElement().getChildrenByRole().get(child.getDeclared());
 		if (children.isEmpty())
 			return BetterList.empty();
@@ -376,9 +492,21 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	 */
 	default BetterList<QIS> forChildren(String childName, QonfigElementDef defaultChild, Consumer<QonfigElement.Builder> builder)
 		throws IllegalArgumentException, QonfigInterpretationException {
-		QonfigChildDef child = getType().getChild(childName);
-		if (child == null)
-			throw new IllegalArgumentException("No such child " + getType() + "." + childName);
+		QonfigChildDef child = getRole(childName);
+		return forChildren(child, defaultChild, builder);
+	}
+
+	/**
+	 * @param child The child role to interpret the children for
+	 * @param defaultChild The type of child to use as a default if no children are specified for the given role
+	 * @param builder Configures the synthetic default child element to use
+	 * @return A list of interpretation sessions for each child in this element with the given role, or a list with the single default
+	 *         session
+	 * @throws IllegalArgumentException If no such child role exists
+	 * @throws QonfigInterpretationException If an error occurs initializing the children's interpretation
+	 */
+	default BetterList<QIS> forChildren(QonfigChildDef child, QonfigElementDef defaultChild, Consumer<QonfigElement.Builder> builder)
+		throws IllegalArgumentException, QonfigInterpretationException {
 		BetterList<QonfigElement> children = (BetterList<QonfigElement>) getElement().getChildrenByRole().get(child.getDeclared());
 		if (!children.isEmpty()) {
 			AbstractQIS<QIS>[] sessions = new AbstractQIS[children.size()];
@@ -436,20 +564,80 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	}
 
 	/**
+	 * @param roleName The name of the role to get
+	 * @return The role for the given name
+	 * @throws IllegalArgumentException If the given role does not exist
+	 */
+	default QonfigChildDef getMetaRole(String roleName) throws IllegalArgumentException {
+		return getMetaRole(null, roleName);
+	}
+
+	/**
+	 * @param asElement The name of the element or add-on type to interpret the element as
+	 * @param roleName The name of the role to get
+	 * @return The role with the given name
+	 * @throws IllegalArgumentException If the given element type or role does not exist, or this element is not an instance of the given
+	 *         type
+	 */
+	default QonfigChildDef getMetaRole(String asElement, String roleName) throws IllegalArgumentException {
+		return getMetaRole(null, asElement, roleName);
+	}
+
+	/**
+	 * @param toolkit The name of the toolkit defining the metadata to get, or null to use the definer of the {@link #getFocusType() focus
+	 *        type}
+	 * @param asElement The name of the element or add-on type to interpret the element as
+	 * @param roleName The name of the role to get
+	 * @return The role with the given name
+	 * @throws IllegalArgumentException If the given element type or role does not exist, or this element is not an instance of the given
+	 *         type
+	 */
+	default QonfigChildDef getMetaRole(QonfigToolkit toolkit, String asElement, String roleName) throws IllegalArgumentException {
+		if (toolkit == null)
+			toolkit = getFocusType().getDeclarer();
+		QonfigElementOrAddOn element = Impl.getTargetElement(this, toolkit, asElement);
+		QonfigChildDef role = element.getMetaSpec().getChild(roleName);
+		if (role == null) {
+			for (QonfigElementOrAddOn type : getTypes().values()) {
+				QonfigChildDef typeRole = type.getMetaSpec().getChild(roleName);
+				if (typeRole != null) {
+					if (role != null)
+						throw new IllegalArgumentException(
+							"Multiple meta roles named '" + roleName + "' available, including for " + role.getOwner() + " and " + type);
+					role = typeRole;
+				}
+			}
+		}
+		if (role == null)
+			throw new IllegalArgumentException("No such meta role " + element.getMetaSpec() + "." + roleName);
+		return role;
+	}
+
+	/**
 	 * @param metadataName The name of the metadata child on this session's element type to interpret the children for
 	 * @return A list of interpretation sessions for each metadata on all types in this element with the given metadata role
 	 * @throws IllegalArgumentException If no such metadata role exists
 	 * @throws QonfigInterpretationException If an error occurs initializing the metadata's interpretation
 	 */
 	default BetterList<QIS> forMetadata(String metadataName) throws IllegalArgumentException, QonfigInterpretationException {
-		QonfigChildDef child = getType().getMetaSpec().getChild(metadataName);
+		QonfigChildDef child = getMetaRole(metadataName);
 		if (child == null)
-			throw new IllegalArgumentException("No such metadata " + getType() + "." + metadataName);
+			throw new IllegalArgumentException("No such metadata " + getFocusType() + "." + metadataName);
+		return forMetadata(child);
+	}
+
+	/**
+	 * @param metaRole The metadata child on this session's element type to interpret the children for
+	 * @return A list of interpretation sessions for each metadata on all types in this element with the given metadata role
+	 * @throws IllegalArgumentException If no such metadata role exists
+	 * @throws QonfigInterpretationException If an error occurs initializing the metadata's interpretation
+	 */
+	default BetterList<QIS> forMetadata(QonfigChildDef metaRole) throws IllegalArgumentException, QonfigInterpretationException {
 		List<QonfigElement> metadata = new ArrayList<>();
 		Set<QonfigAddOn> addOns = new HashSet<>();
-		Impl.addMetadata(child, metadata, addOns, getElement().getType());
+		Impl.addMetadata(metaRole, metadata, addOns, getElement().getType());
 		for (QonfigAddOn inh : getElement().getInheritance().getExpanded(QonfigAddOn::getInheritance))
-			Impl.addMetadata(child, metadata, addOns, inh);
+			Impl.addMetadata(metaRole, metadata, addOns, inh);
 		if (metadata.isEmpty())
 			return BetterList.empty();
 		AbstractQIS<?>[] sessions = new AbstractQIS[metadata.size()];
@@ -482,6 +670,31 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 		return (BetterList<T>) (BetterList<?>) BetterList.of(interpreted);
 	}
 
+	/**
+	 * @param <T> The type of value to interpret
+	 * @param metaRole The metadata child on the element-def/add-on associated with the current creator/modifier
+	 * @param asType The type of value to interpret the element as. The super wildcard is to allow for generics.
+	 * @return The interpreted values for each metadata in all types on this element that fulfill the given metadata role
+	 * @throws IllegalArgumentException If no such metadata exists on the type
+	 * @throws QonfigInterpretationException If the value cannot be interpreted
+	 */
+	default <T> BetterList<T> interpretMetadata(QonfigChildDef metaRole, Class<? super T> asType)
+		throws IllegalArgumentException, QonfigInterpretationException {
+		BetterList<QIS> md = forMetadata(metaRole);
+		if (md.isEmpty())
+			return BetterList.empty();
+		Object[] interpreted = new Object[md.size()];
+		int i = 0;
+		for (QIS child : md) {
+			interpreted[i] = child.interpret(asType);
+		}
+		return (BetterList<T>) (BetterList<?>) BetterList.of(interpreted);
+	}
+
+	/**
+	 * @param asType The type to query for
+	 * @return Whether {@link #interpret(Class) interpretation} as a value of the given type is supported by this session
+	 */
 	boolean supportsInterpretation(Class<?> asType);
 
 	/**
@@ -565,6 +778,39 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 
 	/** Implementation methods for {@link AbstractQIS} that I didn't want to expose */
 	class Impl {
+		static QonfigElementOrAddOn getTargetElement(AbstractQIS<?> session, QonfigToolkit toolkit, String elementName)
+			throws IllegalArgumentException {
+			QonfigElementOrAddOn element = getTargetElement(toolkit, elementName, session.getFocusType());
+			if (element == null) {
+				for (QonfigElementOrAddOn type : session.getTypes().values()) {
+					element = getTargetElement(toolkit, elementName, type);
+					if (element != null)
+						break;
+				}
+			}
+			if (element == null)
+				throw new IllegalArgumentException("No such element or add-on " + elementName + " in toolkit " + toolkit);
+			else if (!session.getElement().isInstance(element))
+				throw new IllegalArgumentException("Element is not an instance of " + element);
+			return element;
+		}
+
+		private static QonfigElementOrAddOn getTargetElement(QonfigToolkit toolkit, String elementName, QonfigElementOrAddOn type) {
+			if (elementName == null)
+				return type;
+			else {
+				if (toolkit == null) {
+					if (elementName.equals(type.getName()))
+						return type;
+					toolkit = type.getDeclarer();
+					return toolkit.getElementOrAddOn(elementName);
+				} else if (type.getDeclarer() == toolkit && type.getName().equals(elementName))
+					return type;
+				else
+					return toolkit.getElementOrAddOn(elementName);
+			}
+		}
+
 		static void addMetadata(QonfigChildDef child, List<QonfigElement> metadata, Set<QonfigAddOn> addOns, QonfigElementOrAddOn type) {
 			if (!child.getOwner().isAssignableFrom(type.getMetaSpec()))
 				return;

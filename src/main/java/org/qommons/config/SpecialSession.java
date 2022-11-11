@@ -2,6 +2,7 @@ package org.qommons.config;
 
 import java.util.function.Supplier;
 
+import org.qommons.MultiInheritanceSet;
 import org.qommons.config.QonfigInterpreterCore.CoreSession;
 
 /**
@@ -21,14 +22,28 @@ public interface SpecialSession<QIS extends SpecialSession<QIS>> extends Abstrac
 	}
 
 	@Override
-	default QonfigElementOrAddOn getType() {
-		return getWrapped().getType();
+	default QonfigElementOrAddOn getFocusType() {
+		return getWrapped().getFocusType();
+	}
+
+	@Override
+	default MultiInheritanceSet<QonfigElementOrAddOn> getTypes() {
+		return getWrapped().getTypes();
 	}
 
 	@Override
 	default QIS asElement(QonfigElementOrAddOn type) {
 		try {
 			return getWrapped().asElement(type).recast((QIS) this);
+		} catch (QonfigInterpretationException e) {
+			throw new IllegalStateException("Should not encounter an exception", e);
+		}
+	}
+
+	@Override
+	default QIS asElementOnly(QonfigElementOrAddOn type) {
+		try {
+			return getWrapped().asElementOnly(type).recast((QIS) this);
 		} catch (QonfigInterpretationException e) {
 			throw new IllegalStateException("Should not encounter an exception", e);
 		}

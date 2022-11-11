@@ -1,8 +1,10 @@
 package org.qommons.config;
 
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import org.qommons.MultiInheritanceSet;
 import org.qommons.QommonsUtils;
@@ -76,6 +78,49 @@ public class QonfigAutoInheritance {
 		}
 	}
 
+	/** A class to compile auto-inheritance from many sources */
+	public static class Compiler {
+		private final Collection<QonfigToolkit> theToolkits;
+		private final Set<QonfigChildDef> theRoles;
+		private final MultiInheritanceSet<QonfigElementOrAddOn> theTested;
+
+		/**
+		 * @param toolkit The toolkits with auto-inheritance to consider
+		 * @param roles The child roles fulfilled by the element to consider
+		 * @param inheritance Consumer to be notified of add-ons inherited just from the roles
+		 */
+		public Compiler(Collection<QonfigToolkit> toolkit, Set<QonfigChildDef> roles, Consumer<QonfigAddOn> inheritance) {
+			theToolkits = toolkit;
+			theRoles = roles;
+			theTested = MultiInheritanceSet.create(QonfigElementOrAddOn::isAssignableFrom);
+			for (QonfigChildDef role : theRoles) {
+				add(role.getType(), inheritance);
+				for (QonfigAddOn req : role.getRequirement())
+					add(req, inheritance);
+				for (QonfigAddOn inh : role.getInheritance())
+					add(inh, inheritance);
+			}
+		}
+
+		/**
+		 * @param type The type extended/inherited by the element to consider
+		 * @param inheritance Consumer to be notified of add-ons auto-inherited due to inheriting the given type
+		 * @return This compiler
+		 */
+		public Compiler add(QonfigElementOrAddOn type, Consumer<QonfigAddOn> inheritance) {
+			if (theTested.add(type)) {
+				for (QonfigToolkit toolkit : theToolkits) {
+					MultiInheritanceSet<QonfigAddOn> autoInh = toolkit.getAutoInheritance(type, theRoles);
+					for (QonfigAddOn inh : autoInh.values()) {
+						inheritance.accept(inh);
+						add(inh, inheritance);
+					}
+				}
+			}
+			return this;
+		}
+	}
+
 	private final QonfigToolkit theDeclarer;
 	private final MultiInheritanceSet<QonfigAddOn> theInheritance;
 	private final Set<AutoInheritTarget> theTargets;
@@ -133,8 +178,9 @@ public class QonfigAutoInheritance {
 		 * @return This builder
 		 */
 		public Builder inherits(QonfigAddOn inheritance) {
-			if (inheritance.isAbstract())
-				theSession.withError(inheritance + " is abstract and cannot be inherited automatically");
+			// Removing this constraint
+			// if (inheritance.isAbstract())
+			// theSession.withError(inheritance + " is abstract and cannot be inherited automatically");
 			if (inheritance.getSuperElement() != null) {
 				for (AutoInheritTarget target : theTargets)
 					checkInheritance(target, inheritance, theSession);

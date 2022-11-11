@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -12,6 +13,7 @@ import java.util.function.Supplier;
 import org.qommons.BiTuple;
 import org.qommons.ClassMap;
 import org.qommons.ClassMap.TypeMatch;
+import org.qommons.MultiInheritanceSet;
 import org.qommons.QommonsUtils;
 import org.qommons.StatusReportAccumulator;
 import org.qommons.StatusReportAccumulator.Status;
@@ -24,7 +26,8 @@ public class QonfigInterpreterCore {
 		private final CoreSession theParent;
 		private final QonfigParseSession theParseSession;
 		private final QonfigElement theElement;
-		private final QonfigElementOrAddOn theType;
+		private final QonfigElementOrAddOn theFocusType;
+		private final MultiInheritanceSet<QonfigElementOrAddOn> theTypes;
 		private final int theChildIndex;
 		private final Map<String, Object> theValues;
 		private final ClassMap<SpecialSession<?>> theToolkitSessions;
@@ -43,7 +46,8 @@ public class QonfigInterpreterCore {
 			theParent = source;
 			theParseSession = QonfigParseSession.forRoot(root.getType().getName(), root.getDocument().getDocToolkit());
 			theElement = root;
-			theType = root.getType();
+			theFocusType = root.getType();
+			theTypes = MultiInheritanceSet.empty();
 			theValues = new HashMap<>();
 			theChildIndex = 0;
 			theToolkitSessions = new ClassMap<>();
@@ -54,17 +58,20 @@ public class QonfigInterpreterCore {
 		 * 
 		 * @param parent The parent session
 		 * @param element The element to interpret
-		 * @param type The element/add-on type to interpret as (affects what attributes and children are available by name)
+		 * @param focusType The element/add-on type to interpret as (affects what attributes and children are available by name, see
+		 *        {@link #getFocusType()})
+		 * @param types All types that this session is to be aware of its element implementing
 		 * @param childIndex The index of the child in its parent, for improved visibility of errors
 		 * @throws QonfigInterpretationException If an error occurs initializing this session
 		 */
-		protected CoreSession(CoreSession parent, QonfigElement element, QonfigElementOrAddOn type, int childIndex)
-			throws QonfigInterpretationException {
+		protected CoreSession(CoreSession parent, QonfigElement element, QonfigElementOrAddOn focusType,
+			MultiInheritanceSet<QonfigElementOrAddOn> types, int childIndex) throws QonfigInterpretationException {
 			CoreSession parent2 = parent;
 			theInterpreter = parent2.theInterpreter;
 			theParent = parent;
 			theElement = element;
-			theType = type;
+			theFocusType = focusType;
+			theTypes = types;
 			theChildIndex = childIndex;
 			theToolkitSessions = new ClassMap<>();
 			if (parent.getElement() == element) {
@@ -76,7 +83,6 @@ public class QonfigInterpreterCore {
 			}
 		}
 
-		/** @return The element being interpreted */
 		@Override
 		public QonfigElement getElement() {
 			return theElement;
@@ -87,23 +93,43 @@ public class QonfigInterpreterCore {
 			return theInterpreter;
 		}
 
-		/** @return The element or add-on type that the element is being interpreted as */
 		@Override
-		public QonfigElementOrAddOn getType() {
-			return theType;
+		public QonfigElementOrAddOn getFocusType() {
+			return theFocusType;
 		}
 
-		/**
-		 * @param type The element/add-on type to interpret the element as
-		 * @return A session based off this session but being interpreted as the given element
-		 */
 		@Override
-		public CoreSession asElement(QonfigElementOrAddOn type) {
-			if (theType == type)
+		public MultiInheritanceSet<QonfigElementOrAddOn> getTypes() {
+			return theTypes;
+		}
+
+		@Override
+		public CoreSession asElement(QonfigElementOrAddOn focusType) {
+			if (theFocusType == focusType)
+				return this;
+			else if (theElement.isInstance(focusType)) {
+				MultiInheritanceSet<QonfigElementOrAddOn> types = MultiInheritanceSet.create(QonfigElementOrAddOn::isAssignableFrom);
+				types.add(theFocusType);
+				types.addAll(theTypes.values());
+				try {
+					return theInterpreter.interpret(this, theElement, focusType, MultiInheritanceSet.unmodifiable(types), theChildIndex);
+				} catch (QonfigInterpretationException e) {
+					throw new IllegalStateException("Initialization failure for same-element session?", e);
+				}
+			} else {
+				String msg = "Element " + theElement + " is not an instance of " + focusType;
+				withError(msg);
+				throw new IllegalStateException(msg);
+			}
+		}
+
+		@Override
+		public CoreSession asElementOnly(QonfigElementOrAddOn type) {
+			if (theFocusType == type && theTypes.isEmpty())
 				return this;
 			else if (theElement.isInstance(type)) {
 				try {
-					return theInterpreter.interpret(this, theElement, type, theChildIndex);
+					return theInterpreter.interpret(this, theElement, type, MultiInheritanceSet.empty(), theChildIndex);
 				} catch (QonfigInterpretationException e) {
 					throw new IllegalStateException("Initialization failure for same-element session?", e);
 				}
@@ -172,7 +198,32 @@ public class QonfigInterpreterCore {
 
 		@Override
 		public CoreSession interpretChild(QonfigElement child, QonfigElementOrAddOn asType) throws QonfigInterpretationException {
-			return theInterpreter.interpret(this, child, asType, //
+			// Here we determine what types the child session should be aware of.
+			// It should be aware of all the sub-types and inheritance from the roles in all of this session's recognized types
+			// that the child fulfills.
+			// It should also be aware of all auto-inherited add-ons for toolkits and roles that this session recognizes.
+
+			MultiInheritanceSet<QonfigElementOrAddOn> types = MultiInheritanceSet.create(QonfigElementOrAddOn::isAssignableFrom);
+			Set<QonfigChildDef> roles = new LinkedHashSet<>();
+			// Add inheritance from recognized roles
+			for (QonfigChildDef role : child.getParentRoles()) {
+				if (role.getOwner().isAssignableFrom(theFocusType) || theTypes.contains(role.getOwner())) {
+					roles.add(role);
+					types.add(role.getType());
+					types.addAll(role.getRequirement());
+					types.addAll(role.getInheritance());
+				}
+			}
+
+			// Add auto-inheritance from recognized toolkits and roles
+			MultiInheritanceSet<QonfigToolkit> toolkits = MultiInheritanceSet.create(QonfigToolkit::dependsOn);
+			toolkits.add(theFocusType.getDeclarer());
+			for (QonfigElementOrAddOn type : theTypes.values())
+				toolkits.add(type.getDeclarer());
+			// The constructor here does the work and we don't have any further add-ons to add, no need to keep the compiler reference
+			new QonfigAutoInheritance.Compiler(toolkits.values(), roles, types::add);
+
+			return theInterpreter.interpret(this, child, asType, MultiInheritanceSet.unmodifiable(types), //
 				theElement.getChildren().indexOf(child));
 		}
 
@@ -188,13 +239,6 @@ public class QonfigInterpreterCore {
 			return theParseSession;
 		}
 
-		/**
-		 * @param <T> The type of value to interpret
-		 * @param as The element type to interpret the element as
-		 * @param asType The type of value to interpret the element as
-		 * @return The interpreted value
-		 * @throws QonfigInterpretationException If the value cannot be interpreted
-		 */
 		@Override
 		public <T> T interpret(QonfigElementOrAddOn as, Class<T> asType) throws QonfigInterpretationException {
 			ClassMap<QonfigCreatorHolder<?>> creators = theInterpreter.theCreators.get(as);
@@ -206,11 +250,11 @@ public class QonfigInterpreterCore {
 				throw new IllegalStateException(msg);
 			}
 			CoreSession session;
-			if (theType == creator.element)
+			if (theFocusType == creator.element)
 				session = this;
-			else if (theElement.isInstance(creator.element)) {
-				session = theInterpreter.interpret(this, theElement, as, theChildIndex);
-			} else {
+			else if (theElement.isInstance(creator.element))
+				session = asElement(as);
+			else {
 				String msg = "Element " + theElement + " is not an instance of " + as;
 				withError(msg);
 				throw new IllegalStateException(msg);
@@ -293,48 +337,28 @@ public class QonfigInterpreterCore {
 
 		@Override
 		public boolean supportsInterpretation(Class<?> asType) {
-			ClassMap<QonfigCreatorHolder<?>> creators = theInterpreter.theCreators.get(theType);
+			ClassMap<QonfigCreatorHolder<?>> creators = theInterpreter.theCreators.get(theFocusType);
 			QonfigCreatorHolder<?> creator = creators == null ? null : creators.get(asType, ClassMap.TypeMatch.SUB_TYPE);
 			return creator != null;
 		}
 
-		/**
-		 * @param sessionKey The key to get data for
-		 * @return Data stored for the given key in this session
-		 */
 		@Override
 		public Object get(String sessionKey) {
 			return theValues.get(sessionKey);
 		}
 
-		/**
-		 * @param <T> The expected type of the value
-		 * @param sessionKey The key to get data for
-		 * @param type The expected type of the value. The super wildcard is to accommodate generics.
-		 * @return Data stored for the given key in this session
-		 */
 		@Override
 		public <T> T get(String sessionKey, Class<? super T> type) {
 			Object value = theValues.get(sessionKey);
 			return (T) type.cast(value);
 		}
 
-		/**
-		 * @param sessionKey The key to store data for
-		 * @param value The data to store for the given key in this session
-		 * @return This session
-		 */
 		@Override
 		public CoreSession put(String sessionKey, Object value) {
 			theValues.put(sessionKey, value);
 			return this;
 		}
 
-		/**
-		 * @param sessionKey The key to store data for
-		 * @param value The data to store for the given key in this session
-		 * @return This session
-		 */
 		@Override
 		public CoreSession putGlobal(String sessionKey, Object value) {
 			CoreSession session = this;
@@ -345,12 +369,6 @@ public class QonfigInterpreterCore {
 			return this;
 		}
 
-		/**
-		 * @param <T> The type of the data
-		 * @param sessionKey The key to store data for
-		 * @param creator Creates data to store for the given key in this session (if absent)
-		 * @return The previous or new value
-		 */
 		@Override
 		public <T> T computeIfAbsent(String sessionKey, Supplier<T> creator) {
 			return (T) theValues.computeIfAbsent(sessionKey, __ -> creator.get());
@@ -407,7 +425,7 @@ public class QonfigInterpreterCore {
 
 		@Override
 		public String toString() {
-			return "Interpreting " + theElement + " with " + theType;
+			return "Interpreting " + theElement + " with " + theFocusType;
 		}
 	}
 
@@ -572,8 +590,7 @@ public class QonfigInterpreterCore {
 	 * @param specialSessions Special session implementations configured for the interpreter
 	 */
 	protected QonfigInterpreterCore(Class<?> callingClass, Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
-		Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> modifiers,
-		ClassMap<SpecialSessionImplementation<?>> specialSessions) {
+		Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> modifiers, ClassMap<SpecialSessionImplementation<?>> specialSessions) {
 		theCallingClass = callingClass;
 		theCreators = creators;
 		theModifiers = modifiers;
@@ -626,14 +643,16 @@ public class QonfigInterpreterCore {
 	 * 
 	 * @param parent The parent session
 	 * @param element The element to interpret
-	 * @param type The element/add-on type to interpret as (affects what attributes and children are available by name)
+	 * @param focusType The element/add-on type to interpret as (affects what attributes and children are available by name, see
+	 *        {@link AbstractQIS#getFocusType()})
+	 * @param types All types that the session is to be aware of its element extending
 	 * @param childIndex The index of the child in its parent, for improved visibility of errors
 	 * @return The session to interpret the element
 	 * @throws QonfigInterpretationException If an error occurs initializing the interpretation
 	 */
-	protected CoreSession interpret(CoreSession parent, QonfigElement element, QonfigElementOrAddOn type, int childIndex)
-		throws QonfigInterpretationException {
-		return new CoreSession(parent, element, type, childIndex);
+	protected CoreSession interpret(CoreSession parent, QonfigElement element, QonfigElementOrAddOn focusType,
+		MultiInheritanceSet<QonfigElementOrAddOn> types, int childIndex) throws QonfigInterpretationException {
+		return new CoreSession(parent, element, focusType, types, childIndex);
 	}
 
 	/** Builds {@link QonfigInterpreterCore}s */

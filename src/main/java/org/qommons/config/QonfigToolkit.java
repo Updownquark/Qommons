@@ -4,10 +4,13 @@ import java.net.URL;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Set;
+import java.util.TreeMap;
 
 import org.qommons.MultiInheritanceMap;
 import org.qommons.MultiInheritanceSet;
@@ -20,6 +23,49 @@ import org.qommons.config.QonfigAutoInheritance.AutoInheritTarget;
 
 /** A structure containing a set of types that can be used to parsed highly-structured and validated {@link QonfigDocument}s */
 public class QonfigToolkit implements Named {
+	/**
+	 * A Qonfig toolkit is defined by its name and Major/Minor version. The Patch version of Semantic Versioning is reserved for the
+	 * implementation/interpretation. This class represents the version piece of the toolkit definition
+	 */
+	public static class ToolkitDefVersion implements Comparable<ToolkitDefVersion> {
+		/** The major version of this toolkit. Toolkits with the same major version should be backward-compatible. */
+		public final int majorVersion;
+		/**
+		 * The minor version of this toolkit. Any change to a toolkit that is backward-compatible should cause an increase in the minor
+		 * version
+		 */
+		public final int minorVersion;
+
+		public ToolkitDefVersion(int majorVersion, int minorVersion) {
+			this.majorVersion = majorVersion;
+			this.minorVersion = minorVersion;
+		}
+
+		@Override
+		public int compareTo(ToolkitDefVersion o) {
+			int comp = Integer.compare(majorVersion, o.majorVersion);
+			if (comp == 0)
+				comp = Integer.compare(minorVersion, o.minorVersion);
+			return comp;
+		}
+
+		@Override
+		public int hashCode() {
+			return Integer.reverse(majorVersion) ^ minorVersion;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof ToolkitDefVersion && majorVersion == ((ToolkitDefVersion) obj).majorVersion
+				&& minorVersion == ((ToolkitDefVersion) obj).minorVersion;
+		}
+
+		@Override
+		public String toString() {
+			return "v" + majorVersion + "." + minorVersion;
+		}
+	}
+
 	public interface ToolkitBuilder {
 		void parseTypes(QonfigParseSession session);
 
@@ -33,6 +79,7 @@ public class QonfigToolkit implements Named {
 	private final int theMinorVersion;
 	private final URL theLocation;
 	private final Map<String, QonfigToolkit> theDependencies;
+	private final Map<String, NavigableMap<ToolkitDefVersion, QonfigToolkit>> theDependenciesByDefinition;
 	private final Map<String, QonfigValueType.Declared> theDeclaredAttributeTypes;
 	private final Map<String, QonfigValueType.Declared> theCompiledAttributeTypes;
 	private final Map<String, QonfigElementDef> theDeclaredElements;
@@ -70,12 +117,22 @@ public class QonfigToolkit implements Named {
 				.buildMultiMap();
 			BetterMultiMap<String, QonfigElementDef> compiledElements = BetterHashMultiMap.<String, QonfigElementDef> build()
 				.withDistinctValues().buildMultiMap();
+			Map<String, NavigableMap<ToolkitDefVersion, QonfigToolkit>> dependenciesByDef = new LinkedHashMap<>();
 			for (QonfigAddOn el : theDeclaredAddOns.values())
 				compiledAddOns.add(el.getName(), el);
 			for (QonfigElementDef el : theDeclaredElements.values())
 				compiledElements.add(el.getName(), el);
 			Set<QonfigElementDef> depRoots = new LinkedHashSet<>();
 			for (QonfigToolkit dep : dependencies.values()) {
+				dependenciesByDef.computeIfAbsent(dep.getName(), __ -> new TreeMap<>())
+					.putIfAbsent(new ToolkitDefVersion(dep.getMajorVersion(), dep.getMinorVersion()), dep);
+				for (Map.Entry<String, NavigableMap<ToolkitDefVersion, QonfigToolkit>> dd : dep.theDependenciesByDefinition.entrySet()) {
+					NavigableMap<ToolkitDefVersion, QonfigToolkit> dbdv = dependenciesByDef.computeIfAbsent(dd.getKey(),
+						__ -> new TreeMap<>());
+					for (Map.Entry<ToolkitDefVersion, QonfigToolkit> v : dd.getValue().entrySet())
+						dbdv.putIfAbsent(v.getKey(), v.getValue());
+				}
+
 				depRoots.addAll(dep.getRoots());
 				for (QonfigElementDef e : dep.theCompiledElements.values())
 					compiledElements.add(e.getName(), e);
@@ -93,6 +150,9 @@ public class QonfigToolkit implements Named {
 					}
 				}
 			}
+			for (Map.Entry<String, NavigableMap<ToolkitDefVersion, QonfigToolkit>> dbd : dependenciesByDef.entrySet())
+				dbd.setValue(Collections.unmodifiableNavigableMap(dbd.getValue()));
+			theDependenciesByDefinition = Collections.unmodifiableMap(dependenciesByDef);
 			theCompiledElements = BetterCollections.unmodifiableMultiMap(compiledElements);
 			theCompiledAddOns = BetterCollections.unmodifiableMultiMap(compiledAddOns);
 			theCompiledAttributeTypes = Collections.unmodifiableMap(compiledTypes);
@@ -179,6 +239,7 @@ public class QonfigToolkit implements Named {
 				}
 			}
 		} else { // PLACEHOLDER
+			theDependenciesByDefinition = null;
 			theCompiledElements = null;
 			theCompiledAddOns = null;
 			theCompiledAttributeTypes = null;
@@ -210,9 +271,14 @@ public class QonfigToolkit implements Named {
 		return theLocation;
 	}
 
-	/** @return All toolkits extended by this toolkit, by name */
+	/** @return All toolkits directly extended by this toolkit, by the name assigned to the dependency in this toolkit definition */
 	public Map<String, QonfigToolkit> getDependencies() {
 		return theDependencies;
+	}
+
+	/** @return All toolkits directly or indirectly extended by this toolkit, by each toolkit's own name and version */
+	public Map<String, NavigableMap<ToolkitDefVersion, QonfigToolkit>> getDependenciesByDefinition() {
+		return theDependenciesByDefinition;
 	}
 
 	/**
@@ -499,7 +565,7 @@ public class QonfigToolkit implements Named {
 	}
 
 	/**
-	 * @param elementOrAddOnName The name of the element or add-on that defined the attribute, or an extension of it
+	 * @param elementOrAddOnName The name of the element or add-on that defined the role, or an extension of it
 	 * @param roleName The role name of the child to get
 	 * @return The child definition
 	 * @throws IllegalArgumentException If no such element/add-on is defined under this toolkit, no such role is defined on it, or multiple
@@ -523,6 +589,34 @@ public class QonfigToolkit implements Named {
 		QonfigChildDef child = el.getChild(roleName);
 		if (child == null)
 			throw new IllegalArgumentException("No such child " + elementOrAddOnName + "." + roleName);
+		return child;
+	}
+
+	/**
+	 * @param elementOrAddOnName The name of the element or add-on that defined the metadata role, or an extension of it
+	 * @param roleName The role name of the metadata child to get
+	 * @return The metadata child definition
+	 * @throws IllegalArgumentException If no such element/add-on is defined under this toolkit, no such metadata role is defined on it, or
+	 *         multiple matching roles are defined on it
+	 */
+	public QonfigChildDef getMetaChild(String elementOrAddOnName, String roleName) throws IllegalArgumentException {
+		QonfigElementOrAddOn el = null;
+		boolean cache = elementOrAddOnName.indexOf(':') < 0;
+		if (cache) {
+			el = theCachedElement;
+			if (el != null && !el.getName().equals(elementOrAddOnName))
+				el = null;
+		}
+		if (el == null) {
+			el = getElementOrAddOn(elementOrAddOnName);
+			if (cache && el != null)
+				theCachedElement = el;
+		}
+		if (el == null)
+			throw new IllegalArgumentException("No such element or add-on '" + elementOrAddOnName + "'");
+		QonfigChildDef child = el.getMetaSpec().getChild(roleName);
+		if (child == null)
+			throw new IllegalArgumentException("No such meta child " + elementOrAddOnName + "." + roleName);
 		return child;
 	}
 
