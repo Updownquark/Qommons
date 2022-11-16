@@ -35,7 +35,7 @@ public interface Stamped {
 		if (values.isEmpty())
 			return 0;
 		long stamp = 0;
-		int shift = 64 / values.size();
+		int shift = Math.max(1, 63 / values.size());
 		int i = 0;
 		for (T value : values) {
 			if (value == null)
@@ -44,6 +44,7 @@ public interface Stamped {
 			if (i > 0)
 				valueStamp = Long.rotateRight(valueStamp, shift * i);
 			stamp ^= valueStamp;
+			i++;
 		}
 		return stamp;
 	}
@@ -59,7 +60,7 @@ public interface Stamped {
 		if (values.isEmpty())
 			return 0;
 		long stamp = 0;
-		int shift = 64 / values.size();
+		int shift = Math.max(1, 63 / values.size());
 		int i = 0;
 		for (Stamped value : values) {
 			if (value == null)
@@ -68,6 +69,7 @@ public interface Stamped {
 			if (i > 0)
 				valueStamp = Long.rotateRight(valueStamp, shift * i);
 			stamp ^= valueStamp;
+			i++;
 		}
 		return stamp;
 	}
@@ -82,12 +84,13 @@ public interface Stamped {
 		if (stamps.length == 0)
 			return 0;
 		long stamp = 0;
-		int shift = 64 / stamps.length;
+		int shift = Math.max(1, 63 / stamps.length);
 		int i = 0;
 		for (long s : stamps) {
 			if (i > 0)
 				s = Long.rotateRight(s, shift * i);
 			stamp ^= s;
+			i++;
 		}
 		return stamp;
 	}
