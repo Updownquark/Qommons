@@ -14,6 +14,7 @@ import java.util.regex.Pattern;
 import org.qommons.Named;
 import org.qommons.Transaction;
 import org.qommons.ex.ExSupplier;
+import org.qommons.io.PositionalXMLReader;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 
@@ -43,6 +44,11 @@ public class StrictXmlReader implements Named, Transaction {
 		theUsedNodes = new BitSet();
 	}
 
+	/** @return The W3C element backing this reader */
+	public Element getElement() {
+		return theElement;
+	}
+
 	/** @return This element's parent reader */
 	public StrictXmlReader getParent() {
 		return theParent;
@@ -68,6 +74,11 @@ public class StrictXmlReader implements Named, Transaction {
 	public String getTagName() {
 		int colon = theElement.getNodeName().indexOf(':');
 		return colon < 0 ? theElement.getNodeName() : theElement.getNodeName().substring(colon + 1);
+	}
+
+	/** @return The line number of the start of this element, if it was parsed using {@link PositionalXMLReader} */
+	public int getLineNumber() {
+		return PositionalXMLReader.getLineNumber(theElement);
 	}
 
 	/**

@@ -93,8 +93,8 @@ public class QonfigToolkit implements Named {
 	private final Set<QonfigElementDef> theDeclaredRoots;
 	private final Set<QonfigElementDef> theRoots;
 
-	public QonfigToolkit(String name, int majorVersion, int minorVersion, URL location, Map<String, QonfigToolkit> dependencies,
-		Map<String, QonfigValueType.Declared> declaredTypes,
+	public QonfigToolkit(String name, int majorVersion, int minorVersion, URL location, int lineNumber,
+		Map<String, QonfigToolkit> dependencies, Map<String, QonfigValueType.Declared> declaredTypes,
 		Map<String, QonfigAddOn> declaredAddOns, Map<String, QonfigElementDef> declaredElements,
 		List<QonfigAutoInheritance> autoInheritance, ToolkitBuilder builder) throws QonfigParseException {
 		theName = name;
@@ -108,7 +108,7 @@ public class QonfigToolkit implements Named {
 		theDeclaredAutoInheritance = autoInheritance;
 
 		if (builder != null) {
-			QonfigParseSession session = QonfigParseSession.forRoot("qonfig-def", this);
+			QonfigParseSession session = QonfigParseSession.forRoot("qonfig-def", this, lineNumber);
 			builder.parseTypes(session);
 
 			Map<String, QonfigValueType.Declared> compiledTypes = new HashMap<>(theDeclaredAttributeTypes);

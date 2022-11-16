@@ -1,6 +1,5 @@
 package org.qommons.config;
 
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -30,6 +29,7 @@ public class QonfigInterpreterCore {
 		private final MultiInheritanceSet<QonfigElementOrAddOn> theTypes;
 		private final int theChildIndex;
 		private final Map<String, Object> theValues;
+		private Set<String> theLocalValueKeys;
 		private final ClassMap<SpecialSession<?>> theToolkitSessions;
 
 		/**
@@ -44,7 +44,8 @@ public class QonfigInterpreterCore {
 			throws QonfigInterpretationException {
 			theInterpreter = interpreter;
 			theParent = source;
-			theParseSession = QonfigParseSession.forRoot(root.getType().getName(), root.getDocument().getDocToolkit());
+			theParseSession = QonfigParseSession.forRoot(root.getType().getName(), root.getDocument().getDocToolkit(),
+				root.getLineNumber());
 			theElement = root;
 			theFocusType = root.getType();
 			theTypes = MultiInheritanceSet.empty();
@@ -66,8 +67,7 @@ public class QonfigInterpreterCore {
 		 */
 		protected CoreSession(CoreSession parent, QonfigElement element, QonfigElementOrAddOn focusType,
 			MultiInheritanceSet<QonfigElementOrAddOn> types, int childIndex) throws QonfigInterpretationException {
-			CoreSession parent2 = parent;
-			theInterpreter = parent2.theInterpreter;
+			theInterpreter = parent.theInterpreter;
 			theParent = parent;
 			theElement = element;
 			theFocusType = focusType;
@@ -75,11 +75,13 @@ public class QonfigInterpreterCore {
 			theChildIndex = childIndex;
 			theToolkitSessions = new ClassMap<>();
 			if (parent.getElement() == element) {
-				theParseSession = parent2.theParseSession;
-				theValues = parent2.theValues;
+				theParseSession = parent.theParseSession;
+				theValues = parent.theValues;
 			} else {
-				theParseSession = parent2.theParseSession.forChild(element.getType().getName(), childIndex);
-				theValues = new HashMap<>(parent2.theValues);
+				theParseSession = parent.theParseSession.forChild(element.getType().getName(), childIndex, element.getLineNumber());
+				theValues = new HashMap<>(parent.theValues);
+				if (parent.theLocalValueKeys != null)
+					theValues.keySet().removeAll(parent.theLocalValueKeys);
 			}
 		}
 
@@ -259,17 +261,38 @@ public class QonfigInterpreterCore {
 				withError(msg);
 				throw new IllegalStateException(msg);
 			}
-			Collection<QonfigModifierHolder<T>> modifiers = getModifiers(creator.type);
+			QonfigModifierHolder<T>[] modifiers = getModifiers(creator.type);
+			Object[] modifierPrepValues = new Object[modifiers.length];
+			int mIdx = 0;
 			for (QonfigModifierHolder<T> modifier : modifiers) {
 				try {
 					if (theElement.isInstance(modifier.element))
-						modifier.modifier.prepareSession(session.asElement(modifier.element));
+						modifierPrepValues[mIdx++] = modifier.modifier.prepareSession(session.asElement(modifier.element));
 				} catch (QonfigInterpretationException | RuntimeException e) {
 					if (theInterpreter.loggedThrowable != e) {
 						theInterpreter.loggedThrowable = e;
 						session.withError("Modifier " + modifier.modifier + " for "//
 							+ (modifier.element instanceof QonfigElementDef ? "super type " : "add-on ") + modifier.element + " on type "
 							+ modifier.type.getName() + " failed to prepare session for the creator", e);
+					}
+					throw e;
+				}
+				if (!theParseSession.getErrors().isEmpty()) {
+					String msg = "Could not interpret " + getElement() + " as " + asType;
+					throw new QonfigInterpretationException(msg, theParseSession.createException(msg));
+				}
+			}
+			for (mIdx = modifiers.length - 1; mIdx >= 0; mIdx--) {
+				QonfigModifierHolder<T> modifier = modifiers[mIdx];
+				try {
+					if (theElement.isInstance(modifier.element))
+						modifier.modifier.postPrepare(session.asElement(modifier.element), modifierPrepValues[mIdx]);
+				} catch (QonfigInterpretationException | RuntimeException e) {
+					if (theInterpreter.loggedThrowable != e) {
+						theInterpreter.loggedThrowable = e;
+						session.withError("Modifier " + modifier.modifier + " for "//
+							+ (modifier.element instanceof QonfigElementDef ? "super type " : "add-on ") + modifier.element + " on type "
+							+ modifier.type.getName() + " post-prepare failed for element", e);
 					}
 					throw e;
 				}
@@ -296,10 +319,11 @@ public class QonfigInterpreterCore {
 				String msg = "Could not interpret " + getElement() + " as " + asType;
 				throw new QonfigInterpretationException(msg, theParseSession.createException(msg));
 			}
-			for (QonfigModifierHolder<T> modifier : modifiers) {
+			for (mIdx = 0; mIdx < modifiers.length; mIdx++) {
+				QonfigModifierHolder<T> modifier = modifiers[mIdx];
 				try {
 					if (theElement.isInstance(modifier.element))
-						value = modifier.modifier.modifyValue(value, session.asElement(modifier.element));
+						value = modifier.modifier.modifyValue(value, session.asElement(modifier.element), modifierPrepValues[mIdx]);
 				} catch (QonfigInterpretationException | RuntimeException e) {
 					if (theInterpreter.loggedThrowable != e) {
 						theInterpreter.loggedThrowable = e;
@@ -370,11 +394,20 @@ public class QonfigInterpreterCore {
 		}
 
 		@Override
+		public CoreSession putLocal(String sessionKey, Object value) {
+			theValues.put(sessionKey, value);
+			if (theLocalValueKeys == null)
+				theLocalValueKeys = new HashSet<>();
+			theLocalValueKeys.add(sessionKey);
+			return this;
+		}
+
+		@Override
 		public <T> T computeIfAbsent(String sessionKey, Supplier<T> creator) {
 			return (T) theValues.computeIfAbsent(sessionKey, __ -> creator.get());
 		}
 
-		<T> Collection<QonfigModifierHolder<T>> getModifiers(Class<T> type) throws QonfigInterpretationException {
+		<T> QonfigModifierHolder<T>[] getModifiers(Class<T> type) throws QonfigInterpretationException {
 			Map<QonfigValueModifier<T>, QonfigModifierHolder<T>> modifiers = new LinkedHashMap<>();
 			getModifiers(type, theElement.getType().getSuperElement(), modifiers);
 			Set<QonfigAddOn> inh = new HashSet<>();
@@ -387,7 +420,7 @@ public class QonfigInterpreterCore {
 				if (inh.add(el))
 					modifyWith(type, el, inh, modifiers);
 			}
-			return modifiers.values();
+			return modifiers.values().toArray(new QonfigModifierHolder[modifiers.size()]);
 		}
 
 		private <T> void getModifiers(Class<T> type, QonfigElementDef superType,
@@ -480,18 +513,32 @@ public class QonfigInterpreterCore {
 	public interface QonfigValueModifier<T> {
 		/**
 		 * @param session The active interpreter session
+		 * @return An Object to pass to {@link #postPrepare(CoreSession, Object)} after the all modifiers have prepared the session
 		 * @throws QonfigInterpretationException If anything goes wrong with the preparation
 		 */
-		default void prepareSession(CoreSession session) throws QonfigInterpretationException {
+		default Object prepareSession(CoreSession session) throws QonfigInterpretationException {
+			return null;
 		}
 
 		/**
 		 * @param value The value created for the element
 		 * @param session The active interpreter session
+		 * @param prepared Object returned from {@link #prepareSession(CoreSession)}, default null
+		 * @return The Object to pass to {@link #modifyValue(Object, CoreSession, Object)} after the value has been created
+		 * @throws QonfigInterpretationException If the post-modification operation could not be performed
+		 */
+		default Object postPrepare(CoreSession session, Object prepared) throws QonfigInterpretationException {
+			return prepared;
+		}
+
+		/**
+		 * @param value The value created for the element
+		 * @param session The active interpreter session
+		 * @param prepared Object returned from {@link #prepareSession(CoreSession)}, default null
 		 * @return The modified value
 		 * @throws QonfigInterpretationException If the value could not be modified
 		 */
-		T modifyValue(T value, CoreSession session) throws QonfigInterpretationException;
+		T modifyValue(T value, CoreSession session, Object prepared) throws QonfigInterpretationException;
 	}
 
 	static class QonfigExtensionCreator<S, T> implements QonfigValueCreator<T> {

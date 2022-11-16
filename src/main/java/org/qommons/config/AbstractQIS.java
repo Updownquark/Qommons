@@ -517,7 +517,7 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 			}
 			return BetterList.of((QIS[]) sessions);
 		}
-		QonfigElement.Builder b = getElement().synthesizeChild(child, defaultChild, getParseSession());
+		QonfigElement.Builder b = getElement().synthesizeChild(child, defaultChild, getParseSession(), -1);
 		if (builder != null)
 			builder.accept(b);
 		QonfigElement element = b.doneWithAttributes().build();
@@ -712,6 +712,8 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	<T> T get(String sessionKey, Class<? super T> type);
 
 	/**
+	 * Puts a value into this session that will be visible to all descendants of this session (created after this call)
+	 * 
 	 * @param sessionKey The key to store data for
 	 * @param value The data to store for the given key in this session
 	 * @return This session
@@ -719,11 +721,23 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	QIS put(String sessionKey, Object value);
 
 	/**
+	 * Puts a value into this session that will be visible to all ancestors and descendants of this session (descendants created after this
+	 * call)
+	 * 
 	 * @param sessionKey The key to store data for
 	 * @param value The data to store for the given key in this session
 	 * @return This session
 	 */
 	QIS putGlobal(String sessionKey, Object value);
+
+	/**
+	 * Puts a value into this session that will be visible only to sessions "parallel" to this session--sessions for the same element
+	 * 
+	 * @param sessionKey The key to store data for
+	 * @param value The data to store for the given key in this session
+	 * @return This session
+	 */
+	QIS putLocal(String sessionKey, Object value);
 
 	/**
 	 * @param <T> The type of the data

@@ -21,7 +21,7 @@ import org.qommons.collect.BetterList;
 import org.qommons.collect.BetterMultiMap;
 
 /** An element in a Qonfig document */
-public class QonfigElement {
+public class QonfigElement implements LineNumbered {
 	private final QonfigDocument theDocument;
 	private final QonfigElement theParent;
 	private final QonfigElementDef theType;
@@ -32,11 +32,11 @@ public class QonfigElement {
 	private final List<QonfigElement> theChildren;
 	private final BetterMultiMap<QonfigChildDef.Declared, QonfigElement> theChildrenByRole;
 	private final Object theValue;
+	private final int theLineNumber;
 
 	private QonfigElement(QonfigDocument doc, QonfigElement parent, QonfigElementDef type, MultiInheritanceSet<QonfigAddOn> inheritance,
 		Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles, Map<QonfigAttributeDef.Declared, Object> attributes,
-		List<QonfigElement> children,
-		BetterMultiMap<QonfigChildDef.Declared, QonfigElement> childrenByRole, Object value) {
+		List<QonfigElement> children, BetterMultiMap<QonfigChildDef.Declared, QonfigElement> childrenByRole, Object value, int lineNumber) {
 		if (doc.getRoot() == null)
 			doc.setRoot(this);
 		theDocument = doc;
@@ -49,6 +49,7 @@ public class QonfigElement {
 		theChildren = children;
 		theChildrenByRole = childrenByRole;
 		theValue = value;
+		theLineNumber = lineNumber;
 	}
 
 	/** @return The document this element belongs to */
@@ -79,6 +80,11 @@ public class QonfigElement {
 	/** @return All add-ons that this element inherits */
 	public MultiInheritanceSet<QonfigAddOn> getInheritance() {
 		return theInheritance;
+	}
+
+	@Override
+	public int getLineNumber() {
+		return theLineNumber;
 	}
 
 	/**
@@ -270,10 +276,11 @@ public class QonfigElement {
 	 * @param child The role for the new child to fill
 	 * @param type The element type of the new child
 	 * @param session The parse session for the builder
+	 * @param lineNumber The line number where the child was defined
 	 * @return A builder for a new, disconnected child of this element
 	 */
-	public Builder synthesizeChild(QonfigChildDef child, QonfigElementDef type, QonfigParseSession session) {
-		return new Builder(session, getDocument(), this, type, Collections.singleton(child), Collections.emptySet());
+	public Builder synthesizeChild(QonfigChildDef child, QonfigElementDef type, QonfigParseSession session, int lineNumber) {
+		return new Builder(session, getDocument(), this, type, Collections.singleton(child), Collections.emptySet(), lineNumber);
 	}
 
 	@Override
@@ -293,10 +300,12 @@ public class QonfigElement {
 	 * @param doc The document being parsed
 	 * @param parent The parent for the new element
 	 * @param type The declared type of the element
+	 * @param lineNumber The line number where the element was defined
 	 * @return A builder for an element
 	 */
-	public static Builder build(QonfigParseSession session, QonfigDocument doc, QonfigElement parent, QonfigElementDef type) {
-		return new Builder(session, doc, parent, type, Collections.emptySet(), Collections.emptySet());
+	public static Builder build(QonfigParseSession session, QonfigDocument doc, QonfigElement parent, QonfigElementDef type,
+		int lineNumber) {
+		return new Builder(session, doc, parent, type, Collections.emptySet(), Collections.emptySet(), lineNumber);
 	}
 
 	/** Represents an attribute value before it is parsed */
@@ -318,6 +327,7 @@ public class QonfigElement {
 		private final QonfigElement theParent;
 		private final QonfigElementDef theType;
 		private final MultiInheritanceSet<QonfigAddOn> theInheritance;
+		private final int theLineNumber;
 		private final QonfigAutoInheritance.Compiler theAutoInheritance;
 		private final List<ElementQualifiedParseItem> theDeclaredAttributes;
 		private final List<AttributeValue> theDeclaredAttributeValues;
@@ -331,7 +341,7 @@ public class QonfigElement {
 		private int theChildCount;
 
 		Builder(QonfigParseSession session, QonfigDocument doc, QonfigElement parent, QonfigElementDef type,
-			Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles) {
+			Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles, int lineNumber) {
 			if (type.isAbstract())
 				session.withError("Elements cannot be declared directly for abstract type " + type);
 			theSession = session;
@@ -345,6 +355,7 @@ public class QonfigElement {
 			theChildren = new ArrayList<>();
 			theChildrenByRole = BetterHashMultiMap.<QonfigChildDef.Declared, QonfigElement> build().buildMultiMap();
 			theInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+			theLineNumber = lineNumber;
 			for (QonfigChildDef child : parentRoles) {
 				if (!child.getType().isAssignableFrom(type))
 					session
@@ -391,14 +402,14 @@ public class QonfigElement {
 				ok = false;
 			}
 			if (addOn.getSuperElement() != null && !addOn.getSuperElement().isAssignableFrom(theType)) {
-				theSession.withError(
-					"Add-on " + addOn + " requires " + addOn.getSuperElement() + ", which " + theType + " does not extend");
+				theSession
+					.withError("Add-on " + addOn + " requires " + addOn.getSuperElement() + ", which " + theType + " does not extend");
 				ok = false;
 			}
 			for (QonfigAddOn inh : addOn.getFullInheritance().getExpanded(QonfigAddOn::getInheritance)) {
 				if (inh.getSuperElement() != null && !inh.getSuperElement().isAssignableFrom(theType)) {
-					theSession.withError(
-						"Add-on " + addOn + " requires " + addOn.getSuperElement() + ", which " + theType + " does not extend");
+					theSession
+						.withError("Add-on " + addOn + " requires " + addOn.getSuperElement() + ", which " + theType + " does not extend");
 					ok = false;
 				}
 			}
@@ -420,11 +431,11 @@ public class QonfigElement {
 			if (attr.declaredElement != null && !attr.declaredElement.getDeclaredAttributes().containsKey(attr.itemName)) {
 				int count = attr.declaredElement.getAttributesByName().get(attr.itemName).size();
 				if (count == 0) {
-					theSession.forChild("attribute", attr.itemName)
+					theSession.forChild("attribute", attr.itemName, theLineNumber)
 						.withError("Element " + attr.declaredElement + " does not declare attribute \"" + attr.itemName + "\"", null);
 					return this;
 				} else if (count > 1) {
-					theSession.forChild("attribute", attr.itemName).withError(
+					theSession.forChild("attribute", attr.itemName, theLineNumber).withError(
 						"Element " + attr.declaredElement + " inherits multiple attributes named \"" + attr.itemName + "\"", null);
 					return this;
 				}
@@ -461,15 +472,16 @@ public class QonfigElement {
 		 * @param declaredRoles The role specifications that the child is declared to fulfill
 		 * @param type The declared type of the element
 		 * @param child Consumer to configure the child element
+		 * @param lineNumber The line number where the child was defined
 		 * @return This builder
 		 */
 		public Builder withChild(List<ElementQualifiedParseItem> declaredRoles, QonfigElementDef type,
-			Consumer<QonfigElement.Builder> child) {
+			Consumer<QonfigElement.Builder> child, int lineNumber) {
 			if (theStage > 1)
 				throw new IllegalStateException("Cannot add children after the element has been built");
 			// At this stage, we have all the information we need to determine the complete inheritance of the element
 			create();
-			QonfigParseSession session = theSession.forChild(type.toString(), theChildCount);
+			QonfigParseSession session = theSession.forChild(type.toString(), theChildCount, theLineNumber);
 			Set<QonfigChildDef> roles = new LinkedHashSet<>(declaredRoles.size() * 3 / 2 + 1);
 			Set<QonfigChildDef.Declared> realRoles = new LinkedHashSet<>(declaredRoles.size() * 3 / 2 + 1);
 			if (!declaredRoles.isEmpty()) {
@@ -484,10 +496,8 @@ public class QonfigElement {
 							session.withError("Cannot declare a role on the root element: " + roleDef, null);
 							continue;
 						} else if (!theParent.isInstance(roleDef.declaredElement)) {
-							session.withError(
-								"Parent does not inherit element " + roleDef.declaredElement + "--cannot declare a child with role "
-									+ roleDef,
-								null);
+							session.withError("Parent does not inherit element " + roleDef.declaredElement
+								+ "--cannot declare a child with role " + roleDef, null);
 							continue;
 						}
 						role = ((QonfigElementDef) roleDef.declaredElement).getDeclaredChildren().get(roleDef.itemName);
@@ -564,7 +574,7 @@ public class QonfigElement {
 					children.add(role);
 			}
 			Builder childBuilder = new Builder(session, theDocument, theElement, type, Collections.unmodifiableSet(roles),
-				Collections.unmodifiableSet(realRoles));
+				Collections.unmodifiableSet(realRoles), lineNumber);
 			child.accept(childBuilder);
 			QonfigElement builtChild = childBuilder.build();
 			theChildren.add(builtChild);
@@ -580,7 +590,7 @@ public class QonfigElement {
 			// Since attribute values can affect inheritance, we need to iterate through this loop as long as inheritance keeps changing
 			Map<QonfigAttributeDef.Declared, Object> attrValues = new LinkedHashMap<>();
 			theElement = new QonfigElement(theDocument, theParent, theType, theInheritance, theParentRoles, theDeclaredRoles, attrValues,
-				theChildren, theChildrenByRole, theValue);
+				theChildren, theChildrenByRole, theValue, theLineNumber);
 			MultiInheritanceSet<QonfigAddOn> completeInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
 			completeInheritance.addAll(theType.getInheritance());
 			completeInheritance.addAll(theInheritance.values());
@@ -601,7 +611,7 @@ public class QonfigElement {
 					if (attrDef.declaredElement != null) {
 						if (!attrDef.declaredElement.isAssignableFrom(theType) && (!(attrDef.declaredElement instanceof QonfigAddOn)
 							|| !completeInheritance.contains((QonfigAddOn) attrDef.declaredElement))) {
-							theSession.forChild("attribute", attrDef.itemName).withError("Element does not inherit element "
+							theSession.forChild("attribute", attrDef.itemName, theLineNumber).withError("Element does not inherit element "
 								+ attrDef.declaredElement + "--cannot specify attribute " + attrDef.itemName);
 							parsedAttrs.set(i);
 							continue;
@@ -642,7 +652,8 @@ public class QonfigElement {
 									attr = a;
 							}
 							if (!resolved) {
-								theSession.forChild("attribute", attrDef.toString()).withError("Multiple matching attributes inherited");
+								theSession.forChild("attribute", attrDef.toString(), theLineNumber)
+									.withError("Multiple matching attributes inherited");
 								continue;
 							}
 							break;
@@ -650,14 +661,14 @@ public class QonfigElement {
 					}
 					parsedAttrs.set(i);
 					if (attrValues.containsKey(attr.getDeclared())) {
-						theSession.forChild("attribute", attrDef.itemName)
+						theSession.forChild("attribute", attrDef.itemName, theLineNumber)
 							.withError("Duplicate values supplied for attribute " + attrDef.itemName, null);
 					}
 					Object value;
 					try {
 						value = theDeclaredAttributeValues.get(i).parseAttributeValue(theSession, attr);
 					} catch (RuntimeException e) {
-						theSession.forChild("attribute", attrDef.itemName)
+						theSession.forChild("attribute", attrDef.itemName, theLineNumber)
 							.withError("Could not parse attribute " + theDeclaredAttributeValues.get(i).toString(), e);
 						continue;
 					}
@@ -677,7 +688,7 @@ public class QonfigElement {
 				if (i >= theDeclaredAttributes.size())
 					break;
 				ElementQualifiedParseItem attrDef = theDeclaredAttributes.get(i);
-				theSession.forChild("attribute", attrDef.toString()).withError("No such attribute found");
+				theSession.forChild("attribute", attrDef.toString(), theLineNumber).withError("No such attribute found");
 			}
 			// Now that we know our inheritance completely, we need to check all the attributes we've parsed
 			// to make sure they still match exactly one attribute definition.
@@ -726,7 +737,8 @@ public class QonfigElement {
 								attr = a;
 						}
 						if (!resolved) {
-							theSession.forChild("attribute", attrDef.toString()).withError("Multiple matching attributes inherited");
+							theSession.forChild("attribute", attrDef.toString(), theLineNumber)
+								.withError("Multiple matching attributes inherited");
 							continue;
 						}
 					}
@@ -735,10 +747,10 @@ public class QonfigElement {
 				ValueDefModifier mod = theType.getAttributeModifiers().get(attr.getDeclared());
 				if (mod != null) {
 					if (mod.getTypeRestriction() != null && !mod.getTypeRestriction().isInstance(value))
-						theSession.forChild("attribute", attrDef.toString()).withError("Type of value " + value
+						theSession.forChild("attribute", attrDef.toString(), theLineNumber).withError("Type of value " + value
 							+ " does not match that required by " + theType + " (" + mod.getTypeRestriction() + ")");
 					if (mod.getSpecification() == SpecificationType.Forbidden)
-						theSession.forChild("attribute", attrDef.toString())
+						theSession.forChild("attribute", attrDef.toString(), theLineNumber)
 							.withError("Specification of value for attribute forbidden by type " + theType);
 				}
 				for (QonfigAddOn inh : theInheritance.getExpanded(QonfigAddOn::getInheritance)) {
@@ -747,10 +759,10 @@ public class QonfigElement {
 					mod = inh.getAttributeModifiers().get(attr.getDeclared());
 					if (mod != null) {
 						if (mod.getTypeRestriction() != null && !mod.getTypeRestriction().isInstance(value))
-							theSession.forChild("attribute", attrDef.toString()).withError("Type of value " + value
+							theSession.forChild("attribute", attrDef.toString(), theLineNumber).withError("Type of value " + value
 								+ " does not match that required by " + inh + " (" + mod.getTypeRestriction() + ")");
 						if (mod.getSpecification() == SpecificationType.Forbidden)
-							theSession.forChild("attribute", attrDef.toString())
+							theSession.forChild("attribute", attrDef.toString(), theLineNumber)
 								.withError("Specification of value for attribute forbidden by type " + inh);
 					}
 				}
@@ -811,11 +823,11 @@ public class QonfigElement {
 							Boolean defaulted = defaultedAttributes.get(mod.getKey());
 							if (value != null) {
 								if (defaulted == null)
-									theSession.forChild("attribute", mod.getKey().toString())
+									theSession.forChild("attribute", mod.getKey().toString(), theLineNumber)
 										.withError("Specification of value for attribute forbidden by " + inh);
 								else if (!Objects.equals(value, mod.getValue().getDefaultValue())) {
 									if (defaulted) // Forbidden
-										theSession.forChild("attribute", mod.getKey().toString()).withError(
+										theSession.forChild("attribute", mod.getKey().toString(), theLineNumber).withError(
 											"Default values for forbidden attribute specified from multiple sources, including " + inh);
 									else {
 										defaultedAttributes.put(mod.getKey(), true);
@@ -859,10 +871,10 @@ public class QonfigElement {
 					if (mod == null)
 						continue;
 					if (mod.getTypeRestriction() != null && !mod.getTypeRestriction().isInstance(theValue))
-						theSession.forChild("value", null).withError("Type of value " + theValue + " does not match that required by " + inh
-							+ " (" + mod.getTypeRestriction() + ")");
+						theSession.forChild("value", null, theLineNumber).withError("Type of value " + theValue
+							+ " does not match that required by " + inh + " (" + mod.getTypeRestriction() + ")");
 					if (mod.getSpecification() == SpecificationType.Forbidden)
-						theSession.forChild("value", null).withError("Specification of value forbidden by type " + inh);
+						theSession.forChild("value", null, theLineNumber).withError("Specification of value forbidden by type " + inh);
 				}
 			} else {
 				// Default the value if provided, checking for inherited specifications that conflict
@@ -883,7 +895,7 @@ public class QonfigElement {
 						required = inh;
 					if (mod.getSpecification() == SpecificationType.Forbidden && mod.getDefaultValue() != null) {
 						if (forbidden && !Objects.equals(theValue, mod.getDefaultValue()))
-							theSession.forChild("value", null)
+							theSession.forChild("value", null, theLineNumber)
 								.withError("Default values forbidden and specified from multiple sources, including " + inh);
 						theValue = mod.getDefaultValue();
 					}
@@ -892,7 +904,7 @@ public class QonfigElement {
 					forbidden = mod.getSpecification() == SpecificationType.Forbidden;
 				}
 				if (required != null && theValue == null)
-					theSession.forChild("value", null).withError("Value required by " + required);
+					theSession.forChild("value", null, theLineNumber).withError("Value required by " + required);
 			}
 
 			theStage = 1;

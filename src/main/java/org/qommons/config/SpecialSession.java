@@ -97,6 +97,12 @@ public interface SpecialSession<QIS extends SpecialSession<QIS>> extends Abstrac
 	}
 
 	@Override
+	default QIS putLocal(String sessionKey, Object value) {
+		getWrapped().putLocal(sessionKey, value);
+		return (QIS) this;
+	}
+
+	@Override
 	default <T> T computeIfAbsent(String sessionKey, Supplier<T> creator) {
 		return getWrapped().computeIfAbsent(sessionKey, creator);
 	}

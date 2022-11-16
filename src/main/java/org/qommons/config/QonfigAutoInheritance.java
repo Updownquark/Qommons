@@ -194,16 +194,17 @@ public class QonfigAutoInheritance {
 		 * 
 		 * @param target The element or add-on type to target--may be null if the target is to be role-only
 		 * @param role The role to target--may be null if the target is type-only
+		 * @param lineNumber The line number in the file where the target was defined
 		 * @return This builder
 		 */
-		public Builder withTarget(QonfigElementOrAddOn target, QonfigChildDef role) {
+		public Builder withTarget(QonfigElementOrAddOn target, QonfigChildDef role, int lineNumber) {
 			if (target == null && role == null) {
-				theSession.forChild("target", "(empty)")
+				theSession.forChild("target", "(empty)", lineNumber)
 					.withError("Either a target or a role or both must be specified for an auto-inheritance target");
 				return this;
 			}
 			AutoInheritTarget ait = new AutoInheritTarget(target, role);
-			QonfigParseSession targetSession = theSession.forChild("target", ait);
+			QonfigParseSession targetSession = theSession.forChild("target", ait, lineNumber);
 			if (role != null && role.getMax() == 0)
 				targetSession
 					.withError("As no children are allowed in role " + role + ", this role cannot be targeted for auto-inheritance");

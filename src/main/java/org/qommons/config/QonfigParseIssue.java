@@ -53,6 +53,8 @@ public class QonfigParseIssue {
 	public String toString() {
 		StringBuilder str = new StringBuilder();
 		str.append(thePath.toString());
+		if (thePath.getLineNumber() >= 0)
+			str.append(" (line ").append(thePath.getLineNumber()).append(')');
 		str.append(": ");
 		str.append(theMessage);
 		str.append(" ( ").append(theLocation).append(" )");

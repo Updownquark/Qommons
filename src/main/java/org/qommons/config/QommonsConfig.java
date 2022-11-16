@@ -9,9 +9,7 @@ import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-
+import org.qommons.io.PositionalXMLReader;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
@@ -666,8 +664,8 @@ public abstract class QommonsConfig implements Cloneable {
 	 */
 	public static Element getRootElement(java.net.URL url) throws IOException {
 		try (InputStream in = url.openStream()) {
-			return DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in).getDocumentElement();
-		} catch (ParserConfigurationException | SAXException e) {
+			return PositionalXMLReader.readXML(in).getDocumentElement();
+		} catch (SAXException e) {
 			throw new IOException("Could not read XML file " + url, e);
 		}
 	}
@@ -681,8 +679,8 @@ public abstract class QommonsConfig implements Cloneable {
 	 */
 	public static Element getRootElement(InputStream stream) throws IOException {
 		try {
-			return DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(stream).getDocumentElement();
-		} catch (ParserConfigurationException | SAXException e) {
+			return PositionalXMLReader.readXML(stream).getDocumentElement();
+		} catch (SAXException e) {
 			throw new IOException("Could not read XML", e);
 		}
 	}

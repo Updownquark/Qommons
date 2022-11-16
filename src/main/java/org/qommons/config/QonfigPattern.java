@@ -11,9 +11,10 @@ public class QonfigPattern extends AbstractQonfigType implements QonfigValueType
 	 * @param declarer The toolkit declaring this pattern
 	 * @param name The name of the pattern
 	 * @param pattern The regex pattern to apply
+	 * @param lineNumber The line number where this pattern was defined
 	 */
-	public QonfigPattern(QonfigToolkit declarer, String name, Pattern pattern) {
-		super(declarer, name);
+	public QonfigPattern(QonfigToolkit declarer, String name, Pattern pattern, int lineNumber) {
+		super(declarer, name, lineNumber);
 		thePattern = pattern;
 	}
 

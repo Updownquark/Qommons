@@ -52,6 +52,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		private final Set<QonfigAddOn> theRequirement;
 		private final int theMin;
 		private final int theMax;
+		private final int theLineNumber;
 
 		/**
 		 * @param owner The element-def or add-on that this child belongs to
@@ -62,9 +63,10 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 *        role
 		 * @param min The minimum number of elements that may be specified for this role
 		 * @param max The maximum number of elements that may be specified for this role
+		 * @param lineNumber The line number where this child was defined
 		 */
 		public Abstract(QonfigElementOrAddOn owner, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment,
-			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max) {
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, int lineNumber) {
 			theOwner = owner;
 			theType = type;
 			theFulfillment = fulfillment;
@@ -72,6 +74,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 			theRequirement = requirement;
 			theMin = min;
 			theMax = max;
+			theLineNumber = lineNumber;
 		}
 
 		@Override
@@ -118,6 +121,11 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		}
 
 		@Override
+		public int getLineNumber() {
+			return theLineNumber;
+		}
+
+		@Override
 		public int hashCode() {
 			return Objects.hash(theOwner, getName());
 		}
@@ -151,10 +159,11 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 *        role
 		 * @param min The minimum number of elements that may be specified for this role
 		 * @param max The maximum number of elements that may be specified for this role
+		 * @param lineNumber The line number where this child was defined
 		 */
 		public DeclaredChildDef(QonfigElementOrAddOn owner, String name, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment,
-			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max) {
-			super(owner, type, fulfillment, inheritance, requirement, min, max);
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, int lineNumber) {
+			super(owner, type, fulfillment, inheritance, requirement, min, max, lineNumber);
 			theName = name;
 		}
 
@@ -193,10 +202,11 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 *        role
 		 * @param min The minimum number of elements that may be specified for this role
 		 * @param max The maximum number of elements that may be specified for this role
+		 * @param lineNumber The line number where this child was defined
 		 */
 		public Modified(QonfigChildDef declared, QonfigElementOrAddOn owner, QonfigElementDef type, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, int min, int max) {
-			super(owner, type, Collections.emptySet(), combine(declared.getInheritance(), inheritance), requirement, min, max);
+			Set<QonfigAddOn> requirement, int min, int max, int lineNumber) {
+			super(owner, type, Collections.emptySet(), combine(declared.getInheritance(), inheritance), requirement, min, max, lineNumber);
 			theDeclared = declared instanceof QonfigChildDef.Declared ? (QonfigChildDef.Declared) declared
 				: ((QonfigChildDef.Modified) declared).getDeclared();
 			theDeclaredInheritance = inheritance;
@@ -250,9 +260,11 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param declared The inherited child
 		 * @param owner The element-def or add-on that this child belongs to
 		 * @param overriding The new children that fulfill the role, overriding it
+		 * @param lineNumber The line number where this child was defined
 		 */
-		public Overridden(QonfigElementOrAddOn owner, QonfigChildDef.Declared declared, Set<QonfigChildDef.Declared> overriding) {
-			super(owner, declared.getType(), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), 0, 0);
+		public Overridden(QonfigElementOrAddOn owner, QonfigChildDef.Declared declared, Set<QonfigChildDef.Declared> overriding,
+			int lineNumber) {
+			super(owner, declared.getType(), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), 0, 0, lineNumber);
 			theDeclared = declared;
 			theOverriding = overriding;
 		}
@@ -340,6 +352,11 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		@Override
 		public int getMax() {
 			return theInherited.getMax();
+		}
+
+		@Override
+		public int getLineNumber() {
+			return -1; // This child wasn't defined anywhere, it was inherited by default
 		}
 
 		@Override

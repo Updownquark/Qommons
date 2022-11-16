@@ -120,12 +120,13 @@ public class QonfigValidation {
 							ao.getValueModifier().getDefaultValue()), //
 						new ValueSpec(valueModifier.getTypeRestriction(), valueModifier.getSpecification(),
 							valueModifier.getDefaultValue()), //
-						err -> session.forChild("text", null).withError(err), //
-						warn -> session.forChild("text", null).withWarning(warn));
+						err -> session.forChild("text", null, root.getLineNumber()).withError(err), //
+						warn -> session.forChild("text", null, root.getLineNumber()).withWarning(warn));
 				} else if (valueModifier.getSpecification() != ao.getValueModifier().getSpecification()
 					|| !Objects.equals(valueModifier.getDefaultValue(), ao.getValueModifier().getDefaultValue())) {
-					session.forChild("child-def", path.toString()).withError("Inherited add-ons " + textModSource + " and " + inh.getValue()
-						+ " specify different text modifications. Inheriting both of these root add-ons is illegal.");
+					session.forChild("child-def", path.toString(), root.getLineNumber())
+						.withError("Inherited add-ons " + textModSource + " and " + inh.getValue()
+							+ " specify different text modifications. Inheriting both of these root add-ons is illegal.");
 				}
 			}
 			// Validate attribute modifications
@@ -138,7 +139,7 @@ public class QonfigValidation {
 					ValueDefModifier preMod = attrModifiers.get(attr.getKey());
 					if (preMod.getSpecification() != attr.getValue().getSpecification()
 						|| !Objects.equals(preMod.getDefaultValue(), attr.getValue().getDefaultValue()))
-						session.forChild("child-def", path.toString())
+						session.forChild("child-def", path.toString(), root.getLineNumber())
 							.withError("Inherited add-ons " + attrModSource.get(attr.getKey()) + " and " + inh.getValue()
 								+ " specify different modifications. Inheriting cannot inherit both of these root add-ons is illegal.");
 				}

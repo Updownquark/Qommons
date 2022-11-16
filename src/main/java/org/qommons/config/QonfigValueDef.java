@@ -24,18 +24,21 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		private final QonfigValueType theType;
 		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
+		private final int theLineNumber;
 
 		/**
 		 * @param owner The owner of the value
 		 * @param type The type that must be specified
 		 * @param specify The specification of the value
 		 * @param defaultValue The value to use if it is not specified
+		 * @param lineNumber The line number where this value was defined
 		 */
-		public Abstract(QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify, Object defaultValue) {
+		public Abstract(QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify, Object defaultValue, int lineNumber) {
 			theOwner = owner;
 			theType = type;
 			theSpecification = specify;
 			theDefaultValue = defaultValue;
+			theLineNumber = lineNumber;
 		}
 
 		@Override
@@ -72,6 +75,11 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		}
 
 		@Override
+		public int getLineNumber() {
+			return theLineNumber;
+		}
+
+		@Override
 		public int hashCode() {
 			return getOwner().hashCode();
 		}
@@ -98,9 +106,11 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		 * @param type The type that must be specified
 		 * @param specify The specification of the value
 		 * @param defaultValue The value to use if it is not specified
+		 * @param lineNumber The line number where this value was defined
 		 */
-		public DeclaredValueDef(QonfigElementDef owner, QonfigValueType type, SpecificationType specify, Object defaultValue) {
-			super(owner, type, specify, defaultValue);
+		public DeclaredValueDef(QonfigElementDef owner, QonfigValueType type, SpecificationType specify, Object defaultValue,
+			int lineNumber) {
+			super(owner, type, specify, defaultValue, lineNumber);
 		}
 
 		@Override
@@ -124,9 +134,11 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		 * @param type The type that must be specified
 		 * @param specify The specification of the value
 		 * @param defaultValue The value to use if it is not specified
+		 * @param lineNumber The line number where this value was defined
 		 */
-		public Modified(QonfigValueDef declared, QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify,			Object defaultValue) {
-			super(owner, type, specify, defaultValue);
+		public Modified(QonfigValueDef declared, QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify,
+			Object defaultValue, int lineNumber) {
+			super(owner, type, specify, defaultValue, lineNumber);
 			theDeclared = declared instanceof DeclaredValueDef ? (DeclaredValueDef) declared
 				: ((QonfigValueDef.Modified) declared).getDeclared();
 		}

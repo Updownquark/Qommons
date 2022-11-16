@@ -4,7 +4,7 @@ import java.util.Map;
 import java.util.Set;
 
 /** Modification to an element-def */
-public interface ElementDefModifier {
+public interface ElementDefModifier extends LineNumbered {
 	/** @return The type restriction on the kinds of element-defs that may be instantiated to fulfill an element definition */
 	QonfigElementDef getTypeRestriction();
 

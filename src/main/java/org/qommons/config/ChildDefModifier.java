@@ -39,6 +39,7 @@ public interface ChildDefModifier extends ElementDefModifier {
 		private final Set<QonfigAddOn> theRequirement;
 		private final Integer theMin;
 		private final Integer theMax;
+		private final int theLineNumber;
 
 		/**
 		 * @param typeRestriction The type restriction for the child, or null to inherit it
@@ -47,14 +48,16 @@ public interface ChildDefModifier extends ElementDefModifier {
 		 *        role
 		 * @param min The minimum number of times the child must be specified, or null to inherit it
 		 * @param max The maximum number of times the child may be specified, or null to inherit it
+		 * @param lineNumber The line number in the file where this child was defined
 		 */
 		public Default(QonfigElementDef typeRestriction, Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, Integer min,
-			Integer max) {
+			Integer max, int lineNumber) {
 			theTypeRestriction = typeRestriction;
 			theInheritance = inheritance;
 			theRequirement = requirement;
 			theMin = min;
 			theMax = max;
+			theLineNumber = lineNumber;
 		}
 
 		@Override
@@ -80,6 +83,11 @@ public interface ChildDefModifier extends ElementDefModifier {
 		@Override
 		public Integer getMax() {
 			return theMax;
+		}
+
+		@Override
+		public int getLineNumber() {
+			return theLineNumber;
 		}
 	}
 }

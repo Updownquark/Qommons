@@ -14,14 +14,17 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 	public static final class ChildModifier implements ChildDefModifier {
 		private final Set<QonfigAddOn> theInheritance;
 		private final Set<QonfigAddOn> theRequirement;
+		private final int theLineNumber;
 
 		/**
 		 * @param inheritance The add-ons inherited by the child
 		 * @param requirement The set of add-ons that an element must inherit to fulfill this role
+		 * @param lineNumber The line number in the file where this child modifier was defined
 		 */
-		public ChildModifier(Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement) {
+		public ChildModifier(Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int lineNumber) {
 			theInheritance = inheritance;
 			theRequirement = requirement;
+			theLineNumber = lineNumber;
 		}
 
 		@Override
@@ -62,6 +65,11 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		@Override
 		public Integer getMax() {
 			return null;
+		}
+
+		@Override
+		public int getLineNumber() {
+			return theLineNumber;
 		}
 
 		@Override
@@ -117,9 +125,9 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
 		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ChildModifier> childModifiers,
 		BetterMultiMap<String, QonfigChildDef> childrenByName, //
-		ValueModifier value, MultiInheritanceSet<QonfigAddOn> fullInheritance, QonfigAddOn metaSpec) {
+		ValueModifier value, MultiInheritanceSet<QonfigAddOn> fullInheritance, QonfigAddOn metaSpec, int lineNumber) {
 		super(declarer, name, isAbstract, requirement, inheritance, fullInheritance, declaredAttributes, attributeModifiers,
-			attributesByName, declaredChildren, childModifiers, childrenByName, value, metaSpec);
+			attributesByName, declaredChildren, childModifiers, childrenByName, value, metaSpec, lineNumber);
 	}
 
 	/**
@@ -256,7 +264,7 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 				getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueModifier>) getAttributeModifiers(), getAttributesByName(), //
 				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildModifier>) getChildModifiers(), getChildrenByName(), //
 				getValue(), getFullInheritance(), //
-				getMetaSpec() == null ? null : (QonfigAddOn) getMetaSpec().get());
+				getMetaSpec() == null ? null : (QonfigAddOn) getMetaSpec().get(), getSession().getPath().getLineNumber());
 		}
 
 		@Override
@@ -265,25 +273,25 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		}
 
 		@Override
-		public Builder withValue(QonfigValueType type, SpecificationType specification, Object defaultValue) {
+		public Builder withValue(QonfigValueType type, SpecificationType specification, Object defaultValue, int lineNumber) {
 			theSession.withError("Value cannot be specified by an add-on, only modified");
 			return this;
 		}
 
 		@Override
-		public Builder modifyValue(QonfigValueType type, SpecificationType specification, Object defaultValue) {
+		public Builder modifyValue(QonfigValueType type, SpecificationType specification, Object defaultValue, int lineNumber) {
 			if (getSuperElement() == null) {
-				theSession.forChild("value", null).withError("No required element to modify the value for");
+				theSession.forChild("value", null, lineNumber).withError("No required element to modify the value for");
 				return this;
 			} else if (getSuperElement().getValue() == null) {
-				theSession.forChild("value", null)
+				theSession.forChild("value", null, lineNumber)
 					.withError("Required element " + getSuperElement() + " does not specify a value to be modified");
 				return this;
 			} else if (type != null && !type.equals(getSuperElement().getValue().getType())) {
-				theSession.forChild("value", null).withError("Value type cannot be modified by an add-on");
+				theSession.forChild("value", null, lineNumber).withError("Value type cannot be modified by an add-on");
 				type = null;
 			}
-			super.modifyValue(type, specification, defaultValue);
+			super.modifyValue(type, specification, defaultValue, lineNumber);
 			return this;
 		}
 
@@ -293,53 +301,52 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		}
 
 		@Override
-		public Builder withAttribute(String name, QonfigValueType type, SpecificationType specify, Object defaultValue) {
-			super.withAttribute(name, type, specify, defaultValue);
+		public Builder withAttribute(String name, QonfigValueType type, SpecificationType specify, Object defaultValue, int lineNumber) {
+			super.withAttribute(name, type, specify, defaultValue, lineNumber);
 			return this;
 		}
 
 		@Override
 		public Builder modifyAttribute(QonfigAttributeDef attribute, QonfigValueType type, SpecificationType specification,
-			Object defaultValue) {
+			Object defaultValue, int lineNumber) {
 			if (type != null && !type.equals(attribute.getType())) {
-				theSession.forChild("attribute", attribute.getOwner().getName() + "." + attribute.getName())
+				theSession.forChild("attribute", attribute.getOwner().getName() + "." + attribute.getName(), lineNumber)
 					.withError("Attribute type cannot be modified by an add-on");
 				type = null;
 			}
-			super.modifyAttribute(attribute, type, specification, defaultValue);
+			super.modifyAttribute(attribute, type, specification, defaultValue, lineNumber);
 			return this;
 		}
 
 		@Override
 		public Builder withChild(String name, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, int min, int max) {
+			Set<QonfigAddOn> requirement, int min, int max, int lineNumber) {
 			if (!fulfillment.isEmpty()) {
-				theSession.forChild("child-def", name).withError("Children of add-ons cannot fulfill roles");
+				theSession.forChild("child-def", name, lineNumber).withError("Children of add-ons cannot fulfill roles");
 				fulfillment = Collections.emptySet();
 			}
-			super.withChild(name, type, fulfillment, inheritance, requirement, min, max);
+			super.withChild(name, type, fulfillment, inheritance, requirement, min, max, lineNumber);
 			return this;
 		}
 
 		@Override
 		public Builder modifyChild(QonfigChildDef.Declared child, QonfigElementDef type, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, Integer min,
-			Integer max) {
+			Set<QonfigAddOn> requirement, Integer min, Integer max, int lineNumber) {
 			if (type != null && !type.equals(child.getType())) {
-				theSession.forChild("child-mod", child.getOwner().getName() + "." + child.getName())
+				theSession.forChild("child-mod", child.getOwner().getName() + "." + child.getName(), lineNumber)
 					.withError("Child min/max cannot be modified by an add-on");
 			} else if (min != null || max != null) {
-				theSession.forChild("child-mod", child.getOwner().getName() + "." + child.getName())
+				theSession.forChild("child-mod", child.getOwner().getName() + "." + child.getName(), lineNumber)
 					.withError("Child type cannot be modified by an add-on");
 			}
-			super.modifyChild(child, type, inheritance, requirement, min, max);
+			super.modifyChild(child, type, inheritance, requirement, min, max, lineNumber);
 			return this;
 		}
 
 		@Override
 		protected ChildDefModifier childModifier(QonfigChildDef.Declared child, QonfigElementDef type, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, Integer min, Integer max) {
-			return new ChildModifier(inheritance, requirement);
+			Set<QonfigAddOn> requirement, Integer min, Integer max, int lineNumber) {
+			return new ChildModifier(inheritance, requirement, lineNumber);
 		}
 
 		@Override

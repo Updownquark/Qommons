@@ -17,18 +17,21 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		private final QonfigValueType theType;
 		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
+		private final int theLineNumber;
 
 		/**
 		 * @param owner The element-def or add-on that the attribute belongs to
 		 * @param type The type for the attribute value
 		 * @param specify The specification of the attribute
 		 * @param defaultValue The value to use if it is not specified
+		 * @param lineNumber The line number in the file where this attribute was defined
 		 */
-		public Abstract(QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify, Object defaultValue) {
+		public Abstract(QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify, Object defaultValue, int lineNumber) {
 			theOwner = owner;
 			theType = type;
 			theSpecification = specify;
 			theDefaultValue = defaultValue;
+			theLineNumber = lineNumber;
 		}
 
 		@Override
@@ -63,6 +66,11 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		}
 
 		@Override
+		public int getLineNumber() {
+			return theLineNumber;
+		}
+
+		@Override
 		public int hashCode() {
 			return Objects.hash(getOwner(), getName());
 		}
@@ -92,10 +100,11 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		 * @param type The type for the attribute value
 		 * @param specify The specification of the attribute
 		 * @param defaultValue The value to use if it is not specified
+		 * @param lineNumber The line number in the file where this attribute was defined
 		 */
 		public DeclaredAttributeDef(QonfigElementOrAddOn owner, String name, QonfigValueType type, SpecificationType specify,
-			Object defaultValue) {
-			super(owner, type, specify, defaultValue);
+			Object defaultValue, int lineNumber) {
+			super(owner, type, specify, defaultValue, lineNumber);
 			theName = name;
 		}
 
@@ -120,10 +129,11 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		 * @param type The type for the attribute value
 		 * @param specify The specification of the attribute
 		 * @param defaultValue The value to use if it is not specified
+		 * @param lineNumber The line number in the file where this attribute was defined
 		 */
 		public Modified(QonfigAttributeDef declared, QonfigElementOrAddOn owner, QonfigValueType type,
-			SpecificationType specify, Object defaultValue) {
-			super(owner, type, specify, defaultValue);
+			SpecificationType specify, Object defaultValue, int lineNumber) {
+			super(owner, type, specify, defaultValue, lineNumber);
 			theDeclared = declared instanceof DeclaredAttributeDef ? (DeclaredAttributeDef) declared
 				: ((QonfigAttributeDef.Modified) declared).getDeclared();
 		}

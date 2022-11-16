@@ -8,14 +8,17 @@ import org.qommons.StringUtils;
 public abstract class AbstractQonfigType implements QonfigType {
 	private final QonfigToolkit theDeclarer;
 	private final String theName;
+	private final int theLineNumber;
 
 	/**
 	 * @param declarer The toolkit that declared this type
 	 * @param name The name of this type
+	 * @param lineNumber The line number in the file where this type was defined
 	 */
-	public AbstractQonfigType(QonfigToolkit declarer, String name) {
+	public AbstractQonfigType(QonfigToolkit declarer, String name, int lineNumber) {
 		theDeclarer = declarer;
 		theName = name;
+		theLineNumber = lineNumber;
 	}
 
 	@Override
@@ -26,6 +29,11 @@ public abstract class AbstractQonfigType implements QonfigType {
 	@Override
 	public String getName() {
 		return theName;
+	}
+
+	@Override
+	public int getLineNumber() {
+		return theLineNumber;
 	}
 
 	/**

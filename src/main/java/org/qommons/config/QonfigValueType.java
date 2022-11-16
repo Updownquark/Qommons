@@ -5,12 +5,17 @@ import java.util.List;
 import org.qommons.Named;
 
 /** A type of values that can be parsed from attribute or element text values */
-public interface QonfigValueType extends Named {
+public interface QonfigValueType extends Named, LineNumbered {
 	/** The "string" type */
 	public static final QonfigValueType STRING = new QonfigValueType() {
 		@Override
 		public String getName() {
 			return "string";
+		}
+
+		@Override
+		public int getLineNumber() {
+			return -1;
 		}
 
 		@Override
@@ -33,6 +38,11 @@ public interface QonfigValueType extends Named {
 		@Override
 		public String getName() {
 			return "boolean";
+		}
+
+		@Override
+		public int getLineNumber() {
+			return -1;
 		}
 
 		@Override
@@ -67,14 +77,17 @@ public interface QonfigValueType extends Named {
 	public static class Literal implements Declared {
 		private final QonfigToolkit theDeclarer;
 		private final String theValue;
+		private final int theLineNumber;
 
 		/**
 		 * @param declarer The toolkit that declared the literal
 		 * @param value The literal value to match
+		 * @param lineNumber The line number where this type was defined
 		 */
-		public Literal(QonfigToolkit declarer, String value) {
+		public Literal(QonfigToolkit declarer, String value, int lineNumber) {
 			theDeclarer = declarer;
 			theValue = value;
+			theLineNumber = lineNumber;
 		}
 
 		@Override
@@ -85,6 +98,11 @@ public interface QonfigValueType extends Named {
 		@Override
 		public String getName() {
 			return "literal";
+		}
+
+		/** @return The literal value */
+		public String getValue() {
+			return theValue;
 		}
 
 		@Override
@@ -102,6 +120,11 @@ public interface QonfigValueType extends Named {
 		}
 
 		@Override
+		public int getLineNumber() {
+			return theLineNumber;
+		}
+
+		@Override
 		public String toString() {
 			return "literal:" + theValue;
 		}
@@ -112,16 +135,19 @@ public interface QonfigValueType extends Named {
 		private final QonfigToolkit theDeclarer;
 		private final String theName;
 		private final List<QonfigValueType> theComponents;
+		private final int theLineNumber;
 
 		/**
 		 * @param declarer The toolkit that declared the one-of type
 		 * @param name The name for the type
 		 * @param components The components to delegate to
+		 * @param lineNumber The line number where this type was defined
 		 */
-		public OneOf(QonfigToolkit declarer, String name, List<QonfigValueType> components) {
+		public OneOf(QonfigToolkit declarer, String name, List<QonfigValueType> components, int lineNumber) {
 			theDeclarer = declarer;
 			theName = name;
 			theComponents = components;
+			theLineNumber = lineNumber;
 		}
 
 		@Override
@@ -136,7 +162,7 @@ public interface QonfigValueType extends Named {
 
 		@Override
 		public Object parse(String value, QonfigToolkit tk, QonfigParseSession session) {
-			QonfigParseSession testEnv = QonfigParseSession.forRoot("", tk);
+			QonfigParseSession testEnv = QonfigParseSession.forRoot("", tk, theLineNumber);
 			QonfigValueType best = null;
 			for (QonfigValueType component : theComponents) {
 				testEnv.getErrors().clear();
@@ -163,6 +189,11 @@ public interface QonfigValueType extends Named {
 		}
 
 		@Override
+		public int getLineNumber() {
+			return theLineNumber;
+		}
+
+		@Override
 		public String toString() {
 			return "one-of:" + theComponents;
 		}
@@ -172,14 +203,17 @@ public interface QonfigValueType extends Named {
 	public class Custom implements Declared {
 		private final QonfigToolkit theDeclarer;
 		private final CustomValueType theCustomType;
+		private final int theLineNumber;
 
 		/**
 		 * @param declarer The toolkit declaring the value type
 		 * @param customType The custom-implemented value type
+		 * @param lineNumber The line number where this type was defined
 		 */
-		public Custom(QonfigToolkit declarer, CustomValueType customType) {
+		public Custom(QonfigToolkit declarer, CustomValueType customType, int lineNumber) {
 			theDeclarer = declarer;
 			theCustomType = customType;
+			theLineNumber = lineNumber;
 		}
 
 		@Override
@@ -203,6 +237,11 @@ public interface QonfigValueType extends Named {
 		}
 
 		@Override
+		public int getLineNumber() {
+			return theLineNumber;
+		}
+
+		@Override
 		public String toString() {
 			return theCustomType.toString();
 		}
@@ -215,6 +254,7 @@ public interface QonfigValueType extends Named {
 		private final QonfigValueType theType;
 		private final String thePrefix;
 		private final String theSuffix;
+		private final int theLineNumber;
 
 		/**
 		 * @param declarer The toolkit declaring this type
@@ -222,13 +262,15 @@ public interface QonfigValueType extends Named {
 		 * @param type The type to do the parsing
 		 * @param prefix The prefix that must be prepended to values
 		 * @param suffix The suffix that must be appended to values
+		 * @param lineNumber The line number where this type was defined
 		 */
-		public Explicit(QonfigToolkit declarer, String name, QonfigValueType type, String prefix, String suffix) {
+		public Explicit(QonfigToolkit declarer, String name, QonfigValueType type, String prefix, String suffix, int lineNumber) {
 			theDeclarer = declarer;
 			theName = name;
 			theType = type;
 			thePrefix = prefix;
 			theSuffix = suffix;
+			theLineNumber = lineNumber;
 		}
 
 		@Override
@@ -260,6 +302,11 @@ public interface QonfigValueType extends Named {
 		@Override
 		public String getName() {
 			return theName;
+		}
+
+		@Override
+		public int getLineNumber() {
+			return theLineNumber;
 		}
 
 		@Override
