@@ -397,6 +397,10 @@ public interface Causable {
 		return Impl.cause(causes);
 	}
 
+	/**
+	 * @param causes The causes to wrap
+	 * @return A simple cause, wrapping the given causes
+	 */
 	static Causable simpleDelegate(Object... causes) {
 		return new SimpleDelegate(causes);
 	}
