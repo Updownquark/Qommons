@@ -26,7 +26,8 @@ public class StringUtils {
 	 * A comparator that returns the result of {@link #compareNumberTolerant(CharSequence, CharSequence, boolean, boolean)
 	 * compareNumberTolerant}<code>(s1, s2, true, true)</code>
 	 */
-	public static final Comparator<String> DISTINCT_NUMBER_TOLERANT = (s1, s2) -> compareNumberTolerant(s1, s2, true, true);
+	public static final Comparator<CharSequence> DISTINCT_NUMBER_TOLERANT = LambdaUtils.printableComparator(//
+		(s1, s2) -> compareNumberTolerant(s1, s2, true, true), () -> "numberTolerant", null);
 
 	/**
 	 * Compares two strings in such a way that strings with embedded multi-digit numbers in the same position are sorted intuitively.

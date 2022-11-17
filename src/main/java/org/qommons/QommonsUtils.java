@@ -944,7 +944,7 @@ public class QommonsUtils {
 	 * A comparator that returns the result of {@link #compareNumberTolerant(String, String, boolean, boolean)
 	 * compareNumberTolerant}<code>(s1, s2, true, true)</code>
 	 */
-	public static final Comparator<String> DISTINCT_NUMBER_TOLERANT = StringUtils.DISTINCT_NUMBER_TOLERANT;
+	public static final Comparator<CharSequence> DISTINCT_NUMBER_TOLERANT = StringUtils.DISTINCT_NUMBER_TOLERANT;
 
 	/**
 	 * Compares two strings in such a way that strings with embedded multi-digit numbers in the same position are sorted intuitively.
