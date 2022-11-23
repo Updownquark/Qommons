@@ -243,8 +243,10 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 			// There's a weird issue which I think is a java bug, but I'm not sure:
 			// When using resolve on a root path, java doesn't add the backslash after the root name (e.g. C:),
 			// so the child path ends up being something like "C:blah" with no separator, which doesn't work.
-			if (theParent == null && childPath.toString().startsWith(thePath.toString())) {
-				char sep = childPath.toString().charAt(thePath.toString().length());
+			String childPathStr = childPath.toString();
+			String pathStr = thePath.toString();
+			if (theParent == null && childPathStr.startsWith(pathStr) && childPathStr.length() > pathStr.length()) {
+				char sep = childPathStr.charAt(pathStr.length());
 				if (sep != '/' && sep != '\\')
 					childPath = Paths.get(thePath + File.separator, fileName);
 			}

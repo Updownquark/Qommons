@@ -29,7 +29,7 @@ public class QonfigInterpreterCore {
 		private final MultiInheritanceSet<QonfigElementOrAddOn> theTypes;
 		private final int theChildIndex;
 		private final Map<String, Object> theValues;
-		private Set<String> theLocalValueKeys;
+		private final Set<String> theLocalValueKeys;
 		private final ClassMap<SpecialSession<?>> theToolkitSessions;
 
 		/**
@@ -50,6 +50,7 @@ public class QonfigInterpreterCore {
 			theFocusType = root.getType();
 			theTypes = MultiInheritanceSet.empty();
 			theValues = new HashMap<>();
+			theLocalValueKeys = new HashSet<>();
 			theChildIndex = 0;
 			theToolkitSessions = new ClassMap<>();
 		}
@@ -77,11 +78,12 @@ public class QonfigInterpreterCore {
 			if (parent.getElement() == element) {
 				theParseSession = parent.theParseSession;
 				theValues = parent.theValues;
+				theLocalValueKeys = parent.theLocalValueKeys;
 			} else {
 				theParseSession = parent.theParseSession.forChild(element.getType().getName(), childIndex, element.getLineNumber());
 				theValues = new HashMap<>(parent.theValues);
-				if (parent.theLocalValueKeys != null)
-					theValues.keySet().removeAll(parent.theLocalValueKeys);
+				theValues.keySet().removeAll(parent.theLocalValueKeys);
+				theLocalValueKeys = new HashSet<>();
 			}
 		}
 
@@ -396,8 +398,6 @@ public class QonfigInterpreterCore {
 		@Override
 		public CoreSession putLocal(String sessionKey, Object value) {
 			theValues.put(sessionKey, value);
-			if (theLocalValueKeys == null)
-				theLocalValueKeys = new HashSet<>();
 			theLocalValueKeys.add(sessionKey);
 			return this;
 		}

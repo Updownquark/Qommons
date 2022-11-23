@@ -219,7 +219,7 @@ public interface BetterFile extends Named {
 					throw new ParseException("Empty content not allowed", 0);
 			} else {
 				try {
-					return BetterFile.at(theFileSource, text.toString());
+					return BetterFile.at(theFileSource, text.toString(), theWorkingDir);
 				} catch (IllegalArgumentException e) {
 					if (theWorkingDir != null)
 						return theWorkingDir.at(text.toString());
@@ -398,50 +398,67 @@ public interface BetterFile extends Named {
 	 * @return A better file at the given path under the file source root
 	 */
 	static BetterFile at(FileDataSource dataSource, String path) {
-		if (path.isEmpty()) {
+		return at(dataSource, path, null);
+	}
+
+	/**
+	 * @param dataSource The file source
+	 * @param path The path under the file source root
+	 * @param relativeTo The directory to evaluate the path relative to, unless it is an absolute path
+	 * @return A better file at the given path under the file source root or the given directory
+	 */
+	static BetterFile at(FileDataSource dataSource, String path, BetterFile relativeTo) {
+		if (path.isEmpty())
 			throw new IllegalArgumentException("Empty path");
-		} else if (path.charAt(0) == '.') {
-			return at(dataSource, System.getProperty("user.dir")).at(path);
-		}
-		StringBuilder name = new StringBuilder();
-		AbstractWrappingFile parent = null;
-		for (int c = 0; c < path.length(); c++) {
-			if (path.charAt(c) == '/' || path.charAt(c) == '\\') {
-				if (c == 0) { // Initial slash--hopefully a linux path
-					for (FileBacking root : dataSource.getRoots()) {
-						if (root.getName().equals("/")) {
-							parent = new FileRoot(dataSource, root);
-							break;
-						} else if (root.getName().charAt(0) == '/') {
-							name.append(path.charAt(c));
-							break;
-						}
+		boolean initSlash=path.charAt(0)=='/' || path.charAt(0)=='\\';
+		String [] splitPath=(initSlash ? path.substring(1) : path).split("[/\\\\]");
+		BetterFile parent = null;
+		int pathIdx = 0;
+		if (initSlash) { // Initial slash--a linux-style absolute path
+			for (FileBacking root : dataSource.getRoots()) {
+				if (root.getName().equals("/")) {
+					parent = new FileRoot(dataSource, root);
+					break;
+				} else if (splitPath.length > 0 && root.getName().charAt(0) == '/' && root.getName().substring(1).equals(splitPath[0])) {
+					parent=new FileRoot(dataSource, root);
+					pathIdx++;
+					break;
+				}
+			}
+			if (parent == null)
+				parent = new FileRoot(dataSource, dataSource.getRoot("/"));
+		} else {
+			for (FileBacking root : dataSource.getRoots()) {
+				if (root.getName().startsWith(splitPath[0])) {
+					if (root.getName().length() == splitPath[0].length() || (root.getName().length() == splitPath[0].length() + 1
+						&& (root.getName().endsWith("/") || root.getName().endsWith("\\")))) {
+						parent = new FileRoot(dataSource, root);
+						pathIdx++;
+						break;
 					}
-					continue;
-				} else if (name.length() == 0)
-					throw new IllegalArgumentException("Illegal path: " + path);
-				if (parent == null) {
-					String rootName = name.toString();
-					if (rootName.equals(".")) // Start at current directory
-						return at(dataSource, System.getProperty("user.dir")).at(path.substring(c + 1));
-					if (rootName.indexOf(':') >= 0) // Roots must be '/' or else have a colon in them, e.g. Windows paths or URLs
-						parent = new FileRoot(dataSource, dataSource.getRoot(rootName));
-					else
-						parent = (AbstractWrappingFile) at(dataSource, System.getProperty("user.dir")).at(rootName);
-				} else
-					parent = parent.createChild(name.toString(), null);
-				name.setLength(0);
-			} else
-				name.append(path.charAt(c));
-		}
-		if (name.length() > 0) {
+				}
+			}
 			if (parent == null) {
-				String rootName = name.toString();
-				if (rootName.equals("."))
-					return at(dataSource, System.getProperty("user.dir")); // Current directory
-				parent = new FileRoot(dataSource, dataSource.getRoot(rootName));
+				if (splitPath[0].indexOf(':') >= 0) { // Windows-style absolute path (or URL or something)
+					parent = new FileRoot(dataSource, dataSource.getRoot(splitPath[0]));
+					pathIdx++;
+				} else if (relativeTo != null)
+					parent = relativeTo;
+				else
+					parent = at(dataSource, System.getProperty("user.dir"));
+			}
+		}
+
+		while (pathIdx < splitPath.length) {
+			if (".".equals(splitPath[pathIdx])) {//
+			} else if ("..".equals(splitPath[pathIdx])) {
+				BetterFile newParent = parent.getParent();
+				if (newParent == null)
+					throw new IllegalArgumentException("Bad path " + path + ": " + parent.getPath() + " is a root");
+				parent = newParent;
 			} else
-				parent = parent.createChild(name.toString(), null);
+				parent = parent.at(splitPath[pathIdx]);
+			pathIdx++;
 		}
 		return parent;
 	}

@@ -367,7 +367,7 @@ public class ClassMap<V> {
 	 *        </ul>
 	 * @return All values mapped to types matching the query
 	 */
-	public synchronized List<V> getAll(Class<?> type, TypeMatch acceptMatches) {
+	public synchronized BetterList<V> getAll(Class<?> type, TypeMatch acceptMatches) {
 		List<V>[] values = new List[1];
 		descend(type, //
 			new MatchAcceptingAction<>(acceptMatches, true, (type2, value, match) -> {
@@ -376,7 +376,7 @@ public class ClassMap<V> {
 				values[0].add(value);
 				return true;
 			}));
-		return values[0] == null ? Collections.emptyList() : values[0];
+		return values[0] == null ? BetterList.empty() : BetterList.of(values[0]);
 	}
 
 	/** @return A set containing all top-level classes with values in this map */
@@ -397,7 +397,7 @@ public class ClassMap<V> {
 	 *        </ul>
 	 * @return All entries mapped to types matching the query
 	 */
-	public synchronized List<BiTuple<Class<?>, V>> getAllEntries(Class<?> type, TypeMatch acceptMatches) {
+	public synchronized BetterList<BiTuple<Class<?>, V>> getAllEntries(Class<?> type, TypeMatch acceptMatches) {
 		List<BiTuple<Class<?>, V>>[] entries = new List[1];
 		descend(type, //
 			new MatchAcceptingAction<>(acceptMatches, true, (type2, value, match) -> {
@@ -406,7 +406,7 @@ public class ClassMap<V> {
 				entries[0].add(new BiTuple<>(type2, value));
 				return true;
 			}));
-		return entries[0] == null ? Collections.emptyList() : entries[0];
+		return entries[0] == null ? BetterList.empty() : BetterList.of(entries[0]);
 	}
 
 	/**
@@ -414,8 +414,8 @@ public class ClassMap<V> {
 	 * @param type The class to query with
 	 * @return All entries mapped to sub-types of the given type
 	 */
-	public synchronized <C> List<BiTuple<Class<? extends C>, V>> getAllSubEntries(Class<C> type) {
-		return (List<BiTuple<Class<? extends C>, V>>) (List<?>) getAllEntries(type, TypeMatch.SUB_TYPE);
+	public synchronized <C> BetterList<BiTuple<Class<? extends C>, V>> getAllSubEntries(Class<C> type) {
+		return (BetterList<BiTuple<Class<? extends C>, V>>) (List<?>) getAllEntries(type, TypeMatch.SUB_TYPE);
 	}
 
 	/**
@@ -423,12 +423,12 @@ public class ClassMap<V> {
 	 * @param type The class to query with
 	 * @return All entries mapped to sub-types of the given type
 	 */
-	public synchronized <C> List<BiTuple<Class<? super C>, V>> getAllSuperEntries(Class<C> type) {
-		return (List<BiTuple<Class<? super C>, V>>) (List<?>) getAllEntries(type, TypeMatch.SUPER_TYPE);
+	public synchronized <C> BetterList<BiTuple<Class<? super C>, V>> getAllSuperEntries(Class<C> type) {
+		return (BetterList<BiTuple<Class<? super C>, V>>) (List<?>) getAllEntries(type, TypeMatch.SUPER_TYPE);
 	}
 
 	/** @return All entries in this map */
-	public synchronized List<BiTuple<Class<?>, V>> getAllEntries() {
+	public synchronized BetterList<BiTuple<Class<?>, V>> getAllEntries() {
 		return getAllEntries(Object.class, null);
 	}
 
