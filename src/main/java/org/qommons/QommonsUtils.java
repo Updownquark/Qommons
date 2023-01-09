@@ -1,5 +1,8 @@
 package org.qommons;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.PrintStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.text.ParseException;
@@ -651,6 +654,35 @@ public class QommonsUtils {
 			t -> getDifferenceFormat(t.getValue1(), t.getValue2()));
 		format.setTimeZone(timeZone);
 		return format.format(new Date(time));
+	}
+
+	/**
+	 * Suppresses print operations to {@link System#out} or {@link System#err} by replacing the target stream with a dud temporarily
+	 * 
+	 * @param err Whether to suppress {@link System#err} or {@link System#out}
+	 * @return The transaction to {@link Transaction#close()} when stream suppression should cease
+	 */
+	public static Transaction suppressSystemPrint(boolean err) {
+		PrintStream oldStream = err ? System.err : System.out;
+		PrintStream dud = new PrintStream(new OutputStream() {
+			@Override
+			public void write(int b) throws IOException {
+			}
+
+			@Override
+			public void write(byte[] b, int off, int len) throws IOException {
+			}
+		});
+		if (err)
+			System.setErr(dud);
+		else
+			System.setOut(dud);
+		return () -> {
+			if (err)
+				System.setErr(oldStream);
+			else
+				System.setOut(oldStream);
+		};
 	}
 
 	/**

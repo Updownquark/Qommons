@@ -1,5 +1,6 @@
 package org.qommons.io;
 
+import java.io.File;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.text.ParseException;
@@ -729,6 +730,38 @@ public interface Format<T> {
 		@Override
 		public String toString() {
 			return theType.getSimpleName();
+		}
+	}
+
+	/** A simple file path format */
+	public static class FileFormat implements Format<File> {
+		private final boolean allowNull;
+
+		/** @param allowNull Whether to allow an empty string, which parses to null */
+		public FileFormat(boolean allowNull) {
+			this.allowNull = allowNull;
+		}
+
+		@Override
+		public void append(StringBuilder text, File value) {
+			if (value != null)
+				text.append(value.getPath());
+		}
+
+		@Override
+		public File parse(CharSequence text) throws ParseException {
+			if (text.length() == 0) {
+				if (allowNull)
+					return null;
+				else
+					throw new ParseException("Empty content not allowed", 0);
+			} else {
+				try {
+					return new File(text.toString());
+				} catch (IllegalArgumentException e) {
+					throw e;
+				}
+			}
 		}
 	}
 

@@ -21,6 +21,8 @@ import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
+import org.qommons.ex.CheckedExceptionWrapper;
+import org.qommons.ex.ExFunction;
 
 /**
  * A {@link List} that is also a {@link BetterCollection}.
@@ -333,6 +335,61 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			return empty();
 		list.trimToSize();
 		return new ConstantList<>(list);
+	}
+
+	/**
+	 * Creates a list from a flattened stream of streams
+	 * 
+	 * @param <T> The type of the objects in the primary stream
+	 * @param <E> The type of values for the list
+	 * @param <X> An exception type that may be thrown when accessing the streams of objects in the primary stream
+	 * @param values The primary stream
+	 * @param map The function to produce streams of list values from objects in the primary stream
+	 * @return A constant list containing all values mapped from the stream
+	 * @throws X If the map function throws an exception
+	 */
+	public static <T, E, X extends Throwable> BetterList<E> of(Stream<? extends T> values,
+		ExFunction<T, ? extends Stream<? extends E>, X> map) throws X {
+		try {
+			return of(values.flatMap(v -> {
+				try {
+					return map.apply(v);
+				} catch (RuntimeException | Error e) {
+					throw e;
+				} catch (Throwable x) {
+					throw new CheckedExceptionWrapper(x);
+				}
+			}));
+		} catch (CheckedExceptionWrapper e) {
+			throw (X) e.getCause();
+		}
+	}
+
+	/**
+	 * Creates a list from a mapped stream of streams
+	 * 
+	 * @param <T> The type of the objects in the stream
+	 * @param <E> The type of values for the list
+	 * @param <X> An exception type that may be thrown when mapping from the stream objects to list objects
+	 * @param values The stream
+	 * @param map The function to produce list values from objects in the primary stream
+	 * @return A constant list containing all values mapped from the stream
+	 * @throws X If the map function throws an exception
+	 */
+	public static <T, E, X extends Throwable> BetterList<E> of2(Stream<? extends T> values, ExFunction<T, ? extends E, X> map) throws X {
+		try {
+			return of(values.map(v -> {
+				try {
+					return map.apply(v);
+				} catch (RuntimeException | Error e) {
+					throw e;
+				} catch (Throwable x) {
+					throw new CheckedExceptionWrapper(x);
+				}
+			}));
+		} catch (CheckedExceptionWrapper e) {
+			throw (X) e.getCause();
+		}
 	}
 
 	/**

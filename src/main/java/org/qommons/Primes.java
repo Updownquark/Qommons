@@ -120,8 +120,11 @@ public class Primes {
 	/**
 	 * @param maxPrime The maximum number to iterate to
 	 * @return An iterable that iterates primes up to the largest prime less than or equal to the given number
+	 * @throws IllegalArgumentException If the max prime is &lt;=0
 	 */
-	public Iterable<Integer> primesUntil(int maxPrime) {
+	public Iterable<Integer> primesUntil(int maxPrime) throws IllegalArgumentException {
+		if (maxPrime <= 0)
+			throw new IllegalArgumentException("Max prime must be greater than zero");
 		int lastPrime = getPrimeLTE(maxPrime);
 		return new Iterable<Integer>() {
 			@Override
@@ -149,6 +152,39 @@ public class Primes {
 				};
 			}
 		};
+	}
+
+	/**
+	 * Breaks down a number into a list of prime numbers that all multiply to that value
+	 * 
+	 * @param value The value to factorize
+	 * @param maxPrime The maximum prime to test against the value
+	 * @return A list containing only prime numbers, the product of all of which is <code>value</code>. Unless...
+	 *         <ul>
+	 *         <li><code>value==1</code>, in which case the a list containing only 1 will be returned</li>
+	 *         <li><code>value</code> is or is composed of a prime greater than <code>maxPrime</code>. In this case, all primes
+	 *         &lt;=maxPrime will be in the return value, followed by -1.</li>
+	 *         </ul>
+	 * @throws IllegalArgumentException If either the value or the max prime are &lt;=0
+	 */
+	public IntList factorize(long value, int maxPrime) throws IllegalArgumentException {
+		if (value <= 0)
+			throw new IllegalArgumentException("Only positive numbers may be factorized");
+		else if (value == 1)
+			return new IntList(new int[] { 1 });
+		Iterator<Integer> primes = primesUntil(maxPrime).iterator();
+		IntList factored = new IntList(false, false);
+		long remainder = value;
+		while (remainder > 1 && primes.hasNext()) {
+			int prime = primes.next();
+			while ((remainder % prime) == 0) {
+				factored.add(prime);
+				remainder /= prime;
+			}
+		}
+		if (remainder > 1) // Couldn't factorize completely
+			factored.add(-1);
+		return factored;
 	}
 
 	/**

@@ -206,6 +206,51 @@ public class SimpleXMLParser {
 		 * @return The position of the given character in the content in the XML file
 		 */
 		FilePosition getPosition(int index);
+
+		/**
+		 * @param startIndex The start index (inclusive) for the sub-sequence
+		 * @param endIndex The end index (exclusive) for the sub-sequence
+		 * @return The sub sequence
+		 */
+		default ContentPosition subSequence(int startIndex, int endIndex) {
+			if (startIndex < 0 || startIndex > endIndex || endIndex > length())
+				throw new IndexOutOfBoundsException(startIndex + " to " + endIndex + " of " + length());
+			return new SubContentPosition(this, startIndex, endIndex);
+		}
+
+		/** A {@link ContentPosition} that is a sub-sequence of another */
+		class SubContentPosition implements ContentPosition {
+			private final ContentPosition theWrapped;
+			private final int theStart;
+			private final int theEnd;
+
+			SubContentPosition(ContentPosition wrap, int start, int end) {
+				if (start < 0 || start > end || end > wrap.length())
+					throw new IndexOutOfBoundsException(start + " to " + end + " of " + wrap.length());
+				theWrapped = wrap;
+				this.theStart = start;
+				this.theEnd = end;
+			}
+
+			@Override
+			public int length() {
+				return theEnd - theStart;
+			}
+
+			@Override
+			public FilePosition getPosition(int index) {
+				if (theStart + index >= theEnd)
+					throw new IndexOutOfBoundsException(index + " of " + length());
+				return theWrapped.getPosition(theStart + index);
+			}
+
+			@Override
+			public ContentPosition subSequence(int startIndex, int endIndex) {
+				if (startIndex < 0 || startIndex > endIndex || theStart + endIndex > theEnd)
+					throw new IndexOutOfBoundsException(startIndex + " to " + endIndex + " of " + length());
+				return new SubContentPosition(theWrapped, theStart + startIndex, theStart + endIndex);
+			}
+		}
 	}
 
 	/** A handler to be notified for each item of content in an XML document */

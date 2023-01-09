@@ -8,7 +8,14 @@ import java.util.Arrays;
 import org.qommons.StringUtils;
 import org.qommons.StringUtils.CharAccumulator;
 
-/** A character buffer that uses its storage circularly to make for efficient FIFO functionality */
+/**
+ * <p>
+ * A character buffer that uses its storage circularly to make for efficient FIFO functionality.
+ * </p>
+ * <p>
+ * This class is NOT thread-safe. It cannot be used directly by multiple threads while any modifications are possible.
+ * </p>
+ */
 public class CircularByteBuffer implements StringUtils.BinaryAccumulator {
 	private byte[] theBuffer;
 	private int theOffset;
@@ -59,6 +66,19 @@ public class CircularByteBuffer implements StringUtils.BinaryAccumulator {
 		if (i >= theBuffer.length)
 			i -= theBuffer.length;
 		return theBuffer[i];
+	}
+
+	/**
+	 * Similar to {@link InputStream#read()}, returns and discards the first byte in the buffer, or returns -1 if the buffer is empty
+	 * 
+	 * @return The first byte in the buffer, or -1 if the buffer is empty
+	 */
+	public int pop() {
+		if (theLength == 0)
+			return -1;
+		byte value = theBuffer[theOffset];
+		theOffset = (theOffset + 1) % theBuffer.length;
+		return value;
 	}
 
 	/** @return This buffer's content, as a new byte array */
@@ -365,6 +385,51 @@ public class CircularByteBuffer implements StringUtils.BinaryAccumulator {
 				}
 			}
 		}
+	}
+
+	/** @return A {@link InputStream} that reads (and removes) bytes off the front of this buffer */
+	public InputStream asInputStream() {
+		class CBBInputStream extends InputStream {
+			@Override
+			public int read() {
+				return pop();
+			}
+
+			@Override
+			public int read(byte[] b, int off, int len) {
+				if (len < theLength) {
+					copyTo(0, b, off, len);
+					delete(0, len);
+				} else {
+					len = theLength;
+					copyTo(0, b, off, theLength);
+					clear(false);
+				}
+				return len;
+			}
+
+			@Override
+			public int available() {
+				return length();
+			}
+		}
+		return new CBBInputStream();
+	}
+
+	/** @return An {@link OutputStream} that appends to the end of this buffer */
+	public OutputStream asOutputStream() {
+		class CBBOutputStream extends OutputStream {
+			@Override
+			public void write(int b) {
+				append((byte) b);
+			}
+
+			@Override
+			public void write(byte[] b, int off, int len) {
+				append(b, off, len - off);
+			}
+		}
+		return new CBBOutputStream();
 	}
 
 	@Override

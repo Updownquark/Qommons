@@ -47,6 +47,19 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 		return theLength;
 	}
 
+	/**
+	 * Similar to {@link Reader#read()}, returns and discards the first character in the buffer, or returns -1 if the buffer is empty
+	 * 
+	 * @return The first character in the buffer, or -1 if the buffer is empty
+	 */
+	public int pop() {
+		if (theLength == 0)
+			return -1;
+		char value = theBuffer[theOffset];
+		theOffset = (theOffset + 1) % theBuffer.length;
+		return value;
+	}
+
 	@Override
 	public char charAt(int index) {
 		if (index < 0 || index >= theLength)
@@ -307,5 +320,57 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 				}
 			}
 		}
+	}
+
+	/** @return A {@link Reader} that reads (and removes) characters off the front of this buffer */
+	public Reader asReader() {
+		class CCBReader extends Reader {
+			@Override
+			public int read() {
+				return pop();
+			}
+
+			@Override
+			public int read(char[] cbuf, int off, int len) throws IOException {
+				if (len < theLength) {
+					copyTo(0, cbuf, off, len);
+					delete(0, len);
+				} else {
+					len = theLength;
+					copyTo(0, cbuf, off, theLength);
+					clear(false);
+				}
+				return len;
+			}
+
+			@Override
+			public void close() {
+			}
+		}
+		return new CCBReader();
+	}
+
+	/** @return A {@link Writer} that appends to the end of this buffer */
+	public Writer asWriter() {
+		class CBBWriter extends Writer {
+			@Override
+			public void write(int b) {
+				CircularCharBuffer.this.append((char) b);
+			}
+
+			@Override
+			public void write(char[] b, int off, int len) {
+				CircularCharBuffer.this.append(b, off, len - off);
+			}
+
+			@Override
+			public void flush() {
+			}
+
+			@Override
+			public void close() {
+			}
+		}
+		return new CBBWriter();
 	}
 }

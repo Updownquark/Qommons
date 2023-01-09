@@ -9,6 +9,8 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import org.qommons.ex.ExFunction;
+
 /** A bunch of utilities to easily make functions that are prettier and more useful than ordinary lambdas */
 public class LambdaUtils {
 	/** An identifier placeholder for <code>null</code> */
@@ -151,6 +153,32 @@ public class LambdaUtils {
 	 */
 	public static <T, X> Function<T, X> constantFn(X value, Supplier<String> print, Object identifier) {
 		return new PrintableFunction<>(t -> value, print != null ? print : () -> String.valueOf(value), identifier);
+	}
+
+	/**
+	 * @param <T> The argument type of the function
+	 * @param <X> The result type of the function
+	 * @param <E> The exception type that might have been thrown
+	 * @param value The value to return from the function
+	 * @param print The printed function representation
+	 * @param identifier The identifier for the function
+	 * @return A function that always returns the given value
+	 */
+	public static <T, X, E extends Throwable> ExFunction<T, X, E> constantExFn(X value, String print, Object identifier) {
+		return constantExFn(value, print != null ? new ConstantSupply(print) : () -> String.valueOf(value), identifier);
+	}
+
+	/**
+	 * @param <T> The argument type of the function
+	 * @param <X> The result type of the function
+	 * @param <E> The exception type that might have been thrown
+	 * @param value The value to return from the function
+	 * @param print The printed function representation
+	 * @param identifier The identifier for the function
+	 * @return A function that always returns the given value
+	 */
+	public static <T, X, E extends Throwable> ExFunction<T, X, E> constantExFn(X value, Supplier<String> print, Object identifier) {
+		return new PrintableExFunction<>(t -> value, print != null ? print : () -> String.valueOf(value), identifier);
 	}
 
 	/**
@@ -701,6 +729,22 @@ public class LambdaUtils {
 
 		@Override
 		public X apply(T t) {
+			return getLambda().apply(t);
+		}
+	}
+
+	static class PrintableExFunction<T, X, E extends Throwable> extends PrintableLambda<ExFunction<T, X, E>>
+		implements ExFunction<T, X, E> {
+		PrintableExFunction(ExFunction<T, X, E> function, Supplier<String> print, Object identifier) {
+			super(function, print, identifier);
+		}
+
+		PrintableExFunction(ExFunction<T, X, E> function, Supplier<String> print) {
+			super(function, print);
+		}
+
+		@Override
+		public X apply(T t) throws E {
 			return getLambda().apply(t);
 		}
 	}
