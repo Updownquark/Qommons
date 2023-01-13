@@ -1075,6 +1075,22 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 			public boolean isPresent() {
 				return keyId.isPresent() && valueId.isPresent();
 			}
+
+			@Override
+			public int hashCode() {
+				return Objects.hash(keyId, valueId);
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return obj instanceof KeyValueElementId && keyId.equals(((KeyValueElementId) obj).keyId)
+					&& valueId.equals(((KeyValueElementId) obj).valueId);
+			}
+
+			@Override
+			public String toString() {
+				return keyId + ":" + valueId;
+			}
 		}
 
 		class ValueHandleElement implements CollectionElement<MultiEntryValueHandle<K, V>> {
