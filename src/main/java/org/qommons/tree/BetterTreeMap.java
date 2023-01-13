@@ -759,8 +759,9 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 
 		@Override
-		public BinaryTreeNode<K> getOrAdd(K value, ElementId after, ElementId before, boolean first, Runnable added) {
-			TreeEntry entry = (BetterTreeMap<K, V>.TreeEntry) BetterTreeMap.this.getOrPutEntry(value, null, after, before, first, added);
+		public BinaryTreeNode<K> getOrAdd(K value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
+			TreeEntry entry = (BetterTreeMap<K, V>.TreeEntry) BetterTreeMap.this.getOrPutEntry(value, null, after, before, first, preAdd,
+				postAdd);
 			return entry == null ? null : entry.keyHandle();
 		}
 
@@ -872,8 +873,8 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 
 		@Override
 		public BinaryTreeNode<Map.Entry<K, V>> getOrAdd(Map.Entry<K, V> value, ElementId after, ElementId before, boolean first,
-			Runnable added) {
-			return (BinaryTreeNode<Map.Entry<K, V>>) super.getOrAdd(value, after, before, first, added);
+			Runnable preAdd, Runnable postAdd) {
+			return (BinaryTreeNode<Map.Entry<K, V>>) super.getOrAdd(value, after, before, first, preAdd, postAdd);
 		}
 
 		@Override

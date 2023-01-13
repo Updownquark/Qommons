@@ -417,7 +417,7 @@ public class BetterCollections {
 		}
 
 		@Override
-		public CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable added) {
+		public CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
 			if (!getWrapped().belongs(value))
 				return null;
 			return getElement(value, first);
@@ -520,7 +520,7 @@ public class BetterCollections {
 		}
 
 		@Override
-		public CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable added) {
+		public CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
 			return getElement(value, first);
 		}
 
@@ -605,7 +605,7 @@ public class BetterCollections {
 
 		@Override
 		public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before,
-			boolean first, Runnable added) {
+			boolean first, Runnable preAdd, Runnable postAdd) {
 			return getEntry(key);
 		}
 
@@ -836,7 +836,7 @@ public class BetterCollections {
 
 		@Override
 		public MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, ElementId afterKey,
-			ElementId beforeKey, boolean first, Runnable added) {
+			ElementId beforeKey, boolean first, Runnable preAdd, Runnable postAdd) {
 			if (!theWrapped.keySet().belongs(key))
 				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 			MultiEntryHandle<? extends K, ? extends V> found = ((BetterMultiMap<K, V>) theWrapped).getEntry(key);

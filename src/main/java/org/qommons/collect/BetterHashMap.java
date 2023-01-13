@@ -218,13 +218,13 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 
 	@Override
 	public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before,
-		boolean first, Runnable added) {
+		boolean first, Runnable preAdd, Runnable postAdd) {
 		CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getOrAdd(//
 			theEntries.getHasher().applyAsInt(key), entry -> theEntries.getEquals().apply(entry.getKey(), key), //
 			() -> {
 				V newValue = value.apply(key);
 				return newEntry(key, newValue);
-			}, after, before, first, added);
+			}, after, before, first, preAdd, postAdd);
 		if (entryEl == null)
 			return null;
 		return handleFor(entryEl);
@@ -401,8 +401,8 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
-		public CollectionElement<K> getOrAdd(K value, ElementId after, ElementId before, boolean first, Runnable added) {
-			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getOrAdd(newEntry(value, null), after, before, first, added);
+		public CollectionElement<K> getOrAdd(K value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
+			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getOrAdd(newEntry(value, null), after, before, first, preAdd, postAdd);
 			return entryEl == null ? null : handleFor(entryEl);
 		}
 

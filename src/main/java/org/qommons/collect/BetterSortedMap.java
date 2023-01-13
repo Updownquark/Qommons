@@ -67,7 +67,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before,
-		boolean first, Runnable added) {
+		boolean first, Runnable preAdd, Runnable postAdd) {
 		if (after != null || before != null) {
 			// If the given elements constrain the search space, we can probably be faster than the general method below
 			try (Transaction t = lock(true, null)) {
@@ -86,20 +86,24 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 							break;
 						comp = comparator().compare(key, bestEntry.getKey());
 						if ((comp < 0) == first) {
+							if (preAdd != null)
+								preAdd.run();
 							MapEntryHandle<K, V> addedEntry = putEntry(key, value.apply(key), //
 								first ? null : bestEntry.getElementId(), //
 								first ? bestEntry.getElementId() : null, first);
-							if (added != null)
-								added.run();
+							if (postAdd != null)
+								postAdd.run();
 							return addedEntry;
 						}
 					}
 					if (worst == null) {
+						if (preAdd != null)
+							preAdd.run();
 						MapEntryHandle<K, V> addedEntry = putEntry(key, value.apply(key), //
 							first ? getTerminalEntry(false).getElementId() : null, //
 							first ? null : getTerminalEntry(true).getElementId(), !first);
-						if (added != null)
-							added.run();
+						if (postAdd != null)
+							postAdd.run();
 						return addedEntry;
 					}
 				} else {
@@ -115,19 +119,23 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 							break;
 						comp = comparator().compare(key, worstEntry.getKey());
 						if ((comp > 0) == first) {
+							if (preAdd != null)
+								preAdd.run();
 							MapEntryHandle<K, V> addedEntry = putEntry(key, value.apply(key), //
 								first ? worstEntry.getElementId() : null, //
 								first ? null : worstEntry.getElementId(), !first);
-							if (added != null)
-								added.run();
+							if (postAdd != null)
+								postAdd.run();
 							return addedEntry;
 						}
 					}
+					if (preAdd != null)
+						preAdd.run();
 					MapEntryHandle<K, V> addedEntry = putEntry(key, value.apply(key), //
 						first ? getTerminalEntry(true).getElementId() : null, //
 						first ? null : getTerminalEntry(false).getElementId(), first);
-					if (added != null)
-						added.run();
+					if (postAdd != null)
+						postAdd.run();
 					return addedEntry;
 				}
 			}
@@ -149,6 +157,8 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 				if (compare != 0) {
 					CollectionElement<K> adjacent = keySet().getAdjacentElement(found.getElementId(), compare < 0);
 					if (adjacent == null) {
+						if (preAdd != null)
+							preAdd.run();
 						found = putEntry(key, value.apply(key), //
 							compare < 0 ? null : found.getElementId(), //
 							compare < 0 ? found.getElementId() : null, //
@@ -164,6 +174,8 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 							found = search(keySet().searchFor(key, 0), BetterSortedList.SortedSearchFilter.PreferLess);
 							compare = comparator().compare(key, found.getKey());
 						} else {
+							if (preAdd != null)
+								preAdd.run();
 							found = putEntry(key, value.apply(key), //
 								compare < 0 ? adjacent.getElementId() : found.getElementId(), //
 								compare < 0 ? found.getElementId() : adjacent.getElementId(), //
@@ -177,6 +189,8 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 				found = search(keySet().searchFor(key, 0), BetterSortedList.SortedSearchFilter.PreferLess);
 				if (found == null) {
 					// The map is still null. Add the first entry.
+					if (preAdd != null)
+						preAdd.run();
 					found = putEntry(key, value.apply(key), first);
 					newEntry = true;
 				} else {
@@ -184,14 +198,16 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 				}
 			}
 			if (!newEntry && compare != 0) {
+				if (preAdd != null)
+					preAdd.run();
 				found = putEntry(key, value.apply(key), //
 					compare < 0 ? null : found.getElementId(), //
 					compare < 0 ? found.getElementId() : null, //
 					false);
 				newEntry = true;
 			}
-			if (found != null && newEntry && added != null)
-				added.run();
+			if (found != null && newEntry && postAdd != null)
+				postAdd.run();
 			return found;
 		}
 	}

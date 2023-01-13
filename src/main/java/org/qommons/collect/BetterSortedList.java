@@ -145,7 +145,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	}
 
 	@Override
-	default CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable added) {
+	default CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
 		if (after != null || before != null) {
 			// If the given elements constrain the search space, we can probably be faster than the general method below
 			try (Transaction t = lock(true, null)) {
@@ -164,16 +164,20 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 							break;
 						comp = comparator().compare(value, bestEl.get());
 						if ((comp < 0) == first) {
+							if (preAdd != null)
+								preAdd.run();
 							ElementId addedEl = mutableElement(bestEl.getElementId()).add(value, first);
-							if (added != null)
-								added.run();
+							if (postAdd != null)
+								postAdd.run();
 							return getElement(addedEl);
 						}
 					}
 					if (worst == null) {
+						if (preAdd != null)
+							preAdd.run();
 						ElementId addedEl = mutableElement(getTerminalElement(!first).getElementId()).add(value, !first);
-						if (added != null)
-							added.run();
+						if (postAdd != null)
+							postAdd.run();
 						return getElement(addedEl);
 					}
 				} else {
@@ -189,15 +193,19 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 							break;
 						comp = comparator().compare(value, worstEl.get());
 						if ((comp > 0) == first) {
+							if (preAdd != null)
+								preAdd.run();
 							ElementId addedEl = mutableElement(worstEl.getElementId()).add(value, !first);
-							if (added != null)
-								added.run();
+							if (postAdd != null)
+								postAdd.run();
 							return getElement(addedEl);
 						}
 					}
+					if (preAdd != null)
+						preAdd.run();
 					ElementId addedEl = mutableElement(getTerminalElement(first).getElementId()).add(value, first);
-					if (added != null)
-						added.run();
+					if (postAdd != null)
+						postAdd.run();
 					return getElement(addedEl);
 				}
 			}
@@ -205,9 +213,11 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		while (true) {
 			CollectionElement<E> found = search(searchFor(value, 0), BetterSortedList.SortedSearchFilter.PreferLess);
 			if (found == null) {
+				if (preAdd != null)
+					preAdd.run();
 				found = addElement(value, first);
-				if (found != null && added != null)
-					added.run();
+				if (found != null && postAdd != null)
+					postAdd.run();
 				return found;
 			}
 			int compare = comparator().compare(value, found.get());
@@ -220,9 +230,11 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 				} catch (IllegalArgumentException e) {
 					continue; // Possible it may have been removed already
 				}
+				if (preAdd != null)
+					preAdd.run();
 				ElementId addedId = mutableElement.add(value, compare < 0);
-				if (added != null)
-					added.run();
+				if (postAdd != null)
+					postAdd.run();
 				return getElement(addedId);
 			}
 		}

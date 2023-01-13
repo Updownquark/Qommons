@@ -163,8 +163,8 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 		}
 
 		@Override
-		public BinaryTreeNode<K> getOrAdd(K value, ElementId after, ElementId before, boolean first, Runnable added) {
-			return (BinaryTreeNode<K>) super.getOrAdd(value, after, before, first, added);
+		public BinaryTreeNode<K> getOrAdd(K value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
+			return (BinaryTreeNode<K>) super.getOrAdd(value, after, before, first, preAdd, postAdd);
 		}
 
 		@Override

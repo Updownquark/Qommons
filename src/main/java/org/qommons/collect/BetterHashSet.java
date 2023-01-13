@@ -380,8 +380,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	/**
-	 * A version of {@link #getOrAdd(Object, ElementId, ElementId, boolean, Runnable)} that allows direct specification of hash code and
-	 * equality for more flexible searching of the table
+	 * A version of {@link #getOrAdd(Object, ElementId, ElementId, boolean, Runnable, Runnable)} that allows direct specification of hash
+	 * code and equality for more flexible searching of the table
 	 * 
 	 * @param hashCode The hash code to search for
 	 * @param equals The predicate for matching a value in the table
@@ -390,11 +390,12 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	 * @param before The element before which to add the value (may be null)
 	 * @param first Whether to prefer adding the value closer to the after element (or the beginning of the set) or the before element (or
 	 *        the end of the set)
-	 * @param added Will execute if the value is added
+	 * @param preAdd Will execute if the value is added, before it is added
+	 * @param postAdd Will execute if the value is added, after it is added
 	 * @return The existing or added element
 	 */
 	public CollectionElement<E> getOrAdd(int hashCode, Predicate<? super E> equals, Supplier<? extends E> value, ElementId after,
-		ElementId before, boolean first, Runnable added) {
+		ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
 		checkIntegrity();
 		HashTableEntry[] table = theTable;
 		int tableIndex = getTableIndex(table.length, hashCode);
@@ -405,6 +406,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 		// Ordered insert is O(n), but we'll support it
 		try (Transaction t = lock(true, null)) {
+			if (preAdd != null)
+				preAdd.run();
 			ensureCapacity(theSize + 1);
 			if (theTable != table) {
 				// Table rebuilt, need to get the insertion information again
@@ -420,8 +423,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			theSize++;
 			theLocker.modified();
 			insert(table, entry, tableIndex, adjacent);
-			if (added != null)
-				added.run();
+			if (postAdd != null)
+				postAdd.run();
 			checkIntegrity();
 			return entry.immutable();
 		}
@@ -491,7 +494,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException {
 		boolean[] added = new boolean[1];
-		CollectionElement<E> element = getOrAdd(theHasher.applyAsInt(value), equalsTest(value), () -> value, after, before, first,
+		CollectionElement<E> element = getOrAdd(theHasher.applyAsInt(value), equalsTest(value), () -> value, after, before, first, null,
 			() -> added[0] = true);
 		return added[0] ? element : null;
 	}
@@ -582,8 +585,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable added) {
-		return getOrAdd(theHasher.applyAsInt(value), equalsTest(value), () -> value, after, before, first, added);
+	public CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
+		return getOrAdd(theHasher.applyAsInt(value), equalsTest(value), () -> value, after, before, first, preAdd, postAdd);
 	}
 
 	@Override

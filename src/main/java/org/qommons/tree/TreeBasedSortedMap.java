@@ -47,8 +47,8 @@ public interface TreeBasedSortedMap<K, V> extends BetterSortedMap<K, V> {
 
 	@Override
 	default BinaryTreeEntry<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId afterKey, ElementId beforeKey,
-		boolean first, Runnable added) {
-		return (BinaryTreeEntry<K, V>) BetterSortedMap.super.getOrPutEntry(key, value, afterKey, beforeKey, first, added);
+		boolean first, Runnable preAdd, Runnable postAdd) {
+		return (BinaryTreeEntry<K, V>) BetterSortedMap.super.getOrPutEntry(key, value, afterKey, beforeKey, first, preAdd, postAdd);
 	}
 
 	@Override

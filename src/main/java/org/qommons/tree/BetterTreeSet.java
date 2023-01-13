@@ -95,9 +95,9 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 		}
 
 		@Override
-		public BinaryTreeNode<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable added) {
+		public BinaryTreeNode<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
 			return BinaryTreeNode
-				.reverse(getWrapped().getOrAdd(value, ElementId.reverse(before), ElementId.reverse(before), !first, added));
+				.reverse(getWrapped().getOrAdd(value, ElementId.reverse(before), ElementId.reverse(before), !first, preAdd, postAdd));
 		}
 
 		@Override

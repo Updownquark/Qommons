@@ -293,8 +293,8 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 	}
 
 	@Override
-	public BinaryTreeNode<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable added) {
-		return (BinaryTreeNode<E>) BetterSortedList.super.getOrAdd(value, after, before, first, added);
+	public BinaryTreeNode<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
+		return (BinaryTreeNode<E>) BetterSortedList.super.getOrAdd(value, after, before, first, preAdd, postAdd);
 	}
 
 	@Override

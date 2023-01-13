@@ -96,7 +96,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 	default MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
 		boolean[] added = new boolean[1];
 		MapEntryHandle<K, V> entry = getOrPutEntry(key, LambdaUtils.constantFn(value, () -> String.valueOf(value), value), after, before,
-			first, () -> added[0] = true);
+			first, null, () -> added[0] = true);
 		if (entry == null)
 			return null;
 		if (!added[0])
@@ -111,18 +111,20 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 	MapEntryHandle<K, V> getEntry(K key);
 
 	/**
-	 * Same as {@link #computeIfAbsent(Object, Function)}, but returns the entry of the affected element
+	 * Same as {@link #computeIfAbsent(Object, Function)}, but returns the entry of the affected element, or null if it does not exist and
+	 * cannot be added
 	 * 
 	 * @param key The key to retrieve or insert the value for
 	 * @param value The function to produce the value for the added entry, if not present
 	 * @param after The ID of the key element to be the lower bound for the new entry's insertion in the key set
 	 * @param before The ID of the key element to be the upper bound for the new entry's insertion in the key set
 	 * @param first Whether to prefer adding the new entry early or late in the key/entry set
-	 * @param added The runnable that will be invoked if the entry is added
+	 * @param preAdd The runnable that will be invoked if the entry is added, before it is added
+	 * @param postAdd The runnable that will be invoked if the entry is added, after it is added
 	 * @return The entry of the element if retrieved or added; may be null if key/value pair is not permitted in the map
 	 */
 	MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before, boolean first,
-		Runnable added);
+		Runnable preAdd, Runnable postAdd);
 
 	/**
 	 * @param entryId The element ID to get the handle for
@@ -227,7 +229,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		while (true) {
 			boolean[] added = new boolean[1];
 			MapEntryHandle<K, V> entry = getOrPutEntry(key, //
-				k -> value, null, null, false, () -> added[0] = true);
+				k -> value, null, null, false, null, () -> added[0] = true);
 			if (entry != null && !added[0]) {
 				// Get the mutable entry in case the immutable one doesn't support Entry.setValue(Object)
 				MutableMapEntryHandle<K, V> mutableEntry;
@@ -479,7 +481,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 
 	@Override
 	default V computeIfAbsent(K key, Function<? super K, ? extends V> mappingFunction) {
-		MapEntryHandle<K, V> entry = getOrPutEntry(key, mappingFunction, null, null, false, null);
+		MapEntryHandle<K, V> entry = getOrPutEntry(key, mappingFunction, null, null, false, null, null);
 		return entry == null ? null : entry.getValue();
 	}
 
@@ -522,7 +524,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 				V newValue = remappingFunction.apply(k, null);
 				value.accept(newValue);
 				return newValue;
-			}, null, null, false, null);
+			}, null, null, false, null, null);
 			if (value.isPresent())
 				return value.get();// Added
 			MutableMapEntryHandle<K, V> mutableEntry;
@@ -637,7 +639,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 
 		@Override
 		public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before,
-			boolean first, Runnable added) {
+			boolean first, Runnable preAdd, Runnable postAdd) {
 			return null;
 		}
 
@@ -714,9 +716,10 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 
 		@Override
 		public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before,
-			boolean first, Runnable added) {
+			boolean first, Runnable preAdd, Runnable postAdd) {
 			return MapEntryHandle
-				.reverse(theWrapped.getOrPutEntry(key, value, ElementId.reverse(before), ElementId.reverse(after), !first, added));
+				.reverse(
+					theWrapped.getOrPutEntry(key, value, ElementId.reverse(before), ElementId.reverse(after), !first, preAdd, postAdd));
 		}
 
 		@Override
@@ -908,8 +911,9 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		}
 
 		@Override
-		public CollectionElement<Entry<K, V>> getOrAdd(Entry<K, V> value, ElementId after, ElementId before, boolean first, Runnable added) {
-			MapEntryHandle<K, V> entry = theMap.getOrPutEntry(value.getKey(), k -> value.getValue(), after, before, first, added);
+		public CollectionElement<Entry<K, V>> getOrAdd(Entry<K, V> value, ElementId after, ElementId before, boolean first, Runnable preAdd,
+			Runnable postAdd) {
+			MapEntryHandle<K, V> entry = theMap.getOrPutEntry(value.getKey(), k -> value.getValue(), after, before, first, preAdd, postAdd);
 			return entry == null ? null : getElement(entry.getElementId());
 		}
 

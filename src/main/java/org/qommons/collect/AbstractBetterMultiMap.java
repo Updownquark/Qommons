@@ -340,7 +340,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			// We need to create simple collections initially, then replace them with those built by the value creator.
 			for (Map.Entry<K, List<V>> entry : initialValues.entrySet()) {
 				MapEntryHandle<K, BetterCollection<V>> myEntry = theEntries.getOrPutEntry(entry.getKey(),
-					k -> BetterTreeList.<V> build().build(), null, null, false, null);
+					k -> BetterTreeList.<V> build().build(), null, null, false, null, null);
 				if (myEntry != null)
 					myEntry.getValue().addAll(entry.getValue());
 			}
@@ -450,7 +450,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	public MultiEntryValueHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first) {
 		try (Transaction t = lock(true, null)) {
 			MapEntryHandle<K, BetterCollection<V>> entry = theEntries.getOrPutEntry(key,
-				k -> theValues.createValuesFor(k, theLocking, null), afterKey, beforeKey, first, null);
+				k -> theValues.createValuesFor(k, theLocking, null), afterKey, beforeKey, first, null, null);
 			if (entry == null)
 				return null;
 			CollectionElement<V> valueEl = entry.getValue().addElement(value, first);
@@ -466,7 +466,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 
 	@Override
 	public MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, ElementId afterKey,
-		ElementId beforeKey, boolean first, Runnable added) {
+		ElementId beforeKey, boolean first, Runnable preAdd, Runnable postAdd) {
 		return entryFor(theEntries.getOrPutEntry(key, k -> {
 			BetterCollection<V> values = theValues.createValuesFor(k, theLocking, value.apply(k));
 			if (values.isEmpty()) {
@@ -476,7 +476,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			theValueSize += values.size();
 			theStamp++;
 			return values;
-		}, afterKey, beforeKey, first, added));
+		}, afterKey, beforeKey, first, preAdd, postAdd));
 	}
 
 	@Override
@@ -760,7 +760,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 
 		@Override
-		public CollectionElement<K> getOrAdd(K value, ElementId after, ElementId before, boolean first, Runnable added) {
+		public CollectionElement<K> getOrAdd(K value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
 			try (Transaction t = lock(true, null)) {
 				return getBacking().getElement(value, first);
 			}
@@ -856,7 +856,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 			try (Transaction t = lock(true, null)) {
 				MapEntryHandle<K, BetterCollection<V>> entry = theEntries.getOrPutEntry(theKey,
 					k -> theValues.createValuesFor(k, theLocking, null), //
-					null, null, false, null);
+					null, null, false, null, null);
 				if (entry == null)
 					throw new UnsupportedOperationException("Could not add map entry for " + theKey);
 				return entry.getValue();
@@ -1238,16 +1238,16 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 
 		@Override
-		public CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable added) {
+		public CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
 			BetterSet<E> wrapped = (BetterSet<E>) getWrapped().getBacking(false);
 			if (wrapped == null)
 				throw new NoSuchElementException();
-			Runnable newAdded = () -> {
-				if (added != null)
-					added.run();
+			Runnable newPostAdd = () -> {
+				if (postAdd != null)
+					postAdd.run();
 				getWrapped().changed(1);
 			};
-			return wrapped.getOrAdd(value, after, before, first, newAdded);
+			return wrapped.getOrAdd(value, after, before, first, preAdd, newPostAdd);
 		}
 
 		@Override

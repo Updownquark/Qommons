@@ -16,5 +16,5 @@ public interface TreeBasedSet<E> extends TreeBasedSortedList<E>, SplitSpliterabl
 	}
 
 	@Override
-	BinaryTreeNode<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable added);
+	BinaryTreeNode<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd);
 }

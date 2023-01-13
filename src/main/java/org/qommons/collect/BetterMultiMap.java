@@ -204,7 +204,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 	 */
 	default MultiEntryValueHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first) {
 		boolean[] added = new boolean[1];
-		MultiEntryHandle<K, V> entry = getOrPutEntry(key, k -> BetterList.of(value), afterKey, beforeKey, first, () -> added[0] = true);
+		MultiEntryHandle<K, V> entry = getOrPutEntry(key, k -> BetterList.of(value), afterKey, beforeKey, first, null,
+			() -> added[0] = true);
 		if (entry == null)
 			return null;
 		CollectionElement<V> valueEl;
@@ -225,11 +226,12 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 	 * @param afterKey The key element after which to insert the entry (if it must be added, null allowed)
 	 * @param beforeKey The key element before which to insert the entry (if it must be added, null allowed)
 	 * @param first Whether to prefer adding the new entry early or late in the key/entry set
-	 * @param added The runnable that will be invoked if the entry is added
+	 * @param preAdd The runnable that will be invoked if the entry is added, before it is added
+	 * @param postAdd The runnable that will be invoked if the entry is added, after it is added
 	 * @return The entry of the element if retrieved or added; may be null if key/value pair is not permitted in the map
 	 */
 	MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, ElementId afterKey,
-		ElementId beforeKey, boolean first, Runnable added);
+		ElementId beforeKey, boolean first, Runnable preAdd, Runnable postAdd);
 
 	@Override
 	default boolean add(K key, V value) {
@@ -520,8 +522,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 
 		@Override
 		public CollectionElement<MultiEntryHandle<K, V>> getOrAdd(MultiEntryHandle<K, V> value, ElementId after, ElementId before,
-			boolean first, Runnable added) {
-			return entryFor(getMap().getOrPutEntry(value.getKey(), k -> value.getValues(), after, before, first, added));
+			boolean first, Runnable preAdd, Runnable postAdd) {
+			return entryFor(getMap().getOrPutEntry(value.getKey(), k -> value.getValues(), after, before, first, preAdd, postAdd));
 		}
 
 		@Override
@@ -1818,7 +1820,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 
 		@Override
 		public MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, ElementId afterKey,
-			ElementId beforeKey, boolean first, Runnable added) {
+			ElementId beforeKey, boolean first, Runnable preAdd, Runnable postAdd) {
 			return null;
 		}
 
@@ -1918,8 +1920,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 					BetterList<V> values = BetterTreeList.<V> build().build();
 					reverse(values, value);
 					return values;
-				}, after, before, first,
-					() -> added[0] = true);
+				}, after, before, first, null, () -> added[0] = true);
 				if (entry == null)
 					return null;
 				if (!added[0])
@@ -1930,12 +1931,12 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 
 		@Override
 		public MapEntryHandle<K, X> getOrPutEntry(K key, Function<? super K, ? extends X> value, ElementId afterKey, ElementId beforeKey,
-			boolean first, Runnable added) {
+			boolean first, Runnable preAdd, Runnable postAdd) {
 			return entryFor(getSource().getOrPutEntry(key, k -> {
 				BetterList<V> values = BetterTreeList.<V> build().build();
 				reverse(values, value.apply(k));
 				return values;
-			}, afterKey, beforeKey, first, added));
+			}, afterKey, beforeKey, first, preAdd, postAdd));
 		}
 
 		/**
@@ -2332,9 +2333,9 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 
 		@Override
 		public MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, ElementId afterKey,
-			ElementId beforeKey, boolean first, Runnable added) {
-			return MultiEntryHandle
-				.reverse(theSource.getOrPutEntry(key, value, ElementId.reverse(beforeKey), ElementId.reverse(afterKey), !first, added));
+			ElementId beforeKey, boolean first, Runnable preAdd, Runnable postAdd) {
+			return MultiEntryHandle.reverse(
+				theSource.getOrPutEntry(key, value, ElementId.reverse(beforeKey), ElementId.reverse(afterKey), !first, preAdd, postAdd));
 		}
 
 		@Override
