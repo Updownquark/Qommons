@@ -1,5 +1,6 @@
 package org.qommons.config;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -16,6 +17,7 @@ import org.qommons.MultiInheritanceSet;
 import org.qommons.QommonsUtils;
 import org.qommons.StatusReportAccumulator;
 import org.qommons.StatusReportAccumulator.Status;
+import org.qommons.io.SimpleXMLParser.FilePosition;
 
 /** A class for interpreting parsed {@link QonfigDocument}s into useful structures */
 public class QonfigInterpreterCore {
@@ -23,7 +25,7 @@ public class QonfigInterpreterCore {
 	public static class CoreSession implements AbstractQIS<CoreSession> {
 		private final QonfigInterpreterCore theInterpreter;
 		private final CoreSession theParent;
-		private final QonfigParseSession theParseSession;
+		private final List<QonfigParseIssue> theWarnings;
 		private final QonfigElement theElement;
 		private final QonfigElementOrAddOn theFocusType;
 		private final MultiInheritanceSet<QonfigElementOrAddOn> theTypes;
@@ -44,8 +46,7 @@ public class QonfigInterpreterCore {
 			throws QonfigInterpretationException {
 			theInterpreter = interpreter;
 			theParent = source;
-			theParseSession = QonfigParseSession.forRoot(root.getType().getName(), root.getDocument().getDocToolkit(),
-				root.getLineNumber());
+			theWarnings = new ArrayList<>();
 			theElement = root;
 			theFocusType = root.getType();
 			theTypes = MultiInheritanceSet.empty();
@@ -75,12 +76,11 @@ public class QonfigInterpreterCore {
 			theTypes = types;
 			theChildIndex = childIndex;
 			theToolkitSessions = new ClassMap<>();
+			theWarnings = parent.theWarnings;
 			if (parent.getElement() == element) {
-				theParseSession = parent.theParseSession;
 				theValues = parent.theValues;
 				theLocalValueKeys = parent.theLocalValueKeys;
 			} else {
-				theParseSession = parent.theParseSession.forChild(element.getType().getName(), childIndex, element.getLineNumber());
 				theValues = new HashMap<>(parent.theValues);
 				theValues.keySet().removeAll(parent.theLocalValueKeys);
 				theLocalValueKeys = new HashSet<>();
@@ -122,7 +122,7 @@ public class QonfigInterpreterCore {
 				}
 			} else {
 				String msg = "Element " + theElement + " is not an instance of " + focusType;
-				withError(msg);
+				error(msg);
 				throw new IllegalStateException(msg);
 			}
 		}
@@ -139,7 +139,7 @@ public class QonfigInterpreterCore {
 				}
 			} else {
 				String msg = "Element " + theElement + " is not an instance of " + type;
-				withError(msg);
+				error(msg);
 				throw new IllegalStateException(msg);
 			}
 		}
@@ -238,9 +238,112 @@ public class QonfigInterpreterCore {
 			return theInterpreter.interpret(root);
 		}
 
+		static class RuntimeInterpretationException extends RuntimeException {
+			private final QonfigFilePosition thePosition;
+
+			public RuntimeInterpretationException(String message, QonfigFilePosition position) {
+				super(message);
+				thePosition = position;
+			}
+
+			public RuntimeInterpretationException(String message, Throwable cause, QonfigFilePosition position) {
+				super(message, cause);
+				thePosition = position;
+			}
+
+			public QonfigFilePosition getPosition() {
+				return thePosition;
+			}
+
+			public QonfigInterpretationException toIntepreterException() {
+				QonfigInterpretationException qie;
+				if (getCause() != this)
+					qie = new QonfigInterpretationException(getMessage(), getCause(), getPosition(), 0);
+				else
+					qie = new QonfigInterpretationException(getMessage(), getPosition(), 0);
+				qie.setStackTrace(getStackTrace());
+				return qie;
+			}
+		}
+
 		@Override
-		public QonfigParseSession getParseSession() {
-			return theParseSession;
+		public ErrorReporting error(String message, Throwable cause) {
+			QonfigFilePosition position = new QonfigFilePosition(theElement.getDocument().getLocation(), theElement.getFilePosition());
+			if (cause == null)
+				throw new RuntimeInterpretationException(message, position);
+			else if (cause instanceof QonfigInterpretationException)
+				throw new RuntimeInterpretationException(message, cause, ((QonfigInterpretationException) cause).getPosition());
+			else
+				throw new RuntimeInterpretationException(message, cause, position);
+		}
+
+		@Override
+		public CoreSession warn(String message, Throwable cause) {
+			theWarnings.add(new QonfigParseIssue(getElementPath(), message, getLocation(), cause));
+			return this;
+		}
+
+		private ElementPath getElementPath() {
+			if (theParent == null)
+				return ElementPath.forRoot(theElement.getDocument().getLocation(), theElement.getType().getName(),
+					theElement.getFilePosition());
+			else if (theParent.theElement == theElement)
+				return theParent.getElementPath();
+			else
+				return theParent.getElementPath().forChild(theElement.getType().getName(), theElement.getFilePosition());
+		}
+
+		private static StackTraceElement getLocation() {
+			StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+			if (stack == null)
+				return null;
+			int i;
+			for (i = 1; i < stack.length && (//
+			stack[i].getClassName().equals(QonfigParseSession.class.getName())//
+				|| stack[i].getClassName().equals(QonfigInterpreterCore.class.getName())//
+				|| stack[i].getClassName().equals(QonfigInterpreterCore.CoreSession.class.getName())//
+				|| stack[i].getClassName().equals(AbstractQIS.class.getName())//
+			); i++) {//
+			}
+			return i < stack.length ? stack[i] : null;
+		}
+
+		@Override
+		public ErrorReporting forChild(String childName, FilePosition position) {
+			class ChildErrorReporting implements ErrorReporting {
+				private final ElementPath thePath;
+
+				ChildErrorReporting(ElementPath path) {
+					thePath = path;
+				}
+
+				@Override
+				public ErrorReporting warn(String message, Throwable cause) {
+					theWarnings.add(new QonfigParseIssue(thePath, message, getLocation(), cause));
+					return this;
+				}
+
+				@Override
+				public ErrorReporting error(String message, Throwable cause) {
+					QonfigFilePosition position2 = new QonfigFilePosition(theElement.getDocument().getLocation(),
+						theElement.getFilePosition());
+					if (cause == null)
+						throw new RuntimeInterpretationException(message, position2);
+					else
+						throw new RuntimeInterpretationException(message, cause, position2);
+				}
+
+				@Override
+				public ErrorReporting forChild(String childName2, FilePosition position2) {
+					return new ChildErrorReporting(thePath.forChild(childName2, position2));
+				}
+			}
+			return new ChildErrorReporting(getElementPath().forChild(childName, position));
+		}
+
+		@Override
+		public List<QonfigParseIssue> getWarnings() {
+			return theWarnings;
 		}
 
 		@Override
@@ -250,7 +353,7 @@ public class QonfigInterpreterCore {
 				: (QonfigCreatorHolder<T>) creators.get(asType, ClassMap.TypeMatch.SUB_TYPE);
 			if (creator == null) {
 				String msg = "No creator registered for element " + as.getName() + " and target type " + asType.getName();
-				withError(msg);
+				error(msg);
 				throw new IllegalStateException(msg);
 			}
 			CoreSession session;
@@ -260,7 +363,7 @@ public class QonfigInterpreterCore {
 				session = asElement(as);
 			else {
 				String msg = "Element " + theElement + " is not an instance of " + as;
-				withError(msg);
+				error(msg);
 				throw new IllegalStateException(msg);
 			}
 			QonfigModifierHolder<T>[] modifiers = getModifiers(creator.type);
@@ -270,18 +373,12 @@ public class QonfigInterpreterCore {
 				try {
 					if (theElement.isInstance(modifier.element))
 						modifierPrepValues[mIdx++] = modifier.modifier.prepareSession(session.asElement(modifier.element));
-				} catch (QonfigInterpretationException | RuntimeException e) {
-					if (theInterpreter.loggedThrowable != e) {
-						theInterpreter.loggedThrowable = e;
-						session.withError("Modifier " + modifier.modifier + " for "//
-							+ (modifier.element instanceof QonfigElementDef ? "super type " : "add-on ") + modifier.element + " on type "
-							+ modifier.type.getName() + " failed to prepare session for the creator", e);
-					}
-					throw e;
-				}
-				if (!theParseSession.getErrors().isEmpty()) {
-					String msg = "Could not interpret " + getElement() + " as " + asType;
-					throw new QonfigInterpretationException(msg, theParseSession.createException(msg));
+				} catch (RuntimeInterpretationException e) {
+					throw e.toIntepreterException();
+				} catch (RuntimeException e) {
+					QonfigFilePosition position = new QonfigFilePosition(theElement.getDocument().getLocation(),
+						theElement.getFilePosition());
+					throw new QonfigInterpretationException(e, position, 0);
 				}
 			}
 			for (mIdx = modifiers.length - 1; mIdx >= 0; mIdx--) {
@@ -289,74 +386,44 @@ public class QonfigInterpreterCore {
 				try {
 					if (theElement.isInstance(modifier.element))
 						modifier.modifier.postPrepare(session.asElement(modifier.element), modifierPrepValues[mIdx]);
-				} catch (QonfigInterpretationException | RuntimeException e) {
-					if (theInterpreter.loggedThrowable != e) {
-						theInterpreter.loggedThrowable = e;
-						session.withError("Modifier " + modifier.modifier + " for "//
-							+ (modifier.element instanceof QonfigElementDef ? "super type " : "add-on ") + modifier.element + " on type "
-							+ modifier.type.getName() + " post-prepare failed for element", e);
-					}
-					throw e;
-				}
-				if (!theParseSession.getErrors().isEmpty()) {
-					String msg = "Could not interpret " + getElement() + " as " + asType;
-					throw new QonfigInterpretationException(msg, theParseSession.createException(msg));
+				} catch (RuntimeInterpretationException e) {
+					throw e.toIntepreterException();
+				} catch (RuntimeException e) {
+					QonfigFilePosition position = new QonfigFilePosition(theElement.getDocument().getLocation(),
+						theElement.getFilePosition());
+					throw new QonfigInterpretationException(e, position, 0);
 				}
 			}
 			T value;
 			try {
 				value = creator.creator.createValue(session);
-			} catch (QonfigInterpretationException | RuntimeException e) {
-				if (theInterpreter.loggedThrowable != e) {
-					theInterpreter.loggedThrowable = e;
-					session.withError(
-						"Creator " + creator.creator + " for element " + as + " failed to create value for element " + theElement, e);
-				}
-				if (theParent != null)
-					throw e;
-				else
-					throw new QonfigInterpretationException(theParseSession.createException(e.getMessage()));
-			}
-			if (!theParseSession.getErrors().isEmpty()) {
-				String msg = "Could not interpret " + getElement() + " as " + asType;
-				throw new QonfigInterpretationException(msg, theParseSession.createException(msg));
+			} catch (RuntimeInterpretationException e) {
+				throw e.toIntepreterException();
+			} catch (RuntimeException e) {
+				QonfigFilePosition position = new QonfigFilePosition(theElement.getDocument().getLocation(), theElement.getFilePosition());
+				throw new QonfigInterpretationException(e, position, 0);
 			}
 			for (mIdx = 0; mIdx < modifiers.length; mIdx++) {
 				QonfigModifierHolder<T> modifier = modifiers[mIdx];
 				try {
 					if (theElement.isInstance(modifier.element))
 						value = modifier.modifier.modifyValue(value, session.asElement(modifier.element), modifierPrepValues[mIdx]);
-				} catch (QonfigInterpretationException | RuntimeException e) {
-					if (theInterpreter.loggedThrowable != e) {
-						theInterpreter.loggedThrowable = e;
-						session.withError("Modifier " + modifier.modifier + " for "//
-							+ (modifier.element instanceof QonfigElementDef ? "super type " : "add-on ") + modifier.element + " on type "
-							+ modifier.type.getName() + " failed to modify value " + value + " for element", e);
-					}
-					throw e;
-				}
-				if (!theParseSession.getErrors().isEmpty()) {
-					String msg = "Could not interpret " + getElement() + " as " + asType;
-					throw new QonfigInterpretationException(msg, theParseSession.createException(msg));
+				} catch (RuntimeInterpretationException e) {
+					throw e.toIntepreterException();
+				} catch (RuntimeException e) {
+					QonfigFilePosition position = new QonfigFilePosition(theElement.getDocument().getLocation(),
+						theElement.getFilePosition());
+					throw new QonfigInterpretationException(e, position, 0);
 				}
 			}
 			try {
 				// This is safe because the creator created the value
 				value = ((QonfigValueCreator<T>) creator.creator).postModification(value, session);
-			} catch (QonfigInterpretationException | RuntimeException e) {
-				if (theInterpreter.loggedThrowable != e) {
-					theInterpreter.loggedThrowable = e;
-					session.withError("Creator " + creator.creator + " for element " + as + " post-modification failed for value " + value
-						+ " for element " + theElement, e);
-				}
-				if (theParent != null)
-					throw e;
-				else
-					throw new QonfigInterpretationException(theParseSession.createException(e.getMessage()));
-			}
-			if (!theParseSession.getErrors().isEmpty()) {
-				String msg = "Could not interpret " + getElement() + " as " + asType;
-				throw new QonfigInterpretationException(msg, theParseSession.createException(msg));
+			} catch (RuntimeInterpretationException e) {
+				throw e.toIntepreterException();
+			} catch (RuntimeException e) {
+				QonfigFilePosition position = new QonfigFilePosition(theElement.getDocument().getLocation(), theElement.getFilePosition());
+				throw new QonfigInterpretationException(e, position, 0);
 			}
 			return value;
 		}
@@ -570,7 +637,7 @@ public class QonfigInterpreterCore {
 
 		@Override
 		public T createValue(CoreSession session) throws QonfigInterpretationException {
-			QonfigAddOn delegate = (QonfigAddOn) session.getElement().getAttributes().get(theTypeAttribute);
+			QonfigAddOn delegate = (QonfigAddOn) session.getElement().getAttributes().get(theTypeAttribute).value;
 			return session.interpret(delegate, theType);
 		}
 
@@ -628,7 +695,6 @@ public class QonfigInterpreterCore {
 	private final Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> theCreators;
 	private final Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> theModifiers;
 	private final ClassMap<SpecialSessionImplementation<?>> theSpecialSessions;
-	Throwable loggedThrowable;
 
 	/**
 	 * @param callingClass The class building the interpreter

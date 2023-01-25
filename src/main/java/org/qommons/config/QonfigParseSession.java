@@ -4,8 +4,10 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.qommons.io.SimpleXMLParser.FilePosition;
+
 /** A structure to pass around during Qonfig parsing to report errors and warnings */
-public class QonfigParseSession {
+public class QonfigParseSession implements ErrorReporting {
 	private final QonfigToolkit theToolkit;
 	private final ElementPath thePath;
 	private final List<QonfigParseIssue> theWarnings;
@@ -23,14 +25,9 @@ public class QonfigParseSession {
 		return theToolkit;
 	}
 
-	/**
-	 * @param childName The name of the child to create the session for
-	 * @param identifier An identifier for the child (in case multiple children with the same name exist in the parent)
-	 * @param lineNumber The line number of the element this session is for
-	 * @return A session for the child
-	 */
-	public QonfigParseSession forChild(String childName, Object identifier, int lineNumber) {
-		return new QonfigParseSession(theToolkit, thePath.forChild(childName, identifier, lineNumber), theWarnings, theErrors);
+	@Override
+	public QonfigParseSession forChild(String childName, FilePosition position) {
+		return new QonfigParseSession(theToolkit, thePath.forChild(childName, position), theWarnings, theErrors);
 	}
 
 	private static StackTraceElement getLocation() {
@@ -48,38 +45,14 @@ public class QonfigParseSession {
 		return i < stack.length ? stack[i] : null;
 	}
 
-	/**
-	 * @param message The warning message to log
-	 * @return This session
-	 */
-	public QonfigParseSession withWarning(String message) {
-		return withWarning(message, null);
-	}
-
-	/**
-	 * @param message The warning message to log
-	 * @param cause The cause of the warning, if any
-	 * @return This session
-	 */
-	public QonfigParseSession withWarning(String message, Throwable cause) {
+	@Override
+	public QonfigParseSession warn(String message, Throwable cause) {
 		theWarnings.add(new QonfigParseIssue(thePath, message, getLocation(), cause));
 		return this;
 	}
 
-	/**
-	 * @param message The error message to log
-	 * @return This session
-	 */
-	public QonfigParseSession withError(String message) {
-		return withError(message, null);
-	}
-
-	/**
-	 * @param message The error message to log
-	 * @param cause The cause of the error, if any
-	 * @return This session
-	 */
-	public QonfigParseSession withError(String message, Throwable cause) {
+	@Override
+	public QonfigParseSession error(String message, Throwable cause) {
 		theErrors.add(new QonfigParseIssue(thePath, message, getLocation(), cause));
 		return this;
 	}
@@ -89,12 +62,12 @@ public class QonfigParseSession {
 		return thePath;
 	}
 
-	/** @return All warnings logged against this session or any of its {@link #forChild(String, Object, int) children} */
+	/** @return All warnings logged against this session or any of its {@link #forChild(String, FilePosition) children} */
 	public List<QonfigParseIssue> getWarnings() {
 		return theWarnings;
 	}
 
-	/** @return All errors logged against this session or any of its {@link #forChild(String, Object, int) children} */
+	/** @return All errors logged against this session or any of its {@link #forChild(String, FilePosition) children} */
 	public List<QonfigParseIssue> getErrors() {
 		return theErrors;
 	}
@@ -102,7 +75,7 @@ public class QonfigParseSession {
 	/**
 	 * @param message The root message for the exception, if any is thrown
 	 * @return This session
-	 * @throws QonfigParseException If any errors have been logged against this session or any of its {@link #forChild(String, Object, int)
+	 * @throws QonfigParseException If any errors have been logged against this session or any of its {@link #forChild(String, FilePosition)
 	 *         children}
 	 */
 	public QonfigParseSession throwErrors(String message) throws QonfigParseException {
@@ -113,16 +86,17 @@ public class QonfigParseSession {
 
 	/**
 	 * @param message The root message for the exception, if any is thrown
-	 * @return An exception for errors that have logged against this session or any of its {@link #forChild(String, Object, int) children}
+	 * @return An exception for errors that have logged against this session or any of its {@link #forChild(String, FilePosition) children}
 	 */
 	public QonfigParseException createException(String message) {
-		return QonfigParseException.forIssues(message, theErrors);
+		return QonfigParseException.forIssues(//
+			theToolkit.getLocation() == null ? theToolkit.getName() : theToolkit.getLocation().toString(), message, theErrors);
 	}
 
 	/**
 	 * @param stream The stream to print the warnings to
 	 * @param message The root message to print if there are any warnings
-	 * @return Whether any warnings had been logged against this session or any of its {@link #forChild(String, Object, int) children}
+	 * @return Whether any warnings had been logged against this session or any of its {@link #forChild(String, FilePosition) children}
 	 */
 	public boolean printWarnings(PrintStream stream, String message) {
 		if (!theWarnings.isEmpty()) {
@@ -146,10 +120,12 @@ public class QonfigParseSession {
 	 * 
 	 * @param rootName The root name for the session
 	 * @param toolkit The toolkit for the session
-	 * @param lineNumber The line number of the root element
+	 * @param position The file position of the root element
 	 * @return The new parse session
 	 */
-	public static QonfigParseSession forRoot(String rootName, QonfigToolkit toolkit, int lineNumber) {
-		return new QonfigParseSession(toolkit, ElementPath.forRoot(rootName, lineNumber), new ArrayList<>(), new ArrayList<>());
+	public static QonfigParseSession forRoot(String rootName, QonfigToolkit toolkit, FilePosition position) {
+		return new QonfigParseSession(toolkit,
+			ElementPath.forRoot(toolkit.getLocation() == null ? toolkit.getName() : toolkit.getLocation().toString(), rootName, position),
+			new ArrayList<>(), new ArrayList<>());
 	}
 }

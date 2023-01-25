@@ -5,6 +5,8 @@ import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 
+import org.qommons.io.SimpleXMLParser.FilePosition;
+
 /** A child that may be specified for an element */
 public interface QonfigChildDef extends QonfigElementOwned {
 	/** A child specification as originally declared */
@@ -52,7 +54,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		private final Set<QonfigAddOn> theRequirement;
 		private final int theMin;
 		private final int theMax;
-		private final int theLineNumber;
+		private final FilePosition thePosition;
 
 		/**
 		 * @param owner The element-def or add-on that this child belongs to
@@ -63,10 +65,10 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 *        role
 		 * @param min The minimum number of elements that may be specified for this role
 		 * @param max The maximum number of elements that may be specified for this role
-		 * @param lineNumber The line number where this child was defined
+		 * @param position The position in the file where this child was defined
 		 */
 		public Abstract(QonfigElementOrAddOn owner, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment,
-			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, int lineNumber) {
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, FilePosition position) {
 			theOwner = owner;
 			theType = type;
 			theFulfillment = fulfillment;
@@ -74,7 +76,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 			theRequirement = requirement;
 			theMin = min;
 			theMax = max;
-			theLineNumber = lineNumber;
+			thePosition = position;
 		}
 
 		@Override
@@ -121,8 +123,8 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		}
 
 		@Override
-		public int getLineNumber() {
-			return theLineNumber;
+		public FilePosition getFilePosition() {
+			return thePosition;
 		}
 
 		@Override
@@ -159,11 +161,11 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 *        role
 		 * @param min The minimum number of elements that may be specified for this role
 		 * @param max The maximum number of elements that may be specified for this role
-		 * @param lineNumber The line number where this child was defined
+		 * @param position The position in the file where this child was defined
 		 */
 		public DeclaredChildDef(QonfigElementOrAddOn owner, String name, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment,
-			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, int lineNumber) {
-			super(owner, type, fulfillment, inheritance, requirement, min, max, lineNumber);
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, FilePosition position) {
+			super(owner, type, fulfillment, inheritance, requirement, min, max, position);
 			theName = name;
 		}
 
@@ -202,11 +204,11 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 *        role
 		 * @param min The minimum number of elements that may be specified for this role
 		 * @param max The maximum number of elements that may be specified for this role
-		 * @param lineNumber The line number where this child was defined
+		 * @param position The position in the file where this child was defined
 		 */
 		public Modified(QonfigChildDef declared, QonfigElementOrAddOn owner, QonfigElementDef type, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, int min, int max, int lineNumber) {
-			super(owner, type, Collections.emptySet(), combine(declared.getInheritance(), inheritance), requirement, min, max, lineNumber);
+			Set<QonfigAddOn> requirement, int min, int max, FilePosition position) {
+			super(owner, type, Collections.emptySet(), combine(declared.getInheritance(), inheritance), requirement, min, max, position);
 			theDeclared = declared instanceof QonfigChildDef.Declared ? (QonfigChildDef.Declared) declared
 				: ((QonfigChildDef.Modified) declared).getDeclared();
 			theDeclaredInheritance = inheritance;
@@ -260,11 +262,11 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param declared The inherited child
 		 * @param owner The element-def or add-on that this child belongs to
 		 * @param overriding The new children that fulfill the role, overriding it
-		 * @param lineNumber The line number where this child was defined
+		 * @param position The position in the file where this child was defined
 		 */
 		public Overridden(QonfigElementOrAddOn owner, QonfigChildDef.Declared declared, Set<QonfigChildDef.Declared> overriding,
-			int lineNumber) {
-			super(owner, declared.getType(), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), 0, 0, lineNumber);
+			FilePosition position) {
+			super(owner, declared.getType(), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), 0, 0, position);
 			theDeclared = declared;
 			theOverriding = overriding;
 		}
@@ -355,8 +357,8 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		}
 
 		@Override
-		public int getLineNumber() {
-			return -1; // This child wasn't defined anywhere, it was inherited by default
+		public FilePosition getFilePosition() {
+			return null; // This child wasn't defined anywhere, it was inherited by default
 		}
 
 		@Override

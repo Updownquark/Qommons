@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.qommons.config.QonfigInterpreterCore.Builder;
+import org.qommons.io.SimpleXMLParser.XmlParseException;
 
 /** Provides a utility method for interpreting an application from a setup XML file formatted as qonfig-app.qtd */
 public class QonfigApp {
@@ -47,6 +48,8 @@ public class QonfigApp {
 			throw new IllegalStateException("Could not locate app toolkit definition");
 		} catch (IOException e) {
 			throw new IllegalStateException("Could not read app toolkit definition", e);
+		} catch (XmlParseException e) {
+			throw new IllegalArgumentException("Could not parse toolkit definition XML: " + appDefUrl, e);
 		} catch (QonfigParseException e) {
 			throw new IllegalStateException("Could not parse app toolkit definition", e);
 		}
@@ -56,6 +59,8 @@ public class QonfigApp {
 			appDef = qonfigParser.parseDocument(appDefUrl.toString(), appDefIn).getRoot();
 		} catch (IOException e) {
 			throw new IllegalArgumentException("Could not read Qonfig-App definition: " + appDefUrl, e);
+		} catch (XmlParseException e) {
+			throw new IllegalArgumentException("Could not parse Qonfig-App definition XML: " + appDefUrl, e);
 		} catch (QonfigParseException e) {
 			throw new IllegalArgumentException("Could not parse Qonfig-App definition: " + appDefUrl, e);
 		}
@@ -89,6 +94,8 @@ public class QonfigApp {
 					valueTypes.toArray(new CustomValueType[valueTypes.size()]));
 			} catch (IOException e) {
 				throw new IllegalStateException("Could not read toolkit " + toolkitDef, e);
+			} catch (XmlParseException e) {
+				throw new IllegalArgumentException("Could not parse toolkit XML: " + appDefUrl, e);
 			} catch (QonfigParseException e) {
 				throw new IllegalStateException("Could not parse toolkit " + toolkitDef, e);
 			} catch (RuntimeException e) {
@@ -102,6 +109,8 @@ public class QonfigApp {
 			qonfigDoc = qonfigParser.parseDocument(appFileURL.toString(), appFileIn);
 		} catch (IOException e) {
 			throw new IllegalArgumentException("Could not read application file " + appFile, e);
+		} catch (XmlParseException e) {
+			throw new IllegalArgumentException("Could not parse application file XML: " + appDefUrl, e);
 		} catch (QonfigParseException e) {
 			throw new IllegalArgumentException("Could not parse application file " + appFile, e);
 		}

@@ -9,10 +9,10 @@ public interface CustomValueType extends Named {
 	 * 
 	 * @param value The text to parse
 	 * @param tk The toolkit that the document belongs to
-	 * @param session The session to report errors
+	 * @param errors The reporting to report errors
 	 * @return The parsed value
 	 */
-	Object parse(String value, QonfigToolkit tk, QonfigParseSession session);
+	Object parse(String value, QonfigToolkit tk, ErrorReporting errors);
 
 	/**
 	 * @param value The value to test

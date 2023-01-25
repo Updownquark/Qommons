@@ -2,6 +2,8 @@ package org.qommons.config;
 
 import java.util.Objects;
 
+import org.qommons.io.SimpleXMLParser.FilePosition;
+
 /** An attribute that may be specified on an element */
 public interface QonfigAttributeDef extends QonfigValueDef {
 	/** An attribute specification as originally declared */
@@ -17,21 +19,22 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		private final QonfigValueType theType;
 		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
-		private final int theLineNumber;
+		private final FilePosition thePosition;
 
 		/**
 		 * @param owner The element-def or add-on that the attribute belongs to
 		 * @param type The type for the attribute value
 		 * @param specify The specification of the attribute
 		 * @param defaultValue The value to use if it is not specified
-		 * @param lineNumber The line number in the file where this attribute was defined
+		 * @param position Number The line number in the file where this attribute was defined
 		 */
-		public Abstract(QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify, Object defaultValue, int lineNumber) {
+		public Abstract(QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify, Object defaultValue,
+			FilePosition position) {
 			theOwner = owner;
 			theType = type;
 			theSpecification = specify;
 			theDefaultValue = defaultValue;
-			theLineNumber = lineNumber;
+			thePosition = position;
 		}
 
 		@Override
@@ -66,8 +69,8 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		}
 
 		@Override
-		public int getLineNumber() {
-			return theLineNumber;
+		public FilePosition getFilePosition() {
+			return thePosition;
 		}
 
 		@Override
@@ -100,11 +103,11 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		 * @param type The type for the attribute value
 		 * @param specify The specification of the attribute
 		 * @param defaultValue The value to use if it is not specified
-		 * @param lineNumber The line number in the file where this attribute was defined
+		 * @param position The position in the file where this attribute was defined
 		 */
 		public DeclaredAttributeDef(QonfigElementOrAddOn owner, String name, QonfigValueType type, SpecificationType specify,
-			Object defaultValue, int lineNumber) {
-			super(owner, type, specify, defaultValue, lineNumber);
+			Object defaultValue, FilePosition position) {
+			super(owner, type, specify, defaultValue, position);
 			theName = name;
 		}
 
@@ -129,11 +132,11 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		 * @param type The type for the attribute value
 		 * @param specify The specification of the attribute
 		 * @param defaultValue The value to use if it is not specified
-		 * @param lineNumber The line number in the file where this attribute was defined
+		 * @param position The position in the file where this attribute modification was defined
 		 */
 		public Modified(QonfigAttributeDef declared, QonfigElementOrAddOn owner, QonfigValueType type,
-			SpecificationType specify, Object defaultValue, int lineNumber) {
-			super(owner, type, specify, defaultValue, lineNumber);
+			SpecificationType specify, Object defaultValue, FilePosition position) {
+			super(owner, type, specify, defaultValue, position);
 			theDeclared = declared instanceof DeclaredAttributeDef ? (DeclaredAttributeDef) declared
 				: ((QonfigAttributeDef.Modified) declared).getDeclared();
 		}

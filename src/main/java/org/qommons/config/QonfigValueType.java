@@ -3,9 +3,10 @@ package org.qommons.config;
 import java.util.List;
 
 import org.qommons.Named;
+import org.qommons.io.SimpleXMLParser.FilePosition;
 
 /** A type of values that can be parsed from attribute or element text values */
-public interface QonfigValueType extends Named, LineNumbered {
+public interface QonfigValueType extends Named, FileSourced {
 	/** The "string" type */
 	public static final QonfigValueType STRING = new QonfigValueType() {
 		@Override
@@ -14,12 +15,12 @@ public interface QonfigValueType extends Named, LineNumbered {
 		}
 
 		@Override
-		public int getLineNumber() {
-			return -1;
+		public FilePosition getFilePosition() {
+			return null;
 		}
 
 		@Override
-		public Object parse(String value, QonfigToolkit tk, QonfigParseSession session) {
+		public Object parse(String value, QonfigToolkit tk, ErrorReporting session) {
 			return value;
 		}
 
@@ -41,19 +42,19 @@ public interface QonfigValueType extends Named, LineNumbered {
 		}
 
 		@Override
-		public int getLineNumber() {
-			return -1;
+		public FilePosition getFilePosition() {
+			return null;
 		}
 
 		@Override
-		public Object parse(String value, QonfigToolkit tk, QonfigParseSession session) {
+		public Object parse(String value, QonfigToolkit tk, ErrorReporting session) {
 			switch (value) {
 			case "true":
 				return Boolean.TRUE;
 			case "false":
 				return Boolean.FALSE;
 			default:
-				session.withError("Illegal boolean value: " + value);
+				session.error("Illegal boolean value: " + value);
 				return Boolean.FALSE;
 			}
 		}
@@ -77,17 +78,17 @@ public interface QonfigValueType extends Named, LineNumbered {
 	public static class Literal implements Declared {
 		private final QonfigToolkit theDeclarer;
 		private final String theValue;
-		private final int theLineNumber;
+		private final FilePosition thePosition;
 
 		/**
 		 * @param declarer The toolkit that declared the literal
 		 * @param value The literal value to match
-		 * @param lineNumber The line number where this type was defined
+		 * @param position The position in the file where this type was defined
 		 */
-		public Literal(QonfigToolkit declarer, String value, int lineNumber) {
+		public Literal(QonfigToolkit declarer, String value, FilePosition position) {
 			theDeclarer = declarer;
 			theValue = value;
-			theLineNumber = lineNumber;
+			thePosition = position;
 		}
 
 		@Override
@@ -106,11 +107,11 @@ public interface QonfigValueType extends Named, LineNumbered {
 		}
 
 		@Override
-		public Object parse(String value, QonfigToolkit tk, QonfigParseSession session) {
+		public Object parse(String value, QonfigToolkit tk, ErrorReporting session) {
 			if (value.equals(theValue))
 				return theValue;
 			else
-				session.withError("'" + theValue + "' expected, not '" + value + "'");
+				session.error("'" + theValue + "' expected, not '" + value + "'");
 			return null;
 		}
 
@@ -120,8 +121,8 @@ public interface QonfigValueType extends Named, LineNumbered {
 		}
 
 		@Override
-		public int getLineNumber() {
-			return theLineNumber;
+		public FilePosition getFilePosition() {
+			return thePosition;
 		}
 
 		@Override
@@ -135,19 +136,19 @@ public interface QonfigValueType extends Named, LineNumbered {
 		private final QonfigToolkit theDeclarer;
 		private final String theName;
 		private final List<QonfigValueType> theComponents;
-		private final int theLineNumber;
+		private final FilePosition thePosition;
 
 		/**
 		 * @param declarer The toolkit that declared the one-of type
 		 * @param name The name for the type
 		 * @param components The components to delegate to
-		 * @param lineNumber The line number where this type was defined
+		 * @param position The position in the file where this type was defined
 		 */
-		public OneOf(QonfigToolkit declarer, String name, List<QonfigValueType> components, int lineNumber) {
+		public OneOf(QonfigToolkit declarer, String name, List<QonfigValueType> components, FilePosition position) {
 			theDeclarer = declarer;
 			theName = name;
 			theComponents = components;
-			theLineNumber = lineNumber;
+			thePosition = position;
 		}
 
 		@Override
@@ -161,8 +162,8 @@ public interface QonfigValueType extends Named, LineNumbered {
 		}
 
 		@Override
-		public Object parse(String value, QonfigToolkit tk, QonfigParseSession session) {
-			QonfigParseSession testEnv = QonfigParseSession.forRoot("", tk, theLineNumber);
+		public Object parse(String value, QonfigToolkit tk, ErrorReporting session) {
+			QonfigParseSession testEnv = QonfigParseSession.forRoot("", tk, thePosition);
 			QonfigValueType best = null;
 			for (QonfigValueType component : theComponents) {
 				testEnv.getErrors().clear();
@@ -176,7 +177,7 @@ public interface QonfigValueType extends Named, LineNumbered {
 			if (best != null)
 				return best.parse(value, tk, session);
 			else
-				session.withError(this + " expected");
+				session.error(this + " expected");
 			return null;
 		}
 
@@ -189,8 +190,8 @@ public interface QonfigValueType extends Named, LineNumbered {
 		}
 
 		@Override
-		public int getLineNumber() {
-			return theLineNumber;
+		public FilePosition getFilePosition() {
+			return thePosition;
 		}
 
 		@Override
@@ -203,17 +204,17 @@ public interface QonfigValueType extends Named, LineNumbered {
 	public class Custom implements Declared {
 		private final QonfigToolkit theDeclarer;
 		private final CustomValueType theCustomType;
-		private final int theLineNumber;
+		private final FilePosition thePosition;
 
 		/**
 		 * @param declarer The toolkit declaring the value type
 		 * @param customType The custom-implemented value type
-		 * @param lineNumber The line number where this type was defined
+		 * @param position The position in the file where this type was defined
 		 */
-		public Custom(QonfigToolkit declarer, CustomValueType customType, int lineNumber) {
+		public Custom(QonfigToolkit declarer, CustomValueType customType, FilePosition position) {
 			theDeclarer = declarer;
 			theCustomType = customType;
-			theLineNumber = lineNumber;
+			thePosition = position;
 		}
 
 		@Override
@@ -222,7 +223,7 @@ public interface QonfigValueType extends Named, LineNumbered {
 		}
 
 		@Override
-		public Object parse(String value, QonfigToolkit tk, QonfigParseSession session) {
+		public Object parse(String value, QonfigToolkit tk, ErrorReporting session) {
 			return theCustomType.parse(value, tk, session);
 		}
 
@@ -237,8 +238,8 @@ public interface QonfigValueType extends Named, LineNumbered {
 		}
 
 		@Override
-		public int getLineNumber() {
-			return theLineNumber;
+		public FilePosition getFilePosition() {
+			return thePosition;
 		}
 
 		@Override
@@ -254,7 +255,7 @@ public interface QonfigValueType extends Named, LineNumbered {
 		private final QonfigValueType theType;
 		private final String thePrefix;
 		private final String theSuffix;
-		private final int theLineNumber;
+		private final FilePosition thePosition;
 
 		/**
 		 * @param declarer The toolkit declaring this type
@@ -262,19 +263,19 @@ public interface QonfigValueType extends Named, LineNumbered {
 		 * @param type The type to do the parsing
 		 * @param prefix The prefix that must be prepended to values
 		 * @param suffix The suffix that must be appended to values
-		 * @param lineNumber The line number where this type was defined
+		 * @param position The position in the file where this type was defined
 		 */
-		public Explicit(QonfigToolkit declarer, String name, QonfigValueType type, String prefix, String suffix, int lineNumber) {
+		public Explicit(QonfigToolkit declarer, String name, QonfigValueType type, String prefix, String suffix, FilePosition position) {
 			theDeclarer = declarer;
 			theName = name;
 			theType = type;
 			thePrefix = prefix;
 			theSuffix = suffix;
-			theLineNumber = lineNumber;
+			thePosition = position;
 		}
 
 		@Override
-		public Object parse(String value, QonfigToolkit tk, QonfigParseSession session) {
+		public Object parse(String value, QonfigToolkit tk, ErrorReporting session) {
 			if (!value.startsWith(thePrefix) || !value.endsWith(theSuffix)) {
 				StringBuilder err = new StringBuilder("Value must ");
 				if (thePrefix.isEmpty()) {
@@ -283,7 +284,7 @@ public interface QonfigValueType extends Named, LineNumbered {
 					err.append("start with '" + thePrefix + "'");
 				} else
 					err.append("start with '" + thePrefix + "' and end with '" + theSuffix + "'");
-				session.withError(err.toString());
+				session.error(err.toString());
 				return null;
 			}
 			return theType.parse(value.substring(thePrefix.length(), value.length() - theSuffix.length()), tk, session);
@@ -305,8 +306,8 @@ public interface QonfigValueType extends Named, LineNumbered {
 		}
 
 		@Override
-		public int getLineNumber() {
-			return theLineNumber;
+		public FilePosition getFilePosition() {
+			return thePosition;
 		}
 
 		@Override
@@ -320,10 +321,10 @@ public interface QonfigValueType extends Named, LineNumbered {
 	 * 
 	 * @param value The text to parse
 	 * @param tk The toolkit that the document belongs to
-	 * @param session The session to report errors
+	 * @param errors The reporting to report errors
 	 * @return The parsed value
 	 */
-	Object parse(String value, QonfigToolkit tk, QonfigParseSession session);
+	Object parse(String value, QonfigToolkit tk, ErrorReporting errors);
 
 	/**
 	 * @param value The value to test

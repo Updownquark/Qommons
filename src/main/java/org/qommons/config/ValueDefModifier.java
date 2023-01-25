@@ -2,6 +2,9 @@ package org.qommons.config;
 
 /** Modifies an attribute or element value defined by a super-type */
 public interface ValueDefModifier {
+	/** @return The toolkit that declared this modifier */
+	QonfigToolkit getDeclarer();
+
 	/** @return The sub-type of the value to restrict specified values to. Null means to inherit from the super-specified value. */
 	QonfigValueType getTypeRestriction();
 
@@ -13,20 +16,28 @@ public interface ValueDefModifier {
 
 	/** Default {@link ValueDefModifier} implementation */
 	public static class Default implements ValueDefModifier {
+		private final QonfigToolkit theDeclarer;
 		private final QonfigValueType theTypeRestriction;
 		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
 
 		/**
+		 * @param declarer The toolkit that declared the modifier
 		 * @param typeRestriction The sub-type of the value to restrict specified values to. Null means to inherit from the super-specified
 		 *        value.
 		 * @param specify The specification for the value. Null means to inherit from the super-specified value.
 		 * @param defaultValue The default value to use if the value is not specified. Null means to inherit from the super-specified value.
 		 */
-		public Default(QonfigValueType typeRestriction, SpecificationType specify, Object defaultValue) {
+		public Default(QonfigToolkit declarer, QonfigValueType typeRestriction, SpecificationType specify, Object defaultValue) {
+			theDeclarer = declarer;
 			theTypeRestriction = typeRestriction;
 			theSpecification = specify;
 			theDefaultValue = defaultValue;
+		}
+
+		@Override
+		public QonfigToolkit getDeclarer() {
+			return theDeclarer;
 		}
 
 		@Override

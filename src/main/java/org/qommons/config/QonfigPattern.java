@@ -3,6 +3,8 @@ package org.qommons.config;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.qommons.io.SimpleXMLParser.FilePosition;
+
 /** A value type for pattern-matched strings */
 public class QonfigPattern extends AbstractQonfigType implements QonfigValueType.Declared {
 	private final Pattern thePattern;
@@ -11,10 +13,10 @@ public class QonfigPattern extends AbstractQonfigType implements QonfigValueType
 	 * @param declarer The toolkit declaring this pattern
 	 * @param name The name of the pattern
 	 * @param pattern The regex pattern to apply
-	 * @param lineNumber The line number where this pattern was defined
+	 * @param position The position in the file where this value was defined
 	 */
-	public QonfigPattern(QonfigToolkit declarer, String name, Pattern pattern, int lineNumber) {
-		super(declarer, name, lineNumber);
+	public QonfigPattern(QonfigToolkit declarer, String name, Pattern pattern, FilePosition position) {
+		super(declarer, name, position);
 		thePattern = pattern;
 	}
 
@@ -24,10 +26,10 @@ public class QonfigPattern extends AbstractQonfigType implements QonfigValueType
 	}
 
 	@Override
-	public Object parse(String value, QonfigToolkit tk, QonfigParseSession session) {
+	public Object parse(String value, QonfigToolkit tk, ErrorReporting session) {
 		Matcher m = thePattern.matcher(value);
 		if (!m.matches()) {
-			session.withError("Expected string matching '" + thePattern.pattern() + "', not '" + value + "'");
+			session.error("Expected string matching '" + thePattern.pattern() + "', not '" + value + "'");
 			return null;
 		}
 		return new PatternMatch(m);

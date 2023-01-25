@@ -66,11 +66,11 @@ public class ElementQualifiedParseItem {
 			try {
 				qualifier = session.getToolkit().getElementOrAddOn(m.group("wholeElement"));
 				if (qualifier == null) {
-					session.withError("No such element found: " + m.group("wholeElement"));
+					session.error("No such element found: " + m.group("wholeElement"));
 					return null;
 				}
 			} catch (IllegalArgumentException e) {
-				session.withError(e.getMessage());
+				session.error(e.getMessage());
 				return null;
 			}
 			String ns = m.group("ns");

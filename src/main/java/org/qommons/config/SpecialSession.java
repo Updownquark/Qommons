@@ -1,9 +1,12 @@
 package org.qommons.config;
 
+import java.io.PrintStream;
+import java.util.List;
 import java.util.function.Supplier;
 
 import org.qommons.MultiInheritanceSet;
 import org.qommons.config.QonfigInterpreterCore.CoreSession;
+import org.qommons.io.SimpleXMLParser.FilePosition;
 
 /**
  * A session with added capabilities and utilities. These sessions are provided by a {@link SpecialSessionImplementation} via
@@ -108,7 +111,29 @@ public interface SpecialSession<QIS extends SpecialSession<QIS>> extends Abstrac
 	}
 
 	@Override
-	default QonfigParseSession getParseSession() {
-		return getWrapped().getParseSession();
+	default QIS warn(String message, Throwable cause) {
+		getWrapped().warn(message, cause);
+		return (QIS) this;
+	}
+
+	@Override
+	default QIS error(String message, Throwable cause) {
+		getWrapped().error(message, cause);
+		return (QIS) this;
+	}
+
+	@Override
+	default ErrorReporting forChild(String childName, FilePosition position) {
+		return getWrapped().forChild(childName, position);
+	}
+
+	@Override
+	default List<QonfigParseIssue> getWarnings() {
+		return getWrapped().getWarnings();
+	}
+
+	@Override
+	default boolean printWarnings(PrintStream stream, String message) {
+		return getWrapped().printWarnings(stream, message);
 	}
 }

@@ -20,7 +20,7 @@ public enum SpecificationType {
 		for (SpecificationType spec : SpecificationType.values())
 			if (spec.name().toLowerCase().equals(attrValue))
 				return spec;
-		session.withError("Illegal specify value: " + attrValue);
+		session.error("Illegal specify value: " + attrValue);
 		return null;
 	}
 }

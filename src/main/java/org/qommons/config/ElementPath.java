@@ -1,27 +1,28 @@
 package org.qommons.config;
 
-/** Represents a path through XML structure for identifying the location of errors, etc. */
-public class ElementPath {
-	private final ElementPath theParent;
-	private final String theElementName;
-	private final Object theIdentifier;
-	private final int theLineNumber;
+import org.qommons.io.SimpleXMLParser.FilePosition;
 
-	private ElementPath(ElementPath parent, String elementName, Object identifier, int lineNumber) {
+/** Represents a path through XML structure for identifying the location of errors, etc. */
+public class ElementPath implements FileSourced {
+	private final ElementPath theParent;
+	private final String theFile;
+	private final String theElementName;
+	private final FilePosition thePosition;
+
+	private ElementPath(ElementPath parent, String file, String elementName, FilePosition position) {
 		theParent = parent;
+		theFile = file;
 		theElementName = elementName;
-		theIdentifier = identifier;
-		theLineNumber = lineNumber;
+		thePosition = position;
 	}
 
 	/**
 	 * @param childName The name of the child to create the path for
-	 * @param identifier An identifier for the child (in case multiple children with the same name exist in the parent)
-	 * @param lineNumber The line number in the file where the element was defined
+	 * @param position The position in the file where the element was defined
 	 * @return An element path for the child
 	 */
-	public ElementPath forChild(String childName, Object identifier, int lineNumber) {
-		return new ElementPath(this, childName, identifier, lineNumber);
+	public ElementPath forChild(String childName, FilePosition position) {
+		return new ElementPath(this, theFile, childName, position);
 	}
 
 	/** @return This path's parent */
@@ -34,14 +35,9 @@ public class ElementPath {
 		return theElementName;
 	}
 
-	/** @return The identifier identifying this path's element among its siblings */
-	public Object getIdentifier() {
-		return theIdentifier;
-	}
-
-	/** @return The line number where this path's element was defined */
-	public int getLineNumber() {
-		return theLineNumber;
+	@Override
+	public QonfigFilePosition getFilePosition() {
+		return new QonfigFilePosition(theFile, thePosition);
 	}
 
 	@Override
@@ -56,8 +52,6 @@ public class ElementPath {
 	public StringBuilder toString(StringBuilder str) {
 		if (theParent != null) {
 			theParent.toString(str).append('/').append(theElementName);
-			if (theIdentifier != null)
-				str.append('[').append(theIdentifier).append(']');
 		} else
 			str.append(theElementName);
 		return str;
@@ -66,11 +60,12 @@ public class ElementPath {
 	/**
 	 * Creates a path for the root element
 	 * 
+	 * @param fileLocation The location of the file containing the element
 	 * @param rootName The name of the root element
-	 * @param lineNumber The line number in the file where the element was defined
+	 * @param position The position in the file where the element was defined
 	 * @return The root path
 	 */
-	public static ElementPath forRoot(String rootName, int lineNumber) {
-		return new ElementPath(null, rootName, 0, lineNumber);
+	public static ElementPath forRoot(String fileLocation, String rootName, FilePosition position) {
+		return new ElementPath(null, fileLocation, rootName, position);
 	}
 }

@@ -53,8 +53,8 @@ public class QonfigParseIssue {
 	public String toString() {
 		StringBuilder str = new StringBuilder();
 		str.append(thePath.toString());
-		if (thePath.getLineNumber() >= 0)
-			str.append(" (line ").append(thePath.getLineNumber()).append(')');
+		if (thePath.getParent() != null)
+			str.append(" (").append(thePath.getParent()).append(')');
 		str.append(": ");
 		str.append(theMessage);
 		str.append(" ( ").append(theLocation).append(" )");
@@ -62,7 +62,7 @@ public class QonfigParseIssue {
 			str.append(": ").append(theCause);
 			int i = 0;
 			for (StackTraceElement stack : theCause.getStackTrace()) {
-				str.append('\n').append(stack);
+				str.append("\n\t").append(stack);
 				if (++i == 10)
 					break;
 			}

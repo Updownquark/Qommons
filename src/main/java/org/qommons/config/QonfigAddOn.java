@@ -7,6 +7,7 @@ import java.util.Set;
 import org.qommons.MultiInheritanceSet;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterMultiMap;
+import org.qommons.io.SimpleXMLParser.FilePosition;
 
 /** An add-on that can be applied to an element in various forms to alter its specification and behavior */
 public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType, ElementDefModifier {
@@ -14,17 +15,17 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 	public static final class ChildModifier implements ChildDefModifier {
 		private final Set<QonfigAddOn> theInheritance;
 		private final Set<QonfigAddOn> theRequirement;
-		private final int theLineNumber;
+		private final FilePosition thePosition;
 
 		/**
 		 * @param inheritance The add-ons inherited by the child
 		 * @param requirement The set of add-ons that an element must inherit to fulfill this role
-		 * @param lineNumber The line number in the file where this child modifier was defined
+		 * @param position The position in the file where this child modifier was defined
 		 */
-		public ChildModifier(Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int lineNumber) {
+		public ChildModifier(Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, FilePosition position) {
 			theInheritance = inheritance;
 			theRequirement = requirement;
-			theLineNumber = lineNumber;
+			thePosition = position;
 		}
 
 		@Override
@@ -68,8 +69,8 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		}
 
 		@Override
-		public int getLineNumber() {
-			return theLineNumber;
+		public FilePosition getFilePosition() {
+			return thePosition;
 		}
 
 		@Override
@@ -80,16 +81,24 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 
 	/** A {@link ValueDefModifier} for add-ons */
 	public static final class ValueModifier implements ValueDefModifier {
+		private final QonfigToolkit theDeclarer;
 		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
 
 		/**
+		 * @param declarer The toolkit that declared this modifier
 		 * @param specification The specification type of the attribute or element value
 		 * @param defaultValue The default value for the attribute or element value
 		 */
-		public ValueModifier(SpecificationType specification, Object defaultValue) {
+		public ValueModifier(QonfigToolkit declarer, SpecificationType specification, Object defaultValue) {
+			theDeclarer = declarer;
 			theDefaultValue = defaultValue;
 			theSpecification = specification;
+		}
+
+		@Override
+		public QonfigToolkit getDeclarer() {
+			return theDeclarer;
 		}
 
 		@Override
@@ -125,9 +134,9 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
 		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ChildModifier> childModifiers,
 		BetterMultiMap<String, QonfigChildDef> childrenByName, //
-		ValueModifier value, MultiInheritanceSet<QonfigAddOn> fullInheritance, QonfigAddOn metaSpec, int lineNumber) {
+		ValueModifier value, MultiInheritanceSet<QonfigAddOn> fullInheritance, QonfigAddOn metaSpec, FilePosition position) {
 		super(declarer, name, isAbstract, requirement, inheritance, fullInheritance, declaredAttributes, attributeModifiers,
-			attributesByName, declaredChildren, childModifiers, childrenByName, value, metaSpec, lineNumber);
+			attributesByName, declaredChildren, childModifiers, childrenByName, value, metaSpec, position);
 	}
 
 	/**
@@ -183,14 +192,14 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 	}
 
 	@Override
-	public QonfigAddOn parse(String value, QonfigToolkit tk, QonfigParseSession session) {
+	public QonfigAddOn parse(String value, QonfigToolkit tk, ErrorReporting session) {
 		int colon = value.indexOf(':');
 		QonfigAddOn found = null;
 		if (colon >= 0) {
 			String depName = value.substring(0, colon);
 			QonfigToolkit dep = tk.getDependencies().get(depName);
 			if (dep == null) {
-				session.withError("No such dependency '" + depName + "'");
+				session.error("No such dependency '" + depName + "'");
 				return null;
 			}
 			String addOnName = value.substring(colon + 1);
@@ -200,10 +209,10 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 				found = addOns.getFirst();
 				break;
 			case 0:
-				session.withError("No such add-on '" + addOnName + "' in toolkit " + depName + " (" + dep.getLocation() + ")");
+				session.error("No such add-on '" + addOnName + "' in toolkit " + depName + " (" + dep.getLocation() + ")");
 				break;
 			default:
-				session.withError("Multiple add-ons named '" + addOnName + "' in toolkit " + depName + " (" + dep.getLocation() + ")");
+				session.error("Multiple add-ons named '" + addOnName + "' in toolkit " + depName + " (" + dep.getLocation() + ")");
 			}
 		} else {
 			BetterCollection<QonfigAddOn> addOns = tk.getAllAddOns().get(value);
@@ -212,21 +221,21 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 				found = addOns.getFirst();
 				break;
 			case 0:
-				session.withError("No such add-on '" + value + "' in toolkit " + tk.getLocation());
+				session.error("No such add-on '" + value + "' in toolkit " + tk.getLocation());
 				break;
 			default:
-				session.withError("Multiple add-ons named '" + value + "' in toolkit " + tk.getLocation());
+				session.error("Multiple add-ons named '" + value + "' in toolkit " + tk.getLocation());
 			}
 		}
 		if (found == null)
 			return null;
 		boolean ok = true;
 		if (!isAssignableFrom(found)) {
-			session.withError(value + " cannot be used as an instance of " + this);
+			session.error(value + " cannot be used as an instance of " + this);
 			ok = false;
 		}
 		if (found.isAbstract()) {
-			session.withError(value + " is abstract and cannot be specified as a value");
+			session.error(value + " is abstract and cannot be specified as a value");
 			ok = false;
 		}
 		return ok ? found : null;
@@ -264,7 +273,7 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 				getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueModifier>) getAttributeModifiers(), getAttributesByName(), //
 				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildModifier>) getChildModifiers(), getChildrenByName(), //
 				getValue(), getFullInheritance(), //
-				getMetaSpec() == null ? null : (QonfigAddOn) getMetaSpec().get(), getSession().getPath().getLineNumber());
+				getMetaSpec() == null ? null : (QonfigAddOn) getMetaSpec().get(), getSession().getPath().getFilePosition());
 		}
 
 		@Override
@@ -273,80 +282,78 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		}
 
 		@Override
-		public Builder withValue(QonfigValueType type, SpecificationType specification, Object defaultValue, int lineNumber) {
-			theSession.withError("Value cannot be specified by an add-on, only modified");
+		public Builder withValue(QonfigValueType type, SpecificationType specification, Object defaultValue, FilePosition position) {
+			theSession.error("Value cannot be specified by an add-on, only modified");
 			return this;
 		}
 
 		@Override
-		public Builder modifyValue(QonfigValueType type, SpecificationType specification, Object defaultValue, int lineNumber) {
+		public Builder modifyValue(QonfigValueType type, SpecificationType specification, Object defaultValue, FilePosition position) {
 			if (getSuperElement() == null) {
-				theSession.forChild("value", null, lineNumber).withError("No required element to modify the value for");
+				theSession.forChild("value", position).error("No required element to modify the value for");
 				return this;
 			} else if (getSuperElement().getValue() == null) {
-				theSession.forChild("value", null, lineNumber)
-					.withError("Required element " + getSuperElement() + " does not specify a value to be modified");
+				theSession.forChild("value", position)
+					.error("Required element " + getSuperElement() + " does not specify a value to be modified");
 				return this;
 			} else if (type != null && !type.equals(getSuperElement().getValue().getType())) {
-				theSession.forChild("value", null, lineNumber).withError("Value type cannot be modified by an add-on");
+				theSession.forChild("value", position).error("Value type cannot be modified by an add-on");
 				type = null;
 			}
-			super.modifyValue(type, specification, defaultValue, lineNumber);
+			super.modifyValue(type, specification, defaultValue, position);
 			return this;
 		}
 
 		@Override
 		protected ValueModifier valueModifier(QonfigValueType type, SpecificationType specification, Object defaultValue) {
-			return new ValueModifier(specification, defaultValue);
+			return new ValueModifier(getSession().getToolkit(), specification, defaultValue);
 		}
 
 		@Override
-		public Builder withAttribute(String name, QonfigValueType type, SpecificationType specify, Object defaultValue, int lineNumber) {
-			super.withAttribute(name, type, specify, defaultValue, lineNumber);
+		public Builder withAttribute(String name, QonfigValueType type, SpecificationType specify, Object defaultValue,
+			FilePosition position) {
+			super.withAttribute(name, type, specify, defaultValue, position);
 			return this;
 		}
 
 		@Override
 		public Builder modifyAttribute(QonfigAttributeDef attribute, QonfigValueType type, SpecificationType specification,
-			Object defaultValue, int lineNumber) {
+			Object defaultValue, FilePosition position) {
 			if (type != null && !type.equals(attribute.getType())) {
-				theSession.forChild("attribute", attribute.getOwner().getName() + "." + attribute.getName(), lineNumber)
-					.withError("Attribute type cannot be modified by an add-on");
+				theSession.forChild("attribute", position).error("Attribute type cannot be modified by an add-on");
 				type = null;
 			}
-			super.modifyAttribute(attribute, type, specification, defaultValue, lineNumber);
+			super.modifyAttribute(attribute, type, specification, defaultValue, position);
 			return this;
 		}
 
 		@Override
 		public Builder withChild(String name, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, int min, int max, int lineNumber) {
+			Set<QonfigAddOn> requirement, int min, int max, FilePosition position) {
 			if (!fulfillment.isEmpty()) {
-				theSession.forChild("child-def", name, lineNumber).withError("Children of add-ons cannot fulfill roles");
+				theSession.forChild("child-def", position).error("Children of add-ons cannot fulfill roles");
 				fulfillment = Collections.emptySet();
 			}
-			super.withChild(name, type, fulfillment, inheritance, requirement, min, max, lineNumber);
+			super.withChild(name, type, fulfillment, inheritance, requirement, min, max, position);
 			return this;
 		}
 
 		@Override
 		public Builder modifyChild(QonfigChildDef.Declared child, QonfigElementDef type, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, Integer min, Integer max, int lineNumber) {
+			Set<QonfigAddOn> requirement, Integer min, Integer max, FilePosition position) {
 			if (type != null && !type.equals(child.getType())) {
-				theSession.forChild("child-mod", child.getOwner().getName() + "." + child.getName(), lineNumber)
-					.withError("Child min/max cannot be modified by an add-on");
+				theSession.forChild("child-mod", position).error("Child min/max cannot be modified by an add-on");
 			} else if (min != null || max != null) {
-				theSession.forChild("child-mod", child.getOwner().getName() + "." + child.getName(), lineNumber)
-					.withError("Child type cannot be modified by an add-on");
+				theSession.forChild("child-mod", position).error("Child type cannot be modified by an add-on");
 			}
-			super.modifyChild(child, type, inheritance, requirement, min, max, lineNumber);
+			super.modifyChild(child, type, inheritance, requirement, min, max, position);
 			return this;
 		}
 
 		@Override
 		protected ChildDefModifier childModifier(QonfigChildDef.Declared child, QonfigElementDef type, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, Integer min, Integer max, int lineNumber) {
-			return new ChildModifier(inheritance, requirement, lineNumber);
+			Set<QonfigAddOn> requirement, Integer min, Integer max, FilePosition position) {
+			return new ChildModifier(inheritance, requirement, position);
 		}
 
 		@Override

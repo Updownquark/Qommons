@@ -1,5 +1,6 @@
 package org.qommons.config;
 
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.function.Supplier;
 
 import org.qommons.MultiInheritanceSet;
 import org.qommons.collect.BetterList;
+import org.qommons.config.QonfigElement.QonfigValue;
 import org.qommons.ex.ExFunction;
 
 /**
@@ -16,7 +18,7 @@ import org.qommons.ex.ExFunction;
  * 
  * @param <QIS> The sub-type of the session
  */
-public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
+public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends ErrorReporting {
 	/** @return The element being interpreted */
 	QonfigElement getElement();
 
@@ -109,11 +111,20 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 
 	/**
 	 * @param attributeName The name of the attribute on the element-def/add-on associated with the current creator/modifier
-	 * @return The value of the target attribute
+	 * @return The text given for the target attribute
 	 * @throws IllegalArgumentException If no such attribute exists on the element/add-on
 	 */
 	default String getAttributeText(String attributeName) throws IllegalArgumentException {
 		return getAttributeText(null, attributeName);
+	}
+
+	/**
+	 * @param attributeName The name of the attribute on the element-def/add-on associated with the current creator/modifier
+	 * @return The full value of the target attribute
+	 * @throws IllegalArgumentException If no such attribute exists on the element/add-on
+	 */
+	default QonfigValue getAttributeQV(String attributeName) throws IllegalArgumentException {
+		return getElement().getAttributes().get(getAttributeDef(null, null, attributeName));
 	}
 
 	/**
@@ -257,6 +268,22 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	/** @return The element's value as text */
 	default String getValueText() {
 		return getElement().getValueText();
+	}
+
+	default QonfigValueDef getValueDef() {
+		QonfigValueDef value = getFocusType().getValue();
+		if (value != null)
+			return value;
+		else if (getFocusType() instanceof QonfigElementDef || getFocusType().getSuperElement() != null)
+			return null;
+		for (QonfigElementOrAddOn type : getTypes().values()) {
+			value = type.getValue();
+			if (value != null)
+				return value;
+			else if (type instanceof QonfigElementDef || type.getSuperElement() != null)
+				return null;
+		}
+		return null;
 	}
 
 	/**
@@ -517,7 +544,7 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 			}
 			return BetterList.of((QIS[]) sessions);
 		}
-		QonfigElement.Builder b = getElement().synthesizeChild(child, defaultChild, getParseSession(), -1);
+		QonfigElement.Builder b = getElement().synthesizeChild(child, defaultChild, this, null);
 		if (builder != null)
 			builder.accept(b);
 		QonfigElement element = b.doneWithAttributes().build();
@@ -747,48 +774,32 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	 */
 	<T> T computeIfAbsent(String sessionKey, Supplier<T> creator);
 
-	/**
-	 * @param message The warning message to log
-	 * @return This session
-	 */
-	default QIS withWarning(String message) {
-		return withWarning(message, null);
+	@Override
+	default QIS warn(String message) {
+		return warn(message, null);
 	}
 
-	/**
-	 * @param message The warning message to log
-	 * @param cause The cause of the warning, if any
-	 * @return This session
-	 */
-	default QIS withWarning(String message, Throwable cause) {
-		getParseSession().withWarning(message, cause);
-		return (QIS) this;
-	}
+	@Override
+	QIS warn(String message, Throwable cause);
+
+	List<QonfigParseIssue> getWarnings();
 
 	/**
-	 * @param message The error message to log
-	 * @return This session
+	 * @param stream The stream to print the warnings to
+	 * @param message The root message to print if there are any warnings
+	 * @return Whether any warnings had been logged against this session or any of its relatives
 	 */
-	default QIS withError(String message) {
-		return withError(message, null);
+	default boolean printWarnings(PrintStream stream, String message) {
+		if (!getWarnings().isEmpty()) {
+			stream.print(message);
+			stream.print(" WARNING:\n");
+		}
+		for (QonfigParseIssue issue : getWarnings()) {
+			stream.print("WARNING: ");
+			issue.print(stream);
+		}
+		return !getWarnings().isEmpty();
 	}
-
-	/**
-	 * @param message The error message to log
-	 * @param cause The cause of the error, if any
-	 * @return This session
-	 */
-	default QIS withError(String message, Throwable cause) {
-		getParseSession().withError(message, cause);
-		return (QIS) this;
-	}
-
-	/**
-	 * The parse session contains the ability to log messages in a way that provides the user with detailed context
-	 * 
-	 * @return The parse session for this interpretation session
-	 */
-	QonfigParseSession getParseSession();
 
 	/** Implementation methods for {@link AbstractQIS} that I didn't want to expose */
 	class Impl {

@@ -20,6 +20,7 @@ import org.qommons.collect.BetterCollections;
 import org.qommons.collect.BetterHashMultiMap;
 import org.qommons.collect.BetterMultiMap;
 import org.qommons.config.QonfigAutoInheritance.AutoInheritTarget;
+import org.qommons.io.SimpleXMLParser.FilePosition;
 
 /** A structure containing a set of types that can be used to parsed highly-structured and validated {@link QonfigDocument}s */
 public class QonfigToolkit implements Named {
@@ -36,6 +37,10 @@ public class QonfigToolkit implements Named {
 		 */
 		public final int minorVersion;
 
+		/**
+		 * @param majorVersion The majoer version of this toolkit
+		 * @param minorVersion THe minor version of this toolkit
+		 */
 		public ToolkitDefVersion(int majorVersion, int minorVersion) {
 			this.majorVersion = majorVersion;
 			this.minorVersion = minorVersion;
@@ -78,6 +83,7 @@ public class QonfigToolkit implements Named {
 	private final int theMajorVersion;
 	private final int theMinorVersion;
 	private final URL theLocation;
+	private final String theLocationString;
 	private final Map<String, QonfigToolkit> theDependencies;
 	private final Map<String, NavigableMap<ToolkitDefVersion, QonfigToolkit>> theDependenciesByDefinition;
 	private final Map<String, QonfigValueType.Declared> theDeclaredAttributeTypes;
@@ -93,7 +99,7 @@ public class QonfigToolkit implements Named {
 	private final Set<QonfigElementDef> theDeclaredRoots;
 	private final Set<QonfigElementDef> theRoots;
 
-	public QonfigToolkit(String name, int majorVersion, int minorVersion, URL location, int lineNumber,
+	public QonfigToolkit(String name, int majorVersion, int minorVersion, URL location, FilePosition position,
 		Map<String, QonfigToolkit> dependencies, Map<String, QonfigValueType.Declared> declaredTypes,
 		Map<String, QonfigAddOn> declaredAddOns, Map<String, QonfigElementDef> declaredElements,
 		List<QonfigAutoInheritance> autoInheritance, ToolkitBuilder builder) throws QonfigParseException {
@@ -106,9 +112,10 @@ public class QonfigToolkit implements Named {
 		theDeclaredAddOns = declaredAddOns;
 		theDeclaredElements = declaredElements;
 		theDeclaredAutoInheritance = autoInheritance;
+		theLocationString = theLocation != null ? theLocation.toString() : name;
 
 		if (builder != null) {
-			QonfigParseSession session = QonfigParseSession.forRoot("qonfig-def", this, lineNumber);
+			QonfigParseSession session = QonfigParseSession.forRoot("qonfig-def", this, position);
 			builder.parseTypes(session);
 
 			Map<String, QonfigValueType.Declared> compiledTypes = new HashMap<>(theDeclaredAttributeTypes);
@@ -269,6 +276,11 @@ public class QonfigToolkit implements Named {
 	/** @return The resource location defining the toolkit */
 	public URL getLocation() {
 		return theLocation;
+	}
+
+	/** @return A string representation of this toolkit's location */
+	public String getLocationString() {
+		return theLocationString;
 	}
 
 	/** @return All toolkits directly extended by this toolkit, by the name assigned to the dependency in this toolkit definition */

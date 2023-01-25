@@ -14,7 +14,9 @@ import java.util.regex.Pattern;
 import org.qommons.Named;
 import org.qommons.Transaction;
 import org.qommons.ex.ExSupplier;
-import org.qommons.io.PositionalXMLReader;
+import org.qommons.io.SimpleXMLParser;
+import org.qommons.io.SimpleXMLParser.ContentPosition;
+import org.qommons.io.SimpleXMLParser.FilePosition;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 
@@ -76,9 +78,8 @@ public class StrictXmlReader implements Named, Transaction {
 		return colon < 0 ? theElement.getNodeName() : theElement.getNodeName().substring(colon + 1);
 	}
 
-	/** @return The line number of the start of this element, if it was parsed using {@link PositionalXMLReader} */
-	public int getLineNumber() {
-		return PositionalXMLReader.getLineNumber(theElement);
+	public FilePosition getNamePosition() {
+		return SimpleXMLParser.getNamePosition(theElement);
 	}
 
 	/**
@@ -155,6 +156,20 @@ public class StrictXmlReader implements Named, Transaction {
 			theUsedNodes.set(i);
 		}
 		return found;
+	}
+
+	public FilePosition getAttributeNamePosition(String name) {
+		Node node = theElement.getAttributeNode(name);
+		if (node == null)
+			return null;
+		return SimpleXMLParser.getNamePosition(node);
+	}
+
+	public ContentPosition getAttributeValuePosition(String name) {
+		Node node = theElement.getAttributeNode(name);
+		if (node == null)
+			return null;
+		return SimpleXMLParser.getContentPosition(node);
 	}
 
 	/**
@@ -275,6 +290,61 @@ public class StrictXmlReader implements Named, Transaction {
 			return found.trim();
 		else
 			return "";
+	}
+
+	public ContentPosition getTextTrimPosition() throws IllegalArgumentException {
+		int attLen = theElement.getAttributes().getLength();
+		ContentPosition found = null;
+		boolean anyNonWS = false;
+		for (int i = 0; i < theElement.getChildNodes().getLength(); i++) {
+			Node n = theElement.getChildNodes().item(i);
+			if ((n.getNodeType() == Node.TEXT_NODE || n.getNodeType() == Node.CDATA_SECTION_NODE)) {
+				ContentPosition pos = SimpleXMLParser.getContentPosition(n);
+				if (!isWhiteSpace(n.getNodeValue())) {
+					if (anyNonWS)
+						throw new IllegalArgumentException(
+							getPath() + ": Multiple text/CDATA sections specified under parent " + getPath());
+					String content = n.getNodeValue();
+					int offset, end;
+					for (offset = 0; offset < content.length() && Character.isWhitespace(content.charAt(offset)); offset++) {
+					}
+					if (offset == content.length()) {
+						offset = 0;
+						end = 0;
+					} else {
+						for (end = content.length(); end >= 0 && Character.isWhitespace(content.charAt(end)); end--) {
+						}
+					}
+					return pos.subSequence(offset, end);
+				} else if (found == null)
+					found = pos;
+				theUsedNodes.set(i + attLen);
+			}
+		}
+		if (found == null)
+			return null;
+		else
+			return new SinglePosition(found.getPosition(0));
+	}
+
+	private static class SinglePosition implements ContentPosition {
+		private final FilePosition thePostion;
+
+		SinglePosition(FilePosition postion) {
+			thePostion = postion;
+		}
+
+		@Override
+		public int length() {
+			return 0;
+		}
+
+		@Override
+		public FilePosition getPosition(int index) {
+			if (index != 0)
+				throw new IndexOutOfBoundsException(index + " of 0");
+			return thePostion;
+		}
 	}
 
 	/**

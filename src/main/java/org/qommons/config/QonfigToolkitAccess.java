@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.function.Supplier;
 
 import org.qommons.QommonsUtils;
+import org.qommons.io.SimpleXMLParser.XmlParseException;
 
 /** A convenient structure for defining and providing toolkit instances */
 public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
@@ -137,7 +138,7 @@ public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
 			try (InputStream in = theLocation.openStream()) {
 				tk = parser.parseToolkit(theLocation, in, //
 					theCustomValueTypes.toArray(new CustomValueType[theCustomValueTypes.size()]));
-			} catch (IOException | QonfigParseException e) {
+			} catch (IOException | XmlParseException | QonfigParseException e) {
 				tk = null;
 				theError = new IllegalStateException("Unable to parse toolkit " + theLocationString, e);
 				throw theError;

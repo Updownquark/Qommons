@@ -1,22 +1,19 @@
 package org.qommons.config;
 
 /** An exception as the result of errors during interpretation of a Qonfig document */
-public class QonfigInterpretationException extends Exception {
-	/**
-	 * @param message The message for the exception
-	 * @param cause The cause of the exception
-	 */
-	public QonfigInterpretationException(String message, Throwable cause) {
-		super(message, cause);
+public class QonfigInterpretationException extends QonfigException {
+	/** @see QonfigException#QonfigException(String, Throwable, QonfigFilePosition, int) */
+	public QonfigInterpretationException(String message, Throwable cause, QonfigFilePosition position, int errorLength) {
+		super(message, cause, position, errorLength);
 	}
 
-	/** @param message The message for the exception */
-	public QonfigInterpretationException(String message) {
-		super(message);
+	/** @see QonfigException#QonfigException(String, QonfigFilePosition, int) */
+	public QonfigInterpretationException(String message, QonfigFilePosition position, int errorLength) {
+		super(message, position, errorLength);
 	}
 
-	/** @param cause The cause of the exception */
-	public QonfigInterpretationException(Throwable cause) {
-		super(cause);
+	/** @see QonfigException#QonfigException(Throwable, QonfigFilePosition, int) */
+	public QonfigInterpretationException(Throwable cause, QonfigFilePosition position, int errorLength) {
+		super(cause, position, errorLength);
 	}
 }

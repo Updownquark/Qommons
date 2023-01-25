@@ -1,5 +1,7 @@
 package org.qommons.config;
 
+import org.qommons.io.SimpleXMLParser.FilePosition;
+
 /** Represents an element value specification */
 public interface QonfigValueDef extends QonfigElementOwned {
 	/** An element value specification as originally declared */
@@ -24,21 +26,22 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		private final QonfigValueType theType;
 		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
-		private final int theLineNumber;
+		private final FilePosition thePosition;
 
 		/**
 		 * @param owner The owner of the value
 		 * @param type The type that must be specified
 		 * @param specify The specification of the value
 		 * @param defaultValue The value to use if it is not specified
-		 * @param lineNumber The line number where this value was defined
+		 * @param position The position in the file where this value was defined
 		 */
-		public Abstract(QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify, Object defaultValue, int lineNumber) {
+		public Abstract(QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify, Object defaultValue,
+			FilePosition position) {
 			theOwner = owner;
 			theType = type;
 			theSpecification = specify;
 			theDefaultValue = defaultValue;
-			theLineNumber = lineNumber;
+			thePosition = position;
 		}
 
 		@Override
@@ -75,8 +78,8 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		}
 
 		@Override
-		public int getLineNumber() {
-			return theLineNumber;
+		public FilePosition getFilePosition() {
+			return thePosition;
 		}
 
 		@Override
@@ -106,11 +109,11 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		 * @param type The type that must be specified
 		 * @param specify The specification of the value
 		 * @param defaultValue The value to use if it is not specified
-		 * @param lineNumber The line number where this value was defined
+		 * @param position The position in the file where this value was defined
 		 */
 		public DeclaredValueDef(QonfigElementDef owner, QonfigValueType type, SpecificationType specify, Object defaultValue,
-			int lineNumber) {
-			super(owner, type, specify, defaultValue, lineNumber);
+			FilePosition position) {
+			super(owner, type, specify, defaultValue, position);
 		}
 
 		@Override
@@ -134,11 +137,11 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		 * @param type The type that must be specified
 		 * @param specify The specification of the value
 		 * @param defaultValue The value to use if it is not specified
-		 * @param lineNumber The line number where this value was defined
+		 * @param position The position in the file where this value was defined
 		 */
 		public Modified(QonfigValueDef declared, QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify,
-			Object defaultValue, int lineNumber) {
-			super(owner, type, specify, defaultValue, lineNumber);
+			Object defaultValue, FilePosition position) {
+			super(owner, type, specify, defaultValue, position);
 			theDeclared = declared instanceof DeclaredValueDef ? (DeclaredValueDef) declared
 				: ((QonfigValueDef.Modified) declared).getDeclared();
 		}
