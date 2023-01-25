@@ -351,9 +351,10 @@ public class QuarkJarPatcher {
 							File parent = targetFile.getParentFile();
 							if (!parent.exists() && !parent.mkdirs())
 								throw new IOException("Could not create " + parent.getAbsolutePath());
+							File patchFile = extractedFiles.remove(content);
 							try (
 								CountingInputStream in = new CountingInputStream(
-									new BufferedInputStream(new FileInputStream(extractedFiles.get(content)))); //
+									new BufferedInputStream(new FileInputStream(patchFile))); //
 								OutputStream out = new BufferedOutputStream(new FileOutputStream(targetFile))) {
 								int read = in.read(buffer);
 								while (read >= 0) {
@@ -364,6 +365,8 @@ public class QuarkJarPatcher {
 								}
 							} catch (IOException e) {
 								throw new IOException("Could not write " + targetFile.getAbsolutePath(), e);
+							} finally {
+								patchFile.delete();
 							}
 							fileContentSoFar += targetFile.length();
 						}
@@ -383,7 +386,7 @@ public class QuarkJarPatcher {
 							while (entry != null) {
 								status[1] = entry.getName();
 								status(null, entry.getName(), progress[0], status, progress, uiDirty);
-								File patchFile = extractedFiles.get(entry.getName());
+								File patchFile = extractedFiles.remove(entry.getName());
 								if (patchFile != null) {
 									entry = new ZipEntry(entry.getName());
 									entry.setLastModifiedTime(FileTime.fromMillis(patchFile.lastModified()));
@@ -395,6 +398,7 @@ public class QuarkJarPatcher {
 											read = in.read(buffer);
 										}
 									}
+									patchFile.delete();
 								} else {
 									zipOut.putNextEntry(entry);
 									int read = zipIn.read(buffer);
@@ -407,6 +411,26 @@ public class QuarkJarPatcher {
 									Math.round((fileContentSoFar + targetIn.getPosition() * 0.9f) * 1000.0f / totalLength), status,
 									progress, uiDirty);
 								entry = zipIn.getNextEntry();
+							}
+							// Now insert added files
+							for (Map.Entry<String, File> file : extractedFiles.entrySet()) {
+								File patchFile = file.getValue();
+								entry = new ZipEntry(file.getKey());
+								status[1] = entry.getName();
+								status(null, entry.getName(), progress[0], status, progress, uiDirty);
+								entry.setLastModifiedTime(FileTime.fromMillis(patchFile.lastModified()));
+								zipOut.putNextEntry(entry);
+								try (InputStream in = new BufferedInputStream(new FileInputStream(patchFile))) {
+									int read = in.read(buffer);
+									while (read >= 0) {
+										zipOut.write(buffer, 0, read);
+										read = in.read(buffer);
+									}
+								}
+								patchFile.delete();
+								status(null, entry.getName(),
+									Math.round((fileContentSoFar + targetIn.getPosition() * 0.9f) * 1000.0f / totalLength), status,
+									progress, uiDirty);
 							}
 						}
 						// The remaining 10% is replacing the target zip file
@@ -438,10 +462,8 @@ public class QuarkJarPatcher {
 				JOptionPane.showMessageDialog(dialog, "Patch applied successfully", "Patch Applied Successfully",
 					JOptionPane.INFORMATION_MESSAGE);
 			progress[1] = 0;
-			status("Removing extracted files", null, 0, status, progress, uiDirty);
+			status("Finishing up", null, 0, status, progress, uiDirty);
 		} finally {
-			for (File f : extractedFiles.values())
-				f.delete();
 			finished[0] = true;
 			System.exit(0);
 		}
