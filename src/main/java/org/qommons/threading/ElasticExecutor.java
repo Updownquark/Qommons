@@ -366,9 +366,7 @@ public class ElasticExecutor<T> {
 	}
 	private static final char[] WORKER_ID_CHAR_SEQ;
 	static {
-		String workerCharSeq = "0123456789"//
-			+ "ABCDEFGHJKLMNPQRSTUVWXYZ" // No "O" or "1" so they're not confused with "0" and "1"
-		;
+		String workerCharSeq = "0123456789";
 		WORKER_ID_CHAR_SEQ = workerCharSeq.toCharArray();
 	}
 
