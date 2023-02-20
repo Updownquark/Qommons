@@ -78,6 +78,7 @@ public class StrictXmlReader implements Named, Transaction {
 		return colon < 0 ? theElement.getNodeName() : theElement.getNodeName().substring(colon + 1);
 	}
 
+	/** @return The file position of the element's name in its opening tag */
 	public FilePosition getNamePosition() {
 		return SimpleXMLParser.getNamePosition(theElement);
 	}
@@ -158,6 +159,10 @@ public class StrictXmlReader implements Named, Transaction {
 		return found;
 	}
 
+	/**
+	 * @param name The name of the attribute
+	 * @return The file position of the attribute's name, or null if the attribute was not specified
+	 */
 	public FilePosition getAttributeNamePosition(String name) {
 		Node node = theElement.getAttributeNode(name);
 		if (node == null)
@@ -165,6 +170,10 @@ public class StrictXmlReader implements Named, Transaction {
 		return SimpleXMLParser.getNamePosition(node);
 	}
 
+	/**
+	 * @param name The name of the attribute
+	 * @return The file position of the start of the attribute's value, or null if the attribute was not specified
+	 */
 	public ContentPosition getAttributeValuePosition(String name) {
 		Node node = theElement.getAttributeNode(name);
 		if (node == null)
@@ -292,6 +301,10 @@ public class StrictXmlReader implements Named, Transaction {
 			return "";
 	}
 
+	/**
+	 * @return The content position of the element's trimmed text
+	 * @throws IllegalArgumentException If multiple text/CDATA sections are specified under this element
+	 */
 	public ContentPosition getTextTrimPosition() throws IllegalArgumentException {
 		int attLen = theElement.getAttributes().getLength();
 		ContentPosition found = null;
