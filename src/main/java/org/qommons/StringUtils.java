@@ -22,12 +22,43 @@ import java.util.regex.Pattern;
 
 /** Common utilities for dealing with Strings */
 public class StringUtils {
+	private StringUtils() {
+	}
+
+	private static final Comparator<CharSequence>[] CI_COMPARATORS = new Comparator[4];
+
+	/**
+	 * @param ignoreCase Whether to ignore case for the comparison
+	 * @param onlyZeroIfEqual If this is true, the method will revert to a number-intolerant, case-attentive comparison if the strings are
+	 *        equivalent with number tolerance and case-ignorance (if <code>ignoreCase==true</code>). If true, this method will only return
+	 *        zero if <code>s1.equals(s2)</code>.
+	 * @return A comparator that returns the result of {@link #compareNumberTolerant(CharSequence, CharSequence, boolean, boolean)
+	 *         compareNumberTolerant}<code>(s1, s2, <code>ignoreCase</code>, <code>onlyZeroIfEqual</code>)</code>
+	 */
+	public static Comparator<CharSequence> distinctNumberTolerant(boolean ignoreCase, boolean onlyZeroIfEqual) {
+		int index = (ignoreCase ? 2 : 0) | (onlyZeroIfEqual ? 1 : 0);
+		Comparator<CharSequence> compare = CI_COMPARATORS[index];
+		if (compare == null) {
+			StringBuilder str = new StringBuilder("numberTolerant(");
+			if (ignoreCase) {
+				str.append('I');
+				if (onlyZeroIfEqual)
+					str.append('S'); // S for strict
+			} else if (onlyZeroIfEqual)
+				str.append('S');
+			compare = LambdaUtils.printableComparator(//
+				(s1, s2) -> compareNumberTolerant(s1, s2, true, true), //
+				() -> str.toString(), null);
+			CI_COMPARATORS[index] = compare;
+		}
+		return compare;
+	}
+
 	/**
 	 * A comparator that returns the result of {@link #compareNumberTolerant(CharSequence, CharSequence, boolean, boolean)
 	 * compareNumberTolerant}<code>(s1, s2, true, true)</code>
 	 */
-	public static final Comparator<CharSequence> DISTINCT_NUMBER_TOLERANT = LambdaUtils.printableComparator(//
-		(s1, s2) -> compareNumberTolerant(s1, s2, true, true), () -> "numberTolerant", null);
+	public static final Comparator<CharSequence> DISTINCT_NUMBER_TOLERANT = distinctNumberTolerant(true, true);
 
 	/**
 	 * Compares two strings in such a way that strings with embedded multi-digit numbers in the same position are sorted intuitively.
@@ -159,6 +190,21 @@ public class StringUtils {
 		if (full.length() < suffix.length())
 			return false;
 		return subSequenceMatches(full, full.length() - suffix.length(), suffix, 0, -1, true) == suffix.length();
+	}
+
+	/**
+	 * @param str The string to compute the hash code for
+	 * @return A hash code for the string that is the same as that for all strings equal to the given string case-insensitively
+	 */
+	public static int hashCodeIgnoreCase(CharSequence str) {
+		int hashCode = 0;
+		for (int c = 0; c < str.length(); c++) {
+			char ch = str.charAt(c);
+			if (ch >= 'A' && ch <= 'Z')
+				ch += a_MINUS_A;
+			hashCode = hashCode * 31 + ch;
+		}
+		return hashCode;
 	}
 
 	/**
