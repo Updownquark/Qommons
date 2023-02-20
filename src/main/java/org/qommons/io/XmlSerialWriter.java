@@ -65,7 +65,6 @@ public class XmlSerialWriter {
 		 * @throws IOException If an exception occurs writing the comment
 		 */
 		public XmlComponent writeComment(String comment) throws IOException {
-			assertWritable();
 			preContent(true);
 			getDocument().getWriter().append("<!--");
 			writeXmlContent(getDocument().getWriter(), comment, XmlContentType.COMMENT);
@@ -74,7 +73,6 @@ public class XmlSerialWriter {
 		}
 
 		XmlComponent addChild(String elementName, XmlChild onChild) throws IOException {
-			assertWritable();
 			preContent(true);
 			Element element = new Element(getDocument(), elementName, getDepth() + 1);
 			if (onChild != null) {
@@ -153,7 +151,7 @@ public class XmlSerialWriter {
 
 		@Override
 		public int getDepth() {
-			return -1;
+			return 0;
 		}
 
 		@Override
@@ -248,6 +246,11 @@ public class XmlSerialWriter {
 			return this;
 		}
 
+		@Override
+		public String toString() {
+			return "document";
+		}
+
 		enum Stage {
 			HEADER, POST_HEADER, POST_CONTENT
 		}
@@ -262,6 +265,7 @@ public class XmlSerialWriter {
 		private boolean isEmpty;
 		private boolean isContentOnly;
 		private boolean isHeaderClosed;
+		private boolean isClosing;
 		private boolean isClosed;
 
 		Element(Document doc, String elementName, int depth) throws IOException {
@@ -289,7 +293,10 @@ public class XmlSerialWriter {
 
 		@Override
 		void indent() throws IOException {
-			for (int i = 0; i < theDepth; i++)
+			int depth = theDepth;
+			if (isClosing)
+				depth--;
+			for (int i = 0; i < depth; i++)
 				theDocument.getWriter().write(theDocument.getIndent());
 		}
 
@@ -300,7 +307,6 @@ public class XmlSerialWriter {
 
 		@Override
 		void init() throws IOException {
-			indent();
 			theDocument.getWriter().write('<');
 			writeXmlContent(theDocument.getWriter(), theElementName, XmlContentType.ELEMENT_NAME);
 		}
@@ -387,6 +393,8 @@ public class XmlSerialWriter {
 		}
 
 		void close() throws IOException {
+			assertWritable();
+			isClosing = true;
 			if (isEmpty) {
 				theDocument.getWriter().write(" />");
 				isHeaderClosed = true;
@@ -397,6 +405,11 @@ public class XmlSerialWriter {
 				theDocument.getWriter().write(">");
 			}
 			isClosed = true;
+		}
+
+		@Override
+		public String toString() {
+			return "<" + theElementName + ">";
 		}
 	}
 
