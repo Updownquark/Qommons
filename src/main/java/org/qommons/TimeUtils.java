@@ -1946,6 +1946,24 @@ public class TimeUtils {
 		}
 
 		/**
+		 * @param timeZone The name of the time zone to use for this set of options
+		 * @return The new time options with the given time zone
+		 */
+		public TimeEvaluationOptions withTimeZone(String timeZone) {
+			return withTimeZone(TimeZone.getTimeZone(timeZone));
+		}
+
+		/** @return A new time options set that uses local time */
+		public TimeEvaluationOptions localTime() {
+			return withTimeZone(TimeZone.getDefault());
+		}
+
+		/** @return A new time options set that uses Greenwich Mean Time */
+		public TimeEvaluationOptions gmt() {
+			return withTimeZone("GMT");
+		}
+
+		/**
 		 * @param resolution The maximum resolution to print times in
 		 * @return A set of time evaluation options identical to this but with the given max resolution
 		 */
