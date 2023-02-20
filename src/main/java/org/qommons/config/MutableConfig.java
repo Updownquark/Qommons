@@ -161,7 +161,6 @@ public class MutableConfig extends QommonsConfig {
 	 */
 	public MutableConfig set(String key, String value) {
 		MutableConfig config = getOrCreate(key);
-		if (value != null)
 			config.setValue(value);
 		return this;
 	}
