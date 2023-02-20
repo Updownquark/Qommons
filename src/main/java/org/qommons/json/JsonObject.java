@@ -25,6 +25,15 @@ public class JsonObject {
 	}
 
 	/**
+	 * @param key The key to get the value of
+	 * @param defaultValue The value to return if no value is stored under the given key in this object
+	 * @return The value stored in this object by the given key, or the given default if the key is not used in this object
+	 */
+	public Object getOrDefault(String key, Object defaultValue) {
+		return theValues.getOrDefault(key, defaultValue);
+	}
+
+	/**
 	 * @param key The key to store the value under
 	 * @param value The value to store
 	 * @return This object
