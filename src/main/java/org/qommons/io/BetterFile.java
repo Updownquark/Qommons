@@ -673,7 +673,8 @@ public interface BetterFile extends Named {
 				if (!p.equals("/"))
 					str.append('/');
 			}
-			str.deleteCharAt(str.length() - 1);
+			if (str.length() > 1)
+				str.deleteCharAt(str.length() - 1);
 			return str.toString();
 		}
 	
