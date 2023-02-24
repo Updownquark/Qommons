@@ -1,15 +1,27 @@
 package org.qommons.collect;
 
 /**
- * Although not every ObservableCollection must be indexed, all ObservableCollections must have some notion of order. All change events and
- * spliterator elements from ObservableCollections provide an ElementId that not only uniquely identifies the element in the collection, but
- * allows the element's order relative to other elements to be determined.
+ * <p>
+ * Although not every BetterCollection must be indexed, all BetterCollections must have a consistent of order. Each element in a
+ * BetterCollection has an ElementId that not only uniquely identifies the element in the collection, but allows the element's order to be
+ * determined relative to other elements in the collection.
+ * </p>
  *
- * The equivalence and ordering of ElementIds may not change with its contents or with any other property of the collection. The ElementId
- * must remain valid until the element is removed from the collection and thereafter until the collection is changed again.
+ * <p>
+ * The equivalence and ordering of ElementIds may not change with its value or with any other property of the collection. The ElementId must
+ * remain comparable to other elements in the collection until the element is removed from the collection <b>and afterward</b> until the
+ * collection is changed again.
+ * </p>
+ * 
+ * <p>
+ * A collection may create new ElementId instances each time one is requested, but different ElementId instances for a common element must
+ * return 0 from {@link #compareTo(ElementId)} for equivalent elements. They must also {@link #equals(Object)} each other (and have a common
+ * {@link #hashCode()}) forever, no matter how long ago the element was removed from the collection or how much it has changed since.
+ * </p>
  *
- * A collection's iteration must follow this ordering scheme as well, i.e. the ID of each element from the
- * {@link BetterCollection#spliterator()} method must be successively greater than the previous element
+ * <p>
+ * A collection's iteration must follow this ordering scheme as well, iteration must go in order of the ID collection's elements.
+ * </p>
  *
  * @see CollectionElement#getElementId()
  */
