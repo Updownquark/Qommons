@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -294,6 +295,21 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		return new ElementList<>(this, low, lowIncluded, high, highIncluded);
 	}
 
+	/**
+	 * @param filter The filter to use to trim the list
+	 * @return A new, immutable list containing all elements of this list that match the given filter
+	 */
+	default BetterList<E> quickFilter(Predicate<? super E> filter) {
+		try (Transaction t = lock(false, null)) {
+			ArrayList<E> copy = new ArrayList<>();
+			for (E value : this) {
+				if (filter.test(value))
+					copy.add(value);
+			}
+			return of(copy);
+		}
+	}
+
 	/** Singleton empty better list */
 	public static final BetterList<Object> EMPTY = new EmptyList<>();
 
@@ -311,6 +327,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 * @return An immutable list containing the given values
 	 */
 	public static <E> BetterList<E> of(E... values) {
+		if (values == null || values.length == 0)
+			return empty();
 		return new ConstantList<>(Arrays.asList(values));
 	}
 
@@ -320,6 +338,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 * @return An immutable list containing the given values
 	 */
 	public static <E> BetterList<E> of(Collection<? extends E> values) {
+		if (values == null || values.isEmpty())
+			return empty();
 		return new ConstantList<>(values instanceof List ? (List<? extends E>) values : new ArrayList<>(values));
 	}
 

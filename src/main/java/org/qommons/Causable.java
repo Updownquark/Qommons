@@ -41,7 +41,7 @@ import org.qommons.collect.CircularArrayList;
  * {@link AbstractCausable}.
  * </p>
  */
-public interface Causable {
+public interface Causable extends CausalLock.Cause {
 	/** An action to be fired when a causable finishes */
 	@FunctionalInterface
 	public interface TerminalAction {
@@ -132,12 +132,12 @@ public interface Causable {
 
 		/** @param causes The causes of this causable */
 		public AbstractCausable(Object... causes) {
-			theCauses = BetterList.of(causes);
+			theCauses = BetterList.of(causes).quickFilter(c -> c != null);
 			if (causes == null)
 				theRootCausable = this;
 			else {
 				Causable root = this;
-				for (Object cause : causes) {
+				for (Object cause : theCauses) {
 					if (cause instanceof Causable && !(cause instanceof ChainBreak)) {
 						if (((Causable) cause).isTerminated())
 							throw new IllegalStateException("Cannot use a finished Causable as a cause");

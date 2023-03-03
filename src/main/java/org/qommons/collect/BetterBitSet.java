@@ -545,6 +545,45 @@ public class BetterBitSet {
 	}
 
 	/**
+	 * Shifts all bits in this set between <code>index</code> and {@link #length()} <code>length</code> bits forward, leaving a gap between
+	 * <code>index</code> (inclusive) and <code>index+length</code> (exclusive)
+	 * 
+	 * @param index The index at which to insert the interval
+	 * @param length The length of the interval to insert
+	 */
+	public void insertInterval(int index, int length) {
+		if (index >= length())
+			return; // No-op
+		// Obviously we could do better, but this one actually seems kinda hard, so I'm just gonna leave this here for now
+		for (int i = length() - 1; i > index; i--)
+			set(i + length, get(i));
+		for (int i = index + length - 1; i > index; i--)
+			clear(i);
+	}
+
+	/**
+	 * Removes all bits between <code>index</code> (inclusive) and <code>index+length</code> (exclusive), shifting all bits between
+	 * <code>index+length</code> and {@link #length()} backward <code>length</code> bits.
+	 * 
+	 * @param index The starting index of the interval to remove
+	 * @param length The length of the interval to remove
+	 */
+	public void removeInterval(int index, int length) {
+		int currLen = length();
+		if (index >= currLen)
+			return; // No-op
+		else if (index + length >= currLen) {
+			clear(index, currLen);
+			return;
+		}
+		// Obviously we could do better, but this one actually seems kinda hard, so I'm just gonna leave this here for now
+		length = Math.min(length, currLen - index);
+		for (int i = index; i < index + length; i++)
+			set(i, get(i + length));
+		clear(index + length, currLen);
+	}
+
+	/**
 	 * Returns the value of the bit with the specified index. The value is {@code true} if the bit with the index {@code bitIndex} is
 	 * currently set in this {@code BetterBitSet}; otherwise, the result is {@code false}.
 	 *
@@ -895,6 +934,93 @@ public class BetterBitSet {
 				count = nextCount;
 		}
 		return -count - 1;
+	}
+
+	/**
+	 * @param other The bit set to compare to
+	 * @param index The starting index to check
+	 * @return The smallest index, <code>i &gt;= index</code>, for which <code>this.get(i)!=other.get(i)</code>, or <code>-1</code> if there
+	 *         is no such difference
+	 */
+	public int nextDifference(BetterBitSet other, int index) {
+		int word = wordIndex(index);
+		if (word >= wordsInUse && word >= other.wordsInUse)
+			return -1;
+		if (words[word] != other.words[word]) {
+			int bitIndex = index - word * BITS_PER_WORD;
+			int mask = 1 << bitIndex;
+			while (mask != 0) {
+				if ((words[word] & mask) != (other.words[word] & mask))
+					return index;
+				index++;
+				mask <<= 1;
+			}
+		}
+		for (word++; word < wordsInUse && word < other.wordsInUse; word++) {
+			if (words[word] != other.words[word])
+				break;
+			index += BITS_PER_WORD;
+		}
+		if (word < wordsInUse) {
+			if (word < other.wordsInUse) {
+				int bitIndex = index - word * BITS_PER_WORD;
+				int mask = 1 << bitIndex;
+				while (mask != 0) {
+					if ((words[word] & mask) != (other.words[word] & mask))
+						return index;
+					index++;
+					mask <<= 1;
+				}
+				throw new IllegalStateException("Shouldn't be here--maybe a threading bug");
+			} else
+				return index + Long.numberOfTrailingZeros(words[word]);
+		} else if (word < other.wordsInUse)
+			return index + Long.numberOfTrailingZeros(other.words[word]);
+		else
+			return -1;
+	}
+
+	/**
+	 * @param other The bit set to compare to
+	 * @param index The starting index to check
+	 * @return The largest index, <code>i &lt;= index</code>, for which <code>this.get(i)!=other.get(i)</code>, or <code>-1</code> if there
+	 *         is no such difference
+	 */
+	public int previousDifference(BetterBitSet other, int index) {
+		int word = wordIndex(index);
+		if (word > wordsInUse) {
+			if (word > other.wordsInUse)
+				return Math.max(length(), other.length());
+			else
+				return other.previousSetBit(index);
+		} else if (word > other.wordsInUse)
+			return previousSetBit(index);
+		if (words[word] != other.words[word]) {
+			int bitIndex = index - word * BITS_PER_WORD;
+			int mask = 1 << bitIndex;
+			while (mask != 0) {
+				if ((words[word] & mask) != (other.words[word] & mask))
+					return index;
+				index--;
+				mask >>>= 1;
+			}
+		}
+		for (word--; word >= 0; word--) {
+			if (words[word] != other.words[word])
+				break;
+			index -= BITS_PER_WORD;
+		}
+		if (word < 0)
+			return -1;
+		int bitIndex = index - word * BITS_PER_WORD;
+		int mask = 1 << bitIndex;
+		while (mask != 0) {
+			if ((words[word] & mask) != (other.words[word] & mask))
+				return index;
+			index--;
+			mask >>>= 1;
+		}
+		throw new IllegalStateException("Shouldn't be here--maybe a threading bug");
 	}
 
 	/**
