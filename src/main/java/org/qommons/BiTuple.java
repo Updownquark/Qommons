@@ -25,7 +25,7 @@ public class BiTuple<V1, V2> {
 		hashCode = -1;
 	}
 
-	/** @return The first Value */
+	/** @return The first value */
 	public V1 getValue1() {
 		return theValue1;
 	}
@@ -69,5 +69,23 @@ public class BiTuple<V1, V2> {
 	@Override
 	public String toString() {
 		return new StringBuilder("[").append(theValue1).append(", ").append(theValue2).append(']').toString();
+	}
+
+	/**
+	 * @param <V> The type of the tuple's first value
+	 * @param tuple The tuple
+	 * @return The {@link #getValue1() first value} of the tuple, or null if tuple is null
+	 */
+	public static <V> V getValue1Of(BiTuple<V, ?> tuple) {
+		return tuple == null ? null : tuple.getValue1();
+	}
+
+	/**
+	 * @param <V> The type of the tuple's second value
+	 * @param tuple The tuple
+	 * @return The {@link #getValue2() second value} of the tuple, or null if tuple is null
+	 */
+	public static <V> V getValue2Of(BiTuple<?, V> tuple) {
+		return tuple == null ? null : tuple.getValue2();
 	}
 }
