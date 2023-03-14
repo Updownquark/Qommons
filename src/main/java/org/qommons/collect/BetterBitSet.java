@@ -924,9 +924,12 @@ public class BetterBitSet {
 			if (nextCount >= n) {
 				long mask = 1L;
 				int b;
-				for (b = 0; count < n; b++) {
-					if ((words[w] & mask) != 0)
+				for (b = 0; true; b++) {
+					if ((words[w] & mask) != 0) {
+						if (count == n)
+							break;
 						count++;
+					}
 					mask <<= 1;
 				}
 				return w * BITS_PER_WORD + b;
