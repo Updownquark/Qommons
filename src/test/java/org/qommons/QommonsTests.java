@@ -3,6 +3,7 @@ package org.qommons;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 import org.junit.runners.Suite.SuiteClasses;
+import org.qommons.collect.BetterBitSetTest;
 import org.qommons.collect.CLQTest;
 import org.qommons.collect.CircularListTest;
 import org.qommons.collect.CollectionUtilsTests;
@@ -33,7 +34,8 @@ import org.qommons.tree.TreeUtilsTest;
 	QommonsTimerTest.class, //
 	TimeUtilsTest.class, //
 	ClassMapTest.class, //
-	PrimesTest.class
+	PrimesTest.class, //
+	BetterBitSetTest.class
 })
 public class QommonsTests {
 }

@@ -555,10 +555,9 @@ public class BetterBitSet {
 		if (index >= length())
 			return; // No-op
 		// Obviously we could do better, but this one actually seems kinda hard, so I'm just gonna leave this here for now
-		for (int i = length() - 1; i > index; i--)
+		for (int i = length() - 1; i >= index; i--)
 			set(i + length, get(i));
-		for (int i = index + length - 1; i > index; i--)
-			clear(i);
+		clear(index, index + length);
 	}
 
 	/**
@@ -917,11 +916,13 @@ public class BetterBitSet {
 	 *         <code>-{@link #cardinality()}-1</code> otherwise
 	 */
 	public int indexOfNthSetBit(int n) {
+		if (n < 0)
+			throw new IndexOutOfBoundsException("n < 0: " + n);
 		int count = 0;
 		for (int w = 0; w < wordsInUse; w++) {
 			int wordBits = Long.bitCount(words[w]);
 			int nextCount = count + wordBits;
-			if (nextCount >= n) {
+			if (nextCount > n) {
 				long mask = 1L;
 				int b;
 				for (b = 0; true; b++) {
@@ -946,35 +947,40 @@ public class BetterBitSet {
 	 *         is no such difference
 	 */
 	public int nextDifference(BetterBitSet other, int index) {
+		if (index < 0)
+			throw new IndexOutOfBoundsException("index < 0: " + index);
 		int word = wordIndex(index);
 		if (word >= wordsInUse && word >= other.wordsInUse)
 			return -1;
-		if (words[word] != other.words[word]) {
-			int bitIndex = index - word * BITS_PER_WORD;
-			int mask = 1 << bitIndex;
-			while (mask != 0) {
-				if ((words[word] & mask) != (other.words[word] & mask))
-					return index;
-				index++;
-				mask <<= 1;
+
+		if (word < wordsInUse && word < other.wordsInUse) {
+			if (words[word] != other.words[word]) {
+				int bitIndex = index - word * BITS_PER_WORD;
+				long wordDiff = words[word] ^ other.words[word];
+				if (Long.numberOfLeadingZeros(wordDiff) < BITS_PER_WORD - bitIndex) {
+					long mask = 1L << bitIndex;
+					while (mask != 0) {
+						if ((wordDiff & mask) != 0)
+							return index;
+						index++;
+						mask <<= 1;
+					}
+				} else
+					index = (word + 1) * BITS_PER_WORD;
+			} else
+				index = (word + 1) * BITS_PER_WORD;
+
+			for (word++; word < wordsInUse && word < other.wordsInUse; word++) {
+				if (words[word] != other.words[word])
+					break;
+				index += BITS_PER_WORD;
 			}
 		}
-		for (word++; word < wordsInUse && word < other.wordsInUse; word++) {
-			if (words[word] != other.words[word])
-				break;
-			index += BITS_PER_WORD;
-		}
+
 		if (word < wordsInUse) {
 			if (word < other.wordsInUse) {
-				int bitIndex = index - word * BITS_PER_WORD;
-				int mask = 1 << bitIndex;
-				while (mask != 0) {
-					if ((words[word] & mask) != (other.words[word] & mask))
-						return index;
-					index++;
-					mask <<= 1;
-				}
-				throw new IllegalStateException("Shouldn't be here--maybe a threading bug");
+				long wordDiff = words[word] ^ other.words[word];
+				return index + Long.numberOfTrailingZeros(wordDiff);
 			} else
 				return index + Long.numberOfTrailingZeros(words[word]);
 		} else if (word < other.wordsInUse)
@@ -990,40 +996,71 @@ public class BetterBitSet {
 	 *         is no such difference
 	 */
 	public int previousDifference(BetterBitSet other, int index) {
+		if (index < 0)
+			throw new IndexOutOfBoundsException("index < 0: " + index);
 		int word = wordIndex(index);
-		if (word > wordsInUse) {
-			if (word > other.wordsInUse)
-				return Math.max(length(), other.length());
-			else
-				return other.previousSetBit(index);
-		} else if (word > other.wordsInUse)
-			return previousSetBit(index);
-		if (words[word] != other.words[word]) {
-			int bitIndex = index - word * BITS_PER_WORD;
-			int mask = 1 << bitIndex;
-			while (mask != 0) {
-				if ((words[word] & mask) != (other.words[word] & mask))
-					return index;
-				index--;
-				mask >>>= 1;
+		if (word >= wordsInUse) {
+			int length = length() - 1;
+			if (word >= other.wordsInUse) {
+				int oLen = other.length() - 1;
+				if (length < oLen)
+					return oLen;
+				else if (length > oLen)
+					return length;
+				else {
+					word = wordsInUse - 1;
+					index = length;
+				}
+			} else {
+				int psb = other.previousSetBit(index);
+				if (length < psb)
+					return psb;
+				else if (length > psb)
+					return length;
+				else {
+					word = wordsInUse - 1;
+					index = length;
+				}
+			}
+		} else if (word >= other.wordsInUse) {
+			int length = other.length() - 1;
+			int psb = previousSetBit(index);
+			if (length < psb)
+				return psb;
+			else if (length > psb)
+				return length;
+			else {
+				word = other.wordsInUse - 1;
+				index = length;
 			}
 		}
-		for (word--; word >= 0; word--) {
+
+		if (words[word] != other.words[word]) {
+			int bitIndex = index - word * BITS_PER_WORD;
+			long wordDiff = words[word] ^ other.words[word];
+			if (Long.numberOfTrailingZeros(wordDiff) <= bitIndex) {
+				long mask = 1L << bitIndex;
+				while (mask != 0) {
+					if ((wordDiff & mask) != 0)
+						return index;
+					index--;
+					mask >>= 1;
+				}
+			} else
+				index = word * BITS_PER_WORD - 1;
+		} else
+			index = word * BITS_PER_WORD - 1;
+
+		for (word--; word >= 0 && word >= 0; word--) {
 			if (words[word] != other.words[word])
 				break;
 			index -= BITS_PER_WORD;
 		}
+
 		if (word < 0)
 			return -1;
-		int bitIndex = index - word * BITS_PER_WORD;
-		int mask = 1 << bitIndex;
-		while (mask != 0) {
-			if ((words[word] & mask) != (other.words[word] & mask))
-				return index;
-			index--;
-			mask >>>= 1;
-		}
-		throw new IllegalStateException("Shouldn't be here--maybe a threading bug");
+		long wordDiff = words[word] ^ other.words[word];
+		return index - Long.numberOfLeadingZeros(wordDiff);
 	}
 
 	/**
