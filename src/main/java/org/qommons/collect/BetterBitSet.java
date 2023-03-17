@@ -394,6 +394,18 @@ public class BetterBitSet {
 	}
 
 	/**
+	 * Sets many bits in one call
+	 * 
+	 * @param bits The indexes of the bits to set
+	 * @return This bit set
+	 */
+	public BetterBitSet setAll(int... bits) {
+		for (int bit : bits)
+			set(bit);
+		return this;
+	}
+
+	/**
 	 * Sets the bit at the specified index to the specified value.
 	 *
 	 * @param bitIndex a bit index
@@ -552,12 +564,68 @@ public class BetterBitSet {
 	 * @param length The length of the interval to insert
 	 */
 	public void insertInterval(int index, int length) {
-		if (index >= length())
+		if (index < 0)
+			throw new IndexOutOfBoundsException("index < 0: " + index);
+		else if (length == 0)
+			return;
+		else if (length < 0)
+			throw new IllegalArgumentException("length < 0: " + length);
+		int thisLen = length();
+		if (index >= thisLen)
 			return; // No-op
-		// Obviously we could do better, but this one actually seems kinda hard, so I'm just gonna leave this here for now
-		for (int i = length() - 1; i >= index; i--)
-			set(i + length, get(i));
-		clear(index, index + length);
+		int firstWord = wordIndex(index);
+		int lastSourceIndex = thisLen - 1;
+		int lastSourceWord = wordIndex(lastSourceIndex);
+		int lastWord = wordIndex(lastSourceIndex + length);
+		int sourceWord;
+		int destWord = lastWord;
+		expandTo(lastWord);
+		if (length % BITS_PER_WORD == 0) { // Easier/faster case, since we can move whole words
+			boolean easyCase = index % BITS_PER_WORD == 0;
+			sourceWord = lastSourceWord;
+			for (; sourceWord > firstWord; sourceWord--, destWord--)
+				words[destWord] = words[sourceWord];
+			if (easyCase) {
+				words[destWord] = words[sourceWord];
+				words[sourceWord] = 0;
+			} else {
+				int firstWordBitsToKeep = index - firstWord * BITS_PER_WORD;
+				long firstWordMask = 0xffffffffffffffffL >>> (BITS_PER_WORD - firstWordBitsToKeep);
+				long antiFWM = ~firstWordMask;
+				words[destWord] = words[sourceWord] & antiFWM;
+				words[sourceWord] &= firstWordMask;
+			}
+		} else {
+			int wordDiff = length / BITS_PER_WORD;
+			sourceWord = destWord - wordDiff;
+			int shift = length - wordDiff * BITS_PER_WORD;
+			int antiShift = BITS_PER_WORD - shift;
+			int firstWordBitsToKeep = index - firstWord * BITS_PER_WORD;
+			long firstWordMask;
+			if (firstWordBitsToKeep == 0)
+				firstWordMask = 0;
+			else
+				firstWordMask = 0xffffffffffffffffL >>> (BITS_PER_WORD - firstWordBitsToKeep);
+			long antiFWM = ~firstWordMask;
+			if (sourceWord > firstWord) {
+				for (; sourceWord > firstWord + 1; sourceWord--, destWord--)
+					words[destWord] = (words[sourceWord] << shift) | (words[sourceWord - 1] >>> antiShift);
+				words[destWord] = (words[sourceWord] << shift) | ((words[sourceWord - 1] & antiFWM) >>> antiShift);
+				sourceWord--;
+				destWord--;
+			}
+			// Now sourceWord==firstWord
+			if (destWord == firstWord)
+				words[destWord] = ((words[firstWord] & antiFWM) << shift) | (words[firstWord] & firstWordMask);
+			else {
+				words[destWord] = (words[firstWord] & antiFWM) << shift;
+				words[firstWord] &= firstWordMask;
+
+				// Clear any full words in the interval
+				for (destWord--; destWord > firstWord; destWord--)
+					words[destWord] = 0;
+			}
+		}
 	}
 
 	/**
@@ -568,6 +636,12 @@ public class BetterBitSet {
 	 * @param length The length of the interval to remove
 	 */
 	public void removeInterval(int index, int length) {
+		if (index < 0)
+			throw new IndexOutOfBoundsException("index < 0: " + index);
+		else if (length == 0)
+			return;
+		else if (length < 0)
+			throw new IllegalArgumentException("length < 0: " + length);
 		int currLen = length();
 		if (index >= currLen)
 			return; // No-op

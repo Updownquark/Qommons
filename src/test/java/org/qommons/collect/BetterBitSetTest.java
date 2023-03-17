@@ -19,7 +19,7 @@ public class BetterBitSetTest {
 		TestHelper.createTester(BetterBitSetTester.class)//
 			.withPlacemarks("op")//
 			.withFailurePersistence(true).revisitKnownFailures(true).withDebug(true)//
-			.withRandomCases(25).withMaxProgressInterval(Duration.ofMillis(100)).withMaxCaseDuration(Duration.ofSeconds(5))//
+			.withRandomCases(25).withMaxProgressInterval(Duration.ofMillis(500)).withMaxCaseDuration(Duration.ofSeconds(5))//
 			.execute().throwErrorIfFailed();
 	}
 
@@ -34,12 +34,16 @@ public class BetterBitSetTest {
 			for (int i = 0; i < ops; i++) {
 				boolean left = helper.getBoolean();
 				BetterBitSet target = left ? theLeft : theRight;
+				if (helper.isReproducing()) {
+					System.out.print("[" + i + "] " + (left ? "Left " : "Right "));
+					System.out.flush();
+				}
 				helper.createAction()//
 					.or(.9, () -> { // Flip a bit
 						int index = helper.getInt(0, 1_000);
 						boolean pre = target.get(index);
 						if (helper.isReproducing())
-							System.out.println((left ? "Left" : "Right") + " flipping " + index + " " + pre + "->" + (!pre));
+							System.out.println("flipping " + index + " " + pre + "->" + (!pre));
 						int preCard = target.cardinality();
 						int setIndex = target.countBitsSetBetween(0, index);
 						int prevSet = target.previousSetBit(index - 1);
@@ -72,10 +76,19 @@ public class BetterBitSetTest {
 						}
 					})//
 					.or(.025, () -> { // Insert interval
-						int index = helper.getInt(0, target.size());
-						int amount = helper.getInt(0, 100);
+						int index, amount;
+						if (helper.getBoolean(0.025)) { // Special case
+							amount = helper.getInt(0, 12) * 8;
+							if (helper.getBoolean(0.1)) // Ultra-special case
+								index = helper.getInt(0, target.size() / 64) * 64;
+							else
+								index = helper.getInt(0, target.size());
+						} else {
+							index = helper.getInt(0, target.size());
+							amount = helper.getInt(0, 100);
+						}
 						if (helper.isReproducing())
-							System.out.println((left ? "Left" : "Right") + " inserting " + amount + "@" + index);
+							System.out.println("inserting " + amount + "@" + index);
 						int[] preIndexes = target.stream().toArray();
 						for (int j = 0; j < preIndexes.length; j++) {
 							if (preIndexes[j] >= index)
@@ -92,7 +105,7 @@ public class BetterBitSetTest {
 						int index = helper.getInt(0, target.size());
 						int amount = helper.getInt(0, target.size() - index);
 						if (helper.isReproducing())
-							System.out.println((left ? "Left" : "Right") + " removing " + amount + "@" + index);
+							System.out.println("removing " + amount + "@" + index);
 						int[] indexes = target.stream()//
 							.filter(ti -> ti < index || ti >= index + amount)//
 							.map(ti -> ti < index ? ti : ti - amount)//
