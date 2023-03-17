@@ -89,21 +89,31 @@ public class BetterBitSetTest {
 						}
 						if (helper.isReproducing())
 							System.out.println("inserting " + amount + "@" + index);
-						int[] preIndexes = target.stream().toArray();
-						for (int j = 0; j < preIndexes.length; j++) {
-							if (preIndexes[j] >= index)
-								preIndexes[j] += amount;
+						int[] indexes = target.stream().toArray();
+						for (int j = 0; j < indexes.length; j++) {
+							if (indexes[j] >= index)
+								indexes[j] += amount;
 						}
 						target.insertInterval(index, amount);
 						int j = 0;
 						for (int k = target.nextSetBit(0); k >= 0; k = target.nextSetBit(k + 1)) {
-							Assert.assertEquals(preIndexes[j], k);
+							Assert.assertEquals(indexes[j], k);
 							j++;
 						}
+						Assert.assertEquals(indexes.length, j);
 					})//
 					.or(.025, () -> { // Remove interval
-						int index = helper.getInt(0, target.size());
-						int amount = helper.getInt(0, target.size() - index);
+						int index, amount;
+						if (helper.getBoolean(0.025)) { // Special case
+							amount = helper.getInt(0, 12) * 8;
+							if (helper.getBoolean(0.1)) // Ultra-special case
+								index = helper.getInt(0, target.size() / 64) * 64;
+							else
+								index = helper.getInt(0, target.size());
+						} else {
+							index = helper.getInt(0, target.size());
+							amount = helper.getInt(0, 100);
+						}
 						if (helper.isReproducing())
 							System.out.println("removing " + amount + "@" + index);
 						int[] indexes = target.stream()//
@@ -116,6 +126,7 @@ public class BetterBitSetTest {
 							Assert.assertEquals(indexes[j], k);
 							j++;
 						}
+						Assert.assertEquals(indexes.length, j);
 					})//
 					.execute("op");
 				if (helper.isReproducing())

@@ -573,6 +573,7 @@ public class BetterBitSet {
 		int thisLen = length();
 		if (index >= thisLen)
 			return; // No-op
+
 		int firstWord = wordIndex(index);
 		int lastSourceIndex = thisLen - 1;
 		int lastSourceWord = wordIndex(lastSourceIndex);
@@ -581,16 +582,15 @@ public class BetterBitSet {
 		int destWord = lastWord;
 		expandTo(lastWord);
 		if (length % BITS_PER_WORD == 0) { // Easier/faster case, since we can move whole words
-			boolean easyCase = index % BITS_PER_WORD == 0;
 			sourceWord = lastSourceWord;
 			for (; sourceWord > firstWord; sourceWord--, destWord--)
 				words[destWord] = words[sourceWord];
-			if (easyCase) {
+			if (index % BITS_PER_WORD == 0) {
 				words[destWord] = words[sourceWord];
 				words[sourceWord] = 0;
 			} else {
 				int firstWordBitsToKeep = index - firstWord * BITS_PER_WORD;
-				long firstWordMask = 0xffffffffffffffffL >>> (BITS_PER_WORD - firstWordBitsToKeep);
+				long firstWordMask = WORD_MASK >>> (BITS_PER_WORD - firstWordBitsToKeep);
 				long antiFWM = ~firstWordMask;
 				words[destWord] = words[sourceWord] & antiFWM;
 				words[sourceWord] &= firstWordMask;
@@ -605,7 +605,7 @@ public class BetterBitSet {
 			if (firstWordBitsToKeep == 0)
 				firstWordMask = 0;
 			else
-				firstWordMask = 0xffffffffffffffffL >>> (BITS_PER_WORD - firstWordBitsToKeep);
+				firstWordMask = WORD_MASK >>> (BITS_PER_WORD - firstWordBitsToKeep);
 			long antiFWM = ~firstWordMask;
 			if (sourceWord > firstWord) {
 				for (; sourceWord > firstWord + 1; sourceWord--, destWord--)
@@ -642,18 +642,57 @@ public class BetterBitSet {
 			return;
 		else if (length < 0)
 			throw new IllegalArgumentException("length < 0: " + length);
-		int currLen = length();
-		if (index >= currLen)
+		int thisLen = length();
+		if (index >= thisLen)
 			return; // No-op
-		else if (index + length >= currLen) {
-			clear(index, currLen);
+		else if (index + length >= thisLen) {
+			clear(index, thisLen);
 			return;
 		}
-		// Obviously we could do better, but this one actually seems kinda hard, so I'm just gonna leave this here for now
-		length = Math.min(length, currLen - index);
-		for (int i = index; i < index + length; i++)
-			set(i, get(i + length));
-		clear(index + length, currLen);
+
+		int firstWord = wordIndex(index);
+		int firstSourceWord = wordIndex(index + length);
+		int sourceWord = firstSourceWord;
+		int destWord = firstWord;
+		if (length % 64 == 0) {
+			if (index % BITS_PER_WORD == 0) {
+				words[destWord] = words[sourceWord];
+				words[sourceWord] = 0;
+			} else {
+				int firstWordBitsToKeep = index - firstWord * BITS_PER_WORD;
+				long firstWordMask = WORD_MASK >>> (BITS_PER_WORD - firstWordBitsToKeep);
+				long antiFWM = ~firstWordMask;
+				words[destWord] = (words[destWord] & firstWordMask) | (words[sourceWord] & antiFWM);
+			}
+			for (sourceWord++, destWord++; sourceWord < wordsInUse; sourceWord++, destWord++)
+				words[destWord] = words[sourceWord];
+
+			for (int w = destWord; w < wordsInUse; w++)
+				words[w] = 0;
+			wordsInUse = destWord;
+		} else {
+			// int wordDiff = length / BITS_PER_WORD;
+			// int shift = length - wordDiff * BITS_PER_WORD;
+			// int antiShift = BITS_PER_WORD - shift;
+			// int firstWordBitsToKeep = index - firstWord * BITS_PER_WORD;
+			// long firstWordMask;
+			// if (firstWordBitsToKeep == 0)
+			// firstWordMask = 0;
+			// else
+			// firstWordMask = WORD_MASK >>> (BITS_PER_WORD - firstWordBitsToKeep);
+			// long antiFWM = ~firstWordMask;
+			// words[destWord] = (words[destWord] & firstWordMask) | ((words[sourceWord] << antiShift) & antiFWM);
+			// for (sourceWord++, destWord++; sourceWord < wordsInUse; sourceWord++, destWord++)
+			// words[destWord] = (words[sourceWord - 1] << antiShift) | (words[sourceWord] >> shift);
+			// // TODO
+			// for (int w = destWord; w < wordsInUse; w++)
+			// words[w] = 0;
+			// wordsInUse = destWord;
+			// Obviously we could do better, but this one actually seems kinda hard, so I'm just gonna leave this here for now
+			for (int i = index; i < thisLen - length; i++)
+				set(i, get(i + length));
+			clear(thisLen - length, thisLen);
+		}
 	}
 
 	/**
