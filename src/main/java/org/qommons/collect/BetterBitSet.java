@@ -654,7 +654,7 @@ public class BetterBitSet {
 		int firstSourceWord = wordIndex(index + length);
 		int sourceWord = firstSourceWord;
 		int destWord = firstWord;
-		if (length % 64 == 0) {
+		if (length % BITS_PER_WORD == 0) {
 			if (index % BITS_PER_WORD == 0) {
 				words[destWord] = words[sourceWord];
 				words[sourceWord] = 0;
@@ -671,27 +671,49 @@ public class BetterBitSet {
 				words[w] = 0;
 			wordsInUse = destWord;
 		} else {
-			// int wordDiff = length / BITS_PER_WORD;
-			// int shift = length - wordDiff * BITS_PER_WORD;
-			// int antiShift = BITS_PER_WORD - shift;
-			// int firstWordBitsToKeep = index - firstWord * BITS_PER_WORD;
-			// long firstWordMask;
-			// if (firstWordBitsToKeep == 0)
-			// firstWordMask = 0;
-			// else
-			// firstWordMask = WORD_MASK >>> (BITS_PER_WORD - firstWordBitsToKeep);
-			// long antiFWM = ~firstWordMask;
-			// words[destWord] = (words[destWord] & firstWordMask) | ((words[sourceWord] << antiShift) & antiFWM);
-			// for (sourceWord++, destWord++; sourceWord < wordsInUse; sourceWord++, destWord++)
-			// words[destWord] = (words[sourceWord - 1] << antiShift) | (words[sourceWord] >> shift);
-			// // TODO
-			// for (int w = destWord; w < wordsInUse; w++)
-			// words[w] = 0;
-			// wordsInUse = destWord;
-			// Obviously we could do better, but this one actually seems kinda hard, so I'm just gonna leave this here for now
-			for (int i = index; i < thisLen - length; i++)
-				set(i, get(i + length));
-			clear(thisLen - length, thisLen);
+			int wordDiff = length / BITS_PER_WORD;
+			int shift = length - wordDiff * BITS_PER_WORD;
+			int antiShift = BITS_PER_WORD - shift;
+			int firstWordBitsToKeep = index - firstWord * BITS_PER_WORD;
+			long firstWordMask;
+			if (firstWordBitsToKeep == 0)
+				firstWordMask = 0;
+			else
+				firstWordMask = WORD_MASK >>> (BITS_PER_WORD - firstWordBitsToKeep);
+			long antiFWM = ~firstWordMask;
+			if (sourceWord == destWord) {
+				sourceWord++;
+				if (sourceWord == wordsInUse)
+					words[destWord] = (words[destWord] & firstWordMask) | ((words[destWord] >>> shift) & antiFWM);
+				else {
+					words[destWord] = (words[destWord] & firstWordMask) | ((words[destWord] >>> shift) & antiFWM)
+						| (words[sourceWord] << antiShift);
+					for (sourceWord++, destWord++; sourceWord < wordsInUse; sourceWord++, destWord++)
+						words[destWord] = (words[destWord] >>> shift) | (words[sourceWord] << antiShift);
+					words[destWord] >>>= shift;
+				}
+			} else if (wordDiff == 0 || firstWordBitsToKeep + shift >= BITS_PER_WORD) {
+				words[destWord] = (words[destWord] & firstWordMask) | ((words[sourceWord] << antiShift) & antiFWM);
+				for (destWord++; sourceWord < wordsInUse - 1; sourceWord++, destWord++)
+					words[destWord] = (words[sourceWord] >>> shift) | (words[sourceWord + 1] << antiShift);
+				words[destWord] = words[sourceWord] >>> shift;
+			} else {
+				words[destWord] &= firstWordMask;
+				long shifted = words[sourceWord] >>> shift;
+				if (sourceWord + 1 < wordsInUse) {
+					shifted |= words[sourceWord + 1] << antiShift;
+					words[destWord] |= shifted & antiFWM;
+					for (sourceWord++, destWord++; sourceWord < wordsInUse - 1; sourceWord++, destWord++)
+						words[destWord] = (words[sourceWord] >>> shift) | (words[sourceWord + 1] << antiShift);
+					words[destWord] = words[sourceWord] >>> shift;
+				} else
+					words[destWord] |= shifted & antiFWM;
+			}
+			if (words[destWord] != 0)
+				destWord++;
+			for (int w = destWord; w < wordsInUse; w++)
+				words[w] = 0;
+			wordsInUse = destWord;
 		}
 	}
 

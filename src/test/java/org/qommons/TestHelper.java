@@ -890,7 +890,7 @@ public class TestHelper extends TestUtil {
 				long debugHits = BreakpointHere.getBreakpointCatchCount();
 				if (first)
 					first = false;
-				else if (debug) {// No timeout checking for debugging
+				else if (reproduction) {// No timeout checking for reproduction
 				} else if (debugHits == caseDebugHitCount) {
 					// Make sure the test case doesn't take longer than configured limits
 					Instant now = Instant.now();

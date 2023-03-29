@@ -39,7 +39,7 @@ public class BetterBitSetTest {
 					System.out.flush();
 				}
 				helper.createAction()//
-					.or(.9, () -> { // Flip a bit
+					.or(.6, () -> { // Flip a bit
 						int index = helper.getInt(0, 1_000);
 						boolean pre = target.get(index);
 						if (helper.isReproducing())
@@ -75,7 +75,7 @@ public class BetterBitSetTest {
 							Assert.assertEquals(index, target.indexOfNthSetBit(setIndex));
 						}
 					})//
-					.or(.025, () -> { // Insert interval
+					.or(.2, () -> { // Insert interval
 						int index, amount;
 						if (helper.getBoolean(0.025)) { // Special case
 							amount = helper.getInt(0, 12) * 8;
@@ -102,7 +102,7 @@ public class BetterBitSetTest {
 						}
 						Assert.assertEquals(indexes.length, j);
 					})//
-					.or(.025, () -> { // Remove interval
+					.or(.2, () -> { // Remove interval
 						int index, amount;
 						if (helper.getBoolean(0.025)) { // Special case
 							amount = helper.getInt(0, 12) * 8;
