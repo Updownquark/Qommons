@@ -1,6 +1,7 @@
 package org.qommons;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -235,6 +236,14 @@ public class ClassMap<V> {
 			return keys;
 		}
 
+		<L extends Collection<V>> L getAllValues(L values) {
+			if(theValue!=null)
+				values.add(theValue);
+			for(ClassMapEntry<? extends C, V> sub : theSubMaps)
+				sub.getAllValues(values);
+			return values;
+		}
+
 		StringBuilder append(StringBuilder str, int indent) {
 			for (int i = 0; i < indent; i++)
 				str.append('\t');
@@ -430,6 +439,13 @@ public class ClassMap<V> {
 	/** @return All entries in this map */
 	public synchronized BetterList<BiTuple<Class<?>, V>> getAllEntries() {
 		return getAllEntries(Object.class, null);
+	}
+
+	/** @return All values in this map */
+	public synchronized BetterList<V> getAllValues() {
+		if (isEmpty())
+			return BetterList.empty();
+		return BetterList.of(theRoot.getAllValues(new ArrayList<>()));
 	}
 
 	/**
