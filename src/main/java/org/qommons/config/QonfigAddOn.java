@@ -7,7 +7,7 @@ import java.util.Set;
 import org.qommons.MultiInheritanceSet;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterMultiMap;
-import org.qommons.io.SimpleXMLParser.FilePosition;
+import org.qommons.io.FilePosition;
 
 /** An add-on that can be applied to an element in various forms to alter its specification and behavior */
 public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType, ElementDefModifier {

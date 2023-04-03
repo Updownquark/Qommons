@@ -4,7 +4,7 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.qommons.io.SimpleXMLParser.FilePosition;
+import org.qommons.io.FilePosition;
 
 /** A structure to pass around during Qonfig parsing to report errors and warnings */
 public class QonfigParseSession implements ErrorReporting {

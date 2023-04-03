@@ -17,7 +17,8 @@ import org.qommons.MultiInheritanceSet;
 import org.qommons.QommonsUtils;
 import org.qommons.StatusReportAccumulator;
 import org.qommons.StatusReportAccumulator.Status;
-import org.qommons.io.SimpleXMLParser.FilePosition;
+import org.qommons.io.FilePosition;
+import org.qommons.io.LocatedFilePosition;
 
 /** A class for interpreting parsed {@link QonfigDocument}s into useful structures */
 public class QonfigInterpreterCore {
@@ -239,26 +240,26 @@ public class QonfigInterpreterCore {
 		}
 
 		static class RuntimeInterpretationException extends RuntimeException {
-			private final QonfigFilePosition thePosition;
+			private final LocatedFilePosition thePosition;
 
-			public RuntimeInterpretationException(String message, QonfigFilePosition position) {
+			public RuntimeInterpretationException(String message, LocatedFilePosition position) {
 				super(message);
 				thePosition = position;
 			}
 
-			public RuntimeInterpretationException(String message, Throwable cause, QonfigFilePosition position) {
+			public RuntimeInterpretationException(String message, Throwable cause, LocatedFilePosition position) {
 				super(message, cause);
 				thePosition = position;
 			}
 
-			public QonfigFilePosition getPosition() {
+			public LocatedFilePosition getPosition() {
 				return thePosition;
 			}
 
 			public QonfigInterpretationException toIntepreterException() {
 				QonfigInterpretationException qie;
 				if (getCause() != this)
-					qie = new QonfigInterpretationException(getMessage(), getCause(), getPosition(), 0);
+					qie = new QonfigInterpretationException(getMessage(), getPosition(), 0, getCause());
 				else
 					qie = new QonfigInterpretationException(getMessage(), getPosition(), 0);
 				qie.setStackTrace(getStackTrace());
@@ -268,7 +269,7 @@ public class QonfigInterpreterCore {
 
 		@Override
 		public ErrorReporting error(String message, Throwable cause) {
-			QonfigFilePosition position = new QonfigFilePosition(theElement.getDocument().getLocation(), theElement.getFilePosition());
+			LocatedFilePosition position = new LocatedFilePosition(theElement.getDocument().getLocation(), theElement.getFilePosition());
 			if (cause == null)
 				throw new RuntimeInterpretationException(message, position);
 			else if (cause instanceof QonfigInterpretationException)
@@ -325,7 +326,7 @@ public class QonfigInterpreterCore {
 
 				@Override
 				public ErrorReporting error(String message, Throwable cause) {
-					QonfigFilePosition position2 = new QonfigFilePosition(theElement.getDocument().getLocation(),
+					LocatedFilePosition position2 = new LocatedFilePosition(theElement.getDocument().getLocation(),
 						theElement.getFilePosition());
 					if (cause == null)
 						throw new RuntimeInterpretationException(message, position2);
@@ -376,9 +377,9 @@ public class QonfigInterpreterCore {
 				} catch (RuntimeInterpretationException e) {
 					throw e.toIntepreterException();
 				} catch (RuntimeException e) {
-					QonfigFilePosition position = new QonfigFilePosition(theElement.getDocument().getLocation(),
+					LocatedFilePosition position = new LocatedFilePosition(theElement.getDocument().getLocation(),
 						theElement.getFilePosition());
-					throw new QonfigInterpretationException(e, position, 0);
+					throw new QonfigInterpretationException(position, 0, e);
 				}
 			}
 			for (mIdx = modifiers.length - 1; mIdx >= 0; mIdx--) {
@@ -389,9 +390,9 @@ public class QonfigInterpreterCore {
 				} catch (RuntimeInterpretationException e) {
 					throw e.toIntepreterException();
 				} catch (RuntimeException e) {
-					QonfigFilePosition position = new QonfigFilePosition(theElement.getDocument().getLocation(),
+					LocatedFilePosition position = new LocatedFilePosition(theElement.getDocument().getLocation(),
 						theElement.getFilePosition());
-					throw new QonfigInterpretationException(e, position, 0);
+					throw new QonfigInterpretationException(position, 0, e);
 				}
 			}
 			T value;
@@ -400,8 +401,8 @@ public class QonfigInterpreterCore {
 			} catch (RuntimeInterpretationException e) {
 				throw e.toIntepreterException();
 			} catch (RuntimeException e) {
-				QonfigFilePosition position = new QonfigFilePosition(theElement.getDocument().getLocation(), theElement.getFilePosition());
-				throw new QonfigInterpretationException(e, position, 0);
+				LocatedFilePosition position = new LocatedFilePosition(theElement.getDocument().getLocation(), theElement.getFilePosition());
+				throw new QonfigInterpretationException(position, 0, e);
 			}
 			for (mIdx = 0; mIdx < modifiers.length; mIdx++) {
 				QonfigModifierHolder<T> modifier = modifiers[mIdx];
@@ -411,9 +412,9 @@ public class QonfigInterpreterCore {
 				} catch (RuntimeInterpretationException e) {
 					throw e.toIntepreterException();
 				} catch (RuntimeException e) {
-					QonfigFilePosition position = new QonfigFilePosition(theElement.getDocument().getLocation(),
+					LocatedFilePosition position = new LocatedFilePosition(theElement.getDocument().getLocation(),
 						theElement.getFilePosition());
-					throw new QonfigInterpretationException(e, position, 0);
+					throw new QonfigInterpretationException(position, 0, e);
 				}
 			}
 			try {
@@ -422,8 +423,8 @@ public class QonfigInterpreterCore {
 			} catch (RuntimeInterpretationException e) {
 				throw e.toIntepreterException();
 			} catch (RuntimeException e) {
-				QonfigFilePosition position = new QonfigFilePosition(theElement.getDocument().getLocation(), theElement.getFilePosition());
-				throw new QonfigInterpretationException(e, position, 0);
+				LocatedFilePosition position = new LocatedFilePosition(theElement.getDocument().getLocation(), theElement.getFilePosition());
+				throw new QonfigInterpretationException(position, 0, e);
 			}
 			return value;
 		}

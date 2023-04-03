@@ -6,7 +6,7 @@ import java.util.function.Supplier;
 
 import org.qommons.MultiInheritanceSet;
 import org.qommons.config.QonfigInterpreterCore.CoreSession;
-import org.qommons.io.SimpleXMLParser.FilePosition;
+import org.qommons.io.FilePosition;
 
 /**
  * A session with added capabilities and utilities. These sessions are provided by a {@link SpecialSessionImplementation} via

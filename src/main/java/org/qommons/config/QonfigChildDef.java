@@ -5,7 +5,7 @@ import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 
-import org.qommons.io.SimpleXMLParser.FilePosition;
+import org.qommons.io.FilePosition;
 
 /** A child that may be specified for an element */
 public interface QonfigChildDef extends QonfigElementOwned {

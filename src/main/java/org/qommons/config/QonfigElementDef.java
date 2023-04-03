@@ -6,7 +6,7 @@ import java.util.Set;
 import org.qommons.MultiInheritanceSet;
 import org.qommons.collect.BetterMultiMap;
 import org.qommons.config.QonfigAttributeDef.Declared;
-import org.qommons.io.SimpleXMLParser.FilePosition;
+import org.qommons.io.FilePosition;
 
 /** The definition of an element that can be declared in a document */
 public class QonfigElementDef extends QonfigElementOrAddOn {

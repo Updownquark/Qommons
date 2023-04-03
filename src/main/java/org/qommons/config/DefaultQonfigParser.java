@@ -24,9 +24,10 @@ import java.util.regex.PatternSyntaxException;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterHashSet;
 import org.qommons.collect.BetterSet;
+import org.qommons.io.FilePosition;
+import org.qommons.io.LocatedFilePosition;
 import org.qommons.io.SimpleXMLParser;
 import org.qommons.io.SimpleXMLParser.ContentPosition;
-import org.qommons.io.SimpleXMLParser.FilePosition;
 import org.qommons.io.SimpleXMLParser.XmlParseException;
 import org.w3c.dom.Element;
 
@@ -1460,7 +1461,7 @@ public class DefaultQonfigParser implements QonfigParser {
 		}
 
 		@Override
-		public QonfigFilePosition getFilePosition() {
+		public LocatedFilePosition getFilePosition() {
 			return null;
 		}
 	}

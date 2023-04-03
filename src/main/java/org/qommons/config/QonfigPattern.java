@@ -3,7 +3,7 @@ package org.qommons.config;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.qommons.io.SimpleXMLParser.FilePosition;
+import org.qommons.io.FilePosition;
 
 /** A value type for pattern-matched strings */
 public class QonfigPattern extends AbstractQonfigType implements QonfigValueType.Declared {

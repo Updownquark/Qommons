@@ -1,6 +1,6 @@
 package org.qommons.config;
 
-import org.qommons.io.SimpleXMLParser.FilePosition;
+import org.qommons.io.FilePosition;
 
 /** Represents an element value specification */
 public interface QonfigValueDef extends QonfigElementOwned {

@@ -20,7 +20,7 @@ import org.qommons.collect.BetterCollections;
 import org.qommons.collect.BetterHashMultiMap;
 import org.qommons.collect.BetterMultiMap;
 import org.qommons.config.QonfigAutoInheritance.AutoInheritTarget;
-import org.qommons.io.SimpleXMLParser.FilePosition;
+import org.qommons.io.FilePosition;
 
 /** A structure containing a set of types that can be used to parsed highly-structured and validated {@link QonfigDocument}s */
 public class QonfigToolkit implements Named {

@@ -4,7 +4,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
-import org.qommons.io.SimpleXMLParser.FilePosition;
+import org.qommons.io.FilePosition;
 
 /** Modifies an inherited child */
 public interface ChildDefModifier extends ElementDefModifier {

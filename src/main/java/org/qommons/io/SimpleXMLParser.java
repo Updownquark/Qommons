@@ -148,54 +148,6 @@ public class SimpleXMLParser {
 		}
 	}
 
-	/** The position of a single character in a text file */
-	public static class FilePosition {
-		private final int thePosition;
-		private final int theLineNumber;
-		private final int theCharNumber;
-
-		/**
-		 * @param position The absolute character position in the file
-		 * @param lineNumber The line number in the file, indexed from zero
-		 * @param charNumber The character number (within the line) in the file, indexed from zero
-		 */
-		public FilePosition(int position, int lineNumber, int charNumber) {
-			thePosition = position;
-			theLineNumber = lineNumber;
-			theCharNumber = charNumber;
-		}
-
-		/** @return The absolute character position in the file */
-		public int getPosition() {
-			return thePosition;
-		}
-
-		/** @return The line number in the file, indexed from zero */
-		public int getLineNumber() {
-			return theLineNumber;
-		}
-
-		/** @return The character number (within the line) in the file, indexed from zero */
-		public int getCharNumber() {
-			return theCharNumber;
-		}
-
-		@Override
-		public int hashCode() {
-			return thePosition;
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			return obj instanceof FilePosition && thePosition == ((FilePosition) obj).thePosition;
-		}
-
-		@Override
-		public String toString() {
-			return new StringBuilder("L").append(theLineNumber + 1).append(",C").append(theCharNumber + 1).toString();
-		}
-	}
-
 	/** Provides information about the position in the XML file of characters in XML content */
 	public interface ContentPosition {
 		/** @return The length of the content that this position structure is for */
@@ -249,6 +201,39 @@ public class SimpleXMLParser {
 				if (startIndex < 0 || startIndex > endIndex || theStart + endIndex > theEnd)
 					throw new IndexOutOfBoundsException(startIndex + " to " + endIndex + " of " + length());
 				return new SubContentPosition(theWrapped, theStart + startIndex, theStart + endIndex);
+			}
+		}
+
+		public static class Fixed implements ContentPosition {
+			private final FilePosition position;
+
+			public Fixed(FilePosition position) {
+				this.position = position;
+			}
+
+			@Override
+			public int length() {
+				return 0;
+			}
+
+			@Override
+			public FilePosition getPosition(int index) {
+				return position;
+			}
+
+			@Override
+			public int hashCode() {
+				return position.hashCode();
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return obj instanceof Fixed && position.equals(((Fixed) obj).position);
+			}
+
+			@Override
+			public String toString() {
+				return position.toString();
 			}
 		}
 	}
@@ -399,7 +384,7 @@ public class SimpleXMLParser {
 		 * {@link Node#getUserData(String) User data} key in which the {@link ContentPosition position} of the node's
 		 * {@link Node#getNodeValue() value} will be stored in each {@link Node} parsed by this class
 		 */
-		public final static String CONTENT_POSITION_KEY = "namePosition";
+		public final static String CONTENT_POSITION_KEY = "contentPosition";
 
 		private final Document theDocument;
 		private final Deque<Element> theStack;

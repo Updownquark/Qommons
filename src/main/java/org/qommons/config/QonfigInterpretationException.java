@@ -1,19 +1,21 @@
 package org.qommons.config;
 
+import org.qommons.io.LocatedFilePosition;
+
 /** An exception as the result of errors during interpretation of a Qonfig document */
 public class QonfigInterpretationException extends QonfigException {
-	/** @see QonfigException#QonfigException(String, Throwable, QonfigFilePosition, int) */
-	public QonfigInterpretationException(String message, Throwable cause, QonfigFilePosition position, int errorLength) {
-		super(message, cause, position, errorLength);
+	/** @see QonfigException#QonfigException(String, LocatedFilePosition, int, Throwable) */
+	public QonfigInterpretationException(String message, LocatedFilePosition position, int errorLength, Throwable cause) {
+		super(message, position, errorLength, cause);
 	}
 
-	/** @see QonfigException#QonfigException(String, QonfigFilePosition, int) */
-	public QonfigInterpretationException(String message, QonfigFilePosition position, int errorLength) {
+	/** @see QonfigException#QonfigException(String, LocatedFilePosition, int) */
+	public QonfigInterpretationException(String message, LocatedFilePosition position, int errorLength) {
 		super(message, position, errorLength);
 	}
 
-	/** @see QonfigException#QonfigException(Throwable, QonfigFilePosition, int) */
-	public QonfigInterpretationException(Throwable cause, QonfigFilePosition position, int errorLength) {
-		super(cause, position, errorLength);
+	/** @see QonfigException#QonfigException(LocatedFilePosition, int, Throwable) */
+	public QonfigInterpretationException(LocatedFilePosition position, int errorLength, Throwable cause) {
+		super(position, errorLength, cause);
 	}
 }

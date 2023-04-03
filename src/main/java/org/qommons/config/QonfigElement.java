@@ -19,8 +19,9 @@ import org.qommons.collect.BetterHashMultiMap;
 import org.qommons.collect.BetterHashSet;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.BetterMultiMap;
+import org.qommons.io.FilePosition;
+import org.qommons.io.LocatedFilePosition;
 import org.qommons.io.SimpleXMLParser.ContentPosition;
-import org.qommons.io.SimpleXMLParser.FilePosition;
 
 /** An element in a Qonfig document */
 public class QonfigElement implements FileSourced {
@@ -110,8 +111,8 @@ public class QonfigElement implements FileSourced {
 		return theFilePosition;
 	}
 
-	public QonfigFilePosition getPositionInFile() {
-		return new QonfigFilePosition(getDocument().getLocation(), getFilePosition());
+	public LocatedFilePosition getPositionInFile() {
+		return new LocatedFilePosition(getDocument().getLocation(), getFilePosition());
 	}
 
 	/**
@@ -807,9 +808,11 @@ public class QonfigElement implements FileSourced {
 							break;
 						default:
 							Object defValue = attr.getDefaultValue();
-							attrValues.put(attr,
-								new QonfigValue(String.valueOf(defValue), defValue, attr.getDeclarer().getLocationString(), null));
-							defaultedAttributes.put(attr, attr.getSpecification() == SpecificationType.Forbidden);
+							if (defValue != null) {
+								attrValues.put(attr,
+									new QonfigValue(String.valueOf(defValue), defValue, attr.getDeclarer().getLocationString(), null));
+								defaultedAttributes.put(attr, attr.getSpecification() == SpecificationType.Forbidden);
+							}
 							break;
 						}
 					}
@@ -836,9 +839,11 @@ public class QonfigElement implements FileSourced {
 						break;
 					default:
 						Object defValue = attr.getValue().getDefaultValue();
-						attrValues.put(attr.getKey(),
-							new QonfigValue(String.valueOf(defValue), defValue, attr.getValue().getDeclarer().getLocationString(), null));
-						defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
+						if (defValue != null) {
+							attrValues.put(attr.getKey(), new QonfigValue(String.valueOf(defValue), defValue,
+								attr.getValue().getDeclarer().getLocationString(), null));
+							defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
+						}
 						break;
 					}
 				}
@@ -876,9 +881,11 @@ public class QonfigElement implements FileSourced {
 							defaulted = defaultedAttributes.get(mod.getKey());
 							if (value == null && defaulted == null) {
 								Object defValue = mod.getValue().getDefaultValue();
-								attrValues.put(mod.getKey(), new QonfigValue(String.valueOf(defValue), defValue,
-									mod.getValue().getDeclarer().getLocationString(), null));
-								defaultedAttributes.put(mod.getKey(), false);
+								if (defValue != null) {
+									attrValues.put(mod.getKey(), new QonfigValue(String.valueOf(defValue), defValue,
+										mod.getValue().getDeclarer().getLocationString(), null));
+									defaultedAttributes.put(mod.getKey(), false);
+								}
 							}
 							break;
 						}
@@ -921,8 +928,10 @@ public class QonfigElement implements FileSourced {
 				if (theType.getValue() != null) {
 					if (theType.getValue().getDefaultValue() != null) {
 						Object defValue = theType.getValue().getDefaultValue();
-						theValue = new QonfigValue(String.valueOf(defValue), defValue, theType.getDeclarer().getLocationString(), null);
-						forbidden = theType.getValue().getSpecification() == SpecificationType.Forbidden;
+						if (defValue != null) {
+							theValue = new QonfigValue(String.valueOf(defValue), defValue, theType.getDeclarer().getLocationString(), null);
+							forbidden = theType.getValue().getSpecification() == SpecificationType.Forbidden;
+						}
 					}
 					required = theType.getValue().getSpecification() == SpecificationType.Required ? theType : null;
 				}

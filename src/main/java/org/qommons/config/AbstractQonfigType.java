@@ -3,7 +3,7 @@ package org.qommons.config;
 import java.util.Objects;
 
 import org.qommons.StringUtils;
-import org.qommons.io.SimpleXMLParser.FilePosition;
+import org.qommons.io.FilePosition;
 
 /** An abstract class for something that is directly owned by a toolkit */
 public abstract class AbstractQonfigType implements QonfigType {

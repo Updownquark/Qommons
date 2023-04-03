@@ -14,9 +14,9 @@ import java.util.regex.Pattern;
 import org.qommons.Named;
 import org.qommons.Transaction;
 import org.qommons.ex.ExSupplier;
+import org.qommons.io.FilePosition;
 import org.qommons.io.SimpleXMLParser;
 import org.qommons.io.SimpleXMLParser.ContentPosition;
-import org.qommons.io.SimpleXMLParser.FilePosition;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 
@@ -325,7 +325,7 @@ public class StrictXmlReader implements Named, Transaction {
 						offset = 0;
 						end = 0;
 					} else {
-						for (end = content.length(); end >= 0 && Character.isWhitespace(content.charAt(end)); end--) {
+						for (end = content.length() - 1; end >= 0 && Character.isWhitespace(content.charAt(end)); end--) {
 						}
 					}
 					return pos.subSequence(offset, end);

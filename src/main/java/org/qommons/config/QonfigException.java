@@ -1,35 +1,35 @@
 package org.qommons.config;
 
-public abstract class QonfigException extends Exception {
-	private final QonfigFilePosition thePosition;
+import org.qommons.io.LocatedFilePosition;
+import org.qommons.io.TextParseException;
+
+public abstract class QonfigException extends TextParseException {
 	private final int theErrorLength;
 
 	/**
 	 * @param message The message for the exception
 	 * @param cause The cause of the exception
 	 */
-	public QonfigException(String message, Throwable cause, QonfigFilePosition position, int errorLength) {
-		super(position == null ? message : position + ": " + message, cause);
-		thePosition = position;
+	public QonfigException(String message, LocatedFilePosition position, int errorLength, Throwable cause) {
+		super(message, position, cause);
 		theErrorLength = errorLength;
 	}
 
 	/** @param message The message for the exception */
-	public QonfigException(String message, QonfigFilePosition position, int errorLength) {
-		super(position == null ? message : position + ": " + message);
-		thePosition = position;
+	public QonfigException(String message, LocatedFilePosition position, int errorLength) {
+		super(message, position);
 		theErrorLength = errorLength;
 	}
 
 	/** @param cause The cause of the exception */
-	public QonfigException(Throwable cause, QonfigFilePosition position, int errorLength) {
-		super(cause);
-		thePosition = position;
+	public QonfigException(LocatedFilePosition position, int errorLength, Throwable cause) {
+		super(cause.getMessage(), position, cause);
 		theErrorLength = errorLength;
 	}
 
-	public QonfigFilePosition getPosition() {
-		return thePosition;
+	@Override
+	public LocatedFilePosition getPosition() {
+		return (LocatedFilePosition) super.getPosition();
 	}
 
 	public int getErrorLength() {

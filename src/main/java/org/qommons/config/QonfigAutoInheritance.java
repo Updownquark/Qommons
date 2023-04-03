@@ -8,7 +8,7 @@ import java.util.function.Consumer;
 
 import org.qommons.MultiInheritanceSet;
 import org.qommons.QommonsUtils;
-import org.qommons.io.SimpleXMLParser.FilePosition;
+import org.qommons.io.FilePosition;
 
 /** A set of add-ons that shall be inherited automatically by elements matching a condition */
 public class QonfigAutoInheritance {

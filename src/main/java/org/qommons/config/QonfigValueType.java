@@ -3,7 +3,7 @@ package org.qommons.config;
 import java.util.List;
 
 import org.qommons.Named;
-import org.qommons.io.SimpleXMLParser.FilePosition;
+import org.qommons.io.FilePosition;
 
 /** A type of values that can be parsed from attribute or element text values */
 public interface QonfigValueType extends Named, FileSourced {
@@ -220,6 +220,11 @@ public interface QonfigValueType extends Named, FileSourced {
 		@Override
 		public QonfigToolkit getDeclarer() {
 			return theDeclarer;
+		}
+
+		/** @return The custom type fulfilling this declared custom type */
+		public CustomValueType getCustomType() {
+			return theCustomType;
 		}
 
 		@Override

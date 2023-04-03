@@ -4,8 +4,7 @@ import java.text.ParseException;
 
 /** A ParseException for multi-line character sequences */
 public class TextParseException extends ParseException {
-	private final int theLineNumber;
-	private final int theColumnNumber;
+	private final FilePosition thePosition;
 
 	/**
 	 * @param s The message for the exception
@@ -15,8 +14,7 @@ public class TextParseException extends ParseException {
 	 */
 	public TextParseException(String s, int errorOffset, int lineNumber, int columnNumber) {
 		super(s, errorOffset);
-		theLineNumber = lineNumber;
-		theColumnNumber = columnNumber;
+		thePosition = new FilePosition(errorOffset, lineNumber, columnNumber);
 	}
 
 	/**
@@ -29,8 +27,27 @@ public class TextParseException extends ParseException {
 	public TextParseException(String s, int errorOffset, int lineNumber, int columnNumber, Throwable cause) {
 		super(s, errorOffset);
 		initCause(cause);
-		theLineNumber = lineNumber;
-		theColumnNumber = columnNumber;
+		thePosition = new FilePosition(errorOffset, lineNumber, columnNumber);
+	}
+
+	/**
+	 * @param s The message for the exception
+	 * @param position The position in the sequence
+	 */
+	public TextParseException(String s, FilePosition position) {
+		super(s, position == null ? 0 : position.getPosition());
+		thePosition = position;
+	}
+
+	/**
+	 * @param s The message for the exception
+	 * @param position The position in the sequence
+	 * @param cause The cause of the exception
+	 */
+	public TextParseException(String s, FilePosition position, Throwable cause) {
+		super(s, position == null ? 0 : position.getPosition());
+		initCause(cause);
+		thePosition = position;
 	}
 
 	/**
@@ -40,23 +57,29 @@ public class TextParseException extends ParseException {
 	public TextParseException(String s, TextParseException cause) {
 		super(s, cause.getErrorOffset());
 		initCause(cause);
-		theLineNumber = cause.getLineNumber();
-		theColumnNumber = cause.getColumnNumber();
+		thePosition = cause.getPosition();
+	}
+
+	/** @return The position of the source of the error in the file */
+	public FilePosition getPosition() {
+		return thePosition;
 	}
 
 	/** @return The line number of the error in the sequence, offset from zero */
 	public int getLineNumber() {
-		return theLineNumber;
+		return thePosition.getLineNumber();
 	}
 
 	/** @return The character number of the error in the line, offset from zero */
 	public int getColumnNumber() {
-		return theColumnNumber;
+		return thePosition.getCharNumber();
 	}
 
 	@Override
 	public String toString() {
-		return new StringBuilder("Line ").append(theLineNumber + 1).append(" Col ").append(theColumnNumber + 1).append(": ")
-			.append(getMessage()).toString();
+		if (thePosition != null)
+			return new StringBuilder().append(thePosition).append(": ").append(super.toString()).toString();
+		else
+			return super.toString();
 	}
 }

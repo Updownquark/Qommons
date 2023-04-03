@@ -2,7 +2,7 @@ package org.qommons.config;
 
 import java.util.Objects;
 
-import org.qommons.io.SimpleXMLParser.FilePosition;
+import org.qommons.io.FilePosition;
 
 /** An attribute that may be specified on an element */
 public interface QonfigAttributeDef extends QonfigValueDef {

@@ -19,7 +19,7 @@ import org.qommons.collect.BetterMultiMap;
 import org.qommons.config.QonfigAddOn.ValueModifier;
 import org.qommons.config.QonfigAttributeDef.Declared;
 import org.qommons.config.QonfigValidation.ValueSpec;
-import org.qommons.io.SimpleXMLParser.FilePosition;
+import org.qommons.io.FilePosition;
 
 /** Super class of {@link QonfigElementDef} and {@link QonfigAddOn} */
 public abstract class QonfigElementOrAddOn extends AbstractQonfigType {

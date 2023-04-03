@@ -1,6 +1,7 @@
 package org.qommons.config;
 
-import org.qommons.io.SimpleXMLParser.FilePosition;
+import org.qommons.io.FilePosition;
+import org.qommons.io.LocatedFilePosition;
 
 /** Represents a path through XML structure for identifying the location of errors, etc. */
 public class ElementPath implements FileSourced {
@@ -36,8 +37,8 @@ public class ElementPath implements FileSourced {
 	}
 
 	@Override
-	public QonfigFilePosition getFilePosition() {
-		return new QonfigFilePosition(theFile, thePosition);
+	public LocatedFilePosition getFilePosition() {
+		return new LocatedFilePosition(theFile, thePosition);
 	}
 
 	@Override

@@ -2,7 +2,7 @@ package org.qommons.config;
 
 import java.util.List;
 
-/** Thrown by {@link QonfigParser}s if a toolkit or document cannot be parsed */
+/** Thrown by {@link QonfigParser}s if a toolkit or document cannot be parsed from XML */
 public class QonfigParseException extends Exception {
 	private final String theDocumentLocation;
 	private final List<QonfigParseIssue> theIssues;
