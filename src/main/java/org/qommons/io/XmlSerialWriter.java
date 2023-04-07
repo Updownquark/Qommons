@@ -443,6 +443,9 @@ public class XmlSerialWriter {
 		}
 	}
 
+	private XmlSerialWriter() {
+	}
+
 	static void writeXmlContent(Writer writer, String content, XmlContentType type) throws IOException {
 		switch (type) {
 		case ATTRIBUTE_NAME:

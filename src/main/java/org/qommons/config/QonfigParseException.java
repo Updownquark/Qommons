@@ -1,6 +1,9 @@
 package org.qommons.config;
 
+import java.util.Arrays;
 import java.util.List;
+
+import org.qommons.io.FilePosition;
 
 /** Thrown by {@link QonfigParser}s if a toolkit or document cannot be parsed from XML */
 public class QonfigParseException extends Exception {
@@ -49,6 +52,16 @@ public class QonfigParseException extends Exception {
 		}
 		return cause == null ? new QonfigParseException(documentLocation, message, issues)
 			: new QonfigParseException(documentLocation, message, issues, cause);
+	}
+
+	public static QonfigParseException createSimple(String fileLocation, String elementName, FilePosition position, String message,
+		Throwable cause) {
+		List<QonfigParseIssue> issues = Arrays.asList(new QonfigParseIssue(ElementPath.forRoot(fileLocation, elementName, position),
+			"No 'name' given for toolkit", Thread.currentThread().getStackTrace()[0], cause));
+		if (cause != null)
+			return new QonfigParseException(fileLocation, "No 'name' given for toolkit", issues, cause);
+		else
+			return new QonfigParseException(fileLocation, "No 'name' given for toolkit", issues);
 	}
 
 	private static String createMessage(String documentLocation, List<QonfigParseIssue> issues) {

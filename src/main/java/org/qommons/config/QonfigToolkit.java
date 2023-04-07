@@ -72,9 +72,9 @@ public class QonfigToolkit implements Named {
 	}
 
 	public interface ToolkitBuilder {
-		void parseTypes(QonfigParseSession session);
+		void parseTypes(QonfigParseSession session) throws QonfigParseException;
 
-		void fillOutTypes(QonfigParseSession session);
+		void fillOutTypes(QonfigParseSession session) throws QonfigParseException;
 
 		Set<QonfigElementDef> getDeclaredRoots(QonfigParseSession session);
 	}

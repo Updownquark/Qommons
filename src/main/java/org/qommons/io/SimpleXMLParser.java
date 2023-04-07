@@ -204,9 +204,11 @@ public class SimpleXMLParser {
 			}
 		}
 
+		/** A file position of length 0 whose {@link #getPosition(int)} method always returns the same value */
 		public static class Fixed implements ContentPosition {
 			private final FilePosition position;
 
+			/** @param position The position for this content position */
 			public Fixed(FilePosition position) {
 				this.position = position;
 			}

@@ -2,9 +2,11 @@ package org.qommons.config;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Reader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +19,8 @@ import org.qommons.ex.ExSupplier;
 import org.qommons.io.FilePosition;
 import org.qommons.io.SimpleXMLParser;
 import org.qommons.io.SimpleXMLParser.ContentPosition;
+import org.qommons.io.SimpleXMLParser.XmlParseException;
+import org.qommons.io.TextParseException;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 
@@ -25,6 +29,28 @@ import org.w3c.dom.Node;
  * to verify that the element was specified as intended.
  */
 public class StrictXmlReader implements Named, Transaction {
+	/**
+	 * @param in The input stream to parse
+	 * @return A {@link StrictXmlReader} for the root of the XML document contained parsed from stream
+	 * @throws IOException If the XML could not be read
+	 * @throws XmlParseException IF the XML could not be parsed
+	 */
+	public static StrictXmlReader ofRoot(InputStream in) throws IOException, XmlParseException {
+		SimpleXMLParser parser = new SimpleXMLParser();
+		return new StrictXmlReader(parser.parseDocument(in).getDocumentElement());
+	}
+
+	/**
+	 * @param reader The text stream to parse
+	 * @return A {@link StrictXmlReader} for the root of the XML document contained parsed from stream
+	 * @throws IOException If the XML could not be read
+	 * @throws XmlParseException IF the XML could not be parsed
+	 */
+	public static StrictXmlReader ofRoot(Reader reader) throws IOException, XmlParseException {
+		SimpleXMLParser parser = new SimpleXMLParser();
+		return new StrictXmlReader(parser.parseDocument(reader).getDocumentElement());
+	}
+
 	/** Returned from {@link #getElementOrMissing(String)} if the element is not present */
 	public static final StrictXmlReader MISSING = new StrictXmlReader(null);
 
@@ -85,11 +111,11 @@ public class StrictXmlReader implements Named, Transaction {
 
 	/**
 	 * @param name The name of the attribute to get the value of
-	 * @param required Whether to throw an exception if the attribute was not specified
 	 * @return The attribute text, or null if none was specified
-	 * @throws IllegalArgumentException If <code>required</code> and the attribute was not specified
 	 */
-	public String getAttribute(String name, boolean required) throws IllegalArgumentException {
+	public String getAttributeIfExists(String name) {
+		if (theElement == null) // MISSING
+			return null;
 		String value = null;
 		for (int i = 0; i < theElement.getAttributes().getLength(); i++) {
 			Node attr = theElement.getAttributes().item(i);
@@ -99,8 +125,18 @@ public class StrictXmlReader implements Named, Transaction {
 				break;
 			}
 		}
-		if (value == null && required)
-			throw new IllegalArgumentException(getPath() + ": No attribute '" + name + "' specified on element " + getPath());
+		return value;
+	}
+
+	/**
+	 * @param name The name of the attribute to get the value of
+	 * @return The attribute text
+	 * @throws TextParseException If the attribute was not specified
+	 */
+	public String getAttribute(String name) throws TextParseException {
+		String value = getAttributeIfExists(name);
+		if (value == null)
+			throw new TextParseException(getPath() + ": No attribute '" + name + "' specified on element " + getPath(), getNamePosition());
 		return value;
 	}
 
@@ -110,8 +146,8 @@ public class StrictXmlReader implements Named, Transaction {
 	 * @return The value of the attribute, or the given default if it is missing
 	 */
 	public String getAttribute(String name, String defaultValue) {
-		String val = getAttribute(name, false);
-		return val == null ? defaultValue : val;
+		String value = getAttributeIfExists(name);
+		return value == null ? defaultValue : value;
 	}
 
 	/**
@@ -122,18 +158,17 @@ public class StrictXmlReader implements Named, Transaction {
 	 * @return The parsed value of the attribute, or the given default if it is missing
 	 */
 	public <T> T getAttribute(String name, Function<String, ? extends T> parser, T defaultValue) {
-		String val = getAttribute(name, false);
-		return val == null ? defaultValue : parser.apply(val);
+		String value = getAttributeIfExists(name);
+		return value == null ? defaultValue : parser.apply(value);
 	}
 
 	/**
 	 * @param pattern The pattern to match attribute names with
-	 * @param min The minimum number of attributes expected
-	 * @param max The maximum number of attributes expected, or &lt;0 to enforce no max
 	 * @return A map of attribute name to value for all attributes whose names match the given pattern
-	 * @throws IllegalArgumentException If the number of matching attributes specified was <code>&lt;min</code> or <code>&gt;max</code>
 	 */
-	public Map<String, String> findAttributes(Pattern pattern, int min, int max) throws IllegalArgumentException {
+	public Map<String, String> findAttributes(Pattern pattern) {
+		if (theElement == null) // MISSING
+			return Collections.emptyMap();
 		Map<String, String> found = new LinkedHashMap<>();
 		for (int i = 0; i < theElement.getAttributes().getLength(); i++) {
 			Node n = theElement.getAttributes().item(i);
@@ -142,14 +177,31 @@ public class StrictXmlReader implements Named, Transaction {
 			found.put(n.getNodeName(), n.getNodeValue());
 			theUsedNodes.set(i);
 		}
+		return found;
+	}
+
+	/**
+	 * @param pattern The pattern to match attribute names with
+	 * @param min The minimum number of attributes expected
+	 * @param max The maximum number of attributes expected, or &lt;0 to enforce no max
+	 * @return A map of attribute name to value for all attributes whose names match the given pattern
+	 * @throws TextParseException If the number of matching attributes specified was <code>&lt;min</code> or <code>&gt;max</code>
+	 */
+	public Map<String, String> findAttributes(Pattern pattern, int min, int max) throws TextParseException {
+		if (theElement == null) // MISSING, no checks
+			return Collections.emptyMap();
+		Map<String, String> found = findAttributes(pattern);
 		if (found.size() < min || (max >= 0 && found.size() > max))
-			throw new IllegalArgumentException(getPath() + ": Between " + min + " and " + max + " attribute"
-				+ ((min == max && max == 1) ? "" : "s") + " matching " + pattern.pattern() + " expected," + " but found " + found.size());
+			throw new TextParseException(getPath() + ": Between " + min + " and " + max + " attribute"
+				+ ((min == max && max == 1) ? "" : "s") + " matching " + pattern.pattern() + " expected," + " but found " + found.size(),
+				getNamePosition());
 		return found;
 	}
 
 	/** @return A name-to-value map of all attributes specified on this element */
 	public Map<String, String> getAllAttributes() {
+		if (theElement == null) // MISSING
+			return Collections.emptyMap();
 		Map<String, String> found = new LinkedHashMap<>();
 		for (int i = 0; i < theElement.getAttributes().getLength(); i++) {
 			Node n = theElement.getAttributes().item(i);
@@ -182,13 +234,49 @@ public class StrictXmlReader implements Named, Transaction {
 	}
 
 	/**
-	 * @param name The name of the element to get
-	 * @param required Whether to throw an exception if the element was not specified
-	 * @return The child element with the given name, or null if none was specified
-	 * @throws IllegalArgumentException If multiple elements with the given name were specified, or if <code>required</code> and no such
-	 *         element was specified
+	 * @param name The name of the elements to get
+	 * @return All child elements with the given name
 	 */
-	public StrictXmlReader getElement(String name, boolean required) throws IllegalArgumentException {
+	public List<StrictXmlReader> getElements(String name) {
+		if (theElement == null) // MISSING
+			return Collections.emptyList();
+		List<StrictXmlReader> found = new ArrayList<>();
+		int attLen = theElement.getAttributes().getLength();
+		for (int i = 0; i < theElement.getChildNodes().getLength(); i++) {
+			Node n = theElement.getChildNodes().item(i);
+			if (!(n instanceof Element) || !((Element) n).getTagName().equals(name))
+				continue;
+			found.add(new StrictXmlReader(this, (Element) n));
+			theUsedNodes.set(i + attLen);
+		}
+		return found;
+	}
+
+	/**
+	 * @param name The name of the elements to get
+	 * @param min The minimum number of elements expected
+	 * @param max The maximum number of elements expected, or &lt;0 to enforce no max
+	 * @return All child elements with the given name
+	 * @throws TextParseException If the number of matching elements specified was <code>&lt;min</code> or <code>&gt;max</code>
+	 */
+	public List<StrictXmlReader> getElements(String name, int min, int max) throws TextParseException {
+		if (theElement == null) // MISSING
+			return Collections.emptyList();
+		List<StrictXmlReader> found = getElements(name);
+		if (found.size() < min || (max >= 0 && found.size() > max))
+			throw new TextParseException(getPath() + ": Between " + min + " and " + max + " '" + name + "' element"
+				+ ((min == max && max == 1) ? "" : "s") + " expected," + " but found " + found.size(), getNamePosition());
+		return found;
+	}
+
+	/**
+	 * @param name The name of the element to get
+	 * @return The child element with the given name, or null if none was specified
+	 * @throws TextParseException If multiple elements with the given name were specified
+	 */
+	public StrictXmlReader getElementIfExists(String name) throws TextParseException {
+		if (theElement == null) // MISSING
+			return null;
 		Element found = null;
 		int foundIdx = -1;
 		for (int i = 0; i < theElement.getChildNodes().getLength(); i++) {
@@ -196,7 +284,8 @@ public class StrictXmlReader implements Named, Transaction {
 			if (!(n instanceof Element) || !((Element) n).getTagName().equals(name))
 				continue;
 			if (found != null)
-				throw new IllegalArgumentException(getPath() + ": Multiple '" + name + "' elements specified under parent " + getPath());
+				throw new TextParseException(getPath() + ": Multiple '" + name + "' elements specified under parent " + getPath(),
+					getNamePosition());
 			found = (Element) n;
 			foundIdx = i;
 			theUsedNodes.set(i + theElement.getAttributes().getLength());
@@ -207,51 +296,39 @@ public class StrictXmlReader implements Named, Transaction {
 			if (theChildren[foundIdx] == null)
 				theChildren[foundIdx] = new StrictXmlReader(this, found);
 			return theChildren[foundIdx];
-		} else if (required)
-			throw new IllegalArgumentException(getPath() + ": No element '" + name + "' specified under parent " + getPath());
-		else
+		} else
 			return null;
+	}
+
+	/**
+	 * @param name The name of the element to get
+	 * @return The child element with the given name, or null if none was specified
+	 * @throws TextParseException If multiple elements with the given name were specified, or if no such element was specified
+	 */
+	public StrictXmlReader getElement(String name) throws TextParseException {
+		if (theElement == null) // MISSING, no checks
+			return MISSING;
+
+		StrictXmlReader found = getElementIfExists(name);
+		if (found == null)
+			throw new TextParseException(getPath() + ": No element '" + name + "' specified under parent " + getPath(), getNamePosition());
+		return found;
 	}
 
 	/**
 	 * @param name The name of the child element to get
 	 * @return The first child element with the given name, or {@link #MISSING} if there was no such child
+	 * @throws TextParseException If multiple elements with the given name were specified
 	 */
-	public StrictXmlReader getElementOrMissing(String name) {
-		StrictXmlReader found = getElement(name, false);
+	public StrictXmlReader getElementOrMissing(String name) throws TextParseException {
+		StrictXmlReader found = getElementIfExists(name);
 		return found == null ? MISSING : found;
 	}
 
-	/**
-	 * @param name The name of the elements to get
-	 * @param min The minimum number of elements expected
-	 * @param max The maximum number of elements expected, or &lt;0 to enforce no max
-	 * @return All child elements with the given name
-	 * @throws IllegalArgumentException If the number of matching elements specified was <code>&lt;min</code> or <code>&gt;max</code>
-	 */
-	public List<StrictXmlReader> getElements(String name, int min, int max) throws IllegalArgumentException {
-		List<StrictXmlReader> found = new ArrayList<>();
-		int attLen = theElement.getAttributes().getLength();
-		for (int i = 0; i < theElement.getChildNodes().getLength(); i++) {
-			Node n = theElement.getChildNodes().item(i);
-			if (!(n instanceof Element) || !((Element) n).getTagName().equals(name))
-				continue;
-			found.add(new StrictXmlReader(this, (Element) n));
-			theUsedNodes.set(i + attLen);
-		}
-		if (found.size() < min || (max >= 0 && found.size() > max))
-			throw new IllegalArgumentException(getPath() + ": Between " + min + " and " + max + " '" + name + "' element"
-				+ ((min == max && max == 1) ? "" : "s") + " expected," + " but found " + found.size());
-		return found;
-	}
-
-	/**
-	 * @param min The minimum number of elements expected
-	 * @param max The maximum number of elements expected, or &lt;0 to enforce no max
-	 * @return All child elements
-	 * @throws IllegalArgumentException If the number of matching elements specified was <code>&lt;min</code> or <code>&gt;max</code>
-	 */
-	public List<StrictXmlReader> getElements(int min, int max) throws IllegalArgumentException {
+	/** @return All child elements */
+	public List<StrictXmlReader> getElements() {
+		if (theElement == null) // MISSING
+			return Collections.emptyList();
 		List<StrictXmlReader> found = new ArrayList<>();
 		int attLen = theElement.getAttributes().getLength();
 		for (int i = 0; i < theElement.getChildNodes().getLength(); i++) {
@@ -261,19 +338,32 @@ public class StrictXmlReader implements Named, Transaction {
 			found.add(new StrictXmlReader(this, (Element) n));
 			theUsedNodes.set(i + attLen);
 		}
-		if (found.size() < min || (max >= 0 && found.size() > max))
-			throw new IllegalArgumentException(getPath() + ": Between " + min + " and " + max + " element"
-				+ ((min == max && max == 1) ? "" : "s") + " expected," + " but found " + found.size());
 		return found;
 	}
 
 	/**
-	 * @param required Whether to throw an exception if the element was specified as self-closing
-	 * @return The text content of this element, trimmed for whitespace at both ends
-	 * @throws IllegalArgumentException If multiple text sections were specified, or if <code>required</code> and the element was
-	 *         self-closing
+	 * @param min The minimum number of elements expected
+	 * @param max The maximum number of elements expected, or &lt;0 to enforce no max
+	 * @return All child elements
+	 * @throws TextParseException If the number of matching elements specified was <code>&lt;min</code> or <code>&gt;max</code>
 	 */
-	public String getTextTrim(boolean required) throws IllegalArgumentException {
+	public List<StrictXmlReader> getElements(int min, int max) throws TextParseException {
+		if (theElement == null) // MISSING
+			return Collections.emptyList();
+		List<StrictXmlReader> found = getElements();
+		if (found.size() < min || (max >= 0 && found.size() > max))
+			throw new TextParseException(getPath() + ": Between " + min + " and " + max + " element" + ((min == max && max == 1) ? "" : "s")
+				+ " expected," + " but found " + found.size(), getNamePosition());
+		return found;
+	}
+
+	/**
+	 * @return The text content of this element, trimmed for whitespace at both ends
+	 * @throws TextParseException If multiple text sections were specified
+	 */
+	public String getTextTrimIfExists() throws TextParseException {
+		if (theElement == null) // MISSING
+			return null;
 		String found = null;
 		boolean anyText = false;
 		int attLen = theElement.getAttributes().getLength();
@@ -283,29 +373,40 @@ public class StrictXmlReader implements Named, Transaction {
 				anyText = true;
 				if (!isWhiteSpace(n.getNodeValue())) {
 					if (found != null)
-						throw new IllegalArgumentException(
-							getPath() + ": Multiple text/CDATA sections specified under parent " + getPath());
+						throw new TextParseException(getPath() + ": Multiple text/CDATA sections specified under parent " + getPath(),
+							getNamePosition());
 					found = n.getNodeValue();
 				}
 				theUsedNodes.set(i + attLen);
 			}
 		}
-		if (!anyText) {
-			if (required)
-				throw new IllegalArgumentException(getPath() + ": No text specified on element " + getPath());
-			else
-				return null;
-		} else if (found != null)
+		if (!anyText)
+			return null;
+		else if (found != null)
 			return found.trim();
 		else
 			return "";
 	}
 
 	/**
-	 * @return The content position of the element's trimmed text
-	 * @throws IllegalArgumentException If multiple text/CDATA sections are specified under this element
+	 * @param required Whether to throw an exception if the element was specified as self-closing
+	 * @return The text content of this element, trimmed for whitespace at both ends
+	 * @throws TextParseException If multiple text sections were specified, or if <code>required</code> and the element was self-closing
 	 */
-	public ContentPosition getTextTrimPosition() throws IllegalArgumentException {
+	public String getTextTrim(boolean required) throws TextParseException {
+		if (theElement == null) // MISSING
+			return null;
+		String found = getTextTrimIfExists();
+		if (found == null)
+			throw new TextParseException(getPath() + ": No text specified on element " + getPath(), getNamePosition());
+		return found;
+	}
+
+	/**
+	 * @return The content position of the element's trimmed text, or null if the element was specified as self-closing or multiple text
+	 *         sections were specified
+	 */
+	public ContentPosition getTextTrimPosition() {
 		int attLen = theElement.getAttributes().getLength();
 		ContentPosition found = null;
 		boolean anyNonWS = false;
@@ -315,8 +416,9 @@ public class StrictXmlReader implements Named, Transaction {
 				ContentPosition pos = SimpleXMLParser.getContentPosition(n);
 				if (!isWhiteSpace(n.getNodeValue())) {
 					if (anyNonWS)
-						throw new IllegalArgumentException(
-							getPath() + ": Multiple text/CDATA sections specified under parent " + getPath());
+						return pos;
+					// throw new TextParseException(getPath() + ": Multiple text/CDATA sections specified under parent " + getPath(),
+					// getNamePosition());
 					String content = n.getNodeValue();
 					int offset, end;
 					for (offset = 0; offset < content.length() && Character.isWhitespace(content.charAt(offset)); offset++) {
@@ -361,13 +463,13 @@ public class StrictXmlReader implements Named, Transaction {
 	}
 
 	/**
-	 * @param trim Whether to trim each text section
-	 * @param required Whether to throw an exception if the element was specified as self-closing
+	 * @param trim Whether to trim each text section, or null if this element is self-closing
 	 * @return The text content of this element. If multiple text sections were specified, they will be appended with a newline character
 	 *         between
-	 * @throws IllegalArgumentException If <code>required</code> and the element was self-closing
 	 */
-	public String getCompleteText(boolean trim, boolean required) throws IllegalArgumentException {
+	public String getCompleteTextIfSpecified(boolean trim) {
+		if (theElement == null) // MISSING
+			return null;
 		StringBuilder found = new StringBuilder();
 		boolean anyText = false;
 		int attLen = theElement.getAttributes().getLength();
@@ -384,19 +486,33 @@ public class StrictXmlReader implements Named, Transaction {
 				theUsedNodes.set(i + attLen);
 			}
 		}
-		if (!anyText && required)
-			throw new IllegalArgumentException(getPath() + ": No text specified on element " + getPath());
+		if (!anyText)
+			return null;
 		return found.toString();
 	}
 
 	/**
 	 * @param trim Whether to trim each text section
-	 * @param min The minimum number of text sections expected
-	 * @param max The maximum number of text sections expected, or &lt;0 to enforce no max
-	 * @return The content of all text sections of this element
-	 * @throws IllegalArgumentException If the number of text sections specified was <code>&lt;min</code> or <code>&gt;max</code>
+	 * @return The text content of this element. If multiple text sections were specified, they will be appended with a newline character
+	 *         between
+	 * @throws TextParseException If <code>required</code> and the element was self-closing
 	 */
-	public List<String> getAllText(boolean trim, int min, int max) {
+	public String getCompleteText(boolean trim) throws TextParseException {
+		if (theElement == null) // MISSING
+			return null;
+		String completeText = getCompleteTextIfSpecified(trim);
+		if (completeText == null)
+			throw new TextParseException(getPath() + ": No text specified on element " + getPath(), getNamePosition());
+		return completeText;
+	}
+
+	/**
+	 * @param trim Whether to trim each text section
+	 * @return The content of all text sections of this element
+	 */
+	public List<String> getAllText(boolean trim) {
+		if (theElement == null) // MISSING
+			return Collections.emptyList();
 		List<String> found = new ArrayList<>();
 		int attLen = theElement.getAttributes().getLength();
 		for (int i = 0; i < theElement.getChildNodes().getLength(); i++) {
@@ -408,10 +524,24 @@ public class StrictXmlReader implements Named, Transaction {
 				found.add(trim ? n.getNodeValue().trim() : n.getNodeValue());
 			}
 		}
-		if (found.size() < min || (max >= 0 && found.size() > max))
-			throw new IllegalArgumentException(getPath() + ": Between " + min + " and " + max + " text section"
-				+ ((min == max && max == 1) ? "" : "s") + " expected," + " but found " + found.size());
 		return found;
+	}
+
+	/**
+	 * @param trim Whether to trim each text section
+	 * @param min The minimum number of text sections expected
+	 * @param max The maximum number of text sections expected, or &lt;0 to enforce no max
+	 * @return The content of all text sections of this element
+	 * @throws TextParseException If the number of text sections specified was <code>&lt;min</code> or <code>&gt;max</code>
+	 */
+	public List<String> getAllText(boolean trim, int min, int max) throws TextParseException {
+		if (theElement == null) // MISSING
+			return Collections.emptyList();
+		List<String> text = getAllText(trim);
+		if (text.size() < min || (max >= 0 && text.size() > max))
+			throw new TextParseException(getPath() + ": Between " + min + " and " + max + " text section"
+				+ ((min == max && max == 1) ? "" : "s") + " expected," + " but found " + text.size(), getNamePosition());
+		return text;
 	}
 
 	/** @return This element's path under the root */
@@ -443,10 +573,10 @@ public class StrictXmlReader implements Named, Transaction {
 	/**
 	 * Goes through all this element's content and throws an exception if any of it was not used
 	 * 
-	 * @throws IllegalArgumentException If any attributes, child elements, or non-whitespace text was unused (i.e. was not requested through
-	 *         any methods)
+	 * @throws TextParseException If any attributes, child elements, or non-whitespace text was unused (i.e. was not requested through any
+	 *         methods)
 	 */
-	public void check() throws IllegalArgumentException {
+	public void check() throws TextParseException {
 		check(false);
 	}
 
@@ -454,9 +584,11 @@ public class StrictXmlReader implements Named, Transaction {
 	 * Goes through all this element's content and throws an exception if any of it was not used
 	 * 
 	 * @param deep Whether to also check the content of child elements
-	 * @throws IllegalArgumentException If there was any unexpected content in this element
+	 * @throws TextParseException If there was any unexpected content in this element
 	 */
-	public void check(boolean deep) throws IllegalArgumentException {
+	public void check(boolean deep) throws TextParseException {
+		if (theElement == null) // MISSING
+			return;
 		Map<String, Integer> errs = null;
 		errs = check(new StringBuilder(), deep, errs);
 		if (errs == null)
@@ -476,7 +608,7 @@ public class StrictXmlReader implements Named, Transaction {
 				if (err.getValue() > 1)
 					str.append("(x").append(err.getValue()).append(')');
 			}
-			throw new IllegalArgumentException(str.toString());
+			throw new TextParseException(str.toString(), getNamePosition());
 		}
 	}
 
@@ -522,7 +654,11 @@ public class StrictXmlReader implements Named, Transaction {
 
 	@Override
 	public void close() {
-		check(true);
+		try {
+			check(true);
+		} catch (TextParseException e) {
+			throw new IllegalArgumentException(e);
+		}
 	}
 
 	private static boolean isWhiteSpace(String nodeValue) {
