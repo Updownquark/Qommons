@@ -268,6 +268,10 @@ public class TimeUtils {
 			});
 		}
 
+		/**
+		 * @param adjustment A function to adjust each component of this duration
+		 * @return The adjusted duration
+		 */
 		public ParsedDuration adjust(BiFunction<DurationComponentType, Integer, Integer> adjustment) {
 			EnumMap<DurationComponentType, Integer> fieldValues = new EnumMap<>(DurationComponentType.class);
 			for (Map.Entry<DurationComponentType, DurationComponent> entry : components.entrySet())
@@ -430,6 +434,10 @@ public class TimeUtils {
 			return true;
 		}
 
+		/**
+		 * @param duration The duration to add
+		 * @return The sum duration
+		 */
 		public ParsedDuration plus(ParsedDuration duration) {
 			boolean neg = isNegative != duration.isNegative;
 			return adjust((type, found) -> {
@@ -474,6 +482,10 @@ public class TimeUtils {
 			return new ParsedDuration(null, neg, Collections.unmodifiableList(newComponents), theSeparators, theFormat);
 		}
 
+		/**
+		 * @param multiple The multiple to apply
+		 * @return The product duration
+		 */
 		public ParsedDuration times(double multiple) {
 			if (multiple == 1)
 				return this;
@@ -526,6 +538,10 @@ public class TimeUtils {
 			return neg ? product.negate() : product;
 		}
 
+		/**
+		 * @param duration The duration divisor
+		 * @return The number of times into this duration that the given duration may go
+		 */
 		public double divide(ParsedDuration duration) {
 			if (components.isEmpty())
 				return 0;
@@ -732,6 +748,7 @@ public class TimeUtils {
 			}
 		}
 
+		/** @return A duration that is the same as this one, but in the opposite direction */
 		public ParsedDuration negate() {
 			String text = theText;
 			if (isNegative) {

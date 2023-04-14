@@ -1094,12 +1094,34 @@ public class OsgiBundleSet {
 		if (packages == null) {
 			return null;
 		}
-		for (ExportedPackage bundle : packages) {
-			if (version.contains(bundle.getVersion())) {
-				return bundle;
+		for (ExportedPackage pkg : packages) {
+			if (version.contains(pkg.getVersion())) {
+				return pkg;
 			}
 		}
 		return null;
+	}
+	
+	/**
+	 * @param name The name of the package to get
+	 * @param version The range of versions acceptable for the package
+	 * @return All packages exported in this bundle set with the given name and a version in the given range
+	 */
+	public Set<ExportedPackage> getExportedPackages(String name, Range<Version> version){
+		name = name.replaceAll("\\.", "/");
+		Set<ExportedPackage> packages = theExportedPackages.get(name);
+		if (packages == null) {
+			return null;
+		}
+		Set<ExportedPackage> ret=null;
+		for (ExportedPackage pkg : packages) {
+			if (version.contains(pkg.getVersion())) {
+				if(ret==null)
+					ret=new LinkedHashSet<>();
+				ret.add(pkg);
+			}
+		}
+		return ret==null ? Collections.emptySet() : Collections.unmodifiableSet(ret);
 	}
 
 	/**
@@ -1261,6 +1283,7 @@ public class OsgiBundleSet {
 		// So we have to assume they'll be using the same version (hopefully it won't ever change) as we have,
 		// and we have to use reflection.
 		// We could improve this code to get the names of the methods we're calling from the class we have some day.
+		
 		Class<?> serviceType;
 		try {
 			serviceType = loadClass(dsClassName);

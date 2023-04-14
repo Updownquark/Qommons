@@ -2,6 +2,7 @@ package org.qommons.config;
 
 import org.qommons.io.FilePosition;
 
+/** An interface to allow errors and warnings to be reported in a traceable way without terminating execution with an exception */
 public interface ErrorReporting {
 	/**
 	 * @param message The warning message to log

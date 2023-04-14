@@ -25,13 +25,24 @@ import org.qommons.io.SimpleXMLParser.ContentPosition;
 
 /** An element in a Qonfig document */
 public class QonfigElement implements FileSourced {
+	/** An attribute or text content value */
 	public static class QonfigValue {
+		/** The source text of the value */
 		public final String text;
+		/** The parsed value */
 		public final Object value;
+		/** The location of the file where the value was specified */
 		public final String fileLocation;
 		/** The position in the file where this value was specified. This will be null if the value is defaulted from a definition. */
 		public final ContentPosition position;
 
+		/**
+		 * @param text The source text of the value
+		 * @param value The parsed value
+		 * @param fileLocation The location of the file where the value was specified
+		 * @param position The position in the file where this value was specified. This will be null if the value is defaulted from a
+		 *        definition
+		 */
 		public QonfigValue(String text, Object value, String fileLocation, ContentPosition position) {
 			this.text = text;
 			this.value = value;
@@ -111,6 +122,7 @@ public class QonfigElement implements FileSourced {
 		return theFilePosition;
 	}
 
+	/** @return The position in the file where the start of this element was declared */
 	public LocatedFilePosition getPositionInFile() {
 		return new LocatedFilePosition(getDocument().getLocation(), getFilePosition());
 	}
@@ -338,12 +350,16 @@ public class QonfigElement implements FileSourced {
 
 	/** Represents an attribute value before it is parsed */
 	public static interface AttributeValue {
+		/** @return The text value given for this attribute value */
 		String getText();
 
+		/** @return The positioning of this attribute value */
 		ContentPosition getPosition();
 
 		/**
 		 * Parses the attribute value
+		 * 
+		 * @param toolkit The {@link QonfigDocument}'s toolkit
 		 * @param attribute The attribute to parse the value for
 		 * @param errors The reporting to log errors
 		 * 
@@ -454,6 +470,7 @@ public class QonfigElement implements FileSourced {
 		/**
 		 * @param attr The attribute specification
 		 * @param value The attribute value
+		 * @param namePosition The position of the attribute's name
 		 * @return This builder
 		 */
 		public Builder withAttribute(ElementQualifiedParseItem attr, AttributeValue value, FilePosition namePosition) {
@@ -487,7 +504,9 @@ public class QonfigElement implements FileSourced {
 		}
 
 		/**
+		 * @param text The text for the element's value
 		 * @param value The value for this element
+		 * @param position The position of the value
 		 * @return This builder
 		 */
 		public Builder withValue(String text, Object value, ContentPosition position) {

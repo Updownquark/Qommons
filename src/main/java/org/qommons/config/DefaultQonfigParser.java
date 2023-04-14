@@ -627,7 +627,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			case "pattern":
 				String text;
 				try {
-					text = pattern.getTextTrim(false);
+					text = pattern.getTextTrimIfExists();
 				} catch (TextParseException e) {
 					throw QonfigParseException.createSimple(fileLocation, root.getName(), root.getNamePosition(), e.getMessage(), e);
 				}
@@ -659,7 +659,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				return new QonfigPattern(session.getToolkit(), name, p, pattern.getNamePosition());
 			case "literal":
 				try {
-					text = pattern.getTextTrim(false);
+					text = pattern.getTextTrimIfExists();
 				} catch (TextParseException e) {
 					throw QonfigParseException.createSimple(fileLocation, root.getName(), root.getNamePosition(), e.getMessage(), e);
 				}

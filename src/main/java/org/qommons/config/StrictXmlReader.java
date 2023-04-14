@@ -389,11 +389,10 @@ public class StrictXmlReader implements Named, Transaction {
 	}
 
 	/**
-	 * @param required Whether to throw an exception if the element was specified as self-closing
 	 * @return The text content of this element, trimmed for whitespace at both ends
 	 * @throws TextParseException If multiple text sections were specified, or if <code>required</code> and the element was self-closing
 	 */
-	public String getTextTrim(boolean required) throws TextParseException {
+	public String getTextTrim() throws TextParseException {
 		if (theElement == null) // MISSING
 			return null;
 		String found = getTextTrimIfExists();

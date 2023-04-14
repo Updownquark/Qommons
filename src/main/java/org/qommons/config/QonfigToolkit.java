@@ -71,11 +71,28 @@ public class QonfigToolkit implements Named {
 		}
 	}
 
+	/** Fills out a QonfigToolkit. This interface allows {@link QonfigToolkit}s to be immutable after they are built */
 	public interface ToolkitBuilder {
+		/**
+		 * Parses all the types for the toolkit
+		 * 
+		 * @param session The parsing session for error reporting, etc.
+		 * @throws QonfigParseException If an unrecoverable error occurs parsing the types
+		 */
 		void parseTypes(QonfigParseSession session) throws QonfigParseException;
 
+		/**
+		 * Links and fills out all the types for the toolkit
+		 * 
+		 * @param session The parsing session for error reporting, etc.
+		 * @throws QonfigParseException If an unrecoverable error occurs fleshing outthe types
+		 */
 		void fillOutTypes(QonfigParseSession session) throws QonfigParseException;
 
+		/**
+		 * @param session The parsing session for error reporting, etc.
+		 * @return The roots for the toolkit
+		 */
 		Set<QonfigElementDef> getDeclaredRoots(QonfigParseSession session);
 	}
 
@@ -99,6 +116,20 @@ public class QonfigToolkit implements Named {
 	private final Set<QonfigElementDef> theDeclaredRoots;
 	private final Set<QonfigElementDef> theRoots;
 
+	/**
+	 * @param name The name of the toolkit
+	 * @param majorVersion The major version of the toolkit
+	 * @param minorVersion The minor version of the toolkit
+	 * @param location The location of the file where the toolkit was declared
+	 * @param position The file position of the root element of the toolkit
+	 * @param dependencies The named dependencies of this toolkit
+	 * @param declaredTypes The set of value types declared by the toolkit--typically empty, to be populated by the <code>builder</code>
+	 * @param declaredAddOns The set of add-ons declared by the toolkit--typically empty, to be populated by the <code>builder</code>
+	 * @param declaredElements The set of elements declared by the toolkit--typically empty, to be populated by the <code>builder</code>
+	 * @param autoInheritance The automatic inheritance rules of the toolkit--typically empty, to be populated by the <code>builder</code>
+	 * @param builder The toolkit builder to populate all the type information for the toolkit
+	 * @throws QonfigParseException If an error occurs populating the toolkit
+	 */
 	public QonfigToolkit(String name, int majorVersion, int minorVersion, URL location, FilePosition position,
 		Map<String, QonfigToolkit> dependencies, Map<String, QonfigValueType.Declared> declaredTypes,
 		Map<String, QonfigAddOn> declaredAddOns, Map<String, QonfigElementDef> declaredElements,

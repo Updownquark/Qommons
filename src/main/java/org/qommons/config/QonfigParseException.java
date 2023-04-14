@@ -10,12 +10,23 @@ public class QonfigParseException extends Exception {
 	private final String theDocumentLocation;
 	private final List<QonfigParseIssue> theIssues;
 
+	/**
+	 * @param documentLocation The location of the Qonfig toolkit or document where this exception occurred
+	 * @param message The message for the dev
+	 * @param issues The list of issues composing this exception
+	 */
 	public QonfigParseException(String documentLocation, String message, List<QonfigParseIssue> issues) {
 		super(message + createMessage(documentLocation, issues));
 		theDocumentLocation = documentLocation;
 		theIssues = issues;
 	}
 
+	/**
+	 * @param documentLocation The location of the Qonfig toolkit or document where this exception occurred
+	 * @param message The message for the dev
+	 * @param issues The list of issues composing this exception
+	 * @param cause The cause of this exception
+	 */
 	public QonfigParseException(String documentLocation, String message, List<QonfigParseIssue> issues, Throwable cause) {
 		super(message + createMessage(documentLocation, issues), cause);
 		theDocumentLocation = documentLocation;
@@ -54,6 +65,15 @@ public class QonfigParseException extends Exception {
 			: new QonfigParseException(documentLocation, message, issues, cause);
 	}
 
+	/**
+	 * 
+	 * @param fileLocation The location of the Qonfig toolkit or document where the exception occurred
+	 * @param elementName The name of the element where the exception occurred
+	 * @param position The position in the file where the exception occurred
+	 * @param message The message for the dev
+	 * @param cause The cause of the exception--may be null
+	 * @return A {@link QonfigParseException} to throw
+	 */
 	public static QonfigParseException createSimple(String fileLocation, String elementName, FilePosition position, String message,
 		Throwable cause) {
 		List<QonfigParseIssue> issues = Arrays.asList(new QonfigParseIssue(ElementPath.forRoot(fileLocation, elementName, position),

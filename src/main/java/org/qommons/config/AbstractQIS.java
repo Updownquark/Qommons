@@ -12,6 +12,7 @@ import org.qommons.MultiInheritanceSet;
 import org.qommons.collect.BetterList;
 import org.qommons.config.QonfigElement.QonfigValue;
 import org.qommons.ex.ExFunction;
+import org.qommons.io.LocatedFilePosition;
 
 /**
  * An interpretation session with lots of capabilities for interpreting {@link QonfigElement}s
@@ -270,6 +271,7 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends ErrorReportin
 		return getElement().getValueText();
 	}
 
+	/** @return The value definition for this element */
 	default QonfigValueDef getValueDef() {
 		QonfigValueDef value = getFocusType().getValue();
 		if (value != null)
@@ -719,6 +721,32 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends ErrorReportin
 	}
 
 	/**
+	 * @param attribute The name of the attribute to get the position of
+	 * @param offset The offset within the attribute value to get the position at
+	 * @return The file position of the given text location
+	 * @throws IllegalArgumentException If no such attribute exists in this element's types
+	 */
+	default LocatedFilePosition getAttributeValuePosition(String attribute, int offset) throws IllegalArgumentException {
+		QonfigAttributeDef attr = getAttributeDef(null, null, attribute);
+		if (attr == null)
+			throw new IllegalArgumentException("Unrecognized attribute: " + attribute);
+		QonfigValue value = getElement().getAttributes().get(attr.getDeclared());
+		return value == null ? null : new LocatedFilePosition(value.fileLocation, value.position.getPosition(offset));
+	}
+
+	/**
+	 * @param offset The offset within the value to get the position at
+	 * @return The file position of the given text location
+	 * @throws IllegalArgumentException If this element's type has no value
+	 */
+	default LocatedFilePosition getValuePosition(int offset) throws IllegalArgumentException {
+		if (getValueDef() == null)
+			throw new IllegalArgumentException("No value possible");
+		QonfigValue value = getElement().getValue();
+		return value == null ? null : new LocatedFilePosition(value.fileLocation, value.position.getPosition(offset));
+	}
+
+	/**
 	 * @param asType The type to query for
 	 * @return Whether {@link #interpret(Class) interpretation} as a value of the given type is supported by this session
 	 */
@@ -782,6 +810,7 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends ErrorReportin
 	@Override
 	QIS warn(String message, Throwable cause);
 
+	/** @return All {@link #warn(String, Throwable) warnings} declared to this session or any of its relatives */
 	List<QonfigParseIssue> getWarnings();
 
 	/**
