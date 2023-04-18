@@ -301,7 +301,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			}
 			builder.withChild(roles, childType, cb -> {
 				parseDocElement(childSession, cb, child, true, __ -> true);
-			}, SimpleXMLParser.getNamePosition(el.getElement()));
+			}, SimpleXMLParser.getNamePosition(child.getElement()));
 		}
 		return builder.build();
 	}
