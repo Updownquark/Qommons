@@ -81,9 +81,7 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 
 	@Override
 	public boolean isAssignableFrom(QonfigElementOrAddOn other) {
-		if (!(other instanceof QonfigElementDef))
-			return false;
-		QonfigElementDef el = (QonfigElementDef) other;
+		QonfigElementOrAddOn el = other;
 		while (el != null) {
 			if (equals(el))
 				return true;

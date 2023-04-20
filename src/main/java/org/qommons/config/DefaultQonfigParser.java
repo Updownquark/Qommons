@@ -277,7 +277,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				childType = session.getToolkit().getElement(child.getName());
 			} catch (IllegalArgumentException e) {
-				childSession.error(e.getMessage());
+				childSession.error(e.getMessage(), e);
 				continue;
 			}
 			if (childType == null) {
@@ -1024,9 +1024,12 @@ public class DefaultQonfigParser implements QonfigParser {
 					builder.getSession().error("No name attribute for attribute definition");
 					continue;
 				}
-				if (attrName.lastIndexOf('.') < 0)
-					continue; // Simple attribute, already parsed
 				QonfigParseSession attrSession = builder.getSession().forChild("attr-mod", attr.getNamePosition());
+				if (attrName.lastIndexOf('.') < 0) {
+					attrSession.forChild("name", attr.getAttributeValuePosition("name").getPosition(0))
+						.error("Attribute modification must specify 'element.name'");
+					continue;
+				}
 				ElementQualifiedParseItem qAttr;
 				qAttr = ElementQualifiedParseItem.parse(attrName, attrSession);
 				if (qAttr == null)

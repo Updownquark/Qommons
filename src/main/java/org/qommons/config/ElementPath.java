@@ -43,7 +43,7 @@ public class ElementPath implements FileSourced {
 
 	@Override
 	public String toString() {
-		return toString(new StringBuilder()).toString();
+		return getFilePosition().toString();
 	}
 
 	/**

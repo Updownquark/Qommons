@@ -40,6 +40,7 @@ public class QonfigParseSession implements ErrorReporting {
 			|| stack[i].getClassName().equals(QonfigInterpreterCore.class.getName())//
 			|| stack[i].getClassName().equals(QonfigInterpreterCore.CoreSession.class.getName())//
 			|| stack[i].getClassName().equals(AbstractQIS.class.getName())//
+			|| stack[i].getClassName().equals(ErrorReporting.class.getName())//
 		); i++) {//
 		}
 		return i < stack.length ? stack[i] : null;

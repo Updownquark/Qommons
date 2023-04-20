@@ -243,8 +243,8 @@ public class QonfigElement implements FileSourced {
 				throw new IllegalArgumentException("Attribute " + attr + " mis-applied to " + theType.getName());
 			return null;
 		}
-		if (type.isInstance(value))
-			return (T) value;
+		if (type.isInstance(value.value))
+			return (T) value.value;
 		else if (type.isPrimitive()) {
 			boolean match;
 			if (type == boolean.class)
@@ -531,7 +531,7 @@ public class QonfigElement implements FileSourced {
 				throw new IllegalStateException("Cannot add children after the element has been built");
 			// At this stage, we have all the information we need to determine the complete inheritance of the element
 			create();
-			ErrorReporting errors = theErrors.forChild(type.toString(), theFilePosition);
+			ErrorReporting errors = theErrors.forChild(type.toString(), position);
 			Set<QonfigChildDef> roles = new LinkedHashSet<>(declaredRoles.size() * 3 / 2 + 1);
 			Set<QonfigChildDef.Declared> realRoles = new LinkedHashSet<>(declaredRoles.size() * 3 / 2 + 1);
 			if (!declaredRoles.isEmpty()) {
@@ -818,8 +818,6 @@ public class QonfigElement implements FileSourced {
 			// Now populate default values for optional/forbidden attributes
 			Map<QonfigAttributeDef.Declared, Boolean> defaultedAttributes = new HashMap<>();
 			for (QonfigAddOn inh : completeInheritance.getExpanded(QonfigAddOn::getInheritance)) {
-				if (theType.isAssignableFrom(inh))
-					continue;
 				for (QonfigAttributeDef.Declared attr : inh.getDeclaredAttributes().values()) {
 					if (attrValues.get(attr) == null) {
 						switch (attr.getSpecification()) {
@@ -912,9 +910,20 @@ public class QonfigElement implements FileSourced {
 				}
 			}
 			for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : theType.getAllAttributes().entrySet()) {
-				if (attrValues.get(attr.getKey()) == null && attr.getValue().getSpecification() == SpecificationType.Required) {
+				if (attrValues.get(attr.getKey()) != null)
+					continue;
+				if (attr.getValue().getSpecification() == SpecificationType.Required) {
 					theErrors.error("Attribute " + attr.getKey() + " required by type " + theType);
-					break;
+					continue;
+				}
+				for (QonfigAddOn inh : completeInheritance.getExpanded(QonfigAddOn::getInheritance)) {
+					if (!attr.getKey().getOwner().isAssignableFrom(inh))
+						continue;
+					QonfigAddOn.ValueModifier mod = inh.getAttributeModifiers().get(attr.getKey());
+					if (mod != null && mod.getSpecification() == SpecificationType.Required) {
+						theErrors.error("Attribute " + attr.getKey() + " required by type " + inh);
+						break;
+					}
 				}
 			}
 			for (QonfigAddOn inh : completeInheritance.getExpanded(QonfigAddOn::getInheritance)) {

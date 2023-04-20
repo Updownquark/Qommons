@@ -15,6 +15,7 @@ import java.util.TreeMap;
 import org.qommons.MultiInheritanceMap;
 import org.qommons.MultiInheritanceSet;
 import org.qommons.Named;
+import org.qommons.QommonsUtils;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterCollections;
 import org.qommons.collect.BetterHashMultiMap;
@@ -397,7 +398,8 @@ public class QonfigToolkit implements Named {
 		case 1:
 			return els.getFirst();
 		default:
-			throw new IllegalArgumentException("Multiple elements matching '" + name + "'");
+			throw new IllegalArgumentException("Multiple elements matching '" + name + "' from toolkits "//
+				+ QommonsUtils.map(els, el -> el.getDeclarer(), false));
 		}
 	}
 
