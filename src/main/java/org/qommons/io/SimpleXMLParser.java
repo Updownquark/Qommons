@@ -191,7 +191,7 @@ public class SimpleXMLParser {
 
 			@Override
 			public FilePosition getPosition(int index) {
-				if (theStart + index >= theEnd)
+				if (theStart + index > theEnd)
 					throw new IndexOutOfBoundsException(index + " of " + length());
 				return theWrapped.getPosition(theStart + index);
 			}
@@ -802,6 +802,7 @@ public class SimpleXMLParser {
 			PositionedContent content = session.getSpecialContent("?>");
 			handler.handleProcessingInstruction(target, pos, content.toString(), content);
 		}
+		session.nextChar();
 	}
 
 	private void handleElement(ParseSession session, ParseHandler handler) throws IOException, XmlParseException {
