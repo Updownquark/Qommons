@@ -12,14 +12,11 @@
 			<attribute name="def" type="string" specify="required" />
 			<child-def name="value-type" type="value-type" min="0" max="inf" />
 		</element-def>
-		<element-def name="value-type">
+		<element-def name="simple-configuration" abstract="true">
 			<value type="string" specify="required" />
 		</element-def>
-		<element-def name="special-session">
-			<value type="string" specify="required" />
-		</element-def>
-		<element-def name="interpretation">
-			<value type="string" specify="required" />
-		</element-def>
+		<element-def name="value-type" extends="simple-configuration" />
+		<element-def name="special-session" extends="simple-configuration" />
+		<element-def name="interpretation" extends="simple-configuration" />
 	</elements>
 </qonfig-def>

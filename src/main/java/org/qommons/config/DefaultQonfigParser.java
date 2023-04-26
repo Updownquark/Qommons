@@ -281,7 +281,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				continue;
 			}
 			if (childType == null) {
-				childSession.error("No such element-def found");
+				childSession.error("No such element-def found: " + child.getName());
 				continue;
 			}
 			List<ElementQualifiedParseItem> roles;

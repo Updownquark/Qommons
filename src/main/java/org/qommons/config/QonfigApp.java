@@ -11,68 +11,76 @@ import java.util.Set;
 
 import org.qommons.config.QonfigInterpreterCore.Builder;
 import org.qommons.io.SimpleXMLParser.XmlParseException;
+import org.qommons.io.TextParseException;
 
 /** Provides a utility method for interpreting an application from a setup XML file formatted as qonfig-app.qtd */
 public class QonfigApp {
-	/**
-	 * @param <T> The type of the application value
-	 * @param appSetupFile The location of the setup file (interpreted as a class resource)
-	 * @param type The type of the application value
-	 * @return The application value
-	 * @throws IllegalArgumentException If this method cannot locate, parse, or interpret the application setup file
-	 */
-	public static <T> T interpretApp(String appSetupFile, Class<T> type) throws IllegalArgumentException {
-		if (!appSetupFile.startsWith("/")) // Force absolute
-			appSetupFile = "/" + appSetupFile;
-		URL appDefUrl = QonfigApp.class.getResource(appSetupFile);
-		if (appDefUrl == null)
-			throw new IllegalArgumentException("Could not locate Qonfig-App definition file: " + appSetupFile);
-		return interpretApp(appDefUrl, type);
+	private static QonfigToolkit QONFIG_APP_TOOLKIT;
+
+	public static synchronized QonfigToolkit getQonfigAppToolkit() {
+		if (QONFIG_APP_TOOLKIT != null)
+			return QONFIG_APP_TOOLKIT;
+		URL qonfigAppTKUrl = QonfigApp.class.getResource("qonfig-app.qtd");
+		if (qonfigAppTKUrl == null)
+			throw new IllegalStateException("App toolkit 'qonfig-app.qtd' is missing");
+		// Parse the app definition
+		DefaultQonfigParser qonfigParser = new DefaultQonfigParser();
+		try (InputStream aTKIn = qonfigAppTKUrl.openStream()) {
+			QONFIG_APP_TOOLKIT = qonfigParser.parseToolkit(qonfigAppTKUrl, aTKIn);
+		} catch (NullPointerException e) {
+			throw new IllegalStateException("Could not locate app toolkit definition '" + qonfigAppTKUrl.getPath() + "'");
+		} catch (IOException e) {
+			throw new IllegalStateException("Could not read app toolkit definition '" + qonfigAppTKUrl.getPath() + "'", e);
+		} catch (XmlParseException e) {
+			throw new IllegalArgumentException("Could not parse toolkit definition XML '" + qonfigAppTKUrl.getPath() + "'", e);
+		} catch (QonfigParseException e) {
+			throw new IllegalStateException("Could not parse app toolkit definition '" + qonfigAppTKUrl.getPath() + "'", e);
+		}
+		return QONFIG_APP_TOOLKIT;
+	}
+
+	public static QonfigDocument parseApp(URL appDefUrl, URL... appToolkits) throws IOException, TextParseException, QonfigParseException {
+		QonfigToolkit qonfigAppTK = getQonfigAppToolkit();
+		DefaultQonfigParser qonfigParser = new DefaultQonfigParser();
+		qonfigParser.withToolkit(qonfigAppTK);
+
+		for (URL appToolkit : appToolkits) {
+			QonfigToolkit appTK;
+			try (InputStream aTKIn = appToolkit.openStream()) {
+				appTK = qonfigParser.parseToolkit(appToolkit, aTKIn);
+			} catch (IOException e) {
+				throw new IOException("Could not read app toolkit definition '" + appToolkit.getPath() + "'", e);
+			} catch (XmlParseException e) {
+				throw new TextParseException("Could not parse toolkit definition XML '" + appToolkit.getPath() + "'", e.getPosition(), e);
+			}
+			qonfigParser.withToolkit(appTK);
+		}
+
+		try (InputStream appDefIn = appDefUrl.openStream()) {
+			return qonfigParser.parseDocument(appDefUrl.toString(), appDefIn);
+		} catch (IOException e) {
+			throw new IOException("Could not read Qonfig-App definition: " + appDefUrl, e);
+		} catch (XmlParseException e) {
+			throw new TextParseException("Could not parse Qonfig-App definition XML: " + appDefUrl, e.getPosition(), e);
+		}
 	}
 
 	/**
 	 * @param <T> The type of the application value
-	 * @param appDefUrl The location of the setup file
 	 * @param type The type of the application value
 	 * @return The application value
 	 * @throws IllegalArgumentException If this method cannot locate, parse, or interpret the application setup file
 	 */
-	public static <T> T interpretApp(URL appDefUrl, Class<T> type) {
-		// Parse the app definition
-		DefaultQonfigParser qonfigParser = new DefaultQonfigParser();
-		URL appTKUrl = QonfigApp.class.getResource("qonfig-app.qtd");
-		QonfigToolkit appTK;
-		try (InputStream aTKIn = appTKUrl.openStream()) {
-			appTK = qonfigParser.parseToolkit(appTKUrl, aTKIn);
-		} catch (NullPointerException e) {
-			throw new IllegalStateException("Could not locate app toolkit definition");
-		} catch (IOException e) {
-			throw new IllegalStateException("Could not read app toolkit definition", e);
-		} catch (XmlParseException e) {
-			throw new IllegalArgumentException("Could not parse toolkit definition XML: " + appDefUrl, e);
-		} catch (QonfigParseException e) {
-			throw new IllegalStateException("Could not parse app toolkit definition", e);
-		}
-		qonfigParser.withToolkit(appTK);
-		QonfigElement appDef;
-		try (InputStream appDefIn = appDefUrl.openStream()) {
-			appDef = qonfigParser.parseDocument(appDefUrl.toString(), appDefIn).getRoot();
-		} catch (IOException e) {
-			throw new IllegalArgumentException("Could not read Qonfig-App definition: " + appDefUrl, e);
-		} catch (XmlParseException e) {
-			throw new IllegalArgumentException("Could not parse Qonfig-App definition XML: " + appDefUrl, e);
-		} catch (QonfigParseException e) {
-			throw new IllegalArgumentException("Could not parse Qonfig-App definition: " + appDefUrl, e);
-		}
-
-		String appDefLoc = appDefUrl.toString();
+	public static <T> T interpretApp(QonfigDocument appDef, Class<T> type)
+		throws IOException, TextParseException, QonfigParseException, QonfigInterpretationException {
+		QonfigToolkit qonfigAppTK = getQonfigAppToolkit();
 
 		// Ensure the Qonfig file exists
-		String appFile = appDef.getAttributeText(appTK.getAttribute("qonfig-app", "app-file"));
+		String appFile = appDef.getRoot().getAttributeText(qonfigAppTK.getAttribute("qonfig-app", "app-file"));
 		URL appFileURL = QonfigApp.class.getResource(appFile);
 		if (appFileURL == null) {
 			try {
-				String resolved = QommonsConfig.resolve(appFile, appDefLoc);
+				String resolved = QommonsConfig.resolve(appFile, appDef.getLocation());
 				if (resolved == null)
 					throw new IllegalArgumentException("Could not find app file " + appFile);
 				appFileURL = new URL(resolved);
@@ -82,10 +90,11 @@ public class QonfigApp {
 		}
 
 		// Install the dependency toolkits in the Qonfig parser
-		qonfigParser = new DefaultQonfigParser(); // Reset the parser
-		for (QonfigElement toolkitEl : appDef.getChildrenInRole(appTK, "qonfig-app", "toolkit")) {
-			List<CustomValueType> valueTypes = create(toolkitEl.getChildrenInRole(appTK, "toolkit", "value-type"), CustomValueType.class);
-			String toolkitDef = toolkitEl.getAttributeText(appTK.getAttribute("toolkit", "def"));
+		DefaultQonfigParser qonfigParser = new DefaultQonfigParser();
+		for (QonfigElement toolkitEl : appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "toolkit")) {
+			List<CustomValueType> valueTypes = create(toolkitEl.getChildrenInRole(qonfigAppTK, "toolkit", "value-type"),
+				CustomValueType.class);
+			String toolkitDef = toolkitEl.getAttributeText(qonfigAppTK.getAttribute("toolkit", "def"));
 			URL toolkitURL = QonfigApp.class.getResource(toolkitDef);
 			if (toolkitURL == null)
 				throw new IllegalArgumentException("Could not find toolkit " + toolkitDef);
@@ -95,7 +104,7 @@ public class QonfigApp {
 			} catch (IOException e) {
 				throw new IllegalStateException("Could not read toolkit " + toolkitDef, e);
 			} catch (XmlParseException e) {
-				throw new IllegalArgumentException("Could not parse toolkit XML: " + appDefUrl, e);
+				throw new IllegalArgumentException("Could not parse toolkit XML: " + appDef.getLocation(), e);
 			} catch (QonfigParseException e) {
 				throw new IllegalStateException("Could not parse toolkit " + toolkitDef, e);
 			} catch (RuntimeException e) {
@@ -108,11 +117,9 @@ public class QonfigApp {
 		try (InputStream appFileIn = appFileURL.openStream()) {
 			qonfigDoc = qonfigParser.parseDocument(appFileURL.toString(), appFileIn);
 		} catch (IOException e) {
-			throw new IllegalArgumentException("Could not read application file " + appFile, e);
+			throw new IOException("Could not read application file " + appFile, e);
 		} catch (XmlParseException e) {
-			throw new IllegalArgumentException("Could not parse application file XML: " + appDefUrl, e);
-		} catch (QonfigParseException e) {
-			throw new IllegalArgumentException("Could not parse application file " + appFile, e);
+			throw new TextParseException("Could not parse application file XML: " + appDef.getLocation(), e.getPosition(), e);
 		}
 
 		// Build the interpreter
@@ -120,29 +127,23 @@ public class QonfigApp {
 		addToolkits(qonfigDoc.getDocToolkit(), toolkits);
 		QonfigInterpreterCore.Builder coreBuilder = QonfigInterpreterCore.build(QonfigApp.class,
 			toolkits.toArray(new QonfigToolkit[toolkits.size()]));
-		for (SpecialSessionImplementation<?> ssi : create(appDef.getChildrenInRole(appTK, "qonfig-app", "special-session"),
+		for (SpecialSessionImplementation<?> ssi : create(appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "special-session"),
 			SpecialSessionImplementation.class)) {
 			addSpecial(ssi, coreBuilder);
 		}
 
-		for (QonfigInterpretation interp : create(appDef.getChildrenInRole(appTK, "qonfig-app", "interpretation"),
+		for (QonfigInterpretation interp : create(appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "interpretation"),
 			QonfigInterpretation.class)) {
 			coreBuilder.configure(interp);
 		}
 		QonfigInterpreterCore interpreter = coreBuilder.build();
 
 		// Interpret the app
-		T appValue;
-		try {
-			appValue = interpreter.interpret(qonfigDoc.getRoot())//
+		return interpreter.interpret(qonfigDoc.getRoot())//
 				.interpret(type);
-		} catch (QonfigInterpretationException e) {
-			throw new IllegalStateException("Could not interpret Qonfig file at " + appFile, e);
-		}
-		return appValue;
 	}
 
-	static <T> List<T> create(Collection<QonfigElement> elements, Class<T> type) {
+	public static <T> List<T> create(Collection<QonfigElement> elements, Class<T> type) {
 		List<T> values = new ArrayList<>(elements.size());
 		for (QonfigElement el : elements) {
 			Class<?> elType;
