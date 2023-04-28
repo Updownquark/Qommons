@@ -173,13 +173,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 			}
 
 			@Override
-			public String canAdd(V value, boolean before) {
-				return valueElement.canAdd(value, before);
-			}
-
-			@Override
-			public ElementId add(V value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-				return valueElement.add(value, before);
+			public String toString() {
+				return getKey() + "=" + get();
 			}
 		};
 	}

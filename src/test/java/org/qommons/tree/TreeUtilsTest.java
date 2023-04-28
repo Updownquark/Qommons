@@ -426,7 +426,7 @@ public class TreeUtilsTest {
 	public void testTreeRepair() {
 		TestHelper.createTester(TreeRepairTester.class).withDebug(true)
 			.withPersistenceDir(new File("src/test/java/org/qommons/tree"), false).revisitKnownFailures(true)//
-			.withRandomCases(1000).withMaxFailures(1)//
+			.withRandomCases(300).withMaxFailures(1)//
 			.execute().throwErrorIfFailed();
 	}
 

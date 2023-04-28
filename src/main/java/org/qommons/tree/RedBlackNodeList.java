@@ -837,22 +837,5 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 				theLocker.modified();
 			}
 		}
-
-		@Override
-		public String canAdd(E value, boolean before) {
-			return null;
-		}
-
-		@Override
-		public ElementId add(E value, boolean onLeft) {
-			try (Transaction t = lock(true, null)) {
-				if (!isPresent())
-					throw new IllegalStateException("This element has been removed");
-				RedBlackNode<E> newNode = new RedBlackNode<>(theTree, value);
-				theNode.add(newNode, onLeft);
-				theLocker.modified();
-				return new NodeId(newNode);
-			}
-		}
 	}
 }

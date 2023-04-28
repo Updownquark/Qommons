@@ -878,7 +878,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 			}
 		}
 
-		int compareToNode(BinaryTreeNode<HashEntry> node) {
+		int compareToNode(HashEntry node) {
 			if (hashCode < node.get().hashCode())
 				return -1;
 			else if (hashCode > node.get().hashCode())
@@ -914,7 +914,11 @@ public class BetterHashSet<E> implements BetterSet<E> {
 
 		void add(HashEntry entry, HashEntry adjacentEntry) {
 			if (adjacentEntry != null) {
-				ElementId id = adjacentEntry.theTreeNode.add(entry, entry.hashCode < adjacentEntry.hashCode);
+				ElementId id;
+				if (entry.compareToNode(adjacentEntry) >= 0)
+					id = entries.addElement(entry, adjacentEntry.theTreeNode.getElementId(), null, true).getElementId();
+				else
+					id = entries.addElement(entry, null, adjacentEntry.theTreeNode.getElementId(), false).getElementId();
 				entry.placedAt(this, entries.mutableElement(id));
 				return;
 			}
@@ -923,8 +927,13 @@ public class BetterHashSet<E> implements BetterSet<E> {
 				entry.placedAt(this, entries.mutableNodeFor(entries.addElement(entry, false)));
 				return;
 			}
-			node = node.findClosest(entry::compareToNode, true, false, null);
-			entry.placedAt(this, entries.mutableNodeFor(entries.mutableNodeFor(node).add(entry, entry.hashCode() < node.get().hashCode())));
+			node = node.findClosest(n -> entry.compareToNode(n.get()), true, false, null);
+			ElementId id;
+			if (entry.hashCode() >= node.get().hashCode())
+				id = entries.addElement(entry, node.getElementId(), null, true).getElementId();
+			else
+				id = entries.addElement(entry, null, node.getElementId(), false).getElementId();
+			entry.placedAt(this, entries.mutableElement(id));
 		}
 
 		HashEntry findForInsert(int hashCode, Predicate<? super E> equals, OptimisticContext ctx) {

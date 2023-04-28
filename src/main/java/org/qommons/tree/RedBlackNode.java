@@ -13,6 +13,8 @@ import java.util.TreeSet;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
+import org.qommons.QommonsUtils;
+
 /**
  * A node in a red/black binary tree structure.
  * 
@@ -116,10 +118,8 @@ public final class RedBlackNode<E> {
 
 	/** Runs debugging checks on this tree structure to assure that all internal constraints are currently met. */
 	public final void checkValid() {
-		if(theParent != null)
-			throw new IllegalStateException("checkValid() may only be called on the root");
-		if (isRed && (theLeft != null || theRight != null)) // Root may be red if it's solo
-			throw new IllegalStateException("The root is red!");
+		QommonsUtils.assertThat(theParent == null, false, "checkValid() may only be called on the root");
+		QommonsUtils.assertThat(!isRed || (theLeft == null && theRight == null), false, "The root is red!"); // Root may be red if it's solo
 
 		checkValid(initValidationProperties());
 	}
@@ -141,18 +141,28 @@ public final class RedBlackNode<E> {
 	 * @param properties The validation properties to use to check validity
 	 */
 	protected void checkValid(java.util.Map<String, Object> properties) {
-		if(theLeft != null && theLeft.theParent != this)
-			throw new IllegalStateException("(" + this + "): left (" + theLeft + ")'s parent is not this");
-		if(theRight != null && theRight.theParent != this)
-			throw new IllegalStateException("(" + this + "): right (" + theRight + ")'s parent is not this");
-		if (thePrevious != null && thePrevious.theNext != this)
-			throw new IllegalStateException("(" + this + "): previous (" + thePrevious + ")'s next is not this");
-		if (theNext != null && theNext.thePrevious != this)
-			throw new IllegalStateException("(" + this + "): next (" + theNext + ")'s previous is not this");
+		QommonsUtils.assertThat(theLeft == null || theLeft.theParent == this, false, //
+			"(", this, "): left (", theLeft, ")'s parent is not this");
+		QommonsUtils.assertThat(theRight == null || theRight.theParent == this, false, //
+			"(", this, "): right (", theRight, ")'s parent is not this");
+		if (thePrevious == null)
+			QommonsUtils.assertThat(theTree.theFirst == this, false, //
+				"(", this, "): has no previous, but is not the first in the tree");
+		else
+			QommonsUtils.assertThat(thePrevious.theNext == this, false, //
+				"(", this, "): previous (", thePrevious, ")'s next is not this");
+		if (theNext == null)
+			QommonsUtils.assertThat(theTree.theLast == this, false, //
+				"(", this, "): has no next, but is not the last in the tree");
+		else
+			QommonsUtils.assertThat(theNext.thePrevious == this, false, //
+				"(", this, "): next (", theNext, ")'s previous is not this");
 		Integer blackDepth = (Integer) properties.get("black-depth");
 		if(isRed) {
-			if((theLeft != null && theLeft.isRed) || (theRight != null && theRight.isRed))
-				throw new IllegalStateException("Red node (" + this + ") has red children");
+			QommonsUtils.assertThat(theLeft == null || !theLeft.isRed, false, //
+				"Red node (", this, ") has red left");
+			QommonsUtils.assertThat(theRight == null || !theRight.isRed, false, //
+				"Red node (", this, ") has red right");
 		} else {
 			blackDepth = blackDepth + 1;
 			properties.put("black-depth", blackDepth);
@@ -161,11 +171,12 @@ public final class RedBlackNode<E> {
 			Integer leafBlackDepth = (Integer) properties.get("leaf-black-depth");
 			if(leafBlackDepth == null) {
 				properties.put("leaf-black-depth", leafBlackDepth);
-			} else if(!leafBlackDepth.equals(blackDepth))
-				throw new IllegalStateException("Different leaf black depths: " + leafBlackDepth + " and " + blackDepth);
+			} else
+				QommonsUtils.assertThat(leafBlackDepth.equals(blackDepth), false, //
+					"Different leaf black depths: ", leafBlackDepth, " and ", blackDepth);
 		}
-		if (theSize != sizeOf(getLeft()) + sizeOf(getRight()) + 1)
-			throw new IllegalStateException("Size is incorrect: " + this);
+		QommonsUtils.assertThat(theSize == sizeOf(getLeft()) + sizeOf(getRight()) + 1, false, //
+			"Size is incorrect: ", this);
 	}
 
 	/**
@@ -252,8 +263,7 @@ public final class RedBlackNode<E> {
 	 * @return The node at the given index in this sub-tree
 	 */
 	public RedBlackNode<E> get(int index, BooleanSupplier cont) {
-		if (index < 0)
-			throw new IndexOutOfBoundsException("" + index);
+		QommonsUtils.assertThat(index >= 0, IndexOutOfBoundsException::new, index);
 		RedBlackNode<E> node = this;
 		int passed = 0;
 		int nodeIndex = sizeOf(theLeft);
@@ -268,8 +278,7 @@ public final class RedBlackNode<E> {
 		}
 		if (!checkedCont)
 			return null;
-		if (node == null)
-			throw new IndexOutOfBoundsException(index + " of " + (nodeIndex + 1));
+		QommonsUtils.assertThat(node != null, IndexOutOfBoundsException::new, index, " of ", nodeIndex + 1);
 		return node;
 	}
 
@@ -299,8 +308,8 @@ public final class RedBlackNode<E> {
 		CachedIndex ci = theCachedIndex;
 		if (!isPresent()) {
 			// This method can be called immediately after the node has been removed, but not if the tree has since been changed
-			if (theTree.theStructureStamp != ci.stamp)
-				throw new IllegalStateException("Elements cannot be used if the collection has been changed since the element was removed");
+			QommonsUtils.assertThat(theTree.theStructureStamp == ci.stamp, false, //
+				"Elements cannot be used if the collection has been changed since the element was removed");
 			return ci.index;
 		}
 		long treeStamp = theTree.theStructureStamp;
@@ -358,10 +367,9 @@ public final class RedBlackNode<E> {
 	 * @throws IllegalArgumentException If the two nodes are not present in the same tree
 	 */
 	public static int compare(RedBlackNode<?> a, RedBlackNode<?> b, BooleanSupplier cont) {
-		if (a == null || b == null)
-			throw new NullPointerException((a == null && b == null) ? "Both null" : (a == null ? "a is null" : "b is null"));
-		if (a.theTree != b.theTree)
-			throw new IllegalArgumentException("Nodes are not from the same tree");
+		QommonsUtils.assertThat(a != null && b != null, NullPointerException::new, //
+			(a == null && b == null) ? "Both null" : (a == null ? "a is null" : "b is null"));
+		QommonsUtils.assertThat(a.theTree == b.theTree, true, "Nodes are not from the same tree");
 		/* The easy way to compare two tree nodes is to just find the indexes of both in the tree and compare them.
 		 * If both nodes have this information cached, this is constant time, so use it. */
 		CachedIndex aIdx = a.theCachedIndex;
@@ -423,10 +431,9 @@ public final class RedBlackNode<E> {
 	 * @return A node between the given nodes, or null if the nodes are the same or adjacent
 	 */
 	public static <E> RedBlackNode<E> splitBetween(RedBlackNode<E> a, RedBlackNode<E> b, BooleanSupplier cont) {
-		if (a == null || b == null)
-			throw new NullPointerException((a == null && b == null) ? "Both null" : (a == null ? "a is null" : "b is null"));
-		if (a.theTree != b.theTree)
-			throw new IllegalArgumentException("Nodes are not from the same tree");
+		QommonsUtils.assertThat(a != null && b != null, NullPointerException::new, //
+			(a == null && b == null) ? "Both null" : (a == null ? "a is null" : "b is null"));
+		QommonsUtils.assertThat(a.theTree == b.theTree, true, "Nodes are not from the same tree");
 
 		RedBlackNode<E> origA = a, origB = b;
 		RedBlackNode<E> lastALeft = null, lastARight = null, lastBLeft = null, lastBRight = null;
@@ -503,8 +510,7 @@ public final class RedBlackNode<E> {
 	 * @return The node that was previously this node's parent, or null if it did not have a parent
 	 */
 	private RedBlackNode<E> setParent(RedBlackNode<E> parent) {
-		if(parent == this)
-			throw new IllegalArgumentException("A tree node cannot be its own parent: " + parent);
+		QommonsUtils.assertThat(parent != this, true, "A tree node cannot be its own parent: ", parent);
 		RedBlackNode<E> oldParent = theParent;
 		theParent = parent;
 		return oldParent;
@@ -518,9 +524,8 @@ public final class RedBlackNode<E> {
 	 * @return The child (or null) that was replaced as this node's left or right child
 	 */
 	private RedBlackNode<E> setChild(RedBlackNode<E> child, boolean left) {
-		if(child == this)
-			throw new IllegalArgumentException(
-				"A tree node cannot have itself as a child: " + this + " (" + (left ? "left" : "right") + ")");
+		QommonsUtils.assertThat(child != this, true, //
+			"A tree node cannot have itself as a child: ", this, " (", (left ? "left" : "right"), ")");
 		RedBlackNode<E> oldChild;
 		if(left) {
 			oldChild = theLeft;
@@ -584,8 +589,7 @@ public final class RedBlackNode<E> {
 	 * @param node The node to switch places with
 	 */
 	private void switchWith(RedBlackNode<E> node) {
-		if (node.theTree != theTree)
-			throw new IllegalArgumentException("Can't mix nodes from different trees");
+		QommonsUtils.assertThat(node.theTree == theTree, true, "Can't mix nodes from different trees");
 		RedBlackNode<E> counted = node;
 		RedBlackNode<E> parent = getParent();
 		startCountTransaction();
@@ -691,8 +695,7 @@ public final class RedBlackNode<E> {
 	 * @param left The side on which to place the node
 	 */
 	public void add(RedBlackNode<E> node, boolean left) {
-		if (node.theTree != theTree)
-			throw new IllegalArgumentException("Can't mix nodes from different trees");
+		QommonsUtils.assertThat(node.theTree == theTree, true, "Can't mix nodes from different trees");
 		// First let's link up the next and previous fields
 		if (left) {
 			if (thePrevious != null)
@@ -734,8 +737,7 @@ public final class RedBlackNode<E> {
 
 	/** Removes this node (but not its children) from the tree, rebalancing if necessary */
 	public void delete() {
-		if (!isPresent())
-			throw new IllegalStateException("This node has already been removed");
+		QommonsUtils.assertThat(isPresent(), false, "This node has already been removed");
 		int preDeleteIndex = getNodesBefore(() -> true);
 
 		// First let's link up the next and previous fields
@@ -830,8 +832,8 @@ public final class RedBlackNode<E> {
 				return null;
 			CachedIndex ci = theCachedIndex;
 			// This method can be called immediately after the node has been removed, but not if the tree has since been changed
-			if (theTree.theStructureStamp != ci.stamp)
-				throw new IllegalStateException("Elements cannot be used if the collection has been changed since the element was removed");
+			QommonsUtils.assertThat(theTree.theStructureStamp == ci.stamp, false, //
+				"Elements cannot be used if the collection has been changed since the element was removed");
 		}
 		return left ? thePrevious : theNext;
 	}

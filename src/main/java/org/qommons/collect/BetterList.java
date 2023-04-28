@@ -710,12 +710,9 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		private long theStamp;
 
 		public SubList(BetterList<E> wrapped, int start, int end) {
-			if (end > wrapped.size())
-				throw new IndexOutOfBoundsException(end + " of " + wrapped.size());
-			if (start < 0)
-				throw new IndexOutOfBoundsException("" + start);
-			if (start > end)
-				throw new IndexOutOfBoundsException(start + ">" + end);
+			QommonsUtils.assertThat(end <= wrapped.size(), IndexOutOfBoundsException::new, end, " of ", wrapped.size());
+			QommonsUtils.assertThat(start >= 0, IndexOutOfBoundsException::new, start);
+			QommonsUtils.assertThat(start <= end, IndexOutOfBoundsException::new, start, ">", end);
 			theWrapped = wrapped;
 			theStart = start;
 			theEnd = end;
@@ -1047,15 +1044,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				try (Transaction t = lock(true, null)) {
 					theWrappedEl.remove();
 					theEnd--;
-				}
-			}
-
-			@Override
-			public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-				try (Transaction t = lock(true, null)) {
-					ElementId newId = theWrappedEl.add(value, before);
-					theEnd++;
-					return newId;
 				}
 			}
 
@@ -1595,11 +1583,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				@Override
 				public void remove() throws UnsupportedOperationException {
 					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-				}
-
-				@Override
-				public String canAdd(E value, boolean before) {
-					return StdMsg.UNSUPPORTED_OPERATION;
 				}
 			};
 		}

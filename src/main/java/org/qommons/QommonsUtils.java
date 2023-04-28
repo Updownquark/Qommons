@@ -1258,6 +1258,83 @@ public class QommonsUtils {
 		return ret;
 	}
 
+	/**
+	 * A utility to assist with optimizing for code coverage. May be used instead of <code>
+	 * if(condition)
+	 * 		throw SomeException(message);
+	 * </code> without generating code coverage holes because the condition never occurs
+	 * 
+	 * @param <X> The type of the exception to throw
+	 * @param condition The condition to test
+	 * @param ex Produces the exception
+	 * @param message The message for the exception
+	 * @throws X If the condition is false
+	 */
+	public static <X extends Throwable> void assertThat(boolean condition, Function<String, X> ex, Object... message) throws X {
+		if (message.length == 0)
+			throw new IllegalArgumentException("Need a message");
+		else if (condition)
+			return;
+		throw ex.apply(createMessage(message));
+	}
+
+	/**
+	 * A utility to assist with optimizing for code coverage. May be used instead of <code>
+	 * if(condition)
+	 * 		throw SomeException(message);
+	 * </code> without generating code coverage holes because the condition never occurs
+	 * 
+	 * @param condition The condition to test
+	 * @param arg Whether to throw an {@link IllegalArgumentException} or an {@link IllegalStateException}
+	 * @param message The message for the exception
+	 * @throws IllegalArgumentException If the condition is false and arg is true
+	 * @throws IllegalStateException If the condition is false and arg is false
+	 */
+	public static void assertThat(boolean condition, boolean arg, Object... message)
+		throws IllegalArgumentException, IllegalStateException {
+		if (message.length == 0)
+			throw new IllegalArgumentException("Need a message");
+		if (condition)
+			return;
+		String msg = createMessage(message);
+		if (arg)
+			throw new IllegalArgumentException(msg);
+		else
+			throw new IllegalStateException(msg);
+	}
+
+	private static String createMessage(Object... message) {
+		if (message.length == 1 && message[0] instanceof String)
+			return (String) message[0];
+		else {
+			StringBuilder str = new StringBuilder();
+			for (Object m : message)
+				str.append(m);
+			return str.toString();
+		}
+	}
+
+	/**
+	 * @param index The index to check
+	 * @param max The maximum index
+	 * @param maxOk Whether index==max is ok
+	 * @param message The message for the exception
+	 * @throws IndexOutOfBoundsException If index&lt;0, index>max, or !maxOk and index==max
+	 */
+	public static void checkIndex(int index, int max, boolean maxOk, Object... message) throws IndexOutOfBoundsException {
+		if (index < 0) {
+			if (message.length == 0)
+				throw new IndexOutOfBoundsException(index + " of " + max);
+			else
+				throw new IndexOutOfBoundsException(createMessage(message) + ": " + index + " of " + max);
+		} else if ((index > max) || (!maxOk && index == max)) {
+			if (message.length == 0)
+				throw new IndexOutOfBoundsException(index + " of " + max);
+			else
+				throw new IndexOutOfBoundsException(createMessage(message) + ": " + index + " of " + max);
+		}
+	}
+
 	private static final long SIGN_MASK = 1L << 63;
 	private static final long UNSIGNED_MASK = ~SIGN_MASK;
 

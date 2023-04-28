@@ -166,7 +166,11 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 						if ((comp < 0) == first) {
 							if (preAdd != null)
 								preAdd.run();
-							ElementId addedEl = mutableElement(bestEl.getElementId()).add(value, first);
+							ElementId addedEl;
+							if (first)
+								addedEl = addElement(value, null, bestEl.getElementId(), false).getElementId();
+							else
+								addedEl = addElement(value, bestEl.getElementId(), null, true).getElementId();
 							if (postAdd != null)
 								postAdd.run();
 							return getElement(addedEl);
@@ -175,7 +179,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 					if (worst == null) {
 						if (preAdd != null)
 							preAdd.run();
-						ElementId addedEl = mutableElement(getTerminalElement(!first).getElementId()).add(value, !first);
+						ElementId addedEl = addElement(value, null, null, !first).getElementId();
 						if (postAdd != null)
 							postAdd.run();
 						return getElement(addedEl);
@@ -195,7 +199,11 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 						if ((comp > 0) == first) {
 							if (preAdd != null)
 								preAdd.run();
-							ElementId addedEl = mutableElement(worstEl.getElementId()).add(value, !first);
+							ElementId addedEl;
+							if (first)
+								addedEl = addElement(value, worstEl.getElementId(), null, true).getElementId();
+							else
+								addedEl = addElement(value, null, worstEl.getElementId(), false).getElementId();
 							if (postAdd != null)
 								postAdd.run();
 							return getElement(addedEl);
@@ -203,7 +211,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 					}
 					if (preAdd != null)
 						preAdd.run();
-					ElementId addedEl = mutableElement(getTerminalElement(first).getElementId()).add(value, first);
+					ElementId addedEl = addElement(value, null, null, first).getElementId();
 					if (postAdd != null)
 						postAdd.run();
 					return getElement(addedEl);
@@ -224,15 +232,15 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 			if (compare == 0)
 				return found;
 			try (Transaction t = lock(true, null)) {
-				MutableCollectionElement<E> mutableElement;
-				try {
-					mutableElement = mutableElement(found.getElementId());
-				} catch (IllegalArgumentException e) {
+				if (!found.getElementId().isPresent())
 					continue; // Possible it may have been removed already
-				}
 				if (preAdd != null)
 					preAdd.run();
-				ElementId addedId = mutableElement.add(value, compare < 0);
+				ElementId addedId;
+				if (compare < 0)
+					addedId = addElement(value, null, found.getElementId(), false).getElementId();
+				else
+					addedId = addElement(value, found.getElementId(), null, true).getElementId();
 				if (postAdd != null)
 					postAdd.run();
 				return getElement(addedId);

@@ -292,16 +292,6 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 		}
 
 		@Override
-		public String canAdd(V value, boolean before) {
-			return StdMsg.UNSUPPORTED_OPERATION;
-		}
-
-		@Override
-		public ElementId add(V value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-		}
-
-		@Override
 		public MapEntryHandle<K, V> immutable() {
 			return theEntry;
 		}

@@ -1,7 +1,6 @@
 package org.qommons.tree;
 
 import org.qommons.collect.BetterCollection;
-import org.qommons.collect.ElementId;
 import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.OptimisticContext;
 
@@ -202,16 +201,6 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 		@Override
 		public void remove() throws UnsupportedOperationException {
 			getWrapped().remove();
-		}
-
-		@Override
-		public String canAdd(E value, boolean before) {
-			return getWrapped().canAdd(value, !before);
-		}
-
-		@Override
-		public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-			return getWrapped().add(value, !before).reverse();
 		}
 
 		@Override

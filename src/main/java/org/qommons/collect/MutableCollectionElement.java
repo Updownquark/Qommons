@@ -94,49 +94,6 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 	 */
 	void remove() throws UnsupportedOperationException;
 
-	/**
-	 * Tests whether the given value could be added adjacent to this element
-	 * 
-	 * @param value The value to test
-	 * @param before Whether to add the element before or after this element in the collection
-	 * @return null If the addition would succeed, or a message describing why it would fail
-	 */
-	default String canAdd(E value, boolean before) {
-		BetterCollection<E> coll = getCollection();
-		ElementId id = getElementId();
-		return coll.canAdd(value, //
-			before ? CollectionElement.getElementId(coll.getAdjacentElement(id, false)) : id,
-			before ? id : CollectionElement.getElementId(coll.getAdjacentElement(id, true)));
-	}
-
-	/**
-	 * Adds an element adjacent to this element
-	 * 
-	 * @param value The value to add
-	 * @param before Whether to add the element before or after this element in the collection
-	 * @return The {@link CollectionElement#getElementId() ID} of the new element
-	 * @throws UnsupportedOperationException If the operation is unsupported, independent of the argument
-	 * @throws IllegalArgumentException If some property of the value prevents it being added at the specified position
-	 */
-	default ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-		BetterCollection<E> coll = getCollection();
-		ElementId id = getElementId();
-		CollectionElement<E> added = coll.addElement(value, //
-			before ? CollectionElement.getElementId(coll.getAdjacentElement(id, false)) : id,
-			before ? id : CollectionElement.getElementId(coll.getAdjacentElement(id, true)), !before);
-		if (added != null)
-			return added.getElementId();
-		String msg = coll.canAdd(value, //
-			before ? CollectionElement.getElementId(coll.getAdjacentElement(id, false)) : id,
-			before ? id : CollectionElement.getElementId(coll.getAdjacentElement(id, true)));
-		if (msg == null)
-			throw new UnsupportedOperationException();
-		else if (msg.equals(StdMsg.UNSUPPORTED_OPERATION))
-			throw new UnsupportedOperationException(msg);
-		else
-			throw new IllegalArgumentException(msg);
-	}
-
 	/** @return An immutable observable element backed by this mutable element's data */
 	default CollectionElement<E> immutable() {
 		return new ImmutableCollectionElement<>(this);
@@ -243,16 +200,6 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 		@Override
 		public void remove() throws UnsupportedOperationException {
 			getWrapped().remove();
-		}
-
-		@Override
-		public String canAdd(E value, boolean before) {
-			return getWrapped().canAdd(value, !before);
-		}
-
-		@Override
-		public ElementId add(E value, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
-			return getWrapped().add(value, !before).reverse();
 		}
 
 		@Override

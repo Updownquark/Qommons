@@ -2,7 +2,6 @@ package org.qommons.tree;
 
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterMap;
-import org.qommons.collect.ElementId;
 import org.qommons.collect.MutableMapEntryHandle;
 import org.qommons.collect.OptimisticContext;
 
@@ -24,16 +23,6 @@ public interface MutableBinaryTreeEntry<K, V> extends BinaryTreeEntry<K, V>, Mut
 
 	@Override
 	MutableBinaryTreeEntry<K, V> getClosest(boolean left);
-
-	@Override
-	default String canAdd(V value, boolean before) {
-		return StdMsg.UNSUPPORTED_OPERATION;
-	}
-
-	@Override
-	default ElementId add(V value, boolean before) throws UnsupportedOperationException {
-		throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-	}
 
 	@Override
 	default MutableBinaryTreeEntry<K, V> reverse() {
@@ -146,16 +135,6 @@ public interface MutableBinaryTreeEntry<K, V> extends BinaryTreeEntry<K, V>, Mut
 		@Override
 		public void remove() throws UnsupportedOperationException {
 			getWrapped().remove();
-		}
-
-		@Override
-		public String canAdd(V value, boolean before) {
-			return getWrapped().canAdd(value, !before);
-		}
-
-		@Override
-		public ElementId add(V value, boolean before) throws UnsupportedOperationException {
-			return getWrapped().add(value, !before).reverse();
 		}
 
 		@Override
