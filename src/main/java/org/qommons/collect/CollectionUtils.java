@@ -1312,7 +1312,7 @@ public class CollectionUtils {
 				input.rightIndex = rightIndex;
 				input.rightVal = rightVal;
 				ElementSyncAction action;
-				input.hasLeft = false;
+				boolean actionHasLeft = input.hasLeft = false;
 				String debugMsg = "";
 				if (debug)
 					debugMsg = "Right-only " + rightIndex + "->" + input.targetIndex + " " + input.rightVal;
@@ -1334,7 +1334,7 @@ public class CollectionUtils {
 						L value;
 						if (action == PRESERVE) {
 							if (debug) {
-								if (input.hasLeft)
+								if (actionHasLeft)
 									debugMsg += " Preserving";
 								else
 									debugMsg += " Ignoring";
@@ -1343,7 +1343,7 @@ public class CollectionUtils {
 						} else {
 							value = ((ValueSyncAction<L>) action).value;
 							if (debug) {
-								if (input.hasLeft)
+								if (actionHasLeft)
 									debugMsg += " Updating to " + value;
 								else
 									debugMsg += " Adding";
@@ -1352,7 +1352,7 @@ public class CollectionUtils {
 						debugMsg = addValue(value, debugMsg);
 						input.targetIndex++;
 					}
-					if (input.hasLeft) {
+					if (actionHasLeft) {
 						if (leftIndex == leftTarget)
 							advanceLeft();
 						leftTarget++;
@@ -1511,6 +1511,7 @@ public class CollectionUtils {
 
 			@Override
 			public ElementSyncAction useValue(L newValue) {
+				hasLeft = true;
 				leftVal = newValue;
 				valueAction.value = newValue;
 				return valueAction;

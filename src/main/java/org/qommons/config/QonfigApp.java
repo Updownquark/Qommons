@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import org.qommons.config.QonfigInterpreterCore.Builder;
 import org.qommons.io.SimpleXMLParser.XmlParseException;
@@ -17,6 +18,7 @@ import org.qommons.io.TextParseException;
 public class QonfigApp {
 	private static QonfigToolkit QONFIG_APP_TOOLKIT;
 
+	/** @return The Qonfig-App toolkit */
 	public static synchronized QonfigToolkit getQonfigAppToolkit() {
 		if (QONFIG_APP_TOOLKIT != null)
 			return QONFIG_APP_TOOLKIT;
@@ -39,6 +41,14 @@ public class QonfigApp {
 		return QONFIG_APP_TOOLKIT;
 	}
 
+	/**
+	 * @param appDefUrl The location of the {@link #getQonfigAppToolkit() Qonfig-App}-formatted application to parse
+	 * @param appToolkits The locations of other toolkit definitions that may be needed to parse the application
+	 * @return The parsed application
+	 * @throws IOException If the application could not be read
+	 * @throws TextParseException If the application could not be parsed as XML
+	 * @throws QonfigParseException If the application could not be parsed as Qonfig
+	 */
 	public static QonfigDocument parseApp(URL appDefUrl, URL... appToolkits) throws IOException, TextParseException, QonfigParseException {
 		QonfigToolkit qonfigAppTK = getQonfigAppToolkit();
 		DefaultQonfigParser qonfigParser = new DefaultQonfigParser();
@@ -67,11 +77,33 @@ public class QonfigApp {
 
 	/**
 	 * @param <T> The type of the application value
+	 * @param appDef The {@link #getQonfigAppToolkit() Qonfig-App}-formatted application to interpret
 	 * @param type The type of the application value
 	 * @return The application value
+	 * @throws IOException If the application's app-file reference could not be found or read
+	 * @throws TextParseException If the app-file could not be parsed as XML
+	 * @throws QonfigParseException If the app-file could not be parsed as Qonfig
+	 * @throws QonfigInterpretationException If the application could not be interpreted
 	 * @throws IllegalArgumentException If this method cannot locate, parse, or interpret the application setup file
 	 */
 	public static <T> T interpretApp(QonfigDocument appDef, Class<T> type)
+		throws IOException, TextParseException, QonfigParseException, QonfigInterpretationException {
+		return interpretApp(appDef, type, null);
+	}
+
+	/**
+	 * @param <T> The type of the application value
+	 * @param appDef The {@link #getQonfigAppToolkit() Qonfig-App}-formatted application to interpret
+	 * @param type The type of the application value
+	 * @param session Accepts the interpretation session for the app root (may be null)
+	 * @return The application value
+	 * @throws IOException If the application's app-file reference could not be found or read
+	 * @throws TextParseException If the app-file could not be parsed as XML
+	 * @throws QonfigParseException If the app-file could not be parsed as Qonfig
+	 * @throws QonfigInterpretationException If the application could not be interpreted
+	 * @throws IllegalArgumentException If this method cannot locate, parse, or interpret the application setup file
+	 */
+	public static <T> T interpretApp(QonfigDocument appDef, Class<T> type, Consumer<AbstractQIS<?>> session)
 		throws IOException, TextParseException, QonfigParseException, QonfigInterpretationException {
 		QonfigToolkit qonfigAppTK = getQonfigAppToolkit();
 
@@ -137,20 +169,29 @@ public class QonfigApp {
 			coreBuilder.configure(interp);
 		}
 		QonfigInterpreterCore interpreter = coreBuilder.build();
-
 		// Interpret the app
-		return interpreter.interpret(qonfigDoc.getRoot())//
-				.interpret(type);
+		QonfigInterpreterCore.CoreSession coreSession = interpreter.interpret(qonfigDoc.getRoot());
+		if (session != null)
+			session.accept(coreSession);
+		return coreSession.interpret(type);
 	}
 
-	public static <T> List<T> create(Collection<QonfigElement> elements, Class<T> type) {
+	/**
+	 * @param <T> The type of values to create
+	 * @param elements The elements whose values contain the names of classes implementing the given type
+	 * @param type The type of values to create
+	 * @return A list of the instantiated values
+	 * @throws QonfigParseException If one of the values could not be instantiated
+	 */
+	public static <T> List<T> create(Collection<QonfigElement> elements, Class<T> type) throws QonfigParseException {
 		List<T> values = new ArrayList<>(elements.size());
 		for (QonfigElement el : elements) {
 			Class<?> elType;
 			try {
 				elType = Class.forName(el.getValueText());
 			} catch (ClassNotFoundException e) {
-				throw new IllegalArgumentException("No such " + type.getSimpleName() + " findable: " + el.getValueText());
+				throw QonfigParseException.createSimple(el.getDocument().getLocation(), el.getType().getName(),
+					el.getValue().position.getPosition(0), "No such " + type.getSimpleName() + " findable: " + el.getValueText(), e);
 			}
 			if (!type.isAssignableFrom(elType))
 				throw new IllegalArgumentException("Class " + elType.getName() + " is not a " + type.getName());
@@ -158,10 +199,12 @@ public class QonfigApp {
 			try {
 				value = (T) elType.newInstance();
 			} catch (IllegalAccessException e) {
-				throw new IllegalArgumentException(
+				throw QonfigParseException.createSimple(el.getDocument().getLocation(), el.getType().getName(),
+					el.getValue().position.getPosition(0),
 					"Could not access " + type.getSimpleName() + " " + elType.getName() + " for instantiation", e);
 			} catch (InstantiationException e) {
-				throw new IllegalArgumentException("Could not instantiate " + type.getSimpleName() + " " + elType.getName(), e);
+				throw QonfigParseException.createSimple(el.getDocument().getLocation(), el.getType().getName(),
+					el.getValue().position.getPosition(0), "Could not instantiate " + type.getSimpleName() + " " + elType.getName(), e);
 			}
 			values.add(value);
 		}

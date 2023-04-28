@@ -26,55 +26,123 @@ import org.qommons.tree.BetterTreeList;
  * @param <V> The value type of the map
  */
 public interface MultiInheritanceMap<K, V> {
+	/** @return The number of keys in this map */
 	int size();
 
+	/** @return Whether this map is empty */
 	default boolean isEmpty() {
 		return size() == 0;
 	}
 
+	/** @return All keys in this map with a value mapped to them */
 	Set<K> keySet();
 
+	/** @return All values mapped to keys in this map */
 	Collection<V> values();
 
+	/** @return All key-value pairs in this map */
 	Collection<Map.Entry<K, V>> entrySet();
 
+	/**
+	 * @param key The key to test
+	 * @param exact Whether to test for the key EXACTLY, or to return true if a value is mapped to a key that the given key is an
+	 *        {@link MultiInheritanceSet.Inheritance#isExtension(Object, Object) extension} of
+	 * @return Whether a value is present in this map for the given key
+	 */
 	boolean containsKey(K key, boolean exact);
 
+	/**
+	 * @param key The key to get the value for
+	 * @return A value that is mapped to a key in this map for which the given key is an
+	 *         {@link MultiInheritanceSet.Inheritance#isExtension(Object, Object) extension}
+	 */
 	V getAny(K key);
 
+	/**
+	 * @param key The key to get the value for
+	 * @return All values is mapped to keys in this map for which the given key is an
+	 *         {@link MultiInheritanceSet.Inheritance#isExtension(Object, Object) extension}
+	 */
 	BetterList<V> getAll(K key);
 
+	/**
+	 * @return The entries at the root of this map (for keys that are not {@link MultiInheritanceSet.Inheritance#isExtension(Object, Object)
+	 *         extensions} of other keys in this map
+	 */
 	Collection<Map.Entry<K, V>> getRoots();
 
+	/**
+	 * @return The entries at the leaves of this map (for keys that have no other
+	 *         {@link MultiInheritanceSet.Inheritance#isExtension(Object, Object) extensions} in this map
+	 */
 	Collection<Map.Entry<K, V>> getTerminals();
 
+	/**
+	 * @param parent The parent entry to get children of
+	 * @return Entries of keys that are direct {@link MultiInheritanceSet.Inheritance#isExtension(Object, Object) extensions} of the given
+	 *         entry's key in this map
+	 */
 	Collection<Map.Entry<K, V>> getChildren(Map.Entry<K, V> parent);
 
+	/**
+	 * @param key The key to put the value for
+	 * @param value Computes the value for the given key and the value currently in the map for that key
+	 * @return The computed value
+	 */
 	V compute(K key, BiFunction<? super K, ? super V, ? extends V> value);
 
+	/**
+	 * @param key The key to put the value for
+	 * @param value The value to put
+	 * @return The value that was previously in this map for the given key
+	 */
 	default V put(K key, V value) {
 		return compute(key, (__, ___) -> value);
 	}
 
+	/**
+	 * Adds all entries from the give map into this one
+	 * 
+	 * @param map The map to put
+	 */
 	default void putAll(MultiInheritanceMap<? extends K, ? extends V> map) {
 		for (Map.Entry<? extends K, ? extends V> entry : map.entrySet())
 			put(entry.getKey(), entry.getValue());
 	}
 
+	/**
+	 * @param <K> The key type for the map
+	 * @param <V> The value type for the map
+	 * @param inheritance The inheritance for the map
+	 * @return The new map
+	 */
 	public static <K, V> MultiInheritanceMap<K, V> create(MultiInheritanceSet.Inheritance<K> inheritance) {
 		return new Default<>(inheritance);
 	}
 
+	/**
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param map The map to wrap
+	 * @return A map with the same data as the given map, but which cannot be modified directly
+	 */
 	public static <K, V> MultiInheritanceMap<K, V> unmodifiable(MultiInheritanceMap<K, V> map) {
 		return map instanceof Unmodifiable ? map : new Unmodifiable<>(map);
 	}
 
+	/**
+	 * Default {@link MultiInheritanceMap} implementation
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	public class Default<K, V> implements MultiInheritanceMap<K, V> {
 		private final MultiInheritanceSet.Inheritance<K> theInheritance;
 		private final Map<K, Node<K, V>> theNodes;
 		private final List<Node<K, V>> theRoots;
 		private final AtomicInteger theNodeIdCounter;
 
+		/** @param inheritance The inheritance for this map */
 		public Default(MultiInheritanceSet.Inheritance<K> inheritance) {
 			theInheritance = inheritance;
 			theNodes = new LinkedHashMap<>();
@@ -272,35 +340,6 @@ public interface MultiInheritanceMap<K, V> {
 			}
 		}
 
-		private void remove(List<Node<K, V>> nodes, K key, Node<K, V> found, boolean andExtensions, IntList visited) {
-			int size = nodes.size();
-			for (int i = 0; i < size; i++) {
-				Node<K, V> node = nodes.get(i);
-				if (node == found) {
-					nodes.remove(i);
-					if (!andExtensions && found.children != null)
-						nodes.addAll(found.children);
-					break;
-				} else if (node.children != null && theInheritance.isExtension(node.key, key)) {
-					if (visited == null || visited.add(node.id))
-						remove(node.children, key, found, andExtensions, visited);
-				} else if (found == null && andExtensions && theInheritance.isExtension(key, node.key)) {
-					nodes.remove(i);
-					i--;
-				}
-			}
-		}
-
-		private static boolean isStandalone(Node<?, ?> node) {
-			if (node.children == null)
-				return true;
-			for (Node<?, ?> child : node.children) {
-				if (child.parentCount > 1 || !isStandalone(child))
-					return false;
-			}
-			return true;
-		}
-
 		private static class Node<K, V> implements Map.Entry<K, V> {
 			final int id;
 			final K key;
@@ -348,9 +387,16 @@ public interface MultiInheritanceMap<K, V> {
 		}
 	}
 
+	/**
+	 * Implementation for {@link MultiInheritanceMap#unmodifiable(MultiInheritanceMap)}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	public class Unmodifiable<K, V> implements MultiInheritanceMap<K, V> {
 		private final MultiInheritanceMap<K, V> theBacking;
 
+		/** @param backing The map to wrap */
 		public Unmodifiable(MultiInheritanceMap<K, V> backing) {
 			theBacking = backing;
 		}

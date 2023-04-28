@@ -186,6 +186,32 @@ public interface MultiInheritanceSet<T> {
 	}
 
 	/**
+	 * @param set The set to hash
+	 * @return The hash code for the set
+	 */
+	public static int hashCode(MultiInheritanceSet<?> set) {
+		int hash = 0;
+		for (Object node : set.values())
+			hash += Objects.hashCode(node);
+		return hash;
+	}
+
+	/**
+	 * @param set The set to compare
+	 * @param obj The object to compare with the set
+	 * @return Whether the set and the object are equivalent
+	 */
+	public static boolean equals(MultiInheritanceSet<?> set, Object obj) {
+		if (obj == set)
+			return true;
+		else if (!(obj instanceof MultiInheritanceSet))
+			return false;
+		Collection<?> setNodes = set.values();
+		Collection<?> otherNodes = ((MultiInheritanceSet<?>) obj).values();
+		return otherNodes.size() == setNodes.size() && setNodes.containsAll(otherNodes);
+	}
+
+	/**
 	 * Default, modifiable {@link MultiInheritanceSet} implementation
 	 * 
 	 * @param <T> The type of items in the set
@@ -265,6 +291,16 @@ public interface MultiInheritanceSet<T> {
 			Default<T> copy = new Default<>(theInheritance);
 			copy.addAll(values());
 			return copy;
+		}
+
+		@Override
+		public int hashCode() {
+			return MultiInheritanceSet.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return MultiInheritanceSet.equals(this, obj);
 		}
 
 		@Override
@@ -442,6 +478,23 @@ public interface MultiInheritanceSet<T> {
 			MultiInheritanceSet<T> copy = create(theInheritance);
 			copy.add(theValue);
 			return copy;
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hashCode(theValue);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (obj == this)
+				return true;
+			else if (!(obj instanceof MultiInheritanceSet))
+				return false;
+			else if (((MultiInheritanceSet<?>) obj).size() != 1)
+				return false;
+			else
+				return Objects.equals(theValue, ((MultiInheritanceSet<?>) obj).values().iterator().next());
 		}
 
 		@Override

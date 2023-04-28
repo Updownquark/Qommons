@@ -4,13 +4,34 @@ import java.util.function.BiFunction;
 
 import org.qommons.ex.ExBiFunction;
 
+/**
+ * A simple utility to transform java objects by type
+ * 
+ * @param <X> The type of exception that this transformer may throw
+ */
 public interface Transformer<X extends Throwable> {
+	/**
+	 * @param <T> The type of the value to transform the source into
+	 * @param source The source value to transform
+	 * @param as The type of the value to transform the source into
+	 * @return The transformed value
+	 * @throws X If the transformation is not configured or if it fails
+	 */
 	<T> T transform(Object source, Class<T> as) throws X;
 
+	/**
+	 * @param <X> The type of exception that this transformer may throw
+	 * @return A builder to configure a new transformer
+	 */
 	static <X extends Throwable> Builder<X> build() {
 		return new Builder<>();
 	}
 
+	/**
+	 * Configures a new {@link Transformer}
+	 * 
+	 * @param <X> The type of exception that this transformer may throw
+	 */
 	public class Builder<X extends Throwable> {
 		private final ClassMap<ClassMap<? extends ExBiFunction<?, Transformer<X>, ?, ? extends X>>> theTypeTransformers;
 		private BiFunction<Class<?>, Class<?>, X> theNoTransformerException;
@@ -25,6 +46,16 @@ public interface Transformer<X extends Throwable> {
 			theNoTransformerException = noTransformerException;
 		}
 
+		/**
+		 * Populates the future transformer with a new transformation type capability
+		 * 
+		 * @param <S> The type to convert from
+		 * @param <T> The type to convert to
+		 * @param sourceType The type to convert from
+		 * @param targetType The type to convert to
+		 * @param transformer The function to do the transformation
+		 * @return This builder
+		 */
 		public <S, T> Builder<X> with(Class<S> sourceType, Class<T> targetType,
 			ExBiFunction<? super S, Transformer<X>, ? extends T, ? extends X> transformer) {
 			ClassMap<ExBiFunction<?, Transformer<X>, ? extends T, ? extends X>> targetTransformers;
@@ -34,12 +65,18 @@ public interface Transformer<X extends Throwable> {
 			return this;
 		}
 
+		/**
+		 * @param noTransformerException The function to create the exception to throw in the case of a requested transformation which has
+		 *        not been configured
+		 * @return This builder
+		 */
 		public Builder<X> withNoTransformerException(BiFunction<Class<?>, Class<?>, X> noTransformerException) {
 			theNoTransformerException = noTransformerException;
 			return this;
 		}
 
-		public Transformer<X> build() {
+		/** @return A transformer configured with the transformation capabilities configured in this builder */
+		public CompositeTransformer<X> build() {
 			return new CompositeTransformer<>(deepCopy(theTypeTransformers), theNoTransformerException);
 		}
 
@@ -51,6 +88,11 @@ public interface Transformer<X extends Throwable> {
 		}
 	}
 
+	/**
+	 * Default {@link Transformer} implementation returned by {@link Builder#build()}
+	 * 
+	 * @param <X> The type of exception that this transformer may throw
+	 */
 	public class CompositeTransformer<X extends Throwable> implements Transformer<X> {
 		private final ClassMap<ClassMap<? extends ExBiFunction<?, Transformer<X>, ?, ? extends X>>> theTypeTransformers;
 		private BiFunction<Class<?>, Class<?>, X> theNoTransformerException;
@@ -88,6 +130,10 @@ public interface Transformer<X extends Throwable> {
 			return typeTransformer.apply(source, this);
 		}
 
+		/**
+		 * @return A builder pre-populated with all of this transformer's capabilities, which can be used to create a new transformer with
+		 *         additional capabilities
+		 */
 		public Builder<X> copy() {
 			return new Builder<>(Builder.deepCopy(theTypeTransformers), theNoTransformerException);
 		}
