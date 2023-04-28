@@ -891,6 +891,49 @@ public class StringUtils {
 		return true;
 	}
 
+	/**
+	 * Breaks up text into lines by whitespace
+	 * 
+	 * @param text The text to break up
+	 * @param lineLength The maximum length of the lines to produce
+	 * @param newLine The new line sequence to insert between each line
+	 * @return The lineated text
+	 */
+	public static String lineate(String text, int lineLength, String newLine) {
+		if (text.length() <= lineLength)
+			return text;
+		StringBuilder ret = new StringBuilder();
+		int currentLineStart = 0;
+		while (currentLineStart + lineLength < text.length()) {
+			boolean wasWS = false;
+			int maxLineEnd = Math.min(text.length(), currentLineStart + lineLength);
+			int c;
+			for (c = maxLineEnd - 1; c > currentLineStart; c--) {
+				if (Character.isWhitespace(text.charAt(c)))
+					wasWS = true;
+				else if (wasWS)
+					break;
+			}
+			if (ret.length() > 0)
+				ret.append(newLine);
+			if (c == currentLineStart) {// No white space
+				ret.append(text, currentLineStart, maxLineEnd);
+				currentLineStart = maxLineEnd;
+			} else {
+				ret.append(text, currentLineStart, c + 1);
+				currentLineStart = c + 1;
+			}
+			while (currentLineStart < text.length() && Character.isWhitespace(text.charAt(currentLineStart)))
+				currentLineStart++;
+		}
+		if (currentLineStart < text.length()) {
+			if (ret.length() > 0)
+				ret.append(newLine);
+			ret.append(text, currentLineStart, text.length());
+		}
+		return ret.toString();
+	}
+
 	/** A source of binary data */
 	public interface ByteIterator {
 		/**
