@@ -552,6 +552,15 @@ public interface Format<T> {
 		}
 	}
 
+	/**
+	 * @param <T> The type of the value to print
+	 * @param print The print function for the value
+	 * @return A format that can print with the given function, but cannot parse anything
+	 */
+	public static <T> PrintOnlyFormat<T> printOnly(Function<? super T, String> print) {
+		return new PrintOnlyFormat<>(print);
+	}
+
 	/** Default {@link Integer} format */
 	public static class IntFormat implements Format<Integer> {
 		private final LongFormat theLongFormat;
@@ -1555,6 +1564,32 @@ public interface Format<T> {
 				list.add(value);
 			}
 			return list;
+		}
+	}
+
+	/**
+	 * A format that can only print and cannot parse
+	 * 
+	 * @param <T> The value to format
+	 */
+	public static class PrintOnlyFormat<T> implements Format<T> {
+		private final Function<? super T, String> thePrint;
+
+		/** @param print The print function for this format to use */
+		public PrintOnlyFormat(Function<? super T, String> print) {
+			thePrint = print;
+		}
+
+		@Override
+		public void append(StringBuilder text, T value) {
+			text.append(thePrint.apply(value));
+		}
+
+		@Override
+		public T parse(CharSequence text) throws ParseException {
+			if (text.length() == 0)
+				return null;
+			throw new ParseException("Print-only formatting cannot parse", 0);
 		}
 	}
 }
