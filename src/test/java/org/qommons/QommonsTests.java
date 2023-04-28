@@ -35,7 +35,8 @@ import org.qommons.tree.TreeUtilsTest;
 	TimeUtilsTest.class, //
 	ClassMapTest.class, //
 	PrimesTest.class, //
-	BetterBitSetTest.class
+	BetterBitSetTest.class, //
+	QuarkApplicationVersioningTests.class //
 })
 public class QommonsTests {
 }

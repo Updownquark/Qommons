@@ -61,15 +61,31 @@ public class Version implements Comparable<Version> {
 			comp = Integer.compare(patch, o.patch);
 		if (comp == 0) {//
 			if (qualifier != null) {
+				// A qualifier that is just more version numbers should be treated as just further version qualification
+				// A qualifier that has text (e.g. rc, er, etc.) implies a pre-release
 				if (o.qualifier != null)
 					comp = qualifier.compareTo(o.qualifier);
+				else if (isNumeric(qualifier))
+					comp = 1;
 				else
 					comp = -1;
 			} else if (o.qualifier != null) {
-				comp = 1;
+				if (isNumeric(o.qualifier))
+					comp = -1;
+				else
+					comp = 1;
 			}
 		}
 		return comp;
+	}
+
+	private static boolean isNumeric(String qualifier) {
+		for (int c = 0; c < qualifier.length(); c++) {
+			char ch = qualifier.charAt(c);
+			if ((ch < '0' || ch > '9') && ch != '.' && ch != '-' && ch != '_')
+				return false;
+		}
+		return true;
 	}
 
 	/** @return A {@link Version} that is the same as this, but with no {@link #qualifier} */
