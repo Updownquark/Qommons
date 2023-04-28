@@ -6,6 +6,7 @@ import java.io.OutputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
@@ -134,12 +135,12 @@ public class UrlFileSource extends RemoteFileSource {
 
 		@Override
 		public void delete(DirectorySyncResults results) throws IOException {
-			throw new IOException("Cannot delete a URL");
+			throw new IOException("Cannot delete a URL resource");
 		}
 
 		@Override
 		public OutputStream write() throws IOException {
-			throw new IOException("Cannot write to a URL");
+			throw new IOException("Cannot write to a URL resource");
 		}
 
 		@Override
@@ -153,8 +154,8 @@ public class UrlFileSource extends RemoteFileSource {
 		}
 
 		@Override
-		public void move(String newFilePath) throws IOException {
-			throw new IOException("Cannot move a URL");
+		public void move(List<String> newFilePath) throws IOException {
+			throw new IOException("Cannot move a URL resource");
 		}
 
 		@Override

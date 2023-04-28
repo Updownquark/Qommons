@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.LongConsumer;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import java.util.zip.ZipEntry;
@@ -94,6 +96,7 @@ public class FileUtils {
 			.withArchival(new ArchiveEnabledFileSource.ZipCompression())//
 			.withArchival(new ArchiveEnabledFileSource.GZipCompression())//
 			.withArchival(new ArchiveEnabledFileSource.TarArchival())//
+			.setMaxArchiveDepth(1)//
 		;
 	}
 
@@ -200,9 +203,23 @@ public class FileUtils {
 	 * @throws IOException If an error occurs reading or writing the data
 	 */
 	public static long copy(ExSupplier<InputStream, IOException> from, ExSupplier<OutputStream, IOException> to) throws IOException {
+		return copy(from, to, null);
+	}
+
+	/**
+	 * Simple stream copy utility
+	 * 
+	 * @param from Creates the input stream to copy from
+	 * @param to Creates the output stream to copy to
+	 * @param progress Callback to be notified of the copy operation's progress--the total number of bytes copied
+	 * @return The number of bytes copied
+	 * @throws IOException If an error occurs reading or writing the data
+	 */
+	public static long copy(ExSupplier<InputStream, IOException> from, ExSupplier<OutputStream, IOException> to, LongConsumer progress)
+		throws IOException {
 		try (InputStream in = from.get(); //
 			OutputStream out = to.get()) {
-			return copy(in, out);
+			return copy(in, out, progress);
 		}
 	}
 
@@ -215,6 +232,19 @@ public class FileUtils {
 	 * @throws IOException If an error occurs reading or writing the data
 	 */
 	public static long copy(InputStream from, OutputStream to) throws IOException {
+		return copy(from, to, null);
+	}
+
+	/**
+	 * Simple stream copy utility
+	 * 
+	 * @param from The input stream to copy from
+	 * @param to The output stream to copy to
+	 * @return The number of bytes copied
+	 * @param progress Callback to be notified of the copy operation's progress--the total number of bytes copied
+	 * @throws IOException If an error occurs reading or writing the data
+	 */
+	public static long copy(InputStream from, OutputStream to, LongConsumer progress) throws IOException {
 		byte[] buffer = BUFFERS.get();
 		long total = 0;
 		int read = from.read(buffer);
@@ -222,6 +252,8 @@ public class FileUtils {
 			if (read > 0) {
 				total += read;
 				to.write(buffer, 0, read);
+				if (progress != null)
+					progress.accept(total);
 			}
 			read = from.read(buffer);
 		}
@@ -388,6 +420,44 @@ public class FileUtils {
 		if (canceled.getAsBoolean())
 			return null;
 		return StringUtils.encodeHex().format(hasher.getHash());
+	}
+
+	private static final String[] BYTE_PREFIXES = new String[] { "k", "M", "G", "T", "P", "E", "Z", "Y" };
+
+	/**
+	 * Prints a representation of the given file's structure to the given writer
+	 * 
+	 * @param file The file to print
+	 * @param writer The writer to append to
+	 * @param indent The number of places to indent the file in the writer
+	 * @throws IOException If an exception occurs writing to the writer
+	 */
+	public static void printStructure(BetterFile file, Appendable writer, int indent) throws IOException {
+		for (int i = 0; i < indent; i++)
+			writer.append('\t');
+		writer.append(file.getName());
+		if (!file.exists())
+			writer.append(" (missing)");
+		else if (file.isDirectory()) {
+			writer.append("/\n");
+			for (BetterFile f : file.listFiles())
+				printStructure(f, writer, indent + 1);
+		} else {
+			writer.append(": ");
+			long length = file.length();
+			int unit = -1;
+			while (length > 100_000 && unit < BYTE_PREFIXES.length) {
+				length /= 1024;
+				unit++;
+			}
+			if (unit >= 0)
+				writer.append(length + BYTE_PREFIXES[unit] + "b");
+			else
+				writer.append(length + "b");
+
+			writer.append(new Date(file.getLastModified()).toString());
+			writer.append("\n");
+		}
 	}
 
 	/** Possible actions to take for a source-dest resource pair in a {@link FileSyncOperation} */
@@ -1096,10 +1166,19 @@ public class FileUtils {
 		}
 
 		@Override
+		public boolean isDirectory() {
+			return true;
+		}
+
+		@Override
+		public boolean isFile() {
+			return false;
+		}
+
+		@Override
 		public boolean get(FileBooleanAttribute attribute) {
 			boolean or;
 			switch (attribute) {
-			case Directory:
 			case Readable:
 				or = true;
 				break;
@@ -1361,14 +1440,22 @@ public class FileUtils {
 		}
 
 		@Override
+		public boolean isDirectory() {
+			return true;
+		}
+
+		@Override
+		public boolean isFile() {
+			return false;
+		}
+
+		@Override
 		public boolean get(FileBooleanAttribute attribute) {
 			switch (attribute) {
 			case Readable:
 				return true;
 			case Writable:
 				return false;
-			case Directory:
-				return true;
 			case Hidden:
 			case Symbolic:
 				return false;
@@ -1524,13 +1611,21 @@ public class FileUtils {
 		}
 
 		@Override
+		public boolean isDirectory() {
+			return false;
+		}
+
+		@Override
+		public boolean isFile() {
+			return true;
+		}
+
+		@Override
 		public boolean get(FileBooleanAttribute attribute) {
 			switch (attribute) {
 			case Readable:
 				return theData != null;
 			case Writable:
-				return false;
-			case Directory:
 				return false;
 			case Hidden:
 			case Symbolic:

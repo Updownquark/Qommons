@@ -137,10 +137,18 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
+		public boolean isDirectory() {
+			return Files.isDirectory(thePath);
+		}
+
+		@Override
+		public boolean isFile() {
+			return !isDirectory();
+		}
+
+		@Override
 		public boolean get(FileBooleanAttribute attribute) {
 			switch (attribute) {
-			case Directory:
-				return Files.isDirectory(thePath);
 			case Hidden:
 				try {
 					return Files.isHidden(thePath);
@@ -273,7 +281,7 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		public void delete(DirectorySyncResults results) throws IOException {
 			if (!Files.exists(thePath))
 				return;
-			boolean dir = get(FileBooleanAttribute.Directory);
+			boolean dir = isDirectory();
 			if (dir) {
 				try {
 					discoverContents(child -> {
@@ -304,24 +312,6 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		@Override
 		public boolean set(FileBooleanAttribute attribute, boolean value, boolean ownerOnly) {
 			switch (attribute) {
-			case Directory:
-				if (Files.exists(thePath))
-					return value == Files.isDirectory(thePath);
-				else if (value) {
-					try {
-						Files.createDirectories(thePath);
-						return true;
-					} catch (IOException e) {
-						return false;
-					}
-				} else {
-					try {
-						Files.createFile(thePath);
-						return true;
-					} catch (IOException e) {
-						return false;
-					}
-				}
 			case Hidden:
 				try {
 					if (Files.isHidden(thePath) == value)
@@ -358,8 +348,12 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public void move(String newFilePath) throws IOException {
-			Files.move(thePath, Paths.get(newFilePath));
+		public void move(List<String> newFilePath) throws IOException {
+			String first = newFilePath.get(0);
+			String[] more = new String[newFilePath.size() - 1];
+			for (int i = 0; i < more.length; i++)
+				more[i] = newFilePath.get(i + 1);
+			Files.move(thePath, Paths.get(first, more));
 		}
 
 		@Override

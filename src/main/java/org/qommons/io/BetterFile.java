@@ -37,7 +37,7 @@ import org.qommons.io.FileUtils.DirectorySyncResults;
 public interface BetterFile extends Named {
 	/** A boolean attribute on a file */
 	enum FileBooleanAttribute {
-		Readable, Writable, Directory, Hidden, Symbolic
+		Readable, Writable, Hidden, Symbolic
 	}
 
 	/** Produces hash values from binary input */
@@ -186,6 +186,10 @@ public interface BetterFile extends Named {
 		public Hasher hasher() {
 			return hasher.get();
 		}
+
+		public static CheckSumType parse(String hashType) throws IllegalArgumentException {
+			return valueOf(hashType.replaceAll("-", ""));
+		}
 	}
 
 	/** A format object for parsing/formatting {@link BetterFile}s */
@@ -242,9 +246,10 @@ public interface BetterFile extends Named {
 	long getLastModified();
 
 	/** @return Whether this file represents a directory potentially containing other file structures */
-	default boolean isDirectory() {
-		return get(BetterFile.FileBooleanAttribute.Directory);
-	}
+	boolean isDirectory();
+
+	/** @return Whether this file represents a file that can potentially be {@link #read()} and {@link #write() written} */
+	boolean isFile();
 
 	/**
 	 * @param attribute The attribute to get
@@ -505,6 +510,12 @@ public interface BetterFile extends Named {
 		/** @return The last modified time of this file */
 		long getLastModified();
 
+		/** @return Whether this file represents a directory potentially containing other file structures */
+		boolean isDirectory();
+
+		/** @return Whether this file represents a file that can potentially be {@link #read()} and {@link #write() written} */
+		boolean isFile();
+
 		/**
 		 * @param attribute The attribute to get
 		 * @return The value of the attribute for this file
@@ -585,7 +596,7 @@ public interface BetterFile extends Named {
 		 * @param newFilePath The path to move this file to
 		 * @throws IOException If the move operation fails
 		 */
-		void move(String newFilePath) throws IOException;
+		void move(List<String> newFilePath) throws IOException;
 
 		/**
 		 * Visits all of this file's content--may be more efficient than using {@link #visitAll(ExBiConsumer, BooleanSupplier)} recursively,
@@ -733,6 +744,18 @@ public interface BetterFile extends Named {
 		}
 	
 		@Override
+		public boolean isDirectory() {
+			FileBacking backing = check();
+			return backing == null ? false : backing.isDirectory();
+		}
+
+		@Override
+		public boolean isFile() {
+			FileBacking backing = check();
+			return backing == null ? false : backing.isFile();
+		}
+
+		@Override
 		public boolean get(FileBooleanAttribute attribute) {
 			FileBacking backing = check();
 			return backing != null && backing.get(attribute);
@@ -763,6 +786,8 @@ public interface BetterFile extends Named {
 		@Override
 		public String getCheckSum(CheckSumType type, BooleanSupplier canceled) throws IOException {
 			FileBacking backing = check();
+			if (canceled == null)
+				canceled = () -> false;
 			return backing == null ? null : backing.getCheckSum(type, canceled);
 		}
 
@@ -815,11 +840,24 @@ public interface BetterFile extends Named {
 		public BetterFile move(BetterFile newFile) throws IOException {
 			if (getPath().equals(newFile.getPath()))
 				return this;
+			// TODO Check if newFile is an ancestor or descendant of this file
 			FileBacking backing = check();
 			if (backing == null)
 				return null;
-			backing.move(newFile.getPath());
-			return at(newFile.getPath());
+			backing.move(movePath(newFile));
+			if (newFile.getSource().equals(getSource()))
+				return newFile;
+			return BetterFile.at(getSource(), newFile.getPath());
+		}
+
+		private static List<String> movePath(BetterFile file) {
+			List<String> path = new ArrayList<>();
+			while (file != null) {
+				path.add(file.getName());
+				file = file.getParent();
+			}
+			Collections.reverse(path);
+			return Collections.unmodifiableList(path);
 		}
 
 		@Override
@@ -960,13 +998,13 @@ public interface BetterFile extends Named {
 		protected FileBacking createBacking(boolean directory) throws IOException {
 			FileBacking backing = findBacking();
 			if (backing != null && backing.exists()) {
-				if (backing.get(BetterFile.FileBooleanAttribute.Directory) != directory)
+				if (!(directory ? backing.isDirectory() : backing.isFile()))
 					throw new IOException(getPath() + " already exists as a " + (directory ? "file" : "directory"));
 			}
 			FileBacking parentBacking = theParent.check();
 			if (parentBacking == null)
 				parentBacking = theParent.createBacking(true);
-			else if (parentBacking.exists() && !parentBacking.get(BetterFile.FileBooleanAttribute.Directory))
+			else if (parentBacking.exists() && !parentBacking.isDirectory())
 				throw new IOException("Cannot create a child of a non-directory file " + theParent);
 			return parentBacking.createChild(theName, directory);
 		}
@@ -1057,6 +1095,11 @@ public interface BetterFile extends Named {
 			return theSource.isDirectory();
 		}
 	
+		@Override
+		public boolean isFile() {
+			return theSource.isFile();
+		}
+
 		@Override
 		public List<? extends BetterFile> discoverContents(Consumer<? super BetterFile> onDiscovered, BooleanSupplier canceled) {
 			List<BetterFile> files = new ArrayList<>();
@@ -1209,6 +1252,16 @@ public interface BetterFile extends Named {
 		@Override
 		public long getLastModified() {
 			return theSource.getLastModified();
+		}
+
+		@Override
+		public boolean isDirectory() {
+			return theSource.isDirectory();
+		}
+
+		@Override
+		public boolean isFile() {
+			return theSource.isFile();
 		}
 
 		@Override

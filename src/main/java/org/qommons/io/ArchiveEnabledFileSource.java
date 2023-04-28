@@ -122,11 +122,10 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 	// }
 
 	boolean isArchive(BetterFile.FileBacking backing) {
-		if (backing.get(FileBooleanAttribute.Directory))
+		if (!backing.isFile())
 			return false;
 		for (ArchiveEnabledFileSource.FileArchival compression : theArchivalMethods) {
-			if (compression.detectPossibleCompressedFile(backing.getName()) && backing.exists()
-				&& !backing.get(FileBooleanAttribute.Directory)) {
+			if (compression.detectPossibleCompressedFile(backing.getName()) && backing.exists() && backing.isFile()) {
 				try {
 					if (compression.detectCompressedFile(backing, () -> false))
 						return true;
@@ -140,7 +139,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		ExBiConsumer<ArchiveEntry, CharSequence, IOException> forEach, BooleanSupplier canceled) throws IOException {
 		for (ArchiveEnabledFileSource.FileArchival archival : theArchivalMethods) {
 			if (archival.detectPossibleCompressedFile(backing.getSource().getName()) && backing.getSource().exists()
-				&& !backing.getSource().get(FileBooleanAttribute.Directory)) {
+				&& backing.getSource().isFile()) {
 				try {
 					if (!archival.detectCompressedFile(backing.getSource(), canceled))
 						continue;
@@ -272,13 +271,22 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
+		public boolean isDirectory() {
+			if (theRootEntry != null)
+				return true;
+			else if (!hasCheckedForArchive && isArchive(theBacking))
+				return true;
+			else
+				return theBacking.isDirectory();
+		}
+
+		@Override
+		public boolean isFile() {
+			return theBacking.isFile();
+		}
+
+		@Override
 		public boolean get(FileBooleanAttribute attribute) {
-			if (attribute == FileBooleanAttribute.Directory) {
-				if (theRootEntry != null)
-					return true;
-				else if (!hasCheckedForArchive && isArchive(theBacking))
-					return true;
-			}
 			return theBacking.get(attribute);
 		}
 
@@ -367,8 +375,8 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public void move(String newFilePath) throws IOException {
-			throw new IOException("Cannot move archive entries");
+		public void move(List<String> newFilePath) throws IOException {
+			theBacking.move(newFilePath);
 		}
 
 		@Override
@@ -440,12 +448,20 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
+		public boolean isDirectory() {
+			return theEntry.isDirectory();
+		}
+
+		@Override
+		public boolean isFile() {
+			return !theEntry.isDirectory();
+		}
+
+		@Override
 		public boolean get(BetterFile.FileBooleanAttribute attribute) {
 			if (!theRoot.check())
 				return false;
 			switch (attribute) {
-			case Directory:
-				return theEntry.isDirectory();
 			case Hidden:
 				return false;
 			case Readable:
@@ -533,7 +549,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public void move(String newFilePath) throws IOException {
+		public void move(List<String> newFilePath) throws IOException {
 			throw new IOException("Cannot move archive entries");
 		}
 
@@ -613,6 +629,16 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
+		public boolean isDirectory() {
+			return false;
+		}
+
+		@Override
+		public boolean isFile() {
+			return false;
+		}
+
+		@Override
 		public boolean get(BetterFile.FileBooleanAttribute attribute) {
 			return false;
 		}
@@ -672,7 +698,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public void move(String newFilePath) throws IOException {
+		public void move(List<String> newFilePath) throws IOException {
 			throw new IOException("No such archive entry");
 		}
 

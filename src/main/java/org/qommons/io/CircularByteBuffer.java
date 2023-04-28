@@ -387,9 +387,45 @@ public class CircularByteBuffer implements StringUtils.BinaryAccumulator {
 		}
 	}
 
-	/** @return A {@link InputStream} that reads (and removes) bytes off the front of this buffer */
+	/** @return A {@link InputStream} that reads bytes from this buffer */
 	public InputStream asInputStream() {
 		class CBBInputStream extends InputStream {
+			private int theStreamOffset;
+
+			@Override
+			public int read() {
+				if (theStreamOffset >= theLength)
+					return -1;
+				return get(theStreamOffset++);
+			}
+
+			@Override
+			public int read(byte[] b, int off, int len) {
+				int remain = theLength - theStreamOffset;
+				if (remain == 0)
+					return -1;
+				else if (len < remain) {
+					copyTo(theStreamOffset, b, off, len);
+					theStreamOffset += len;
+				} else {
+					len = remain;
+					copyTo(theStreamOffset, b, off, remain);
+					theStreamOffset = theLength;
+				}
+				return len;
+			}
+
+			@Override
+			public int available() {
+				return length();
+			}
+		}
+		return new CBBInputStream();
+	}
+
+	/** @return A {@link InputStream} that reads (and removes) bytes off the front of this buffer */
+	public InputStream asDeletingInputStream() {
+		class DeletingCBBInputStream extends InputStream {
 			@Override
 			public int read() {
 				return pop();
@@ -413,7 +449,7 @@ public class CircularByteBuffer implements StringUtils.BinaryAccumulator {
 				return length();
 			}
 		}
-		return new CBBInputStream();
+		return new DeletingCBBInputStream();
 	}
 
 	/** @return An {@link OutputStream} that appends to the end of this buffer */

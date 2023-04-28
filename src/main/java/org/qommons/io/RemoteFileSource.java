@@ -173,11 +173,20 @@ public abstract class RemoteFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
+		public boolean isDirectory() {
+			checkData();
+			return isDirectory;
+		}
+
+		@Override
+		public boolean isFile() {
+			checkData();
+			return !isDirectory;
+		}
+
+		@Override
 		public boolean get(FileBooleanAttribute attribute) {
 			switch (attribute) {
-			case Directory:
-				checkData();
-				return isDirectory;
 			case Readable:
 				return true;
 			case Hidden:

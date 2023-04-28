@@ -308,7 +308,7 @@ public class SftpFileSource extends RemoteFileSource {
 		@Override
 		public boolean discoverContents(Consumer<? super FileBacking> onDiscovered, BooleanSupplier canceled) {
 			try {
-				if (!get(FileBooleanAttribute.Directory))
+				if (!isDirectory())
 					return true;
 				for (RemoteResourceInfo file : getSession().session.ls(getPath())) {
 					if (canceled.getAsBoolean())
@@ -541,7 +541,6 @@ public class SftpFileSource extends RemoteFileSource {
 			if(!exists())
 				return false;
 			switch(attribute) {
-			case Directory:
 			case Symbolic:
 			case Hidden:
 				return false;
@@ -601,9 +600,10 @@ public class SftpFileSource extends RemoteFileSource {
 		}
 
 		@Override
-		public void move(String newFilePath) throws IOException {
+		public void move(List<String> newFilePath) throws IOException {
 			try {
-				getSession().session.rename(getPath(), newFilePath);
+				String path = String.join("/", newFilePath);
+				getSession().session.rename(getPath(), path);
 			} catch (Exception e) {
 				throw new IOException("Could not rename " + getPath() + " to " + newFilePath, e);
 			}
