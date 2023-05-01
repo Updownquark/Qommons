@@ -2,6 +2,7 @@ package org.qommons;
 
 import java.util.function.BiFunction;
 
+import org.qommons.ClassMap.TypeMatch;
 import org.qommons.ex.ExBiFunction;
 
 /**
@@ -10,6 +11,26 @@ import org.qommons.ex.ExBiFunction;
  * @param <X> The type of exception that this transformer may throw
  */
 public interface Transformer<X extends Throwable> {
+	/**
+	 * A function capable of modifying a transformed value
+	 * 
+	 * @param <S> The type of the source value that was transformed
+	 * @param <T> The type of the transformed value
+	 * @param <X> The type of the exception that this modifier or the transformer may throw
+	 */
+	public interface Modifier<S, T, X extends Throwable> {
+		/**
+		 * Modifies a transformed value
+		 * 
+		 * @param <T2> The type of the transformed value
+		 * @param source The source value that was transformed
+		 * @param value The transformed value
+		 * @param tx The transformer
+		 * @return The modified value
+		 * @throws X If the modification fails
+		 */
+		<T2 extends T> T2 modify(S source, T2 value, Transformer<X> tx) throws X;
+	}
 	/**
 	 * @param <T> The type of the value to transform the source into
 	 * @param source The source value to transform
@@ -34,15 +55,18 @@ public interface Transformer<X extends Throwable> {
 	 */
 	public class Builder<X extends Throwable> {
 		private final ClassMap<ClassMap<? extends ExBiFunction<?, Transformer<X>, ?, ? extends X>>> theTypeTransformers;
+		private final ClassMap<ClassMap<? extends Modifier<?, ?, X>>> theModifiers;
 		private BiFunction<Class<?>, Class<?>, X> theNoTransformerException;
 
 		Builder() {
-			this(new ClassMap<>(), null);
+			this(new ClassMap<>(), new ClassMap<>(), null);
 		}
 
 		Builder(ClassMap<ClassMap<? extends ExBiFunction<?, Transformer<X>, ?, ? extends X>>> typeTransformers,
+			ClassMap<ClassMap<? extends Modifier<?, ?, X>>> modifiers,
 			BiFunction<Class<?>, Class<?>, X> noTransformerException) {
 			theTypeTransformers = typeTransformers;
+			theModifiers = modifiers;
 			theNoTransformerException = noTransformerException;
 		}
 
@@ -66,6 +90,24 @@ public interface Transformer<X extends Throwable> {
 		}
 
 		/**
+		 * Populates the future transformer with a new modification type capability, which relies on a transformer but modifies the
+		 * transformed value by type
+		 * 
+		 * @param <S> The type to convert from
+		 * @param <T> The type to convert to
+		 * @param sourceType The type to convert from
+		 * @param targetType The type to convert to
+		 * @param modifier The modifier for transformed values
+		 * @return This builder
+		 */
+		public <S, T> Builder<X> modifyWith(Class<S> sourceType, Class<T> targetType, Modifier<? super S, ? super T, X> modifier) {
+			ClassMap<Modifier<?, ? super T, X>> targetModifiers;
+			targetModifiers = (ClassMap<Modifier<?, ? super T, X>>) theModifiers.computeIfAbsent(targetType, () -> new ClassMap<>());
+			targetModifiers.put(sourceType, modifier);
+			return this;
+		}
+
+		/**
 		 * @param noTransformerException The function to create the exception to throw in the case of a requested transformation which has
 		 *        not been configured
 		 * @return This builder
@@ -77,7 +119,7 @@ public interface Transformer<X extends Throwable> {
 
 		/** @return A transformer configured with the transformation capabilities configured in this builder */
 		public CompositeTransformer<X> build() {
-			return new CompositeTransformer<>(deepCopy(theTypeTransformers), theNoTransformerException);
+			return new CompositeTransformer<>(deepCopy(theTypeTransformers), deepCopy(theModifiers), theNoTransformerException);
 		}
 
 		static <T> ClassMap<ClassMap<? extends T>> deepCopy(ClassMap<ClassMap<? extends T>> classMap) {
@@ -95,11 +137,14 @@ public interface Transformer<X extends Throwable> {
 	 */
 	public class CompositeTransformer<X extends Throwable> implements Transformer<X> {
 		private final ClassMap<ClassMap<? extends ExBiFunction<?, Transformer<X>, ?, ? extends X>>> theTypeTransformers;
+		private final ClassMap<ClassMap<? extends Modifier<?, ?, X>>> theModifiers;
 		private BiFunction<Class<?>, Class<?>, X> theNoTransformerException;
 
 		CompositeTransformer(ClassMap<ClassMap<? extends ExBiFunction<?, Transformer<X>, ?, ? extends X>>> typeTransformers,
+			ClassMap<ClassMap<? extends Modifier<?, ?, X>>> modifiers,
 			BiFunction<Class<?>, Class<?>, X> noTransformerException) {
 			theTypeTransformers = typeTransformers;
+			theModifiers = modifiers;
 			theNoTransformerException = noTransformerException;
 		}
 
@@ -111,23 +156,31 @@ public interface Transformer<X extends Throwable> {
 		}
 
 		private <S, T> T _transform(S source, Class<T> targetType) throws X {
-			ClassMap<ExBiFunction<?, Transformer<X>, ? extends T, ? extends X>> targetTransformers;
-			targetTransformers = (ClassMap<ExBiFunction<?, Transformer<X>, ? extends T, ? extends X>>) theTypeTransformers.get(targetType,
-				ClassMap.TypeMatch.SUB_TYPE);
-			ExBiFunction<? super S, Transformer<X>, ? extends T, ? extends X> typeTransformer;
 			Class<S> sourceType = (Class<S>) source.getClass();
-			if (targetTransformers != null) {
+			ExBiFunction<? super S, Transformer<X>, ? extends T, ? extends X> typeTransformer = null;
+			for (ClassMap<? extends ExBiFunction<?, Transformer<X>, ?, ? extends X>> targetTransformers : theTypeTransformers
+				.getAll(targetType, ClassMap.TypeMatch.SUB_TYPE)) {
 				typeTransformer = (ExBiFunction<? super S, Transformer<X>, ? extends T, ? extends X>) targetTransformers.get(sourceType,
 					ClassMap.TypeMatch.SUPER_TYPE);
-			} else
-				typeTransformer = null;
+				if (typeTransformer != null)
+					break;
+			}
 			if (typeTransformer == null) {
 				if (theNoTransformerException != null)
 					throw theNoTransformerException.apply(sourceType, targetType);
 				else
 					throw new IllegalArgumentException("No transformer for " + sourceType.getName() + "->" + targetType.getName());
 			}
-			return typeTransformer.apply(source, this);
+			T transformed = typeTransformer.apply(source, this);
+			Class<T> targetType2 = transformed == null ? targetType : (Class<T>) transformed.getClass();
+
+			for (ClassMap<? extends Modifier<?, ?, ? extends X>> targetModifiers : theModifiers.getAll(targetType2, TypeMatch.SUPER_TYPE)) {
+				for (Modifier<?, ?, ? extends X> modifier : targetModifiers.getAll(sourceType, TypeMatch.SUPER_TYPE)) {
+					Modifier<? super S, ? super T, X> modifier2 = (Modifier<? super S, ? super T, X>) modifier;
+					transformed = modifier2.<T> modify(source, transformed, this);
+				}
+			}
+			return transformed;
 		}
 
 		/**
@@ -135,7 +188,7 @@ public interface Transformer<X extends Throwable> {
 		 *         additional capabilities
 		 */
 		public Builder<X> copy() {
-			return new Builder<>(Builder.deepCopy(theTypeTransformers), theNoTransformerException);
+			return new Builder<>(Builder.deepCopy(theTypeTransformers), Builder.deepCopy(theModifiers), theNoTransformerException);
 		}
 	}
 }

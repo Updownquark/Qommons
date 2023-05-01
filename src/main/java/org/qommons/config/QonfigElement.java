@@ -330,7 +330,10 @@ public class QonfigElement implements FileSourced {
 			if (attr.getValue() != null)
 				str.append(' ').append(attr.getKey()).append("=\"").append(attr.getValue()).append('"');
 		}
-		return str.append('>').toString();
+		str.append('>');
+		if (theValue != null)
+			str.append(theValue.text).append("</").append(theType.getName()).append('>');
+		return str.toString();
 	}
 
 	/**
