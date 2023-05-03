@@ -135,6 +135,9 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 				return null;
 
 			CollectionElement<E> right = theRightBound == null ? theRightBound : theCollection.getTerminalElement(true);
+			if (right == null)
+				return null;
+
 			CollectionElement<E> divider = theCollection.splitBetween(left.getElementId(), right.getElementId());
 			if (divider == null)
 				return null;

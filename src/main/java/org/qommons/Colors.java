@@ -1538,7 +1538,7 @@ public class Colors {
 	 * @param clArgs Command-line arguments. Call empty for documentation
 	 */
 	public static void main(String[] clArgs) {
-		ArgumentParsing2.Arguments args = ArgumentParsing2.build()//
+		ArgumentParsing.Arguments args = ArgumentParsing.build()//
 			.forValuePattern(patt -> patt//
 				.addEnumArgument("type", MainMethodType.class, a -> a.required())//
 				.addFileArgument("dir", a -> a.directory(true).create(true)//

@@ -147,9 +147,9 @@ public class Range<C> implements Comparable<C> {
 				str.append("??");
 			else if (isPresent()) {
 				if (isLowerBound.booleanValue()) {
-					str.append(isLowerBound.booleanValue() ? '[' : '(').append(theValue);
+					str.append(isClosed ? '[' : '(').append(theValue);
 				} else {
-					str.append(theValue).append(isLowerBound.booleanValue() ? ']' : ')');
+					str.append(theValue).append(isClosed ? ']' : ')');
 				}
 			} else
 				str.append(isLowerBound.booleanValue() ? "(-\u221E" : "\u221E)");

@@ -10,8 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
 
-import org.qommons.ArgumentParsing2;
-import org.qommons.ArgumentParsing2.ArgumentParser;
+import org.qommons.ArgumentParsing;
+import org.qommons.ArgumentParsing.ArgumentParser;
 import org.qommons.Named;
 
 /**
@@ -36,7 +36,7 @@ public class Qonsole implements Named, AutoCloseable {
 		 * @param args The parsed arguments given by the user
 		 * @throws ParseException If the input could not be handled
 		 */
-		public void input(ArgumentParsing2.Arguments args) throws ParseException;
+		public void input(ArgumentParsing.Arguments args) throws ParseException;
 	}
 
 	/**
@@ -45,7 +45,7 @@ public class Qonsole implements Named, AutoCloseable {
 	 * @see Qonsole#addPlugin(String, ArgumentParser, QonsoleArgsHandler)
 	 */
 	public class QonsoleArgsPlugin implements QonsolePlugin {
-		private final ArgumentParsing2.ArgumentParser theParser;
+		private final ArgumentParsing.ArgumentParser theParser;
 		private final QonsoleArgsHandler theHandler;
 
 		/**
@@ -132,7 +132,7 @@ public class Qonsole implements Named, AutoCloseable {
 				return false;
 			if (currentArg.length() > 0)
 				argList.add(currentArg.toString());
-			ArgumentParsing2.Arguments args;
+			ArgumentParsing.Arguments args;
 			try {
 				args = theParser.parse(argList);
 			} catch (IllegalArgumentException e) {
@@ -231,7 +231,7 @@ public class Qonsole implements Named, AutoCloseable {
 	 * @param handler The handler to receive the parsed arguments
 	 * @return This Qonsole
 	 */
-	public Qonsole addPlugin(String pluginName, ArgumentParsing2.ArgumentParser parser, QonsoleArgsHandler handler) {
+	public Qonsole addPlugin(String pluginName, ArgumentParsing.ArgumentParser parser, QonsoleArgsHandler handler) {
 		return addPlugin(pluginName, new QonsoleArgsPlugin(parser, handler));
 	}
 

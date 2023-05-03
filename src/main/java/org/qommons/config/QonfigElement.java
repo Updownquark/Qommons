@@ -583,8 +583,10 @@ public class QonfigElement implements FileSourced {
 							role = inhRoles.getFirst();
 						if (role == null)
 							errors.error("No such role \"" + roleDef.itemName + "\" found", null);
-						roles.add(role);
-						realRoles.add(role.getDeclared());
+						else {
+							roles.add(role);
+							realRoles.add(role.getDeclared());
+						}
 					}
 				}
 			} else { // Alright, we have to guess
@@ -829,8 +831,8 @@ public class QonfigElement implements FileSourced {
 						default:
 							Object defValue = attr.getDefaultValue();
 							if (defValue != null) {
-								attrValues.put(attr,
-									new QonfigValue(String.valueOf(defValue), defValue, attr.getDeclarer().getLocationString(), null));
+								attrValues.put(attr, new QonfigValue(defValue == null ? null : defValue.toString(), defValue,
+									attr.getDeclarer().getLocationString(), null));
 								defaultedAttributes.put(attr, attr.getSpecification() == SpecificationType.Forbidden);
 							}
 							break;
@@ -844,7 +846,7 @@ public class QonfigElement implements FileSourced {
 							break;
 						default:
 							Object defValue = attr.getValue().getDefaultValue();
-							attrValues.put(attr.getKey(), new QonfigValue(String.valueOf(defValue), defValue,
+							attrValues.put(attr.getKey(), new QonfigValue(defValue == null ? null : defValue.toString(), defValue,
 								attr.getValue().getDeclarer().getLocationString(), null));
 							defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
 							break;
@@ -860,7 +862,8 @@ public class QonfigElement implements FileSourced {
 					default:
 						Object defValue = attr.getValue().getDefaultValue();
 						if (defValue != null) {
-							attrValues.put(attr.getKey(), new QonfigValue(String.valueOf(defValue), defValue,
+							attrValues.put(attr.getKey(),
+								new QonfigValue(defValue.toString(), defValue,
 								attr.getValue().getDeclarer().getLocationString(), null));
 							defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
 						}
@@ -873,7 +876,7 @@ public class QonfigElement implements FileSourced {
 				if (inh.isAssignableFrom(theType))
 					continue;
 				for (Map.Entry<QonfigAttributeDef.Declared, ? extends ValueDefModifier> mod : inh.getAttributeModifiers().entrySet()) {
-					Object value = attrValues.get(mod.getKey());
+					QonfigValue value = attrValues.get(mod.getKey());
 					if (mod.getValue().getSpecification() != null) {
 						switch (mod.getValue().getSpecification()) {
 						case Required:
@@ -882,12 +885,13 @@ public class QonfigElement implements FileSourced {
 							Boolean defaulted = defaultedAttributes.get(mod.getKey());
 							if (value != null) {
 								if (defaulted == null)
-									theErrors.forChild("attribute", theFilePosition)
-										.error("Specification of value for attribute forbidden by " + inh);
-								else if (!Objects.equals(value, mod.getValue().getDefaultValue())) {
+									theErrors.forChild("attribute", value.position.getPosition(0))
+										.error("Specification of value for attribute '" + mod.getKey() + "' forbidden by " + inh);
+								else if (!Objects.equals(value.value, mod.getValue().getDefaultValue())) {
 									if (defaulted) // Forbidden
 										theErrors.forChild("attribute", theFilePosition).error(
-											"Default values for forbidden attribute specified from multiple sources, including " + inh);
+											"Default values for forbidden attribute '" + mod.getKey()
+												+ "' specified from multiple sources, including " + inh);
 									else {
 										defaultedAttributes.put(mod.getKey(), true);
 										Object defValue = mod.getValue().getDefaultValue();

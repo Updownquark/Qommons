@@ -11,9 +11,9 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import org.qommons.ArgumentParsing2;
-import org.qommons.ArgumentParsing2.Argument;
-import org.qommons.ArgumentParsing2.MatchedArgument;
+import org.qommons.ArgumentParsing;
+import org.qommons.ArgumentParsing.Argument;
+import org.qommons.ArgumentParsing.MatchedArgument;
 import org.qommons.QommonsUtils;
 import org.qommons.TimeUtils;
 import org.qommons.collect.ListenerList;
@@ -771,7 +771,7 @@ public class QommonsTimer {
 			System.out.println("Set frequency to 2 seconds");
 			handle.setFrequency(Duration.ofSeconds(2), false);
 
-			ArgumentParsing2.ArgumentPattern valuePattern = new ArgumentParsing2.ArgumentPattern() {
+			ArgumentParsing.ArgumentPattern valuePattern = new ArgumentParsing.ArgumentPattern() {
 				@Override
 				public int getMaxValues() {
 					return 1;
@@ -801,7 +801,7 @@ public class QommonsTimer {
 					return "argument=value";
 				}
 			};
-			ArgumentParsing2.ArgumentParser argParser = ArgumentParsing2.build().forValuePattern(valuePattern, p -> p//
+			ArgumentParsing.ArgumentParser argParser = ArgumentParsing.build().forValuePattern(valuePattern, p -> p//
 				.addBooleanArgument("active", null)//
 				.addDurationArgument("end", null)//
 				.addDurationArgument("next", null)//
@@ -821,7 +821,7 @@ public class QommonsTimer {
 					System.err.println(argParser);
 					continue;
 				}
-				ArgumentParsing2.Arguments lineArgs;
+				ArgumentParsing.Arguments lineArgs;
 				try {
 					lineArgs = argParser.parse(line.split(" "));
 				} catch (IllegalArgumentException e) {

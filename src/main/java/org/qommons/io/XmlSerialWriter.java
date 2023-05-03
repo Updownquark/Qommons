@@ -311,6 +311,11 @@ public class XmlSerialWriter {
 			writeXmlContent(theDocument.getWriter(), theElementName, XmlContentType.ELEMENT_NAME);
 		}
 
+		/** @return Whether this element's header has been closed to allow for content */
+		public boolean isHeaderClosed() {
+			return isHeaderClosed;
+		}
+
 		@Override
 		public Element writeComment(String comment) throws IOException {
 			super.writeComment(comment);

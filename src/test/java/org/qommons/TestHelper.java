@@ -991,6 +991,8 @@ public class TestHelper extends TestUtil {
 
 	/** Controls a set of {@link TestExecutionSlave}s to execute test cases from multiple processes simultaneously */
 	public static class TestExecutionMaster {
+		private static final Random RANDOM = new Random();
+
 		private final TestSetExecution theExecutor;
 		private final NavigableSet<String> thePlacemarkNames;
 		private final TestSlaveHandle[] theSlaves;
@@ -1053,9 +1055,8 @@ public class TestHelper extends TestUtil {
 				args.add(placemarkArg.toString());
 			}
 
-			Random random = new Random();
 			for (int p = 0; p < theSlaves.length; p++) {
-				String testerID = Long.toHexString(random.nextLong());
+				String testerID = Long.toHexString(RANDOM.nextLong());
 				args.set(testerIdIndex, "--testerID=" + testerID);
 				Process process;
 				try {
@@ -1541,7 +1542,7 @@ public class TestHelper extends TestUtil {
 		 *        </ul>
 		 */
 		public static void main(String[] clArgs) {
-			ArgumentParsing2.Arguments args = ArgumentParsing2.build()//
+			ArgumentParsing.Arguments args = ArgumentParsing.build()//
 				.forValuePattern(patt -> patt//
 					.addStringArgument("testerID", a -> a.required())//
 					.addStringArgument("testable", a -> a.required())//
@@ -1868,7 +1869,7 @@ public class TestHelper extends TestUtil {
 		return testFile;
 	}
 
-	private static final SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("ddMMMyyyy HH:mm:ss");
+	private static final String TIME_FORMAT = "ddMMMyyyy HH:mm:ss";
 
 	private static void writeTestFailures(File failureDir, Class<? extends Testable> testable, boolean qualifiedName,
 		NavigableSet<String> placemarkNames, List<TestFailure> failures) {
@@ -1887,6 +1888,7 @@ public class TestHelper extends TestUtil {
 			else
 				return f1.fixed.compareTo(f2.fixed);
 		});
+		SimpleDateFormat timeFormat = new SimpleDateFormat(TIME_FORMAT);
 		try (BufferedWriter writer = new BufferedWriter(new java.io.FileWriter(testFile))) {
 			writer.write("Failed,Fixed,Seed,Position");
 			for (String pn : placemarkNames)
@@ -1895,9 +1897,9 @@ public class TestHelper extends TestUtil {
 			StringBuilder csvLine = new StringBuilder();
 			for (TestFailure failure : failures) {
 				csvLine.setLength(0);
-				csvLine.append(TIME_FORMAT.format(new Date(failure.failed.toEpochMilli()))).append(',');
+				csvLine.append(timeFormat.format(new Date(failure.failed.toEpochMilli()))).append(',');
 				if (failure.fixed != null)
-					csvLine.append(TIME_FORMAT.format(new Date(failure.fixed.toEpochMilli())));
+					csvLine.append(timeFormat.format(new Date(failure.fixed.toEpochMilli())));
 				csvLine.append(',');
 				csvLine.append(Long.toHexString(failure.seed)).append(',').append(failure.bytes);
 				for (String pn : placemarkNames) {

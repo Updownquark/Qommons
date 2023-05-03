@@ -19,7 +19,7 @@ import java.util.stream.StreamSupport;
  * I really do hate to do this, but {@link java.util.BitSet} is missing some methods that I really need but can't implements without access
  * to private fields. It's a copy from JDK 11 with some augmentations.
  */
-public class BetterBitSet {
+public class BetterBitSet implements Cloneable {
 	/*
 	 * BitSets are packed into arrays of "words."  Currently a word is
 	 * a long, which consists of 64 bits, requiring 6 address bits.
@@ -1186,7 +1186,7 @@ public class BetterBitSet {
 		} else
 			index = word * BITS_PER_WORD - 1;
 
-		for (word--; word >= 0 && word >= 0; word--) {
+		for (word--; word >= 0; word--) {
 			if (words[word] != other.words[word])
 				break;
 			index -= BITS_PER_WORD;

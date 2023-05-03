@@ -282,7 +282,7 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 	 * @throws IOException If an error occurs writing the data
 	 */
 	public CircularCharBuffer writeContent(Writer writer, int offset, int length) throws IOException {
-		if (offset < 0 || length < 0 || offset + length > theLength)
+		if (offset < 0 || offset + length > theLength)
 			throw new IndexOutOfBoundsException(offset + " to " + (offset + length) + " of " + theLength);
 		if (length < 0)
 			length = theLength - offset;

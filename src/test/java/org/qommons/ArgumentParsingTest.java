@@ -10,12 +10,12 @@ import java.util.regex.Matcher;
 
 import org.junit.Assert;
 import org.junit.Test;
-import org.qommons.ArgumentParsing2.ArgumentParser;
-import org.qommons.ArgumentParsing2.Arguments;
+import org.qommons.ArgumentParsing.ArgumentParser;
+import org.qommons.ArgumentParsing.Arguments;
 
-/** Runs some tests on {@link ArgumentParsing2} */
-public class ArgumentParsing2Test {
-	private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("ddMMMyyyy HH:mm:ss");
+/** Runs some tests on {@link ArgumentParsing} */
+public class ArgumentParsingTest {
+	private static final String DATE_FORMAT = "ddMMMyyyy HH:mm:ss";
 
 	enum TestEnum {
 		One, Two, Three, File
@@ -24,9 +24,9 @@ public class ArgumentParsing2Test {
 	private ArgumentParser theParser;
 
 	void setup(boolean splitValues) {
-		theParser = ArgumentParsing2.build()//
+		theParser = ArgumentParsing.build()//
 			.forFlagPattern(flagArgs -> flagArgs.add("flag", null))//
-			.forValuePattern(splitValues ? ArgumentParsing2.SPLIT_VALUE_PATTERN : ArgumentParsing2.DEFAULT_VALUE_PATTERN,
+			.forValuePattern(splitValues ? ArgumentParsing.SPLIT_VALUE_PATTERN : ArgumentParsing.DEFAULT_VALUE_PATTERN,
 				valueArgs -> valueArgs//
 					.addBooleanArgument("bool-arg", a -> a.optional())//
 					.addIntArgument("int-arg", a -> a.optional().defaultValue(20))//
@@ -47,7 +47,7 @@ public class ArgumentParsing2Test {
 					.addFileArgument("file-arg2", a -> a.optional().relativeToFileArg("file-arg1")//
 						.when("file-arg1", File.class, c -> c.specified().not().forbidden())// Requires file-arg1
 				)//
-			).forValuePattern(splitValues ? ArgumentParsing2.SPLIT_MULTI_VALUE_PATTERN : ArgumentParsing2.DEFAULT_MULTI_VALUE_PATTERN, mvArgs -> mvArgs//
+			).forValuePattern(splitValues ? ArgumentParsing.SPLIT_MULTI_VALUE_PATTERN : ArgumentParsing.DEFAULT_MULTI_VALUE_PATTERN, mvArgs -> mvArgs//
 				.addIntArgument("multi-int-arg", null)//
 			).build().printHelpOnError(false);
 	}
@@ -56,6 +56,8 @@ public class ArgumentParsing2Test {
 	@Test
 	public void testArgumentParsing() {
 		setup(false);
+		SimpleDateFormat dateFormat = new SimpleDateFormat(DATE_FORMAT);
+
 		// Round 1
 		Arguments args = theParser.parse("--flag", "--long-arg=5", "--long-arg=6", "--enum-arg=One", "--string-arg=str",
 			"--pattern-arg=5-10");
@@ -73,7 +75,7 @@ public class ArgumentParsing2Test {
 		Assert.assertNull(args.get("file-arg2"));
 		Assert.assertEquals(20, args.get("int-arg", int.class).intValue());
 		try {
-			Assert.assertEquals(DATE_FORMAT.parse("25Dec2020 00:30:00").toInstant(), args.get("time-arg", Instant.class));
+			Assert.assertEquals(dateFormat.parse("25Dec2020 00:30:00").toInstant(), args.get("time-arg", Instant.class));
 		} catch (ParseException e) {
 			throw new IllegalStateException(e);
 		}
@@ -102,6 +104,8 @@ public class ArgumentParsing2Test {
 	@Test
 	public void testSplitArgumentParsing() {
 		setup(true);
+		SimpleDateFormat dateFormat = new SimpleDateFormat(DATE_FORMAT);
+
 		// Round 1
 		Arguments args = theParser.parse("--flag", "--long-arg", "5", "--long-arg", "6", "--enum-arg", "One", "--string-arg", "str",
 			"--pattern-arg", "5-10");
@@ -119,7 +123,7 @@ public class ArgumentParsing2Test {
 		Assert.assertNull(args.get("file-arg2"));
 		Assert.assertEquals(20, args.get("int-arg", int.class).intValue());
 		try {
-			Assert.assertEquals(DATE_FORMAT.parse("25Dec2020 00:30:00").toInstant(), args.get("time-arg", Instant.class));
+			Assert.assertEquals(dateFormat.parse("25Dec2020 00:30:00").toInstant(), args.get("time-arg", Instant.class));
 		} catch (ParseException e) {
 			throw new IllegalStateException(e);
 		}

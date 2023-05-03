@@ -1175,7 +1175,7 @@ public class TimeUtils {
 			int indexBump) {
 			if (element.getValue() == newValue)
 				return element;
-			String newText = null;
+			String newText;
 			if (element.getField() == DateElementType.Hour) {
 				if (elements.containsKey(DateElementType.AmPm))
 					newText = element.getParser().format(newValue);
@@ -1211,7 +1211,8 @@ public class TimeUtils {
 				else
 					newChar = lower ? 'p' : 'P';
 				newText = newText.substring(0, idx) + newChar + newText.substring(idx + 1);
-			}
+			} else
+				throw new IllegalArgumentException("Unadjustable element type: " + element.getField());
 			ParsedElement<DateElementType, Integer> newEl = new ParsedElement<>(element.getParser(), element.getStart() + indexBump,
 				element.getField(), newValue, newText);
 			return newEl;

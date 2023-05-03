@@ -1176,7 +1176,7 @@ public final class ArrayUtils {
 	 */
 	public static String toString(Object array) {
 		if(array == null)
-			return String.valueOf(null);
+			return "null";
 		else if(array instanceof Object []) {
 			Object [] oa = (Object []) array;
 			StringBuffer ret = new StringBuffer("[");

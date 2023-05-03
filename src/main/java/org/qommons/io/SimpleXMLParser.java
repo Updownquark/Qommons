@@ -815,7 +815,7 @@ public class SimpleXMLParser {
 		Set<String> attributes = null;
 		if (Character.isWhitespace(session.currentChar()))
 			session.skipWS();
-		while (session.currentChar() >= 0 && session.currentChar() != '/' && session.currentChar() != '>') {
+		while (session.currentChar() != '/' && session.currentChar() != '>') {
 			// Attribute
 			session.mark();
 			FilePosition pos = session.getFilePosition(false);
@@ -1182,9 +1182,9 @@ public class SimpleXMLParser {
 			char ch = nextChar();
 			if (ch >= '0' && ch <= '9')
 				return ch - '0';
-			else if (ch >= 'a' || ch < 'z')
+			else if (ch >= 'a' && ch <= 'z')
 				return ch - 'a' + 10;
-			else if (ch >= 'A' || ch < 'Z')
+			else if (ch >= 'A' && ch <= 'Z')
 				return ch - 'A' + 10;
 			else {
 				throwException(true, "Expected 4 hexadecimal digits for unicode escape sequence");

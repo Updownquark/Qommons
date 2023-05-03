@@ -909,7 +909,7 @@ public final class RedBlackNode<E> {
 
 	/** This is the rebalancing code from {@link java.util.TreeMap}, refactored for RedBlackTree. */
 	private static <E> RedBlackNode<E> fixAfterInsertion(RedBlackNode<E> x) {
-		while(x != null && isRed(x.theParent) && x.getParent().getParent() != null) {
+		while (isRed(x.theParent) && x.getParent().getParent() != null) {
 			boolean parentLeft = x.getParent().getSide();
 			RedBlackNode<E> y = x.getParent().getSibling();
 			if(isRed(y)) {

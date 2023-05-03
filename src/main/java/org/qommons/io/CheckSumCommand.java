@@ -34,6 +34,8 @@ public interface CheckSumCommand{
 			public String readOutput(Reader commandOut, CheckSumType type) throws IOException {
 				BufferedReader br = commandOut instanceof BufferedReader ? (BufferedReader) commandOut : new BufferedReader(commandOut);
 				String line = br.readLine();
+				if (line == null)
+					return line;
 				int space = line.indexOf(' ');
 				return space < 0 ? line : line.substring(0, space);
 			}
@@ -60,7 +62,7 @@ public interface CheckSumCommand{
 			public String readOutput(Reader commandOut, CheckSumType type) throws IOException {
 				BufferedReader br = commandOut instanceof BufferedReader ? (BufferedReader) commandOut : new BufferedReader(commandOut);
 				String line = br.readLine();
-				do {
+				while (line != null) {
 					if (line.length() >= type.hexChars) {
 						boolean isHash = true;
 						for (int i = 0; isHash && i < type.hexChars; i++) {
@@ -70,7 +72,7 @@ public interface CheckSumCommand{
 							return line.substring(0, type.hexChars);
 					}
 					line = br.readLine();
-				} while (line != null);
+				}
 				throw new IOException("Could not read checksum from command output");
 			}
 		})//
@@ -97,6 +99,8 @@ public interface CheckSumCommand{
 			public String readOutput(Reader commandOut, CheckSumType type) throws IOException {
 				BufferedReader br = commandOut instanceof BufferedReader ? (BufferedReader) commandOut : new BufferedReader(commandOut);
 				String line = br.readLine();
+				if (line == null)
+					return line;
 				int space = line.indexOf(' ');
 				return space < 0 ? line : line.substring(0, space);
 			}

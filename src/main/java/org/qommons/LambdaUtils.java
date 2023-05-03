@@ -836,7 +836,7 @@ public class LambdaUtils {
 				return true;
 			else if (!(obj instanceof MappedBiFunction2))
 				return false;
-			return theMap.equals(((MappedBiFunction1<?, ?, ?>) obj).theMap);
+			return theMap.equals(((MappedBiFunction2<?, ?, ?>) obj).theMap);
 		}
 
 		@Override

@@ -3,7 +3,6 @@ package org.qommons.collect;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
-import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -54,7 +53,7 @@ public class SimpleMultiEntry<K, V> implements MultiMap.MultiEntry<K, V> {
 
 	@Override
 	public boolean equals(Object o) {
-		return o instanceof Map.Entry && Objects.equals(((Map.Entry<?, ?>) o).getKey(), theKey);
+		return o instanceof MultiMap.MultiEntry && Objects.equals(((MultiMap.MultiEntry<?, ?>) o).getKey(), theKey);
 	}
 
 	@Override

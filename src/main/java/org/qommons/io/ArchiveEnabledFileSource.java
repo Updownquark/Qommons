@@ -1242,7 +1242,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 					long position = getLong(buffer, theBufferOffset + 42);
 
 					int headerLength = 46 + nameLen + extraLen + commentLen;
-					if (disk == 0xffff || uncompressedSize == 0xffffffffL || uncompressedSize == 0xffffffffL || position == 0xffffffffL) {
+					if (disk == 0xffff || uncompressedSize == 0xffffffffL || position == 0xffffffffL) {
 						// Zip64, need to find and apply the special Zip64 header extension
 						boolean foundZipHeader = false;
 						int extraOffset = theBufferOffset + 46 + nameLen;

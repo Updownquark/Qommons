@@ -471,7 +471,7 @@ public class CircularArrayList<E> implements DequeList<E> {
 		int size = theSize;
 		if (size == 0)
 			return null;
-		return size == 0 ? null : (E) array[offset];
+		return (E) array[offset];
 	}
 
 	@Override
@@ -481,7 +481,7 @@ public class CircularArrayList<E> implements DequeList<E> {
 		int size = theSize;
 		if (size == 0)
 			return null;
-		return size == 0 ? null : (E) array[translateToInternalIndex(array, offset, size, size - 1)];
+		return (E) array[translateToInternalIndex(array, offset, size, size - 1)];
 	}
 
 	@Override
@@ -714,8 +714,6 @@ public class CircularArrayList<E> implements DequeList<E> {
 		if (theSize == 0)
 			return false;
 		int removed = 0;
-		if (theSize == 0)
-			return false;
 		int cap = theArray.length;
 		int inspect = theOffset;
 		int copyTo = inspect;

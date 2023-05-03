@@ -134,6 +134,8 @@ public class RedBlackTree<E> {
 			RedBlackNode<E> other = node.getClosest(false);
 			if (other != null)
 				closest = other;
+			else
+				return true;
 		}
 		RedBlackNode<E> left = closest.getClosest(true);
 		RedBlackNode<E> right = closest.getClosest(false);

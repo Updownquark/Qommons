@@ -41,7 +41,7 @@ import javax.swing.JLabel;
 import javax.swing.JProgressBar;
 import javax.swing.Timer;
 
-import org.qommons.ArgumentParsing2;
+import org.qommons.ArgumentParsing;
 import org.qommons.BiTuple;
 import org.qommons.Named;
 import org.qommons.Range;
@@ -1329,7 +1329,7 @@ public class OsgiBundleSet {
 		for (Bundle bundle : getBundles()) {
 			for (OsgiManifest.ManifestEntry component : bundle.getManifest().getAll("Service-Component")) {
 				String componentName = component.getValue();
-				if (configuration != null) {
+				if (!configuration.isEmpty()) {
 					String excludes = component.getAttributes().get("exclude-configurations");
 					if (excludes != null) {
 						boolean found = false;
@@ -1345,7 +1345,7 @@ public class OsgiBundleSet {
 				}
 				String includes = component.getAttributes().get("include-configurations");
 				if (includes != null) {
-					if (configuration == null)
+					if (configuration.isEmpty())
 						continue;
 					boolean found = false;
 					for (String cfg : includes.split(",")) {
@@ -1479,7 +1479,7 @@ public class OsgiBundleSet {
 		try {
 			BetterFile.FileDataSource fds = new ArchiveEnabledFileSource(new NativeFileSource())//
 				.withArchival(new ArchiveEnabledFileSource.ZipCompression());
-			ArgumentParsing2.Arguments args = ArgumentParsing2.build()//
+			ArgumentParsing.Arguments args = ArgumentParsing.build()//
 				.forFlagPattern(argSet -> {
 					argSet.add("jar", null)//
 					;

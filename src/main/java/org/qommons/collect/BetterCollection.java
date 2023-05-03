@@ -801,6 +801,8 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return Whether <code>o</code> is a collection whose content matches that of <code>c</code>
 	 */
 	public static boolean equals(Collection<?> c, Object o) {
+		if (o == null)
+			return false;
 		try (Transaction t = Lockable.lockAll(//
 			c instanceof Transactable ? Lockable.lockable((Transactable) c, false, null) : null, //
 			o instanceof Transactable ? Lockable.lockable((Transactable) o, false, null) : null)) {

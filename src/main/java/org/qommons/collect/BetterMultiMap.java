@@ -1353,9 +1353,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 				currentKey = mvBefore != null;
 				MultiEntryHandle<K, V> keyEntry = theMap.getEntryById(mvBefore.keyId);
 				while (keyEntry != null) {
-					msg = keyEntry.getValues().canAdd(value, //
-						mvBefore.keyId.equals(keyEntry.getElementId()) ? mvBefore.valueId : null, //
-						currentKey ? mvAfter.valueId : null);
+					msg = keyEntry.getValues().canAdd(value, null, //
+						mvBefore.keyId.equals(keyEntry.getElementId()) ? mvBefore.valueId : null);
 					if (msg == null)
 						return null;
 					keyEntry = theMap.getAdjacentEntry(keyEntry.getElementId(), false);

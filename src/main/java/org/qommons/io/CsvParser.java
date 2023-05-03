@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 
-import org.qommons.ArgumentParsing2;
+import org.qommons.ArgumentParsing;
 import org.qommons.IntList;
 import org.qommons.collect.QuickSet;
 import org.qommons.collect.QuickSet.QuickMap;
@@ -281,7 +281,6 @@ public class CsvParser {
 	 * @throws TextParseException always
 	 */
 	public void throwParseException(int columnIndex, int errorOffset, String message) throws TextParseException {
-		throwParseException(columnIndex, errorOffset, message);
 		int colOffset = getColumnOffset(columnIndex);
 		throw new TextParseException(message, colOffset + errorOffset, theLastLineNumber, columnIndex);
 	}
@@ -465,7 +464,7 @@ public class CsvParser {
 	 * @param args Command line arguments determining the location of the source and target files, the filtering, and the delimiter.
 	 */
 	public static void main(String[] args) {
-		ArgumentParsing2.Arguments parsedArgs = ArgumentParsing2.build().forValuePattern(a -> {
+		ArgumentParsing.Arguments parsedArgs = ArgumentParsing.build().forValuePattern(a -> {
 			a.addBetterFileArgument("src", f -> f.required().directory(false).mustExist(true))//
 				.addBetterFileArgument("target", f -> f.required().directory(false).create(true))//
 				.addPatternArgument("filter", "(?<column>.+)=(?<value>.*)", a2 -> a2.times(0, Integer.MAX_VALUE))//

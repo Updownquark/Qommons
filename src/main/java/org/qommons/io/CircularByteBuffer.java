@@ -347,7 +347,7 @@ public class CircularByteBuffer implements StringUtils.BinaryAccumulator {
 	 * @throws IOException If an error occurs writing the data
 	 */
 	public CircularByteBuffer writeContent(OutputStream output, int offset, int length) throws IOException {
-		if (offset < 0 || length < 0 || offset + length > theLength)
+		if (offset < 0 || offset + length > theLength)
 			throw new IndexOutOfBoundsException(offset + " to " + (offset + length) + " of " + theLength);
 		if (length < 0)
 			length = theLength - offset;
