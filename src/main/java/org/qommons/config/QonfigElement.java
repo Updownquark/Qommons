@@ -742,7 +742,8 @@ public class QonfigElement implements FileSourced {
 			for (int i = parsedAttrs.nextClearBit(0); i >= 0; i = parsedAttrs.nextClearBit(i + 1)) {
 				if (i >= theDeclaredAttributes.size())
 					break;
-				theErrors.forChild("attribute", theFilePosition).error("No such attribute found");
+				theErrors.forChild("attribute", new LocatedFilePosition(theDocument.getLocation(), theDeclaredAttributes.get(i).position))
+					.error("No such attribute found: '" + theDeclaredAttributes.get(i) + "'");
 			}
 			// Now that we know our inheritance completely, we need to check all the attributes we've parsed
 			// to make sure they still match exactly one attribute definition.

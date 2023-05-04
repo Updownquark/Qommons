@@ -3,6 +3,8 @@ package org.qommons.config;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.qommons.io.FilePosition;
+
 /** Represents the specification of an {@link QonfigElementOwned element-owned item} from a stream */
 public class ElementQualifiedParseItem {
 	/** The pattern to parse qualified names */
@@ -17,18 +19,23 @@ public class ElementQualifiedParseItem {
 	public final QonfigElementOrAddOn declaredElement;
 	/** The name of the item */
 	public final String itemName;
+	/** The position of the item */
+	public final FilePosition position;
 
 	/**
 	 * @param ns The namespace qualifier for the element
 	 * @param declaredElementName The name of the element qualifier
 	 * @param declaredElement The qualifying element
 	 * @param itemName The name of the item
+	 * @param position The position of the item
 	 */
-	public ElementQualifiedParseItem(String ns, String declaredElementName, QonfigElementOrAddOn declaredElement, String itemName) {
+	public ElementQualifiedParseItem(String ns, String declaredElementName, QonfigElementOrAddOn declaredElement, String itemName,
+		FilePosition position) {
 		declaredNamespace = ns;
 		this.declaredElementName = declaredElementName;
 		this.declaredElement = declaredElement;
 		this.itemName = itemName;
+		this.position = position;
 	}
 
 	/** @return The qualifier, as it wa specified, or the empty string if there was no qualifier */
@@ -57,9 +64,10 @@ public class ElementQualifiedParseItem {
 	/**
 	 * @param item The string to parse the qualified item from
 	 * @param session The session to get the toolkit from and log errors to
+	 * @param position The position of the item to be parsed
 	 * @return The qualified item, or null if it could not be parsed
 	 */
-	public static ElementQualifiedParseItem parse(String item, QonfigParseSession session) {
+	public static ElementQualifiedParseItem parse(String item, QonfigParseSession session, FilePosition position) {
 		Matcher m = QUALIFIED_ITEM_NAME.matcher(item);
 		if (m.matches()) {
 			QonfigElementOrAddOn qualifier;
@@ -76,8 +84,8 @@ public class ElementQualifiedParseItem {
 			String ns = m.group("ns");
 			String elName = m.group("element");
 			String itemName = m.group("attribute");
-			return new ElementQualifiedParseItem(ns, elName, qualifier, itemName);
+			return new ElementQualifiedParseItem(ns, elName, qualifier, itemName, position);
 		} else
-			return new ElementQualifiedParseItem(null, null, null, item);
+			return new ElementQualifiedParseItem(null, null, null, item, position);
 	}
 }

@@ -240,7 +240,8 @@ public class DefaultQonfigParser implements QonfigParser {
 					}
 				} else if ("role".equals(attr.getKey())) {//
 				} else {
-					ElementQualifiedParseItem qAttr = ElementQualifiedParseItem.parse(attr.getKey(), session);
+					ElementQualifiedParseItem qAttr = ElementQualifiedParseItem.parse(attr.getKey(), session,
+						el.getAttributeNamePosition(attr.getKey()));
 					builder.withAttribute(qAttr, new AttParser(attr.getValue(), el.getAttributeValuePosition(attr.getKey())),
 						el.getAttributeNamePosition(attr.getKey()));
 				}
@@ -287,23 +288,49 @@ public class DefaultQonfigParser implements QonfigParser {
 			List<ElementQualifiedParseItem> roles;
 			if (roleAttr == null)
 				roles = Collections.emptyList();
-			else {
-				String[] split = roleAttr.split(",");
-				roles = new ArrayList<>(split.length);
-				for (String s : split) {
-					s = s.trim();
-					try {
-						roles.add(ElementQualifiedParseItem.parse(s, session));
-					} catch (IllegalArgumentException e) {
-						childSession.error(e.getMessage());
-					}
-				}
-			}
+			else
+				roles = parseRoles(roleAttr, child.getAttributeValuePosition("role"), childSession);
 			builder.withChild(roles, childType, cb -> {
 				parseDocElement(childSession, cb, child, true, __ -> true);
 			}, SimpleXMLParser.getNamePosition(child.getElement()));
 		}
 		return builder.build();
+	}
+
+	private static List<ElementQualifiedParseItem> parseRoles(String roleAttr, ContentPosition position, QonfigParseSession session) {
+		List<ElementQualifiedParseItem> roles = null;
+		int start = 0;
+		for (int c = 0; c < roleAttr.length(); c++) {
+			if (Character.isWhitespace(roleAttr.charAt(c))) {
+				if (c > start) {
+					String roleName = roleAttr.substring(start, c);
+					if (roles == null)
+						roles = new ArrayList<>();
+					try {
+						roles.add(ElementQualifiedParseItem.parse(roleName, session, position.getPosition(start)));
+					} catch (IllegalArgumentException e) {
+						session.error(e.getMessage());
+					}
+				}
+				start = c + 1;
+			}
+		}
+		if (start < roleAttr.length()) {
+			String roleName = roleAttr.substring(start);
+			ElementQualifiedParseItem lastRole;
+			try {
+				lastRole = ElementQualifiedParseItem.parse(roleName, session, position.getPosition(start));
+				if (roles == null)
+					return Arrays.asList(lastRole);
+				roles.add(lastRole);
+			} catch (IllegalArgumentException e) {
+				session.error(e.getMessage());
+			}
+		}
+		if (roles == null)
+			return Collections.emptyList();
+		((ArrayList<?>) roles).trimToSize();
+		return roles;
 	}
 
 	private static class AttParser implements QonfigElement.AttributeValue {
@@ -1031,7 +1058,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					continue;
 				}
 				ElementQualifiedParseItem qAttr;
-				qAttr = ElementQualifiedParseItem.parse(attrName, attrSession);
+				qAttr = ElementQualifiedParseItem.parse(attrName, attrSession, attr.getAttributeValuePosition("name").getPosition(0));
 				if (qAttr == null)
 					continue;
 				QonfigElementOrAddOn qualifier = qAttr.declaredElement != null ? qAttr.declaredElement : builder.get();
@@ -1115,12 +1142,9 @@ public class DefaultQonfigParser implements QonfigParser {
 					rolesS = null;
 				}
 				if (rolesS != null) {
-					roles = new LinkedHashSet<>(7);
-					for (String roleName : rolesS.split(",")) {
-						roleName = roleName.trim();
-						ElementQualifiedParseItem parsedRole = ElementQualifiedParseItem.parse(roleName, builder.getSession());
-						if (parsedRole == null)
-							continue;
+					List<ElementQualifiedParseItem> parsedRoles = parseRoles(rolesS, child.getAttributeValuePosition("role"), childSession);
+					roles = new LinkedHashSet<>(parsedRoles.size() * 3 / 2);
+					for (ElementQualifiedParseItem parsedRole : parsedRoles) {
 						QonfigElementOrAddOn qualifier;
 						if (parsedRole.declaredElement != null)
 							qualifier = parsedRole.declaredElement;
@@ -1268,7 +1292,8 @@ public class DefaultQonfigParser implements QonfigParser {
 				QonfigParseSession childSession = builder.getSession().forChild(child.getName(), child.getNamePosition());
 				QonfigChildDef.Declared overridden;
 				{
-					ElementQualifiedParseItem parsedRole = ElementQualifiedParseItem.parse(name, builder.getSession());
+					ElementQualifiedParseItem parsedRole = ElementQualifiedParseItem.parse(name, builder.getSession(),
+						child.getAttributeValuePosition(childAttrName).getPosition(0));
 					if (parsedRole == null)
 						continue;
 					QonfigElementOrAddOn qualifier;
