@@ -126,30 +126,25 @@ public class Primes {
 		if (maxPrime <= 0)
 			throw new IllegalArgumentException("Max prime must be greater than zero");
 		int lastPrime = getPrimeLTE(maxPrime);
-		return new Iterable<Integer>() {
+		return () -> new Iterator<Integer>() {
+			private int nextPrime = 0;
+			private Boolean hasNext;
+
 			@Override
-			public Iterator<Integer> iterator() {
-				return new Iterator<Integer>() {
-					private int nextPrime = 0;
-					private Boolean hasNext;
+			public boolean hasNext() {
+				if (hasNext == null) {
+					nextPrime = getPrimeGTE(nextPrime + 1);
+					hasNext = nextPrime <= lastPrime;
+				}
+				return hasNext;
+			}
 
-					@Override
-					public boolean hasNext() {
-						if (hasNext == null) {
-							nextPrime = getPrimeGTE(nextPrime + 1);
-							hasNext = nextPrime <= lastPrime;
-						}
-						return hasNext;
-					}
-
-					@Override
-					public Integer next() {
-						if (!hasNext())
-							throw new NoSuchElementException();
-						hasNext = null;
-						return nextPrime;
-					}
-				};
+			@Override
+			public Integer next() {
+				if (!hasNext())
+					throw new NoSuchElementException();
+				hasNext = null;
+				return nextPrime;
 			}
 		};
 	}
@@ -174,16 +169,20 @@ public class Primes {
 			return new IntList(new int[] { 1 });
 		Iterator<Integer> primes = primesUntil(maxPrime).iterator();
 		IntList factored = new IntList(false, false);
+		int lastPrime = 1;
 		long remainder = value;
-		while (remainder > 1 && primes.hasNext()) {
+		while (remainder > lastPrime && primes.hasNext()) {
 			int prime = primes.next();
 			while ((remainder % prime) == 0) {
 				factored.add(prime);
 				remainder /= prime;
 			}
+			lastPrime = prime;
 		}
-		if (remainder > 1) // Couldn't factorize completely
+		if (remainder > lastPrime) // Couldn't factorize completely
 			factored.add(-1);
+		else if (remainder > 1)
+			factored.add((int) remainder);
 		return factored;
 	}
 
