@@ -1218,7 +1218,8 @@ public class SimpleXMLParser {
 
 		@Override
 		public FilePosition getPosition(int index) {
-			theContent.charAt(index); // Check the index
+			if (index > theContent.length())
+				throw new IndexOutOfBoundsException(index + " of " + theContent.length());
 			int line = Arrays.binarySearch(theLineBreaks, index);
 			if (line < 0)
 				line = -line - 1;
