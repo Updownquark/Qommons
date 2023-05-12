@@ -30,6 +30,22 @@ public interface Transformer<X extends Throwable> {
 		 * @throws X If the modification fails
 		 */
 		<T2 extends T> T2 modify(S source, T2 value, Transformer<X> tx) throws X;
+
+		public class Composite<S, T, X extends Throwable> implements Modifier<S, T, X> {
+			private final Modifier<? super S, T, X> theFirst;
+			private final Modifier<? super S, T, X> theSecond;
+
+			public Composite(Modifier<? super S, T, X> first, Modifier<? super S, T, X> second) {
+				theFirst = first;
+				theSecond = second;
+			}
+
+			@Override
+			public <T2 extends T> T2 modify(S source, T2 value, Transformer<X> tx) throws X {
+				T2 interm = theFirst.modify(source, value, tx);
+				return theSecond.modify(source, interm, tx);
+			}
+		}
 	}
 	/**
 	 * @param <T> The type of the value to transform the source into
@@ -100,10 +116,15 @@ public interface Transformer<X extends Throwable> {
 		 * @param modifier The modifier for transformed values
 		 * @return This builder
 		 */
-		public <S, T> Builder<X> modifyWith(Class<S> sourceType, Class<T> targetType, Modifier<? super S, ? super T, X> modifier) {
-			ClassMap<Modifier<?, ? super T, X>> targetModifiers;
-			targetModifiers = (ClassMap<Modifier<?, ? super T, X>>) theModifiers.computeIfAbsent(targetType, () -> new ClassMap<>());
-			targetModifiers.put(sourceType, modifier);
+		public <S, T> Builder<X> modifyWith(Class<S> sourceType, Class<T> targetType, Modifier<? super S, T, X> modifier) {
+			ClassMap<Modifier<?, T, X>> targetModifiers;
+			targetModifiers = (ClassMap<Modifier<?, T, X>>) theModifiers.computeIfAbsent(targetType, () -> new ClassMap<>());
+			targetModifiers.compute(sourceType, pre -> {
+				if (pre == null)
+					return modifier;
+				else
+					return new Modifier.Composite<>((Modifier<S, T, X>) pre, modifier);
+			});
 			return this;
 		}
 
