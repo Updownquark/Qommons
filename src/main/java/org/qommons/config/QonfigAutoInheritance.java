@@ -8,7 +8,7 @@ import java.util.function.Consumer;
 
 import org.qommons.MultiInheritanceSet;
 import org.qommons.QommonsUtils;
-import org.qommons.io.FilePosition;
+import org.qommons.io.ContentPosition;
 
 /** A set of add-ons that shall be inherited automatically by elements matching a condition */
 public class QonfigAutoInheritance {
@@ -109,7 +109,7 @@ public class QonfigAutoInheritance {
 		 * @return This compiler
 		 */
 		public Compiler add(QonfigElementOrAddOn type, Consumer<QonfigAddOn> inheritance) {
-			if (theTested.add(type)) {
+			if (type != null && theTested.add(type)) {
 				for (QonfigToolkit toolkit : theToolkits) {
 					MultiInheritanceSet<QonfigAddOn> autoInh = toolkit.getAutoInheritance(type, theRoles);
 					for (QonfigAddOn inh : autoInh.values()) {
@@ -198,18 +198,18 @@ public class QonfigAutoInheritance {
 		 * @param position The position in the file where the target was defined
 		 * @return This builder
 		 */
-		public Builder withTarget(QonfigElementOrAddOn target, QonfigChildDef role, FilePosition position) {
+		public Builder withTarget(QonfigElementOrAddOn target, QonfigChildDef role, ContentPosition position) {
 			if (target == null && role == null) {
-				theSession.forChild("target", position)
+				theSession.at(position)
 					.error("Either a target or a role or both must be specified for an auto-inheritance target");
 				return this;
 			}
 			AutoInheritTarget ait = new AutoInheritTarget(target, role);
-			QonfigParseSession targetSession = theSession.forChild("target", position);
+			QonfigParseSession targetSession = theSession.at(position);
 			if (role != null && role.getMax() == 0)
 				targetSession
 					.error("As no children are allowed in role " + role + ", this role cannot be targeted for auto-inheritance");
-			if (target != null && role != null && !role.getType().isAssignableFrom(target))
+			if (target != null && role != null && role.getType() != null && !role.getType().isAssignableFrom(target))
 				targetSession.error("Target " + target + " cannot fulfill role " + role + ", which requires " + role.getType());
 			for (QonfigAddOn inheritance : theInheritance.values())
 				checkInheritance(ait, inheritance, targetSession);
@@ -221,7 +221,8 @@ public class QonfigAutoInheritance {
 			if (inheritance.getSuperElement() == null)
 				return;
 			if (ait.getTarget() != null && inheritance.getSuperElement().isAssignableFrom(ait.getTarget())) {//
-			} else if (ait.getRole() != null && inheritance.getSuperElement().isAssignableFrom(ait.getRole().getType())) {//
+			} else if (ait.getRole() != null && ait.getRole().getType() != null
+				&& inheritance.getSuperElement().isAssignableFrom(ait.getRole().getType())) {//
 			} else
 				session
 					.error("Cannot target " + ait + " to inherit " + inheritance + ", which requires "

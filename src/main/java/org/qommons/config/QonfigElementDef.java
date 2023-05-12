@@ -6,7 +6,7 @@ import java.util.Set;
 import org.qommons.MultiInheritanceSet;
 import org.qommons.collect.BetterMultiMap;
 import org.qommons.config.QonfigAttributeDef.Declared;
-import org.qommons.io.FilePosition;
+import org.qommons.io.ContentPosition;
 
 /** The definition of an element that can be declared in a document */
 public class QonfigElementDef extends QonfigElementOrAddOn {
@@ -21,7 +21,7 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		Map<QonfigAttributeDef.Declared, QonfigAttributeDef> allAttributes, BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
 		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ChildDefModifier> childModifiers,
 		Map<QonfigChildDef.Declared, QonfigChildDef> allChildren, BetterMultiMap<String, QonfigChildDef> childrenByName, //
-		ValueDefModifier value, MultiInheritanceSet<QonfigAddOn> fullInheritance, QonfigElementDef metaSpec, FilePosition position) {
+		ValueDefModifier value, MultiInheritanceSet<QonfigAddOn> fullInheritance, QonfigElementDef metaSpec, ContentPosition position) {
 		super(declarer, name, isAbstract, superElement, inheritance, fullInheritance, declaredAttributes, attributeModifiers,
 			attributesByName, declaredChildren, childModifiers, childrenByName, value, metaSpec, position);
 		theCompiledAttributes = allAttributes;
@@ -117,11 +117,10 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 
 		@Override
 		protected ChildDefModifier childModifier(QonfigChildDef.Declared child, QonfigElementDef type, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, Integer min, Integer max, FilePosition position) {
+			Set<QonfigAddOn> requirement, Integer min, Integer max, ContentPosition position) {
 			QonfigChildDef override = getCompiledChildren().get(child.getDeclared());
 			if (override instanceof QonfigChildDef.Overridden) {
-				theSession.forChild("child-mod", position)
-					.error("Child has been overridden by " + ((QonfigChildDef.Overridden) override).getOverriding());
+				theSession.at(position).error("Child has been overridden by " + ((QonfigChildDef.Overridden) override).getOverriding());
 				return null;
 			}
 			return new ChildDefModifier.Default(type, inheritance, requirement, min, max, position);
@@ -135,7 +134,7 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildDefModifier>) getChildModifiers(), getCompiledChildren(),
 				getChildrenByName(), //
 				getValue(), getFullInheritance(), //
-				getMetaSpec() == null ? null : (QonfigElementDef) getMetaSpec().get(), getSession().getPath().getFilePosition());
+				getMetaSpec() == null ? null : (QonfigElementDef) getMetaSpec().get(), getSession().getFrame());
 		}
 	}
 }

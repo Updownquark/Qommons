@@ -4,7 +4,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
-import org.qommons.io.FilePosition;
+import org.qommons.io.ContentPosition;
 
 /** Modifies an inherited child */
 public interface ChildDefModifier extends ElementDefModifier {
@@ -41,7 +41,7 @@ public interface ChildDefModifier extends ElementDefModifier {
 		private final Set<QonfigAddOn> theRequirement;
 		private final Integer theMin;
 		private final Integer theMax;
-		private final FilePosition thePosition;
+		private final ContentPosition thePosition;
 
 		/**
 		 * @param typeRestriction The type restriction for the child, or null to inherit it
@@ -53,7 +53,7 @@ public interface ChildDefModifier extends ElementDefModifier {
 		 * @param position The position in the file where this child was defined
 		 */
 		public Default(QonfigElementDef typeRestriction, Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, Integer min,
-			Integer max, FilePosition position) {
+			Integer max, ContentPosition position) {
 			theTypeRestriction = typeRestriction;
 			theInheritance = inheritance;
 			theRequirement = requirement;
@@ -88,7 +88,7 @@ public interface ChildDefModifier extends ElementDefModifier {
 		}
 
 		@Override
-		public FilePosition getFilePosition() {
+		public ContentPosition getFilePosition() {
 			return thePosition;
 		}
 	}

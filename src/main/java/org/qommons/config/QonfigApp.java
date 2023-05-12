@@ -138,7 +138,8 @@ public class QonfigApp {
 			} catch (XmlParseException e) {
 				throw new IllegalArgumentException("Could not parse toolkit XML: " + appDef.getLocation(), e);
 			} catch (QonfigParseException e) {
-				throw new IllegalStateException("Could not parse toolkit " + toolkitDef, e);
+				e.printStackTrace();
+				throw new IllegalStateException("Could not parse toolkit " + toolkitDef);
 			} catch (RuntimeException e) {
 				throw new IllegalStateException("Could not parse toolkit " + toolkitDef, e);
 			}
@@ -191,7 +192,7 @@ public class QonfigApp {
 				elType = Class.forName(el.getValueText());
 			} catch (ClassNotFoundException e) {
 				throw QonfigParseException.createSimple(el.getDocument().getLocation(), el.getType().getName(),
-					el.getValue().position.getPosition(0), "No such " + type.getSimpleName() + " findable: " + el.getValueText(), e);
+					el.getValue().position, "No such " + type.getSimpleName() + " findable: " + el.getValueText(), e);
 			}
 			if (!type.isAssignableFrom(elType))
 				throw new IllegalArgumentException("Class " + elType.getName() + " is not a " + type.getName());
@@ -200,11 +201,11 @@ public class QonfigApp {
 				value = (T) elType.newInstance();
 			} catch (IllegalAccessException e) {
 				throw QonfigParseException.createSimple(el.getDocument().getLocation(), el.getType().getName(),
-					el.getValue().position.getPosition(0),
+					el.getValue().position,
 					"Could not access " + type.getSimpleName() + " " + elType.getName() + " for instantiation", e);
 			} catch (InstantiationException e) {
 				throw QonfigParseException.createSimple(el.getDocument().getLocation(), el.getType().getName(),
-					el.getValue().position.getPosition(0), "Could not instantiate " + type.getSimpleName() + " " + elType.getName(), e);
+					el.getValue().position, "Could not instantiate " + type.getSimpleName() + " " + elType.getName(), e);
 			}
 			values.add(value);
 		}

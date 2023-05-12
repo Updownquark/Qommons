@@ -3,7 +3,7 @@ package org.qommons.config;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.qommons.io.FilePosition;
+import org.qommons.io.ContentPosition;
 
 /** Represents the specification of an {@link QonfigElementOwned element-owned item} from a stream */
 public class ElementQualifiedParseItem {
@@ -20,7 +20,7 @@ public class ElementQualifiedParseItem {
 	/** The name of the item */
 	public final String itemName;
 	/** The position of the item */
-	public final FilePosition position;
+	public final ContentPosition position;
 
 	/**
 	 * @param ns The namespace qualifier for the element
@@ -30,7 +30,7 @@ public class ElementQualifiedParseItem {
 	 * @param position The position of the item
 	 */
 	public ElementQualifiedParseItem(String ns, String declaredElementName, QonfigElementOrAddOn declaredElement, String itemName,
-		FilePosition position) {
+		ContentPosition position) {
 		declaredNamespace = ns;
 		this.declaredElementName = declaredElementName;
 		this.declaredElement = declaredElement;
@@ -67,7 +67,7 @@ public class ElementQualifiedParseItem {
 	 * @param position The position of the item to be parsed
 	 * @return The qualified item, or null if it could not be parsed
 	 */
-	public static ElementQualifiedParseItem parse(String item, QonfigParseSession session, FilePosition position) {
+	public static ElementQualifiedParseItem parse(String item, QonfigParseSession session, ContentPosition position) {
 		Matcher m = QUALIFIED_ITEM_NAME.matcher(item);
 		if (m.matches()) {
 			QonfigElementOrAddOn qualifier;

@@ -19,9 +19,10 @@ import org.qommons.collect.BetterHashMultiMap;
 import org.qommons.collect.BetterHashSet;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.BetterMultiMap;
-import org.qommons.io.FilePosition;
+import org.qommons.io.ContentPosition;
+import org.qommons.io.ErrorReporting;
+import org.qommons.io.LocatedContentPosition;
 import org.qommons.io.LocatedFilePosition;
-import org.qommons.io.SimpleXMLParser.ContentPosition;
 
 /** An element in a Qonfig document */
 public class QonfigElement implements FileSourced {
@@ -66,12 +67,12 @@ public class QonfigElement implements FileSourced {
 	private final List<QonfigElement> theChildren;
 	private final BetterMultiMap<QonfigChildDef.Declared, QonfigElement> theChildrenByRole;
 	private final QonfigValue theValue;
-	private final FilePosition theFilePosition;
+	private final LocatedContentPosition theFilePosition;
 
 	private QonfigElement(QonfigDocument doc, QonfigElement parent, QonfigElementDef type, MultiInheritanceSet<QonfigAddOn> inheritance,
 		Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles,
 		Map<QonfigAttributeDef.Declared, QonfigValue> attributes, List<QonfigElement> children,
-		BetterMultiMap<QonfigChildDef.Declared, QonfigElement> childrenByRole, QonfigValue value, FilePosition filePosition) {
+		BetterMultiMap<QonfigChildDef.Declared, QonfigElement> childrenByRole, QonfigValue value, LocatedContentPosition filePosition) {
 		if (doc.getRoot() == null)
 			doc.setRoot(this);
 		theDocument = doc;
@@ -118,13 +119,13 @@ public class QonfigElement implements FileSourced {
 	}
 
 	@Override
-	public FilePosition getFilePosition() {
+	public LocatedContentPosition getFilePosition() {
 		return theFilePosition;
 	}
 
 	/** @return The position in the file where the start of this element was declared */
 	public LocatedFilePosition getPositionInFile() {
-		return new LocatedFilePosition(getDocument().getLocation(), getFilePosition());
+		return getFilePosition().getPosition(0);
 	}
 
 	/**
@@ -316,11 +317,10 @@ public class QonfigElement implements FileSourced {
 	 * @param child The role for the new child to fill
 	 * @param type The element type of the new child
 	 * @param errors The error reporting for the builder
-	 * @param position The file position where the child was defined
 	 * @return A builder for a new, disconnected child of this element
 	 */
-	public Builder synthesizeChild(QonfigChildDef child, QonfigElementDef type, ErrorReporting errors, FilePosition position) {
-		return new Builder(errors, getDocument(), this, type, Collections.singleton(child), Collections.emptySet(), position);
+	public Builder synthesizeChild(QonfigChildDef child, QonfigElementDef type, ErrorReporting errors) {
+		return new Builder(errors, getDocument(), this, type, Collections.singleton(child), Collections.emptySet());
 	}
 
 	@Override
@@ -343,12 +343,10 @@ public class QonfigElement implements FileSourced {
 	 * @param doc The document being parsed
 	 * @param parent The parent for the new element
 	 * @param type The declared type of the element
-	 * @param position The file position where the element was defined
 	 * @return A builder for an element
 	 */
-	public static Builder build(QonfigParseSession session, QonfigDocument doc, QonfigElement parent, QonfigElementDef type,
-		FilePosition position) {
-		return new Builder(session, doc, parent, type, Collections.emptySet(), Collections.emptySet(), position);
+	public static Builder build(QonfigParseSession session, QonfigDocument doc, QonfigElement parent, QonfigElementDef type) {
+		return new Builder(session, doc, parent, type, Collections.emptySet(), Collections.emptySet());
 	}
 
 	/** Represents an attribute value before it is parsed */
@@ -378,7 +376,6 @@ public class QonfigElement implements FileSourced {
 		private final QonfigElement theParent;
 		private final QonfigElementDef theType;
 		private final MultiInheritanceSet<QonfigAddOn> theInheritance;
-		private final FilePosition theFilePosition;
 		private final QonfigAutoInheritance.Compiler theAutoInheritance;
 		private final List<ElementQualifiedParseItem> theDeclaredAttributes;
 		private final List<AttributeValue> theDeclaredAttributeValues;
@@ -391,7 +388,7 @@ public class QonfigElement implements FileSourced {
 		private int theStage;
 
 		Builder(ErrorReporting errors, QonfigDocument doc, QonfigElement parent, QonfigElementDef type,
-			Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles, FilePosition filePosition) {
+			Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles) {
 			if (type.isAbstract())
 				errors.error("Elements cannot be declared directly for abstract type " + type);
 			theErrors = errors;
@@ -405,9 +402,8 @@ public class QonfigElement implements FileSourced {
 			theChildren = new ArrayList<>();
 			theChildrenByRole = BetterHashMultiMap.<QonfigChildDef.Declared, QonfigElement> build().buildMultiMap();
 			theInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
-			theFilePosition = filePosition;
 			for (QonfigChildDef child : parentRoles) {
-				if (!child.getType().isAssignableFrom(type))
+				if (child.getType() != null && !child.getType().isAssignableFrom(type))
 					errors
 						.error("This element (" + theType + ") does not inherit " + child.getType() + "--cannot fulfill role " + child);
 				theInheritance.addAll(child.getInheritance());
@@ -473,21 +469,20 @@ public class QonfigElement implements FileSourced {
 		/**
 		 * @param attr The attribute specification
 		 * @param value The attribute value
-		 * @param namePosition The position of the attribute's name
 		 * @return This builder
 		 */
-		public Builder withAttribute(ElementQualifiedParseItem attr, AttributeValue value, FilePosition namePosition) {
+		public Builder withAttribute(ElementQualifiedParseItem attr, AttributeValue value) {
 			if (theStage > 0)
 				throw new IllegalStateException("Cannot specify attributes after children");
 			if (attr.declaredElement != null && !attr.declaredElement.getDeclaredAttributes().containsKey(attr.itemName)) {
 				int count = attr.declaredElement.getAttributesByName().get(attr.itemName).size();
 				if (count == 0) {
-					theErrors.forChild("attribute", namePosition)
+					theErrors.at(attr.position)
 						.error("Element " + attr.declaredElement + " does not declare attribute \"" + attr.itemName + "\"", null);
 					return this;
 				} else if (count > 1) {
-					theErrors.forChild("attribute", namePosition).error(
-						"Element " + attr.declaredElement + " inherits multiple attributes named \"" + attr.itemName + "\"", null);
+					theErrors.at(attr.position)
+						.error("Element " + attr.declaredElement + " inherits multiple attributes named \"" + attr.itemName + "\"", null);
 					return this;
 				}
 			}
@@ -529,12 +524,12 @@ public class QonfigElement implements FileSourced {
 		 * @return This builder
 		 */
 		public Builder withChild(List<ElementQualifiedParseItem> declaredRoles, QonfigElementDef type,
-			Consumer<QonfigElement.Builder> child, FilePosition position) {
+			Consumer<QonfigElement.Builder> child, ContentPosition position) {
 			if (theStage > 1)
 				throw new IllegalStateException("Cannot add children after the element has been built");
 			// At this stage, we have all the information we need to determine the complete inheritance of the element
 			create();
-			ErrorReporting errors = theErrors.forChild(type.toString(), position);
+			ErrorReporting errors = theErrors.at(position);
 			Set<QonfigChildDef> roles = new LinkedHashSet<>(declaredRoles.size() * 3 / 2 + 1);
 			Set<QonfigChildDef.Declared> realRoles = new LinkedHashSet<>(declaredRoles.size() * 3 / 2 + 1);
 			if (!declaredRoles.isEmpty()) {
@@ -592,7 +587,7 @@ public class QonfigElement implements FileSourced {
 			} else { // Alright, we have to guess
 				QonfigChildDef role = null;
 				for (Map.Entry<QonfigChildDef.Declared, QonfigChildDef> childDef : theType.getAllChildren().entrySet()) {
-					if (childDef.getValue().getType().isAssignableFrom(type)) {
+					if (childDef.getValue().isCompatible(type)) {
 						if (role != null) {
 							errors.error("Child of type " + type + " is compatible with multiple roles--role must be specified");
 							return this;
@@ -602,7 +597,7 @@ public class QonfigElement implements FileSourced {
 				}
 				for (QonfigAddOn inh : theInheritance.getExpanded(QonfigAddOn::getInheritance)) {
 					for (Map.Entry<String, QonfigChildDef.Declared> childDef : inh.getDeclaredChildren().entrySet()) {
-						if (childDef.getValue().getType().isAssignableFrom(type)) {
+						if (childDef.getValue().isCompatible(type)) {
 							if (role != null && !role.equals(childDef.getValue()))
 								throw new IllegalArgumentException(
 									"Child of type " + type + " is compatible with multiple roles--role must be specified");
@@ -629,7 +624,7 @@ public class QonfigElement implements FileSourced {
 					children.add(role);
 			}
 			Builder childBuilder = new Builder(errors, theDocument, theElement, type, Collections.unmodifiableSet(roles),
-				Collections.unmodifiableSet(realRoles), position);
+				Collections.unmodifiableSet(realRoles));
 			child.accept(childBuilder);
 			QonfigElement builtChild = childBuilder.build();
 			theChildren.add(builtChild);
@@ -643,8 +638,6 @@ public class QonfigElement implements FileSourced {
 				return;
 			// Since attribute values can affect inheritance, we need to iterate through this loop as long as inheritance keeps changing
 			Map<QonfigAttributeDef.Declared, QonfigValue> attrValues = new LinkedHashMap<>();
-			theElement = new QonfigElement(theDocument, theParent, theType, theInheritance, theParentRoles, theDeclaredRoles, attrValues,
-				theChildren, theChildrenByRole, theValue, theFilePosition);
 			MultiInheritanceSet<QonfigAddOn> completeInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
 			completeInheritance.addAll(theType.getInheritance());
 			completeInheritance.addAll(theInheritance.values());
@@ -665,8 +658,8 @@ public class QonfigElement implements FileSourced {
 					if (attrDef.declaredElement != null) {
 						if (!attrDef.declaredElement.isAssignableFrom(theType) && (!(attrDef.declaredElement instanceof QonfigAddOn)
 							|| !completeInheritance.contains((QonfigAddOn) attrDef.declaredElement))) {
-							theErrors.forChild("attribute", theFilePosition).error("Element does not inherit element "
-								+ attrDef.declaredElement + "--cannot specify attribute " + attrDef.itemName);
+							theErrors.error("Element does not inherit element " + attrDef.declaredElement + "--cannot specify attribute "
+								+ attrDef.itemName);
 							parsedAttrs.set(i);
 							continue;
 						}
@@ -706,7 +699,7 @@ public class QonfigElement implements FileSourced {
 									attr = a;
 							}
 							if (!resolved) {
-								theErrors.forChild("attribute", theFilePosition).error("Multiple matching attributes inherited");
+								theErrors.error("Multiple matching attributes inherited");
 								continue;
 							}
 							break;
@@ -714,16 +707,14 @@ public class QonfigElement implements FileSourced {
 					}
 					parsedAttrs.set(i);
 					if (attrValues.containsKey(attr.getDeclared())) {
-						theErrors.forChild("attribute", theFilePosition)
-							.error("Duplicate values supplied for attribute " + attrDef.itemName, null);
+						theErrors.error("Duplicate values supplied for attribute " + attrDef.itemName, null);
 					}
 					AttributeValue attrValue = theDeclaredAttributeValues.get(i);
 					Object value;
 					try {
-						value = attrValue.parseAttributeValue(theDocument.getDocToolkit(), attr, theErrors);
+						value = attrValue.parseAttributeValue(theDocument.getDocToolkit(), attr, theErrors.at(attrValue.getPosition()));
 					} catch (RuntimeException e) {
-						theErrors.forChild("attribute", theFilePosition)
-							.error("Could not parse attribute " + theDeclaredAttributeValues.get(i).toString(), e);
+						theErrors.error("Could not parse attribute " + theDeclaredAttributeValues.get(i).toString(), e);
 						continue;
 					}
 					attrValues.put(attr.getDeclared(),
@@ -742,7 +733,7 @@ public class QonfigElement implements FileSourced {
 			for (int i = parsedAttrs.nextClearBit(0); i >= 0; i = parsedAttrs.nextClearBit(i + 1)) {
 				if (i >= theDeclaredAttributes.size())
 					break;
-				theErrors.forChild("attribute", new LocatedFilePosition(theDocument.getLocation(), theDeclaredAttributes.get(i).position))
+				theErrors.at(theDeclaredAttributes.get(i).position)
 					.error("No such attribute found: '" + theDeclaredAttributes.get(i) + "'");
 			}
 			// Now that we know our inheritance completely, we need to check all the attributes we've parsed
@@ -792,7 +783,7 @@ public class QonfigElement implements FileSourced {
 								attr = a;
 						}
 						if (!resolved) {
-							theErrors.forChild("attribute", theFilePosition).error("Multiple matching attributes inherited");
+							theErrors.error("Multiple matching attributes inherited");
 							continue;
 						}
 					}
@@ -801,11 +792,10 @@ public class QonfigElement implements FileSourced {
 				ValueDefModifier mod = theType.getAttributeModifiers().get(attr.getDeclared());
 				if (mod != null) {
 					if (mod.getTypeRestriction() != null && !mod.getTypeRestriction().isInstance(value))
-						theErrors.forChild("attribute", theFilePosition).error("Type of value " + value
-							+ " does not match that required by " + theType + " (" + mod.getTypeRestriction() + ")");
+						theErrors.error("Type of value " + value + " does not match that required by " + theType + " ("
+							+ mod.getTypeRestriction() + ")");
 					if (mod.getSpecification() == SpecificationType.Forbidden)
-						theErrors.forChild("attribute", theFilePosition)
-							.error("Specification of value for attribute forbidden by type " + theType);
+						theErrors.error("Specification of value for attribute forbidden by type " + theType);
 				}
 				for (QonfigAddOn inh : theInheritance.getExpanded(QonfigAddOn::getInheritance)) {
 					if (theType.isAssignableFrom(inh))
@@ -813,11 +803,10 @@ public class QonfigElement implements FileSourced {
 					mod = inh.getAttributeModifiers().get(attr.getDeclared());
 					if (mod != null) {
 						if (mod.getTypeRestriction() != null && !mod.getTypeRestriction().isInstance(value))
-							theErrors.forChild("attribute", theFilePosition).error("Type of value " + value
+							theErrors.error("Type of value " + value
 								+ " does not match that required by " + inh + " (" + mod.getTypeRestriction() + ")");
 						if (mod.getSpecification() == SpecificationType.Forbidden)
-							theErrors.forChild("attribute", theFilePosition)
-								.error("Specification of value for attribute forbidden by type " + inh);
+							theErrors.error("Specification of value for attribute forbidden by type " + inh);
 					}
 				}
 			}
@@ -886,13 +875,12 @@ public class QonfigElement implements FileSourced {
 							Boolean defaulted = defaultedAttributes.get(mod.getKey());
 							if (value != null) {
 								if (defaulted == null)
-									theErrors.forChild("attribute", value.position.getPosition(0))
+									theErrors.at(value.position)
 										.error("Specification of value for attribute '" + mod.getKey() + "' forbidden by " + inh);
 								else if (!Objects.equals(value.value, mod.getValue().getDefaultValue())) {
 									if (defaulted) // Forbidden
-										theErrors.forChild("attribute", theFilePosition).error(
-											"Default values for forbidden attribute '" + mod.getKey()
-												+ "' specified from multiple sources, including " + inh);
+										theErrors.error("Default values for forbidden attribute '" + mod.getKey()
+											+ "' specified from multiple sources, including " + inh);
 									else {
 										defaultedAttributes.put(mod.getKey(), true);
 										Object defValue = mod.getValue().getDefaultValue();
@@ -952,10 +940,10 @@ public class QonfigElement implements FileSourced {
 					if (mod == null)
 						continue;
 					if (mod.getTypeRestriction() != null && !mod.getTypeRestriction().isInstance(theValue))
-						theErrors.forChild("value", theFilePosition).error("Type of value " + theValue
-							+ " does not match that required by " + inh + " (" + mod.getTypeRestriction() + ")");
+						theErrors.error("Type of value " + theValue + " does not match that required by " + inh + " ("
+							+ mod.getTypeRestriction() + ")");
 					if (mod.getSpecification() == SpecificationType.Forbidden)
-						theErrors.forChild("value", theFilePosition).error("Specification of value forbidden by type " + inh);
+						theErrors.error("Specification of value forbidden by type " + inh);
 				}
 			} else {
 				// Default the value if provided, checking for inherited specifications that conflict
@@ -979,8 +967,7 @@ public class QonfigElement implements FileSourced {
 						required = inh;
 					if (mod.getSpecification() == SpecificationType.Forbidden && mod.getDefaultValue() != null) {
 						if (forbidden && !Objects.equals(theValue, mod.getDefaultValue()))
-							theErrors.forChild("value", theFilePosition)
-								.error("Default values forbidden and specified from multiple sources, including " + inh);
+							theErrors.error("Default values forbidden and specified from multiple sources, including " + inh);
 						Object defValue = mod.getDefaultValue();
 						theValue = new QonfigValue(String.valueOf(defValue), defValue, mod.getDeclarer().getLocationString(), null);
 					}
@@ -991,8 +978,11 @@ public class QonfigElement implements FileSourced {
 					forbidden = mod.getSpecification() == SpecificationType.Forbidden;
 				}
 				if (required != null && theValue == null)
-					theErrors.forChild("value", theFilePosition).error("Value required by " + required);
+					theErrors.error("Value required by " + required);
 			}
+
+			theElement = new QonfigElement(theDocument, theParent, theType, theInheritance, theParentRoles, theDeclaredRoles, attrValues,
+				theChildren, theChildrenByRole, theValue, theErrors.getFrame());
 
 			theStage = 1;
 		}

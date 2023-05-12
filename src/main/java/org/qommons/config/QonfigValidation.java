@@ -116,15 +116,15 @@ public class QonfigValidation {
 					valueModifier = ao.getValueModifier();
 				} else if (valueModified) {
 					QonfigValidation.validateSpecification( //
-						new ValueSpec(root.getType().getValue().getType(), ao.getValueModifier().getSpecification(),
-							ao.getValueModifier().getDefaultValue()), //
+						new ValueSpec(root.getType() == null ? null : root.getType().getValue().getType(),
+							ao.getValueModifier().getSpecification(), ao.getValueModifier().getDefaultValue()), //
 						new ValueSpec(valueModifier.getTypeRestriction(), valueModifier.getSpecification(),
 							valueModifier.getDefaultValue()), //
-						err -> session.forChild("text", root.getFilePosition()).error(err), //
-						warn -> session.forChild("text", root.getFilePosition()).warn(warn));
+						err -> session.at(root.getFilePosition()).error(err), //
+						warn -> session.at(root.getFilePosition()).warn(warn));
 				} else if (valueModifier.getSpecification() != ao.getValueModifier().getSpecification()
 					|| !Objects.equals(valueModifier.getDefaultValue(), ao.getValueModifier().getDefaultValue())) {
-					session.forChild("child-def", root.getFilePosition()).error("Inherited add-ons " + textModSource + " and "
+					session.at(root.getFilePosition()).error("Inherited add-ons " + textModSource + " and "
 						+ inh.getValue() + " specify different text modifications. Inheriting both of these root add-ons is illegal.");
 				}
 			}
@@ -138,31 +138,33 @@ public class QonfigValidation {
 					ValueDefModifier preMod = attrModifiers.get(attr.getKey());
 					if (preMod.getSpecification() != attr.getValue().getSpecification()
 						|| !Objects.equals(preMod.getDefaultValue(), attr.getValue().getDefaultValue()))
-						session.forChild("child-def", root.getFilePosition())
+						session.at(root.getFilePosition())
 							.error("Inherited add-ons " + attrModSource.get(attr.getKey()) + " and " + inh.getValue()
 								+ " specify different modifications. Inheriting cannot inherit both of these root add-ons is illegal.");
 				}
 			}
 		}
 		// Validate child modifications
-		for (Map.Entry<QonfigChildDef.Declared, QonfigChildDef> child : root.getType().getAllChildren().entrySet()) {
-			Map<QonfigAddOn, String> inheritanceChildren = new HashMap<>();
-			for (Map.Entry<QonfigAddOn, String> inh : inheritance.entrySet()) {
-				ChildModifier chMod = inh.getKey().getChildModifiers().get(child.getKey());
-				if (chMod != null)
-					for (QonfigAddOn inh2 : chMod.getInheritance())
-						inheritanceChildren.put(inh.getKey(), inh.getValue() + '/' + inh2.getName());
+		if (root.getType() != null) {
+			for (Map.Entry<QonfigChildDef.Declared, QonfigChildDef> child : root.getType().getAllChildren().entrySet()) {
+				Map<QonfigAddOn, String> inheritanceChildren = new HashMap<>();
+				for (Map.Entry<QonfigAddOn, String> inh : inheritance.entrySet()) {
+					ChildModifier chMod = inh.getKey().getChildModifiers().get(child.getKey());
+					if (chMod != null)
+						for (QonfigAddOn inh2 : chMod.getInheritance())
+							inheritanceChildren.put(inh.getKey(), inh.getValue() + '/' + inh2.getName());
+				}
+				int preLen = path.length();
+				QonfigChildDef childRoot = root.getType().getAllChildren().get(child.getKey());
+				if (!noRecurse.add(childRoot))
+					continue;
+				validateChild(//
+					childRoot, //
+					inheritanceChildren, //
+					null, // Child modifiers can't specify recursive constraints
+					path.append('.').append(child.getKey().getName()), session, noRecurse);
+				path.setLength(preLen);
 			}
-			int preLen = path.length();
-			QonfigChildDef childRoot = root.getType().getAllChildren().get(child.getKey());
-			if (!noRecurse.add(childRoot))
-				continue;
-			validateChild(//
-				childRoot, //
-				inheritanceChildren, //
-				null, // Child modifiers can't specify recursive constraints
-				path.append('.').append(child.getKey().getName()), session, noRecurse);
-			path.setLength(preLen);
 		}
 	}
 }

@@ -10,6 +10,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import org.qommons.ex.ExFunction;
+import org.qommons.ex.ExSupplier;
 
 /** A bunch of utilities to easily make functions that are prettier and more useful than ordinary lambdas */
 public class LambdaUtils {
@@ -226,6 +227,19 @@ public class LambdaUtils {
 	 */
 	public static <T> Supplier<T> constantSupplier(T value, Supplier<String> print, Object identifier) {
 		return new PrintableSupplier<>(() -> value, print != null ? print : () -> String.valueOf(value), identifier);
+	}
+
+	/**
+	 * @param <T> The type of the supplier
+	 * @param <X> The type of exception thrown by the supplier
+	 * @param supplier Supplier for the value to supply
+	 * @param print The printed supplier representation
+	 * @param identifier The identifier for the supplier
+	 * @return A supplier that always returns the given value
+	 */
+	public static <T, X extends Throwable> ExSupplier<T, X> printableExSupplier(ExSupplier<T, X> supplier, Supplier<String> print,
+		Object identifier) {
+		return new PrintableExSupplier<>(supplier, print != null ? print : supplier::toString, identifier);
 	}
 
 	/**
@@ -680,6 +694,21 @@ public class LambdaUtils {
 
 		@Override
 		public T get() {
+			return getLambda().get();
+		}
+	}
+
+	static class PrintableExSupplier<T, X extends Throwable> extends PrintableLambda<ExSupplier<T, X>> implements ExSupplier<T, X> {
+		PrintableExSupplier(ExSupplier<T, X> lambda, Supplier<String> print, Object identifier) {
+			super(lambda, print, identifier);
+		}
+
+		PrintableExSupplier(ExSupplier<T, X> lambda, Supplier<String> print) {
+			super(lambda, print);
+		}
+
+		@Override
+		public T get() throws X {
 			return getLambda().get();
 		}
 	}

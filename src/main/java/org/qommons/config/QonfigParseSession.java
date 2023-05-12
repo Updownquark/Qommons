@@ -4,20 +4,35 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.qommons.io.FilePosition;
+import org.qommons.io.ContentPosition;
+import org.qommons.io.ErrorReporting;
+import org.qommons.io.LocatedContentPosition;
 
 /** A structure to pass around during Qonfig parsing to report errors and warnings */
 public class QonfigParseSession implements ErrorReporting {
+	private final QonfigParseSession theParent;
+	private final LocatedContentPosition theFrame;
 	private final QonfigToolkit theToolkit;
-	private final ElementPath thePath;
-	private final List<QonfigParseIssue> theWarnings;
-	private final List<QonfigParseIssue> theErrors;
+	private final List<Issue> theErrors;
+	private final List<Issue> theWarnings;
 
-	private QonfigParseSession(QonfigToolkit toolkit, ElementPath path, List<QonfigParseIssue> warnings, List<QonfigParseIssue> errors) {
+	private QonfigParseSession(QonfigParseSession parent, LocatedContentPosition frame, QonfigToolkit toolkit, List<Issue> warnings,
+		List<Issue> errors) {
+		theParent = parent;
+		theFrame = frame;
 		theToolkit = toolkit;
-		thePath = path;
 		theWarnings = warnings;
 		theErrors = errors;
+	}
+
+	@Override
+	public QonfigParseSession getParent() {
+		return theParent;
+	}
+
+	@Override
+	public LocatedContentPosition getFrame() {
+		return theFrame;
 	}
 
 	/** @return The toolkit that is being parsed, or for which a document is being parsed */
@@ -26,11 +41,17 @@ public class QonfigParseSession implements ErrorReporting {
 	}
 
 	@Override
-	public QonfigParseSession forChild(String childName, FilePosition position) {
-		return new QonfigParseSession(theToolkit, thePath.forChild(childName, position), theWarnings, theErrors);
+	public QonfigParseSession at(ContentPosition position) {
+		return (QonfigParseSession) ErrorReporting.super.at(position);
 	}
 
-	private static StackTraceElement getLocation() {
+	@Override
+	public QonfigParseSession at(LocatedContentPosition position) {
+		return new QonfigParseSession(this, position, theToolkit, theWarnings, theErrors);
+	}
+
+	@Override
+	public StackTraceElement getLocation() {
 		StackTraceElement[] stack = Thread.currentThread().getStackTrace();
 		if (stack == null)
 			return null;
@@ -47,37 +68,29 @@ public class QonfigParseSession implements ErrorReporting {
 	}
 
 	@Override
-	public QonfigParseSession warn(String message, Throwable cause) {
-		theWarnings.add(new QonfigParseIssue(thePath, message, getLocation(), cause));
+	public QonfigParseSession report(Issue issue) {
+		if (issue.severity == IssueSeverity.ERROR)
+			theErrors.add(issue);
+		else
+			theWarnings.add(issue);
 		return this;
 	}
 
-	@Override
-	public QonfigParseSession error(String message, Throwable cause) {
-		theErrors.add(new QonfigParseIssue(thePath, message, getLocation(), cause));
-		return this;
-	}
 
-	/** @return This session's element path */
-	public ElementPath getPath() {
-		return thePath;
-	}
-
-	/** @return All warnings logged against this session or any of its {@link #forChild(String, FilePosition) children} */
-	public List<QonfigParseIssue> getWarnings() {
+	/** @return All warnings logged against this session or any of its {@link #at(ContentPosition) children} */
+	public List<Issue> getWarnings() {
 		return theWarnings;
 	}
 
-	/** @return All errors logged against this session or any of its {@link #forChild(String, FilePosition) children} */
-	public List<QonfigParseIssue> getErrors() {
+	/** @return All errors logged against this session or any of its {@link #at(ContentPosition) children} */
+	public List<Issue> getErrors() {
 		return theErrors;
 	}
 
 	/**
 	 * @param message The root message for the exception, if any is thrown
 	 * @return This session
-	 * @throws QonfigParseException If any errors have been logged against this session or any of its {@link #forChild(String, FilePosition)
-	 *         children}
+	 * @throws QonfigParseException If any errors have been logged against this session or any of its {@link #at(ContentPosition) children}
 	 */
 	public QonfigParseSession throwErrors(String message) throws QonfigParseException {
 		if (theErrors.isEmpty())
@@ -87,46 +100,44 @@ public class QonfigParseSession implements ErrorReporting {
 
 	/**
 	 * @param message The root message for the exception, if any is thrown
-	 * @return An exception for errors that have logged against this session or any of its {@link #forChild(String, FilePosition) children}
+	 * @return An exception for errors that have logged against this session or any of its {@link #at(ContentPosition) children}
 	 */
 	public QonfigParseException createException(String message) {
-		return QonfigParseException.forIssues(//
-			theToolkit.getLocation() == null ? theToolkit.getName() : theToolkit.getLocation().toString(), message, theErrors);
+		return QonfigParseException.forIssues(message, theErrors);
 	}
 
 	/**
 	 * @param stream The stream to print the warnings to
 	 * @param message The root message to print if there are any warnings
-	 * @return Whether any warnings had been logged against this session or any of its {@link #forChild(String, FilePosition) children}
+	 * @return Whether any warnings had been logged against this session or any of its {@link #at(ContentPosition) children}
 	 */
 	public boolean printWarnings(PrintStream stream, String message) {
 		if (!theWarnings.isEmpty()) {
 			stream.print(message);
 			stream.print(" WARNING:\n");
 		}
-		for (QonfigParseIssue issue : theWarnings) {
+		for (Issue issue : theWarnings) {
 			stream.print("WARNING: ");
-			issue.print(stream);
+			issue.printStackTrace(stream);
 		}
 		return !theWarnings.isEmpty();
 	}
 
 	@Override
 	public String toString() {
-		return theToolkit + ":" + thePath;
+		return theToolkit + ":" + theFrame;
 	}
 
 	/**
 	 * Creates a root session
 	 * 
-	 * @param rootName The root name for the session
 	 * @param toolkit The toolkit for the session
 	 * @param position The file position of the root element
 	 * @return The new parse session
 	 */
-	public static QonfigParseSession forRoot(String rootName, QonfigToolkit toolkit, FilePosition position) {
-		return new QonfigParseSession(toolkit,
-			ElementPath.forRoot(toolkit.getLocation() == null ? toolkit.getName() : toolkit.getLocation().toString(), rootName, position),
-			new ArrayList<>(), new ArrayList<>());
+	public static QonfigParseSession forRoot(QonfigToolkit toolkit, ContentPosition position) {
+		return new QonfigParseSession(null,
+			LocatedContentPosition.of(toolkit.getLocation() == null ? toolkit.getName() : toolkit.getLocation().toString(), position),
+			toolkit, new ArrayList<>(), new ArrayList<>());
 	}
 }

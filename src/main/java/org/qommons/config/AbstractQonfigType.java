@@ -3,20 +3,20 @@ package org.qommons.config;
 import java.util.Objects;
 
 import org.qommons.StringUtils;
-import org.qommons.io.FilePosition;
+import org.qommons.io.ContentPosition;
 
 /** An abstract class for something that is directly owned by a toolkit */
 public abstract class AbstractQonfigType implements QonfigType {
 	private final QonfigToolkit theDeclarer;
 	private final String theName;
-	private final FilePosition thePosition;
+	private final ContentPosition thePosition;
 
 	/**
 	 * @param declarer The toolkit that declared this type
 	 * @param name The name of this type
 	 * @param position The position in the file where this type was defined
 	 */
-	public AbstractQonfigType(QonfigToolkit declarer, String name, FilePosition position) {
+	public AbstractQonfigType(QonfigToolkit declarer, String name, ContentPosition position) {
 		theDeclarer = declarer;
 		theName = name;
 		thePosition = position;
@@ -33,7 +33,7 @@ public abstract class AbstractQonfigType implements QonfigType {
 	}
 
 	@Override
-	public FilePosition getFilePosition() {
+	public ContentPosition getFilePosition() {
 		return thePosition;
 	}
 

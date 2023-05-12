@@ -29,6 +29,10 @@ public class LocatedFilePosition extends FilePosition {
 		return theFileLocation;
 	}
 
+	public String printPosition() {
+		return super.toString();
+	}
+
 	@Override
 	public String toString() {
 		if (theFileLocation == null)

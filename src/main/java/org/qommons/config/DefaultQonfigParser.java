@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -24,10 +25,10 @@ import java.util.regex.PatternSyntaxException;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterHashSet;
 import org.qommons.collect.BetterSet;
+import org.qommons.io.ContentPosition;
+import org.qommons.io.ErrorReporting;
 import org.qommons.io.FilePosition;
-import org.qommons.io.LocatedFilePosition;
 import org.qommons.io.SimpleXMLParser;
-import org.qommons.io.SimpleXMLParser.ContentPosition;
 import org.qommons.io.SimpleXMLParser.XmlParseException;
 import org.qommons.io.TextParseException;
 import org.w3c.dom.Element;
@@ -184,7 +185,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					throw new IllegalArgumentException("Element '" + rootReader.getName() + "' is not declared as the root of any toolkit");
 				rootDef = rootDef2;
 			}
-			FilePosition position = SimpleXMLParser.getNamePosition(root);
+			ContentPosition position = new ContentPosition.Simple(SimpleXMLParser.getNamePosition(root), root.getNodeName());
 			QonfigToolkit docToolkit = new QonfigToolkit(location, 1, 0, null, position, Collections.unmodifiableMap(uses),
 				Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), Collections.emptyList(),
 				new QonfigToolkit.ToolkitBuilder() {
@@ -201,9 +202,9 @@ public class DefaultQonfigParser implements QonfigParser {
 						return Collections.singleton(rootDef);
 					}
 				});
-			session = QonfigParseSession.forRoot(rootReader.getName(), docToolkit, position);
+			session = QonfigParseSession.forRoot(docToolkit, position);
 			doc = new QonfigDocument(location, docToolkit);
-			parseDocElement(session, QonfigElement.build(session, doc, null, rootDef, position), rootReader, true, el -> true);
+			parseDocElement(session, QonfigElement.build(session, doc, null, rootDef), rootReader, true, el -> true);
 		}
 		session.printWarnings(System.err, location);
 		session.throwErrors(location);
@@ -223,27 +224,25 @@ public class DefaultQonfigParser implements QonfigParser {
 			for (Map.Entry<String, String> attr : el.getAllAttributes().entrySet()) {
 				if (USES.matcher(attr.getKey()).matches()) {//
 				} else if (DOC_ELEMENT_INHERITANCE_ATTR.equals(attr.getKey())) {
-					for (String inhName : attr.getValue().split(",")) {
-						inhName = inhName.trim();
+					splitAttribute(attr.getValue(), el.getAttributeValuePosition(attr.getKey()), session, (inhName, inhPos) -> {
 						QonfigAddOn addOn;
 						try {
 							addOn = session.getToolkit().getAddOn(inhName);
 							if (addOn == null) {
-								session.forChild("attribute", session.getPath().getFilePosition()).error("No such add-on " + inhName);
-								continue;
+								session.at(inhPos).error("No such add-on " + inhName);
+								return;
 							}
 						} catch (IllegalArgumentException e) {
-							session.forChild("attribute", session.getPath().getFilePosition()).error(e.getMessage());
-							continue;
+							session.at(inhPos).error(e.getMessage());
+							return;
 						}
 						builder.inherits(addOn);
-					}
+					});
 				} else if ("role".equals(attr.getKey())) {//
 				} else {
 					ElementQualifiedParseItem qAttr = ElementQualifiedParseItem.parse(attr.getKey(), session,
-						el.getAttributeNamePosition(attr.getKey()));
-					builder.withAttribute(qAttr, new AttParser(attr.getValue(), el.getAttributeValuePosition(attr.getKey())),
-						el.getAttributeNamePosition(attr.getKey()));
+						asContent(el.getAttributeNamePosition(attr.getKey()), attr.getKey()));
+					builder.withAttribute(qAttr, new AttParser(attr.getValue(), el.getAttributeValuePosition(attr.getKey())));
 				}
 			}
 
@@ -251,7 +250,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				text = el.getTextTrimIfExists();
 			} catch (TextParseException e) {
-				session.forChild("value", el.getTextTrimPosition().getPosition(0)).error("Could not parse element text", e);
+				session.at(el.getTextTrimPosition()).error("Could not parse element text", e);
 				text = null;
 			}
 			if (text != null) {
@@ -260,11 +259,10 @@ public class DefaultQonfigParser implements QonfigParser {
 						Object value = builder.getType().getValue().getType().parse(text, session.getToolkit(), session);
 						builder.withValue(text, value, el.getTextTrimPosition());
 					} catch (RuntimeException e) {
-						session.forChild("value", el.getTextTrimPosition().getPosition(0)).error("Could not parse element text: " + text,
-							e);
+						session.at(el.getTextTrimPosition()).error("Could not parse element text: " + text, e);
 					}
 				} else if (!text.isEmpty())
-					session.forChild("value", el.getTextTrimPosition().getPosition(0)).error("No value expected or accepted: " + text);
+					session.at(el.getTextTrimPosition()).error("No value expected or accepted: " + text);
 			}
 		}
 		builder.doneWithAttributes();
@@ -273,7 +271,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			if (!childApplies.test(child))
 				continue;
 			String roleAttr = child.getAttributeIfExists("role");
-			QonfigParseSession childSession = session.forChild(child.getName(), SimpleXMLParser.getNamePosition(child.getElement()));
+			QonfigParseSession childSession = session.at(asContent(SimpleXMLParser.getNamePosition(child.getElement()), child.getName()));
 			QonfigElementDef childType;
 			try {
 				childType = session.getToolkit().getElement(child.getName());
@@ -292,45 +290,51 @@ public class DefaultQonfigParser implements QonfigParser {
 				roles = parseRoles(roleAttr, child.getAttributeValuePosition("role"), childSession);
 			builder.withChild(roles, childType, cb -> {
 				parseDocElement(childSession, cb, child, true, __ -> true);
-			}, SimpleXMLParser.getNamePosition(child.getElement()));
+			}, asContent(SimpleXMLParser.getNamePosition(child.getElement()), child.getName()));
 		}
 		return builder.build();
 	}
 
-	private static List<ElementQualifiedParseItem> parseRoles(String roleAttr, ContentPosition position, QonfigParseSession session) {
-		List<ElementQualifiedParseItem> roles = null;
+	private static void splitAttribute(String attributeValue, ContentPosition position, QonfigParseSession session,
+		BiConsumer<String, ContentPosition> onItem) {
 		int start = 0;
-		for (int c = 0; c < roleAttr.length(); c++) {
-			if (Character.isWhitespace(roleAttr.charAt(c))) {
-				if (c > start) {
-					String roleName = roleAttr.substring(start, c);
-					if (roles == null)
-						roles = new ArrayList<>();
+		for (int c = 0; c < attributeValue.length(); c++) {
+			char ch = attributeValue.charAt(c);
+			if (ch == ',' || Character.isWhitespace(ch)) {
+				if (c > start || ch == ',') {
+					String itemName = attributeValue.substring(start, c);
+					ContentPosition itemPos = position.subSequence(start, position.length());
 					try {
-						roles.add(ElementQualifiedParseItem.parse(roleName, session, position.getPosition(start)));
-					} catch (IllegalArgumentException e) {
-						session.error(e.getMessage());
+						onItem.accept(itemName, itemPos);
+					} catch (RuntimeException e) {
+						session.at(itemPos).error(e.getMessage());
 					}
 				}
 				start = c + 1;
 			}
 		}
-		if (start < roleAttr.length()) {
-			String roleName = roleAttr.substring(start);
-			ElementQualifiedParseItem lastRole;
+		if (start < attributeValue.length()) {
+			String itemName = attributeValue.substring(start);
+			ContentPosition itemPos = position.subSequence(start, position.length());
 			try {
-				lastRole = ElementQualifiedParseItem.parse(roleName, session, position.getPosition(start));
-				if (roles == null)
-					return Arrays.asList(lastRole);
-				roles.add(lastRole);
-			} catch (IllegalArgumentException e) {
-				session.error(e.getMessage());
+				onItem.accept(itemName, itemPos);
+			} catch (RuntimeException e) {
+				session.at(itemPos).error(e.getMessage());
 			}
 		}
-		if (roles == null)
+	}
+
+	private static List<ElementQualifiedParseItem> parseRoles(String roleAttr, ContentPosition position, QonfigParseSession session) {
+		List<ElementQualifiedParseItem>[] roles = new List[1];
+		splitAttribute(roleAttr, position, session, (role, rolePos) -> {
+			if (roles[0] == null)
+				roles[0] = new ArrayList<>();
+			roles[0].add(ElementQualifiedParseItem.parse(role, session.at(rolePos), rolePos));
+		});
+		if (roles[0] == null)
 			return Collections.emptyList();
-		((ArrayList<?>) roles).trimToSize();
-		return roles;
+		((ArrayList<?>) roles[0]).trimToSize();
+		return roles[0];
 	}
 
 	private static class AttParser implements QonfigElement.AttributeValue {
@@ -370,11 +374,12 @@ public class DefaultQonfigParser implements QonfigParser {
 		ToolkitDef def;
 		QonfigToolkit toolkit;
 		try (StrictXmlReader rootReader = new StrictXmlReader(root)) {
+			ContentPosition rootNameContent = asContent(rootReader.getNamePosition(), rootReader.getName());
 			String name;
 			try {
 				name = rootReader.getAttribute("name");
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(location.toString(), rootReader.getName(), rootReader.getNamePosition(),
+				throw QonfigParseException.createSimple(location.toString(), rootReader.getName(), rootNameContent,
 					"No 'name' given for toolkit", e);
 			}
 			if (!TOOLKIT_NAME.matcher(name).matches())
@@ -383,7 +388,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				version = TOOLKIT_VERSION.matcher(rootReader.getAttribute("version"));
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(location.toString(), rootReader.getName(), rootReader.getNamePosition(),
+				throw QonfigParseException.createSimple(location.toString(), rootReader.getName(), rootNameContent,
 					"No 'version' given for toolkit", e);
 			}
 			if (!version.matches())
@@ -414,7 +419,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				dependencies.put(refName, dep);
 			}
 			ToolkitParser parser = new ToolkitParser(location.toString(), rootReader, customValueTypes);
-			toolkit = new QonfigToolkit(name, major, minor, location, rootReader.getNamePosition(),
+			toolkit = new QonfigToolkit(name, major, minor, location, rootNameContent,
 				Collections.unmodifiableMap(dependencies), Collections.unmodifiableMap(parser.getDeclaredTypes()),
 				Collections.unmodifiableMap(parser.getDeclaredAddOns()), Collections.unmodifiableMap(parser.getDeclaredElements()),
 				Collections.unmodifiableList(parser.getDeclaredAutoInheritance()), parser);
@@ -481,21 +486,22 @@ public class DefaultQonfigParser implements QonfigParser {
 			// First pass to parse basic definitions
 			String rootNamesStr = root.getAttributeIfExists("root");
 			rootNames = rootNamesStr == null ? new String[0] : rootNamesStr.split(",");
+			ContentPosition rootNameContent = asContent(root.getNamePosition(), root.getName());
 			StrictXmlReader patterns;
 			try {
 				patterns = root.getElementIfExists("value-types");
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, root.getName(), root.getNamePosition(), e.getMessage(), e);
+				throw QonfigParseException.createSimple(fileLocation, root.getName(), rootNameContent, e.getMessage(), e);
 			}
 			if (patterns != null) {
-				QonfigParseSession patternsSession = session.forChild(patterns.getName(), patterns.getNamePosition());
+				QonfigParseSession patternsSession = session.at(asContent(patterns.getNamePosition(), patterns.getName()));
 				for (StrictXmlReader pattern : patterns.getElements()) {
 					String name = pattern.getAttributeIfExists("name");
 					if (name == null) {
 						patternsSession.error("Value type declared with no name");
 						continue;
 					}
-					QonfigParseSession patternSession = patternsSession.forChild(name, pattern.getNamePosition());
+					QonfigParseSession patternSession = patternsSession.at(asContent(pattern.getNamePosition(), pattern.getName()));
 					if (declaredTypes.containsKey(name)) {
 						patternSession.error("A value type named " + name + " has already been declared");
 						continue;
@@ -535,10 +541,10 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				addOnsEl = root.getElementIfExists("add-ons");
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, root.getName(), root.getNamePosition(), e.getMessage(), e);
+				throw QonfigParseException.createSimple(fileLocation, root.getName(), rootNameContent, e.getMessage(), e);
 			}
 			if (addOnsEl != null) {
-				addOnsSession = session.forChild("add-ons", addOnsEl.getNamePosition());
+				addOnsSession = session.at(asContent(addOnsEl.getNamePosition(), addOnsEl.getName()));
 				createElementsOrAddOns(addOnsEl.getElements("add-on"), addOnsSession);
 				try {
 					addOnsEl.check();
@@ -546,15 +552,15 @@ public class DefaultQonfigParser implements QonfigParser {
 					session.warn(e.getMessage());
 				}
 			} else
-				addOnsSession = session.forChild("add-ons", null);
+				addOnsSession = null;
 			StrictXmlReader elementsEl;
 			try {
 				elementsEl = root.getElementIfExists("elements");
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, root.getName(), root.getNamePosition(), e.getMessage(), e);
+				throw QonfigParseException.createSimple(fileLocation, root.getName(), rootNameContent, e.getMessage(), e);
 			}
 			if (elementsEl != null) {
-				elsSession = session.forChild("elements", elementsEl.getNamePosition());
+				elsSession = session.at(asContent(elementsEl.getNamePosition(), elementsEl.getName()));
 				createElementsOrAddOns(elementsEl.getElements("element-def"), elsSession);
 				try {
 					elementsEl.check();
@@ -562,7 +568,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					session.warn(e.getMessage());
 				}
 			} else
-				elsSession = session.forChild("elements", null);
+				elsSession = null;
 			// Stage 2: Hook up extensions, checking for recursion
 			LinkedList<String> path = new LinkedList<>();
 			Set<String> completed = new HashSet<>();
@@ -580,7 +586,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				root.getElementIfExists("auto-inheritance");
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, root.getName(), root.getNamePosition(), e.getMessage(), e);
+				throw QonfigParseException.createSimple(fileLocation, root.getName(), rootNameContent, e.getMessage(), e);
 			}
 			try {
 				root.check();
@@ -594,7 +600,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			while (elIter.hasNext()) {
 				StrictXmlReader element = elIter.next();
 				String name = element.getAttributeIfExists("name");
-				QonfigParseSession elSession = session.forChild(element.getName(), element.getNamePosition());
+				QonfigParseSession elSession = session.at(asContent(element.getNamePosition(), element.getName()));
 				if (name == null) {
 					elSession.error("No name attribute for " + element.getName());
 					elIter.remove();
@@ -630,11 +636,12 @@ public class DefaultQonfigParser implements QonfigParser {
 		}
 
 		QonfigValueType parsePattern(StrictXmlReader pattern, QonfigParseSession session, boolean topLevel) throws QonfigParseException {
+			ContentPosition patternContent = asContent(pattern.getNamePosition(), pattern.getName());
 			String name;
 			try {
 				name = topLevel ? pattern.getAttribute("name") : pattern.getAttributeIfExists("name");
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, root.getName(), root.getNamePosition(), e.getMessage(), e);
+				throw QonfigParseException.createSimple(fileLocation, pattern.getName(), patternContent, e.getMessage(), e);
 			}
 			switch (pattern.getName()) {
 			case "string":
@@ -656,7 +663,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				try {
 					text = pattern.getTextTrimIfExists();
 				} catch (TextParseException e) {
-					throw QonfigParseException.createSimple(fileLocation, root.getName(), root.getNamePosition(), e.getMessage(), e);
+					throw QonfigParseException.createSimple(fileLocation, pattern.getName(), patternContent, e.getMessage(), e);
 				}
 				if (text == null) {
 					if (name != null) {
@@ -683,12 +690,12 @@ public class DefaultQonfigParser implements QonfigParser {
 				} catch (TextParseException e) {
 					session.warn(e.getMessage());
 				}
-				return new QonfigPattern(session.getToolkit(), name, p, pattern.getNamePosition());
+				return new QonfigPattern(session.getToolkit(), name, p, patternContent);
 			case "literal":
 				try {
 					text = pattern.getTextTrimIfExists();
 				} catch (TextParseException e) {
-					throw QonfigParseException.createSimple(fileLocation, root.getName(), root.getNamePosition(), e.getMessage(), e);
+					throw QonfigParseException.createSimple(fileLocation, pattern.getName(), patternContent, e.getMessage(), e);
 				}
 				if (text == null) {
 					session.error("Literal has no value");
@@ -699,12 +706,13 @@ public class DefaultQonfigParser implements QonfigParser {
 				} catch (TextParseException e) {
 					session.warn(e.getMessage());
 				}
-				return new QonfigValueType.Literal(session.getToolkit(), text, pattern.getNamePosition());
+				return new QonfigValueType.Literal(session.getToolkit(), text, patternContent);
 			case "one-of":
 				ArrayList<QonfigValueType> components = new ArrayList<>();
 				try {
 					for (StrictXmlReader compEl : pattern.getElements(1, -1)) {
-						QonfigValueType comp = parsePattern(compEl, session.forChild(compEl.getName(), compEl.getNamePosition()), false);
+						QonfigValueType comp = parsePattern(compEl, session.at(asContent(compEl.getNamePosition(), compEl.getName())),
+							false);
 						if (comp != null)
 							components.add(comp);
 						compEl.check();
@@ -714,8 +722,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					session.warn(e.getMessage());
 				}
 				components.trimToSize();
-				return new QonfigValueType.OneOf(session.getToolkit(), name, Collections.unmodifiableList(components),
-					pattern.getNamePosition());
+				return new QonfigValueType.OneOf(session.getToolkit(), name, Collections.unmodifiableList(components), patternContent);
 			case "explicit":
 				String prefix = pattern.getAttributeIfExists("prefix");
 				String suffix = pattern.getAttributeIfExists("suffix");
@@ -723,7 +730,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				try {
 					wrapped = parsePattern(pattern.getElements(0, 1).get(0), session, false);
 				} catch (TextParseException e) {
-					throw QonfigParseException.createSimple(fileLocation, root.getName(), root.getNamePosition(), e.getMessage(), e);
+					throw QonfigParseException.createSimple(fileLocation, pattern.getName(), patternContent, e.getMessage(), e);
 				}
 				try {
 					pattern.check();
@@ -731,11 +738,11 @@ public class DefaultQonfigParser implements QonfigParser {
 					session.warn(e.getMessage());
 				}
 				return new QonfigValueType.Explicit(session.getToolkit(), name, wrapped, //
-					prefix == null ? "" : prefix, suffix == null ? "" : suffix, pattern.getNamePosition());
+					prefix == null ? "" : prefix, suffix == null ? "" : suffix, patternContent);
 			case "external":
 				for (CustomValueType vt : theCustomValueTypes) {
 					if (vt.getName().equals(name))
-						return new QonfigValueType.Custom(session.getToolkit(), vt, pattern.getNamePosition());
+						return new QonfigValueType.Custom(session.getToolkit(), vt, patternContent);
 				}
 				session.error("Expected external value type '" + name + "', but none supplied");
 				return new ErrorValueType(session.getToolkit(), name);
@@ -789,12 +796,12 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				autoInheritEl = root.getElementIfExists("auto-inheritance");
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, root.getName(), root.getNamePosition(), e.getMessage(), e);
+				throw QonfigParseException.createSimple(fileLocation, root.getName(), asContent(root.getNamePosition(), root.getName()),
+					e.getMessage(), e);
 			}
 			if (autoInheritEl != null) {
-				QonfigParseSession autoInheritSession = session.forChild("auto-inheritance", autoInheritEl.getNamePosition());
 				for (StrictXmlReader ai : autoInheritEl.getElements("auto-inherit"))
-					parseAutoInheritance(ai, autoInheritSession.forChild("auto-inherit", ai.getNamePosition()));
+					parseAutoInheritance(ai, session.at(asContent(ai.getNamePosition(), ai.getName())));
 				try {
 					autoInheritEl.check();
 				} catch (TextParseException e) {
@@ -847,7 +854,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				completed.add(name);// No extensions
 				return builder.get();
 			}
-			QonfigParseSession session = (addOn ? addOnsSession : elsSession).forChild(element.getName(), element.getNamePosition());
+			QonfigParseSession session = (addOn ? addOnsSession : elsSession).at(asContent(element.getNamePosition(), element.getName()));
 			if (path.contains(builder.getName())) {
 				session.error("Circular element inheritance detected: " + path);
 				return null;
@@ -885,39 +892,42 @@ public class DefaultQonfigParser implements QonfigParser {
 						builder.setSuperElement(el);
 				}
 				if (inheritsS != null && !inheritsS.isEmpty()) {
-					for (String inh : inheritsS.split(",")) {
-						inh = inh.trim();
+					boolean[] circularInheritance = new boolean[1];
+					splitAttribute(inheritsS, element.getAttributeValuePosition("inherits"), session, (inh, inhPos) -> {
 						int colon = inh.indexOf(':');
 						QonfigAddOn el = null;
 						if (colon >= 0) {
 							try {
 								el = session.getToolkit().getAddOn(inh);
 								if (el == null)
-									session.error("No such add-on found: " + inh);
+									session.at(inhPos).error("No such add-on found: " + inh);
 							} catch (IllegalArgumentException e) {
-								session.error("For extension " + inh + ": " + e.getMessage());
+								session.at(inhPos).error("For extension " + inh + ": " + e.getMessage());
 							}
 						} else {
 							QonfigElementOrAddOn.Builder extBuilder = theBuilders.get(inh);
 							if (extBuilder == null) {
 								el = session.getToolkit().getAddOn(inh);
 								if (el == null)
-									session.error("No such add-on found: " + inh);
+									session.at(inhPos).error("No such add-on found: " + inh);
 							} else if (!(extBuilder instanceof QonfigAddOn.Builder)) {
-								session.error(inheritsS + " must refer to add-ons");
+								session.at(inhPos).error(inheritsS + " must refer to add-ons");
 							} else {
 								// TODO This throws an error in the case of an element-def specifying as inheritance
 								// an add-on that requires it
 								el = (QonfigAddOn) parseExtensions(theNodes.get(inh), path, elsSession, addOnsSession, completed);
 								if (el == null) {
-									session.error("Circular inheritance detected: " + path);
-									return null;
+									session.at(inhPos).error("Circular inheritance detected: " + path);
+									circularInheritance[0] = true;
+									return;
 								}
 							}
 						}
 						if (el != null)
 							builder.inherits(el);
-					}
+					});
+					if (circularInheritance[0])
+						return null;
 				}
 				return builder.get();
 			} finally {
@@ -953,7 +963,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					builder.getSession().error("Attribute name '" + attrName + "' is reserved");
 					continue;
 				}
-				QonfigParseSession attrSession = builder.getSession().forChild("attribute", attr.getNamePosition());
+				QonfigParseSession attrSession = builder.getSession().at(asContent(attr.getNamePosition(), attr.getName()));
 				if (!checkName(attrName))
 					attrSession.error("Illegal attribute name");
 				String typeName = attr.getAttributeIfExists("type");
@@ -976,7 +986,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				if (defaultS != null && type != null)
 					defaultV = type.parse(defaultS, attrSession.getToolkit(), attrSession);
 				if (type != null)
-					builder.withAttribute(attrName, type, spec, defaultV, attr.getNamePosition());
+					builder.withAttribute(attrName, type, spec, defaultV, asContent(attr.getNamePosition(), attr.getName()));
 				try {
 					attr.check();
 				} catch (TextParseException e) {
@@ -990,11 +1000,12 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				text = element.getElementIfExists(modify ? "value-mod" : "value");
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, root.getName(), root.getNamePosition(), e.getMessage(), e);
+				throw QonfigParseException.createSimple(fileLocation, root.getName(), asContent(root.getNamePosition(), root.getName()),
+					e.getMessage(), e);
 			}
 			if (text == null)
 				return;
-			QonfigParseSession textSession = builder.getSession().forChild(text.getName(), element.getNamePosition());
+			QonfigParseSession textSession = builder.getSession().at(asContent(element.getNamePosition(), element.getName()));
 			String typeName = text.getAttributeIfExists("type");
 			QonfigValueType type;
 			if (typeName == null) {
@@ -1022,9 +1033,9 @@ public class DefaultQonfigParser implements QonfigParser {
 				defaultV = parseType.parse(defaultS, builder.getSession().getToolkit(), textSession);
 			}
 			if (modify)
-				builder.modifyValue(type, spec, defaultV, text.getNamePosition());
+				builder.modifyValue(type, spec, defaultV, asContent(text.getNamePosition(), text.getName()));
 			else
-				builder.withValue(type, spec, defaultV, text.getNamePosition());
+				builder.withValue(type, spec, defaultV, asContent(text.getNamePosition(), text.getName()));
 			try {
 				text.check();
 			} catch (TextParseException e) {
@@ -1051,14 +1062,14 @@ public class DefaultQonfigParser implements QonfigParser {
 					builder.getSession().error("No name attribute for attribute definition");
 					continue;
 				}
-				QonfigParseSession attrSession = builder.getSession().forChild("attr-mod", attr.getNamePosition());
+				QonfigParseSession attrSession = builder.getSession().at(asContent(attr.getNamePosition(), attr.getName()));
 				if (attrName.lastIndexOf('.') < 0) {
-					attrSession.forChild("name", attr.getAttributeValuePosition("name").getPosition(0))
+					attrSession.at(attr.getAttributeValuePosition("name"))
 						.error("Attribute modification must specify 'element.name'");
 					continue;
 				}
 				ElementQualifiedParseItem qAttr;
-				qAttr = ElementQualifiedParseItem.parse(attrName, attrSession, attr.getAttributeValuePosition("name").getPosition(0));
+				qAttr = ElementQualifiedParseItem.parse(attrName, attrSession, attr.getAttributeValuePosition("name"));
 				if (qAttr == null)
 					continue;
 				QonfigElementOrAddOn qualifier = qAttr.declaredElement != null ? qAttr.declaredElement : builder.get();
@@ -1102,7 +1113,7 @@ public class DefaultQonfigParser implements QonfigParser {
 							.error("Default value '" + defaultS + "' parsed to null by attribute type " + type2 + "--this is not allowed");
 				}
 				if (overridden != null)
-					builder.modifyAttribute(overridden, type, spec, defaultV, attr.getNamePosition());
+					builder.modifyAttribute(overridden, type, spec, defaultV, asContent(attr.getNamePosition(), attr.getName()));
 				try {
 					attr.check();
 				} catch (TextParseException e) {
@@ -1132,13 +1143,14 @@ public class DefaultQonfigParser implements QonfigParser {
 					builder.getSession().error("Unnamed " + elementName);
 					break;
 				}
-				QonfigParseSession childSession = builder.getSession().forChild(elementName, child.getNamePosition());
+				QonfigParseSession childSession = builder.getSession().at(asContent(child.getNamePosition(), child.getName()));
 				if (!checkName(name))
-					childSession.error("Bad " + elementName + " name");
+					childSession.at(child.getAttributeValuePosition("name")).error("Bad " + elementName + " name");
 				Set<QonfigChildDef.Declared> roles;
 				String rolesS = child.getAttributeIfExists("role");
 				if (rolesS != null && metadata) {
-					childSession.error("role cannot be specified for " + elementName);
+					childSession.at(asContent(child.getAttributeNamePosition("role"), "role"))
+						.error("role cannot be specified for " + elementName);
 					rolesS = null;
 				}
 				if (rolesS != null) {
@@ -1156,13 +1168,15 @@ public class DefaultQonfigParser implements QonfigParser {
 								session.getToolkit());
 							switch (children.size()) {
 							case 0:
-								childSession.error("No such role '" + parsedRole.itemName + "' on element " + qualifier);
+								childSession.at(parsedRole.position)
+									.error("No such role '" + parsedRole.itemName + "' on element " + qualifier);
 								break;
 							case 1:
 								role = children.getFirst().getDeclared();
 								break;
 							default:
-								childSession.error("Multiple roles named '" + parsedRole.itemName + "' on element " + qualifier);
+								childSession.at(parsedRole.position)
+									.error("Multiple roles named '" + parsedRole.itemName + "' on element " + qualifier);
 								break;
 							}
 						}
@@ -1174,13 +1188,15 @@ public class DefaultQonfigParser implements QonfigParser {
 				String typeName = child.getAttributeIfExists("type");
 				QonfigElementDef elType;
 				if (typeName == null) {
-					childSession.error("No type specified");
+					// Allow a child with no type specified
+					// childSession.error("No type specified");
 					elType = null;
 				} else {
 					try {
 						elType = builder.getSession().getToolkit().getElement(typeName);
 						if (elType == null)
-							childSession.error("Unrecognized element-def: '" + typeName + "'");
+							childSession.at(child.getAttributeValuePosition("type"))
+								.error("Unrecognized element-def: '" + typeName + "'");
 					} catch (IllegalArgumentException e) {
 						childSession.error(e.getMessage());
 						elType = null;
@@ -1192,7 +1208,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				try {
 					min = minS == null ? 1 : Integer.parseInt(minS);
 				} catch (NumberFormatException e) {
-					childSession.error("Bad \"min\" value \"" + minS + "\"", e);
+					childSession.at(child.getAttributeValuePosition("min")).error("Bad \"min\" value \"" + minS + "\"", e);
 					min = 1;
 				}
 				try {
@@ -1206,55 +1222,52 @@ public class DefaultQonfigParser implements QonfigParser {
 					else
 						max = Integer.parseInt(maxS);
 				} catch (NumberFormatException e) {
-					childSession.error("Bad \"max\" value \"" + maxS + "\"", e);
+					childSession.at(child.getAttributeValuePosition("max")).error("Bad \"max\" value \"" + maxS + "\"", e);
 					max = Integer.MAX_VALUE;
 				}
 				String inheritsS = child.getAttributeIfExists("inherits");
 				Set<QonfigAddOn> inherits = new LinkedHashSet<>();
 				if (inheritsS != null) {
-					for (String inherit : inheritsS.split(",")) {
-						inherit = inherit.trim();
-						if (inherit.isEmpty())
-							continue;
+					splitAttribute(inheritsS, child.getAttributeValuePosition("inherits"), session, (inherit, pos) -> {
 						QonfigAddOn el;
 						try {
 							el = builder.getSession().getToolkit().getAddOn(inherit);
 						} catch (IllegalArgumentException e) {
-							childSession.error(e.getMessage());
-							continue;
+							childSession.at(pos).error(e.getMessage());
+							return;
 						}
 						if (el == null)
-							childSession.error("Unrecognized add-on \"" + inherit + "\" as inheritance");
+							childSession.at(pos).error("Unrecognized add-on \"" + inherit + "\" as inheritance");
 						else
 							inherits.add(el);
-					}
+					});
 				}
 				Set<QonfigAddOn> requires = new LinkedHashSet<>();
 				String requiresS = child.getAttributeIfExists("requires");
 				if (requiresS != null) {
-					for (String require : requiresS.split(",")) {
-						require = require.trim();
+					splitAttribute(requiresS, child.getAttributeValuePosition("requires"), session, (require, pos) -> {
 						if (require.isEmpty())
-							continue;
+							return;
 						QonfigAddOn el;
 						try {
 							el = builder.getSession().getToolkit().getAddOn(require);
 						} catch (IllegalArgumentException e) {
-							childSession.error(e.getMessage());
-							continue;
+							childSession.at(pos).error(e.getMessage());
+							return;
 						}
 						if (el == null)
-							childSession.error("Unrecognized add-on \"" + require + "\" as requirement");
+							childSession.at(pos).error("Unrecognized add-on \"" + require + "\" as requirement");
 						else
 							requires.add(el);
-					}
+					});
 				}
-				if (elType != null) {
-					if (metadata)
-						builder.withMetaSpec(name, elType, inherits, requires, min, max, child.getNamePosition());
-					else
-						builder.withChild(name, elType, roles, inherits, requires, min, max, child.getNamePosition());
-				}
+				// if (elType != null) { Allow child with no type specified
+				if (metadata)
+					builder.withMetaSpec(name, elType, inherits, requires, min, max, asContent(child.getNamePosition(), child.getName()));
+				else
+					builder.withChild(name, elType, roles, inherits, requires, min, max,
+						asContent(child.getNamePosition(), child.getName()));
+				// }
 				try {
 					child.check();
 				} catch (TextParseException e) {
@@ -1281,19 +1294,18 @@ public class DefaultQonfigParser implements QonfigParser {
 			childLoop: //
 			for (StrictXmlReader child : element.getElements(elementName)) {
 				String name = child.getAttributeIfExists(childAttrName);
+				QonfigParseSession childSession = builder.getSession().at(asContent(child.getNamePosition(), child.getName()));
 				if (name == null) {
 					if (child.getAttributeIfExists("name") != null)
-						builder.getSession().forChild(elementName, child.getNamePosition())
-							.error("Use '" + childAttrName + "=' instead of 'name='");
+						childSession.error("Use '" + childAttrName + "=' instead of 'name='");
 					else
-						builder.getSession().forChild(elementName, child.getNamePosition()).error("No " + childAttrName + " attribute");
+						childSession.error("No " + childAttrName + " attribute");
 					break;
 				}
-				QonfigParseSession childSession = builder.getSession().forChild(child.getName(), child.getNamePosition());
 				QonfigChildDef.Declared overridden;
 				{
 					ElementQualifiedParseItem parsedRole = ElementQualifiedParseItem.parse(name, builder.getSession(),
-						child.getAttributeValuePosition(childAttrName).getPosition(0));
+						child.getAttributeValuePosition(childAttrName));
 					if (parsedRole == null)
 						continue;
 					QonfigElementOrAddOn qualifier;
@@ -1360,47 +1372,48 @@ public class DefaultQonfigParser implements QonfigParser {
 				String inheritsS = child.getAttributeIfExists("inherits");
 				Set<QonfigAddOn> inherits = new LinkedHashSet<>();
 				if (inheritsS != null) {
-					for (String inherit : inheritsS.split(",")) {
-						inherit = inherit.trim();
+					splitAttribute(inheritsS, child.getAttributeValuePosition("inherits"), session, (inherit, inhPos) -> {
 						if (inherit.isEmpty())
-							continue;
+							return;
 						QonfigAddOn el;
 						try {
 							el = builder.getSession().getToolkit().getAddOn(inherit);
 						} catch (IllegalArgumentException e) {
-							childSession.error(e.getMessage());
-							continue;
+							childSession.at(inhPos).error(e.getMessage());
+							return;
 						}
 						if (el == null)
-							childSession.error("Unrecognized add-on \"" + inherit + "\" as inheritance");
+							childSession.at(inhPos).error("Unrecognized add-on \"" + inherit + "\" as inheritance");
 						else
 							inherits.add(el);
-					}
+					});
 				}
 				String requiresS = child.getAttributeIfExists("requires");
 				Set<QonfigAddOn> requires = new LinkedHashSet<>();
 				if (requiresS != null) {
-					for (String require : requiresS.split(",")) {
-						require = require.trim();
+					splitAttribute(requiresS, child.getAttributeValuePosition("requires"), session, (require, reqPos) -> {
 						if (require.isEmpty())
-							continue;
+							return;
 						QonfigAddOn el;
 						try {
 							el = builder.getSession().getToolkit().getAddOn(require);
 						} catch (IllegalArgumentException e) {
-							childSession.error(e.getMessage());
-							continue;
+							childSession.at(reqPos).error(e.getMessage());
+							return;
 						}
 						if (el == null)
-							childSession.error("Unrecognized add-on \"" + require + "\" as requirement");
-						requires.add(el);
-					}
+							childSession.at(reqPos).error("Unrecognized add-on \"" + require + "\" as requirement");
+						else
+							requires.add(el);
+					});
 				}
 				if (overridden != null) {
 					if (metadata)
-						builder.getMetaSpec().modifyChild(overridden, elType, inherits, requires, min, max, child.getNamePosition());
+						builder.getMetaSpec().modifyChild(overridden, elType, inherits, requires, min, max,
+							asContent(child.getNamePosition(), child.getName()));
 					else
-						builder.modifyChild(overridden, elType, inherits, requires, min, max, child.getNamePosition());
+						builder.modifyChild(overridden, elType, inherits, requires, min, max,
+							asContent(child.getNamePosition(), child.getName()));
 				}
 				try {
 					child.check();
@@ -1445,21 +1458,20 @@ public class DefaultQonfigParser implements QonfigParser {
 				session.error("No inheritance");
 				return;
 			}
-			String[] inheritance = inhStr.split(",");
-			for (String inh : inheritance) {
+			splitAttribute(inhStr, element.getAttributeValuePosition("inherits"), session, (inh, inhPos) -> {
 				QonfigAddOn addOn = session.getToolkit().getAddOn(inh);
 				if (addOn == null)
-					session.error("No such add-on found: " + inh);
+					session.at(inhPos).error("No such add-on found: " + inh);
 				else
 					builder.inherits(addOn);
-			}
+			});
 			List<StrictXmlReader> targets = element.getElements();
 			if (targets.isEmpty()) {
 				session.error("No targets");
 				return;
 			}
 			for (StrictXmlReader target : targets) {
-				QonfigParseSession targetSession = session.forChild("target", target.getNamePosition());
+				QonfigParseSession targetSession = session.at(asContent(target.getNamePosition(), target.getName()));
 				String typeStr = target.getAttributeIfExists("element");
 				QonfigElementOrAddOn type;
 				if (typeStr == null)
@@ -1494,7 +1506,7 @@ public class DefaultQonfigParser implements QonfigParser {
 						continue;
 					}
 				}
-				builder.withTarget(type, child, target.getNamePosition());
+				builder.withTarget(type, child, asContent(target.getNamePosition(), target.getName()));
 				try {
 					target.check();
 				} catch (TextParseException e) {
@@ -1514,7 +1526,8 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				builder = theBuilders.get(element.getAttribute("name"));
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, root.getName(), root.getNamePosition(), e.getMessage(), e);
+				throw QonfigParseException.createSimple(fileLocation, root.getName(), asContent(root.getNamePosition(), root.getName()),
+					e.getMessage(), e);
 			}
 			builder.withMetaData(md -> {
 				parseDocElement(session, md, element, false, child -> !TOOLKIT_EL_NAMES.contains(child.getName()));
@@ -1526,7 +1539,8 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				builder = theBuilders.get(element.getAttribute("name"));
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, root.getName(), root.getNamePosition(), e.getMessage(), e);
+				throw QonfigParseException.createSimple(fileLocation, root.getName(), asContent(root.getNamePosition(), root.getName()),
+					e.getMessage(), e);
 			}
 			if (completed.contains(builder.getName()))
 				return;
@@ -1576,7 +1590,7 @@ public class DefaultQonfigParser implements QonfigParser {
 		}
 
 		@Override
-		public LocatedFilePosition getFilePosition() {
+		public ContentPosition getFilePosition() {
 			return null;
 		}
 	}
@@ -1602,6 +1616,10 @@ public class DefaultQonfigParser implements QonfigParser {
 		}
 		session.error("Unrecognized value type '" + typeName + "'", null);
 		return QonfigValueType.STRING;
+	}
+
+	static ContentPosition asContent(FilePosition start, String content) {
+		return new ContentPosition.Simple(start, content);
 	}
 
 	private static boolean checkName(String name) {

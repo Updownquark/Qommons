@@ -5,7 +5,7 @@ import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 
-import org.qommons.io.FilePosition;
+import org.qommons.io.ContentPosition;
 
 /** A child that may be specified for an element */
 public interface QonfigChildDef extends QonfigElementOwned {
@@ -45,6 +45,16 @@ public interface QonfigChildDef extends QonfigElementOwned {
 	 */
 	boolean isFulfilledBy(QonfigChildDef child);
 
+	default boolean isCompatible(QonfigElementDef element) {
+		if (getType() != null && !getType().isAssignableFrom(element))
+			return false;
+		for (QonfigAddOn req : getRequirement()) {
+			if (!req.isAssignableFrom(element))
+				return false;
+		}
+		return true;
+	}
+
 	/** Abstract {@link QonfigChildDef} implementation */
 	public static abstract class Abstract implements QonfigChildDef {
 		private final QonfigElementOrAddOn theOwner;
@@ -54,7 +64,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		private final Set<QonfigAddOn> theRequirement;
 		private final int theMin;
 		private final int theMax;
-		private final FilePosition thePosition;
+		private final ContentPosition thePosition;
 
 		/**
 		 * @param owner The element-def or add-on that this child belongs to
@@ -68,7 +78,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param position The position in the file where this child was defined
 		 */
 		public Abstract(QonfigElementOrAddOn owner, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment,
-			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, FilePosition position) {
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, ContentPosition position) {
 			theOwner = owner;
 			theType = type;
 			theFulfillment = fulfillment;
@@ -123,7 +133,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		}
 
 		@Override
-		public FilePosition getFilePosition() {
+		public ContentPosition getFilePosition() {
 			return thePosition;
 		}
 
@@ -143,7 +153,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 
 		@Override
 		public String toString() {
-			return theOwner + "." + getName() + "(" + theType + ")";
+			return theOwner + "." + getName() + "(" + (theType == null ? "typeless" : theType.toString()) + ")";
 		}
 	}
 
@@ -164,7 +174,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param position The position in the file where this child was defined
 		 */
 		public DeclaredChildDef(QonfigElementOrAddOn owner, String name, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment,
-			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, FilePosition position) {
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, ContentPosition position) {
 			super(owner, type, fulfillment, inheritance, requirement, min, max, position);
 			theName = name;
 		}
@@ -207,7 +217,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param position The position in the file where this child was defined
 		 */
 		public Modified(QonfigChildDef declared, QonfigElementOrAddOn owner, QonfigElementDef type, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, int min, int max, FilePosition position) {
+			Set<QonfigAddOn> requirement, int min, int max, ContentPosition position) {
 			super(owner, type, Collections.emptySet(), combine(declared.getInheritance(), inheritance), requirement, min, max, position);
 			theDeclared = declared instanceof QonfigChildDef.Declared ? (QonfigChildDef.Declared) declared
 				: ((QonfigChildDef.Modified) declared).getDeclared();
@@ -265,7 +275,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param position The position in the file where this child was defined
 		 */
 		public Overridden(QonfigElementOrAddOn owner, QonfigChildDef.Declared declared, Set<QonfigChildDef.Declared> overriding,
-			FilePosition position) {
+			ContentPosition position) {
 			super(owner, declared.getType(), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), 0, 0, position);
 			theDeclared = declared;
 			theOverriding = overriding;
@@ -357,7 +367,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		}
 
 		@Override
-		public FilePosition getFilePosition() {
+		public ContentPosition getFilePosition() {
 			return null; // This child wasn't defined anywhere, it was inherited by default
 		}
 
@@ -377,7 +387,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 
 		@Override
 		public String toString() {
-			return theOwner + "." + getName() + "(" + getType() + ")";
+			return theOwner + "." + getName() + "(" + (getType() == null ? "typeless" : getType().toString()) + ")";
 		}
 	}
 }

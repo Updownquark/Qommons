@@ -1,6 +1,7 @@
 package org.qommons.config;
 
 import org.qommons.Named;
+import org.qommons.io.ErrorReporting;
 
 /** Allows injection of custom value types into toolkits */
 public interface CustomValueType extends Named {

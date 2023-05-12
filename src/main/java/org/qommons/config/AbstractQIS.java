@@ -1,6 +1,5 @@
 package org.qommons.config;
 
-import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -12,6 +11,7 @@ import org.qommons.MultiInheritanceSet;
 import org.qommons.collect.BetterList;
 import org.qommons.config.QonfigElement.QonfigValue;
 import org.qommons.ex.ExFunction;
+import org.qommons.io.ErrorReporting;
 import org.qommons.io.LocatedFilePosition;
 
 /**
@@ -546,7 +546,7 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends ErrorReportin
 			}
 			return BetterList.of((QIS[]) sessions);
 		}
-		QonfigElement.Builder b = getElement().synthesizeChild(child, defaultChild, this, null);
+		QonfigElement.Builder b = getElement().synthesizeChild(child, defaultChild, this);
 		if (builder != null)
 			builder.accept(b);
 		QonfigElement element = b.doneWithAttributes().build();
@@ -803,31 +803,9 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends ErrorReportin
 	<T> T computeIfAbsent(String sessionKey, Supplier<T> creator);
 
 	@Override
-	default QIS warn(String message) {
-		return warn(message, null);
-	}
-
-	@Override
-	QIS warn(String message, Throwable cause);
-
-	/** @return All {@link #warn(String, Throwable) warnings} declared to this session or any of its relatives */
-	List<QonfigParseIssue> getWarnings();
-
-	/**
-	 * @param stream The stream to print the warnings to
-	 * @param message The root message to print if there are any warnings
-	 * @return Whether any warnings had been logged against this session or any of its relatives
-	 */
-	default boolean printWarnings(PrintStream stream, String message) {
-		if (!getWarnings().isEmpty()) {
-			stream.print(message);
-			stream.print(" WARNING:\n");
-		}
-		for (QonfigParseIssue issue : getWarnings()) {
-			stream.print("WARNING: ");
-			issue.print(stream);
-		}
-		return !getWarnings().isEmpty();
+	default ErrorReporting report(Issue issue) {
+		issue.printStackTrace(issue.severity == IssueSeverity.INFO ? System.out : System.err);
+		return this;
 	}
 
 	/** Implementation methods for {@link AbstractQIS} that I didn't want to expose */
