@@ -199,4 +199,56 @@ public class Primes {
 		theNonPrimes = nonPrimes;
 		return this;
 	}
+
+	/**
+	 * A utility method to factor the result of {@link #factorize(long, int)} in a pretty way
+	 * 
+	 * @param factorization The factorization of a number
+	 * @return A pretty representation of the factorization
+	 */
+	public static String formatFactorization(IntList factorization) {
+		if (factorization == null)
+			return "";
+		StringBuilder str = new StringBuilder();
+		int prev = -100;
+		int pow = 1;
+		for (Integer factor : factorization) {
+			if (factor.intValue() == prev)
+				pow++;
+			else if (prev > 0) {
+				if (str.length() > 0)
+					str.append(", ");
+				str.append(prev);
+				if (pow == 1) {//
+				} else if (pow < 4) {
+					str.append((char) ('\u00b0' + pow));
+				} else if (pow < 10)
+					str.append((char) ('\u2070' + pow));
+				else
+					str.append('^').append(pow);
+				prev = -100;
+				pow = 1;
+			}
+			if (factor.intValue() <= 0) {
+				if (str.length() > 0)
+					str.append(", ");
+				str.append("...");
+			}
+			else
+				prev = factor;
+		}
+		if (prev > 0) {
+			if (str.length() > 0)
+				str.append(", ");
+			str.append(prev);
+			if (pow == 1) {//
+			} else if (pow < 4) {
+				str.append((char) ('\u00b0' + pow));
+			} else if (pow < 10)
+				str.append((char) ('\u2070' + pow));
+			else
+				str.append('^').append(pow);
+		}
+		return str.toString();
+	}
 }
