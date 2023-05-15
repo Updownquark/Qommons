@@ -431,13 +431,30 @@ public interface Causable extends CausalLock.Cause {
 			}
 		}
 
+		private static class SimpleCauseInUse extends AbstractCausable implements CausableInUse {
+			private final Transaction theInUseT;
+
+			public SimpleCauseInUse() {
+				super();
+				theInUseT = super.use();
+			}
+
+			@Override
+			public void close() {
+				theInUseT.close();
+			}
+		}
+
 		private static final ConcurrentHashMap<Object, CauseInUseImpl> CAUSES = new ConcurrentHashMap<>();
 
 		private Impl() {
 		}
 
 		static CausableInUse cause(Object... causes) {
-			return CAUSES.computeIfAbsent(Arrays.asList(causes), __ -> new CauseInUseImpl(causes)).descend();
+			if (causes.length == 0)
+				return new SimpleCauseInUse();
+			else
+				return CAUSES.computeIfAbsent(Arrays.asList(causes), __ -> new CauseInUseImpl(causes)).descend();
 		}
 	}
 
