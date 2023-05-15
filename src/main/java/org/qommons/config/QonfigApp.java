@@ -152,7 +152,7 @@ public class QonfigApp {
 		} catch (IOException e) {
 			throw new IOException("Could not read application file " + appFile, e);
 		} catch (XmlParseException e) {
-			throw new TextParseException("Could not parse application file XML: " + appDef.getLocation(), e.getPosition(), e);
+			throw new TextParseException("Could not parse application file XML: " + appFileURL, e.getPosition(), e);
 		}
 
 		// Build the interpreter
