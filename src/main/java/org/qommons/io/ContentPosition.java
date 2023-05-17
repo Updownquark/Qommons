@@ -106,9 +106,15 @@ public interface ContentPosition {
 		}
 	}
 
+	/** Simple {@link ContentPosition} implementation */
 	public static class Simple implements ContentPosition {
 		private final FilePosition theStart;
 		private final String theContent;
+
+		/**
+		 * @param start The start position
+		 * @param content The content
+		 */
 		public Simple(FilePosition start, String content) {
 			theStart = start;
 			theContent = content;

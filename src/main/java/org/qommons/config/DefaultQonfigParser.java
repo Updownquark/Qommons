@@ -1271,7 +1271,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				try {
 					child.check();
 				} catch (TextParseException e) {
-					childSession.error(e.getMessage());
+					childSession.at(new ContentPosition.Fixed(e.getPosition())).error(e.getMessage());
 				}
 			}
 		}

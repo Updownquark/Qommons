@@ -1,6 +1,8 @@
 package org.qommons.io;
 
+/** A {@link ContentPosition} that knows the file its in, so it can produce {@link LocatedFilePosition}s */
 public interface LocatedContentPosition extends ContentPosition {
+	/** @return The file that this position is in */
 	String getFileLocation();
 
 	@Override
@@ -12,12 +14,18 @@ public interface LocatedContentPosition extends ContentPosition {
 	@Override
 	LocatedContentPosition subSequence(int startIndex, int endIndex);
 
+	/**
+	 * @param fileLocation The file location
+	 * @param position The position in the file
+	 * @return The file content position
+	 */
 	public static LocatedContentPosition of(String fileLocation, ContentPosition position) {
 		if (position instanceof LocatedContentPosition)
 			return (LocatedContentPosition) position;
 		return new Default(fileLocation, position);
 	}
 
+	/** Default {@link LocatedContentPosition} implementation */
 	class Default implements LocatedContentPosition {
 		private final String theFileLocation;
 		private final ContentPosition thePosition;

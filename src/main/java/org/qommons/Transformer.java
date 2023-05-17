@@ -31,10 +31,21 @@ public interface Transformer<X extends Throwable> {
 		 */
 		<T2 extends T> T2 modify(S source, T2 value, Transformer<X> tx) throws X;
 
+		/**
+		 * A sequence of two or modifiers
+		 * 
+		 * @param <S> The source type of the first modifier, and this modifier
+		 * @param <T> The target type of the first modifier, also the source type of the second
+		 * @param <X> The target type of the second modifier, and this modifier
+		 */
 		public class Composite<S, T, X extends Throwable> implements Modifier<S, T, X> {
 			private final Modifier<? super S, T, X> theFirst;
 			private final Modifier<? super S, T, X> theSecond;
 
+			/**
+			 * @param first The first modifier to apply
+			 * @param second The second modifier to apply
+			 */
 			public Composite(Modifier<? super S, T, X> first, Modifier<? super S, T, X> second) {
 				theFirst = first;
 				theSecond = second;

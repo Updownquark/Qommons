@@ -7,10 +7,15 @@ import java.util.List;
 
 /** An interface to allow errors and warnings to be reported in a traceable way without terminating execution with an exception */
 public interface ErrorReporting {
+	/** Default {@link ErrorReporting} implementation */
 	public static class Default implements ErrorReporting {
 		private final Default theParent;
 		private final LocatedContentPosition theFrame;
 
+		/**
+		 * @param parent The parent reporting
+		 * @param frame The position of this reporting
+		 */
 		public Default(Default parent, LocatedContentPosition frame) {
 			theParent = parent;
 			theFrame = frame;
@@ -43,17 +48,38 @@ public interface ErrorReporting {
 		}
 	}
 
+	/** Severity of a reported issue in an {@link ErrorReporting} instance */
 	public enum IssueSeverity {
-		ERROR, WARN, INFO
+		/** An error that is likely to cause the program to fail its objectives in significant ways */
+		ERROR,
+		/**
+		 * An error that may cause the program to behave differently than intended, but which will not likely keep the program from being
+		 * useful
+		 */
+		WARN,
+		/** An information message which should not have any adverse effect */
+		INFO
 	}
 
+	/** A reported issue in an {@link ErrorReporting} */
 	public class Issue {
 		private final ErrorReporting theFrame;
+		/** The severity of this issue */
 		public final IssueSeverity severity;
+		/** The message for this issue */
 		public final String message;
+		/** The location in the code where this issue was reported from */
 		public final StackTraceElement codeLocation;
+		/** The exception that caused this issue */
 		public final Throwable cause;
 
+		/**
+		 * @param frame The error reporting instance in which this issue was reported
+		 * @param severity The severity of this issue
+		 * @param message The message for this issue
+		 * @param codeLocation The location in the code where this issue was reported from
+		 * @param cause The exception that caused this issue
+		 */
 		public Issue(ErrorReporting frame, IssueSeverity severity, String message, StackTraceElement codeLocation, Throwable cause) {
 			theFrame = frame;
 			this.severity = severity;
@@ -62,6 +88,7 @@ public interface ErrorReporting {
 			this.cause = cause;
 		}
 
+		/** @return The error reporting instance in which this issue was reported */
 		public ErrorReporting getFrame() {
 			return theFrame;
 		}
@@ -79,6 +106,11 @@ public interface ErrorReporting {
 			return str.toString();
 		}
 
+		/**
+		 * Prints a human-readable representation of this issue to the given printer
+		 * 
+		 * @param w The printer to print this issue to
+		 */
 		public void printStackTrace(PrintWriter w) {
 			w.append(severity.toString());
 			if (message != null) {
@@ -102,6 +134,11 @@ public interface ErrorReporting {
 			}
 		}
 
+		/**
+		 * Prints a human-readable representation of this issue to the given printer
+		 * 
+		 * @param w The printer to print this issue to
+		 */
 		public void printStackTrace(PrintStream w) {
 			w.append(severity.toString());
 			if (message != null) {
@@ -128,7 +165,7 @@ public interface ErrorReporting {
 
 	/**
 	 * @param message The warning message to log
-	 * @return This session
+	 * @return This error reporting instance
 	 */
 	default ErrorReporting info(String message) {
 		return info(message, null);
@@ -137,7 +174,7 @@ public interface ErrorReporting {
 	/**
 	 * @param message The warning message to log
 	 * @param cause The cause of the warning, if any
-	 * @return This session
+	 * @return This error reporting instance
 	 */
 	default ErrorReporting info(String message, Throwable cause) {
 		return report(new Issue(this, IssueSeverity.INFO, message, getLocation(), cause));
@@ -145,7 +182,7 @@ public interface ErrorReporting {
 
 	/**
 	 * @param message The warning message to log
-	 * @return This session
+	 * @return This error reporting instance
 	 */
 	default ErrorReporting warn(String message) {
 		return warn(message, null);
@@ -154,7 +191,7 @@ public interface ErrorReporting {
 	/**
 	 * @param message The warning message to log
 	 * @param cause The cause of the warning, if any
-	 * @return This session
+	 * @return This error reporting instance
 	 */
 	default ErrorReporting warn(String message, Throwable cause) {
 		return report(new Issue(this, IssueSeverity.WARN, message, getLocation(), cause));
@@ -162,7 +199,7 @@ public interface ErrorReporting {
 
 	/**
 	 * @param message The error message to log
-	 * @return This session
+	 * @return This error reporting instance
 	 */
 	default ErrorReporting error(String message) {
 		return error(message, null);
@@ -171,18 +208,25 @@ public interface ErrorReporting {
 	/**
 	 * @param message The error message to log
 	 * @param cause The cause of the error, if any
-	 * @return This session
+	 * @return This error reporting instance
 	 */
 	default ErrorReporting error(String message, Throwable cause) {
 		return report(new Issue(this, IssueSeverity.ERROR, message, getLocation(), cause));
 	}
 
+	/**
+	 * @param issue The issue to report
+	 * @return This error reporting instance
+	 */
 	ErrorReporting report(Issue issue);
 
+	/** @return The position of the content that this error reporting is for */
 	LocatedContentPosition getFrame();
 
+	/** @return This reporting instance's parent */
 	ErrorReporting getParent();
 
+	/** @return The code location to use for a new issue */
 	default StackTraceElement getLocation() {
 		StackTraceElement[] stack = Thread.currentThread().getStackTrace();
 		if (stack == null)
@@ -193,10 +237,15 @@ public interface ErrorReporting {
 		return i < stack.length ? stack[i] : null;
 	}
 
+	/** @return The stack of file positions for this error reporting */
 	default List<LocatedFilePosition> getStack() {
 		return getStack(new ArrayList<>());
 	}
 
+	/**
+	 * @param stack The stack to add file positions for this error reporting to
+	 * @return The stack
+	 */
 	default List<LocatedFilePosition> getStack(List<LocatedFilePosition> stack) {
 		if (getFrame() != null)
 			stack.add(getFrame().getPosition(0));
@@ -216,6 +265,10 @@ public interface ErrorReporting {
 			return at(LocatedContentPosition.of(getFrame().getFileLocation(), position));
 	}
 
+	/**
+	 * @param positionOffset The offset in this reporting's content
+	 * @return A new error reporting instance that reports for content offset to the given position
+	 */
 	default ErrorReporting at(int positionOffset) {
 		if (positionOffset == 0)
 			return this;

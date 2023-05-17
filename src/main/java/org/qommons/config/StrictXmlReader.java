@@ -588,7 +588,7 @@ public class StrictXmlReader implements Named, Transaction {
 	public void check(boolean deep) throws TextParseException {
 		if (theElement == null) // MISSING
 			return;
-		Map<String, Integer> errs = null;
+		Map<String, List<FilePosition>> errs = null;
 		errs = check(new StringBuilder(), deep, errs);
 		if (errs == null)
 			return;
@@ -596,22 +596,23 @@ public class StrictXmlReader implements Named, Transaction {
 		case 0:
 			break;
 		case 1:
-			if (errs.entrySet().iterator().next().getValue() == 1)
-				throw new IllegalArgumentException(
-					getPath() + ": Illegal content on element " + getPath() + ": " + errs.keySet().iterator().next());
+			if (errs.entrySet().iterator().next().getValue().size() == 1)
+				throw new TextParseException(
+					getPath() + ": Illegal content on element " + getPath() + ": " + errs.keySet().iterator().next(),
+					errs.values().iterator().next().get(0));
 			//$FALL-THROUGH$
 		default:
 			StringBuilder str = new StringBuilder(getPath() + ": Illegal content on element ").append(getPath()).append(':');
-			for (Map.Entry<String, Integer> err : errs.entrySet()) {
+			for (Map.Entry<String, List<FilePosition>> err : errs.entrySet()) {
 				str.append("\n\t").append(err.getKey());
-				if (err.getValue() > 1)
-					str.append("(x").append(err.getValue()).append(')');
+				for (FilePosition pos : err.getValue())
+					str.append("\n\t\t").append(pos);
 			}
 			throw new TextParseException(str.toString(), getNamePosition());
 		}
 	}
 
-	private Map<String, Integer> check(StringBuilder path, boolean deep, Map<String, Integer> errs) {
+	private Map<String, List<FilePosition>> check(StringBuilder path, boolean deep, Map<String, List<FilePosition>> errs) {
 		if (theElement == null)
 			return errs;
 		int attLen = theElement.getAttributes().getLength();
@@ -622,17 +623,17 @@ public class StrictXmlReader implements Named, Transaction {
 			Node n = i < attLen ? theElement.getAttributes().item(i) : theElement.getChildNodes().item(i - attLen);
 			switch (n.getNodeType()) {
 			case Node.ELEMENT_NODE:
-				errs.compute(path + ((Element) n).getTagName(), (__, ct) -> ct == null ? 1 : ct + 1);
+				errs.computeIfAbsent(path + ((Element) n).getTagName(), __ -> new ArrayList<>()).add(SimpleXMLParser.getNamePosition(n));
 				break;
 			case Node.ATTRIBUTE_NODE:
-				errs.compute(path + n.getNodeName(), (__, ct) -> ct == null ? 1 : ct + 1);
+				errs.computeIfAbsent(path + n.getNodeName(), __ -> new ArrayList<>()).add(SimpleXMLParser.getNamePosition(n));
 				break;
 			case Node.TEXT_NODE:
 				if (!isWhiteSpace(n.getNodeValue()))
-					errs.compute(path + "text", (__, ct) -> ct == null ? 1 : ct + 1);
+					errs.computeIfAbsent(path + " text", __ -> new ArrayList<>()).add(SimpleXMLParser.getContentPosition(n).getPosition(0));
 				break;
 			case Node.CDATA_SECTION_NODE:
-				errs.compute(path + "CDATA", (__, ct) -> ct == null ? 1 : ct + 1);
+				errs.computeIfAbsent(path + " CDATA", __ -> new ArrayList<>()).add(SimpleXMLParser.getContentPosition(n).getPosition(0));
 				break;
 			default:
 				continue;

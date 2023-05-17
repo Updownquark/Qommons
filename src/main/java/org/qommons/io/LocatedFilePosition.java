@@ -29,8 +29,20 @@ public class LocatedFilePosition extends FilePosition {
 		return theFileLocation;
 	}
 
+	/** @return A string representing this position without the file path */
 	public String printPosition() {
 		return super.toString();
+	}
+
+	/** @return A shortened position string */
+	public String toShortString() {
+		if (theFileLocation == null)
+			return super.toString();
+		String loc = theFileLocation;
+		int lastSlash = loc.lastIndexOf('/');
+		if (lastSlash >= 0)
+			loc = loc.substring(lastSlash + 1);
+		return loc + "@" + super.toString();
 	}
 
 	@Override

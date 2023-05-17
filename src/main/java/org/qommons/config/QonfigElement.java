@@ -323,6 +323,15 @@ public class QonfigElement implements FileSourced {
 		return new Builder(errors, getDocument(), this, type, Collections.singleton(child), Collections.emptySet());
 	}
 
+	/** @return A string with this element's type name and shortened file location */
+	public String printLocation() {
+		StringBuilder str = new StringBuilder().append('<').append(theType.getName()).append("> ");
+		if (theFilePosition == null)
+			return str.toString();
+		str.append(theFilePosition.getPosition(0).toShortString());
+		return str.toString();
+	}
+
 	@Override
 	public String toString() {
 		StringBuilder str = new StringBuilder().append('<').append(theType.getName());
@@ -814,50 +823,31 @@ public class QonfigElement implements FileSourced {
 			Map<QonfigAttributeDef.Declared, Boolean> defaultedAttributes = new HashMap<>();
 			for (QonfigAddOn inh : completeInheritance.getExpanded(QonfigAddOn::getInheritance)) {
 				for (QonfigAttributeDef.Declared attr : inh.getDeclaredAttributes().values()) {
-					if (attrValues.get(attr) == null) {
-						switch (attr.getSpecification()) {
-						case Required:
-							break;
-						default:
-							Object defValue = attr.getDefaultValue();
-							if (defValue != null) {
-								attrValues.put(attr, new QonfigValue(defValue == null ? null : defValue.toString(), defValue,
-									attr.getDeclarer().getLocationString(), null));
-								defaultedAttributes.put(attr, attr.getSpecification() == SpecificationType.Forbidden);
-							}
-							break;
+					if (attrValues.get(attr) == null && attr.getSpecification() != SpecificationType.Required) {
+						Object defValue = attr.getDefaultValue();
+						if (defValue != null) {
+							attrValues.put(attr, new QonfigValue(defValue == null ? null : defValue.toString(), defValue,
+								attr.getDeclarer().getLocationString(), null));
+							defaultedAttributes.put(attr, attr.getSpecification() == SpecificationType.Forbidden);
 						}
 					}
 				}
 				for (Map.Entry<QonfigAttributeDef.Declared, ? extends ValueDefModifier> attr : inh.getAttributeModifiers().entrySet()) {
-					if (attrValues.get(attr.getKey()) == null) {
-						switch (attr.getValue().getSpecification()) {
-						case Required:
-							break;
-						default:
-							Object defValue = attr.getValue().getDefaultValue();
-							attrValues.put(attr.getKey(), new QonfigValue(defValue == null ? null : defValue.toString(), defValue,
-								attr.getValue().getDeclarer().getLocationString(), null));
-							defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
-							break;
-						}
+					if (attrValues.get(attr.getKey()) == null && attr.getValue().getSpecification() != SpecificationType.Required) {
+						Object defValue = attr.getValue().getDefaultValue();
+						attrValues.put(attr.getKey(), new QonfigValue(defValue == null ? null : defValue.toString(), defValue,
+							attr.getValue().getDeclarer().getLocationString(), null));
+						defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
 					}
 				}
 			}
 			for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : theType.getAllAttributes().entrySet()) {
-				if (attrValues.get(attr.getKey()) == null) {
-					switch (attr.getValue().getSpecification()) {
-					case Required:
-						break;
-					default:
-						Object defValue = attr.getValue().getDefaultValue();
-						if (defValue != null) {
-							attrValues.put(attr.getKey(),
-								new QonfigValue(defValue.toString(), defValue,
-								attr.getValue().getDeclarer().getLocationString(), null));
-							defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
-						}
-						break;
+				if (attrValues.get(attr.getKey()) == null && attr.getValue().getSpecification() != SpecificationType.Required) {
+					Object defValue = attr.getValue().getDefaultValue();
+					if (defValue != null) {
+						attrValues.put(attr.getKey(),
+							new QonfigValue(defValue.toString(), defValue, attr.getValue().getDeclarer().getLocationString(), null));
+						defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
 					}
 				}
 			}
@@ -908,7 +898,7 @@ public class QonfigElement implements FileSourced {
 			for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : theType.getAllAttributes().entrySet()) {
 				if (attrValues.get(attr.getKey()) != null)
 					continue;
-				if (attr.getValue().getSpecification() == SpecificationType.Required) {
+				else if (attr.getValue().getSpecification() == SpecificationType.Required) {
 					theErrors.error("Attribute " + attr.getKey() + " required by type " + theType);
 					continue;
 				}
@@ -923,7 +913,7 @@ public class QonfigElement implements FileSourced {
 				}
 			}
 			for (QonfigAddOn inh : completeInheritance.getExpanded(QonfigAddOn::getInheritance)) {
-				if (theType.isAssignableFrom(inh))
+				if (inh.isAssignableFrom(theType))
 					continue;
 				for (QonfigAttributeDef.Declared attr : inh.getDeclaredAttributes().values()) {
 					if (attrValues.get(attr) == null && attr.getSpecification() == SpecificationType.Required) {

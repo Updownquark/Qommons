@@ -227,6 +227,7 @@ public class SftpFileSource extends RemoteFileSource {
 	static final Set<OpenMode> WRITE_MODE = Collections
 		.unmodifiableSet(new HashSet<>(Arrays.asList(OpenMode.CREAT, OpenMode.TRUNC, OpenMode.WRITE)));
 
+	@SuppressWarnings("resource")
 	private class SftpFile extends RemoteFileBacking {
 		private String thePath;
 		private int thePermissions;

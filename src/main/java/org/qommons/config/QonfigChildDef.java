@@ -45,6 +45,10 @@ public interface QonfigChildDef extends QonfigElementOwned {
 	 */
 	boolean isFulfilledBy(QonfigChildDef child);
 
+	/**
+	 * @param element The element type to test
+	 * @return Whether the given element type is able to fulfill this child role
+	 */
 	default boolean isCompatible(QonfigElementDef element) {
 		if (getType() != null && !getType().isAssignableFrom(element))
 			return false;
