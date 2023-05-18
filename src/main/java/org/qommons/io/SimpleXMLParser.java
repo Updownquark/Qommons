@@ -206,7 +206,7 @@ public class SimpleXMLParser {
 		/**
 		 * <p>
 		 * Called when any characters occur between an element's open and close tags which is not an XML structure such as a
-		 * {@link #handleElementStart(String, FilePosition) child element}, a {@link #handleCDataContent(String, String, PositionedContent)
+		 * {@link #handleElementStart(String, FilePosition) child element}, a {@link #handleCDataContent(String, String, ContentPosition)
 		 * CDATA} structure, or a {@link #handleComment(String, ContentPosition) comment}.
 		 * </p>
 		 * <p>
@@ -246,7 +246,7 @@ public class SimpleXMLParser {
 		 * @param content The content of the CDATA structure--everything between '&lt;!CDATA[[' and ']]>'
 		 * @param position Position information for the CDATA content
 		 */
-		default void handleCDataContent(String elementName, String content, PositionedContent position) {
+		default void handleCDataContent(String elementName, String content, ContentPosition position) {
 		}
 
 		/**
@@ -368,7 +368,7 @@ public class SimpleXMLParser {
 		}
 
 		@Override
-		public void handleCDataContent(String elementName, String content, PositionedContent position) {
+		public void handleCDataContent(String elementName, String content, ContentPosition position) {
 			Node node = theDocument.createCDATASection(content);
 			node.setUserData(CONTENT_POSITION_KEY, position, null);
 			theStack.getLast().appendChild(node);
@@ -687,7 +687,7 @@ public class SimpleXMLParser {
 	private static void handleComment(ParseSession session, ParseHandler handler) throws IOException, XmlParseException {
 		if (!session.expect("-"))
 			session.throwException(false, "'<!-' here should be followed by another '-' for a comment");
-		PositionedContent comment = session.getSpecialContent("--");
+		ContentPosition comment = session.getSpecialContent("--");
 		if (session.nextChar() != '>')
 			session.throwException(true, "'--' is not allowed in comments");
 		handler.handleComment(comment.toString(), comment);
@@ -707,7 +707,7 @@ public class SimpleXMLParser {
 			else
 				session.throwException(true, "Processing instruction target must be followed by '?>' or whitespace");
 		} else {
-			PositionedContent content = session.getSpecialContent("?>");
+			ContentPosition content = session.getSpecialContent("?>");
 			handler.handleProcessingInstruction(target, pos, content.toString(), content);
 		}
 		session.nextChar();
@@ -733,7 +733,7 @@ public class SimpleXMLParser {
 			if (!attributes.add(attributeName))
 				session.throwException(true, "Multiple '" + attributeName + "' attributes specified on this element");
 			session.startAttribute(attributeName);
-			PositionedContent value = session.getTextValue(true, '"');
+			ContentPosition value = session.getTextValue(true, '"');
 			handler.handleAttributeValue(attributeName, pos, value.toString(), value);
 			session.skipWS();
 		}
@@ -753,7 +753,7 @@ public class SimpleXMLParser {
 					if (session.nextChar() == '[') { // CDATA
 						if (!session.expect("CDATA["))
 							session.throwException(true, "Bad CDATA initializer");
-						PositionedContent content = session.getSpecialContent("]]>");
+						ContentPosition content = session.getSpecialContent("]]>");
 						handler.handleCDataContent(elementName, content.toString(), content);
 					} else if (session.currentChar() == '-') { // Comment
 						handleComment(session, handler);
@@ -781,7 +781,7 @@ public class SimpleXMLParser {
 					session.nextChar(); // Move past the terminal '>'
 				}
 			} else { // Element content
-				PositionedContent content = session.getTextValue(false, '<');
+				ContentPosition content = session.getTextValue(false, '<');
 				handler.handleElementContent(elementName, content.toString(), content);
 			}
 		}
@@ -957,7 +957,7 @@ public class SimpleXMLParser {
 		}
 
 		/** Parses an attribute value or element text content */
-		PositionedContent getTextValue(boolean skipCurrent, char terminator) throws IOException, XmlParseException {
+		ContentPosition getTextValue(boolean skipCurrent, char terminator) throws IOException, XmlParseException {
 			// When we get here, we're still on the preceding quote defining the start of the value
 			char ch = skipCurrent ? nextChar() : currentChar();
 			int startPos = thePosition;
@@ -981,12 +981,11 @@ public class SimpleXMLParser {
 				theBuffer.append(ch);
 			}
 			insertChars.add(lineInsertChars.toArray());
-			return new PositionedContent(theBuffer.toString(), startPos, startLine, startChar, lineBreaks.toArray(),
-				insertChars.toArray(new int[insertChars.size()][]));
+			return createContent(theBuffer.toString(), startPos, startLine, startChar, lineBreaks, insertChars);
 		}
 
 		/** Parses special content, e.g. in a comment or CDATA, where only the termination string is not allowed */
-		PositionedContent getSpecialContent(String terminator) throws IOException, XmlParseException {
+		ContentPosition getSpecialContent(String terminator) throws IOException, XmlParseException {
 			// When we get here, we're still on the preceding character defining the start of the value
 			char ch = nextChar();
 			int startPos = thePosition;
@@ -1017,8 +1016,7 @@ public class SimpleXMLParser {
 				theBuffer.append(ch);
 			}
 			insertChars.add(lineInsertChars.toArray());
-			return new PositionedContent(theBuffer.toString(), startPos, startLine, startChar, lineBreaks.toArray(),
-				insertChars.toArray(new int[insertChars.size()][]));
+			return createContent(theBuffer.toString(), startPos, startLine, startChar, lineBreaks, insertChars);
 		}
 
 		private char parseEscapeSequence(int pos) throws IOException, XmlParseException {
@@ -1099,6 +1097,17 @@ public class SimpleXMLParser {
 				return 0; // Won't get here
 			}
 		}
+	}
+
+	private static int[][] EMPTY_INSERT_CHARS = new int[0][0];
+
+	static ContentPosition createContent(String content, int contentStartPosition, int contentStartLine, int contentStartChar,
+		IntList lineBreaks, List<int[]> insertChars) {
+		if (lineBreaks.isEmpty() && insertChars.isEmpty())
+			return new ContentPosition.Simple(new FilePosition(contentStartPosition, contentStartLine, contentStartChar), content);
+		else
+			return new PositionedContent(content, contentStartPosition, contentStartLine, contentStartChar, lineBreaks.toArray(),
+				insertChars.isEmpty() ? EMPTY_INSERT_CHARS : insertChars.toArray(new int[insertChars.size()][]));
 	}
 
 	static class PositionedContent implements ContentPosition {
@@ -1216,7 +1225,7 @@ public class SimpleXMLParser {
 				}
 
 				@Override
-				public void handleCDataContent(String elementName, String content, PositionedContent position) {
+				public void handleCDataContent(String elementName, String content, ContentPosition position) {
 					indent();
 					System.out.println("CDATA @" + printStart(position) + ": " + printContent(content));
 				}

@@ -30,8 +30,9 @@ import java.util.NoSuchElementException;
  * may be modified by one or more of them, it MUST be synchronized externally.
  * </p>
  */
-public class IntList implements Iterable<Integer>, Sealable, Cloneable
-{
+public class IntList implements Iterable<Integer>, Sealable, Cloneable {
+	private static final int[] EMPTY = new int[0];
+
 	private int [] theValue;
 
 	private int theSize;
@@ -947,8 +948,9 @@ public class IntList implements Iterable<Integer>, Sealable, Cloneable
 	}
 
 	/** @return The list of values currently in this list */
-	public int [] toArray()
-	{
+	public int[] toArray() {
+		if (theSize == 0)
+			return EMPTY;
 		int [] ret = new int [theSize];
 		System.arraycopy(theValue, 0, ret, 0, theSize);
 		return ret;
