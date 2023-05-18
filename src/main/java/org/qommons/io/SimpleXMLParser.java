@@ -142,7 +142,7 @@ public class SimpleXMLParser {
 			if (theEncoding != null)
 				str.append(" encoding=").append(theEncoding);
 			if (isStandalone != null)
-				str.append(" standalone=").append(isStandalone ? "yes" : "no");
+				str.append(" standalone=").append(isStandalone.booleanValue() ? "yes" : "no");
 			str.append(" ?>");
 			return str.toString();
 		}
