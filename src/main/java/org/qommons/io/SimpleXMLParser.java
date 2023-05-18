@@ -1112,18 +1112,14 @@ public class SimpleXMLParser {
 
 	static class PositionedContent implements ContentPosition {
 		final String theContent;
-		private final int theContentStartPosition;
-		private final int theContentStartLine;
-		private final int theContentStartChar;
+		private final FilePosition theStart;
 		private final int[] theLineBreaks;
 		private final int[][] theInsertChars;
 
 		PositionedContent(String content, int contentStartPosition, int contentStartLine, int contentStartChar, int[] lineBreaks,
 			int[][] insertChars) {
 			theContent = content;
-			theContentStartPosition = contentStartPosition;
-			theContentStartLine = contentStartLine;
-			theContentStartChar = contentStartChar;
+			theStart = new FilePosition(contentStartPosition, contentStartLine, contentStartChar);
 			theLineBreaks = lineBreaks;
 			theInsertChars = insertChars;
 		}
@@ -1135,6 +1131,8 @@ public class SimpleXMLParser {
 
 		@Override
 		public FilePosition getPosition(int index) {
+			if (index < 0)
+				return theStart;
 			if (index > theContent.length())
 				throw new IndexOutOfBoundsException(index + " of " + theContent.length());
 			int line = Arrays.binarySearch(theLineBreaks, index);
@@ -1142,15 +1140,17 @@ public class SimpleXMLParser {
 				line = -line - 1;
 			int lineStart = line == 0 ? 0 : theLineBreaks[line - 1];
 			int charPos = index - lineStart;
+			if (line == 0)
+				charPos += theStart.getCharNumber();
 			int insertIdx = Arrays.binarySearch(theInsertChars[line], index);
 			if (insertIdx < 0)
 				insertIdx = -insertIdx - 1;
 			charPos += insertIdx;
-			int pos = theContentStartPosition;
+			int pos = theStart.getPosition();
 			for (int L = 0; L < theLineBreaks.length; L++)
 				pos += theLineBreaks[L] + theInsertChars[L].length;
 			pos += charPos;
-			return new FilePosition(pos, theContentStartLine + line, theContentStartChar + charPos);
+			return new FilePosition(pos, theStart.getLineNumber() + line, charPos);
 		}
 
 		@Override
