@@ -28,6 +28,7 @@ import org.qommons.collect.BetterSet;
 import org.qommons.io.ContentPosition;
 import org.qommons.io.ErrorReporting;
 import org.qommons.io.FilePosition;
+import org.qommons.io.LocatedFilePosition;
 import org.qommons.io.SimpleXMLParser;
 import org.qommons.io.SimpleXMLParser.XmlParseException;
 import org.qommons.io.TextParseException;
@@ -206,7 +207,6 @@ public class DefaultQonfigParser implements QonfigParser {
 			doc = new QonfigDocument(location, docToolkit);
 			parseDocElement(session, QonfigElement.build(session, doc, null, rootDef), rootReader, true, el -> true);
 		}
-		session.printWarnings(System.err, location);
 		session.throwErrors(location);
 		return doc;
 	}
@@ -379,7 +379,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				name = rootReader.getAttribute("name");
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(location.toString(), rootReader.getName(), rootNameContent,
+				throw QonfigParseException.createSimple(new LocatedFilePosition(location.toString(), rootNameContent.getPosition(0)),
 					"No 'name' given for toolkit", e);
 			}
 			if (!TOOLKIT_NAME.matcher(name).matches())
@@ -388,7 +388,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				version = TOOLKIT_VERSION.matcher(rootReader.getAttribute("version"));
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(location.toString(), rootReader.getName(), rootNameContent,
+				throw QonfigParseException.createSimple(new LocatedFilePosition(location.toString(), rootNameContent.getPosition(0)),
 					"No 'version' given for toolkit", e);
 			}
 			if (!version.matches())
@@ -491,7 +491,8 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				patterns = root.getElementIfExists("value-types");
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, root.getName(), rootNameContent, e.getMessage(), e);
+				throw QonfigParseException.createSimple(new LocatedFilePosition(fileLocation, rootNameContent.getPosition(0)),
+					e.getMessage(), e);
 			}
 			if (patterns != null) {
 				QonfigParseSession patternsSession = session.at(asContent(patterns.getNamePosition(), patterns.getName()));
@@ -541,7 +542,8 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				addOnsEl = root.getElementIfExists("add-ons");
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, root.getName(), rootNameContent, e.getMessage(), e);
+				throw QonfigParseException.createSimple(new LocatedFilePosition(fileLocation, rootNameContent.getPosition(0)),
+					e.getMessage(), e);
 			}
 			if (addOnsEl != null) {
 				addOnsSession = session.at(asContent(addOnsEl.getNamePosition(), addOnsEl.getName()));
@@ -557,7 +559,8 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				elementsEl = root.getElementIfExists("elements");
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, root.getName(), rootNameContent, e.getMessage(), e);
+				throw QonfigParseException.createSimple(new LocatedFilePosition(fileLocation, rootNameContent.getPosition(0)),
+					e.getMessage(), e);
 			}
 			if (elementsEl != null) {
 				elsSession = session.at(asContent(elementsEl.getNamePosition(), elementsEl.getName()));
@@ -586,7 +589,8 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				root.getElementIfExists("auto-inheritance");
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, root.getName(), rootNameContent, e.getMessage(), e);
+				throw QonfigParseException.createSimple(new LocatedFilePosition(fileLocation, rootNameContent.getPosition(0)),
+					e.getMessage(), e);
 			}
 			try {
 				root.check();
@@ -641,7 +645,8 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				name = topLevel ? pattern.getAttribute("name") : pattern.getAttributeIfExists("name");
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, pattern.getName(), patternContent, e.getMessage(), e);
+				throw QonfigParseException.createSimple(new LocatedFilePosition(fileLocation, patternContent.getPosition(0)),
+					e.getMessage(), e);
 			}
 			switch (pattern.getName()) {
 			case "string":
@@ -663,7 +668,8 @@ public class DefaultQonfigParser implements QonfigParser {
 				try {
 					text = pattern.getTextTrimIfExists();
 				} catch (TextParseException e) {
-					throw QonfigParseException.createSimple(fileLocation, pattern.getName(), patternContent, e.getMessage(), e);
+					throw QonfigParseException.createSimple(new LocatedFilePosition(fileLocation, patternContent.getPosition(0)),
+						e.getMessage(), e);
 				}
 				if (text == null) {
 					if (name != null) {
@@ -695,7 +701,8 @@ public class DefaultQonfigParser implements QonfigParser {
 				try {
 					text = pattern.getTextTrimIfExists();
 				} catch (TextParseException e) {
-					throw QonfigParseException.createSimple(fileLocation, pattern.getName(), patternContent, e.getMessage(), e);
+					throw QonfigParseException.createSimple(new LocatedFilePosition(fileLocation, patternContent.getPosition(0)),
+						e.getMessage(), e);
 				}
 				if (text == null) {
 					session.error("Literal has no value");
@@ -730,7 +737,8 @@ public class DefaultQonfigParser implements QonfigParser {
 				try {
 					wrapped = parsePattern(pattern.getElements(0, 1).get(0), session, false);
 				} catch (TextParseException e) {
-					throw QonfigParseException.createSimple(fileLocation, pattern.getName(), patternContent, e.getMessage(), e);
+					throw QonfigParseException.createSimple(new LocatedFilePosition(fileLocation, patternContent.getPosition(0)),
+						e.getMessage(), e);
 				}
 				try {
 					pattern.check();
@@ -796,8 +804,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				autoInheritEl = root.getElementIfExists("auto-inheritance");
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, root.getName(), asContent(root.getNamePosition(), root.getName()),
-					e.getMessage(), e);
+				throw QonfigParseException.createSimple(new LocatedFilePosition(fileLocation, root.getNamePosition()), e.getMessage(), e);
 			}
 			if (autoInheritEl != null) {
 				for (StrictXmlReader ai : autoInheritEl.getElements("auto-inherit"))
@@ -1000,8 +1007,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				text = element.getElementIfExists(modify ? "value-mod" : "value");
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, root.getName(), asContent(root.getNamePosition(), root.getName()),
-					e.getMessage(), e);
+				throw QonfigParseException.createSimple(new LocatedFilePosition(fileLocation, root.getNamePosition()), e.getMessage(), e);
 			}
 			if (text == null)
 				return;
@@ -1526,8 +1532,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				builder = theBuilders.get(element.getAttribute("name"));
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, root.getName(), asContent(root.getNamePosition(), root.getName()),
-					e.getMessage(), e);
+				throw QonfigParseException.createSimple(new LocatedFilePosition(fileLocation, root.getNamePosition()), e.getMessage(), e);
 			}
 			builder.withMetaData(md -> {
 				parseDocElement(session, md, element, false, child -> !TOOLKIT_EL_NAMES.contains(child.getName()));
@@ -1539,8 +1544,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				builder = theBuilders.get(element.getAttribute("name"));
 			} catch (TextParseException e) {
-				throw QonfigParseException.createSimple(fileLocation, root.getName(), asContent(root.getNamePosition(), root.getName()),
-					e.getMessage(), e);
+				throw QonfigParseException.createSimple(new LocatedFilePosition(fileLocation, root.getNamePosition()), e.getMessage(), e);
 			}
 			if (completed.contains(builder.getName()))
 				return;

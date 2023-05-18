@@ -5,9 +5,8 @@ import java.io.PrintWriter;
 import java.util.Arrays;
 import java.util.List;
 
-import org.qommons.io.ContentPosition;
 import org.qommons.io.ErrorReporting;
-import org.qommons.io.LocatedContentPosition;
+import org.qommons.io.LocatedFilePosition;
 
 /** Thrown by {@link QonfigParser}s if a toolkit or document cannot be parsed from XML */
 public class QonfigParseException extends Exception {
@@ -71,17 +70,14 @@ public class QonfigParseException extends Exception {
 
 	/**
 	 * 
-	 * @param fileLocation The location of the Qonfig toolkit or document where the exception occurred
-	 * @param elementName The name of the element where the exception occurred
 	 * @param position The position in the file where the exception occurred
 	 * @param message The message for the dev
 	 * @param cause The cause of the exception--may be null
 	 * @return A {@link QonfigParseException} to throw
 	 */
-	public static QonfigParseException createSimple(String fileLocation, String elementName, ContentPosition position, String message,
-		Throwable cause) {
+	public static QonfigParseException createSimple(LocatedFilePosition position, String message, Throwable cause) {
 		List<ErrorReporting.Issue> issues = Arrays
-			.asList(new ErrorReporting.Issue(new ErrorReporting.Default(null, LocatedContentPosition.of(fileLocation, position)),
+			.asList(new ErrorReporting.Issue(position,
 				ErrorReporting.IssueSeverity.ERROR, message, Thread.currentThread().getStackTrace()[0], cause));
 		if (cause != null)
 			return new QonfigParseException(message, issues, cause);

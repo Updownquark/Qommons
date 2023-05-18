@@ -270,11 +270,12 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 
 		@Override
 		protected QonfigAddOn create() {
-			return new QonfigAddOn(theSession.getToolkit(), getName(), isAbstract(), getSuperElement(), getInheritance(), //
-				getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueModifier>) getAttributeModifiers(), getAttributesByName(), //
-				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildModifier>) getChildModifiers(), getChildrenByName(), //
+			return new QonfigAddOn(theSession.getToolkit(), getName(), super.isAbstract(), getSuperElement(), getInheritance(), //
+				getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueModifier>) super.getAttributeModifiers(),
+				getAttributesByName(), //
+				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildModifier>) super.getChildModifiers(), getChildrenByName(), //
 				getValue(), getFullInheritance(), //
-				getMetaSpec() == null ? null : (QonfigAddOn) getMetaSpec().get(), getSession().getFrame());
+				super.getMetaSpec() == null ? null : (QonfigAddOn) super.getMetaSpec().get(), getSession().getFileLocation());
 		}
 
 		@Override

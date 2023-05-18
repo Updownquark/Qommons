@@ -129,12 +129,12 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		@Override
 		protected QonfigElementOrAddOn create() {
 			return new QonfigElementDef(theSession.getToolkit(), getName(), getSuperElement(), getInheritance(), isAbstract(), //
-				getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueDefModifier>) getAttributeModifiers(),
+				getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueDefModifier>) super.getAttributeModifiers(),
 				getCompiledAttributes(), getAttributesByName(), //
-				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildDefModifier>) getChildModifiers(), getCompiledChildren(),
+				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildDefModifier>) super.getChildModifiers(), getCompiledChildren(),
 				getChildrenByName(), //
-				getValue(), getFullInheritance(), //
-				getMetaSpec() == null ? null : (QonfigElementDef) getMetaSpec().get(), getSession().getFrame());
+				super.getValue(), getFullInheritance(), //
+				super.getMetaSpec() == null ? null : (QonfigElementDef) super.getMetaSpec().get(), getSession().getFileLocation());
 		}
 	}
 }

@@ -5,7 +5,6 @@ import java.util.function.Supplier;
 import org.qommons.MultiInheritanceSet;
 import org.qommons.config.QonfigInterpreterCore.CoreSession;
 import org.qommons.io.ErrorReporting;
-import org.qommons.io.LocatedContentPosition;
 
 /**
  * A session with added capabilities and utilities. These sessions are provided by a {@link SpecialSessionImplementation} via
@@ -110,17 +109,7 @@ public interface SpecialSession<QIS extends SpecialSession<QIS>> extends Abstrac
 	}
 
 	@Override
-	default LocatedContentPosition getFrame() {
-		return getWrapped().getFrame();
-	}
-
-	@Override
-	default ErrorReporting getParent() {
-		return getWrapped().getParent();
-	}
-
-	@Override
-	default ErrorReporting at(LocatedContentPosition position) {
-		return getWrapped().at(position);
+	default ErrorReporting reporting() {
+		return getWrapped().reporting();
 	}
 }

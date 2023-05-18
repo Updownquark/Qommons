@@ -168,9 +168,8 @@ public interface QonfigValueType extends Named, FileSourced {
 			QonfigValueType best = null;
 			for (QonfigValueType component : theComponents) {
 				testEnv.getErrors().clear();
-				testEnv.getWarnings().clear();
 				Object parsed = component.parse(value, tk, testEnv);
-				if (testEnv.getErrors().isEmpty() && testEnv.getWarnings().isEmpty())
+				if (testEnv.getErrors().isEmpty())
 					return parsed;
 				else if (best == null && testEnv.getErrors().isEmpty())
 					best = component;

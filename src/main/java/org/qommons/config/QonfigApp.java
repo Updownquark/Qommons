@@ -11,6 +11,8 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import org.qommons.config.QonfigInterpreterCore.Builder;
+import org.qommons.io.ErrorReporting;
+import org.qommons.io.LocatedFilePosition;
 import org.qommons.io.SimpleXMLParser.XmlParseException;
 import org.qommons.io.TextParseException;
 
@@ -159,7 +161,7 @@ public class QonfigApp {
 		Set<QonfigToolkit> toolkits = new LinkedHashSet<>();
 		addToolkits(qonfigDoc.getDocToolkit(), toolkits);
 		QonfigInterpreterCore.Builder coreBuilder = QonfigInterpreterCore.build(QonfigApp.class,
-			toolkits.toArray(new QonfigToolkit[toolkits.size()]));
+			new ErrorReporting.Default(qonfigDoc.getRoot().getFilePosition()), toolkits.toArray(new QonfigToolkit[toolkits.size()]));
 		for (SpecialSessionImplementation<?> ssi : create(appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "special-session"),
 			SpecialSessionImplementation.class)) {
 			addSpecial(ssi, coreBuilder);
@@ -191,8 +193,9 @@ public class QonfigApp {
 			try {
 				elType = Class.forName(el.getValueText());
 			} catch (ClassNotFoundException e) {
-				throw QonfigParseException.createSimple(el.getDocument().getLocation(), el.getType().getName(),
-					el.getValue().position, "No such " + type.getSimpleName() + " findable: " + el.getValueText(), e);
+				throw QonfigParseException.createSimple(
+					new LocatedFilePosition(el.getDocument().getLocation(), el.getValue().position.getPosition(0)),
+					"No such " + type.getSimpleName() + " findable: " + el.getValueText(), e);
 			}
 			if (!type.isAssignableFrom(elType))
 				throw new IllegalArgumentException("Class " + elType.getName() + " is not a " + type.getName());
@@ -200,12 +203,13 @@ public class QonfigApp {
 			try {
 				value = (T) elType.newInstance();
 			} catch (IllegalAccessException e) {
-				throw QonfigParseException.createSimple(el.getDocument().getLocation(), el.getType().getName(),
-					el.getValue().position,
+				throw QonfigParseException.createSimple(
+					new LocatedFilePosition(el.getDocument().getLocation(), el.getValue().position.getPosition(0)),
 					"Could not access " + type.getSimpleName() + " " + elType.getName() + " for instantiation", e);
 			} catch (InstantiationException e) {
-				throw QonfigParseException.createSimple(el.getDocument().getLocation(), el.getType().getName(),
-					el.getValue().position, "Could not instantiate " + type.getSimpleName() + " " + elType.getName(), e);
+				throw QonfigParseException.createSimple(
+					new LocatedFilePosition(el.getDocument().getLocation(), el.getValue().position.getPosition(0)),
+					"Could not instantiate " + type.getSimpleName() + " " + elType.getName(), e);
 			}
 			values.add(value);
 		}

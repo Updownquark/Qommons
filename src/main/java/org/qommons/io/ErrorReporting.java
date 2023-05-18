@@ -2,32 +2,31 @@ package org.qommons.io;
 
 import java.io.PrintStream;
 import java.io.PrintWriter;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 /** An interface to allow errors and warnings to be reported in a traceable way without terminating execution with an exception */
 public interface ErrorReporting {
 	/** Default {@link ErrorReporting} implementation */
 	public static class Default implements ErrorReporting {
-		private final Default theParent;
 		private final LocatedContentPosition theFrame;
+		private final Set<String> theIgnoredClasses;
 
-		/**
-		 * @param parent The parent reporting
-		 * @param frame The position of this reporting
-		 */
-		public Default(Default parent, LocatedContentPosition frame) {
-			theParent = parent;
+		/** @param frame The position of this reporting */
+		public Default(LocatedContentPosition frame) {
 			theFrame = frame;
+			theIgnoredClasses = new LinkedHashSet<>();
+			theIgnoredClasses.add(ErrorReporting.class.getName());
+			theIgnoredClasses.add(Default.class.getName());
+		}
+
+		private Default(LocatedContentPosition frame, Set<String> ignoredClasses) {
+			theFrame = frame;
+			theIgnoredClasses = ignoredClasses;
 		}
 
 		@Override
-		public ErrorReporting getParent() {
-			return theParent;
-		}
-
-		@Override
-		public LocatedContentPosition getFrame() {
+		public LocatedContentPosition getFileLocation() {
 			return theFrame;
 		}
 
@@ -39,7 +38,17 @@ public interface ErrorReporting {
 
 		@Override
 		public ErrorReporting at(LocatedContentPosition position) {
-			return new Default(this, position);
+			return new Default(position, theIgnoredClasses);
+		}
+
+		@Override
+		public void ignoreClass(String className) {
+			theIgnoredClasses.add(className);
+		}
+
+		@Override
+		public StackTraceElement getCodeLocation() {
+			return Impl.getCodeLocation(theIgnoredClasses);
 		}
 
 		@Override
@@ -50,20 +59,21 @@ public interface ErrorReporting {
 
 	/** Severity of a reported issue in an {@link ErrorReporting} instance */
 	public enum IssueSeverity {
-		/** An error that is likely to cause the program to fail its objectives in significant ways */
-		ERROR,
+		/** An information message which should not have any adverse effect */
+		INFO,
 		/**
 		 * An error that may cause the program to behave differently than intended, but which will not likely keep the program from being
 		 * useful
 		 */
 		WARN,
-		/** An information message which should not have any adverse effect */
-		INFO
+		/** An error that is likely to cause the program to fail its objectives in significant ways */
+		ERROR
 	}
 
 	/** A reported issue in an {@link ErrorReporting} */
 	public class Issue {
-		private final ErrorReporting theFrame;
+		/** The file location at which this issue was reported */
+		public final LocatedFilePosition fileLocation;
 		/** The severity of this issue */
 		public final IssueSeverity severity;
 		/** The message for this issue */
@@ -74,23 +84,19 @@ public interface ErrorReporting {
 		public final Throwable cause;
 
 		/**
-		 * @param frame The error reporting instance in which this issue was reported
+		 * @param fileLocation The file location at which this issue was reported
 		 * @param severity The severity of this issue
 		 * @param message The message for this issue
 		 * @param codeLocation The location in the code where this issue was reported from
 		 * @param cause The exception that caused this issue
 		 */
-		public Issue(ErrorReporting frame, IssueSeverity severity, String message, StackTraceElement codeLocation, Throwable cause) {
-			theFrame = frame;
+		public Issue(LocatedFilePosition fileLocation, IssueSeverity severity, String message, StackTraceElement codeLocation,
+			Throwable cause) {
+			this.fileLocation = fileLocation;
 			this.severity = severity;
 			this.message = message;
 			this.codeLocation = codeLocation;
 			this.cause = cause;
-		}
-
-		/** @return The error reporting instance in which this issue was reported */
-		public ErrorReporting getFrame() {
-			return theFrame;
 		}
 
 		@Override
@@ -117,17 +123,10 @@ public interface ErrorReporting {
 				w.append(": ");
 				w.append(message);
 			}
-			w.append("\n\t at ");
-			w.append(codeLocation.toString());
-			String file = null;
-			for (LocatedFilePosition frame : theFrame.getStack()) {
-				w.append("\n\t at ");
-				if (!frame.getFileLocation().equals(file)) {
-					w.append(frame.toString());
-					file = frame.getFileLocation();
-				} else
-					w.append(frame.printPosition());
-			}
+			if (codeLocation != null)
+				w.append("\n\t at ").append(codeLocation.toString());
+			if (fileLocation != null)
+				w.append("\n\t at ").append(fileLocation.toString());
 			if (cause != null) {
 				w.append("\nCaused by: ");
 				cause.printStackTrace(w);
@@ -145,17 +144,10 @@ public interface ErrorReporting {
 				w.append(": ");
 				w.append(message);
 			}
-			w.append("\n\t at ");
-			w.append(codeLocation.toString());
-			String file = null;
-			for (LocatedFilePosition frame : theFrame.getStack()) {
-				w.append("\n\t at ");
-				if (!frame.getFileLocation().equals(file)) {
-					w.append(frame.toString());
-					file = frame.getFileLocation();
-				} else
-					w.append(frame.printPosition());
-			}
+			if (codeLocation != null)
+				w.append("\n\t at ").append(codeLocation.toString());
+			if (fileLocation != null)
+				w.append("\n\t at ").append(fileLocation.toString());
 			if (cause != null) {
 				w.append("\nCaused by: ");
 				cause.printStackTrace(w);
@@ -177,7 +169,7 @@ public interface ErrorReporting {
 	 * @return This error reporting instance
 	 */
 	default ErrorReporting info(String message, Throwable cause) {
-		return report(new Issue(this, IssueSeverity.INFO, message, getLocation(), cause));
+		return report(new Issue(getFileLocation().getPosition(0), IssueSeverity.INFO, message, getCodeLocation(), cause));
 	}
 
 	/**
@@ -194,7 +186,7 @@ public interface ErrorReporting {
 	 * @return This error reporting instance
 	 */
 	default ErrorReporting warn(String message, Throwable cause) {
-		return report(new Issue(this, IssueSeverity.WARN, message, getLocation(), cause));
+		return report(new Issue(getFileLocation().getPosition(0), IssueSeverity.WARN, message, getCodeLocation(), cause));
 	}
 
 	/**
@@ -211,7 +203,7 @@ public interface ErrorReporting {
 	 * @return This error reporting instance
 	 */
 	default ErrorReporting error(String message, Throwable cause) {
-		return report(new Issue(this, IssueSeverity.ERROR, message, getLocation(), cause));
+		return report(new Issue(getFileLocation().getPosition(0), IssueSeverity.ERROR, message, getCodeLocation(), cause));
 	}
 
 	/**
@@ -221,38 +213,12 @@ public interface ErrorReporting {
 	ErrorReporting report(Issue issue);
 
 	/** @return The position of the content that this error reporting is for */
-	LocatedContentPosition getFrame();
+	LocatedContentPosition getFileLocation();
 
-	/** @return This reporting instance's parent */
-	ErrorReporting getParent();
+	void ignoreClass(String className);
 
 	/** @return The code location to use for a new issue */
-	default StackTraceElement getLocation() {
-		StackTraceElement[] stack = Thread.currentThread().getStackTrace();
-		if (stack == null)
-			return null;
-		int i;
-		for (i = 1; i < stack.length && stack[i].getClassName().equals(ErrorReporting.class.getName()); i++) {//
-		}
-		return i < stack.length ? stack[i] : null;
-	}
-
-	/** @return The stack of file positions for this error reporting */
-	default List<LocatedFilePosition> getStack() {
-		return getStack(new ArrayList<>());
-	}
-
-	/**
-	 * @param stack The stack to add file positions for this error reporting to
-	 * @return The stack
-	 */
-	default List<LocatedFilePosition> getStack(List<LocatedFilePosition> stack) {
-		if (getFrame() != null)
-			stack.add(getFrame().getPosition(0));
-		if (getParent() != null)
-			getParent().getStack(stack);
-		return stack;
-	}
+	StackTraceElement getCodeLocation();
 
 	/**
 	 * @param position The file position of the element this reporting is for
@@ -262,7 +228,7 @@ public interface ErrorReporting {
 		if (position instanceof LocatedContentPosition)
 			return at((LocatedContentPosition) position);
 		else
-			return at(LocatedContentPosition.of(getFrame().getFileLocation(), position));
+			return at(LocatedContentPosition.of(getFileLocation().getFileLocation(), position));
 	}
 
 	/**
@@ -272,7 +238,7 @@ public interface ErrorReporting {
 	default ErrorReporting at(int positionOffset) {
 		if (positionOffset == 0)
 			return this;
-		return at(getFrame().subSequence(positionOffset));
+		return at(getFileLocation().subSequence(positionOffset));
 	}
 
 	/**
@@ -280,4 +246,19 @@ public interface ErrorReporting {
 	 * @return A reporting for the child
 	 */
 	ErrorReporting at(LocatedContentPosition position);
+
+	class Impl {
+		private Impl() {
+		}
+
+		static StackTraceElement getCodeLocation(Set<String> ignoreClasses) {
+			StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+			if (stack == null)
+				return null;
+			int i;
+			for (i = 1; i < stack.length && ignoreClasses.contains(stack[i].getClassName()); i++) {//
+			}
+			return i < stack.length ? stack[i] : null;
+		}
+	}
 }

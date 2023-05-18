@@ -972,7 +972,7 @@ public class QonfigElement implements FileSourced {
 			}
 
 			theElement = new QonfigElement(theDocument, theParent, theType, theInheritance, theParentRoles, theDeclaredRoles, attrValues,
-				theChildren, theChildrenByRole, theValue, theErrors.getFrame());
+				theChildren, theChildrenByRole, theValue, theErrors.getFileLocation());
 
 			theStage = 1;
 		}

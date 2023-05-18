@@ -14,8 +14,7 @@ import org.qommons.ClassMap;
 import org.qommons.ClassMap.TypeMatch;
 import org.qommons.MultiInheritanceSet;
 import org.qommons.QommonsUtils;
-import org.qommons.StatusReportAccumulator;
-import org.qommons.StatusReportAccumulator.Status;
+import org.qommons.Transaction;
 import org.qommons.io.ErrorReporting;
 import org.qommons.io.LocatedContentPosition;
 import org.qommons.io.LocatedFilePosition;
@@ -28,6 +27,7 @@ public class QonfigInterpreterCore {
 		private final CoreSession theParent;
 		private final QonfigElement theElement;
 		private final QonfigElementOrAddOn theFocusType;
+		private final ExceptionThrowingReporting theReporting;
 		private final MultiInheritanceSet<QonfigElementOrAddOn> theTypes;
 		private final int theChildIndex;
 		private final Map<String, Object> theValues;
@@ -42,11 +42,13 @@ public class QonfigInterpreterCore {
 		 * @param source The session (if any) that {@link #intepretRoot(QonfigElement)} was called on
 		 * @throws QonfigInterpretationException If an error occurs initializing this session
 		 */
-		protected CoreSession(QonfigInterpreterCore interpreter, QonfigElement root, CoreSession source)
+		protected CoreSession(QonfigInterpreterCore interpreter, QonfigElement root, CoreSession source,
+			ExceptionThrowingReporting reporting)
 			throws QonfigInterpretationException {
 			theInterpreter = interpreter;
 			theParent = source;
 			theElement = root;
+			theReporting = reporting;
 			theFocusType = root.getType();
 			theTypes = MultiInheritanceSet.empty();
 			theValues = new HashMap<>();
@@ -76,9 +78,11 @@ public class QonfigInterpreterCore {
 			theChildIndex = childIndex;
 			theToolkitSessions = new ClassMap<>();
 			if (parent.getElement() == element) {
+				theReporting = parent.theReporting;
 				theValues = parent.theValues;
 				theLocalValueKeys = parent.theLocalValueKeys;
 			} else {
+				theReporting = parent.theReporting.at(element.getFilePosition());
 				theValues = new HashMap<>(parent.theValues);
 				theValues.keySet().removeAll(parent.theLocalValueKeys);
 				theLocalValueKeys = new HashSet<>();
@@ -113,14 +117,14 @@ public class QonfigInterpreterCore {
 				MultiInheritanceSet<QonfigElementOrAddOn> types = MultiInheritanceSet.create(QonfigElementOrAddOn::isAssignableFrom);
 				types.add(theFocusType);
 				types.addAll(theTypes.values());
-				try {
+				try (Transaction t = theReporting.interpreting()) {
 					return theInterpreter.interpret(this, theElement, focusType, MultiInheritanceSet.unmodifiable(types), theChildIndex);
 				} catch (QonfigInterpretationException e) {
 					throw new IllegalStateException("Initialization failure for same-element session?", e);
 				}
 			} else {
 				String msg = "Element " + theElement + " is not an instance of " + focusType;
-				error(msg);
+				reporting().error(msg);
 				throw new IllegalStateException(msg);
 			}
 		}
@@ -130,14 +134,14 @@ public class QonfigInterpreterCore {
 			if (theFocusType == type && theTypes.isEmpty())
 				return this;
 			else if (theElement.isInstance(type)) {
-				try {
+				try (Transaction t = theReporting.interpreting()) {
 					return theInterpreter.interpret(this, theElement, type, MultiInheritanceSet.empty(), theChildIndex);
 				} catch (QonfigInterpretationException e) {
 					throw new IllegalStateException("Initialization failure for same-element session?", e);
 				}
 			} else {
 				String msg = "Element " + theElement + " is not an instance of " + type;
-				error(msg);
+				reporting().error(msg);
 				throw new IllegalStateException(msg);
 			}
 		}
@@ -237,189 +241,89 @@ public class QonfigInterpreterCore {
 			return theInterpreter.interpret(root);
 		}
 
-		static class RuntimeInterpretationException extends RuntimeException {
-			private final LocatedFilePosition thePosition;
-
-			public RuntimeInterpretationException(String message, LocatedFilePosition position) {
-				super(message);
-				thePosition = position;
-			}
-
-			public RuntimeInterpretationException(String message, Throwable cause, LocatedFilePosition position) {
-				super(message, cause);
-				thePosition = position;
-			}
-
-			public LocatedFilePosition getPosition() {
-				return thePosition;
-			}
-
-			public QonfigInterpretationException toIntepreterException() {
-				QonfigInterpretationException qie;
-				if (getCause() != this)
-					qie = new QonfigInterpretationException(getMessage(), getPosition(), 0, getCause());
-				else
-					qie = new QonfigInterpretationException(getMessage(), getPosition(), 0);
-				qie.setStackTrace(getStackTrace());
-				return qie;
-			}
-		}
-
 		@Override
-		public LocatedContentPosition getFrame() {
-			return theElement.getFilePosition();
-		}
-
-		@Override
-		public ErrorReporting getParent() {
-			return theParent;
-		}
-
-		@Override
-		public StackTraceElement getLocation() {
-			StackTraceElement[] stack = Thread.currentThread().getStackTrace();
-			if (stack == null)
-				return null;
-			int i;
-			for (i = 1; i < stack.length && (//
-			stack[i].getClassName().equals(QonfigParseSession.class.getName())//
-				|| stack[i].getClassName().equals(QonfigInterpreterCore.class.getName())//
-				|| stack[i].getClassName().equals(QonfigInterpreterCore.CoreSession.class.getName())//
-				|| stack[i].getClassName().equals(AbstractQIS.class.getName())//
-			); i++) {//
-			}
-			return i < stack.length ? stack[i] : null;
-		}
-
-		@Override
-		public ErrorReporting at(LocatedContentPosition position) {
-			class ChildErrorReporting implements ErrorReporting {
-				private final ErrorReporting theERParent;
-				private final LocatedContentPosition theFrame;
-
-				public ChildErrorReporting(ErrorReporting parent, LocatedContentPosition frame) {
-					theERParent = parent;
-					theFrame = frame;
-				}
-
-				@Override
-				public ErrorReporting getParent() {
-					return theERParent;
-				}
-
-				@Override
-				public LocatedContentPosition getFrame() {
-					return theFrame;
-				}
-
-				@Override
-				public ErrorReporting report(Issue issue) {
-					if (issue.severity == IssueSeverity.ERROR) {
-						if (issue.cause == null)
-							throw new RuntimeInterpretationException(issue.message, issue.getFrame().getFrame().getPosition(0));
-						else
-							throw new RuntimeInterpretationException(issue.message, issue.cause,
-								issue.getFrame().getFrame().getPosition(0));
-					} else
-						issue.printStackTrace(issue.severity == IssueSeverity.INFO ? System.out : System.err);
-					return this;
-				}
-
-				@Override
-				public ErrorReporting at(LocatedContentPosition frame) {
-					return new ChildErrorReporting(this, frame);
-				}
-
-				@Override
-				public ErrorReporting error(String message, Throwable cause) {
-					LocatedFilePosition position2 = new LocatedFilePosition(theElement.getDocument().getLocation(),
-						theElement.getFilePosition().getPosition(0));
-					if (cause == null)
-						throw new RuntimeInterpretationException(message, position2);
-					else
-						throw new RuntimeInterpretationException(message, cause, position2);
-				}
-			}
-			return new ChildErrorReporting(this, position);
+		public ErrorReporting reporting() {
+			return theReporting;
 		}
 
 		@Override
 		public <T> T interpret(QonfigElementOrAddOn as, Class<T> asType) throws QonfigInterpretationException {
-			ClassMap<QonfigCreatorHolder<?>> creators = theInterpreter.theCreators.get(as);
-			QonfigCreatorHolder<T> creator = creators == null ? null
-				: (QonfigCreatorHolder<T>) creators.get(asType, ClassMap.TypeMatch.SUB_TYPE);
-			if (creator == null) {
-				String msg = "No creator registered for element " + as.getName() + " and target type " + asType.getName();
-				error(msg);
-				throw new IllegalStateException(msg);
-			}
-			CoreSession session;
-			if (theFocusType == creator.element)
-				session = this;
-			else if (theElement.isInstance(creator.element))
-				session = asElement(as);
-			else {
-				String msg = "Element " + theElement + " is not an instance of " + as;
-				error(msg);
-				throw new IllegalStateException(msg);
-			}
-			QonfigModifierHolder<T>[] modifiers = getModifiers(creator.type);
-			Object[] modifierPrepValues = new Object[modifiers.length];
-			int mIdx = 0;
-			for (QonfigModifierHolder<T> modifier : modifiers) {
+			try (Transaction t = theReporting.interpreting()) {
+				ClassMap<QonfigCreatorHolder<?>> creators = theInterpreter.theCreators.get(as);
+				QonfigCreatorHolder<T> creator = creators == null ? null
+					: (QonfigCreatorHolder<T>) creators.get(asType, ClassMap.TypeMatch.SUB_TYPE);
+				if (creator == null) {
+					String msg = "No creator registered for element " + as.getName() + " and target type " + asType.getName();
+					reporting().error(msg);
+				}
+				CoreSession session;
+				if (theFocusType == creator.element)
+					session = this;
+				else if (theElement.isInstance(creator.element))
+					session = asElement(as);
+				else {
+					String msg = "Element " + theElement + " is not an instance of " + as;
+					reporting().error(msg);
+					throw new IllegalStateException(msg);
+				}
+				QonfigModifierHolder<T>[] modifiers = getModifiers(creator.type);
+				Object[] modifierPrepValues = new Object[modifiers.length];
+				int mIdx = 0;
+				for (QonfigModifierHolder<T> modifier : modifiers) {
+					try {
+						if (theElement.isInstance(modifier.element))
+							modifierPrepValues[mIdx++] = modifier.modifier.prepareSession(session.asElement(modifier.element));
+					} catch (RuntimeInterpretationException e) {
+						throw e.toIntepreterException();
+					} catch (RuntimeException e) {
+						LocatedFilePosition position = theElement.getFilePosition().getPosition(0);
+						throw new QonfigInterpretationException(position, 0, e);
+					}
+				}
+				for (mIdx = modifiers.length - 1; mIdx >= 0; mIdx--) {
+					QonfigModifierHolder<T> modifier = modifiers[mIdx];
+					try {
+						if (theElement.isInstance(modifier.element))
+							modifier.modifier.postPrepare(session.asElement(modifier.element), modifierPrepValues[mIdx]);
+					} catch (RuntimeInterpretationException e) {
+						throw e.toIntepreterException();
+					} catch (RuntimeException e) {
+						LocatedFilePosition position = theElement.getFilePosition().getPosition(0);
+						throw new QonfigInterpretationException(position, 0, e);
+					}
+				}
+				T value;
 				try {
-					if (theElement.isInstance(modifier.element))
-						modifierPrepValues[mIdx++] = modifier.modifier.prepareSession(session.asElement(modifier.element));
+					value = creator.creator.createValue(session);
 				} catch (RuntimeInterpretationException e) {
 					throw e.toIntepreterException();
 				} catch (RuntimeException e) {
 					LocatedFilePosition position = theElement.getFilePosition().getPosition(0);
 					throw new QonfigInterpretationException(position, 0, e);
 				}
-			}
-			for (mIdx = modifiers.length - 1; mIdx >= 0; mIdx--) {
-				QonfigModifierHolder<T> modifier = modifiers[mIdx];
+				for (mIdx = 0; mIdx < modifiers.length; mIdx++) {
+					QonfigModifierHolder<T> modifier = modifiers[mIdx];
+					try {
+						if (theElement.isInstance(modifier.element))
+							value = modifier.modifier.modifyValue(value, session.asElement(modifier.element), modifierPrepValues[mIdx]);
+					} catch (RuntimeInterpretationException e) {
+						throw e.toIntepreterException();
+					} catch (RuntimeException e) {
+						LocatedFilePosition position = theElement.getFilePosition().getPosition(0);
+						throw new QonfigInterpretationException(position, 0, e);
+					}
+				}
 				try {
-					if (theElement.isInstance(modifier.element))
-						modifier.modifier.postPrepare(session.asElement(modifier.element), modifierPrepValues[mIdx]);
+					// This is safe because the creator created the value
+					value = ((QonfigValueCreator<T>) creator.creator).postModification(value, session);
 				} catch (RuntimeInterpretationException e) {
 					throw e.toIntepreterException();
 				} catch (RuntimeException e) {
 					LocatedFilePosition position = theElement.getFilePosition().getPosition(0);
 					throw new QonfigInterpretationException(position, 0, e);
 				}
+				return value;
 			}
-			T value;
-			try {
-				value = creator.creator.createValue(session);
-			} catch (RuntimeInterpretationException e) {
-				throw e.toIntepreterException();
-			} catch (RuntimeException e) {
-				LocatedFilePosition position = theElement.getFilePosition().getPosition(0);
-				throw new QonfigInterpretationException(position, 0, e);
-			}
-			for (mIdx = 0; mIdx < modifiers.length; mIdx++) {
-				QonfigModifierHolder<T> modifier = modifiers[mIdx];
-				try {
-					if (theElement.isInstance(modifier.element))
-						value = modifier.modifier.modifyValue(value, session.asElement(modifier.element), modifierPrepValues[mIdx]);
-				} catch (RuntimeInterpretationException e) {
-					throw e.toIntepreterException();
-				} catch (RuntimeException e) {
-					LocatedFilePosition position = theElement.getFilePosition().getPosition(0);
-					throw new QonfigInterpretationException(position, 0, e);
-				}
-			}
-			try {
-				// This is safe because the creator created the value
-				value = ((QonfigValueCreator<T>) creator.creator).postModification(value, session);
-			} catch (RuntimeInterpretationException e) {
-				throw e.toIntepreterException();
-			} catch (RuntimeException e) {
-				LocatedFilePosition position = theElement.getFilePosition().getPosition(0);
-				throw new QonfigInterpretationException(position, 0, e);
-			}
-			return value;
 		}
 
 		@Override
@@ -689,6 +593,7 @@ public class QonfigInterpreterCore {
 	private final Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> theCreators;
 	private final Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> theModifiers;
 	private final ClassMap<SpecialSessionImplementation<?>> theSpecialSessions;
+	private final ExceptionThrowingReporting theReporting;
 
 	/**
 	 * @param callingClass The class building the interpreter
@@ -697,10 +602,12 @@ public class QonfigInterpreterCore {
 	 * @param specialSessions Special session implementations configured for the interpreter
 	 */
 	protected QonfigInterpreterCore(Class<?> callingClass, Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
-		Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> modifiers, ClassMap<SpecialSessionImplementation<?>> specialSessions) {
+		Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> modifiers, ClassMap<SpecialSessionImplementation<?>> specialSessions,
+		ExceptionThrowingReporting reporting) {
 		theCallingClass = callingClass;
 		theCreators = creators;
 		theModifiers = modifiers;
+		theReporting = reporting;
 		theSpecialSessions = specialSessions.copy();
 		// Compile and check dependencies
 		StringBuilder error = null;
@@ -742,7 +649,7 @@ public class QonfigInterpreterCore {
 	 * @throws QonfigInterpretationException If an error occurs initializing the session
 	 */
 	protected CoreSession interpretRoot(QonfigElement element, CoreSession source) throws QonfigInterpretationException {
-		return new CoreSession(this, element, source);
+		return new CoreSession(this, element, source, theReporting);
 	}
 
 	/**
@@ -767,7 +674,7 @@ public class QonfigInterpreterCore {
 		private final Class<?> theCallingClass;
 		private final Set<QonfigToolkit> theToolkits;
 		private final QonfigToolkit theToolkit;
-		private final StatusReportAccumulator<QonfigElementOrAddOn> theStatus;
+		private final ExceptionThrowingReporting theReporting;
 		private final Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> theCreators;
 		private final Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> theModifiers;
 		private final ClassMap<SpecialSessionImplementation<?>> theSpecialSessions;
@@ -778,16 +685,23 @@ public class QonfigInterpreterCore {
 		 * @param callingClass The class building the interpreter
 		 * @param toolkits The toolkits to interpret documents for
 		 */
-		protected Builder(Class<?> callingClass, QonfigToolkit... toolkits) {
+		protected Builder(Class<?> callingClass, ExceptionThrowingReporting reporting, QonfigToolkit... toolkits) {
 			theCallingClass = callingClass;
 			theToolkits = QommonsUtils.unmodifiableDistinctCopy(toolkits);
 			if (toolkits == null)
 				throw new NullPointerException();
 			theToolkit = null;
+			theReporting = reporting;
 			theCreators = new HashMap<>();
 			theModifiers = new HashMap<>();
-			theStatus = new StatusReportAccumulator<>();
 			theSpecialSessions = new ClassMap<>();
+
+			reporting.ignoreClass(QonfigParseSession.class.getName());
+			reporting.ignoreClass(QonfigInterpreterCore.class.getName());
+			reporting.ignoreClass(QonfigInterpreterCore.CoreSession.class.getName());
+			reporting.ignoreClass(AbstractQIS.class.getName());
+			reporting.ignoreClass(SpecialSession.class.getName());
+			reporting.ignoreClass(Builder.class.getName());
 		}
 
 		/**
@@ -801,14 +715,14 @@ public class QonfigInterpreterCore {
 		 * @param modifiers The set of value modifiers for interpretation so far
 		 * @param specialSessions Special session implementations configured for the builder
 		 */
-		protected Builder(Class<?> callingClass, Set<QonfigToolkit> toolkits, QonfigToolkit toolkit,
-			StatusReportAccumulator<QonfigElementOrAddOn> status, Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
+		protected Builder(Class<?> callingClass, Set<QonfigToolkit> toolkits, QonfigToolkit toolkit, ExceptionThrowingReporting reporting,
+			Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
 			Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> modifiers,
 			ClassMap<SpecialSessionImplementation<?>> specialSessions) {
 			theCallingClass = callingClass;
 			theToolkits = toolkits;
 			theToolkit = toolkit;
-			theStatus = status;
+			theReporting = reporting;
 			theCreators = creators;
 			theModifiers = modifiers;
 			theSpecialSessions = specialSessions;
@@ -825,15 +739,15 @@ public class QonfigInterpreterCore {
 		 * @return A new builder with the given data
 		 */
 		protected Builder builderFor(Class<?> callingClass, Set<QonfigToolkit> toolkits, QonfigToolkit toolkit,
-			StatusReportAccumulator<QonfigElementOrAddOn> status, Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
+			ExceptionThrowingReporting reporting, Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
 			Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> modifiers,
 			ClassMap<SpecialSessionImplementation<?>> specialSessions) {
-			return new Builder(callingClass, toolkits, toolkit, status, creators, modifiers, specialSessions);
+			return new Builder(callingClass, toolkits, toolkit, reporting, creators, modifiers, specialSessions);
 		}
 
 		/** @return A new interpreter with this builder's configuration */
 		public QonfigInterpreterCore create() {
-			return new QonfigInterpreterCore(getCallingClass(), getCreators(), getModifiers(), theSpecialSessions);
+			return new QonfigInterpreterCore(getCallingClass(), getCreators(), getModifiers(), theSpecialSessions, theReporting);
 		}
 
 		/** @return The toolkit that will be used to get elements/add-ons when only names are specified */
@@ -880,7 +794,7 @@ public class QonfigInterpreterCore {
 			else if (!dependsOn(toolkit))
 				throw new IllegalArgumentException("Toolkit " + toolkit.getLocation() + " is not used by toolkits " + theToolkits);
 			else
-				return builderFor(theCallingClass, theToolkits, toolkit, theStatus, theCreators, theModifiers, theSpecialSessions);
+				return builderFor(theCallingClass, theToolkits, toolkit, theReporting, theCreators, theModifiers, theSpecialSessions);
 		}
 
 		/**
@@ -1140,7 +1054,7 @@ public class QonfigInterpreterCore {
 									// if (ext.theSuperElement.isAbstract())
 									// theStatus.error(el, "No creator configured for element");
 								} else if (!ext.theSuperType.isAssignableFrom(superHolder.type))
-									theStatus.warn(el, "Extension of " + ext.theSuperType.getName() + " is parsed as "
+									theReporting.warn("Extension of " + ext.theSuperType.getName() + " is parsed as "
 										+ superHolder.type.getName() + ", not " + ext.theSuperType.getName());
 							}
 						}
@@ -1154,8 +1068,83 @@ public class QonfigInterpreterCore {
 				// theStatus.warn(el, "No modifier configured for otherwise-unused add-on");
 				// }
 			}
-			System.err.println(theStatus.print(Status.Warn, Status.Error, StringBuilder::append, 0, null));
 			return create();
+		}
+	}
+
+	static class RuntimeInterpretationException extends RuntimeException {
+		private final LocatedFilePosition thePosition;
+
+		RuntimeInterpretationException(String message, LocatedFilePosition position) {
+			super(message);
+			thePosition = position;
+		}
+
+		RuntimeInterpretationException(String message, Throwable cause, LocatedFilePosition position) {
+			super(message, cause);
+			thePosition = position;
+		}
+
+		public LocatedFilePosition getPosition() {
+			return thePosition;
+		}
+
+		public QonfigInterpretationException toIntepreterException() {
+			QonfigInterpretationException qie;
+			if (getCause() != this)
+				qie = new QonfigInterpretationException(getMessage(), getPosition(), 0, getCause());
+			else
+				qie = new QonfigInterpretationException(getMessage(), getPosition(), 0);
+			qie.setStackTrace(getStackTrace());
+			return qie;
+		}
+	}
+
+	protected static class ExceptionThrowingReporting implements ErrorReporting {
+		private final ErrorReporting theWrapped;
+		private boolean isInterpreting;
+
+		public ExceptionThrowingReporting(ErrorReporting parent) {
+			theWrapped = parent;
+		}
+
+		Transaction interpreting() {
+			boolean pre = isInterpreting;
+			if (pre)
+				return Transaction.NONE;
+			isInterpreting = true;
+			return () -> isInterpreting = false;
+		}
+
+		@Override
+		public LocatedContentPosition getFileLocation() {
+			return theWrapped.getFileLocation();
+		}
+
+		@Override
+		public void ignoreClass(String className) {
+		}
+
+		@Override
+		public StackTraceElement getCodeLocation() {
+			return theWrapped.getCodeLocation();
+		}
+
+		@Override
+		public ErrorReporting report(Issue issue) {
+			theWrapped.report(issue);
+			if (issue.severity == IssueSeverity.ERROR) {
+				if (issue.cause == null)
+					throw new RuntimeInterpretationException(issue.message, issue.fileLocation);
+				else
+					throw new RuntimeInterpretationException(issue.message, issue.cause, issue.fileLocation);
+			}
+			return this;
+		}
+
+		@Override
+		public ExceptionThrowingReporting at(LocatedContentPosition frame) {
+			return new ExceptionThrowingReporting(theWrapped.at(frame));
 		}
 	}
 
@@ -1164,7 +1153,7 @@ public class QonfigInterpreterCore {
 	 * @param toolkits The toolkits to interpret
 	 * @return A builder to create an interpreter
 	 */
-	public static Builder build(Class<?> callingClass, QonfigToolkit... toolkits) {
-		return new Builder(callingClass, toolkits);
+	public static Builder build(Class<?> callingClass, ErrorReporting reporting, QonfigToolkit... toolkits) {
+		return new Builder(callingClass, new ExceptionThrowingReporting(reporting), toolkits);
 	}
 }

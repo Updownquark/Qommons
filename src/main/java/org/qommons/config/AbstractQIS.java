@@ -12,6 +12,7 @@ import org.qommons.collect.BetterList;
 import org.qommons.config.QonfigElement.QonfigValue;
 import org.qommons.ex.ExFunction;
 import org.qommons.io.ErrorReporting;
+import org.qommons.io.LocatedContentPosition;
 import org.qommons.io.LocatedFilePosition;
 
 /**
@@ -19,7 +20,7 @@ import org.qommons.io.LocatedFilePosition;
  * 
  * @param <QIS> The sub-type of the session
  */
-public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends ErrorReporting {
+public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	/** @return The element being interpreted */
 	QonfigElement getElement();
 
@@ -546,7 +547,7 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends ErrorReportin
 			}
 			return BetterList.of((QIS[]) sessions);
 		}
-		QonfigElement.Builder b = getElement().synthesizeChild(child, defaultChild, this);
+		QonfigElement.Builder b = getElement().synthesizeChild(child, defaultChild, reporting());
 		if (builder != null)
 			builder.accept(b);
 		QonfigElement element = b.doneWithAttributes().build();
@@ -722,6 +723,19 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends ErrorReportin
 
 	/**
 	 * @param attribute The name of the attribute to get the position of
+	 * @return The file position of the given text location
+	 * @throws IllegalArgumentException If no such attribute exists in this element's types
+	 */
+	default LocatedContentPosition getAttributeValuePosition(String attribute) throws IllegalArgumentException {
+		QonfigAttributeDef attr = getAttributeDef(null, null, attribute);
+		if (attr == null)
+			throw new IllegalArgumentException("Unrecognized attribute: " + attribute);
+		QonfigValue value = getElement().getAttributes().get(attr.getDeclared());
+		return value == null ? null : LocatedContentPosition.of(value.fileLocation, value.position);
+	}
+
+	/**
+	 * @param attribute The name of the attribute to get the position of
 	 * @param offset The offset within the attribute value to get the position at
 	 * @return The file position of the given text location
 	 * @throws IllegalArgumentException If no such attribute exists in this element's types
@@ -751,6 +765,9 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends ErrorReportin
 	 * @return Whether {@link #interpret(Class) interpretation} as a value of the given type is supported by this session
 	 */
 	boolean supportsInterpretation(Class<?> asType);
+
+	/** @return The error reporting for this session */
+	ErrorReporting reporting();
 
 	/**
 	 * @param sessionKey The key to get data for
@@ -802,14 +819,11 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends ErrorReportin
 	 */
 	<T> T computeIfAbsent(String sessionKey, Supplier<T> creator);
 
-	@Override
-	default ErrorReporting report(Issue issue) {
-		issue.printStackTrace(issue.severity == IssueSeverity.INFO ? System.out : System.err);
-		return this;
-	}
-
 	/** Implementation methods for {@link AbstractQIS} that I didn't want to expose */
 	class Impl {
+		private Impl() {
+		}
+
 		static QonfigElementOrAddOn getTargetElement(AbstractQIS<?> session, QonfigToolkit toolkit, String elementName)
 			throws IllegalArgumentException {
 			QonfigElementOrAddOn element = getTargetElement(toolkit, elementName, session.getFocusType());

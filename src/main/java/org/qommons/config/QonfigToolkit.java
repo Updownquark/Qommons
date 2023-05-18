@@ -202,8 +202,7 @@ public class QonfigToolkit implements Named {
 			allRoots.addAll(theDeclaredRoots);
 			allRoots.addAll(depRoots);
 			theRoots = Collections.unmodifiableSet(allRoots);
-			session.throwErrors(location == null ? "Document" : location.toString())//
-				.printWarnings(System.err, location == null ? "Document" : location.toString());
+			session.throwErrors(location == null ? "Document" : location.toString());
 
 			theTypeAutoInheritance = MultiInheritanceMap.create(QonfigElementOrAddOn::isAssignableFrom);
 			theRoleAutoInheritance = MultiInheritanceMap.create(QonfigChildDef::isFulfilledBy);
