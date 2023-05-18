@@ -92,12 +92,6 @@ public interface SpecialSession<QIS extends SpecialSession<QIS>> extends Abstrac
 	}
 
 	@Override
-	default QIS putGlobal(String sessionKey, Object value) {
-		getWrapped().putGlobal(sessionKey, value);
-		return (QIS) this;
-	}
-
-	@Override
 	default QIS putLocal(String sessionKey, Object value) {
 		getWrapped().putLocal(sessionKey, value);
 		return (QIS) this;

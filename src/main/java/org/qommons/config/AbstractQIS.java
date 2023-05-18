@@ -793,16 +793,6 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	QIS put(String sessionKey, Object value);
 
 	/**
-	 * Puts a value into this session that will be visible to all ancestors and descendants of this session (descendants created after this
-	 * call)
-	 * 
-	 * @param sessionKey The key to store data for
-	 * @param value The data to store for the given key in this session
-	 * @return This session
-	 */
-	QIS putGlobal(String sessionKey, Object value);
-
-	/**
 	 * Puts a value into this session that will be visible only to sessions "parallel" to this session--sessions for the same element
 	 * 
 	 * @param sessionKey The key to store data for

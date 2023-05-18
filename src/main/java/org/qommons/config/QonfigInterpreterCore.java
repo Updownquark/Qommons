@@ -351,16 +351,6 @@ public class QonfigInterpreterCore {
 		}
 
 		@Override
-		public CoreSession putGlobal(String sessionKey, Object value) {
-			CoreSession session = this;
-			while (session != null) {
-				session.theValues.put(sessionKey, value);
-				session = session.theParent;
-			}
-			return this;
-		}
-
-		@Override
 		public CoreSession putLocal(String sessionKey, Object value) {
 			theValues.put(sessionKey, value);
 			theLocalValueKeys.add(sessionKey);
