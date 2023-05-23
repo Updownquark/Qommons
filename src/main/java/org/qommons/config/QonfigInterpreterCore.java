@@ -40,6 +40,7 @@ public class QonfigInterpreterCore {
 		 * @param interpreter The interpreter this session is for
 		 * @param root The root element of the interpretation
 		 * @param source The session (if any) that {@link #intepretRoot(QonfigElement)} was called on
+		 * @param reporting The error reporting for this session
 		 * @throws QonfigInterpretationException If an error occurs initializing this session
 		 */
 		protected CoreSession(QonfigInterpreterCore interpreter, QonfigElement root, CoreSession source,
@@ -590,6 +591,7 @@ public class QonfigInterpreterCore {
 	 * @param creators The set of value creators for interpretation
 	 * @param modifiers The set of value modifiers for interpretation
 	 * @param specialSessions Special session implementations configured for the interpreter
+	 * @param reporting The error reporting for the interpretation
 	 */
 	protected QonfigInterpreterCore(Class<?> callingClass, Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
 		Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> modifiers, ClassMap<SpecialSessionImplementation<?>> specialSessions,
@@ -670,9 +672,10 @@ public class QonfigInterpreterCore {
 		private final ClassMap<SpecialSessionImplementation<?>> theSpecialSessions;
 
 		/**
-		 * Initial constructor called from {@link QonfigInterpreterCore#build(Class, QonfigToolkit...)}
+		 * Initial constructor called from {@link QonfigInterpreterCore#build(Class, ErrorReporting, QonfigToolkit...)}
 		 * 
 		 * @param callingClass The class building the interpreter
+		 * @param reporting The error reporting for the interpretation
 		 * @param toolkits The toolkits to interpret documents for
 		 */
 		protected Builder(Class<?> callingClass, ExceptionThrowingReporting reporting, QonfigToolkit... toolkits) {
@@ -700,7 +703,7 @@ public class QonfigInterpreterCore {
 		 * @param callingClass The class building the interpreter
 		 * @param toolkits The toolkits to interpret documents for
 		 * @param toolkit The toolkit to get elements/add-ons for when only names are specified
-		 * @param status The error reporting for the interpretation
+		 * @param reporting The error reporting for the interpretation
 		 * @param creators The set of value creators for interpretation so far
 		 * @param modifiers The set of value modifiers for interpretation so far
 		 * @param specialSessions Special session implementations configured for the builder
@@ -722,7 +725,7 @@ public class QonfigInterpreterCore {
 		 * @param callingClass The class building the interpreter
 		 * @param toolkits The toolkits to interpret documents for
 		 * @param toolkit The toolkit to get elements/add-ons for when only names are specified
-		 * @param status The error reporting for the interpretation
+		 * @param reporting The error reporting for the interpretation
 		 * @param creators The set of value creators for interpretation so far
 		 * @param modifiers The set of value modifiers for interpretation so far
 		 * @param specialSessions Special session implementations configured for the builder
@@ -1090,10 +1093,15 @@ public class QonfigInterpreterCore {
 		}
 	}
 
+	/**
+	 * ErrorReporting that throws runtime exceptions during interpretation, but then delegates to a wrapped reporter after interpreting is
+	 * finished
+	 */
 	protected static class ExceptionThrowingReporting implements ErrorReporting {
 		private final ErrorReporting theWrapped;
 		private boolean isInterpreting;
 
+		/** @param parent The reporting instance to delegate to after interpretation is finished */
 		public ExceptionThrowingReporting(ErrorReporting parent) {
 			theWrapped = parent;
 		}
@@ -1140,6 +1148,7 @@ public class QonfigInterpreterCore {
 
 	/**
 	 * @param callingClass The calling class
+	 * @param reporting The error reporting for the interpretation
 	 * @param toolkits The toolkits to interpret
 	 * @return A builder to create an interpreter
 	 */

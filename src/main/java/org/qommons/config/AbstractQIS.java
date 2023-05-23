@@ -749,6 +749,17 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	}
 
 	/**
+	 * @return The content position of the given text location
+	 * @throws IllegalArgumentException If this element's type has no value
+	 */
+	default LocatedContentPosition getValuePosition() throws IllegalArgumentException {
+		if (getValueDef() == null)
+			throw new IllegalArgumentException("No value possible");
+		QonfigValue value = getElement().getValue();
+		return value == null ? null : LocatedContentPosition.of(value.fileLocation, value.position);
+	}
+
+	/**
 	 * @param offset The offset within the value to get the position at
 	 * @return The file position of the given text location
 	 * @throws IllegalArgumentException If this element's type has no value

@@ -207,6 +207,16 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 	 */
 	public abstract boolean isAssignableFrom(QonfigElementOrAddOn other);
 
+	@Override
+	public final int hashCode() {
+		return super.hashCode();
+	}
+
+	@Override
+	public final boolean equals(Object obj) {
+		return super.equals(obj);
+	}
+
 	static final String ELEMENT_METADATA_SUFFIX = "$META";
 	static final String ADD_ON_METADATA_ELEMENT = "$ELEMENT";
 
