@@ -428,7 +428,7 @@ public class CircularByteBuffer implements StringUtils.BinaryAccumulator {
 		class DeletingCBBInputStream extends InputStream {
 			@Override
 			public int read() {
-				return pop();
+				return pop() & 0xff;
 			}
 
 			@Override

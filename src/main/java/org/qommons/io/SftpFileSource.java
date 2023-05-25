@@ -40,9 +40,19 @@ import net.schmizz.sshj.userauth.UserAuthException;
 
 /** Facilitates use of the {@link BetterFile} API with a remote file system via SFTP */
 public class SftpFileSource extends RemoteFileSource {
+	/** An SSH session configuration */
 	public interface SftpSessionConfig {
+		/**
+		 * @param timeout The timeout to wait for connection
+		 * @return This session configuration
+		 */
 		SftpSessionConfig withTimeout(int timeout);
 
+		/**
+		 * @param userName The user name to connect with
+		 * @param password The password to connect with
+		 * @return This session configuration
+		 */
 		SftpSessionConfig withAuthentication(String userName, String password);
 	}
 
@@ -412,7 +422,7 @@ public class SftpFileSource extends RemoteFileSource {
 					if (theSingleBuffer == null)
 						theSingleBuffer = new byte[1];
 					if (read(theSingleBuffer, 0, 1) > 0)
-						return theSingleBuffer[0];
+						return theSingleBuffer[0] & 0xff;
 					else
 						return -1;
 				}

@@ -550,7 +550,7 @@ public class OsgiBundleSet {
 			if (file.isDirectory()) {
 				for (BetterFile child : file.listFiles())
 					addDeepContents(child, files);
-			} else
+			} else if (file.exists())
 				files.add(file);
 		}
 
@@ -1467,7 +1467,11 @@ public class OsgiBundleSet {
 
 					dialog.setVisible(true);
 				});
-			} catch (InvocationTargetException | InterruptedException e) {
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				e.printStackTrace();
+				return;
+			} catch (InvocationTargetException e) {
 				e.printStackTrace();
 				return;
 			}
