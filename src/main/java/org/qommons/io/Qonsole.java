@@ -147,15 +147,18 @@ public class Qonsole implements Named, AutoCloseable {
 
 	/** @return A colon-delimited Qonsole monitoring System.in that does not interfere with other (later) users of System.in */
 	public static Qonsole getSystemConsole() {
-		if (SYSTEM_QONSOLE == null) {
+		Qonsole qonsole = SYSTEM_QONSOLE;
+		if (qonsole == null) {
 			synchronized (Qonsole.class) {
-				if (SYSTEM_QONSOLE == null) {
-					SYSTEM_QONSOLE = new Qonsole("System", new InputStreamReader(System.in), ":", () -> false);
-					System.setIn(new ReaderInputStream(SYSTEM_QONSOLE.read()));
+				qonsole = SYSTEM_QONSOLE;
+				if (qonsole == null) {
+					qonsole = new Qonsole("System", new InputStreamReader(System.in), ":", () -> false);
+					System.setIn(new ReaderInputStream(qonsole.read()));
+					SYSTEM_QONSOLE = qonsole;
 				}
 			}
 		}
-		return SYSTEM_QONSOLE;
+		return qonsole;
 	}
 
 	private final String theName;

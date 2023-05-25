@@ -397,7 +397,9 @@ public class ListenerList<E> {
 			if (wait) {
 				try {
 					Thread.sleep(0, 100_000);
-				} catch (InterruptedException e) {}
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
 				if (timeChecking && ++waited == 10) {
 					waited = 0;
 					if (System.currentTimeMillis() > start + waitTime)

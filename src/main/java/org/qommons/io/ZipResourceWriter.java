@@ -5,11 +5,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.util.List;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 /** A resource writer that writes its data to a zip file or stream */
@@ -91,7 +91,7 @@ public class ZipResourceWriter implements HierarchicalResourceWriter, AutoClosea
 	 * @throws IOException If an error occurs reading the data
 	 */
 	public static void doZipTask(File zipFile, ResourceTask zipTask) throws IOException {
-		try (ZipInputStream zin = new ZipInputStream(new BufferedInputStream(new FileInputStream(zipFile)))) {
+		try (InputStream zin = new BufferedInputStream(new FileInputStream(zipFile))) {
 			doZipTask(zin, zipTask);
 		}
 	}
@@ -104,24 +104,20 @@ public class ZipResourceWriter implements HierarchicalResourceWriter, AutoClosea
 	 * @param zipTask The task to perform on the unpacked archive
 	 * @throws IOException If an error occurs reading the data
 	 */
-	public static void doZipTask(ZipInputStream zipIn, ResourceTask zipTask) throws IOException {
+	public static void doZipTask(InputStream zipIn, ResourceTask zipTask) throws IOException {
 		File dir = Files.createTempDirectory("export-temp").toFile();
+		byte[] buffer = new byte[16 * 1024];
+		DefaultFileSource dfs = new DefaultFileSource(dir);
 		try {
-			DefaultFileSource dfs = new DefaultFileSource(dir);
-			ZipEntry entry = zipIn.getNextEntry();
-			byte [] buffer = new byte[16 * 1024];
-			while(entry != null) {
+			FileUtils.extractZip(zipIn, (entry, zip) -> {
 				try (OutputStream writer = dfs.writeResource(entry.getName())) {
 					int read = zipIn.read(buffer);
-					while(read > 0) {
+					while (read > 0) {
 						writer.write(buffer, 0, read);
 						read = zipIn.read(buffer);
 					}
 				}
-				zipIn.closeEntry();
-				entry = zipIn.getNextEntry();
-			}
-			zipIn.close();
+			}, null);
 			zipTask.doTask(dfs);
 		} finally {
 			deleteDir(dir, null);

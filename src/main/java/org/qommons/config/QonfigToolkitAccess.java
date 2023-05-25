@@ -21,8 +21,8 @@ public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
 	private final List<QonfigToolkitAccess> theDependencies;
 	private final List<CustomValueType> theCustomValueTypes;
 
-	private QonfigToolkit theToolkit;
-	private RuntimeException theError;
+	private volatile QonfigToolkit theToolkit;
+	private volatile RuntimeException theError;
 
 	/**
 	 * Specifies a toolkit accessor for a class resource
@@ -103,15 +103,19 @@ public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
 	 */
 	@Override
 	public QonfigToolkit get() throws IllegalArgumentException {
-		if (theToolkit != null)
-			return theToolkit;
-		else if (theError != null)
-			throw theError;
+		QonfigToolkit toolkit = theToolkit;
+		RuntimeException error = theError;
+		if (toolkit != null)
+			return toolkit;
+		else if (error != null)
+			throw error;
 		synchronized (this) {
-			if (theToolkit != null)
-				return theToolkit;
-			else if (theError != null)
-				throw theError;
+			toolkit = theToolkit;
+			error = theError;
+			if (toolkit != null)
+				return toolkit;
+			else if (error != null)
+				throw error;
 
 			if (theLocation == null) {
 				if (theResourceClass != null) {
@@ -134,17 +138,15 @@ public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
 			DefaultQonfigParser parser = new DefaultQonfigParser();
 			for (QonfigToolkitAccess dep : theDependencies)
 				addDependency(parser, dep.get());
-			QonfigToolkit tk;
 			try (InputStream in = theLocation.openStream()) {
-				tk = parser.parseToolkit(theLocation, in, //
+				toolkit = parser.parseToolkit(theLocation, in, //
 					theCustomValueTypes.toArray(new CustomValueType[theCustomValueTypes.size()]));
 			} catch (IOException | XmlParseException | QonfigParseException e) {
-				tk = null;
 				theError = new IllegalStateException("Unable to parse toolkit " + theLocationString, e);
 				throw theError;
 			}
-			theToolkit = tk;
-			return tk;
+			theToolkit = toolkit;
+			return toolkit;
 		}
 	}
 

@@ -40,8 +40,6 @@ import org.qommons.io.BetterFile.FileBacking;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
 import org.qommons.io.FileUtils.DirectorySyncResults;
 
-import sun.nio.cs.ArrayDecoder;
-
 /** Enables using archive files as a directory structure within an existing file system */
 public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 	private final BetterFile.FileDataSource theWrapped;
@@ -1337,7 +1335,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		private static final int UTF_FLAG = 0x800;
-		private static boolean OPTIMIZE_ARRAY_DECODER = true;
+		// private static boolean OPTIMIZE_ARRAY_DECODER = true;
 
 		private static String read(byte[] buffer, int offset, int length) {
 			char[] ch = new char[length];
@@ -1355,17 +1353,17 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 			// UTF-8 only for now. Other ArrayDeocder only handles
 			// CodingErrorAction.REPLACE mode. ZipCoder uses
 			// REPORT mode.
-			try {
-				if (OPTIMIZE_ARRAY_DECODER && cd instanceof ArrayDecoder) {
-					int clen = ((ArrayDecoder) cd).decode(buffer, offset, length, ca);
-					if (clen == -1) // malformed
-						throw new IllegalArgumentException("MALFORMED");
-					return new String(ca, 0, clen);
-				}
-			} catch (IllegalAccessError e) {
-				// Later VMs don't let me do this
-				OPTIMIZE_ARRAY_DECODER = false;
-			}
+			// try {
+			// if (OPTIMIZE_ARRAY_DECODER && cd instanceof ArrayDecoder) {
+			// int clen = ((ArrayDecoder) cd).decode(buffer, offset, length, ca);
+			// if (clen == -1) // malformed
+			// throw new IllegalArgumentException("MALFORMED");
+			// return new String(ca, 0, clen);
+			// }
+			// } catch (IllegalAccessError e) {
+			// // Later VMs don't let me do this
+			// OPTIMIZE_ARRAY_DECODER = false;
+			// }
 			ByteBuffer bb = ByteBuffer.wrap(buffer, offset, length);
 			CharBuffer cb = CharBuffer.wrap(ca);
 			CoderResult cr = cd.decode(bb, cb, true);

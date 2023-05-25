@@ -495,21 +495,24 @@ public class SimpleSequenceParser<E extends Enum<E>, V extends Comparable<V>> {
 					if (compStart < 0)
 						continue;
 					int compEnd = components.getEnd(i);
-					E type = format.getComponents().get(i).getType();
+					ParserElement<E, V> component = format.getComponents().get(i);
+					if (component == null)
+						throw new IllegalStateException();
+					E type = component.getType();
 					String text = seq.subSequence(compStart, compEnd).toString();
 					V value;
 					if (type == null)
 						value = null;
 					else {
 						try {
-							value = format.getComponents().get(i).getFormat().parse(text);
+							value = component.getFormat().parse(text);
 						} catch (ParseException e) {
 							if (valueEx == null)
 								valueEx = new ParseException(e.getMessage(), e.getErrorOffset() + compStart);
 							continue;
 						}
 					}
-					ParsedElement<E, V> pc = new ParsedElement<>(format.getComponents().get(i).getFormat(), compStart, type, value, text);
+					ParsedElement<E, V> pc = new ParsedElement<>(component.getFormat(), compStart, type, value, text);
 					sequence.add(pc);
 					if (type != null)
 						componentsByType.put(type, pc);

@@ -9,14 +9,11 @@ import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-
+import org.qommons.io.SimpleXMLParser;
+import org.qommons.io.TextParseException;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
-import org.xml.sax.SAXException;
 
 /**
  * <p>
@@ -681,16 +678,9 @@ public abstract class QommonsConfig implements Cloneable {
 	 * @throws IOException If the XML could not be read or parsed
 	 */
 	public static Element getRootElement(InputStream stream) throws IOException {
-		DocumentBuilder docBuilder;
 		try {
-			final DocumentBuilderFactory docBuilderFactory = DocumentBuilderFactory.newInstance();
-			docBuilder = docBuilderFactory.newDocumentBuilder();
-		} catch (ParserConfigurationException e) {
-			throw new RuntimeException("Can't create DOM builder.", e);
-		}
-		try {
-			return docBuilder.parse(stream).getDocumentElement();
-		} catch (SAXException e) {
+			return new SimpleXMLParser().parseDocument(stream).getDocumentElement();
+		} catch (TextParseException e) {
 			throw new IOException("Could not parse XML", e);
 		}
 	}

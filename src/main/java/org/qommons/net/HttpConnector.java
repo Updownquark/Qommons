@@ -23,15 +23,12 @@ import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 
-import org.apache.log4j.Logger;
 import org.qommons.LoggingWriter;
 import org.qommons.QommonsUtils;
 
 /** Facilitates easier HTTP connections. */
 public class HttpConnector
 {
-	private static final Logger log = Logger.getLogger(HttpConnector.class);
-
 	/** The name of the system property to set the SSL handler package in */
 	public static final String SSL_HANDLER_PROP = "java.protocol.handler.pkgs";
 
@@ -235,12 +232,13 @@ public class HttpConnector
 			javax.net.ssl.SSLContext sc;
 			try
 			{
-				sc = javax.net.ssl.SSLContext.getInstance("SSL");
+				sc = javax.net.ssl.SSLContext.getInstance("TLSv1.2");
 				sc.init(theKeyManagers, new TrustManager [] {retriever},
 					new java.security.SecureRandom());
 			} catch(java.security.GeneralSecurityException e)
 			{
-				log.error("Could not initialize SSL context", e);
+				System.err.println("Could not initialize SSL context");
+				e.printStackTrace();
 				IOException toThrow = new IOException("Could not initialize SSL context: "
 					+ e.getMessage());
 				toThrow.setStackTrace(e.getStackTrace());
@@ -416,7 +414,7 @@ public class HttpConnector
 			SSLSocketFactory socketFactory;
 			if (!theKeyManagers.isEmpty() || !theTrustManagers.isEmpty()) {
 				javax.net.ssl.SSLContext sc;
-				sc = javax.net.ssl.SSLContext.getInstance("SSL");
+				sc = javax.net.ssl.SSLContext.getInstance("TLSv1.2");
 				sc.init(keyManagers, trustManagers, new java.security.SecureRandom());
 				socketFactory = sc.getSocketFactory();
 			} else

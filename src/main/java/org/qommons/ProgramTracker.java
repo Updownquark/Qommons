@@ -11,14 +11,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.log4j.Logger;
 import org.qommons.json.JsonObject;
 import org.qommons.threading.QommonsTimer;
 
 /** A simple utility to help in finding performance bottlenecks in a program */
 public class ProgramTracker implements Cloneable {
-	private static final Logger log = Logger.getLogger(ProgramTracker.class);
-
 	private static final String DEFAULT_INDENT_INCREMENT = "   ";
 
 	static final SimpleDateFormat [] [] formats;
@@ -1067,24 +1064,6 @@ public class ProgramTracker implements Cloneable {
 		for(TrackNode node : theNodes.values())
 			print(node, sb, 0, totalTime, 0, config);
 		return sb;
-	}
-
-	/** Prints the data gathered by this tracker this class's log with debug priority */
-	public final void logDebug() {
-		logDebug(0, 0);
-	}
-
-	/**
-	 * Prints the data gathered by this tracker this class's log with debug priority
-	 *
-	 * @param displayThreshold The threshold below which percent items in the profiling will not be printed
-	 * @param hightlightThreshold The threshold above which percent items in the profiling will be highlighted
-	 */
-	public final void logDebug(float displayThreshold, float hightlightThreshold) {
-		java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-		java.io.PrintStream stream = new java.io.PrintStream(baos);
-		printData(stream, displayThreshold, hightlightThreshold);
-		log.debug("\n" + new String(baos.toByteArray()));
 	}
 
 	@Override

@@ -232,6 +232,36 @@ public interface Format<T> {
 	}
 
 	/**
+	 * Creates a Qommons format from a java number format. It is preferred to use {@link #doubleFormat(String)} since number formats are not
+	 * thread-safe, so if this instance is used concurrently it will fail.
+	 * 
+	 * @param format The number format
+	 * @return A double-value format with the given pattern
+	 * @see DecimalFormat#DecimalFormat(String)
+	 */
+	public static Format<Double> doubleFormat(NumberFormat format) {
+		// DecimalFormat instances are not thread-safe
+		return new Format<Double>() {
+			@Override
+			public void append(StringBuilder text, Double value) {
+				if (value == null)
+					return;
+				text.append(format.format(value.doubleValue()));
+			}
+
+			@Override
+			public Double parse(CharSequence text) throws ParseException {
+				return parseDouble(text, format);
+			}
+
+			@Override
+			public String toString() {
+				return "DOUBLE(" + format + ")";
+			}
+		};
+	}
+
+	/**
 	 * @param pattern The float format pattern
 	 * @return A double-value format with the given pattern
 	 * @see DecimalFormat#DecimalFormat(String)

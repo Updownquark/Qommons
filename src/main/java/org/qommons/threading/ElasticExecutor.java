@@ -313,7 +313,7 @@ public class ElasticExecutor<T> {
 			try {
 				Thread.sleep(sleepTime);
 			} catch (InterruptedException e) {
-				// Just wake up normally
+				Thread.currentThread().interrupt(); // Just wake up normally
 			}
 		}
 		return true;

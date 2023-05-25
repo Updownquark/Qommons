@@ -14,6 +14,7 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.net.URL;
+import java.nio.file.Files;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,7 +25,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 import javax.swing.BoxLayout;
@@ -36,17 +36,16 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.Timer;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
 
 import org.qommons.config.QommonsConfig;
 import org.qommons.io.BetterFile;
 import org.qommons.io.CountingInputStream;
 import org.qommons.io.FileUtils;
+import org.qommons.io.SimpleXMLParser;
+import org.qommons.io.TextParseException;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.Text;
-import org.xml.sax.SAXException;
 
 /** A class for creating and applying patches to applications */
 public class QuarkJarPatcher {
@@ -205,7 +204,7 @@ public class QuarkJarPatcher {
 		Map<String, File> extractedFiles = new HashMap<>();
 		try {
 			// Read the patch configuration and extract the patch contents
-			Patch patch;
+			Patch[] patch = new Patch[1];
 			byte[] buffer = new byte[256 * 1024];
 			try {
 				String path = classFile.getPath();
@@ -220,73 +219,51 @@ public class QuarkJarPatcher {
 				}
 				String zipUrl = classFile.toString();
 				zipUrl = zipUrl.substring(offset, zipUrl.length() - path.length() + slash);
-				try (InputStream zipIn = new URL(zipUrl).openStream();
-					ZipInputStream zip = new ZipInputStream(new BufferedInputStream(zipIn))) {
-					// Patch file should be the very first entry
-					ZipEntry entry = zip.getNextEntry();
-					if (!entry.getName().endsWith(".patch"))
-						throw new IOException("Expected *.patch configuration file as first entry in " + zipUrl);
-
-					status("Reading patch configuration", null, -1, status, progress, uiDirty);
-					File tempPatch = File.createTempFile(entry.getName().substring(0, entry.getName().length() - ".patch".length()),
-						".patch");
-					try (OutputStream out = new BufferedOutputStream(new FileOutputStream(tempPatch))) {
-						int read = zip.read(buffer);
-						while (read >= 0) {
-							out.write(buffer, 0, read);
-							read = zip.read(buffer);
-						}
-					}
-					Element patchRoot;
-					try {
-						patchRoot = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(tempPatch).getDocumentElement();
-					} catch (ParserConfigurationException | SAXException e) {
-						throw new IOException("Could not read XML", e);
-					}
-					patch = parsePatch(patchRoot);
-					tempPatch.delete();
-					System.out.println("Read configuration for " + patch.getAppName() + " patch " + patch.getPatchName());
-					System.out.println("By " + patch.getPatchAuthor() + " " + patch.getPatchDate());
-					System.out.println(patch.getPatchDescription());
-					if (dialog != null) {
-						dialog.setTitle("Applying " + patch.getAppName() + " patch " + patch.getPatchName());
-						description.setText("<html>For " + patch.getAppName() + " " + patch.getTargetVersion() + "<br>"//
-							+ "By " + patch.getPatchAuthor() + " " + patch.getPatchDate() + "<br>"//
-							+ patch.getPatchDescription());
-					}
-					status("Extracting patch contents", null, -1, status, progress, uiDirty);
-
+				File tempDir = Files.createTempFile("QuarkJarPatcher", "z").toFile();
+				try (InputStream zipIn = new URL(zipUrl).openStream()) {
+					String fZipUrl = zipUrl;
 					Set<String> patchContents = new HashSet<>();
-					for (PatchFileSet fs : patch.getPatchContents())
-						patchContents.addAll(fs.getFileSetContents());
-					progress[0] = 0;
-					progress[1] = patchContents.size();
-					status(null, null, 0, status, progress, uiDirty);
-
-					entry = zip.getNextEntry();
-					while (entry != null) {
-						if (!patchContents.remove(entry.getName())) {
-							entry = zip.getNextEntry();
-							continue; // Not an actual patch file, or possibly a duplicate
-						}
-						int lastDot = entry.getName().lastIndexOf('.');
-						String prefix = lastDot >= 0 ? entry.getName().substring(0, lastDot) : entry.getName();
-						String suffix = lastDot >= 0 ? entry.getName().substring(lastDot) : null;
-						File entryFile = File.createTempFile(prefix, suffix);
-						extractedFiles.put(entry.getName(), entryFile);
-						status(null, entry.getName(), progress[0], status, progress, uiDirty);
-						try (OutputStream out = new BufferedOutputStream(new FileOutputStream(entryFile))) {
-							int read = zip.read(buffer);
-							while (read >= 0) {
-								out.write(buffer, 0, read);
-								read = zip.read(buffer);
+					JDialog fDialog = dialog;
+					JEditorPane fDescrip = description;
+					FileUtils.extractZip(zipIn, tempDir, (f, p) -> {
+						if (patch[0] == null) {
+							if (!p.endsWith(".patch"))
+								throw new IOException("Expected *.patch configuration file as first entry in " + fZipUrl);
+							status("Reading patch configuration", null, -1, status, progress, uiDirty);
+							Element patchRoot;
+							try (InputStream in = new BufferedInputStream(new FileInputStream(f))) {
+								patchRoot = new SimpleXMLParser().parseDocument(in).getDocumentElement();
+							} catch (TextParseException e) {
+								throw new IOException("Could not read XML", e);
 							}
+							patch[0] = parsePatch(patchRoot);
+							f.delete();
+
+							System.out.println("Read configuration for " + patch[0].getAppName() + " patch " + patch[0].getPatchName());
+							System.out.println("By " + patch[0].getPatchAuthor() + " " + patch[0].getPatchDate());
+							System.out.println(patch[0].getPatchDescription());
+							if (fDialog != null) {
+								fDialog.setTitle("Applying " + patch[0].getAppName() + " patch " + patch[0].getPatchName());
+								fDescrip.setText("<html>For " + patch[0].getAppName() + " " + patch[0].getTargetVersion() + "<br>"//
+									+ "By " + patch[0].getPatchAuthor() + " " + patch[0].getPatchDate() + "<br>"//
+									+ patch[0].getPatchDescription());
+							}
+							status("Extracting patch contents", null, -1, status, progress, uiDirty);
+
+							for (PatchFileSet fs : patch[0].getPatchContents())
+								patchContents.addAll(fs.getFileSetContents());
+							progress[0] = 0;
+							progress[1] = patchContents.size();
+							status(null, null, 0, status, progress, uiDirty);
+						} else {
+							status(null, p, progress[0], status, progress, uiDirty);
+
+							if (patchContents.remove(p)) {
+								extractedFiles.put(p, f);
+							} else
+								f.delete();
 						}
-						entryFile.setLastModified(entry.getLastModifiedTime().toMillis());
-						status(null, entry.getName(), progress[0] + 1, status, progress, uiDirty);
-						if (patchContents.isEmpty())
-							break;
-					}
+					});
 					if (!patchContents.isEmpty()) {
 						System.err.println("Missing contents: " + patchContents);
 						throw new IOException("Patch file is missing required contents");
@@ -306,7 +283,7 @@ public class QuarkJarPatcher {
 				progress[1] = 0;
 				status("Requesting installation directory", null, 0, status, progress, uiDirty);
 				JFileChooser chooser = new JFileChooser(installDir);
-				chooser.setDialogTitle("Select " + patch.getAppName() + " installation directory to patch");
+				chooser.setDialogTitle("Select " + patch[0].getAppName() + " installation directory to patch");
 				chooser.setDialogType(JFileChooser.OPEN_DIALOG);
 				chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
 				chooser.setFileHidingEnabled(false);
@@ -321,15 +298,15 @@ public class QuarkJarPatcher {
 			try {
 				status("Locating patch targets", null, 0, status, progress, uiDirty);
 				// First, find the patch targets
-				File[] targets = new File[patch.getPatchContents().size()];
+				File[] targets = new File[patch[0].getPatchContents().size()];
 				long totalLength = 0;
 				for (int i = 0; i < targets.length; i++) {
-					if (patch.getPatchContents().get(i).getUpdateTarget() == null) {
+					if (patch[0].getPatchContents().get(i).getUpdateTarget() == null) {
 						targets[i] = installDir;
-						for (String content : patch.getPatchContents().get(i).getFileSetContents())
+						for (String content : patch[0].getPatchContents().get(i).getFileSetContents())
 							totalLength += extractedFiles.get(content).length();
 					} else {
-						targets[i] = new File(installDir, patch.getPatchContents().get(i).getUpdateTarget());
+						targets[i] = new File(installDir, patch[0].getPatchContents().get(i).getUpdateTarget());
 						if (!targets[i].exists())
 							throw new IOException("Patch target not found: " + targets[i].getAbsolutePath());
 						else if (!targets[i].canWrite())
@@ -337,6 +314,8 @@ public class QuarkJarPatcher {
 						totalLength += targets[i].length();
 					}
 				}
+				if (totalLength == 0)
+					throw new IllegalStateException("No patch targets or empty ones!");
 
 				progress[1] = 1000;
 				// Apply each patch file set
@@ -345,7 +324,7 @@ public class QuarkJarPatcher {
 					status("Applying patch target " + targets[i].getName(), null, Math.round(fileContentSoFar * 1000.0f / totalLength),
 						status, progress, uiDirty);
 					if (targets[i].isDirectory()) { // Just replace the target files
-						for (String content : patch.getPatchContents().get(i).getFileSetContents()) {
+						for (String content : patch[0].getPatchContents().get(i).getFileSetContents()) {
 							status[1] = content;
 							File targetFile = new File(targets[i], content);
 							File parent = targetFile.getParentFile();
@@ -380,10 +359,9 @@ public class QuarkJarPatcher {
 						try (
 							CountingInputStream targetIn = new CountingInputStream(
 								new BufferedInputStream(new FileInputStream(targets[i])));
-							ZipInputStream zipIn = new ZipInputStream(targetIn);
 							ZipOutputStream zipOut = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(replacement)))) {
-							ZipEntry entry = zipIn.getNextEntry();
-							while (entry != null) {
+							long fcsf = fileContentSoFar, tl = totalLength;
+							FileUtils.extractZip(targetIn, (entry, zipIn) -> {
 								status[1] = entry.getName();
 								status(null, entry.getName(), progress[0], status, progress, uiDirty);
 								File patchFile = extractedFiles.remove(entry.getName());
@@ -408,14 +386,13 @@ public class QuarkJarPatcher {
 									}
 								}
 								status(null, entry.getName(),
-									Math.round((fileContentSoFar + targetIn.getPosition() * 0.9f) * 1000.0f / totalLength), status,
+									Math.round((fcsf + targetIn.getPosition() * 0.9f) * 1000.0f / tl), status,
 									progress, uiDirty);
-								entry = zipIn.getNextEntry();
-							}
+							}, null);
 							// Now insert added files
 							for (Map.Entry<String, File> file : extractedFiles.entrySet()) {
 								File patchFile = file.getValue();
-								entry = new ZipEntry(file.getKey());
+								ZipEntry entry = new ZipEntry(file.getKey());
 								status[1] = entry.getName();
 								status(null, entry.getName(), progress[0], status, progress, uiDirty);
 								entry.setLastModifiedTime(FileTime.fromMillis(patchFile.lastModified()));

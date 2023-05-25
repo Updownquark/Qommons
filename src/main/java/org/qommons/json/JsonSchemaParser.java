@@ -1,13 +1,8 @@
 /* JsonSchemaParser.java Created Dec 21, 2009 by Andrew Butler, PSL */
 package org.qommons.json;
 
-import org.apache.log4j.Logger;
-
 /** Parses a JSON schema for validation */
 public class JsonSchemaParser {
-	/** Used by the JSON schema API for logging */
-	public static final Logger log = Logger.getLogger(JsonSchemaParser.class);
-
 	private final SAJParser theParser;
 
 	private java.util.Map<String, String> theSchemaRoots;
@@ -206,7 +201,8 @@ public class JsonSchemaParser {
 				try {
 					br.close();
 				} catch(java.io.IOException e) {
-					log.error("Could not close stream", e);
+					System.err.println("Could not close stream");
+					e.printStackTrace();
 				}
 		}
 		JsonObject schema;

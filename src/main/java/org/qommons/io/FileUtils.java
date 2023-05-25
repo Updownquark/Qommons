@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -32,6 +33,7 @@ import java.util.zip.ZipInputStream;
 
 import org.qommons.ArrayUtils;
 import org.qommons.StringUtils;
+import org.qommons.ex.ExBiConsumer;
 import org.qommons.ex.ExConsumer;
 import org.qommons.ex.ExSupplier;
 import org.qommons.io.BetterFile.CheckSumType;
@@ -245,6 +247,22 @@ public class FileUtils {
 	 * @throws IOException If an error occurs reading or writing the data
 	 */
 	public static long copy(InputStream from, OutputStream to, LongConsumer progress) throws IOException {
+		return copy(from, to, progress, null);
+	}
+
+	/**
+	 * Simple stream copy utility
+	 * 
+	 * @param from The input stream to copy from
+	 * @param to The output stream to copy to
+	 * @return The number of bytes copied
+	 * @param progress Callback to be notified of the copy operation's progress--the total number of bytes copied
+	 * @param canceled Returns true if the operation should immediately cease
+	 * @throws IOException If an error occurs reading or writing the data
+	 */
+	public static long copy(InputStream from, OutputStream to, LongConsumer progress, BooleanSupplier canceled) throws IOException {
+		if (canceled != null && canceled.getAsBoolean())
+			return -1;
 		byte[] buffer = BUFFERS.get();
 		long total = 0;
 		int read = from.read(buffer);
@@ -255,6 +273,8 @@ public class FileUtils {
 				if (progress != null)
 					progress.accept(total);
 			}
+			if (canceled != null && canceled.getAsBoolean())
+				return -1;
 			read = from.read(buffer);
 		}
 		return total;
@@ -417,9 +437,87 @@ public class FileUtils {
 				read = in.read(buffer))
 				hasher.update(buffer, 0, read);
 		}
-		if (canceled.getAsBoolean())
+		if (canceled != null && canceled.getAsBoolean())
 			return null;
 		return StringUtils.encodeHex().format(hasher.getHash());
+	}
+
+	/**
+	 * Extracts a zip file in a secure way, avoiding the zip-slip vulnerability
+	 * 
+	 * @param in The zip-formatted input stream to parse
+	 * @param onEntry The callback to deal with non-malicious entries
+	 * @param canceled Returns true if the operation should immediately cease
+	 * @throws IOException If the file could not be read or parsed as a zip, or if the callback throws an exception
+	 */
+	public static void extractZip(InputStream in, ExBiConsumer<ZipEntry, ZipInputStream, IOException> onEntry, BooleanSupplier canceled)
+		throws IOException {
+		File root = new File(System.getProperty("user.dir")); // Just need a file to ensure we don't fall prey to zip-slip
+		String rootPath;
+		try {
+			rootPath = root.getCanonicalPath() + File.separator;
+		} catch (IOException e) {
+			throw new IOException("Could not get canonical path for current directory " + root.getPath(), e);
+		}
+		try (ZipInputStream zip = new ZipInputStream(in)) {
+			for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
+				if (canceled != null && canceled.getAsBoolean())
+					break;
+				File entryFile = new File(root, entry.getName());
+				try {
+					if (!entryFile.getCanonicalPath().startsWith(rootPath)) {
+						System.err.println("Entry '" + entry.getName() + "' would not be extracted into '" + rootPath + "'");
+						continue;
+					}
+				} catch (IOException e) {
+					System.err.println("Bad path for entry '" + entry.getName() + "': " + e.getMessage());
+					continue;
+				}
+				onEntry.accept(entry, zip);
+				zip.closeEntry();
+			}
+		}
+	}
+
+	/**
+	 * Extracts a zip archive into a directory. It does this in a secure way, avoiding the zip-slip vulnerability.
+	 * 
+	 * @param in The zip-formatted input stream to parse
+	 * @param directory The directory to extract the zip into
+	 * @param onEntry A callback to be notified of each extracted file
+	 * @return The extracted directory (same as the argument)
+	 * @throws IOException If the file could not be read, the extracted files could not be written, or the callback throws an exception
+	 */
+	public static File extractZip(InputStream in, File directory, ExBiConsumer<File, String, IOException> onEntry) throws IOException {
+		return extractZip(in, directory, onEntry, null);
+	}
+
+	/**
+	 * Extracts a zip archive into a directory. It does this in a secure way, avoiding the zip-slip vulnerability.
+	 * 
+	 * @param in The zip-formatted input stream to parse
+	 * @param directory The directory to extract the zip into
+	 * @param onEntry A callback to be notified of each extracted file
+	 * @param canceled Returns true if the operation should immediately cease
+	 * @return The extracted directory (same as the argument)
+	 * @throws IOException If the file could not be read, the extracted files could not be written, or the callback throws an exception
+	 */
+	public static File extractZip(InputStream in, File directory, ExBiConsumer<File, String, IOException> onEntry, BooleanSupplier canceled)
+		throws IOException {
+		extractZip(in, (entry, zip) -> {
+			File entryFile = new File(directory, entry.getName());
+			if (entry.isDirectory())
+				entryFile.mkdirs();
+			else {
+				try (OutputStream out = new FileOutputStream(entryFile)) {
+					copy(zip, out, null, canceled);
+				}
+			}
+			entryFile.setLastModified(entry.getLastModifiedTime().toMillis());
+			if (onEntry != null)
+				onEntry.accept(entryFile, entry.getName());
+		}, canceled);
+		return directory;
 	}
 
 	private static final String[] BYTE_PREFIXES = new String[] { "k", "M", "G", "T", "P", "E", "Z", "Y" };

@@ -479,7 +479,7 @@ public class SAJParser {
 			StringBuilder unicodeStr = new StringBuilder();
 
 			for(int i = 0; i < 4; i++) {
-				read = theWrapped.read();
+				read = theWrapped.read() & 0xffff;
 				unicodeStr.append((char) read);
 				unicode <<= 4;
 				if(read >= '0' && read <= '9')
@@ -494,7 +494,7 @@ public class SAJParser {
 			char [] chars = Character.toChars(unicode);
 			if(chars.length > 1)
 				theBuffer = chars[1];
-			return chars[0];
+			return chars[0] & 0xffff;
 		}
 
 		@Override

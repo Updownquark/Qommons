@@ -9,7 +9,6 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.Predicate;
 
-import org.junit.Assert;
 import org.qommons.Ternian;
 
 /**
@@ -236,17 +235,18 @@ public class CircularArrayList<E> implements DequeList<E> {
 
 	/** For unit tests. Ensures the integrity of the list. */
 	public void checkValid() {
-		// Can't have more elements than the capacity
-		Assert.assertTrue(theSize <= theArray.length);
-		// The offset must be a valid index in the array
-		Assert.assertTrue(theOffset < theArray.length);
-		// The array must be within the list's capacity settings
-		Assert.assertTrue(theArray.length <= theMaxCapacity);
-		Assert.assertTrue(theArray.length >= theMinCapacity);
+		if (theSize > theArray.length)
+			throw new IllegalStateException("Can't have more elements than the capacity");
+		if (theOffset >= theArray.length)
+			throw new IllegalStateException("The offset must be a valid index in the array");
+		if (theArray.length < theMinCapacity || theArray.length > theMaxCapacity)
+			throw new IllegalStateException("The array must be within the list's capacity settings: " + theMinCapacity + "<="
+				+ theArray.length + "<=" + theMaxCapacity);
 		if (theMinOccupancy > 0) {
 			// Ensure the minimum occupancy requirement is met
 			int occSize = Math.max((int) Math.ceil(theSize / theMinOccupancy), theMinCapacity);
-			Assert.assertTrue(theArray.length <= occSize);
+			if (theArray.length > occSize)
+				throw new IllegalStateException("Min occupancy is not met: " + occSize + "/" + theArray.length);
 		}
 
 		// Ensure only elements contained in the list are referenced by the list
@@ -255,7 +255,7 @@ public class CircularArrayList<E> implements DequeList<E> {
 			t -= theArray.length;
 		while (t != theOffset) {
 			if (theArray[t] != null)
-				Assert.assertNull(theArray[t]);
+				throw new IllegalStateException("Array[" + t + "] is not null");
 			t++;
 			if (t == theArray.length)
 				t = 0;

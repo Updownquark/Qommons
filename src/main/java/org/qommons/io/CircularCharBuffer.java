@@ -327,7 +327,7 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 		class CCBReader extends Reader {
 			@Override
 			public int read() {
-				return pop();
+				return pop() & 0xff;
 			}
 
 			@Override

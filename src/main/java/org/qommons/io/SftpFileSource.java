@@ -17,8 +17,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
+import org.qommons.ex.CheckedExceptionWrapper;
 import org.qommons.ex.ExBiConsumer;
-import org.qommons.ex.ExConsumer;
 import org.qommons.io.BetterFile.CheckSumType;
 import org.qommons.io.BetterFile.FileBacking;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
@@ -36,9 +36,16 @@ import net.schmizz.sshj.sftp.RemoteResourceInfo;
 import net.schmizz.sshj.sftp.SFTPClient;
 import net.schmizz.sshj.transport.TransportException;
 import net.schmizz.sshj.transport.verification.PromiscuousVerifier;
+import net.schmizz.sshj.userauth.UserAuthException;
 
 /** Facilitates use of the {@link BetterFile} API with a remote file system via SFTP */
 public class SftpFileSource extends RemoteFileSource {
+	public interface SftpSessionConfig {
+		SftpSessionConfig withTimeout(int timeout);
+
+		SftpSessionConfig withAuthentication(String userName, String password);
+	}
+
 	class ThreadSession implements AutoCloseable {
 		final Thread thread;
 		final SSHClient client;
@@ -93,8 +100,7 @@ public class SftpFileSource extends RemoteFileSource {
 
 	private final String theHost;
 	private final String theUser;
-	private final ExConsumer<SSHClient, Exception> theSessionConfiguration;
-	private final ExConsumer<SSHClient, Exception> theSessionConnection;
+	private final Consumer<SftpSessionConfig> theSessionConfiguration;
 	private final String theRootDir;
 	private String theKnownOS;
 
@@ -109,15 +115,12 @@ public class SftpFileSource extends RemoteFileSource {
 	 * @param host The host to communicate with
 	 * @param user The user to connect as
 	 * @param sessionConfiguration Configures each session as it is needed
-	 * @param connection Achieves the connection
 	 * @param rootDir The directory to use as the root of this file source
 	 */
-	public SftpFileSource(String host, String user, ExConsumer<SSHClient, Exception> sessionConfiguration,
-		ExConsumer<SSHClient, Exception> connection, String rootDir) {
+	public SftpFileSource(String host, String user, Consumer<SftpSessionConfig> sessionConfiguration, String rootDir) {
 		theHost = host;
 		theUser = user;
 		theSessionConfiguration = sessionConfiguration;
-		theSessionConnection = connection;
 		theRootDir = rootDir;
 		theSessions = new ConcurrentHashMap<>();
 	}
@@ -194,6 +197,7 @@ public class SftpFileSource extends RemoteFileSource {
 			return session.use();
 	}
 
+	@SuppressWarnings("resource") // The session is kept around to be closed later
 	ThreadSession createSession(Thread thread) throws IOException {
 		Exception ex = null;
 		for (int i = 0; i <= theRetryCount; i++) {
@@ -201,9 +205,45 @@ public class SftpFileSource extends RemoteFileSource {
 				SSHClient s = new SSHClient();
 				s.loadKnownHosts();
 				s.addHostKeyVerifier(new PromiscuousVerifier());
-				theSessionConfiguration.accept(s);
+				theSessionConfiguration.accept(new SftpSessionConfig() {
+					@Override
+					public SftpSessionConfig withTimeout(int timeout) {
+						s.setConnectTimeout(timeout);
+						s.setTimeout(timeout);
+						return this;
+					}
+
+					@Override
+					public SftpSessionConfig withAuthentication(String userName, String password) {
+						return this;
+					}
+				});
 				s.connect(theHost);
-				theSessionConnection.accept(s);
+				try {
+					theSessionConfiguration.accept(new SftpSessionConfig() {
+						@Override
+						public SftpSessionConfig withTimeout(int timeout) {
+							return this;
+						}
+
+						@Override
+						public SftpSessionConfig withAuthentication(String userName, String password) {
+							try {
+								s.authPassword(userName, password);
+							} catch (UserAuthException | TransportException e) {
+								throw new CheckedExceptionWrapper(e);
+							}
+							return this;
+						}
+					});
+				} catch (CheckedExceptionWrapper e) {
+					if (e.getCause() instanceof IOException)
+						throw (IOException) e.getCause();
+					else if (e.getCause() instanceof RuntimeException)
+						throw (RuntimeException) e.getCause();
+					else
+						throw e;
+				}
 				return new ThreadSession(thread, s, s.newSFTPClient());
 			} catch (Exception e) {
 				e.getStackTrace();

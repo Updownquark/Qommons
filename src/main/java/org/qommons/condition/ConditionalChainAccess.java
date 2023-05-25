@@ -104,8 +104,9 @@ public class ConditionalChainAccess<E, T> implements ConditionalValueAccess<E, T
 			ConditionalValueAccess<Object, Object> f = (ConditionalValueAccess<Object, Object>) field;
 			v1 = f.get(v1);
 			v2 = f.get(v2);
-			if (f.compare(v1, v2) == 0)
-				return 0;
+			int comp = f.compare(v1, v2);
+			if (comp != 0)
+				return comp;
 		}
 		return 0;
 	}

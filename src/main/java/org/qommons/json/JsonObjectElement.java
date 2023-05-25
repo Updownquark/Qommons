@@ -92,7 +92,7 @@ public class JsonObjectElement extends DefaultJsonElement {
 				if(theChildren.get(entry.getKey()) == null)
 					total++;
 			}
-		return matched / total;
+		return total == 0 ? 1.0f : matched / total;
 	}
 
 	@Override
@@ -112,7 +112,7 @@ public class JsonObjectElement extends DefaultJsonElement {
 				case ERROR:
 					throw new JsonSchemaException("Extra element " + entry.getKey() + " in JSON object", this, jsonValue);
 				case WARN:
-					JsonSchemaParser.log.warn("Extra element " + entry.getKey() + " in JSON object " + getPathString());
+					System.err.println("Extra element " + entry.getKey() + " in JSON object " + getPathString());
 					break;
 				case IGNORE:
 					break;

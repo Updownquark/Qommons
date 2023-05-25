@@ -356,7 +356,9 @@ public interface Lockable extends ThreadConstrained {
 							}
 							try {
 								Thread.sleep(2);
-							} catch (InterruptedException e) {}
+							} catch (InterruptedException e) {
+								Thread.currentThread().interrupt();
+							}
 							continue reattempt;
 						}
 						locks[i] = lock;
@@ -577,7 +579,9 @@ public interface Lockable extends ThreadConstrained {
 				outerLock.close();
 				try {
 					Thread.sleep(2);
-				} catch (InterruptedException e) {}
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
 				continue;
 			}
 			return Transaction.and(outerLock, innerLock);

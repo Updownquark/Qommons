@@ -713,6 +713,7 @@ public class QommonsTimer {
 					try {
 						Thread.sleep(1_000_000_000L);
 					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
 					} finally {
 						isSleeping.set(false);
 					}
@@ -726,6 +727,7 @@ public class QommonsTimer {
 					try {
 						theClock.sleep(sleepTime);
 					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
 					} finally {
 						isSleeping.set(false);
 					}

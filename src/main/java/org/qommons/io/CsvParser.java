@@ -598,7 +598,7 @@ public class CsvParser {
 				}
 			}
 			System.out.println();
-			int percent = (int) Math.round(kept * 1000.0 / total);
+			int percent = total == 0 ? 1000 : (int) Math.round(kept * 1000.0 / total);
 			System.out.println(kept + " of " + total + " lines (" + (percent / 10) + "." + (percent % 10) + "% copied");
 		} catch (IOException e) {
 			e.printStackTrace();

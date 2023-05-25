@@ -44,6 +44,7 @@ public class BufferedReaderWriter {
 				try {
 					BufferedReaderWriter.this.wait();
 				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
 				}
 				if (isClosed)
 					return false;

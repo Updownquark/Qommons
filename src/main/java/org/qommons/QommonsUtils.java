@@ -30,6 +30,7 @@ import org.qommons.collect.BetterList;
 import org.qommons.collect.SimpleImmutableList;
 import org.qommons.ex.ExFunction;
 import org.qommons.ex.ExPredicate;
+import org.qommons.io.Format;
 
 /** Even more general utilities that I can't think where else to put */
 public class QommonsUtils {
@@ -126,6 +127,49 @@ public class QommonsUtils {
 	 */
 	public static int getRandomInt() {
 		return theRandom.nextInt() >>> 1;
+	}
+
+	/**
+	 * Creates a date format based on {@link SimpleDateFormat} that can be used across threads
+	 * 
+	 * @param format The format string
+	 * @return The date format
+	 */
+	public static Format<Date> simpleDateFormat(String format) {
+		return simpleDateFormat(format, TimeZone.getDefault());
+	}
+
+	/**
+	 * Creates a date format based on {@link SimpleDateFormat} that can be used across threads
+	 * 
+	 * @param format The format string
+	 * @param timeZone The time zone for the format
+	 * @return The date format
+	 */
+	public static Format<Date> simpleDateFormat(String format, TimeZone timeZone) {
+		ThreadLocal<SimpleDateFormat> localFormat = ThreadLocal.withInitial(() -> {
+			SimpleDateFormat sdf = new SimpleDateFormat(format);
+			sdf.setTimeZone(timeZone);
+			return sdf;
+		});
+		return new Format<Date>() {
+			@Override
+			public void append(StringBuilder text, Date value) {
+				SimpleDateFormat sdf = localFormat.get();
+				text.append(sdf.format(value));
+			}
+
+			@Override
+			public Date parse(CharSequence text) throws ParseException {
+				SimpleDateFormat sdf = localFormat.get();
+				return sdf.parse(text.toString());
+			}
+
+			@Override
+			public String toString() {
+				return format;
+			}
+		};
 	}
 
 	/**
@@ -713,10 +757,6 @@ public class QommonsUtils {
 				ret.insert(0, '0');
 			//$FALL-THROUGH$
 		case Calendar.SECOND:
-			if (length > 0) {
-				ret.insert(0, '.');
-				length++;
-			}
 			ret.insert(0, ec.get(Calendar.SECOND));
 			length += 3;
 			while (ret.length() < length)
@@ -726,10 +766,6 @@ public class QommonsUtils {
 			//$FALL-THROUGH$
 		case Calendar.MINUTE:
 		case Calendar.HOUR_OF_DAY:
-			if (length > 0) {
-				ret.insert(0, ':');
-				length++;
-			}
 			ret.insert(0, ec.get(Calendar.MINUTE));
 			length += 2;
 			while (ret.length() < length)
@@ -744,10 +780,6 @@ public class QommonsUtils {
 			//$FALL-THROUGH$
 		case Calendar.DAY_OF_MONTH:
 			int day = ec.get(Calendar.DAY_OF_MONTH);
-			if (length > 0) {
-				ret.insert(0, ' ');
-				length++;
-			}
 			ret.insert(0, day);
 			length += 2;
 			while (ret.length() < length)
@@ -1322,12 +1354,7 @@ public class QommonsUtils {
 	 * @throws IndexOutOfBoundsException If index&lt;0, index>max, or !maxOk and index==max
 	 */
 	public static void checkIndex(int index, int max, boolean maxOk, Object... message) throws IndexOutOfBoundsException {
-		if (index < 0) {
-			if (message.length == 0)
-				throw new IndexOutOfBoundsException(index + " of " + max);
-			else
-				throw new IndexOutOfBoundsException(createMessage(message) + ": " + index + " of " + max);
-		} else if ((index > max) || (!maxOk && index == max)) {
+		if (index < 0 || (index > max) || (!maxOk && index == max)) {
 			if (message.length == 0)
 				throw new IndexOutOfBoundsException(index + " of " + max);
 			else

@@ -396,7 +396,7 @@ public class CircularByteBuffer implements StringUtils.BinaryAccumulator {
 			public int read() {
 				if (theStreamOffset >= theLength)
 					return -1;
-				return get(theStreamOffset++);
+				return get(theStreamOffset++) & 0xff;
 			}
 
 			@Override
