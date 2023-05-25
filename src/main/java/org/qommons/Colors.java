@@ -32,6 +32,564 @@ import org.qommons.io.Format;
  * hue-saturation-brightness components (e.g. "hsb(120, 100, 39)").<br>
  * rgb values can be specified via hex like "#006400", and hsb values like "$786427".<br>
  * </p>
+ * <p>
+ * In addition to {@link #transparent} (which is not available via {@link #parseColor(String)}), the constants in this class are:
+ * <table>
+ * <tr>
+ * <td style="background-color:#000000;color:white">black</td>
+ * <td>Basic black, #000000</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ffffff;color:black">white</td>
+ * <td>Basic white, #ffffff</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ff0000;color:white">red</td>
+ * <td>Basic red, #ff0000</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#00ff00;color:black">lime</td>
+ * <td>&quot;Lime&quot; is basic green from HTML. &quot;Green&quot; is a darker color. #00ff00</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#0000ff;color:white">blue</td>
+ * <td>Basic blue, #0000ff</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ffff00;color:black">yellow</td>
+ * <td>Basic yellow, a mix of full red and green, #ffff00</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#00ffff;color:black">cyan/aqua</td>
+ * <td>Basic cyan, a mix of full green and blue, #00ffff</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ff00ff;color:black">magenta/fuchsia</td>
+ * <td>Basic magenta, a mix of full red and blue, #ff00ff</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#800000;color:white">maroon</td>
+ * <td>A darker red, #800000</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#008000;color:white">green</td>
+ * <td>A darker green than {@link java.awt.Color#green}. Use {@link #lime} for that green. #008000</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#000080;color:white">navy</td>
+ * <td>A darker blue, #000080</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#808000;color:white">olive</td>
+ * <td>A darker yellow, #808000</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#008080;color:white">teal</td>
+ * <td>A darker cyan: #008080</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#800080;color:white">purple</td>
+ * <td>A darker magenta: #800080</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ffa500;color:white">orange</td>
+ * <td>#ffa500</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#a52a2a;color:white">brown</td>
+ * <td>a52a2a</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#f0f8ff;color:black">alice blue</td>
+ * <td>f0f8ff</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#faebd7;color:black">antique white</td>
+ * <td>faebd7</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#7fffd4;color:black">aquamarine</td>
+ * <td>7fffd4</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#f0ffff;color:black">azure</td>
+ * <td>#f0ffff</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#f5f5dc;color:black">beige</td>
+ * <td>#f5f5dc</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ffe4c4;color:black">bisque</td>
+ * <td>#ffe4c4</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ffebcd;color:black">blanched almond</td>
+ * <td>A very light brown: #ffebcd</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#8a2be2;color:white">blue violet</td>
+ * <td>Lilac color: #8a2be2</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#deb887;color:white">burly wood</td>
+ * <td>A light brown: #deb887</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#5f9ea0;color:white">cadet blue</td>
+ * <td>#5f9ea0</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#7fff00;color:black">chartreuse</td>
+ * <td>A bright green #7fff00</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#d2691e;color:white">chocolate</td>
+ * <td>An orangey brown #d2691e</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ff7f50;color:white">coral</td>
+ * <td>#ff7f50</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#6495ed;color:white">cornflower blue</td>
+ * <td>#6495ed</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#fff8dc;color:black">corn silk</td>
+ * <td>#fff8dc</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#dc143c;color:white">crimson</td>
+ * <td>#dc143c</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#00008b;color:white">dark blue</td>
+ * <td>#00008b</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#008b8b;color:white">dark cyan</td>
+ * <td>#008b8b</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#b8860b;color:white">dark goldenrod</td>
+ * <td>#b8860b</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#a9a9a9;color:white">dark gray</td>
+ * <td>#a9a9a9</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#006400;color:white">dark green</td>
+ * <td>#006400</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#bdb76b;color:white">dark khaki</td>
+ * <td>#bdb76b</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#8b008b;color:white">dark magenta</td>
+ * <td>#8b008b</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#556b2f;color:white">dark olive green</td>
+ * <td>#556b2f</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ff8c00;color:white">dark orange</td>
+ * <td>#ff8c00</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#9932cc;color:white">dark orchid</td>
+ * <td>#9932cc</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#8b0000;color:white">dark red</td>
+ * <td>#8b0000</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#e9967a;color:white">dark salmon</td>
+ * <td>#e9967a</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#8fbc8f;color:white">dark sea green</td>
+ * <td>#8fbc8f</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#483d8b;color:white">dark slate blue</td>
+ * <td>#483d8b</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#2f4f4f;color:white">dark slate gray</td>
+ * <td>#2f4f4f</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#00ced1;color:white">dark turquoise</td>
+ * <td>#00ced1</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#9400d3;color:white">dark violet</td>
+ * <td>#9400d3</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ff1493;color:white">deep pink</td>
+ * <td>#ff1493</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#00bfff;color:white">deep sky blue</td>
+ * <td>#00bfff</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#696969;color:white">dim gray</td>
+ * <td>#696969</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#1e90ff;color:white">dodger blue</td>
+ * <td>#1e90ff</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#b22222;color:white">fire brick</td>
+ * <td>#b22222</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#fffaf0;color:black">floral white</td>
+ * <td>#fffaf0</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#228b22;color:white">forest green</td>
+ * <td>#228b22</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#dcdcdc;color:black">gainsboro</td>
+ * <td>#dcdcdc</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#f8f8ff;color:black">ghost white</td>
+ * <td>#f8f8ff</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ffd700;color:white">gold</td>
+ * <td>#ffd700</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#daa520;color:white">goldenrod</td>
+ * <td>#daa520</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#808080;color:white">gray</td>
+ * <td>#808080</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#adff2f;color:black">green yellow</td>
+ * <td>#adff2f</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#f0fff0;color:black">honeydew</td>
+ * <td>#f0fff0</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ff69b4;color:white">hot pink</td>
+ * <td>#ff69b4</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#cd5c5c;color:white">indian red</td>
+ * <td>#cd5c5c</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#4b0082;color:white">indigo</td>
+ * <td>#4b0082</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#fffff0;color:black">ivory</td>
+ * <td>#fffff0</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#f0e68c;color:black">khaki</td>
+ * <td>#f0e68c</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#e6e6fa;color:black">lavender</td>
+ * <td>#e6e6fa</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#fff0f5;color:black">lavender blush</td>
+ * <td>#fff0f5</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#7cfc00;color:black">lawn green</td>
+ * <td>#7cfc00</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#fffacd;color:black">lemon chiffon</td>
+ * <td>#fffacd</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#add8e6;color:black">light blue</td>
+ * <td>#add8e6</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#f08080;color:white">light coral</td>
+ * <td>#f08080</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#e0ffff;color:black">light cyan</td>
+ * <td>#e0ffff</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#fafad2;color:black">light goldenrod yellow</td>
+ * <td>#fafad2</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#d3d3d3;color:black">light gray</td>
+ * <td>#d3d3d3</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#90ee90;color:black">light green</td>
+ * <td>#90ee90</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ffb6c1;color:white">light pink</td>
+ * <td>#ffb6c1</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ffa07a;color:white">light salmon</td>
+ * <td>#ffa07a</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#20b2aa;color:white">light sea green</td>
+ * <td>#20b2aa</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#87cefa;color:black">light sky blue</td>
+ * <td>#87cefa</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#778899;color:white">light slate gray</td>
+ * <td>#778899</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#b0c4de;color:black">light steel blue</td>
+ * <td>#b0c4de</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ffffe0;color:black">light yellow</td>
+ * <td>#ffffe0</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#32cd32;color:white">lime green</td>
+ * <td>#32cd32</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#faf0e6;color:black">linen</td>
+ * <td>#faf0e6</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#66cdaa;color:white">medium aquamarine</td>
+ * <td>#66cdaa</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#0000cd;color:white">medium blue</td>
+ * <td>#0000cd</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ba55d3;color:white">medium orchid</td>
+ * <td>#ba55d3</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#9370d8;color:white">medium purple</td>
+ * <td>#9370d8</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#3cb371;color:white">medium sea green</td>
+ * <td>#3cb371</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#7b68ee;color:white">medium slate blue</td>
+ * <td>#7b68ee</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#00fa9a;color:black">medium spring green</td>
+ * <td>#00fa9a</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#48d1cc;color:white">medium turquoise</td>
+ * <td>#48d1cc</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#c71585;color:white">medium violet red</td>
+ * <td>#c71585</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#191970;color:white">midnight blue</td>
+ * <td>#191970</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#f5fffa;color:black">mint cream</td>
+ * <td>#f5fffa</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ffe4e1;color:black">misty rose</td>
+ * <td>#ffe4e1</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ffe4b5;color:black">moccasin</td>
+ * <td>#ffe4b5</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ffdead;color:black">navajo white</td>
+ * <td>#ffdead</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#fdf5e6;color:black">old lace</td>
+ * <td>#fdf5e6</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#6b8e23;color:white">olive drab</td>
+ * <td>#6b8e23</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ff4500;color:white">orange red</td>
+ * <td>#ff4500</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#da70d6;color:white">orchid</td>
+ * <td>#da70d6</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#eee8aa;color:black">pale goldenrod</td>
+ * <td>#eee8aa</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#98fb98;color:black">pale green</td>
+ * <td>#98fb98</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#afeeee;color:black">pale turquoise</td>
+ * <td>#afeeee</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#d87093;color:white">pale violet red</td>
+ * <td>#d87093</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ffefd5;color:black">papaya whip</td>
+ * <td>#ffefd5</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ffdab9;color:black">peach puff</td>
+ * <td>#ffdab9</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#cd853f;color:white">peru</td>
+ * <td>#cd853f</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ffc0cb;color:black">pink</td>
+ * <td>#ffc0cb</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#dda0dd;color:black">plum</td>
+ * <td>#dda0dd</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#b0e0e6;color:black">powder blue</td>
+ * <td>#b0e0e6</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#bc8f8f;color:white">rosy brown</td>
+ * <td>#bc8f8f</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#4169e1;color:white">royal blue</td>
+ * <td>#4169e1</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#8b4513;color:white">saddle brown</td>
+ * <td>#8b4513</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#fa8072;color:white">salmon</td>
+ * <td>#fa8072</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#f4a460;color:white">sandy brown</td>
+ * <td>#f4a460</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#2e8b57;color:white">sea green</td>
+ * <td>#2e8b57</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#fff5ee;color:black">sea shell</td>
+ * <td>#fff5ee</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#a0522d;color:white">sienna</td>
+ * <td>#a0522d</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#c0c0c0;color:black">silver</td>
+ * <td>#c0c0c0</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#a7ceeb;color:black">sky blue</td>
+ * <td>#a7ceeb</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#6a5acd;color:white">slate blue</td>
+ * <td>#6a5acd</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#708090;color:white">slate gray</td>
+ * <td>#708090</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#fffafa;color:black">snow</td>
+ * <td>#fffafa</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#00ff7f;color:black">spring green</td>
+ * <td>#00ff7f</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#4682b4;color:white">steel blue</td>
+ * <td>#4682b4</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#d2b4bc;color:black">tan</td>
+ * <td>#d2b4bc</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#d8bfd8;color:black">thistle</td>
+ * <td>#d8bfd8</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ff6347;color:white">tomato</td>
+ * <td>#ff6347</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#40e0d0;color:black">turquoise</td>
+ * <td>#40e0d0</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#ee82ee;color:white">violet</td>
+ * <td>#ee82ee</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#f5deb3;color:black">wheat</td>
+ * <td>#f5deb3</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#f5f5f5;color:black">white smoke</td>
+ * <td>#f5f5f5</td>
+ * </tr>
+ * <tr>
+ * <td style="background-color:#9acd32;color:black">yellow green</td>
+ * <td>#9acd32</td>
+ * </tr>
+ * </table>
+ * </ul>
+ * </p>
  */
 public class Colors {
 	private Colors() {
@@ -137,7 +695,7 @@ public class Colors {
 	public static final Color antiqueWhite = _parseColor("#faebd7");
 
 	/** #7fffd4 <span style="font-weight:bolder;color:#7fffd4">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
-	public static final Color aquaMarine = _parseColor("#7fffd4");
+	public static final Color aquamarine = _parseColor("#7fffd4");
 
 	/** #f0ffff <span style="font-weight:bolder;color:#f0ffff">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
 	public static final Color azure = _parseColor("#f0ffff");
@@ -185,7 +743,7 @@ public class Colors {
 	public static final Color darkCyan = _parseColor("#008b8b");
 
 	/** #b8860b <span style="font-weight:bolder;color:#b8860b">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
-	public static final Color darkGoldenRod = _parseColor("#b8860b");
+	public static final Color darkGoldenrod = _parseColor("#b8860b");
 
 	/** #a9a9a9 <span style="font-weight:bolder;color:#a9a9a9">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
 	public static final Color darkGray = _parseColor("#a9a9a9");
@@ -260,7 +818,7 @@ public class Colors {
 	public static final Color gold = _parseColor("#ffd700");
 
 	/** #daa520 <span style="font-weight:bolder;color:#daa520">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
-	public static final Color goldenRod = _parseColor("#daa520");
+	public static final Color goldenrod = _parseColor("#daa520");
 
 	/** #808080 <span style="font-weight:bolder;color:#808080">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
 	public static final Color gray = _parseColor("#808080");
@@ -308,7 +866,7 @@ public class Colors {
 	public static final Color lightCyan = _parseColor("#e0ffff");
 
 	/** #fafad2 <span style="font-weight:bolder;color:#fafad2">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
-	public static final Color lightGoldenRodYellow = _parseColor("#fafad2");
+	public static final Color lightGoldenrodYellow = _parseColor("#fafad2");
 
 	/** #d3d3d3 <span style="font-weight:bolder;color:#d3d3d3">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
 	public static final Color lightGray = _parseColor("#d3d3d3");
@@ -344,7 +902,7 @@ public class Colors {
 	public static final Color linen = _parseColor("#faf0e6");
 
 	/** #66cdaa <span style="font-weight:bolder;color:#66cdaa">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
-	public static final Color mediumAquaMarine = _parseColor("#66cdaa");
+	public static final Color mediumAquamarine = _parseColor("#66cdaa");
 
 	/** #0000cd <span style="font-weight:bolder;color:#0000cd">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
 	public static final Color mediumBlue = _parseColor("#0000cd");
@@ -398,7 +956,7 @@ public class Colors {
 	public static final Color orchid = _parseColor("#da70d6");
 
 	/** #eee8aa <span style="font-weight:bolder;color:#eee8aa">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
-	public static final Color paleGoldenRod = _parseColor("#eee8aa");
+	public static final Color paleGoldenrod = _parseColor("#eee8aa");
 
 	/** #98fb98 <span style="font-weight:bolder;color:#98fb98">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
 	public static final Color paleGreen = _parseColor("#98fb98");
@@ -1192,17 +1750,17 @@ public class Colors {
 		BufferedImage blackImg = images[1];
 		BufferedImage bwImg = images[2];
 		try {
-			FileOutputStream out = new FileOutputStream(new File(directory, "ColorHexagon.png"));
-			ImageIO.write(colorImg, "png", out);
-			out.close();
+			try (FileOutputStream out = new FileOutputStream(new File(directory, "ColorHexagon.png"))) {
+				ImageIO.write(colorImg, "png", out);
+			}
 
-			out = new FileOutputStream(new File(directory, "ShadeHexagon.png"));
-			ImageIO.write(blackImg, "png", out);
-			out.close();
+			try (FileOutputStream out = new FileOutputStream(new File(directory, "ShadeHexagon.png"))) {
+				ImageIO.write(blackImg, "png", out);
+			}
 
-			out = new FileOutputStream(new File(directory, "AlphaHexagon.png"));
-			ImageIO.write(bwImg, "png", out);
-			out.close();
+			try (FileOutputStream out = new FileOutputStream(new File(directory, "AlphaHexagon.png"))) {
+				ImageIO.write(bwImg, "png", out);
+			}
 		} catch (IOException e) {
 			throw new IllegalStateException("Could not write image files to " + directory.getPath(), e);
 		}

@@ -39,7 +39,7 @@ public class QonfigToolkit implements Named {
 		public final int minorVersion;
 
 		/**
-		 * @param majorVersion The majoer version of this toolkit
+		 * @param majorVersion The major version of this toolkit
 		 * @param minorVersion THe minor version of this toolkit
 		 */
 		public ToolkitDefVersion(int majorVersion, int minorVersion) {

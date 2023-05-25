@@ -581,6 +581,7 @@ public class QonfigInterpreterCore {
 	}
 
 	private final Class<?> theCallingClass;
+	private final Set<QonfigToolkit> theKnownToolkits;
 	private final Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> theCreators;
 	private final Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> theModifiers;
 	private final ClassMap<SpecialSessionImplementation<?>> theSpecialSessions;
@@ -588,15 +589,18 @@ public class QonfigInterpreterCore {
 
 	/**
 	 * @param callingClass The class building the interpreter
+	 * @param allKnownToolkits All toolkits used to build the interpreter
 	 * @param creators The set of value creators for interpretation
 	 * @param modifiers The set of value modifiers for interpretation
 	 * @param specialSessions Special session implementations configured for the interpreter
 	 * @param reporting The error reporting for the interpretation
 	 */
-	protected QonfigInterpreterCore(Class<?> callingClass, Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
+	protected QonfigInterpreterCore(Class<?> callingClass, Set<QonfigToolkit> allKnownToolkits,
+		Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
 		Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> modifiers, ClassMap<SpecialSessionImplementation<?>> specialSessions,
 		ExceptionThrowingReporting reporting) {
 		theCallingClass = callingClass;
+		theKnownToolkits = allKnownToolkits;
 		theCreators = creators;
 		theModifiers = modifiers;
 		theReporting = reporting;
@@ -621,6 +625,11 @@ public class QonfigInterpreterCore {
 	/** @return The class invoking this interpretation--may be needed to access resources on the classpath */
 	public Class<?> getCallingClass() {
 		return theCallingClass;
+	}
+
+	/** @return All toolkits known to this interpreter */
+	public Set<QonfigToolkit> getKnownToolkits() {
+		return theKnownToolkits;
 	}
 
 	/**
@@ -740,7 +749,8 @@ public class QonfigInterpreterCore {
 
 		/** @return A new interpreter with this builder's configuration */
 		public QonfigInterpreterCore create() {
-			return new QonfigInterpreterCore(getCallingClass(), getCreators(), getModifiers(), theSpecialSessions, theReporting);
+			return new QonfigInterpreterCore(getCallingClass(), theToolkits, getCreators(), getModifiers(), theSpecialSessions,
+				theReporting);
 		}
 
 		/** @return The toolkit that will be used to get elements/add-ons when only names are specified */
@@ -1017,6 +1027,8 @@ public class QonfigInterpreterCore {
 						error.append("Unmet dependency " + api.getName() + " of interpretation " + interp.getClass().getName());
 					}
 				}
+				if (error != null)
+					theReporting.warn(error.toString());
 
 				if (tkok)
 					interp.configureInterpreter(forToolkit(interpTK));
