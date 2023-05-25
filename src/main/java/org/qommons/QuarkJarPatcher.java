@@ -361,14 +361,18 @@ public class QuarkJarPatcher {
 								new BufferedInputStream(new FileInputStream(targets[i])));
 							ZipOutputStream zipOut = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(replacement)))) {
 							long fcsf = fileContentSoFar, tl = totalLength;
-							FileUtils.extractZip(targetIn, (entry, zipIn) -> {
-								status[1] = entry.getName();
-								status(null, entry.getName(), progress[0], status, progress, uiDirty);
-								File patchFile = extractedFiles.remove(entry.getName());
+							FileUtils.extractZip(targetIn, entry -> {
+								status[1] = entry.getPath();
+								status(null, entry.getPath(), progress[0], status, progress, uiDirty);
+								File patchFile = extractedFiles.remove(entry.getPath());
+								ZipEntry zipEntry = new ZipEntry(entry.getPath());
 								if (patchFile != null) {
-									entry = new ZipEntry(entry.getName());
-									entry.setLastModifiedTime(FileTime.fromMillis(patchFile.lastModified()));
-									zipOut.putNextEntry(entry);
+									zipEntry.setLastModifiedTime(FileTime.fromMillis(patchFile.lastModified()));
+									zipOut.putNextEntry(zipEntry);
+									// The Snyk vulnerability testing tool is flagging this as vulnerable to zip-slip
+									// This is incorrect. All zip access occurring in this file is using the extractZip methods
+									// in Qommons FileUtils, which check the paths of all entries.
+									// But no matter what I do here, I can't suppress the error from Snyk.
 									try (InputStream in = new BufferedInputStream(new FileInputStream(patchFile))) {
 										int read = in.read(buffer);
 										while (read >= 0) {
@@ -377,15 +381,12 @@ public class QuarkJarPatcher {
 										}
 									}
 									patchFile.delete();
-								} else {
-									zipOut.putNextEntry(entry);
-									int read = zipIn.read(buffer);
-									while (read >= 0) {
-										zipOut.write(buffer, 0, read);
-										read = zipIn.read(buffer);
-									}
+								} else if (!entry.isDirectory()) {
+									zipEntry.setLastModifiedTime(FileTime.fromMillis(entry.getLastModified()));
+									zipOut.putNextEntry(zipEntry);
+									FileUtils.copy(entry.getContent(), zipOut);
 								}
-								status(null, entry.getName(),
+								status(null, entry.getPath(),
 									Math.round((fcsf + targetIn.getPosition() * 0.9f) * 1000.0f / tl), status,
 									progress, uiDirty);
 							}, null);

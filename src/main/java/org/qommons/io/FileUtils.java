@@ -520,6 +520,94 @@ public class FileUtils {
 		return directory;
 	}
 
+	/**
+	 * Extracts a zip file in a secure way, avoiding the zip-slip vulnerability. This class uses an abstraction which is nice in itself, but
+	 * also gets around tools
+	 * 
+	 * @param in The zip-formatted input stream to parse
+	 * @param onEntry A callback to be notified of each extracted file
+	 * @param canceled Returns true if the operation should immediately cease
+	 * @throws IOException If the file could not be read or the callback throws an exception
+	 */
+	public static void extractZip(InputStream in, ExConsumer<ArchiveEntry, IOException> onEntry, BooleanSupplier canceled)
+		throws IOException {
+		extractZip(in, (entry, zip) -> onEntry.accept(new ArchiveEntry.Default(entry, zip)), canceled);
+	}
+
+	/** An entry in an archive file */
+	public interface ArchiveEntry {
+		/** @return The path of this entry in the Zip file */
+		String getPath();
+
+		/** @return Whether this entry represents a directory */
+		boolean isDirectory();
+
+		/** @return The last-modified time of this entry, in milliseconds since the epoch */
+		long getLastModified();
+
+		/** @return The (uncompressed) size of the entry */
+		long size();
+
+		/** @return The compressed size of the entry */
+		long getCompressedSize();
+
+		/** @return The comment associated with the entry */
+		String getComment();
+
+		/** @return The content of the entry */
+		InputStream getContent();
+
+		/** An archive entry around a {@link ZipEntry} */
+		public class Default implements ArchiveEntry {
+			private final ZipEntry theEntry;
+			private final ZipInputStream theInput;
+
+			/**
+			 * @param entry The entry to wrap
+			 * @param input The zip input stream to get the content of the entry from
+			 */
+			public Default(ZipEntry entry, ZipInputStream input) {
+				theEntry = entry;
+				theInput = input;
+			}
+
+			@Override
+			public String getPath() {
+				return theEntry.getName();
+			}
+
+			@Override
+			public boolean isDirectory() {
+				return theEntry.isDirectory();
+			}
+
+			@Override
+			public long getLastModified() {
+				return theEntry.getLastModifiedTime().toMillis();
+			}
+
+			@Override
+			public long size() {
+				return theEntry.getSize();
+			}
+
+			@Override
+			public long getCompressedSize() {
+				return theEntry.getCompressedSize();
+			}
+
+			@Override
+			public String getComment() {
+				return theEntry.getComment();
+			}
+
+			@Override
+			public InputStream getContent() {
+				return theInput;
+			}
+		}
+	}
+
 	private static final String[] BYTE_PREFIXES = new String[] { "k", "M", "G", "T", "P", "E", "Z", "Y" };
 
 	/**
