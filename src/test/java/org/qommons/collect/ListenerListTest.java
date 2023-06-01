@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
 import org.junit.Assert;
 import org.junit.Test;
 import org.qommons.BreakpointHere;
-import org.qommons.TestHelper;
+import org.qommons.testing.TestHelper;
 
 /** Tests {@link ListenerList} */
 public class ListenerListTest {

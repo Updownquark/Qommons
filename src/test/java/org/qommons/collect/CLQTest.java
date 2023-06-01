@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.Assert;
 import org.junit.Test;
 import org.qommons.BreakpointHere;
-import org.qommons.TestHelper;
+import org.qommons.testing.TestHelper;
 
 /**
  * I wrote this to compare performance of {@link ConcurrentLinkedQueue} against {@link ListenerList}

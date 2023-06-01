@@ -1,4 +1,4 @@
-package org.qommons;
+package org.qommons.testing;
 
 import java.util.Random;
 

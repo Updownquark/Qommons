@@ -1,7 +1,7 @@
 package org.qommons.tree;
 
-import static org.qommons.QommonsTestUtils.testCollection;
-import static org.qommons.QommonsTestUtils.testMap;
+import static org.qommons.testing.QommonsTestUtils.testCollection;
+import static org.qommons.testing.QommonsTestUtils.testMap;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -15,11 +15,11 @@ import java.util.TreeSet;
 import org.junit.Assert;
 import org.junit.Test;
 import org.qommons.LambdaUtils;
-import org.qommons.QommonsTestUtils;
-import org.qommons.TestHelper;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.ValueStoredCollection;
+import org.qommons.testing.QommonsTestUtils;
+import org.qommons.testing.TestHelper;
 
 /** Runs tests on the red-black tree structures behind the ObServe tree collections */
 public class TreeUtilsTest {

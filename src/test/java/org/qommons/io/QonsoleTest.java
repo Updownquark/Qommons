@@ -6,8 +6,8 @@ import java.time.Duration;
 
 import org.junit.Assert;
 import org.junit.Test;
-import org.qommons.TestHelper;
-import org.qommons.TestHelper.Testable;
+import org.qommons.testing.TestHelper;
+import org.qommons.testing.TestHelper.Testable;
 
 /** Tests {@link Qonsole} */
 public class QonsoleTest {

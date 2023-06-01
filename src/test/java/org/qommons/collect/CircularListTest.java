@@ -8,8 +8,8 @@ import java.util.ArrayList;
 
 import org.junit.Assert;
 import org.junit.Test;
-import org.qommons.QommonsTestUtils;
-import org.qommons.TestHelper;
+import org.qommons.testing.QommonsTestUtils;
+import org.qommons.testing.TestHelper;
 
 /** Tests {@link CircularArrayList} */
 public class CircularListTest {
@@ -265,7 +265,7 @@ public class CircularListTest {
 			for (int i = 0; i < 100; i++)
 				assertEquals(Integer.valueOf(i + 50), list.get(i));
 			check.addAll(QommonsTestUtils.sequence(100, v -> v + 50, false));
-			Assert.assertThat(list, QommonsTestUtils.collectionsEqual(check, true));
+			QommonsTestUtils.assertThat(list, QommonsTestUtils.collectionsEqual(check, true));
 
 			list.addAll(// Broken up for debugging
 				QommonsTestUtils.sequence(50, i -> i + 150, false));
@@ -274,7 +274,7 @@ public class CircularListTest {
 			assertEquals(100, list.size());
 			for (int i = 0; i < 100; i++)
 				assertEquals(Integer.valueOf(i + 100), list.get(i));
-			Assert.assertThat(list, QommonsTestUtils.collectionsEqual(check, true));
+			QommonsTestUtils.assertThat(list, QommonsTestUtils.collectionsEqual(check, true));
 
 			list.removeIf(i -> i % 2 == 0);
 			check.removeIf(i -> i % 2 == 0);
@@ -286,7 +286,7 @@ public class CircularListTest {
 			assertEquals(100, list.size());
 			for (int i = 0; i < 100; i++)
 				assertEquals(Integer.valueOf(i * 2), list.get(i));
-			Assert.assertThat(list, QommonsTestUtils.collectionsEqual(check, true));
+			QommonsTestUtils.assertThat(list, QommonsTestUtils.collectionsEqual(check, true));
 
 			list.addAll(list.size() / 4, QommonsTestUtils.sequence(50, null, false));
 			// TODO What should this look like

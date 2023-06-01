@@ -1,8 +1,8 @@
 package org.qommons.collect;
 
 import org.junit.Test;
-import org.qommons.QommonsTestUtils;
-import org.qommons.TestHelper;
+import org.qommons.testing.QommonsTestUtils;
+import org.qommons.testing.TestHelper;
 
 /** Tests {@link BetterHashSet} and {@link BetterHashMap} */
 public class HashSetTest {

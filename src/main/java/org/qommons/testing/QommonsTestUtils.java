@@ -1,12 +1,6 @@
-package org.qommons;
+package org.qommons.testing;
 
 import static java.util.Arrays.asList;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.not;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -27,8 +21,6 @@ import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import org.hamcrest.Description;
-import org.hamcrest.Matcher;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterList;
 
@@ -36,6 +28,92 @@ import org.qommons.collect.BetterList;
 public class QommonsTestUtils {
 	/** The recursive depth to use to test dependent collections (e.g. sub lists and sub maps) */
 	public static final int COLLECTION_TEST_DEPTH = 5;
+
+	public interface Matcher<T> {
+		boolean matches(T value);
+
+		void describeMismatch(T value, StringBuilder msg);
+
+		default Matcher<T> not() {
+			Matcher<T> outer = this;
+			class NotMatcher implements Matcher<T> {
+				@Override
+				public boolean matches(T value) {
+					return !outer.matches(value);
+				}
+
+				@Override
+				public void describeMismatch(T value, StringBuilder msg) {
+					msg.append("Not: ");
+					outer.describeMismatch(value, msg);
+				}
+
+				@Override
+				public Matcher<T> not() {
+					return outer;
+				}
+			}
+			return new NotMatcher();
+		}
+	}
+
+	public interface Matcher2<T> extends Matcher<T> {
+		@Override
+		default void describeMismatch(T value, StringBuilder msg) {
+			msg.append("Expected ");
+			describeTo(msg);
+			msg.append(", but encountered ").append(value);
+		}
+
+		void describeTo(StringBuilder msg);
+	}
+
+	private static void assertEquals(Object expected, Object actual) throws AssertionError {
+		if (!Objects.equals(expected, actual))
+			throw new AssertionError(new StringBuilder("Expected ").append(expected).append(" but encountered ").append(actual).toString());
+	}
+
+	private static void assertEquals(Object message, Object expected, Object actual) throws AssertionError {
+		if (!Objects.equals(expected, actual))
+			throw new AssertionError(message);
+	}
+
+	private static void assertTrue(boolean b) throws AssertionError {
+		if (!b)
+			throw new AssertionError();
+	}
+
+	private static void assertTrue(Object message, boolean b) throws AssertionError {
+		if (!b)
+			throw new AssertionError(message);
+	}
+
+	private static void assertFalse(boolean b) throws AssertionError {
+		if (b)
+			throw new AssertionError();
+	}
+
+	private static void assertFalse(Object message, boolean b) throws AssertionError {
+		if (b)
+			throw new AssertionError(message);
+	}
+
+	public static <T> void assertThat(T value, Matcher<T> matcher) throws AssertionError {
+		if (!matcher.matches(value)) {
+			StringBuilder msg = new StringBuilder();
+			matcher.describeMismatch(value, msg);
+			throw new AssertionError(msg.toString());
+		}
+	}
+
+	public static <T> void assertThat(Object message, T value, Matcher<T> matcher) throws AssertionError {
+		if (!matcher.matches(value)) {
+			StringBuilder msg = new StringBuilder();
+			msg.append(message).append('\n');
+			matcher.describeMismatch(value, msg);
+			throw new AssertionError(msg.toString());
+		}
+	}
 
 	/**
 	 * Runs a barrage of tests against a collection
@@ -177,7 +255,7 @@ public class QommonsTestUtils {
 		assertTrue(coll.isEmpty()); // Test isEmpty
 		if (check != null)
 			check.accept(coll);
-		assertThat(coll, not(contains(0)));
+		assertThat(coll, contains(0).not());
 
 		ArrayList<Integer> toAdd = new ArrayList<>();
 		helper.placemark();
@@ -222,13 +300,13 @@ public class QommonsTestUtils {
 		assertEquals(10, coll.size());
 		if (check != null)
 			check.accept(coll);
-		assertThat(coll, not(containsAll(1, 2, 11, 99)));
+		assertThat(coll, containsAll(1, 2, 11, 99).not());
 		helper.placemark();
 		coll.clear(); // Test clear
 		assertEquals(0, coll.size());
 		if (check != null)
 			check.accept(coll);
-		assertThat(coll, not(contains(2)));
+		assertThat(coll, contains(2).not());
 		// Leave the collection empty
 	}
 
@@ -283,31 +361,31 @@ public class QommonsTestUtils {
 		assertEquals(30, set.size());
 		if (check != null)
 			check.accept(set);
-		assertEquals((Integer) 0, reversed ? set.last() : set.first());
-		assertEquals((Integer) 58, reversed ? set.first() : set.last());
-		assertEquals((Integer) 14, reversed ? set.higher(16) : set.lower(16));
-		assertEquals((Integer) 18, reversed ? set.lower(16) : set.higher(16));
-		assertEquals((Integer) 14, reversed ? set.ceiling(15) : set.floor(15));
-		assertEquals((Integer) 16, reversed ? set.floor(15) : set.ceiling(15));
-		assertEquals((Integer) 16, reversed ? set.ceiling(16) : set.floor(16));
-		assertEquals((Integer) 16, reversed ? set.floor(16) : set.ceiling(16));
+		assertEquals(0, reversed ? set.last() : set.first());
+		assertEquals(58, reversed ? set.first() : set.last());
+		assertEquals(14, reversed ? set.higher(16) : set.lower(16));
+		assertEquals(18, reversed ? set.lower(16) : set.higher(16));
+		assertEquals(14, reversed ? set.ceiling(15) : set.floor(15));
+		assertEquals(16, reversed ? set.floor(15) : set.ceiling(15));
+		assertEquals(16, reversed ? set.ceiling(16) : set.floor(16));
+		assertEquals(16, reversed ? set.floor(16) : set.ceiling(16));
 		helper.placemark();
-		assertEquals((Integer) 0, reversed ? set.pollLast() : set.pollFirst());
+		assertEquals(0, reversed ? set.pollLast() : set.pollFirst());
 		assertEquals(29, set.size());
 		if (check != null)
 			check.accept(set);
 		helper.placemark();
-		assertEquals((Integer) 58, reversed ? set.pollFirst() : set.pollLast());
+		assertEquals(58, reversed ? set.pollFirst() : set.pollLast());
 		assertEquals(28, set.size());
 		if (check != null)
 			check.accept(set);
 		helper.placemark();
-		assertEquals((Integer) 2, reversed ? set.pollLast() : set.pollFirst());
+		assertEquals(2, reversed ? set.pollLast() : set.pollFirst());
 		assertEquals(27, set.size());
 		if (check != null)
 			check.accept(set);
 		helper.placemark();
-		assertEquals((Integer) 56, reversed ? set.pollFirst() : set.pollLast());
+		assertEquals(56, reversed ? set.pollFirst() : set.pollLast());
 		assertEquals(26, set.size());
 		if (check != null)
 			check.accept(set);
@@ -317,7 +395,7 @@ public class QommonsTestUtils {
 		while (desc.hasNext()) {
 			Integer el = desc.next();
 			if (last != null)
-				assertThat(el, not(greaterThanOrEqual(last, set.comparator()))); // Strictly less than
+				assertThat(el, greaterThanOrEqual(last, set.comparator()).not()); // Strictly less than
 			last = el;
 		}
 
@@ -444,7 +522,7 @@ public class QommonsTestUtils {
 		if (check != null)
 			check.accept(list);
 		helper.placemark();
-		assertEquals((Integer) 0, list.remove(10));
+		assertEquals(0, list.remove(10));
 		assertEquals(10, list.size());
 		if (check != null)
 			check.accept(list);
@@ -463,7 +541,7 @@ public class QommonsTestUtils {
 		if (check != null)
 			check.accept(list);
 		for (int i = 0; i < 30; i++)
-			assertEquals((Integer) i, list.get(i)); // Test get
+			assertEquals(i, list.get(i)); // Test get
 
 		// Test range checks
 		helper.placemark();
@@ -511,7 +589,7 @@ public class QommonsTestUtils {
 		list.remove(31);
 		list.remove(30);
 		for (int i = 0; i < 30; i++) {
-			assertEquals("i=" + i, (Integer) i, //
+			assertEquals("i=" + i, i, //
 				list.set(i, //
 					30 - i - 1)); // Test set
 			if (check != null)
@@ -524,7 +602,7 @@ public class QommonsTestUtils {
 			check.accept(list);
 		helper.placemark();
 		for (int i = 0; i < 30; i++) {
-			assertEquals((Integer) (30 - i - 1), list.set(i, 30 - i - 1));
+			assertEquals(30 - i - 1, list.set(i, 30 - i - 1));
 			if (check != null)
 				check.accept(list);
 		}
@@ -679,14 +757,14 @@ public class QommonsTestUtils {
 			List<Integer> subList = list.subList(subIndex, subIndex + 5);
 			assertEquals(5, subList.size());
 			for (i = 0; i < subList.size(); i++)
-				assertEquals((Integer) (subIndex + i), subList.get(i));
+				assertEquals(subIndex + i, subList.get(i));
 			i = 0;
 			for (Integer el : subList)
-				assertEquals((Integer) (subIndex + i++), el);
+				assertEquals(subIndex + i++, el);
 			helper.placemark();
 			subList.remove(0);
 			assertEquals(4, subList.size());
-			assertThat(list, not(contains(subIndex)));
+			assertThat(list, contains(subIndex).not());
 			if (check != null)
 				check.accept(list);
 			helper.placemark();
@@ -718,11 +796,11 @@ public class QommonsTestUtils {
 				assertEquals(list.size(), 25 + sl.size());
 				for (int j = 0; j < list.size(); j++) {
 					if (j < subIndex)
-						assertEquals((Integer) j, list.get(j));
+						assertEquals(j, list.get(j));
 					else if (j < subIndex + sl.size())
 						assertEquals(sl.get(j - subIndex), list.get(j));
 					else
-						assertEquals((Integer) (j - sl.size() + 5), list.get(j));
+						assertEquals(j - sl.size() + 5, list.get(j));
 				}
 				if (check != null)
 					check.accept(list);
@@ -819,8 +897,8 @@ public class QommonsTestUtils {
 		assertTrue(map.isEmpty()); // Test isEmpty
 		if (check != null)
 			check.accept(map);
-		assertThat(map, not(containsKey(0)));
-		assertThat(map, not(containsValue(1)));
+		assertThat(map, containsKey(0).not());
+		assertThat(map, containsValue(1).not());
 		assertEquals(null, map.get(0));
 
 		Map<Integer, Integer> toAdd = new HashMap<>();
@@ -851,12 +929,12 @@ public class QommonsTestUtils {
 		assertEquals(10, map.size());
 		if (check != null)
 			check.accept(map);
-		assertThat(map.keySet(), not(containsAll(1, 2, 11, 99)));
+		assertThat(map.keySet(), containsAll(1, 2, 11, 99).not());
 		map.clear(); // Test clear
 		assertEquals(0, map.size());
 		if (check != null)
 			check.accept(map);
-		assertThat(map, not(containsKey(2)));
+		assertThat(map, containsKey(2).not());
 		// Leave the map empty
 
 		assertEquals(null, map.put(0, 1));
@@ -867,12 +945,12 @@ public class QommonsTestUtils {
 		assertEquals(2, map.size());
 		if (check != null)
 			check.accept(map);
-		assertEquals((Integer) 1, map.put(0, 2)); // Test uniqueness
-		assertEquals((Integer) 2, map.put(0, 1));
+		assertEquals(1, map.put(0, 2)); // Test uniqueness
+		assertEquals(2, map.put(0, 1));
 		assertEquals(2, map.size());
 		if (check != null)
 			check.accept(map);
-		assertEquals((Integer) 1, map.remove(0));
+		assertEquals(1, map.remove(0));
 		assertEquals(1, map.size());
 		if (check != null)
 			check.accept(map);
@@ -902,27 +980,27 @@ public class QommonsTestUtils {
 		assertEquals(30, map.size());
 		if (check != null)
 			check.accept(map);
-		assertEquals((Integer) 0, map.firstKey());
-		assertEquals((Integer) 58, map.lastKey());
-		assertEquals((Integer) 14, map.lowerKey(16));
-		assertEquals((Integer) 18, map.higherKey(16));
-		assertEquals((Integer) 14, map.floorKey(15));
-		assertEquals((Integer) 16, map.ceilingKey(15));
-		assertEquals((Integer) 16, map.floorKey(16));
-		assertEquals((Integer) 16, map.ceilingKey(16));
-		assertEquals((Integer) 0, map.pollFirstEntry().getKey());
+		assertEquals(0, map.firstKey());
+		assertEquals(58, map.lastKey());
+		assertEquals(14, map.lowerKey(16));
+		assertEquals(18, map.higherKey(16));
+		assertEquals(14, map.floorKey(15));
+		assertEquals(16, map.ceilingKey(15));
+		assertEquals(16, map.floorKey(16));
+		assertEquals(16, map.ceilingKey(16));
+		assertEquals(0, map.pollFirstEntry().getKey());
 		assertEquals(29, map.size());
 		if (check != null)
 			check.accept(map);
-		assertEquals((Integer) 58, map.pollLastEntry().getKey());
+		assertEquals(58, map.pollLastEntry().getKey());
 		assertEquals(28, map.size());
 		if (check != null)
 			check.accept(map);
-		assertEquals((Integer) 2, map.pollFirstEntry().getKey());
+		assertEquals(2, map.pollFirstEntry().getKey());
 		assertEquals(27, map.size());
 		if (check != null)
 			check.accept(map);
-		assertEquals((Integer) 56, map.pollLastEntry().getKey());
+		assertEquals(56, map.pollLastEntry().getKey());
 		assertEquals(26, map.size());
 		if (check != null)
 			check.accept(map);
@@ -932,7 +1010,7 @@ public class QommonsTestUtils {
 		while (desc.hasNext()) {
 			Integer el = desc.next();
 			if (last != null)
-				assertThat(el, not(greaterThanOrEqual(last, map.comparator()))); // Strictly less than
+				assertThat(el, greaterThanOrEqual(last, map.comparator()).not()); // Strictly less than
 			last = el;
 		}
 
@@ -1023,21 +1101,35 @@ public class QommonsTestUtils {
 		check.accept(subMap);
 	}
 
+	public static Matcher<Object> equalTo(Object value) {
+		return new Matcher2<Object>() {
+			@Override
+			public boolean matches(Object item) {
+				return Objects.equals(value, item);
+			}
+
+			@Override
+			public void describeTo(StringBuilder msg) {
+				msg.append(value);
+			}
+		};
+	}
+
 	/**
 	 * @param <T> The type of the value to check containment for
 	 * @param value The value to check containment for
 	 * @return A matcher that matches a collection if it contains the given value
 	 */
 	public static <T> Matcher<Collection<T>> contains(T value) {
-		return new org.hamcrest.BaseMatcher<Collection<T>>() {
+		return new Matcher2<Collection<T>>() {
 			@Override
-			public boolean matches(Object arg0) {
-				return ((Collection<T>) arg0).contains(value);
+			public boolean matches(Collection<T> item) {
+				return item.contains(value);
 			}
 
 			@Override
-			public void describeTo(Description arg0) {
-				arg0.appendText("collection contains ").appendValue(value);
+			public void describeTo(StringBuilder arg0) {
+				arg0.append("collection contains ").append(value);
 			}
 		};
 	}
@@ -1057,15 +1149,15 @@ public class QommonsTestUtils {
 	 * @return A matcher that matches a collection if it contains all of the given values
 	 */
 	public static <T> Matcher<Collection<T>> containsAll(Collection<T> values) {
-		return new org.hamcrest.BaseMatcher<Collection<T>>() {
+		return new Matcher2<Collection<T>>() {
 			@Override
-			public boolean matches(Object arg0) {
-				return ((Collection<T>) arg0).containsAll(values);
+			public boolean matches(Collection<T> value) {
+				return value.containsAll(values);
 			}
 
 			@Override
-			public void describeTo(Description arg0) {
-				arg0.appendText("collection contains all of ").appendValue(values);
+			public void describeTo(StringBuilder descrip) {
+				descrip.append("collection contains all of ").append(values);
 			}
 		};
 	}
@@ -1089,7 +1181,7 @@ public class QommonsTestUtils {
 	 */
 	public static <T> Matcher<Collection<T>> collectionsEqual(Collection<? extends T> values, boolean ordered,
 		BiPredicate<? super T, ? super T> equals) {
-		return new org.hamcrest.BaseMatcher<Collection<T>>() {
+		return new Matcher<Collection<T>>() {
 			private final String DESCRIP = "collection equivalent to ";
 			private final int MAX_SIZE_LENGTH = 5;
 			private int theFirstMiss = -1;
@@ -1097,14 +1189,12 @@ public class QommonsTestUtils {
 			private boolean wasUnorderedEqual;
 
 			@Override
-			public boolean matches(Object arg0) {
-				Collection<T> arg = (Collection<T>) arg0;
-
+			public boolean matches(Collection<T> value) {
 				// Must be equivalent
 				Map<T, Integer> vValueCounts = new HashMap<>();
 				Map<T, Integer> aValueCounts = new HashMap<>();
 				Iterator<? extends T> vIter = values.iterator();
-				Iterator<T> aIter = arg.iterator();
+				Iterator<T> aIter = value.iterator();
 				int i;
 				for (i = 0; vIter.hasNext() && aIter.hasNext(); i++) {
 					T vValue = vIter.next();
@@ -1119,7 +1209,7 @@ public class QommonsTestUtils {
 					if (!bothDone)
 						theFirstMiss = i;
 					else
-						isSizeMismatched = arg.size() != values.size();
+						isSizeMismatched = value.size() != values.size();
 				} else
 					wasUnorderedEqual = bothDone && vValueCounts.equals(aValueCounts);
 				if (theFirstMiss < 0)
@@ -1131,17 +1221,10 @@ public class QommonsTestUtils {
 			}
 
 			@Override
-			public void describeTo(Description arg0) {
-				arg0.appendText(DESCRIP);
-				appendSize(values.size(), arg0);
-				arg0.appendValue(values);
-			}
-
-			@Override
-			public void describeMismatch(Object item, Description description) {
-				boolean matches = matches(item);
-				if (matches)
-					return;
+			public void describeMismatch(Collection<T> item, StringBuilder description) {
+				description.append("Expected ");
+				appendSize(values.size(), description);
+				description.append(DESCRIP);
 				StringBuilder str = new StringBuilder();
 				if (isSizeMismatched)
 					str.append("(size only) ");
@@ -1153,19 +1236,19 @@ public class QommonsTestUtils {
 				int spaces = DESCRIP.length() - str.length();
 				for (int i = 0; i < spaces; i++)
 					str.insert(i, ' ');
-				description.appendText(str.toString());
+				description.append(str.toString());
 				appendSize(((Collection<?>) item).size(), description);
-				description.appendValue(item);
+				description.append(item);
 			}
 
-			private void appendSize(int size, Description description) {
+			private void appendSize(int size, StringBuilder description) {
 				int ss = 10;
 				for (int i = 1; i < MAX_SIZE_LENGTH; i++) {
 					if (size < ss)
-						description.appendText(" ");
+						description.append(" ");
 					ss *= 10;
 				}
-				description.appendText("" + size);
+				description.append("" + size);
 			}
 		};
 	}
@@ -1218,15 +1301,15 @@ public class QommonsTestUtils {
 	 * @return A matcher that matches a value v if v is greater than or equal to the <code>value</code>.
 	 */
 	public static <T> Matcher<T> greaterThanOrEqual(T value, Comparator<? super T> comp) {
-		return new org.hamcrest.BaseMatcher<T>() {
+		return new Matcher2<T>() {
 			@Override
-			public boolean matches(Object arg0) {
-				return comp.compare((T) arg0, value) >= 1;
+			public boolean matches(T value) {
+				return comp.compare(value, value) >= 1;
 			}
 
 			@Override
-			public void describeTo(Description arg0) {
-				arg0.appendText("value is not greater than " + value);
+			public void describeTo(StringBuilder descrip) {
+				descrip.append("value is not greater than ").append(value);
 			}
 		};
 	}
@@ -1237,15 +1320,15 @@ public class QommonsTestUtils {
 	 * @return A matcher that matches a map if it contains the given key
 	 */
 	public static <T> Matcher<Map<T, ?>> containsKey(T value) {
-		return new org.hamcrest.BaseMatcher<Map<T, ?>>() {
+		return new Matcher2<Map<T, ?>>() {
 			@Override
-			public boolean matches(Object arg0) {
-				return ((Map<T, ?>) arg0).containsKey(value);
+			public boolean matches(Map<T, ?> value) {
+				return ((Map<T, ?>) value).containsKey(value);
 			}
 
 			@Override
-			public void describeTo(Description arg0) {
-				arg0.appendText("collection contains ").appendValue(value);
+			public void describeTo(StringBuilder descrip) {
+				descrip.append("collection contains ").append(value);
 			}
 		};
 	}
@@ -1256,15 +1339,15 @@ public class QommonsTestUtils {
 	 * @return A matcher that matches a map if it contains the given value
 	 */
 	public static <T> Matcher<Map<?, T>> containsValue(T value) {
-		return new org.hamcrest.BaseMatcher<Map<?, T>>() {
+		return new Matcher2<Map<?, T>>() {
 			@Override
-			public boolean matches(Object arg0) {
-				return ((Map<?, T>) arg0).containsValue(value);
+			public boolean matches(Map<?, T> value) {
+				return ((Map<?, T>) value).containsValue(value);
 			}
 
 			@Override
-			public void describeTo(Description arg0) {
-				arg0.appendText("collection contains ").appendValue(value);
+			public void describeTo(StringBuilder descrip) {
+				descrip.append("collection contains ").append(value);
 			}
 		};
 	}
@@ -1278,10 +1361,10 @@ public class QommonsTestUtils {
 	 */
 	public static <K, V> Matcher<Map<K, V>> mapsEqual(Map<K, V> values, boolean ordered) {
 		Matcher<Collection<K>> keyMatcher = collectionsEqual(values.keySet(), ordered);
-		return new org.hamcrest.BaseMatcher<Map<K, V>>() {
+		return new Matcher2<Map<K, V>>() {
 			@Override
-			public boolean matches(Object arg0) {
-				Map<K, V> arg = (Map<K, V>) arg0;
+			public boolean matches(Map<K, V> value) {
+				Map<K, V> arg = value;
 				if (!keyMatcher.matches(arg.keySet()))
 					return false;
 				for (Map.Entry<K, V> entry : values.entrySet())
@@ -1291,8 +1374,8 @@ public class QommonsTestUtils {
 			}
 
 			@Override
-			public void describeTo(Description arg0) {
-				arg0.appendText("map equivalent to ").appendValue(values);
+			public void describeTo(StringBuilder descrip) {
+				descrip.append("map equivalent to ").append(values);
 			}
 		};
 	}

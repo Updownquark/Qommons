@@ -10,14 +10,14 @@ import java.util.function.BiPredicate;
 
 import org.junit.Assert;
 import org.junit.Test;
-import org.qommons.QommonsTestUtils;
-import org.qommons.TestHelper;
 import org.qommons.collect.CollectionUtils.AdjustmentOrder;
 import org.qommons.collect.CollectionUtils.CollectionAdjustment;
 import org.qommons.collect.CollectionUtils.ElementSyncAction;
 import org.qommons.collect.CollectionUtils.ElementSyncInput;
 import org.qommons.debug.Debug;
 import org.qommons.ex.ExFunction;
+import org.qommons.testing.QommonsTestUtils;
+import org.qommons.testing.TestHelper;
 import org.qommons.tree.BetterTreeList;
 
 /** Tests for {@link CollectionUtils} utilities */
@@ -278,9 +278,9 @@ public class CollectionUtilsTests {
 				Debug.d().start().debug(adjuster, true).setField("debugging", true);
 			adjuster.adjust(sync, order);
 
-			Assert.assertThat(adjusted, QommonsTestUtils.collectionsEqual(expect, true, equals));
+			QommonsTestUtils.assertThat(adjusted, QommonsTestUtils.collectionsEqual(expect, true, equals));
 			if (!useUniversal)
-				Assert.assertThat(adjusting, QommonsTestUtils.collectionsEqual(expect, true, equals));
+				QommonsTestUtils.assertThat(adjusting, QommonsTestUtils.collectionsEqual(expect, true, equals));
 		}
 	}
 }

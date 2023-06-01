@@ -5,8 +5,8 @@ import java.util.BitSet;
 
 import org.junit.Assert;
 import org.junit.Test;
-import org.qommons.TestHelper;
-import org.qommons.TestHelper.Testable;
+import org.qommons.testing.TestHelper;
+import org.qommons.testing.TestHelper.Testable;
 
 /**
  * Tests the functionality of all the functionality in {@link BetterBitSet} over and above what java's own {@link BitSet} does. I'll just

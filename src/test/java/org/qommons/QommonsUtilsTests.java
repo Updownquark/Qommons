@@ -2,6 +2,7 @@ package org.qommons;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.qommons.testing.TestHelper;
 
 /** Tests for some of the methods in {@link QommonsUtils} */
 public class QommonsUtilsTests {
