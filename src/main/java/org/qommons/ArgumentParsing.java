@@ -2842,9 +2842,15 @@ public class ArgumentParsing {
 			private boolean isAcceptingUnmatched;
 			private String theDescription;
 			private DefaultArgParser theBuiltParser;
+			private DefaultArgBuilder<?, ?> theBuildingArgument;
 
 			DefaultParserBuilder() {
 				theArguments = new LinkedHashMap<>();
+			}
+
+			Transaction building(DefaultArgBuilder<?, ?> arg) {
+				theBuildingArgument = arg;
+				return () -> theBuildingArgument = null;
 			}
 
 			@Override
@@ -2874,8 +2880,13 @@ public class ArgumentParsing {
 
 			ArgumentTypeHolder<?> getHolder(String name) {
 				ArgumentTypeHolder<?> arg = theArguments.get(name);
-				if (arg == null)
-					throw new IllegalArgumentException("No such argument \"" + name + "\" configured");
+				if (arg == null) {
+					if (theBuildingArgument != null)
+						throw new IllegalArgumentException("No such argument \"" + name + "\" configured. Declare \"" + name
+							+ "\" before \"" + theBuildingArgument.getArgument().getName() + "\".");
+					else
+						throw new IllegalArgumentException("No such argument \"" + name + "\" configured");
+				}
 				return arg;
 			}
 
@@ -2974,7 +2985,7 @@ public class ArgumentParsing {
 					else if (type == boolean.class || type == Boolean.class)
 						str.append("boolean");
 					else if (type == Matcher.class)
-						str.append("string matching " + parser);
+						str.append("string matching ").append(parser);
 					else if (type == Instant.class)
 						str.append("date");
 					else if (type == Duration.class)
@@ -3037,8 +3048,11 @@ public class ArgumentParsing {
 				thePattern.validate(name);
 				DefaultArgBuilder<Void, ?> builder = new DefaultArgBuilder<>(name, thePattern, void.class, null, theParser);
 				builder.times(0, 1);
-				if (configure != null)
-					configure.accept(builder);
+				if (configure != null) {
+					try (Transaction t = theParser.building(builder)) {
+						configure.accept(builder);
+					}
+				}
 				theParser.addArg(builder.build());
 				return this;
 			}
@@ -3069,8 +3083,11 @@ public class ArgumentParsing {
 				if (builder.getValueParser() == null)
 					throw new NullPointerException("No parser specified");
 				thePattern.validate(builder.getArgument().getName());
-				if (configure != null)
-					configure.accept(builder);
+				if (configure != null) {
+					try (Transaction t = theParser.building(builder)) {
+						configure.accept(builder);
+					}
+				}
 				theParser.addArg(builder.build());
 				return this;
 			}
