@@ -29,11 +29,31 @@ public class QommonsTestUtils {
 	/** The recursive depth to use to test dependent collections (e.g. sub lists and sub maps) */
 	public static final int COLLECTION_TEST_DEPTH = 5;
 
+	/**
+	 * A testing matcher to provide more information than a simple check on failure
+	 * 
+	 * @param <T> The type of value to match
+	 */
 	public interface Matcher<T> {
+		/**
+		 * Tests against the given value
+		 * 
+		 * @param value The actual value from the test
+		 * @return Whether this test passes against the given value
+		 */
 		boolean matches(T value);
 
+		/**
+		 * @param value The actual value from the test
+		 * @param msg The string builder to append an error message to describing the failure
+		 */
 		void describeMismatch(T value, StringBuilder msg);
 
+		/**
+		 * A matcher that passes if and only if this matcher does not
+		 * 
+		 * @return The anti-matcher
+		 */
 		default Matcher<T> not() {
 			Matcher<T> outer = this;
 			class NotMatcher implements Matcher<T> {
@@ -57,6 +77,11 @@ public class QommonsTestUtils {
 		}
 	}
 
+	/**
+	 * A {@link Matcher} extension that is a little simpler to implement
+	 * 
+	 * @param <T> The type of the value to match
+	 */
 	public interface Matcher2<T> extends Matcher<T> {
 		@Override
 		default void describeMismatch(T value, StringBuilder msg) {
@@ -65,39 +90,79 @@ public class QommonsTestUtils {
 			msg.append(", but encountered ").append(value);
 		}
 
+		/**
+		 * Describes this match capability
+		 * 
+		 * @param msg The string builder to append to
+		 */
 		void describeTo(StringBuilder msg);
 	}
 
-	private static void assertEquals(Object expected, Object actual) throws AssertionError {
+	/**
+	 * @param expected The expected value
+	 * @param actual The actual value
+	 * @throws AssertionError If the actual value does not {@link Object#equals(Object) equal} the expected value
+	 */
+	public static void assertEquals(Object expected, Object actual) throws AssertionError {
 		if (!Objects.equals(expected, actual))
 			throw new AssertionError(new StringBuilder("Expected ").append(expected).append(" but encountered ").append(actual).toString());
 	}
 
-	private static void assertEquals(Object message, Object expected, Object actual) throws AssertionError {
+	/**
+	 * @param message The message for the exception if the condition is not met
+	 * @param expected The expected value
+	 * @param actual The actual value
+	 * @throws AssertionError If the actual value does not {@link Object#equals(Object) equal} the expected value
+	 */
+	public static void assertEquals(Object message, Object expected, Object actual) throws AssertionError {
 		if (!Objects.equals(expected, actual))
 			throw new AssertionError(message);
 	}
 
-	private static void assertTrue(boolean b) throws AssertionError {
+	/**
+	 * @param b The boolean to check
+	 * @throws AssertionError if <code>b</code> is false
+	 */
+	public static void assertTrue(boolean b) throws AssertionError {
 		if (!b)
 			throw new AssertionError();
 	}
 
-	private static void assertTrue(Object message, boolean b) throws AssertionError {
+	/**
+	 * @param message The message for the exception if <code>b</code> is false
+	 * @param b The boolean to check
+	 * @throws AssertionError if <code>b</code> is false
+	 */
+	public static void assertTrue(Object message, boolean b) throws AssertionError {
 		if (!b)
 			throw new AssertionError(message);
 	}
 
-	private static void assertFalse(boolean b) throws AssertionError {
+	/**
+	 * @param b The boolean to check
+	 * @throws AssertionError if <code>b</code> is true
+	 */
+	public static void assertFalse(boolean b) throws AssertionError {
 		if (b)
 			throw new AssertionError();
 	}
 
-	private static void assertFalse(Object message, boolean b) throws AssertionError {
+	/**
+	 * @param message The message for the exception if <code>b</code> is true
+	 * @param b The boolean to check
+	 * @throws AssertionError if <code>b</code> is true
+	 */
+	public static void assertFalse(Object message, boolean b) throws AssertionError {
 		if (b)
 			throw new AssertionError(message);
 	}
 
+	/**
+	 * @param <T> The type of value to match
+	 * @param value The actual value from the test
+	 * @param matcher The matcher to match against
+	 * @throws AssertionError If the value does not pass the matcher's condition
+	 */
 	public static <T> void assertThat(T value, Matcher<T> matcher) throws AssertionError {
 		if (!matcher.matches(value)) {
 			StringBuilder msg = new StringBuilder();
@@ -106,6 +171,13 @@ public class QommonsTestUtils {
 		}
 	}
 
+	/**
+	 * @param message The message for the exception if the test does not pass
+	 * @param <T> The type of value to match
+	 * @param value The actual value from the test
+	 * @param matcher The matcher to match against
+	 * @throws AssertionError If the value does not pass the matcher's condition
+	 */
 	public static <T> void assertThat(Object message, T value, Matcher<T> matcher) throws AssertionError {
 		if (!matcher.matches(value)) {
 			StringBuilder msg = new StringBuilder();
@@ -1101,6 +1173,10 @@ public class QommonsTestUtils {
 		check.accept(subMap);
 	}
 
+	/**
+	 * @param value The value to match
+	 * @return A matcher that matches to values {@link Object#equals(Object) equal} to the given value
+	 */
 	public static Matcher<Object> equalTo(Object value) {
 		return new Matcher2<Object>() {
 			@Override
@@ -1303,8 +1379,8 @@ public class QommonsTestUtils {
 	public static <T> Matcher<T> greaterThanOrEqual(T value, Comparator<? super T> comp) {
 		return new Matcher2<T>() {
 			@Override
-			public boolean matches(T value) {
-				return comp.compare(value, value) >= 1;
+			public boolean matches(T item) {
+				return comp.compare(item, item) >= 1;
 			}
 
 			@Override
@@ -1322,8 +1398,8 @@ public class QommonsTestUtils {
 	public static <T> Matcher<Map<T, ?>> containsKey(T value) {
 		return new Matcher2<Map<T, ?>>() {
 			@Override
-			public boolean matches(Map<T, ?> value) {
-				return ((Map<T, ?>) value).containsKey(value);
+			public boolean matches(Map<T, ?> item) {
+				return ((Map<T, ?>) item).containsKey(item);
 			}
 
 			@Override
@@ -1341,8 +1417,8 @@ public class QommonsTestUtils {
 	public static <T> Matcher<Map<?, T>> containsValue(T value) {
 		return new Matcher2<Map<?, T>>() {
 			@Override
-			public boolean matches(Map<?, T> value) {
-				return ((Map<?, T>) value).containsValue(value);
+			public boolean matches(Map<?, T> item) {
+				return ((Map<?, T>) item).containsValue(item);
 			}
 
 			@Override
