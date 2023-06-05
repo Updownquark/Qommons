@@ -3,17 +3,17 @@ package org.qommons.config;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.qommons.io.ContentPosition;
+import org.qommons.io.PositionedContent;
 import org.qommons.io.ErrorReporting;
-import org.qommons.io.LocatedContentPosition;
+import org.qommons.io.LocatedPositionedContent;
 
 /** A structure to pass around during Qonfig parsing to report errors and warnings */
 public class QonfigParseSession extends ErrorReporting.Default {
-	private final LocatedContentPosition theFileLocation;
+	private final LocatedPositionedContent theFileLocation;
 	private final QonfigToolkit theToolkit;
 	private final List<Issue> theErrors;
 
-	private QonfigParseSession(LocatedContentPosition frame, QonfigToolkit toolkit, List<Issue> errors) {
+	private QonfigParseSession(LocatedPositionedContent frame, QonfigToolkit toolkit, List<Issue> errors) {
 		super(frame);
 		theFileLocation = frame;
 		theToolkit = toolkit;
@@ -21,7 +21,7 @@ public class QonfigParseSession extends ErrorReporting.Default {
 	}
 
 	@Override
-	public LocatedContentPosition getFileLocation() {
+	public LocatedPositionedContent getFileLocation() {
 		return theFileLocation;
 	}
 
@@ -31,12 +31,12 @@ public class QonfigParseSession extends ErrorReporting.Default {
 	}
 
 	@Override
-	public QonfigParseSession at(ContentPosition position) {
+	public QonfigParseSession at(PositionedContent position) {
 		return (QonfigParseSession) super.at(position);
 	}
 
 	@Override
-	public QonfigParseSession at(LocatedContentPosition position) {
+	public QonfigParseSession at(LocatedPositionedContent position) {
 		return new QonfigParseSession(position, theToolkit, theErrors);
 	}
 
@@ -50,7 +50,7 @@ public class QonfigParseSession extends ErrorReporting.Default {
 	}
 
 
-	/** @return All errors logged against this session or any of its {@link #at(ContentPosition) children} */
+	/** @return All errors logged against this session or any of its {@link #at(PositionedContent) children} */
 	public List<Issue> getErrors() {
 		return theErrors;
 	}
@@ -58,7 +58,7 @@ public class QonfigParseSession extends ErrorReporting.Default {
 	/**
 	 * @param message The root message for the exception, if any is thrown
 	 * @return This session
-	 * @throws QonfigParseException If any errors have been logged against this session or any of its {@link #at(ContentPosition) children}
+	 * @throws QonfigParseException If any errors have been logged against this session or any of its {@link #at(PositionedContent) children}
 	 */
 	public QonfigParseSession throwErrors(String message) throws QonfigParseException {
 		if (theErrors.isEmpty())
@@ -68,7 +68,7 @@ public class QonfigParseSession extends ErrorReporting.Default {
 
 	/**
 	 * @param message The root message for the exception, if any is thrown
-	 * @return An exception for errors that have logged against this session or any of its {@link #at(ContentPosition) children}
+	 * @return An exception for errors that have logged against this session or any of its {@link #at(PositionedContent) children}
 	 */
 	public QonfigParseException createException(String message) {
 		return QonfigParseException.forIssues(message, theErrors);
@@ -86,9 +86,9 @@ public class QonfigParseSession extends ErrorReporting.Default {
 	 * @param position The file position of the root element
 	 * @return The new parse session
 	 */
-	public static QonfigParseSession forRoot(QonfigToolkit toolkit, ContentPosition position) {
+	public static QonfigParseSession forRoot(QonfigToolkit toolkit, PositionedContent position) {
 		return new QonfigParseSession(
-			LocatedContentPosition.of(toolkit.getLocation() == null ? toolkit.getName() : toolkit.getLocation().toString(), position),
+			LocatedPositionedContent.of(toolkit.getLocation() == null ? toolkit.getName() : toolkit.getLocation().toString(), position),
 			toolkit, new ArrayList<>());
 	}
 }

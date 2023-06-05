@@ -9,24 +9,25 @@ import java.util.Set;
 public interface ErrorReporting {
 	/** Default {@link ErrorReporting} implementation */
 	public static class Default implements ErrorReporting {
-		private final LocatedContentPosition theFrame;
+		private final LocatedPositionedContent theFrame;
 		private final Set<String> theIgnoredClasses;
 
 		/** @param frame The position of this reporting */
-		public Default(LocatedContentPosition frame) {
+		public Default(LocatedPositionedContent frame) {
 			theFrame = frame;
 			theIgnoredClasses = new LinkedHashSet<>();
 			theIgnoredClasses.add(ErrorReporting.class.getName());
+			theIgnoredClasses.add(ErrorReporting.Impl.class.getName());
 			theIgnoredClasses.add(Default.class.getName());
 		}
 
-		private Default(LocatedContentPosition frame, Set<String> ignoredClasses) {
+		private Default(LocatedPositionedContent frame, Set<String> ignoredClasses) {
 			theFrame = frame;
 			theIgnoredClasses = ignoredClasses;
 		}
 
 		@Override
-		public LocatedContentPosition getFileLocation() {
+		public LocatedPositionedContent getFileLocation() {
 			return theFrame;
 		}
 
@@ -37,7 +38,7 @@ public interface ErrorReporting {
 		}
 
 		@Override
-		public ErrorReporting at(LocatedContentPosition position) {
+		public ErrorReporting at(LocatedPositionedContent position) {
 			return new Default(position, theIgnoredClasses);
 		}
 
@@ -102,13 +103,15 @@ public interface ErrorReporting {
 		@Override
 		public String toString() {
 			StringBuilder str = new StringBuilder();
-			str.append(severity);
+			str.append(severity).append(": ");
+			if (fileLocation != null)
+				str.append(fileLocation.toShortString()).append(' ');
 			if (message != null) {
-				str.append(": ").append(message);
+				str.append(message);
 				if (cause != null)
 					str.append("<-").append(cause);
 			} else if (cause != null)
-				str.append(": ").append(cause);
+				str.append(cause);
 			return str.toString();
 		}
 
@@ -213,8 +216,14 @@ public interface ErrorReporting {
 	ErrorReporting report(Issue issue);
 
 	/** @return The position of the content that this error reporting is for */
-	LocatedContentPosition getFileLocation();
+	LocatedPositionedContent getFileLocation();
 
+	/**
+	 * Adds a class to the list of classes that this reporting instance's {@link #getCodeLocation()} method will use to get the the calling
+	 * code location
+	 * 
+	 * @param className The class name to ignore in stack traces
+	 */
 	void ignoreClass(String className);
 
 	/** @return The code location to use for a new issue */
@@ -224,11 +233,11 @@ public interface ErrorReporting {
 	 * @param position The file position of the element this reporting is for
 	 * @return A reporting for the child
 	 */
-	default ErrorReporting at(ContentPosition position) {
-		if (position instanceof LocatedContentPosition)
-			return at((LocatedContentPosition) position);
+	default ErrorReporting at(PositionedContent position) {
+		if (position instanceof LocatedPositionedContent)
+			return at((LocatedPositionedContent) position);
 		else
-			return at(LocatedContentPosition.of(getFileLocation().getFileLocation(), position));
+			return at(LocatedPositionedContent.of(getFileLocation().getFileLocation(), position));
 	}
 
 	/**
@@ -245,8 +254,9 @@ public interface ErrorReporting {
 	 * @param position The file position of the element this reporting is for
 	 * @return A reporting for the child
 	 */
-	ErrorReporting at(LocatedContentPosition position);
+	ErrorReporting at(LocatedPositionedContent position);
 
+	/** Implementation details in this class */
 	class Impl {
 		private Impl() {
 		}

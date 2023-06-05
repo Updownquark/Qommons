@@ -21,7 +21,7 @@ import org.qommons.collect.BetterCollections;
 import org.qommons.collect.BetterHashMultiMap;
 import org.qommons.collect.BetterMultiMap;
 import org.qommons.config.QonfigAutoInheritance.AutoInheritTarget;
-import org.qommons.io.ContentPosition;
+import org.qommons.io.PositionedContent;
 
 /** A structure containing a set of types that can be used to parsed highly-structured and validated {@link QonfigDocument}s */
 public class QonfigToolkit implements Named {
@@ -131,7 +131,7 @@ public class QonfigToolkit implements Named {
 	 * @param builder The toolkit builder to populate all the type information for the toolkit
 	 * @throws QonfigParseException If an error occurs populating the toolkit
 	 */
-	public QonfigToolkit(String name, int majorVersion, int minorVersion, URL location, ContentPosition position,
+	public QonfigToolkit(String name, int majorVersion, int minorVersion, URL location, PositionedContent position,
 		Map<String, QonfigToolkit> dependencies, Map<String, QonfigValueType.Declared> declaredTypes,
 		Map<String, QonfigAddOn> declaredAddOns, Map<String, QonfigElementDef> declaredElements,
 		List<QonfigAutoInheritance> autoInheritance, ToolkitBuilder builder) throws QonfigParseException {

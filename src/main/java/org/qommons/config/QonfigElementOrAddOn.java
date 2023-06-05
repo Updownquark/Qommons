@@ -19,7 +19,7 @@ import org.qommons.collect.BetterMultiMap;
 import org.qommons.config.QonfigAddOn.ValueModifier;
 import org.qommons.config.QonfigAttributeDef.Declared;
 import org.qommons.config.QonfigValidation.ValueSpec;
-import org.qommons.io.ContentPosition;
+import org.qommons.io.PositionedContent;
 
 /** Super class of {@link QonfigElementDef} and {@link QonfigAddOn} */
 public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
@@ -65,7 +65,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
 		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ? extends ChildDefModifier> childModifiers,
 		BetterMultiMap<String, QonfigChildDef> childrenByName, ValueDefModifier value, QonfigElementOrAddOn metaSpec,
-		ContentPosition position) {
+		PositionedContent position) {
 		super(declarer, name, position);
 		this.isAbstract = isAbstract;
 		theSuperElement = superElement;
@@ -552,7 +552,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param position The position in the file where the value was defined
 		 * @return This builder
 		 */
-		public Builder withValue(QonfigValueType type, SpecificationType specification, Object defaultValue, ContentPosition position) {
+		public Builder withValue(QonfigValueType type, SpecificationType specification, Object defaultValue, PositionedContent position) {
 			if (!checkStage(Stage.Initial))
 				throw new IllegalStateException("Value cannot be specified at this stage: " + theStage);
 			else if (theValue != null)
@@ -585,7 +585,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param position The position in the file where the value modifier was defined
 		 * @return This builder
 		 */
-		public Builder modifyValue(QonfigValueType type, SpecificationType specification, Object defaultValue, ContentPosition position) {
+		public Builder modifyValue(QonfigValueType type, SpecificationType specification, Object defaultValue, PositionedContent position) {
 			if (!checkStage(Stage.ModifyAttributes))
 				throw new IllegalStateException("Value cannot be modified at this stage: " + theStage);
 			else if (theValue != null)
@@ -625,7 +625,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @return This builder
 		 */
 		public Builder withAttribute(String name, QonfigValueType type, SpecificationType specify, Object defaultValue,
-			ContentPosition position) {
+			PositionedContent position) {
 			if (!checkStage(Stage.NewAttributes))
 				throw new IllegalStateException("Attributes cannot be added at this stage: " + theStage);
 			else if (theDeclaredAttributes.containsKey(name)) {
@@ -663,7 +663,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @return This builder
 		 */
 		public Builder modifyAttribute(QonfigAttributeDef attribute, QonfigValueType type, SpecificationType specification,
-			Object defaultValue, ContentPosition position) {
+			Object defaultValue, PositionedContent position) {
 			if (!checkStage(Stage.ModifyAttributes))
 				throw new IllegalStateException("Attributes cannot be added at this stage: " + theStage);
 			else if (theAttributeModifiers.containsKey(attribute)) {
@@ -723,7 +723,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @return This builder
 		 */
 		public Builder withChild(String name, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, int min, int max, ContentPosition position) {
+			Set<QonfigAddOn> requirement, int min, int max, PositionedContent position) {
 			if (!checkStage(Stage.NewChildren))
 				throw new IllegalStateException("Attributes cannot be added at this stage: " + theStage);
 			else if (theDeclaredChildren.containsKey(name)) {
@@ -785,7 +785,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @return This builder
 		 */
 		public Builder modifyChild(QonfigChildDef.Declared child, QonfigElementDef type, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, Integer min, Integer max, ContentPosition position) {
+			Set<QonfigAddOn> requirement, Integer min, Integer max, PositionedContent position) {
 			if (!checkStage(Stage.ModifyChildren))
 				throw new IllegalStateException("Children cannot be modified at this stage: " + theStage);
 			else if (child.getDeclared().getOwner().getDeclaredChildren().get(child.getName()) != child.getDeclared())
@@ -994,7 +994,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @return The child modifier to use
 		 */
 		protected abstract ChildDefModifier childModifier(QonfigChildDef.Declared child, QonfigElementDef type,
-			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, Integer min, Integer max, ContentPosition position);
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, Integer min, Integer max, PositionedContent position);
 
 		/**
 		 * Declares a metadata element that extensions can use to document themselves
@@ -1010,7 +1010,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @return This builder
 		 */
 		public Builder withMetaSpec(String name, QonfigElementDef type, Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min,
-			int max, ContentPosition position) {
+			int max, PositionedContent position) {
 			if (!checkStage(Stage.MetaSpec))
 				throw new IllegalStateException("Metadata specifications cannot be added at this stage: " + theStage);
 			theMetaSpec.withChild(name, type, Collections.emptySet(), inheritance, requirement, min, max, position);
@@ -1019,7 +1019,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 
 		/**
 		 * @param metadata Accepts an element builder to which children can be
-		 *        {@link QonfigElement.Builder#withChild(java.util.List, QonfigElementDef, Consumer, ContentPosition) added}
+		 *        {@link QonfigElement.Builder#withChild(java.util.List, QonfigElementDef, Consumer, PositionedContent) added}
 		 * @return This builder
 		 */
 		public Builder withMetaData(Consumer<QonfigElement.Builder> metadata) {

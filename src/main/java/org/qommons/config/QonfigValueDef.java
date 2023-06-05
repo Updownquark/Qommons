@@ -1,6 +1,6 @@
 package org.qommons.config;
 
-import org.qommons.io.ContentPosition;
+import org.qommons.io.PositionedContent;
 
 /** Represents an element value specification */
 public interface QonfigValueDef extends QonfigElementOwned {
@@ -26,7 +26,7 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		private final QonfigValueType theType;
 		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
-		private final ContentPosition thePosition;
+		private final PositionedContent thePosition;
 
 		/**
 		 * @param owner The owner of the value
@@ -36,7 +36,7 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		 * @param position The position in the file where this value was defined
 		 */
 		public Abstract(QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify, Object defaultValue,
-			ContentPosition position) {
+			PositionedContent position) {
 			theOwner = owner;
 			theType = type;
 			theSpecification = specify;
@@ -78,7 +78,7 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		}
 
 		@Override
-		public ContentPosition getFilePosition() {
+		public PositionedContent getFilePosition() {
 			return thePosition;
 		}
 
@@ -112,7 +112,7 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		 * @param position The position in the file where this value was defined
 		 */
 		public DeclaredValueDef(QonfigElementDef owner, QonfigValueType type, SpecificationType specify, Object defaultValue,
-			ContentPosition position) {
+			PositionedContent position) {
 			super(owner, type, specify, defaultValue, position);
 		}
 
@@ -140,7 +140,7 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		 * @param position The position in the file where this value was defined
 		 */
 		public Modified(QonfigValueDef declared, QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify,
-			Object defaultValue, ContentPosition position) {
+			Object defaultValue, PositionedContent position) {
 			super(owner, type, specify, defaultValue, position);
 			theDeclared = declared instanceof DeclaredValueDef ? (DeclaredValueDef) declared
 				: ((QonfigValueDef.Modified) declared).getDeclared();

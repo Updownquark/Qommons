@@ -19,9 +19,9 @@ import org.qommons.collect.BetterHashMultiMap;
 import org.qommons.collect.BetterHashSet;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.BetterMultiMap;
-import org.qommons.io.ContentPosition;
+import org.qommons.io.PositionedContent;
 import org.qommons.io.ErrorReporting;
-import org.qommons.io.LocatedContentPosition;
+import org.qommons.io.LocatedPositionedContent;
 import org.qommons.io.LocatedFilePosition;
 
 /** An element in a Qonfig document */
@@ -35,7 +35,7 @@ public class QonfigElement implements FileSourced {
 		/** The location of the file where the value was specified */
 		public final String fileLocation;
 		/** The position in the file where this value was specified. This will be null if the value is defaulted from a definition. */
-		public final ContentPosition position;
+		public final PositionedContent position;
 
 		/**
 		 * @param text The source text of the value
@@ -44,7 +44,7 @@ public class QonfigElement implements FileSourced {
 		 * @param position The position in the file where this value was specified. This will be null if the value is defaulted from a
 		 *        definition
 		 */
-		public QonfigValue(String text, Object value, String fileLocation, ContentPosition position) {
+		public QonfigValue(String text, Object value, String fileLocation, PositionedContent position) {
 			this.text = text;
 			this.value = value;
 			this.fileLocation = fileLocation;
@@ -67,12 +67,12 @@ public class QonfigElement implements FileSourced {
 	private final List<QonfigElement> theChildren;
 	private final BetterMultiMap<QonfigChildDef.Declared, QonfigElement> theChildrenByRole;
 	private final QonfigValue theValue;
-	private final LocatedContentPosition theFilePosition;
+	private final LocatedPositionedContent theFilePosition;
 
 	private QonfigElement(QonfigDocument doc, QonfigElement parent, QonfigElementDef type, MultiInheritanceSet<QonfigAddOn> inheritance,
 		Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles,
 		Map<QonfigAttributeDef.Declared, QonfigValue> attributes, List<QonfigElement> children,
-		BetterMultiMap<QonfigChildDef.Declared, QonfigElement> childrenByRole, QonfigValue value, LocatedContentPosition filePosition) {
+		BetterMultiMap<QonfigChildDef.Declared, QonfigElement> childrenByRole, QonfigValue value, LocatedPositionedContent filePosition) {
 		if (doc.getRoot() == null)
 			doc.setRoot(this);
 		theDocument = doc;
@@ -119,7 +119,7 @@ public class QonfigElement implements FileSourced {
 	}
 
 	@Override
-	public LocatedContentPosition getFilePosition() {
+	public LocatedPositionedContent getFilePosition() {
 		return theFilePosition;
 	}
 
@@ -364,7 +364,7 @@ public class QonfigElement implements FileSourced {
 		String getText();
 
 		/** @return The positioning of this attribute value */
-		ContentPosition getPosition();
+		PositionedContent getPosition();
 
 		/**
 		 * Parses the attribute value
@@ -516,7 +516,7 @@ public class QonfigElement implements FileSourced {
 		 * @param position The position of the value
 		 * @return This builder
 		 */
-		public Builder withValue(String text, Object value, ContentPosition position) {
+		public Builder withValue(String text, Object value, PositionedContent position) {
 			if (theStage > 0)
 				throw new IllegalStateException("Cannot specify text after children");
 			else if (theValue != null)
@@ -533,7 +533,7 @@ public class QonfigElement implements FileSourced {
 		 * @return This builder
 		 */
 		public Builder withChild(List<ElementQualifiedParseItem> declaredRoles, QonfigElementDef type,
-			Consumer<QonfigElement.Builder> child, ContentPosition position) {
+			Consumer<QonfigElement.Builder> child, PositionedContent position) {
 			if (theStage > 1)
 				throw new IllegalStateException("Cannot add children after the element has been built");
 			// At this stage, we have all the information we need to determine the complete inheritance of the element

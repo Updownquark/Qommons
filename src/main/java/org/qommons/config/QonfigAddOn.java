@@ -7,7 +7,7 @@ import java.util.Set;
 import org.qommons.MultiInheritanceSet;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterMultiMap;
-import org.qommons.io.ContentPosition;
+import org.qommons.io.PositionedContent;
 import org.qommons.io.ErrorReporting;
 
 /** An add-on that can be applied to an element in various forms to alter its specification and behavior */
@@ -16,14 +16,14 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 	public static final class ChildModifier implements ChildDefModifier {
 		private final Set<QonfigAddOn> theInheritance;
 		private final Set<QonfigAddOn> theRequirement;
-		private final ContentPosition thePosition;
+		private final PositionedContent thePosition;
 
 		/**
 		 * @param inheritance The add-ons inherited by the child
 		 * @param requirement The set of add-ons that an element must inherit to fulfill this role
 		 * @param position The position in the file where this child modifier was defined
 		 */
-		public ChildModifier(Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, ContentPosition position) {
+		public ChildModifier(Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, PositionedContent position) {
 			theInheritance = inheritance;
 			theRequirement = requirement;
 			thePosition = position;
@@ -70,7 +70,7 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		}
 
 		@Override
-		public ContentPosition getFilePosition() {
+		public PositionedContent getFilePosition() {
 			return thePosition;
 		}
 
@@ -135,7 +135,7 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
 		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ChildModifier> childModifiers,
 		BetterMultiMap<String, QonfigChildDef> childrenByName, //
-		ValueModifier value, MultiInheritanceSet<QonfigAddOn> fullInheritance, QonfigAddOn metaSpec, ContentPosition position) {
+		ValueModifier value, MultiInheritanceSet<QonfigAddOn> fullInheritance, QonfigAddOn metaSpec, PositionedContent position) {
 		super(declarer, name, isAbstract, requirement, inheritance, fullInheritance, declaredAttributes, attributeModifiers,
 			attributesByName, declaredChildren, childModifiers, childrenByName, value, metaSpec, position);
 	}
@@ -284,13 +284,13 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		}
 
 		@Override
-		public Builder withValue(QonfigValueType type, SpecificationType specification, Object defaultValue, ContentPosition position) {
+		public Builder withValue(QonfigValueType type, SpecificationType specification, Object defaultValue, PositionedContent position) {
 			theSession.error("Value cannot be specified by an add-on, only modified");
 			return this;
 		}
 
 		@Override
-		public Builder modifyValue(QonfigValueType type, SpecificationType specification, Object defaultValue, ContentPosition position) {
+		public Builder modifyValue(QonfigValueType type, SpecificationType specification, Object defaultValue, PositionedContent position) {
 			if (getSuperElement() == null) {
 				theSession.at(position).error("No required element to modify the value for");
 				return this;
@@ -313,14 +313,14 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 
 		@Override
 		public Builder withAttribute(String name, QonfigValueType type, SpecificationType specify, Object defaultValue,
-			ContentPosition position) {
+			PositionedContent position) {
 			super.withAttribute(name, type, specify, defaultValue, position);
 			return this;
 		}
 
 		@Override
 		public Builder modifyAttribute(QonfigAttributeDef attribute, QonfigValueType type, SpecificationType specification,
-			Object defaultValue, ContentPosition position) {
+			Object defaultValue, PositionedContent position) {
 			if (type != null && !type.equals(attribute.getType())) {
 				theSession.at(position).error("Attribute type cannot be modified by an add-on");
 				type = null;
@@ -331,7 +331,7 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 
 		@Override
 		public Builder withChild(String name, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, int min, int max, ContentPosition position) {
+			Set<QonfigAddOn> requirement, int min, int max, PositionedContent position) {
 			if (!fulfillment.isEmpty()) {
 				theSession.at(position).error("Children of add-ons cannot fulfill roles");
 				fulfillment = Collections.emptySet();
@@ -342,7 +342,7 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 
 		@Override
 		public Builder modifyChild(QonfigChildDef.Declared child, QonfigElementDef type, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, Integer min, Integer max, ContentPosition position) {
+			Set<QonfigAddOn> requirement, Integer min, Integer max, PositionedContent position) {
 			if (type != null && !type.equals(child.getType())) {
 				theSession.at(position).error("Child type cannot be modified by an add-on");
 			} else if (min != null || max != null) {
@@ -354,7 +354,7 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 
 		@Override
 		protected ChildDefModifier childModifier(QonfigChildDef.Declared child, QonfigElementDef type, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, Integer min, Integer max, ContentPosition position) {
+			Set<QonfigAddOn> requirement, Integer min, Integer max, PositionedContent position) {
 			return new ChildModifier(inheritance, requirement, position);
 		}
 

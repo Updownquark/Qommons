@@ -2,7 +2,7 @@ package org.qommons.config;
 
 import java.util.Objects;
 
-import org.qommons.io.ContentPosition;
+import org.qommons.io.PositionedContent;
 
 /** An attribute that may be specified on an element */
 public interface QonfigAttributeDef extends QonfigValueDef {
@@ -19,7 +19,7 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		private final QonfigValueType theType;
 		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
-		private final ContentPosition thePosition;
+		private final PositionedContent thePosition;
 
 		/**
 		 * @param owner The element-def or add-on that the attribute belongs to
@@ -29,7 +29,7 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		 * @param position Number The line number in the file where this attribute was defined
 		 */
 		public Abstract(QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify, Object defaultValue,
-			ContentPosition position) {
+			PositionedContent position) {
 			theOwner = owner;
 			theType = type;
 			theSpecification = specify;
@@ -69,7 +69,7 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		}
 
 		@Override
-		public ContentPosition getFilePosition() {
+		public PositionedContent getFilePosition() {
 			return thePosition;
 		}
 
@@ -106,7 +106,7 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		 * @param position The position in the file where this attribute was defined
 		 */
 		public DeclaredAttributeDef(QonfigElementOrAddOn owner, String name, QonfigValueType type, SpecificationType specify,
-			Object defaultValue, ContentPosition position) {
+			Object defaultValue, PositionedContent position) {
 			super(owner, type, specify, defaultValue, position);
 			theName = name;
 		}
@@ -135,7 +135,7 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		 * @param position The position in the file where this attribute modification was defined
 		 */
 		public Modified(QonfigAttributeDef declared, QonfigElementOrAddOn owner, QonfigValueType type,
-			SpecificationType specify, Object defaultValue, ContentPosition position) {
+			SpecificationType specify, Object defaultValue, PositionedContent position) {
 			super(owner, type, specify, defaultValue, position);
 			theDeclared = declared instanceof DeclaredAttributeDef ? (DeclaredAttributeDef) declared
 				: ((QonfigAttributeDef.Modified) declared).getDeclared();

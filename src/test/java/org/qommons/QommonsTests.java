@@ -11,6 +11,7 @@ import org.qommons.collect.HashSetTest;
 import org.qommons.collect.ListenerListTest;
 import org.qommons.io.QonsoleTest;
 import org.qommons.io.ReaderInputStreamTest;
+import org.qommons.io.SimpleXMLParserTest;
 import org.qommons.threading.QommonsTimerTest;
 import org.qommons.tree.TreeUtilsTest;
 
@@ -36,7 +37,8 @@ import org.qommons.tree.TreeUtilsTest;
 	ClassMapTest.class, //
 	PrimesTest.class, //
 	BetterBitSetTest.class, //
-	QuarkApplicationVersioningTests.class //
+	QuarkApplicationVersioningTests.class, //
+	SimpleXMLParserTest.class
 })
 public class QommonsTests {
 }

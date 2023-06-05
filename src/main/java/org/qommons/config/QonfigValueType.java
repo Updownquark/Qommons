@@ -3,7 +3,7 @@ package org.qommons.config;
 import java.util.List;
 
 import org.qommons.Named;
-import org.qommons.io.ContentPosition;
+import org.qommons.io.PositionedContent;
 import org.qommons.io.ErrorReporting;
 
 /** A type of values that can be parsed from attribute or element text values */
@@ -16,7 +16,7 @@ public interface QonfigValueType extends Named, FileSourced {
 		}
 
 		@Override
-		public ContentPosition getFilePosition() {
+		public PositionedContent getFilePosition() {
 			return null;
 		}
 
@@ -43,7 +43,7 @@ public interface QonfigValueType extends Named, FileSourced {
 		}
 
 		@Override
-		public ContentPosition getFilePosition() {
+		public PositionedContent getFilePosition() {
 			return null;
 		}
 
@@ -79,14 +79,14 @@ public interface QonfigValueType extends Named, FileSourced {
 	public static class Literal implements Declared {
 		private final QonfigToolkit theDeclarer;
 		private final String theValue;
-		private final ContentPosition thePosition;
+		private final PositionedContent thePosition;
 
 		/**
 		 * @param declarer The toolkit that declared the literal
 		 * @param value The literal value to match
 		 * @param position The position in the file where this type was defined
 		 */
-		public Literal(QonfigToolkit declarer, String value, ContentPosition position) {
+		public Literal(QonfigToolkit declarer, String value, PositionedContent position) {
 			theDeclarer = declarer;
 			theValue = value;
 			thePosition = position;
@@ -122,7 +122,7 @@ public interface QonfigValueType extends Named, FileSourced {
 		}
 
 		@Override
-		public ContentPosition getFilePosition() {
+		public PositionedContent getFilePosition() {
 			return thePosition;
 		}
 
@@ -137,7 +137,7 @@ public interface QonfigValueType extends Named, FileSourced {
 		private final QonfigToolkit theDeclarer;
 		private final String theName;
 		private final List<QonfigValueType> theComponents;
-		private final ContentPosition thePosition;
+		private final PositionedContent thePosition;
 
 		/**
 		 * @param declarer The toolkit that declared the one-of type
@@ -145,7 +145,7 @@ public interface QonfigValueType extends Named, FileSourced {
 		 * @param components The components to delegate to
 		 * @param position The position in the file where this type was defined
 		 */
-		public OneOf(QonfigToolkit declarer, String name, List<QonfigValueType> components, ContentPosition position) {
+		public OneOf(QonfigToolkit declarer, String name, List<QonfigValueType> components, PositionedContent position) {
 			theDeclarer = declarer;
 			theName = name;
 			theComponents = components;
@@ -190,7 +190,7 @@ public interface QonfigValueType extends Named, FileSourced {
 		}
 
 		@Override
-		public ContentPosition getFilePosition() {
+		public PositionedContent getFilePosition() {
 			return thePosition;
 		}
 
@@ -204,14 +204,14 @@ public interface QonfigValueType extends Named, FileSourced {
 	public class Custom implements Declared {
 		private final QonfigToolkit theDeclarer;
 		private final CustomValueType theCustomType;
-		private final ContentPosition thePosition;
+		private final PositionedContent thePosition;
 
 		/**
 		 * @param declarer The toolkit declaring the value type
 		 * @param customType The custom-implemented value type
 		 * @param position The position in the file where this type was defined
 		 */
-		public Custom(QonfigToolkit declarer, CustomValueType customType, ContentPosition position) {
+		public Custom(QonfigToolkit declarer, CustomValueType customType, PositionedContent position) {
 			theDeclarer = declarer;
 			theCustomType = customType;
 			thePosition = position;
@@ -243,7 +243,7 @@ public interface QonfigValueType extends Named, FileSourced {
 		}
 
 		@Override
-		public ContentPosition getFilePosition() {
+		public PositionedContent getFilePosition() {
 			return thePosition;
 		}
 
@@ -260,7 +260,7 @@ public interface QonfigValueType extends Named, FileSourced {
 		private final QonfigValueType theType;
 		private final String thePrefix;
 		private final String theSuffix;
-		private final ContentPosition thePosition;
+		private final PositionedContent thePosition;
 
 		/**
 		 * @param declarer The toolkit declaring this type
@@ -270,7 +270,7 @@ public interface QonfigValueType extends Named, FileSourced {
 		 * @param suffix The suffix that must be appended to values
 		 * @param position The position in the file where this type was defined
 		 */
-		public Explicit(QonfigToolkit declarer, String name, QonfigValueType type, String prefix, String suffix, ContentPosition position) {
+		public Explicit(QonfigToolkit declarer, String name, QonfigValueType type, String prefix, String suffix, PositionedContent position) {
 			theDeclarer = declarer;
 			theName = name;
 			theType = type;
@@ -311,7 +311,7 @@ public interface QonfigValueType extends Named, FileSourced {
 		}
 
 		@Override
-		public ContentPosition getFilePosition() {
+		public PositionedContent getFilePosition() {
 			return thePosition;
 		}
 

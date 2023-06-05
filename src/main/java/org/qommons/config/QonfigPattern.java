@@ -3,7 +3,7 @@ package org.qommons.config;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.qommons.io.ContentPosition;
+import org.qommons.io.PositionedContent;
 import org.qommons.io.ErrorReporting;
 
 /** A value type for pattern-matched strings */
@@ -16,7 +16,7 @@ public class QonfigPattern extends AbstractQonfigType implements QonfigValueType
 	 * @param pattern The regex pattern to apply
 	 * @param position The position in the file where this value was defined
 	 */
-	public QonfigPattern(QonfigToolkit declarer, String name, Pattern pattern, ContentPosition position) {
+	public QonfigPattern(QonfigToolkit declarer, String name, Pattern pattern, PositionedContent position) {
 		super(declarer, name, position);
 		thePattern = pattern;
 	}

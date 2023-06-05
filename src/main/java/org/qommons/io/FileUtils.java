@@ -10,6 +10,8 @@ import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.Reader;
+import java.io.Writer;
 import java.net.JarURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -195,6 +197,7 @@ public class FileUtils {
 	private static final int BUFFER_SIZE = 1024 * 1024; // 1MB
 
 	private static final ThreadLocal<byte[]> BUFFERS = ThreadLocal.withInitial(() -> new byte[BUFFER_SIZE]);
+	private static final ThreadLocal<char[]> CHAR_BUFFERS = ThreadLocal.withInitial(() -> new char[BUFFER_SIZE]);
 
 	/**
 	 * Simple stream copy utility
@@ -264,6 +267,36 @@ public class FileUtils {
 		if (canceled != null && canceled.getAsBoolean())
 			return -1;
 		byte[] buffer = BUFFERS.get();
+		long total = 0;
+		int read = from.read(buffer);
+		while (read >= 0) {
+			if (read > 0) {
+				total += read;
+				to.write(buffer, 0, read);
+				if (progress != null)
+					progress.accept(total);
+			}
+			if (canceled != null && canceled.getAsBoolean())
+				return -1;
+			read = from.read(buffer);
+		}
+		return total;
+	}
+
+	/**
+	 * Simple character stream copy utility
+	 * 
+	 * @param from The reader to copy from
+	 * @param to The writer to copy to
+	 * @return The number of characters copied
+	 * @param progress Callback to be notified of the copy operation's progress--the total number of characters copied
+	 * @param canceled Returns true if the operation should immediately cease
+	 * @throws IOException If an error occurs reading or writing the data
+	 */
+	public static long copy(Reader from, Writer to, LongConsumer progress, BooleanSupplier canceled) throws IOException {
+		if (canceled != null && canceled.getAsBoolean())
+			return -1;
+		char[] buffer = CHAR_BUFFERS.get();
 		long total = 0;
 		int read = from.read(buffer);
 		while (read >= 0) {

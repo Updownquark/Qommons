@@ -5,7 +5,7 @@ import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 
-import org.qommons.io.ContentPosition;
+import org.qommons.io.PositionedContent;
 
 /** A child that may be specified for an element */
 public interface QonfigChildDef extends QonfigElementOwned {
@@ -68,7 +68,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		private final Set<QonfigAddOn> theRequirement;
 		private final int theMin;
 		private final int theMax;
-		private final ContentPosition thePosition;
+		private final PositionedContent thePosition;
 
 		/**
 		 * @param owner The element-def or add-on that this child belongs to
@@ -82,7 +82,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param position The position in the file where this child was defined
 		 */
 		public Abstract(QonfigElementOrAddOn owner, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment,
-			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, ContentPosition position) {
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, PositionedContent position) {
 			theOwner = owner;
 			theType = type;
 			theFulfillment = fulfillment;
@@ -137,7 +137,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		}
 
 		@Override
-		public ContentPosition getFilePosition() {
+		public PositionedContent getFilePosition() {
 			return thePosition;
 		}
 
@@ -178,7 +178,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param position The position in the file where this child was defined
 		 */
 		public DeclaredChildDef(QonfigElementOrAddOn owner, String name, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment,
-			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, ContentPosition position) {
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, PositionedContent position) {
 			super(owner, type, fulfillment, inheritance, requirement, min, max, position);
 			theName = name;
 		}
@@ -221,7 +221,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param position The position in the file where this child was defined
 		 */
 		public Modified(QonfigChildDef declared, QonfigElementOrAddOn owner, QonfigElementDef type, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, int min, int max, ContentPosition position) {
+			Set<QonfigAddOn> requirement, int min, int max, PositionedContent position) {
 			super(owner, type, Collections.emptySet(), combine(declared.getInheritance(), inheritance), requirement, min, max, position);
 			theDeclared = declared instanceof QonfigChildDef.Declared ? (QonfigChildDef.Declared) declared
 				: ((QonfigChildDef.Modified) declared).getDeclared();
@@ -279,7 +279,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param position The position in the file where this child was defined
 		 */
 		public Overridden(QonfigElementOrAddOn owner, QonfigChildDef.Declared declared, Set<QonfigChildDef.Declared> overriding,
-			ContentPosition position) {
+			PositionedContent position) {
 			super(owner, declared.getType(), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), 0, 0, position);
 			theDeclared = declared;
 			theOverriding = overriding;
@@ -371,7 +371,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		}
 
 		@Override
-		public ContentPosition getFilePosition() {
+		public PositionedContent getFilePosition() {
 			return null; // This child wasn't defined anywhere, it was inherited by default
 		}
 

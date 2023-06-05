@@ -12,7 +12,7 @@ import org.qommons.collect.BetterList;
 import org.qommons.config.QonfigElement.QonfigValue;
 import org.qommons.ex.ExFunction;
 import org.qommons.io.ErrorReporting;
-import org.qommons.io.LocatedContentPosition;
+import org.qommons.io.LocatedPositionedContent;
 import org.qommons.io.LocatedFilePosition;
 
 /**
@@ -726,12 +726,12 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	 * @return The file position of the given text location
 	 * @throws IllegalArgumentException If no such attribute exists in this element's types
 	 */
-	default LocatedContentPosition getAttributeValuePosition(String attribute) throws IllegalArgumentException {
+	default LocatedPositionedContent getAttributeValuePosition(String attribute) throws IllegalArgumentException {
 		QonfigAttributeDef attr = getAttributeDef(null, null, attribute);
 		if (attr == null)
 			throw new IllegalArgumentException("Unrecognized attribute: " + attribute);
 		QonfigValue value = getElement().getAttributes().get(attr.getDeclared());
-		return value == null ? null : LocatedContentPosition.of(value.fileLocation, value.position);
+		return value == null ? null : LocatedPositionedContent.of(value.fileLocation, value.position);
 	}
 
 	/**
@@ -752,11 +752,11 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	 * @return The content position of the given text location
 	 * @throws IllegalArgumentException If this element's type has no value
 	 */
-	default LocatedContentPosition getValuePosition() throws IllegalArgumentException {
+	default LocatedPositionedContent getValuePosition() throws IllegalArgumentException {
 		if (getValueDef() == null)
 			throw new IllegalArgumentException("No value possible");
 		QonfigValue value = getElement().getValue();
-		return value == null ? null : LocatedContentPosition.of(value.fileLocation, value.position);
+		return value == null ? null : LocatedPositionedContent.of(value.fileLocation, value.position);
 	}
 
 	/**

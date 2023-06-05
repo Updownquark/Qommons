@@ -16,8 +16,8 @@ import java.util.regex.Pattern;
 import org.qommons.Named;
 import org.qommons.Transaction;
 import org.qommons.ex.ExSupplier;
-import org.qommons.io.ContentPosition;
 import org.qommons.io.FilePosition;
+import org.qommons.io.PositionedContent;
 import org.qommons.io.SimpleXMLParser;
 import org.qommons.io.SimpleXMLParser.XmlParseException;
 import org.qommons.io.TextParseException;
@@ -226,11 +226,11 @@ public class StrictXmlReader implements Named, Transaction {
 	 * @param name The name of the attribute
 	 * @return The file position of the start of the attribute's value, or null if the attribute was not specified
 	 */
-	public ContentPosition getAttributeValuePosition(String name) {
+	public PositionedContent getAttributeValuePosition(String name) {
 		Node node = theElement.getAttributeNode(name);
 		if (node == null)
 			return null;
-		return SimpleXMLParser.getContentPosition(node);
+		return SimpleXMLParser.getPositionContent(node);
 	}
 
 	/**
@@ -405,14 +405,14 @@ public class StrictXmlReader implements Named, Transaction {
 	 * @return The content position of the element's trimmed text, or null if the element was specified as self-closing or multiple text
 	 *         sections were specified
 	 */
-	public ContentPosition getTextTrimPosition() {
+	public PositionedContent getTextTrimPosition() {
 		int attLen = theElement.getAttributes().getLength();
-		ContentPosition found = null;
+		PositionedContent found = null;
 		boolean anyNonWS = false;
 		for (int i = 0; i < theElement.getChildNodes().getLength(); i++) {
 			Node n = theElement.getChildNodes().item(i);
 			if ((n.getNodeType() == Node.TEXT_NODE || n.getNodeType() == Node.CDATA_SECTION_NODE)) {
-				ContentPosition pos = SimpleXMLParser.getContentPosition(n);
+				PositionedContent pos = SimpleXMLParser.getPositionContent(n);
 				if (!isWhiteSpace(n.getNodeValue())) {
 					if (anyNonWS)
 						return pos;
@@ -441,11 +441,11 @@ public class StrictXmlReader implements Named, Transaction {
 			return new SinglePosition(found.getPosition(0));
 	}
 
-	private static class SinglePosition implements ContentPosition {
-		private final FilePosition thePostion;
+	private static class SinglePosition implements PositionedContent {
+		private final FilePosition thePosition;
 
 		SinglePosition(FilePosition postion) {
-			thePostion = postion;
+			thePosition = postion;
 		}
 
 		@Override
@@ -454,10 +454,22 @@ public class StrictXmlReader implements Named, Transaction {
 		}
 
 		@Override
+		public char charAt(int index) {
+			throw new IndexOutOfBoundsException(index + " of 0");
+		}
+
+		@Override
+		public CharSequence getSourceContent(int from, int to) {
+			if (from != 0 || to != 0)
+				throw new IndexOutOfBoundsException(from + " to " + to + " of 0");
+			return "";
+		}
+
+		@Override
 		public FilePosition getPosition(int index) {
 			if (index != 0)
 				throw new IndexOutOfBoundsException(index + " of 0");
-			return thePostion;
+			return thePosition;
 		}
 	}
 
@@ -630,10 +642,10 @@ public class StrictXmlReader implements Named, Transaction {
 				break;
 			case Node.TEXT_NODE:
 				if (!isWhiteSpace(n.getNodeValue()))
-					errs.computeIfAbsent(path + " text", __ -> new ArrayList<>()).add(SimpleXMLParser.getContentPosition(n).getPosition(0));
+					errs.computeIfAbsent(path + " text", __ -> new ArrayList<>()).add(SimpleXMLParser.getPositionContent(n).getPosition(0));
 				break;
 			case Node.CDATA_SECTION_NODE:
-				errs.computeIfAbsent(path + " CDATA", __ -> new ArrayList<>()).add(SimpleXMLParser.getContentPosition(n).getPosition(0));
+				errs.computeIfAbsent(path + " CDATA", __ -> new ArrayList<>()).add(SimpleXMLParser.getPositionContent(n).getPosition(0));
 				break;
 			default:
 				continue;

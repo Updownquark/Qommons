@@ -25,7 +25,7 @@ import java.util.regex.PatternSyntaxException;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterHashSet;
 import org.qommons.collect.BetterSet;
-import org.qommons.io.ContentPosition;
+import org.qommons.io.PositionedContent;
 import org.qommons.io.ErrorReporting;
 import org.qommons.io.FilePosition;
 import org.qommons.io.LocatedFilePosition;
@@ -186,7 +186,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					throw new IllegalArgumentException("Element '" + rootReader.getName() + "' is not declared as the root of any toolkit");
 				rootDef = rootDef2;
 			}
-			ContentPosition position = new ContentPosition.Simple(SimpleXMLParser.getNamePosition(root), root.getNodeName());
+			PositionedContent position = new PositionedContent.Simple(SimpleXMLParser.getNamePosition(root), root.getNodeName());
 			QonfigToolkit docToolkit = new QonfigToolkit(location, 1, 0, null, position, Collections.unmodifiableMap(uses),
 				Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), Collections.emptyList(),
 				new QonfigToolkit.ToolkitBuilder() {
@@ -295,15 +295,15 @@ public class DefaultQonfigParser implements QonfigParser {
 		return builder.build();
 	}
 
-	private static void splitAttribute(String attributeValue, ContentPosition position, QonfigParseSession session,
-		BiConsumer<String, ContentPosition> onItem) {
+	private static void splitAttribute(String attributeValue, PositionedContent position, QonfigParseSession session,
+		BiConsumer<String, PositionedContent> onItem) {
 		int start = 0;
 		for (int c = 0; c < attributeValue.length(); c++) {
 			char ch = attributeValue.charAt(c);
 			if (ch == ',' || Character.isWhitespace(ch)) {
 				if (c > start || ch == ',') {
 					String itemName = attributeValue.substring(start, c);
-					ContentPosition itemPos = position.subSequence(start, position.length());
+					PositionedContent itemPos = position.subSequence(start, position.length());
 					try {
 						onItem.accept(itemName, itemPos);
 					} catch (RuntimeException e) {
@@ -315,7 +315,7 @@ public class DefaultQonfigParser implements QonfigParser {
 		}
 		if (start < attributeValue.length()) {
 			String itemName = attributeValue.substring(start);
-			ContentPosition itemPos = position.subSequence(start, position.length());
+			PositionedContent itemPos = position.subSequence(start, position.length());
 			try {
 				onItem.accept(itemName, itemPos);
 			} catch (RuntimeException e) {
@@ -324,7 +324,7 @@ public class DefaultQonfigParser implements QonfigParser {
 		}
 	}
 
-	private static List<ElementQualifiedParseItem> parseRoles(String roleAttr, ContentPosition position, QonfigParseSession session) {
+	private static List<ElementQualifiedParseItem> parseRoles(String roleAttr, PositionedContent position, QonfigParseSession session) {
 		List<ElementQualifiedParseItem>[] roles = new List[1];
 		splitAttribute(roleAttr, position, session, (role, rolePos) -> {
 			if (roles[0] == null)
@@ -339,9 +339,9 @@ public class DefaultQonfigParser implements QonfigParser {
 
 	private static class AttParser implements QonfigElement.AttributeValue {
 		private final String theValue;
-		private final ContentPosition thePosition;
+		private final PositionedContent thePosition;
 
-		AttParser(String value, ContentPosition position) {
+		AttParser(String value, PositionedContent position) {
 			theValue = value;
 			thePosition = position;
 		}
@@ -352,7 +352,7 @@ public class DefaultQonfigParser implements QonfigParser {
 		}
 
 		@Override
-		public ContentPosition getPosition() {
+		public PositionedContent getPosition() {
 			return thePosition;
 		}
 
@@ -374,7 +374,7 @@ public class DefaultQonfigParser implements QonfigParser {
 		ToolkitDef def;
 		QonfigToolkit toolkit;
 		try (StrictXmlReader rootReader = new StrictXmlReader(root)) {
-			ContentPosition rootNameContent = asContent(rootReader.getNamePosition(), rootReader.getName());
+			PositionedContent rootNameContent = asContent(rootReader.getNamePosition(), rootReader.getName());
 			String name;
 			try {
 				name = rootReader.getAttribute("name");
@@ -486,7 +486,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			// First pass to parse basic definitions
 			String rootNamesStr = root.getAttributeIfExists("root");
 			rootNames = rootNamesStr == null ? new String[0] : rootNamesStr.split(",");
-			ContentPosition rootNameContent = asContent(root.getNamePosition(), root.getName());
+			PositionedContent rootNameContent = asContent(root.getNamePosition(), root.getName());
 			StrictXmlReader patterns;
 			try {
 				patterns = root.getElementIfExists("value-types");
@@ -551,7 +551,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				try {
 					addOnsEl.check();
 				} catch (TextParseException e) {
-					session.warn(e.getMessage());
+					session.at(new PositionedContent.Fixed(e.getPosition())).warn(e.getMessage());
 				}
 			} else
 				addOnsSession = null;
@@ -568,7 +568,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				try {
 					elementsEl.check();
 				} catch (TextParseException e) {
-					session.warn(e.getMessage());
+					session.at(new PositionedContent.Fixed(e.getPosition())).warn(e.getMessage());
 				}
 			} else
 				elsSession = null;
@@ -595,7 +595,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				root.check();
 			} catch (TextParseException e) {
-				session.warn(e.getMessage());
+				session.at(new PositionedContent.Fixed(e.getPosition())).warn(e.getMessage());
 			}
 		}
 
@@ -640,7 +640,7 @@ public class DefaultQonfigParser implements QonfigParser {
 		}
 
 		QonfigValueType parsePattern(StrictXmlReader pattern, QonfigParseSession session, boolean topLevel) throws QonfigParseException {
-			ContentPosition patternContent = asContent(pattern.getNamePosition(), pattern.getName());
+			PositionedContent patternContent = asContent(pattern.getNamePosition(), pattern.getName());
 			String name;
 			try {
 				name = topLevel ? pattern.getAttribute("name") : pattern.getAttributeIfExists("name");
@@ -694,7 +694,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				try {
 					pattern.check();
 				} catch (TextParseException e) {
-					session.warn(e.getMessage());
+					session.at(new PositionedContent.Fixed(e.getPosition())).warn(e.getMessage());
 				}
 				return new QonfigPattern(session.getToolkit(), name, p, patternContent);
 			case "literal":
@@ -711,7 +711,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				try {
 					pattern.check();
 				} catch (TextParseException e) {
-					session.warn(e.getMessage());
+					session.at(new PositionedContent.Fixed(e.getPosition())).warn(e.getMessage());
 				}
 				return new QonfigValueType.Literal(session.getToolkit(), text, patternContent);
 			case "one-of":
@@ -726,7 +726,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					}
 					pattern.check();
 				} catch (TextParseException e) {
-					session.warn(e.getMessage());
+					session.at(new PositionedContent.Fixed(e.getPosition())).warn(e.getMessage());
 				}
 				components.trimToSize();
 				return new QonfigValueType.OneOf(session.getToolkit(), name, Collections.unmodifiableList(components), patternContent);
@@ -812,7 +812,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				try {
 					autoInheritEl.check();
 				} catch (TextParseException e) {
-					session.warn(e.getMessage());
+					session.at(new PositionedContent.Fixed(e.getPosition())).warn(e.getMessage());
 				}
 			}
 
@@ -824,7 +824,8 @@ public class DefaultQonfigParser implements QonfigParser {
 				try {
 					element.check();
 				} catch (TextParseException e) {
-					theBuilders.get(element.getAttributeIfExists("name")).getSession().error(e.getMessage());
+					theBuilders.get(element.getAttributeIfExists("name")).getSession().at(new PositionedContent.Fixed(e.getPosition()))
+						.error(e.getMessage());
 				}
 			}
 			for (String rootName : rootNames) {
@@ -1277,7 +1278,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				try {
 					child.check();
 				} catch (TextParseException e) {
-					childSession.at(new ContentPosition.Fixed(e.getPosition())).error(e.getMessage());
+					childSession.at(new PositionedContent.Fixed(e.getPosition())).error(e.getMessage());
 				}
 			}
 		}
@@ -1594,7 +1595,7 @@ public class DefaultQonfigParser implements QonfigParser {
 		}
 
 		@Override
-		public ContentPosition getFilePosition() {
+		public PositionedContent getFilePosition() {
 			return null;
 		}
 	}
@@ -1622,8 +1623,8 @@ public class DefaultQonfigParser implements QonfigParser {
 		return QonfigValueType.STRING;
 	}
 
-	static ContentPosition asContent(FilePosition start, String content) {
-		return new ContentPosition.Simple(start, content);
+	static PositionedContent asContent(FilePosition start, String content) {
+		return new PositionedContent.Simple(start, content);
 	}
 
 	private static boolean checkName(String name) {

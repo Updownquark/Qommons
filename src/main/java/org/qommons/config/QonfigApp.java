@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -50,8 +51,10 @@ public class QonfigApp {
 	 * @throws IOException If the application could not be read
 	 * @throws TextParseException If the application could not be parsed as XML
 	 * @throws QonfigParseException If the application could not be parsed as Qonfig
+	 * @throws IllegalStateException If a referenced resource, like a toolkit, cannot be resolved
 	 */
-	public static QonfigDocument parseApp(URL appDefUrl, URL... appToolkits) throws IOException, TextParseException, QonfigParseException {
+	public static QonfigApp parseApp(URL appDefUrl, URL... appToolkits)
+		throws IOException, TextParseException, QonfigParseException, IllegalStateException {
 		QonfigToolkit qonfigAppTK = getQonfigAppToolkit();
 		DefaultQonfigParser qonfigParser = new DefaultQonfigParser();
 		qonfigParser.withToolkit(qonfigAppTK);
@@ -68,63 +71,19 @@ public class QonfigApp {
 			qonfigParser.withToolkit(appTK);
 		}
 
+		QonfigDocument appDef;
 		try (InputStream appDefIn = appDefUrl.openStream()) {
-			return qonfigParser.parseDocument(appDefUrl.toString(), appDefIn);
+			appDef = qonfigParser.parseDocument(appDefUrl.toString(), appDefIn);
 		} catch (IOException e) {
 			throw new IOException("Could not read Qonfig-App definition: " + appDefUrl, e);
 		} catch (XmlParseException e) {
 			throw new TextParseException("Could not parse Qonfig-App definition XML: " + appDefUrl, e.getPosition(), e);
 		}
-	}
 
-	/**
-	 * @param <T> The type of the application value
-	 * @param appDef The {@link #getQonfigAppToolkit() Qonfig-App}-formatted application to interpret
-	 * @param type The type of the application value
-	 * @return The application value
-	 * @throws IOException If the application's app-file reference could not be found or read
-	 * @throws TextParseException If the app-file could not be parsed as XML
-	 * @throws QonfigParseException If the app-file could not be parsed as Qonfig
-	 * @throws QonfigInterpretationException If the application could not be interpreted
-	 * @throws IllegalArgumentException If this method cannot locate, parse, or interpret the application setup file
-	 */
-	public static <T> T interpretApp(QonfigDocument appDef, Class<T> type)
-		throws IOException, TextParseException, QonfigParseException, QonfigInterpretationException {
-		return interpretApp(appDef, type, null);
-	}
-
-	/**
-	 * @param <T> The type of the application value
-	 * @param appDef The {@link #getQonfigAppToolkit() Qonfig-App}-formatted application to interpret
-	 * @param type The type of the application value
-	 * @param session Accepts the interpretation session for the app root (may be null)
-	 * @return The application value
-	 * @throws IOException If the application's app-file reference could not be found or read
-	 * @throws TextParseException If the app-file could not be parsed as XML
-	 * @throws QonfigParseException If the app-file could not be parsed as Qonfig
-	 * @throws QonfigInterpretationException If the application could not be interpreted
-	 * @throws IllegalArgumentException If this method cannot locate, parse, or interpret the application setup file
-	 */
-	public static <T> T interpretApp(QonfigDocument appDef, Class<T> type, Consumer<AbstractQIS<?>> session)
-		throws IOException, TextParseException, QonfigParseException, QonfigInterpretationException {
-		QonfigToolkit qonfigAppTK = getQonfigAppToolkit();
-
-		// Ensure the Qonfig file exists
 		String appFile = appDef.getRoot().getAttributeText(qonfigAppTK.getAttribute("qonfig-app", "app-file"));
-		URL appFileURL = QonfigApp.class.getResource(appFile);
-		if (appFileURL == null) {
-			try {
-				String resolved = QommonsConfig.resolve(appFile, appDef.getLocation());
-				if (resolved == null)
-					throw new IllegalArgumentException("Could not find app file " + appFile);
-				appFileURL = new URL(resolved);
-			} catch (IOException e) {
-				throw new IllegalArgumentException("Could not find app file " + appFile, e);
-			}
-		}
 
-		// Install the dependency toolkits in the Qonfig parser
-		DefaultQonfigParser qonfigParser = new DefaultQonfigParser();
+		Set<QonfigToolkit> toolkits = new LinkedHashSet<>();
+		// Resolve the dependency toolkits
 		for (QonfigElement toolkitEl : appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "toolkit")) {
 			List<CustomValueType> valueTypes = create(toolkitEl.getChildrenInRole(qonfigAppTK, "toolkit", "value-type"),
 				CustomValueType.class);
@@ -133,50 +92,27 @@ public class QonfigApp {
 			if (toolkitURL == null)
 				throw new IllegalArgumentException("Could not find toolkit " + toolkitDef);
 			try (InputStream tkIn = toolkitURL.openStream()) {
-				qonfigParser.parseToolkit(toolkitURL, tkIn, //
-					valueTypes.toArray(new CustomValueType[valueTypes.size()]));
+				toolkits.add(qonfigParser.parseToolkit(toolkitURL, tkIn, //
+					valueTypes.toArray(new CustomValueType[valueTypes.size()])));
 			} catch (IOException e) {
 				throw new IllegalStateException("Could not read toolkit " + toolkitDef, e);
 			} catch (XmlParseException e) {
 				throw new IllegalArgumentException("Could not parse toolkit XML: " + appDef.getLocation(), e);
 			} catch (QonfigParseException e) {
-				e.printStackTrace();
-				throw new IllegalStateException("Could not parse toolkit " + toolkitDef);
+				throw new IllegalStateException("Could not parse toolkit " + toolkitDef, e);
 			} catch (RuntimeException e) {
 				throw new IllegalStateException("Could not parse toolkit " + toolkitDef, e);
 			}
 		}
 
-		// Parse the application file
-		QonfigDocument qonfigDoc;
-		try (InputStream appFileIn = appFileURL.openStream()) {
-			qonfigDoc = qonfigParser.parseDocument(appFileURL.toString(), appFileIn);
-		} catch (IOException e) {
-			throw new IOException("Could not read application file " + appFile, e);
-		} catch (XmlParseException e) {
-			throw new TextParseException("Could not parse application file XML: " + appFileURL, e.getPosition(), e);
-		}
+		List<SpecialSessionImplementation<?>> sessionTypes = create(
+			appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "special-session"),
+			(Class<SpecialSessionImplementation<?>>) (Class<?>) SpecialSessionImplementation.class);
 
-		// Build the interpreter
-		Set<QonfigToolkit> toolkits = new LinkedHashSet<>();
-		addToolkits(qonfigDoc.getDocToolkit(), toolkits);
-		QonfigInterpreterCore.Builder coreBuilder = QonfigInterpreterCore.build(QonfigApp.class,
-			new ErrorReporting.Default(qonfigDoc.getRoot().getFilePosition()), toolkits.toArray(new QonfigToolkit[toolkits.size()]));
-		for (SpecialSessionImplementation<?> ssi : create(appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "special-session"),
-			SpecialSessionImplementation.class)) {
-			addSpecial(ssi, coreBuilder);
-		}
+		List<QonfigInterpretation> interpretations = create(appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "interpretation"),
+			QonfigInterpretation.class);
 
-		for (QonfigInterpretation interp : create(appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "interpretation"),
-			QonfigInterpretation.class)) {
-			coreBuilder.configure(interp);
-		}
-		QonfigInterpreterCore interpreter = coreBuilder.build();
-		// Interpret the app
-		QonfigInterpreterCore.CoreSession coreSession = interpreter.interpret(qonfigDoc.getRoot());
-		if (session != null)
-			session.accept(coreSession);
-		return coreSession.interpret(type);
+		return new QonfigApp(appDef, appFile, Collections.unmodifiableSet(toolkits), sessionTypes, interpretations);
 	}
 
 	/**
@@ -187,7 +123,7 @@ public class QonfigApp {
 	 * @throws QonfigParseException If one of the values could not be instantiated
 	 */
 	public static <T> List<T> create(Collection<QonfigElement> elements, Class<T> type) throws QonfigParseException {
-		List<T> values = new ArrayList<>(elements.size());
+		ArrayList<T> values = new ArrayList<>(elements.size());
 		for (QonfigElement el : elements) {
 			Class<?> elType;
 			try {
@@ -213,7 +149,8 @@ public class QonfigApp {
 			}
 			values.add(value);
 		}
-		return values;
+		values.trimToSize();
+		return Collections.unmodifiableList(values);
 	}
 
 	private static void addToolkits(QonfigToolkit toolkit, Set<QonfigToolkit> toolkits) {
@@ -225,5 +162,146 @@ public class QonfigApp {
 
 	private static <QIS extends SpecialSession<QIS>> void addSpecial(SpecialSessionImplementation<QIS> ssi, Builder coreBuilder) {
 		coreBuilder.withSpecial(ssi.getProvidedAPI(), ssi);
+	}
+
+	private final QonfigDocument theDocument;
+	private final String theAppFile;
+	private final Set<QonfigToolkit> theToolkits;
+	private final List<SpecialSessionImplementation<?>> theSessionTypes;
+	private final List<QonfigInterpretation> theInterpretations;
+
+	/**
+	 * @param document The document defining the app
+	 * @param appFile The location of the file containing the user interface definition of the application
+	 * @param toolkits All toolkits configured to support the application
+	 * @param sessionTypes All Qonfig session types configured to support the application
+	 * @param interpretations All Qonfig interpretations configured to support the application
+	 */
+	protected QonfigApp(QonfigDocument document, String appFile, Set<QonfigToolkit> toolkits,
+		List<SpecialSessionImplementation<?>> sessionTypes,
+		List<QonfigInterpretation> interpretations) {
+		theDocument = document;
+		theAppFile = appFile;
+		theToolkits = toolkits;
+		theSessionTypes = sessionTypes;
+		theInterpretations = interpretations;
+	}
+
+	/** @return The document that defined this application */
+	public QonfigDocument getDocument() {
+		return theDocument;
+	}
+
+	/** @return The location of the document that defined this application */
+	public String getLocation() {
+		return theDocument.getLocation();
+	}
+
+	/** @return The location of the file defining the user interface of the application */
+	public String getAppFile() {
+		return theAppFile;
+	}
+
+	/** @return All toolkits configured to support the application */
+	public Set<QonfigToolkit> getToolkits() {
+		return theToolkits;
+	}
+
+	/** @return All Qonfig session types configured to support the application */
+	public List<SpecialSessionImplementation<?>> getSessionTypes() {
+		return theSessionTypes;
+	}
+
+	/** @return All Qonfig interpretations configured to support the application */
+	public List<QonfigInterpretation> getInterpretations() {
+		return theInterpretations;
+	}
+
+	/**
+	 * @return The application file resolved to a URL
+	 * @throws IllegalArgumentException If the application file could not be resolved
+	 */
+	public URL resolveAppFile() throws IllegalArgumentException {
+		URL appFileURL = QonfigApp.class.getResource(getAppFile());
+		if (appFileURL == null) {
+			try {
+				String resolved = QommonsConfig.resolve(getAppFile(), getLocation());
+				if (resolved == null)
+					throw new IllegalArgumentException("Could not find app file " + getAppFile());
+				appFileURL = new URL(resolved);
+			} catch (IOException e) {
+				throw new IllegalArgumentException("Could not find app file " + getAppFile(), e);
+			}
+		}
+		return appFileURL;
+	}
+
+	/**
+	 * @param <T> The type of the application value
+	 * @param type The type of the application value
+	 * @return The application value
+	 * @throws IOException If the application's app-file reference could not be found or read
+	 * @throws TextParseException If the app-file could not be parsed as XML
+	 * @throws QonfigParseException If the app-file could not be parsed as Qonfig
+	 * @throws QonfigInterpretationException If the application could not be interpreted
+	 * @throws IllegalArgumentException If this method cannot locate, parse, or interpret the application setup file
+	 */
+	public <T> T interpretApp(Class<T> type) throws IOException, TextParseException, QonfigParseException, QonfigInterpretationException {
+		return interpretApp(type, null);
+	}
+
+	/**
+	 * @param <T> The type of the application value
+	 * @param type The type of the application value
+	 * @param session Accepts the interpretation session for the app root (may be null)
+	 * @return The application value
+	 * @throws IOException If the application's app-file reference could not be found or read
+	 * @throws TextParseException If the app-file could not be parsed as XML
+	 * @throws QonfigParseException If the app-file could not be parsed as Qonfig
+	 * @throws QonfigInterpretationException If the application could not be interpreted
+	 * @throws IllegalArgumentException If this method cannot locate, parse, or interpret the application setup file
+	 */
+	public <T> T interpretApp(Class<T> type, Consumer<AbstractQIS<?>> session)
+		throws IOException, TextParseException, QonfigParseException, QonfigInterpretationException {
+		// Ensure the Qonfig file exists
+		URL appFileURL = resolveAppFile();
+
+		DefaultQonfigParser qonfigParser = new DefaultQonfigParser();
+		for (QonfigToolkit dep : getToolkits())
+			qonfigParser.withToolkit(dep);
+
+		// Parse the application file
+		QonfigDocument qonfigDoc;
+		try (InputStream appFileIn = appFileURL.openStream()) {
+			qonfigDoc = qonfigParser.parseDocument(appFileURL.toString(), appFileIn);
+		} catch (IOException e) {
+			throw new IOException("Could not read application file " + getAppFile(), e);
+		} catch (XmlParseException e) {
+			throw new TextParseException("Could not parse application file XML: " + appFileURL, e.getPosition(), e);
+		}
+
+		// Build the interpreter
+		Set<QonfigToolkit> toolkits = new LinkedHashSet<>();
+		addToolkits(qonfigDoc.getDocToolkit(), toolkits);
+		QonfigInterpreterCore.Builder coreBuilder = QonfigInterpreterCore.build(QonfigApp.class,
+			new ErrorReporting.Default(qonfigDoc.getRoot().getFilePosition()), toolkits.toArray(new QonfigToolkit[toolkits.size()]));
+
+		for (SpecialSessionImplementation<?> ssi : getSessionTypes())
+			addSpecial(ssi, coreBuilder);
+
+		for (QonfigInterpretation interp : getInterpretations())
+			coreBuilder.configure(interp);
+
+		QonfigInterpreterCore interpreter = coreBuilder.build();
+		// Interpret the app
+		QonfigInterpreterCore.CoreSession coreSession = interpreter.interpret(qonfigDoc.getRoot());
+		if (session != null)
+			session.accept(coreSession);
+		return coreSession.interpret(type);
+	}
+
+	@Override
+	public String toString() {
+		return theAppFile;
 	}
 }

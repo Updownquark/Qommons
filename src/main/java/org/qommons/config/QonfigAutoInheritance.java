@@ -8,7 +8,7 @@ import java.util.function.Consumer;
 
 import org.qommons.MultiInheritanceSet;
 import org.qommons.QommonsUtils;
-import org.qommons.io.ContentPosition;
+import org.qommons.io.PositionedContent;
 
 /** A set of add-ons that shall be inherited automatically by elements matching a condition */
 public class QonfigAutoInheritance {
@@ -198,7 +198,7 @@ public class QonfigAutoInheritance {
 		 * @param position The position in the file where the target was defined
 		 * @return This builder
 		 */
-		public Builder withTarget(QonfigElementOrAddOn target, QonfigChildDef role, ContentPosition position) {
+		public Builder withTarget(QonfigElementOrAddOn target, QonfigChildDef role, PositionedContent position) {
 			if (target == null && role == null) {
 				theSession.at(position)
 					.error("Either a target or a role or both must be specified for an auto-inheritance target");

@@ -16,7 +16,7 @@ import org.qommons.MultiInheritanceSet;
 import org.qommons.QommonsUtils;
 import org.qommons.Transaction;
 import org.qommons.io.ErrorReporting;
-import org.qommons.io.LocatedContentPosition;
+import org.qommons.io.LocatedPositionedContent;
 import org.qommons.io.LocatedFilePosition;
 
 /** A class for interpreting parsed {@link QonfigDocument}s into useful structures */
@@ -1127,7 +1127,7 @@ public class QonfigInterpreterCore {
 		}
 
 		@Override
-		public LocatedContentPosition getFileLocation() {
+		public LocatedPositionedContent getFileLocation() {
 			return theWrapped.getFileLocation();
 		}
 
@@ -1153,7 +1153,7 @@ public class QonfigInterpreterCore {
 		}
 
 		@Override
-		public ExceptionThrowingReporting at(LocatedContentPosition frame) {
+		public ExceptionThrowingReporting at(LocatedPositionedContent frame) {
 			return new ExceptionThrowingReporting(theWrapped.at(frame));
 		}
 	}

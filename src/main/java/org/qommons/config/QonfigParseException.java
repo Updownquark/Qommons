@@ -2,7 +2,7 @@ package org.qommons.config;
 
 import java.io.PrintStream;
 import java.io.PrintWriter;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import org.qommons.io.ErrorReporting;
@@ -12,23 +12,23 @@ import org.qommons.io.LocatedFilePosition;
 public class QonfigParseException extends Exception {
 	private final List<ErrorReporting.Issue> theIssues;
 
-	/**
-	 * @param message The message for the dev
-	 * @param issues The list of issues composing this exception
-	 */
-	public QonfigParseException(String message, List<ErrorReporting.Issue> issues) {
+	private QonfigParseException(String message, List<ErrorReporting.Issue> issues) {
 		super(message + createMessage(issues));
 		theIssues = issues;
 	}
 
-	/**
-	 * @param message The message for the dev
-	 * @param issues The list of issues composing this exception
-	 * @param cause The cause of this exception
-	 */
-	public QonfigParseException(String message, List<ErrorReporting.Issue> issues, Throwable cause) {
+	private QonfigParseException(String message, List<ErrorReporting.Issue> issues, Throwable cause) {
 		super(message + createMessage(issues), cause);
 		theIssues = issues;
+	}
+
+	private QonfigParseException(ErrorReporting.Issue issue) {
+		super(issue.toString());
+		if (issue.cause != null)
+			initCause(issue.cause);
+		theIssues = Collections.singletonList(issue);
+		if (issue.codeLocation != null)
+			setStackTrace(new StackTraceElement[] { issue.codeLocation });
 	}
 
 	/** @return The issues that this session is for */
@@ -54,6 +54,8 @@ public class QonfigParseException extends Exception {
 	 * @return The exception to throw
 	 */
 	public static QonfigParseException forIssues(String message, List<ErrorReporting.Issue> issues) {
+		if (issues.size() == 1)
+			return new QonfigParseException(issues.get(0));
 		Throwable cause = null;
 		for (ErrorReporting.Issue issue : issues) {
 			if (issue.cause != null) {
@@ -65,7 +67,11 @@ public class QonfigParseException extends Exception {
 				}
 			}
 		}
-		return cause == null ? new QonfigParseException(message, issues) : new QonfigParseException(message, issues, cause);
+		QonfigParseException ex = cause == null ? new QonfigParseException(message, issues)
+			: new QonfigParseException(message, issues, cause);
+		for (ErrorReporting.Issue issue : issues)
+			ex.addSuppressed(new Issue(issue));
+		return ex;
 	}
 
 	/**
@@ -76,13 +82,8 @@ public class QonfigParseException extends Exception {
 	 * @return A {@link QonfigParseException} to throw
 	 */
 	public static QonfigParseException createSimple(LocatedFilePosition position, String message, Throwable cause) {
-		List<ErrorReporting.Issue> issues = Arrays
-			.asList(new ErrorReporting.Issue(position,
+		return new QonfigParseException(new ErrorReporting.Issue(position,
 				ErrorReporting.IssueSeverity.ERROR, message, Thread.currentThread().getStackTrace()[0], cause));
-		if (cause != null)
-			return new QonfigParseException(message, issues, cause);
-		else
-			return new QonfigParseException(message, issues);
 	}
 
 	private static String createMessage(List<ErrorReporting.Issue> issues) {
@@ -90,5 +91,15 @@ public class QonfigParseException extends Exception {
 		for (ErrorReporting.Issue issue : issues)
 			str.append('\n').append(issue);
 		return str.toString();
+	}
+
+	private static class Issue extends Exception {
+		Issue(ErrorReporting.Issue issue) {
+			super(issue.toString());
+			if (issue.codeLocation != null)
+				setStackTrace(new StackTraceElement[] { issue.codeLocation });
+			else
+				setStackTrace(new StackTraceElement[0]);
+		}
 	}
 }
