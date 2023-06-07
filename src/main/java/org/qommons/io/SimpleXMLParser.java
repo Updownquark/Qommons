@@ -23,7 +23,6 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
 import org.qommons.ArrayUtils;
-import org.qommons.DefaultCharSubSequence;
 import org.qommons.Named;
 import org.w3c.dom.Attr;
 import org.w3c.dom.Document;
@@ -67,6 +66,15 @@ public class SimpleXMLParser {
 	public static final String CDATA_END = "]]>";
 	public static final String PROCESSING_INSTRUCTION_BEGIN = "<?";
 	public static final String PROCESSING_INSTRUCTION_END = "?>";
+	public static final String TAB = "\t";
+	public static final String AMP = "&amp;";
+	public static final String APOS = "&apos;";
+	public static final String GT = "&gt;";
+	public static final String LT = "&lt;";
+	public static final String QUOT = "&quot;";
+	private static final String NLCR = "\n\r";
+	private static final String CRNL = "\r\n";
+
 
 	/** An element as given by an {@link XmlParseException} */
 	public static class LocatedXmlElement implements Named {
@@ -1369,7 +1377,7 @@ public class SimpleXMLParser {
 		private int linePosition;
 		private final List<SpecialCharSequence> lineSpecialSequences = new ArrayList<>();
 
-		private void specialSequence(int length, char[] chars) {
+		private void specialSequence(int length, String chars) {
 			lineSpecialSequences.add(new SpecialCharSequence(theBuffer.length(), length, chars));
 		}
 
@@ -1604,12 +1612,12 @@ public class SimpleXMLParser {
 			nextChar(); // Position ourselves at the beginning of the attribute value
 		}
 
-		private final char[] HEX_SEQ = new char[] { '&', 'x', '#', '0', '0', '0', '0', ';' };
+		private final char[] HEX_SEQ = new char[] { '&', '#', 'x', '0', '0', '0', '0', ';' };
 
 		private void parseEscapeSequence() throws IOException, XmlParseException {
 			mark();
 			int ch = getNextStreamChar();
-			char[] seq;
+			String seq;
 			switch (ch) {
 			case 'a':
 				ch = getNextStreamChar();
@@ -1649,33 +1657,31 @@ public class SimpleXMLParser {
 				seq = QUOT;
 				theChar = '"';
 				break;
-			case 'x':
-				if (getNextStreamChar() != '#')
-					throwException(false, "'#' expected");
+			case '#':
+				if (getNextStreamChar() != 'x')
+					throwException(false, "'x' expected");
 
 				mark();
-				HEX_SEQ[3] = (char) (ch = getNextStreamChar());
-				int code = hex(ch);
-				HEX_SEQ[4] = (char) (ch = getNextStreamChar());
-				code = code * 16 + hex(ch);
-				HEX_SEQ[5] = (char) (ch = getNextStreamChar());
-				code = code * 16 + hex(ch);
-				HEX_SEQ[6] = (char) (ch = getNextStreamChar());
-				code = code * 16 + hex(ch);
+				int code = 0;
+				for (int s = 3; s < 7; s++) {
+					ch = getNextStreamChar();
+					HEX_SEQ[s] = (char) ch;
+					code = code * 16 + hex(ch);
+				}
 
-				if (nextChar() != ';')
+				if (getNextStreamChar() != ';')
 					throwException(false, "';' expected");
 
-				seq = HEX_SEQ;
+				seq = new String(HEX_SEQ);
 				theChar = (char) code;
 				break;
 			default:
 				throwException(true, "Unrecognized escape sequence");
 				return; // Won't get here
 			}
-			specialSequence(seq.length, seq);
-			thePosition += seq.length - 1;
-			theCharNumber += seq.length - 1;
+			specialSequence(seq.length(), seq);
+			thePosition += seq.length() - 1;
+			theCharNumber += seq.length() - 1;
 		}
 
 		private void expectEscapeSequence(String seq) throws IOException, XmlParseException {
@@ -1695,7 +1701,7 @@ public class SimpleXMLParser {
 			else if (ch >= 'A' && ch <= 'Z')
 				return ch - 'A' + 10;
 			else {
-				throwException(true, "Expected 4 hexadecimal digits for unicode escape sequence");
+				throwException(false, "Expected 4 hexadecimal digits for unicode escape sequence, but found " + (char) ch);
 				return 0; // Won't get here
 			}
 		}
@@ -1707,15 +1713,6 @@ public class SimpleXMLParser {
 	}
 
 	static final SpecialCharSequence[] EMPTY_SPECIAL_SEQUENCE = new SpecialCharSequence[0];
-
-	static final char[] NLCR = new char[] { '\n', '\r' };
-	static final char[] CRNL = new char[] { '\r', '\n' };
-	static final char[] TAB = new char[] { '\t' };
-	static final char[] AMP = new char[] { '&', 'a', 'm', 'p', ';' };
-	static final char[] APOS = new char[] { '&', 'a', 'p', 'o', 's', ';' };
-	static final char[] GT = new char[] { '&', 'g', 't', ';' };
-	static final char[] LT = new char[] { '&', 'l', 't', ';' };
-	static final char[] QUOT = new char[] { '&', 'q', 'u', 'o', 't', ';' };
 
 	static class PositionedContentImpl implements PositionedContent {
 		private final String theContent;
@@ -1804,7 +1801,7 @@ public class SimpleXMLParser {
 			int charIndex = index - contentIndex;
 			int pos = position + charIndex, col = charIndex;
 			for (int s = 0; s <= seqIndex; s++) {
-				pos += specialSequences[s].sequence.length - 1;
+				pos += specialSequences[s].sequence.length() - 1;
 				col += specialSequences[s].contentLength - 1;
 			}
 			return new FilePosition(pos, lineNumber, charNumber + col);
@@ -1813,7 +1810,7 @@ public class SimpleXMLParser {
 		CharSequence getSourceCharacter(int index, String content) {
 			int seqIndex = getSeqIndex(index);
 			if (seqIndex >= 0)
-				return new SimpleCharSequence(specialSequences[seqIndex].sequence);
+				return specialSequences[seqIndex].sequence;
 			else
 				return new SingleCharSequence(content.charAt(index));
 		}
@@ -1841,9 +1838,9 @@ public class SimpleXMLParser {
 	static class SpecialCharSequence {
 		final int contentIndex;
 		final int contentLength;
-		final char[] sequence;
+		final String sequence;
 
-		SpecialCharSequence(int contentIndex, int contentLength, char[] sequence) {
+		SpecialCharSequence(int contentIndex, int contentLength, String sequence) {
 			this.contentIndex = contentIndex;
 			this.contentLength = contentLength;
 			this.sequence = sequence;
@@ -1894,43 +1891,6 @@ public class SimpleXMLParser {
 		@Override
 		public String toString() {
 			return String.valueOf(theChar);
-		}
-	}
-
-	static class SimpleCharSequence implements CharSequence {
-		private final char[] theChars;
-
-		SimpleCharSequence(char[] chars) {
-			theChars = chars;
-		}
-
-		@Override
-		public int length() {
-			return theChars.length;
-		}
-
-		@Override
-		public char charAt(int index) {
-			if (index < 0 || index >= theChars.length)
-				throw new IndexOutOfBoundsException(index + " of " + theChars.length);
-			return theChars[index];
-		}
-
-		@Override
-		public CharSequence subSequence(int start, int end) {
-			if (start < 0 || start > end || end > theChars.length)
-				throw new IndexOutOfBoundsException(start + " to " + end + " of " + theChars.length);
-			else if (start == end)
-				return "";
-			else if (start == 0 && end == theChars.length)
-				return this;
-			else
-				return new DefaultCharSubSequence(this, start, end);
-		}
-
-		@Override
-		public String toString() {
-			return String.valueOf(theChars);
 		}
 	}
 

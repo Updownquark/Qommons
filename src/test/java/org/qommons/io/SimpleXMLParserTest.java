@@ -65,7 +65,7 @@ public class SimpleXMLParserTest {
 				new ExpectedElementStart("child1", 15, 5), //
 				new ExpectedWhitespace(" ", 15, 11), //
 				new ExpectedAttribute("attr10", 15, 12, "Multi-\n\t\t-line attribute", 15, 20), //
-				new ExpectedElementContent("\n\t\tText 1\n\t\t", 16, 25), //
+				new ExpectedElementContent("\n\t\tText 1\u00b0\n\t\t", 16, 25), //
 				new ExpectedComment(" Comment 1", 18, 12), //
 				new ExpectedElementContent("\n\t\tText <2>>\n\t", 18, 25), //
 				new ExpectedElementEnd("child1", 20, 6), //
@@ -273,15 +273,9 @@ public class SimpleXMLParserTest {
 				case '\t':
 					ch += 4;
 					break;
-				case '"':
-				case '\'':
-				case '&':
-				case '<':
-				case '>':
+				default:
 					ch += value.getSourceContent(c, c + 1).length();
 					break;
-				default:
-					ch++;
 				}
 			}
 			FilePosition pos = value.getPosition(content.length());
