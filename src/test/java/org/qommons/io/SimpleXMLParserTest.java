@@ -7,8 +7,13 @@ import java.util.Iterator;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.qommons.io.SimpleXMLParser.XmlAttribute;
+import org.qommons.io.SimpleXMLParser.XmlCdata;
+import org.qommons.io.SimpleXMLParser.XmlComment;
 import org.qommons.io.SimpleXMLParser.XmlDeclaration;
+import org.qommons.io.SimpleXMLParser.XmlElementTerminal;
 import org.qommons.io.SimpleXMLParser.XmlParseException;
+import org.qommons.io.SimpleXMLParser.XmlProcessingInstruction;
 
 /** Unit test for {@link SimpleXMLParser} */
 public class SimpleXMLParserTest {
@@ -28,30 +33,37 @@ public class SimpleXMLParserTest {
 				new ExpectedXmlDeclaration()//
 					.withVersion("1.0", 0, 6, 0, 15)//
 					.withEncoding("UTF-8", 1, 4, 1, 14), //
+				new ExpectedWhitespace("\n\n", 1, 22), //
 				new ExpectedComment(" This is a header comment\nblah ", 3, 4), //
+				new ExpectedWhitespace("\n\n", 4, 8), //
 				new ExpectedElementStart("test", 6, 1), //
+				new ExpectedWhitespace(" ", 6, 5), //
 				new ExpectedAttribute("ns1:attr1", 6, 6, "Attribute 1", 6, 17), //
+				new ExpectedWhitespace(" ", 6, 29), //
 				new ExpectedAttribute("ns2:attr2", 6, 30, "Attribute 2", 6, 41), //
+				new ExpectedWhitespace("\n\t", 6, 53), //
 				new ExpectedAttribute("ns3:attr3", 7, 4, "Attribute 3", 7, 15), //
 				new ExpectedElementContent("\n\t", 7, 28), //
 				new ExpectedElementStart("child0", 8, 5), //
 				new ExpectedElementContent("\n\t\t", 8, 12), //
 				new ExpectedProcessingInstruction("CONTENTLESS-INSTRUCTION", 9, 10, null, -1, -1),
 				new ExpectedElementContent("\n\t\t", 9, 35), //
-				new ExpectedProcessingInstruction("INSTRUCTION", 10, 10, " ", 10, 21),
+				new ExpectedProcessingInstruction("INSTRUCTION", 10, 10, "", 10, 22),
 				new ExpectedElementContent("\n\t\t", 10, 24), //
-				new ExpectedProcessingInstruction("INSTRUCTION", 11, 10, " CONTENT", 11, 21),
+				new ExpectedProcessingInstruction("INSTRUCTION", 11, 10, "CONTENT", 11, 22),
 				new ExpectedElementContent("\n\t\t", 11, 31), //
 				new ExpectedElementStart("child00", 12, 9), //
 				new ExpectedElementEnd("child00", 12, 19), //
 				new ExpectedElementContent("\n\t\t", 12, 27), //
 				new ExpectedElementStart("child01", 13, 9), //
+				new ExpectedWhitespace(" ", 13, 16), //
 				new ExpectedAttribute("attr010", 13, 17, "\"Child Attribute'", 13, 26), //
 				new ExpectedElementEnd("child01", -1, -1), //
 				new ExpectedElementContent("\n\t", 13, 56), //
 				new ExpectedElementEnd("child0", 14, 6), //
 				new ExpectedElementContent("\n\t", 14, 13), //
 				new ExpectedElementStart("child1", 15, 5), //
+				new ExpectedWhitespace(" ", 15, 11), //
 				new ExpectedAttribute("attr10", 15, 12, "Multi-\n\t\t-line attribute", 15, 20), //
 				new ExpectedElementContent("\n\t\tText 1\n\t\t", 16, 25), //
 				new ExpectedComment(" Comment 1", 18, 12), //
@@ -61,7 +73,9 @@ public class SimpleXMLParserTest {
 				new ExpectedCdata("\n\t\t<This is some text & stuff>\n\t", 21, 13), //
 				new ExpectedElementContent("\n", 23, 7), //
 				new ExpectedElementEnd("test", 24, 2), //
-				new ExpectedComment(" This is a footer comment with special characters &<'\nblah ", 26, 4)//
+				new ExpectedWhitespace("\n\n", 24, 7), //
+				new ExpectedComment(" This is a footer comment with special characters &<'\nblah ", 26, 4), //
+				new ExpectedWhitespace("\n", 27, 8)//
 			);
 			new SimpleXMLParser().setTabLength(4).parseXml(in, tester);
 			tester.done();
@@ -92,26 +106,30 @@ public class SimpleXMLParserTest {
 		}
 
 		@Override
-		public void handleProcessingInstruction(String target, FilePosition targetPosition, PositionedContent content) {
-			next(ExpectedProcessingInstruction.class, "PI " + target + "=" + content).validate(target, targetPosition, content);
+		public void handleIgnorableWhitespace(PositionedContent whitespace) {
+			next(ExpectedWhitespace.class, "Whitespace: " + toString(whitespace)).validate(whitespace);
 		}
 
 		@Override
-		public void handleComment(PositionedContent comment) {
+		public void handleProcessingInstruction(XmlProcessingInstruction pi) {
+			next(ExpectedProcessingInstruction.class, "PI " + pi.getTargetName() + "=" + pi.getValueContent()).validate(pi);
+		}
+
+		@Override
+		public void handleComment(XmlComment comment) {
 			next(ExpectedComment.class, "comment " + toString(comment)).validate(comment);
 		}
 
 		@Override
-		public void handleElementStart(String name, FilePosition position) {
-			next(ExpectedElementStart.class, "element start: " + name).validate(name, position);
+		public void handleElementStart(XmlElementTerminal element) {
+			next(ExpectedElementStart.class, "element start: " + element.getName()).validate(element);
 			indent++;
 		}
 
 		@Override
-		public void handleAttribute(String attributeName, FilePosition namePosition, PositionedContent attributeValue) {
-			next(ExpectedAttribute.class, "attribute " + attributeName + "=" + toString(attributeValue)).validate(attributeName,
-				namePosition,
-				attributeValue);
+		public void handleAttribute(XmlAttribute attribute) {
+			next(ExpectedAttribute.class, "attribute " + attribute.getName() + "=" + toString(attribute.getValueContent()))
+				.validate(attribute);
 		}
 
 		@Override
@@ -120,14 +138,14 @@ public class SimpleXMLParserTest {
 		}
 
 		@Override
-		public void handleCDataContent(String elementName, PositionedContent content) {
-			next(ExpectedCdata.class, "CDATA " + content).validate(content);
+		public void handleCDataContent(String elementName, XmlCdata cdata) {
+			next(ExpectedCdata.class, "CDATA " + cdata.getValueContent()).validate(cdata);
 		}
 
 		@Override
-		public void handleElementEnd(String elementName, FilePosition position, boolean selfClosing) {
+		public void handleElementEnd(XmlElementTerminal element, boolean selfClosing) {
 			indent--;
-			next(ExpectedElementEnd.class, "element end: " + elementName).validate(elementName, position, selfClosing);
+			next(ExpectedElementEnd.class, "element end: " + element.getName()).validate(element, selfClosing);
 		}
 
 		void done() {
@@ -274,14 +292,23 @@ public class SimpleXMLParserTest {
 		}
 	}
 
+	static class ExpectedWhitespace extends ExpectedContent {
+		ExpectedWhitespace(String content, int lineNumber, int charNumber) {
+			super(content, lineNumber, charNumber);
+		}
+
+		void validate(PositionedContent value) {
+			validateContent(value);
+		}
+	}
 
 	static class ExpectedComment extends ExpectedContent {
 		ExpectedComment(String content, int lineNumber, int charNumber) {
 			super(content, lineNumber, charNumber);
 		}
 
-		void validate(PositionedContent comment) {
-			validateContent(comment);
+		void validate(XmlComment comment) {
+			validateContent(comment.getValueContent());
 		}
 
 		@Override
@@ -302,14 +329,14 @@ public class SimpleXMLParserTest {
 			theTargetChar = targetChar;
 		}
 
-		void validate(String target, FilePosition targetPosition, PositionedContent content) {
-			Assert.assertEquals(theTarget, target);
-			Assert.assertEquals(theTargetLine, targetPosition.getLineNumber());
-			Assert.assertEquals(theTargetChar, targetPosition.getCharNumber());
-			if (content == null)
+		void validate(XmlProcessingInstruction pi) {
+			Assert.assertEquals(theTarget, pi.getTargetName());
+			Assert.assertEquals(theTargetLine, pi.getTargetPosition().getLineNumber());
+			Assert.assertEquals(theTargetChar, pi.getTargetPosition().getCharNumber());
+			if (pi.getValueOffset() < 0)
 				Assert.assertNull(getContent());
 			else
-				validateContent(content);
+				validateContent(pi.getValueContent());
 		}
 
 		@Override
@@ -333,14 +360,14 @@ public class SimpleXMLParserTest {
 			return elementName;
 		}
 
-		void validate(String element, FilePosition position) {
-			Assert.assertEquals(elementName, element);
+		void validate(XmlElementTerminal element) {
+			Assert.assertEquals(elementName, element.getName());
 			if (lineNumber >= 0) {
-				Assert.assertNotNull(position);
-				Assert.assertEquals(lineNumber, position.getLineNumber());
-				Assert.assertEquals(charNumber, position.getCharNumber());
+				Assert.assertTrue(element.getNameOffset() >= 0);
+				Assert.assertEquals(lineNumber, element.getNamePosition().getLineNumber());
+				Assert.assertEquals(charNumber, element.getNamePosition().getCharNumber());
 			} else
-				Assert.assertNull(position);
+				Assert.assertTrue(element.getNameOffset() < 0);
 		}
 	}
 
@@ -367,11 +394,11 @@ public class SimpleXMLParserTest {
 			this.nameCharNumber = nameCharNumber;
 		}
 
-		void validate(String attribute, FilePosition namePosition, PositionedContent value) {
-			Assert.assertEquals(attributeName, attribute);
-			Assert.assertEquals(nameLineNumber, namePosition.getLineNumber());
-			Assert.assertEquals(nameCharNumber, namePosition.getCharNumber());
-			validateContent(value);
+		void validate(XmlAttribute attribute) {
+			Assert.assertEquals(attributeName, attribute.getName());
+			Assert.assertEquals(nameLineNumber, attribute.getNamePosition().getLineNumber());
+			Assert.assertEquals(nameCharNumber, attribute.getNamePosition().getCharNumber());
+			validateContent(attribute.getValueContent());
 		}
 
 		@Override
@@ -396,8 +423,8 @@ public class SimpleXMLParserTest {
 			super(content, lineNumber, charNumber);
 		}
 
-		void validate(PositionedContent content) {
-			validateContent(content);
+		void validate(XmlCdata cdata) {
+			validateContent(cdata.getValueContent());
 		}
 
 		@Override
@@ -411,8 +438,8 @@ public class SimpleXMLParserTest {
 			super(elementName, lineNumber, charNumber);
 		}
 
-		void validate(String element, FilePosition position, boolean selfClosing) {
-			validate(element, selfClosing ? null : position);
+		void validate(XmlElementTerminal element, boolean selfClosing) {
+			validate(element);
 		}
 
 		@Override
