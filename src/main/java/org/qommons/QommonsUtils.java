@@ -849,6 +849,8 @@ public class QommonsUtils {
 	public static <T> List<T> unmodifiableCopy(T... values) {
 		if (values == null || values.length == 0)
 			return Collections.emptyList();
+		else if (values.length == 0)
+			return Collections.singletonList(values[0]);
 		return new SimpleImmutableList<>(values);
 	}
 
@@ -860,6 +862,8 @@ public class QommonsUtils {
 	public static <T> Set<T> unmodifiableDistinctCopy(T... values) {
 		if (values == null || values.length == 0)
 			return Collections.emptySet();
+		else if (values.length == 0)
+			return Collections.singleton(values[0]);
 		LinkedHashSet<T> set = new LinkedHashSet<>(values.length * 3 / 2 + 1);
 		for (T v : values)
 			set.add(v);
@@ -874,6 +878,10 @@ public class QommonsUtils {
 	public static <K, V> Map<K, V> unmodifiableCopy(Map<? extends K, ? extends V> map) {
 		if (map == null || map.isEmpty())
 			return Collections.emptyMap();
+		else if (map.size() == 1) {
+			Map.Entry<? extends K, ? extends V> entry = map.entrySet().iterator().next();
+			return Collections.singletonMap(entry.getKey(), entry.getValue());
+		}
 		Map<K, V> copy = new LinkedHashMap<>(map.size() * 2);
 		copy.putAll(map);
 		return Collections.unmodifiableMap(copy);

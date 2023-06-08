@@ -141,13 +141,18 @@ public interface Identifiable {
 
 		@Override
 		public String toString() {
-			StringBuilder str = new StringBuilder().append(theWrappedId).append('.').append(theOp).append('(');
-			for (int i = 0; i < theParams.length; i++) {
-				if (i > 0)
-					str.append(",");
-				str.append(theParams[i]);
+			StringBuilder str = new StringBuilder().append(theWrappedId);
+			if (!theOp.isEmpty())
+				str.append('.').append(theOp);
+			if (theParams.length > 0) {
+				str.append('(');
+				for (int i = 0; i < theParams.length; i++) {
+					if (i > 0)
+						str.append(",");
+					str.append(theParams[i]);
+				}
+				str.append(')');
 			}
-			str.append(')');
 			return str.toString();
 		}
 	}

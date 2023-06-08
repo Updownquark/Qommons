@@ -1643,7 +1643,7 @@ public class ArgumentParsing {
 		 * @return This builder
 		 */
 		<T> ValuedArgumentSetBuilder addArgument(String name, Class<T> type, ArgumentValueParser<? extends T> parser,
-			Consumer<ArgumentBuilder<T, ?>> configure);
+			Consumer<? super ArgumentBuilder<T, ?>> configure);
 
 		/**
 		 * Adds an argument type for the parser
@@ -1656,7 +1656,7 @@ public class ArgumentParsing {
 		 * @return This builder
 		 */
 		default <T> ValuedArgumentSetBuilder addSimpleArgument(String name, Class<T> type, Function<String, T> parser,
-			Consumer<ArgumentBuilder<T, ?>> configure) {
+			Consumer<? super ArgumentBuilder<T, ?>> configure) {
 			return addArgument(name, type, (text, otherArgs) -> parser.apply(text), configure);
 		}
 
@@ -1667,7 +1667,7 @@ public class ArgumentParsing {
 		 * @param configure Configures the argument (optional), adding constraints and/or a default value
 		 * @return This builder
 		 */
-		default ValuedArgumentSetBuilder addStringArgument(String name, Consumer<ArgumentBuilder<String, ?>> configure) {
+		default ValuedArgumentSetBuilder addStringArgument(String name, Consumer<? super ArgumentBuilder<String, ?>> configure) {
 			return addSimpleArgument(name, String.class, v -> v, configure);
 		}
 
@@ -1678,7 +1678,7 @@ public class ArgumentParsing {
 		 * @param configure Configures the argument (optional), adding constraints and/or a default value
 		 * @return This builder
 		 */
-		default ValuedArgumentSetBuilder addIntArgument(String name, Consumer<ArgumentBuilder<Integer, ?>> configure) {
+		default ValuedArgumentSetBuilder addIntArgument(String name, Consumer<? super ArgumentBuilder<Integer, ?>> configure) {
 			return addSimpleArgument(name, Integer.class, Integer::parseInt, configure);
 		}
 
@@ -1689,7 +1689,7 @@ public class ArgumentParsing {
 		 * @param configure Configures the argument (optional), adding constraints and/or a default value
 		 * @return This builder
 		 */
-		default ValuedArgumentSetBuilder addLongArgument(String name, Consumer<ArgumentBuilder<Long, ?>> configure) {
+		default ValuedArgumentSetBuilder addLongArgument(String name, Consumer<? super ArgumentBuilder<Long, ?>> configure) {
 			return addSimpleArgument(name, Long.class, Long::parseLong, configure);
 		}
 
@@ -1700,7 +1700,7 @@ public class ArgumentParsing {
 		 * @param configure Configures the argument (optional), adding constraints and/or a default value
 		 * @return This builder
 		 */
-		default ValuedArgumentSetBuilder addDoubleArgument(String name, Consumer<ArgumentBuilder<Double, ?>> configure) {
+		default ValuedArgumentSetBuilder addDoubleArgument(String name, Consumer<? super ArgumentBuilder<Double, ?>> configure) {
 			return addSimpleArgument(name, Double.class, Double::parseDouble, configure);
 		}
 
@@ -1711,7 +1711,7 @@ public class ArgumentParsing {
 		 * @param configure Configures the argument (optional), adding constraints and/or a default value
 		 * @return This builder
 		 */
-		default ValuedArgumentSetBuilder addBooleanArgument(String name, Consumer<ArgumentBuilder<Boolean, ?>> configure) {
+		default ValuedArgumentSetBuilder addBooleanArgument(String name, Consumer<? super ArgumentBuilder<Boolean, ?>> configure) {
 			return addArgument(name, Boolean.class, (txt, __) -> {
 				switch (txt.toLowerCase()) {
 				case "t":
@@ -1739,8 +1739,8 @@ public class ArgumentParsing {
 		 * @param configure Configures the argument (optional), adding constraints and/or a default value
 		 * @return This builder
 		 */
-		default <E extends Enum<E>> ValuedArgumentSetBuilder addEnumArgument(String name, Class<E> enumType,
-			Consumer<ArgumentBuilder<E, ?>> configure) {
+		default <E extends Enum<?>> ValuedArgumentSetBuilder addEnumArgument(String name, Class<E> enumType,
+			Consumer<? super ArgumentBuilder<E, ?>> configure) {
 			return addSimpleArgument(name, enumType, s -> {
 				for (E value : enumType.getEnumConstants()) {
 					if (value.name().equals(s))
@@ -1764,7 +1764,7 @@ public class ArgumentParsing {
 		 * @return This builder
 		 */
 		default ValuedArgumentSetBuilder addPatternArgument(String name, String pattern,
-			Consumer<ArgumentBuilder<Matcher, ?>> configure) {
+			Consumer<? super ArgumentBuilder<Matcher, ?>> configure) {
 			return addPatternArgument(name, Pattern.compile(pattern), configure);
 		}
 
@@ -1777,7 +1777,7 @@ public class ArgumentParsing {
 		 * @return This builder
 		 */
 		default ValuedArgumentSetBuilder addPatternArgument(String name, Pattern pattern,
-			Consumer<ArgumentBuilder<Matcher, ?>> configure) {
+			Consumer<? super ArgumentBuilder<Matcher, ?>> configure) {
 			return addArgument(name, Matcher.class, new PatternParser(pattern), configure);
 		}
 
@@ -1789,7 +1789,7 @@ public class ArgumentParsing {
 		 *        Instant-specific options
 		 * @return This builder
 		 */
-		ValuedArgumentSetBuilder addInstantArgument(String name, Consumer<InstantArgumentBuilder<?>> configure);
+		ValuedArgumentSetBuilder addInstantArgument(String name, Consumer<? super InstantArgumentBuilder<?>> configure);
 
 		/**
 		 * Adds a {@link Double}-type argument type for the parser
@@ -1798,7 +1798,7 @@ public class ArgumentParsing {
 		 * @param configure Configures the argument (optional), adding constraints and/or a default value
 		 * @return This builder
 		 */
-		default ValuedArgumentSetBuilder addDurationArgument(String name, Consumer<ArgumentBuilder<Duration, ?>> configure) {
+		default ValuedArgumentSetBuilder addDurationArgument(String name, Consumer<? super ArgumentBuilder<Duration, ?>> configure) {
 			return addArgument(name, Duration.class, (txt, __) -> {
 				return TimeUtils.parseDuration(txt).asDuration();
 			}, configure);
@@ -1812,7 +1812,7 @@ public class ArgumentParsing {
 		 *        file-specific options
 		 * @return This builder
 		 */
-		ValuedArgumentSetBuilder addFileArgument(String name, Consumer<FileArgumentBuilder<?>> configure);
+		ValuedArgumentSetBuilder addFileArgument(String name, Consumer<? super FileArgumentBuilder<?>> configure);
 
 		/**
 		 * Adds a {@link BetterFile}-type argument type for the parser
@@ -1822,7 +1822,7 @@ public class ArgumentParsing {
 		 *        file-specific options
 		 * @return This builder
 		 */
-		ValuedArgumentSetBuilder addBetterFileArgument(String name, Consumer<BetterFileArgumentBuilder<?>> configure);
+		ValuedArgumentSetBuilder addBetterFileArgument(String name, Consumer<? super BetterFileArgumentBuilder<?>> configure);
 	}
 
 	/** Parses pattern-matched argument strings for {@link ValuedArgumentSetBuilder#addPatternArgument(String, Pattern, Consumer)} */
@@ -3069,7 +3069,7 @@ public class ArgumentParsing {
 
 			@Override
 			public <T> ValuedArgumentSetBuilder addArgument(String name, Class<T> type, ArgumentValueParser<? extends T> parser,
-				Consumer<ArgumentBuilder<T, ?>> configure) {
+				Consumer<? super ArgumentBuilder<T, ?>> configure) {
 				DefaultArgBuilder<T, ?> builder = new DefaultArgBuilder<>(name, thePattern, type, parser, theParser);
 				return add3(builder, configure);
 			}
@@ -3093,17 +3093,17 @@ public class ArgumentParsing {
 			}
 
 			@Override
-			public ValuedArgumentSetBuilder addInstantArgument(String name, Consumer<InstantArgumentBuilder<?>> configure) {
+			public ValuedArgumentSetBuilder addInstantArgument(String name, Consumer<? super InstantArgumentBuilder<?>> configure) {
 				return add3(new DefaultInstantArgBuilder(name, thePattern, theParser), configure);
 			}
 
 			@Override
-			public ValuedArgumentSetBuilder addFileArgument(String name, Consumer<FileArgumentBuilder<?>> configure) {
+			public ValuedArgumentSetBuilder addFileArgument(String name, Consumer<? super FileArgumentBuilder<?>> configure) {
 				return add3(new DefaultFileArgBuilder(name, thePattern, theParser), configure);
 			}
 
 			@Override
-			public ValuedArgumentSetBuilder addBetterFileArgument(String name, Consumer<BetterFileArgumentBuilder<?>> configure) {
+			public ValuedArgumentSetBuilder addBetterFileArgument(String name, Consumer<? super BetterFileArgumentBuilder<?>> configure) {
 				return add3(new DefaultBetterFileArgBuilder(name, thePattern, theParser), configure);
 			}
 		}
