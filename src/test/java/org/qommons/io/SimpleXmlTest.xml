@@ -11,11 +11,11 @@ blah -->
 		<?INSTRUCTION ?>
 		<?INSTRUCTION CONTENT?>
 		<child00></child00>
-		<child01 attr010="&quot;Child Attribute&apos;"/>
+		<child01 attr010="&quot;Child Attribute&apos;&#169;"/>
 	</child0>
 	<child1 attr10="Multi-
 		-line attribute">
-		Text 1
+		Text 1&#x00b0;
 		<!-- Comment 1-->
 		Text &lt;2&gt;>
 	</child1>

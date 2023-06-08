@@ -14,8 +14,10 @@ import java.nio.charset.UnsupportedCharsetException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -24,6 +26,7 @@ import javax.xml.parsers.ParserConfigurationException;
 
 import org.qommons.ArrayUtils;
 import org.qommons.Named;
+import org.qommons.QommonsUtils;
 import org.w3c.dom.Attr;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -66,15 +69,19 @@ public class SimpleXMLParser {
 	public static final String CDATA_END = "]]>";
 	public static final String PROCESSING_INSTRUCTION_BEGIN = "<?";
 	public static final String PROCESSING_INSTRUCTION_END = "?>";
-	public static final String TAB = "\t";
-	public static final String AMP = "&amp;";
-	public static final String APOS = "&apos;";
-	public static final String GT = "&gt;";
-	public static final String LT = "&lt;";
-	public static final String QUOT = "&quot;";
+	public static final String NAMED_ENTITY_PREFIX = "&";
+	public static final String DECIMAL_ENTITY_PREFIX = "&#";
+	public static final String HEX_ENTITY_PREFIX = "&#x";
+	public static final Map<String, String> STANDARD_NAMED_ENTITIES = QommonsUtils.<String, String> buildMap(null)//
+		.with("quot", "\"")//
+		.with("amp", "&")//
+		.with("apos", "'")//
+		.with("gt", ">")//
+		.with("lt", "<")//
+		.getUnmodifiable();
 	private static final String NLCR = "\n\r";
 	private static final String CRNL = "\r\n";
-
+	private static final String TAB = "\t";
 
 	/** An element as given by an {@link XmlParseException} */
 	public static class LocatedXmlElement implements Named {
@@ -193,6 +200,107 @@ public class SimpleXMLParser {
 		/** @return Whether the 'standalone' attribute was specified as 'yes' or 'no', or null if it it was not specified */
 		public Boolean isStandalone() {
 			return isStandalone;
+		}
+
+		public List<String> getAttributes() {
+			if (theVersion == null) {
+				if (theEncoding == null) {
+					if (isStandalone == null)
+						return QommonsUtils.unmodifiableCopy();
+					else
+						return QommonsUtils.unmodifiableCopy(STANDALONE);
+				} else if (theEncodingNameOffset < theStandaloneNameOffset)
+					return QommonsUtils.unmodifiableCopy(ENCODING, STANDALONE);
+				else
+					return QommonsUtils.unmodifiableCopy(STANDALONE, ENCODING);
+			} else {
+				if (theEncoding == null) {
+					if (isStandalone == null)
+						return QommonsUtils.unmodifiableCopy(VERSION);
+					else if (theVersionNameOffset < theStandaloneNameOffset)
+						return QommonsUtils.unmodifiableCopy(VERSION, STANDALONE);
+					else
+						return QommonsUtils.unmodifiableCopy(STANDALONE, VERSION);
+				} else if (theVersionNameOffset < theEncodingNameOffset) {
+					if (isStandalone == null)
+						return QommonsUtils.unmodifiableCopy(VERSION, ENCODING);
+					else if (theVersionNameOffset < theStandaloneNameOffset) {
+						if (theEncodingNameOffset < theStandaloneNameOffset)
+							return QommonsUtils.unmodifiableCopy(VERSION, ENCODING, STANDALONE);
+						else
+							return QommonsUtils.unmodifiableCopy(VERSION, STANDALONE, ENCODING);
+					} else
+						return QommonsUtils.unmodifiableCopy(STANDALONE, VERSION, ENCODING);
+				} else if (isStandalone == null)
+					return QommonsUtils.unmodifiableCopy(ENCODING, VERSION);
+				else if (theEncodingNameOffset < theStandaloneNameOffset) {
+					if (theVersionNameOffset < theStandaloneNameOffset)
+						return QommonsUtils.unmodifiableCopy(ENCODING, VERSION, STANDALONE);
+					else
+						return QommonsUtils.unmodifiableCopy(ENCODING, STANDALONE, VERSION);
+				} else
+					return QommonsUtils.unmodifiableCopy(STANDALONE, ENCODING, VERSION);
+			}
+		}
+
+		public FilePosition getAttributeNamePosition(String attribute) {
+			int offset;
+			switch (attribute) {
+			case VERSION:
+				offset = theVersionNameOffset;
+				break;
+			case ENCODING:
+				offset = theEncodingNameOffset;
+				break;
+			case STANDALONE:
+				offset = theStandaloneNameOffset;
+				break;
+			default:
+				throw new IllegalArgumentException("No such attribute '" + attribute + "' on XML declaration");
+			}
+			return offset < 0 ? null : theDeclarationContent.getPosition(offset);
+		}
+
+		public PositionedContent getAttributeValue(String attribute) {
+			int start, length;
+			switch (attribute) {
+			case VERSION:
+				start = theVersionValueOffset;
+				length = start < 0 ? 0 : theVersion.length();
+				break;
+			case ENCODING:
+				start = theEncodingValueOffset;
+				length = start < 0 ? 0 : theEncoding.displayName().length();
+				break;
+			case STANDALONE:
+				start = theStandaloneValueOffset;
+				length = start < 0 ? 0 : (isStandalone.booleanValue() ? 3 : 2);
+				break;
+			default:
+				throw new IllegalArgumentException("No such attribute '" + attribute + "' on XML declaration");
+			}
+			return theDeclarationContent.subSequence(start, start + length);
+		}
+
+		public FilePosition getAttributeValueEnd(String attribute) {
+			int start, length;
+			switch (attribute) {
+			case VERSION:
+				start = theVersionValueOffset;
+				length = start < 0 ? 0 : theVersion.length();
+				break;
+			case ENCODING:
+				start = theEncodingValueOffset;
+				length = start < 0 ? 0 : theEncoding.displayName().length();
+				break;
+			case STANDALONE:
+				start = theStandaloneValueOffset;
+				length = start < 0 ? 0 : (isStandalone.booleanValue() ? 3 : 2);
+				break;
+			default:
+				throw new IllegalArgumentException("No such attribute '" + attribute + "' on XML declaration");
+			}
+			return theDeclarationContent.getPosition(start + length + 1);
 		}
 
 		public int getVersionNameOffset() {
@@ -482,6 +590,9 @@ public class SimpleXMLParser {
 		default void handleElementStart(XmlElementTerminal element) {
 		}
 
+		default void handleElementOpen(String elementName, PositionedContent openEnd) {
+		}
+
 		/**
 		 * Called when an attribute is encountered
 		 * 
@@ -675,6 +786,7 @@ public class SimpleXMLParser {
 	}
 
 	private int theTabLength = 4;
+	private final Map<String, String> theNamedEntities = new HashMap<>(STANDARD_NAMED_ENTITIES);
 
 	/** @return The number of spaces to interpret tabs as in the character numbers provided by this parser. The default is 4. */
 	public int getTabLength() {
@@ -689,6 +801,16 @@ public class SimpleXMLParser {
 		if (tabLength < 0)
 			throw new IllegalArgumentException("Tab length must not be less than zero");
 		theTabLength = tabLength;
+		return this;
+	}
+
+	public SimpleXMLParser withNamedEntity(String name, String sequence) {
+		theNamedEntities.put(name, sequence);
+		return this;
+	}
+
+	public SimpleXMLParser withNamedEntities(Map<String, String> entities) {
+		theNamedEntities.putAll(entities);
 		return this;
 	}
 
@@ -1235,8 +1357,8 @@ public class SimpleXMLParser {
 			return;
 		}
 
-		session.nextChar();
-		session.dumpSequence(); // Discard the '>'
+		session.nextChar(); // Include the '>' in the sequence
+		handler.handleElementOpen(elementName, session.dumpSequence());
 		while (true) {
 			session.mark();
 			if (session.currentChar() == '<') { // Comment, CDATA, or child element
@@ -1370,7 +1492,7 @@ public class SimpleXMLParser {
 		private int theMarkCharNumber;
 
 		private final StringBuilder theNameBuffer = new StringBuilder();
-		private final StringBuilder theBuffer = new StringBuilder();
+		private final StringBuilder theSequenceBuffer = new StringBuilder();
 		private final int[] theSequencePosition = new int[3];
 		private final List<LineContent> lines = new ArrayList<>();
 		private int lineStart;
@@ -1378,7 +1500,7 @@ public class SimpleXMLParser {
 		private final List<SpecialCharSequence> lineSpecialSequences = new ArrayList<>();
 
 		private void specialSequence(int length, String chars) {
-			lineSpecialSequences.add(new SpecialCharSequence(theBuffer.length(), length, chars));
+			lineSpecialSequences.add(new SpecialCharSequence(theSequenceBuffer.length(), length, chars));
 		}
 
 		private void newLine() {
@@ -1390,7 +1512,7 @@ public class SimpleXMLParser {
 				lineSpecialSequences.clear();
 			}
 			lines.add(new LineContent(lineStart, linePosition, seqs));
-			lineStart = theBuffer.length();
+			lineStart = theSequenceBuffer.length();
 			linePosition = thePosition;
 		}
 
@@ -1428,7 +1550,7 @@ public class SimpleXMLParser {
 					if (wasCRNL) {
 						wasCRNL = false;
 						specialSequence(1, CRNL);
-						theBuffer.append('\n');
+						theSequenceBuffer.append('\n');
 						ch = getNextStreamChar();
 						newLine();
 					} else {
@@ -1438,7 +1560,7 @@ public class SimpleXMLParser {
 							specialSequence(1, NLCR);
 							ch = getNextStreamChar();
 						}
-						theBuffer.append('\n');
+						theSequenceBuffer.append('\n');
 						newLine();
 					}
 					theLineNumber++;
@@ -1447,11 +1569,11 @@ public class SimpleXMLParser {
 				case '\t':
 					theCharNumber += theTabLength;
 					specialSequence(theTabLength, TAB);
-					theBuffer.append('\t');
+					theSequenceBuffer.append('\t');
 					ch = getNextStreamChar();
 					break;
 				default:
-					theBuffer.append(theChar);
+					theSequenceBuffer.append(theChar);
 					theCharNumber++;
 					ch = getNextStreamChar();
 				}
@@ -1487,12 +1609,12 @@ public class SimpleXMLParser {
 		}
 
 		PositionedContent dumpSequence() throws IOException, XmlParseException {
-			if (theBuffer.length() > 0)
+			if (theSequenceBuffer.length() > 0)
 				newLine();
 			LineContent[] dumped = lines.toArray(new LineContent[lines.size()]);
 			lines.clear();
-			String content = theBuffer.toString();
-			theBuffer.setLength(0);
+			String content = theSequenceBuffer.toString();
+			theSequenceBuffer.setLength(0);
 			lineStart = 0;
 			linePosition = 0;
 			FilePosition seqPos = new FilePosition(theSequencePosition[0], theSequencePosition[1], theSequencePosition[2]);
@@ -1505,13 +1627,13 @@ public class SimpleXMLParser {
 		char skipWS(ParseHandler handler) throws IOException, XmlParseException {
 			while (Character.isWhitespace(nextChar())) { //
 			}
-			if (theBuffer.length() > 0 && handler != null)
+			if (theSequenceBuffer.length() > 0 && handler != null)
 				handler.handleIgnorableWhitespace(dumpSequence());
 			return theChar;
 		}
 
 		String parseXmlContent(boolean permissive, Termination terminator) throws IOException, XmlParseException {
-			int preLen = theBuffer.length();
+			int preLen = theSequenceBuffer.length();
 			char ch = currentChar();
 			int t = 0;
 			int preTerm = -1;
@@ -1520,7 +1642,7 @@ public class SimpleXMLParser {
 				t = terminator.isTerminator(ch, preT);
 				if (t > 0) {
 					if (preT == 0)
-						preTerm = theBuffer.length();
+						preTerm = theSequenceBuffer.length();
 					if (terminator.isTerminated(t))
 						break;
 					continue;
@@ -1534,7 +1656,7 @@ public class SimpleXMLParser {
 			}
 			if (terminator.isLastTerminatorCharIncluded())
 				nextChar(); // Move past the terminator
-			return theBuffer.subSequence(preLen, preTerm).toString();
+			return theSequenceBuffer.subSequence(preLen, preTerm).toString();
 		}
 		void openElement(String name, FilePosition position) {
 			theElement = new LocatedXmlElement(theElement, name, position);
@@ -1612,98 +1734,99 @@ public class SimpleXMLParser {
 			nextChar(); // Position ourselves at the beginning of the attribute value
 		}
 
-		private final char[] HEX_SEQ = new char[] { '&', '#', 'x', '0', '0', '0', '0', ';' };
+		private final StringBuilder theEntityBuffer = new StringBuilder();
 
 		private void parseEscapeSequence() throws IOException, XmlParseException {
 			mark();
 			int ch = getNextStreamChar();
-			String seq;
-			switch (ch) {
-			case 'a':
-				ch = getNextStreamChar();
-				switch (ch) {
-				case 'm':
-					// amp
-					expectEscapeSequence("p");
-					seq = AMP;
-					theChar = '&';
-					break;
-				case 'p':
-					// apos
-					expectEscapeSequence("os");
-					seq = APOS;
-					theChar = '\'';
-					break;
-				default:
-					throwException(true, "Unrecognized escape sequence");
-					return; // Won't get here
-				}
-				break;
-			case 'g':
-				// gt
-				expectEscapeSequence("t");
-				seq = GT;
-				theChar = '>';
-				break;
-			case 'l':
-				// lt
-				expectEscapeSequence("t");
-				seq = LT;
-				theChar = '<';
-				break;
-			case 'q':
-				// quot
-				expectEscapeSequence("uot");
-				seq = QUOT;
-				theChar = '"';
-				break;
-			case '#':
-				if (getNextStreamChar() != 'x')
-					throwException(false, "'x' expected");
-
-				mark();
-				int code = 0;
-				for (int s = 3; s < 7; s++) {
+			String content;
+			if (theChar == '&') {
+				if (ch == '#') {
+					int code = 0;
 					ch = getNextStreamChar();
-					HEX_SEQ[s] = (char) ch;
-					code = code * 16 + hex(ch);
+					if (ch == 'x') { // Hex entity
+						mark();
+						theEntityBuffer.append(HEX_ENTITY_PREFIX);
+						ch = getNextStreamChar();
+						int count = 0;
+						int hex = hex(ch);
+						while (hex >= 0) {
+							count++;
+							theEntityBuffer.append((char) ch);
+							code = code * 16 + hex;
+							if (code > Character.MAX_CODE_POINT)
+								throwException(true, "Hex entity is too large--no such character");
+							ch = getNextStreamChar();
+							hex = hex(ch);
+						}
+						if (count == 0)
+							throwException(true, "One or more hexadecimal characters expected");
+					} else { // Decimal entity
+						mark();
+						theEntityBuffer.append(DECIMAL_ENTITY_PREFIX);
+						int count = 0;
+						while (ch >= '0' && ch <= '9') {
+							count++;
+							theEntityBuffer.append((char) ch);
+							code = code * 10 + ch - '0';
+							if (code > Character.MAX_CODE_POINT)
+								throwException(true, "Decimal entity is too large--no such character");
+							ch = getNextStreamChar();
+						}
+						if (count == 0)
+							throwException(true, "One or more decimal characters expected");
+					}
+					content = String.valueOf((char) code);
+				} else {
+					mark();
+					theEntityBuffer.append(NAMED_ENTITY_PREFIX);
+					int count = 0;
+					while (isNameChar(ch)) {
+						count++;
+						theEntityBuffer.append((char) ch);
+						ch = getNextStreamChar();
+					}
+					if (count == 0)
+						throwException(true, "Entity name expected");
+					String entityName = theEntityBuffer.substring(NAMED_ENTITY_PREFIX.length());
+					content = theNamedEntities.get(entityName);
+					if (content == null) {
+						throwException(true, "Unrecognized named entity: '" + entityName + "'");
+						content = "!"; // Won't get here
+					}
 				}
-
-				if (getNextStreamChar() != ';')
-					throwException(false, "';' expected");
-
-				seq = new String(HEX_SEQ);
-				theChar = (char) code;
-				break;
-			default:
+			} else if (theChar == '%') {
+				throwException(true, "Parsed entities are not supported");
+				content = "!"; // Won't get here
+			} else {
 				throwException(true, "Unrecognized escape sequence");
-				return; // Won't get here
+				content = "!"; // Won't get here
 			}
+			if (ch != ';') {
+				thePosition += theEntityBuffer.length();
+				theCharNumber += theEntityBuffer.length();
+				throwException(false, "';' expected");
+			}
+			theEntityBuffer.append(';');
+			String seq = theEntityBuffer.toString();
+			theEntityBuffer.setLength(0);
 			specialSequence(seq.length(), seq);
+			if (content.length() > 1)
+				theSequenceBuffer.append(content, 0, content.length() - 1);
+			theChar = content.charAt(content.length() - 1);
 			thePosition += seq.length() - 1;
 			theCharNumber += seq.length() - 1;
 		}
 
-		private void expectEscapeSequence(String seq) throws IOException, XmlParseException {
-			for (int c = 0; c < seq.length(); c++) {
-				if (getNextStreamChar() != seq.charAt(c))
-					throwException(true, "Unrecognized escape sequence");
-			}
-			if (getNextStreamChar() != ';')
-				throwException(false, "';' expected");
-		}
-
-		private int hex(int ch) throws XmlParseException {
+		private int hex(int ch) {
 			if (ch >= '0' && ch <= '9')
 				return ch - '0';
 			else if (ch >= 'a' && ch <= 'z')
 				return ch - 'a' + 10;
 			else if (ch >= 'A' && ch <= 'Z')
 				return ch - 'A' + 10;
-			else {
-				throwException(false, "Expected 4 hexadecimal digits for unicode escape sequence, but found " + (char) ch);
-				return 0; // Won't get here
-			}
+			else
+				return -1;
 		}
 
 		@Override

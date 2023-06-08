@@ -57,9 +57,9 @@ public class SimpleXMLParserTest {
 				new ExpectedElementContent("\n\t\t", 12, 27), //
 				new ExpectedElementStart("child01", 13, 9), //
 				new ExpectedWhitespace(" ", 13, 16), //
-				new ExpectedAttribute("attr010", 13, 17, "\"Child Attribute'", 13, 26), //
+				new ExpectedAttribute("attr010", 13, 17, "\"Child Attribute'\u00a9", 13, 26), //
 				new ExpectedElementEnd("child01", -1, -1), //
-				new ExpectedElementContent("\n\t", 13, 56), //
+				new ExpectedElementContent("\n\t", 13, 62), //
 				new ExpectedElementEnd("child0", 14, 6), //
 				new ExpectedElementContent("\n\t", 14, 13), //
 				new ExpectedElementStart("child1", 15, 5), //
