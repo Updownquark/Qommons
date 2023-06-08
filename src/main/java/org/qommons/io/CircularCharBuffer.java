@@ -48,6 +48,20 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 	}
 
 	/**
+	 * @param index the index of the character to get
+	 * @return The character in this buffer at the given index
+	 * @throws IndexOutOfBoundsException If the index is &lt;0 or beyond the number of characters in the buffer
+	 */
+	public char get(int index) throws IndexOutOfBoundsException {
+		if (index < 0 || index >= theLength)
+			throw new IndexOutOfBoundsException(index + " of " + theLength);
+		int i = theOffset + index;
+		if (i >= theBuffer.length)
+			i -= theBuffer.length;
+		return theBuffer[i];
+	}
+
+	/**
 	 * Similar to {@link Reader#read()}, returns and discards the first character in the buffer, or returns -1 if the buffer is empty
 	 * 
 	 * @return The first character in the buffer, or -1 if the buffer is empty
@@ -322,23 +336,30 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 		}
 	}
 
-	/** @return A {@link Reader} that reads (and removes) characters off the front of this buffer */
+	/** @return A {@link Reader} that reads characters from this buffer */
 	public Reader asReader() {
 		class CCBReader extends Reader {
+			private int theStreamOffset;
+
 			@Override
 			public int read() {
-				return pop() & 0xff;
+				if (theStreamOffset >= theLength)
+					return -1;
+				return get(theStreamOffset++) & 0xff;
 			}
 
 			@Override
-			public int read(char[] cbuf, int off, int len) throws IOException {
-				if (len < theLength) {
-					copyTo(0, cbuf, off, len);
-					delete(0, len);
+			public int read(char[] b, int off, int len) {
+				int remain = theLength - theStreamOffset;
+				if (remain == 0)
+					return -1;
+				else if (len < remain) {
+					copyTo(theStreamOffset, b, off, len);
+					theStreamOffset += len;
 				} else {
-					len = theLength;
-					copyTo(0, cbuf, off, theLength);
-					clear(false);
+					len = remain;
+					copyTo(theStreamOffset, b, off, remain);
+					theStreamOffset = theLength;
 				}
 				return len;
 			}
@@ -348,6 +369,34 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 			}
 		}
 		return new CCBReader();
+	}
+
+	/** @return A {@link Reader} that reads (and removes) characters off the front of this buffer */
+	public Reader asDeletingReader() {
+		class DeletingCCBReader extends Reader {
+			@Override
+			public int read() {
+				return pop() & 0xff;
+			}
+
+			@Override
+			public int read(char[] b, int off, int len) {
+				if (len < theLength) {
+					copyTo(0, b, off, len);
+					delete(0, len);
+				} else {
+					len = theLength;
+					copyTo(0, b, off, theLength);
+					clear(false);
+				}
+				return len;
+			}
+
+			@Override
+			public void close() {
+			}
+		}
+		return new DeletingCCBReader();
 	}
 
 	/** @return A {@link Writer} that appends to the end of this buffer */
