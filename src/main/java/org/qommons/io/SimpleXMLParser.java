@@ -963,6 +963,7 @@ public class SimpleXMLParser {
 					handleXmlDeclaration(session, new ParseHandler() {
 						@Override
 						public void handleDeclaration(XmlDeclaration declaration) {
+							buffer.append(declaration.getContent()).append(session.currentChar());
 							charSet[0] = declaration.getEncoding();
 						}
 					});
