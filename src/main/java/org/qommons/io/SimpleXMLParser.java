@@ -1617,7 +1617,6 @@ public class SimpleXMLParser {
 			String content = theSequenceBuffer.toString();
 			theSequenceBuffer.setLength(0);
 			lineStart = 0;
-			linePosition = 0;
 			FilePosition seqPos = new FilePosition(theSequencePosition[0], theSequencePosition[1], theSequencePosition[2]);
 			theSequencePosition[0] = thePosition;
 			theSequencePosition[1] = theLineNumber;
