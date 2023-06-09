@@ -3,8 +3,8 @@ package org.qommons.config;
 import java.util.List;
 
 import org.qommons.Named;
-import org.qommons.io.PositionedContent;
 import org.qommons.io.ErrorReporting;
+import org.qommons.io.PositionedContent;
 
 /** A type of values that can be parsed from attribute or element text values */
 public interface QonfigValueType extends Named, FileSourced {
@@ -160,6 +160,11 @@ public interface QonfigValueType extends Named, FileSourced {
 		@Override
 		public String getName() {
 			return theName;
+		}
+
+		/** @return The type possibilities in this one-of */
+		public List<QonfigValueType> getComponents() {
+			return theComponents;
 		}
 
 		@Override
