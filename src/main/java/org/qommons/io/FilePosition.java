@@ -2,6 +2,8 @@ package org.qommons.io;
 
 /** The position of a single character in a text file */
 public class FilePosition {
+	public static final FilePosition START = new FilePosition(0, 0, 0);
+
 	private final int thePosition;
 	private final int theLineNumber;
 	private final int theCharNumber;
