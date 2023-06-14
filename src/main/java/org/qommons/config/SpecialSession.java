@@ -1,7 +1,5 @@
 package org.qommons.config;
 
-import java.util.function.Supplier;
-
 import org.qommons.MultiInheritanceSet;
 import org.qommons.config.QonfigInterpreterCore.CoreSession;
 import org.qommons.io.ErrorReporting;
@@ -76,30 +74,8 @@ public interface SpecialSession<QIS extends SpecialSession<QIS>> extends Abstrac
 	}
 
 	@Override
-	default Object get(String sessionKey) {
-		return getWrapped().get(sessionKey);
-	}
-
-	@Override
-	default <T> T get(String sessionKey, Class<? super T> type) {
-		return getWrapped().get(sessionKey, type);
-	}
-
-	@Override
-	default QIS put(String sessionKey, Object value) {
-		getWrapped().put(sessionKey, value);
-		return (QIS) this;
-	}
-
-	@Override
-	default QIS putLocal(String sessionKey, Object value) {
-		getWrapped().putLocal(sessionKey, value);
-		return (QIS) this;
-	}
-
-	@Override
-	default <T> T computeIfAbsent(String sessionKey, Supplier<T> creator) {
-		return getWrapped().computeIfAbsent(sessionKey, creator);
+	default SessionValues values() {
+		return getWrapped().values();
 	}
 
 	@Override

@@ -15,9 +15,13 @@ import org.qommons.ClassMap.TypeMatch;
 import org.qommons.MultiInheritanceSet;
 import org.qommons.QommonsUtils;
 import org.qommons.Transaction;
+import org.qommons.collect.BetterHashMap;
+import org.qommons.collect.BetterMap;
+import org.qommons.collect.CollectionElement;
+import org.qommons.collect.MapEntryHandle;
 import org.qommons.io.ErrorReporting;
-import org.qommons.io.LocatedPositionedContent;
 import org.qommons.io.LocatedFilePosition;
+import org.qommons.io.LocatedPositionedContent;
 
 /** A class for interpreting parsed {@link QonfigDocument}s into useful structures */
 public class QonfigInterpreterCore {
@@ -30,8 +34,7 @@ public class QonfigInterpreterCore {
 		private final ExceptionThrowingReporting theReporting;
 		private final MultiInheritanceSet<QonfigElementOrAddOn> theTypes;
 		private final int theChildIndex;
-		private final Map<String, Object> theValues;
-		private final Set<String> theLocalValueKeys;
+		private final SessionValuesImpl theValues;
 		private final ClassMap<SpecialSession<?>> theToolkitSessions;
 
 		/**
@@ -52,8 +55,7 @@ public class QonfigInterpreterCore {
 			theReporting = reporting;
 			theFocusType = root.getType();
 			theTypes = MultiInheritanceSet.empty();
-			theValues = new HashMap<>();
-			theLocalValueKeys = new HashSet<>();
+			theValues = new SessionValuesImpl();
 			theChildIndex = 0;
 			theToolkitSessions = new ClassMap<>();
 		}
@@ -81,12 +83,9 @@ public class QonfigInterpreterCore {
 			if (parent.getElement() == element) {
 				theReporting = parent.theReporting;
 				theValues = parent.theValues;
-				theLocalValueKeys = parent.theLocalValueKeys;
 			} else {
 				theReporting = parent.theReporting.at(element.getFilePosition());
-				theValues = new HashMap<>(parent.theValues);
-				theValues.keySet().removeAll(parent.theLocalValueKeys);
-				theLocalValueKeys = new HashSet<>();
+				theValues = parent.theValues.createChild();
 			}
 		}
 
@@ -335,32 +334,8 @@ public class QonfigInterpreterCore {
 		}
 
 		@Override
-		public Object get(String sessionKey) {
-			return theValues.get(sessionKey);
-		}
-
-		@Override
-		public <T> T get(String sessionKey, Class<? super T> type) {
-			Object value = theValues.get(sessionKey);
-			return (T) type.cast(value);
-		}
-
-		@Override
-		public CoreSession put(String sessionKey, Object value) {
-			theValues.put(sessionKey, value);
-			return this;
-		}
-
-		@Override
-		public CoreSession putLocal(String sessionKey, Object value) {
-			theValues.put(sessionKey, value);
-			theLocalValueKeys.add(sessionKey);
-			return this;
-		}
-
-		@Override
-		public <T> T computeIfAbsent(String sessionKey, Supplier<T> creator) {
-			return (T) theValues.computeIfAbsent(sessionKey, __ -> creator.get());
+		public SessionValues values() {
+			return theValues;
 		}
 
 		<T> QonfigModifierHolder<T>[] getModifiers(Class<T> type) throws QonfigInterpretationException {
@@ -415,6 +390,145 @@ public class QonfigInterpreterCore {
 		@Override
 		public String toString() {
 			return "Interpreting " + theElement + " with " + theFocusType;
+		}
+	}
+
+	static class SessionValuesImpl implements SessionValues {
+		interface ValueContainer {
+			Object getValue();
+
+			SessionValues.ValueSource getSource();
+		}
+
+		static class Root implements ValueContainer {
+			Object value;
+			final boolean local;
+
+			Root(Object value, boolean local) {
+				this.value = value;
+				this.local = local;
+			}
+
+			Root set(Object v) {
+				value = v;
+				return this;
+			}
+
+			@Override
+			public Object getValue() {
+				return value;
+			}
+
+			@Override
+			public SessionValuesImpl.ValueSource getSource() {
+				return local ? SessionValues.ValueSource.Local : SessionValuesImpl.ValueSource.Own;
+			}
+
+			@Override
+			public String toString() {
+				return getSource() + ": " + getValue();
+			}
+		}
+
+		static class Inherited implements ValueContainer {
+			private final CollectionElement<ValueContainer> container;
+
+			Inherited(CollectionElement<ValueContainer> container) {
+				this.container = container;
+			}
+
+			@Override
+			public Object getValue() {
+				return container.get().getValue();
+			}
+
+			@Override
+			public SessionValuesImpl.ValueSource getSource() {
+				return SessionValuesImpl.ValueSource.Inherited;
+			}
+
+			@Override
+			public String toString() {
+				return getSource() + ": " + getValue();
+			}
+		}
+
+		static Object open(ValueContainer container) {
+			return container == null ? null : container.getValue();
+		}
+
+		private final SessionValuesImpl theParent;
+		private final BetterMap<String, ValueContainer> theValues;
+
+		SessionValuesImpl() { // For root
+			theParent = null;
+			theValues = BetterHashMap.build().build();
+		}
+
+		private SessionValuesImpl(SessionValuesImpl parent) {
+			theParent = parent;
+			theValues = BetterHashMap.build().build();
+			for (MapEntryHandle<String, ValueContainer> entry = theParent.theValues.getTerminalEntry(true); //
+				entry != null; //
+				entry = theParent.theValues.getAdjacentEntry(entry.getElementId(), true)) {
+				if (entry.getValue().getSource() != SessionValues.ValueSource.Local)
+					theValues.put(entry.getKey(), new Inherited(entry));
+			}
+		}
+
+		SessionValuesImpl createChild() {
+			return new SessionValuesImpl(this);
+		}
+
+		@Override
+		public Object get(String sessionKey, boolean localOnly) {
+			return open(localOnly ? theValues.get(sessionKey) : find(sessionKey, true));
+		}
+
+		@Override
+		public <T> T get(String sessionKey, Class<? super T> type) {
+			Object value = get(sessionKey);
+			return (T) type.cast(value);
+		}
+
+		private ValueContainer find(String sessionKey, boolean local) {
+			return theValues.compute(sessionKey, (k, old) -> {
+				if (old == null)
+					return theParent == null ? null : theParent.find(k, false);
+				else if (local || !(old instanceof Root) || !((Root) old).local)
+					return old;
+				else
+					return null;
+			});
+		}
+
+		@Override
+		public SessionValuesImpl put(String sessionKey, Object value) {
+			theValues.compute(sessionKey, (k, old) -> {
+				if (old == null || !(old instanceof Root) || ((Root) old).local)
+					return new Root(value, false);
+				else
+					return ((Root) old).set(value);
+			});
+			return this;
+		}
+
+		@Override
+		public SessionValuesImpl putLocal(String sessionKey, Object value) {
+			theValues.compute(sessionKey, (k, old) -> {
+				if (old == null)
+					return new Root(value, true);
+				else if (old instanceof Root && ((Root) old).local)
+					return ((Root) old).set(value);
+				else
+					throw new IllegalStateException("Cannot convert an inheritable value into a local one: " + sessionKey);
+			});
+			return this;
+		}
+
+		@Override
+		public <T> T computeIfAbsent(String sessionKey, Supplier<T> creator) {
+			return (T) open(theValues.compute(sessionKey, (k, old) -> old == null ? new Root(creator.get(), false) : old));
 		}
 	}
 

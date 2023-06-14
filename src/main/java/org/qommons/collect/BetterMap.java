@@ -525,8 +525,16 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 				value.accept(newValue);
 				return newValue;
 			}, null, null, false, null, null);
-			if (value.isPresent())
+			if (value.isPresent()) {
+				if (value.get() == null) {// Should not add
+					try {
+						mutableEntry(entry.getElementId()).remove();
+					} catch (IllegalArgumentException e) {
+						return null;
+					}
+				}
 				return value.get();// Added
+			}
 			MutableMapEntryHandle<K, V> mutableEntry;
 			try {
 				mutableEntry = mutableEntry(entry.getElementId());

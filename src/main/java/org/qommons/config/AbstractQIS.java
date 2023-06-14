@@ -12,15 +12,15 @@ import org.qommons.collect.BetterList;
 import org.qommons.config.QonfigElement.QonfigValue;
 import org.qommons.ex.ExFunction;
 import org.qommons.io.ErrorReporting;
-import org.qommons.io.LocatedPositionedContent;
 import org.qommons.io.LocatedFilePosition;
+import org.qommons.io.LocatedPositionedContent;
 
 /**
  * An interpretation session with lots of capabilities for interpreting {@link QonfigElement}s
  * 
  * @param <QIS> The sub-type of the session
  */
-public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
+public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends SessionValues {
 	/** @return The element being interpreted */
 	QonfigElement getElement();
 
@@ -780,45 +780,35 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> {
 	/** @return The error reporting for this session */
 	ErrorReporting reporting();
 
-	/**
-	 * @param sessionKey The key to get data for
-	 * @return Data stored for the given key in this session
-	 */
-	Object get(String sessionKey);
+	/** @return The values for this session */
+	SessionValues values();
 
-	/**
-	 * @param <T> The expected type of the value
-	 * @param sessionKey The key to get data for
-	 * @param type The expected type of the value. The super wildcard is to accommodate generics.
-	 * @return Data stored for the given key in this session
-	 */
-	<T> T get(String sessionKey, Class<? super T> type);
+	@Override
+	default Object get(String sessionKey, boolean local) {
+		return values().get(sessionKey, local);
+	}
 
-	/**
-	 * Puts a value into this session that will be visible to all descendants of this session (created after this call)
-	 * 
-	 * @param sessionKey The key to store data for
-	 * @param value The data to store for the given key in this session
-	 * @return This session
-	 */
-	QIS put(String sessionKey, Object value);
+	@Override
+	default <T> T get(String sessionKey, Class<? super T> type){
+		return values().get(sessionKey, type);
+	}
 
-	/**
-	 * Puts a value into this session that will be visible only to sessions "parallel" to this session--sessions for the same element
-	 * 
-	 * @param sessionKey The key to store data for
-	 * @param value The data to store for the given key in this session
-	 * @return This session
-	 */
-	QIS putLocal(String sessionKey, Object value);
+	@Override
+	default QIS put(String sessionKey, Object value){
+		values().put(sessionKey, value);
+		return (QIS) this;
+	}
 
-	/**
-	 * @param <T> The type of the data
-	 * @param sessionKey The key to store data for
-	 * @param creator Creates data to store for the given key in this session (if absent)
-	 * @return The previous or new value
-	 */
-	<T> T computeIfAbsent(String sessionKey, Supplier<T> creator);
+	@Override
+	default QIS putLocal(String sessionKey, Object value){
+		values().putLocal(sessionKey, value);
+		return (QIS) this;
+	}
+
+	@Override
+	default <T> T computeIfAbsent(String sessionKey, Supplier<T> creator){
+		return values().computeIfAbsent(sessionKey, creator);
+	}
 
 	/** Implementation methods for {@link AbstractQIS} that I didn't want to expose */
 	class Impl {
