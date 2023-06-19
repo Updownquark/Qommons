@@ -213,7 +213,7 @@ public interface PositionedContent extends CharSequence {
 
 		@Override
 		public String toString() {
-			return "";
+			return theContent;
 		}
 	}
 }

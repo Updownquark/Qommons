@@ -426,8 +426,9 @@ public class StrictXmlReader implements Named, Transaction {
 						offset = 0;
 						end = 0;
 					} else {
-						for (end = content.length() - 1; end >= 0 && Character.isWhitespace(content.charAt(end)); end--) {
-						}
+						end = content.length();
+						for (int c = content.length() - 1; end >= 0 && Character.isWhitespace(content.charAt(c)); c--)
+							end = c;
 					}
 					return pos.subSequence(offset, end);
 				} else if (found == null)
@@ -470,6 +471,11 @@ public class StrictXmlReader implements Named, Transaction {
 			if (index != 0)
 				throw new IndexOutOfBoundsException(index + " of 0");
 			return thePosition;
+		}
+
+		@Override
+		public String toString() {
+			return "";
 		}
 	}
 

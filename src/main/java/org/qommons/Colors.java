@@ -1425,7 +1425,7 @@ public class Colors {
 	 * Performs a somewhat subjective analysis of a color to determine how dark it looks to a user
 	 * 
 	 * @param color The color to analyze
-	 * @return The darkness of the color
+	 * @return The darkness of the color on a scale of 1 (completely black) to 0 (completely white)
 	 */
 	public static float getDarkness(Color color) {
 		float ret = color.getRed() + color.getGreen() + color.getBlue() / 10;
