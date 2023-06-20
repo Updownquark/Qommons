@@ -51,6 +51,11 @@ public interface LocatedPositionedContent extends PositionedContent {
 		}
 
 		@Override
+		public int getSourceLength(int from, int to) {
+			return theContent.getSourceLength(from, to);
+		}
+
+		@Override
 		public char charAt(int index) {
 			return theContent.charAt(index);
 		}

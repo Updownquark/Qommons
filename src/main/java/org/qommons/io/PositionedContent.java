@@ -11,7 +11,15 @@ public interface PositionedContent extends CharSequence {
 	/**
 	 * @param from The start index (inclusive) to get source content for
 	 * @param to The end index (exclusive) to get source content for
-	 * @return The text specified in the source file that was parsed into the character in this sequence between the two indexes
+	 * @return The number of text characters specified in the source file that was parsed into the characters in this sequence between the
+	 *         two indexes
+	 */
+	int getSourceLength(int from, int to);
+
+	/**
+	 * @param from The start index (inclusive) to get source content for
+	 * @param to The end index (exclusive) to get source content for
+	 * @return The text specified in the source file that was parsed into the characters in this sequence between the two indexes
 	 */
 	CharSequence getSourceContent(int from, int to);
 
@@ -91,6 +99,12 @@ public interface PositionedContent extends CharSequence {
 		}
 
 		@Override
+		public int getSourceLength(int from, int to) {
+			checkRange(from, to);
+			return theWrapped.getSourceLength(theStart + from, theStart + to);
+		}
+
+		@Override
 		public FilePosition getPosition(int index) {
 			checkIndex(index, true);
 			return theWrapped.getPosition(theStart + index);
@@ -139,6 +153,13 @@ public interface PositionedContent extends CharSequence {
 		public CharSequence getSourceContent(int from, int to) {
 			if (from == 0 && to == 0)
 				return this;
+			throw new IndexOutOfBoundsException(from + " to " + to + " of 0");
+		}
+
+		@Override
+		public int getSourceLength(int from, int to) {
+			if (from == 0 && to == 0)
+				return 0;
 			throw new IndexOutOfBoundsException(from + " to " + to + " of 0");
 		}
 
@@ -195,6 +216,11 @@ public interface PositionedContent extends CharSequence {
 		@Override
 		public CharSequence getSourceContent(int from, int to) {
 			return theContent.substring(from, to);
+		}
+
+		@Override
+		public int getSourceLength(int from, int to) {
+			return to - from;
 		}
 
 		@Override

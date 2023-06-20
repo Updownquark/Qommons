@@ -467,6 +467,13 @@ public class StrictXmlReader implements Named, Transaction {
 		}
 
 		@Override
+		public int getSourceLength(int from, int to) {
+			if (from != 0 || to != 0)
+				throw new IndexOutOfBoundsException(from + " to " + to + " of 0");
+			return 0;
+		}
+
+		@Override
 		public FilePosition getPosition(int index) {
 			if (index != 0)
 				throw new IndexOutOfBoundsException(index + " of 0");

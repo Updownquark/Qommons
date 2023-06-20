@@ -1878,6 +1878,24 @@ public class SimpleXMLParser {
 		}
 
 		@Override
+		public int getSourceLength(int from, int to) {
+			if (from < 0 || from > to || to > theContent.length())
+				throw new IndexOutOfBoundsException(from + " to " + to + " of " + theContent.length());
+			else if (from == to)
+				return 0;
+			int line = getLine(from);
+			if (to == from + 1) // Single character
+				return theLines[line].getSourceCharacter(from, theContent).length();
+			int total = 0;
+			while (line < theLines.length && to > theLines[line].contentIndex) {
+				int lineEnd = line + 1 < theLines.length ? theLines[line + 1].contentIndex : to;
+				total += theLines[line].getSourceLength(from, Math.min(lineEnd, to));
+				line++;
+			}
+			return total;
+		}
+
+		@Override
 		public CharSequence getSourceContent(int from, int to) {
 			if (from < 0 || from > to || to > theContent.length())
 				throw new IndexOutOfBoundsException(from + " to " + to + " of " + theContent.length());
@@ -1890,6 +1908,7 @@ public class SimpleXMLParser {
 			while (line < theLines.length && to > theLines[line].contentIndex) {
 				int lineEnd = line + 1 < theLines.length ? theLines[line + 1].contentIndex : to;
 				theLines[line].getSourceContent(from, Math.min(lineEnd, to), str, theContent);
+				line++;
 			}
 			return str.toString();
 		}
@@ -1938,7 +1957,29 @@ public class SimpleXMLParser {
 				return new SingleCharSequence(content.charAt(index));
 		}
 
+		int getSourceLength(int from, int to) {
+			if (specialSequences.length == 0)
+				return to - from;
+			int seqIdx;
+			if (from <= contentIndex)
+				seqIdx = 0;
+			else {
+				seqIdx = getSeqIndex(from);
+				if (seqIdx < 0)
+					seqIdx = -seqIdx;
+			}
+			int len = 0, seqCount = 0;
+			for (int s = seqIdx; s < specialSequences.length && specialSequences[s].contentIndex < to; s++) {
+				len += specialSequences[s].contentLength;
+				seqCount++;
+			}
+			len += to - from - seqCount;
+			return len;
+		}
+
 		CharSequence getSourceContent(int from, int to, StringBuilder str, String content) {
+			if (specialSequences.length == 0)
+				return content.subSequence(from, to);
 			int seqIdx;
 			if (from <= contentIndex)
 				seqIdx = 0;
