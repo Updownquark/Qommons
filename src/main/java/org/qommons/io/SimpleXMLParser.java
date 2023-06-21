@@ -67,11 +67,17 @@ public class SimpleXMLParser {
 	public static final String CDATA_START = "<![CDATA[";
 	/** Constant for the declaration of the end of a CDATA section */
 	public static final String CDATA_END = "]]>";
+	/** Constant for the declaration of the beginning of a processing instruction */
 	public static final String PROCESSING_INSTRUCTION_BEGIN = "<?";
+	/** Constant for the declaration of the end of a processing instruction */
 	public static final String PROCESSING_INSTRUCTION_END = "?>";
+	/** Constant for the declaration of a named entity */
 	public static final String NAMED_ENTITY_PREFIX = "&";
+	/** Constant for the declaration of a numerically-specified character in decimal notation */
 	public static final String DECIMAL_ENTITY_PREFIX = "&#";
+	/** Constant for the declaration of a numerically-specified character in hexadecimal notation */
 	public static final String HEX_ENTITY_PREFIX = "&#x";
+	/** Standard named entities in XML by their representation (e.g. "amp" for "&amp;", specified by "&amp;amp;") */
 	public static final Map<String, String> STANDARD_NAMED_ENTITIES = QommonsUtils.<String, String> buildMap(null)//
 		.with("quot", "\"")//
 		.with("amp", "&")//
@@ -138,7 +144,9 @@ public class SimpleXMLParser {
 		}
 	}
 
+	/** Super interface for any XML structure passed to a {@link ParseHandler handler} */
 	public interface XmlComponent {
+		/** @return The character content defining the entire XML structure */
 		PositionedContent getContent();
 	}
 
@@ -162,12 +170,19 @@ public class SimpleXMLParser {
 		 * @param encoding The character set encoding specified in the declaration, or null if none was specified. This class assumes UTF-8
 		 *        encoding if not specified.
 		 * @param standalone Whether the 'standalone' attribute was specified as 'yes' or 'no', or null if it it was not specified
-		 * @param versionNamePosition The position of the start of the "version" attribute name, if specified
-		 * @param versionValuePosition The position of the start of the "version" attribute value, if specified
-		 * @param encodingNamePosition The position of the start of the "encoding" attribute name, if specified
-		 * @param encodingValuePosition The position of the start of the "encoding" attribute value, if specified
-		 * @param standaloneNamePosition The position of the start of the "standalone" attribute name, if specified
-		 * @param standaloneValuePosition The position of the start of the "standalone" attribute value, if specified
+		 * @param declarationContent The text content declaring the XML declaration
+		 * @param versionNameOffset The position of the start of the "version" attribute name relative to the start of the declaration, or
+		 *        -1 if not specified
+		 * @param versionValueOffset The position of the start of the "version" attribute value relative to the start of the declaration, or
+		 *        -1 if not specified
+		 * @param encodingNameOffset The position of the start of the "encoding" attribute name relative to the start of the declaration, or
+		 *        -1 if not specified
+		 * @param encodingValueOffset The position of the start of the "encoding" attribute value relative to the start of the declaration,
+		 *        or -1 if not specified
+		 * @param standaloneNameOffset The position of the start of the "standalone" attribute name relative to the start of the
+		 *        declaration, or -1 if not specified
+		 * @param standaloneValueOffset The position of the start of the "standalone" attribute value relative to the start of the
+		 *        declaration, or -1 if not specified
 		 */
 		public XmlDeclaration(String version, Charset encoding, Boolean standalone, PositionedContent declarationContent, //
 			int versionNameOffset, int versionValueOffset, int encodingNameOffset, int encodingValueOffset, int standaloneNameOffset,
@@ -202,6 +217,14 @@ public class SimpleXMLParser {
 			return isStandalone;
 		}
 
+		/**
+		 * @return The "attributes" specified on this declaration, in order. Each element will be
+		 *         <ul>
+		 *         <li>{@link SimpleXMLParser#VERSION version}</li>
+		 *         <li>{@link SimpleXMLParser#ENCODING encoding}</li>
+		 *         <li>or {@link SimpleXMLParser#STANDALONE standalone}</li>
+		 *         </ul>
+		 */
 		public List<String> getAttributes() {
 			if (theVersion == null) {
 				if (theEncoding == null) {
@@ -243,6 +266,15 @@ public class SimpleXMLParser {
 			}
 		}
 
+		/**
+		 * @param attribute The "attribute" to get the name position for. Must be
+		 *        <ul>
+		 *        <li>{@link SimpleXMLParser#VERSION version}</li>
+		 *        <li>{@link SimpleXMLParser#ENCODING encoding}</li>
+		 *        <li>or {@link SimpleXMLParser#STANDALONE standalone}</li>
+		 *        </ul>
+		 * @return The position of the name of the given "attribute" in this declaration, or null if it was not specified
+		 */
 		public FilePosition getAttributeNamePosition(String attribute) {
 			int offset;
 			switch (attribute) {
@@ -261,6 +293,15 @@ public class SimpleXMLParser {
 			return offset < 0 ? null : theDeclarationContent.getPosition(offset);
 		}
 
+		/**
+		 * @param attribute The "attribute" to get the value content for. Must be
+		 *        <ul>
+		 *        <li>{@link SimpleXMLParser#VERSION version}</li>
+		 *        <li>{@link SimpleXMLParser#ENCODING encoding}</li>
+		 *        <li>or {@link SimpleXMLParser#STANDALONE standalone}</li>
+		 *        </ul>
+		 * @return The value content of the given "attribute" in this declaration, or null if it was not specified
+		 */
 		public PositionedContent getAttributeValue(String attribute) {
 			int start, length;
 			switch (attribute) {
@@ -282,6 +323,15 @@ public class SimpleXMLParser {
 			return theDeclarationContent.subSequence(start, start + length);
 		}
 
+		/**
+		 * @param attribute The "attribute" to get the end position for. Must be
+		 *        <ul>
+		 *        <li>{@link SimpleXMLParser#VERSION version}</li>
+		 *        <li>{@link SimpleXMLParser#ENCODING encoding}</li>
+		 *        <li>or {@link SimpleXMLParser#STANDALONE standalone}</li>
+		 *        </ul>
+		 * @return The position of the end quote of the value of the given "attribute" in this declaration, or null if it was not specified
+		 */
 		public FilePosition getAttributeValueEnd(String attribute) {
 			int start, length;
 			switch (attribute) {
@@ -303,26 +353,32 @@ public class SimpleXMLParser {
 			return theDeclarationContent.getPosition(start + length + 1);
 		}
 
+		/** @return The offset of the name of the {@link SimpleXMLParser#VERSION version} attribute, or -1 if it was not specified */
 		public int getVersionNameOffset() {
 			return theVersionNameOffset;
 		}
 
+		/** @return The offset of the value of the {@link SimpleXMLParser#VERSION version} attribute, or -1 if it was not specified */
 		public int getVersionValueOffset() {
 			return theVersionValueOffset;
 		}
 
+		/** @return The offset of the name of the {@link SimpleXMLParser#ENCODING encoding} attribute, or -1 if it was not specified */
 		public int getEncodingNameOffset() {
 			return theEncodingNameOffset;
 		}
 
+		/** @return The offset of the value of the {@link SimpleXMLParser#ENCODING encoding} attribute, or -1 if it was not specified */
 		public int getEncodingValueOffset() {
 			return theEncodingValueOffset;
 		}
 
+		/** @return The offset of the name of the {@link SimpleXMLParser#STANDALONE standalone} attribute, or -1 if it was not specified */
 		public int getStandaloneNameOffset() {
 			return theStandaloneNameOffset;
 		}
 
+		/** @return The offset of the value of the {@link SimpleXMLParser#STANDALONE standalone} attribute, or -1 if it was not specified */
 		public int getStandaloneValueOffset() {
 			return theStandaloneValueOffset;
 		}
@@ -382,25 +438,40 @@ public class SimpleXMLParser {
 		}
 	}
 
+	/**
+	 * <p>
+	 * An XML processing instruction parsed by a {@link SimpleXMLParser}.
+	 * </p>
+	 * <p>
+	 * A processing instruction is of the form <code>&lt;?TARGET VALUE?></code>, where VALUE is optional
+	 */
 	public static class XmlProcessingInstruction implements XmlComponent {
 		private final String theTargetName;
 		private final int theValueOffset;
 		private final PositionedContent theContent;
 
+		/**
+		 * @param targetName The name of the processing instruction's target
+		 * @param contentOffset The offset of the processing instruction's content, or -1 if there was no content
+		 * @param content The text content defining the processing instruction, including <code>&lt;?</code> and <code>?></code>
+		 */
 		public XmlProcessingInstruction(String targetName, int contentOffset, PositionedContent content) {
 			theTargetName = targetName;
 			theValueOffset = contentOffset;
 			theContent = content;
 		}
 
+		/** @return The name of the processing instruction's target */
 		public String getTargetName() {
 			return theTargetName;
 		}
 
+		/** @return The offset of the processing instruction's content, or -1 if there was no content */
 		public int getValueOffset() {
 			return theValueOffset;
 		}
 
+		/** @return The text content defining the processing instruction */
 		public FilePosition getTargetPosition() {
 			return theContent.getPosition(PROCESSING_INSTRUCTION_END.length());
 		}
@@ -410,11 +481,13 @@ public class SimpleXMLParser {
 			return theContent;
 		}
 
+		/** @return The text content containing the processing instruction's target */
 		public PositionedContent getTargetContent() {
 			return theContent.subSequence(PROCESSING_INSTRUCTION_BEGIN.length(),
 				PROCESSING_INSTRUCTION_BEGIN.length() + theTargetName.length());
 		}
 
+		/** @return The text content containing the processing instruction's value, or null if no value was specified */
 		public PositionedContent getValueContent() {
 			return theValueOffset < 0 ? null
 				: theContent.subSequence(theValueOffset, theContent.length() - PROCESSING_INSTRUCTION_END.length());
@@ -426,9 +499,11 @@ public class SimpleXMLParser {
 		}
 	}
 
+	/** An XML comment parsed by a {@link SimpleXMLParser} */
 	public static class XmlComment implements XmlComponent {
 		private final PositionedContent theContent;
 
+		/** @param content The text content defining the comment, including <code>&lt;!--</code> and <code>--></code> */
 		public XmlComment(PositionedContent content) {
 			theContent = content;
 		}
@@ -438,6 +513,7 @@ public class SimpleXMLParser {
 			return theContent;
 		}
 
+		/** @return The text content of the comment, between the opening <code>&lt;!--</code> and the closing <code>--></code> */
 		public PositionedContent getValueContent() {
 			return theContent.subSequence(COMMENT_START.length(), theContent.length() - COMMENT_END.length());
 		}
@@ -448,14 +524,21 @@ public class SimpleXMLParser {
 		}
 	}
 
+	/** Represents an open or close tag of an XML element being parsed by a {@link SimpleXMLParser} */
 	public static class XmlElementTerminal implements XmlComponent, Named {
 		private final String theName;
 		private final int theNameOffset;
 		private final PositionedContent theContent;
 
-		public XmlElementTerminal(String elementName, int targetOffset, PositionedContent content) {
+		/**
+		 * @param elementName The name of the element
+		 * @param nameOffset The offset of the name of the element in the open or close tag
+		 * @param content The content defining the element's open (everything between and including the initial <code>&lt;</code> and the
+		 *        element's name) or close tag (everything between and including <code>&lt;/</code> and <code>></code>
+		 */
+		public XmlElementTerminal(String elementName, int nameOffset, PositionedContent content) {
 			theName = elementName;
-			theNameOffset = targetOffset;
+			theNameOffset = nameOffset;
 			theContent = content;
 		}
 
@@ -464,10 +547,12 @@ public class SimpleXMLParser {
 			return theName;
 		}
 
+		/** @return The offset of the name of the element in the open or close tag */
 		public int getNameOffset() {
 			return theNameOffset;
 		}
 
+		/** @return The position of the beginning of the element's name */
 		public FilePosition getNamePosition() {
 			if (theNameOffset < 0)
 				return null; // Self-closing tag
@@ -479,6 +564,7 @@ public class SimpleXMLParser {
 			return theContent;
 		}
 
+		/** @return The text content containing the element's name */
 		public PositionedContent getNameContent() {
 			return theContent.subSequence(theNameOffset);
 		}
@@ -489,11 +575,18 @@ public class SimpleXMLParser {
 		}
 	}
 
+	/** An XML attribute parsed by a {@link SimpleXMLParser} */
 	public static class XmlAttribute implements XmlComponent, Named {
 		private final String theName;
 		private final int theValueStartOffset;
 		private final PositionedContent theContent;
 
+		/**
+		 * @param attributeName The name of the attribute
+		 * @param valueStartOffset The offset of the attribute's value in its declaration
+		 * @param content The content defining the attribute, everything between and including the attribute name and the terminal
+		 *        <code>"</code>
+		 */
 		public XmlAttribute(String attributeName, int valueStartOffset, PositionedContent content) {
 			theName = attributeName;
 			theValueStartOffset = valueStartOffset;
@@ -505,10 +598,12 @@ public class SimpleXMLParser {
 			return theName;
 		}
 
+		/** @return The position of the start of the attribute's name */
 		public FilePosition getNamePosition() {
 			return theContent.getPosition(0);
 		}
 
+		/** @return The offset of the attribute's value in its declaration */
 		public int getValueStartOffset() {
 			return theValueStartOffset;
 		}
@@ -518,6 +613,7 @@ public class SimpleXMLParser {
 			return theContent;
 		}
 
+		/** @return The text content containing the value of the attribute */
 		public PositionedContent getValueContent() {
 			return theContent.subSequence(theValueStartOffset, theContent.length() - 1);
 		}
@@ -528,9 +624,14 @@ public class SimpleXMLParser {
 		}
 	}
 
+	/** An XML CDATA structure parsed by a {@link SimpleXMLParser} */
 	public static class XmlCdata implements XmlComponent {
 		private final PositionedContent theContent;
 
+		/**
+		 * @param content The content defining the CDATA, everything between and including the terminal {@link SimpleXMLParser#CDATA_START
+		 *        &lt;![CDATA[} and {@link SimpleXMLParser#CDATA_END ]]>}
+		 */
 		public XmlCdata(PositionedContent content) {
 			theContent = content;
 		}
@@ -540,6 +641,7 @@ public class SimpleXMLParser {
 			return theContent;
 		}
 
+		/** @return The text content containing the character data in the CDATA structure */
 		public PositionedContent getValueContent() {
 			return theContent.subSequence(CDATA_START.length(), theContent.length() - CDATA_END.length());
 		}
@@ -564,11 +666,7 @@ public class SimpleXMLParser {
 		/**
 		 * Called when an XML processing instruction is encountered: <code>&lt;?TARGET?></code> or <code>&lt;?TARGET CONTENT?></code>.
 		 * 
-		 * @param target The target of the instruction
-		 * @param targetPosition The position of the target instruction
-		 * @param content The positioned content of the instruction, or null if no content is specified. This will only be null if the
-		 *        terminal '?>' IMMEDIATELY follows the TARGET, with no whitespace. If any whitespace exists between the TARGET and the
-		 *        terminal '?>', the content will be all of the characters between the TARGET and '?>'.
+		 * @param pi The processing instruction
 		 */
 		default void handleProcessingInstruction(XmlProcessingInstruction pi) {
 		}
@@ -584,21 +682,24 @@ public class SimpleXMLParser {
 		/**
 		 * Called when the declaration of a root or a child element is encountered
 		 * 
-		 * @param name The name of the element
-		 * @param position The position of the element's name in its open tag
+		 * @param element The element
 		 */
 		default void handleElementStart(XmlElementTerminal element) {
 		}
 
+		/**
+		 * Called when an element's opening tag ends without being self-closing
+		 * 
+		 * @param elementName The name of the element
+		 * @param openEnd The content closing the open tag
+		 */
 		default void handleElementOpen(String elementName, PositionedContent openEnd) {
 		}
 
 		/**
 		 * Called when an attribute is encountered
 		 * 
-		 * @param attributeName The name of the attribute
-		 * @param namePosition The position of the attribute's name
-		 * @param attributeValue The positioned value of the attribute--everything between the quotes
+		 * @param attribute The attribute
 		 */
 		default void handleAttribute(XmlAttribute attribute) {
 		}
@@ -606,8 +707,8 @@ public class SimpleXMLParser {
 		/**
 		 * <p>
 		 * Called when any characters occur between an element's open and close tags which is not an XML structure such as a
-		 * {@link #handleElementStart(String, FilePosition) child element}, a {@link #handleCDataContent(String, PositionedContent) CDATA}
-		 * structure, or a {@link #handleComment(PositionedContent) comment}.
+		 * {@link #handleElementStart(XmlElementTerminal) child element}, a {@link #handleCDataContent(String, XmlCdata) CDATA} structure,
+		 * or a {@link #handleCDataContent(String, XmlCdata) comment}.
 		 * </p>
 		 * <p>
 		 * This method will not be called for an element that is self-closing (e.g. &lt;element />), for empty content (e.g.
@@ -642,7 +743,7 @@ public class SimpleXMLParser {
 		 * Called when a CDATA structure is encountered.
 		 * 
 		 * @param elementName The name of the element under which the CDATA structure occurred
-		 * @param content The positioned content of the CDATA structure--everything between '&lt;!CDATA[[' and ']]>'
+		 * @param cdata The CDATA structure
 		 */
 		default void handleCDataContent(String elementName, XmlCdata cdata) {
 		}
@@ -650,9 +751,7 @@ public class SimpleXMLParser {
 		/**
 		 * Called when an element is closed
 		 * 
-		 * @param elementName The name of the element being closed
-		 * @param position The position of the name of the element in the closing tag (which may be the same as the opening tag if the
-		 *        element is self-closing, offset from zero)
+		 * @param element The element being closed
 		 * @param selfClosing Whether the element was self-closing, as opposed to opened and closed with separate tags
 		 */
 		default void handleElementEnd(XmlElementTerminal element, boolean selfClosing) {
@@ -804,11 +903,25 @@ public class SimpleXMLParser {
 		return this;
 	}
 
+	/**
+	 * Adds a named sequence to be recognized by this parser. E.g. this could be used to recognize HTML entities.
+	 * 
+	 * @param name The name of the entity to be recognized by the parser (the content between "&" and ";")
+	 * @param sequence The sequence to be represented by the entity
+	 * @return This parser
+	 */
 	public SimpleXMLParser withNamedEntity(String name, String sequence) {
 		theNamedEntities.put(name, sequence);
 		return this;
 	}
 
+	/**
+	 * Adds a set of named sequences to be recognized by this parser. E.g. this could be used to recognize HTML entities.
+	 * 
+	 * @param entities A map whose keys are the names of the entities to be recognized by the parser (the content between "&" and ";") and
+	 *        whose values are the sequences to be represented by each entity
+	 * @return This parser
+	 */
 	public SimpleXMLParser withNamedEntities(Map<String, String> entities) {
 		theNamedEntities.putAll(entities);
 		return this;

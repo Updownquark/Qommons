@@ -151,8 +151,9 @@ public interface ErrorReporting {
 				w.append("\n\t at ").append(codeLocation.toString());
 			if (fileLocation != null)
 				w.append("\n\t at ").append(fileLocation.toString());
+			w.append('\n');
 			if (cause != null) {
-				w.append("\nCaused by: ");
+				w.append("Caused by: ");
 				cause.printStackTrace(w);
 			}
 		}

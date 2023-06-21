@@ -21,6 +21,7 @@ import org.qommons.io.LocatedPositionedContent;
  * @param <QIS> The sub-type of the session
  */
 public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends SessionValues {
+	/** The property that the {@link #getElementRepresentation() element representation} is stored under */
 	static final String ELEMENT_REPRESENTATION = "ELEMENT.REPRESENTATION";
 
 	/** @return The element being interpreted */
@@ -773,12 +774,17 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends SessionValues
 		return value == null ? null : new LocatedFilePosition(value.fileLocation, value.position.getPosition(offset));
 	}
 
+	/** @return The object being interpreted from this session's element */
 	default Object getElementRepresentation() {
 		return values().get(ELEMENT_REPRESENTATION);
 	}
 
-	default QIS setElementRepresentation(Object def) {
-		values().put(ELEMENT_REPRESENTATION, def);
+	/**
+	 * @param er The object being interpreted from this session's element
+	 * @return This session
+	 */
+	default QIS setElementRepresentation(Object er) {
+		values().put(ELEMENT_REPRESENTATION, er);
 		return (QIS) this;
 	}
 

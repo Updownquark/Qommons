@@ -84,4 +84,71 @@ public interface LocatedPositionedContent extends PositionedContent {
 			return theContent.toString();
 		}
 	}
+
+	/** {@link LocatedPositionedContent} on a single line */
+	class SimpleLine implements LocatedPositionedContent {
+		private final LocatedFilePosition theStart;
+		private final String theContent;
+
+		/**
+		 * @param start The start of the content
+		 * @param content The content
+		 */
+		public SimpleLine(LocatedFilePosition start, String content) {
+			theStart = start;
+			theContent = content;
+		}
+
+		@Override
+		public int getSourceLength(int from, int to) {
+			return to - from;
+		}
+
+		@Override
+		public CharSequence getSourceContent(int from, int to) {
+			return theContent.substring(from, to);
+		}
+
+		@Override
+		public int length() {
+			return theContent.length();
+		}
+
+		@Override
+		public char charAt(int index) {
+			return theContent.charAt(index);
+		}
+
+		@Override
+		public String getFileLocation() {
+			return theStart.getFileLocation();
+		}
+
+		@Override
+		public LocatedFilePosition getPosition(int index) {
+			if (index == 0)
+				return theStart;
+			return new LocatedFilePosition(theStart.getFileLocation(), theStart.getPosition() + index, theStart.getLineNumber(),
+				theStart.getCharNumber() + index);
+		}
+
+		@Override
+		public LocatedPositionedContent subSequence(int startIndex) {
+			if (startIndex == 0)
+				return this;
+			return new SimpleLine(getPosition(startIndex), theContent.substring(startIndex));
+		}
+
+		@Override
+		public LocatedPositionedContent subSequence(int startIndex, int endIndex) {
+			if (startIndex == 0 && endIndex == length())
+				return this;
+			return new SimpleLine(getPosition(startIndex), theContent.substring(startIndex, endIndex));
+		}
+
+		@Override
+		public String toString() {
+			return theContent;
+		}
+	}
 }

@@ -25,10 +25,10 @@ import java.util.regex.PatternSyntaxException;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterHashSet;
 import org.qommons.collect.BetterSet;
-import org.qommons.io.PositionedContent;
 import org.qommons.io.ErrorReporting;
 import org.qommons.io.FilePosition;
 import org.qommons.io.LocatedFilePosition;
+import org.qommons.io.PositionedContent;
 import org.qommons.io.SimpleXMLParser;
 import org.qommons.io.SimpleXMLParser.XmlParseException;
 import org.qommons.io.TextParseException;
@@ -271,7 +271,8 @@ public class DefaultQonfigParser implements QonfigParser {
 			if (!childApplies.test(child))
 				continue;
 			String roleAttr = child.getAttributeIfExists("role");
-			QonfigParseSession childSession = session.at(asContent(SimpleXMLParser.getNamePosition(child.getElement()), child.getName()));
+			FilePosition namePosition = SimpleXMLParser.getNamePosition(child.getElement());
+			QonfigParseSession childSession = session.at(asContent(namePosition, child.getName()));
 			QonfigElementDef childType;
 			try {
 				childType = session.getToolkit().getElement(child.getName());
@@ -290,7 +291,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				roles = parseRoles(roleAttr, child.getAttributeValuePosition("role"), childSession);
 			builder.withChild(roles, childType, cb -> {
 				parseDocElement(childSession, cb, child, true, __ -> true);
-			}, asContent(SimpleXMLParser.getNamePosition(child.getElement()), child.getName()));
+			}, asContent(namePosition, child.getName()));
 		}
 		return builder.build();
 	}
