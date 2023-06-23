@@ -98,7 +98,8 @@ public class Debug {
 	private final Map<String, DebugData> theData;
 	private final Map<Object, DebugData> theDataByValue;
 	private final ReentrantLock theLock;
-	private AtomicLong isActive;
+	private final AtomicLong isActive;
+	private final AtomicLong theIdGen;
 
 	private Debug(boolean active) {
 		theThreads = new ThreadLocal<DebugData>() {
@@ -114,6 +115,7 @@ public class Debug {
 		theDataByValue = new IdentityHashMap<>();
 		theLock = new ReentrantLock();
 		isActive = new AtomicLong();
+		theIdGen = new AtomicLong();
 	}
 
 	/** @return Whether the debug architecture is currently active */
@@ -302,6 +304,7 @@ public class Debug {
 
 	public static class DebugData {
 		private final Debug theDebug;
+		private final long theId;
 		private Object theValue;
 		private final NavigableSet<String> theRootNames;
 		private final Map<String, DebugData> theRefs;
@@ -314,6 +317,7 @@ public class Debug {
 		private DebugData(Debug debug) {
 			theDebug = debug;
 			if (debug != null) {
+				theId = debug.theIdGen.getAndIncrement();
 				theRootNames = new TreeSet<>();
 				theRefs = new TreeMap<>();
 				theReverseRefs = new TreeMap<>();
@@ -322,6 +326,7 @@ public class Debug {
 				theActionListeners = ListenerList.build().allowReentrant().build();
 				theCheckRemove = debug.addCheck(() -> check());
 			} else {
+				theId = -1;
 				theRootNames = null;
 				theRefs = null;
 				theReverseRefs = null;
@@ -715,7 +720,7 @@ public class Debug {
 					Map.Entry<String, Set<DebugData>> rr = theReverseRefs.entrySet().iterator().next();
 					rr.getValue().iterator().next()._getIdentity(str).append(DIV).append(rr.getKey());
 				} else if (theValue != null)
-					str.append("System ID ").append(Integer.toHexString(System.identityHashCode(theValue)).toUpperCase());
+					str.append("ID ").append(Long.toHexString(theId).toUpperCase());
 				else
 					str.append("null");
 			} else if (theRootNames.size() == 1)

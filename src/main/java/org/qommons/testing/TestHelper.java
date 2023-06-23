@@ -255,6 +255,11 @@ public class TestHelper extends TestUtil {
 		return placemark == null ? -1 : placemark.longValue();
 	}
 
+	/** @return Whether this debugging session has previously hit a breakpoint */
+	public boolean hasHitBreak() {
+		return !theBreakpoints.isEmpty() && getPosition() >= theBreakpoints.iterator().next();
+	}
+
 	/** @return A new {@link TestHelper} whose sequence is determined by this helper's seed and its position */
 	public TestHelper fork() {
 		long forkSeed = getAnyLong();
