@@ -21,9 +21,13 @@ public interface ErrorReporting {
 			theIgnoredClasses.add(Default.class.getName());
 		}
 
-		private Default(LocatedPositionedContent frame, Set<String> ignoredClasses) {
+		/**
+		 * @param source The error reporting parent
+		 * @param frame The source location for this reporting
+		 */
+		protected Default(Default source, LocatedPositionedContent frame) {
 			theFrame = frame;
-			theIgnoredClasses = ignoredClasses;
+			theIgnoredClasses = source.theIgnoredClasses;
 		}
 
 		@Override
@@ -39,7 +43,7 @@ public interface ErrorReporting {
 
 		@Override
 		public ErrorReporting at(LocatedPositionedContent position) {
-			return new Default(position, theIgnoredClasses);
+			return new Default(this, position);
 		}
 
 		@Override

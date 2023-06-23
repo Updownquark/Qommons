@@ -789,10 +789,12 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends SessionValues
 	}
 
 	/**
+	 * @param <T> The interpretation support type to query
 	 * @param asType The type to query for
-	 * @return Whether {@link #interpret(Class) interpretation} as a value of the given type is supported by this session
+	 * @return If {@link #interpret(Class) interpretation} as a value of the given type is supported by this session, the sub-type that the
+	 *         interpreted value will be; otherwise null
 	 */
-	boolean supportsInterpretation(Class<?> asType);
+	<T> Class<? extends T> getInterpretationSupport(Class<T> asType);
 
 	/** @return The error reporting for this session */
 	ErrorReporting reporting();

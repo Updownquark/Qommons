@@ -327,10 +327,10 @@ public class QonfigInterpreterCore {
 		}
 
 		@Override
-		public boolean supportsInterpretation(Class<?> asType) {
+		public <T> Class<? extends T> getInterpretationSupport(Class<T> asType) {
 			ClassMap<QonfigCreatorHolder<?>> creators = theInterpreter.theCreators.get(theFocusType);
 			QonfigCreatorHolder<?> creator = creators == null ? null : creators.get(asType, ClassMap.TypeMatch.SUB_TYPE);
-			return creator != null;
+			return creator == null ? null : ((QonfigCreatorHolder<? extends T>) creator).type;
 		}
 
 		@Override
@@ -814,6 +814,7 @@ public class QonfigInterpreterCore {
 
 			reporting.ignoreClass(QonfigParseSession.class.getName());
 			reporting.ignoreClass(QonfigInterpreterCore.class.getName());
+			reporting.ignoreClass(QonfigInterpreterCore.ExceptionThrowingReporting.class.getName());
 			reporting.ignoreClass(QonfigInterpreterCore.CoreSession.class.getName());
 			reporting.ignoreClass(AbstractQIS.class.getName());
 			reporting.ignoreClass(SpecialSession.class.getName());
@@ -1247,6 +1248,7 @@ public class QonfigInterpreterCore {
 
 		@Override
 		public void ignoreClass(String className) {
+			theWrapped.ignoreClass(className);
 		}
 
 		@Override
@@ -1269,6 +1271,11 @@ public class QonfigInterpreterCore {
 		@Override
 		public ExceptionThrowingReporting at(LocatedPositionedContent frame) {
 			return new ExceptionThrowingReporting(theWrapped.at(frame));
+		}
+
+		@Override
+		public String toString() {
+			return theWrapped.toString();
 		}
 	}
 

@@ -69,8 +69,8 @@ public interface SpecialSession<QIS extends SpecialSession<QIS>> extends Abstrac
 	}
 
 	@Override
-	default boolean supportsInterpretation(Class<?> asType) {
-		return getWrapped().supportsInterpretation(asType);
+	default <T> Class<? extends T> getInterpretationSupport(Class<T> asType) {
+		return getWrapped().getInterpretationSupport(asType);
 	}
 
 	@Override

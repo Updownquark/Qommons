@@ -3,26 +3,25 @@ package org.qommons.config;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.qommons.io.PositionedContent;
 import org.qommons.io.ErrorReporting;
 import org.qommons.io.LocatedPositionedContent;
+import org.qommons.io.PositionedContent;
 
 /** A structure to pass around during Qonfig parsing to report errors and warnings */
 public class QonfigParseSession extends ErrorReporting.Default {
-	private final LocatedPositionedContent theFileLocation;
 	private final QonfigToolkit theToolkit;
 	private final List<Issue> theErrors;
 
 	private QonfigParseSession(LocatedPositionedContent frame, QonfigToolkit toolkit, List<Issue> errors) {
 		super(frame);
-		theFileLocation = frame;
 		theToolkit = toolkit;
 		theErrors = errors;
 	}
 
-	@Override
-	public LocatedPositionedContent getFileLocation() {
-		return theFileLocation;
+	private QonfigParseSession(QonfigParseSession parent, LocatedPositionedContent frame) {
+		super(parent, frame);
+		theToolkit = parent.theToolkit;
+		theErrors = parent.theErrors;
 	}
 
 	/** @return The toolkit that is being parsed, or for which a document is being parsed */
@@ -37,7 +36,7 @@ public class QonfigParseSession extends ErrorReporting.Default {
 
 	@Override
 	public QonfigParseSession at(LocatedPositionedContent position) {
-		return new QonfigParseSession(position, theToolkit, theErrors);
+		return new QonfigParseSession(this, position);
 	}
 
 	@Override
@@ -76,7 +75,7 @@ public class QonfigParseSession extends ErrorReporting.Default {
 
 	@Override
 	public String toString() {
-		return theToolkit + ":" + theFileLocation;
+		return theToolkit + ":" + getFileLocation();
 	}
 
 	/**
