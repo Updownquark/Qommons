@@ -1,11 +1,11 @@
 package org.qommons;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -411,7 +411,7 @@ public interface Causable extends CausalLock.Cause {
 			private final Transaction theInUseT;
 			private final AtomicInteger theDepth;
 
-			CauseInUseImpl(Object... causes) {
+			CauseInUseImpl(Collection<?> causes) {
 				super(causes);
 				theInUseT = super.use();
 				theDepth = new AtomicInteger();
@@ -425,8 +425,8 @@ public interface Causable extends CausalLock.Cause {
 			@Override
 			public void close() {
 				if (theDepth.decrementAndGet() == 0) {
-					theInUseT.close();
 					CAUSES.remove(getCauses());
+					theInUseT.close();
 				}
 			}
 		}
@@ -451,10 +451,11 @@ public interface Causable extends CausalLock.Cause {
 		}
 
 		static CausableInUse cause(Object... causes) {
-			if (causes.length == 0)
+			List<Object> nnCauses = BetterList.of(causes).quickFilter(c -> c != null);
+			if (nnCauses.isEmpty())
 				return new SimpleCauseInUse();
 			else
-				return CAUSES.computeIfAbsent(Arrays.asList(causes), __ -> new CauseInUseImpl(causes)).descend();
+				return CAUSES.computeIfAbsent(nnCauses, __ -> new CauseInUseImpl(nnCauses)).descend();
 		}
 	}
 
