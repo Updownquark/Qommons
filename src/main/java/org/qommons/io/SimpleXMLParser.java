@@ -273,6 +273,45 @@ public class SimpleXMLParser {
 		 *        <li>{@link SimpleXMLParser#ENCODING encoding}</li>
 		 *        <li>or {@link SimpleXMLParser#STANDALONE standalone}</li>
 		 *        </ul>
+		 * @return The positioned "attribute" in this declaration, or null if it was not specified
+		 */
+		public XmlAttribute getAttribute(String attribute) {
+			int start, valueStart, end;
+			switch (attribute) {
+			case VERSION:
+				start = theVersionNameOffset;
+				if (start < 0)
+					return null;
+				valueStart = theVersionValueOffset;
+				end = valueStart + theVersion.length() + 1;
+				break;
+			case ENCODING:
+				start = theEncodingNameOffset;
+				if (start < 0)
+					return null;
+				valueStart = theEncodingValueOffset;
+				end = valueStart + theEncoding.name().length() + 1;
+				break;
+			case STANDALONE:
+				start = theStandaloneNameOffset;
+				if (start < 0)
+					return null;
+				valueStart = theStandaloneValueOffset;
+				end = valueStart + (isStandalone.booleanValue() ? 3 : 2) + 1;
+				break;
+			default:
+				throw new IllegalArgumentException("No such attribute '" + attribute + "' on XML declaration");
+			}
+			return new XmlAttribute(attribute, valueStart - start, theDeclarationContent.subSequence(start, end));
+		}
+
+		/**
+		 * @param attribute The "attribute" to get the name position for. Must be
+		 *        <ul>
+		 *        <li>{@link SimpleXMLParser#VERSION version}</li>
+		 *        <li>{@link SimpleXMLParser#ENCODING encoding}</li>
+		 *        <li>or {@link SimpleXMLParser#STANDALONE standalone}</li>
+		 *        </ul>
 		 * @return The position of the name of the given "attribute" in this declaration, or null if it was not specified
 		 */
 		public FilePosition getAttributeNamePosition(String attribute) {
