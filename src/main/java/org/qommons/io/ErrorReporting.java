@@ -211,7 +211,8 @@ public interface ErrorReporting {
 	 * @return This error reporting instance
 	 */
 	default ErrorReporting error(String message, Throwable cause) {
-		return report(new Issue(getFileLocation().getPosition(0), IssueSeverity.ERROR, message, getCodeLocation(), cause));
+		return report(new Issue(getFileLocation() == null ? null : getFileLocation().getPosition(0), IssueSeverity.ERROR, message,
+			getCodeLocation(), cause));
 	}
 
 	/**

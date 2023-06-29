@@ -19,10 +19,10 @@ import org.qommons.collect.BetterHashMultiMap;
 import org.qommons.collect.BetterHashSet;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.BetterMultiMap;
-import org.qommons.io.PositionedContent;
 import org.qommons.io.ErrorReporting;
-import org.qommons.io.LocatedPositionedContent;
 import org.qommons.io.LocatedFilePosition;
+import org.qommons.io.LocatedPositionedContent;
+import org.qommons.io.PositionedContent;
 
 /** An element in a Qonfig document */
 public class QonfigElement implements FileSourced {
@@ -268,10 +268,10 @@ public class QonfigElement implements FileSourced {
 				throw new IllegalStateException("Unaccounted primitive type " + type.getName());
 			if (!match)
 				throw new ClassCastException(
-					theType + ": Value " + value + ", type " + value.getClass().getName() + " cannot be cast to " + type.getName());
+					theType + ": Value " + value + ", type " + value.value.getClass().getName() + " cannot be cast to " + type.getName());
 		} else
 			throw new ClassCastException(
-				theType + ": Value " + value + ", type " + value.getClass().getName() + " cannot be cast to " + type.getName());
+				theType + ": Value " + value + ", type " + value.value.getClass().getName() + " cannot be cast to " + type.getName());
 		return (T) value.value;
 	}
 
