@@ -390,7 +390,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 
 		@Override
 		public String getDescription() {
-			return null;
+			return theInherited.getDescription();
 		}
 
 		@Override

@@ -30,16 +30,24 @@ public class QonfigApp {
 			throw new IllegalStateException("App toolkit 'qonfig-app.qtd' is missing");
 		// Parse the app definition
 		DefaultQonfigParser qonfigParser = new DefaultQonfigParser();
-		try (InputStream aTKIn = qonfigAppTKUrl.openStream()) {
-			QONFIG_APP_TOOLKIT = qonfigParser.parseToolkit(qonfigAppTKUrl, aTKIn);
+		InputStream aTKIn;
+		try {
+			aTKIn = qonfigAppTKUrl.openStream();
 		} catch (NullPointerException e) {
 			throw new IllegalStateException("Could not locate app toolkit definition '" + qonfigAppTKUrl.getPath() + "'");
+		} catch (IOException e) {
+			throw new IllegalStateException("Could not locate toolkit definition '" + qonfigAppTKUrl.getPath() + "'", e);
+		}
+		try {
+			QONFIG_APP_TOOLKIT = qonfigParser.parseToolkit(qonfigAppTKUrl, aTKIn);
+			aTKIn.close();
 		} catch (IOException e) {
 			throw new IllegalStateException("Could not read app toolkit definition '" + qonfigAppTKUrl.getPath() + "'", e);
 		} catch (XmlParseException e) {
 			throw new IllegalArgumentException("Could not parse toolkit definition XML '" + qonfigAppTKUrl.getPath() + "'", e);
 		} catch (QonfigParseException e) {
 			throw new IllegalStateException("Could not parse app toolkit definition '" + qonfigAppTKUrl.getPath() + "'", e);
+		} finally {
 		}
 		return QONFIG_APP_TOOLKIT;
 	}

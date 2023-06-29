@@ -32,9 +32,11 @@ import org.qommons.io.PositionedContent;
 import org.qommons.io.SimpleXMLParser;
 import org.qommons.io.SimpleXMLParser.XmlParseException;
 import org.qommons.io.TextParseException;
+import org.w3c.dom.Comment;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.ProcessingInstruction;
+import org.w3c.dom.Text;
 
 /** Default {@link QonfigParser} implementation */
 public class DefaultQonfigParser implements QonfigParser {
@@ -1000,7 +1002,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					defaultV = type.parse(defaultS, attrSession.getToolkit(), attrSession);
 				if (type != null)
 					builder.withAttribute(attrName, type, spec, defaultV, asContent(attr.getNamePosition(), attr.getName()),
-						getDocumentation(element));
+						getDocumentation(attr));
 				try {
 					attr.check();
 				} catch (TextParseException e) {
@@ -1126,7 +1128,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				}
 				if (overridden != null)
 					builder.modifyAttribute(overridden, type, spec, defaultV, asContent(attr.getNamePosition(), attr.getName()),
-						getDocumentation(element));
+						getDocumentation(attr));
 				try {
 					attr.check();
 				} catch (TextParseException e) {
@@ -1276,10 +1278,10 @@ public class DefaultQonfigParser implements QonfigParser {
 				// if (elType != null) { Allow child with no type specified
 				if (metadata)
 					builder.withMetaSpec(name, elType, inherits, requires, min, max, asContent(child.getNamePosition(), child.getName()),
-						getDocumentation(element));
+						getDocumentation(child));
 				else
 					builder.withChild(name, elType, roles, inherits, requires, min, max,
-						asContent(child.getNamePosition(), child.getName()), getDocumentation(element));
+						asContent(child.getNamePosition(), child.getName()), getDocumentation(child));
 				// }
 				try {
 					child.check();
@@ -1423,10 +1425,10 @@ public class DefaultQonfigParser implements QonfigParser {
 				if (overridden != null) {
 					if (metadata)
 						builder.getMetaSpec().modifyChild(overridden, elType, inherits, requires, min, max,
-							asContent(child.getNamePosition(), child.getName()), getDocumentation(element));
+							asContent(child.getNamePosition(), child.getName()), getDocumentation(child));
 					else
 						builder.modifyChild(overridden, elType, inherits, requires, min, max,
-							asContent(child.getNamePosition(), child.getName()), getDocumentation(element));
+							asContent(child.getNamePosition(), child.getName()), getDocumentation(child));
 				}
 				try {
 					child.check();
@@ -1574,9 +1576,15 @@ public class DefaultQonfigParser implements QonfigParser {
 					break;
 				else if (child instanceof ProcessingInstruction)
 					prevPI = (ProcessingInstruction) child;
+				else if (child instanceof Comment) { //
+				} else if (child instanceof Text) {
+					if (!isAllWhiteSpace(child.getNodeValue()))
+						prevPI = null;
+				} else
+					prevPI = null;
 			}
 			if (prevPI == null || !prevPI.getTarget().equals("DOC") || prevPI.getData() == null || prevPI.getData().isEmpty())
-				return prevPI.getData();
+				return null;
 			String doc = prevPI.getData().trim();
 			// Process the documentation
 			StringBuilder str = null;
@@ -1593,6 +1601,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					if (i - lastNonWS > 1) {
 						if (str == null)
 							str = new StringBuilder().append(doc, 0, lastNonWS + 1);
+						str.append(' ');
 					}
 					lastNonWS = i;
 					switch (ch) {
@@ -1638,6 +1647,16 @@ public class DefaultQonfigParser implements QonfigParser {
 			else if (lastAmp >= 0)
 				str.append(doc, lastAmp, doc.length());
 			return str.toString();
+		}
+
+		private boolean isAllWhiteSpace(String nodeValue) {
+			if (nodeValue == null)
+				return true;
+			for (int c = 0; c < nodeValue.length(); c++) {
+				if (!Character.isWhitespace(nodeValue.charAt(c)))
+					return false;
+			}
+			return true;
 		}
 	}
 
