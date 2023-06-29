@@ -27,6 +27,7 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
 		private final PositionedContent thePosition;
+		private final String theDescription;
 
 		/**
 		 * @param owner The owner of the value
@@ -34,14 +35,16 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		 * @param specify The specification of the value
 		 * @param defaultValue The value to use if it is not specified
 		 * @param position The position in the file where this value was defined
+		 * @param description The description for this value
 		 */
 		public Abstract(QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify, Object defaultValue,
-			PositionedContent position) {
+			PositionedContent position, String description) {
 			theOwner = owner;
 			theType = type;
 			theSpecification = specify;
 			theDefaultValue = defaultValue;
 			thePosition = position;
+			theDescription = description;
 		}
 
 		@Override
@@ -83,6 +86,11 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		}
 
 		@Override
+		public String getDescription() {
+			return theDescription;
+		}
+
+		@Override
 		public int hashCode() {
 			return getOwner().hashCode();
 		}
@@ -110,10 +118,11 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		 * @param specify The specification of the value
 		 * @param defaultValue The value to use if it is not specified
 		 * @param position The position in the file where this value was defined
+		 * @param description The description for this value
 		 */
 		public DeclaredValueDef(QonfigElementDef owner, QonfigValueType type, SpecificationType specify, Object defaultValue,
-			PositionedContent position) {
-			super(owner, type, specify, defaultValue, position);
+			PositionedContent position, String description) {
+			super(owner, type, specify, defaultValue, position, description);
 		}
 
 		@Override
@@ -138,10 +147,11 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		 * @param specify The specification of the value
 		 * @param defaultValue The value to use if it is not specified
 		 * @param position The position in the file where this value was defined
+		 * @param description The description for the value modification
 		 */
 		public Modified(QonfigValueDef declared, QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify,
-			Object defaultValue, PositionedContent position) {
-			super(owner, type, specify, defaultValue, position);
+			Object defaultValue, PositionedContent position, String description) {
+			super(owner, type, specify, defaultValue, position, description);
 			theDeclared = declared instanceof DeclaredValueDef ? (DeclaredValueDef) declared
 				: ((QonfigValueDef.Modified) declared).getDeclared();
 		}

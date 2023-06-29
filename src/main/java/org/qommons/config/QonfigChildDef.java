@@ -69,6 +69,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		private final int theMin;
 		private final int theMax;
 		private final PositionedContent thePosition;
+		private final String theDescription;
 
 		/**
 		 * @param owner The element-def or add-on that this child belongs to
@@ -80,9 +81,10 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param min The minimum number of elements that may be specified for this role
 		 * @param max The maximum number of elements that may be specified for this role
 		 * @param position The position in the file where this child was defined
+		 * @param description The description for this child
 		 */
 		public Abstract(QonfigElementOrAddOn owner, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment,
-			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, PositionedContent position) {
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, PositionedContent position, String description) {
 			theOwner = owner;
 			theType = type;
 			theFulfillment = fulfillment;
@@ -91,6 +93,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 			theMin = min;
 			theMax = max;
 			thePosition = position;
+			theDescription = description;
 		}
 
 		@Override
@@ -142,6 +145,11 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		}
 
 		@Override
+		public String getDescription() {
+			return theDescription;
+		}
+
+		@Override
 		public int hashCode() {
 			return Objects.hash(theOwner, getName());
 		}
@@ -176,10 +184,11 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param min The minimum number of elements that may be specified for this role
 		 * @param max The maximum number of elements that may be specified for this role
 		 * @param position The position in the file where this child was defined
+		 * @param description The description for this child
 		 */
 		public DeclaredChildDef(QonfigElementOrAddOn owner, String name, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment,
-			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, PositionedContent position) {
-			super(owner, type, fulfillment, inheritance, requirement, min, max, position);
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, PositionedContent position, String description) {
+			super(owner, type, fulfillment, inheritance, requirement, min, max, position, description);
 			theName = name;
 		}
 
@@ -219,10 +228,12 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param min The minimum number of elements that may be specified for this role
 		 * @param max The maximum number of elements that may be specified for this role
 		 * @param position The position in the file where this child was defined
+		 * @param description The description for the child modification
 		 */
 		public Modified(QonfigChildDef declared, QonfigElementOrAddOn owner, QonfigElementDef type, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, int min, int max, PositionedContent position) {
-			super(owner, type, Collections.emptySet(), combine(declared.getInheritance(), inheritance), requirement, min, max, position);
+			Set<QonfigAddOn> requirement, int min, int max, PositionedContent position, String description) {
+			super(owner, type, Collections.emptySet(), combine(declared.getInheritance(), inheritance), requirement, min, max, position,
+				description);
 			theDeclared = declared instanceof QonfigChildDef.Declared ? (QonfigChildDef.Declared) declared
 				: ((QonfigChildDef.Modified) declared).getDeclared();
 			theDeclaredInheritance = inheritance;
@@ -277,10 +288,12 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param owner The element-def or add-on that this child belongs to
 		 * @param overriding The new children that fulfill the role, overriding it
 		 * @param position The position in the file where this child was defined
+		 * @param description The description for this child
 		 */
 		public Overridden(QonfigElementOrAddOn owner, QonfigChildDef.Declared declared, Set<QonfigChildDef.Declared> overriding,
-			PositionedContent position) {
-			super(owner, declared.getType(), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), 0, 0, position);
+			PositionedContent position, String description) {
+			super(owner, declared.getType(), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), 0, 0, position,
+				description);
 			theDeclared = declared;
 			theOverriding = overriding;
 		}
@@ -373,6 +386,11 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		@Override
 		public PositionedContent getFilePosition() {
 			return null; // This child wasn't defined anywhere, it was inherited by default
+		}
+
+		@Override
+		public String getDescription() {
+			return null;
 		}
 
 		@Override

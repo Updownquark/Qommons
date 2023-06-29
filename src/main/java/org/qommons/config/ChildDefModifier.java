@@ -42,6 +42,7 @@ public interface ChildDefModifier extends ElementDefModifier {
 		private final Integer theMin;
 		private final Integer theMax;
 		private final PositionedContent thePosition;
+		private final String theDescription;
 
 		/**
 		 * @param typeRestriction The type restriction for the child, or null to inherit it
@@ -51,15 +52,17 @@ public interface ChildDefModifier extends ElementDefModifier {
 		 * @param min The minimum number of times the child must be specified, or null to inherit it
 		 * @param max The maximum number of times the child may be specified, or null to inherit it
 		 * @param position The position in the file where this child was defined
+		 * @param description The description for this modification
 		 */
 		public Default(QonfigElementDef typeRestriction, Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, Integer min,
-			Integer max, PositionedContent position) {
+			Integer max, PositionedContent position, String description) {
 			theTypeRestriction = typeRestriction;
 			theInheritance = inheritance;
 			theRequirement = requirement;
 			theMin = min;
 			theMax = max;
 			thePosition = position;
+			theDescription = description;
 		}
 
 		@Override
@@ -90,6 +93,11 @@ public interface ChildDefModifier extends ElementDefModifier {
 		@Override
 		public PositionedContent getFilePosition() {
 			return thePosition;
+		}
+
+		@Override
+		public String getDescription() {
+			return theDescription;
 		}
 	}
 }

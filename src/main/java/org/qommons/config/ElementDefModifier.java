@@ -3,8 +3,10 @@ package org.qommons.config;
 import java.util.Map;
 import java.util.Set;
 
+import org.qommons.SelfDescribed;
+
 /** Modification to an element-def */
-public interface ElementDefModifier extends FileSourced {
+public interface ElementDefModifier extends FileSourced, SelfDescribed {
 	/** @return The type restriction on the kinds of element-defs that may be instantiated to fulfill an element definition */
 	QonfigElementDef getTypeRestriction();
 

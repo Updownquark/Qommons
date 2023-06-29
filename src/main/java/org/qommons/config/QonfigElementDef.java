@@ -21,9 +21,10 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		Map<QonfigAttributeDef.Declared, QonfigAttributeDef> allAttributes, BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
 		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ChildDefModifier> childModifiers,
 		Map<QonfigChildDef.Declared, QonfigChildDef> allChildren, BetterMultiMap<String, QonfigChildDef> childrenByName, //
-		ValueDefModifier value, MultiInheritanceSet<QonfigAddOn> fullInheritance, QonfigElementDef metaSpec, PositionedContent position) {
+		ValueDefModifier value, MultiInheritanceSet<QonfigAddOn> fullInheritance, QonfigElementDef metaSpec, PositionedContent position,
+		String description) {
 		super(declarer, name, isAbstract, superElement, inheritance, fullInheritance, declaredAttributes, attributeModifiers,
-			attributesByName, declaredChildren, childModifiers, childrenByName, value, metaSpec, position);
+			attributesByName, declaredChildren, childModifiers, childrenByName, value, metaSpec, position, description);
 		theCompiledAttributes = allAttributes;
 		theCompiledChildren = allChildren;
 
@@ -31,7 +32,7 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 			theValue = superElement == null ? null : superElement.getValue();
 		else if (superElement == null || superElement.getValue() == null)
 			theValue = new QonfigValueDef.DeclaredValueDef(this, value.getTypeRestriction(), value.getSpecification(),
-				value.getDefaultValue(), null);
+				value.getDefaultValue(), null, value.getDescription());
 		else {
 			QonfigValidation.ValueSpec spec = QonfigValidation.validateSpecification(//
 				new QonfigValidation.ValueSpec(superElement.getValue().getType(), superElement.getValue().getSpecification(),
@@ -40,7 +41,8 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 				__ -> {
 				}, __ -> {
 				});
-			theValue = new QonfigValueDef.Modified(superElement.getValue(), this, spec.type, spec.specification, spec.defaultValue, null);
+			theValue = new QonfigValueDef.Modified(superElement.getValue(), this, spec.type, spec.specification, spec.defaultValue, null,
+				value.getDescription());
 		}
 	}
 
@@ -93,16 +95,17 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 	/**
 	 * @param name The name for the element type
 	 * @param session The session for error reporting
+	 * @param description The description for the new element
 	 * @return A builder to build an element-def
 	 */
-	public static Builder build(String name, QonfigParseSession session) {
-		return new Builder(name, session);
+	public static Builder build(String name, QonfigParseSession session, String description) {
+		return new Builder(name, session, description);
 	}
 
 	/** Builds element-defs */
 	public static class Builder extends QonfigElementOrAddOn.Builder {
-		Builder(String name, QonfigParseSession session) {
-			super(name, session);
+		Builder(String name, QonfigParseSession session, String description) {
+			super(name, session, description);
 		}
 
 		@Override
@@ -111,19 +114,20 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		}
 
 		@Override
-		protected ValueDefModifier valueModifier(QonfigValueType type, SpecificationType specification, Object defaultValue) {
-			return new ValueDefModifier.Default(getSession().getToolkit(), type, specification, defaultValue);
+		protected ValueDefModifier valueModifier(QonfigValueType type, SpecificationType specification, Object defaultValue,
+			String description) {
+			return new ValueDefModifier.Default(getSession().getToolkit(), type, specification, defaultValue, description);
 		}
 
 		@Override
 		protected ChildDefModifier childModifier(QonfigChildDef.Declared child, QonfigElementDef type, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, Integer min, Integer max, PositionedContent position) {
+			Set<QonfigAddOn> requirement, Integer min, Integer max, PositionedContent position, String description) {
 			QonfigChildDef override = getCompiledChildren().get(child.getDeclared());
 			if (override instanceof QonfigChildDef.Overridden) {
 				theSession.at(position).error("Child has been overridden by " + ((QonfigChildDef.Overridden) override).getOverriding());
 				return null;
 			}
-			return new ChildDefModifier.Default(type, inheritance, requirement, min, max, position);
+			return new ChildDefModifier.Default(type, inheritance, requirement, min, max, position, description);
 		}
 
 		@Override
@@ -134,7 +138,8 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildDefModifier>) super.getChildModifiers(), getCompiledChildren(),
 				getChildrenByName(), //
 				super.getValue(), getFullInheritance(), //
-				super.getMetaSpec() == null ? null : (QonfigElementDef) super.getMetaSpec().get(), getSession().getFileLocation());
+				super.getMetaSpec() == null ? null : (QonfigElementDef) super.getMetaSpec().get(), getSession().getFileLocation(),
+				getDescription());
 		}
 	}
 }

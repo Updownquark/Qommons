@@ -58,6 +58,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 	 * @param value The value definition or modifier for the item
 	 * @param metaSpec The metadata specification for the element
 	 * @param position The position in the file where this element was defined
+	 * @param description The description for this element or add-on
 	 */
 	protected QonfigElementOrAddOn(QonfigToolkit declarer, String name, boolean isAbstract, //
 		QonfigElementDef superElement, Set<QonfigAddOn> inheritance, MultiInheritanceSet<QonfigAddOn> fullInheritance, //
@@ -65,8 +66,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
 		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ? extends ChildDefModifier> childModifiers,
 		BetterMultiMap<String, QonfigChildDef> childrenByName, ValueDefModifier value, QonfigElementOrAddOn metaSpec,
-		PositionedContent position) {
-		super(declarer, name, position);
+		PositionedContent position, String description) {
+		super(declarer, name, position, description);
 		this.isAbstract = isAbstract;
 		theSuperElement = superElement;
 		theInheritance = inheritance;
@@ -263,6 +264,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		private final Map<QonfigChildDef.Declared, QonfigChildDef> theCompiledChildren;
 		private final BetterMultiMap<String, QonfigChildDef> theChildrenByName;
 		private ValueDefModifier theValue;
+		private final String theDescription;
 
 		private final QonfigElementOrAddOn.Builder theMetaSpec;
 		private QonfigMetadata theMetadata;
@@ -275,10 +277,12 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		/**
 		 * @param name The name for the element-def/add-on
 		 * @param session The session for error reporting
+		 * @param description The description for the element or add-on
 		 */
-		protected Builder(String name, QonfigParseSession session) {
+		protected Builder(String name, QonfigParseSession session, String description) {
 			theName = name;
 			theSession = session;
+			theDescription = description;
 
 			theInheritance = new LinkedHashSet<>();
 
@@ -298,9 +302,11 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			if (name.endsWith(ELEMENT_METADATA_SUFFIX) || name.endsWith(ELEMENT_METADATA_SUFFIX + ADD_ON_METADATA_ELEMENT)) {
 				theMetaSpec = null;
 			} else if (this instanceof QonfigElementDef.Builder)
-				theMetaSpec = QonfigElementDef.build(name + ELEMENT_METADATA_SUFFIX, session);
+				theMetaSpec = QonfigElementDef.build(name + ELEMENT_METADATA_SUFFIX, session,
+					"Metadata for the " + session.getToolkit().getName() + "." + name + " element");
 			else
-				theMetaSpec = QonfigAddOn.build(name + ELEMENT_METADATA_SUFFIX, session);
+				theMetaSpec = QonfigAddOn.build(name + ELEMENT_METADATA_SUFFIX, session,
+					"Metadata for the " + session.getToolkit().getName() + "." + name + " add-on");
 
 			theStage = Stage.Initial;
 		}
@@ -375,6 +381,11 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			return theValue;
 		}
 
+		/** @return The description for the new element or add-on */
+		protected String getDescription() {
+			return theDescription;
+		}
+
 		/** @return The metadata specification for the element */
 		protected QonfigElementOrAddOn.Builder getMetaSpec() {
 			return theMetaSpec;
@@ -439,7 +450,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					QonfigAttributeDef.Modified modified = new QonfigAttributeDef.Modified(mod.getKey(), get(), //
 						mod.getValue().getTypeRestriction() != null ? mod.getValue().getTypeRestriction() : mod.getKey().getType(), //
 						mod.getValue().getSpecification() != null ? mod.getValue().getSpecification() : mod.getKey().getSpecification(), //
-						mod.getValue().getDefaultValue() != null ? mod.getValue().getDefaultValue() : mod.getKey().getDefaultValue(), null);
+						mod.getValue().getDefaultValue() != null ? mod.getValue().getDefaultValue() : mod.getKey().getDefaultValue(), null,
+						null);
 					QonfigAttributeDef old = theCompiledAttributes.put(mod.getKey(), modified);
 					theAttributesByName.add(mod.getKey().getName(), modified);
 					if (old != null)
@@ -457,13 +469,13 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 						mdType = (QonfigElementDef) theMetaSpec.get();
 					else if (theMetaSpec.getSuperElement() != null)
 						mdType = (QonfigElementDef) QonfigElementDef
-							.build(theMetaSpec.get().getName() + ADD_ON_METADATA_ELEMENT, theSession)//
+							.build(theMetaSpec.get().getName() + ADD_ON_METADATA_ELEMENT, theSession, theMetaSpec.getDescription())//
 							.setSuperElement(theMetaSpec.getSuperElement())//
 							.inherits((QonfigAddOn) theMetaSpec.get())//
 							.build();
 					else
 						mdType = (QonfigElementDef) QonfigElementDef
-							.build(theMetaSpec.get().getName() + ADD_ON_METADATA_ELEMENT, theSession)//
+							.build(theMetaSpec.get().getName() + ADD_ON_METADATA_ELEMENT, theSession, theMetaSpec.getDescription())//
 							.inherits((QonfigAddOn) theMetaSpec.get())//
 							.build();
 					theMetadataBuilder = QonfigElement.build(theSession, theMetadata, null, mdType);
@@ -476,7 +488,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			default:
 			}
 		}
-
+		
 		/**
 		 * @param abst Whether this item should be abstract
 		 * @return This builder
@@ -550,9 +562,11 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param specification The specification for the value
 		 * @param defaultValue The value to use if not specified
 		 * @param position The position in the file where the value was defined
+		 * @param description The description for the value
 		 * @return This builder
 		 */
-		public Builder withValue(QonfigValueType type, SpecificationType specification, Object defaultValue, PositionedContent position) {
+		public Builder withValue(QonfigValueType type, SpecificationType specification, Object defaultValue, PositionedContent position,
+			String description) {
 			if (!checkStage(Stage.Initial))
 				throw new IllegalStateException("Value cannot be specified at this stage: " + theStage);
 			else if (theValue != null)
@@ -572,7 +586,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					specification = SpecificationType.Required;
 			} else if (specification == SpecificationType.Forbidden && defaultValue == null)
 				theSession.at(position).error("No default specified");
-			theValue = valueModifier(type, specification, defaultValue);
+			theValue = valueModifier(type, specification, defaultValue, description);
 			return this;
 		}
 
@@ -583,9 +597,11 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param specification The specification for the value (or null to inherit it)
 		 * @param defaultValue The value to use if the value is not specified (or null to inherit it)
 		 * @param position The position in the file where the value modifier was defined
+		 * @param description The description for the value modification
 		 * @return This builder
 		 */
-		public Builder modifyValue(QonfigValueType type, SpecificationType specification, Object defaultValue, PositionedContent position) {
+		public Builder modifyValue(QonfigValueType type, SpecificationType specification, Object defaultValue, PositionedContent position,
+			String description) {
 			if (!checkStage(Stage.ModifyAttributes))
 				throw new IllegalStateException("Value cannot be modified at this stage: " + theStage);
 			else if (theValue != null)
@@ -600,7 +616,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				err -> theSession.at(position).error(err), warn -> theSession.at(position).warn(warn));
 			if (newSpec.specification != theSuperElement.getValue().getSpecification()
 				|| !Objects.equals(newSpec.defaultValue, theSuperElement.getValue().getDefaultValue()))
-				theValue = valueModifier(type, specification, defaultValue);
+				theValue = valueModifier(type, specification, defaultValue, description);
 			return this;
 		}
 
@@ -610,9 +626,11 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param type The type for the value
 		 * @param specification The specification for the value
 		 * @param defaultValue The value to use if the value is not specified
+		 * @param description The description for the value modification
 		 * @return The value modifier to use for the item
 		 */
-		protected abstract ValueDefModifier valueModifier(QonfigValueType type, SpecificationType specification, Object defaultValue);
+		protected abstract ValueDefModifier valueModifier(QonfigValueType type, SpecificationType specification, Object defaultValue,
+			String description);
 
 		/**
 		 * Declares an attribute
@@ -622,10 +640,11 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param specify The specification for the attribute
 		 * @param defaultValue The value to use if the attribute is not specified
 		 * @param position The position in the file where the attribute was defined
+		 * @param description The description for the attribute
 		 * @return This builder
 		 */
 		public Builder withAttribute(String name, QonfigValueType type, SpecificationType specify, Object defaultValue,
-			PositionedContent position) {
+			PositionedContent position, String description) {
 			if (!checkStage(Stage.NewAttributes))
 				throw new IllegalStateException("Attributes cannot be added at this stage: " + theStage);
 			else if (theDeclaredAttributes.containsKey(name)) {
@@ -648,7 +667,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				}
 			}
 			theDeclaredAttributes.put(name,
-				new QonfigAttributeDef.DeclaredAttributeDef(theBuilt, name, type, specify, defaultValue, position));
+				new QonfigAttributeDef.DeclaredAttributeDef(theBuilt, name, type, specify, defaultValue, position, description));
 			return this;
 		}
 
@@ -660,10 +679,11 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param specification The new specification for the value (or null to inherit it)
 		 * @param defaultValue The value to use if the attribute is not specified (or null to inherit it)
 		 * @param position The position where the attribute modifier was defined
+		 * @param description The description for the attribute modification
 		 * @return This builder
 		 */
 		public Builder modifyAttribute(QonfigAttributeDef attribute, QonfigValueType type, SpecificationType specification,
-			Object defaultValue, PositionedContent position) {
+			Object defaultValue, PositionedContent position, String description) {
 			if (!checkStage(Stage.ModifyAttributes))
 				throw new IllegalStateException("Attributes cannot be added at this stage: " + theStage);
 			else if (theAttributeModifiers.containsKey(attribute)) {
@@ -704,7 +724,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			ValueSpec newSpec = QonfigValidation.validateSpecification(//
 				oldSpec, new ValueSpec(null, specification, defaultValue), //
 				err -> theSession.at(position).error(err), warn -> theSession.at(position).warn(warn));
-			theAttributeModifiers.put(attribute.getDeclared(), valueModifier(newSpec.type, newSpec.specification, newSpec.defaultValue));
+			theAttributeModifiers.put(attribute.getDeclared(),
+				valueModifier(newSpec.type, newSpec.specification, newSpec.defaultValue, description));
 			return this;
 		}
 
@@ -720,10 +741,11 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param min The minimum number of children of the given role that must be specified for {@link QonfigElement}s of this item's type
 		 * @param max The maximum number of children of the given role that may be specified for {@link QonfigElement}s of this item's type
 		 * @param position The position where the child was defined
+		 * @param description The description for the child
 		 * @return This builder
 		 */
 		public Builder withChild(String name, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, int min, int max, PositionedContent position) {
+			Set<QonfigAddOn> requirement, int min, int max, PositionedContent position, String description) {
 			if (!checkStage(Stage.NewChildren))
 				throw new IllegalStateException("Attributes cannot be added at this stage: " + theStage);
 			else if (theDeclaredChildren.containsKey(name)) {
@@ -755,17 +777,17 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			}
 			QonfigChildDef.Declared child = new QonfigChildDef.DeclaredChildDef(get(), name, type,
 				QommonsUtils.unmodifiableDistinctCopy(fulfillment), QommonsUtils.unmodifiableDistinctCopy(inheritance),
-				QommonsUtils.unmodifiableDistinctCopy(requirement), min, max, position);
+				QommonsUtils.unmodifiableDistinctCopy(requirement), min, max, position, description);
 			theDeclaredChildren.put(name, child);
 			theCompiledChildren.put(child, child);
 			for (QonfigChildDef.Declared fulfilled : fulfillment)
 				theCompiledChildren.compute(fulfilled, (__, old) -> {
 					if (old == null)
-						return new QonfigChildDef.Overridden(get(), fulfilled, Collections.singleton(child), position);
+						return new QonfigChildDef.Overridden(get(), fulfilled, Collections.singleton(child), position, description);
 					Set<QonfigChildDef.Declared> overriding = new LinkedHashSet<>();
 					overriding.addAll(((QonfigChildDef.Overridden) old).getOverriding());
 					overriding.add(child);
-					return new QonfigChildDef.Overridden(get(), fulfilled, overriding, position);
+					return new QonfigChildDef.Overridden(get(), fulfilled, overriding, position, description);
 				});
 			theChildrenByName.add(name, child);
 			return this;
@@ -782,10 +804,11 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param min The minimum number of children of the given role that must be specified for {@link QonfigElement}s of this item's type
 		 * @param max The maximum number of children of the given role that may be specified for {@link QonfigElement}s of this item's type
 		 * @param position The position in the file where the child modifier was defined
+		 * @param description The description for the child modification
 		 * @return This builder
 		 */
 		public Builder modifyChild(QonfigChildDef.Declared child, QonfigElementDef type, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, Integer min, Integer max, PositionedContent position) {
+			Set<QonfigAddOn> requirement, Integer min, Integer max, PositionedContent position, String description) {
 			if (!checkStage(Stage.ModifyChildren))
 				throw new IllegalStateException("Children cannot be modified at this stage: " + theStage);
 			else if (child.getDeclared().getOwner().getDeclaredChildren().get(child.getName()) != child.getDeclared())
@@ -976,7 +999,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			}
 			Set<QonfigAddOn> inhCopy = QommonsUtils.unmodifiableDistinctCopy(inheritance);
 			Set<QonfigAddOn> reqCopy = QommonsUtils.unmodifiableDistinctCopy(requirement);
-			theChildModifiers.put(child.getDeclared(), childModifier(child, type, inhCopy, reqCopy, min, max, null));
+			theChildModifiers.put(child.getDeclared(), childModifier(child, type, inhCopy, reqCopy, min, max, null, description));
 			return this;
 		}
 
@@ -991,10 +1014,12 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param min The minimum number of children of the given role that must be specified for {@link QonfigElement}s of this item's type
 		 * @param max The maximum number of children of the given role that may be specified for {@link QonfigElement}s of this item's type
 		 * @param position The position in the file where the child modifier was defined
+		 * @param description The description for the child modification
 		 * @return The child modifier to use
 		 */
 		protected abstract ChildDefModifier childModifier(QonfigChildDef.Declared child, QonfigElementDef type,
-			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, Integer min, Integer max, PositionedContent position);
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, Integer min, Integer max, PositionedContent position,
+			String description);
 
 		/**
 		 * Declares a metadata element that extensions can use to document themselves
@@ -1007,13 +1032,14 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param min The minimum number of metadata elements of the given role that must be specified for extensions of this element
 		 * @param max The maximum number of metadata elements of the given role that may be specified for extensions of this element
 		 * @param position The position in the file where the metadata specification was defined
+		 * @param description The description for the metadata element
 		 * @return This builder
 		 */
 		public Builder withMetaSpec(String name, QonfigElementDef type, Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min,
-			int max, PositionedContent position) {
+			int max, PositionedContent position, String description) {
 			if (!checkStage(Stage.MetaSpec))
 				throw new IllegalStateException("Metadata specifications cannot be added at this stage: " + theStage);
-			theMetaSpec.withChild(name, type, Collections.emptySet(), inheritance, requirement, min, max, position);
+			theMetaSpec.withChild(name, type, Collections.emptySet(), inheritance, requirement, min, max, position, description);
 			return this;
 		}
 
@@ -1128,7 +1154,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					mod.getValue().getTypeRestriction() != null ? mod.getValue().getTypeRestriction() : mod.getKey().getType(), //
 					mod.getValue().getInheritance(), mod.getValue().getRequirement(), //
 					mod.getValue().getMin() != null ? mod.getValue().getMin() : mod.getKey().getMin(), //
-					mod.getValue().getMax() != null ? mod.getValue().getMax() : mod.getKey().getMax(), mod.getKey().getFilePosition());
+					mod.getValue().getMax() != null ? mod.getValue().getMax() : mod.getKey().getMax(), mod.getKey().getFilePosition(),
+						mod.getValue().getDescription());
 				theCompiledChildren.put(mod.getKey(), modified);
 				theChildrenByName.add(mod.getKey().getName(), modified);
 			}
@@ -1212,8 +1239,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					} else if (!modified)
 						theCompiledChildren.put(child.getKey(), new QonfigChildDef.Inherited(get(), child.getValue()));
 					else
-						theCompiledChildren.put(child.getKey(),
-							new QonfigChildDef.Modified(child.getKey(), get(), type, inheritance, requirement, min, max, null));
+						theCompiledChildren.put(child.getKey(), new QonfigChildDef.Modified(child.getKey(), get(), type, inheritance,
+							requirement, min, max, null, null));
 					theChildrenByName.add(child.getKey().getName(), theCompiledChildren.get(child.getKey()));
 				}
 			}
@@ -1346,7 +1373,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 							"Inherited child " + child + " has incompatible inherited min/max restrictions: " + min + "..." + max);
 					} else if (modified)
 						theCompiledChildren.put(child.getDeclared(),
-							new QonfigChildDef.Modified(child, get(), type, inheritance, requirement, min, max, null));
+							new QonfigChildDef.Modified(child, get(), type, inheritance, requirement, min, max, null, null));
 					else
 						theCompiledChildren.put(child.getDeclared(), new QonfigChildDef.Inherited(get(), child));
 					theChildrenByName.add(child.getName(), theCompiledChildren.get(child.getDeclared()));

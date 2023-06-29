@@ -10,16 +10,19 @@ public abstract class AbstractQonfigType implements QonfigType {
 	private final QonfigToolkit theDeclarer;
 	private final String theName;
 	private final PositionedContent thePosition;
+	private final String theDescription;
 
 	/**
 	 * @param declarer The toolkit that declared this type
 	 * @param name The name of this type
 	 * @param position The position in the file where this type was defined
+	 * @param description The description of this declared type
 	 */
-	public AbstractQonfigType(QonfigToolkit declarer, String name, PositionedContent position) {
+	protected AbstractQonfigType(QonfigToolkit declarer, String name, PositionedContent position, String description) {
 		theDeclarer = declarer;
 		theName = name;
 		thePosition = position;
+		theDescription = description;
 	}
 
 	@Override
@@ -35,6 +38,11 @@ public abstract class AbstractQonfigType implements QonfigType {
 	@Override
 	public PositionedContent getFilePosition() {
 		return thePosition;
+	}
+
+	@Override
+	public String getDescription() {
+		return theDescription;
 	}
 
 	/**

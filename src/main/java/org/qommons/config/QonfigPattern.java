@@ -3,8 +3,8 @@ package org.qommons.config;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.qommons.io.PositionedContent;
 import org.qommons.io.ErrorReporting;
+import org.qommons.io.PositionedContent;
 
 /** A value type for pattern-matched strings */
 public class QonfigPattern extends AbstractQonfigType implements QonfigValueType.Declared {
@@ -15,9 +15,10 @@ public class QonfigPattern extends AbstractQonfigType implements QonfigValueType
 	 * @param name The name of the pattern
 	 * @param pattern The regex pattern to apply
 	 * @param position The position in the file where this value was defined
+	 * @param description The description for this pattern
 	 */
-	public QonfigPattern(QonfigToolkit declarer, String name, Pattern pattern, PositionedContent position) {
-		super(declarer, name, position);
+	public QonfigPattern(QonfigToolkit declarer, String name, Pattern pattern, PositionedContent position, String description) {
+		super(declarer, name, position, description);
 		thePattern = pattern;
 	}
 
