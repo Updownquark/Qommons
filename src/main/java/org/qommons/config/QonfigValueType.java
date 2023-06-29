@@ -113,7 +113,7 @@ public interface QonfigValueType extends Named, FileSourced {
 		@Override
 		public Object parse(String value, QonfigToolkit tk, ErrorReporting session) {
 			if (value.equals(theValue))
-				return theValue;
+				return this;
 			else
 				session.error("'" + theValue + "' expected, not '" + value + "'");
 			return null;
