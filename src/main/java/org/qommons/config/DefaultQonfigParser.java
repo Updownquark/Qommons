@@ -191,9 +191,9 @@ public class DefaultQonfigParser implements QonfigParser {
 				rootDef = rootDef2;
 			}
 			PositionedContent position = new PositionedContent.Simple(SimpleXMLParser.getNamePosition(root), root.getNodeName());
-			QonfigToolkit docToolkit = new QonfigToolkit(location, 1, 0, null, position, Collections.unmodifiableMap(uses),
-				Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), Collections.emptyList(),
-				new QonfigToolkit.ToolkitBuilder() {
+			QonfigToolkit docToolkit = new QonfigToolkit(location, 1, 0, null, position, getDocumentation(rootReader),
+				Collections.unmodifiableMap(uses), Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(),
+				Collections.emptyList(), new QonfigToolkit.ToolkitBuilder() {
 					@Override
 					public void parseTypes(QonfigParseSession s) {
 					}
@@ -209,7 +209,8 @@ public class DefaultQonfigParser implements QonfigParser {
 				});
 			session = QonfigParseSession.forRoot(docToolkit, position);
 			doc = new QonfigDocument(location, docToolkit);
-			parseDocElement(session, QonfigElement.build(session, doc, null, rootDef), rootReader, true, el -> true);
+			parseDocElement(session, QonfigElement.build(session, doc, null, rootDef, getDocumentation(rootReader)), rootReader, true,
+				el -> true);
 		}
 		session.throwErrors(location);
 		return doc;
@@ -295,7 +296,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				roles = parseRoles(roleAttr, child.getAttributeValuePosition("role"), childSession);
 			builder.withChild(roles, childType, cb -> {
 				parseDocElement(childSession, cb, child, true, __ -> true);
-			}, asContent(namePosition, child.getName()));
+			}, asContent(namePosition, child.getName()), getDocumentation(child));
 		}
 		return builder.build();
 	}
@@ -340,6 +341,67 @@ public class DefaultQonfigParser implements QonfigParser {
 			return Collections.emptyList();
 		((ArrayList<?>) roles[0]).trimToSize();
 		return roles[0];
+	}
+
+	/**
+	 * Finds and parses documentation specified on the given element. Documentation (in this implementation) takes the form of an XML
+	 * processing instruction with target "DOC" occurring immediately before the target element (with only comments and whitespace
+	 * permissible in between)
+	 * 
+	 * @param xml The XML element to get documentation for
+	 * @return The documentation for the element, if specified
+	 */
+	protected String getDocumentation(StrictXmlReader xml) {
+		Node parentEl = xml.getElement().getParentNode();
+		ProcessingInstruction prevPI = null;
+		for (int i = 0; i < parentEl.getChildNodes().getLength(); i++) {
+			Node child = parentEl.getChildNodes().item(i);
+			if (child == xml.getElement())
+				break;
+			else if (child instanceof ProcessingInstruction)
+				prevPI = (ProcessingInstruction) child;
+			else if (prevPI != null) {
+				if (child instanceof Comment) { //
+				} else if (child instanceof Text) {
+					if (!isAllWhiteSpace(child.getNodeValue()))
+						prevPI = null;
+				} else
+					prevPI = null;
+			}
+		}
+		if (prevPI == null || !prevPI.getTarget().equals("DOC") || prevPI.getData() == null || prevPI.getData().isEmpty())
+			return null;
+		String doc = prevPI.getData().trim();
+		// Process the documentation
+		StringBuilder str = null;
+		int lastNonWS = -1;
+		for (int i = 0; i < doc.length(); i++) {
+			char ch = doc.charAt(i);
+			if (Character.isWhitespace(ch)) {
+			} else {
+				if (i - lastNonWS > 1) {
+					if (str == null)
+						str = new StringBuilder().append(doc, 0, lastNonWS + 1);
+					str.append(' ');
+				}
+				lastNonWS = i;
+				if (str != null)
+					str.append(ch);
+			}
+		}
+		if (str == null)
+			return doc;
+		return str.toString();
+	}
+
+	private static boolean isAllWhiteSpace(String nodeValue) {
+		if (nodeValue == null)
+			return true;
+		for (int c = 0; c < nodeValue.length(); c++) {
+			if (!Character.isWhitespace(nodeValue.charAt(c)))
+				return false;
+		}
+		return true;
 	}
 
 	private static class AttParser implements QonfigElement.AttributeValue {
@@ -424,9 +486,9 @@ public class DefaultQonfigParser implements QonfigParser {
 				dependencies.put(refName, dep);
 			}
 			ToolkitParser parser = new ToolkitParser(location.toString(), rootReader, customValueTypes);
-			toolkit = new QonfigToolkit(name, major, minor, location, rootNameContent, Collections.unmodifiableMap(dependencies),
-				Collections.unmodifiableMap(parser.getDeclaredTypes()), Collections.unmodifiableMap(parser.getDeclaredAddOns()),
-				Collections.unmodifiableMap(parser.getDeclaredElements()),
+			toolkit = new QonfigToolkit(name, major, minor, location, rootNameContent, getDocumentation(rootReader),
+				Collections.unmodifiableMap(dependencies), Collections.unmodifiableMap(parser.getDeclaredTypes()),
+				Collections.unmodifiableMap(parser.getDeclaredAddOns()), Collections.unmodifiableMap(parser.getDeclaredElements()),
 				Collections.unmodifiableList(parser.getDeclaredAutoInheritance()), parser);
 		}
 		// TODO Verify
@@ -1048,9 +1110,9 @@ public class DefaultQonfigParser implements QonfigParser {
 				defaultV = parseType.parse(defaultS, builder.getSession().getToolkit(), textSession);
 			}
 			if (modify)
-				builder.modifyValue(type, spec, defaultV, asContent(text.getNamePosition(), text.getName()), getDocumentation(element));
+				builder.modifyValue(type, spec, defaultV, asContent(text.getNamePosition(), text.getName()), getDocumentation(text));
 			else
-				builder.withValue(type, spec, defaultV, asContent(text.getNamePosition(), text.getName()), getDocumentation(element));
+				builder.withValue(type, spec, defaultV, asContent(text.getNamePosition(), text.getName()), getDocumentation(text));
 			try {
 				text.check();
 			} catch (TextParseException e) {
@@ -1565,98 +1627,6 @@ public class DefaultQonfigParser implements QonfigParser {
 					validate(theNodes.get(inh.getName()), completed);
 			}
 			builder.setStage(QonfigElementOrAddOn.Builder.Stage.MetaData);
-		}
-
-		private String getDocumentation(StrictXmlReader xml) {
-			Element parentEl = (Element) xml.getElement().getParentNode();
-			ProcessingInstruction prevPI = null;
-			for (int i = 0; i < parentEl.getChildNodes().getLength(); i++) {
-				Node child = parentEl.getChildNodes().item(i);
-				if (child == xml.getElement())
-					break;
-				else if (child instanceof ProcessingInstruction)
-					prevPI = (ProcessingInstruction) child;
-				else if (child instanceof Comment) { //
-				} else if (child instanceof Text) {
-					if (!isAllWhiteSpace(child.getNodeValue()))
-						prevPI = null;
-				} else
-					prevPI = null;
-			}
-			if (prevPI == null || !prevPI.getTarget().equals("DOC") || prevPI.getData() == null || prevPI.getData().isEmpty())
-				return null;
-			String doc = prevPI.getData().trim();
-			// Process the documentation
-			StringBuilder str = null;
-			int lastAmp = -1;
-			int lastNonWS = -1;
-			for (int i = 0; i < doc.length(); i++) {
-				char ch = doc.charAt(i);
-				if (Character.isWhitespace(ch)) {
-					if (str != null && lastAmp >= 0) {
-						str.append(doc, lastAmp, doc.length());
-						lastAmp = -1;
-					}
-				} else {
-					if (i - lastNonWS > 1) {
-						if (str == null)
-							str = new StringBuilder().append(doc, 0, lastNonWS + 1);
-						str.append(' ');
-					}
-					lastNonWS = i;
-					switch (ch) {
-					case '&':
-						lastAmp = i;
-						break;
-					case ';':
-						if (lastAmp >= 0) {
-							if (str == null)
-								str = new StringBuilder().append(doc, 0, lastAmp);
-							switch (doc.substring(lastAmp + 1, i).toLowerCase()) {
-							case "amp":
-								str.append('&');
-								break;
-							case "lt":
-								str.append('<');
-								break;
-							case "gt":
-								str.append('>');
-								break;
-							case "quot":
-								str.append('"');
-								break;
-							case "apos":
-								str.append('\'');
-								break;
-							default:
-								str.append(doc, lastAmp, i + 1);
-								break;
-							}
-						} else if (str != null)
-							str.append(ch);
-						lastAmp = -1;
-						break;
-					default:
-						if (str != null && lastAmp < 0)
-							str.append(ch);
-					}
-				}
-			}
-			if (str == null)
-				return doc;
-			else if (lastAmp >= 0)
-				str.append(doc, lastAmp, doc.length());
-			return str.toString();
-		}
-
-		private boolean isAllWhiteSpace(String nodeValue) {
-			if (nodeValue == null)
-				return true;
-			for (int c = 0; c < nodeValue.length(); c++) {
-				if (!Character.isWhitespace(nodeValue.charAt(c)))
-					return false;
-			}
-			return true;
 		}
 	}
 

@@ -16,6 +16,7 @@ import org.qommons.MultiInheritanceMap;
 import org.qommons.MultiInheritanceSet;
 import org.qommons.Named;
 import org.qommons.QommonsUtils;
+import org.qommons.SelfDescribed;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterCollections;
 import org.qommons.collect.BetterHashMultiMap;
@@ -24,7 +25,7 @@ import org.qommons.config.QonfigAutoInheritance.AutoInheritTarget;
 import org.qommons.io.PositionedContent;
 
 /** A structure containing a set of types that can be used to parsed highly-structured and validated {@link QonfigDocument}s */
-public class QonfigToolkit implements Named {
+public class QonfigToolkit implements Named, SelfDescribed {
 	/**
 	 * A Qonfig toolkit is defined by its name and Major/Minor version. The Patch version of Semantic Versioning is reserved for the
 	 * implementation/interpretation. This class represents the version piece of the toolkit definition
@@ -102,6 +103,7 @@ public class QonfigToolkit implements Named {
 	private final int theMinorVersion;
 	private final URL theLocation;
 	private final String theLocationString;
+	private final String theDescription;
 	private final Map<String, QonfigToolkit> theDependencies;
 	private final Map<String, NavigableMap<ToolkitDefVersion, QonfigToolkit>> theDependenciesByDefinition;
 	private final Map<String, QonfigValueType.Declared> theDeclaredAttributeTypes;
@@ -123,6 +125,7 @@ public class QonfigToolkit implements Named {
 	 * @param minorVersion The minor version of the toolkit
 	 * @param location The location of the file where the toolkit was declared
 	 * @param position The file position of the root element of the toolkit
+	 * @param description A description of the toolkit's purpose and potential use
 	 * @param dependencies The named dependencies of this toolkit
 	 * @param declaredTypes The set of value types declared by the toolkit--typically empty, to be populated by the <code>builder</code>
 	 * @param declaredAddOns The set of add-ons declared by the toolkit--typically empty, to be populated by the <code>builder</code>
@@ -131,7 +134,7 @@ public class QonfigToolkit implements Named {
 	 * @param builder The toolkit builder to populate all the type information for the toolkit
 	 * @throws QonfigParseException If an error occurs populating the toolkit
 	 */
-	public QonfigToolkit(String name, int majorVersion, int minorVersion, URL location, PositionedContent position,
+	public QonfigToolkit(String name, int majorVersion, int minorVersion, URL location, PositionedContent position, String description,
 		Map<String, QonfigToolkit> dependencies, Map<String, QonfigValueType.Declared> declaredTypes,
 		Map<String, QonfigAddOn> declaredAddOns, Map<String, QonfigElementDef> declaredElements,
 		List<QonfigAutoInheritance> autoInheritance, ToolkitBuilder builder) throws QonfigParseException {
@@ -139,6 +142,7 @@ public class QonfigToolkit implements Named {
 		theMajorVersion = majorVersion;
 		theMinorVersion = minorVersion;
 		theLocation = location;
+		theDescription = description;
 		theDependencies = dependencies;
 		theDeclaredAttributeTypes = declaredTypes;
 		theDeclaredAddOns = declaredAddOns;
@@ -312,6 +316,11 @@ public class QonfigToolkit implements Named {
 	/** @return A string representation of this toolkit's location */
 	public String getLocationString() {
 		return theLocationString;
+	}
+
+	@Override
+	public String getDescription() {
+		return theDescription;
 	}
 
 	/** @return All toolkits directly extended by this toolkit, by the name assigned to the dependency in this toolkit definition */

@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import org.qommons.MultiInheritanceSet;
+import org.qommons.SelfDescribed;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterHashMultiMap;
 import org.qommons.collect.BetterHashSet;
@@ -25,7 +26,7 @@ import org.qommons.io.LocatedPositionedContent;
 import org.qommons.io.PositionedContent;
 
 /** An element in a Qonfig document */
-public class QonfigElement implements FileSourced {
+public class QonfigElement implements FileSourced, SelfDescribed {
 	/** An attribute or text content value */
 	public static class QonfigValue {
 		/** The source text of the value */
@@ -68,11 +69,13 @@ public class QonfigElement implements FileSourced {
 	private final BetterMultiMap<QonfigChildDef.Declared, QonfigElement> theChildrenByRole;
 	private final QonfigValue theValue;
 	private final LocatedPositionedContent theFilePosition;
+	private final String theDescription;
 
 	private QonfigElement(QonfigDocument doc, QonfigElement parent, QonfigElementDef type, MultiInheritanceSet<QonfigAddOn> inheritance,
 		Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles,
 		Map<QonfigAttributeDef.Declared, QonfigValue> attributes, List<QonfigElement> children,
-		BetterMultiMap<QonfigChildDef.Declared, QonfigElement> childrenByRole, QonfigValue value, LocatedPositionedContent filePosition) {
+		BetterMultiMap<QonfigChildDef.Declared, QonfigElement> childrenByRole, QonfigValue value, LocatedPositionedContent filePosition,
+		String description) {
 		if (doc.getRoot() == null)
 			doc.setRoot(this);
 		theDocument = doc;
@@ -86,6 +89,7 @@ public class QonfigElement implements FileSourced {
 		theChildrenByRole = childrenByRole;
 		theValue = value;
 		theFilePosition = filePosition;
+		theDescription = description;
 	}
 
 	/** @return The document this element belongs to */
@@ -126,6 +130,11 @@ public class QonfigElement implements FileSourced {
 	/** @return The position in the file where the start of this element was declared */
 	public LocatedFilePosition getPositionInFile() {
 		return getFilePosition().getPosition(0);
+	}
+
+	@Override
+	public String getDescription() {
+		return theDescription;
 	}
 
 	/**
@@ -317,10 +326,11 @@ public class QonfigElement implements FileSourced {
 	 * @param child The role for the new child to fill
 	 * @param type The element type of the new child
 	 * @param errors The error reporting for the builder
+	 * @param description A description for the synthetic child
 	 * @return A builder for a new, disconnected child of this element
 	 */
-	public Builder synthesizeChild(QonfigChildDef child, QonfigElementDef type, ErrorReporting errors) {
-		return new Builder(errors, getDocument(), this, type, Collections.singleton(child), Collections.emptySet());
+	public Builder synthesizeChild(QonfigChildDef child, QonfigElementDef type, ErrorReporting errors, String description) {
+		return new Builder(errors, getDocument(), this, type, Collections.singleton(child), Collections.emptySet(), description);
 	}
 
 	/** @return A string with this element's type name and shortened file location */
@@ -352,10 +362,12 @@ public class QonfigElement implements FileSourced {
 	 * @param doc The document being parsed
 	 * @param parent The parent for the new element
 	 * @param type The declared type of the element
+	 * @param description A description for the element
 	 * @return A builder for an element
 	 */
-	public static Builder build(QonfigParseSession session, QonfigDocument doc, QonfigElement parent, QonfigElementDef type) {
-		return new Builder(session, doc, parent, type, Collections.emptySet(), Collections.emptySet());
+	public static Builder build(QonfigParseSession session, QonfigDocument doc, QonfigElement parent, QonfigElementDef type,
+		String description) {
+		return new Builder(session, doc, parent, type, Collections.emptySet(), Collections.emptySet(), description);
 	}
 
 	/** Represents an attribute value before it is parsed */
@@ -392,12 +404,13 @@ public class QonfigElement implements FileSourced {
 		private final Set<QonfigChildDef.Declared> theDeclaredRoles;
 		private final List<QonfigElement> theChildren;
 		private final BetterMultiMap<QonfigChildDef.Declared, QonfigElement> theChildrenByRole;
+		private final String theDescription;
 		private QonfigValue theValue;
 		private QonfigElement theElement;
 		private int theStage;
 
 		Builder(ErrorReporting errors, QonfigDocument doc, QonfigElement parent, QonfigElementDef type,
-			Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles) {
+			Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles, String description) {
 			if (type.isAbstract())
 				errors.error("Elements cannot be declared directly for abstract type " + type);
 			theErrors = errors;
@@ -430,6 +443,7 @@ public class QonfigElement implements FileSourced {
 				theInheritance::add);
 			theAutoInheritance.add(type, theInheritance::add);
 			theInheritance.addAll(doc.getDocToolkit().getAutoInheritance(theType, theParentRoles).values());
+			theDescription = description;
 
 			for (QonfigChildDef ch : parentRoles) {
 				for (QonfigAddOn req : ch.getRequirement()) {
@@ -530,10 +544,11 @@ public class QonfigElement implements FileSourced {
 		 * @param type The declared type of the element
 		 * @param child Consumer to configure the child element
 		 * @param position The position in the file where the child was defined
+		 * @param description A description for the new child
 		 * @return This builder
 		 */
 		public Builder withChild(List<ElementQualifiedParseItem> declaredRoles, QonfigElementDef type,
-			Consumer<QonfigElement.Builder> child, PositionedContent position) {
+			Consumer<QonfigElement.Builder> child, PositionedContent position, String description) {
 			if (theStage > 1)
 				throw new IllegalStateException("Cannot add children after the element has been built");
 			// At this stage, we have all the information we need to determine the complete inheritance of the element
@@ -633,7 +648,7 @@ public class QonfigElement implements FileSourced {
 					children.add(role);
 			}
 			Builder childBuilder = new Builder(errors, theDocument, theElement, type, Collections.unmodifiableSet(roles),
-				Collections.unmodifiableSet(realRoles));
+				Collections.unmodifiableSet(realRoles), description);
 			child.accept(childBuilder);
 			QonfigElement builtChild = childBuilder.build();
 			theChildren.add(builtChild);
@@ -972,7 +987,7 @@ public class QonfigElement implements FileSourced {
 			}
 
 			theElement = new QonfigElement(theDocument, theParent, theType, theInheritance, theParentRoles, theDeclaredRoles, attrValues,
-				theChildren, theChildrenByRole, theValue, theErrors.getFileLocation());
+				theChildren, theChildrenByRole, theValue, theErrors.getFileLocation(), theDescription);
 
 			theStage = 1;
 		}

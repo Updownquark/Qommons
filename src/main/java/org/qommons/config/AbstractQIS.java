@@ -518,27 +518,31 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends SessionValues
 	 * @param childName The name of the child role to interpret the children for
 	 * @param defaultChild The type of child to use as a default if no children are specified for the given role
 	 * @param builder Configures the synthetic default child element to use
+	 * @param description The description for the synthetic child if no children are specified for the role
 	 * @return A list of interpretation sessions for each child in this element with the given role, or a list with the single default
 	 *         session
 	 * @throws IllegalArgumentException If no such child role exists
 	 * @throws QonfigInterpretationException If an error occurs initializing the children's interpretation
 	 */
-	default BetterList<QIS> forChildren(String childName, QonfigElementDef defaultChild, Consumer<QonfigElement.Builder> builder)
+	default BetterList<QIS> forChildren(String childName, QonfigElementDef defaultChild, String description,
+		Consumer<QonfigElement.Builder> builder)
 		throws IllegalArgumentException, QonfigInterpretationException {
 		QonfigChildDef child = getRole(childName);
-		return forChildren(child, defaultChild, builder);
+		return forChildren(child, defaultChild, description, builder);
 	}
 
 	/**
 	 * @param child The child role to interpret the children for
 	 * @param defaultChild The type of child to use as a default if no children are specified for the given role
+	 * @param description The description for the synthetic child if no children are specified for the role
 	 * @param builder Configures the synthetic default child element to use
 	 * @return A list of interpretation sessions for each child in this element with the given role, or a list with the single default
 	 *         session
 	 * @throws IllegalArgumentException If no such child role exists
 	 * @throws QonfigInterpretationException If an error occurs initializing the children's interpretation
 	 */
-	default BetterList<QIS> forChildren(QonfigChildDef child, QonfigElementDef defaultChild, Consumer<QonfigElement.Builder> builder)
+	default BetterList<QIS> forChildren(QonfigChildDef child, QonfigElementDef defaultChild, String description,
+		Consumer<QonfigElement.Builder> builder)
 		throws IllegalArgumentException, QonfigInterpretationException {
 		BetterList<QonfigElement> children = (BetterList<QonfigElement>) getElement().getChildrenByRole().get(child.getDeclared());
 		if (!children.isEmpty()) {
@@ -550,7 +554,7 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends SessionValues
 			}
 			return BetterList.of((QIS[]) sessions);
 		}
-		QonfigElement.Builder b = getElement().synthesizeChild(child, defaultChild, reporting());
+		QonfigElement.Builder b = getElement().synthesizeChild(child, defaultChild, reporting(), description);
 		if (builder != null)
 			builder.accept(b);
 		QonfigElement element = b.doneWithAttributes().build();

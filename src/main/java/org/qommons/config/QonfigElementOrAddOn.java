@@ -478,7 +478,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 							.build(theMetaSpec.get().getName() + ADD_ON_METADATA_ELEMENT, theSession, theMetaSpec.getDescription())//
 							.inherits((QonfigAddOn) theMetaSpec.get())//
 							.build();
-					theMetadataBuilder = QonfigElement.build(theSession, theMetadata, null, mdType);
+					theMetadataBuilder = QonfigElement.build(theSession, theMetadata, null, mdType,
+						"Metadata for " + theSession.getToolkit().getName() + "." + theName);
 				}
 				break;
 			case Built:
@@ -1045,7 +1046,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 
 		/**
 		 * @param metadata Accepts an element builder to which children can be
-		 *        {@link QonfigElement.Builder#withChild(java.util.List, QonfigElementDef, Consumer, PositionedContent) added}
+		 *        {@link QonfigElement.Builder#withChild(java.util.List, QonfigElementDef, Consumer, PositionedContent, String) added}
 		 * @return This builder
 		 */
 		public Builder withMetaData(Consumer<QonfigElement.Builder> metadata) {
