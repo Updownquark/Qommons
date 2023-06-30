@@ -185,9 +185,11 @@ public class ListenerList<E> {
 		E theListener;
 		volatile Node next;
 		volatile Node previous;
+		volatile boolean present;
 
 		Node(E listener) {
 			theListener = listener;
+			present = true;
 		}
 
 		boolean isInAddFiringRound(Object firing) {
@@ -223,6 +225,7 @@ public class ListenerList<E> {
 		}
 
 		private boolean _remove() {
+			present = false;
 			if (previous.next != this)
 				return false;
 			removeListener(this);
@@ -459,7 +462,6 @@ public class ListenerList<E> {
 		}
 		try {
 			while (node != theTerminal) {
-				Node nextNode = node.next; // Get the next node before calling the listener, since the listener might remove itself
 				if (node instanceof ListenerList.TempNode) {
 					if (node.isInAddFiringRound(iterId)) {
 						node.remove();
@@ -495,7 +497,15 @@ public class ListenerList<E> {
 					}
 				}
 
-				node = nextNode;
+				/* Now we need to get the next listener in the list.
+				 * A problem may occur, however, if the list is modified as a result of a listener call.
+				 * If, for example, a call to a listener causes it to remove itself and then the next listener in the list,
+				 * this node will still be pointing to the next listener that was removed.
+				 * We have to find the most recent listener that we called for this action that is still in the list and use its next node.
+				 */
+				while (!node.present)
+					node = node.previous;
+				node = node.next;
 			}
 		} finally {
 			if (isFiringSafe != null) {
