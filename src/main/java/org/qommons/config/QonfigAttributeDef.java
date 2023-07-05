@@ -129,6 +129,21 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		public DeclaredAttributeDef getDeclared() {
 			return this;
 		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(getOwner(), theName);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof DeclaredAttributeDef))
+				return false;
+			DeclaredAttributeDef other = (DeclaredAttributeDef) obj;
+			return getOwner().equals(other.getOwner()) && theName.equals(other.theName);
+		}
 	}
 
 	/** A modified or inherited {@link QonfigAttributeDef} */

@@ -9,6 +9,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -671,6 +672,22 @@ public class QonfigToolkit implements Named, SelfDescribed {
 		if (child == null)
 			throw new IllegalArgumentException("No such meta child " + elementOrAddOnName + "." + roleName);
 		return child;
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(theName, theMajorVersion, theMinorVersion);
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		else if (!(obj instanceof QonfigToolkit))
+			return false;
+		QonfigToolkit other = (QonfigToolkit) obj;
+		return Objects.equals(theName, other.theName) && theMajorVersion == other.theMajorVersion
+			&& theMinorVersion == other.theMinorVersion;
 	}
 
 	@Override

@@ -210,12 +210,19 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 
 	@Override
 	public final int hashCode() {
-		return super.hashCode();
+		return Objects.hash(getDeclarer(), getName());
 	}
 
 	@Override
 	public final boolean equals(Object obj) {
-		return super.equals(obj);
+		if (obj == this)
+			return true;
+		else if (obj == null)
+			return false;
+		else if (getClass() != obj.getClass())
+			return false;
+		QonfigElementOrAddOn other = (QonfigElementOrAddOn) obj;
+		return getDeclarer().equals(other.getDeclarer()) && getName().equals(other.getName());
 	}
 
 	static final String ELEMENT_METADATA_SUFFIX = "$META";

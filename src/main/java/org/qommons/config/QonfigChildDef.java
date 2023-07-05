@@ -211,6 +211,21 @@ public interface QonfigChildDef extends QonfigElementOwned {
 					return true;
 			return false;
 		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(getOwner(), theName);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof DeclaredChildDef))
+				return false;
+			DeclaredChildDef other = (DeclaredChildDef) obj;
+			return getOwner().equals(other.getOwner()) && theName.equals(other.getName());
+		}
 	}
 
 	/** An inherited or modified child definition */
