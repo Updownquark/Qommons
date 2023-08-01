@@ -46,6 +46,15 @@ public interface SessionValues {
 	SessionValues putLocal(String sessionKey, Object value);
 
 	/**
+	 * Puts a value into this session that will be visible to all sessions in the hierarchy except where it is overridden
+	 * 
+	 * @param sessionKey The key to store data for
+	 * @param value The data to store for the given key in this session
+	 * @return This session
+	 */
+	SessionValues putGlobal(String sessionKey, Object value);
+
+	/**
 	 * @param <T> The type of the data
 	 * @param sessionKey The key to store data for
 	 * @param creator Creates data to store for the given key in this session (if absent)

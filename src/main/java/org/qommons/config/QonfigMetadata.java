@@ -14,4 +14,9 @@ public class QonfigMetadata extends QonfigDocument {
 	public QonfigElementOrAddOn getElement() {
 		return theElement;
 	}
+
+	@Override
+	public String toString() {
+		return "metadata:" + theElement + "@" + theElement.getFilePosition().getPosition(0);
+	}
 }

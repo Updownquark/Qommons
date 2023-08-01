@@ -48,7 +48,8 @@ public interface Stamped {
 	public static <T> long compositeStamp(Collection<? extends T> values, ToLongFunction<? super T> stampFn) {
 		if (values.isEmpty())
 			return 0;
-		return compositeStamp(values.stream().mapToLong(stampFn), values.size());
+		return compositeStamp(//
+			values.stream().mapToLong(stampFn), values.size());
 	}
 
 	/**
@@ -60,7 +61,8 @@ public interface Stamped {
 	static long compositeStamp(long... stamps) {
 		if (stamps.length == 0)
 			return 0;
-		return compositeStamp(Arrays.stream(stamps), stamps.length);
+		return compositeStamp(//
+			Arrays.stream(stamps), stamps.length);
 	}
 
 	/**

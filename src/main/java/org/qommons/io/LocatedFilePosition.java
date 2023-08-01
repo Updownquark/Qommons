@@ -2,6 +2,9 @@ package org.qommons.io;
 
 /** A file position that also specifies the location of the document */
 public class LocatedFilePosition extends FilePosition {
+	/** A file position with null location and zero position */
+	public static final LocatedFilePosition NULL_ZERO = new LocatedFilePosition(null, FilePosition.START);
+
 	private final String theFileLocation;
 
 	/**

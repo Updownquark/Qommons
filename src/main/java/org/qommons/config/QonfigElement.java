@@ -622,10 +622,11 @@ public class QonfigElement implements FileSourced, SelfDescribed {
 				for (QonfigAddOn inh : theInheritance.getExpanded(QonfigAddOn::getInheritance)) {
 					for (Map.Entry<String, QonfigChildDef.Declared> childDef : inh.getDeclaredChildren().entrySet()) {
 						if (childDef.getValue().isCompatible(type)) {
-							if (role != null && !role.equals(childDef.getValue()))
-								throw new IllegalArgumentException(
-									"Child of type " + type + " is compatible with multiple roles--role must be specified");
-							role = childDef.getValue();
+							if (role == null)
+								role = childDef.getValue();
+							else if (!role.getDeclared().equals(childDef.getValue()))
+								throw new IllegalArgumentException("Child of type " + type + " is compatible with multiple roles: " + role
+									+ " and " + childDef.getValue() + "--role must be specified");
 						}
 					}
 				}

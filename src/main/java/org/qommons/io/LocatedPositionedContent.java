@@ -2,6 +2,62 @@ package org.qommons.io;
 
 /** A {@link PositionedContent} that knows the file its in, so it can produce {@link LocatedFilePosition}s */
 public interface LocatedPositionedContent extends PositionedContent {
+	/** Empty content at position 0 */
+	public static LocatedPositionedContent EMPTY = new LocatedPositionedContent() {
+		@Override
+		public int length() {
+			return 0;
+		}
+
+		@Override
+		public char charAt(int index) {
+			throw new IndexOutOfBoundsException(index + " of 0");
+		}
+
+		@Override
+		public int getSourceLength(int from, int to) {
+			if (from != 0 && to != 0)
+				throw new IndexOutOfBoundsException(from + " to " + to + " of 0");
+			return 0;
+		}
+
+		@Override
+		public CharSequence getSourceContent(int from, int to) {
+			if (from != 0 && to != 0)
+				throw new IndexOutOfBoundsException(from + " to " + to + " of 0");
+			return this;
+		}
+
+		@Override
+		public LocatedPositionedContent subSequence(int startIndex, int endIndex) {
+			if (startIndex != 0 && startIndex != 0)
+				throw new IndexOutOfBoundsException(startIndex + " to " + startIndex + " of 0");
+			return this;
+		}
+
+		@Override
+		public LocatedPositionedContent subSequence(int startIndex) {
+			if (startIndex != 0)
+				throw new IndexOutOfBoundsException(startIndex + " of 0");
+			return this;
+		}
+
+		@Override
+		public LocatedFilePosition getPosition(int index) {
+			return LocatedFilePosition.NULL_ZERO;
+		}
+
+		@Override
+		public String getFileLocation() {
+			return null;
+		}
+
+		@Override
+		public String toString() {
+			return "";
+		}
+	};
+
 	/** @return The file that this position is in */
 	String getFileLocation();
 

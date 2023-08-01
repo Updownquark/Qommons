@@ -10,6 +10,7 @@ import java.util.function.Supplier;
 import org.qommons.MultiInheritanceSet;
 import org.qommons.collect.BetterList;
 import org.qommons.config.QonfigElement.QonfigValue;
+import org.qommons.ex.ExBiConsumer;
 import org.qommons.ex.ExFunction;
 import org.qommons.io.ErrorReporting;
 import org.qommons.io.LocatedFilePosition;
@@ -352,9 +353,9 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends SessionValues
 
 	/**
 	 * @param elementName The name of the element/add-on type to test
-	 * @return Whether the element is an instance of the given type
+	 * @return If the element is an instance of the given type, the referenced type. Otherwise null
 	 */
-	default boolean isInstance(String elementName) {
+	default QonfigElementOrAddOn isInstance(String elementName) {
 		return isInstance(null, elementName);
 	}
 
@@ -362,20 +363,22 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends SessionValues
 	 * @param toolkit The name of the toolkit defining the element to test, or null to use the definer of the {@link #getFocusType() focus
 	 *        type}
 	 * @param elementName The name of the element to test
-	 * @return Whether this element is an instance of the given element
+	 * @return If the element is an instance of the given type, the referenced type. Otherwise null
 	 * @throws IllegalArgumentException If no such element exists
 	 */
-	default boolean isInstance(QonfigToolkit toolkit, String elementName) throws IllegalArgumentException {
+	default QonfigElementOrAddOn isInstance(QonfigToolkit toolkit, String elementName) throws IllegalArgumentException {
 		if (toolkit == null)
 			toolkit = getFocusType().getDeclarer();
 		if (getFocusType().getName().equals(elementName))
-			return true;
+			return getFocusType();
 		else {
 			QonfigElementOrAddOn element = toolkit.getElementOrAddOn(elementName);
 			if (element == null)
 				throw new IllegalArgumentException("No such element or add-on " + elementName + " in toolkit " + toolkit);
+			else if (getElement().isInstance(element))
+				return element;
 			else
-				return getElement().isInstance(element);
+				return null;
 		}
 	}
 
@@ -391,12 +394,37 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends SessionValues
 
 	/**
 	 * @param <T> The type of value to interpret
+	 * @param asType The type of value to interpret the element as
+	 * @param action The action to perform after interpretation--may be null
+	 * @return The interpreted value
+	 * @throws QonfigInterpretationException If the value cannot be interpreted
+	 */
+	default <T> T interpret(Class<T> asType, ExBiConsumer<? super T, ? super QIS, QonfigInterpretationException> action)
+		throws QonfigInterpretationException {
+		return interpret(getFocusType(), asType, action);
+	}
+
+	/**
+	 * @param <T> The type of value to interpret
 	 * @param as The element type to interpret the element as
 	 * @param asType The type of value to interpret the element as
 	 * @return The interpreted value
 	 * @throws QonfigInterpretationException If the value cannot be interpreted
 	 */
-	<T> T interpret(QonfigElementOrAddOn as, Class<T> asType) throws QonfigInterpretationException;
+	default <T> T interpret(QonfigElementOrAddOn as, Class<T> asType) throws QonfigInterpretationException {
+		return interpret(as, asType, null);
+	}
+
+	/**
+	 * @param <T> The type of value to interpret
+	 * @param as The element type to interpret the element as
+	 * @param asType The type of value to interpret the element as
+	 * @param action The action to perform after interpretation--may be null
+	 * @return The interpreted value
+	 * @throws QonfigInterpretationException If the value cannot be interpreted
+	 */
+	<T> T interpret(QonfigElementOrAddOn as, Class<T> asType, ExBiConsumer<? super T, ? super QIS, QonfigInterpretationException> action)
+		throws QonfigInterpretationException;
 
 	/**
 	 * @param <C> The type of the attribute value to get
@@ -525,8 +553,7 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends SessionValues
 	 * @throws QonfigInterpretationException If an error occurs initializing the children's interpretation
 	 */
 	default BetterList<QIS> forChildren(String childName, QonfigElementDef defaultChild, String description,
-		Consumer<QonfigElement.Builder> builder)
-		throws IllegalArgumentException, QonfigInterpretationException {
+		Consumer<QonfigElement.Builder> builder) throws IllegalArgumentException, QonfigInterpretationException {
 		QonfigChildDef child = getRole(childName);
 		return forChildren(child, defaultChild, description, builder);
 	}
@@ -542,8 +569,7 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends SessionValues
 	 * @throws QonfigInterpretationException If an error occurs initializing the children's interpretation
 	 */
 	default BetterList<QIS> forChildren(QonfigChildDef child, QonfigElementDef defaultChild, String description,
-		Consumer<QonfigElement.Builder> builder)
-		throws IllegalArgumentException, QonfigInterpretationException {
+		Consumer<QonfigElement.Builder> builder) throws IllegalArgumentException, QonfigInterpretationException {
 		BetterList<QonfigElement> children = (BetterList<QonfigElement>) getElement().getChildrenByRole().get(child.getDeclared());
 		if (!children.isEmpty()) {
 			AbstractQIS<QIS>[] sessions = new AbstractQIS[children.size()];
@@ -553,12 +579,14 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends SessionValues
 				i++;
 			}
 			return BetterList.of((QIS[]) sessions);
-		}
-		QonfigElement.Builder b = getElement().synthesizeChild(child, defaultChild, reporting(), description);
-		if (builder != null)
-			builder.accept(b);
-		QonfigElement element = b.doneWithAttributes().build();
-		return BetterList.of(interpretChild(element, defaultChild));
+		} else if (defaultChild != null) {
+			QonfigElement.Builder b = getElement().synthesizeChild(child, defaultChild, reporting(), description);
+			if (builder != null)
+				builder.accept(b);
+			QonfigElement element = b.doneWithAttributes().build();
+			return BetterList.of(interpretChild(element, defaultChild));
+		} else
+			return BetterList.empty();
 	}
 
 	/**
@@ -752,7 +780,8 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends SessionValues
 		if (attr == null)
 			throw new IllegalArgumentException("Unrecognized attribute: " + attribute);
 		QonfigValue value = getElement().getAttributes().get(attr.getDeclared());
-		return value == null ? null : new LocatedFilePosition(value.fileLocation, value.position.getPosition(offset));
+		return (value == null || value.position == null) ? null
+			: new LocatedFilePosition(value.fileLocation, value.position.getPosition(offset));
 	}
 
 	/**
@@ -812,24 +841,30 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends SessionValues
 	}
 
 	@Override
-	default <T> T get(String sessionKey, Class<? super T> type){
+	default <T> T get(String sessionKey, Class<? super T> type) {
 		return values().get(sessionKey, type);
 	}
 
 	@Override
-	default QIS put(String sessionKey, Object value){
+	default QIS put(String sessionKey, Object value) {
 		values().put(sessionKey, value);
 		return (QIS) this;
 	}
 
 	@Override
-	default QIS putLocal(String sessionKey, Object value){
+	default QIS putLocal(String sessionKey, Object value) {
 		values().putLocal(sessionKey, value);
 		return (QIS) this;
 	}
 
 	@Override
-	default <T> T computeIfAbsent(String sessionKey, Supplier<T> creator){
+	default QIS putGlobal(String sessionKey, Object value) {
+		values().putGlobal(sessionKey, value);
+		return (QIS) this;
+	}
+
+	@Override
+	default <T> T computeIfAbsent(String sessionKey, Supplier<T> creator) {
 		return values().computeIfAbsent(sessionKey, creator);
 	}
 

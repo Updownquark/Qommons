@@ -864,7 +864,8 @@ public class SimpleXMLParser {
 
 		@Override
 		public void handleProcessingInstruction(XmlProcessingInstruction pi) {
-			Node node = theDocument.createProcessingInstruction(pi.getTargetName(), pi.getValueContent().toString());
+			String content = pi.getValueOffset() >= 0 ? pi.getValueContent().toString() : null;
+			Node node = theDocument.createProcessingInstruction(pi.getTargetName(), content);
 			node.setUserData(NAME_POSITION_KEY, pi.getTargetPosition(), null);
 			node.setUserData(CONTENT_POSITION_KEY, pi.getValueContent(), null);
 			if (theStack.isEmpty())

@@ -284,6 +284,34 @@ public class LambdaUtils {
 	}
 
 	/**
+	 * @param <S> The source type of the function
+	 * @param <T> The result type of the function
+	 * @param <X> The type of exception thrown by the function
+	 * @param function Function for the printable function to apply
+	 * @param print The printed function representation
+	 * @param identifier The identifier for the function
+	 * @return The printable function
+	 */
+	public static <S, T, X extends Throwable> ExFunction<S, T, X> printableExFn(ExFunction<S, T, X> function, Supplier<String> print,
+		Object identifier) {
+		return new PrintableExFunction<>(function, print != null ? print : function::toString, identifier);
+	}
+
+	/**
+	 * @param <S> The source type of the function
+	 * @param <T> The result type of the function
+	 * @param <X> The type of exception thrown by the function
+	 * @param function Function for the printable function to apply
+	 * @param print The printed function representation
+	 * @param identifier The identifier for the function
+	 * @return The printable function
+	 */
+	public static <S, T, X extends Throwable> ExFunction<S, T, X> printableExFn(ExFunction<S, T, X> function, String print,
+		Object identifier) {
+		return printableExFn(function, () -> print, identifier);
+	}
+
+	/**
 	 * @param <T> The first argument type of the function
 	 * @param <U> The second argument type of the function
 	 * @param <X> The return type of the function

@@ -136,7 +136,7 @@ public interface QonfigValueType extends Named, FileSourced {
 
 		@Override
 		public String toString() {
-			return "literal:" + theValue;
+			return String.valueOf(theValue);
 		}
 	}
 

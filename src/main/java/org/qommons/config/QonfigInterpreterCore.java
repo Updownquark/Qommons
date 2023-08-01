@@ -19,6 +19,7 @@ import org.qommons.collect.BetterHashMap;
 import org.qommons.collect.BetterMap;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.MapEntryHandle;
+import org.qommons.ex.ExBiConsumer;
 import org.qommons.io.ErrorReporting;
 import org.qommons.io.LocatedFilePosition;
 import org.qommons.io.LocatedPositionedContent;
@@ -247,7 +248,8 @@ public class QonfigInterpreterCore {
 		}
 
 		@Override
-		public <T> T interpret(QonfigElementOrAddOn as, Class<T> asType) throws QonfigInterpretationException {
+		public <T> T interpret(QonfigElementOrAddOn as, Class<T> asType,
+			ExBiConsumer<? super T, ? super CoreSession, QonfigInterpretationException> action) throws QonfigInterpretationException {
 			try (Transaction t = theReporting.interpreting()) {
 				ClassMap<QonfigCreatorHolder<?>> creators = theInterpreter.theCreators.get(as);
 				QonfigCreatorHolder<T> creator = creators == null ? null
@@ -284,7 +286,8 @@ public class QonfigInterpreterCore {
 					QonfigModifierHolder<T> modifier = modifiers[mIdx];
 					try {
 						if (theElement.isInstance(modifier.element))
-							modifier.modifier.postPrepare(session.asElement(modifier.element), modifierPrepValues[mIdx]);
+							modifierPrepValues[mIdx] = modifier.modifier.postPrepare(session.asElement(modifier.element),
+								modifierPrepValues[mIdx]);
 					} catch (RuntimeInterpretationException e) {
 						throw e.toIntepreterException();
 					} catch (RuntimeException e) {
@@ -322,6 +325,8 @@ public class QonfigInterpreterCore {
 					LocatedFilePosition position = theElement.getFilePosition().getPosition(0);
 					throw new QonfigInterpretationException(position, 0, e);
 				}
+				if (action != null)
+					action.accept(value, this);
 				return value;
 			}
 		}
@@ -527,6 +532,19 @@ public class QonfigInterpreterCore {
 		}
 
 		@Override
+		public SessionValues putGlobal(String sessionKey, Object value) {
+			_putGlobal(sessionKey, value);
+			return this;
+		}
+
+		private MapEntryHandle<String, ValueContainer> _putGlobal(String sessionKey, Object value) {
+			if (theParent == null)
+				return theValues.putEntry(sessionKey, new Root(value, false), false);
+			MapEntryHandle<String, ValueContainer> entry = theParent._putGlobal(sessionKey, value);
+			return theValues.putEntry(sessionKey, new Inherited(entry), false);
+		}
+
+		@Override
 		public <T> T computeIfAbsent(String sessionKey, Supplier<T> creator) {
 			return (T) open(theValues.compute(sessionKey, (k, old) -> old == null ? new Root(creator.get(), false) : old));
 		}
@@ -694,7 +712,6 @@ public class QonfigInterpreterCore {
 		}
 	}
 
-	private final Class<?> theCallingClass;
 	private final Set<QonfigToolkit> theKnownToolkits;
 	private final Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> theCreators;
 	private final Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> theModifiers;
@@ -702,18 +719,16 @@ public class QonfigInterpreterCore {
 	private final ExceptionThrowingReporting theReporting;
 
 	/**
-	 * @param callingClass The class building the interpreter
 	 * @param allKnownToolkits All toolkits used to build the interpreter
 	 * @param creators The set of value creators for interpretation
 	 * @param modifiers The set of value modifiers for interpretation
 	 * @param specialSessions Special session implementations configured for the interpreter
 	 * @param reporting The error reporting for the interpretation
 	 */
-	protected QonfigInterpreterCore(Class<?> callingClass, Set<QonfigToolkit> allKnownToolkits,
+	protected QonfigInterpreterCore(Set<QonfigToolkit> allKnownToolkits,
 		Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
 		Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> modifiers, ClassMap<SpecialSessionImplementation<?>> specialSessions,
 		ExceptionThrowingReporting reporting) {
-		theCallingClass = callingClass;
 		theKnownToolkits = allKnownToolkits;
 		theCreators = creators;
 		theModifiers = modifiers;
@@ -734,11 +749,6 @@ public class QonfigInterpreterCore {
 		}
 		if (error != null)
 			throw new IllegalStateException(error.toString());
-	}
-
-	/** @return The class invoking this interpretation--may be needed to access resources on the classpath */
-	public Class<?> getCallingClass() {
-		return theCallingClass;
 	}
 
 	/** @return All toolkits known to this interpreter */
@@ -786,7 +796,6 @@ public class QonfigInterpreterCore {
 
 	/** Builds {@link QonfigInterpreterCore}s */
 	public static class Builder {
-		private final Class<?> theCallingClass;
 		private final Set<QonfigToolkit> theToolkits;
 		private final QonfigToolkit theToolkit;
 		private final ExceptionThrowingReporting theReporting;
@@ -795,14 +804,12 @@ public class QonfigInterpreterCore {
 		private final ClassMap<SpecialSessionImplementation<?>> theSpecialSessions;
 
 		/**
-		 * Initial constructor called from {@link QonfigInterpreterCore#build(Class, ErrorReporting, QonfigToolkit...)}
+		 * Initial constructor called from {@link QonfigInterpreterCore#build(ErrorReporting, QonfigToolkit...)}
 		 * 
-		 * @param callingClass The class building the interpreter
 		 * @param reporting The error reporting for the interpretation
 		 * @param toolkits The toolkits to interpret documents for
 		 */
-		protected Builder(Class<?> callingClass, ExceptionThrowingReporting reporting, QonfigToolkit... toolkits) {
-			theCallingClass = callingClass;
+		protected Builder(ExceptionThrowingReporting reporting, QonfigToolkit... toolkits) {
 			theToolkits = QommonsUtils.unmodifiableDistinctCopy(toolkits);
 			if (toolkits == null)
 				throw new NullPointerException();
@@ -824,7 +831,6 @@ public class QonfigInterpreterCore {
 		/**
 		 * View builder called from {@link #forToolkit(QonfigToolkit)}
 		 * 
-		 * @param callingClass The class building the interpreter
 		 * @param toolkits The toolkits to interpret documents for
 		 * @param toolkit The toolkit to get elements/add-ons for when only names are specified
 		 * @param reporting The error reporting for the interpretation
@@ -832,11 +838,10 @@ public class QonfigInterpreterCore {
 		 * @param modifiers The set of value modifiers for interpretation so far
 		 * @param specialSessions Special session implementations configured for the builder
 		 */
-		protected Builder(Class<?> callingClass, Set<QonfigToolkit> toolkits, QonfigToolkit toolkit, ExceptionThrowingReporting reporting,
+		protected Builder(Set<QonfigToolkit> toolkits, QonfigToolkit toolkit, ExceptionThrowingReporting reporting,
 			Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
 			Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> modifiers,
 			ClassMap<SpecialSessionImplementation<?>> specialSessions) {
-			theCallingClass = callingClass;
 			theToolkits = toolkits;
 			theToolkit = toolkit;
 			theReporting = reporting;
@@ -846,7 +851,6 @@ public class QonfigInterpreterCore {
 		}
 
 		/**
-		 * @param callingClass The class building the interpreter
 		 * @param toolkits The toolkits to interpret documents for
 		 * @param toolkit The toolkit to get elements/add-ons for when only names are specified
 		 * @param reporting The error reporting for the interpretation
@@ -855,27 +859,22 @@ public class QonfigInterpreterCore {
 		 * @param specialSessions Special session implementations configured for the builder
 		 * @return A new builder with the given data
 		 */
-		protected Builder builderFor(Class<?> callingClass, Set<QonfigToolkit> toolkits, QonfigToolkit toolkit,
+		protected Builder builderFor(Set<QonfigToolkit> toolkits, QonfigToolkit toolkit,
 			ExceptionThrowingReporting reporting, Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
 			Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> modifiers,
 			ClassMap<SpecialSessionImplementation<?>> specialSessions) {
-			return new Builder(callingClass, toolkits, toolkit, reporting, creators, modifiers, specialSessions);
+			return new Builder(toolkits, toolkit, reporting, creators, modifiers, specialSessions);
 		}
 
 		/** @return A new interpreter with this builder's configuration */
 		public QonfigInterpreterCore create() {
-			return new QonfigInterpreterCore(getCallingClass(), theToolkits, getCreators(), getModifiers(), theSpecialSessions,
+			return new QonfigInterpreterCore(theToolkits, getCreators(), getModifiers(), theSpecialSessions,
 				theReporting);
 		}
 
 		/** @return The toolkit that will be used to get elements/add-ons when only names are specified */
 		public QonfigToolkit getToolkit() {
 			return theToolkit;
-		}
-
-		/** @return The class building the interpreter */
-		public Class<?> getCallingClass() {
-			return theCallingClass;
 		}
 
 		/** @return The value creators configured in this builder */
@@ -912,7 +911,7 @@ public class QonfigInterpreterCore {
 			else if (!dependsOn(toolkit))
 				throw new IllegalArgumentException("Toolkit " + toolkit.getLocation() + " is not used by toolkits " + theToolkits);
 			else
-				return builderFor(theCallingClass, theToolkits, toolkit, theReporting, theCreators, theModifiers, theSpecialSessions);
+				return builderFor(theToolkits, toolkit, theReporting, theCreators, theModifiers, theSpecialSessions);
 		}
 
 		/**
@@ -1280,12 +1279,11 @@ public class QonfigInterpreterCore {
 	}
 
 	/**
-	 * @param callingClass The calling class
 	 * @param reporting The error reporting for the interpretation
 	 * @param toolkits The toolkits to interpret
 	 * @return A builder to create an interpreter
 	 */
-	public static Builder build(Class<?> callingClass, ErrorReporting reporting, QonfigToolkit... toolkits) {
-		return new Builder(callingClass, new ExceptionThrowingReporting(reporting), toolkits);
+	public static Builder build(ErrorReporting reporting, QonfigToolkit... toolkits) {
+		return new Builder(new ExceptionThrowingReporting(reporting), toolkits);
 	}
 }

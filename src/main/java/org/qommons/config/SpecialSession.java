@@ -2,12 +2,13 @@ package org.qommons.config;
 
 import org.qommons.MultiInheritanceSet;
 import org.qommons.config.QonfigInterpreterCore.CoreSession;
+import org.qommons.ex.ExBiConsumer;
 import org.qommons.io.ErrorReporting;
 
 /**
  * A session with added capabilities and utilities. These sessions are provided by a {@link SpecialSessionImplementation} via
- * {@link QonfigInterpreterCore.Builder#withSpecial(Class, SpecialSessionImplementation)} and are accessed from
- * {@link QonfigInterpretation interpretations} by {@link AbstractQIS#as(Class)}.
+ * {@link QonfigInterpreterCore.Builder#withSpecial(Class, SpecialSessionImplementation)} and are accessed from {@link QonfigInterpretation
+ * interpretations} by {@link AbstractQIS#as(Class)}.
  * 
  * @param <QIS> The sub-type of the session
  */
@@ -64,8 +65,10 @@ public interface SpecialSession<QIS extends SpecialSession<QIS>> extends Abstrac
 	}
 
 	@Override
-	default <T> T interpret(QonfigElementOrAddOn as, Class<T> asType) throws QonfigInterpretationException {
-		return getWrapped().interpret(as, asType);
+	default <T> T interpret(QonfigElementOrAddOn as, Class<T> asType,
+		ExBiConsumer<? super T, ? super QIS, QonfigInterpretationException> action) throws QonfigInterpretationException {
+		return getWrapped().interpret(as, asType,
+			action == null ? null : (value, session) -> action.accept(value, session.recast((QIS) this)));
 	}
 
 	@Override

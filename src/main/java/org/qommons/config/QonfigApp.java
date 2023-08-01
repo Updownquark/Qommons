@@ -105,7 +105,7 @@ public class QonfigApp {
 			} catch (IOException e) {
 				throw new IllegalStateException("Could not read toolkit " + toolkitDef, e);
 			} catch (XmlParseException e) {
-				throw new IllegalArgumentException("Could not parse toolkit XML: " + appDef.getLocation(), e);
+				throw new IllegalArgumentException("Could not parse toolkit XML: " + toolkitDef, e);
 			} catch (QonfigParseException e) {
 				throw new IllegalStateException("Could not parse toolkit " + toolkitDef, e);
 			} catch (RuntimeException e) {
@@ -186,8 +186,7 @@ public class QonfigApp {
 	 * @param interpretations All Qonfig interpretations configured to support the application
 	 */
 	protected QonfigApp(QonfigDocument document, String appFile, Set<QonfigToolkit> toolkits,
-		List<SpecialSessionImplementation<?>> sessionTypes,
-		List<QonfigInterpretation> interpretations) {
+		List<SpecialSessionImplementation<?>> sessionTypes, List<QonfigInterpretation> interpretations) {
 		theDocument = document;
 		theAppFile = appFile;
 		theToolkits = toolkits;
@@ -291,8 +290,8 @@ public class QonfigApp {
 		// Build the interpreter
 		Set<QonfigToolkit> toolkits = new LinkedHashSet<>();
 		addToolkits(qonfigDoc.getDocToolkit(), toolkits);
-		QonfigInterpreterCore.Builder coreBuilder = QonfigInterpreterCore.build(QonfigApp.class,
-			new ErrorReporting.Default(qonfigDoc.getRoot().getFilePosition()), toolkits.toArray(new QonfigToolkit[toolkits.size()]));
+		QonfigInterpreterCore.Builder coreBuilder = QonfigInterpreterCore
+			.build(new ErrorReporting.Default(qonfigDoc.getRoot().getFilePosition()), toolkits.toArray(new QonfigToolkit[toolkits.size()]));
 
 		for (SpecialSessionImplementation<?> ssi : getSessionTypes())
 			addSpecial(ssi, coreBuilder);
