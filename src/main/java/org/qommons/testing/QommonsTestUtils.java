@@ -1380,7 +1380,7 @@ public class QommonsTestUtils {
 		return new Matcher2<T>() {
 			@Override
 			public boolean matches(T item) {
-				return comp.compare(item, item) >= 1;
+				return comp.compare(item, value) >= 1;
 			}
 
 			@Override
@@ -1399,7 +1399,7 @@ public class QommonsTestUtils {
 		return new Matcher2<Map<T, ?>>() {
 			@Override
 			public boolean matches(Map<T, ?> item) {
-				return ((Map<T, ?>) item).containsKey(item);
+				return ((Map<T, ?>) item).containsKey(value);
 			}
 
 			@Override
@@ -1418,7 +1418,7 @@ public class QommonsTestUtils {
 		return new Matcher2<Map<?, T>>() {
 			@Override
 			public boolean matches(Map<?, T> item) {
-				return ((Map<?, T>) item).containsValue(item);
+				return ((Map<?, T>) item).containsValue(value);
 			}
 
 			@Override
