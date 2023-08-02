@@ -224,6 +224,14 @@ public interface ErrorReporting {
 	/** @return The position of the content that this error reporting is for */
 	LocatedPositionedContent getFileLocation();
 
+	/** @return The file position at the beginning of this reporting's content */
+	default LocatedFilePosition getPosition() {
+		LocatedPositionedContent content = getFileLocation();
+		if (content == null)
+			return null;
+		return content.getPosition(0);
+	}
+
 	/**
 	 * Adds a class to the list of classes that this reporting instance's {@link #getCodeLocation()} method will use to get the the calling
 	 * code location

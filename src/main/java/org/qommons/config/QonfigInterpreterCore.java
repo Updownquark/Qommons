@@ -1217,6 +1217,14 @@ public class QonfigInterpreterCore {
 			qie.setStackTrace(getStackTrace());
 			return qie;
 		}
+
+		@Override
+		public String toString() {
+			if (thePosition != null)
+				return new StringBuilder().append(thePosition).append(": ").append(super.toString()).toString();
+			else
+				return super.toString();
+		}
 	}
 
 	/**

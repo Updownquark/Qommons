@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 
 import org.qommons.ex.ExFunction;
 import org.qommons.ex.ExSupplier;
@@ -60,8 +61,17 @@ public class LambdaUtils {
 	 * @param <T> The type for the function
 	 * @return A function that returns its argument
 	 */
-	public static <T> Function<T, T> identity() {
-		return (Function<T, T>) IdentityFunction.INSTANCE;
+	public static <T> UnaryOperator<T> identity() {
+		return (UnaryOperator<T>) IdentityFunction.INSTANCE;
+	}
+
+	/**
+	 * @param <S> The source type for the function
+	 * @param <T> The target type for the function
+	 * @return A function that returns its argument
+	 */
+	public static <S, T> Function<S, T> unenforcedCast() {
+		return (Function<S, T>) IdentityFunction.INSTANCE;
 	}
 
 	/**
@@ -572,7 +582,7 @@ public class LambdaUtils {
 		return new PrintableComparator<>(compare, print, identifier);
 	}
 
-	static class IdentityFunction<T> implements Function<T, T>, Identity {
+	static class IdentityFunction<T> implements UnaryOperator<T>, Identity {
 		static final IdentityFunction<?> INSTANCE = new IdentityFunction<>();
 
 		@Override
