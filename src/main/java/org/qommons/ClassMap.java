@@ -282,6 +282,8 @@ public class ClassMap<V> {
 			return (Class<T>) Float.class;
 		else if (type == short.class)
 			return (Class<T>) Short.class;
+		else if (type == void.class)
+			return (Class<T>) Void.class;
 		else
 			throw new IllegalStateException("Unrecognized primitive type: " + type.getName());
 	}

@@ -591,6 +591,16 @@ public class LambdaUtils {
 		}
 
 		@Override
+		public <V> Function<T, V> andThen(Function<? super T, ? extends V> after) {
+			return (Function<T, V>) after;
+		}
+
+		@Override
+		public <V> Function<V, T> compose(Function<? super V, ? extends T> before) {
+			return (Function<V, T>) before;
+		}
+
+		@Override
 		public int hashCode() {
 			return 0;
 		}
@@ -797,6 +807,18 @@ public class LambdaUtils {
 		@Override
 		public X apply(T t) {
 			return getLambda().apply(t);
+		}
+
+		@Override
+		public <V> Function<T, V> andThen(Function<? super X, ? extends V> after) {
+			if (after instanceof IdentityFunction)
+				return (Function<T, V>) this;
+			else {
+				return new PrintableFunction<>(v -> {
+					X interm = apply(v);
+					return after.apply(interm);
+				}, () -> toString() + "->" + after.toString());
+			}
 		}
 	}
 
