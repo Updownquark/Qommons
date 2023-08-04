@@ -111,10 +111,10 @@ public class ZipResourceWriter implements HierarchicalResourceWriter, AutoClosea
 		try {
 			FileUtils.extractZip(zipIn, (entry, zip) -> {
 				try (OutputStream writer = dfs.writeResource(entry.getName())) {
-					int read = zipIn.read(buffer);
+					int read = zip.read(buffer);
 					while (read > 0) {
 						writer.write(buffer, 0, read);
-						read = zipIn.read(buffer);
+						read = zip.read(buffer);
 					}
 				}
 			}, null);
