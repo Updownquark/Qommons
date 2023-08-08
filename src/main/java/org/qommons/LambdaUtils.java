@@ -36,7 +36,54 @@ public class LambdaUtils {
 		(v1, v2) -> ((Comparable<Object>) v1).compareTo(v2), //
 		() -> "Comparable::compareTo", "Comparable::compareTo");
 
-	private interface Identity {}
+	private interface Identity {
+	}
+
+	/** A Runnable that does nothing */
+	public static final Runnable RUN_DO_NOTHING = new Runnable() {
+		@Override
+		public void run() {
+		}
+
+		@Override
+		public String toString() {
+			return "Nothing";
+		}
+	};
+
+	/** A Consumer that does nothing */
+	public static final Consumer<Object> CONSUME_DO_NOTHING = new Consumer<Object>() {
+		@Override
+		public void accept(Object value) {
+		}
+
+		@Override
+		public Consumer<Object> andThen(Consumer<? super Object> after) {
+			return after;
+		}
+
+		@Override
+		public String toString() {
+			return "Nothing";
+		}
+	};
+
+	/** A Bi-Consumer that does nothing */
+	public static final BiConsumer<Object, Object> BI_CONSUME_DO_NOTHING = new BiConsumer<Object, Object>() {
+		@Override
+		public void accept(Object v1, Object v2) {
+		}
+
+		@Override
+		public BiConsumer<Object, Object> andThen(BiConsumer<? super Object, ? super Object> after) {
+			return after;
+		}
+
+		@Override
+		public String toString() {
+			return "Nothing";
+		}
+	};
 
 	/**
 	 * @param o The lambda to check
@@ -55,6 +102,23 @@ public class LambdaUtils {
 			return IDENTITY;
 		Object id = o instanceof PrintableLambda ? ((PrintableLambda<?>) o).identifier : null;
 		return id == NULL_PLACEHOLDER ? null : id;
+	}
+
+	/**
+	 * @param function The function to test
+	 * @return Whether the given function is a type known to this utility class which does nothing
+	 */
+	public static boolean isTrivial(Object function) {
+		if (function == null)
+			return true;
+		else if (function == RUN_DO_NOTHING || function == CONSUME_DO_NOTHING || function == BI_CONSUME_DO_NOTHING)
+			return true;
+		else if (function == IdentityFunction.INSTANCE)
+			return true;
+		else if (function instanceof LambdaUtility)
+			return ((LambdaUtility) function).isTrivial();
+		else
+			return false;
 	}
 
 	/**
@@ -202,8 +266,8 @@ public class LambdaUtils {
 	 * @return A function that always returns the given value
 	 */
 	public static <T, V, X> BiFunction<T, V, X> constantBiFn(X value, String print, Object identifier) {
-		return new PrintableBiFunction<>((t, v) -> value,
-			print != null ? new ConstantSupply(print) : () -> String.valueOf(value), identifier);
+		return new PrintableBiFunction<>((t, v) -> value, print != null ? new ConstantSupply(print) : () -> String.valueOf(value),
+			identifier);
 	}
 
 	/**
@@ -582,6 +646,10 @@ public class LambdaUtils {
 		return new PrintableComparator<>(compare, print, identifier);
 	}
 
+	interface LambdaUtility {
+		boolean isTrivial();
+	}
+
 	static class IdentityFunction<T> implements UnaryOperator<T>, Identity {
 		static final IdentityFunction<?> INSTANCE = new IdentityFunction<>();
 
@@ -645,7 +713,7 @@ public class LambdaUtils {
 		}
 	}
 
-	private static class PrintableLambda<L> {
+	private static abstract class PrintableLambda<L> implements LambdaUtility {
 		private final L theLambda;
 		private final Supplier<String> thePrint;
 		private final Object identifier;
@@ -714,6 +782,11 @@ public class LambdaUtils {
 		public void run() {
 			getLambda().run();
 		}
+
+		@Override
+		public boolean isTrivial() {
+			return LambdaUtils.isTrivial(getLambda());
+		}
 	}
 
 	static class PrintableConsumer<T> extends PrintableLambda<Consumer<T>> implements Consumer<T> {
@@ -728,6 +801,11 @@ public class LambdaUtils {
 		@Override
 		public void accept(T t) {
 			getLambda().accept(t);
+		}
+
+		@Override
+		public boolean isTrivial() {
+			return LambdaUtils.isTrivial(getLambda());
 		}
 	}
 
@@ -744,6 +822,11 @@ public class LambdaUtils {
 		public T get() {
 			return getLambda().get();
 		}
+
+		@Override
+		public boolean isTrivial() {
+			return false;
+		}
 	}
 
 	static class PrintableExSupplier<T, X extends Throwable> extends PrintableLambda<ExSupplier<T, X>> implements ExSupplier<T, X> {
@@ -759,6 +842,11 @@ public class LambdaUtils {
 		public T get() throws X {
 			return getLambda().get();
 		}
+
+		@Override
+		public boolean isTrivial() {
+			return false;
+		}
 	}
 
 	static class PrintablePredicate<T> extends PrintableLambda<Predicate<T>> implements Predicate<T> {
@@ -773,6 +861,11 @@ public class LambdaUtils {
 		@Override
 		public boolean test(T t) {
 			return getLambda().test(t);
+		}
+
+		@Override
+		public boolean isTrivial() {
+			return false;
 		}
 	}
 
@@ -792,6 +885,11 @@ public class LambdaUtils {
 		@Override
 		public boolean test(T t, U u) {
 			return getLambda().test(t, u);
+		}
+
+		@Override
+		public boolean isTrivial() {
+			return false;
 		}
 	}
 
@@ -820,6 +918,11 @@ public class LambdaUtils {
 				}, () -> toString() + "->" + after.toString());
 			}
 		}
+
+		@Override
+		public boolean isTrivial() {
+			return LambdaUtils.isTrivial(getLambda());
+		}
 	}
 
 	static class PrintableExFunction<T, X, E extends Throwable> extends PrintableLambda<ExFunction<T, X, E>>
@@ -835,6 +938,11 @@ public class LambdaUtils {
 		@Override
 		public X apply(T t) throws E {
 			return getLambda().apply(t);
+		}
+
+		@Override
+		public boolean isTrivial() {
+			return LambdaUtils.isTrivial(getLambda());
 		}
 	}
 
@@ -855,6 +963,11 @@ public class LambdaUtils {
 		public X apply(T t, U u) {
 			return getLambda().apply(t, u);
 		}
+
+		@Override
+		public boolean isTrivial() {
+			return LambdaUtils.isTrivial(getLambda());
+		}
 	}
 
 	static class PrintableBiConsumer<T, U> extends PrintableLambda<BiConsumer<T, U>> implements BiConsumer<T, U> {
@@ -866,9 +979,14 @@ public class LambdaUtils {
 		public void accept(T t, U u) {
 			getLambda().accept(t, u);
 		}
+
+		@Override
+		public boolean isTrivial() {
+			return LambdaUtils.isTrivial(getLambda());
+		}
 	}
 
-	static class MappedBiFunction1<T, U, X> implements BiFunction<T, U, X> {
+	static class MappedBiFunction1<T, U, X> implements BiFunction<T, U, X>, LambdaUtility {
 		private final Function<? super T, ? extends X> theMap;
 
 		MappedBiFunction1(Function<? super T, ? extends X> map) {
@@ -880,6 +998,11 @@ public class LambdaUtils {
 		@Override
 		public X apply(T t, U u) {
 			return theMap.apply(t);
+		}
+
+		@Override
+		public boolean isTrivial() {
+			return LambdaUtils.isTrivial(theMap);
 		}
 
 		@Override
@@ -934,7 +1057,7 @@ public class LambdaUtils {
 		}
 	}
 
-	static class MappedTriFunction1<T, U, V, X> implements TriFunction<T, U, V, X> {
+	static class MappedTriFunction1<T, U, V, X> implements TriFunction<T, U, V, X>, LambdaUtility {
 		private final Function<? super T, ? extends X> theMap;
 
 		MappedTriFunction1(Function<? super T, ? extends X> map) {
@@ -944,6 +1067,11 @@ public class LambdaUtils {
 		@Override
 		public X apply(T t, U u, V v) {
 			return theMap.apply(t);
+		}
+
+		@Override
+		public boolean isTrivial() {
+			return LambdaUtils.isTrivial(theMap);
 		}
 
 		@Override
@@ -1030,7 +1158,7 @@ public class LambdaUtils {
 		}
 	}
 
-	static class BiMappedTriFunction12<T, U, V, X> implements TriFunction<T, U, V, X> {
+	static class BiMappedTriFunction12<T, U, V, X> implements TriFunction<T, U, V, X>, LambdaUtility {
 		private final BiFunction<? super T, ? super U, ? extends X> theMap;
 
 		BiMappedTriFunction12(BiFunction<? super T, ? super U, ? extends X> map) {
@@ -1040,6 +1168,11 @@ public class LambdaUtils {
 		@Override
 		public X apply(T arg1, U arg2, V arg3) {
 			return theMap.apply(arg1, arg2);
+		}
+
+		@Override
+		public boolean isTrivial() {
+			return LambdaUtils.isTrivial(theMap);
 		}
 
 		@Override
@@ -1143,6 +1276,11 @@ public class LambdaUtils {
 		public X apply(T t, U u, V v) {
 			return getLambda().apply(t, u, v);
 		}
+
+		@Override
+		public boolean isTrivial() {
+			return LambdaUtils.isTrivial(getLambda());
+		}
 	}
 
 	static class PrintableComparable<T> extends PrintableLambda<Comparable<T>> implements Comparable<T> {
@@ -1154,6 +1292,11 @@ public class LambdaUtils {
 		public int compareTo(T o1) {
 			return getLambda().compareTo(o1);
 		}
+
+		@Override
+		public boolean isTrivial() {
+			return false;
+		}
 	}
 
 	static class PrintableComparator<T> extends PrintableLambda<Comparator<T>> implements Comparator<T> {
@@ -1164,6 +1307,11 @@ public class LambdaUtils {
 		@Override
 		public int compare(T o1, T o2) {
 			return getLambda().compare(o1, o2);
+		}
+
+		@Override
+		public boolean isTrivial() {
+			return false;
 		}
 	}
 }
