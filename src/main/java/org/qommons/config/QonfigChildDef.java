@@ -5,6 +5,7 @@ import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 
+import org.qommons.MultiInheritanceSet;
 import org.qommons.io.PositionedContent;
 
 /** A child that may be specified for an element */
@@ -47,13 +48,14 @@ public interface QonfigChildDef extends QonfigElementOwned {
 
 	/**
 	 * @param element The element type to test
+	 * @param autoInheritance Add-ons that are automatically inherited by the element
 	 * @return Whether the given element type is able to fulfill this child role
 	 */
-	default boolean isCompatible(QonfigElementDef element) {
+	default boolean isCompatible(QonfigElementDef element, MultiInheritanceSet<QonfigAddOn> autoInheritance) {
 		if (getType() != null && !getType().isAssignableFrom(element))
 			return false;
 		for (QonfigAddOn req : getRequirement()) {
-			if (!req.isAssignableFrom(element))
+			if (!req.isAssignableFrom(element) && !autoInheritance.contains(req))
 				return false;
 		}
 		return true;

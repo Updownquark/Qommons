@@ -1,6 +1,7 @@
 package org.qommons.config;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -83,23 +84,54 @@ public class QonfigAutoInheritance {
 	public static class Compiler {
 		private final Collection<QonfigToolkit> theToolkits;
 		private final Set<QonfigChildDef> theRoles;
+		private final MultiInheritanceSet<QonfigAddOn> theInheritance;
 		private final MultiInheritanceSet<QonfigElementOrAddOn> theTested;
 
 		/**
-		 * @param toolkit The toolkits with auto-inheritance to consider
-		 * @param roles The child roles fulfilled by the element to consider
-		 * @param inheritance Consumer to be notified of add-ons inherited just from the roles
+		 * @param toolkits The toolkits with auto-inheritance to consider
 		 */
-		public Compiler(Collection<QonfigToolkit> toolkit, Set<QonfigChildDef> roles, Consumer<QonfigAddOn> inheritance) {
-			theToolkits = toolkit;
-			theRoles = roles;
+		public Compiler(Collection<QonfigToolkit> toolkits) {
+			theToolkits = toolkits;
+			theRoles = new LinkedHashSet<>();
+			theInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
 			theTested = MultiInheritanceSet.create(QonfigElementOrAddOn::isAssignableFrom);
-			for (QonfigChildDef role : theRoles) {
-				add(role.getType(), inheritance);
-				for (QonfigAddOn req : role.getRequirement())
-					add(req, inheritance);
-				for (QonfigAddOn inh : role.getInheritance())
+		}
+
+		public MultiInheritanceSet<QonfigAddOn> getInheritance() {
+			return MultiInheritanceSet.unmodifiable(theInheritance);
+		}
+
+		public Compiler add(QonfigChildDef role, Consumer<QonfigAddOn> inheritance) {
+			if (!theRoles.add(role))
+				return this;
+			for (QonfigElementOrAddOn type : theTested.values()) {
+				for (QonfigToolkit toolkit : theToolkits) {
+					MultiInheritanceSet<QonfigAddOn> autoInh = toolkit.getAutoInheritance(type, theRoles);
+					for (QonfigAddOn inh : autoInh.values()) {
+						theInheritance.add(inh);
+						if (inheritance != null)
+							inheritance.accept(inh);
+						add(inh, inheritance);
+					}
+				}
+			}
+			add(role.getType(), inheritance);
+			for (QonfigAddOn req : role.getRequirement())
+				add(req, inheritance);
+			for (QonfigAddOn inh : role.getInheritance())
+				add(inh, inheritance);
+			return this;
+		}
+
+		private void add(QonfigChildDef role, QonfigElementOrAddOn type, Consumer<QonfigAddOn> inheritance) {
+			for (QonfigToolkit toolkit : theToolkits) {
+				MultiInheritanceSet<QonfigAddOn> autoInh = toolkit.getAutoInheritance(type, Collections.singleton(role));
+				for (QonfigAddOn inh : autoInh.values()) {
+					theInheritance.add(inh);
+					if (inheritance != null)
+						inheritance.accept(inh);
 					add(inh, inheritance);
+				}
 			}
 		}
 
@@ -113,8 +145,11 @@ public class QonfigAutoInheritance {
 				for (QonfigToolkit toolkit : theToolkits) {
 					MultiInheritanceSet<QonfigAddOn> autoInh = toolkit.getAutoInheritance(type, theRoles);
 					for (QonfigAddOn inh : autoInh.values()) {
-						inheritance.accept(inh);
-						add(inh, inheritance);
+						if (theInheritance.add(inh)) {
+							if (inheritance != null)
+								inheritance.accept(inh);
+							add(inh, inheritance);
+						}
 					}
 				}
 			}
@@ -200,15 +235,13 @@ public class QonfigAutoInheritance {
 		 */
 		public Builder withTarget(QonfigElementOrAddOn target, QonfigChildDef role, PositionedContent position) {
 			if (target == null && role == null) {
-				theSession.at(position)
-					.error("Either a target or a role or both must be specified for an auto-inheritance target");
+				theSession.at(position).error("Either a target or a role or both must be specified for an auto-inheritance target");
 				return this;
 			}
 			AutoInheritTarget ait = new AutoInheritTarget(target, role);
 			QonfigParseSession targetSession = theSession.at(position);
 			if (role != null && role.getMax() == 0)
-				targetSession
-					.error("As no children are allowed in role " + role + ", this role cannot be targeted for auto-inheritance");
+				targetSession.error("As no children are allowed in role " + role + ", this role cannot be targeted for auto-inheritance");
 			if (target != null && role != null && role.getType() != null && !role.getType().isAssignableFrom(target))
 				targetSession.error("Target " + target + " cannot fulfill role " + role + ", which requires " + role.getType());
 			for (QonfigAddOn inheritance : theInheritance.values())
@@ -224,9 +257,7 @@ public class QonfigAutoInheritance {
 			} else if (ait.getRole() != null && ait.getRole().getType() != null
 				&& inheritance.getSuperElement().isAssignableFrom(ait.getRole().getType())) {//
 			} else
-				session
-					.error("Cannot target " + ait + " to inherit " + inheritance + ", which requires "
-					+ inheritance.getSuperElement());
+				session.error("Cannot target " + ait + " to inherit " + inheritance + ", which requires " + inheritance.getSuperElement());
 		}
 
 		/** @return The new auto-inheritance object */

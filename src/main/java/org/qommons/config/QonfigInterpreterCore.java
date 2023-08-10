@@ -229,7 +229,9 @@ public class QonfigInterpreterCore {
 			for (QonfigElementOrAddOn type : theTypes.values())
 				toolkits.add(type.getDeclarer());
 			// The constructor here does the work and we don't have any further add-ons to add, no need to keep the compiler reference
-			new QonfigAutoInheritance.Compiler(toolkits.values(), roles, types::add);
+			QonfigAutoInheritance.Compiler autoInheritance = new QonfigAutoInheritance.Compiler(toolkits.values());
+			for (QonfigChildDef role : roles)
+				autoInheritance.add(role, types::add);
 
 			return theInterpreter.interpret(this, child, asType, MultiInheritanceSet.unmodifiable(types), //
 				theElement.getChildren().indexOf(child));

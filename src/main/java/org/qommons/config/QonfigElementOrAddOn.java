@@ -485,7 +485,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 							.build(theMetaSpec.get().getName() + ADD_ON_METADATA_ELEMENT, theSession, theMetaSpec.getDescription())//
 							.inherits((QonfigAddOn) theMetaSpec.get())//
 							.build();
-					theMetadataBuilder = QonfigElement.build(theSession, theMetadata, null, mdType,
+					theMetadataBuilder = QonfigElement.buildRoot(theSession, theMetadata, mdType,
 						"Metadata for " + theSession.getToolkit().getName() + "." + theName);
 				}
 				break;

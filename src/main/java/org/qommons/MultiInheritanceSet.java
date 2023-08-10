@@ -1,6 +1,5 @@
 package org.qommons;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -10,6 +9,7 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 
 import org.qommons.collect.MutableCollectionElement.StdMsg;
+import org.qommons.tree.BetterTreeList;
 
 /**
  * A set of items in a hierarchy. For any item inserted into this set, the set will then also contain all items that the new item extends.
@@ -223,7 +223,8 @@ public interface MultiInheritanceSet<T> {
 		/** @param inheritance The inheritance for the set to use */
 		public Default(MultiInheritanceSet.Inheritance<T> inheritance) {
 			theInheritance = inheritance;
-			theNodes = new ArrayList<>(5);
+			// Make it better to avoid ConcurrentModificationExceptions
+			theNodes = BetterTreeList.<T> build().build();
 		}
 
 		@Override

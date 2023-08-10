@@ -320,19 +320,6 @@ public class QonfigElement implements FileSourced, SelfDescribed {
 		return theValue == null ? null : theValue.toString();
 	}
 
-	/**
-	 * Creates a child of this element. However, the child will not be added to this element's {@link #getChildren() children}.
-	 * 
-	 * @param child The role for the new child to fill
-	 * @param type The element type of the new child
-	 * @param errors The error reporting for the builder
-	 * @param description A description for the synthetic child
-	 * @return A builder for a new, disconnected child of this element
-	 */
-	public Builder synthesizeChild(QonfigChildDef child, QonfigElementDef type, ErrorReporting errors, String description) {
-		return new Builder(errors, getDocument(), this, type, Collections.singleton(child), Collections.emptySet(), description);
-	}
-
 	/** @return A string with this element's type name and shortened file location */
 	public String printLocation() {
 		StringBuilder str = new StringBuilder().append('<').append(theType.getName()).append("> ");
@@ -360,14 +347,14 @@ public class QonfigElement implements FileSourced, SelfDescribed {
 	 * 
 	 * @param session The session for error logging
 	 * @param doc The document being parsed
-	 * @param parent The parent for the new element
 	 * @param type The declared type of the element
 	 * @param description A description for the element
 	 * @return A builder for an element
 	 */
-	public static Builder build(QonfigParseSession session, QonfigDocument doc, QonfigElement parent, QonfigElementDef type,
-		String description) {
-		return new Builder(session, doc, parent, type, Collections.emptySet(), Collections.emptySet(), description);
+	public static Builder buildRoot(QonfigParseSession session, QonfigDocument doc, QonfigElementDef type, String description) {
+		QonfigAutoInheritance.Compiler autoInheritance = new QonfigAutoInheritance.Compiler(Collections.singleton(doc.getDocToolkit()));
+		autoInheritance.add(type, null);
+		return new Builder(session, doc, null, type, Collections.emptySet(), Collections.emptySet(), autoInheritance, description);
 	}
 
 	/** Represents an attribute value before it is parsed */
@@ -410,7 +397,8 @@ public class QonfigElement implements FileSourced, SelfDescribed {
 		private int theStage;
 
 		Builder(ErrorReporting errors, QonfigDocument doc, QonfigElement parent, QonfigElementDef type,
-			Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles, String description) {
+			Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles, QonfigAutoInheritance.Compiler autoInheritance,
+			String description) {
 			if (type.isAbstract())
 				errors.error("Elements cannot be declared directly for abstract type " + type);
 			theErrors = errors;
@@ -439,10 +427,10 @@ public class QonfigElement implements FileSourced, SelfDescribed {
 					}
 				}
 			}
-			theAutoInheritance = new QonfigAutoInheritance.Compiler(Collections.singleton(doc.getDocToolkit()), theParentRoles,
-				theInheritance::add);
-			theAutoInheritance.add(type, theInheritance::add);
-			theInheritance.addAll(doc.getDocToolkit().getAutoInheritance(theType, theParentRoles).values());
+			theAutoInheritance = autoInheritance;
+			theInheritance.addAll(theAutoInheritance.getInheritance().values());
+			for (QonfigChildDef role : theParentRoles)
+				theAutoInheritance.add(role, theInheritance::add);
 			theDescription = description;
 
 			for (QonfigChildDef ch : parentRoles) {
@@ -556,6 +544,9 @@ public class QonfigElement implements FileSourced, SelfDescribed {
 			ErrorReporting errors = theErrors.at(position);
 			Set<QonfigChildDef> roles = new LinkedHashSet<>(declaredRoles.size() * 3 / 2 + 1);
 			Set<QonfigChildDef.Declared> realRoles = new LinkedHashSet<>(declaredRoles.size() * 3 / 2 + 1);
+			QonfigAutoInheritance.Compiler autoInheritance = new QonfigAutoInheritance.Compiler(
+				Collections.singleton(theDocument.getDocToolkit()));
+			autoInheritance.add(type, null);
 			if (!declaredRoles.isEmpty()) {
 				roleLoop: //
 				for (ElementQualifiedParseItem roleDef : declaredRoles) {
@@ -611,7 +602,7 @@ public class QonfigElement implements FileSourced, SelfDescribed {
 			} else { // Alright, we have to guess
 				QonfigChildDef role = null;
 				for (Map.Entry<QonfigChildDef.Declared, QonfigChildDef> childDef : theType.getAllChildren().entrySet()) {
-					if (childDef.getValue().isCompatible(type)) {
+					if (childDef.getValue().isCompatible(type, autoInheritance.getInheritance())) {
 						if (role != null) {
 							errors.error("Child of type " + type + " is compatible with multiple roles--role must be specified");
 							return this;
@@ -621,7 +612,7 @@ public class QonfigElement implements FileSourced, SelfDescribed {
 				}
 				for (QonfigAddOn inh : theInheritance.getExpanded(QonfigAddOn::getInheritance)) {
 					for (Map.Entry<String, QonfigChildDef.Declared> childDef : inh.getDeclaredChildren().entrySet()) {
-						if (childDef.getValue().isCompatible(type)) {
+						if (childDef.getValue().isCompatible(type, autoInheritance.getInheritance())) {
 							if (role == null)
 								role = childDef.getValue();
 							else if (!role.getDeclared().equals(childDef.getValue()))
@@ -649,7 +640,7 @@ public class QonfigElement implements FileSourced, SelfDescribed {
 					children.add(role);
 			}
 			Builder childBuilder = new Builder(errors, theDocument, theElement, type, Collections.unmodifiableSet(roles),
-				Collections.unmodifiableSet(realRoles), description);
+				Collections.unmodifiableSet(realRoles), autoInheritance, description);
 			child.accept(childBuilder);
 			QonfigElement builtChild = childBuilder.build();
 			theChildren.add(builtChild);

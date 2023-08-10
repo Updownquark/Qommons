@@ -209,7 +209,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				});
 			session = QonfigParseSession.forRoot(docToolkit, position);
 			doc = new QonfigDocument(location, docToolkit);
-			parseDocElement(session, QonfigElement.build(session, doc, null, rootDef, getDocumentation(rootReader)), rootReader, true,
+			parseDocElement(session, QonfigElement.buildRoot(session, doc, rootDef, getDocumentation(rootReader)), rootReader, true,
 				el -> true);
 		}
 		session.throwErrors(location);
