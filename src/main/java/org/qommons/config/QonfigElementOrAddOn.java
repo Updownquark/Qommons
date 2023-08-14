@@ -550,9 +550,13 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			if (addOn.getSuperElement() != null) {
 				if (addOn.getSuperElement() == theBuilt) {//
 				} else if (theSuperElement != null && addOn.getSuperElement().isAssignableFrom(theSuperElement)) {//
-				} else if (theSuperElement == null)
-					theSuperElement = addOn.getSuperElement();
-				else
+				} else if (theSuperElement == null) {
+					// // For add-ons, just inherit this element. For elements it must be declared.
+					if (this instanceof QonfigAddOn.Builder)
+						theSuperElement = addOn.getSuperElement();
+					else
+						return theName + " cannot inherit " + addOn + ": " + addOn.getSuperElement() + " required";
+				} else
 					return "Illegal inheritance: " + theName + " <- " + addOn + ": super element " + addOn.getSuperElement()
 						+ " incompatible with " + theName;
 			}
