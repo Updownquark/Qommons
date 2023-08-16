@@ -1940,7 +1940,7 @@ public class SimpleXMLParser {
 						ch = getNextStreamChar();
 					}
 					if (count == 0)
-						throwException(true, "Entity name expected");
+						throwException(true, "Entity name expected following '&'.  Use '&amp;' for the '&' character.");
 					String entityName = theEntityBuffer.substring(NAMED_ENTITY_PREFIX.length());
 					content = theNamedEntities.get(entityName);
 					if (content == null) {

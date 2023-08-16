@@ -321,6 +321,8 @@ public interface MultiInheritanceSet<T> {
 		private boolean hasNext;
 
 		InheritanceIterator(InheritanceEnumerator<T> enumerator, Iterator<T> init) {
+			if (enumerator == null || init == null)
+				throw new NullPointerException();
 			theEnumerator = enumerator;
 			theIterStack = new LinkedList<>();
 			theIterStack.add(init);

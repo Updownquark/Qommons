@@ -32,6 +32,14 @@ public class LocatedFilePosition extends FilePosition {
 		return theFileLocation;
 	}
 
+	/** @return The name of the {@link #getFileLocation() file location}, without the path prefix */
+	public String getFileName() {
+		if (theFileLocation == null)
+			return null;
+		int lastSlash = theFileLocation.lastIndexOf('/');
+		return lastSlash < 0 ? theFileLocation : theFileLocation.substring(lastSlash + 1);
+	}
+
 	/** @return A string representing this position without the file path */
 	public String printPosition() {
 		return super.toString();

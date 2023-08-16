@@ -1,6 +1,7 @@
 package org.qommons.config;
 
 import org.qommons.SelfDescribed;
+import org.qommons.io.PositionedContent;
 
 /** Modifies an attribute or element value defined by a super-type */
 public interface ValueDefModifier extends SelfDescribed {
@@ -16,6 +17,9 @@ public interface ValueDefModifier extends SelfDescribed {
 	/** @return The default value to use if the value is not specified. Null means to inherit from the super-specified value. */
 	Object getDefaultValue();
 
+	/** @return The content that specified the modifier */
+	PositionedContent getContent();
+
 	/** Default {@link ValueDefModifier} implementation */
 	public static class Default implements ValueDefModifier {
 		private final QonfigToolkit theDeclarer;
@@ -23,6 +27,7 @@ public interface ValueDefModifier extends SelfDescribed {
 		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
 		private final String theDescription;
+		private final PositionedContent theContent;
 
 		/**
 		 * @param declarer The toolkit that declared the modifier
@@ -31,14 +36,16 @@ public interface ValueDefModifier extends SelfDescribed {
 		 * @param specify The specification for the value. Null means to inherit from the super-specified value.
 		 * @param defaultValue The default value to use if the value is not specified. Null means to inherit from the super-specified value.
 		 * @param description The description for this modification
+		 * @param content The content that specified the modifier
 		 */
 		public Default(QonfigToolkit declarer, QonfigValueType typeRestriction, SpecificationType specify, Object defaultValue,
-			String description) {
+			String description, PositionedContent content) {
 			theDeclarer = declarer;
 			theTypeRestriction = typeRestriction;
 			theSpecification = specify;
 			theDefaultValue = defaultValue;
 			theDescription = description;
+			theContent = content;
 		}
 
 		@Override
@@ -64,6 +71,11 @@ public interface ValueDefModifier extends SelfDescribed {
 		@Override
 		public String getDescription() {
 			return theDescription;
+		}
+
+		@Override
+		public PositionedContent getContent() {
+			return theContent;
 		}
 
 		@Override

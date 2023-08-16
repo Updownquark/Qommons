@@ -94,18 +94,22 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
 		private final String theDescription;
+		private final PositionedContent theContent;
 
 		/**
 		 * @param declarer The toolkit that declared this modifier
 		 * @param specification The specification type of the attribute or element value
 		 * @param defaultValue The default value for the attribute or element value
 		 * @param description The description for this modification
+		 * @param content The content that specified the modifier
 		 */
-		public ValueModifier(QonfigToolkit declarer, SpecificationType specification, Object defaultValue, String description) {
+		public ValueModifier(QonfigToolkit declarer, SpecificationType specification, Object defaultValue, String description,
+			PositionedContent content) {
 			theDeclarer = declarer;
 			theDefaultValue = defaultValue;
 			theSpecification = specification;
 			theDescription = description;
+			theContent = content;
 		}
 
 		@Override
@@ -131,6 +135,11 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		@Override
 		public String getDescription() {
 			return theDescription;
+		}
+
+		@Override
+		public PositionedContent getContent() {
+			return theContent;
 		}
 
 		@Override
@@ -328,8 +337,8 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 
 		@Override
 		protected ValueModifier valueModifier(QonfigValueType type, SpecificationType specification, Object defaultValue,
-			String description) {
-			return new ValueModifier(getSession().getToolkit(), specification, defaultValue, description);
+			String description, PositionedContent position) {
+			return new ValueModifier(getSession().getToolkit(), specification, defaultValue, description, position);
 		}
 
 		@Override

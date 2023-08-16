@@ -115,8 +115,8 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 
 		@Override
 		protected ValueDefModifier valueModifier(QonfigValueType type, SpecificationType specification, Object defaultValue,
-			String description) {
-			return new ValueDefModifier.Default(getSession().getToolkit(), type, specification, defaultValue, description);
+			String description, PositionedContent position) {
+			return new ValueDefModifier.Default(getSession().getToolkit(), type, specification, defaultValue, description, position);
 		}
 
 		@Override

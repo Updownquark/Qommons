@@ -61,6 +61,15 @@ public interface LocatedPositionedContent extends PositionedContent {
 	/** @return The file that this position is in */
 	String getFileLocation();
 
+	/** @return The name of the {@link #getFileLocation() file location}, without the path prefix */
+	default String getFileName() {
+		String file = getFileLocation();
+		if (file == null)
+			return null;
+		int lastSlash = file.lastIndexOf('/');
+		return lastSlash < 0 ? file : file.substring(lastSlash + 1);
+	}
+
 	@Override
 	LocatedFilePosition getPosition(int index);
 
@@ -118,6 +127,8 @@ public interface LocatedPositionedContent extends PositionedContent {
 
 		@Override
 		public LocatedFilePosition getPosition(int index) {
+			if (theContent == null)
+				return null;
 			return new LocatedFilePosition(theFileLocation, theContent.getPosition(index));
 		}
 

@@ -250,8 +250,10 @@ public interface ErrorReporting {
 	default ErrorReporting at(PositionedContent position) {
 		if (position instanceof LocatedPositionedContent)
 			return at((LocatedPositionedContent) position);
-		else
+		else if (getFileLocation() != null)
 			return at(LocatedPositionedContent.of(getFileLocation().getFileLocation(), position));
+		else
+			return at((LocatedPositionedContent) null);
 	}
 
 	/**
@@ -261,7 +263,7 @@ public interface ErrorReporting {
 	default ErrorReporting at(int positionOffset) {
 		if (positionOffset == 0)
 			return this;
-		return at(getFileLocation().subSequence(positionOffset));
+		return at(getFileLocation() == null ? null : getFileLocation().subSequence(positionOffset));
 	}
 
 	/**

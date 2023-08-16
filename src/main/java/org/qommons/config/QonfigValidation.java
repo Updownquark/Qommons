@@ -1,11 +1,13 @@
 package org.qommons.config;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
 
+import org.qommons.MultiInheritanceSet;
 import org.qommons.config.QonfigAddOn.ChildModifier;
 import org.qommons.config.QonfigAddOn.ValueModifier;
 
@@ -89,6 +91,83 @@ public class QonfigValidation {
 			}
 		}
 		return new ValueSpec(type, newSpec, newDefaultValue);
+	}
+
+	public static ValueSpec validateValue(ValueSpec override, List<ValueSpec> inherited, Consumer<String> onError,
+		Consumer<String> onWarning) {
+		// Check type first
+		QonfigValueType type = null;
+		if (override.type != null) {
+			type = override.type;
+			for (ValueSpec inh : inherited) {
+				if (inh.type != null && inh.type != type) {
+					if (!(type instanceof QonfigAddOn || !(inh.type instanceof QonfigAddOn))
+						|| !((QonfigAddOn) inh.type).isAssignableFrom((QonfigAddOn) type))
+						onError.accept("Type " + inh.type + " cannot be overridden with type " + override.type);
+				}
+			}
+		} else {
+			MultiInheritanceSet<QonfigAddOn> types = null;
+			for (ValueSpec inh : inherited) {
+				if (inh.type != null) {
+					if (!(inh.type instanceof QonfigAddOn)) {
+						type = inh.type;
+						break;
+					}
+					if (types == null)
+						types = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+					types.add((QonfigAddOn) inh.type);
+				}
+			}
+			if (types != null) {
+				if (types.values().size() > 1)
+					onError.accept("Multiple incompatible types inherited: " + types + ".  Type must be specified.");
+				type = types.values().iterator().next();
+			} else if (type == null)
+				throw new IllegalStateException("No type given");
+		}
+
+		Object defaultValue = override.defaultValue;
+		boolean required = false, forbidden = false;
+		for (ValueSpec inh : inherited) {
+			switch (inh.specification) {
+			case Required:
+				required = true;
+				break;
+			case Optional:
+				break;
+			case Forbidden:
+				if (override.defaultValue != null && !override.defaultValue.equals(inh.defaultValue))
+					onError.accept("Cannot modify forbidden value: '" + inh.defaultValue + "' to '" + override.defaultValue + "'");
+				else if (forbidden && !inh.defaultValue.equals(defaultValue))
+					onError.accept("Inherited multiple values incompatible values for forbidden value");
+			}
+			if (inh.defaultValue != null && type.isInstance(inh.defaultValue))
+				defaultValue = inh.defaultValue;
+		}
+		SpecificationType specification;
+		if (override.specification != null) {
+			specification = override.specification;
+			switch (specification) {
+			case Required:
+				if (forbidden)
+					onError.accept("Cannot make a forbidden value specifiable");
+				else if (override.defaultValue != null)
+					onWarning.accept("Default value '" + override.defaultValue + "'will not be used--value must be specified");
+				break;
+			case Optional:
+			case Forbidden:
+				if (required && defaultValue == null)
+					onError.accept("Default value required to fulfill inherited requirement if value may be unspecified");
+				break;
+			}
+		} else if (forbidden)
+			specification = SpecificationType.Forbidden;
+		else if (defaultValue != null || !required)
+			specification = SpecificationType.Optional;
+		else
+			specification = SpecificationType.Required;
+		return new ValueSpec(type, specification, defaultValue);
 	}
 
 	/**

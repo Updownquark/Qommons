@@ -1,11 +1,13 @@
 package org.qommons.config;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -16,7 +18,6 @@ import org.qommons.QommonsUtils;
 import org.qommons.collect.BetterCollections;
 import org.qommons.collect.BetterHashMultiMap;
 import org.qommons.collect.BetterMultiMap;
-import org.qommons.config.QonfigAddOn.ValueModifier;
 import org.qommons.config.QonfigAttributeDef.Declared;
 import org.qommons.config.QonfigValidation.ValueSpec;
 import org.qommons.io.PositionedContent;
@@ -452,21 +453,10 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				}
 				break;
 			case NewChildren:
-				// Add modified attributes to compiled
-				for (Map.Entry<QonfigAttributeDef.Declared, ? extends ValueDefModifier> mod : get().getAttributeModifiers().entrySet()) {
-					QonfigAttributeDef.Modified modified = new QonfigAttributeDef.Modified(mod.getKey(), get(), //
-						mod.getValue().getTypeRestriction() != null ? mod.getValue().getTypeRestriction() : mod.getKey().getType(), //
-						mod.getValue().getSpecification() != null ? mod.getValue().getSpecification() : mod.getKey().getSpecification(), //
-						mod.getValue().getDefaultValue() != null ? mod.getValue().getDefaultValue() : mod.getKey().getDefaultValue(), null,
-						null);
-					QonfigAttributeDef old = theCompiledAttributes.put(mod.getKey(), modified);
-					theAttributesByName.add(mod.getKey().getName(), modified);
-					if (old != null)
-						theAttributesByName.remove(mod.getKey().getName(), old);
-				}
+				validateAttributes();
 				break;
 			case MetaData:
-				validate();
+				validateChildren();
 				if (theMetaSpec != null) {
 					theMetaSpec.setStage(Stage.Built);
 					theMetadata = new QonfigMetadata(theBuilt);
@@ -551,7 +541,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				if (addOn.getSuperElement() == theBuilt) {//
 				} else if (theSuperElement != null && addOn.getSuperElement().isAssignableFrom(theSuperElement)) {//
 				} else if (theSuperElement == null) {
-					// // For add-ons, just inherit this element. For elements it must be declared.
+					// For add-ons, just inherit this element. For elements it must be declared.
 					if (this instanceof QonfigAddOn.Builder)
 						theSuperElement = addOn.getSuperElement();
 					else
@@ -598,7 +588,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					specification = SpecificationType.Required;
 			} else if (specification == SpecificationType.Forbidden && defaultValue == null)
 				theSession.at(position).error("No default specified");
-			theValue = valueModifier(type, specification, defaultValue, description);
+			theValue = valueModifier(type, specification, defaultValue, description, position);
 			return this;
 		}
 
@@ -628,7 +618,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				err -> theSession.at(position).error(err), warn -> theSession.at(position).warn(warn));
 			if (newSpec.specification != theSuperElement.getValue().getSpecification()
 				|| !Objects.equals(newSpec.defaultValue, theSuperElement.getValue().getDefaultValue()))
-				theValue = valueModifier(type, specification, defaultValue, description);
+				theValue = valueModifier(type, specification, defaultValue, description, position);
 			return this;
 		}
 
@@ -639,10 +629,11 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param specification The specification for the value
 		 * @param defaultValue The value to use if the value is not specified
 		 * @param description The description for the value modification
+		 * @param position The content that specified the modifier
 		 * @return The value modifier to use for the item
 		 */
 		protected abstract ValueDefModifier valueModifier(QonfigValueType type, SpecificationType specification, Object defaultValue,
-			String description);
+			String description, PositionedContent position);
 
 		/**
 		 * Declares an attribute
@@ -716,12 +707,13 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					oldSpec = new ValueSpec(attribute.getDeclared().getType(), attribute.getDeclared().getSpecification(),
 						attribute.getDeclared().getDefaultValue());
 					ValueDefModifier mod = theSuperElement.getAttributeModifiers().get(attribute.getDeclared());
-					if (mod != null)
+					if (mod != null) {
 						oldSpec = QonfigValidation.validateSpecification(oldSpec, //
 							new ValueSpec(null, mod.getSpecification(), mod.getDefaultValue()), //
 							__ -> {
 							}, __ -> {
 							});
+					}
 				}
 			} else {
 				ext = theFullInheritance.contains((QonfigAddOn) owner);
@@ -737,7 +729,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				oldSpec, new ValueSpec(null, specification, defaultValue), //
 				err -> theSession.at(position).error(err), warn -> theSession.at(position).warn(warn));
 			theAttributeModifiers.put(attribute.getDeclared(),
-				valueModifier(newSpec.type, newSpec.specification, newSpec.defaultValue, description));
+				valueModifier(newSpec.type, newSpec.specification, newSpec.defaultValue, description, position));
+
 			return this;
 		}
 
@@ -1084,51 +1077,153 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 */
 		protected abstract QonfigElementOrAddOn create();
 
-		private void validate() {
-			boolean valueModified = theValue != null;
-			QonfigAddOn textModSource = null;
-			Map<QonfigAttributeDef.Declared, QonfigAddOn> attrModSource = new HashMap<>();
-			for (QonfigAddOn inh : theInheritance) {
-				// Validate value
-				if (inh.getValueModifier() != null) {
-					if (theValue == null) {
-						textModSource = inh;
-						theValue = inh.getValueModifier();
-					} else if (valueModified) {
-						QonfigValidation.validateSpecification( //
-							new ValueSpec(theSuperElement.getValue().getType(), inh.getValueModifier().getSpecification(),
-								inh.getValueModifier().getDefaultValue()), //
-							new ValueSpec(theValue.getTypeRestriction(), theValue.getSpecification(), theValue.getDefaultValue()), //
-							theSession::error, //
-							theSession::warn);
-					} else if (theValue.getSpecification() != inh.getValueModifier().getSpecification()
-						|| !Objects.equals(theValue.getDefaultValue(), inh.getValueModifier().getDefaultValue())) {
-						theSession.error("Inherited add-ons " + textModSource + " and " + inh + " specify different text modifications. "
-								+ theName + " must specify text modification explicitly.");
-					}
+		private void validateAttributes() {
+			//Compile all inherited attributes
+			Map<QonfigAttributeDef.Declared, List<ValueSpec>> inheritedAttrs=new HashMap<>();
+			if(theSuperElement!=null) {
+				for(Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : theSuperElement.getAllAttributes().entrySet())
+					inheritedAttrs.computeIfAbsent(attr.getKey(), __->new ArrayList<>()).add(new ValueSpec(attr.getValue().getType(),
+						attr.getValue().getSpecification(), attr.getValue().getDefaultValue()));
+			}
+			for (QonfigAddOn inh : theFullInheritance.values())
+				addAttributes(inheritedAttrs, inh);
+			
+			//Now ensure that we can create a single attribute for each attribute inherited which satisfies all inherited modifications
+			for(Map.Entry<QonfigAttributeDef.Declared, List<ValueSpec>> attr : inheritedAttrs.entrySet()) {
+				ValueDefModifier modifier=theAttributeModifiers.get(attr.getKey());
+				ValueSpec modSpec;
+				if(modifier!=null)
+					modSpec = new ValueSpec(modifier.getTypeRestriction(), modifier.getSpecification(), modifier.getDefaultValue());
+				else if(attr.getValue().size()==1 && theSuperElement!=null && theSuperElement.getAllAttributes().containsKey(attr.getKey())) {
+					theCompiledAttributes.put(attr.getKey(), theSuperElement.getAllAttributes().get(attr.getKey()));
+					continue;
+				}else
+					modSpec=new ValueSpec(null, null, null);
+				ValueSpec spec=QonfigValidation.validateValue(//
+						modSpec, attr.getValue(), theSession::error, theSession::warn);
+				if(modifier!=null)
+					theCompiledAttributes.put(attr.getKey(), new QonfigAttributeDef.Modified(attr.getKey(), theBuilt, spec.type, spec.specification,
+						spec.defaultValue, modifier.getContent(), modifier.getDescription()));
+				else
+					theCompiledAttributes.put(attr.getKey(), new QonfigAttributeDef.Modified(attr.getKey(), theBuilt, spec.type,
+						spec.specification, spec.defaultValue, null, null));
+			}
+			inheritedAttrs.clear();
+
+			// Now for the value. We only need this if we inherit a value, and that can only come from the super element, not add-ons
+			if (theSuperElement != null && theSuperElement.getValue() != null) {
+				List<ValueSpec> inheritedValues = new ArrayList<>();
+				inheritedValues.add(new ValueSpec(theSuperElement.getValue().getType(), theSuperElement.getValue().getSpecification(),
+					theSuperElement.getValue().getDefaultValue()));
+				for (QonfigAddOn inh : theInheritance) {
+					if (inh.getValue() != null && !inh.getSuperElement().isAssignableFrom(theSuperElement))
+						inheritedValues.add(
+							new ValueSpec(inh.getValue().getType(), inh.getValue().getSpecification(), inh.getValue().getDefaultValue()));
 				}
-				// Validate attribute modifications
-				for (Map.Entry<QonfigAttributeDef.Declared, ValueModifier> attr : inh.getAttributeModifiers().entrySet()) {
-					ValueDefModifier own = theAttributeModifiers.get(attr.getKey());
-					if (own == null) {
-						attrModSource.put(attr.getKey(), inh);
-						theAttributeModifiers.put(attr.getKey(), attr.getValue());
-					} else if (theAttributeModifierOrigSpecs.containsKey(attr.getKey())) {
-						QonfigValidation.validateSpecification( //
-							theAttributeModifierOrigSpecs.get(attr.getKey()), //
-							new ValueSpec(own.getTypeRestriction(), own.getSpecification(), own.getDefaultValue()), //
-							err -> theSession.at(attr.getKey().getFilePosition()).error(err), //
-							warn -> theSession.at(attr.getKey().getFilePosition()).warn(warn));
-					} else {
-						ValueDefModifier preMod = theAttributeModifiers.get(attr.getKey());
-						if (preMod.getSpecification() != attr.getValue().getSpecification()
-							|| !Objects.equals(preMod.getDefaultValue(), attr.getValue().getDefaultValue()))
-							theSession.at(attr.getKey().getFilePosition())
-								.error("Inherited add-ons " + attrModSource.get(attr.getKey()) + " and " + inh
-									+ " specify different modifications. " + theName + " must specify attribute modification explicitly.");
-					}
+
+				ValueSpec modSpec;
+				if (theValue != null)
+					modSpec = new ValueSpec(theValue.getTypeRestriction(), theValue.getSpecification(), theValue.getDefaultValue());
+				else if (inheritedValues.size() == 1) // No add-on modifications to worry about
+					modSpec = null;
+				else
+					modSpec = new ValueSpec(null, null, null);
+				if (modSpec != null) {
+					ValueSpec spec = QonfigValidation.validateValue(//
+						modSpec, inheritedValues, theSession::error, theSession::warn);
+					if (theValue != null)
+						if (spec.type != theValue.getTypeRestriction() || spec.specification != theValue.getSpecification()
+							|| spec.defaultValue != theValue.getDefaultValue())
+							theValue = new ValueDefModifier.Default(theBuilt.getDeclarer(), spec.type, spec.specification,
+								spec.defaultValue, theValue.getDescription(), theValue.getContent());
+						else
+							theValue = new ValueDefModifier.Default(theBuilt.getDeclarer(), spec.type, spec.specification,
+								spec.defaultValue, null, null);
 				}
 			}
+			// //For attributes we've explicitly modified, verify that the modification is valid given all inheritance
+			// for (Map.Entry<QonfigAttributeDef.Declared, ? extends ValueDefModifier> mod : get().getAttributeModifiers().entrySet()) {
+			// ValueSpec modSpec=new ValueSpec(mod.getValue().getTypeRestriction(), mod.getValue().getSpecification(),
+			// mod.getValue().getDefaultValue());
+			// //Can assume this will be here because we validate in modifyAttribute()
+			// List<ValueSpec> inherited=inheritedAttrs.get(mod.getKey());
+			// for(ValueSpec
+			// validateSpec
+			// modSpec=QonfigValidation.validateSpecification(modSpec, //
+			// new ValueSpec(theValue.getTypeRestriction(), theValue.getSpecification(), theValue.getDefaultValue()), //
+			// theSession::error, //
+			// theSession::warn);
+			// QonfigAttributeDef.Modified modified = new QonfigAttributeDef.Modified(mod.getKey(), get(), //
+			// mod.getValue().getTypeRestriction() != null ? mod.getValue().getTypeRestriction() : mod.getKey().getType(), //
+			// mod.getValue().getSpecification() != null ? mod.getValue().getSpecification() : mod.getKey().getSpecification(), //
+			// mod.getValue().getDefaultValue() != null ? mod.getValue().getDefaultValue() : mod.getKey().getDefaultValue(), null,
+			// null);
+			// QonfigAttributeDef old = theCompiledAttributes.put(mod.getKey(), modified);
+			// theAttributesByName.add(mod.getKey().getName(), modified);
+			// if (old != null)
+			// theAttributesByName.remove(mod.getKey().getName(), old);
+			// }
+			// boolean valueModified = theValue != null;
+			// QonfigAddOn textModSource = null;
+			// Map<QonfigAttributeDef.Declared, QonfigAddOn> attrModSource = new HashMap<>();
+			// for (QonfigAddOn inh : theInheritance) {
+			// // Validate value
+			// if (inh.getValueModifier() != null) {
+			// if (theValue == null) {
+			// textModSource = inh;
+			// theValue = inh.getValueModifier();
+			// } else if (valueModified) {
+			// QonfigValidation.validateSpecification( //
+			// new ValueSpec(theSuperElement.getValue().getType(), inh.getValueModifier().getSpecification(),
+			// inh.getValueModifier().getDefaultValue()), //
+			// new ValueSpec(theValue.getTypeRestriction(), theValue.getSpecification(), theValue.getDefaultValue()), //
+			// theSession::error, //
+			// theSession::warn);
+			// } else if (theValue.getSpecification() != inh.getValueModifier().getSpecification()
+			// || !Objects.equals(theValue.getDefaultValue(), inh.getValueModifier().getDefaultValue())) {
+			// theSession.error("Inherited add-ons " + textModSource + " and " + inh + " specify different text modifications. "
+			// + theName + " must specify text modification explicitly.");
+			// }
+			// }
+			// // Validate attribute modifications
+			// for (Map.Entry<QonfigAttributeDef.Declared, ValueModifier> attr : inh.getAttributeModifiers().entrySet()) {
+			// ValueDefModifier own = theAttributeModifiers.get(attr.getKey());
+			// if (own == null) {
+			// attrModSource.put(attr.getKey(), inh);
+			// theAttributeModifiers.put(attr.getKey(), attr.getValue());
+			// } else if (theAttributeModifierOrigSpecs.containsKey(attr.getKey())) {
+			// QonfigValidation.validateSpecification( //
+			// theAttributeModifierOrigSpecs.get(attr.getKey()), //
+			// new ValueSpec(own.getTypeRestriction(), own.getSpecification(), own.getDefaultValue()), //
+			// err -> theSession.at(attr.getKey().getFilePosition()).error(err), //
+			// warn -> theSession.at(attr.getKey().getFilePosition()).warn(warn));
+			// } else {
+			// ValueDefModifier preMod = theAttributeModifiers.get(attr.getKey());
+			// if (preMod.getSpecification() != attr.getValue().getSpecification()
+			// || !Objects.equals(preMod.getDefaultValue(), attr.getValue().getDefaultValue()))
+			// theSession.at(attr.getKey().getFilePosition())
+			// .error("Inherited add-ons " + attrModSource.get(attr.getKey()) + " and " + inh
+			// + " specify different modifications. " + theName + " must specify attribute modification explicitly.");
+			// }
+			// }
+			// }
+		}
+
+		private static void addAttributes(Map<QonfigAttributeDef.Declared, List<ValueSpec>> inheritedAttrs, QonfigAddOn addOn) {
+			for (QonfigAttributeDef.Declared attr : addOn.getDeclaredAttributes().values())
+				inheritedAttrs.computeIfAbsent(attr, __ -> new ArrayList<>())
+					.add(new ValueSpec(attr.getType(), attr.getSpecification(), attr.getDefaultValue()));
+			if (addOn.getSuperElement() != null) {
+				for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : addOn.getSuperElement().getAllAttributes()
+					.entrySet())
+					inheritedAttrs.computeIfAbsent(attr.getKey(), __ -> new ArrayList<>()).add(
+						new ValueSpec(attr.getValue().getType(), attr.getValue().getSpecification(), attr.getValue().getDefaultValue()));
+			}
+			for (QonfigAddOn inh : addOn.getInheritance())
+				addAttributes(inheritedAttrs, inh);
+		}
+
+		private void validateChildren() {
 			if (theSuperElement != null) {
 				// Validate child modifications
 				for (Map.Entry<QonfigChildDef.Declared, QonfigChildDef> child : theSuperElement.getAllChildren().entrySet()) {
