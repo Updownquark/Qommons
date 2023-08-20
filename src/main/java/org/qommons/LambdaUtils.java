@@ -10,6 +10,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
+import org.qommons.ex.ExBiFunction;
 import org.qommons.ex.ExFunction;
 import org.qommons.ex.ExSupplier;
 
@@ -383,6 +384,36 @@ public class LambdaUtils {
 	public static <S, T, X extends Throwable> ExFunction<S, T, X> printableExFn(ExFunction<S, T, X> function, String print,
 		Object identifier) {
 		return printableExFn(function, () -> print, identifier);
+	}
+
+	/**
+	 * @param <S> The first argument type of the function
+	 * @param <T> The second argument type of the function
+	 * @param <V> The result type of the function
+	 * @param <X> The type of exception thrown by the function
+	 * @param function Function for the printable function to apply
+	 * @param print The printed function representation
+	 * @param identifier The identifier for the function
+	 * @return The printable function
+	 */
+	public static <S, T, V, X extends Throwable> ExBiFunction<S, T, V, X> printableExBiFn(ExBiFunction<S, T, V, X> function, String print,
+		Object identifier) {
+		return printableExBiFn(function, () -> print, identifier);
+	}
+
+	/**
+	 * @param <S> The first argument type of the function
+	 * @param <T> The second argument type of the function
+	 * @param <V> The result type of the function
+	 * @param <X> The type of exception thrown by the function
+	 * @param function Function for the printable function to apply
+	 * @param print The printed function representation
+	 * @param identifier The identifier for the function
+	 * @return The printable function
+	 */
+	public static <S, T, V, X extends Throwable> ExBiFunction<S, T, V, X> printableExBiFn(ExBiFunction<S, T, V, X> function,
+		Supplier<String> print, Object identifier) {
+		return new PrintableExBiFunction<>(function, print, identifier);
 	}
 
 	/**
@@ -938,6 +969,27 @@ public class LambdaUtils {
 		@Override
 		public X apply(T t) throws E {
 			return getLambda().apply(t);
+		}
+
+		@Override
+		public boolean isTrivial() {
+			return LambdaUtils.isTrivial(getLambda());
+		}
+	}
+
+	static class PrintableExBiFunction<S, T, X, E extends Throwable> extends PrintableLambda<ExBiFunction<S, T, X, E>>
+		implements ExBiFunction<S, T, X, E> {
+		PrintableExBiFunction(ExBiFunction<S, T, X, E> function, Supplier<String> print, Object identifier) {
+			super(function, print, identifier);
+		}
+
+		PrintableExBiFunction(ExBiFunction<S, T, X, E> function, Supplier<String> print) {
+			super(function, print);
+		}
+
+		@Override
+		public X apply(S arg0, T arg1) throws E {
+			return getLambda().apply(arg0, arg1);
 		}
 
 		@Override
