@@ -1391,7 +1391,8 @@ public class DefaultQonfigParser implements QonfigParser {
 					else {
 						qualifier = builder.getSuperElement();
 						if (qualifier == null) {
-							childSession.error("No requires, so no children");
+							childSession.error("No " + (builder instanceof QonfigElementDef.Builder ? "extends" : "requires")
+								+ ", so no children to modify");
 							continue childLoop;
 						}
 					}
@@ -1440,11 +1441,17 @@ public class DefaultQonfigParser implements QonfigParser {
 					childSession.error("Bad \"min\" value \"" + minS + "\"", e);
 					min = null;
 				}
-				try {
-					max = maxS == null ? null : Integer.parseInt(maxS);
-				} catch (NumberFormatException e) {
-					childSession.error("Bad \"max\" value \"" + maxS + "\"", e);
+				if (maxS == null)
 					max = null;
+				else if (maxS.equals("inf"))
+					max = Integer.MAX_VALUE;
+				else {
+					try {
+						max = Integer.parseInt(maxS);
+					} catch (NumberFormatException e) {
+						childSession.error("Bad \"max\" value \"" + maxS + "\"", e);
+						max = null;
+					}
 				}
 				String inheritsS = child.getAttributeIfExists("inherits");
 				Set<QonfigAddOn> inherits = new LinkedHashSet<>();
