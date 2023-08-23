@@ -1,6 +1,7 @@
 package org.qommons;
 
 import java.util.Comparator;
+import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
@@ -179,6 +180,15 @@ public class LambdaUtils {
 	 */
 	public static <T> Consumer<T> printableConsumer(Consumer<T> consumer, Supplier<String> print, Object identifier) {
 		return new PrintableConsumer<>(consumer, print != null ? print : () -> String.valueOf(consumer), identifier);
+	}
+
+	/**
+	 * @param <T> The type of the value to test
+	 * @param value The value to test against
+	 * @return A predicate that returns true for all objects that are {@link Object#equals(Object) equal} to the given value
+	 */
+	public static <T> Predicate<T> filterFor(T value) {
+		return new FilterFor<>(value, true);
 	}
 
 	/**
@@ -877,6 +887,50 @@ public class LambdaUtils {
 		@Override
 		public boolean isTrivial() {
 			return false;
+		}
+	}
+
+	static class FilterFor<T> implements Predicate<T> {
+		private final T theValue;
+		private final boolean isEqual;
+
+		FilterFor(T value, boolean equal) {
+			theValue = value;
+			isEqual = equal;
+		}
+
+		@Override
+		public boolean test(T value) {
+			boolean equal = Objects.equals(theValue, value);
+			return equal == isEqual;
+		}
+
+		@Override
+		public Predicate<T> negate() {
+			return new FilterFor<>(theValue, !isEqual);
+		}
+
+		@Override
+		public int hashCode() {
+			return isEqual ? Objects.hash(theValue) : -Objects.hash(theValue);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof FilterFor))
+				return false;
+			FilterFor<T> other = (FilterFor<T>) obj;
+			return Objects.equals(theValue, other.theValue) && isEqual == other.isEqual;
+		}
+
+		@Override
+		public String toString() {
+			if (isEqual)
+				return "equals(" + theValue + ")";
+			else
+				return "!equals(" + theValue + ")";
 		}
 	}
 
