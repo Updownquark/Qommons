@@ -129,14 +129,14 @@ public interface LocatedPositionedContent extends PositionedContent {
 		public LocatedFilePosition getPosition(int index) {
 			if (theContent == null)
 				return null;
-			return new LocatedFilePosition(theFileLocation, theContent.getPosition(index));
+			return new LocatedFilePosition(theFileLocation, theContent == null ? null : theContent.getPosition(index));
 		}
 
 		@Override
 		public LocatedPositionedContent subSequence(int startIndex) {
 			if (startIndex == 0)
 				return this;
-			return new Default(theFileLocation, theContent.subSequence(startIndex));
+			return new Default(theFileLocation, theContent == null ? null : theContent.subSequence(startIndex));
 		}
 
 		@Override
