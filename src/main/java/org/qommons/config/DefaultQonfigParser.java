@@ -14,7 +14,6 @@ import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
@@ -47,45 +46,7 @@ public class DefaultQonfigParser implements QonfigParser {
 		DOC_ELEMENT_INHERITANCE_ATTR, "role"//
 	)));
 
-	static class ToolkitDef {
-		public final String name;
-		public final int majorVersion;
-		public final int minorVersion;
-
-		ToolkitDef(String name, int majorVersion, int minorVersion) {
-			this.name = name;
-			this.majorVersion = majorVersion;
-			this.minorVersion = minorVersion;
-		}
-
-		ToolkitDef(QonfigToolkit toolkit) {
-			name = toolkit.getName();
-			majorVersion = toolkit.getMajorVersion();
-			minorVersion = toolkit.getMinorVersion();
-		}
-
-		@Override
-		public int hashCode() {
-			return Objects.hash(name, majorVersion);
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			if (this == obj)
-				return true;
-			else if (!(obj instanceof ToolkitDef))
-				return false;
-			ToolkitDef other = (ToolkitDef) obj;
-			return name.equals(other.name) && majorVersion == other.majorVersion;
-		}
-
-		@Override
-		public String toString() {
-			return name + " " + majorVersion + "." + minorVersion;
-		}
-	}
-
-	private final Map<ToolkitDef, QonfigToolkit> theToolkits;
+	private final Map<QonfigToolkit.ToolkitDef, QonfigToolkit> theToolkits;
 
 	/** Creates the parser */
 	public DefaultQonfigParser() {
@@ -98,7 +59,7 @@ public class DefaultQonfigParser implements QonfigParser {
 	 * @return Whether this parser has been configured {@link #withToolkit(QonfigToolkit...) with} the given toolkit
 	 */
 	public boolean usesToolkit(String toolkitName, int majorVersion) {
-		return theToolkits.containsKey(new ToolkitDef(toolkitName, majorVersion, 0));
+		return theToolkits.containsKey(new QonfigToolkit.ToolkitDef(toolkitName, majorVersion, 0));
 	}
 
 	@Override
@@ -106,7 +67,7 @@ public class DefaultQonfigParser implements QonfigParser {
 		for (QonfigToolkit toolkit : toolkits) {
 			if (toolkit == null)
 				continue;
-			ToolkitDef def = new ToolkitDef(toolkit);
+			QonfigToolkit.ToolkitDef def = new QonfigToolkit.ToolkitDef(toolkit);
 			QonfigToolkit found = theToolkits.putIfAbsent(def, toolkit);
 			if (found != null) {
 				int vComp = Integer.compare(def.minorVersion, found.getMinorVersion());
@@ -145,7 +106,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				if (!match.matches())
 					throw new IllegalArgumentException(
 						location + ": Bad toolkit reference.  Expected 'name vM.m' but found " + use.getValue());
-				ToolkitDef def = new ToolkitDef(match.group("name"), Integer.parseInt(match.group("major")),
+				QonfigToolkit.ToolkitDef def = new QonfigToolkit.ToolkitDef(match.group("name"), Integer.parseInt(match.group("major")),
 					Integer.parseInt(match.group("minor")));
 
 				QonfigToolkit dep = theToolkits.get(def);
@@ -438,7 +399,7 @@ public class DefaultQonfigParser implements QonfigParser {
 		throws IOException, XmlParseException, QonfigParseException {
 		Element root = new SimpleXMLParser().parseDocument(xml).getDocumentElement();
 		xml.close();
-		ToolkitDef def;
+		QonfigToolkit.ToolkitDef def;
 		QonfigToolkit toolkit;
 		try (StrictXmlReader rootReader = new StrictXmlReader(root)) {
 			PositionedContent rootNameContent = asContent(rootReader.getNamePosition(), rootReader.getName());
@@ -462,7 +423,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				throw new IllegalArgumentException("Illegal toolkit version.  Expected 'M.m' but found " + version.group());
 			int major = Integer.parseInt(version.group("major"));
 			int minor = Integer.parseInt(version.group("minor"));
-			def = new ToolkitDef(name, major, minor);
+			def = new QonfigToolkit.ToolkitDef(name, major, minor);
 			if (theToolkits.containsKey(def))
 				throw new IllegalArgumentException("A toolkit named " + name + " is already registered");
 			if (!rootReader.getTagName().equals("qonfig-def"))
@@ -477,7 +438,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				Matcher match = TOOLKIT_REF.matcher(ext.getValue());
 				if (!match.matches())
 					throw new IllegalArgumentException(def + ": Bad toolkit reference.  Expected 'name vM.m' but found " + ext.getValue());
-				ToolkitDef depDef = new ToolkitDef(match.group("name"), Integer.parseInt(match.group("major")),
+				QonfigToolkit.ToolkitDef depDef = new QonfigToolkit.ToolkitDef(match.group("name"), Integer.parseInt(match.group("major")),
 					Integer.parseInt(match.group("minor")));
 
 				QonfigToolkit dep = theToolkits.get(depDef);

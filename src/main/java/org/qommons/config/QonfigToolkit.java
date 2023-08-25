@@ -1,6 +1,7 @@
 package org.qommons.config;
 
 import java.net.URL;
+import java.text.ParseException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -97,6 +98,92 @@ public class QonfigToolkit implements Named, SelfDescribed {
 		 * @return The roots for the toolkit
 		 */
 		Set<QonfigElementDef> getDeclaredRoots(QonfigParseSession session);
+	}
+
+	/** A structure that contains the definition of a toolkit */
+	public static class ToolkitDef extends ToolkitDefVersion {
+		/** The name of the toolkit */
+		public final String name;
+	
+		/**
+		 * @param name The name of the toolkit
+		 * @param majorVersion The major version of the toolkit
+		 * @param minorVersion The minor version of the toolkit
+		 */
+		public ToolkitDef(String name, int majorVersion, int minorVersion) {
+			super(majorVersion, minorVersion);
+			this.name = name;
+		}
+	
+		/** @param toolkit The toolkit to create a definition of */
+		public ToolkitDef(QonfigToolkit toolkit) {
+			this(toolkit.getName(), toolkit.getMajorVersion(), toolkit.getMinorVersion());
+		}
+	
+		@Override
+		public int hashCode() {
+			return Objects.hash(name, majorVersion);
+		}
+	
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof ToolkitDef))
+				return false;
+			ToolkitDef other = (ToolkitDef) obj;
+			return name.equals(other.name) && majorVersion == other.majorVersion;
+		}
+	
+		@Override
+		public String toString() {
+			return name + " " + majorVersion + "." + minorVersion;
+		}
+
+		/**
+		 * Parses a toolkit definition from text
+		 * 
+		 * @param text The text to parse
+		 * @return The parsed toolkit definition
+		 * @throws ParseException If a definition could not be parsed from the text
+		 */
+		public static ToolkitDef parse(String text) throws ParseException {
+			int space = text.indexOf(' ');
+			if (space < 0)
+				throw new ParseException("Expected a space between toolkit name and version", text.length());
+			if (space == text.length() - 1)
+				throw new ParseException("Expected toolkit version after space", text.length());
+
+			int dot = text.lastIndexOf('.');
+			if (dot < 0 || dot < space)
+				throw new ParseException("Expected a dot between major and minor version", text.length());
+			int majorVersion;
+			if (text.charAt(space + 1) == 'v' || text.charAt(space + 1) == 'V') {
+				if (space + 2 == text.length())
+					throw new ParseException("Expected toolkit version after '" + text.charAt(space + 1) + "'", space + 2);
+				try {
+					majorVersion = Integer.parseInt(text.substring(space + 2, dot));
+				} catch (NumberFormatException e) {
+					throw new ParseException("Could not parse major version", space + 2);
+				}
+			} else {
+				try {
+					majorVersion = Integer.parseInt(text.substring(space + 1, dot));
+				} catch (NumberFormatException e) {
+					throw new ParseException("Could not parse major version", space + 1);
+				}
+			}
+
+			if (dot + 1 == text.length())
+				throw new ParseException("Expected minor version after '.'", dot + 1);
+			int minorVersion;
+			try {
+				minorVersion = Integer.parseInt(text.substring(dot + 1));
+			} catch (NumberFormatException e) {
+				throw new ParseException("Could not parse minor version", dot + 1);
+			}
+			return new ToolkitDef(text.substring(0, space), majorVersion, minorVersion);
+		}
 	}
 
 	private final String theName;
