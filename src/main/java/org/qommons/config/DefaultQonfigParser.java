@@ -1228,14 +1228,14 @@ public class DefaultQonfigParser implements QonfigParser {
 				} else
 					roles = Collections.emptySet();
 				String typeName = child.getAttributeIfExists("type");
-				QonfigElementDef elType;
+				QonfigElementOrAddOn elType;
 				if (typeName == null) {
 					// Allow a child with no type specified
 					// childSession.error("No type specified");
 					elType = null;
 				} else {
 					try {
-						elType = builder.getSession().getToolkit().getElement(typeName);
+						elType = builder.getSession().getToolkit().getElementOrAddOn(typeName);
 						if (elType == null)
 							childSession.at(child.getAttributeValuePosition("type")).error("Unrecognized element-def: '" + typeName + "'");
 					} catch (IllegalArgumentException e) {

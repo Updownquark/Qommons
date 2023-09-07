@@ -165,13 +165,14 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 
 	QonfigAddOn(QonfigToolkit declarer, String name, boolean isAbstract, QonfigElementDef requirement, Set<QonfigAddOn> inheritance,
 		Map<String, QonfigAttributeDef.Declared> declaredAttributes, Map<QonfigAttributeDef.Declared, ValueModifier> attributeModifiers,
-		BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
+		BetterMultiMap<String, QonfigAttributeDef> attributesByName, Map<QonfigAttributeDef.Declared, QonfigAttributeDef> allAttributes, //
 		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ChildModifier> childModifiers,
-		BetterMultiMap<String, QonfigChildDef> childrenByName, //
+		BetterMultiMap<String, QonfigChildDef> childrenByName, Map<QonfigChildDef.Declared, QonfigChildDef> allChildren, //
 		ValueModifier value, MultiInheritanceSet<QonfigAddOn> fullInheritance, QonfigAddOn metaSpec, PositionedContent position,
 		String description) {
 		super(declarer, name, isAbstract, requirement, inheritance, fullInheritance, declaredAttributes, attributeModifiers,
-			attributesByName, declaredChildren, childModifiers, childrenByName, value, metaSpec, position, description);
+			attributesByName, allAttributes, declaredChildren, childModifiers, childrenByName, allChildren, value, metaSpec, position,
+			description);
 	}
 
 	/**
@@ -184,7 +185,7 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 	}
 
 	@Override
-	public QonfigElementDef getTypeRestriction() {
+	public QonfigElementOrAddOn getTypeRestriction() {
 		return null;
 	}
 
@@ -307,8 +308,9 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		protected QonfigAddOn create() {
 			return new QonfigAddOn(theSession.getToolkit(), getName(), super.isAbstract(), getSuperElement(), getInheritance(), //
 				getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueModifier>) super.getAttributeModifiers(),
-				getAttributesByName(), //
-				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildModifier>) super.getChildModifiers(), getChildrenByName(), //
+				getAttributesByName(), getCompiledAttributes(), //
+				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildModifier>) super.getChildModifiers(), getChildrenByName(),
+				getCompiledChildren(), //
 				getValue(), getFullInheritance(), //
 				super.getMetaSpec() == null ? null : (QonfigAddOn) super.getMetaSpec().get(), getSession().getFileLocation(),
 				getDescription());
@@ -368,8 +370,8 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		}
 
 		@Override
-		public Builder withChild(String name, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, int min, int max, PositionedContent position, String description) {
+		public Builder withChild(String name, QonfigElementOrAddOn type, Set<QonfigChildDef.Declared> fulfillment,
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, PositionedContent position, String description) {
 			if (!fulfillment.isEmpty()) {
 				theSession.at(position).error("Children of add-ons cannot fulfill roles");
 				fulfillment = Collections.emptySet();

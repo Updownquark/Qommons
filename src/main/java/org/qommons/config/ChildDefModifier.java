@@ -36,7 +36,7 @@ public interface ChildDefModifier extends ElementDefModifier {
 
 	/** Default {@link ChildDefModifier} implementation */
 	public static class Default implements ChildDefModifier {
-		private final QonfigElementDef theTypeRestriction;
+		private final QonfigElementOrAddOn theTypeRestriction;
 		private final Set<QonfigAddOn> theInheritance;
 		private final Set<QonfigAddOn> theRequirement;
 		private final Integer theMin;
@@ -54,7 +54,7 @@ public interface ChildDefModifier extends ElementDefModifier {
 		 * @param position The position in the file where this child was defined
 		 * @param description The description for this modification
 		 */
-		public Default(QonfigElementDef typeRestriction, Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, Integer min,
+		public Default(QonfigElementOrAddOn typeRestriction, Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, Integer min,
 			Integer max, PositionedContent position, String description) {
 			theTypeRestriction = typeRestriction;
 			theInheritance = inheritance;
@@ -66,7 +66,7 @@ public interface ChildDefModifier extends ElementDefModifier {
 		}
 
 		@Override
-		public QonfigElementDef getTypeRestriction() {
+		public QonfigElementOrAddOn getTypeRestriction() {
 			return theTypeRestriction;
 		}
 

@@ -8,7 +8,7 @@ import org.qommons.SelfDescribed;
 /** Modification to an element-def */
 public interface ElementDefModifier extends FileSourced, SelfDescribed {
 	/** @return The type restriction on the kinds of element-defs that may be instantiated to fulfill an element definition */
-	QonfigElementDef getTypeRestriction();
+	QonfigElementOrAddOn getTypeRestriction();
 
 	/** @return Additional add-ons inherited by the element */
 	Set<QonfigAddOn> getInheritance();

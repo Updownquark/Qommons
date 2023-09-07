@@ -34,10 +34,12 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 	private final Map<String, QonfigAttributeDef.Declared> theDeclaredAttributes;
 	private final Map<QonfigAttributeDef.Declared, ? extends ValueDefModifier> theAttributeModifiers;
 	private final BetterMultiMap<String, QonfigAttributeDef> theAttributesByName;
+	private final Map<QonfigAttributeDef.Declared, QonfigAttributeDef> theCompiledAttributes;
 
 	private final Map<String, QonfigChildDef.Declared> theDeclaredChildren;
 	private final Map<QonfigChildDef.Declared, ? extends ChildDefModifier> theChildModifiers;
 	private final BetterMultiMap<String, QonfigChildDef> theChildrenByName;
+	private final Map<QonfigChildDef.Declared, QonfigChildDef> theCompiledChildren;
 
 	private final ValueDefModifier theValue;
 
@@ -65,10 +67,10 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 	protected QonfigElementOrAddOn(QonfigToolkit declarer, String name, boolean isAbstract, //
 		QonfigElementDef superElement, Set<QonfigAddOn> inheritance, MultiInheritanceSet<QonfigAddOn> fullInheritance, //
 		Map<String, Declared> declaredAttributes, Map<Declared, ? extends ValueDefModifier> attributeModifiers,
-		BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
+		BetterMultiMap<String, QonfigAttributeDef> attributesByName, Map<QonfigAttributeDef.Declared, QonfigAttributeDef> allAttributes, //
 		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ? extends ChildDefModifier> childModifiers,
-		BetterMultiMap<String, QonfigChildDef> childrenByName, ValueDefModifier value, QonfigElementOrAddOn metaSpec,
-		PositionedContent position, String description) {
+		BetterMultiMap<String, QonfigChildDef> childrenByName, Map<QonfigChildDef.Declared, QonfigChildDef> allChildren, //
+		ValueDefModifier value, QonfigElementOrAddOn metaSpec, PositionedContent position, String description) {
 		super(declarer, name, position, description);
 		this.isAbstract = isAbstract;
 		theSuperElement = superElement;
@@ -78,10 +80,12 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		theDeclaredAttributes = declaredAttributes;
 		theAttributeModifiers = attributeModifiers;
 		theAttributesByName = attributesByName;
+		theCompiledAttributes = allAttributes;
 
 		theDeclaredChildren = declaredChildren;
 		theChildModifiers = childModifiers;
 		theChildrenByName = childrenByName;
+		theCompiledChildren = allChildren;
 
 		theValue = value;
 
@@ -131,6 +135,14 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 	}
 
 	/**
+	 * @return All attributes defined in this element, its {@link #getSuperElement() super-type}, or its {@link #getInheritance()
+	 *         inheritance}
+	 */
+	public Map<QonfigAttributeDef.Declared, QonfigAttributeDef> getAllAttributes() {
+		return theCompiledAttributes;
+	}
+
+	/**
 	 * @param name The name of the attribute
 	 * @return The attribute with the given name in this type, or null if no such attribute is defined
 	 * @throws IllegalArgumentException if multiple such attributes are defined in the hierarchy
@@ -170,6 +182,13 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 	/** @return All children declared or inherited by this item */
 	public BetterMultiMap<String, QonfigChildDef> getChildrenByName() {
 		return theChildrenByName;
+	}
+
+	/**
+	 * @return All children defined in this element, its {@link #getSuperElement() super-type}, or its {@link #getInheritance() inheritance}
+	 */
+	public Map<QonfigChildDef.Declared, QonfigChildDef> getAllChildren() {
+		return theCompiledChildren;
 	}
 
 	/**
@@ -752,8 +771,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param description The description for the child
 		 * @return This builder
 		 */
-		public Builder withChild(String name, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment, Set<QonfigAddOn> inheritance,
-			Set<QonfigAddOn> requirement, int min, int max, PositionedContent position, String description) {
+		public Builder withChild(String name, QonfigElementOrAddOn type, Set<QonfigChildDef.Declared> fulfillment,
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, PositionedContent position, String description) {
 			if (!checkStage(Stage.NewChildren))
 				throw new IllegalStateException("Attributes cannot be added at this stage: " + theStage);
 			else if (theDeclaredChildren.containsKey(name)) {
@@ -838,7 +857,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				if (inh.getSuperElement() == null || (child.getType() != null && inh.getSuperElement().isAssignableFrom(child.getType())))
 					continue;
 				QonfigElementDef parent = theSuperElement;
-				QonfigElementDef childType = child.getType();
+				QonfigElementOrAddOn childType = child.getType();
 				boolean ok = false;
 				while (parent != null) {
 					if (!child.getOwner().isAssignableFrom(parent))
@@ -881,7 +900,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					&& (req.getSuperElement().isAssignableFrom(child.getType()) || child.getType().isAssignableFrom(req.getSuperElement())))
 					continue;
 				QonfigElementDef parent = theSuperElement;
-				QonfigElementDef childType = child.getType();
+				QonfigElementOrAddOn childType = child.getType();
 				boolean ok = false;
 				while (parent != null) {
 					if (!child.getOwner().isAssignableFrom(parent))
@@ -1040,8 +1059,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param description The description for the metadata element
 		 * @return This builder
 		 */
-		public Builder withMetaSpec(String name, QonfigElementDef type, Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min,
-			int max, PositionedContent position, String description) {
+		public Builder withMetaSpec(String name, QonfigElementOrAddOn type, Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement,
+			int min, int max, PositionedContent position, String description) {
 			if (!checkStage(Stage.MetaSpec))
 				throw new IllegalStateException("Metadata specifications cannot be added at this stage: " + theStage);
 			theMetaSpec.withChild(name, type, Collections.emptySet(), inheritance, requirement, min, max, position, description);
@@ -1082,9 +1101,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			Map<QonfigAttributeDef.Declared, List<ValueSpec>> inheritedAttrs = new HashMap<>();
 			if (theSuperElement != null) {
 				for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : theSuperElement.getAllAttributes().entrySet())
-					inheritedAttrs.computeIfAbsent(attr.getKey(), __ -> new ArrayList<>()).add(
-						new ValueSpec(attr.getValue().getType(), attr.getValue().getSpecification(), attr.getValue().getDefaultValue(),
-							attr.getValue().getDefaultValueContent()));
+					inheritedAttrs.computeIfAbsent(attr.getKey(), __ -> new ArrayList<>()).add(new ValueSpec(attr.getValue().getType(),
+						attr.getValue().getSpecification(), attr.getValue().getDefaultValue(), attr.getValue().getDefaultValueContent()));
 			}
 			for (QonfigAddOn inh : theFullInheritance.values())
 				addAttributes(inheritedAttrs, inh);
@@ -1120,9 +1138,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					theSuperElement.getValue().getDefaultValue(), theSuperElement.getValue().getDefaultValueContent()));
 				for (QonfigAddOn inh : theInheritance) {
 					if (inh.getValue() != null && !inh.getSuperElement().isAssignableFrom(theSuperElement))
-						inheritedValues.add(
-							new ValueSpec(inh.getValue().getType(), inh.getValue().getSpecification(), inh.getValue().getDefaultValue(),
-								inh.getValue().getDefaultValueContent()));
+						inheritedValues.add(new ValueSpec(inh.getValue().getType(), inh.getValue().getSpecification(),
+							inh.getValue().getDefaultValue(), inh.getValue().getDefaultValueContent()));
 				}
 
 				ValueSpec modSpec;
@@ -1221,9 +1238,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			if (addOn.getSuperElement() != null) {
 				for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : addOn.getSuperElement().getAllAttributes()
 					.entrySet())
-					inheritedAttrs.computeIfAbsent(attr.getKey(), __ -> new ArrayList<>()).add(
-						new ValueSpec(attr.getValue().getType(), attr.getValue().getSpecification(), attr.getValue().getDefaultValue(),
-							attr.getValue().getDefaultValueContent()));
+					inheritedAttrs.computeIfAbsent(attr.getKey(), __ -> new ArrayList<>()).add(new ValueSpec(attr.getValue().getType(),
+						attr.getValue().getSpecification(), attr.getValue().getDefaultValue(), attr.getValue().getDefaultValueContent()));
 			}
 			for (QonfigAddOn inh : addOn.getInheritance())
 				addAttributes(inheritedAttrs, inh);
@@ -1276,7 +1292,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				for (Map.Entry<QonfigChildDef.Declared, QonfigChildDef> child : theSuperElement.getAllChildren().entrySet()) {
 					if (theCompiledChildren.containsKey(child.getKey()))
 						continue;
-					QonfigElementDef type = child.getValue().getType();
+					QonfigElementOrAddOn type = child.getValue().getType();
 					Set<QonfigAddOn> inheritance = new LinkedHashSet<>(child.getValue().getInheritance());
 					Set<QonfigAddOn> requirement = new LinkedHashSet<>(child.getValue().getRequirement());
 					int min = child.getValue().getMin();
@@ -1361,7 +1377,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				for (QonfigChildDef child : inh.getChildrenByName().values()) {
 					if (theCompiledChildren.containsKey(child.getDeclared()))
 						continue;
-					QonfigElementDef type = child.getType();
+					QonfigElementOrAddOn type = child.getType();
 					Set<QonfigAddOn> inheritance = new LinkedHashSet<>(child.getInheritance());
 					Set<QonfigAddOn> requirement = new LinkedHashSet<>(child.getRequirement());
 					int min = child.getMin();

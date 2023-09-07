@@ -23,7 +23,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 	}
 
 	/** @return The super-type of elements that may be declared to fulfill this role */
-	QonfigElementDef getType();
+	QonfigElementOrAddOn getType();
 
 	/** @return The inherited roles that elements of this role fulfill in inherited element-defs and add-ons */
 	Set<QonfigChildDef.Declared> getFulfillment();
@@ -64,7 +64,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 	/** Abstract {@link QonfigChildDef} implementation */
 	public static abstract class Abstract implements QonfigChildDef {
 		private final QonfigElementOrAddOn theOwner;
-		private final QonfigElementDef theType;
+		private final QonfigElementOrAddOn theType;
 		private final Set<QonfigChildDef.Declared> theFulfillment;
 		private final Set<QonfigAddOn> theInheritance;
 		private final Set<QonfigAddOn> theRequirement;
@@ -85,7 +85,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param position The position in the file where this child was defined
 		 * @param description The description for this child
 		 */
-		public Abstract(QonfigElementOrAddOn owner, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment,
+		public Abstract(QonfigElementOrAddOn owner, QonfigElementOrAddOn type, Set<QonfigChildDef.Declared> fulfillment,
 			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, PositionedContent position, String description) {
 			theOwner = owner;
 			theType = type;
@@ -112,7 +112,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		}
 
 		@Override
-		public QonfigElementDef getType() {
+		public QonfigElementOrAddOn getType() {
 			return theType;
 		}
 
@@ -188,7 +188,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param position The position in the file where this child was defined
 		 * @param description The description for this child
 		 */
-		public DeclaredChildDef(QonfigElementOrAddOn owner, String name, QonfigElementDef type, Set<QonfigChildDef.Declared> fulfillment,
+		public DeclaredChildDef(QonfigElementOrAddOn owner, String name, QonfigElementOrAddOn type, Set<QonfigChildDef.Declared> fulfillment,
 			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, PositionedContent position, String description) {
 			super(owner, type, fulfillment, inheritance, requirement, min, max, position, description);
 			theName = name;
@@ -247,7 +247,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param position The position in the file where this child was defined
 		 * @param description The description for the child modification
 		 */
-		public Modified(QonfigChildDef declared, QonfigElementOrAddOn owner, QonfigElementDef type, Set<QonfigAddOn> inheritance,
+		public Modified(QonfigChildDef declared, QonfigElementOrAddOn owner, QonfigElementOrAddOn type, Set<QonfigAddOn> inheritance,
 			Set<QonfigAddOn> requirement, int min, int max, PositionedContent position, String description) {
 			super(owner, type, Collections.emptySet(), combine(declared.getInheritance(), inheritance), requirement, min, max, position,
 				description);
@@ -371,7 +371,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		}
 
 		@Override
-		public QonfigElementDef getType() {
+		public QonfigElementOrAddOn getType() {
 			return theInherited.getType();
 		}
 

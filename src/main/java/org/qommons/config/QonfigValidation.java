@@ -208,8 +208,8 @@ public class QonfigValidation {
 						new ValueSpec(root.getType() == null ? null : root.getType().getValue().getType(),
 							ao.getValueModifier().getSpecification(), ao.getValueModifier().getDefaultValue(),
 							ao.getValueModifier().getDefaultValueContent()), //
-						new ValueSpec(valueModifier.getTypeRestriction(), valueModifier.getSpecification(),
-							valueModifier.getDefaultValue(), valueModifier.getDefaultValueContent()), //
+						new ValueSpec(valueModifier.getTypeRestriction(), valueModifier.getSpecification(), valueModifier.getDefaultValue(),
+							valueModifier.getDefaultValueContent()), //
 						err -> session.at(root.getFilePosition()).error(err), //
 						warn -> session.at(root.getFilePosition()).warn(warn));
 				} else if (valueModifier.getSpecification() != ao.getValueModifier().getSpecification()
@@ -245,7 +245,7 @@ public class QonfigValidation {
 							inheritanceChildren.put(inh.getKey(), inh.getValue() + '/' + inh2.getName());
 				}
 				int preLen = path.length();
-				QonfigChildDef childRoot = root.getType().getAllChildren().get(child.getKey());
+				QonfigChildDef childRoot = child.getValue();
 				if (!noRecurse.add(childRoot))
 					continue;
 				validateChild(//

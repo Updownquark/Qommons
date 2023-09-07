@@ -11,9 +11,6 @@ import org.qommons.io.PositionedContent;
 
 /** The definition of an element that can be declared in a document */
 public class QonfigElementDef extends QonfigElementOrAddOn {
-	private final Map<QonfigAttributeDef.Declared, QonfigAttributeDef> theCompiledAttributes;
-	private final Map<QonfigChildDef.Declared, QonfigChildDef> theCompiledChildren;
-
 	private final QonfigValueDef theValue;
 
 	private QonfigElementDef(QonfigToolkit declarer, String name, QonfigElementDef superElement, Set<QonfigAddOn> inheritance,
@@ -25,9 +22,8 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		ValueDefModifier value, MultiInheritanceSet<QonfigAddOn> fullInheritance, QonfigElementDef metaSpec, PositionedContent position,
 		String description) {
 		super(declarer, name, isAbstract, superElement, inheritance, fullInheritance, declaredAttributes, attributeModifiers,
-			attributesByName, declaredChildren, childModifiers, childrenByName, value, metaSpec, position, description);
-		theCompiledAttributes = allAttributes;
-		theCompiledChildren = allChildren;
+			attributesByName, allAttributes, declaredChildren, childModifiers, childrenByName, allChildren, value, metaSpec, position,
+			description);
 
 		if (value == null)
 			theValue = superElement == null ? null : superElement.getValue();
@@ -53,24 +49,9 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		return (Map<Declared, ValueDefModifier>) super.getAttributeModifiers();
 	}
 
-	/**
-	 * @return All attributes defined in this element, its {@link #getSuperElement() super-type}, or its {@link #getInheritance()
-	 *         inheritance}
-	 */
-	public Map<QonfigAttributeDef.Declared, QonfigAttributeDef> getAllAttributes() {
-		return theCompiledAttributes;
-	}
-
 	@Override
 	public Map<QonfigChildDef.Declared, ChildDefModifier> getChildModifiers() {
 		return (Map<org.qommons.config.QonfigChildDef.Declared, ChildDefModifier>) super.getChildModifiers();
-	}
-
-	/**
-	 * @return All children defined in this element, its {@link #getSuperElement() super-type}, or its {@link #getInheritance() inheritance}
-	 */
-	public Map<QonfigChildDef.Declared, QonfigChildDef> getAllChildren() {
-		return theCompiledChildren;
 	}
 
 	@Override
