@@ -98,7 +98,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			LinkedList<String> path = new LinkedList<>();
 			Map<String, QonfigToolkit> uses = new LinkedHashMap<>();
 			for (Map.Entry<String, String> use : rootReader.findAttributes(USES).entrySet()) {
-				String refName = use.getKey().substring(5);
+				String refName = use.getKey().substring(USES_PREFIX.length());
 				if (refName.isEmpty())
 					throw new IllegalArgumentException("Empty toolkit name");
 				checkName(refName);
@@ -178,14 +178,15 @@ public class DefaultQonfigParser implements QonfigParser {
 		return doc;
 	}
 
-	private static final Pattern USES = Pattern.compile("uses\\:.*");
+	private static final String USES_PREFIX = "xmlns:";
+	private static final Pattern USES = Pattern.compile(USES_PREFIX.replace(":", "\\:") + ".*");
 	private static final Pattern TOOLKIT_REF = Pattern.compile("(?<name>[^\\s]+)\\s*v?(?<major>\\d+)\\.(?<minor>\\d+)");
 
 	QonfigElement parseDocElement(QonfigParseSession session, QonfigElement.Builder builder, StrictXmlReader el, boolean withAttrs,
 		Predicate<StrictXmlReader> childApplies) {
 		if (el.getParent() != null) {
 			for (Map.Entry<String, String> uses : el.findAttributes(USES).entrySet())
-				session.error("uses attributes may only be used at the root: '" + uses.getKey() + "'", null);
+				session.error("xmlns attributes may only be used at the root: '" + uses.getKey() + "'", null);
 		}
 		if (withAttrs) {
 			for (Map.Entry<String, String> attr : el.getAllAttributes().entrySet()) {
@@ -431,7 +432,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				throw new IllegalArgumentException("Expected 'qonfig-def' for root element, not " + root.getNodeName());
 			Map<String, QonfigToolkit> dependencies = new LinkedHashMap<>();
 			for (Map.Entry<String, String> ext : rootReader.findAttributes(EXTENDS).entrySet()) {
-				String refName = ext.getKey().substring("extends:".length());
+				String refName = ext.getKey().substring(USES_PREFIX.length());
 				if (refName.isEmpty())
 					throw new IllegalArgumentException(path + ": Empty dependency name");
 				checkName(refName);
@@ -458,7 +459,7 @@ public class DefaultQonfigParser implements QonfigParser {
 		return toolkit;
 	}
 
-	private static final Pattern EXTENDS = Pattern.compile("extends\\:.*");
+	private static final Pattern EXTENDS = USES;
 	private static final Pattern TOOLKIT_NAME = Pattern.compile("[^\\s]+");
 	private static final Pattern TOOLKIT_VERSION = Pattern.compile("(?<major>\\d+)\\.(?<minor>\\d+)");
 
