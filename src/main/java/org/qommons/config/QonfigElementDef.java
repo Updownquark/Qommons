@@ -6,6 +6,7 @@ import java.util.Set;
 import org.qommons.MultiInheritanceSet;
 import org.qommons.collect.BetterMultiMap;
 import org.qommons.config.QonfigAttributeDef.Declared;
+import org.qommons.io.LocatedPositionedContent;
 import org.qommons.io.PositionedContent;
 
 /** The definition of an element that can be declared in a document */
@@ -32,17 +33,18 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 			theValue = superElement == null ? null : superElement.getValue();
 		else if (superElement == null || superElement.getValue() == null)
 			theValue = new QonfigValueDef.DeclaredValueDef(this, value.getTypeRestriction(), value.getSpecification(),
-				value.getDefaultValue(), null, value.getDescription());
+				value.getDefaultValue(), value.getDefaultValueContent(), null, value.getDescription());
 		else {
 			QonfigValidation.ValueSpec spec = QonfigValidation.validateSpecification(//
 				new QonfigValidation.ValueSpec(superElement.getValue().getType(), superElement.getValue().getSpecification(),
-					superElement.getValue().getDefaultValue()), //
-				new QonfigValidation.ValueSpec(value.getTypeRestriction(), value.getSpecification(), value.getDefaultValue()), //
+					superElement.getValue().getDefaultValue(), superElement.getValue().getDefaultValueContent()), //
+				new QonfigValidation.ValueSpec(value.getTypeRestriction(), value.getSpecification(), value.getDefaultValue(),
+					value.getDefaultValueContent()), //
 				__ -> {
 				}, __ -> {
 				});
-			theValue = new QonfigValueDef.Modified(superElement.getValue(), this, spec.type, spec.specification, spec.defaultValue, null,
-				value.getDescription());
+			theValue = new QonfigValueDef.Modified(superElement.getValue(), this, spec.type, spec.specification, spec.defaultValue,
+				spec.defaultValueContent, null, value.getDescription());
 		}
 	}
 
@@ -115,8 +117,9 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 
 		@Override
 		protected ValueDefModifier valueModifier(QonfigValueType type, SpecificationType specification, Object defaultValue,
-			String description, PositionedContent position) {
-			return new ValueDefModifier.Default(getSession().getToolkit(), type, specification, defaultValue, description, position);
+			LocatedPositionedContent defaultValueContent, String description, PositionedContent position) {
+			return new ValueDefModifier.Default(getSession().getToolkit(), type, specification, defaultValue, defaultValueContent,
+				description, position);
 		}
 
 		@Override

@@ -833,8 +833,8 @@ public class QonfigElement implements FileSourced, SelfDescribed {
 					if (attrValues.get(attr) == null && attr.getSpecification() != SpecificationType.Required) {
 						Object defValue = attr.getDefaultValue();
 						if (defValue != null) {
-							attrValues.put(attr, new QonfigValue(defValue == null ? null : defValue.toString(), defValue,
-								attr.getDeclarer().getLocationString(), null));
+							attrValues.put(attr, new QonfigValue(defValue.toString(), defValue, attr.getDeclarer().getLocationString(),
+								attr.getDefaultValueContent()));
 							defaultedAttributes.put(attr, attr.getSpecification() == SpecificationType.Forbidden);
 						}
 					}
@@ -843,7 +843,7 @@ public class QonfigElement implements FileSourced, SelfDescribed {
 					if (attrValues.get(attr.getKey()) == null && attr.getValue().getSpecification() != SpecificationType.Required) {
 						Object defValue = attr.getValue().getDefaultValue();
 						attrValues.put(attr.getKey(), new QonfigValue(defValue == null ? null : defValue.toString(), defValue,
-							attr.getValue().getDeclarer().getLocationString(), null));
+							attr.getValue().getDeclarer().getLocationString(), attr.getValue().getDefaultValueContent()));
 						defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
 					}
 				}
@@ -852,8 +852,8 @@ public class QonfigElement implements FileSourced, SelfDescribed {
 				if (attrValues.get(attr.getKey()) == null && attr.getValue().getSpecification() != SpecificationType.Required) {
 					Object defValue = attr.getValue().getDefaultValue();
 					if (defValue != null) {
-						attrValues.put(attr.getKey(),
-							new QonfigValue(defValue.toString(), defValue, attr.getValue().getDeclarer().getLocationString(), null));
+						attrValues.put(attr.getKey(), new QonfigValue(defValue.toString(), defValue,
+							attr.getValue().getDeclarer().getLocationString(), attr.getValue().getDefaultValueContent()));
 						defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
 					}
 				}

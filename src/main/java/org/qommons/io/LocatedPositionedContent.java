@@ -85,9 +85,12 @@ public interface LocatedPositionedContent extends PositionedContent {
 	 * @return The file content position
 	 */
 	public static LocatedPositionedContent of(String fileLocation, PositionedContent position) {
-		if (position instanceof LocatedPositionedContent)
+		if (position == null)
+			return null;
+		else if (position instanceof LocatedPositionedContent)
 			return (LocatedPositionedContent) position;
-		return new Default(fileLocation, position);
+		else
+			return new Default(fileLocation, position);
 	}
 
 	/** Default {@link LocatedPositionedContent} implementation */

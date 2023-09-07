@@ -1,6 +1,7 @@
 package org.qommons.config;
 
 import org.qommons.SelfDescribed;
+import org.qommons.io.LocatedPositionedContent;
 import org.qommons.io.PositionedContent;
 
 /** Modifies an attribute or element value defined by a super-type */
@@ -17,6 +18,8 @@ public interface ValueDefModifier extends SelfDescribed {
 	/** @return The default value to use if the value is not specified. Null means to inherit from the super-specified value. */
 	Object getDefaultValue();
 
+	LocatedPositionedContent getDefaultValueContent();
+
 	/** @return The content that specified the modifier */
 	PositionedContent getContent();
 
@@ -26,6 +29,7 @@ public interface ValueDefModifier extends SelfDescribed {
 		private final QonfigValueType theTypeRestriction;
 		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
+		private final LocatedPositionedContent theDefaultValueContent;
 		private final String theDescription;
 		private final PositionedContent theContent;
 
@@ -39,11 +43,12 @@ public interface ValueDefModifier extends SelfDescribed {
 		 * @param content The content that specified the modifier
 		 */
 		public Default(QonfigToolkit declarer, QonfigValueType typeRestriction, SpecificationType specify, Object defaultValue,
-			String description, PositionedContent content) {
+			LocatedPositionedContent defaultValueContent, String description, PositionedContent content) {
 			theDeclarer = declarer;
 			theTypeRestriction = typeRestriction;
 			theSpecification = specify;
 			theDefaultValue = defaultValue;
+			theDefaultValueContent = defaultValueContent;
 			theDescription = description;
 			theContent = content;
 		}
@@ -71,6 +76,11 @@ public interface ValueDefModifier extends SelfDescribed {
 		@Override
 		public String getDescription() {
 			return theDescription;
+		}
+
+		@Override
+		public LocatedPositionedContent getDefaultValueContent() {
+			return theDefaultValueContent;
 		}
 
 		@Override

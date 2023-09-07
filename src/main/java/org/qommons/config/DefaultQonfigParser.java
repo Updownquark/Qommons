@@ -27,6 +27,7 @@ import org.qommons.collect.BetterSet;
 import org.qommons.io.ErrorReporting;
 import org.qommons.io.FilePosition;
 import org.qommons.io.LocatedFilePosition;
+import org.qommons.io.LocatedPositionedContent;
 import org.qommons.io.PositionedContent;
 import org.qommons.io.SimpleXMLParser;
 import org.qommons.io.SimpleXMLParser.XmlParseException;
@@ -1012,7 +1013,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				} else
 					type = parseAttributeType(attrSession, typeName, true);
 				String specifyS = attr.getAttributeIfExists("specify");
-				String defaultS = attr.getAttributeIfExists("default");
+				PositionedContent defaultS = attr.getAttributeValuePosition("default");
 				SpecificationType spec;
 				if (specifyS != null)
 					spec = SpecificationType.fromAttributeValue(specifyS, attrSession);
@@ -1022,10 +1023,10 @@ public class DefaultQonfigParser implements QonfigParser {
 					spec = SpecificationType.Required;
 				Object defaultV = null;
 				if (defaultS != null && type != null)
-					defaultV = type.parse(defaultS, attrSession.getToolkit(), attrSession);
+					defaultV = type.parse(defaultS.toString(), attrSession.getToolkit(), attrSession);
 				if (type != null)
-					builder.withAttribute(attrName, type, spec, defaultV, asContent(attr.getNamePosition(), attr.getName()),
-						getDocumentation(attr));
+					builder.withAttribute(attrName, type, spec, defaultV, LocatedPositionedContent.of(fileLocation, defaultS),
+						asContent(attr.getNamePosition(), attr.getName()), getDocumentation(attr));
 				try {
 					attr.check();
 				} catch (TextParseException e) {
@@ -1051,7 +1052,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			} else
 				type = parseAttributeType(textSession, typeName, false);
 			String specifyS = text.getAttributeIfExists("specify");
-			String defaultS = text.getAttributeIfExists("default");
+			PositionedContent defaultS = text.getAttributeValuePosition("default");
 			SpecificationType spec;
 			if (specifyS != null)
 				spec = SpecificationType.fromAttributeValue(specifyS, textSession);
@@ -1068,12 +1069,14 @@ public class DefaultQonfigParser implements QonfigParser {
 					textSession.error("No type specified");
 					parseType = QonfigValueType.STRING;
 				}
-				defaultV = parseType.parse(defaultS, builder.getSession().getToolkit(), textSession);
+				defaultV = parseType.parse(defaultS.toString(), builder.getSession().getToolkit(), textSession);
 			}
 			if (modify)
-				builder.modifyValue(type, spec, defaultV, asContent(text.getNamePosition(), text.getName()), getDocumentation(text));
+				builder.modifyValue(type, spec, defaultV, LocatedPositionedContent.of(fileLocation, defaultS),
+					asContent(text.getNamePosition(), text.getName()), getDocumentation(text));
 			else
-				builder.withValue(type, spec, defaultV, asContent(text.getNamePosition(), text.getName()), getDocumentation(text));
+				builder.withValue(type, spec, defaultV, LocatedPositionedContent.of(fileLocation, defaultS),
+					asContent(text.getNamePosition(), text.getName()), getDocumentation(text));
 			try {
 				text.check();
 			} catch (TextParseException e) {
@@ -1131,7 +1134,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				} else
 					type = parseAttributeType(attrSession, typeName, true);
 				String specifyS = attr.getAttributeIfExists("specify");
-				String defaultS = attr.getAttributeIfExists("default");
+				PositionedContent defaultS = attr.getAttributeValuePosition("default");
 				SpecificationType spec;
 				if (specifyS != null)
 					spec = SpecificationType.fromAttributeValue(specifyS, attrSession);
@@ -1144,18 +1147,18 @@ public class DefaultQonfigParser implements QonfigParser {
 					QonfigValueType type2 = type;
 					if (type2 == null)
 						type2 = overridden.getType();
-					defaultV = type2.parse(defaultS, attrSession.getToolkit(), attrSession);
+					defaultV = type2.parse(defaultS.toString(), attrSession.getToolkit(), attrSession);
 					if (defaultV == null)
 						builder.getSession()
 							.error("Default value '" + defaultS + "' parsed to null by attribute type " + type2 + "--this is not allowed");
 				}
 				if (overridden != null)
-					builder.modifyAttribute(overridden, type, spec, defaultV, asContent(attr.getNamePosition(), attr.getName()),
-						getDocumentation(attr));
+					builder.modifyAttribute(overridden, type, spec, defaultV, LocatedPositionedContent.of(fileLocation, defaultS),
+						asContent(attr.getNamePosition(), attr.getName()), getDocumentation(attr));
 				try {
 					attr.check();
 				} catch (TextParseException e) {
-					attrSession.warn(e.getMessage());
+					attrSession.warn(e.getMessage(), e);
 				}
 			}
 			parseText(element, builder, true);

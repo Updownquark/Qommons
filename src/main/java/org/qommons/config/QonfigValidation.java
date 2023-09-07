@@ -10,6 +10,7 @@ import java.util.function.Consumer;
 import org.qommons.MultiInheritanceSet;
 import org.qommons.config.QonfigAddOn.ChildModifier;
 import org.qommons.config.QonfigAddOn.ValueModifier;
+import org.qommons.io.LocatedPositionedContent;
 
 /** Provides validation for various toolkit constraints */
 public class QonfigValidation {
@@ -21,16 +22,19 @@ public class QonfigValidation {
 		public final SpecificationType specification;
 		/** The value to use if it is not specified */
 		public final Object defaultValue;
+		public final LocatedPositionedContent defaultValueContent;
 
 		/**
 		 * @param type The type that must be specified
 		 * @param specify The specification of the value
 		 * @param defaultValue The value to use if it is not specified
 		 */
-		public ValueSpec(QonfigValueType type, SpecificationType specify, Object defaultValue) {
+		public ValueSpec(QonfigValueType type, SpecificationType specify, Object defaultValue,
+			LocatedPositionedContent defaultValueContent) {
 			this.type = type;
 			this.specification = specify;
 			this.defaultValue = defaultValue;
+			this.defaultValueContent = defaultValueContent;
 		}
 	}
 
@@ -53,15 +57,18 @@ public class QonfigValidation {
 		}
 		Object oldDefaultValue = old.defaultValue;
 		Object newDefaultValue = override.defaultValue;
+		LocatedPositionedContent defaultValueContent = override.defaultValueContent;
 		if (newDefaultValue != null) {
-			if (newDefaultValue.equals(oldDefaultValue))
-				newDefaultValue = null;
-			else if (type != null && !type.isInstance(newDefaultValue)) {
+			if (newDefaultValue.equals(oldDefaultValue)) { //
+			} else if (type != null && !type.isInstance(newDefaultValue)) {
 				onError.accept("Default value '" + newDefaultValue + "' is not an instance of " + type);
 				newDefaultValue = null;
+				defaultValueContent = null;
 			}
-		} else
+		} else {
 			newDefaultValue = oldDefaultValue;
+			defaultValueContent = old.defaultValueContent;
+		}
 		SpecificationType oldSpec = old.specification;
 		SpecificationType newSpec = oldSpec;
 		if (override.specification != null)
@@ -71,7 +78,7 @@ public class QonfigValidation {
 				if (newSpec != SpecificationType.Forbidden) {
 					onError.accept("Cannot make a forbidden value specifiable");
 					newSpec = oldSpec;
-				} else if (!newDefaultValue.equals(oldDefaultValue)) {
+				} else if (!Objects.equals(newDefaultValue, oldDefaultValue)) {
 					onError.accept("Cannot modify forbidden value: '" + oldDefaultValue + "' to '" + newDefaultValue + "'");
 					newDefaultValue = oldDefaultValue;
 				}
@@ -90,7 +97,7 @@ public class QonfigValidation {
 				break;
 			}
 		}
-		return new ValueSpec(type, newSpec, newDefaultValue);
+		return new ValueSpec(type, newSpec, newDefaultValue, defaultValueContent);
 	}
 
 	public static ValueSpec validateValue(ValueSpec override, List<ValueSpec> inherited, Consumer<String> onError,
@@ -128,6 +135,7 @@ public class QonfigValidation {
 		}
 
 		Object defaultValue = override.defaultValue;
+		LocatedPositionedContent defaultValueContent = override.defaultValueContent;
 		boolean required = false, forbidden = false;
 		for (ValueSpec inh : inherited) {
 			switch (inh.specification) {
@@ -142,8 +150,10 @@ public class QonfigValidation {
 				else if (forbidden && !inh.defaultValue.equals(defaultValue))
 					onError.accept("Inherited multiple values incompatible values for forbidden value");
 			}
-			if (inh.defaultValue != null && type.isInstance(inh.defaultValue))
+			if (inh.defaultValue != null && type.isInstance(inh.defaultValue)) {
 				defaultValue = inh.defaultValue;
+				defaultValueContent = inh.defaultValueContent;
+			}
 		}
 		SpecificationType specification;
 		if (override.specification != null) {
@@ -167,7 +177,7 @@ public class QonfigValidation {
 			specification = SpecificationType.Optional;
 		else
 			specification = SpecificationType.Required;
-		return new ValueSpec(type, specification, defaultValue);
+		return new ValueSpec(type, specification, defaultValue, defaultValueContent);
 	}
 
 	/**
@@ -196,15 +206,16 @@ public class QonfigValidation {
 				} else if (valueModified) {
 					QonfigValidation.validateSpecification( //
 						new ValueSpec(root.getType() == null ? null : root.getType().getValue().getType(),
-							ao.getValueModifier().getSpecification(), ao.getValueModifier().getDefaultValue()), //
+							ao.getValueModifier().getSpecification(), ao.getValueModifier().getDefaultValue(),
+							ao.getValueModifier().getDefaultValueContent()), //
 						new ValueSpec(valueModifier.getTypeRestriction(), valueModifier.getSpecification(),
-							valueModifier.getDefaultValue()), //
+							valueModifier.getDefaultValue(), valueModifier.getDefaultValueContent()), //
 						err -> session.at(root.getFilePosition()).error(err), //
 						warn -> session.at(root.getFilePosition()).warn(warn));
 				} else if (valueModifier.getSpecification() != ao.getValueModifier().getSpecification()
 					|| !Objects.equals(valueModifier.getDefaultValue(), ao.getValueModifier().getDefaultValue())) {
-					session.at(root.getFilePosition()).error("Inherited add-ons " + textModSource + " and "
-						+ inh.getValue() + " specify different text modifications. Inheriting both of these root add-ons is illegal.");
+					session.at(root.getFilePosition()).error("Inherited add-ons " + textModSource + " and " + inh.getValue()
+						+ " specify different text modifications. Inheriting both of these root add-ons is illegal.");
 				}
 			}
 			// Validate attribute modifications

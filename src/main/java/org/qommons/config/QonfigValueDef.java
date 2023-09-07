@@ -1,5 +1,6 @@
 package org.qommons.config;
 
+import org.qommons.io.LocatedPositionedContent;
 import org.qommons.io.PositionedContent;
 
 /** Represents an element value specification */
@@ -20,12 +21,15 @@ public interface QonfigValueDef extends QonfigElementOwned {
 	/** @return The value to use if the user does not specify it */
 	Object getDefaultValue();
 
+	LocatedPositionedContent getDefaultValueContent();
+
 	/** Abstract {@link QonfigValueDef} implementation */
 	public static abstract class Abstract implements QonfigValueDef {
 		private final QonfigElementOrAddOn theOwner;
 		private final QonfigValueType theType;
 		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
+		private final LocatedPositionedContent theDefaultValueContent;
 		private final PositionedContent thePosition;
 		private final String theDescription;
 
@@ -38,11 +42,12 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		 * @param description The description for this value
 		 */
 		public Abstract(QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify, Object defaultValue,
-			PositionedContent position, String description) {
+			LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
 			theOwner = owner;
 			theType = type;
 			theSpecification = specify;
 			theDefaultValue = defaultValue;
+			theDefaultValueContent = defaultValueContent;
 			thePosition = position;
 			theDescription = description;
 		}
@@ -78,6 +83,11 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		@Override
 		public Object getDefaultValue() {
 			return theDefaultValue;
+		}
+
+		@Override
+		public LocatedPositionedContent getDefaultValueContent() {
+			return theDefaultValueContent;
 		}
 
 		@Override
@@ -121,8 +131,8 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		 * @param description The description for this value
 		 */
 		public DeclaredValueDef(QonfigElementDef owner, QonfigValueType type, SpecificationType specify, Object defaultValue,
-			PositionedContent position, String description) {
-			super(owner, type, specify, defaultValue, position, description);
+			LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
+			super(owner, type, specify, defaultValue, defaultValueContent, position, description);
 		}
 
 		@Override
@@ -146,12 +156,13 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		 * @param type The type that must be specified
 		 * @param specify The specification of the value
 		 * @param defaultValue The value to use if it is not specified
+		 * @param defaultValueContent
 		 * @param position The position in the file where this value was defined
 		 * @param description The description for the value modification
 		 */
 		public Modified(QonfigValueDef declared, QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify,
-			Object defaultValue, PositionedContent position, String description) {
-			super(owner, type, specify, defaultValue, position, description);
+			Object defaultValue, LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
+			super(owner, type, specify, defaultValue, defaultValueContent, position, description);
 			theDeclared = declared instanceof DeclaredValueDef ? (DeclaredValueDef) declared
 				: ((QonfigValueDef.Modified) declared).getDeclared();
 		}

@@ -8,6 +8,7 @@ import org.qommons.MultiInheritanceSet;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterMultiMap;
 import org.qommons.io.ErrorReporting;
+import org.qommons.io.LocatedPositionedContent;
 import org.qommons.io.PositionedContent;
 
 /** An add-on that can be applied to an element in various forms to alter its specification and behavior */
@@ -93,6 +94,7 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		private final QonfigToolkit theDeclarer;
 		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
+		private final LocatedPositionedContent theDefaultValueContent;
 		private final String theDescription;
 		private final PositionedContent theContent;
 
@@ -103,10 +105,11 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		 * @param description The description for this modification
 		 * @param content The content that specified the modifier
 		 */
-		public ValueModifier(QonfigToolkit declarer, SpecificationType specification, Object defaultValue, String description,
-			PositionedContent content) {
+		public ValueModifier(QonfigToolkit declarer, SpecificationType specification, Object defaultValue,
+			LocatedPositionedContent defaultValueContent, String description, PositionedContent content) {
 			theDeclarer = declarer;
 			theDefaultValue = defaultValue;
+			theDefaultValueContent = defaultValueContent;
 			theSpecification = specification;
 			theDescription = description;
 			theContent = content;
@@ -130,6 +133,11 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		@Override
 		public Object getDefaultValue() {
 			return theDefaultValue;
+		}
+
+		@Override
+		public LocatedPositionedContent getDefaultValueContent() {
+			return theDefaultValueContent;
 		}
 
 		@Override
@@ -312,15 +320,15 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		}
 
 		@Override
-		public Builder withValue(QonfigValueType type, SpecificationType specification, Object defaultValue, PositionedContent position,
-			String description) {
+		public Builder withValue(QonfigValueType type, SpecificationType specification, Object defaultValue,
+			LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
 			theSession.error("Value cannot be specified by an add-on, only modified");
 			return this;
 		}
 
 		@Override
-		public Builder modifyValue(QonfigValueType type, SpecificationType specification, Object defaultValue, PositionedContent position,
-			String description) {
+		public Builder modifyValue(QonfigValueType type, SpecificationType specification, Object defaultValue,
+			LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
 			if (getSuperElement() == null) {
 				theSession.at(position).error("No required element to modify the value for");
 				return this;
@@ -331,31 +339,31 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 				theSession.at(position).error("Value type cannot be modified by an add-on");
 				type = null;
 			}
-			super.modifyValue(type, specification, defaultValue, position, description);
+			super.modifyValue(type, specification, defaultValue, defaultValueContent, position, description);
 			return this;
 		}
 
 		@Override
 		protected ValueModifier valueModifier(QonfigValueType type, SpecificationType specification, Object defaultValue,
-			String description, PositionedContent position) {
-			return new ValueModifier(getSession().getToolkit(), specification, defaultValue, description, position);
+			LocatedPositionedContent defaultValueContent, String description, PositionedContent position) {
+			return new ValueModifier(getSession().getToolkit(), specification, defaultValue, defaultValueContent, description, position);
 		}
 
 		@Override
 		public Builder withAttribute(String name, QonfigValueType type, SpecificationType specify, Object defaultValue,
-			PositionedContent position, String description) {
-			super.withAttribute(name, type, specify, defaultValue, position, description);
+			LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
+			super.withAttribute(name, type, specify, defaultValue, defaultValueContent, position, description);
 			return this;
 		}
 
 		@Override
 		public Builder modifyAttribute(QonfigAttributeDef attribute, QonfigValueType type, SpecificationType specification,
-			Object defaultValue, PositionedContent position, String description) {
+			Object defaultValue, LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
 			if (type != null && !type.equals(attribute.getType())) {
 				theSession.at(position).error("Attribute type cannot be modified by an add-on");
 				type = null;
 			}
-			super.modifyAttribute(attribute, type, specification, defaultValue, position, description);
+			super.modifyAttribute(attribute, type, specification, defaultValue, defaultValueContent, position, description);
 			return this;
 		}
 

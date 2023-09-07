@@ -2,6 +2,7 @@ package org.qommons.config;
 
 import java.util.Objects;
 
+import org.qommons.io.LocatedPositionedContent;
 import org.qommons.io.PositionedContent;
 
 /** An attribute that may be specified on an element */
@@ -19,6 +20,7 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		private final QonfigValueType theType;
 		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
+		private final LocatedPositionedContent theDefaultValueContent;
 		private final PositionedContent thePosition;
 		private final String theDescription;
 
@@ -31,11 +33,12 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		 * @param description The description for this attribute
 		 */
 		public Abstract(QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify, Object defaultValue,
-			PositionedContent position, String description) {
+			LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
 			theOwner = owner;
 			theType = type;
 			theSpecification = specify;
 			theDefaultValue = defaultValue;
+			theDefaultValueContent = defaultValueContent;
 			thePosition = position;
 			theDescription = description;
 		}
@@ -69,6 +72,11 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		@Override
 		public Object getDefaultValue() {
 			return theDefaultValue;
+		}
+
+		@Override
+		public LocatedPositionedContent getDefaultValueContent() {
+			return theDefaultValueContent;
 		}
 
 		@Override
@@ -115,8 +123,8 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		 * @param description The description for this attribute
 		 */
 		public DeclaredAttributeDef(QonfigElementOrAddOn owner, String name, QonfigValueType type, SpecificationType specify,
-			Object defaultValue, PositionedContent position, String description) {
-			super(owner, type, specify, defaultValue, position, description);
+			Object defaultValue, LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
+			super(owner, type, specify, defaultValue, defaultValueContent, position, description);
 			theName = name;
 		}
 
@@ -160,8 +168,9 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		 * @param description The description for the attribute modification
 		 */
 		public Modified(QonfigAttributeDef declared, QonfigElementOrAddOn owner, QonfigValueType type,
-			SpecificationType specify, Object defaultValue, PositionedContent position, String description) {
-			super(owner, type, specify, defaultValue, position, description);
+			SpecificationType specify, Object defaultValue, LocatedPositionedContent defaultValueContent, PositionedContent position,
+			String description) {
+			super(owner, type, specify, defaultValue, defaultValueContent, position, description);
 			theDeclared = declared instanceof DeclaredAttributeDef ? (DeclaredAttributeDef) declared
 				: ((QonfigAttributeDef.Modified) declared).getDeclared();
 		}

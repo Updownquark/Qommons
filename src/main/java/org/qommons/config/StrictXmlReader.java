@@ -230,6 +230,7 @@ public class StrictXmlReader implements Named, Transaction {
 		Node node = theElement.getAttributeNode(name);
 		if (node == null)
 			return null;
+		getAttributeIfExists(name); // Mark as used
 		return SimpleXMLParser.getPositionContent(node);
 	}
 
