@@ -749,8 +749,7 @@ public class QonfigElement implements FileSourced, SelfDescribed {
 			for (int i = parsedAttrs.nextClearBit(0); i >= 0; i = parsedAttrs.nextClearBit(i + 1)) {
 				if (i >= theDeclaredAttributes.size())
 					break;
-				theErrors.at(theDeclaredAttributes.get(i).position)
-					.error("No such attribute found: '" + theDeclaredAttributes.get(i) + "'");
+				theErrors.at(theDeclaredAttributes.get(i).position).error("Unrecognized attribute: '" + theDeclaredAttributes.get(i) + "'");
 			}
 			// Now that we know our inheritance completely, we need to check all the attributes we've parsed
 			// to make sure they still match exactly one attribute definition.
