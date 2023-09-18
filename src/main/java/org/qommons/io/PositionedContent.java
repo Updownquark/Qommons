@@ -111,6 +111,12 @@ public interface PositionedContent extends CharSequence {
 		}
 
 		@Override
+		public PositionedContent subSequence(int startIndex) {
+			checkIndex(startIndex, false);
+			return new SubContentPosition(theWrapped, theStart + startIndex, theEnd);
+		}
+
+		@Override
 		public PositionedContent subSequence(int startIndex, int endIndex) {
 			checkRange(startIndex, endIndex);
 			return new SubContentPosition(theWrapped, theStart + startIndex, theStart + endIndex);
