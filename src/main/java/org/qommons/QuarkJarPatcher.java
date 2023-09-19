@@ -36,16 +36,21 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.Timer;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 
 import org.qommons.config.QommonsConfig;
+import org.qommons.ex.CheckedExceptionWrapper;
+import org.qommons.ex.ExBiConsumer;
+import org.qommons.ex.ExConsumer;
 import org.qommons.io.BetterFile;
 import org.qommons.io.CountingInputStream;
 import org.qommons.io.FileUtils;
-import org.qommons.io.SimpleXMLParser;
-import org.qommons.io.TextParseException;
+import org.qommons.io.MiniFileUtils;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.Text;
+import org.xml.sax.SAXException;
 
 /** A class for creating and applying patches to applications */
 public class QuarkJarPatcher {
@@ -53,6 +58,22 @@ public class QuarkJarPatcher {
 		+ "\nMain-Class: " + QuarkJarPatcher.class.getName()//
 		+ "\nClass-Path: ." //
 		+ "\n";
+
+	/**
+	 * 
+	 * @return All classes which must be bundled into patches--those needed by the {@link #applyPatch()} method. This list should be kept to
+	 *         a minimum to keep the size of patch files small. This is a static method instead of a static constant so the patch-bundled
+	 *         class doesn't need to include QommonsUtils.
+	 */
+	private static Map<Class<?>, String> getBundledClasses() {
+		return QommonsUtils.<Class<?>, String> buildMap(null)//
+			.with(Patch.class, "").with(PatchFileSet.class, "")//
+			.with(CountingInputStream.class, "")//
+			.with(MiniFileUtils.class, "Zip extraction utility class")//
+			.with(MiniFileUtils.ArchiveEntry.class, "").with(MiniFileUtils.ArchiveEntry.Default.class, "")//
+			.with(ExBiConsumer.class, "").with(ExConsumer.class, "").with(CheckedExceptionWrapper.class, "")//
+			.getUnmodifiable();
+	}
 
 	/**
 	 * @param clArgs Command-line arguments:
@@ -219,21 +240,24 @@ public class QuarkJarPatcher {
 				}
 				String zipUrl = classFile.toString();
 				zipUrl = zipUrl.substring(offset, zipUrl.length() - path.length() + slash);
-				File tempDir = Files.createTempFile("QuarkJarPatcher", "z").toFile();
+				File tempDir = Files.createTempDirectory("QuarkJarPatcher").toFile();
 				try (InputStream zipIn = new URL(zipUrl).openStream()) {
 					String fZipUrl = zipUrl;
 					Set<String> patchContents = new HashSet<>();
 					JDialog fDialog = dialog;
 					JEditorPane fDescrip = description;
-					FileUtils.extractZip(zipIn, tempDir, (f, p) -> {
+					MiniFileUtils.extractZip(zipIn, tempDir, (f, p) -> {
 						if (patch[0] == null) {
 							if (!p.endsWith(".patch"))
 								throw new IOException("Expected *.patch configuration file as first entry in " + fZipUrl);
 							status("Reading patch configuration", null, -1, status, progress, uiDirty);
 							Element patchRoot;
 							try (InputStream in = new BufferedInputStream(new FileInputStream(f))) {
-								patchRoot = new SimpleXMLParser().parseDocument(in).getDocumentElement();
-							} catch (TextParseException e) {
+								patchRoot = DocumentBuilderFactory.newInstance()//
+									.newDocumentBuilder()//
+									.parse(in)//
+									.getDocumentElement();
+							} catch (ParserConfigurationException | SAXException e) {
 								throw new IOException("Could not read XML", e);
 							}
 							patch[0] = parsePatch(patchRoot);
@@ -269,7 +293,7 @@ public class QuarkJarPatcher {
 						throw new IOException("Patch file is missing required contents");
 					}
 				}
-			} catch (Exception e) {
+			} catch (Throwable e) {
 				e.printStackTrace();
 				if (dialog != null) {
 					JOptionPane.showMessageDialog(dialog, e.getMessage(), "Failed to extract patch", JOptionPane.ERROR_MESSAGE);
@@ -361,7 +385,7 @@ public class QuarkJarPatcher {
 								new BufferedInputStream(new FileInputStream(targets[i])));
 							ZipOutputStream zipOut = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(replacement)))) {
 							long fcsf = fileContentSoFar, tl = totalLength;
-							FileUtils.extractZip(targetIn, entry -> {
+							MiniFileUtils.extractZip(targetIn, entry -> {
 								status[1] = entry.getPath();
 								status(null, entry.getPath(), progress[0], status, progress, uiDirty);
 								File patchFile = extractedFiles.remove(entry.getPath());
@@ -384,7 +408,7 @@ public class QuarkJarPatcher {
 								} else if (!entry.isDirectory()) {
 									zipEntry.setLastModifiedTime(FileTime.fromMillis(entry.getLastModified()));
 									zipOut.putNextEntry(zipEntry);
-									FileUtils.copy(entry.getContent(), zipOut);
+									MiniFileUtils.copy(entry.getContent(), zipOut);
 								}
 								status(null, entry.getPath(),
 									Math.round((fcsf + targetIn.getPosition() * 0.9f) * 1000.0f / tl), status,
@@ -430,7 +454,7 @@ public class QuarkJarPatcher {
 						fileContentSoFar += targetLen;
 					}
 				}
-			} catch (Exception e) {
+			} catch (Throwable e) {
 				e.printStackTrace();
 				if (dialog != null)
 					JOptionPane.showMessageDialog(dialog, e.getMessage(), "Failed to apply patch", JOptionPane.ERROR_MESSAGE);
@@ -478,6 +502,7 @@ public class QuarkJarPatcher {
 	}
 
 	public static File createPatch(String patchFileLocation) throws IOException {
+		// This method is free to use any utilities it needs, as this isn't called from the patch installation
 		BetterFile patchConfigFile;
 		InputStream patchStream = null;
 		Patch patch;
@@ -520,43 +545,13 @@ public class QuarkJarPatcher {
 			entry.setComment("The specification file for the patch");
 			zip.putNextEntry(entry);
 			try (InputStream in = patchConfigFile.read()) {
-				FileUtils.copy(in, zip);
+				MiniFileUtils.copy(in, zip);
 			}
 
 			// Now this class file and the few dependency classes we need
-			// This class
-			BetterFile classFile = FileUtils.getClassFile(QuarkJarPatcher.class);
-			entry = new ZipEntry("org/qommons/" + classFile.getName());
-			entry.setLastModifiedTime(FileTime.fromMillis(classFile.getLastModified()));
-			entry.setComment("The patch file application class");
-			zip.putNextEntry(entry);
-			try (InputStream in = classFile.read()) {
-				FileUtils.copy(in, zip);
-			}
-			// The Patch class
-			classFile = classFile.getParent().at(className(Patch.class.getName()) + ".class");
-			entry = new ZipEntry("org/qommons/" + classFile.getName());
-			entry.setLastModifiedTime(FileTime.fromMillis(classFile.getLastModified()));
-			zip.putNextEntry(entry);
-			try (InputStream in = classFile.read()) {
-				FileUtils.copy(in, zip);
-			}
-			// The PatchFileSet class
-			classFile = classFile.getParent().at(className(PatchFileSet.class.getName()) + ".class");
-			entry = new ZipEntry("org/qommons/" + classFile.getName());
-			entry.setLastModifiedTime(FileTime.fromMillis(classFile.getLastModified()));
-			zip.putNextEntry(entry);
-			try (InputStream in = classFile.read()) {
-				FileUtils.copy(in, zip);
-			}
-			// The CountingInputStream class
-			classFile = classFile.getParent().at("io/" + className(CountingInputStream.class.getName()) + ".class");
-			entry = new ZipEntry("org/qommons/io/" + classFile.getName());
-			entry.setLastModifiedTime(FileTime.fromMillis(classFile.getLastModified()));
-			zip.putNextEntry(entry);
-			try (InputStream in = classFile.read()) {
-				FileUtils.copy(in, zip);
-			}
+			BetterFile patcherClassFile = bundleClass(QuarkJarPatcher.class, "The patch file application class", zip);
+			for (Map.Entry<Class<?>, String> dependency : getBundledClasses().entrySet())
+				bundleClass(dependency.getKey(), dependency.getValue(), zip);
 
 			// Manifest file so this class is executed as the jar's main class
 			entry = new ZipEntry("META-INF/MANIFEST.MF");
@@ -568,7 +563,7 @@ public class QuarkJarPatcher {
 			w.flush();
 
 			// Now the actual patch contents
-			BetterFile searchRoot = classFile.getParent().getParent().getParent().getParent(); // class root
+			BetterFile searchRoot = patcherClassFile.getParent().getParent().getParent(); // class root
 			if (!searchRoot.getName().endsWith(".jar")) // If we're not in a jar, use the Qommons project root
 				searchRoot = searchRoot.getParent().getParent().getParent(); // Qommons/target/classes
 			for (PatchFileSet fileSet : patch.getPatchContents()) {
@@ -594,7 +589,7 @@ public class QuarkJarPatcher {
 					entry.setLastModifiedTime(FileTime.fromMillis(found.getLastModified()));
 					zip.putNextEntry(entry);
 					try (InputStream in = found.read()) {
-						FileUtils.copy(in, zip);
+						MiniFileUtils.copy(in, zip);
 					}
 				}
 			}
@@ -602,6 +597,21 @@ public class QuarkJarPatcher {
 		} catch (IOException e) {
 			throw new IOException("Patch creation failed", e);
 		}
+	}
+
+	private static BetterFile bundleClass(Class<?> clazz, String comment, ZipOutputStream zip) throws IOException {
+		BetterFile classFile = FileUtils.getClassFile(clazz);
+		// We'll just assume these classes aren't in the default package
+		String dir = clazz.getName().substring(0, clazz.getName().lastIndexOf('.') + 1).replace(".", "/");
+		ZipEntry entry = new ZipEntry(dir + classFile.getName());
+		entry.setLastModifiedTime(FileTime.fromMillis(classFile.getLastModified()));
+		if (comment != null && !comment.isEmpty())
+			entry.setComment(comment);
+		zip.putNextEntry(entry);
+		try (InputStream in = classFile.read()) {
+			MiniFileUtils.copy(in, zip);
+		}
+		return classFile;
 	}
 
 	private static String className(String name) {
