@@ -64,7 +64,65 @@ public class TimeUtils {
 		/** The "a.m." or "p.m." marker for 12-hour time format */
 		AmPm,
 		/** The time zone specified in the format */
-		TimeZone
+		TimeZone;
+
+		public static DateElementType parse(String name) {
+			switch (name.toLowerCase()) {
+			case "year":
+			case "y":
+			case "yr":
+				return Year;
+			case "month":
+			case "mon":
+			case "mo":
+				return Month;
+			case "day":
+			case "dy": // Whatever
+			case "d":
+				return Day;
+			case "weekday":
+			case "week day":
+			case "wkdy":
+			case "wd":
+			case "w":
+				return Weekday;
+			case "hour":
+			case "hr":
+			case "h":
+				return Hour;
+			case "minute":
+			case "min":
+			case "mi":
+			case "m":
+				return Minute;
+			case "second":
+			case "sec":
+			case "s":
+				return Second;
+			case "subsecond":
+			case "sub second":
+			case "subsec":
+			case "sub sec":
+			case "ss":
+				return SubSecond;
+			case "am/pm":
+			case "ampm":
+			case "am pm":
+			case "a/p":
+			case "a/pm":
+			case "ap":
+			case "apm":
+			case "a":
+				return AmPm;
+			case "timezone":
+			case "time zone":
+			case "tz":
+			case "z":
+				return TimeZone;
+			default:
+				throw new IllegalArgumentException("Unrecognized date element type: " + name);
+			}
+		}
 	}
 
 	/** Time units in a parsed duration */
@@ -1446,7 +1504,21 @@ public class TimeUtils {
 		/** Chooses the closest time matching the relative instant <b>after</b> the reference time */
 		Future,
 		/** Chooses the closest time matching the relative instant either before or after the reference time */
-		Closest
+		Closest;
+
+		public static RelativeInstantEvaluation parse(String text) {
+			switch (text.toLowerCase()) {
+			case "past":
+				return Past;
+			case "future":
+				return Future;
+			case "closest":
+			case "close":
+				return Closest;
+			default:
+				throw new IllegalArgumentException("Unrecognized relative evaluation: " + text);
+			}
+		}
 	}
 
 	/**

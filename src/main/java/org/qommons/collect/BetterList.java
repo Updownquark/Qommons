@@ -282,6 +282,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		return new SubList<>(this, fromIndex, toIndex);
 	}
 
+	@Override
+	default BetterList<CollectionElement<E>> elements() {
+		return elementsBetween(null, true, null, true);
+	}
+
 	/**
 	 * Creates a sub-list of collection elements backed by this list
 	 * 
