@@ -815,7 +815,6 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					overriding.add(child);
 					return new QonfigChildDef.Overridden(get(), fulfilled, overriding, position, description);
 				});
-			theChildrenByName.add(name, child);
 			return this;
 		}
 
@@ -1286,7 +1285,6 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					mod.getValue().getMax() != null ? mod.getValue().getMax() : mod.getKey().getMax(), mod.getKey().getFilePosition(),
 					mod.getValue().getDescription());
 				theCompiledChildren.put(mod.getKey(), modified);
-				theChildrenByName.add(mod.getKey().getName(), modified);
 			}
 			if (theSuperElement != null) {
 				for (Map.Entry<QonfigChildDef.Declared, QonfigChildDef> child : theSuperElement.getAllChildren().entrySet()) {
@@ -1370,7 +1368,6 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					else
 						theCompiledChildren.put(child.getKey(),
 							new QonfigChildDef.Modified(child.getKey(), get(), type, inheritance, requirement, min, max, null, null));
-					theChildrenByName.add(child.getKey().getName(), theCompiledChildren.get(child.getKey()));
 				}
 			}
 			for (QonfigAddOn inh : theInheritance) {
@@ -1505,9 +1502,10 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 							new QonfigChildDef.Modified(child, get(), type, inheritance, requirement, min, max, null, null));
 					else
 						theCompiledChildren.put(child.getDeclared(), new QonfigChildDef.Inherited(get(), child));
-					theChildrenByName.add(child.getName(), theCompiledChildren.get(child.getDeclared()));
 				}
 			}
+			for (QonfigChildDef child : theCompiledChildren.values())
+				theChildrenByName.add(child.getName(), child);
 		}
 
 		/** @return The built element or add-on */

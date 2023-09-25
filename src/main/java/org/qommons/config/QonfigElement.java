@@ -988,7 +988,35 @@ public class QonfigElement implements FileSourced, SelfDescribed {
 			if (theStage == 0)
 				create();
 			if (theStage < 2) {
-				// TODO Verify children
+				// Check the children
+				// To be as helpful as possible, we need to first ensure that this element's type hierarchy is consistent.
+				// E.g. if the type requires 2 instances of a child but one of the add-ons forbids more than 1,
+				// tell the user that the type hierarchy is bad instead of a generic and confusing "between 2 and 1" message.
+				// We also include in the error message for bad child count the types that define the constraints.
+				Map<QonfigChildDef.Declared, ChildConstraint> childrenWarned = Collections.emptyMap();
+				for (QonfigChildDef child : theType.getAllChildren().values()) {
+					int count = theChildrenByRole.get(child.getDeclared()).size();
+					if (count < child.getMin() || count > child.getMax()) {
+						if (childrenWarned.isEmpty())
+							childrenWarned = new LinkedHashMap<>();
+						childrenWarned.put(child.getDeclared(), new ChildConstraint(child));
+					}
+				}
+				for (QonfigAddOn inh : theInheritance.values()) {
+					for (QonfigChildDef child : inh.getAllChildren().values()) {
+						int count = theChildrenByRole.get(child.getDeclared()).size();
+						if (count < child.getMin() || count > child.getMax()) {
+							if (childrenWarned.isEmpty())
+								childrenWarned = new LinkedHashMap<>();
+							childrenWarned.compute(child.getDeclared(),
+								(c, old) -> old == null ? new ChildConstraint(child) : old.constrain(child, theErrors));
+						}
+					}
+				}
+				for (Map.Entry<QonfigChildDef.Declared, ChildConstraint> child : childrenWarned.entrySet()) {
+					int count = theChildrenByRole.get(child.getKey()).size();
+					child.getValue().check(child.getKey(), count, theErrors);
+				}
 				theStage = 2;
 			}
 			return theElement;
@@ -1000,6 +1028,104 @@ public class QonfigElement implements FileSourced, SelfDescribed {
 				return theElement.toString();
 			else
 				return theType.getName();
+		}
+	}
+
+	private static class ChildConstraint {
+		int min;
+		QonfigElementOrAddOn minDefiner;
+		int max;
+		QonfigElementOrAddOn maxDefiner;
+
+		ChildConstraint(QonfigChildDef child) {
+			// Get as close to the root of the definition as we can
+			while (child instanceof QonfigChildDef.Inherited)
+				child = ((QonfigChildDef.Inherited) child).getInherited();
+			min = child.getMin();
+			max = child.getMax();
+			minDefiner = maxDefiner = child.getOwner();
+		}
+
+		ChildConstraint constrain(QonfigChildDef child, ErrorReporting reporting) {
+			while (child instanceof QonfigChildDef.Inherited)
+				child = ((QonfigChildDef.Inherited) child).getInherited();
+			if (child.getMin() > min) {
+				if (child.getMin() > max)
+					reporting.error("Illegal element configuration. " + child.getOwner() + " requires at least " + child.getMin()
+						+ " children for role " + child.getDeclared() + ", but " + maxDefiner + " forbids more than " + max);
+				else {
+					min = child.getMin();
+					minDefiner = child.getOwner();
+				}
+			}
+			if (child.getMax() < max) {
+				if (child.getMax() < min)
+					reporting.error("Illegal element configuration. " + minDefiner + " requires at least " + min + " children for role "
+						+ child.getDeclared() + ", but " + child.getOwner() + " forbids more than " + child.getMax());
+				else {
+					min = child.getMin();
+					minDefiner = child.getOwner();
+				}
+			}
+			return this;
+		}
+
+		void check(QonfigChildDef.Declared child, int count, ErrorReporting reporting) {
+			if (count < min) {
+				if (max == 1) {
+					if (child.getMin() == min)
+						reporting.error("Child required: " + child);
+					else
+						reporting.error("Child " + child + " required by " + minDefiner);
+				} else if (max == Integer.MAX_VALUE) {
+					String error;
+					if (child.getMin() == min)
+						error = "At least " + min + " child" + (min == 1 ? "" : "ren") + " required for " + child;
+					else
+						error = "At least " + min + " child" + (min == 1 ? "" : "ren") + " required for " + child + " by " + minDefiner;
+					if (count == 0)
+						reporting.error(error);
+					else
+						reporting.error(error + ", but only " + count + " specified");
+				} else if (min == max) {
+					String error;
+					if (child.getMin() == min)
+						error = min + " child" + (min == 1 ? "" : "ren") + " required for " + child;
+					else
+						error = min + " child" + (min == 1 ? "" : "ren") + " required for " + child + " by " + minDefiner;
+					if (count == 0)
+						reporting.error(error);
+					else
+						reporting.error(error + ", but only " + count + " specified");
+				} else {
+					String error;
+					if (child.getMin() == min) {
+						if (child.getMax() == max)
+							error = "Between " + min + " and " + max + " children required for " + child;
+						else
+							error = "Between " + min + " and " + max + " children required for " + child + " by " + maxDefiner;
+					} else if (child.getMax() == max || minDefiner == maxDefiner)
+						error = "Between " + min + " and " + max + " children required for " + child + " by " + minDefiner;
+					else
+						error = "Between " + min + " and " + max + " children required for " + child + " by " + minDefiner + "/"
+							+ maxDefiner;
+					if (count == 0)
+						reporting.error(error);
+					else
+						reporting.error(error + ", but only " + count + " specified");
+				}
+			} else if (count > max) {
+				if (max == 0) {
+					if (child.getMax() == max) // Can't imagine why you'd define a child with a max of 0, but it's allowed
+						reporting.error("Child forbidden: " + child);
+					else
+						reporting.error("Child " + child + " forbidden by " + maxDefiner);
+				} else if (child.getMax() == max)
+					reporting.error("No more than " + max + " children allowed for " + child + ", but " + count + " specified");
+				else
+					reporting.error(
+						"No more than " + max + " children allowed for " + child + " by " + maxDefiner + ", but " + count + " specified");
+			}
 		}
 	}
 }
