@@ -1402,6 +1402,17 @@ public class StringUtils {
 		default String format(byte[] bytes, int start, int end) {
 			return format(new StringBuilder(), bytes, start, end).toString();
 		}
+
+		/**
+		 * @param bytes The long to encode as 8 bytes
+		 * @return The formatted data
+		 */
+		default String format(long bytes) {
+			byte[] longBytes = new byte[8];
+			for (int i = 0; i < longBytes.length; i++)
+				longBytes[i] = (byte) ((bytes >>> (i * 8)) & 0xff);
+			return format(bytes);
+		}
 	}
 
 	/** The hex characters output by {@link #encodeHex()} (A-F are upper case, but lower case will be parsed as well) */
