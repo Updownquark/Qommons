@@ -715,7 +715,7 @@ public class QonfigElement implements FileSourced, SelfDescribed {
 									attr = a;
 							}
 							if (!resolved) {
-								theErrors.error("Multiple matching attributes inherited");
+								theErrors.error("Multiple attributes matching '" + attrDef + "' inherited");
 								continue;
 							}
 							break;
