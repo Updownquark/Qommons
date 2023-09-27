@@ -109,6 +109,7 @@ public class SftpFileSource extends RemoteFileSource {
 	}
 
 	private final String theHost;
+	private final int thePort;
 	private final String theUser;
 	private final Consumer<SftpSessionConfig> theSessionConfiguration;
 	private final String theRootDir;
@@ -128,7 +129,21 @@ public class SftpFileSource extends RemoteFileSource {
 	 * @param rootDir The directory to use as the root of this file source
 	 */
 	public SftpFileSource(String host, String user, Consumer<SftpSessionConfig> sessionConfiguration, String rootDir) {
+		this(host, SSHClient.DEFAULT_PORT, user, sessionConfiguration, rootDir);
+	}
+
+	/**
+	 * Creates the file source
+	 * 
+	 * @param host The host to communicate with
+	 * @param port The port to connect on
+	 * @param user The user to connect as
+	 * @param sessionConfiguration Configures each session as it is needed
+	 * @param rootDir The directory to use as the root of this file source
+	 */
+	public SftpFileSource(String host, int port, String user, Consumer<SftpSessionConfig> sessionConfiguration, String rootDir) {
 		theHost = host;
+		thePort = port;
 		theUser = user;
 		theSessionConfiguration = sessionConfiguration;
 		theRootDir = rootDir;
@@ -228,7 +243,7 @@ public class SftpFileSource extends RemoteFileSource {
 						return this;
 					}
 				});
-				s.connect(theHost);
+				s.connect(theHost, thePort);
 				try {
 					theSessionConfiguration.accept(new SftpSessionConfig() {
 						@Override
