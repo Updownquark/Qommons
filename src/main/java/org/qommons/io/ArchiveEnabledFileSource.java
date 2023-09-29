@@ -22,11 +22,13 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -882,7 +884,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		DefaultArchiveEntry withHash(CheckSumType type, String hash) {
-			if (theHashes != null)
+			if (theHashes == null)
 				theHashes = new HashMap<>(3);
 			theHashes.put(type, hash);
 			return this;
@@ -968,25 +970,49 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 	}
 
+	public static class ExtensionTest implements Predicate<String> {
+		private final Set<String> theExtensions;
+
+		public ExtensionTest(String... exts) {
+			theExtensions = new LinkedHashSet<>();
+			for (String ext : exts)
+				theExtensions.add(ext.toLowerCase());
+		}
+
+		@Override
+		public boolean test(String fileName) {
+			int dotIdx = fileName.lastIndexOf('.');
+			if (dotIdx < 0)
+				return false;
+			String ext = fileName.substring(dotIdx + 1).toLowerCase();
+			return theExtensions.contains(ext.toLowerCase());
+		}
+
+		@Override
+		public String toString() {
+			return theExtensions.toString();
+		}
+	}
+
 	/**
 	 * An archival method for interfacing with ZIP files. Because ZIP files contain their contents in a continuous record at the end of the
 	 * file, this class is able to represent the file structure and access individual files very quickly on file systems where random seek
 	 * is fast.
 	 */
 	public static class ZipCompression implements FileArchival {
+		/** Default file name test for ZIP compression */
+		public static final Predicate<String> DEFAULT_ZIP_TEST = new ExtensionTest("zip", "jar");
+
+		private Predicate<String> thePossibleCompressedTest = DEFAULT_ZIP_TEST;
+
+		public ZipCompression withFileTest(Predicate<String> test) {
+			thePossibleCompressedTest = test;
+			return this;
+		}
+
 		@Override
 		public boolean detectPossibleCompressedFile(String fileName) {
-			int dotIdx = fileName.lastIndexOf('.');
-			if (dotIdx < 0)
-				return false;
-			String ext = fileName.substring(dotIdx + 1).toLowerCase();
-			switch (ext) {
-			case "zip":
-			case "jar":
-				return true;
-			default:
-				return false;
-			}
+			return thePossibleCompressedTest == null ? true : thePossibleCompressedTest.test(fileName);
 		}
 
 		@Override
@@ -1001,38 +1027,43 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		@Override
 		public ArchiveEntry parseStructure(FileBacking file, ArchiveEntry existingRoot, Consumer<? super ArchiveEntry> onChild,
 			ExBiConsumer<ArchiveEntry, CharSequence, IOException> forEach, BooleanSupplier canceled) throws IOException {
-			long len = existingRoot == null ? file.length() : -1;
-			if (len >= 0) {
-				byte[] buffer = new byte[(int) Math.min(len, 64 * 1024)];
-				long seekPos = len - buffer.length;
-				boolean zip64 = false;
-				EndOfCentralDirectoryRecord eocd = null;
-				// Although it's allowed in the spec for the terminal comment to be arbitrarily long (which I think it stupid),
-				// allowing it here could cause some pretty severe performance problems for very large corrupted zip files.
-				// This cap allows for a terminal comment that's 6.4MB long.
-				for (int tryCount = 0; eocd == null && tryCount < 100; tryCount++) {
-					if (canceled.getAsBoolean())
+			long len = file.length();
+			if (len < 0)
+				throw new FileNotFoundException("File not found");
+			// We've got 3 ways of parsing the structure of the zip file.
+
+			// First, we can look for the End Of Central Directory record at the end of the file.
+			byte[] buffer = new byte[(int) Math.min(len, 64 * 1024)];
+			long seekPos = len - buffer.length;
+			boolean zip64 = false;
+			EndOfCentralDirectoryRecord eocd = null;
+			// Although it's allowed in the spec for the terminal comment to be arbitrarily long (which I think it stupid),
+			// allowing it here could cause some pretty severe performance problems for very large corrupted zip files.
+			// This cap allows for a terminal comment that's 6.4MB long.
+			for (int tryCount = 0; eocd == null && tryCount < 100; tryCount++) {
+				if (canceled.getAsBoolean())
+					return null;
+				try (InputStream in = file.read(seekPos, canceled)) {
+					if (in == null)
 						return null;
-					try (InputStream in = file.read(seekPos, canceled)) {
-						if (in == null)
-							return null;
-						fillBuffer(in, buffer, 0, buffer.length);
-						eocd = zip64 ? findZip64EOCD(buffer) : findEOCD(buffer);
-						if (eocd == null) {
-							if (seekPos < 46) {
-								// Central directory header has minimum size 46 bytes. If we haven't found the ECOD yet, it doesn't exist.
-								break;
-							}
-							seekPos = Math.max(0, seekPos - buffer.length);
-						} else if (!zip64 && (eocd.diskNumber == 0xffff || eocd.centralDirCount == 0xffff
-							|| eocd.centralDirSize == 0xffffffffL || eocd.centralDirOffset == 0xffffffffL)) {
-							zip64 = true;
-							eocd = findZip64EOCD(buffer);
+					fillBuffer(in, buffer, 0, buffer.length);
+					eocd = zip64 ? findZip64EOCD(buffer) : findEOCD(buffer);
+					if (eocd == null) {
+						if (seekPos < 46) {
+							// Central directory header has minimum size 46 bytes. If we haven't found the ECOD yet, it doesn't exist.
+							break;
 						}
+						seekPos = Math.max(0, seekPos - buffer.length);
+					} else if (!zip64 && (eocd.diskNumber == 0xffff || eocd.centralDirCount == 0xffff || eocd.centralDirSize == 0xffffffffL
+						|| eocd.centralDirOffset == 0xffffffffL)) {
+						zip64 = true;
+						eocd = findZip64EOCD(buffer);
 					}
 				}
-				if (eocd == null)
-					throw new IOException("Not actually a ZIP file: " + file.getName());
+			}
+			if (eocd != null) {
+				// If we found it, we can directly address the Central Directory header and parse it, so we don't need to read the whole
+				// file
 				InputStream eocdIn;
 				if (eocd.centralDirOffset >= seekPos) {
 					// We have the central directory in the buffer
@@ -1042,110 +1073,124 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 				if (eocdIn == null)
 					return null;
 				return new CDRReader(eocd, eocdIn).readCDR((DefaultArchiveEntry) existingRoot, onChild, forEach, canceled);
-			} else {
-				// If we don't know where the end is, looking for the directory at the end of the file can't be efficient
-				// We can do one more thing before we just parse the entire file.
-				// We can look for local entry headers and, if the compressed size is recorded in the header skip the compressed data.
-				// We'll still have to read the entire file, but we won't have to deal with decompression.
-				// Zip allows for this information to be missing from the beginning of the file, though, in which case we're hosed.
-				DefaultArchiveEntry root = new DefaultArchiveEntry("", 0, true);
-				long pos = 0;
-				int entryIndex = 1;
-				boolean badEntry = false;
-				Set<String> children = onChild != null ? new HashSet<>() : null;
-				try (InputStream in = file.read(0, canceled)) {
-					if (in == null)
+			}
+
+			// If we couldn't find the EOCD, it's possible the terminal comment was just really long.
+			// We can do one more thing before we just parse the entire file.
+			// We can look for local entry headers and, if the compressed size is recorded in the header skip the compressed data.
+			// We'll still have to stream the entire file, but we can skip a bunch of it and we won't have to deal with decompression.
+			// Zip allows for this information to be missing from the beginning of the file, though, in which case we're hosed.
+			DefaultArchiveEntry root = new DefaultArchiveEntry("", 0, true);
+			long pos = 0;
+			int entryIndex = 1;
+			boolean badEntry = false;
+			Set<String> children = onChild != null ? new HashSet<>() : null;
+			try (InputStream in = file.read(0, canceled)) {
+				if (in == null)
+					return null;
+				int nextRead;
+				while ((nextRead = in.read()) >= 0) {
+					if (canceled.getAsBoolean())
 						return null;
-					int nextRead;
-					while ((nextRead = in.read()) >= 0) {
+					long entryPos = pos;
+					if (nextRead != 'P' || in.read() != 'K')
+						throw new IOException("Bad ZIP entry #" + entryIndex + "@" + pos);
+					nextRead = in.read();
+					if (nextRead != 3) {
+						// Could be the end. Check for the Central Directory header.
+						if (nextRead == 1 && in.read() == 2)
+							break; // Reached the end
+						else
+							throw new IOException("Bad ZIP entry #" + entryIndex + "@" + pos);
+					} else if (in.read() != 4)
+						throw new IOException("Bad ZIP entry #" + entryIndex + "@" + pos);
+					pos += 4;
+					in.read();
+					in.read();// Version to extract
+					int flags = in.read() | (in.read() << 8);
+					if ((flags & 0x80) != 0) {
+						// This flag means that the entry sizes are not recorded here, but at the end of the compressed data
+						// In this case, we can't catalog all the entries without actually parsing the data
+						badEntry = true;
+						break;
+					}
+					in.read();
+					in.read();// compression method
+					pos += 6;
+					long modTime = in.read() | (in.read() << 8) | (in.read() << 16) | (((long) in.read()) << 24);
+					pos += 4;
+					modTime = dosToJavaTime(modTime);
+					BetterFile.Hasher crc = CheckSumType.CRC32.hasher();
+					for (int i = 0; i < 4; i++)
+						crc.update((byte) in.read());
+					String crc32 = StringUtils.encodeHex().format(crc.getHash());
+					pos += 4;
+					long compressedSize = in.read() | (in.read() << 8) | (in.read() << 16) | (((long) in.read()) << 24);
+					pos += 4;
+					long uncompressedSize = in.read() | (in.read() << 8) | (in.read() << 16) | (((long) in.read()) << 24);
+					pos += 4;
+					int fileNameLen = in.read() | (in.read() << 8);
+					int extraLen = in.read() | (in.read() << 8);
+					pos += 4;
+					byte[] nameBytes = new byte[fileNameLen];
+					int read = 0;
+					while (read < fileNameLen)
+						read += in.read(nameBytes, read, fileNameLen - read);
+					pos += fileNameLen;
+					String fileName = read(nameBytes, 0, fileNameLen);
+					if (extraLen > 0) {
+						int skipped = 0;
+						while (skipped < extraLen)
+							skipped += in.skip(extraLen - skipped);
+					}
+					pos += extraLen;
+					String[] path = FileUtils.splitPath(fileName);
+					DefaultArchiveEntry newEntry = root.add(path, 0, entryPos, fileName.endsWith("/")).fill(uncompressedSize, modTime)
+						.withHash(CheckSumType.CRC32, crc32);
+					if (forEach != null) {
+						ArchiveEntry oldEntry = existingRoot != null ? ((DefaultArchiveEntry) existingRoot).at(path, 0) : null;
+						forEach.accept(oldEntry != null ? oldEntry : newEntry, fileName);
+					}
+					if (children != null && children.add(path[0]))
+						onChild.accept(root.getFile(path[0]));
+					long longRead = 0;
+					while (longRead < compressedSize) {
 						if (canceled.getAsBoolean())
 							return null;
-						long entryPos = pos;
-						if (nextRead != 'P' || in.read() != 'K' || in.read() != 3 || in.read() != 4)
-							throw new IOException("Bad ZIP entry #" + entryIndex + "@" + pos);
-						pos += 4;
-						in.read();
-						in.read();// Version to extract
-						int flags = in.read() | (in.read() << 8);
-						if ((flags & 0x80) != 0) {
-							// This flag means that the entry sizes are not recorded here, but at the end of the compressed data
-							// In this case, we can't catalog all the entries without actually parsing the data
-							badEntry = true;
-							break;
-						}
-						in.read();
-						in.read();// compression method
-						pos += 6;
-						long modTime = in.read() | (in.read() << 8) | (in.read() << 16) | (((long) in.read()) << 24);
-						pos += 4;
-						modTime = dosToJavaTime(modTime);
-						BetterFile.Hasher crc = CheckSumType.CRC32.hasher();
-						for (int i = 0; i < 4; i++)
-							crc.update((byte) in.read());
-						String crc32 = StringUtils.encodeHex().format(crc.getHash());
-						pos += 4;
-						long compressedSize = in.read() | (in.read() << 8) | (in.read() << 16) | (((long) in.read()) << 24);
-						pos += 4;
-						long uncompressedSize = in.read() | (in.read() << 8) | (in.read() << 16) | (((long) in.read()) << 24);
-						pos += 4;
-						int fileNameLen = in.read() | (in.read() << 8);
-						int extraLen = in.read() | (in.read() << 8);
-						pos += 4;
-						byte[] nameBytes = new byte[fileNameLen];
-						int read = 0;
-						while (read < fileNameLen)
-							read += in.read(nameBytes, read, fileNameLen - read);
-						pos += fileNameLen;
-						String fileName = read(nameBytes, 0, fileNameLen);
-						if (extraLen > 0)
-							in.skip(extraLen);
-						pos += extraLen;
-						String[] path = FileUtils.splitPath(fileName);
-						DefaultArchiveEntry newEntry = root.add(path, 0, entryPos, fileName.endsWith("/")).fill(uncompressedSize, modTime)
-							.withHash(CheckSumType.CRC32, crc32);
+						longRead += in.skip(compressedSize - longRead);
+					}
+					pos += compressedSize;
+
+					entryIndex++;
+				}
+			}
+			if (!badEntry) {
+				// We successfully parsed all the entries
+				return root;
+			}
+			root.clear();
+			try (InputStream in = file.read(0, canceled)) {
+				if (in == null)
+					return null;
+				try (CountingInputStream countingIn = new CountingInputStream(in); //
+					ZipInputStream zip = new ZipInputStream(in)) {
+					long entryPos = countingIn.getPosition();
+					for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
+						if (canceled.getAsBoolean())
+							return null;
+						String[] path = FileUtils.splitPath(entry.getName());
+						DefaultArchiveEntry newEntry = root.add(path, 0, entryPos, entry.isDirectory()).fill(entry.getSize(),
+							entry.getLastModifiedTime().toMillis());
 						if (forEach != null) {
 							ArchiveEntry oldEntry = existingRoot != null ? ((DefaultArchiveEntry) existingRoot).at(path, 0) : null;
-							forEach.accept(oldEntry != null ? oldEntry : newEntry, fileName);
+							forEach.accept(oldEntry != null ? oldEntry : newEntry, entry.getName());
 						}
 						if (children != null && children.add(path[0]))
 							onChild.accept(root.getFile(path[0]));
-						long longRead = 0;
-						while (longRead < compressedSize) {
-							if (canceled.getAsBoolean())
-								return null;
-							longRead = in.skip(compressedSize - longRead);
-						}
-						pos += compressedSize;
-
-						entryIndex++;
 					}
 				}
-				if (!badEntry)
-					return root;
-				root.clear();
-				try (InputStream in = file.read(0, canceled)) {
-					if (in == null)
-						return null;
-					try (CountingInputStream countingIn = new CountingInputStream(in); //
-						ZipInputStream zip = new ZipInputStream(in)) {
-						long entryPos = countingIn.getPosition();
-						for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
-							if (canceled.getAsBoolean())
-								return null;
-							String[] path = FileUtils.splitPath(entry.getName());
-							DefaultArchiveEntry newEntry = root.add(path, 0, entryPos, entry.isDirectory()).fill(entry.getSize(),
-								entry.getLastModifiedTime().toMillis());
-							if (forEach != null) {
-								ArchiveEntry oldEntry = existingRoot != null ? ((DefaultArchiveEntry) existingRoot).at(path, 0) : null;
-								forEach.accept(oldEntry != null ? oldEntry : newEntry, entry.getName());
-							}
-							if (children != null && children.add(path[0]))
-								onChild.accept(root.getFile(path[0]));
-						}
-					}
-				}
-				return root;
 			}
+			return root;
 		}
 
 		static int fillBuffer(InputStream in, byte[] buffer, int offset, int length) throws IOException {
