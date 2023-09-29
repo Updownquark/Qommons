@@ -1064,12 +1064,12 @@ public class QommonsUtils {
 					// There's no other way to get this information.
 					getter = Pattern.class.getDeclaredMethod("namedGroups");
 					getter.setAccessible(true);
-				} catch (NoSuchMethodException | SecurityException e) {
-					throw new IllegalStateException("Could not get or access Pattern named group getter", e);
+				} catch (Exception e) {
+					return bestSecondAttemptCaptureGroupNames(pattern);
 				}
 				PATTERN_NAMED_GROUPS_GETTER = getter;
 			} else
-				throw new IllegalStateException("Could not get or access Pattern named group getter");
+				return bestSecondAttemptCaptureGroupNames(pattern);
 			return Collections.emptyMap();
 		}
 		try {
@@ -1078,6 +1078,21 @@ public class QommonsUtils {
 			System.err.println("Could not invoke Pattern named group getter");
 			return Collections.emptyMap();
 		}
+	}
+
+	private static final Pattern NAMED_GROUP_PATTERN = Pattern.compile("\\(\\?\\<(?<name>[a-zA-Z0-9_]+)\\>");
+
+	private static Map<String, Integer> bestSecondAttemptCaptureGroupNames(Pattern pattern) {
+		Matcher m = NAMED_GROUP_PATTERN.matcher(pattern.pattern());
+		if (!m.find())
+			return Collections.emptyMap();
+		Map<String, Integer> groups = new LinkedHashMap<>();
+		int number = 0;
+		do {
+			number++;
+			groups.put(m.group("name"), number);
+		} while (m.find());
+		return groups;
 	}
 
 	/**
