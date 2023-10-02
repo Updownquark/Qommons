@@ -227,10 +227,12 @@ public class SftpFileSource extends RemoteFileSource {
 		while (deadThread != null) {
 			String threadId = theThreadIdsByRef.remove(deadThread);
 			ThreadSession deadSession = theSessions.remove(threadId);
-			if (session == null)
-				session = deadSession;
-			else
-				deadSession.dispose();
+			if (deadSession != null) {
+				if (session == null && deadSession.error == null)
+					session = deadSession;
+				else
+					deadSession.dispose();
+			}
 			deadThread = theThreadDeaths.poll();
 		}
 
