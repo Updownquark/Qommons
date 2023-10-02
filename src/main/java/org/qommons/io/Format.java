@@ -913,6 +913,7 @@ public interface Format<T> {
 		private int theMaxNormalExp;
 		private int theMinNormalExp;
 
+		private boolean isSpaceBetween;
 		private String theBaseUnit;
 		private boolean isBaseUnitRequired;
 		private boolean isBaseUnitCaseSensitive;
@@ -924,6 +925,7 @@ public interface Format<T> {
 			theMaxIntDigits = -1;
 			theMaxNormalExp = sigDigs;
 			theMinNormalExp = 1;
+			isSpaceBetween = true;
 			theBaseUnit = "";
 			isBaseUnitRequired = true;
 			isBaseUnitCaseSensitive = true;
@@ -961,6 +963,15 @@ public interface Format<T> {
 		public SuperDoubleFormatBuilder withUnit(String baseUnit, boolean required) {
 			theBaseUnit = baseUnit;
 			isBaseUnitRequired = required;
+			return this;
+		}
+
+		/**
+		 * @param space Whether to insert a space between the number and the unit
+		 * @return This builder
+		 */
+		public SuperDoubleFormatBuilder withSpaceBeforeUnit(boolean space) {
+			isSpaceBetween = space;
 			return this;
 		}
 
@@ -1035,7 +1046,8 @@ public interface Format<T> {
 			if (maxIntDigits < 0)
 				maxIntDigits = theMaxNormalExp;
 			return new SuperDoubleFormat(theSignificantDigits, maxIntDigits, printIntsWithPrefixes, theMaxNormalExp, theMinNormalExp,
-				theBaseUnit, isBaseUnitRequired, isBaseUnitCaseSensitive, arePrefixesCaseSensitive, prefixCopy, reversePrefixes);
+				isSpaceBetween, theBaseUnit, isBaseUnitRequired, isBaseUnitCaseSensitive, arePrefixesCaseSensitive, prefixCopy,
+				reversePrefixes);
 		}
 
 		/** @return A new {@link Float}-typed format configured by this builder */
@@ -1099,6 +1111,7 @@ public interface Format<T> {
 		private final int theMaxNormalExp;
 		private final int theMinNormalExp;
 
+		private final boolean isSpaceBetween;
 		private final String theBaseUnit;
 		private final boolean isBaseUnitRequired;
 		private final boolean isBaseUnitCaseSensitive;
@@ -1108,7 +1121,7 @@ public interface Format<T> {
 		private final ThreadLocal<NumberFormat> theDoubleFormat; // DecimalFormat instances are not thread-safe
 
 		SuperDoubleFormat(int significantDigits, int maxIntDigits, boolean intWithPrefixes, int maxNormalExp, int minNormalExp,
-			String baseUnit,
+			boolean spaceBetween, String baseUnit,
 			boolean baseUnitRequired, boolean baseUnitCaseSensitive, boolean arePrefixesCaseSensitive,
 			NavigableMap<Double, String> prefixes, Map<String, Double> reversePrefixes) {
 			theSignificantDigits = significantDigits;
@@ -1116,6 +1129,7 @@ public interface Format<T> {
 			printIntsWithPrefixes = intWithPrefixes;
 			theMaxNormalExp = maxNormalExp;
 			theMinNormalExp = minNormalExp;
+			isSpaceBetween = spaceBetween;
 			theBaseUnit = baseUnit;
 			isBaseUnitRequired = baseUnitRequired;
 			isBaseUnitCaseSensitive = baseUnitCaseSensitive;
@@ -1211,20 +1225,16 @@ public interface Format<T> {
 				}
 				int exp;
 				boolean printInt;
-				if (prefix != null && prefix.getKey().intValue() != 0) {
+				if (prefix != null && prefix.getKey().intValue() != 0)
 					value /= prefix.getKey();
-					int sign = Double.compare(value, 0.0);
-					if (sign == 0)
-						exp = 0;
-					else if (sign > 0)
-						exp = (int) Math.log10(value);
-					else
-						exp = (int) Math.log10(-value);
-					printInt = printIntsWithPrefixes && exp >= 0 && exp <= theMaxIntDigits && value == value.longValue();
-				} else {
+				int sign = Double.compare(value, 0.0);
+				if (sign == 0)
 					exp = 0;
-					printInt = false;
-				}
+				else if (sign > 0)
+					exp = (int) Math.log10(value);
+				else
+					exp = (int) Math.log10(-value);
+				printInt = printIntsWithPrefixes && exp >= 0 && exp <= theMaxIntDigits && value == value.longValue();
 
 				boolean expNotation;
 				if (printInt)
@@ -1247,6 +1257,9 @@ public interface Format<T> {
 				text.append(format.format(value));
 				if (expNotation)
 					text.append('E').append(exp);
+
+				if (isSpaceBetween)
+					text.append(' ');
 
 				if (prefix != null)
 					text.append(prefix.getValue());
