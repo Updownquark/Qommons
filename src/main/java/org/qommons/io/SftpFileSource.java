@@ -5,6 +5,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.Reader;
+import java.lang.ref.PhantomReference;
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
@@ -57,24 +60,29 @@ public class SftpFileSource extends RemoteFileSource {
 	}
 
 	class ThreadSession implements AutoCloseable {
-		final Thread thread;
+		String threadId;
 		final SSHClient client;
 		final SFTPClient session;
 		final IOException error;
 		int usage;
 
-		ThreadSession(Thread thread, SSHClient client, SFTPClient s) {
-			this.thread = thread;
+		ThreadSession(String threadId, SSHClient client, SFTPClient s) {
+			this.threadId = threadId;
 			this.client = client;
 			session = s;
 			error = null;
 		}
 
-		ThreadSession(Thread thread, IOException err) {
-			this.thread = thread;
+		ThreadSession(String threadId, IOException err) {
+			this.threadId = threadId;
 			client = null;
 			session = null;
 			error = err;
+		}
+
+		void reUse(String thread) {
+			this.threadId = thread;
+			usage = 0;
 		}
 
 		/** SSH sessions in this library are single-use */
@@ -103,7 +111,7 @@ public class SftpFileSource extends RemoteFileSource {
 		@Override
 		public void close() {
 			if (--usage == 0) {
-				QommonsTimer.getCommonInstance().doAfterInactivity(this, () -> reallyDisconnect(thread), Duration.ofMillis(1000));
+				QommonsTimer.getCommonInstance().doAfterInactivity(this, () -> reallyDisconnect(threadId), Duration.ofMillis(1000));
 			}
 		}
 	}
@@ -115,7 +123,9 @@ public class SftpFileSource extends RemoteFileSource {
 	private final String theRootDir;
 	private String theKnownOS;
 
-	private final ConcurrentHashMap<Thread, ThreadSession> theSessions;
+	private final ConcurrentHashMap<String, ThreadSession> theSessions;
+	private final ReferenceQueue<Thread> theThreadDeaths;
+	private final ConcurrentHashMap<Reference<? extends Thread>, String> theThreadIdsByRef;
 	private int theRetryCount;
 
 	private SftpFile theRoot;
@@ -148,6 +158,8 @@ public class SftpFileSource extends RemoteFileSource {
 		theSessionConfiguration = sessionConfiguration;
 		theRootDir = rootDir;
 		theSessions = new ConcurrentHashMap<>();
+		theThreadDeaths = new ReferenceQueue<>();
+		theThreadIdsByRef = new ConcurrentHashMap<>();
 	}
 
 	/** @return The number of times this file source will re-attempt a connection before failing an operation */
@@ -208,10 +220,32 @@ public class SftpFileSource extends RemoteFileSource {
 	}
 
 	ThreadSession getSession() throws IOException {
+		ThreadSession session = null;
+		// Clean up sessions associated with dead threads
+		// If there are any, use the first of such sessions to satisfy this request instead of creating a fresh one
+		Reference<? extends Thread> deadThread = theThreadDeaths.poll();
+		while (deadThread != null) {
+			String threadId = theThreadIdsByRef.remove(deadThread);
+			ThreadSession deadSession = theSessions.remove(threadId);
+			if (session == null)
+				session = deadSession;
+			else
+				deadSession.dispose();
+			deadThread = theThreadDeaths.poll();
+		}
+
 		Thread thread = Thread.currentThread();
-		ThreadSession session = theSessions.computeIfAbsent(thread, th -> {
+		String threadId = Long.toHexString(thread.getId()) + ":" + Integer.toHexString(System.identityHashCode(thread));
+		if (session != null) {
+			theSessions.put(threadId, session);
+			theThreadIdsByRef.put(new PhantomReference<>(thread, theThreadDeaths), threadId);
+			session.reUse(threadId);
+			return session;
+		}
+		session = theSessions.computeIfAbsent(threadId, th -> {
+			theThreadIdsByRef.put(new PhantomReference<>(thread, theThreadDeaths), threadId);
 			try {
-				return createSession(th);
+				return createSession(threadId);
 			} catch (IOException e) {
 				return new ThreadSession(th, e);
 			}
@@ -222,8 +256,17 @@ public class SftpFileSource extends RemoteFileSource {
 			return session.use();
 	}
 
+	protected void cleanup(boolean scavengeOne) {
+		Reference<? extends Thread> deadThread = theThreadDeaths.poll();
+		while (deadThread != null) {
+			String threadId = theThreadIdsByRef.remove(deadThread);
+			theSessions.remove(threadId).dispose();
+			deadThread = theThreadDeaths.poll();
+		}
+	}
+
 	@SuppressWarnings("resource") // The session is kept around to be closed later
-	ThreadSession createSession(Thread thread) throws IOException {
+	ThreadSession createSession(String threadId) throws IOException {
 		Exception ex = null;
 		for (int i = 0; i <= theRetryCount; i++) {
 			try {
@@ -269,7 +312,7 @@ public class SftpFileSource extends RemoteFileSource {
 					else
 						throw e;
 				}
-				return new ThreadSession(thread, s, s.newSFTPClient());
+				return new ThreadSession(threadId, s, s.newSFTPClient());
 			} catch (Exception e) {
 				e.getStackTrace();
 				ex = e;
@@ -278,8 +321,8 @@ public class SftpFileSource extends RemoteFileSource {
 		throw new IOException("Could not connect to " + theUser + "@" + theHost + " (" + ex.getMessage() + ")", ex);
 	}
 
-	void reallyDisconnect(Thread thread) {
-		theSessions.compute(thread, (t, session) -> {
+	void reallyDisconnect(String threadId) {
+		theSessions.compute(threadId, (t, session) -> {
 			if (session != null && session.usage == 0) {
 				session.dispose();
 				return null;
