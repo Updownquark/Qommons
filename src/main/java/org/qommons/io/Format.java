@@ -1234,7 +1234,10 @@ public interface Format<T> {
 					exp = (int) Math.log10(value);
 				else
 					exp = (int) Math.log10(-value);
-				printInt = printIntsWithPrefixes && exp >= 0 && exp <= theMaxIntDigits && value == value.longValue();
+				if (!printIntsWithPrefixes && prefix != null)
+					printInt = false;
+				else
+					printInt = exp >= 0 && exp <= theMaxIntDigits && value == value.longValue();
 
 				boolean expNotation;
 				if (printInt)
