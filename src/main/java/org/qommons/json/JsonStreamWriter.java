@@ -14,7 +14,7 @@ public class JsonStreamWriter implements JsonSerialWriter {
 
 	private StringBuilder theSB;
 
-	private boolean useFormalJson;
+	private boolean useFormalJson = true;
 
 	private int theLineNumber;
 
