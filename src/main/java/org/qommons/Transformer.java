@@ -68,6 +68,13 @@ public interface Transformer<X extends Throwable> {
 	<T> T transform(Object source, Class<T> as) throws X;
 
 	/**
+	 * @param source The source value to transform
+	 * @param as The type of the value to transform the source into
+	 * @return Whether this transformer has support for the given transformation
+	 */
+	boolean supportsTransform(Object source, Class<?> as);
+
+	/**
 	 * @param <X> The type of exception that this transformer may throw
 	 * @return A builder to configure a new transformer
 	 */
@@ -185,6 +192,18 @@ public interface Transformer<X extends Throwable> {
 			if (source == null)
 				return null;
 			return _transform(source, as);
+		}
+
+		@Override
+		public boolean supportsTransform(Object source, Class<?> as) {
+			Class<?> sourceType = source.getClass();
+			for (ClassMap<? extends ExBiFunction<?, Transformer<X>, ?, ? extends X>> targetTransformers : theTypeTransformers.getAll(as,
+				ClassMap.TypeMatch.SUB_TYPE)) {
+				if (targetTransformers.get(sourceType, ClassMap.TypeMatch.SUPER_TYPE) != null)
+					return true;
+				;
+			}
+			return false;
 		}
 
 		private <S, T> T _transform(S source, Class<T> targetType) throws X {
