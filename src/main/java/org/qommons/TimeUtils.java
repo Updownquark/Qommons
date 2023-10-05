@@ -3640,6 +3640,8 @@ public class TimeUtils {
 		private int theMaxElements;
 		private List<String> thePrecisionNames;
 		private AboveDaysStrategy theAboveDayStrategy;
+		private Duration theAgoTransition;
+		private String theDayFormat;
 		private boolean isPluralized;
 		private String theJustNow;
 		private String theAgo;
@@ -3651,6 +3653,7 @@ public class TimeUtils {
 			theMaxElements = 1;
 			thePrecisionNames = DURATION_PRECISION_ABBREVS;
 			theAboveDayStrategy = AboveDaysStrategy.None;
+			theDayFormat = "ddMMMyyyy";
 			theAgo = "ago";
 		}
 
@@ -3682,6 +3685,14 @@ public class TimeUtils {
 		/** @return This format's {@link #withPrecisionNames(List) precision names} */
 		public List<String> getPrecisionNames() {
 			return thePrecisionNames;
+		}
+
+		public Duration getAgoTransition() {
+			return theAgoTransition;
+		}
+
+		public String getDayFormat() {
+			return theDayFormat;
 		}
 
 		/** @return Whether units are pluralized */
@@ -3729,6 +3740,16 @@ public class TimeUtils {
 		public RelativeTimeFormat abbreviated(boolean abbrev, boolean pluralized) {
 			thePrecisionNames = abbrev ? DURATION_PRECISION_ABBREVS : DURATION_PRECISION_NAMES;
 			isPluralized = pluralized;
+			return this;
+		}
+
+		public RelativeTimeFormat withAgoTransition(Duration agoTransition) {
+			theAgoTransition = agoTransition;
+			return this;
+		}
+
+		public RelativeTimeFormat withDayFormat(String dayFormat) {
+			theDayFormat = dayFormat;
 			return this;
 		}
 
@@ -3961,6 +3982,20 @@ public class TimeUtils {
 				roundPrecision++;
 			if (roundPrecision < comps.diffs.length && comps.diffs[roundPrecision] >= comps.threshes[roundPrecision] / 2.0)
 				increment(comps.diffs, comps.threshes, comps.maxPrecision);
+		}
+
+		public StringBuilder print(Instant time, Instant reference, StringBuilder str) {
+			if (theAgoTransition != null) {
+				Duration diff = between(reference, time);
+				if (diff.abs().compareTo(theAgoTransition) < 0)
+					return printAsDuration(time, reference, str);
+				else {
+					if (str == null)
+						str = new StringBuilder();
+					return str.append(relative(time, reference, theDayFormat));
+				}
+			} else
+				return printAsDuration(time, reference, str);
 		}
 
 		/**
