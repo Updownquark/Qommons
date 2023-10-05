@@ -4059,6 +4059,7 @@ public class TimeUtils {
 			}
 			StringBuilder text = new StringBuilder();
 			int nanoDigits = 0;
+			String amPm = null;
 			for (int i = DurationComponentType.Hour.ordinal(); i <= theMaxPrecision.ordinal(); i++) {
 				DateElementType type = DateElementType.values()[i];
 				int value = 0;
@@ -4072,12 +4073,15 @@ public class TimeUtils {
 						StringUtils.printInt(value, 2, text);
 					} else if (value == 0) {
 						value = 12;
-						text.append("12a.m.");
-					} else if (value <= 12)
-						text.append(value).append("a.m.");
-					else {
+						text.append("12");
+						amPm = "a.m";
+					} else if (value <= 12) {
+						text.append(value);
+						amPm = "a.m.";
+					} else {
 						value -= 12;
-						text.append(value).append("p.m.");
+						text.append(value);
+						amPm = "p.m.";
 					}
 					break;
 				case Minute:
@@ -4107,6 +4111,8 @@ public class TimeUtils {
 				components.put(type, new ParsedElement<>(Format.INT, str.length(), type, value, text.toString()));
 				str.append(text);
 			}
+			if (amPm != null)
+				str.append(' ').append(amPm);
 			if (components.containsKey(DateElementType.Year))
 				return new AbsoluteInstant(str.toString(), time, cal, theTimeZone, DateElementType.values()[comps.maxPrecision], nanoDigits,
 					components);
