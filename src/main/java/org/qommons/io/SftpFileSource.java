@@ -472,8 +472,14 @@ public class SftpFileSource extends RemoteFileSource {
 				private void connect() throws IOException {
 					if (isClosed)
 						return;
-					if (theFile != null)
-						theFile.close();
+					if (theFile != null) {
+						try {
+							theFile.close();
+						} catch (IOException e) {
+							theFile = null;
+							throw e;
+						}
+					}
 					theFile = getSession().session.open(getPath());
 				}
 
@@ -528,8 +534,10 @@ public class SftpFileSource extends RemoteFileSource {
 					if (isClosed)
 						return;
 					isClosed = true;
-					if (theFile != null)
+					if (theFile != null) {
 						theFile.close();
+						theFile = null;
+					}
 					super.close();
 				}
 
