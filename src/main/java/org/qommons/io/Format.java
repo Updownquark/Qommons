@@ -1261,7 +1261,7 @@ public interface Format<T> {
 				if (expNotation)
 					text.append('E').append(exp);
 
-				if (isSpaceBetween)
+				if (isSpaceBetween && theBaseUnit != null && !theBaseUnit.isEmpty())
 					text.append(' ');
 
 				if (prefix != null)
