@@ -78,7 +78,7 @@ public class TextParseException extends ParseException {
 	@Override
 	public String toString() {
 		if (thePosition != null)
-			return new StringBuilder().append(thePosition).append(": ").append(super.toString()).toString();
+			return new StringBuilder().append(thePosition).append(":\n").append(super.toString()).toString();
 		else
 			return super.toString();
 	}
