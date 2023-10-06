@@ -510,6 +510,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		}
 	}
 
+	@SuppressWarnings("static-method")
 	MutableTreeEntry wrapMutable(TreeEntry entry) {
 		return entry == null ? null : entry.mutable();
 	}
