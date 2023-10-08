@@ -11,17 +11,21 @@ import org.qommons.io.PositionedContent;
 public class QonfigParseSession extends ErrorReporting.Default {
 	private final QonfigToolkit theToolkit;
 	private final List<Issue> theErrors;
+	private final ExternalReferenceStitcher theStitcher;
 
-	private QonfigParseSession(LocatedPositionedContent frame, QonfigToolkit toolkit, List<Issue> errors) {
+	private QonfigParseSession(LocatedPositionedContent frame, QonfigToolkit toolkit, List<Issue> errors,
+		ExternalReferenceStitcher stitcher) {
 		super(frame);
 		theToolkit = toolkit;
 		theErrors = errors;
+		theStitcher = stitcher;
 	}
 
-	private QonfigParseSession(QonfigParseSession parent, LocatedPositionedContent frame) {
+	private QonfigParseSession(QonfigParseSession parent, LocatedPositionedContent frame, ExternalReferenceStitcher stitcher) {
 		super(parent, frame);
 		theToolkit = parent.theToolkit;
 		theErrors = parent.theErrors;
+		theStitcher = stitcher;
 	}
 
 	/** @return The toolkit that is being parsed, or for which a document is being parsed */
@@ -36,7 +40,7 @@ public class QonfigParseSession extends ErrorReporting.Default {
 
 	@Override
 	public QonfigParseSession at(LocatedPositionedContent position) {
-		return new QonfigParseSession(this, position);
+		return new QonfigParseSession(this, position, theStitcher);
 	}
 
 	@Override
@@ -83,11 +87,12 @@ public class QonfigParseSession extends ErrorReporting.Default {
 	 * 
 	 * @param toolkit The toolkit for the session
 	 * @param position The file position of the root element
+	 * @param stitcher The stitcher to use to stitch in externally-referenced elements
 	 * @return The new parse session
 	 */
-	public static QonfigParseSession forRoot(QonfigToolkit toolkit, PositionedContent position) {
+	public static QonfigParseSession forRoot(QonfigToolkit toolkit, PositionedContent position, ExternalReferenceStitcher stitcher) {
 		return new QonfigParseSession(
 			LocatedPositionedContent.of(toolkit.getLocation() == null ? toolkit.getName() : toolkit.getLocation().toString(), position),
-			toolkit, new ArrayList<>());
+			toolkit, new ArrayList<>(), stitcher);
 	}
 }

@@ -48,10 +48,12 @@ public class DefaultQonfigParser implements QonfigParser {
 	)));
 
 	private final Map<QonfigToolkit.ToolkitDef, QonfigToolkit> theToolkits;
+	private ExternalReferenceStitcher theStitcher;
 
 	/** Creates the parser */
 	public DefaultQonfigParser() {
 		theToolkits = new HashMap<>();
+		theStitcher = ExternalReferenceStitcher.ERROR;
 	}
 
 	/**
@@ -79,6 +81,12 @@ public class DefaultQonfigParser implements QonfigParser {
 			for (QonfigToolkit dep : toolkit.getDependencies().values())
 				withToolkit(dep);
 		}
+		return this;
+	}
+
+	@Override
+	public DefaultQonfigParser withStitcher(ExternalReferenceStitcher stitcher) {
+		theStitcher = stitcher;
 		return this;
 	}
 
@@ -168,8 +176,8 @@ public class DefaultQonfigParser implements QonfigParser {
 					public Set<QonfigElementDef> getDeclaredRoots(QonfigParseSession s) {
 						return Collections.singleton(rootDef);
 					}
-				});
-			session = QonfigParseSession.forRoot(docToolkit, position);
+				}, theStitcher);
+			session = QonfigParseSession.forRoot(docToolkit, position, theStitcher);
 			doc = new QonfigDocument(location, docToolkit);
 			parseDocElement(session, QonfigElement.buildRoot(session, doc, rootDef, getDocumentation(rootReader)), rootReader, true,
 				el -> true);
@@ -452,7 +460,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			toolkit = new QonfigToolkit(name, major, minor, location, rootNameContent, getDocumentation(rootReader),
 				Collections.unmodifiableMap(dependencies), Collections.unmodifiableMap(parser.getDeclaredTypes()),
 				Collections.unmodifiableMap(parser.getDeclaredAddOns()), Collections.unmodifiableMap(parser.getDeclaredElements()),
-				Collections.unmodifiableList(parser.getDeclaredAutoInheritance()), parser);
+				Collections.unmodifiableList(parser.getDeclaredAutoInheritance()), parser, theStitcher);
 		}
 		// TODO Verify
 		theToolkits.put(def, toolkit);
@@ -968,6 +976,42 @@ public class DefaultQonfigParser implements QonfigParser {
 					});
 					if (circularInheritance[0])
 						return null;
+				}
+				if (!addOn) {
+					String promiseS = element.getAttributeIfExists("promise");
+					PositionedContent promisePos = element.getAttributeValuePosition("promise");
+					if (promiseS != null) {
+						int colon = promiseS.indexOf(':');
+						QonfigElementOrAddOn promise = null;
+						if (colon >= 0) {
+							try {
+								promise = session.getToolkit().getElementOrAddOn(promiseS);
+								if (promise == null)
+									session.at(promisePos).error("No such element or add-on found: " + promiseS);
+							} catch (IllegalArgumentException e) {
+								session.at(promisePos).error("For promise " + promiseS + ": " + e.getMessage());
+							}
+						} else {
+							QonfigElementOrAddOn.Builder extBuilder = theBuilders.get(promiseS);
+							if (extBuilder == null) {
+								promise = session.getToolkit().getElementOrAddOn(promiseS);
+								if (promise == null)
+									session.at(promisePos).error("No such element or add-on found: " + promiseS);
+							} else if (!(extBuilder instanceof QonfigAddOn.Builder)) {
+								session.at(promisePos).error(inheritsS + " must refer to add-ons");
+							} else {
+								// TODO This throws an error in the case of an element-def specifying as inheritance
+								// an add-on that requires it
+								promise = parseExtensions(theNodes.get(promiseS), path, elsSession, addOnsSession, completed);
+								if (promise == null) {
+									session.at(promisePos).error("Circular reference detected: " + path);
+									return null;
+								}
+							}
+						}
+						if (promise != null)
+							((QonfigElementDef.Builder) builder).promise(promise, promisePos);
+					}
 				}
 				return builder.get();
 			} finally {

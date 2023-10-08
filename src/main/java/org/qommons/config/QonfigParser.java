@@ -14,7 +14,9 @@ public interface QonfigParser {
 	 * @param toolkits The toolkits to use
 	 * @return This parser
 	 */
-	DefaultQonfigParser withToolkit(QonfigToolkit... toolkits);
+	QonfigParser withToolkit(QonfigToolkit... toolkits);
+
+	QonfigParser withStitcher(ExternalReferenceStitcher stitcher);
 
 	/**
 	 * @param location The location of the toolkit to parse

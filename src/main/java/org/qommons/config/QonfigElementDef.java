@@ -13,8 +13,10 @@ import org.qommons.io.PositionedContent;
 public class QonfigElementDef extends QonfigElementOrAddOn {
 	private final QonfigValueDef theValue;
 
+	private final QonfigElementOrAddOn thePromise;
+
 	private QonfigElementDef(QonfigToolkit declarer, String name, QonfigElementDef superElement, Set<QonfigAddOn> inheritance,
-		boolean isAbstract, //
+		boolean isAbstract, QonfigElementOrAddOn promise, //
 		Map<String, QonfigAttributeDef.Declared> declaredAttributes, Map<QonfigAttributeDef.Declared, ValueDefModifier> attributeModifiers,
 		Map<QonfigAttributeDef.Declared, QonfigAttributeDef> allAttributes, BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
 		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ChildDefModifier> childModifiers,
@@ -25,6 +27,7 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 			attributesByName, allAttributes, declaredChildren, childModifiers, childrenByName, allChildren, value, metaSpec, position,
 			description);
 
+		thePromise = promise;
 		if (value == null)
 			theValue = superElement == null ? null : superElement.getValue();
 		else if (superElement == null || superElement.getValue() == null)
@@ -87,6 +90,8 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 
 	/** Builds element-defs */
 	public static class Builder extends QonfigElementOrAddOn.Builder {
+		private QonfigElementOrAddOn thePromise;
+
 		Builder(String name, QonfigParseSession session, String description) {
 			super(name, session, description);
 		}
@@ -94,6 +99,18 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		@Override
 		public QonfigElementDef get() {
 			return (QonfigElementDef) super.get();
+		}
+
+		public QonfigElementOrAddOn getPromise() {
+			return thePromise;
+		}
+
+		public Builder promise(QonfigElementOrAddOn promise, PositionedContent position) {
+			if (thePromise != null)
+				getSession().at(position).error("Multiple promises declared");
+			else
+				thePromise = promise;
+			return this;
 		}
 
 		@Override
@@ -116,7 +133,7 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 
 		@Override
 		protected QonfigElementOrAddOn create() {
-			return new QonfigElementDef(theSession.getToolkit(), getName(), getSuperElement(), getInheritance(), isAbstract(), //
+			return new QonfigElementDef(theSession.getToolkit(), getName(), getSuperElement(), getInheritance(), isAbstract(), thePromise, //
 				getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueDefModifier>) super.getAttributeModifiers(),
 				getCompiledAttributes(), getAttributesByName(), //
 				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildDefModifier>) super.getChildModifiers(), getCompiledChildren(),

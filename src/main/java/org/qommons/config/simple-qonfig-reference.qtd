@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<qonfig-def name="Qonfig-Simple-reference" version="0.1">
+	<elements>
+		<element-def name="reference" abstract="true">
+			<attribute name="ref" type="string" />
+		</element-def>
+		<element-def name="child-placeholder">
+			<attribute name="ref-role" type="string" />
+		</element-def>
+	</elements>
+</qonfig-def>
