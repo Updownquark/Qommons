@@ -314,6 +314,52 @@ public class CircularByteBuffer implements StringUtils.BinaryAccumulator {
 	 * @throws IOException If the reader throws an exception
 	 */
 	public int appendFrom(InputStream input, int max) throws IOException {
+		return appendFrom(Input.of(input), max);
+	}
+
+	/** An interface that allows custom code to behave like an {@link InputStream} */
+	public interface Input {
+		/**
+		 * @param buffer The buffer to read data into
+		 * @param offset The offset in the buffer to write to
+		 * @param length The number of bytes to read
+		 * @return The number of bytes actually read
+		 * @throws IOException If a failure occurs reading the bytes
+		 */
+		int read(byte[] buffer, int offset, int length) throws IOException;
+
+		/**
+		 * @return The number of bytes available in this input's buffer without blocking
+		 * @throws IOException If an error occurs trying to determine this
+		 */
+		long available() throws IOException;
+
+		/**
+		 * @param stream The InputStream to wrap
+		 * @return An Input backed by the stream
+		 */
+		static Input of(InputStream stream) {
+			return new Input() {
+				@Override
+				public int read(byte[] buffer, int offset, int length) throws IOException {
+					return stream.read(buffer, offset, length);
+				}
+
+				@Override
+				public long available() throws IOException {
+					return stream.available();
+				}
+			};
+		}
+	}
+
+	/**
+	 * @param input The stream to pull byte data from
+	 * @param max The maximum number of bytes to read, or &lt;0 to read all the content from the stream
+	 * @return The number of bytes read, or -1 if no bytes were read and the end of the stream has been reached
+	 * @throws IOException If the reader throws an exception
+	 */
+	public int appendFrom(Input input, int max) throws IOException {
 		if (max < 0)
 			max = Integer.MAX_VALUE;
 		// Read from the buffer as long as it has more content, up to the max
@@ -347,6 +393,30 @@ public class CircularByteBuffer implements StringUtils.BinaryAccumulator {
 	 * @throws IOException If an error occurs writing the data
 	 */
 	public CircularByteBuffer writeContent(OutputStream output, int offset, int length) throws IOException {
+		return writeContent(output::write, offset, length);
+	}
+
+	/** An interface that allows custom code to behave like an {@link OutputStream} */
+	public interface Output {
+		/**
+		 * @param buffer The buffer containing the data to write
+		 * @param offset The starting index in the buffer of the data to write
+		 * @param length The number of bytes to write
+		 * @throws IOException If an error occurs writing the data
+		 */
+		void write(byte[] buffer, int offset, int length) throws IOException;
+	}
+
+	/**
+	 * Writes some of the content from this buffer to an OutputStream
+	 * 
+	 * @param output The stream to write to
+	 * @param offset The offset in this buffer to write from
+	 * @param length The number of bytes to write
+	 * @return This buffer
+	 * @throws IOException If an error occurs writing the data
+	 */
+	public CircularByteBuffer writeContent(Output output, int offset, int length) throws IOException {
 		if (offset < 0 || offset + length > theLength)
 			throw new IndexOutOfBoundsException(offset + " to " + (offset + length) + " of " + theLength);
 		if (length < 0)

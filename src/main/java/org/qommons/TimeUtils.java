@@ -66,7 +66,12 @@ public class TimeUtils {
 		/** The time zone specified in the format */
 		TimeZone;
 
-		public static DateElementType parse(String name) {
+		/**
+		 * @param name The text to parse
+		 * @return The date element type represented by the text
+		 * @throws IllegalArgumentException If the text was not a date element type representation
+		 */
+		public static DateElementType parse(String name) throws IllegalArgumentException {
 			switch (name.toLowerCase()) {
 			case "year":
 			case "y":
@@ -1506,7 +1511,12 @@ public class TimeUtils {
 		/** Chooses the closest time matching the relative instant either before or after the reference time */
 		Closest;
 
-		public static RelativeInstantEvaluation parse(String text) {
+		/**
+		 * @param text The text to parse
+		 * @return The evaluation type represented by the text
+		 * @throws IllegalArgumentException If the text was not an evaluation type representation
+		 */
+		public static RelativeInstantEvaluation parse(String text) throws IllegalArgumentException {
 			switch (text.toLowerCase()) {
 			case "past":
 				return Past;
@@ -3687,10 +3697,12 @@ public class TimeUtils {
 			return thePrecisionNames;
 		}
 
+		/** @return The duration within which times will be represented by "&lt;duration> ago" */
 		public Duration getAgoTransition() {
 			return theAgoTransition;
 		}
 
+		/** @return The month/day/year format to use if a time is beyond the {@link #getAgoTransition() ago transition} */
 		public String getDayFormat() {
 			return theDayFormat;
 		}
@@ -3743,11 +3755,19 @@ public class TimeUtils {
 			return this;
 		}
 
+		/**
+		 * @param agoTransition The duration within which times will be represented by "&lt;duration> ago"
+		 * @return This format
+		 */
 		public RelativeTimeFormat withAgoTransition(Duration agoTransition) {
 			theAgoTransition = agoTransition;
 			return this;
 		}
 
+		/**
+		 * @param dayFormat The month/day/year format to use if a time is beyond the {@link #getAgoTransition() ago transition}
+		 * @return This format
+		 */
 		public RelativeTimeFormat withDayFormat(String dayFormat) {
 			theDayFormat = dayFormat;
 			return this;
@@ -3984,6 +4004,12 @@ public class TimeUtils {
 				increment(comps.diffs, comps.threshes, comps.maxPrecision);
 		}
 
+		/**
+		 * @param time The time to print
+		 * @param reference The reference time to use to print the time
+		 * @param str The string builder to print it to (or null to create a new one)
+		 * @return The string builder with appended time
+		 */
 		public StringBuilder print(Instant time, Instant reference, StringBuilder str) {
 			if (theAgoTransition != null) {
 				Duration diff = between(reference, time);

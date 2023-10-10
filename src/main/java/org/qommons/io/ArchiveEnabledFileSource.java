@@ -970,9 +970,11 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 	}
 
+	/** A test for recognized file extensions */
 	public static class ExtensionTest implements Predicate<String> {
 		private final Set<String> theExtensions;
 
+		/** @param exts The file extensions to look for */
 		public ExtensionTest(String... exts) {
 			theExtensions = new LinkedHashSet<>();
 			for (String ext : exts)
@@ -1005,6 +1007,10 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 
 		private Predicate<String> thePossibleCompressedTest = DEFAULT_ZIP_TEST;
 
+		/**
+		 * @param test The file name test to determine if the file may be a zip file
+		 * @return This compression method
+		 */
 		public ZipCompression withFileTest(Predicate<String> test) {
 			thePossibleCompressedTest = test;
 			return this;

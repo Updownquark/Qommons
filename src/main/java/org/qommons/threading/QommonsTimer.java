@@ -479,7 +479,7 @@ public class QommonsTimer {
 					}
 					try {
 						theTask.run();
-					} catch (RuntimeException | Error e) {
+					} catch (Throwable e) {
 						e.printStackTrace();
 					}
 					if (interrupt)

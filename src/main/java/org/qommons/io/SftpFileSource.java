@@ -5,10 +5,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.Reader;
-import java.lang.ref.PhantomReference;
-import java.lang.ref.Reference;
-import java.lang.ref.ReferenceQueue;
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -16,17 +12,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
+import org.qommons.DynamicCache;
+import org.qommons.DynamicCache.Resource;
+import org.qommons.QommonsUtils;
 import org.qommons.ex.CheckedExceptionWrapper;
 import org.qommons.ex.ExBiConsumer;
 import org.qommons.io.BetterFile.CheckSumType;
 import org.qommons.io.BetterFile.FileBacking;
 import org.qommons.io.BetterFile.FileBooleanAttribute;
 import org.qommons.io.FileUtils.DirectorySyncResults;
-import org.qommons.threading.QommonsTimer;
 
 import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.connection.ConnectionException;
@@ -59,40 +56,18 @@ public class SftpFileSource extends RemoteFileSource {
 		SftpSessionConfig withAuthentication(String userName, String password);
 	}
 
-	class ThreadSession implements AutoCloseable {
-		String threadId;
+	class SftpSession {
 		final SSHClient client;
 		final SFTPClient session;
-		final IOException error;
-		int usage;
 
-		ThreadSession(String threadId, SSHClient client, SFTPClient s) {
-			this.threadId = threadId;
+		SftpSession(SSHClient client, SFTPClient s) {
 			this.client = client;
 			session = s;
-			error = null;
-		}
-
-		ThreadSession(String threadId, IOException err) {
-			this.threadId = threadId;
-			client = null;
-			session = null;
-			error = err;
-		}
-
-		void reUse(String thread) {
-			this.threadId = thread;
-			usage = 0;
 		}
 
 		/** SSH sessions in this library are single-use */
 		Session getSshSession() throws ConnectionException, TransportException {
 			return client.startSession();
-		}
-
-		ThreadSession use() {
-			usage++;
-			return this;
 		}
 
 		void dispose() {
@@ -107,25 +82,16 @@ public class SftpFileSource extends RemoteFileSource {
 				System.err.println("Error closing client: " + e.getMessage());
 			}
 		}
-
-		@Override
-		public void close() {
-			if (--usage == 0) {
-				QommonsTimer.getCommonInstance().doAfterInactivity(this, () -> reallyDisconnect(threadId), Duration.ofMillis(1000));
-			}
-		}
 	}
 
 	private final String theHost;
 	private final int thePort;
-	private final String theUser;
 	private final Consumer<SftpSessionConfig> theSessionConfiguration;
 	private final String theRootDir;
 	private String theKnownOS;
 
-	private final ConcurrentHashMap<String, ThreadSession> theSessions;
-	private final ReferenceQueue<Thread> theThreadDeaths;
-	private final ConcurrentHashMap<Reference<? extends Thread>, String> theThreadIdsByRef;
+	private final DynamicCache<SftpSession, IOException> theSessionCache;
+	private final boolean doStreamsHoldSessions;
 	private int theRetryCount;
 
 	private SftpFile theRoot;
@@ -154,12 +120,24 @@ public class SftpFileSource extends RemoteFileSource {
 	public SftpFileSource(String host, int port, String user, Consumer<SftpSessionConfig> sessionConfiguration, String rootDir) {
 		theHost = host;
 		thePort = port;
-		theUser = user;
-		theSessionConfiguration = sessionConfiguration;
+		theSessionConfiguration = session -> {
+			session.withAuthentication(user, null);
+			sessionConfiguration.accept(session);
+		};
 		theRootDir = rootDir;
-		theSessions = new ConcurrentHashMap<>();
-		theThreadDeaths = new ReferenceQueue<>();
-		theThreadIdsByRef = new ConcurrentHashMap<>();
+		doStreamsHoldSessions = true;
+		theSessionCache = DynamicCache.build().build(this::createSession, SftpSession::dispose);
+	}
+
+	private SftpFileSource(String host, int port, Consumer<SftpSessionConfig> config, String rootDir, int retryCount,
+		boolean streamsHoldSessions, Builder cacheBuilder) {
+		theHost = host;
+		thePort = port;
+		theSessionConfiguration = config;
+		theRootDir = rootDir;
+		theRetryCount = retryCount;
+		doStreamsHoldSessions = streamsHoldSessions;
+		theSessionCache = cacheBuilder.buildCache(this);
 	}
 
 	/** @return The number of times this file source will re-attempt a connection before failing an operation */
@@ -185,7 +163,7 @@ public class SftpFileSource extends RemoteFileSource {
 	 * @throws IOException If the connection could not be made
 	 */
 	public SftpFileSource check() throws IOException {
-		try (ThreadSession session = getSession()) {
+		try (Resource<SftpSession> session = getSession()) {
 		}
 		return this;
 	}
@@ -219,56 +197,12 @@ public class SftpFileSource extends RemoteFileSource {
 		return new SftpFile((SftpFile) parent, name);
 	}
 
-	ThreadSession getSession() throws IOException {
-		ThreadSession session = null;
-		// Clean up sessions associated with dead threads
-		// If there are any, use the first of such sessions to satisfy this request instead of creating a fresh one
-		Reference<? extends Thread> deadThread = theThreadDeaths.poll();
-		while (deadThread != null) {
-			String threadId = theThreadIdsByRef.remove(deadThread);
-			ThreadSession deadSession = theSessions.remove(threadId);
-			if (deadSession != null) {
-				if (session == null && deadSession.error == null)
-					session = deadSession;
-				else
-					deadSession.dispose();
-			}
-			deadThread = theThreadDeaths.poll();
-		}
-
-		Thread thread = Thread.currentThread();
-		String threadId = Long.toHexString(thread.getId()) + ":" + Integer.toHexString(System.identityHashCode(thread));
-		if (session != null) {
-			theSessions.put(threadId, session);
-			theThreadIdsByRef.put(new PhantomReference<>(thread, theThreadDeaths), threadId);
-			session.reUse(threadId);
-			return session;
-		}
-		session = theSessions.computeIfAbsent(threadId, th -> {
-			theThreadIdsByRef.put(new PhantomReference<>(thread, theThreadDeaths), threadId);
-			try {
-				return createSession(threadId);
-			} catch (IOException e) {
-				return new ThreadSession(th, e);
-			}
-		});
-		if (session.error != null)
-			throw session.error;
-		else
-			return session.use();
-	}
-
-	protected void cleanup(boolean scavengeOne) {
-		Reference<? extends Thread> deadThread = theThreadDeaths.poll();
-		while (deadThread != null) {
-			String threadId = theThreadIdsByRef.remove(deadThread);
-			theSessions.remove(threadId).dispose();
-			deadThread = theThreadDeaths.poll();
-		}
+	Resource<SftpSession> getSession() throws IOException {
+		return theSessionCache.get();
 	}
 
 	@SuppressWarnings("resource") // The session is kept around to be closed later
-	ThreadSession createSession(String threadId) throws IOException {
+	SftpSession createSession() throws IOException {
 		Exception ex = null;
 		for (int i = 0; i <= theRetryCount; i++) {
 			try {
@@ -314,28 +248,130 @@ public class SftpFileSource extends RemoteFileSource {
 					else
 						throw e;
 				}
-				return new ThreadSession(threadId, s, s.newSFTPClient());
+				return new SftpSession(s, s.newSFTPClient());
 			} catch (Exception e) {
 				e.getStackTrace();
 				ex = e;
 			}
 		}
-		throw new IOException("Could not connect to " + theUser + "@" + theHost + " (" + ex.getMessage() + ")", ex);
-	}
-
-	void reallyDisconnect(String threadId) {
-		theSessions.compute(threadId, (t, session) -> {
-			if (session != null && session.usage == 0) {
-				session.dispose();
-				return null;
-			} else
-				return session;
-		});
+		throw new IOException("Could not connect to " + theHost + " (" + ex.getMessage() + ")", ex);
 	}
 
 	static final Set<OpenMode> CREATE_MODE = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(OpenMode.CREAT, OpenMode.WRITE)));
 	static final Set<OpenMode> WRITE_MODE = Collections
 		.unmodifiableSet(new HashSet<>(Arrays.asList(OpenMode.CREAT, OpenMode.TRUNC, OpenMode.WRITE)));
+
+	private static final Consumer<SftpSessionConfig> NOTHING = __ -> {};
+
+	/**
+	 * @param host The hostname or IP address to connect to
+	 * @return A Builder for building an {@link SftpFileSource}
+	 */
+	public static Builder build(String host) {
+		return new Builder(host);
+	}
+
+	/** Builds an {@link SftpFileSource} */
+	public static class Builder extends DynamicCache.AbstractBuilder<Builder> {
+		private final String theHost;
+		private int thePort;
+		private Consumer<SftpSessionConfig> theSessionConfig;
+		private String theRootDir;
+		private int theRetryCount;
+		private boolean doStreamsHoldSessions;
+
+		Builder(String host) {
+			theHost = host;
+			thePort = SSHClient.DEFAULT_PORT;
+			theSessionConfig = NOTHING;
+			theRootDir = "/";
+		}
+
+		/**
+		 * @param port The port to connect to
+		 * @return This builder
+		 */
+		public Builder withPort(int port) {
+			thePort = port;
+			return this;
+		}
+
+		/**
+		 * @param user The user name to connect as
+		 * @param password The password to authenticate with
+		 * @return This builder
+		 */
+		public Builder withAuthentication(String user, String password) {
+			return configureSession(session -> session.withAuthentication(user, password));
+		}
+
+		/**
+		 * @param timeout The timeout to wait for connection
+		 * @return This builder
+		 */
+		public Builder withTimeout(int timeout) {
+			return configureSession(session -> session.withTimeout(timeout));
+		}
+
+		/**
+		 * @param rootDir The directory on the file system to represent as the root of this file source
+		 * @return This builder
+		 */
+		public Builder withRootDir(String rootDir) {
+			theRootDir = rootDir;
+			return this;
+		}
+
+		/**
+		 * @param config Configures the session before connection
+		 * @return This builder
+		 */
+		public Builder configureSession(Consumer<SftpSessionConfig> config) {
+			if (theSessionConfig == NOTHING)
+				theSessionConfig = config;
+			else {
+				Consumer<SftpSessionConfig> previous = theSessionConfig;
+				theSessionConfig = session -> {
+					previous.accept(session);
+					config.accept(session);
+				};
+			}
+			return this;
+		}
+
+		/**
+		 * @param count The number of times to retry connecting on failure
+		 * @return This builder
+		 */
+		public Builder retry(int count) {
+			theRetryCount = Math.max(0, count);
+			return this;
+		}
+
+		/**
+		 * @param hold Whether input and output streams created by the file source hold on to their sessions. If true, repeated use of
+		 *        streams may be slightly faster, but holding multiple streams open may be more expensive.
+		 * 
+		 * @return This builder
+		 */
+		public Builder streamsHoldSessions(boolean hold) {
+			doStreamsHoldSessions = hold;
+			return this;
+		}
+
+		/**
+		 * @param fileSource The file source to create the cache for
+		 * @return The session cache for the file source
+		 */
+		protected DynamicCache<SftpSession, IOException> buildCache(SftpFileSource fileSource) {
+			return super.build(fileSource::createSession, SftpSession::dispose);
+		}
+
+		/** @return The new {@link SftpFileSource} */
+		public SftpFileSource build() {
+			return new SftpFileSource(theHost, thePort, theSessionConfig, theRootDir, theRetryCount, doStreamsHoldSessions, this);
+		}
+	}
 
 	@SuppressWarnings("resource")
 	private class SftpFile extends RemoteFileBacking {
@@ -371,8 +407,8 @@ public class SftpFileSource extends RemoteFileSource {
 
 		@Override
 		protected void queryData() throws IOException {
-			try {
-				setAttributes(getSession().session.statExistence(getPath()));
+			try (Resource<SftpSession> session = getSession()) {
+				setAttributes(session.get().session.statExistence(getPath()));
 			} catch (Exception e) {
 				throw new IOException(e);
 			}
@@ -380,16 +416,16 @@ public class SftpFileSource extends RemoteFileSource {
 
 		@Override
 		public String getCheckSum(CheckSumType type, BooleanSupplier canceled) throws IOException {
-			try (ThreadSession session = getSession()) {
+			try (Resource<SftpSession> session = getSession()) {
 				try {
 					if (theKnownOS != null) {
 						CheckSumCommand cmd = CheckSumCommand.CHECK_SUM_COMMANDS.get(theKnownOS);
 						if (cmd != null)
-							return getCheckSum(cmd, type, session);
+							return getCheckSum(cmd, type, session.get());
 					} else {
 						for (Map.Entry<String, CheckSumCommand> cmd : CheckSumCommand.CHECK_SUM_COMMANDS.entrySet()) {
 							try {
-								String checkSum = getCheckSum(cmd.getValue(), type, session);
+								String checkSum = getCheckSum(cmd.getValue(), type, session.get());
 								if (checkSum != null)
 									theKnownOS = cmd.getKey();
 								return checkSum;
@@ -405,7 +441,7 @@ public class SftpFileSource extends RemoteFileSource {
 			return FileUtils.getCheckSum(() -> read(0, canceled), type, canceled);
 		}
 
-		private String getCheckSum(CheckSumCommand cmd, CheckSumType type, ThreadSession session) throws IOException {
+		private String getCheckSum(CheckSumCommand cmd, CheckSumType type, SftpSession session) throws IOException {
 			String cmdStr = cmd.getCommand(type, getPath());
 			if (cmdStr == null)
 				return null; // OS doesn't support command-line checksum for this type
@@ -421,12 +457,14 @@ public class SftpFileSource extends RemoteFileSource {
 			try {
 				if (!isDirectory())
 					return true;
-				for (RemoteResourceInfo file : getSession().session.ls(getPath())) {
-					if (canceled.getAsBoolean())
-						return false;
-					if (file.getName().equals(".") || file.getName().equals(".."))
-						continue;
-					onDiscovered.accept(new SftpFile(this, file.getName()).setAttributes(file.getAttributes()));
+				try (Resource<SftpSession> session = getSession()) {
+					for (RemoteResourceInfo file : session.get().session.ls(getPath())) {
+						if (canceled.getAsBoolean())
+							return false;
+						if (file.getName().equals(".") || file.getName().equals(".."))
+							continue;
+						onDiscovered.accept(new SftpFile(this, file.getName()).setAttributes(file.getAttributes()));
+					}
 				}
 				return true;
 			} catch (Exception e) {
@@ -452,111 +490,21 @@ public class SftpFileSource extends RemoteFileSource {
 
 		@Override
 		public InputStream read(long startFrom, BooleanSupplier canceled) throws IOException {
-			return new InputStream() {
-				private RemoteFile theFile;
-				private long theOffset = startFrom;
-				private boolean isClosed;
-				private byte[] theSingleBuffer;
-
-				{
-					connect();
-				}
-
-				private void checkConnection() throws IOException {
-					if (isClosed)
-						throw new IOException("Stream is closed");
-					else if (theFile == null)
-						connect();
-				}
-
-				private void connect() throws IOException {
-					if (isClosed)
-						return;
-					if (theFile != null) {
-						try {
-							theFile.close();
-						} catch (IOException e) {
-							theFile = null;
-							throw e;
-						}
-					}
-					theFile = getSession().session.open(getPath());
-				}
-
-				@Override
-				public int read() throws IOException {
-					if (theSingleBuffer == null)
-						theSingleBuffer = new byte[1];
-					if (read(theSingleBuffer, 0, 1) > 0)
-						return theSingleBuffer[0] & 0xff;
-					else
-						return -1;
-				}
-
-				@Override
-				public int read(byte[] b, int off, int len) throws IOException {
-					checkConnection();
-					int read;
-					try {
-						read = theFile.read(theOffset, b, off, len);
-					} catch (IOException e) {
-						// Reconnect and try again
-						connect();
-						read = theFile.read(theOffset, b, off, len);
-						if (read <= 0)
-							return read;
-					}
-					if (read <= 0 && theOffset < length()) {
-						connect();
-						read = theFile.read(theOffset, b, off, len);
-					}
-					if (read > 0)
-						theOffset += read;
-					return read;
-				}
-
-				@Override
-				public long skip(long n) throws IOException {
-					long length = length();
-					long oldOffset = theOffset;
-					long newOffset = Math.min(oldOffset + n, length);
-					theOffset = newOffset;
-					return newOffset - oldOffset;
-				}
-
-				@Override
-				public int available() throws IOException {
-					return 0;
-				}
-
-				@Override
-				public void close() throws IOException {
-					if (isClosed)
-						return;
-					isClosed = true;
-					if (theFile != null) {
-						theFile.close();
-						theFile = null;
-					}
-					super.close();
-				}
-
-				@Override
-				public String toString() {
-					return "Reading:" + getPath();
-				}
-			};
+			if (doStreamsHoldSessions)
+				return new SessionHoldingInputStream(this, startFrom);
+			else
+				return new DynamicSessionInputStream(this, startFrom);
 		}
 
 		@Override
 		public FileBacking createChild(String fileName, boolean directory) throws IOException {
 			if (getParent() != null && !getParent().exists())
 				getParent().createChild(getName(), true);
-			try {
+			try (Resource<SftpSession> session = getSession()) {
 				if (directory) {
-					getSession().session.mkdirs(getPath() + "/" + fileName);
+					session.get().session.mkdirs(getPath() + "/" + fileName);
 				} else {
-					getSession().session.open(getPath() + "/" + fileName, CREATE_MODE).close();
+					session.get().session.open(getPath() + "/" + fileName, CREATE_MODE).close();
 				}
 				return getChild(fileName);
 			} catch (Exception e) {
@@ -566,10 +514,10 @@ public class SftpFileSource extends RemoteFileSource {
 
 		@Override
 		public void delete(DirectorySyncResults results) throws IOException {
-			try {
-				SFTPClient session = getSession().session;
+			try (Resource<SftpSession> session = getSession()) {
+				SFTPClient client = session.get().session;
 				String path = getPath();
-				delete(session, path, session.lstat(path), results);
+				delete(client, path, client.lstat(path), results);
 			} catch (Exception e) {
 				throw new IOException("Could not delete " + getPath(), e);
 			}
@@ -589,69 +537,10 @@ public class SftpFileSource extends RemoteFileSource {
 
 		@Override
 		public OutputStream write() throws IOException {
-			// This isn't tested well yet
-			return new OutputStream() {
-				private RemoteFile theFile;
-				private long theOffset = 0;
-				private boolean isClosed;
-				private byte[] theSingleBuffer;
-
-				{
-					connect();
-				}
-
-				private void checkConnection() throws IOException {
-					if (isClosed)
-						throw new IOException("Stream is closed");
-					else if (theFile == null)
-						connect();
-				}
-
-				private void connect() throws IOException {
-					if (isClosed)
-						return;
-					if (theFile != null)
-						theFile.close();
-					theFile = getSession().session.open(getPath(), WRITE_MODE);
-				}
-
-				@Override
-				public void write(int b) throws IOException {
-					if (theSingleBuffer == null)
-						theSingleBuffer = new byte[1];
-					theSingleBuffer[0] = (byte) b;
-					write(theSingleBuffer, 0, 1);
-				}
-
-				@Override
-				public void write(byte[] b, int off, int len) throws IOException {
-					checkConnection();
-					try {
-						theFile.write(theOffset, b, off, len);
-						theOffset += len;
-					} catch (IOException e) {
-						// Reconnect and try again
-						connect();
-						theFile.write(theOffset, b, off, len);
-						theOffset += len;
-					}
-				}
-
-				@Override
-				public void close() throws IOException {
-					if (isClosed)
-						return;
-					isClosed = true;
-					if (theFile != null)
-						theFile.close();
-					super.close();
-				}
-
-				@Override
-				public String toString() {
-					return "Writing:" + getPath();
-				}
-			};
+			if (doStreamsHoldSessions)
+				return new SessionHoldingOutputStream(this, 0);
+			else
+				return new DynamicSessionOutputStream(this, 0);
 		}
 
 		@Override
@@ -693,10 +582,10 @@ public class SftpFileSource extends RemoteFileSource {
 				}
 				if (newPerms == thePermissions)
 					return true;
-				try {
-					SFTPClient session = getSession().session;
-					FileAttributes atts = session.lstat(getPath());
-					session.setattr(getPath(), new FileAttributes(newPerms, atts.getSize(), atts.getUID(), atts.getGID(), atts.getMode(),
+				try (Resource<SftpSession> session = getSession()) {
+					SFTPClient client = session.get().session;
+					FileAttributes atts = client.lstat(getPath());
+					client.setattr(getPath(), new FileAttributes(newPerms, atts.getSize(), atts.getUID(), atts.getGID(), atts.getMode(),
 						atts.getAtime(), atts.getMtime(), Collections.emptyMap()));
 				} catch (Exception e) {
 					return false;
@@ -707,10 +596,10 @@ public class SftpFileSource extends RemoteFileSource {
 
 		@Override
 		public boolean setLastModified(long lastModified) {
-			try {
-				SFTPClient session = getSession().session;
-				FileAttributes atts = session.lstat(getPath());
-				session.setattr(getPath(), new FileAttributes(atts.getMode().getPermissionsMask(), atts.getSize(), atts.getUID(),
+			try (Resource<SftpSession> session = getSession()) {
+				SFTPClient client = session.get().session;
+				FileAttributes atts = client.lstat(getPath());
+				client.setattr(getPath(), new FileAttributes(atts.getMode().getPermissionsMask(), atts.getSize(), atts.getUID(),
 					atts.getGID(), atts.getMode(), atts.getAtime(), lastModified, Collections.emptyMap()));
 				return true;
 			} catch (Exception e) {
@@ -720,9 +609,9 @@ public class SftpFileSource extends RemoteFileSource {
 
 		@Override
 		public void move(List<String> newFilePath) throws IOException {
-			try {
+			try (Resource<SftpSession> session = getSession()) {
 				String path = String.join("/", newFilePath);
-				getSession().session.rename(getPath(), path);
+				session.get().session.rename(getPath(), path);
 			} catch (Exception e) {
 				throw new IOException("Could not rename " + getPath() + " to " + newFilePath, e);
 			}
@@ -736,7 +625,7 @@ public class SftpFileSource extends RemoteFileSource {
 
 		@Override
 		public int hashCode() {
-			return Objects.hash(theHost, theUser, getPath());
+			return Objects.hash(theHost, getPath());
 		}
 
 		SftpFileSource getSource() {
@@ -751,7 +640,6 @@ public class SftpFileSource extends RemoteFileSource {
 				return false;
 			SftpFile other = (SftpFile) obj;
 			return theHost.equals(other.getSource().theHost)//
-				&& theUser.equals(other.getSource().theUser)//
 				&& getPath().equals(other.getPath());
 		}
 
@@ -765,6 +653,373 @@ public class SftpFileSource extends RemoteFileSource {
 					p += "/";
 				return p + getName();
 			}
+		}
+	}
+
+	class SessionHoldingInputStream extends InputStream {
+		private final SftpFile theSftpFile;
+		private Resource<SftpSession> theSession;
+		private RemoteFile theFile;
+		private long theOffset;
+		private boolean isClosed;
+		private byte[] theSingleBuffer;
+
+		SessionHoldingInputStream(SftpFile file, long startFrom) throws IOException {
+			theSftpFile = file;
+			theOffset = startFrom;
+			connect();
+		}
+
+		private void checkConnection() throws IOException {
+			if (isClosed)
+				throw new IOException("Stream is closed");
+			else if (theFile == null)
+				connect();
+		}
+
+		private void connect() throws IOException {
+			if (isClosed)
+				return;
+			if (theFile != null) {
+				try {
+					theFile.close();
+				} catch (IOException e) {
+					theFile = null;
+					throw e;
+				}
+			}
+			if (theSession == null)
+				theSession = getSession();
+			theFile = theSession.get().session.open(theSftpFile.getPath(), QommonsUtils.unmodifiableDistinctCopy(OpenMode.READ));
+		}
+
+		@Override
+		public int read() throws IOException {
+			if (theSingleBuffer == null)
+				theSingleBuffer = new byte[1];
+			if (read(theSingleBuffer, 0, 1) > 0)
+				return theSingleBuffer[0] & 0xff;
+			else
+				return -1;
+		}
+
+		@Override
+		public int read(byte[] b, int off, int len) throws IOException {
+			checkConnection();
+			int read;
+			try {
+				read = theFile.read(theOffset, b, off, len);
+			} catch (IOException e) {
+				// Reconnect and try again
+				connect();
+				read = theFile.read(theOffset, b, off, len);
+				if (read <= 0)
+					return read;
+			}
+			if (read <= 0 && theOffset < theSftpFile.length()) {
+				connect();
+				read = theFile.read(theOffset, b, off, len);
+			}
+			if (read > 0)
+				theOffset += read;
+			return read;
+		}
+
+		@Override
+		public long skip(long n) throws IOException {
+			long length = theSftpFile.length();
+			long oldOffset = theOffset;
+			long newOffset = Math.min(oldOffset + n, length);
+			theOffset = newOffset;
+			return newOffset - oldOffset;
+		}
+
+		@Override
+		public int available() throws IOException {
+			return 0;
+		}
+
+		@Override
+		public void close() throws IOException {
+			if (isClosed)
+				return;
+			isClosed = true;
+			if (theFile != null) {
+				theFile.close();
+				theFile = null;
+				theSession.close();
+				theSession = null;
+			}
+			super.close();
+		}
+
+		@Override
+		public String toString() {
+			return "Reading:" + theSftpFile.getPath();
+		}
+	}
+
+	class DynamicSessionInputStream extends InputStream {
+		private final SftpFile theSftpFile;
+		/** The offset to read from in the remote stream, i.e. the position of the next byte from read() plus the buffer length */
+		private long theOffset;
+		private final CircularByteBuffer theBuffer;
+
+		private long theMark; // Might as well support it, it's very easy
+
+		DynamicSessionInputStream(SftpFile sftpFile, long offset) {
+			theSftpFile = sftpFile;
+			theOffset = offset;
+			theBuffer = new CircularByteBuffer(4 * 1024);
+		}
+
+		@Override
+		public int read() throws IOException {
+			if (theBuffer.length() == 0) {
+				try (Resource<SftpSession> session = getSession(); //
+					RemoteFile remote = session.get().session.open(theSftpFile.getPath(),
+						QommonsUtils.unmodifiableDistinctCopy(OpenMode.READ))) {
+					fillBuffer(remote);
+					if (theBuffer.length() == 0)
+						return -1;
+				}
+			}
+			return theBuffer.pop();
+		}
+
+		private void fillBuffer(RemoteFile remote) throws IOException {
+			int target = theBuffer.getCapacity() - theBuffer.length();
+			theBuffer.appendFrom(new CircularByteBuffer.Input() {
+				private long theLength = -1;
+
+				@Override
+				public int read(byte[] buffer, int offset, int length) throws IOException {
+					int r = remote.read(theOffset, buffer, offset, length);
+					if (r > 0)
+						theOffset += r;
+					return r;
+				}
+
+				@Override
+				public long available() throws IOException {
+					if (theLength < 0)
+						theLength = theSftpFile.length();
+					return theLength - theOffset;
+				}
+			}, target);
+		}
+
+		@Override
+		public int read(byte[] b, int off, int len) throws IOException {
+			if (len <= theBuffer.length()) {
+				theBuffer.copyTo(0, b, off, len);
+				theBuffer.delete(0, len);
+				return len;
+			}
+			int preBuf = theBuffer.length();
+			int remain = len - preBuf;
+			theBuffer.copyTo(0, b, off, preBuf);
+			theBuffer.clear(false);
+			try (Resource<SftpSession> session = getSession(); //
+				RemoteFile remote = session.get().session.open(theSftpFile.getPath(),
+					QommonsUtils.unmodifiableDistinctCopy(OpenMode.READ))) {
+				if (remain < theBuffer.getCapacity()) {
+					fillBuffer(remote);
+					int read = theBuffer.length();
+					if (read == 0 && theOffset >= theSftpFile.length())
+						return -1;
+					int ret = Math.min(read, remain);
+					theBuffer.copyTo(0, b, off, ret);
+					theBuffer.delete(0, ret);
+					return preBuf + ret;
+				} else {
+					int read = remote.read(theOffset, b, off, len);
+					if (read > 0)
+						theOffset += read;
+					return read;
+				}
+			}
+		}
+
+		@Override
+		public long skip(long n) throws IOException {
+			if (n <= theBuffer.length()) {
+				theBuffer.delete(0, (int) n);
+				return n;
+			} else {
+				long remain = n - theBuffer.length();
+				theBuffer.clear(false);
+				long targetOffset = theOffset + remain;
+				long length = theSftpFile.length();
+				if (targetOffset <= length) {
+					theOffset = targetOffset;
+					return n;
+				} else {
+					long skipped = n - (length - targetOffset);
+					theOffset = length;
+					return skipped;
+				}
+			}
+		}
+
+		@Override
+		public int available() throws IOException {
+			return theBuffer.length();
+		}
+
+		@Override
+		public boolean markSupported() {
+			return true;
+		}
+
+		@Override
+		public synchronized void mark(int readlimit) {
+			theMark = theOffset - theBuffer.length();
+		}
+
+		@Override
+		public synchronized void reset() {
+			theOffset = theMark;
+			theBuffer.clear(false);
+		}
+	}
+
+	class SessionHoldingOutputStream extends OutputStream {
+		private final SftpFile theSftpFile;
+		private Resource<SftpSession> theSession;
+		private RemoteFile theFile;
+		private long theOffset;
+		private boolean isClosed;
+		private byte[] theSingleBuffer;
+
+		SessionHoldingOutputStream(SftpFile file, long startFrom) throws IOException {
+			theSftpFile = file;
+			theOffset = startFrom;
+			connect();
+		}
+
+		private void checkConnection() throws IOException {
+			if (isClosed)
+				throw new IOException("Stream is closed");
+			else if (theFile == null)
+				connect();
+		}
+
+		private void connect() throws IOException {
+			if (isClosed)
+				return;
+			if (theFile != null)
+				theFile.close();
+			if (theSession == null)
+				theSession = getSession();
+			theFile = theSession.get().session.open(theSftpFile.getPath(), WRITE_MODE);
+		}
+
+		@Override
+		public void write(int b) throws IOException {
+			if (theSingleBuffer == null)
+				theSingleBuffer = new byte[1];
+			theSingleBuffer[0] = (byte) b;
+			write(theSingleBuffer, 0, 1);
+		}
+
+		@Override
+		public void write(byte[] b, int off, int len) throws IOException {
+			checkConnection();
+			try {
+				theFile.write(theOffset, b, off, len);
+				theOffset += len;
+			} catch (IOException e) {
+				// Reconnect and try again
+				connect();
+				theFile.write(theOffset, b, off, len);
+				theOffset += len;
+			}
+		}
+
+		@Override
+		public void close() throws IOException {
+			if (isClosed)
+				return;
+			isClosed = true;
+			if (theFile != null) {
+				theFile.close();
+				theFile = null;
+				theSession.close();
+				theSession = null;
+			}
+			super.close();
+		}
+
+		@Override
+		public String toString() {
+			return "Writing:" + theSftpFile.getPath();
+		}
+	}
+
+	class DynamicSessionOutputStream extends OutputStream {
+		private final SftpFile theSftpFile;
+		/** The position to write to in the remote stream, i.e. the number of bytes written so far minus the buffer length */
+		private long theOffset;
+		private final CircularByteBuffer theBuffer;
+
+		DynamicSessionOutputStream(SftpFile sftpFile, long offset) {
+			theSftpFile = sftpFile;
+			theOffset = offset;
+			theBuffer = new CircularByteBuffer(4 * 1024);
+		}
+
+		@Override
+		public void write(int b) throws IOException {
+			theBuffer.append((byte) b);
+			if (theBuffer.length() >= theBuffer.getCapacity() - 1024)
+				flush();
+		}
+
+		@Override
+		public void write(byte[] b, int off, int len) throws IOException {
+			if (theBuffer.length() + len <= theBuffer.getCapacity()) {
+				theBuffer.append(b, off, len);
+				if (theBuffer.length() >= theBuffer.getCapacity() - 1024)
+					flush();
+			} else {
+				try (Resource<SftpSession> session = getSession();
+					RemoteFile remote = session.get().session.open(theSftpFile.getPath(), WRITE_MODE)) {
+					flush(remote);
+					remote.write(theOffset, b, off, len);
+					theOffset += len;
+				}
+			}
+		}
+
+		@Override
+		public void flush() throws IOException {
+			if (theBuffer.length() == 0)
+				return;
+			try (Resource<SftpSession> session = getSession();
+				RemoteFile remote = session.get().session.open(theSftpFile.getPath(), WRITE_MODE)) {
+				flush(remote);
+			}
+		}
+
+		private void flush(RemoteFile remote) throws IOException {
+			if (theBuffer.length() > 0) {
+				theBuffer.writeContent((buf, off, len) -> {
+					remote.write(theOffset, buf, off, len);
+					theOffset += len;
+				}, 0, theBuffer.length());
+				theBuffer.clear(false);
+			}
+		}
+
+		@Override
+		public void close() throws IOException {
+			flush();
+		}
+
+		@Override
+		public String toString() {
+			return "Writing:" + theSftpFile.getPath();
 		}
 	}
 }
