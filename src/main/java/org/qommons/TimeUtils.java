@@ -3654,6 +3654,7 @@ public class TimeUtils {
 		private String theDayFormat;
 		private boolean isPluralized;
 		private String theJustNow;
+		private Duration theJustNowTransition;
 		private String theAgo;
 		private boolean is24HourFormat;
 
@@ -3712,9 +3713,14 @@ public class TimeUtils {
 			return isPluralized;
 		}
 
-		/** @return The {@link #withJustNow(String) just now} String */
+		/** @return The {@link #withJustNow(String, Duration) just now} String */
 		public String getJustNow() {
 			return theJustNow;
+		}
+
+		/** @return The duration within which times will be represented by {@link #getJustNow() just now} */
+		public Duration getJustNowTransition() {
+			return theJustNowTransition;
 		}
 
 		/**
@@ -3790,10 +3796,12 @@ public class TimeUtils {
 		/**
 		 * @param justNow The string to print if the duration is zero within the configured {@link #withMaxPrecision(DurationComponentType)
 		 *        max precision}, or null to just print 0&lt;max prec unit>
+		 * @param transition The duration within which times will be represented by just now
 		 * @return This format
 		 */
-		public RelativeTimeFormat withJustNow(String justNow) {
+		public RelativeTimeFormat withJustNow(String justNow, Duration transition) {
 			theJustNow = justNow;
+			theJustNowTransition = transition;
 			return this;
 		}
 
@@ -4013,6 +4021,14 @@ public class TimeUtils {
 		public StringBuilder print(Instant time, Instant reference, StringBuilder str) {
 			if (theAgoTransition != null) {
 				Duration diff = between(reference, time);
+				if (!diff.isNegative())
+					return printAsDuration(time, reference, str);
+				if (theJustNowTransition != null && theJustNow != null && diff.isNegative()
+					&& diff.negated().compareTo(theJustNowTransition) < 0) {
+					if (str == null)
+						str = new StringBuilder();
+					return str.append(theJustNow);
+				}
 				if (diff.abs().compareTo(theAgoTransition) < 0)
 					return printAsDuration(time, reference, str);
 				else {
@@ -4153,6 +4169,11 @@ public class TimeUtils {
 		 * @return The string builder
 		 */
 		public StringBuilder print(Duration d, StringBuilder str) {
+			if (theJustNowTransition != null && theJustNow != null && d.isNegative() && d.negated().compareTo(theJustNowTransition) < 0) {
+				if (str == null)
+					str = new StringBuilder();
+				return str.append(theJustNow);
+			}
 			DurationComponents comps = new DurationComponents(d);
 			if (theAboveDayStrategy == AboveDaysStrategy.MonthYear) {
 				long t = d.getSeconds();
