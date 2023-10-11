@@ -54,6 +54,9 @@ public class ListenerList<E> {
 	 * @param <E> The type of the value that this node holds
 	 */
 	public interface Element<E> extends Runnable {
+		/** @return Whether this element is still present in the list */
+		boolean isPresent();
+
 		/**
 		 * Removes this node from the list
 		 * 
@@ -194,6 +197,11 @@ public class ListenerList<E> {
 
 		boolean isInAddFiringRound(Object firing) {
 			return false;
+		}
+
+		@Override
+		public boolean isPresent() {
+			return previous.next == this;
 		}
 
 		@Override

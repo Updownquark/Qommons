@@ -713,7 +713,7 @@ public class QommonsTimer {
 					try {
 						Thread.sleep(1_000_000_000L);
 					} catch (InterruptedException e) {
-						Thread.currentThread().interrupt();
+						// Normal, e.g. new task has been scheduled
 					} finally {
 						isSleeping.set(false);
 					}
@@ -727,7 +727,7 @@ public class QommonsTimer {
 					try {
 						theClock.sleep(sleepTime);
 					} catch (InterruptedException e) {
-						Thread.currentThread().interrupt();
+						// Normal, e.g. new task has been scheduled
 					} finally {
 						isSleeping.set(false);
 					}
