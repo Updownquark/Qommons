@@ -162,6 +162,13 @@ public class QommonsTimer {
 			return isActive.get();
 		}
 
+		/** @return The time of the next scheduled execution, or null if this task is not scheduled to run again */
+		public Instant getNextExecution() {
+			if (!isActive.get())
+				return null;
+			return theNextRun;
+		}
+
 		/** @return The time between now and when this task will next be run */
 		public Duration getTimeUntilNextRun() {
 			if (!isActive.get())
