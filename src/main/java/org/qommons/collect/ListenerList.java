@@ -302,7 +302,7 @@ public class ListenerList<E> {
 	 * @param listener The listener to add
 	 * @param skipCurrent Whether to skip calling this listener the first time if this addition is a result of the action being invoked from
 	 *        a {@link #forEach(Consumer)} call
-	 * @return The action to invoke (i.e. {@link Runnable#run()}) to remove this listener
+	 * @return The added element
 	 */
 	public Element<E> add(E listener, boolean skipCurrent) {
 		Object firing;
@@ -314,7 +314,7 @@ public class ListenerList<E> {
 		} else
 			firing = null;
 		Node newNode = firing == null ? new Node(listener) : new SkipOneNode(listener, firing);
-		return addNode(newNode);
+		return addNode(newNode, true);
 	}
 
 	/**
@@ -323,7 +323,7 @@ public class ListenerList<E> {
 	 * @param listener The listener to add
 	 * @param skipCurrent Whether to skip calling this listener the first time if this addition is a result of the action being invoked from
 	 *        a {@link #forEach(Consumer)} call
-	 * @return The action to invoke (i.e. {@link Runnable#run()}) to remove this listener
+	 * @return The added element
 	 */
 	public Element<E> addLast(E listener, boolean skipCurrent) {
 		Object firing;
@@ -335,29 +335,48 @@ public class ListenerList<E> {
 		} else
 			firing = null;
 		RunLastNode node = new RunLastNode(listener, firing);
-		return addNode(node);
+		return addNode(node, true);
 	}
 
-	private Element<E> addNode(Node newNode) {
-		newNode.next = theTerminal;// We know we'll be adding this node as the last node (excluding the terminal)
+	/**
+	 * @param listener The listener to add
+	 * @return The added element
+	 */
+	public Element<E> addFirst(E listener) {
+		Node newNode = new Node(listener);
+		return addNode(newNode, false);
+	}
+
+	private Element<E> addNode(Node newNode, boolean last) {
+		if (last)
+			newNode.next = theTerminal;// We know we'll be adding this node as the last node (excluding the terminal)
+		else
+			newNode.previous = theTerminal;
 		// The next part affects the list's state, so only one at a time
 		if (isSynchronized) {
 			synchronized (theTerminal) {
-				_add(newNode);
+				_add(newNode, last);
 			}
 		} else
-			_add(newNode);
+			_add(newNode, last);
 		return newNode;
 	}
 
-	private void _add(Node newNode) {
+	private void _add(Node newNode, boolean last) {
 		boolean newInUse = theSize != null && theSize.getAndIncrement() == 0;
 		if (newInUse && theInUseListener != null)
 			theInUseListener.inUseChanged(true);
-		Node oldLast = theTerminal.previous;
-		newNode.previous = oldLast;
-		theTerminal.previous = newNode;
-		oldLast.next = newNode;
+		if (last) {
+			Node oldLast = theTerminal.previous;
+			newNode.previous = oldLast;
+			theTerminal.previous = newNode;
+			oldLast.next = newNode;
+		} else {
+			Node oldFirst = theTerminal.next;
+			newNode.next = oldFirst;
+			theTerminal.next = newNode;
+			oldFirst.previous = newNode;
+		}
 	}
 
 	void removeListener(Node node) {
@@ -489,7 +508,7 @@ public class ListenerList<E> {
 				} else if (node.isInAddFiringRound(iterId)) { // Don't execute the same round it was added, if so configured
 				} else if (node instanceof ListenerList.RunLastNode) {
 					TempNode tempNode = new TempNode(node.theListener, iterId);
-					addNode(tempNode);
+					addNode(tempNode, true);
 				} else {
 					try {
 						action.accept(node.theListener);

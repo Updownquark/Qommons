@@ -36,7 +36,7 @@ public class DynamicCache<T, X extends Throwable> {
 	private final int thePersistentCacheLimit;
 	private final int theLiveResourceLimit;
 
-	private int theLiveResourceCount;
+	private volatile int theLiveResourceCount;
 	private final ListenerList<IdleResource<T>> theIdleResourceCache;
 	private final ListenerList<ResourceWaiter<T>> theWaiters;
 
@@ -253,8 +253,13 @@ public class DynamicCache<T, X extends Throwable> {
 		theLiveResourceCount--;
 
 		// Add it back into the persistent cache if it's not full
-		if (theIdleResourceCache.size() < thePersistentCacheLimit)
-			theIdleResourceCache.add(new IdleResource<>(value), false);
+		if (theIdleResourceCache.size() < thePersistentCacheLimit) {
+			/* Add to the beginning of the cache, where it will be pulled off more quickly.
+			 * This will cause live items to be re-used more frequently,
+			 * while items at the end of the cache will be more likely to become stagnant and be purged.
+			 * This will help the cache to maintain only as many resources as it needs to meet demand. */
+			theIdleResourceCache.addFirst(new IdleResource<>(value));
+		}
 		else // There's no place for the resource. Dispose of it.
 			theDestroyer.accept(value);
 	}
