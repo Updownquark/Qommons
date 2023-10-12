@@ -264,7 +264,9 @@ public class ClassMap<V> {
 	private final ClassMapEntry<Object, V> theRoot = new ClassMapEntry<>(null);
 
 	private static <T> Class<T> wrap(Class<T> type) {
-		if (!type.isPrimitive())
+		if (type == null)
+			throw new NullPointerException();
+		else if (!type.isPrimitive())
 			return type;
 		else if (type == boolean.class)
 			return (Class<T>) Boolean.class;
