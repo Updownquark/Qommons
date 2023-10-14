@@ -15,7 +15,7 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 
 	private final QonfigElementOrAddOn thePromise;
 
-	private QonfigElementDef(QonfigToolkit declarer, String name, QonfigElementDef superElement, Set<QonfigAddOn> inheritance,
+	protected QonfigElementDef(QonfigToolkit declarer, String name, QonfigElementDef superElement, Set<QonfigAddOn> inheritance,
 		boolean isAbstract, QonfigElementOrAddOn promise, //
 		Map<String, QonfigAttributeDef.Declared> declaredAttributes, Map<QonfigAttributeDef.Declared, ValueDefModifier> attributeModifiers,
 		Map<QonfigAttributeDef.Declared, QonfigAttributeDef> allAttributes, BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
@@ -78,6 +78,10 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		return false;
 	}
 
+	public QonfigElementOrAddOn getPromise() {
+		return thePromise;
+	}
+
 	/**
 	 * @param name The name for the element type
 	 * @param session The session for error reporting
@@ -106,10 +110,17 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		}
 
 		public Builder promise(QonfigElementOrAddOn promise, PositionedContent position) {
-			if (thePromise != null)
+			if (thePromise != null) {
 				getSession().at(position).error("Multiple promises declared");
-			else
-				thePromise = promise;
+				return this;
+			}
+			if (getSuperElement() != null && getSuperElement().getPromise() != null) {
+				if (!getSuperElement().getPromise().isAssignableFrom(promise))
+					getSession().at(position).error("Promise " + promise + " is incompatible with the promise ("
+						+ getSuperElement().getPromise() + ") of the super element (" + getSuperElement() + ")");
+				return this;
+			}
+			thePromise = promise;
 			return this;
 		}
 
@@ -133,7 +144,8 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 
 		@Override
 		protected QonfigElementOrAddOn create() {
-			return new QonfigElementDef(theSession.getToolkit(), getName(), getSuperElement(), getInheritance(), isAbstract(), thePromise, //
+			return new QonfigElementDef(theSession.getToolkit(), getName(), getSuperElement(), getInheritance(), isAbstract(), //
+				(thePromise == null && getSuperElement() != null) ? getSuperElement().getPromise() : thePromise, //
 				getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueDefModifier>) super.getAttributeModifiers(),
 				getCompiledAttributes(), getAttributesByName(), //
 				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildDefModifier>) super.getChildModifiers(), getCompiledChildren(),

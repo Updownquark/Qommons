@@ -260,11 +260,41 @@ public class DefaultQonfigParser implements QonfigParser {
 				childSession.error("No such element-def found: " + child.getName());
 				continue;
 			}
+			if (childType.getPromise() != null) {
+				String promiserDocLocation = session.getToolkit().getLocationString() + "@" + namePosition;
+				QonfigToolkit promiserDocToolkit;
+				try {
+					promiserDocToolkit = new QonfigToolkit(promiserDocLocation, 1, 0, null,
+						SimpleXMLParser.getPositionContent(child.getElement()), getDocumentation(child),
+						session.getToolkit().getDependencies(), Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(),
+						Collections.emptyList(), new QonfigToolkit.ToolkitBuilder() {
+							@Override
+							public void parseTypes(QonfigParseSession s) {
+							}
+
+							@Override
+							public void fillOutTypes(QonfigParseSession s) {
+							}
+
+							@Override
+							public Set<QonfigElementDef> getDeclaredRoots(QonfigParseSession s) {
+								return Collections.singleton(childType);
+							}
+						}, theStitcher);
+				} catch (QonfigParseException e) {
+					childSession.error("Could not parse promise element", e);
+					continue;
+				}
+				QonfigDocument promiserDoc = new QonfigDocument(promiserDocLocation, promiserDocToolkit);
+				parseDocElement(session, QonfigElement.buildRoot(session, promiserDoc, childType, getDocumentation(child)), child, true,
+					__ -> true);
+			}
 			List<ElementQualifiedParseItem> roles;
 			if (roleAttr == null)
 				roles = Collections.emptyList();
 			else
 				roles = parseRoles(roleAttr, child.getAttributeValuePosition("role"), childSession);
+
 			builder.withChild(roles, childType, cb -> {
 				parseDocElement(childSession, cb, child, true, __ -> true);
 			}, asContent(namePosition, child.getName()), getDocumentation(child));

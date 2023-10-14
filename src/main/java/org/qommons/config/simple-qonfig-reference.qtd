@@ -2,7 +2,7 @@
 
 <qonfig-def name="Qonfig-Simple-reference" version="0.1">
 	<elements>
-		<element-def name="reference" abstract="true">
+		<element-def name="external-reference" abstract="true">
 			<attribute name="ref" type="string" />
 		</element-def>
 		<element-def name="child-placeholder">
