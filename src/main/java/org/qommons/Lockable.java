@@ -1,5 +1,8 @@
 package org.qommons;
 
+import static org.qommons.Lockable.lockAll;
+import static org.qommons.Lockable.tryLockAll;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -309,7 +312,7 @@ public interface Lockable extends ThreadConstrained {
 	 */
 	static Transaction lockAll(Lockable outer, Collection<? extends Lockable> lockables) {
 		return lockAll(outer, //
-			() -> lockables, l -> l);
+			() -> lockables, LambdaUtils.identity());
 	}
 
 	/**
@@ -412,7 +415,7 @@ public interface Lockable extends ThreadConstrained {
 	 * @return A transaction to close to release the locks, or null if the lock could not be obtained.
 	 */
 	static Transaction tryLockAll(Lockable outer, Supplier<? extends Collection<? extends Lockable>> lockables) {
-		return tryLockAll(outer, lockables, l -> l);
+		return tryLockAll(outer, lockables, LambdaUtils.identity());
 	}
 
 	/**
