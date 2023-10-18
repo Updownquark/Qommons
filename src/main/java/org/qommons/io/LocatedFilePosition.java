@@ -5,6 +5,15 @@ public class LocatedFilePosition extends FilePosition {
 	/** A file position with null location and zero position */
 	public static final LocatedFilePosition NULL_ZERO = new LocatedFilePosition(null, FilePosition.START);
 
+	public static LocatedFilePosition of(String location, FilePosition position) {
+		if (position instanceof LocatedFilePosition) {
+			LocatedFilePosition other = (LocatedFilePosition) position;
+			if (other.getFileLocation().equals(location))
+				return other;
+		}
+		return new LocatedFilePosition(location, position);
+	}
+
 	private final String theFileLocation;
 
 	/**

@@ -16,7 +16,7 @@ public interface QonfigParser {
 	 */
 	QonfigParser withToolkit(QonfigToolkit... toolkits);
 
-	QonfigParser withStitcher(ExternalReferenceStitcher stitcher);
+	QonfigParser withPromiseFulfillment(QonfigPromiseFulfillment stitcher);
 
 	/**
 	 * @param location The location of the toolkit to parse
@@ -31,6 +31,8 @@ public interface QonfigParser {
 		throws IOException, TextParseException, QonfigParseException;
 
 	/**
+	 * @param partial Whether to create a partially-validated document structure. These are useful as templates for creating full content
+	 *        later given external content to fill in gaps.
 	 * @param location The location of the document to parse
 	 * @param content The stream content to parse
 	 * @return The parsed document
@@ -38,5 +40,6 @@ public interface QonfigParser {
 	 * @throws TextParseException If the document structure itself cannot be parsed
 	 * @throws QonfigParseException If the document cannot be parsed from the structure
 	 */
-	QonfigDocument parseDocument(String location, InputStream content) throws IOException, TextParseException, QonfigParseException;
+	QonfigDocument parseDocument(boolean partial, String location, InputStream content)
+		throws IOException, TextParseException, QonfigParseException;
 }

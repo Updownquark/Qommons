@@ -47,8 +47,7 @@ public class QonfigApp {
 			throw new IllegalArgumentException("Could not parse toolkit definition XML '" + qonfigAppTKUrl.getPath() + "'", e);
 		} catch (QonfigParseException e) {
 			throw new IllegalStateException("Could not parse app toolkit definition '" + qonfigAppTKUrl.getPath() + "'", e);
-		} finally {
-		}
+		} finally {}
 		return QONFIG_APP_TOOLKIT;
 	}
 
@@ -81,7 +80,7 @@ public class QonfigApp {
 
 		QonfigDocument appDef;
 		try (InputStream appDefIn = appDefUrl.openStream()) {
-			appDef = qonfigParser.parseDocument(appDefUrl.toString(), appDefIn);
+			appDef = qonfigParser.parseDocument(false, appDefUrl.toString(), appDefIn);
 		} catch (IOException e) {
 			throw new IOException("Could not read Qonfig-App definition: " + appDefUrl, e);
 		} catch (XmlParseException e) {
@@ -113,6 +112,9 @@ public class QonfigApp {
 			}
 		}
 
+		List<QonfigPromiseFulfillment> promiseFulfillment = create(
+			appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "promise-fulfillment"), QonfigPromiseFulfillment.class);
+
 		List<SpecialSessionImplementation<?>> sessionTypes = create(
 			appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "special-session"),
 			(Class<SpecialSessionImplementation<?>>) (Class<?>) SpecialSessionImplementation.class);
@@ -120,7 +122,8 @@ public class QonfigApp {
 		List<QonfigInterpretation> interpretations = create(appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "interpretation"),
 			QonfigInterpretation.class);
 
-		return new QonfigApp(appDef, appFile, Collections.unmodifiableSet(toolkits), sessionTypes, interpretations);
+		return new QonfigApp(appDef, appFile, Collections.unmodifiableSet(toolkits), Collections.unmodifiableList(promiseFulfillment),
+			sessionTypes, interpretations);
 	}
 
 	/**
@@ -175,6 +178,7 @@ public class QonfigApp {
 	private final QonfigDocument theDocument;
 	private final String theAppFile;
 	private final Set<QonfigToolkit> theToolkits;
+	private final List<QonfigPromiseFulfillment> thePromiseFulfillment;
 	private final List<SpecialSessionImplementation<?>> theSessionTypes;
 	private final List<QonfigInterpretation> theInterpretations;
 
@@ -184,12 +188,15 @@ public class QonfigApp {
 	 * @param toolkits All toolkits configured to support the application
 	 * @param sessionTypes All Qonfig session types configured to support the application
 	 * @param interpretations All Qonfig interpretations configured to support the application
+	 * @param promiseFulfillment
 	 */
 	protected QonfigApp(QonfigDocument document, String appFile, Set<QonfigToolkit> toolkits,
-		List<SpecialSessionImplementation<?>> sessionTypes, List<QonfigInterpretation> interpretations) {
+		List<QonfigPromiseFulfillment> promiseFulfillment, List<SpecialSessionImplementation<?>> sessionTypes,
+		List<QonfigInterpretation> interpretations) {
 		theDocument = document;
 		theAppFile = appFile;
 		theToolkits = toolkits;
+		thePromiseFulfillment = promiseFulfillment;
 		theSessionTypes = sessionTypes;
 		theInterpretations = interpretations;
 	}
@@ -212,6 +219,10 @@ public class QonfigApp {
 	/** @return All toolkits configured to support the application */
 	public Set<QonfigToolkit> getToolkits() {
 		return theToolkits;
+	}
+
+	public List<QonfigPromiseFulfillment> getPromiseFulfillment() {
+		return thePromiseFulfillment;
 	}
 
 	/** @return All Qonfig session types configured to support the application */
@@ -280,7 +291,7 @@ public class QonfigApp {
 		// Parse the application file
 		QonfigDocument qonfigDoc;
 		try (InputStream appFileIn = appFileURL.openStream()) {
-			qonfigDoc = qonfigParser.parseDocument(appFileURL.toString(), appFileIn);
+			qonfigDoc = qonfigParser.parseDocument(false, appFileURL.toString(), appFileIn);
 		} catch (IOException e) {
 			throw new IOException("Could not read application file " + getAppFile(), e);
 		} catch (XmlParseException e) {

@@ -13,10 +13,10 @@ import org.qommons.io.PositionedContent;
 public class QonfigElementDef extends QonfigElementOrAddOn {
 	private final QonfigValueDef theValue;
 
-	private final QonfigElementOrAddOn thePromise;
+	private final boolean isPromise;
 
 	protected QonfigElementDef(QonfigToolkit declarer, String name, QonfigElementDef superElement, Set<QonfigAddOn> inheritance,
-		boolean isAbstract, QonfigElementOrAddOn promise, //
+		boolean isAbstract, boolean promise, //
 		Map<String, QonfigAttributeDef.Declared> declaredAttributes, Map<QonfigAttributeDef.Declared, ValueDefModifier> attributeModifiers,
 		Map<QonfigAttributeDef.Declared, QonfigAttributeDef> allAttributes, BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
 		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ChildDefModifier> childModifiers,
@@ -27,7 +27,7 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 			attributesByName, allAttributes, declaredChildren, childModifiers, childrenByName, allChildren, value, metaSpec, position,
 			description);
 
-		thePromise = promise;
+		isPromise = promise;
 		if (value == null)
 			theValue = superElement == null ? null : superElement.getValue();
 		else if (superElement == null || superElement.getValue() == null)
@@ -78,8 +78,8 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		return false;
 	}
 
-	public QonfigElementOrAddOn getPromise() {
-		return thePromise;
+	public boolean isPromise() {
+		return isPromise;
 	}
 
 	/**
@@ -94,7 +94,7 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 
 	/** Builds element-defs */
 	public static class Builder extends QonfigElementOrAddOn.Builder {
-		private QonfigElementOrAddOn thePromise;
+		private boolean isPromise;
 
 		Builder(String name, QonfigParseSession session, String description) {
 			super(name, session, description);
@@ -105,22 +105,12 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 			return (QonfigElementDef) super.get();
 		}
 
-		public QonfigElementOrAddOn getPromise() {
-			return thePromise;
+		public boolean getPromise() {
+			return isPromise;
 		}
 
-		public Builder promise(QonfigElementOrAddOn promise, PositionedContent position) {
-			if (thePromise != null) {
-				getSession().at(position).error("Multiple promises declared");
-				return this;
-			}
-			if (getSuperElement() != null && getSuperElement().getPromise() != null) {
-				if (!getSuperElement().getPromise().isAssignableFrom(promise))
-					getSession().at(position).error("Promise " + promise + " is incompatible with the promise ("
-						+ getSuperElement().getPromise() + ") of the super element (" + getSuperElement() + ")");
-				return this;
-			}
-			thePromise = promise;
+		public Builder promise(boolean promise) {
+			isPromise = promise;
 			return this;
 		}
 
@@ -145,7 +135,7 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		@Override
 		protected QonfigElementOrAddOn create() {
 			return new QonfigElementDef(theSession.getToolkit(), getName(), getSuperElement(), getInheritance(), isAbstract(), //
-				(thePromise == null && getSuperElement() != null) ? getSuperElement().getPromise() : thePromise, //
+				isPromise || (getSuperElement() != null && getSuperElement().isPromise()), //
 				getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueDefModifier>) super.getAttributeModifiers(),
 				getCompiledAttributes(), getAttributesByName(), //
 				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildDefModifier>) super.getChildModifiers(), getCompiledChildren(),

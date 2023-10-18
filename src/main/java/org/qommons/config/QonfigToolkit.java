@@ -225,7 +225,7 @@ public class QonfigToolkit implements Named, SelfDescribed {
 	public QonfigToolkit(String name, int majorVersion, int minorVersion, URL location, PositionedContent position, String description,
 		Map<String, QonfigToolkit> dependencies, Map<String, QonfigValueType.Declared> declaredTypes,
 		Map<String, QonfigAddOn> declaredAddOns, Map<String, QonfigElementDef> declaredElements,
-		List<QonfigAutoInheritance> autoInheritance, ToolkitBuilder builder, ExternalReferenceStitcher stitcher)
+		List<QonfigAutoInheritance> autoInheritance, ToolkitBuilder builder)
 		throws QonfigParseException {
 		theName = name;
 		theMajorVersion = majorVersion;
@@ -240,7 +240,7 @@ public class QonfigToolkit implements Named, SelfDescribed {
 		theLocationString = theLocation != null ? theLocation.toString() : name;
 
 		if (builder != null) {
-			QonfigParseSession session = QonfigParseSession.forRoot(this, position, stitcher);
+			QonfigParseSession session = QonfigParseSession.forRoot(false, this, position);
 			builder.parseTypes(session);
 
 			Map<String, QonfigValueType.Declared> compiledTypes = new HashMap<>(theDeclaredAttributeTypes);

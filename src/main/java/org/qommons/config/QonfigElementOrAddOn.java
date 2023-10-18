@@ -495,13 +495,13 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 							.build(theMetaSpec.get().getName() + ADD_ON_METADATA_ELEMENT, theSession, theMetaSpec.getDescription())//
 							.inherits((QonfigAddOn) theMetaSpec.get())//
 							.build();
-					theMetadataBuilder = QonfigElement.buildRoot(theSession, theMetadata, mdType,
+					theMetadataBuilder = QonfigElement.buildRoot(false, theSession, theMetadata, mdType,
 						"Metadata for " + theSession.getToolkit().getName() + "." + theName);
 				}
 				break;
 			case Built:
 				if (theMetaSpec != null)
-					theMetadata.setRoot(theMetadataBuilder.build());
+					theMetadata.setRoot(theMetadataBuilder.buildFull());
 				break;
 			default:
 			}

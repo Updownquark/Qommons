@@ -11,26 +11,29 @@ import org.qommons.io.PositionedContent;
 public class QonfigParseSession extends ErrorReporting.Default {
 	private final QonfigToolkit theToolkit;
 	private final List<Issue> theErrors;
-	private final ExternalReferenceStitcher theStitcher;
+	private final boolean isPartial;
 
-	private QonfigParseSession(LocatedPositionedContent frame, QonfigToolkit toolkit, List<Issue> errors,
-		ExternalReferenceStitcher stitcher) {
+	private QonfigParseSession(boolean partial, LocatedPositionedContent frame, QonfigToolkit toolkit, List<Issue> errors) {
 		super(frame);
 		theToolkit = toolkit;
 		theErrors = errors;
-		theStitcher = stitcher;
+		isPartial = partial;
 	}
 
-	private QonfigParseSession(QonfigParseSession parent, LocatedPositionedContent frame, ExternalReferenceStitcher stitcher) {
+	private QonfigParseSession(QonfigParseSession parent, LocatedPositionedContent frame) {
 		super(parent, frame);
 		theToolkit = parent.theToolkit;
 		theErrors = parent.theErrors;
-		theStitcher = stitcher;
+		isPartial = parent.isPartial;
 	}
 
 	/** @return The toolkit that is being parsed, or for which a document is being parsed */
 	public QonfigToolkit getToolkit() {
 		return theToolkit;
+	}
+
+	public boolean isPartial() {
+		return isPartial;
 	}
 
 	@Override
@@ -40,7 +43,7 @@ public class QonfigParseSession extends ErrorReporting.Default {
 
 	@Override
 	public QonfigParseSession at(LocatedPositionedContent position) {
-		return new QonfigParseSession(this, position, theStitcher);
+		return new QonfigParseSession(this, position);
 	}
 
 	@Override
@@ -52,7 +55,6 @@ public class QonfigParseSession extends ErrorReporting.Default {
 		return this;
 	}
 
-
 	/** @return All errors logged against this session or any of its {@link #at(PositionedContent) children} */
 	public List<Issue> getErrors() {
 		return theErrors;
@@ -61,7 +63,8 @@ public class QonfigParseSession extends ErrorReporting.Default {
 	/**
 	 * @param message The root message for the exception, if any is thrown
 	 * @return This session
-	 * @throws QonfigParseException If any errors have been logged against this session or any of its {@link #at(PositionedContent) children}
+	 * @throws QonfigParseException If any errors have been logged against this session or any of its {@link #at(PositionedContent)
+	 *         children}
 	 */
 	public QonfigParseSession throwErrors(String message) throws QonfigParseException {
 		if (theErrors.isEmpty())
@@ -87,12 +90,11 @@ public class QonfigParseSession extends ErrorReporting.Default {
 	 * 
 	 * @param toolkit The toolkit for the session
 	 * @param position The file position of the root element
-	 * @param stitcher The stitcher to use to stitch in externally-referenced elements
 	 * @return The new parse session
 	 */
-	public static QonfigParseSession forRoot(QonfigToolkit toolkit, PositionedContent position, ExternalReferenceStitcher stitcher) {
-		return new QonfigParseSession(
+	public static QonfigParseSession forRoot(boolean partial, QonfigToolkit toolkit, PositionedContent position) {
+		return new QonfigParseSession(partial,
 			LocatedPositionedContent.of(toolkit.getLocation() == null ? toolkit.getName() : toolkit.getLocation().toString(), position),
-			toolkit, new ArrayList<>(), stitcher);
+			toolkit, new ArrayList<>());
 	}
 }

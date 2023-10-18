@@ -181,7 +181,7 @@ public interface QonfigValueType extends Named, FileSourced {
 
 		@Override
 		public Object parse(String value, QonfigToolkit tk, ErrorReporting session) {
-			QonfigParseSession testEnv = QonfigParseSession.forRoot(tk, thePosition, ExternalReferenceStitcher.ERROR);
+			QonfigParseSession testEnv = QonfigParseSession.forRoot(false, tk, thePosition);
 			QonfigValueType best = null;
 			for (QonfigValueType component : theComponents) {
 				testEnv.getErrors().clear();

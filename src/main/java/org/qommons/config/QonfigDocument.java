@@ -4,14 +4,14 @@ package org.qommons.config;
 public class QonfigDocument {
 	private final String theLocation;
 	private final QonfigToolkit theToolkit;
-	private QonfigElement theRoot;
+	private PartialQonfigElement theRoot;
 
 	QonfigDocument(String location, QonfigToolkit toolkit) {
 		theLocation = location;
 		theToolkit = toolkit;
 	}
 
-	void setRoot(QonfigElement root) {
+	void setRoot(PartialQonfigElement root) {
 		theRoot = root;
 	}
 
@@ -27,6 +27,12 @@ public class QonfigDocument {
 
 	/** @return The content of the document */
 	public QonfigElement getRoot() {
+		if (!(theRoot instanceof QonfigElement))
+			throw new IllegalStateException("This document is partial");
+		return (QonfigElement) theRoot;
+	}
+
+	public PartialQonfigElement getPartialRoot() {
 		return theRoot;
 	}
 }

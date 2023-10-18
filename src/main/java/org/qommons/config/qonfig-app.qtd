@@ -5,6 +5,7 @@
 		<element-def name="qonfig-app">
 			<attribute name="app-file" type="string" specify="required" />
 			<child-def name="toolkit" type="toolkit" max="inf" />
+			<child-def name="promise-fulfillment" type="promise-fulfillment" min="0" max="inf" />
 			<child-def name="special-session" type="special-session" min="0" max="inf" />
 			<child-def name="interpretation" type="interpretation" max="inf" />
 		</element-def>
@@ -16,6 +17,7 @@
 			<value type="string" specify="required" />
 		</element-def>
 		<element-def name="value-type" extends="simple-configuration" />
+		<element-def name="promise-fulfillment" extends="simple-configuration" />
 		<element-def name="special-session" extends="simple-configuration" />
 		<element-def name="interpretation" extends="simple-configuration" />
 	</elements>

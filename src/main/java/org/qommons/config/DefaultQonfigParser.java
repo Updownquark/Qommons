@@ -16,11 +16,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
+import org.qommons.MultiInheritanceMap;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterHashSet;
 import org.qommons.collect.BetterSet;
@@ -40,7 +42,7 @@ import org.w3c.dom.Text;
 
 /** Default {@link QonfigParser} implementation */
 public class DefaultQonfigParser implements QonfigParser {
-	/** The name of the attribute to use todirectly specify inheritance in Qonfig documents */
+	/** The name of the attribute to use to directly specify inheritance in Qonfig documents */
 	public static final String DOC_ELEMENT_INHERITANCE_ATTR = "with-extension";
 	/** Names that cannot be used for Qonfig attributes */
 	public static final Set<String> RESERVED_ATTR_NAMES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(//
@@ -48,12 +50,12 @@ public class DefaultQonfigParser implements QonfigParser {
 	)));
 
 	private final Map<QonfigToolkit.ToolkitDef, QonfigToolkit> theToolkits;
-	private ExternalReferenceStitcher theStitcher;
+	private final MultiInheritanceMap<QonfigElementOrAddOn, QonfigPromiseFulfillment> theStitchers;
 
 	/** Creates the parser */
 	public DefaultQonfigParser() {
 		theToolkits = new HashMap<>();
-		theStitcher = ExternalReferenceStitcher.ERROR;
+		theStitchers = MultiInheritanceMap.create(QonfigElementOrAddOn::isAssignableFrom);
 	}
 
 	/**
@@ -85,8 +87,16 @@ public class DefaultQonfigParser implements QonfigParser {
 	}
 
 	@Override
-	public DefaultQonfigParser withStitcher(ExternalReferenceStitcher stitcher) {
-		theStitcher = stitcher;
+	public DefaultQonfigParser withPromiseFulfillment(QonfigPromiseFulfillment stitcher) {
+		QonfigToolkit.ToolkitDef targetTK = stitcher.getToolkit();
+		QonfigToolkit toolkit = theToolkits.get(targetTK);
+		if (toolkit == null)
+			throw new IllegalArgumentException("No such toolkit installed: " + targetTK);
+		QonfigElementOrAddOn qonfigType = toolkit.getElementOrAddOn(stitcher.getQonfigType());
+		if (qonfigType == null)
+			throw new IllegalArgumentException("No such qonfig type found: " + targetTK + "." + stitcher.getQonfigType());
+		stitcher.setQonfigType(qonfigType);
+		theStitchers.put(qonfigType, stitcher);
 		return this;
 	}
 
@@ -97,7 +107,8 @@ public class DefaultQonfigParser implements QonfigParser {
 	}
 
 	@Override
-	public QonfigDocument parseDocument(String location, InputStream content) throws IOException, XmlParseException, QonfigParseException {
+	public QonfigDocument parseDocument(boolean partial, String location, InputStream content)
+		throws IOException, XmlParseException, QonfigParseException {
 		Element root = new SimpleXMLParser().parseDocument(content).getDocumentElement();
 		content.close();
 		QonfigParseSession session;
@@ -165,22 +176,21 @@ public class DefaultQonfigParser implements QonfigParser {
 				Collections.unmodifiableMap(uses), Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(),
 				Collections.emptyList(), new QonfigToolkit.ToolkitBuilder() {
 					@Override
-					public void parseTypes(QonfigParseSession s) {
-					}
+					public void parseTypes(QonfigParseSession s) {}
 
 					@Override
-					public void fillOutTypes(QonfigParseSession s) {
-					}
+					public void fillOutTypes(QonfigParseSession s) {}
 
 					@Override
 					public Set<QonfigElementDef> getDeclaredRoots(QonfigParseSession s) {
 						return Collections.singleton(rootDef);
 					}
-				}, theStitcher);
-			session = QonfigParseSession.forRoot(docToolkit, position, theStitcher);
+				});
+			session = QonfigParseSession.forRoot(partial, docToolkit, position);
+
 			doc = new QonfigDocument(location, docToolkit);
-			parseDocElement(session, QonfigElement.buildRoot(session, doc, rootDef, getDocumentation(rootReader)), rootReader, true,
-				el -> true);
+			parseDocElement(partial, session, QonfigElement.buildRoot(partial, session, doc, rootDef, getDocumentation(rootReader)),
+				rootReader, true, true, el -> true);
 		}
 		session.throwErrors(location);
 		return doc;
@@ -190,8 +200,8 @@ public class DefaultQonfigParser implements QonfigParser {
 	private static final Pattern USES = Pattern.compile(USES_PREFIX.replace(":", "\\:") + ".*");
 	private static final Pattern TOOLKIT_REF = Pattern.compile("(?<name>[^\\s]+)\\s*v?(?<major>\\d+)\\.(?<minor>\\d+)");
 
-	QonfigElement parseDocElement(QonfigParseSession session, QonfigElement.Builder builder, StrictXmlReader el, boolean withAttrs,
-		Predicate<StrictXmlReader> childApplies) {
+	PartialQonfigElement parseDocElement(boolean partial, QonfigParseSession session, QonfigElement.Builder builder, StrictXmlReader el,
+		boolean withAttrs, boolean withInheritance, Predicate<StrictXmlReader> childApplies) {
 		if (el.getParent() != null) {
 			for (Map.Entry<String, String> uses : el.findAttributes(USES).entrySet())
 				session.error("xmlns attributes may only be used at the root: '" + uses.getKey() + "'", null);
@@ -200,20 +210,8 @@ public class DefaultQonfigParser implements QonfigParser {
 			for (Map.Entry<String, String> attr : el.getAllAttributes().entrySet()) {
 				if (USES.matcher(attr.getKey()).matches()) {//
 				} else if (DOC_ELEMENT_INHERITANCE_ATTR.equals(attr.getKey())) {
-					splitAttribute(attr.getValue(), el.getAttributeValuePosition(attr.getKey()), session, (inhName, inhPos) -> {
-						QonfigAddOn addOn;
-						try {
-							addOn = session.getToolkit().getAddOn(inhName);
-							if (addOn == null) {
-								session.at(inhPos).error("No such add-on " + inhName);
-								return;
-							}
-						} catch (IllegalArgumentException e) {
-							session.at(inhPos).error(e.getMessage());
-							return;
-						}
-						builder.inherits(addOn);
-					});
+					if (withInheritance)
+						parseInheritance(attr.getValue(), el.getAttributeValuePosition(attr.getKey()), session, builder::inherits);
 				} else if ("role".equals(attr.getKey())) {//
 				} else {
 					ElementQualifiedParseItem qAttr = ElementQualifiedParseItem.parse(attr.getKey(), session,
@@ -260,46 +258,60 @@ public class DefaultQonfigParser implements QonfigParser {
 				childSession.error("No such element-def found: " + child.getName());
 				continue;
 			}
-			if (childType.getPromise() != null) {
-				String promiserDocLocation = session.getToolkit().getLocationString() + "@" + namePosition;
-				QonfigToolkit promiserDocToolkit;
-				try {
-					promiserDocToolkit = new QonfigToolkit(promiserDocLocation, 1, 0, null,
-						SimpleXMLParser.getPositionContent(child.getElement()), getDocumentation(child),
-						session.getToolkit().getDependencies(), Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(),
-						Collections.emptyList(), new QonfigToolkit.ToolkitBuilder() {
-							@Override
-							public void parseTypes(QonfigParseSession s) {
-							}
-
-							@Override
-							public void fillOutTypes(QonfigParseSession s) {
-							}
-
-							@Override
-							public Set<QonfigElementDef> getDeclaredRoots(QonfigParseSession s) {
-								return Collections.singleton(childType);
-							}
-						}, theStitcher);
-				} catch (QonfigParseException e) {
-					childSession.error("Could not parse promise element", e);
-					continue;
-				}
-				QonfigDocument promiserDoc = new QonfigDocument(promiserDocLocation, promiserDocToolkit);
-				parseDocElement(session, QonfigElement.buildRoot(session, promiserDoc, childType, getDocumentation(child)), child, true,
-					__ -> true);
-			}
 			List<ElementQualifiedParseItem> roles;
 			if (roleAttr == null)
 				roles = Collections.emptyList();
 			else
 				roles = parseRoles(roleAttr, child.getAttributeValuePosition("role"), childSession);
 
-			builder.withChild(roles, childType, cb -> {
-				parseDocElement(childSession, cb, child, true, __ -> true);
-			}, asContent(namePosition, child.getName()), getDocumentation(child));
+			String descrip=getDocumentation(child);
+			if(childType.isPromise()) {
+				QonfigPromiseFulfillment stitcher = theStitchers.getAny(childType);
+				if (stitcher == null) {
+					childSession.error("No promise fulfillment provided for type '" + childType + "'");
+					continue;
+				}
+				PartialQonfigElement promise = parseDocElement(partial, childSession,
+					QonfigElement.buildRoot(partial, childSession, builder.getDocument(), childType, descrip), child, true, false,
+					__ -> true);
+				String inhStr = child.getAttributeIfExists(DOC_ELEMENT_INHERITANCE_ATTR);
+				Set<QonfigAddOn> inh;
+				if (inhStr == null)
+					inh = Collections.emptySet();
+				else {
+					inh = new LinkedHashSet<>();
+					parseInheritance(inhStr, child.getAttributeValuePosition(DOC_ELEMENT_INHERITANCE_ATTR), childSession, inh::add);
+				}
+
+				try {
+					stitcher.fulfillPromise(promise, builder, roles, inh, this, childSession);
+				} catch (IOException | QonfigParseException e) {
+					childSession.error("Unable to fulfill promise", e);
+				}
+			} else {
+				builder.withChild(roles, childType, cb -> {
+					parseDocElement(partial, childSession, cb, child, true, true, __ -> true);
+				}, asContent(namePosition, child.getName()), descrip);
+			}
 		}
 		return builder.build();
+	}
+
+	private static void parseInheritance(String inh, PositionedContent content, QonfigParseSession session, Consumer<QonfigAddOn> addOn) {
+		splitAttribute(inh, content, session, (inhName, inhPos) -> {
+			QonfigAddOn ao;
+			try {
+				ao = session.getToolkit().getAddOn(inhName);
+				if (ao == null) {
+					session.at(inhPos).error("No such add-on " + inhName);
+					return;
+				}
+			} catch (IllegalArgumentException e) {
+				session.at(inhPos).error(e.getMessage());
+				return;
+			}
+			addOn.accept(ao);
+		});
 	}
 
 	private static void splitAttribute(String attributeValue, PositionedContent position, QonfigParseSession session,
@@ -378,8 +390,7 @@ public class DefaultQonfigParser implements QonfigParser {
 		int lastNonWS = -1;
 		for (int i = 0; i < doc.length(); i++) {
 			char ch = doc.charAt(i);
-			if (Character.isWhitespace(ch)) {
-			} else {
+			if (Character.isWhitespace(ch)) {} else {
 				if (i - lastNonWS > 1) {
 					if (str == null)
 						str = new StringBuilder().append(doc, 0, lastNonWS + 1);
@@ -490,7 +501,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			toolkit = new QonfigToolkit(name, major, minor, location, rootNameContent, getDocumentation(rootReader),
 				Collections.unmodifiableMap(dependencies), Collections.unmodifiableMap(parser.getDeclaredTypes()),
 				Collections.unmodifiableMap(parser.getDeclaredAddOns()), Collections.unmodifiableMap(parser.getDeclaredElements()),
-				Collections.unmodifiableList(parser.getDeclaredAutoInheritance()), parser, theStitcher);
+				Collections.unmodifiableList(parser.getDeclaredAutoInheritance()), parser);
 		}
 		// TODO Verify
 		theToolkits.put(def, toolkit);
@@ -1009,39 +1020,12 @@ public class DefaultQonfigParser implements QonfigParser {
 				}
 				if (!addOn) {
 					String promiseS = element.getAttributeIfExists("promise");
-					PositionedContent promisePos = element.getAttributeValuePosition("promise");
-					if (promiseS != null) {
-						int colon = promiseS.indexOf(':');
-						QonfigElementOrAddOn promise = null;
-						if (colon >= 0) {
-							try {
-								promise = session.getToolkit().getElementOrAddOn(promiseS);
-								if (promise == null)
-									session.at(promisePos).error("No such element or add-on found: " + promiseS);
-							} catch (IllegalArgumentException e) {
-								session.at(promisePos).error("For promise " + promiseS + ": " + e.getMessage());
-							}
-						} else {
-							QonfigElementOrAddOn.Builder extBuilder = theBuilders.get(promiseS);
-							if (extBuilder == null) {
-								promise = session.getToolkit().getElementOrAddOn(promiseS);
-								if (promise == null)
-									session.at(promisePos).error("No such element or add-on found: " + promiseS);
-							} else if (!(extBuilder instanceof QonfigAddOn.Builder)) {
-								session.at(promisePos).error(inheritsS + " must refer to add-ons");
-							} else {
-								// TODO This throws an error in the case of an element-def specifying as inheritance
-								// an add-on that requires it
-								promise = parseExtensions(theNodes.get(promiseS), path, elsSession, addOnsSession, completed);
-								if (promise == null) {
-									session.at(promisePos).error("Circular reference detected: " + path);
-									return null;
-								}
-							}
-						}
-						if (promise != null)
-							((QonfigElementDef.Builder) builder).promise(promise, promisePos);
-					}
+					if (promiseS == null) {//
+					} else if (promiseS.equals("false")) { // OK, but why even bother
+					} else if (!promiseS.equals("true"))
+						session.error("Unrecognized 'promise': expected 'true' or 'false', not '" + promiseS + "'");
+					else
+						((QonfigElementDef.Builder) builder).promise(true);
 				}
 				return builder.get();
 			} finally {
@@ -1652,7 +1636,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				throw QonfigParseException.createSimple(new LocatedFilePosition(fileLocation, root.getNamePosition()), e.getMessage(), e);
 			}
 			builder.withMetaData(md -> {
-				parseDocElement(session, md, element, false, child -> !TOOLKIT_EL_NAMES.contains(child.getName()));
+				parseDocElement(false, session, md, element, false, true, child -> !TOOLKIT_EL_NAMES.contains(child.getName()));
 			});
 		}
 
