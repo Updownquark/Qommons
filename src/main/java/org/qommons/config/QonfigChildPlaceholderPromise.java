@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Matcher;
 
 import org.qommons.io.ErrorReporting;
 
@@ -49,20 +48,20 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 		}
 		QonfigChildDef role;
 		try {
-			Matcher roleMatcher = promise.getAttribute(theRefRole, Matcher.class);
-			String elementName = roleMatcher.group("element");
+			PatternMatch roleMatcher = promise.getAttribute(theRefRole, PatternMatch.class);
+			String elementName = roleMatcher.getGroup("name");
 			if (elementName != null) {
-				String ns = roleMatcher.group("ns");
+				String ns = roleMatcher.getGroup("ns");
 				if (ns != null)
 					elementName = ns + ":" + elementName;
-				role = promise.getDocument().getDocToolkit().getChild(elementName, roleMatcher.group("role"));
+				role = promise.getDocument().getDocToolkit().getChild(elementName, roleMatcher.getGroup("role"));
 				if (role != null && !role.getOwner().isAssignableFrom(refType))
-					session.at(promise.getAttributes().get(theRefRole).position).error("Role '" + roleMatcher.group()
+					session.at(promise.getAttributes().get(theRefRole).position).error("Role '" + roleMatcher.getWholeText()
 						+ "' does not apply to " + QonfigExternalRefPromise.EXT_REFERENCE_TYPE + " extension " + refType);
 			} else
-				role = refType.getChild(roleMatcher.group("role"));
+				role = refType.getChild(roleMatcher.getGroup("role"));
 			if (role == null)
-				session.at(promise.getAttributes().get(theRefRole).position).error("No such role found: " + roleMatcher.group());
+				session.at(promise.getAttributes().get(theRefRole).position).error("No such role found: " + roleMatcher.getWholeText());
 		} catch (IllegalArgumentException e) {
 			session.at(promise.getAttributes().get(theRefRole).position).error(e.getMessage(), e);
 			return;
@@ -79,10 +78,14 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 		QonfigChildDef role) {
 		// Go look through the ancestors to see if we can fulfill this promise right now
 		PartialQonfigElement extRefPromise = null;
-		for (PartialQonfigElement p = parent.getParent(); p != null; p = p.getParent()) {
-			if (p.getExternalContent() == promise.getDocument()) {
-				extRefPromise = p.getPromise();
-				break;
+		if (parent.getExternalContent() == promise.getDocument())
+			extRefPromise = parent.getPromise();
+		else {
+			for (PartialQonfigElement p = parent.getParent(); p != null; p = p.getParent()) {
+				if (p.getExternalContent() == promise.getDocument()) {
+					extRefPromise = p.getPromise();
+					break;
+				}
 			}
 		}
 		if (extRefPromise == null) {
@@ -93,12 +96,10 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 	}
 
 	protected void fulfillChildren(QonfigElement.Builder parent, VariableQonfigElement childRef, QonfigChildDef role,
-		PartialQonfigElement promise,
-		PartialQonfigElement extRefPromise, ErrorReporting reporting) {
+		PartialQonfigElement promise, PartialQonfigElement extRefPromise, ErrorReporting reporting) {
 		Set<QonfigChildDef> roles = new LinkedHashSet<>();
 		for (PartialQonfigElement extChild : extRefPromise.getChildrenByRole().get(role.getDeclared())) {
 			roles.addAll(childRef.getParentRoles());
-			roles.addAll(extChild.getParentRoles());
 			parent.withChild2(roles, extChild.getType(), child -> {
 				child.fulfills(promise, null);
 				for (QonfigAddOn inh : childRef.getInheritance().values())

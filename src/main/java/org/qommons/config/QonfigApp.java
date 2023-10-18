@@ -288,6 +288,9 @@ public class QonfigApp {
 		for (QonfigToolkit dep : getToolkits())
 			qonfigParser.withToolkit(dep);
 
+		for (QonfigPromiseFulfillment promise : thePromiseFulfillment)
+			qonfigParser.withPromiseFulfillment(promise);
+
 		// Parse the application file
 		QonfigDocument qonfigDoc;
 		try (InputStream appFileIn = appFileURL.openStream()) {

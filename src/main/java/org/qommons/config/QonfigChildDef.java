@@ -377,7 +377,10 @@ public interface QonfigChildDef extends QonfigElementOwned {
 
 		@Override
 		public Set<Declared> getFulfillment() {
-			return theInherited.getFulfillment();
+			if (theInherited instanceof Declared)
+				return Collections.singleton((Declared) theInherited);
+			else
+				return theInherited.getFulfillment();
 		}
 
 		@Override

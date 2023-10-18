@@ -1,6 +1,8 @@
 package org.qommons.config;
 
+import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -57,8 +59,29 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>> extends SessionValues
 	 * @param focusTypeName The name of the element/add-on type to interpret the element as (the new {@link #getFocusType()} focus type)
 	 * @return A session based off this session but being interpreted as the given element
 	 */
+	default QIS asElement(String toolkit, String focusTypeName) {
+		if (toolkit == null)
+			return asElement((QonfigToolkit) null, focusTypeName);
+		QonfigToolkit.ToolkitDef toolkitDef;
+		try {
+			toolkitDef = QonfigToolkit.ToolkitDef.parse(toolkit);
+		} catch (ParseException e) {
+			throw new IllegalArgumentException("Bad toolkit reference: " + toolkit, e);
+		}
+		QonfigToolkit found = getElement().getDocument().getDocToolkit().getDependenciesByDefinition()//
+			.getOrDefault(toolkitDef.name, Collections.emptyNavigableMap())//
+			.get(toolkitDef);
+		if (found == null)
+			throw new IllegalArgumentException("No such toolkit found in document dependencies: " + toolkit);
+		return asElement(found, focusTypeName);
+	}
+
+	/**
+	 * @param focusTypeName The name of the element/add-on type to interpret the element as (the new {@link #getFocusType()} focus type)
+	 * @return A session based off this session but being interpreted as the given element
+	 */
 	default QIS asElement(String focusTypeName) {
-		return asElement(null, focusTypeName);
+		return asElement((QonfigToolkit) null, focusTypeName);
 	}
 
 	/**

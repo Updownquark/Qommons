@@ -46,6 +46,11 @@ public class PatternMatch {
 		return theNamedGroups;
 	}
 
+	public String getGroup(String name) {
+		QommonsUtils.NamedGroupCapture capture = theNamedGroups.get(name);
+		return capture == null ? null : capture.value;
+	}
+
 	@Override
 	public int hashCode() {
 		return Objects.hash(theWholeText, theGroups, theNamedGroups);

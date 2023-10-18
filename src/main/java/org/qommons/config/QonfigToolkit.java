@@ -6,7 +6,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -92,12 +91,6 @@ public class QonfigToolkit implements Named, SelfDescribed {
 		 * @throws QonfigParseException If an unrecoverable error occurs fleshing outthe types
 		 */
 		void fillOutTypes(QonfigParseSession session) throws QonfigParseException;
-
-		/**
-		 * @param session The parsing session for error reporting, etc.
-		 * @return The roots for the toolkit
-		 */
-		Set<QonfigElementDef> getDeclaredRoots(QonfigParseSession session);
 	}
 
 	/** A structure that contains the definition of a toolkit */
@@ -204,8 +197,6 @@ public class QonfigToolkit implements Named, SelfDescribed {
 	private final MultiInheritanceMap<QonfigElementOrAddOn, MultiInheritanceSet<QonfigAddOn>> theTypeAutoInheritance;
 	private final MultiInheritanceMap<QonfigChildDef, MultiInheritanceSet<QonfigAddOn>> theRoleAutoInheritance;
 	private final MultiInheritanceMap<QonfigElementOrAddOn, MultiInheritanceMap<QonfigChildDef, MultiInheritanceSet<QonfigAddOn>>> theTypeAndRoleAutoInheritance;
-	private final Set<QonfigElementDef> theDeclaredRoots;
-	private final Set<QonfigElementDef> theRoots;
 
 	/**
 	 * @param name The name of the toolkit
@@ -254,7 +245,6 @@ public class QonfigToolkit implements Named, SelfDescribed {
 				compiledAddOns.add(el.getName(), el);
 			for (QonfigElementDef el : theDeclaredElements.values())
 				compiledElements.add(el.getName(), el);
-			Set<QonfigElementDef> depRoots = new LinkedHashSet<>();
 			for (QonfigToolkit dep : dependencies.values()) {
 				dependenciesByDef.computeIfAbsent(dep.getName(), __ -> new TreeMap<>())
 					.putIfAbsent(new ToolkitDefVersion(dep.getMajorVersion(), dep.getMinorVersion()), dep);
@@ -265,7 +255,6 @@ public class QonfigToolkit implements Named, SelfDescribed {
 						dbdv.putIfAbsent(v.getKey(), v.getValue());
 				}
 
-				depRoots.addAll(dep.getRoots());
 				for (QonfigElementDef e : dep.theCompiledElements.values())
 					compiledElements.add(e.getName(), e);
 				for (QonfigAddOn e : dep.theCompiledAddOns.values())
@@ -290,11 +279,7 @@ public class QonfigToolkit implements Named, SelfDescribed {
 			theCompiledAttributeTypes = Collections.unmodifiableMap(compiledTypes);
 
 			builder.fillOutTypes(session);
-			theDeclaredRoots = builder.getDeclaredRoots(session);
-			Set<QonfigElementDef> allRoots = new LinkedHashSet<>();
-			allRoots.addAll(theDeclaredRoots);
-			allRoots.addAll(depRoots);
-			theRoots = Collections.unmodifiableSet(allRoots);
+
 			session.throwErrors(location == null ? "Document" : location.toString());
 
 			theTypeAutoInheritance = MultiInheritanceMap.create(QonfigElementOrAddOn::isAssignableFrom);
@@ -374,8 +359,6 @@ public class QonfigToolkit implements Named, SelfDescribed {
 			theCompiledElements = null;
 			theCompiledAddOns = null;
 			theCompiledAttributeTypes = null;
-			theDeclaredRoots = null;
-			theRoots = null;
 			theTypeAutoInheritance = null;
 			theRoleAutoInheritance = null;
 			theTypeAndRoleAutoInheritance = null;
@@ -624,7 +607,7 @@ public class QonfigToolkit implements Named, SelfDescribed {
 	 * @param roles The child roles that the element fulfills
 	 * @return The additional add-ons that the element should inherit from automatic inheritance
 	 */
-	public MultiInheritanceSet<QonfigAddOn> getAutoInheritance(QonfigElementOrAddOn target, Set<QonfigChildDef> roles) {
+	public MultiInheritanceSet<QonfigAddOn> getAutoInheritance(QonfigElementOrAddOn target, MultiInheritanceSet<QonfigChildDef> roles) {
 		MultiInheritanceSet<QonfigAddOn> inheritance = null;
 		if (theTypeAutoInheritance == null) {
 			// Normal, happens during building. Means we have to do this the slow way.
@@ -647,7 +630,7 @@ public class QonfigToolkit implements Named, SelfDescribed {
 					inheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
 				inheritance.addAll(autoInherit.values());
 			}
-			for (QonfigChildDef role : roles) {
+			for (QonfigChildDef role : roles.values()) {
 				for (MultiInheritanceSet<QonfigAddOn> autoInherit : theRoleAutoInheritance.getAll(role)) {
 					if (inheritance == null)
 						inheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
@@ -664,16 +647,6 @@ public class QonfigToolkit implements Named, SelfDescribed {
 			}
 		}
 		return inheritance == null ? MultiInheritanceSet.empty() : inheritance;
-	}
-
-	/** @return The available root elements declared for documents of this toolkit */
-	public Set<QonfigElementDef> getDeclaredRoots() {
-		return theDeclaredRoots;
-	}
-
-	/** @return The root elements usable for documents of this toolkit */
-	public Set<QonfigElementDef> getRoots() {
-		return theRoots;
 	}
 
 	private volatile QonfigElementOrAddOn theCachedElement;

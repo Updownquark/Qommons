@@ -211,9 +211,9 @@ public class QonfigInterpreterCore {
 			// It should also be aware of all auto-inherited add-ons for toolkits and roles that this session recognizes.
 
 			MultiInheritanceSet<QonfigElementOrAddOn> types = MultiInheritanceSet.create(QonfigElementOrAddOn::isAssignableFrom);
-			Set<QonfigChildDef> roles = new LinkedHashSet<>();
+			Set<QonfigChildDef.Declared> roles = new LinkedHashSet<>();
 			// Add inheritance from recognized roles
-			for (QonfigChildDef role : child.getParentRoles()) {
+			for (QonfigChildDef.Declared role : child.getDeclaredRoles()) {
 				if (role.getOwner().isAssignableFrom(theFocusType) || theTypes.contains(role.getOwner())) {
 					roles.add(role);
 					if (role.getType() != null)
@@ -228,10 +228,12 @@ public class QonfigInterpreterCore {
 			toolkits.add(theFocusType.getDeclarer());
 			for (QonfigElementOrAddOn type : theTypes.values())
 				toolkits.add(type.getDeclarer());
-			// The constructor here does the work and we don't have any further add-ons to add, no need to keep the compiler reference
 			QonfigAutoInheritance.Compiler autoInheritance = new QonfigAutoInheritance.Compiler(toolkits.values());
-			for (QonfigChildDef role : roles)
-				autoInheritance.add(role, types::add);
+			autoInheritance.addParentType(theElement.getType(), types::add);
+			for (QonfigAddOn inh : theElement.getInheritance().values())
+				autoInheritance.addParentType(inh, types::add);
+			for (QonfigChildDef.Declared role : roles)
+				autoInheritance.addRole(role, types::add);
 
 			return theInterpreter.interpret(this, child, asType, MultiInheritanceSet.unmodifiable(types), //
 				theElement.getChildren().indexOf(child));

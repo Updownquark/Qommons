@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<qonfig-def name="Qonfig-App" version="0.1" root="qonfig-app">
+<qonfig-def name="Qonfig-App" version="0.1">
 	<elements>
 		<element-def name="qonfig-app">
 			<attribute name="app-file" type="string" specify="required" />

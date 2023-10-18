@@ -1070,7 +1070,6 @@ public class QommonsUtils {
 				PATTERN_NAMED_GROUPS_GETTER = getter;
 			} else
 				return bestSecondAttemptCaptureGroupNames(pattern);
-			return Collections.emptyMap();
 		}
 		try {
 			return (Map<String, Integer>) PATTERN_NAMED_GROUPS_GETTER.invoke(pattern);

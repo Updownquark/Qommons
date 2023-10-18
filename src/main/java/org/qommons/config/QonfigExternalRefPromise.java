@@ -10,7 +10,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
 
 import org.qommons.config.QonfigElement.QonfigValue;
 import org.qommons.io.ErrorReporting;
@@ -19,7 +18,7 @@ import org.qommons.io.PositionedContent;
 import org.qommons.io.TextParseException;
 
 public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
-	public static final QonfigToolkit.ToolkitDef REFERENCE_TOOLKIT = new QonfigToolkit.ToolkitDef("QonfigReference", 0, 1);
+	public static final QonfigToolkit.ToolkitDef REFERENCE_TOOLKIT = new QonfigToolkit.ToolkitDef("Qonfig-Reference", 0, 1);
 	public static final String EXT_REFERENCE_TYPE = "external-reference";
 	public static final String EXT_CONTENT_TYPE = "external-content";
 
@@ -60,7 +59,7 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 		QonfigValue refValue = promise.getAttributes().get(theReferenceAttribute);
 		String ref = refValue.text;
 		try {
-			ref = QommonsConfig.resolve(ref, promise.getDocument().getLocation());
+			ref = QommonsConfig.resolve(ref, refValue.fileLocation);
 		} catch (IOException e) {
 			session.error(e.getMessage(), e);
 			return;
@@ -86,7 +85,7 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 		if (!content.check(session))
 			return;
 		// Validate content is for the right external type
-		if (!content.getReferenceType().isAssignableFrom(theExtContentType)) {
+		if (!content.getReferenceType().isAssignableFrom(promise.getType())) {
 			session.at(refValue.position)
 				.error("External content at '" + refValue.text + "' fulfills " + content.getReferenceType() + ", not " + promise.getType());
 			return;
@@ -107,8 +106,8 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 			return new QonfigExternalContent(e.getMessage(), null, e);
 		}
 		QonfigValue fulfills = doc.getPartialRoot().getAttributes().get(theFulfillsAttribute);
-		String ns = ((Matcher) fulfills.value).group("ns");
-		String element = ((Matcher) fulfills.value).group("element");
+		String ns = ((PatternMatch) fulfills.value).getGroup("ns");
+		String element = ((PatternMatch) fulfills.value).getGroup("name");
 		QonfigToolkit declarer;
 		if (ns != null) {
 			QonfigToolkit.ToolkitDef nsDef;

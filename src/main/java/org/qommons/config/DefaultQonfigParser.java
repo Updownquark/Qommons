@@ -145,9 +145,6 @@ public class DefaultQonfigParser implements QonfigParser {
 				if (rootDef == null)
 					throw new IllegalArgumentException("No such element '" + rootReader.getTagName() + "' found in toolkit "
 						+ rootReader.getPrefix() + " (" + primary + ")");
-				else if (!primary.getRoots().contains(rootDef))
-					throw new IllegalArgumentException(
-						rootReader.getName() + " is not a root of toolkit " + rootReader.getPrefix() + " (" + primary + ")");
 			} else {
 				QonfigElementDef rootDef2 = null;
 				for (QonfigToolkit tk : uses.values()) {
@@ -161,14 +158,6 @@ public class DefaultQonfigParser implements QonfigParser {
 				}
 				if (rootDef2 == null)
 					throw new IllegalArgumentException("No such element-def: '" + rootReader.getName() + "'");
-				boolean isRoot = false;
-				for (QonfigToolkit tk : uses.values()) {
-					isRoot = tk.getRoots().contains(rootDef2);
-					if (isRoot)
-						break;
-				}
-				if (!isRoot)
-					throw new IllegalArgumentException("Element '" + rootReader.getName() + "' is not declared as the root of any toolkit");
 				rootDef = rootDef2;
 			}
 			PositionedContent position = new PositionedContent.Simple(SimpleXMLParser.getNamePosition(root), root.getNodeName());
@@ -180,11 +169,6 @@ public class DefaultQonfigParser implements QonfigParser {
 
 					@Override
 					public void fillOutTypes(QonfigParseSession s) {}
-
-					@Override
-					public Set<QonfigElementDef> getDeclaredRoots(QonfigParseSession s) {
-						return Collections.singleton(rootDef);
-					}
 				});
 			session = QonfigParseSession.forRoot(partial, docToolkit, position);
 
@@ -520,13 +504,11 @@ public class DefaultQonfigParser implements QonfigParser {
 		private final StrictXmlReader root;
 		private final Map<String, QonfigValueType.Declared> declaredTypes;
 		private final Map<String, QonfigElementOrAddOn.Builder> theBuilders;
-		private final Set<QonfigElementDef> declaredRoots;
 
 		private final Map<String, QonfigAddOn> declaredAddOns;
 		private final Map<String, QonfigElementDef> declaredElements;
 		private final List<QonfigAutoInheritance> declaredAutoInheritance;
 
-		private String[] rootNames;
 		private final CustomValueType[] theCustomValueTypes;
 		private final Map<String, StrictXmlReader> theNodes;
 
@@ -538,7 +520,6 @@ public class DefaultQonfigParser implements QonfigParser {
 			declaredAddOns = new LinkedHashMap<>();
 			declaredElements = new LinkedHashMap<>();
 			declaredAutoInheritance = new ArrayList<>();
-			declaredRoots = new LinkedHashSet<>();
 			theNodes = new HashMap<>();
 
 			theCustomValueTypes = customValueTypes;
@@ -563,8 +544,6 @@ public class DefaultQonfigParser implements QonfigParser {
 		@Override
 		public void parseTypes(QonfigParseSession session) throws QonfigParseException {
 			// First pass to parse basic definitions
-			String rootNamesStr = root.getAttributeIfExists("root");
-			rootNames = rootNamesStr == null ? new String[0] : rootNamesStr.split(",");
 			PositionedContent rootNameContent = asContent(root.getNamePosition(), root.getName());
 			StrictXmlReader patterns;
 			try {
@@ -743,6 +722,13 @@ public class DefaultQonfigParser implements QonfigParser {
 					session.warn(e.getMessage());
 				}
 				return QonfigValueType.BOOLEAN;
+			case "int":
+				try {
+					pattern.check();
+				} catch (TextParseException e) {
+					session.warn(e.getMessage());
+				}
+				return QonfigValueType.INT;
 			case "pattern":
 				String text;
 				try {
@@ -909,25 +895,10 @@ public class DefaultQonfigParser implements QonfigParser {
 						.error(e.getMessage());
 				}
 			}
-			for (String rootName : rootNames) {
-				QonfigElementDef declaredRoot = session.getToolkit().getElement(rootName);
-				if (declaredRoot == null) {
-					if (session.getToolkit().getAddOn(rootName) == null)
-						session.error("Unrecognized root element: " + rootName);
-					else
-						session.error("Root must be an element-def, not " + rootName);
-				}
-				declaredRoots.add(declaredRoot);
-			}
 
 			// Finish build
 			for (QonfigElementOrAddOn.Builder builder : theBuilders.values())
 				builder.build();
-		}
-
-		@Override
-		public Set<QonfigElementDef> getDeclaredRoots(QonfigParseSession session) {
-			return Collections.unmodifiableSet(declaredRoots);
 		}
 
 		private QonfigElementOrAddOn parseExtensions(StrictXmlReader element, LinkedList<String> path, QonfigParseSession elsSession,
@@ -939,6 +910,18 @@ public class DefaultQonfigParser implements QonfigParser {
 			String inheritsS = element.getAttributeIfExists("inherits");
 			if (completed.contains(name))
 				return builder.get(); // Already filled out
+
+			if (!addOn) {
+				String promiseS = element.getAttributeIfExists("promise");
+				if (promiseS == null) {//
+				} else if (promiseS.equals("false")) { // OK, but why even bother
+				} else if (!promiseS.equals("true"))
+					elsSession.at(element.getAttributeValuePosition("promise"))
+						.error("Unrecognized 'promise': expected 'true' or 'false', not '" + promiseS + "'");
+				else
+					((QonfigElementDef.Builder) builder).promise(true);
+			}
+
 			if (extendsS == null && (inheritsS == null || inheritsS.isEmpty())) {
 				completed.add(name);// No extensions
 				return builder.get();
@@ -1018,15 +1001,6 @@ public class DefaultQonfigParser implements QonfigParser {
 					if (circularInheritance[0])
 						return null;
 				}
-				if (!addOn) {
-					String promiseS = element.getAttributeIfExists("promise");
-					if (promiseS == null) {//
-					} else if (promiseS.equals("false")) { // OK, but why even bother
-					} else if (!promiseS.equals("true"))
-						session.error("Unrecognized 'promise': expected 'true' or 'false', not '" + promiseS + "'");
-					else
-						((QonfigElementDef.Builder) builder).promise(true);
-				}
 				return builder.get();
 			} finally {
 				path.removeLast();
@@ -1070,7 +1044,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					attrSession.error("No type specified");
 					type = null;
 				} else
-					type = parseAttributeType(attrSession, typeName, true);
+					type = parseAttributeType(attrSession.at(attr.getAttributeValuePosition("type")), typeName, true);
 				String specifyS = attr.getAttributeIfExists("specify");
 				PositionedContent defaultS = attr.getAttributeValuePosition("default");
 				SpecificationType spec;
@@ -1711,6 +1685,8 @@ public class DefaultQonfigParser implements QonfigParser {
 			return QonfigValueType.STRING;
 		case "boolean":
 			return QonfigValueType.BOOLEAN;
+		case "int":
+			return QonfigValueType.INT;
 		}
 		QonfigValueType.Declared type = session.getToolkit().getAttributeType(typeName);
 		if (type != null)

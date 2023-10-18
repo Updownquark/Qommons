@@ -104,7 +104,7 @@ public final class QonfigElement extends PartialQonfigElement {
 	public static Builder buildRoot(boolean partial, ErrorReporting reporting, QonfigDocument doc, QonfigElementDef type,
 		String description) {
 		QonfigAutoInheritance.Compiler autoInheritance = new QonfigAutoInheritance.Compiler(Collections.singleton(doc.getDocToolkit()));
-		autoInheritance.add(type, null);
+		autoInheritance.addTargetType(type, null);
 		return new Builder(partial, reporting, doc, null, type, Collections.emptySet(), Collections.emptySet(), autoInheritance,
 			description);
 	}
@@ -149,7 +149,7 @@ public final class QonfigElement extends PartialQonfigElement {
 		private QonfigValue theValue;
 
 		private QonfigDocument theExternalContent;
-		private PartialQonfigElement thePromiser;
+		private PartialQonfigElement thePromise;
 
 		private PartialQonfigElement theElement;
 		private int theStage;
@@ -195,8 +195,8 @@ public final class QonfigElement extends PartialQonfigElement {
 			}
 			theAutoInheritance = autoInheritance;
 			theInheritance.addAll(theAutoInheritance.getInheritance().values());
-			for (QonfigChildDef role : theParentRoles)
-				theAutoInheritance.add(role, theInheritance::add);
+			for (QonfigChildDef.Declared role : theDeclaredRoles)
+				theAutoInheritance.addRole(role, theInheritance::add);
 			theDescription = description;
 
 			for (QonfigChildDef ch : parentRoles) {
@@ -224,6 +224,14 @@ public final class QonfigElement extends PartialQonfigElement {
 			return isPartial;
 		}
 
+		public QonfigDocument getExternalContent() {
+			return theExternalContent;
+		}
+
+		public PartialQonfigElement getPromise() {
+			return thePromise;
+		}
+
 		MultiInheritanceSet<QonfigAddOn> getInheritance() {
 			return theInheritance;
 		}
@@ -241,7 +249,7 @@ public final class QonfigElement extends PartialQonfigElement {
 		}
 
 		public Builder fulfills(PartialQonfigElement promise, QonfigDocument externalContent) {
-			thePromiser = promise;
+			thePromise = promise;
 			theExternalContent = externalContent;
 			return this;
 		}
@@ -270,7 +278,7 @@ public final class QonfigElement extends PartialQonfigElement {
 			}
 			if (ok) {
 				theInheritance.add(addOn);
-				theAutoInheritance.add(addOn, theInheritance::add);
+				theAutoInheritance.addTargetType(addOn, theInheritance::add);
 			}
 			return this;
 		}
@@ -303,8 +311,7 @@ public final class QonfigElement extends PartialQonfigElement {
 		public Builder withAttribute(QonfigAttributeDef.Declared attr, QonfigValue value) {
 			if (theStage > 0)
 				throw new IllegalStateException("Cannot specify attributes after children");
-			if (!attr.getOwner().isAssignableFrom(theType))
-				theErrors.at(value.position).error("Attribute " + attr + " is not applicable to type " + theType);
+			// Can't validate this yet because we don't know our full inheritance yet
 			theProvidedAttributes.put(attr, value);
 			return this;
 		}
@@ -426,28 +433,26 @@ public final class QonfigElement extends PartialQonfigElement {
 			Set<QonfigChildDef.Declared> realRoles = new LinkedHashSet<>();
 			QonfigAutoInheritance.Compiler autoInheritance = new QonfigAutoInheritance.Compiler(
 				Collections.singleton(theDocument.getDocToolkit()));
-			autoInheritance.add(type, null);
+			autoInheritance.addParentType(theType, null);
+			for (QonfigAddOn inh : theInheritance.values())
+				autoInheritance.addParentType(inh, null);
+			autoInheritance.addTargetType(type, null);
 			if (!declaredRoles.isEmpty()) {
 				for (QonfigChildDef role : declaredRoles) {
-					if (theParent == null) {
-						if (!(theDocument instanceof QonfigMetadata))
-							errors.error("Cannot declare a role on the root element: " + role, null);
+					boolean matches = role.getOwner().isAssignableFrom(theType);
+					if (!matches) {
+						for (QonfigAddOn inh : theInheritance.values()) {
+							matches = role.getOwner().isAssignableFrom(inh);
+							if (matches)
+								break;
+						}
+					}
+					if (!matches) {
+						errors.error("Parent does not inherit element " + role.getOwner() + "--cannot declare a child with role " + role,
+							null);
 					} else {
-						boolean matches = role.getOwner().isAssignableFrom(theType);
-						if (!matches) {
-							for (QonfigAddOn inh : theInheritance.values()) {
-								matches = role.getOwner().isAssignableFrom(inh);
-								if (matches)
-									break;
-							}
-						}
-						if (!matches) {
-							errors.error(
-								"Parent does not inherit element " + role.getOwner() + "--cannot declare a child with role " + role, null);
-						} else {
-							roles.add(role);
-							realRoles.add(role.getDeclared());
-						}
+						roles.add(role);
+						realRoles.add(role.getDeclared());
 					}
 				}
 			} else { // Alright, we have to guess
@@ -470,8 +475,8 @@ public final class QonfigElement extends PartialQonfigElement {
 							if (role == null)
 								role = childDef.getValue();
 							else if (!role.getDeclared().equals(childDef.getValue())) {
-								errors.error("Child of type " + type + " is compatible with multiple roles: " + role
-									+ " and " + childDef.getValue() + "--role must be specified");
+								errors.error("Child of type " + type + " is compatible with multiple roles: " + role + " and "
+									+ childDef.getValue() + "--role must be specified");
 								return this;
 							}
 						}
@@ -495,8 +500,8 @@ public final class QonfigElement extends PartialQonfigElement {
 				else
 					children.add(role);
 			}
-			Builder childBuilder = new Builder(isPartial, errors, theDocument, theElement, type,
-				Collections.unmodifiableSet(roles), Collections.unmodifiableSet(realRoles), autoInheritance, description);
+			Builder childBuilder = new Builder(isPartial, errors, theDocument, theElement, type, Collections.unmodifiableSet(roles),
+				Collections.unmodifiableSet(realRoles), autoInheritance, description);
 			child.accept(childBuilder);
 			PartialQonfigElement builtChild = childBuilder.build();
 			theChildren.add(builtChild);
@@ -512,15 +517,15 @@ public final class QonfigElement extends PartialQonfigElement {
 			attrs.compile();
 
 			if (isPartial) {
-				theElement = new PartialQonfigElement(theDocument, theParent, theType, theInheritance, theParentRoles,
-					theDeclaredRoles, Collections.unmodifiableMap(attrs.attrValues), theChildren, theChildrenByRole, theValue,
-					theErrors.getFileLocation(), theDescription, thePromiser, theExternalContent);
+				theElement = new PartialQonfigElement(theDocument, theParent, theType, theInheritance, theParentRoles, theDeclaredRoles,
+					Collections.unmodifiableMap(attrs.attrValues), theChildren, theChildrenByRole, theValue, theErrors.getFileLocation(),
+					theDescription, thePromise, theExternalContent);
 			} else {
 				theElement = new QonfigElement(theDocument, (QonfigElement) theParent, (QonfigElementDef) theType, theInheritance,
-					theParentRoles,
-					theDeclaredRoles, Collections.unmodifiableMap(attrs.attrValues), (List<QonfigElement>) (List<?>) theChildren, //
+					theParentRoles, theDeclaredRoles, Collections.unmodifiableMap(attrs.attrValues),
+					(List<QonfigElement>) (List<?>) theChildren, //
 					(BetterMultiMap<QonfigChildDef.Declared, QonfigElement>) (BetterMultiMap<?, ?>) theChildrenByRole, //
-					theValue, theErrors.getFileLocation(), theDescription, thePromiser, theExternalContent);
+					theValue, theErrors.getFileLocation(), theDescription, thePromise, theExternalContent);
 			}
 			theStage = 1;
 		}
@@ -533,9 +538,9 @@ public final class QonfigElement extends PartialQonfigElement {
 			AttributeCompiler attrs = new AttributeCompiler();
 			attrs.compile();
 
-			theElement = new VariableQonfigElement(theDocument, theParent, theType, theInheritance, theParentRoles,
-				theDeclaredRoles, Collections.unmodifiableMap(attrs.attrValues), theValue, theErrors.getFileLocation(), theDescription,
-				thePromiser, theExternalContent, minCount, maxCount, builder);
+			theElement = new VariableQonfigElement(theDocument, theParent, theType, theInheritance, theParentRoles, theDeclaredRoles,
+				Collections.unmodifiableMap(attrs.attrValues), theValue, theErrors.getFileLocation(), theDescription, thePromise,
+				theExternalContent, minCount, maxCount, builder);
 
 			theStage = 1;
 		}
@@ -643,11 +648,31 @@ public final class QonfigElement extends PartialQonfigElement {
 				checkParsedAttrs();
 
 				// Now for the provided attributes, only using these as defaults
+				boolean inheritanceChanged = true;
+				while (inheritanceChanged) {
+					inheritanceChanged = false;
+					for (Map.Entry<QonfigAttributeDef.Declared, QonfigValue> attr : theProvidedAttributes.entrySet()) {
+						QonfigElementOrAddOn owner = attr.getKey().getOwner();
+						if (owner.isAssignableFrom(theType) //
+							|| (owner instanceof QonfigAddOn && completeInheritance.contains((QonfigAddOn) owner))) {
+							if (!attrValues.containsKey(attr.getKey())) {
+								attrValues.put(attr.getKey(), attr.getValue());
+								if (attr.getValue().value instanceof QonfigAddOn) {
+									QonfigAddOn inh = (QonfigAddOn) attr.getValue().value;
+									if (completeInheritance.add(inh)) {
+										inheritanceChanged = true;
+										theInheritance.add(inh);
+									}
+								}
+							}
+						}
+					}
+				}
 				for (Map.Entry<QonfigAttributeDef.Declared, QonfigValue> attr : theProvidedAttributes.entrySet()) {
 					QonfigElementOrAddOn owner = attr.getKey().getOwner();
 					if (owner.isAssignableFrom(theType) //
-						|| (owner instanceof QonfigAddOn && completeInheritance.contains((QonfigAddOn) owner)))
-						attrValues.putIfAbsent(attr.getKey(), attr.getValue());
+						|| (owner instanceof QonfigAddOn && completeInheritance.contains((QonfigAddOn) owner))) {//
+					}
 					else
 						theErrors.error("Element does not inherit element " + owner + "--cannot specify attribute " + attr.getKey());
 				}
@@ -734,7 +759,7 @@ public final class QonfigElement extends PartialQonfigElement {
 						for (Map.Entry<QonfigAttributeDef.Declared, ? extends ValueDefModifier> mod : inh.getAttributeModifiers()
 							.entrySet()) {
 							QonfigValue value = attrValues.get(mod.getKey());
-							if (mod.getValue().getSpecification() != null
+							if (value != null && mod.getValue().getSpecification() != null
 								&& mod.getValue().getSpecification() == SpecificationType.Forbidden) {
 								theErrors.at(value.position)
 									.error("Specification of value for attribute '" + mod.getKey() + "' forbidden by " + inh);
@@ -844,9 +869,8 @@ public final class QonfigElement extends PartialQonfigElement {
 					QonfigAttributeDef attr;
 					BetterCollection<QonfigAttributeDef> attrs = null;
 					if (attrDef.declaredElement != null) {
-						if (attrDef.declaredElement.isAssignableFrom(theType)
-							|| (attrDef.declaredElement instanceof QonfigAddOn
-								&& completeInheritance.contains((QonfigAddOn) attrDef.declaredElement))) {
+						if (attrDef.declaredElement.isAssignableFrom(theType) || (attrDef.declaredElement instanceof QonfigAddOn
+							&& completeInheritance.contains((QonfigAddOn) attrDef.declaredElement))) {
 							// We already checked in withAttribute() to make sure this is valid
 							attr = attrDef.declaredElement.getDeclaredAttributes().get(attrDef.itemName);
 							if (attr == null)

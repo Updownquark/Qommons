@@ -1,7 +1,6 @@
 package org.qommons.config;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -38,11 +37,11 @@ public class QonfigAutoInheritance {
 		 * @param roles The set of roles fulfilled by an element
 		 * @return Whether an element of the given type, fulfilling the given roles, matches this inheritance target
 		 */
-		public boolean applies(QonfigElementOrAddOn element, Set<QonfigChildDef> roles) {
+		public boolean applies(QonfigElementOrAddOn element, MultiInheritanceSet<QonfigChildDef> roles) {
 			if (theTarget != null && !theTarget.isAssignableFrom(element))
 				return false;
 			if (theRole != null) {
-				for (QonfigChildDef role : roles) {
+				for (QonfigChildDef role : roles.values()) {
 					if (theRole.getOwner().isAssignableFrom(role.getOwner()) && theRole.isFulfilledBy(role))
 						return true;
 				}
@@ -83,55 +82,63 @@ public class QonfigAutoInheritance {
 	/** A class to compile auto-inheritance from many sources */
 	public static class Compiler {
 		private final Collection<QonfigToolkit> theToolkits;
-		private final Set<QonfigChildDef> theRoles;
+		private final MultiInheritanceSet<QonfigElementOrAddOn> theParentTypes;
+		private final Set<QonfigChildDef.Declared> theDeclaredRoles;
+		private final MultiInheritanceSet<QonfigChildDef> theFullRoles;
 		private final MultiInheritanceSet<QonfigAddOn> theInheritance;
-		private final MultiInheritanceSet<QonfigElementOrAddOn> theTested;
+		private final MultiInheritanceSet<QonfigElementOrAddOn> theTargetTypes;
 
 		/**
 		 * @param toolkits The toolkits with auto-inheritance to consider
 		 */
 		public Compiler(Collection<QonfigToolkit> toolkits) {
 			theToolkits = toolkits;
-			theRoles = new LinkedHashSet<>();
+			theParentTypes = MultiInheritanceSet.create(QonfigElementOrAddOn::isAssignableFrom);
+			theDeclaredRoles = new LinkedHashSet<>();
+			theFullRoles = MultiInheritanceSet.create(QonfigChildDef::isFulfilledBy);
 			theInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
-			theTested = MultiInheritanceSet.create(QonfigElementOrAddOn::isAssignableFrom);
+			theTargetTypes = MultiInheritanceSet.create(QonfigElementOrAddOn::isAssignableFrom);
 		}
 
 		public MultiInheritanceSet<QonfigAddOn> getInheritance() {
 			return MultiInheritanceSet.unmodifiable(theInheritance);
 		}
 
-		public Compiler add(QonfigChildDef role, Consumer<QonfigAddOn> inheritance) {
-			if (!theRoles.add(role))
-				return this;
-			for (QonfigElementOrAddOn type : theTested.values()) {
-				for (QonfigToolkit toolkit : theToolkits) {
-					MultiInheritanceSet<QonfigAddOn> autoInh = toolkit.getAutoInheritance(type, theRoles);
-					for (QonfigAddOn inh : autoInh.values()) {
-						theInheritance.add(inh);
-						if (inheritance != null)
-							inheritance.accept(inh);
-						add(inh, inheritance);
-					}
-				}
+		public Compiler addParentType(QonfigElementOrAddOn type, Consumer<QonfigAddOn> inheritance) {
+			if (theParentTypes.add(type)) {
+				for (QonfigChildDef.Declared role : theDeclaredRoles)
+					addFullRole(type.getAllChildren().get(role), inheritance);
 			}
-			add(role.getType(), inheritance);
-			for (QonfigAddOn req : role.getRequirement())
-				add(req, inheritance);
-			for (QonfigAddOn inh : role.getInheritance())
-				add(inh, inheritance);
 			return this;
 		}
 
-		private void add(QonfigChildDef role, QonfigElementOrAddOn type, Consumer<QonfigAddOn> inheritance) {
-			for (QonfigToolkit toolkit : theToolkits) {
-				MultiInheritanceSet<QonfigAddOn> autoInh = toolkit.getAutoInheritance(type, Collections.singleton(role));
-				for (QonfigAddOn inh : autoInh.values()) {
-					theInheritance.add(inh);
-					if (inheritance != null)
-						inheritance.accept(inh);
-					add(inh, inheritance);
+		public Compiler addRole(QonfigChildDef.Declared role, Consumer<QonfigAddOn> inheritance) {
+			if (theDeclaredRoles.add(role)) {
+				for (QonfigElementOrAddOn type : theParentTypes.values())
+					addFullRole(type.getAllChildren().get(role), inheritance);
+			}
+			return this;
+		}
+
+		private void addFullRole(QonfigChildDef role, Consumer<QonfigAddOn> inheritance) {
+			if (role != null && theFullRoles.add(role)) {
+				for (QonfigElementOrAddOn type : theTargetTypes.values()) {
+					for (QonfigToolkit toolkit : theToolkits) {
+						MultiInheritanceSet<QonfigAddOn> autoInh = toolkit.getAutoInheritance(type,
+							MultiInheritanceSet.singleton(role, QonfigChildDef::isFulfilledBy));
+						for (QonfigAddOn inh : autoInh.values()) {
+							theInheritance.add(inh);
+							if (inheritance != null)
+								inheritance.accept(inh);
+							addTargetType(inh, inheritance);
+						}
+					}
 				}
+				addTargetType(role.getType(), inheritance);
+				for (QonfigAddOn req : role.getRequirement())
+					addTargetType(req, inheritance);
+				for (QonfigAddOn inh : role.getInheritance())
+					addTargetType(inh, inheritance);
 			}
 		}
 
@@ -140,15 +147,15 @@ public class QonfigAutoInheritance {
 		 * @param inheritance Consumer to be notified of add-ons auto-inherited due to inheriting the given type
 		 * @return This compiler
 		 */
-		public Compiler add(QonfigElementOrAddOn type, Consumer<QonfigAddOn> inheritance) {
-			if (type != null && theTested.add(type)) {
+		public Compiler addTargetType(QonfigElementOrAddOn type, Consumer<QonfigAddOn> inheritance) {
+			if (type != null && theTargetTypes.add(type)) {
 				for (QonfigToolkit toolkit : theToolkits) {
-					MultiInheritanceSet<QonfigAddOn> autoInh = toolkit.getAutoInheritance(type, theRoles);
+					MultiInheritanceSet<QonfigAddOn> autoInh = toolkit.getAutoInheritance(type, theFullRoles);
 					for (QonfigAddOn inh : autoInh.values()) {
 						if (theInheritance.add(inh)) {
 							if (inheritance != null)
 								inheritance.accept(inh);
-							add(inh, inheritance);
+							addTargetType(inh, inheritance);
 						}
 					}
 				}

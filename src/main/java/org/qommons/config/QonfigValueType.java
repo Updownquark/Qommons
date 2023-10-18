@@ -71,6 +71,34 @@ public interface QonfigValueType extends Named, FileSourced {
 		}
 	};
 
+	/** The "int" type */
+	public static final QonfigValueType INT = new QonfigValueType() {
+		@Override
+		public String getName() {
+			return "int";
+		}
+
+		@Override
+		public PositionedContent getFilePosition() {
+			return null;
+		}
+
+		@Override
+		public boolean isInstance(Object value) {
+			return value instanceof Integer;
+		}
+
+		@Override
+		public Object parse(String value, QonfigToolkit tk, ErrorReporting errors) {
+			try {
+				return Integer.parseInt(value);
+			} catch (NumberFormatException e) {
+				errors.error("Bad integer value: " + value);
+				return 0;
+			}
+		}
+	};
+
 	/** A declared type (as opposed to a modified one */
 	public static interface Declared extends QonfigValueType, QonfigType {
 	}
