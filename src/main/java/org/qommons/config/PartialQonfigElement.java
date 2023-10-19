@@ -294,6 +294,7 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	}
 
 	public void copy(QonfigElement.Builder child) {
+		child.withDocument(theDocument);
 		copyAttributes(child);
 		copyChildren(child);
 	}

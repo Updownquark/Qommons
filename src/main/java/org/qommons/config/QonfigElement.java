@@ -61,7 +61,7 @@ public final class QonfigElement extends PartialQonfigElement {
 		Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles,
 		Map<QonfigAttributeDef.Declared, QonfigValue> attributes, List<QonfigElement> children,
 		BetterMultiMap<QonfigChildDef.Declared, QonfigElement> childrenByRole, QonfigValue value, LocatedPositionedContent filePosition,
-		String description, PartialQonfigElement promise, QonfigDocument externalContent) {
+		String description, QonfigElement promise, QonfigDocument externalContent) {
 		super(doc, parent, type, inheritance, parentRoles, declaredRoles, attributes, children, childrenByRole, value, filePosition,
 			description, promise, externalContent);
 	}
@@ -90,6 +90,11 @@ public final class QonfigElement extends PartialQonfigElement {
 	@Override
 	public BetterMultiMap<QonfigChildDef.Declared, QonfigElement> getChildrenByRole() {
 		return (BetterMultiMap<QonfigChildDef.Declared, QonfigElement>) super.getChildrenByRole();
+	}
+
+	@Override
+	public QonfigElement getPromise() {
+		return (QonfigElement) super.getPromise();
 	}
 
 	/**
@@ -133,7 +138,7 @@ public final class QonfigElement extends PartialQonfigElement {
 	public static class Builder {
 		private final boolean isPartial;
 		private final ErrorReporting theErrors;
-		private final QonfigDocument theDocument;
+		private QonfigDocument theDocument;
 		private final PartialQonfigElement theParent;
 		private final QonfigElementOrAddOn theType;
 		private final MultiInheritanceSet<QonfigAddOn> theInheritance;
@@ -248,7 +253,14 @@ public final class QonfigElement extends PartialQonfigElement {
 			return theErrors;
 		}
 
+		public Builder withDocument(QonfigDocument document) {
+			theDocument = document;
+			return this;
+		}
+
 		public Builder fulfills(PartialQonfigElement promise, QonfigDocument externalContent) {
+			if (!isPartial && !(promise instanceof QonfigElement))
+				throw new IllegalArgumentException("Full elements must have full promises");
 			thePromise = promise;
 			theExternalContent = externalContent;
 			return this;
@@ -258,11 +270,11 @@ public final class QonfigElement extends PartialQonfigElement {
 		 * @param addOn An add-on directly declared for the element to inherit
 		 * @return This builder
 		 */
-		public Builder inherits(QonfigAddOn addOn) {
+		public Builder inherits(QonfigAddOn addOn, boolean appliedDirect) {
 			if (theStage > 0)
 				throw new IllegalStateException("Cannot specify inheritance after children");
 			boolean ok = true;
-			if (addOn.isAbstract()) {
+			if (appliedDirect && addOn.isAbstract()) {
 				theErrors.error("Add-on " + addOn + " is abstract and cannot be applied directly");
 				ok = false;
 			}
@@ -525,7 +537,7 @@ public final class QonfigElement extends PartialQonfigElement {
 					theParentRoles, theDeclaredRoles, Collections.unmodifiableMap(attrs.attrValues),
 					(List<QonfigElement>) (List<?>) theChildren, //
 					(BetterMultiMap<QonfigChildDef.Declared, QonfigElement>) (BetterMultiMap<?, ?>) theChildrenByRole, //
-					theValue, theErrors.getFileLocation(), theDescription, thePromise, theExternalContent);
+					theValue, theErrors.getFileLocation(), theDescription, (QonfigElement) thePromise, theExternalContent);
 			}
 			theStage = 1;
 		}

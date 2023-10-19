@@ -54,12 +54,12 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 				String ns = roleMatcher.getGroup("ns");
 				if (ns != null)
 					elementName = ns + ":" + elementName;
-				role = promise.getDocument().getDocToolkit().getChild(elementName, roleMatcher.getGroup("role"));
+				role = promise.getDocument().getDocToolkit().getChild(elementName, roleMatcher.getGroup("member"));
 				if (role != null && !role.getOwner().isAssignableFrom(refType))
 					session.at(promise.getAttributes().get(theRefRole).position).error("Role '" + roleMatcher.getWholeText()
 						+ "' does not apply to " + QonfigExternalRefPromise.EXT_REFERENCE_TYPE + " extension " + refType);
 			} else
-				role = refType.getChild(roleMatcher.getGroup("role"));
+				role = refType.getChild(roleMatcher.getGroup("member"));
 			if (role == null)
 				session.at(promise.getAttributes().get(theRefRole).position).error("No such role found: " + roleMatcher.getWholeText());
 		} catch (IllegalArgumentException e) {
@@ -69,22 +69,28 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 		
 		parent.withChild(declaredRoles, role.getType(), child -> {
 			for (QonfigAddOn inh : inheritance)
-				child.inherits(inh);
+				child.inherits(inh, false);
 			child.createVariable(role.getMin(), role.getMax(), (child2, parent2) -> fulfillChildren(parent2, child2, promise, role));
 		}, promise.getFilePosition(), promise.getDescription());
 	}
 
 	protected void fulfillChildren(QonfigElement.Builder parent, VariableQonfigElement childRef, PartialQonfigElement promise,
 		QonfigChildDef role) {
-		// Go look through the ancestors to see if we can fulfill this promise right now
 		PartialQonfigElement extRefPromise = null;
-		if (parent.getExternalContent() == promise.getDocument())
+		if (parent.getDocument() == promise.getDocument()) {
 			extRefPromise = parent.getPromise();
-		else {
-			for (PartialQonfigElement p = parent.getParent(); p != null; p = p.getParent()) {
-				if (p.getExternalContent() == promise.getDocument()) {
-					extRefPromise = p.getPromise();
-					break;
+			for (PartialQonfigElement p = parent.getParent(); p != null && extRefPromise == null; p = p.getParent())
+				extRefPromise = p.getPromise();
+		} else {
+			// Go look through the ancestors to find the element containing the content to fulfill this promise
+			if (parent.getExternalContent() == promise.getDocument())
+				extRefPromise = parent.getPromise();
+			else {
+				for (PartialQonfigElement p = parent.getParent(); p != null; p = p.getParent()) {
+					if (p.getExternalContent() == promise.getDocument()) {
+						extRefPromise = p.getPromise();
+						break;
+					}
 				}
 			}
 		}
@@ -97,15 +103,26 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 
 	protected void fulfillChildren(QonfigElement.Builder parent, VariableQonfigElement childRef, QonfigChildDef role,
 		PartialQonfigElement promise, PartialQonfigElement extRefPromise, ErrorReporting reporting) {
+		PartialQonfigElement usePromise;
+		if (extRefPromise instanceof QonfigElement) {
+			// Building fully. Full elements must have full promises, so we need to synthesize the promise element
+			// child-placeholder doesn't fulfill any roles in any parent, it's just a placeholder.
+			// So it can only be synthesized as a root element.
+			QonfigElement.Builder promiseBuilder = QonfigElement.buildRoot(false, reporting, promise.getDocument(),
+				(QonfigElementDef) promise.getType(), promise.getDescription());
+			promise.copy(promiseBuilder);
+			usePromise = promiseBuilder.buildFull();
+		} else
+			usePromise = promise;
 		Set<QonfigChildDef> roles = new LinkedHashSet<>();
 		for (PartialQonfigElement extChild : extRefPromise.getChildrenByRole().get(role.getDeclared())) {
 			roles.addAll(childRef.getParentRoles());
 			parent.withChild2(roles, extChild.getType(), child -> {
-				child.fulfills(promise, null);
+				child.fulfills(usePromise, null);
 				for (QonfigAddOn inh : childRef.getInheritance().values())
-					child.inherits(inh);
+					child.inherits(inh, false);
 				for (QonfigAddOn inh : extChild.getInheritance().values())
-					child.inherits(inh);
+					child.inherits(inh, false);
 
 				childRef.copyAttributes(child);
 				extChild.copyAttributes(child);

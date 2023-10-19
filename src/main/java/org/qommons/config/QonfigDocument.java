@@ -35,4 +35,9 @@ public class QonfigDocument {
 	public PartialQonfigElement getPartialRoot() {
 		return theRoot;
 	}
+
+	@Override
+	public String toString() {
+		return theLocation;
+	}
 }

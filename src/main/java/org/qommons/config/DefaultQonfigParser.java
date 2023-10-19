@@ -171,7 +171,8 @@ public class DefaultQonfigParser implements QonfigParser {
 					public void fillOutTypes(QonfigParseSession s) {}
 				});
 			session = QonfigParseSession.forRoot(partial, docToolkit, position);
-
+			if (rootDef.isPromise())
+				session.error("The root of a document cannot be a promise");
 			doc = new QonfigDocument(location, docToolkit);
 			parseDocElement(partial, session, QonfigElement.buildRoot(partial, session, doc, rootDef, getDocumentation(rootReader)),
 				rootReader, true, true, el -> true);
@@ -195,7 +196,8 @@ public class DefaultQonfigParser implements QonfigParser {
 				if (USES.matcher(attr.getKey()).matches()) {//
 				} else if (DOC_ELEMENT_INHERITANCE_ATTR.equals(attr.getKey())) {
 					if (withInheritance)
-						parseInheritance(attr.getValue(), el.getAttributeValuePosition(attr.getKey()), session, builder::inherits);
+						parseInheritance(attr.getValue(), el.getAttributeValuePosition(attr.getKey()), session,
+							inh -> builder.inherits(inh, true));
 				} else if ("role".equals(attr.getKey())) {//
 				} else {
 					ElementQualifiedParseItem qAttr = ElementQualifiedParseItem.parse(attr.getKey(), session,

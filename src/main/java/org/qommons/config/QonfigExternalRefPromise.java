@@ -141,8 +141,10 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 		QonfigParseSession session) {
 		PartialQonfigElement fulfillment = content.getDocument().getPartialRoot().getChildrenByRole().get(theFulfillmentChild).getFirst();
 		builder.withChild(declaredRoles, fulfillment.getType(), child -> {
+			for (QonfigAddOn inh : fulfillment.getInheritance().values())
+				child.inherits(inh, false);
 			for (QonfigAddOn inh : inheritance)
-				child.inherits(inh);
+				child.inherits(inh, false);
 			child.fulfills(promise, content.getDocument());
 			buildContent(child, fulfillment, promise, session);
 		}, fulfillment.getFilePosition(), fulfillment.getDescription());

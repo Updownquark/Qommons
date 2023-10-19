@@ -19,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.function.Function;
@@ -1107,12 +1108,17 @@ public class QommonsUtils {
 			int start = matcher.start(cg.getValue());
 			if (start >= 0)
 				captureGroups.put(cg.getKey(), new NamedGroupCapture(start, matcher.group(cg.getValue())));
+			else
+				captureGroups.put(cg.getKey(), NamedGroupCapture.MISSING);
 		}
 		return captureGroups;
 	}
 
 	/** Represents the capture of a named group in a pattern-matched text sequence */
 	public static class NamedGroupCapture {
+		/** Provided from {@link QommonsUtils#getCaptureGroups(Matcher)} if a named capture is not present in a match */
+		public static final NamedGroupCapture MISSING = new NamedGroupCapture(-1, null);
+
 		/** The start of the captured sequence within the whole */
 		public final int start;
 		/** The matched group sequence */
@@ -1129,7 +1135,7 @@ public class QommonsUtils {
 
 		@Override
 		public int hashCode() {
-			return value.hashCode() ^ start;
+			return Objects.hash(value) ^ start;
 		}
 
 		@Override
@@ -1139,12 +1145,12 @@ public class QommonsUtils {
 			else if (!(obj instanceof NamedGroupCapture))
 				return false;
 			NamedGroupCapture other = (NamedGroupCapture) obj;
-			return start == other.start && value.equals(other.value);
+			return start == other.start && Objects.equals(value, other.value);
 		}
 
 		@Override
 		public String toString() {
-			return value;
+			return value == null ? "(missing)" : value;
 		}
 	}
 

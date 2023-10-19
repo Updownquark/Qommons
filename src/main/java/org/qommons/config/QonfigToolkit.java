@@ -405,6 +405,14 @@ public class QonfigToolkit implements Named, SelfDescribed {
 		return theDependenciesByDefinition;
 	}
 
+	public QonfigToolkit getDependency(String nsOrDef) throws ParseException {
+		if (nsOrDef.indexOf(' ') < 0)
+			return theDependencies.get(nsOrDef);
+		ToolkitDef def = ToolkitDef.parse(nsOrDef);
+		return theDependenciesByDefinition.getOrDefault(def.name, Collections.emptyNavigableMap())//
+			.get(def);
+	}
+
 	/**
 	 * @param toolkit The toolkit to check
 	 * @return Whether this toolkit depends on the given toolkit, either as one of its dependencies or any order deep of its dependencies'
@@ -455,7 +463,12 @@ public class QonfigToolkit implements Named, SelfDescribed {
 		int colon = name.indexOf(':');
 		if (colon >= 0) {
 			String ns = name.substring(0, colon);
-			QonfigToolkit dep = theDependencies.get(ns);
+			QonfigToolkit dep;
+			try {
+				dep = getDependency(ns);
+			} catch (ParseException e) {
+				throw new IllegalArgumentException(e.getMessage(), e);
+			}
 			if (dep == null)
 				throw new IllegalArgumentException("No such dependency: " + ns);
 			return dep.getElement(name.substring(colon + 1));
@@ -493,7 +506,12 @@ public class QonfigToolkit implements Named, SelfDescribed {
 		int colon = name.indexOf(':');
 		if (colon >= 0) {
 			String ns = name.substring(0, colon);
-			QonfigToolkit dep = theDependencies.get(ns);
+			QonfigToolkit dep;
+			try {
+				dep = getDependency(ns);
+			} catch (ParseException e) {
+				throw new IllegalArgumentException(e.getMessage(), e);
+			}
 			if (dep == null)
 				throw new IllegalArgumentException("No such dependency: " + ns);
 			return dep.getAddOn(name.substring(colon + 1));
@@ -530,7 +548,12 @@ public class QonfigToolkit implements Named, SelfDescribed {
 		int colon = name.indexOf(':');
 		if (colon >= 0) {
 			String ns = name.substring(0, colon);
-			QonfigToolkit dep = theDependencies.get(ns);
+			QonfigToolkit dep;
+			try {
+				dep = getDependency(ns);
+			} catch (ParseException e) {
+				throw new IllegalArgumentException(e.getMessage(), e);
+			}
 			if (dep == null)
 				throw new IllegalArgumentException("No such dependency: " + ns);
 			return dep.getElement(name.substring(colon + 1));
@@ -579,7 +602,12 @@ public class QonfigToolkit implements Named, SelfDescribed {
 		int colon = name.indexOf(':');
 		if (colon >= 0) {
 			String ns = name.substring(0, colon);
-			QonfigToolkit dep = theDependencies.get(ns);
+			QonfigToolkit dep;
+			try {
+				dep = getDependency(ns);
+			} catch (ParseException e) {
+				throw new IllegalArgumentException(e.getMessage(), e);
+			}
 			if (dep == null)
 				throw new IllegalArgumentException("No such dependency: " + ns);
 			return dep.getAttributeType(name.substring(colon + 1));

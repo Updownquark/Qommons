@@ -18,17 +18,11 @@ public class PatternMatch {
 	/** @param m The regex pattern match */
 	public PatternMatch(Matcher m) {
 		theWholeText = m.group();
-		if (m.groupCount() == 0) {
-			theGroups = Collections.emptyList();
-			theNamedGroups = Collections.emptyMap();
-		} else {
-			theNamedGroups = Collections.unmodifiableMap(QommonsUtils.getCaptureGroups(m));
-			List<String> groups = new ArrayList<>(m.groupCount());
-			for (int i = 1; i <= m.groupCount(); i++) {
-				groups.add(m.group(i));
-			}
-			theGroups = Collections.unmodifiableList(groups);
-		}
+		theNamedGroups = Collections.unmodifiableMap(QommonsUtils.getCaptureGroups(m));
+		List<String> groups = new ArrayList<>(m.groupCount());
+		for (int i = 1; i <= m.groupCount(); i++)
+			groups.add(m.group(i));
+		theGroups = Collections.unmodifiableList(groups);
 	}
 
 	/** @return The full text of the match */
@@ -48,7 +42,9 @@ public class PatternMatch {
 
 	public String getGroup(String name) {
 		QommonsUtils.NamedGroupCapture capture = theNamedGroups.get(name);
-		return capture == null ? null : capture.value;
+		if (capture == null)
+			throw new IllegalArgumentException("No such named group: '" + name + "'");
+		return capture.value;
 	}
 
 	@Override

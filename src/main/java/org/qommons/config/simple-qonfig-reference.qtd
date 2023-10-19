@@ -2,8 +2,8 @@
 
 <qonfig-def name="Qonfig-Reference" version="0.1">
 	<value-types>
-		<pattern name="qonfig-type">((?&lt;ns&gt;[a-zA-Z0-9_\\-]+)\:)?(?&lt;name&gt;[a-zA-Z0-9_\\-]+)</pattern>
-		<pattern name="qonfig-member">(((?&lt;ns&gt;[a-zA-Z0-9_\\-]+)\:)?(?&lt;name&gt;[a-zA-Z0-9_\\-]+)\\.)?(?&lt;role&gt;[a-zA-Z0-9_\\-]+)</pattern>
+		<pattern name="qonfig-type">((?&lt;ns&gt;[a-zA-Z0-9_\-]+\s+v?\d+\.\d+)\:)?(?&lt;name&gt;[a-zA-Z0-9_\-]+)</pattern>
+		<pattern name="qonfig-member">(((?&lt;ns&gt;[a-zA-Z0-9_\-]+\s+v?\d+\.\d+)\:)?(?&lt;name&gt;[a-zA-Z0-9_\-]+)\.)?(?&lt;member&gt;[a-zA-Z0-9_\-]+)</pattern>
 	</value-types>
 	<elements>
 		<?DOC The element in a qonfig file that calls for external content to be stitched into its place?>
