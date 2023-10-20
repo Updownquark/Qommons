@@ -114,6 +114,11 @@ public class QonfigAutoInheritance {
 
 		public Compiler addRole(QonfigChildDef.Declared role, Consumer<QonfigAddOn> inheritance) {
 			if (theDeclaredRoles.add(role)) {
+				addTargetType(role.getType(), inheritance);
+				for (QonfigAddOn req : role.getRequirement())
+					addTargetType(req, inheritance);
+				for (QonfigAddOn inh : role.getInheritance())
+					addTargetType(inh, inheritance);
 				for (QonfigElementOrAddOn type : theParentTypes.values())
 					addFullRole(type.getAllChildren().get(role), inheritance);
 			}
@@ -134,11 +139,6 @@ public class QonfigAutoInheritance {
 						}
 					}
 				}
-				addTargetType(role.getType(), inheritance);
-				for (QonfigAddOn req : role.getRequirement())
-					addTargetType(req, inheritance);
-				for (QonfigAddOn inh : role.getInheritance())
-					addTargetType(inh, inheritance);
 			}
 		}
 

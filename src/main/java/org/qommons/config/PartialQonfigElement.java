@@ -9,6 +9,7 @@ import org.qommons.SelfDescribed;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.BetterMultiMap;
 import org.qommons.config.QonfigAttributeDef.Declared;
+import org.qommons.config.QonfigElement.AttributeValue;
 import org.qommons.config.QonfigElement.QonfigValue;
 import org.qommons.io.LocatedFilePosition;
 import org.qommons.io.LocatedPositionedContent;
@@ -20,7 +21,7 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	private final MultiInheritanceSet<QonfigAddOn> theInheritance;
 	private final Set<QonfigChildDef> theParentRoles;
 	private final Set<QonfigChildDef.Declared> theDeclaredRoles;
-	private final Map<QonfigAttributeDef.Declared, QonfigValue> theAttributes;
+	private final Map<QonfigAttributeDef.Declared, AttributeValue> theAttributes;
 	private final List<? extends PartialQonfigElement> theChildren;
 	private final BetterMultiMap<QonfigChildDef.Declared, ? extends PartialQonfigElement> theChildrenByRole;
 	private final QonfigValue theValue;
@@ -32,7 +33,7 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 
 	protected PartialQonfigElement(QonfigDocument document, PartialQonfigElement parent, QonfigElementOrAddOn type,
 		MultiInheritanceSet<QonfigAddOn> inheritance, Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles,
-		Map<Declared, QonfigValue> attributes, List<? extends PartialQonfigElement> children,
+		Map<Declared, AttributeValue> attributes, List<? extends PartialQonfigElement> children,
 		BetterMultiMap<QonfigChildDef.Declared, ? extends PartialQonfigElement> childrenByRole, QonfigValue value,
 		LocatedPositionedContent filePosition, String description, PartialQonfigElement promise, QonfigDocument externalContent) {
 		if (document.getPartialRoot() == null)
@@ -122,7 +123,7 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	}
 
 	/** @return The values of all attributes specified for this element */
-	public Map<QonfigAttributeDef.Declared, QonfigValue> getAttributes() {
+	public Map<QonfigAttributeDef.Declared, AttributeValue> getAttributes() {
 		return theAttributes;
 	}
 
@@ -300,7 +301,7 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	}
 
 	public void copyAttributes(QonfigElement.Builder child) {
-		for (Map.Entry<QonfigAttributeDef.Declared, QonfigValue> attr : theAttributes.entrySet())
+		for (Map.Entry<QonfigAttributeDef.Declared, AttributeValue> attr : theAttributes.entrySet())
 			child.withAttribute(attr.getKey(), attr.getValue());
 		if (theValue != null)
 			child.withValue(theValue.text, theValue.value, theValue.position);
@@ -311,10 +312,14 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 			myChild.copyInto(child);
 	}
 
+	public String toLocatedString() {
+		return theType.getName() + "@" + getPositionInFile().toShortString();
+	}
+
 	@Override
 	public String toString() {
 		StringBuilder str = new StringBuilder().append('<').append(theType.getName());
-		for (Map.Entry<QonfigAttributeDef.Declared, QonfigValue> attr : theAttributes.entrySet()) {
+		for (Map.Entry<QonfigAttributeDef.Declared, AttributeValue> attr : theAttributes.entrySet()) {
 			if (attr.getValue() != null)
 				str.append(' ').append(attr.getKey()).append("=\"").append(attr.getValue()).append('"');
 		}

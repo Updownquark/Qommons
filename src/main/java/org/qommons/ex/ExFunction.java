@@ -1,5 +1,6 @@
 package org.qommons.ex;
 
+import java.util.Objects;
 import java.util.function.Function;
 
 import org.qommons.LambdaUtils;
@@ -36,6 +37,10 @@ public interface ExFunction<F, T, E extends Throwable> {
 		};
 	}
 
+	default <X> ExFunction<F, X, E> andThen(ExFunction<? super T, X, ? extends E> next) {
+		return new CombinedExFn<>(this, next);
+	}
+
 	/**
 	 * @param <F> The argument type
 	 * @param <T> The return type
@@ -57,5 +62,41 @@ public interface ExFunction<F, T, E extends Throwable> {
 	 */
 	static <F> ExFunction<F, F, RuntimeException> identity() {
 		return (ExFunction<F, F, RuntimeException>) IDENTITY;
+	}
+
+	static class CombinedExFn<S, I, T, E extends Throwable> implements ExFunction<S, T, E> {
+		private final ExFunction<S, I, ? extends E> theFirst;
+		private final ExFunction<? super I, T, ? extends E> theSecond;
+
+		public CombinedExFn(ExFunction<S, I, ? extends E> first, ExFunction<? super I, T, ? extends E> second) {
+			theFirst = first;
+			theSecond = second;
+		}
+
+		@Override
+		public T apply(S value) throws E {
+			I intermediate = theFirst.apply(value);
+			return theSecond.apply(intermediate);
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(theFirst, theSecond);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof CombinedExFn))
+				return false;
+			CombinedExFn<?, ?, ?, ?> other = (CombinedExFn<?, ?, ?, ?>) obj;
+			return theFirst.equals(other.theFirst) && theSecond.equals(other.theSecond);
+		}
+
+		@Override
+		public String toString() {
+			return theFirst + "->" + theSecond;
+		}
 	}
 }

@@ -3,7 +3,6 @@ package org.qommons.config;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -116,7 +115,8 @@ public class QonfigInterpreterCore {
 				return this;
 			else if (theElement.isInstance(focusType)) {
 				MultiInheritanceSet<QonfigElementOrAddOn> types = MultiInheritanceSet.create(QonfigElementOrAddOn::isAssignableFrom);
-				types.add(theFocusType);
+				if (theFocusType != null)
+					types.add(theFocusType);
 				types.addAll(theTypes.values());
 				try (Transaction t = theReporting.interpreting()) {
 					return theInterpreter.interpret(this, theElement, focusType, MultiInheritanceSet.unmodifiable(types), theChildIndex);
@@ -164,7 +164,7 @@ public class QonfigInterpreterCore {
 		 * @return The special session of the same type with this core session as its {@link SpecialSession#getWrapped() wrapped}
 		 * @throws QonfigInterpretationException If an error occurs configuring the special session
 		 * @see SpecialSession#asElement(QonfigElementOrAddOn)
-		 * @see SpecialSession#interpretChild(QonfigElement, QonfigElementOrAddOn)
+		 * @see SpecialSession#forChild(QonfigElement, QonfigElementOrAddOn)
 		 * @see SpecialSession#intepretRoot(QonfigElement)
 		 */
 		public <QIS extends SpecialSession<QIS>> QIS recast(QIS interpreter) throws QonfigInterpretationException {
@@ -204,38 +204,9 @@ public class QonfigInterpreterCore {
 		}
 
 		@Override
-		public CoreSession interpretChild(QonfigElement child, QonfigElementOrAddOn asType) throws QonfigInterpretationException {
-			// Here we determine what types the child session should be aware of.
-			// It should be aware of all the sub-types and inheritance from the roles in all of this session's recognized types
-			// that the child fulfills.
-			// It should also be aware of all auto-inherited add-ons for toolkits and roles that this session recognizes.
-
-			MultiInheritanceSet<QonfigElementOrAddOn> types = MultiInheritanceSet.create(QonfigElementOrAddOn::isAssignableFrom);
-			Set<QonfigChildDef.Declared> roles = new LinkedHashSet<>();
-			// Add inheritance from recognized roles
-			for (QonfigChildDef.Declared role : child.getDeclaredRoles()) {
-				if (role.getOwner().isAssignableFrom(theFocusType) || theTypes.contains(role.getOwner())) {
-					roles.add(role);
-					if (role.getType() != null)
-						types.add(role.getType());
-					types.addAll(role.getRequirement());
-					types.addAll(role.getInheritance());
-				}
-			}
-
-			// Add auto-inheritance from recognized toolkits and roles
-			MultiInheritanceSet<QonfigToolkit> toolkits = MultiInheritanceSet.create(QonfigToolkit::dependsOn);
-			toolkits.add(theFocusType.getDeclarer());
-			for (QonfigElementOrAddOn type : theTypes.values())
-				toolkits.add(type.getDeclarer());
-			QonfigAutoInheritance.Compiler autoInheritance = new QonfigAutoInheritance.Compiler(toolkits.values());
-			autoInheritance.addParentType(theElement.getType(), types::add);
-			for (QonfigAddOn inh : theElement.getInheritance().values())
-				autoInheritance.addParentType(inh, types::add);
-			for (QonfigChildDef.Declared role : roles)
-				autoInheritance.addRole(role, types::add);
-
-			return theInterpreter.interpret(this, child, asType, MultiInheritanceSet.unmodifiable(types), //
+		public CoreSession forChild(QonfigElement child, QonfigElementOrAddOn focusType, MultiInheritanceSet<QonfigElementOrAddOn> types)
+			throws QonfigInterpretationException {
+			return theInterpreter.interpret(this, child, focusType, MultiInheritanceSet.unmodifiable(types), //
 				theElement.getChildren().indexOf(child));
 		}
 
@@ -261,6 +232,7 @@ public class QonfigInterpreterCore {
 				if (creator == null) {
 					String msg = "No creator registered for element " + as.getName() + " and target type " + asType.getName();
 					reporting().error(msg);
+					return null;
 				}
 				CoreSession session;
 				if (theFocusType == creator.element)

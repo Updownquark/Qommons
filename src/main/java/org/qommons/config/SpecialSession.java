@@ -55,8 +55,9 @@ public interface SpecialSession<QIS extends SpecialSession<QIS>> extends Abstrac
 	}
 
 	@Override
-	default QIS interpretChild(QonfigElement child, QonfigElementOrAddOn asType) throws QonfigInterpretationException {
-		return getWrapped().interpretChild(child, asType).recast((QIS) this);
+	default QIS forChild(QonfigElement child, QonfigElementOrAddOn focusType, MultiInheritanceSet<QonfigElementOrAddOn> types)
+		throws QonfigInterpretationException {
+		return getWrapped().forChild(child, focusType, types).recast((QIS) this);
 	}
 
 	@Override

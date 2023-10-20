@@ -11,10 +11,10 @@ import org.qommons.io.PositionedContent;
 /** A child that may be specified for an element */
 public interface QonfigChildDef extends QonfigElementOwned {
 	/** A child specification as originally declared */
-	interface Declared extends QonfigChildDef {
+	interface Declared extends QonfigChildDef, QonfigElementOwned.Declared {
 	}
 
-	/** @return The declared child that this definition is or inherits */
+	@Override
 	Declared getDeclared();
 
 	@Override

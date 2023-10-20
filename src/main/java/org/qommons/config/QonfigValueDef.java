@@ -6,10 +6,14 @@ import org.qommons.io.PositionedContent;
 /** Represents an element value specification */
 public interface QonfigValueDef extends QonfigElementOwned {
 	/** An element value specification as originally declared */
-	interface Declared extends QonfigValueDef {
+	interface Declared extends QonfigValueDef, QonfigElementOwned.Declared {
+		@Override
+		default QonfigValueDef.Declared getDeclared() {
+			return this;
+		}
 	}
 
-	/** @return The specification as originally declared */
+	@Override
 	Declared getDeclared();
 
 	/** @return The type of value that must be specified */

@@ -118,6 +118,7 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 		for (PartialQonfigElement extChild : extRefPromise.getChildrenByRole().get(role.getDeclared())) {
 			roles.addAll(childRef.getParentRoles());
 			parent.withChild2(roles, extChild.getType(), child -> {
+				child.withDocument(extChild.getDocument());
 				child.fulfills(usePromise, null);
 				for (QonfigAddOn inh : childRef.getInheritance().values())
 					child.inherits(inh, false);

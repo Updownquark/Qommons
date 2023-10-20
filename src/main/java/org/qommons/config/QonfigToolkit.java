@@ -409,6 +409,8 @@ public class QonfigToolkit implements Named, SelfDescribed {
 		if (nsOrDef.indexOf(' ') < 0)
 			return theDependencies.get(nsOrDef);
 		ToolkitDef def = ToolkitDef.parse(nsOrDef);
+		if (def.name.equals(theName) && def.majorVersion == theMajorVersion && def.minorVersion == theMinorVersion)
+			return this;
 		return theDependenciesByDefinition.getOrDefault(def.name, Collections.emptyNavigableMap())//
 			.get(def);
 	}

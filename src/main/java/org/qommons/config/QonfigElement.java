@@ -57,9 +57,22 @@ public final class QonfigElement extends PartialQonfigElement {
 		}
 	}
 
+	public static class AttributeValue extends QonfigValue {
+		private final PositionedContent theNamePosition;
+
+		public AttributeValue(String text, Object value, String fileLocation, PositionedContent position, PositionedContent namePosition) {
+			super(text, value, fileLocation, position);
+			theNamePosition = namePosition;
+		}
+
+		public PositionedContent getNamePosition() {
+			return theNamePosition;
+		}
+	}
+	
 	private QonfigElement(QonfigDocument doc, QonfigElement parent, QonfigElementDef type, MultiInheritanceSet<QonfigAddOn> inheritance,
 		Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles,
-		Map<QonfigAttributeDef.Declared, QonfigValue> attributes, List<QonfigElement> children,
+		Map<QonfigAttributeDef.Declared, AttributeValue> attributes, List<QonfigElement> children,
 		BetterMultiMap<QonfigChildDef.Declared, QonfigElement> childrenByRole, QonfigValue value, LocatedPositionedContent filePosition,
 		String description, QonfigElement promise, QonfigDocument externalContent) {
 		super(doc, parent, type, inheritance, parentRoles, declaredRoles, attributes, children, childrenByRole, value, filePosition,
@@ -115,7 +128,7 @@ public final class QonfigElement extends PartialQonfigElement {
 	}
 
 	/** Represents an attribute value before it is parsed */
-	public static interface AttributeValue {
+	public static interface AttributeValueInput {
 		/** @return The text value given for this attribute value */
 		String getText();
 
@@ -144,8 +157,8 @@ public final class QonfigElement extends PartialQonfigElement {
 		private final MultiInheritanceSet<QonfigAddOn> theInheritance;
 		private final QonfigAutoInheritance.Compiler theAutoInheritance;
 		private final List<ElementQualifiedParseItem> theDeclaredAttributes;
-		private final List<AttributeValue> theDeclaredAttributeValues;
-		private final Map<QonfigAttributeDef.Declared, QonfigValue> theProvidedAttributes;
+		private final List<AttributeValueInput> theDeclaredAttributeValues;
+		private final Map<QonfigAttributeDef.Declared, AttributeValue> theProvidedAttributes;
 		private final Set<QonfigChildDef> theParentRoles;
 		private final Set<QonfigChildDef.Declared> theDeclaredRoles;
 		private final List<PartialQonfigElement> theChildren;
@@ -300,7 +313,7 @@ public final class QonfigElement extends PartialQonfigElement {
 		 * @param value The attribute value
 		 * @return This builder
 		 */
-		public Builder withAttribute(ElementQualifiedParseItem attr, AttributeValue value) {
+		public Builder withAttribute(ElementQualifiedParseItem attr, AttributeValueInput value) {
 			if (theStage > 0)
 				throw new IllegalStateException("Cannot specify attributes after children");
 			if (attr.declaredElement != null && !attr.declaredElement.getDeclaredAttributes().containsKey(attr.itemName)) {
@@ -320,7 +333,7 @@ public final class QonfigElement extends PartialQonfigElement {
 			return this;
 		}
 
-		public Builder withAttribute(QonfigAttributeDef.Declared attr, QonfigValue value) {
+		public Builder withAttribute(QonfigAttributeDef.Declared attr, AttributeValue value) {
 			if (theStage > 0)
 				throw new IllegalStateException("Cannot specify attributes after children");
 			// Can't validate this yet because we don't know our full inheritance yet
@@ -627,7 +640,7 @@ public final class QonfigElement extends PartialQonfigElement {
 		}
 
 		private class AttributeCompiler {
-			final Map<QonfigAttributeDef.Declared, QonfigValue> attrValues;
+			final Map<QonfigAttributeDef.Declared, AttributeValue> attrValues;
 			final MultiInheritanceSet<QonfigAddOn> completeInheritance;
 			final BitSet parsedAttrs;
 
@@ -663,7 +676,7 @@ public final class QonfigElement extends PartialQonfigElement {
 				boolean inheritanceChanged = true;
 				while (inheritanceChanged) {
 					inheritanceChanged = false;
-					for (Map.Entry<QonfigAttributeDef.Declared, QonfigValue> attr : theProvidedAttributes.entrySet()) {
+					for (Map.Entry<QonfigAttributeDef.Declared, AttributeValue> attr : theProvidedAttributes.entrySet()) {
 						QonfigElementOrAddOn owner = attr.getKey().getOwner();
 						if (owner.isAssignableFrom(theType) //
 							|| (owner instanceof QonfigAddOn && completeInheritance.contains((QonfigAddOn) owner))) {
@@ -680,7 +693,7 @@ public final class QonfigElement extends PartialQonfigElement {
 						}
 					}
 				}
-				for (Map.Entry<QonfigAttributeDef.Declared, QonfigValue> attr : theProvidedAttributes.entrySet()) {
+				for (Map.Entry<QonfigAttributeDef.Declared, AttributeValue> attr : theProvidedAttributes.entrySet()) {
 					QonfigElementOrAddOn owner = attr.getKey().getOwner();
 					if (owner.isAssignableFrom(theType) //
 						|| (owner instanceof QonfigAddOn && completeInheritance.contains((QonfigAddOn) owner))) {//
@@ -716,8 +729,10 @@ public final class QonfigElement extends PartialQonfigElement {
 											else {
 												defaultedAttributes.put(mod.getKey(), true);
 												Object defValue = mod.getValue().getDefaultValue();
-												attrValues.put(mod.getKey(), new QonfigValue(String.valueOf(defValue), defValue,
-													mod.getValue().getDeclarer().getLocationString(), null));
+												attrValues.put(mod.getKey(),
+													new AttributeValue(String.valueOf(defValue), defValue,
+														mod.getValue().getDeclarer().getLocationString(),
+														mod.getValue().getDefaultValueContent(), mod.getValue().getContent()));
 											}
 										}
 									}
@@ -727,8 +742,10 @@ public final class QonfigElement extends PartialQonfigElement {
 									if (value == null && defaulted == null) {
 										Object defValue = mod.getValue().getDefaultValue();
 										if (defValue != null) {
-											attrValues.put(mod.getKey(), new QonfigValue(String.valueOf(defValue), defValue,
-												mod.getValue().getDeclarer().getLocationString(), null));
+											attrValues.put(mod.getKey(),
+												new AttributeValue(String.valueOf(defValue), defValue,
+													mod.getValue().getDeclarer().getLocationString(),
+													mod.getValue().getDefaultValueContent(), mod.getValue().getContent()));
 											defaultedAttributes.put(mod.getKey(), false);
 										}
 									}
@@ -851,7 +868,7 @@ public final class QonfigElement extends PartialQonfigElement {
 					if (attrValues.containsKey(attr.getDeclared())) {
 						theErrors.error("Duplicate values supplied for attribute " + attrDef.itemName, null);
 					}
-					AttributeValue attrValue = theDeclaredAttributeValues.get(i);
+					AttributeValueInput attrValue = theDeclaredAttributeValues.get(i);
 					Object value;
 					try {
 						value = attrValue.parseAttributeValue(theDocument.getDocToolkit(), attr, theErrors.at(attrValue.getPosition()));
@@ -861,7 +878,8 @@ public final class QonfigElement extends PartialQonfigElement {
 					}
 					if (addAttr) {
 						attrValues.put(attr.getDeclared(),
-							new QonfigValue(attrValue.getText(), value, theDocument.getLocation(), attrValue.getPosition()));
+							new AttributeValue(attrValue.getText(), value, theDocument.getLocation(), attrValue.getPosition(),
+								attrDef.position));
 						if (value != null) {
 							if (attr.getType() instanceof QonfigAddOn) {
 								if (completeInheritance.add((QonfigAddOn) value)) {
@@ -960,8 +978,8 @@ public final class QonfigElement extends PartialQonfigElement {
 						if (attrValues.get(attr) == null && attr.getSpecification() != SpecificationType.Required) {
 							Object defValue = attr.getDefaultValue();
 							if (defValue != null) {
-								attrValues.put(attr, new QonfigValue(defValue.toString(), defValue, attr.getDeclarer().getLocationString(),
-									attr.getDefaultValueContent()));
+								attrValues.put(attr, new AttributeValue(defValue.toString(), defValue,
+									attr.getDeclarer().getLocationString(), attr.getDefaultValueContent(), attr.getFilePosition()));
 								defaultedAttributes.put(attr, attr.getSpecification() == SpecificationType.Forbidden);
 							}
 						}
@@ -969,8 +987,10 @@ public final class QonfigElement extends PartialQonfigElement {
 					for (Map.Entry<QonfigAttributeDef.Declared, ? extends ValueDefModifier> attr : inh.getAttributeModifiers().entrySet()) {
 						if (attrValues.get(attr.getKey()) == null && attr.getValue().getSpecification() != SpecificationType.Required) {
 							Object defValue = attr.getValue().getDefaultValue();
-							attrValues.put(attr.getKey(), new QonfigValue(defValue == null ? null : defValue.toString(), defValue,
-								attr.getValue().getDeclarer().getLocationString(), attr.getValue().getDefaultValueContent()));
+							attrValues.put(attr.getKey(),
+								new AttributeValue(defValue == null ? null : defValue.toString(), defValue,
+									attr.getValue().getDeclarer().getLocationString(), attr.getValue().getDefaultValueContent(),
+									attr.getValue().getContent()));
 							defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
 						}
 					}
@@ -979,8 +999,9 @@ public final class QonfigElement extends PartialQonfigElement {
 					if (attrValues.get(attr.getKey()) == null && attr.getValue().getSpecification() != SpecificationType.Required) {
 						Object defValue = attr.getValue().getDefaultValue();
 						if (defValue != null) {
-							attrValues.put(attr.getKey(), new QonfigValue(defValue.toString(), defValue,
-								attr.getValue().getDeclarer().getLocationString(), attr.getValue().getDefaultValueContent()));
+							attrValues.put(attr.getKey(),
+								new AttributeValue(defValue.toString(), defValue, attr.getValue().getDeclarer().getLocationString(),
+									attr.getValue().getDefaultValueContent(), attr.getValue().getFilePosition()));
 							defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
 						}
 					}

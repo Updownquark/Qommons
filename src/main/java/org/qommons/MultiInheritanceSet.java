@@ -257,6 +257,8 @@ public interface MultiInheritanceSet<T> {
 
 		@Override
 		public boolean add(T value) {
+			if (value == null)
+				throw new NullPointerException();
 			int added = -1;
 			int size = theNodes.size();
 			for (int i = 0; i < size; i++) {

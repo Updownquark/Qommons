@@ -9,6 +9,10 @@ import org.qommons.io.PositionedContent;
 public interface QonfigAttributeDef extends QonfigValueDef {
 	/** An attribute specification as originally declared */
 	interface Declared extends QonfigAttributeDef, QonfigValueDef.Declared {
+		@Override
+		default QonfigAttributeDef.Declared getDeclared() {
+			return this;
+		}
 	}
 
 	@Override

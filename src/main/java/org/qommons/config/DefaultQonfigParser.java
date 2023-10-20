@@ -402,7 +402,7 @@ public class DefaultQonfigParser implements QonfigParser {
 		return true;
 	}
 
-	private static class AttParser implements QonfigElement.AttributeValue {
+	private static class AttParser implements QonfigElement.AttributeValueInput {
 		private final String theValue;
 		private final PositionedContent thePosition;
 

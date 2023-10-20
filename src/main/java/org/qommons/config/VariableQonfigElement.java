@@ -8,6 +8,7 @@ import java.util.function.BiConsumer;
 import org.qommons.MultiInheritanceSet;
 import org.qommons.collect.BetterMultiMap;
 import org.qommons.config.QonfigChildDef.Declared;
+import org.qommons.config.QonfigElement.AttributeValue;
 import org.qommons.config.QonfigElement.Builder;
 import org.qommons.config.QonfigElement.QonfigValue;
 import org.qommons.io.LocatedPositionedContent;
@@ -19,9 +20,9 @@ public class VariableQonfigElement extends PartialQonfigElement {
 
 	public VariableQonfigElement(QonfigDocument document, PartialQonfigElement parent, QonfigElementOrAddOn type,
 		MultiInheritanceSet<QonfigAddOn> inheritance, Set<QonfigChildDef> parentRoles, Set<Declared> declaredRoles,
-		Map<org.qommons.config.QonfigAttributeDef.Declared, QonfigValue> attributes, QonfigValue value,
-		LocatedPositionedContent filePosition, String description, PartialQonfigElement promiser, QonfigDocument externalContent,
-		int minimumCount, int maximumCount, BiConsumer<VariableQonfigElement, Builder> builder) {
+		Map<QonfigAttributeDef.Declared, AttributeValue> attributes, QonfigValue value, LocatedPositionedContent filePosition,
+		String description, PartialQonfigElement promiser, QonfigDocument externalContent, int minimumCount, int maximumCount,
+		BiConsumer<VariableQonfigElement, Builder> builder) {
 		super(document, parent, type, inheritance, parentRoles, declaredRoles, attributes, Collections.emptyList(), BetterMultiMap.empty(),
 			value, filePosition, description, promiser, externalContent);
 		theMinimumCount = minimumCount;
