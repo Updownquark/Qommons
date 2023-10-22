@@ -40,7 +40,7 @@ public interface SpecialSessionImplementation<QIS extends SpecialSession<QIS>> {
 
 	/**
 	 * @param coreSession The core session representing the element
-	 * @param source The special session, if any, that requested the interpretation (via {@link AbstractQIS#intepretRoot(QonfigElement)}
+	 * @param source The special session, if any, that requested the interpretation (via {@link AbstractQIS#interpretRoot(QonfigElement)}
 	 * @return The special session for the element
 	 * @throws QonfigInterpretationException If an error occurs creating the session
 	 */
@@ -65,7 +65,7 @@ public interface SpecialSessionImplementation<QIS extends SpecialSession<QIS>> {
 	 * Performs any necessary initialization on the new root session, created with {@link #viewOfRoot(CoreSession, SpecialSession)}
 	 * 
 	 * @param session The session to initialize
-	 * @param source The special session, if any, that requested the interpretation (via {@link AbstractQIS#intepretRoot(QonfigElement)}
+	 * @param source The special session, if any, that requested the interpretation (via {@link AbstractQIS#interpretRoot(QonfigElement)}
 	 * @throws QonfigInterpretationException If an error occurs initializing the session
 	 */
 	void postInitRoot(QIS session, QIS source) throws QonfigInterpretationException;

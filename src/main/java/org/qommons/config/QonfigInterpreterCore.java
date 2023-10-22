@@ -42,7 +42,7 @@ public class QonfigInterpreterCore {
 		 * 
 		 * @param interpreter The interpreter this session is for
 		 * @param root The root element of the interpretation
-		 * @param source The session (if any) that {@link #intepretRoot(QonfigElement)} was called on
+		 * @param source The session (if any) that {@link #interpretRoot(QonfigElement)} was called on
 		 * @param reporting The error reporting for this session
 		 * @throws QonfigInterpretationException If an error occurs initializing this session
 		 */
@@ -165,7 +165,7 @@ public class QonfigInterpreterCore {
 		 * @throws QonfigInterpretationException If an error occurs configuring the special session
 		 * @see SpecialSession#asElement(QonfigElementOrAddOn)
 		 * @see SpecialSession#forChild(QonfigElement, QonfigElementOrAddOn)
-		 * @see SpecialSession#intepretRoot(QonfigElement)
+		 * @see SpecialSession#interpretRoot(QonfigElement)
 		 */
 		public <QIS extends SpecialSession<QIS>> QIS recast(QIS interpreter) throws QonfigInterpretationException {
 			BiTuple<Class<QIS>, SpecialSessionImplementation<QIS>> found = (BiTuple<Class<QIS>, SpecialSessionImplementation<QIS>>) (BiTuple<?, ?>) theInterpreter.theSpecialSessions
@@ -211,7 +211,7 @@ public class QonfigInterpreterCore {
 		}
 
 		@Override
-		public CoreSession intepretRoot(QonfigElement root) throws QonfigInterpretationException {
+		public CoreSession interpretRoot(QonfigElement root) throws QonfigInterpretationException {
 			if (root.getParent() != null)
 				throw new IllegalArgumentException("Not a root");
 			return theInterpreter.interpret(root);
@@ -745,7 +745,7 @@ public class QonfigInterpreterCore {
 
 	/**
 	 * @param element The element to interpret
-	 * @param source The element (if any) that {@link CoreSession#intepretRoot(QonfigElement)} was called on
+	 * @param source The element (if any) that {@link CoreSession#interpretRoot(QonfigElement)} was called on
 	 * @return The session to use to interpret the element
 	 * @throws QonfigInterpretationException If an error occurs initializing the session
 	 */

@@ -78,7 +78,7 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>>
 	 * @return The interpretation session for the element
 	 * @throws QonfigInterpretationException If an error occurs configuring the interpreter
 	 */
-	QIS intepretRoot(QonfigElement root) throws QonfigInterpretationException;
+	QIS interpretRoot(QonfigElement root) throws QonfigInterpretationException;
 
 	/** @return The object being interpreted from this session's element */
 	default Object getElementRepresentation() {

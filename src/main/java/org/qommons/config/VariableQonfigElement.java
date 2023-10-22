@@ -21,7 +21,7 @@ public class VariableQonfigElement extends PartialQonfigElement {
 	public VariableQonfigElement(QonfigDocument document, PartialQonfigElement parent, QonfigElementOrAddOn type,
 		MultiInheritanceSet<QonfigAddOn> inheritance, Set<QonfigChildDef> parentRoles, Set<Declared> declaredRoles,
 		Map<QonfigAttributeDef.Declared, AttributeValue> attributes, QonfigValue value, LocatedPositionedContent filePosition,
-		String description, PartialQonfigElement promiser, QonfigDocument externalContent, int minimumCount, int maximumCount,
+		String description, PartialQonfigElement promiser, PartialQonfigElement externalContent, int minimumCount, int maximumCount,
 		BiConsumer<VariableQonfigElement, Builder> builder) {
 		super(document, parent, type, inheritance, parentRoles, declaredRoles, attributes, Collections.emptyList(), BetterMultiMap.empty(),
 			value, filePosition, description, promiser, externalContent);

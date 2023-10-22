@@ -133,19 +133,19 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 				"Fulfills target '" + fulfillsType + "' does not extent " + theExtReferenceType
 					+ ", as this external reference fulfillment expects",
 				LocatedPositionedContent.of(fulfills.fileLocation, fulfills.position), null);
-		return new QonfigExternalContent(doc, fulfillsType);
+		return new QonfigExternalContent(doc.getPartialRoot().getChildrenByRole().get(theFulfillmentChild).getFirst(), fulfillsType);
 	}
 
 	protected void fulfillWithExternalReference(QonfigElement.Builder builder, List<ElementQualifiedParseItem> declaredRoles,
 		Set<QonfigAddOn> inheritance, QonfigExternalContent content, PartialQonfigElement promise,
 		QonfigParseSession session) {
-		PartialQonfigElement fulfillment = content.getDocument().getPartialRoot().getChildrenByRole().get(theFulfillmentChild).getFirst();
+		PartialQonfigElement fulfillment = content.getFulfillment();
 		builder.withChild(declaredRoles, fulfillment.getType(), child -> {
 			for (QonfigAddOn inh : fulfillment.getInheritance().values())
 				child.inherits(inh, false);
 			for (QonfigAddOn inh : inheritance)
 				child.inherits(inh, false);
-			child.fulfills(promise, content.getDocument());
+			child.fulfills(promise, content.getFulfillment());
 			buildContent(child, fulfillment, promise, session);
 		}, fulfillment.getFilePosition(), fulfillment.getDescription());
 	}
@@ -156,14 +156,14 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 	}
 
 	public static class QonfigExternalContent {
-		private final QonfigDocument theDocument;
+		private final PartialQonfigElement theFulfillment;
 		private final QonfigElementOrAddOn theReferenceType;
 		private final String theErrorMessage;
 		private final LocatedPositionedContent theErrorPosition;
 		private final Throwable theErrorThrowable;
 
-		public QonfigExternalContent(QonfigDocument document, QonfigElementOrAddOn referenceType) {
-			theDocument = document;
+		public QonfigExternalContent(PartialQonfigElement fulfillment, QonfigElementOrAddOn referenceType) {
+			theFulfillment = fulfillment;
 			theReferenceType = referenceType;
 			theErrorMessage = null;
 			theErrorPosition = null;
@@ -174,7 +174,7 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 			theErrorMessage = errorMessage;
 			theErrorPosition = errorPosition;
 			theErrorThrowable = errorThrowable;
-			theDocument = null;
+			theFulfillment = null;
 			theReferenceType = null;
 		}
 
@@ -193,8 +193,8 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 				return true;
 		}
 
-		public QonfigDocument getDocument() {
-			return theDocument;
+		public PartialQonfigElement getFulfillment() {
+			return theFulfillment;
 		}
 
 		public QonfigElementOrAddOn getReferenceType() {

@@ -29,13 +29,13 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	private final String theDescription;
 
 	private final PartialQonfigElement thePromise;
-	private final QonfigDocument theExternalContent;
+	private final PartialQonfigElement theExternalContent;
 
 	protected PartialQonfigElement(QonfigDocument document, PartialQonfigElement parent, QonfigElementOrAddOn type,
 		MultiInheritanceSet<QonfigAddOn> inheritance, Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles,
 		Map<Declared, AttributeValue> attributes, List<? extends PartialQonfigElement> children,
 		BetterMultiMap<QonfigChildDef.Declared, ? extends PartialQonfigElement> childrenByRole, QonfigValue value,
-		LocatedPositionedContent filePosition, String description, PartialQonfigElement promise, QonfigDocument externalContent) {
+		LocatedPositionedContent filePosition, String description, PartialQonfigElement promise, PartialQonfigElement externalContent) {
 		if (document.getPartialRoot() == null)
 			document.setRoot(this);
 		theDocument = document;
@@ -103,7 +103,7 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 		return thePromise;
 	}
 
-	public QonfigDocument getExternalContent() {
+	public PartialQonfigElement getExternalContent() {
 		return theExternalContent;
 	}
 

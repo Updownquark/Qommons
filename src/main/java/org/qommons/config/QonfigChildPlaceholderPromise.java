@@ -83,11 +83,11 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 				extRefPromise = p.getPromise();
 		} else {
 			// Go look through the ancestors to find the element containing the content to fulfill this promise
-			if (parent.getExternalContent() == promise.getDocument())
+			if (parent.getExternalContent() != null && parent.getExternalContent().getDocument() == promise.getDocument())
 				extRefPromise = parent.getPromise();
 			else {
 				for (PartialQonfigElement p = parent.getParent(); p != null; p = p.getParent()) {
-					if (p.getExternalContent() == promise.getDocument()) {
+					if (p.getExternalContent() != null && p.getExternalContent().getDocument() == promise.getDocument()) {
 						extRefPromise = p.getPromise();
 						break;
 					}
@@ -119,7 +119,7 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 			roles.addAll(childRef.getParentRoles());
 			parent.withChild2(roles, extChild.getType(), child -> {
 				child.withDocument(extChild.getDocument());
-				child.fulfills(usePromise, null);
+				child.fulfills(usePromise, extChild);
 				for (QonfigAddOn inh : childRef.getInheritance().values())
 					child.inherits(inh, false);
 				for (QonfigAddOn inh : extChild.getInheritance().values())

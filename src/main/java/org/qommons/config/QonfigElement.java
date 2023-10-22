@@ -74,7 +74,7 @@ public final class QonfigElement extends PartialQonfigElement {
 		Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles,
 		Map<QonfigAttributeDef.Declared, AttributeValue> attributes, List<QonfigElement> children,
 		BetterMultiMap<QonfigChildDef.Declared, QonfigElement> childrenByRole, QonfigValue value, LocatedPositionedContent filePosition,
-		String description, QonfigElement promise, QonfigDocument externalContent) {
+		String description, QonfigElement promise, PartialQonfigElement externalContent) {
 		super(doc, parent, type, inheritance, parentRoles, declaredRoles, attributes, children, childrenByRole, value, filePosition,
 			description, promise, externalContent);
 	}
@@ -166,7 +166,7 @@ public final class QonfigElement extends PartialQonfigElement {
 		private final String theDescription;
 		private QonfigValue theValue;
 
-		private QonfigDocument theExternalContent;
+		private PartialQonfigElement theExternalContent;
 		private PartialQonfigElement thePromise;
 
 		private PartialQonfigElement theElement;
@@ -242,7 +242,7 @@ public final class QonfigElement extends PartialQonfigElement {
 			return isPartial;
 		}
 
-		public QonfigDocument getExternalContent() {
+		public PartialQonfigElement getExternalContent() {
 			return theExternalContent;
 		}
 
@@ -271,7 +271,7 @@ public final class QonfigElement extends PartialQonfigElement {
 			return this;
 		}
 
-		public Builder fulfills(PartialQonfigElement promise, QonfigDocument externalContent) {
+		public Builder fulfills(PartialQonfigElement promise, PartialQonfigElement externalContent) {
 			if (!isPartial && !(promise instanceof QonfigElement))
 				throw new IllegalArgumentException("Full elements must have full promises");
 			thePromise = promise;

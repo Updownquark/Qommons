@@ -61,8 +61,8 @@ public interface SpecialSession<QIS extends SpecialSession<QIS>> extends Abstrac
 	}
 
 	@Override
-	default QIS intepretRoot(QonfigElement root) throws QonfigInterpretationException {
-		return getWrapped().intepretRoot(root).recast((QIS) this);
+	default QIS interpretRoot(QonfigElement root) throws QonfigInterpretationException {
+		return getWrapped().interpretRoot(root).recast((QIS) this);
 	}
 
 	@Override
