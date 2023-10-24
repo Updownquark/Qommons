@@ -301,9 +301,11 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	}
 
 	public void copyAttributes(QonfigElement.Builder child) {
-		for (Map.Entry<QonfigAttributeDef.Declared, AttributeValue> attr : theAttributes.entrySet())
-			child.withAttribute(attr.getKey(), attr.getValue());
-		if (theValue != null)
+		for (Map.Entry<QonfigAttributeDef.Declared, AttributeValue> attr : theAttributes.entrySet()) {
+			if (attr.getValue().fileLocation.equals(theDocument.getLocation()))
+				child.withAttribute(attr.getKey(), attr.getValue());
+		}
+		if (theValue != null && theValue.fileLocation.equals(theDocument.getLocation()))
 			child.withValue(theValue.text, theValue.value, theValue.position);
 	}
 

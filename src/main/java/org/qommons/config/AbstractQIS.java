@@ -141,6 +141,16 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>>
 		return values().computeIfAbsent(sessionKey, creator);
 	}
 
+	@Override
+	default Set<String> keySet() {
+		return values().keySet();
+	}
+
+	@Override
+	default ValueSource getSource(String sessionKey) {
+		return values().getSource(sessionKey);
+	}
+
 	/** Implementation methods for {@link AbstractQIS} that I didn't want to expose */
 	class Impl {
 		private Impl() {

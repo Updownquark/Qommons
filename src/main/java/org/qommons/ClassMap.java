@@ -103,7 +103,7 @@ public class ClassMap<V> {
 		/** @param type The super-type of classes that this subclass map can support */
 		ClassMapEntry(Class<C> type) {
 			theType = type;
-			theSubMaps = new ArrayList<>(3);
+			theSubMaps = new ArrayList<>();
 		}
 
 		/** @return The super-type of classes that this subclass map can support */

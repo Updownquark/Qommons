@@ -7,7 +7,7 @@ public class QonfigDocument {
 	private PartialQonfigElement theRoot;
 
 	QonfigDocument(String location, QonfigToolkit toolkit) {
-		theLocation = location;
+		theLocation = location.intern(); // This string is compared a lot in my code, so this speeds that up
 		theToolkit = toolkit;
 	}
 
