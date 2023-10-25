@@ -452,7 +452,8 @@ public class QuarkApplicationVersioning {
 	public ApplicationVersionDeployment parseDeployment(InputStream in, BetterFile distributionDir) throws IOException, TextParseException {
 		StrictXmlReader root = StrictXmlReader.ofRoot(in);
 		if (!root.getName().equals("application-deploy"))
-			throw new TextParseException("Expected 'application-deploy' for root, not '" + root.getName() + "'", root.getNamePosition());
+			throw new TextParseException("Expected 'application-deploy' for root, not '" + root.getName() + "'",
+				root.getNamePosition().getPosition(0));
 
 		ApplicationVersionDescription app = parseApplication(root, distributionDir, true, true);
 		DirectoryDeployment deploy = parseDeployPolicy(root.getElement("deploy"), true);
@@ -516,7 +517,7 @@ public class QuarkApplicationVersioning {
 			avXml = StrictXmlReader.ofRoot(in);
 		}
 		if (!"application-versions".equals(avXml.getName()))
-			throw new TextParseException("Expected 'application-versions'", avXml.getNamePosition());
+			throw new TextParseException("Expected 'application-versions'", avXml.getNamePosition().getPosition(0));
 		List<ApplicationVersionDescription> apps = new ArrayList<>();
 		for (StrictXmlReader appXml : avXml.getElements("application-version")) {
 			try {
@@ -669,8 +670,7 @@ public class QuarkApplicationVersioning {
 				}
 
 				@Override
-				public void setTotalProgress(int progress2) {
-				}
+				public void setTotalProgress(int progress2) {}
 
 				@Override
 				public void setCurrentFile(String file) {
@@ -685,8 +685,7 @@ public class QuarkApplicationVersioning {
 				}
 
 				@Override
-				public void setCurrentFileProgress(int progress2) {
-				}
+				public void setCurrentFileProgress(int progress2) {}
 
 				@Override
 				public boolean isCanceled() {
@@ -694,7 +693,7 @@ public class QuarkApplicationVersioning {
 				}
 			};
 			fileLabel.setText("Calculating...");
-			int files=getFileCount(replacementDirectory);
+			int files = getFileCount(replacementDirectory);
 			progress.setTotal(files, 1);
 			update(installDirectory, replacementDirectory, backupDir, progress);
 		} catch (IOException | RuntimeException | Error e) {
@@ -850,8 +849,7 @@ public class QuarkApplicationVersioning {
 		case "update":
 			try {
 				Thread.sleep(3000); // Wait for the process to truly die
-			} catch (InterruptedException e) {
-			}
+			} catch (InterruptedException e) {}
 			try {
 				UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
 			} catch (ClassNotFoundException | InstantiationException | IllegalAccessException | UnsupportedLookAndFeelException e) {
@@ -955,7 +953,7 @@ public class QuarkApplicationVersioning {
 				distXml.getAttributeValuePosition("explode").getPosition(0));
 		String hashS = distXml.getAttributeIfExists("hash");
 		if (hashS == null && distributionDir == null)
-			throw new TextParseException("No 'hash' attribute found", distXml.getNamePosition());
+			throw new TextParseException("No 'hash' attribute found", distXml.getNamePosition().getPosition(0));
 		Map<String, Requirement> requirements = new LinkedHashMap<>();
 		try (StrictXmlReader reqsXml = distXml.getElementIfExists("requirements")) {
 			for (StrictXmlReader reqXml : reqsXml.getElements("require")) {
@@ -964,10 +962,10 @@ public class QuarkApplicationVersioning {
 				String minS = reqXml.getAttributeIfExists("min");
 				if (values.isEmpty() && minS == null)
 					throw new TextParseException("Either a min value or a list of values must be specified on a requirement",
-						reqXml.getNamePosition());
+						reqXml.getNamePosition().getPosition(0));
 				else if (!values.isEmpty() && minS != null)
 					throw new TextParseException("Either a min value or a list of values, but not both, must be specified on a requirement",
-						reqXml.getNamePosition());
+						reqXml.getNamePosition().getPosition(0));
 				String maxS = reqXml.getAttributeIfExists("max");
 				if (strict)
 					reqXml.check();
@@ -1008,7 +1006,7 @@ public class QuarkApplicationVersioning {
 		List<FileDeployment> files = null;
 		for (StrictXmlReader fileXml : policyXml.getElements("file")) {
 			if (file.isIgnored())
-				throw new TextParseException("If ignore is true, contents don't matter", fileXml.getNamePosition());
+				throw new TextParseException("If ignore is true, contents don't matter", fileXml.getNamePosition().getPosition(0));
 			if (files == null)
 				files = new ArrayList<>();
 			files.add(parseDeployFile(fileXml, false));
@@ -1020,7 +1018,7 @@ public class QuarkApplicationVersioning {
 		List<DirectoryDeployment> directories = null;
 		for (StrictXmlReader dirXml : policyXml.getElements("directory")) {
 			if (file.isIgnored())
-				throw new TextParseException("If ignore is true, contents don't matter", dirXml.getNamePosition());
+				throw new TextParseException("If ignore is true, contents don't matter", dirXml.getNamePosition().getPosition(0));
 			if (directories == null)
 				directories = new ArrayList<>();
 			directories.add(parseDeployPolicy(dirXml, false));
@@ -1055,9 +1053,11 @@ public class QuarkApplicationVersioning {
 		String compressS = fileXml.getAttributeIfExists("compress");
 		if (ignore) {
 			if (rename != null)
-				throw new TextParseException("If ignore is true, rename doesn't matter", fileXml.getAttributeNamePosition("rename"));
+				throw new TextParseException("If ignore is true, rename doesn't matter",
+					fileXml.getAttributeNamePosition("rename").getPosition(0));
 			if (compressS != null)
-				throw new TextParseException("If ignore is true, compression doesn't matter", fileXml.getAttributeNamePosition("compress"));
+				throw new TextParseException("If ignore is true, compression doesn't matter",
+					fileXml.getAttributeNamePosition("compress").getPosition(0));
 		}
 		boolean compress = "true".equalsIgnoreCase(compressS);
 		if (!compress && compressS != null && !"false".equalsIgnoreCase(compressS))
@@ -1460,13 +1460,13 @@ public class QuarkApplicationVersioning {
 		}
 		return progressBytes;
 	}
-	
+
 	private static int getFileCount(BetterFile dir) {
-		if(!dir.isDirectory())
+		if (!dir.isDirectory())
 			return 1;
-		int files=0;
-		for(BetterFile file : dir.listFiles())
-			files+=getFileCount(file);
+		int files = 0;
+		for (BetterFile file : dir.listFiles())
+			files += getFileCount(file);
 		return files;
 	}
 

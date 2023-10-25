@@ -105,7 +105,7 @@ public class StrictXmlReader implements Named, Transaction {
 	}
 
 	/** @return The file position of the element's name in its opening tag */
-	public FilePosition getNamePosition() {
+	public PositionedContent getNamePosition() {
 		return SimpleXMLParser.getNamePosition(theElement);
 	}
 
@@ -136,7 +136,8 @@ public class StrictXmlReader implements Named, Transaction {
 	public String getAttribute(String name) throws TextParseException {
 		String value = getAttributeIfExists(name);
 		if (value == null)
-			throw new TextParseException(getPath() + ": No attribute '" + name + "' specified on element " + getPath(), getNamePosition());
+			throw new TextParseException(getPath() + ": No attribute '" + name + "' specified on element " + getPath(),
+				getNamePosition().getPosition(0));
 		return value;
 	}
 
@@ -194,7 +195,7 @@ public class StrictXmlReader implements Named, Transaction {
 		if (found.size() < min || (max >= 0 && found.size() > max))
 			throw new TextParseException(getPath() + ": Between " + min + " and " + max + " attribute"
 				+ ((min == max && max == 1) ? "" : "s") + " matching " + pattern.pattern() + " expected," + " but found " + found.size(),
-				getNamePosition());
+				getNamePosition().getPosition(0));
 		return found;
 	}
 
@@ -215,7 +216,7 @@ public class StrictXmlReader implements Named, Transaction {
 	 * @param name The name of the attribute
 	 * @return The file position of the attribute's name, or null if the attribute was not specified
 	 */
-	public FilePosition getAttributeNamePosition(String name) {
+	public PositionedContent getAttributeNamePosition(String name) {
 		Node node = theElement.getAttributeNode(name);
 		if (node == null)
 			return null;
@@ -266,7 +267,7 @@ public class StrictXmlReader implements Named, Transaction {
 		List<StrictXmlReader> found = getElements(name);
 		if (found.size() < min || (max >= 0 && found.size() > max))
 			throw new TextParseException(getPath() + ": Between " + min + " and " + max + " '" + name + "' element"
-				+ ((min == max && max == 1) ? "" : "s") + " expected," + " but found " + found.size(), getNamePosition());
+				+ ((min == max && max == 1) ? "" : "s") + " expected," + " but found " + found.size(), getNamePosition().getPosition(0));
 		return found;
 	}
 
@@ -286,7 +287,7 @@ public class StrictXmlReader implements Named, Transaction {
 				continue;
 			if (found != null)
 				throw new TextParseException(getPath() + ": Multiple '" + name + "' elements specified under parent " + getPath(),
-					getNamePosition());
+					getNamePosition().getPosition(0));
 			found = (Element) n;
 			foundIdx = i;
 			theUsedNodes.set(i + theElement.getAttributes().getLength());
@@ -312,7 +313,8 @@ public class StrictXmlReader implements Named, Transaction {
 
 		StrictXmlReader found = getElementIfExists(name);
 		if (found == null)
-			throw new TextParseException(getPath() + ": No element '" + name + "' specified under parent " + getPath(), getNamePosition());
+			throw new TextParseException(getPath() + ": No element '" + name + "' specified under parent " + getPath(),
+				getNamePosition().getPosition(0));
 		return found;
 	}
 
@@ -354,7 +356,7 @@ public class StrictXmlReader implements Named, Transaction {
 		List<StrictXmlReader> found = getElements();
 		if (found.size() < min || (max >= 0 && found.size() > max))
 			throw new TextParseException(getPath() + ": Between " + min + " and " + max + " element" + ((min == max && max == 1) ? "" : "s")
-				+ " expected," + " but found " + found.size(), getNamePosition());
+				+ " expected," + " but found " + found.size(), getNamePosition().getPosition(0));
 		return found;
 	}
 
@@ -375,7 +377,7 @@ public class StrictXmlReader implements Named, Transaction {
 				if (!isWhiteSpace(n.getNodeValue())) {
 					if (found != null)
 						throw new TextParseException(getPath() + ": Multiple text/CDATA sections specified under parent " + getPath(),
-							getNamePosition());
+							getNamePosition().getPosition(0));
 					found = n.getNodeValue();
 				}
 				theUsedNodes.set(i + attLen);
@@ -398,7 +400,7 @@ public class StrictXmlReader implements Named, Transaction {
 			return null;
 		String found = getTextTrimIfExists();
 		if (found == null)
-			throw new TextParseException(getPath() + ": No text specified on element " + getPath(), getNamePosition());
+			throw new TextParseException(getPath() + ": No text specified on element " + getPath(), getNamePosition().getPosition(0));
 		return found;
 	}
 
@@ -527,7 +529,7 @@ public class StrictXmlReader implements Named, Transaction {
 			return null;
 		String completeText = getCompleteTextIfSpecified(trim);
 		if (completeText == null)
-			throw new TextParseException(getPath() + ": No text specified on element " + getPath(), getNamePosition());
+			throw new TextParseException(getPath() + ": No text specified on element " + getPath(), getNamePosition().getPosition(0));
 		return completeText;
 	}
 
@@ -565,7 +567,7 @@ public class StrictXmlReader implements Named, Transaction {
 		List<String> text = getAllText(trim);
 		if (text.size() < min || (max >= 0 && text.size() > max))
 			throw new TextParseException(getPath() + ": Between " + min + " and " + max + " text section"
-				+ ((min == max && max == 1) ? "" : "s") + " expected," + " but found " + text.size(), getNamePosition());
+				+ ((min == max && max == 1) ? "" : "s") + " expected," + " but found " + text.size(), getNamePosition().getPosition(0));
 		return text;
 	}
 
@@ -634,7 +636,7 @@ public class StrictXmlReader implements Named, Transaction {
 				for (FilePosition pos : err.getValue())
 					str.append("\n\t\t").append(pos);
 			}
-			throw new TextParseException(str.toString(), getNamePosition());
+			throw new TextParseException(str.toString(), getNamePosition().getPosition(0));
 		}
 	}
 
@@ -649,10 +651,12 @@ public class StrictXmlReader implements Named, Transaction {
 			Node n = i < attLen ? theElement.getAttributes().item(i) : theElement.getChildNodes().item(i - attLen);
 			switch (n.getNodeType()) {
 			case Node.ELEMENT_NODE:
-				errs.computeIfAbsent(path + ((Element) n).getTagName(), __ -> new ArrayList<>()).add(SimpleXMLParser.getNamePosition(n));
+				errs.computeIfAbsent(path + ((Element) n).getTagName(), __ -> new ArrayList<>())
+					.add(SimpleXMLParser.getNamePosition(n).getPosition(0));
 				break;
 			case Node.ATTRIBUTE_NODE:
-				errs.computeIfAbsent(path + n.getNodeName(), __ -> new ArrayList<>()).add(SimpleXMLParser.getNamePosition(n));
+				errs.computeIfAbsent(path + n.getNodeName(), __ -> new ArrayList<>())
+					.add(SimpleXMLParser.getNamePosition(n).getPosition(0));
 				break;
 			case Node.TEXT_NODE:
 				if (!isWhiteSpace(n.getNodeValue()))

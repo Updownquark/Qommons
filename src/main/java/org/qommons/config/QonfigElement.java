@@ -281,6 +281,8 @@ public final class QonfigElement extends PartialQonfigElement {
 
 		/**
 		 * @param addOn An add-on directly declared for the element to inherit
+		 * @param appliedDirect Whether the inheritance was applied directly to the element from the document (as opposed to being a result
+		 *        of a role or auto-inheritance)
 		 * @return This builder
 		 */
 		public Builder inherits(QonfigAddOn addOn, boolean appliedDirect) {

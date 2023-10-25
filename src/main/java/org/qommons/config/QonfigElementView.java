@@ -467,7 +467,8 @@ public interface QonfigElementView<E extends PartialQonfigElement, X extends Thr
 		} catch (ParseException e) {
 			throw new IllegalArgumentException("Bad toolkit definition: " + toolkitDef, e);
 		}
-		tk = getFocusType().getDeclarer().getDependenciesByDefinition().getOrDefault(def.name, Collections.emptyNavigableMap())//
+		tk = getElement().getDocument().getDocToolkit().getDependenciesByDefinition()
+			.getOrDefault(def.name, Collections.emptyNavigableMap())//
 			.get(def);
 		if (tk != null)
 			return tk;

@@ -356,9 +356,10 @@ public class SimpleXMLParserTest {
 
 		void validate(XmlProcessingInstruction pi) {
 			Assert.assertEquals(theTarget, pi.getTargetName());
-			Assert.assertEquals(theTargetPosition, pi.getTargetPosition().getPosition());
-			Assert.assertEquals(theTargetLine, pi.getTargetPosition().getLineNumber());
-			Assert.assertEquals(theTargetChar, pi.getTargetPosition().getCharNumber());
+			FilePosition targetPos = pi.getTargetContent().getPosition(0);
+			Assert.assertEquals(theTargetPosition, targetPos.getPosition());
+			Assert.assertEquals(theTargetLine, targetPos.getLineNumber());
+			Assert.assertEquals(theTargetChar, targetPos.getCharNumber());
 			if (pi.getValueOffset() < 0)
 				Assert.assertNull(getContent());
 			else
@@ -392,9 +393,10 @@ public class SimpleXMLParserTest {
 			Assert.assertEquals(elementName, element.getName());
 			if (lineNumber >= 0) {
 				Assert.assertTrue(element.getNameOffset() >= 0);
-				Assert.assertEquals(position, element.getNamePosition().getPosition());
-				Assert.assertEquals(lineNumber, element.getNamePosition().getLineNumber());
-				Assert.assertEquals(charNumber, element.getNamePosition().getCharNumber());
+				FilePosition namePos = element.getNamePosition().getPosition(0);
+				Assert.assertEquals(position, namePos.getPosition());
+				Assert.assertEquals(lineNumber, namePos.getLineNumber());
+				Assert.assertEquals(charNumber, namePos.getCharNumber());
 			} else
 				Assert.assertTrue(element.getNameOffset() < 0);
 		}
@@ -428,9 +430,10 @@ public class SimpleXMLParserTest {
 
 		void validate(XmlAttribute attribute) {
 			Assert.assertEquals(attributeName, attribute.getName());
-			Assert.assertEquals(namePosition, attribute.getNamePosition().getPosition());
-			Assert.assertEquals(nameLineNumber, attribute.getNamePosition().getLineNumber());
-			Assert.assertEquals(nameCharNumber, attribute.getNamePosition().getCharNumber());
+			FilePosition namePos = attribute.getNamePosition().getPosition(0);
+			Assert.assertEquals(namePosition, namePos.getPosition());
+			Assert.assertEquals(nameLineNumber, namePos.getLineNumber());
+			Assert.assertEquals(nameCharNumber, namePos.getCharNumber());
 			validateContent(attribute.getValueContent());
 		}
 

@@ -510,11 +510,6 @@ public class SimpleXMLParser {
 			return theValueOffset;
 		}
 
-		/** @return The text content defining the processing instruction */
-		public FilePosition getTargetPosition() {
-			return theContent.getPosition(PROCESSING_INSTRUCTION_END.length());
-		}
-
 		@Override
 		public PositionedContent getContent() {
 			return theContent;
@@ -592,10 +587,10 @@ public class SimpleXMLParser {
 		}
 
 		/** @return The position of the beginning of the element's name */
-		public FilePosition getNamePosition() {
+		public PositionedContent getNamePosition() {
 			if (theNameOffset < 0)
 				return null; // Self-closing tag
-			return theContent.getPosition(theNameOffset);
+			return theContent.subSequence(theNameOffset, theNameOffset + theName.length());
 		}
 
 		@Override
@@ -638,8 +633,8 @@ public class SimpleXMLParser {
 		}
 
 		/** @return The position of the start of the attribute's name */
-		public FilePosition getNamePosition() {
-			return theContent.getPosition(0);
+		public PositionedContent getNamePosition() {
+			return theContent.subSequence(0, theName.length());
 		}
 
 		/** @return The offset of the attribute's value in its declaration */
@@ -866,7 +861,7 @@ public class SimpleXMLParser {
 		public void handleProcessingInstruction(XmlProcessingInstruction pi) {
 			String content = pi.getValueOffset() >= 0 ? pi.getValueContent().toString() : null;
 			Node node = theDocument.createProcessingInstruction(pi.getTargetName(), content);
-			node.setUserData(NAME_POSITION_KEY, pi.getTargetPosition(), null);
+			node.setUserData(NAME_POSITION_KEY, pi.getTargetContent(), null);
 			node.setUserData(CONTENT_POSITION_KEY, pi.getValueContent(), null);
 			if (theStack.isEmpty())
 				theDocument.appendChild(node);
@@ -1222,8 +1217,8 @@ public class SimpleXMLParser {
 	 * @see #parseDocument(InputStream)
 	 * @see DomCreatorHandler
 	 */
-	public static FilePosition getNamePosition(Node node) {
-		return (FilePosition) node.getUserData(DomCreatorHandler.NAME_POSITION_KEY);
+	public static PositionedContent getNamePosition(Node node) {
+		return (PositionedContent) node.getUserData(DomCreatorHandler.NAME_POSITION_KEY);
 	}
 
 	/**
@@ -2246,7 +2241,8 @@ public class SimpleXMLParser {
 				public void handleProcessingInstruction(XmlProcessingInstruction pi) {
 					indent();
 					System.out.println(
-						"Processing instruction @" + pi.getTargetPosition() + ": " + pi.getTargetName() + "=" + pi.getValueContent());
+						"Processing instruction @" + pi.getTargetContent().getPosition(0) + ": " + pi.getTargetName() + "="
+							+ pi.getValueContent());
 				}
 
 				@Override
@@ -2259,14 +2255,14 @@ public class SimpleXMLParser {
 				@Override
 				public void handleElementStart(XmlElementTerminal element) {
 					indent();
-					System.out.println("Element @" + element.getNamePosition() + ": " + element.getName());
+					System.out.println("Element @" + element.getNamePosition().getPosition(0) + ": " + element.getName());
 					indent++;
 				}
 
 				@Override
 				public void handleAttribute(XmlAttribute attribute) {
 					indent();
-					System.out.println("Attribute @" + attribute.getNamePosition() + ": " + attribute.getName() + "="
+					System.out.println("Attribute @" + attribute.getNamePosition().getPosition(0) + ": " + attribute.getName() + "="
 						+ printContent(attribute.getValueContent().toString()) + " @" + printStart(attribute.getValueContent()));
 				}
 
