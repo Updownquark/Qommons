@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.qommons.config.QonfigElement.AttributeValueInput;
 import org.qommons.config.QonfigElement.QonfigValue;
 import org.qommons.io.ErrorReporting;
 import org.qommons.io.LocatedPositionedContent;
@@ -55,7 +56,8 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 
 	@Override
 	public void fulfillPromise(PartialQonfigElement promise, QonfigElement.Builder parent, List<ElementQualifiedParseItem> declaredRoles,
-		Set<QonfigAddOn> inheritance, QonfigParser parser, QonfigParseSession session) throws IOException, QonfigParseException {
+		Set<QonfigAddOn> inheritance, Map<ElementQualifiedParseItem, AttributeValueInput> attributes, QonfigParser parser,
+		QonfigParseSession session) throws IOException, QonfigParseException {
 		QonfigValue refValue = promise.getAttributes().get(theReferenceAttribute);
 		String ref = refValue.text;
 		try {
@@ -91,7 +93,7 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 			return;
 		}
 
-		fulfillWithExternalReference(parent, declaredRoles, inheritance, content, promise, session);
+		fulfillWithExternalReference(parent, declaredRoles, inheritance, attributes, content, promise, session);
 	}
 
 	protected QonfigExternalContent resolveExternalContent(String ref, QonfigParser parser, QonfigParseSession session,
@@ -137,8 +139,8 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 	}
 
 	protected void fulfillWithExternalReference(QonfigElement.Builder builder, List<ElementQualifiedParseItem> declaredRoles,
-		Set<QonfigAddOn> inheritance, QonfigExternalContent content, PartialQonfigElement promise,
-		QonfigParseSession session) {
+		Set<QonfigAddOn> inheritance, Map<ElementQualifiedParseItem, AttributeValueInput> attributes, QonfigExternalContent content,
+		PartialQonfigElement promise, QonfigParseSession session) {
 		PartialQonfigElement fulfillment = content.getFulfillment();
 		builder.withChild(declaredRoles, fulfillment.getType(), child -> {
 			for (QonfigAddOn inh : fulfillment.getInheritance().values())
@@ -146,6 +148,8 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 			for (QonfigAddOn inh : inheritance)
 				child.inherits(inh, false);
 			child.fulfills(promise, content.getFulfillment());
+			for (Map.Entry<ElementQualifiedParseItem, AttributeValueInput> attr : attributes.entrySet())
+				child.withAttribute(attr.getKey(), attr.getValue());
 			buildContent(child, fulfillment, promise, session);
 		}, fulfillment.getFilePosition(), fulfillment.getDescription());
 	}

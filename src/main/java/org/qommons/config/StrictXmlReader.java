@@ -37,7 +37,7 @@ public class StrictXmlReader implements Named, Transaction {
 	 */
 	public static StrictXmlReader ofRoot(InputStream in) throws IOException, XmlParseException {
 		SimpleXMLParser parser = new SimpleXMLParser();
-		return new StrictXmlReader(parser.parseDocument(in).getDocumentElement());
+		return new StrictXmlReader(parser.parseDocument(null, in).getDocumentElement());
 	}
 
 	/**
@@ -48,7 +48,7 @@ public class StrictXmlReader implements Named, Transaction {
 	 */
 	public static StrictXmlReader ofRoot(Reader reader) throws IOException, XmlParseException {
 		SimpleXMLParser parser = new SimpleXMLParser();
-		return new StrictXmlReader(parser.parseDocument(reader).getDocumentElement());
+		return new StrictXmlReader(parser.parseDocument(null, reader).getDocumentElement());
 	}
 
 	/** Returned from {@link #getElementOrMissing(String)} if the element is not present */

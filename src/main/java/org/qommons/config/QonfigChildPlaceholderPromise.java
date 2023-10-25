@@ -3,8 +3,10 @@ package org.qommons.config;
 import java.io.IOException;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
+import org.qommons.config.QonfigElement.AttributeValueInput;
 import org.qommons.io.ErrorReporting;
 
 public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
@@ -34,7 +36,8 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 
 	@Override
 	public void fulfillPromise(PartialQonfigElement promise, QonfigElement.Builder parent, List<ElementQualifiedParseItem> declaredRoles,
-		Set<QonfigAddOn> inheritance, QonfigParser parser, QonfigParseSession session) throws IOException, QonfigParseException {
+		Set<QonfigAddOn> inheritance, Map<ElementQualifiedParseItem, AttributeValueInput> attributes, QonfigParser parser,
+		QonfigParseSession session) throws IOException, QonfigParseException {
 		PartialQonfigElement extContentRoot = promise.getDocument().getPartialRoot();
 		if (!extContentRoot.isInstance(theFulfillsAttribute.getOwner())) {
 			session.error("This element is only valid within an " + QonfigExternalRefPromise.EXT_CONTENT_TYPE + " document");
@@ -70,6 +73,8 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 		parent.withChild(declaredRoles, role.getType(), child -> {
 			for (QonfigAddOn inh : inheritance)
 				child.inherits(inh, false);
+			for (Map.Entry<ElementQualifiedParseItem, AttributeValueInput> attr : attributes.entrySet())
+				child.withAttribute(attr.getKey(), attr.getValue());
 			child.createVariable(role.getMin(), role.getMax(), (child2, parent2) -> fulfillChildren(parent2, child2, promise, role));
 		}, promise.getFilePosition(), promise.getDescription());
 	}

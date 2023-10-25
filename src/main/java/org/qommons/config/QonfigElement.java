@@ -172,6 +172,9 @@ public final class QonfigElement extends PartialQonfigElement {
 		private PartialQonfigElement theElement;
 		private int theStage;
 
+		private boolean isIgnoringExtraAttributes;
+		private Map<ElementQualifiedParseItem, AttributeValueInput> theUnusedAttributes;
+
 		Builder(boolean partial, ErrorReporting errors, QonfigDocument doc, PartialQonfigElement parent, QonfigElementOrAddOn type,
 			Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles, QonfigAutoInheritance.Compiler autoInheritance,
 			String description) {
@@ -268,6 +271,11 @@ public final class QonfigElement extends PartialQonfigElement {
 
 		public Builder withDocument(QonfigDocument document) {
 			theDocument = document;
+			return this;
+		}
+
+		public Builder ignoreExtraAttributes(boolean ignoringExtraAttributes) {
+			isIgnoringExtraAttributes = ignoringExtraAttributes;
 			return this;
 		}
 
@@ -588,6 +596,10 @@ public final class QonfigElement extends PartialQonfigElement {
 			return theElement;
 		}
 
+		public Map<ElementQualifiedParseItem, AttributeValueInput> getUnusedAttributes() {
+			return theUnusedAttributes == null ? Collections.emptyMap() : Collections.unmodifiableMap(theUnusedAttributes);
+		}
+
 		private void checkChildren() {
 			// Check the children
 			// To be as helpful as possible, we need to first ensure that this element's type hierarchy is consistent.
@@ -655,6 +667,9 @@ public final class QonfigElement extends PartialQonfigElement {
 			}
 
 			void compile() {
+				if (isIgnoringExtraAttributes)
+					theUnusedAttributes = new LinkedHashMap<>();
+
 				// Primary attribute parsing. Since values can confer inheritance, which can affect attributes,
 				// we need to go through all declared attributes, parsing those we understand, ignoring those we don't,
 				// and updating inheritance.
@@ -665,8 +680,11 @@ public final class QonfigElement extends PartialQonfigElement {
 				for (int i = parsedAttrs.nextClearBit(0); i >= 0; i = parsedAttrs.nextClearBit(i + 1)) {
 					if (i >= theDeclaredAttributes.size())
 						break;
-					theErrors.at(theDeclaredAttributes.get(i).position)
-						.error("Unrecognized attribute: '" + theDeclaredAttributes.get(i) + "'");
+					if (isIgnoringExtraAttributes)
+						theUnusedAttributes.put(theDeclaredAttributes.get(i), theDeclaredAttributeValues.get(i));
+					else
+						theErrors.at(theDeclaredAttributes.get(i).position)
+							.error("Unrecognized attribute: '" + theDeclaredAttributes.get(i) + "'");
 				}
 
 				// Now that we know our inheritance completely, we need to check all the attributes we've parsed
@@ -699,9 +717,11 @@ public final class QonfigElement extends PartialQonfigElement {
 					QonfigElementOrAddOn owner = attr.getKey().getOwner();
 					if (owner.isAssignableFrom(theType) //
 						|| (owner instanceof QonfigAddOn && completeInheritance.contains((QonfigAddOn) owner))) {//
-					}
-					else
-						theErrors.error("Element does not inherit element " + owner + "--cannot specify attribute " + attr.getKey());
+					} else if (isIgnoringExtraAttributes) {
+						attrValues.remove(attr.getKey());
+					} else
+						theErrors.at(attr.getValue().getNamePosition())
+							.error("Element does not inherit element " + owner + "--cannot specify attribute " + attr.getKey());
 				}
 
 				if (!isPartial) {
@@ -819,6 +839,9 @@ public final class QonfigElement extends PartialQonfigElement {
 							attr = attrDef.declaredElement.getDeclaredAttributes().get(attrDef.itemName);
 							if (attr == null)
 								attrs = attrDef.declaredElement.getAttributesByName().get(attrDef.itemName);
+						} else if (isIgnoringExtraAttributes) {
+							theUnusedAttributes.put(attrDef, theDeclaredAttributeValues.get(i));
+							continue;
 						} else {
 							theErrors.error("Element does not inherit element " + attrDef.declaredElement + "--cannot specify attribute "
 								+ attrDef.itemName);

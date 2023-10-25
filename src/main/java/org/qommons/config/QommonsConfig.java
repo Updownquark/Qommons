@@ -664,7 +664,7 @@ public abstract class QommonsConfig implements Cloneable {
 	 */
 	public static Element getRootElement(java.net.URL url) throws IOException {
 		try (InputStream in = url.openStream()) {
-			return getRootElement(in);
+			return getRootElement(url.toString(), in);
 		} catch (IOException e) {
 			throw new IOException("Could not read XML file " + url, e);
 		}
@@ -678,8 +678,20 @@ public abstract class QommonsConfig implements Cloneable {
 	 * @throws IOException If the XML could not be read or parsed
 	 */
 	public static Element getRootElement(InputStream stream) throws IOException {
+		return getRootElement(null, stream);
+	}
+
+	/**
+	 * Parses the root element from an XML file
+	 *
+	 * @param fileLocation The location of the file being parsed. Only used for error messaging and may be null.
+	 * @param stream The input stream of the XML resource to parse
+	 * @return The root element of the XML
+	 * @throws IOException If the XML could not be read or parsed
+	 */
+	public static Element getRootElement(String fileLocation, InputStream stream) throws IOException {
 		try {
-			return new SimpleXMLParser().parseDocument(stream).getDocumentElement();
+			return new SimpleXMLParser().parseDocument(fileLocation, stream).getDocumentElement();
 		} catch (TextParseException e) {
 			throw new IOException("Could not parse XML", e);
 		}

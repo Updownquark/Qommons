@@ -77,7 +77,7 @@ public class SimpleXMLParserTest {
 				new ExpectedComment(" This is a footer comment with special characters &<'\nblah ", 505, 26, 4), //
 				new ExpectedWhitespace("\n", 567, 27, 8)//
 			);
-			new SimpleXMLParser().setTabLength(4).parseXml(in, tester);
+			new SimpleXMLParser().setTabLength(4).parseXml(null, in, tester);
 			tester.done();
 		}
 	}

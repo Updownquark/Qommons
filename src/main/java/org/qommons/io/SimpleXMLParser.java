@@ -128,13 +128,16 @@ public class SimpleXMLParser {
 
 		/**
 		 * @param element The element under which the parse error occurred (may be null if the root element had not yet been encountered)
+		 * @param fileLocation The file location being parsed, if given
 		 * @param message The message indicating the nature of the XML malformation
 		 * @param errorOffset The absolute position offset of the character in the file where the error was detected
 		 * @param lineNumber The line number in the file where the error was detected (offset from zero)
 		 * @param columnNumber The character number (in its line) in the file where the error was detected (offset from zero)
 		 */
-		public XmlParseException(LocatedXmlElement element, String message, int errorOffset, int lineNumber, int columnNumber) {
-			super(message, errorOffset, lineNumber, columnNumber);
+		public XmlParseException(LocatedXmlElement element, String fileLocation, String message, int errorOffset, int lineNumber,
+			int columnNumber) {
+			super(message, fileLocation == null ? new FilePosition(errorOffset, lineNumber, columnNumber)
+				: new LocatedFilePosition(fileLocation, errorOffset, lineNumber, columnNumber));
 			theElement = element;
 		}
 
@@ -967,16 +970,19 @@ public class SimpleXMLParser {
 	 * UTF-8.
 	 * 
 	 * @param <H> The type of the handler
+	 * @param fileLocation The location of the file. This can be anything, including null, and only matters when errors are thrown. When
+	 *        given, any {@link XmlParseException}s thrown will have a {@link LocatedFilePosition} for their
+	 *        {@link TextParseException#getPosition() position}.
 	 * @param in The input stream to parse XML from
 	 * @param handler The handler to be notified of each XML structure in the document
 	 * @return The given handler
 	 * @throws IOException If an error occurs reading the stream
 	 * @throws XmlParseException If an error occurs parsing the XML
 	 */
-	public <H extends ParseHandler> H parseXml(InputStream in, H handler) throws IOException, XmlParseException {
+	public <H extends ParseHandler> H parseXml(String fileLocation, InputStream in, H handler) throws IOException, XmlParseException {
 		if (in == null)
 			throw new NullPointerException("Stream cannot be null");
-		parseXml(new ParseSession(in), handler);
+		parseXml(new ParseSession(fileLocation, in), handler);
 		return handler;
 	}
 
@@ -985,16 +991,19 @@ public class SimpleXMLParser {
 	 * being {@link ParseHandler#handleDeclaration(XmlDeclaration) passed} to the handler.
 	 * 
 	 * @param <H> The type of the handler
+	 * @param fileLocation The location of the file. This can be anything, including null, and only matters when errors are thrown. When
+	 *        given, any {@link XmlParseException}s thrown will have a {@link LocatedFilePosition} for their
+	 *        {@link TextParseException#getPosition() position}.
 	 * @param in The reader to parse XML from
 	 * @param handler The handler to be notified of each XML structure in the document
 	 * @return The given handler
 	 * @throws IOException If an error occurs reading the stream
 	 * @throws XmlParseException If an error occurs parsing the XML
 	 */
-	public <H extends ParseHandler> H parseXml(Reader in, H handler) throws IOException, XmlParseException {
+	public <H extends ParseHandler> H parseXml(String fileLocation, Reader in, H handler) throws IOException, XmlParseException {
 		if (in == null)
 			throw new NullPointerException("Reader cannot be null");
-		parseXml(new ParseSession(in), handler);
+		parseXml(new ParseSession(fileLocation, in), handler);
 		return handler;
 	}
 
@@ -1002,6 +1011,9 @@ public class SimpleXMLParser {
 	 * Parses an XML document from a binary stream. The character encoding may be specified by the XML declaration in the document, or is
 	 * defaulted to UTF-8. The document's {@link Node node}s will be populated with any relevant positions.
 	 * 
+	 * @param fileLocation The location of the file. This can be anything, including null, and only matters when errors are thrown. When
+	 *        given, any {@link XmlParseException}s thrown will have a {@link LocatedFilePosition} for their
+	 *        {@link TextParseException#getPosition() position}.
 	 * @param in The stream to parse
 	 * @return The parsed document
 	 * @throws IOException If an error occurs reading the stream
@@ -1009,11 +1021,11 @@ public class SimpleXMLParser {
 	 * @see #getNamePosition(Node)
 	 * @see #getPositionContent(Node)
 	 */
-	public Document parseDocument(InputStream in) throws IOException, XmlParseException {
+	public Document parseDocument(String fileLocation, InputStream in) throws IOException, XmlParseException {
 		if (in == null)
 			throw new NullPointerException("Stream cannot be null");
 		return parseXml(//
-			new ParseSession(in), new DomCreatorHandler(DOM_BUILDERS.get().createDocument()))//
+			new ParseSession(fileLocation, in), new DomCreatorHandler(DOM_BUILDERS.get().createDocument()))//
 				.getDocument();
 	}
 
@@ -1021,6 +1033,9 @@ public class SimpleXMLParser {
 	 * Parses an XML document from a binary stream. If character encoding is specified by the XML declaration in the document, it will be
 	 * ignored. The document's {@link Node node}s will be populated with any relevant positions.
 	 * 
+	 * @param fileLocation The location of the file. This can be anything, including null, and only matters when errors are thrown. When
+	 *        given, any {@link XmlParseException}s thrown will have a {@link LocatedFilePosition} for their
+	 *        {@link TextParseException#getPosition() position}.
 	 * @param in The reader to parse
 	 * @return The parsed document
 	 * @throws IOException If an error occurs reading the stream
@@ -1028,15 +1043,18 @@ public class SimpleXMLParser {
 	 * @see #getNamePosition(Node)
 	 * @see #getPositionContent(Node)
 	 */
-	public Document parseDocument(Reader in) throws IOException, XmlParseException {
+	public Document parseDocument(String fileLocation, Reader in) throws IOException, XmlParseException {
 		if (in == null)
 			throw new NullPointerException("Reader cannot be null");
 		return parseXml(//
-			new ParseSession(in), new DomCreatorHandler(DOM_BUILDERS.get().createDocument()))//
+			new ParseSession(fileLocation, in), new DomCreatorHandler(DOM_BUILDERS.get().createDocument()))//
 				.getDocument();
 	}
 
 	/**
+	 * @param fileLocation The location of the file. This can be anything, including null, and only matters when errors are thrown. When
+	 *        given, any {@link XmlParseException}s thrown will have a {@link LocatedFilePosition} for their
+	 *        {@link TextParseException#getPosition() position}.
 	 * @param in The input stream to read
 	 * @return A reader that reads the input stream as XML text. This takes into account the encoding specified in the XML declaration, if
 	 *         present. The stream is read as UTF-8 if:
@@ -1051,7 +1069,7 @@ public class SimpleXMLParser {
 	 * 
 	 * @throws IOException If the input stream throws it
 	 */
-	public Reader readXmlFile(InputStream in) throws IOException {
+	public Reader readXmlFile(String fileLocation, InputStream in) throws IOException {
 		CircularCharBuffer buffer = new CircularCharBuffer(-1);
 		InputStream wrapped = new InputStream() {
 			@Override
@@ -1099,7 +1117,7 @@ public class SimpleXMLParser {
 				return in.markSupported();
 			}
 		};
-		ParseSession session = new ParseSession(wrapped);
+		ParseSession session = new ParseSession(fileLocation, wrapped);
 		Charset[] charSet = new Charset[1];
 		try {
 			// First, find the declaration, if it exists, or the start of the root element if not
@@ -1214,7 +1232,7 @@ public class SimpleXMLParser {
 	 * 
 	 * @param node The XML node to get the name position for
 	 * @return The name position stored in the node
-	 * @see #parseDocument(InputStream)
+	 * @see #parseDocument(String, InputStream)
 	 * @see DomCreatorHandler
 	 */
 	public static PositionedContent getNamePosition(Node node) {
@@ -1226,7 +1244,7 @@ public class SimpleXMLParser {
 	 * 
 	 * @param node The XML node to get the content position for
 	 * @return The content position stored in the node
-	 * @see #parseDocument(InputStream)
+	 * @see #parseDocument(String, InputStream)
 	 * @see DomCreatorHandler
 	 */
 	public static PositionedContent getPositionContent(Node node) {
@@ -1623,6 +1641,7 @@ public class SimpleXMLParser {
 	static final Termination CDATA_TERMINATION = new StringTermination(CDATA_END);
 
 	class ParseSession {
+		private final String theFileLocation;
 		private final InputStream theStream;
 		private Reader theReader;
 		private char theChar;
@@ -1665,11 +1684,13 @@ public class SimpleXMLParser {
 			linePosition = thePosition;
 		}
 
-		ParseSession(InputStream stream) {
+		ParseSession(String fileLocation, InputStream stream) {
+			theFileLocation = fileLocation;
 			theStream = stream;
 		}
 
-		ParseSession(Reader reader) {
+		ParseSession(String fileLocation, Reader reader) {
+			theFileLocation = fileLocation;
 			theStream = null;
 			theReader = reader;
 		}
@@ -1833,7 +1854,7 @@ public class SimpleXMLParser {
 			int pos = atMark ? theMarkPosition : thePosition;
 			int line = atMark ? theMarkLineNumber : theLineNumber;
 			int ch = atMark ? theMarkCharNumber : theCharNumber;
-			throw new XmlParseException(theElement, message, pos, line, ch);
+			throw new XmlParseException(theElement, theFileLocation, message, pos, line, ch);
 		}
 
 		void setEncoding(Charset charSet) {
@@ -2216,7 +2237,7 @@ public class SimpleXMLParser {
 	 */
 	public static void main(String... args) throws IOException, XmlParseException {
 		try (InputStream in = new BufferedInputStream(new FileInputStream(args[0]))) {
-			new SimpleXMLParser().setTabLength(3).parseXml(in, new ParseHandler() {
+			new SimpleXMLParser().setTabLength(3).parseXml(null, in, new ParseHandler() {
 				int indent = 0;
 
 				private void indent() {

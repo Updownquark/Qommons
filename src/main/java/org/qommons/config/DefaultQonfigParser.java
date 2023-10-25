@@ -111,7 +111,7 @@ public class DefaultQonfigParser implements QonfigParser {
 	@Override
 	public QonfigDocument parseDocument(boolean partial, String location, InputStream content)
 		throws IOException, XmlParseException, QonfigParseException {
-		Element root = new SimpleXMLParser().parseDocument(content).getDocumentElement();
+		Element root = new SimpleXMLParser().parseDocument(location, content).getDocumentElement();
 		content.close();
 		QonfigParseSession session;
 		QonfigDocument doc;
@@ -273,7 +273,7 @@ public class DefaultQonfigParser implements QonfigParser {
 						promiseInh::add);
 				}
 				QonfigElement.Builder promiseBuilder = QonfigElement.buildRoot(partial, childSession, builder.getDocument(), childType,
-					descrip);
+					descrip).ignoreExtraAttributes(true);
 				for (QonfigAddOn inh : promiseInh)
 					promiseBuilder.inherits(inh, true);
 				PartialQonfigElement promise = parseDocElement(partial, childSession, promiseBuilder, child, true, false, __ -> true);
@@ -287,7 +287,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				}
 
 				try {
-					stitcher.fulfillPromise(promise, builder, roles, inh, this, childSession);
+					stitcher.fulfillPromise(promise, builder, roles, inh, promiseBuilder.getUnusedAttributes(), this, childSession);
 				} catch (IOException | QonfigParseException e) {
 					childSession.error("Unable to fulfill promise", e);
 				}
@@ -451,7 +451,7 @@ public class DefaultQonfigParser implements QonfigParser {
 
 	private QonfigToolkit _parseToolkitXml(URL location, InputStream xml, LinkedList<String> path, CustomValueType... customValueTypes)
 		throws IOException, XmlParseException, QonfigParseException {
-		Element root = new SimpleXMLParser().parseDocument(xml).getDocumentElement();
+		Element root = new SimpleXMLParser().parseDocument(location.toString(), xml).getDocumentElement();
 		xml.close();
 		QonfigToolkit.ToolkitDef def;
 		QonfigToolkit toolkit;

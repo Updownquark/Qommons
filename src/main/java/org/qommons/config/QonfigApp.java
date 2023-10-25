@@ -296,9 +296,9 @@ public class QonfigApp {
 		try (InputStream appFileIn = appFileURL.openStream()) {
 			qonfigDoc = qonfigParser.parseDocument(false, appFileURL.toString(), appFileIn);
 		} catch (IOException e) {
-			throw new IOException("Could not read application file " + getAppFile(), e);
+			throw new IOException("Could not read application file " + getAppFile() + "\n" + e.getMessage(), e);
 		} catch (XmlParseException e) {
-			throw new TextParseException("Could not parse application file XML: " + appFileURL, e.getPosition(), e);
+			throw new TextParseException("Could not parse application file XML: " + appFileURL + "\n" + e.getMessage(), e.getPosition(), e);
 		}
 
 		// Build the interpreter
