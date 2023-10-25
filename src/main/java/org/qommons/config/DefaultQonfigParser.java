@@ -260,7 +260,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			if(childType.isPromise()) {
 				QonfigPromiseFulfillment stitcher = theStitchers.getAny(childType);
 				if (stitcher == null) {
-					childSession.error("No promise fulfillment provided for type '" + childType + "'");
+					childSession.error("No promise fulfillment configured for type '" + childType + "'");
 					continue;
 				}
 				String promiseInhStr = child.getAttributeIfExists(DOC_ELEMENT_PROMISE_INHERITANCE_ATTR);
