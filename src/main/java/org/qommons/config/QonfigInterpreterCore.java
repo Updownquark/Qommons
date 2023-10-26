@@ -297,7 +297,7 @@ public class QonfigInterpreterCore {
 					throw new QonfigInterpretationException(position, 0, e);
 				}
 				if (action != null)
-					action.accept(value, this);
+					action.accept(value, session);
 				return value;
 			}
 		}
