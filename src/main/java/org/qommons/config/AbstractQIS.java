@@ -36,7 +36,7 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>>
 	 * @throws QonfigInterpretationException If the value cannot be interpreted
 	 */
 	default <T> T interpret(Class<T> asType) throws QonfigInterpretationException {
-		return interpret(getElement().getType(), asType);
+		return interpret(getFocusType(), asType);
 	}
 
 	/**
@@ -48,7 +48,7 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>>
 	 */
 	default <T> T interpret(Class<T> asType, ExBiConsumer<? super T, ? super QIS, QonfigInterpretationException> action)
 		throws QonfigInterpretationException {
-		return interpret(getElement().getType(), asType, action);
+		return interpret(getFocusType(), asType, action);
 	}
 
 	/**

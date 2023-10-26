@@ -225,6 +225,11 @@ public class QonfigInterpreterCore {
 				QonfigCreatorHolder<T> creator = creators == null ? null
 					: (QonfigCreatorHolder<T>) creators.get(asType, ClassMap.TypeMatch.SUB_TYPE);
 				if (creator == null) {
+					as = getElement().getType();
+					creators = theInterpreter.theCreators.get(as);
+					creator = creators == null ? null : (QonfigCreatorHolder<T>) creators.get(asType, ClassMap.TypeMatch.SUB_TYPE);
+				}
+				if (creator == null) {
 					String msg = "No creator registered for element " + as.getName() + " and target type " + asType.getName();
 					reporting().error(msg);
 					return null;
