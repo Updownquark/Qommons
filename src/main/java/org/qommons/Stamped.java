@@ -1,6 +1,5 @@
 package org.qommons;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.PrimitiveIterator;
 import java.util.function.ToLongFunction;
@@ -34,7 +33,12 @@ public interface Stamped {
 	 * @return The composite stamp
 	 */
 	public static <T> long compositeStamp(Collection<? extends Stamped> values) {
-		return compositeStamp(values, Stamped::getStamp);
+		if (values.isEmpty())
+			return 0;
+		CompositeStamping stamp = new CompositeStamping(values.size());
+		for (Stamped value : values)
+			stamp.add(value.getStamp());
+		return stamp.getStamp();
 	}
 
 	/**
@@ -48,8 +52,10 @@ public interface Stamped {
 	public static <T> long compositeStamp(Collection<? extends T> values, ToLongFunction<? super T> stampFn) {
 		if (values.isEmpty())
 			return 0;
-		return compositeStamp(//
-			values.stream().mapToLong(stampFn), values.size());
+		CompositeStamping stamp = new CompositeStamping(values.size());
+		for (T value : values)
+			stamp.add(stampFn.applyAsLong(value));
+		return stamp.getStamp();
 	}
 
 	/**
@@ -61,8 +67,10 @@ public interface Stamped {
 	static long compositeStamp(long... stamps) {
 		if (stamps.length == 0)
 			return 0;
-		return compositeStamp(//
-			Arrays.stream(stamps), stamps.length);
+		CompositeStamping stamp = new CompositeStamping(stamps.length);
+		for (long s : stamps)
+			stamp.add(s);
+		return stamp.getStamp();
 	}
 
 	/**
@@ -73,22 +81,41 @@ public interface Stamped {
 	 * @return The composite stamp
 	 */
 	static long compositeStamp(LongStream stamps, int count) {
+		CompositeStamping stamp = new CompositeStamping(count);
 		PrimitiveIterator.OfLong stampsIter = stamps.iterator();
-		long stamp = 0;
-		int shift = Math.max(1, 63 / count);
-		int i = 0;
-		// I'm changing this to use both XOR and addition operators in generating the composite stamp
-		// When using XOR only, I found that in some cases, e.g. with composite structures as op1(op2(v1, v2), op2(v1)),
-		// a value's stamp can annihilate itself in the composite. Addition prevents this.
-		// The XOR operation is still necessary so that ordering of the stamps is important.
-		while (stampsIter.hasNext()) {
-			long s = stampsIter.nextLong();
-			if (i == 0)
-				stamp = s;
-			else
-				stamp = (stamp ^ Long.rotateRight(s, shift * i)) + s;
-			i++;
+		while (stampsIter.hasNext())
+			stamp.add(stampsIter.nextLong());
+		return stamp.getStamp();
+	}
+
+	/** Makes a composite stamp from multiple other stamps */
+	public class CompositeStamping implements Stamped {
+		private final int theShift;
+		private int theStampIndex;
+		private long theStamp;
+
+		/** @param count The number of stamps to expect */
+		public CompositeStamping(int count) {
+			theShift = Math.max(1, 63 / count);
 		}
-		return stamp;
+
+		/** @param valueStamp The stamp to add to this composite */
+		public void add(long valueStamp) {
+			// I'm changing this to use both XOR and addition operators in generating the composite stamp
+			// When using XOR only, I found that in some cases, e.g. with composite structures as op1(op2(v1, v2), op2(v1)),
+			// a value's stamp can annihilate itself in the composite. Addition prevents this.
+			// The XOR operation is still necessary so that ordering of the stamps is important.
+			if (theStampIndex == 0)
+				theStamp = valueStamp;
+			else
+				theStamp = (theStamp ^ Long.rotateRight(valueStamp, theShift * theStampIndex)) + valueStamp;
+			theStampIndex++;
+		}
+
+		/** @return The compiled composite stamp */
+		@Override
+		public long getStamp() {
+			return theStamp;
+		}
 	}
 }
