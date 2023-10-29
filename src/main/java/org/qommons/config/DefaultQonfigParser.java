@@ -497,7 +497,9 @@ public class DefaultQonfigParser implements QonfigParser {
 
 				QonfigToolkit dep = theToolkits.get(depDef);
 				if (dep == null)
-					throw new IllegalArgumentException("No such dependency named " + depDef + " registered");
+					throw QonfigParseException.createSimple(
+						LocatedFilePosition.of(location.toString(), rootReader.getAttributeValuePosition(ext.getKey()).getPosition(0)),
+						"No such dependency named " + depDef + " registered", null);
 				dependencies.put(refName, dep);
 			}
 			ToolkitParser parser = new ToolkitParser(location.toString(), rootReader, customValueTypes);

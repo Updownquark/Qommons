@@ -102,13 +102,13 @@ public class QonfigApp {
 				toolkits.add(qonfigParser.parseToolkit(toolkitURL, tkIn, //
 					valueTypes.toArray(new CustomValueType[valueTypes.size()])));
 			} catch (IOException e) {
-				throw new IllegalStateException("Could not read toolkit " + toolkitDef, e);
+				throw new IllegalStateException("Could not read toolkit " + toolkitDef + ": " + e.getMessage(), e);
 			} catch (XmlParseException e) {
-				throw new IllegalArgumentException("Could not parse toolkit XML: " + toolkitDef, e);
+				throw new TextParseException("Could not parse toolkit XML: " + e.getMessage(), e.getPosition(), e);
 			} catch (QonfigParseException e) {
-				throw new IllegalStateException("Could not parse toolkit " + toolkitDef, e);
+				throw new TextParseException("Could not parse toolkit: " + e.getMessage(), e.getIssues().get(0).fileLocation, e);
 			} catch (RuntimeException e) {
-				throw new IllegalStateException("Could not parse toolkit " + toolkitDef, e);
+				throw new IllegalStateException("Could not parse toolkit: " + e.getMessage() + toolkitDef, e);
 			}
 		}
 

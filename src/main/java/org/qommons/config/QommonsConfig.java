@@ -3,6 +3,7 @@ package org.qommons.config;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -729,7 +730,13 @@ public abstract class QommonsConfig implements Cloneable {
 	 * @throws IOException If any of the given paths cannot be interpreted
 	 */
 	public static String resolve(String location, String... relative) throws IOException {
-		if (location.contains("://") || location.startsWith("file:/") || location.startsWith("jar:file:/"))
+		if (location.startsWith("classpath://")) {
+			String resPath = location.substring("classpath:/".length());
+			URL resource = QommonsConfig.class.getResource(resPath);
+			if (resource == null)
+				throw new IOException("No such resource on classpath: " + resPath);
+			return resource.toString();
+		} else if (location.contains("://") || location.startsWith("file:/") || location.startsWith("jar:file:/"))
 			return location;
 		else if(relative.length > 0) {
 			String resolvedRel = resolve(relative[0], org.qommons.ArrayUtils.remove(relative, 0));

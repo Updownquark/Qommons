@@ -84,6 +84,25 @@ public interface Format<T> {
 		}
 	};
 
+	/** Stupid-simple text format that just formats and parses text as-is */
+	public static final Format<CharSequence> CHAR_SEQUENCE = new Format<CharSequence>() {
+		@Override
+		public void append(StringBuilder text, CharSequence value) {
+			if (value != null)
+				text.append(value);
+		}
+
+		@Override
+		public CharSequence parse(CharSequence text) throws ParseException {
+			return text;
+		}
+
+		@Override
+		public String toString() {
+			return "TEXT";
+		}
+	};
+
 	/** Parses long integers from text */
 	public static final LongFormat LONG = new LongFormat();
 
