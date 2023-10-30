@@ -148,7 +148,6 @@ public interface Causable extends CausalLock.Cause {
 						root = ((Causable) cause).getRootCausable();
 						if (root.isTerminated())
 							throw new IllegalStateException("Cannot use a finished Causable as a cause");
-						break;
 					}
 				}
 				theRootCausable = root != null ? root : this;
