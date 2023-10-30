@@ -132,13 +132,17 @@ public interface Causable extends CausalLock.Cause {
 
 		/** @param causes The causes of this causable */
 		public AbstractCausable(Object... causes) {
-			theCauses = BetterList.of(causes).quickFilter(c -> c != null);
-			if (causes == null)
+			// There are prettier ways to do this, but this is a hot spot, so we need to save as many cycles as possible
+			if (causes == null) {
 				theRootCausable = this;
-			else {
-				Causable root = this;
-				for (Object cause : theCauses) {
-					if (cause instanceof Causable && !(cause instanceof ChainBreak)) {
+				theCauses = BetterList.EMPTY;
+			} else {
+				int size = causes.length;
+				Causable root = null;
+				for (Object cause : causes) {
+					if (cause == null)
+						size--;
+					else if (root == null && cause instanceof Causable && !(cause instanceof ChainBreak)) {
 						if (((Causable) cause).isTerminated())
 							throw new IllegalStateException("Cannot use a finished Causable as a cause");
 						root = ((Causable) cause).getRootCausable();
@@ -147,7 +151,18 @@ public interface Causable extends CausalLock.Cause {
 						break;
 					}
 				}
-				theRootCausable = root;
+				theRootCausable = root != null ? root : this;
+				if (size == causes.length)
+					theCauses = BetterList.of(causes);
+				else {
+					Object[] notNullCauses = new Object[size];
+					int i = 0;
+					for (Object cause : causes) {
+						if (cause != null)
+							notNullCauses[i++] = cause;
+					}
+					theCauses = BetterList.of(notNullCauses);
+				}
 			}
 		}
 
