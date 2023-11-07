@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import org.qommons.Transaction;
 import org.qommons.collect.BetterHashMap;
 import org.qommons.collect.BetterMap;
 import org.qommons.collect.CollectionElement;
@@ -137,6 +138,17 @@ public interface SessionValues {
 				return true;
 		}
 		return false;
+	}
+
+	/**
+	 * @param sessionKey The key to store data for
+	 * @param value The data to store for the given key in this session
+	 * @return A transaction that, when closed, will restore the value for the session key to its value before this call
+	 */
+	default Transaction putTemp(String sessionKey, Object value) {
+		Object preValue = get(sessionKey);
+		put(sessionKey, value);
+		return () -> put(sessionKey, preValue);
 	}
 
 	/** An enum describing where a value session is from */
