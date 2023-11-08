@@ -2,17 +2,20 @@
 package org.qommons;
 
 import java.text.SimpleDateFormat;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.log4j.Logger;
-import org.json.simple.JSONObject;
+import org.qommons.json.JsonObject;
+import org.qommons.threading.QommonsTimer;
 
 /** A simple utility to help in finding performance bottlenecks in a program */
 public class ProgramTracker implements Cloneable {
-	private static final Logger log = Logger.getLogger(ProgramTracker.class);
-
 	private static final String DEFAULT_INDENT_INCREMENT = "   ";
 
 	static final SimpleDateFormat [] [] formats;
@@ -38,7 +41,7 @@ public class ProgramTracker implements Cloneable {
 	public static final java.text.NumberFormat NANO_FORMAT = new java.text.DecimalFormat("0.00E0");
 
 	/**
-	 * This static variable is to be used for <b>temporary</b> debugging purposes only. It allows for easier profiling of applications
+	 * This singleton variable is to be used for <b>temporary</b> debugging purposes only. It allows for easier profiling of applications
 	 * without extensive code changes to access the correct tracker. However, if this variable is used in more than one place, it may lead
 	 * to unpredictable results and thrown exceptions. A different mechanism MUST be developed to access a tracker if profiling is to be
 	 * integrated into the application permanently.
@@ -47,22 +50,17 @@ public class ProgramTracker implements Cloneable {
 	 */
 	public static ProgramTracker instance;
 
-	private static final ThreadLocal<ProgramTracker> theThreadTrackers;
-	private static final Map<Thread, ProgramTracker> theThreadTrackerMap;
+	private static boolean THREAD_TRACKING_ACTIVE = "true".equalsIgnoreCase(System.getProperty("qommons.thread.tracking"));
+	private static final Map<Thread, ProgramTracker> theThreadTrackers;
 	private static ProgramTracker ignoring;
 
 	static {
-		theThreadTrackers = new ThreadLocal<ProgramTracker>() {
-			@Override
-			protected ProgramTracker initialValue() {
-				Thread currentThread = Thread.currentThread();
-				ProgramTracker newTracker = new ProgramTracker(currentThread.getName() + " Tracking");
-				theThreadTrackerMap.put(currentThread, newTracker);
-				return newTracker;
-			}
-		};
-		theThreadTrackerMap = new WeakHashMap<>();
+		theThreadTrackers = new ConcurrentHashMap<>();
 		ignoring = new ProgramTracker("ignoring") {
+			{
+				setOn(false);
+			}
+
 			@Override
 			public ProgramTracker setOn(boolean on) {
 				return super.setOn(false);
@@ -71,20 +69,41 @@ public class ProgramTracker implements Cloneable {
 	}
 
 	/**
+	 * Begins thread tracking, such that {@link #getThreadTracker()} will always return an active tracker, initializing new ones as needed.
+	 * 
+	 * @return A transaction that, when called, will print the tracking results, clear all thread trackers, and revert thread tracking to
+	 *         false.
+	 */
+	public static Transaction startThreadTracking() {
+		THREAD_TRACKING_ACTIVE = true;
+		return () -> {
+			THREAD_TRACKING_ACTIVE = false;
+			printThreadTrackers(true);
+		};
+	}
+
+	/**
+	 * @param threadTracking Whether thread tracking should be active, such that {@link #getThreadTracker()} will always return an active
+	 *        tracker, initializing new ones as needed.
+	 */
+	public static void setThreadTracking(boolean threadTracking) {
+		THREAD_TRACKING_ACTIVE = threadTracking;
+	}
+
+	/**
 	 * Sets a tracker as the tracker for the current thread
 	 *
 	 * @param tracker The tracker to set as a tracker thread
 	 */
 	public static void setThreadTracker(ProgramTracker tracker) {
-		if (tracker == null)
-			throw new IllegalArgumentException("Cannot set a null tracker for the current thread");
-		theThreadTrackers.set(tracker);
-		theThreadTrackerMap.put(Thread.currentThread(), tracker);
+		theThreadTrackers.put(Thread.currentThread(), tracker);
 	}
 
 	/** @return The tracker for the current thread, initialized if none has been previously set */
 	public static ProgramTracker getThreadTracker() {
-		return theThreadTrackers.get();
+		if (!THREAD_TRACKING_ACTIVE)
+			return ignoring;
+		return theThreadTrackers.computeIfAbsent(Thread.currentThread(), thread -> new ProgramTracker(thread.getName()));
 	}
 
 	/**
@@ -92,12 +111,49 @@ public class ProgramTracker implements Cloneable {
 	 * @return The tracker assigned to the given thread, or null if none has been initialized
 	 */
 	public static ProgramTracker getThreadTracker(Thread thread) {
-		return theThreadTrackerMap.get(thread);
+		return theThreadTrackers.get(thread);
 	}
 
 	/** @return All threads for which {@link #setThreadTracker(ProgramTracker)} or {@link #getThreadTracker()} has been called */
 	public static Thread [] getTrackedThreads() {
-		return theThreadTrackerMap.keySet().toArray(new Thread[0]);
+		return theThreadTrackers.keySet().toArray(new Thread[0]);
+	}
+
+	/**
+	 * @param routine The routine to start on the tracker for this thread. Use {@link #setThreadTracker(ProgramTracker)} to initialize the
+	 *        tracker.
+	 * @return The track node for the routine
+	 */
+	public static TrackNode threadStart(String routine) {
+		return getThreadTracker().start(routine);
+	}
+
+	/**
+	 * Prints the data from all thread trackers and, if specified, removes them
+	 * 
+	 * @param andClear Whether to remove the thread trackers
+	 */
+	public static void printThreadTrackers(boolean andClear) {
+		Iterator<ProgramTracker> trackerIter = theThreadTrackers.values().iterator();
+		while (trackerIter.hasNext()) {
+			ProgramTracker tracker = trackerIter.next();
+			if (andClear)
+				trackerIter.remove();
+			tracker.printData();
+		}
+	}
+
+	/**
+	 * Starts a listener that, after this method is not called for a certain period of time, prints the data from all thread trackers and,
+	 * if specified, removes them
+	 * 
+	 * @param andClear Whether to remove the thread trackers
+	 * @param inactiveTime The amount of time to wait before printing the data
+	 */
+	public static void printThreadTrackersAfterInactive(boolean andClear, long inactiveTime) {
+		QommonsTimer.getCommonInstance().doAfterInactivity("ProgramTracker.printAfterInactive:" + andClear, () -> {
+			printThreadTrackers(andClear);
+		}, Duration.ofMillis(inactiveTime));
 	}
 
 	/**
@@ -120,57 +176,51 @@ public class ProgramTracker implements Cloneable {
 		return start(instance, routine);
 	}
 
-	/**
-	 * @param routine The routine to start on the tracker for this thread. Use {@link #setThreadTracker(ProgramTracker)} to initialize the
-	 *        tracker.
-	 * @return The track node for the routine
-	 */
-	public static TrackNode threadStart(String routine) {
-		return start(theThreadTrackerMap.get(Thread.currentThread()), routine);
-	}
-
 	/** A configuration class that allows the printing of results of a tracking session to be customized */
 	public static class PrintConfig implements Cloneable {
-		private float theAccentThreshold;
-
+		private float theDisplayThreshold;
+		private float theHighlightThreshold;
 		private boolean isAsync;
-
-		private long theTaskDisplayThreshold;
-
 		private String theIndent;
-
 		private String theInitialIndent;
-
 		private boolean isWithIntro;
 
 		/** Creates a print config */
 		public PrintConfig() {
-			theAccentThreshold = 0;
+			theDisplayThreshold = 0;
+			theHighlightThreshold = 0;
 			isAsync = false;
-			theTaskDisplayThreshold = 0;
 			theIndent = DEFAULT_INDENT_INCREMENT;
 			theInitialIndent = "";
 			isWithIntro = true;
 		}
 
-		/** @return The threshold below which tasks will be omitted from the results */
-		public long getTaskDisplayThreshold() {
-			return theTaskDisplayThreshold;
+		/** @return The threshold percent below which a task will not be printed in the result */
+		public float getDisplayThreshold() {
+			return theDisplayThreshold;
 		}
 
-		/** @param thresh The threshold below which tasks will be omitted from the results */
-		public void setTaskDisplayThreshold(long thresh) {
-			theTaskDisplayThreshold = thresh;
+		/**
+		 * @param displayThreshold The threshold percent below which a task will not be printed in the result
+		 * @return This print config
+		 */
+		public PrintConfig setDisplayThreshold(float displayThreshold) {
+			theDisplayThreshold = displayThreshold;
+			return this;
 		}
 
-		/** @return The threshold percent above which a task will be accented in the result */
-		public float getAccentThreshold() {
-			return theAccentThreshold;
+		/** @return The threshold percent above which a task will be highlighted in the result */
+		public float getHighlightThreshold() {
+			return theHighlightThreshold;
 		}
 
-		/** @param thresh The threshold percent above which a task will be accented in the result */
-		public void setAccentThreshold(float thresh) {
-			theAccentThreshold = thresh;
+		/**
+		 * @param thresh The threshold percent above which a task will be highlighted in the result
+		 * @return This print config
+		 */
+		public PrintConfig setHighlightThreshold(float thresh) {
+			theHighlightThreshold = thresh;
+			return this;
 		}
 
 		/** @return Whether the printing is being done concurrently with the tracker's run */
@@ -178,9 +228,13 @@ public class ProgramTracker implements Cloneable {
 			return isAsync;
 		}
 
-		/** @param async Whether the printing is being done concurrently with the tracker's run */
-		public void setAsync(boolean async) {
+		/**
+		 * @param async Whether the printing is being done concurrently with the tracker's run
+		 * @return This print config
+		 */
+		public PrintConfig setAsync(boolean async) {
 			isAsync = async;
+			return this;
 		}
 
 		/** @return The string to indent nested tasks with */
@@ -188,9 +242,13 @@ public class ProgramTracker implements Cloneable {
 			return theIndent;
 		}
 
-		/** @param indent The string to indent nested tasks with */
-		public void setIndent(String indent) {
+		/**
+		 * @param indent The string to indent nested tasks with
+		 * @return This print config
+		 */
+		public PrintConfig setIndent(String indent) {
 			theIndent = indent;
+			return this;
 		}
 
 		/** @return The number of spaces to start the indentation of with */
@@ -198,9 +256,13 @@ public class ProgramTracker implements Cloneable {
 			return theInitialIndent;
 		}
 
-		/** @param indent The number of spaces to start the indentation of with */
-		public void setInitialIndent(String indent) {
+		/**
+		 * @param indent The number of spaces to start the indentation of with
+		 * @return This print config
+		 */
+		public PrintConfig setInitialIndent(String indent) {
 			theInitialIndent = indent;
+			return this;
 		}
 
 		/** @return Whether program trackers printed with this config will also print a description of the tracker */
@@ -208,9 +270,13 @@ public class ProgramTracker implements Cloneable {
 			return isWithIntro;
 		}
 
-		/** @param wi Whether program trackers printed with this config should also print a description of the tracker */
-		public void setWithIntro(boolean wi) {
+		/**
+		 * @param wi Whether program trackers printed with this config should also print a description of the tracker
+		 * @return This print config
+		 */
+		public PrintConfig setWithIntro(boolean wi) {
 			isWithIntro = wi;
+			return this;
 		}
 
 		@Override
@@ -232,6 +298,9 @@ public class ProgramTracker implements Cloneable {
 
 		/** The number of executions aggregated in this node */
 		int count;
+
+		/** The number of times this node has begun execution since its parent last began execution */
+		int latestCount;
 
 		/** The first time this task was executed */
 		long startTime;
@@ -261,7 +330,7 @@ public class ProgramTracker implements Cloneable {
 		TrackNode parent;
 
 		/** The subroutines of this routine */
-		java.util.ArrayList<TrackNode> children;
+		Map<String, TrackNode> children;
 
 		/**
 		 * The number of times that this routine was {@link ProgramTracker#start(String) start}ed but not explicitly
@@ -272,7 +341,7 @@ public class ProgramTracker implements Cloneable {
 		boolean isReleased;
 
 		TrackNode(TrackNode aParent, String aName, boolean withStats) {
-			children = new java.util.ArrayList<>();
+			children = new LinkedHashMap<>();
 			init(aParent, aName, withStats);
 		}
 
@@ -299,6 +368,7 @@ public class ProgramTracker implements Cloneable {
 
 		void start() {
 			count++;
+			latestCount++;
 			startTime = System.currentTimeMillis();
 			latestStartTime = startTime;
 			latestStartCPU = getCpuNow();
@@ -374,7 +444,7 @@ public class ProgramTracker implements Cloneable {
 
 		/** @return The subroutines of this routine */
 		public TrackNode [] getChildren() {
-			return children.toArray(new TrackNode[children.size()]);
+			return children.values().toArray(new TrackNode[children.size()]);
 		}
 
 		void clear() {
@@ -390,10 +460,10 @@ public class ProgramTracker implements Cloneable {
 		public long getLocalLength(PrintConfig config) {
 			long ret = getRealLength();
 			if(config == null || !config.isAsync())
-				for(TrackNode ch : children)
+				for(TrackNode ch : children.values())
 					ret -= ch.runLength;
 			else
-				for(Object ch : children.toArray())
+				for(Object ch : children.values().toArray())
 					ret -= ((TrackNode) ch).runLength;
 			return ret;
 		}
@@ -426,7 +496,7 @@ public class ProgramTracker implements Cloneable {
 					accent = true;
 				else if(realLength >= thresholdTime) {
 					long length2 = realLength;
-					for(TrackNode child : children) {
+					for(TrackNode child : children.values()) {
 						if(child.getRealLength() >= thresholdTime)
 							length2 -= child.getRealLength();
 					}
@@ -444,12 +514,7 @@ public class ProgramTracker implements Cloneable {
 		 * @return The subtask with the given name
 		 */
 		public TrackNode create(String task) {
-			for(TrackNode child : children)
-				if(child.getName().equals(task))
-					return child;
-			TrackNode ret = newNode(this, task);
-			children.add(ret);
-			return ret;
+			return children.computeIfAbsent(task, __->newNode(this, task));
 		}
 
 		/**
@@ -491,16 +556,13 @@ public class ProgramTracker implements Cloneable {
 			unfinished += node.unfinished;
 			if(lengthStats != null && node.lengthStats != null)
 				lengthStats.merge(node.lengthStats);
-			for(TrackNode child : node.children) {
-				boolean found = false;
-				for(TrackNode thisChild : children)
-					if(thisChild.name.equals(child.name)) {
-						thisChild.merge(child);
-						found = true;
-						break;
-					}
-				if(!found)
-					children.add(child.clone());
+			for(TrackNode child : node.children.values()) {
+				children.compute(child.getName(), (__, old)->{
+					if(old==null)
+						return child.clone();
+					old.merge(child);
+					return old;
+				});
 			}
 		}
 
@@ -535,11 +597,11 @@ public class ProgramTracker implements Cloneable {
 			if(lengthStats != null)
 				ret.lengthStats = lengthStats.clone();
 			ret.parent = null;
-			ret.children = new java.util.ArrayList<>();
-			for(TrackNode child : children) {
+			ret.children = new LinkedHashMap<>();
+			for(TrackNode child : children.values()) {
 				TrackNode childClone = child.clone();
 				childClone.parent = this;
-				ret.children.add(childClone);
+				ret.children.put(child.getName(), childClone);
 			}
 			return ret;
 		}
@@ -563,37 +625,40 @@ public class ProgramTracker implements Cloneable {
 			return sb.toString();
 		}
 
-		void write(int indent, long lastTime, long totalTime, StringBuilder sb, PrintConfig config) {
-			if(config != null) {
-				sb.append(config.getInitialIndent());
-				for(int i = 0; i < indent; i++)
-					sb.append(config.getIndent());
-			}
+		boolean write(int indent, long lastTime, long totalTime, StringBuilder sb, PrintConfig config) {
 			long localLength = getLocalLength(config);
 			float localPercent = 0;
 			float totalPercent = 0;
-			boolean accent = false;
+			boolean highlight = false;
 			long realLength = getRealLength();
-			float accentThresh = config == null ? 0 : config.getAccentThreshold();
+			float accentThresh = config == null ? 0 : config.getHighlightThreshold();
 			if(totalTime > 0) {
 				localPercent = localLength * 100.0f / totalTime;
 				totalPercent = realLength * 100.0f / totalTime;
+				if (config != null && config.getDisplayThreshold() > 0.0f && totalPercent < config.getDisplayThreshold())
+					return false;
 				if(accentThresh > 0) {
 					long thresholdTime = (long) (accentThresh / 100.0f * totalTime);
 					if(localPercent >= accentThresh)
-						accent = true;
+						highlight = true;
 					else if(realLength >= thresholdTime) {
 						long length2 = realLength;
-						for(TrackNode child : children) {
+						for(TrackNode child : children.values()) {
 							if(child.getRealLength() >= thresholdTime)
 								length2 -= child.getRealLength();
 						}
 						if(length2 >= thresholdTime)
-							accent = true;
+							highlight = true;
 					}
 				}
 			}
-			if(accent)
+
+			if (config != null) {
+				sb.append(config.getInitialIndent());
+				for (int i = 0; i < indent; i++)
+					sb.append(config.getIndent());
+			}
+			if (highlight)
 				sb.append("* ");
 			sb.append(name);
 			if(unfinished > 0 || endTime < latestStartTime) {
@@ -631,35 +696,37 @@ public class ProgramTracker implements Cloneable {
 				}
 				sb.append(" total)");
 			}
-			if(accent && lengthStats != null && lengthStats.isInteresting()) {
+			if (highlight && lengthStats != null && lengthStats.isInteresting()) {
 				sb.append("        ");
 				sb.append(lengthStats.toString(NANO_FORMAT));
 			}
-			if(accent)
+			if (highlight)
 				sb.append(" *");
+			return true;
 		}
 
 		/**
 		 * Serializes this tracking node and its children to JSON
 		 *
-		 * @return The JSON representation of this node. May be deserialized with {@link #fromJson(JSONObject)}.
+		 * @return The JSON representation of this node. May be deserialized with {@link #fromJson(JsonObject)}.
 		 */
-		public JSONObject toJson() {
-			JSONObject ret = new JSONObject();
-			ret.put("name", name);
-			ret.put("count", Integer.valueOf(count));
-			ret.put("startTime", Long.valueOf(startTime));
-			ret.put("latestStartTime", Long.valueOf(latestStartTime));
-			ret.put("latestStartNanos", Long.valueOf(latestStartNanos));
-			ret.put("latestStartCPU", Long.valueOf(latestStartCPU));
-			ret.put("endTime", Long.valueOf(endTime));
-			ret.put("length", Long.valueOf(runLength));
-			ret.put("unfinished", Integer.valueOf(unfinished));
+		public JsonObject toJson() {
+			JsonObject ret = new JsonObject();
+			ret.with("name", name);
+			ret.with("count", Integer.valueOf(count));
+			ret.with("latestCount", Integer.valueOf(latestCount));
+			ret.with("startTime", Long.valueOf(startTime));
+			ret.with("latestStartTime", Long.valueOf(latestStartTime));
+			ret.with("latestStartNanos", Long.valueOf(latestStartNanos));
+			ret.with("latestStartCPU", Long.valueOf(latestStartCPU));
+			ret.with("endTime", Long.valueOf(endTime));
+			ret.with("length", Long.valueOf(runLength));
+			ret.with("unfinished", Integer.valueOf(unfinished));
 			if(lengthStats != null)
-				ret.put("lengthStats", lengthStats.toJson());
-			org.json.simple.JSONArray jsonChildren = new org.json.simple.JSONArray();
-			ret.put("children", jsonChildren);
-			for(TrackNode child : children)
+				ret.with("lengthStats", lengthStats.toJson());
+			List<Object> jsonChildren = new ArrayList<>(children.size());
+			ret.with("children", jsonChildren);
+			for(TrackNode child : children.values())
 				jsonChildren.add(child.toJson());
 			return ret;
 		}
@@ -667,9 +734,9 @@ public class ProgramTracker implements Cloneable {
 
 	private String theName;
 
-	private java.util.ArrayList<TrackNode> theCacheNodes;
+	private List<TrackNode> theCacheNodes;
 
-	private java.util.ArrayList<TrackNode> theNodes;
+	private Map<String, TrackNode> theNodes;
 
 	boolean isWithRTStats;
 
@@ -680,6 +747,8 @@ public class ProgramTracker implements Cloneable {
 	private boolean isOn;
 
 	private java.lang.management.ThreadMXBean theThreadBean;
+
+	private TrackNode INACTIVE = new TrackNode(null, "INACTIVE", false);
 
 	/**
 	 * Creates a ProgramTracker
@@ -699,7 +768,7 @@ public class ProgramTracker implements Cloneable {
 	public ProgramTracker(String name, boolean withStats) {
 		theName = name;
 		theCacheNodes = new java.util.ArrayList<>();
-		theNodes = new java.util.ArrayList<>();
+		theNodes = new LinkedHashMap<>();
 		isOn = true;
 		isWithRTStats = withStats;
 	}
@@ -789,7 +858,7 @@ public class ProgramTracker implements Cloneable {
 			return;
 		theCacheNodes.add(node);
 		node.isReleased = true;
-		for(TrackNode child : node.children)
+		for(TrackNode child : node.children.values())
 			releaseNode(child);
 		node.clear();
 	}
@@ -802,7 +871,7 @@ public class ProgramTracker implements Cloneable {
 	public ProgramTracker clear() {
 		theCurrentNode = null;
 		if(!theNodes.isEmpty()) {
-			for(TrackNode node : theNodes)
+			for(TrackNode node : theNodes.values())
 				releaseNode(node);
 			theNodes.clear();
 		}
@@ -817,7 +886,7 @@ public class ProgramTracker implements Cloneable {
 	 */
 	public final TrackNode start(String routine) {
 		if(!isOn)
-			return new TrackNode(null, routine, false);
+			return INACTIVE;
 		/* This code may be quite expensive, since this method is used very often and the call to
 		 * Thread.currentThread() is supposed to be fairly expensive. This code may be useful for
 		 * debugging in some situations, but it is not worth keeping it here to degrade performance
@@ -829,17 +898,9 @@ public class ProgramTracker implements Cloneable {
 			throw new IllegalStateException("Program Trackers may not be used by multiple threads!");
 		 */
 		TrackNode ret = null;
-		if(theCurrentNode == null) {
-			for(TrackNode node : theNodes)
-				if(node.getName().equals(routine)) {
-					ret = node;
-					break;
-				}
-			if(ret == null) {
-				ret = newNode(null, routine);
-				theNodes.add(ret);
-			}
-		} else
+		if(theCurrentNode == null)
+			ret=theNodes.computeIfAbsent(routine, __->newNode(null, routine));
+		else
 			ret = theCurrentNode.create(routine);
 		ret.start();
 		theCurrentNode = ret;
@@ -860,9 +921,11 @@ public class ProgramTracker implements Cloneable {
 			throw new IllegalStateException("Program Trackers may not be used by multiple threads!");
 		 */
 		long time = System.currentTimeMillis();
-		long nanos = -1;
-		if(isWithRTStats)
+		long nanos = -1, nanoCost = -1;
+		if (isWithRTStats) {
 			nanos = System.nanoTime();
+			nanoCost = nanos - theCurrentNode.latestStartNanos;
+		}
 		if(theCurrentNode == null || theCurrentNode != routine) {
 			TrackNode cn = theCurrentNode;
 			while(cn != null && cn != routine)
@@ -873,7 +936,7 @@ public class ProgramTracker implements Cloneable {
 					cn.unfinished++;
 					cn.runLength += time - theCurrentNode.latestStartTime;
 					if(isWithRTStats && theCurrentNode.lengthStats != null)
-						cn.runLengthNanos += nanos - theCurrentNode.latestStartNanos;
+						cn.runLengthNanos += nanoCost;
 					cn.endTime = time;
 					// But don't pollute the statistics
 					cn = cn.parent;
@@ -883,22 +946,28 @@ public class ProgramTracker implements Cloneable {
 				cn = routine;
 				while(cn != null && cn != theCurrentNode)
 					cn = cn.parent;
-				if(cn != null)
-					throw new IllegalStateException("Routine " + routine.getName() + " ended twice" + " or ended after parent routine");
-				else
+				if(cn != null){
+					if(routine.parent==null)
+						throw new IllegalStateException("Routine " + routine.getName() + " ended twice");
+					else
+						throw new IllegalStateException(
+							"Routine " + routine.getName() + " ended twice or ended after parent routine " + routine.parent.getName());
+				} else
 					throw new IllegalStateException(
 						"Routine " + routine.getName() + " not started or ended twice: " + printData(new StringBuilder()));
 			}
 		}
 		if(theCurrentNode != null) {
 			if(isWithRTStats && theCurrentNode.lengthStats != null) {
-				theCurrentNode.lengthStats.add((nanos - theCurrentNode.latestStartNanos) / 1.0e9f);
-				theCurrentNode.runLengthNanos += nanos - theCurrentNode.latestStartNanos;
+				theCurrentNode.lengthStats.add(nanoCost / 1.0e9f);
+				theCurrentNode.runLengthNanos += nanoCost;
 			}
 			theCurrentNode.runLength += time - theCurrentNode.latestStartTime;
 			theCurrentNode.endTime = time;
 			theCurrentNode = theCurrentNode.parent;
 		}
+		for (TrackNode child : routine.children.values())
+			child.latestCount = 0;
 	}
 
 	/** @return The node representing the task that is currently executing */
@@ -908,7 +977,7 @@ public class ProgramTracker implements Cloneable {
 
 	/** @return The raw data gathered by this tracker */
 	public final TrackNode [] getData() {
-		return theNodes.toArray(new TrackNode[theNodes.size()]);
+		return theNodes.values().toArray(new TrackNode[theNodes.size()]);
 	}
 
 	/**
@@ -917,27 +986,31 @@ public class ProgramTracker implements Cloneable {
 	 * @see #printData(StringBuilder)
 	 */
 	public final void printData() {
-		printData(0);
+		printData(0, 0);
 	}
 
 	/**
 	 * Prints the data gathered by this tracker to {@link System#out}
 	 *
-	 * @param threshold The threshold above which percent items in the profiling will be highlighted
+	 * @param displayThreshold The threshold below which percent items in the profiling will not be printed
+	 * @param highlightThreshold The threshold above which percent items in the profiling will be highlighted
 	 */
-	public final void printData(float threshold) {
-		printData(System.out, threshold);
+	public final void printData(float displayThreshold, float highlightThreshold) {
+		printData(System.out, displayThreshold, highlightThreshold);
 	}
 
 	/**
 	 * Prints the data gathered by this tracker to the given stream
 	 *
 	 * @param out The stream to print this tracker's compiled information to
-	 * @param threshold The threshold above which percent items in the profiling will be highlighted
+	 * @param displayThreshold The threshold below which percent items in the profiling will not be printed
+	 * @param highlightTreshold The threshold above which percent items in the profiling will be highlighted
 	 */
-	public final void printData(java.io.PrintStream out, float threshold) {
+	public final void printData(java.io.PrintStream out, float displayThreshold, float highlightTreshold) {
+		if (!isOn)
+			return;
 		PrintConfig config = new PrintConfig();
-		config.setAccentThreshold(threshold);
+		config.setDisplayThreshold(displayThreshold).setHighlightThreshold(highlightTreshold);
 		StringBuilder sb = new StringBuilder();
 		printData(sb, config);
 		out.println(sb.toString());
@@ -957,12 +1030,13 @@ public class ProgramTracker implements Cloneable {
 	 * Prints the data gathered by this tracker to a string builder
 	 *
 	 * @param sb The string builder to append this tracker's compiled information to
-	 * @param threshold The threshold above which percent items in the profiling will be highlighted
+	 * @param displayThreshold The threshold below which percent items in the profiling will not be printed
+	 * @param highlightThreshold The threshold above which percent items in the profiling will be highlighted
 	 * @return The string builder passed in
 	 */
-	public final StringBuilder printData(StringBuilder sb, float threshold) {
+	public final StringBuilder printData(StringBuilder sb, float displayThreshold, float highlightThreshold) {
 		PrintConfig config = new PrintConfig();
-		config.setAccentThreshold(threshold);
+		config.setDisplayThreshold(displayThreshold).setHighlightThreshold(highlightThreshold);
 		return printData(sb, config);
 	}
 
@@ -984,28 +1058,12 @@ public class ProgramTracker implements Cloneable {
 		if(config.isWithIntro())
 			sb.append("Profiling data for tracker " + theName + ":");
 		long totalTime = 0;
-		for(TrackNode node : theNodes)
+		for (TrackNode node : theNodes.values()) {
 			totalTime += node.getRealLength();
-		for(TrackNode node : theNodes)
+		}
+		for(TrackNode node : theNodes.values())
 			print(node, sb, 0, totalTime, 0, config);
 		return sb;
-	}
-
-	/** Prints the data gathered by this tracker this class's log with debug priority */
-	public final void logDebug() {
-		logDebug(0);
-	}
-
-	/**
-	 * Prints the data gathered by this tracker this class's log with debug priority
-	 *
-	 * @param threshold The threshold above which percent items in the profiling will be highlighted
-	 */
-	public final void logDebug(float threshold) {
-		java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-		java.io.PrintStream stream = new java.io.PrintStream(baos);
-		printData(stream, threshold);
-		log.debug("\n" + new String(baos.toByteArray()));
 	}
 
 	@Override
@@ -1017,11 +1075,11 @@ public class ProgramTracker implements Cloneable {
 			throw new IllegalStateException("Clone not supported", e);
 		}
 		ret.theCacheNodes = new java.util.ArrayList<>();
-		ret.theNodes = new java.util.ArrayList<>();
+		ret.theNodes = new LinkedHashMap<>();
 		ret.theCurrentNode = null;
-		for(TrackNode node : theNodes) {
+		for(TrackNode node : theNodes.values()) {
 			TrackNode clone = node.clone();
-			ret.theNodes.add(clone);
+			ret.theNodes.put(node.getName(), clone);
 			if(node == theCurrentNode)
 				ret.theCurrentNode = clone;
 		}
@@ -1031,15 +1089,15 @@ public class ProgramTracker implements Cloneable {
 	/**
 	 * Serializes this tracker to JSON
 	 *
-	 * @return A JSON-serialized representation of this tracker. May be deserialized with {@link #fromJson(JSONObject)}
+	 * @return A JSON-serialized representation of this tracker. May be deserialized with {@link #fromJson(JsonObject)}
 	 */
-	public JSONObject toJson() {
-		JSONObject ret = new JSONObject();
-		ret.put("name", theName);
-		ret.put("withStats", Boolean.valueOf(isWithRTStats));
-		org.json.simple.JSONArray nodes = new org.json.simple.JSONArray();
-		ret.put("nodes", nodes);
-		for(TrackNode node : theNodes)
+	public JsonObject toJson() {
+		JsonObject ret = new JsonObject();
+		ret.with("name", theName);
+		ret.with("withStats", Boolean.valueOf(isWithRTStats));
+		List<Object> nodes = new ArrayList<>();
+		ret.with("nodes", nodes);
+		for(TrackNode node : theNodes.values())
 			nodes.add(node.toJson());
 		return ret;
 	}
@@ -1050,30 +1108,27 @@ public class ProgramTracker implements Cloneable {
 	 * @param tracker The tracker whose data to merge
 	 */
 	public void merge(ProgramTracker tracker) {
-		for(TrackNode node : tracker.theNodes) {
-			boolean found = false;
-			for(TrackNode thisNode : theNodes)
-				if(thisNode.name.equals(node.name)) {
-					thisNode.merge(node);
-					found = true;
-					break;
-				}
-			if(!found)
-				theNodes.add(node.clone());
+		for(TrackNode node : tracker.theNodes.values()) {
+			theNodes.compute(node.getName(), (__, old)->{
+				if(old==null)
+					return node.clone();
+				old.merge(node);
+				return old;
+			});
 		}
 	}
 
 	private void print(TrackNode node, StringBuilder sb, long lastTime, long totalTime, int indent, PrintConfig config) {
-		if(node.parent != null && node.getRealLength() < config.getTaskDisplayThreshold())
-			return;
 		sb.append('\n');
-		node.write(indent, lastTime, totalTime, sb, config);
-		if(!config.isAsync())
-			for(TrackNode ch : node.children)
-				print(ch, sb, lastTime, totalTime, indent + 1, config);
-		else
-			for(Object ch : node.children.toArray())
-				print((TrackNode) ch, sb, lastTime, totalTime, indent + 1, config);
+		if (node.write(indent, lastTime, totalTime, sb, config)) {
+			if (!config.isAsync())
+				for (TrackNode ch : node.children.values())
+					print(ch, sb, lastTime, totalTime, indent + 1, config);
+			else
+				for (Object ch : node.children.values().toArray())
+					print((TrackNode) ch, sb, lastTime, totalTime, indent + 1, config);
+		} else
+			sb.deleteCharAt(sb.length() - 1); // Remove the \n
 	}
 
 	/**
@@ -1127,10 +1182,12 @@ public class ProgramTracker implements Cloneable {
 	 * @param json The JSON representation of a tracker serialized with {@link #toJson()}
 	 * @return A tracker with the same content as the one serialized
 	 */
-	public static ProgramTracker fromJson(JSONObject json) {
+	public static ProgramTracker fromJson(JsonObject json) {
 		ProgramTracker ret = new ProgramTracker((String) json.get("name"), ((Boolean) json.get("withStats")).booleanValue());
-		for(JSONObject node : (java.util.List<JSONObject>) json.get("nodes"))
-			ret.theNodes.add(ret.nodeFromJson(null, node));
+		for (JsonObject jsonNode : (java.util.List<JsonObject>) json.get("nodes")) {
+			TrackNode node=ret.nodeFromJson(null, jsonNode);
+			ret.theNodes.put(node.getName(), node);
+		}
 		return ret;
 	}
 
@@ -1141,7 +1198,7 @@ public class ProgramTracker implements Cloneable {
 	 * @param json The JSON-serialized node, serialized with {@link #toJson()}
 	 * @return A track node with the same content as the one that was serialized
 	 */
-	public TrackNode nodeFromJson(TrackNode parent, JSONObject json) {
+	public TrackNode nodeFromJson(TrackNode parent, JsonObject json) {
 		TrackNode ret = new TrackNode(parent, (String) json.get("name"), false);
 		ret.startTime = ((Number) json.get("startTime")).longValue();
 		ret.latestStartCPU = ((Number) json.get("latestStartCPU")).longValue();
@@ -1152,9 +1209,11 @@ public class ProgramTracker implements Cloneable {
 		ret.runLength = ((Number) json.get("length")).longValue();
 		ret.unfinished = ((Number) json.get("unfinished")).intValue();
 		if(json.get("lengthStats") != null)
-			ret.lengthStats = RunningStatistic.fromJson((JSONObject) json.get("lengthStats"));
-		for(JSONObject node : (java.util.List<JSONObject>) json.get("children"))
-			ret.children.add(nodeFromJson(ret, node));
+			ret.lengthStats = RunningStatistic.fromJson((JsonObject) json.get("lengthStats"));
+		for (JsonObject jsonNode : (java.util.List<JsonObject>) json.get("children")) {
+			TrackNode node=nodeFromJson(null, jsonNode);
+			ret.children.put(node.getName(), node);
+		}
 		return ret;
 	}
 }

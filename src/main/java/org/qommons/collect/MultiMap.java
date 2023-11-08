@@ -1,6 +1,7 @@
 package org.qommons.collect;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -17,25 +18,35 @@ public interface MultiMap<K, V> {
 	 * @param <K> The key type of the map
 	 * @param <V> The value type of the map
 	 */
-	interface MultiEntry<K, V> extends Collection<V> {
+	interface MultiEntry<K, V> {
 		/** @return The key associated with this entry's values */
 		K getKey();
+
+		/** @return All values associated with this entry's key */
+		Collection<V> getValues();
 	}
 
 	/** @return The keys that have least one value in this map */
 	Set<K> keySet();
 
-	/** @return All values stored in this map under any key */
-	Collection<V> values();
-
 	/** @return All key-value collection entries in this multi-map */
 	Set<? extends MultiEntry<K, V>> entrySet();
 
+	/** @return All key-value pairs in this multi-map */
+	Collection<? extends Map.Entry<K, V>> singleEntries();
+
 	/**
-	 * @param key The key to get values for
+	 * @param key The key to get values for. Though this parameter's type is the key type of the map, this method will not throw exceptions
+	 *        if the key is not actually an instance of that type. An empty collection will be returned.
 	 * @return The collection of values stored for the given key in this map. Never null.
 	 */
-	Collection<V> get(Object key);
+	Collection<V> get(K key);
+
+	/** @return The number of values in this multi-map */
+	int valueSize();
+
+	/** @return A collection of all values associated with any key in this map */
+	Collection<V> values();
 
 	/**
 	 * Adds a value for the given key
@@ -56,6 +67,18 @@ public interface MultiMap<K, V> {
 	boolean addAll(K key, Collection<? extends V> values);
 
 	/**
+	 * @param values The map whose key-value pairs to add into this map
+	 * @return Whether any entries were added to this map
+	 */
+	boolean putAll(Map<? extends K, ? extends V> values);
+
+	/**
+	 * @param values The multi-map whose key-value pairs to add into this map
+	 * @return Whether any entries were added to this map
+	 */
+	boolean putAll(MultiMap<? extends K, ? extends V> values);
+
+	/**
 	 * Removes a value associated with a key
 	 *
 	 * @param key The key to remove the value for
@@ -71,4 +94,11 @@ public interface MultiMap<K, V> {
 	 * @return Whether this map was changed as a result of the call
 	 */
 	boolean removeAll(K key);
+
+	/**
+	 * Removes all keys and values in this multi-map
+	 * 
+	 * @return Whether any keys or values were removed
+	 */
+	boolean clear();
 }

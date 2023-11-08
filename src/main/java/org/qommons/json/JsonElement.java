@@ -16,8 +16,7 @@ public interface JsonElement
 	 * @param elementName The name for this element
 	 * @param schemaEl The schema element that this element is based on
 	 */
-	void configure(JsonSchemaParser parser, JsonElement parent, String elementName,
-		org.json.simple.JSONObject schemaEl);
+	void configure(JsonSchemaParser parser, JsonElement parent, String elementName, JsonObject schemaEl);
 
 	/**
 	 * @return The parser that generated this element

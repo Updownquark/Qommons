@@ -1098,37 +1098,4 @@ public class LongList implements Iterable<Long>, Sealable, Cloneable
 			lastRemoved = false;
 		}
 	}
-
-	/**
-	 * Tests the sorting capability of this list
-	 *
-	 * @param args Command-line args, ignored
-	 */
-	public static void main(String [] args)
-	{
-		LongList list = new LongList(true, true);
-		LongList ordered = new LongList();
-		java.util.Random random = new java.util.Random();
-		while(true)
-		{
-			long newVal = random.nextLong();
-			newVal >>>= 1;
-			list.add(newVal);
-			ordered.add(newVal);
-			if(!list.checkSorted())
-			{
-				list.clear();
-				for(int i = 0; i < ordered.size() - 1; i++)
-					list.add(ordered.get(i));
-				long val = ordered.get(ordered.size() - 1);
-				list.add(val);
-			}
-			if(list.size() > 1000)
-			{
-				System.out.println("Tested 1000x");
-				list.clear();
-				ordered.clear();
-			}
-		}
-	}
 }

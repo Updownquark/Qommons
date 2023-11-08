@@ -2,6 +2,7 @@ package org.qommons;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -500,18 +501,22 @@ public class IterableUtils {
 
 			@Override
 			public boolean hasNext() {
-				while ((!hasNext || !filter.test(theNext)) && backing.hasNext()) {
-					hasNext = true;
+				while (!hasNext && backing.hasNext()) {
 					theNext = backing.next();
+					hasNext = filter.test(theNext);
 				}
-				return hasNext && filter.test(theNext);
+
+				return hasNext;
 			}
 
 			@Override
 			public T next() {
-				if ((!hasNext || !filter.test(theNext)) && !hasNext())
+				if (!hasNext && !hasNext())
 					throw new NoSuchElementException();
-				return theNext;
+				T next = theNext;
+				theNext = null;
+				hasNext = false;
+				return next;
 			}
 
 			@Override
@@ -519,6 +524,50 @@ public class IterableUtils {
 				backing.remove();
 			}
 		};
+	}
+
+	/**
+	 * Used by {@link IterableUtils#compare(Iterable, Iterable, SortedAdjuster)}
+	 * 
+	 * @param <T> The type of the first collection
+	 * @param <X> The type of the second collection
+	 */
+	public interface SortedAdjuster<T, X> {
+		/**
+		 * Compares objects from the 2 collections
+		 * 
+		 * @param v1 The object from the first collection
+		 * @param v2 The object from the second collection
+		 * @return Like {@link Comparator#compare(Object, Object)}, but for heterogeneous types
+		 */
+		int compare(T v1, X v2);
+
+		/**
+		 * @param newValue The value from the second collection that was not present in the first
+		 * @param after The value in the first collection that the new value should be placed after (or null if the new value should be
+		 *        first object in the first collection)
+		 * @param before The value in the first collection that the new value should be placed before (or null if the new value should be
+		 *        last object in the first collection)
+		 */
+		void added(X newValue, T after, T before);
+
+		/**
+		 * @param oldValue The value from the first collection that is not present in the second
+		 * @param after The value in the second collection that the value should be placed after (or null if the value should be first
+		 *        object in the second collection)
+		 * @param before The value in the second collection that the value should be placed before (or null if the value should be last
+		 *        object in the second collection)
+		 * @return Whether to remove the value from the second collection (via {@link Iterator#remove()}}
+		 */
+		boolean removed(T oldValue, X after, X before);
+
+		/**
+		 * Called when a value is found in both collections (i.e. when {@link #compare(Object, Object)} returns 0)
+		 * 
+		 * @param v1 The value in the first collection
+		 * @param v2 The value in the second collection
+		 */
+		void found(T v1, X v2);
 	}
 
 	/**
@@ -530,8 +579,91 @@ public class IterableUtils {
 	 *         copy the values it receives.
 	 */
 	public static <T> Iterable<List<T>> combine(Iterator<? extends Iterable<? extends T>> elements) {
-		ExIterable<List<T>, RuntimeException> exRes = ExIterable
-			.combine(ExIterator.fromIterator(elements).map(elIter -> ExIterable.fromIterable(elIter)));
+		ExIterator<? extends ExIterable<? extends T, RuntimeException>, RuntimeException> exArg = ExIterator.fromIterator(elements)
+			.map(elIter -> ExIterable.fromIterable(elIter));
+		ExIterable<List<T>, RuntimeException> exRes = ExIterable.combine(exArg);
 		return exRes.unsafe();
+	}
+
+	/**
+	 * Compares two related sorted sequences
+	 * 
+	 * @param <T> The type of the first sequence
+	 * @param <X> The type of the second sequence
+	 * @param v1 The first sequence
+	 * @param v2 The second sequence
+	 * @param adjuster The adjuster to compare the iterator values and act upon differences
+	 */
+	public static <T, X> void compare(Iterable<? extends T> v1, Iterable<? extends X> v2, SortedAdjuster<T, X> adjuster) {
+		compare(v1.iterator(), v2.iterator(), adjuster);
+	}
+
+	/**
+	 * Compares two related sorted sequences
+	 * 
+	 * @param <T> The type of the first iterator
+	 * @param <X> The type of the second iterator
+	 * @param iter1 The first iterator
+	 * @param iter2 The second iterator
+	 * @param adjuster The adjuster to compare the iterator values and act upon differences
+	 */
+	public static <T, X> void compare(Iterator<? extends T> iter1, Iterator<? extends X> iter2, SortedAdjuster<T, X> adjuster) {
+		class LookAheadIterator<V> {
+			final Iterator<? extends V> iterator;
+			V previous;
+			V current;
+
+			boolean hasCurrent;
+
+			LookAheadIterator(Iterator<? extends V> iter) {
+				iterator = iter;
+				hasCurrent = iter.hasNext();
+				if (hasCurrent) {
+					current = iter.next();
+				}
+			}
+
+			void proceed() {
+				previous = current;
+				hasCurrent = hasCurrent && iterator.hasNext();
+				current = hasCurrent ? iterator.next() : null;
+			}
+		}
+
+		LookAheadIterator<T> laIter1 = new LookAheadIterator<>(iter1);
+		LookAheadIterator<X> laIter2 = new LookAheadIterator<>(iter2);
+		while (laIter1.hasCurrent && laIter2.hasCurrent) {
+			int comp = adjuster.compare(laIter1.current, laIter2.current);
+			if (comp < 0) {
+				// v1 was not found in iter2
+				if (adjuster.removed(laIter1.current, laIter2.previous, laIter2.current))
+					laIter1.iterator.remove();
+
+				laIter1.proceed();
+			} else if (comp > 0) {
+				// v2 was not found in iter1
+				adjuster.added(laIter2.current, laIter1.previous, laIter1.current);
+
+				laIter2.proceed();
+			} else {
+				adjuster.found(laIter1.current, laIter2.current);
+
+				laIter1.proceed();
+				laIter2.proceed();
+			}
+		}
+		while (laIter1.hasCurrent) {
+			// v1 was not found in iter2
+			if (adjuster.removed(laIter1.current, laIter2.previous, laIter2.current))
+				laIter1.iterator.remove();
+
+			laIter1.proceed();
+		}
+		while (laIter2.hasCurrent) {
+			// v2 was not found in iter1
+			adjuster.added(laIter2.current, laIter1.previous, null);
+
+			laIter2.proceed();
+		}
 	}
 }

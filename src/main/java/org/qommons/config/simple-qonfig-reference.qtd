@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<qonfig-def name="Qonfig-Reference" version="0.1">
+	<value-types>
+		<pattern name="qonfig-type">((?&lt;ns&gt;[a-zA-Z0-9_\-]+\s+v?\d+\.\d+)\:)?(?&lt;name&gt;[a-zA-Z0-9_\-]+)</pattern>
+		<pattern name="qonfig-member">(((?&lt;ns&gt;[a-zA-Z0-9_\-]+\s+v?\d+\.\d+)\:)?(?&lt;name&gt;[a-zA-Z0-9_\-]+)\.)?(?&lt;member&gt;[a-zA-Z0-9_\-]+)</pattern>
+	</value-types>
+	<elements>
+		<?DOC The element in a qonfig file that calls for external content to be stitched into its place?>
+		<element-def name="external-reference" abstract="true" promise="true">
+			<?DOC The location of the qonfig file containing the content to stitch into this element's place?>
+			<attribute name="ref" type="string" />
+		</element-def>
+		<?DOC The root of the qonfig file referenced by external-reference.ref?>
+		<element-def name="external-content" abstract="true">
+			<?DOC The name of the external-reference extension that this content fulfills?>
+			<attribute name="fulfills" type="qonfig-type" />
+			<?DOC The content to be stitched into the place of the external-reference referring to this document?>
+			<child-def name="fulfillment" />
+		</element-def>
+		<?DOC A reference from an external-root document to a child of the external-reference that called for it.<br>
+			The child of the reference will be stiched into the external document in place of this child.?>
+		<element-def name="child-placeholder" promise="true">
+			<?DOC The role of the external-reference whose children will replace this element?>
+			<attribute name="ref-role" type="qonfig-member" />
+		</element-def>
+	</elements>
+</qonfig-def>

@@ -3,8 +3,6 @@
  */
 package org.qommons.json;
 
-import org.json.simple.JSONObject;
-
 /** Contains fields and methods to cover some of the basic pieces of JSON validation */
 public abstract class DefaultJsonElement implements JsonElement {
 	private JsonSchemaParser theParser;
@@ -13,18 +11,18 @@ public abstract class DefaultJsonElement implements JsonElement {
 
 	private String theName;
 
-	private JSONObject theConstraints;
+	private JsonObject theConstraints;
 
 	private boolean isNullable;
 
 	@Override
-	public void configure(JsonSchemaParser parser, JsonElement parent, String name, JSONObject schemaEl) {
+	public void configure(JsonSchemaParser parser, JsonElement parent, String name, JsonObject schemaEl) {
 		theParser = parser;
 		if (parent == this)
 			throw new IllegalArgumentException("This element's parent cannot be itself");
 		theParent = parent;
 		theName = name;
-		theConstraints = (JSONObject) schemaEl.get("schemaConstraints");
+		theConstraints = (JsonObject) schemaEl.get("schemaConstraints");
 		schemaEl.remove("schemaConstraints");
 		isNullable = Boolean.TRUE.equals(schemaEl.get("nullable"));
 		schemaEl.remove("nullable");
@@ -46,7 +44,7 @@ public abstract class DefaultJsonElement implements JsonElement {
 	}
 
 	/** @return The schema constraints contained in this element's source */
-	public JSONObject getConstraints() {
+	public JsonObject getConstraints() {
 		return theConstraints;
 	}
 

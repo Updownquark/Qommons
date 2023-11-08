@@ -5,11 +5,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.util.List;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 /** A resource writer that writes its data to a zip file or stream */
@@ -91,24 +91,33 @@ public class ZipResourceWriter implements HierarchicalResourceWriter, AutoClosea
 	 * @throws IOException If an error occurs reading the data
 	 */
 	public static void doZipTask(File zipFile, ResourceTask zipTask) throws IOException {
+		try (InputStream zin = new BufferedInputStream(new FileInputStream(zipFile))) {
+			doZipTask(zin, zipTask);
+		}
+	}
+
+	/**
+	 * Unpacks a zip stream to a temporary directory, calls the task on a resource reader pointed at the temp directory, then deletes the
+	 * temp directory when the task finishes
+	 *
+	 * @param zipIn The zip stream to unpack and operate on
+	 * @param zipTask The task to perform on the unpacked archive
+	 * @throws IOException If an error occurs reading the data
+	 */
+	public static void doZipTask(InputStream zipIn, ResourceTask zipTask) throws IOException {
 		File dir = Files.createTempDirectory("export-temp").toFile();
+		byte[] buffer = new byte[16 * 1024];
+		DefaultFileSource dfs = new DefaultFileSource(dir);
 		try {
-			DefaultFileSource dfs = new DefaultFileSource(dir);
-			ZipInputStream zin = new ZipInputStream(new BufferedInputStream(new FileInputStream(zipFile)));
-			ZipEntry entry = zin.getNextEntry();
-			byte [] buffer = new byte[16 * 1024];
-			while(entry != null) {
+			FileUtils.extractZip(zipIn, (entry, zip) -> {
 				try (OutputStream writer = dfs.writeResource(entry.getName())) {
-					int read = zin.read(buffer);
-					while(read > 0) {
+					int read = zip.read(buffer);
+					while (read > 0) {
 						writer.write(buffer, 0, read);
-						read = zin.read(buffer);
+						read = zip.read(buffer);
 					}
 				}
-				zin.closeEntry();
-				entry = zin.getNextEntry();
-			}
-			zin.close();
+			}, null);
 			zipTask.doTask(dfs);
 		} finally {
 			deleteDir(dir, null);

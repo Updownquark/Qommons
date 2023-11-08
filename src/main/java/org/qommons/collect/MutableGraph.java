@@ -76,14 +76,14 @@ public interface MutableGraph<N, E> extends Graph<N, E> {
 			oldNodes = (List<? extends Node<? extends N, ? extends E>>) graph.getNodes();
 		else
 			oldNodes = new ArrayList<>(graph.getNodes());
-		List<? extends Node<N, E>> newNodes = addNodes(oldNodes.stream().map(n -> n.getValue()).collect(Collectors.toList()));
+		List<? extends Node<N, E>> newNodes = addNodes(oldNodes.stream().map(n -> n.get()).collect(Collectors.toList()));
 		Map<Node<? extends N, ? extends E>, Node<N, E>> oldToNewNodes = new HashMap<>();
 		for (int n = 0; n < oldNodes.size(); n++)
 			oldToNewNodes.put(oldNodes.get(n), newNodes.get(n));
 		for (Edge<? extends N, ? extends E> edge : graph.getEdges()) {
 			Node<N, E> from = oldToNewNodes.get(edge.getStart());
 			Node<N, E> to = oldToNewNodes.get(edge.getEnd());
-			addEdge(from, to, edge.isDirected(), edge.getValue());
+			addEdge(from, to, edge.isDirected(), edge.get());
 		}
 	}
 
@@ -93,6 +93,11 @@ public interface MutableGraph<N, E> extends Graph<N, E> {
 			@Override
 			public Collection<? extends Node<N, E>> getNodes() {
 				return MutableGraph.this.getNodes();
+			}
+
+			@Override
+			public Collection<? extends N> getNodeValues() {
+				return MutableGraph.this.getNodeValues();
 			}
 
 			@Override

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<application-deploy name="Test-App" version="1.2.3-rc.4" release-date="14Apr2023" hash-type="SHA-256"
+	description="This is for testing the application deployment software" update-jar="plugins/qommons-2.0.0.jar">
+	<change-list>
+		<change name="Change #1">Improvements and bug fixes</change>
+		<change name="Change #2">Something else</change>
+		<change name="Something self-explanatory" />
+	</change-list>
+	<distributions>
+		<distribution name="Windows Installer" file="Test-App_1-2-3-rc-4.exe"
+			description="Installs the application on a Windows system, integrates with Start Menu and includes Uninstaller">
+			<requirements>
+				<require type="OS">
+					<value>Windows</value>
+				</require>
+				<require type="arch">
+					<value>x86-64</value>
+				</require>
+				<require type="java" min="1.8.0" />
+			</requirements>
+		</distribution>
+		<distribution name="Linux Distribution" file="Test-App-1.2.3-rc.4.tar.gz" explode="true"
+			description="Simple, portable tarball containing the application, executes via bash script">
+			<requirements>
+				<require type="OS">
+					<value>Linux</value>
+				</require>
+				<require type="arch">
+					<value>x86-64</value>
+				</require>
+				<require type="java" min="1.8.0" />
+			</requirements>
+		</distribution>
+		<!--<distribution name="Windows Distribution" file="Sage-8.8.3-rc.1.piz" explode="true"
+			description="Simple, portable zip archive containing Sage, executes via batch script">
+			<requirements>
+				<require type="OS">
+					<value>Windows</value>
+				</require>
+				<require type="arch">
+					<value>x86-64</value>
+				</require>
+				<require type="java">
+					<min>1.8.0</min>
+				</require>
+			</requirements>
+		</distribution>-->
+	</distributions>
+	<deploy>
+		<file name="(.*)\.sh" rename="$1.sh2" />
+		<!-- Don't clobber the user's data -->
+		<file name="application.config" ignore="true" />
+		<directory name="plugins">
+			<file name="(.*)\.jar" rename="$1.j" />
+		</directory>
+		<!-- Compress other directories -->
+		<directory name="(.*)" compress="true" rename="$1.piz" />
+		<file name="(.*)" />
+	</deploy>
+</application-deploy>

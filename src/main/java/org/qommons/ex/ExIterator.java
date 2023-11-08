@@ -33,10 +33,20 @@ public interface ExIterator<T, E extends Throwable> {
 		throw new UnsupportedOperationException();
 	}
 
+	/**
+	 * @param <V> The type of the mapped value
+	 * @param map The mapping function
+	 * @return An iterator that supplies the same values as this iterator, mapped by the given function
+	 */
 	default <V> ExIterator<V, E> map(Function<? super T, V> map) {
 		return mapEx(ExFunction.of(map));
 	}
 
+	/**
+	 * @param <V> The type of the mapped value
+	 * @param map The mapping function
+	 * @return An iterator that supplies the same values as this iterator, mapped by the given function
+	 */
 	default <V> ExIterator<V, E> mapEx(ExFunction<? super T, V, ? extends E> map) {
 		ExIterator<T, E> outer = this;
 		return new ExIterator<V, E>() {
@@ -57,7 +67,12 @@ public interface ExIterator<T, E extends Throwable> {
 		};
 	}
 
-	public static <T> ExIterator<T, RuntimeException> fromIterator(Iterator<T> iterator) {
+	/**
+	 * @param <T> The iterated type
+	 * @param iterator The iterator to wrap
+	 * @return An {@link ExIterator} that calls the given iterator and never throws any checked exceptions
+	 */
+	public static <T> ExIterator<T, RuntimeException> fromIterator(Iterator<? extends T> iterator) {
 		return new ExIterator<T, RuntimeException>() {
 			@Override
 			public boolean hasNext() {

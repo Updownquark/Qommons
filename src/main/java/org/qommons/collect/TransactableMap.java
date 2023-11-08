@@ -11,4 +11,12 @@ import org.qommons.Transactable;
  * @param <V> The value type for the map
  */
 public interface TransactableMap<K, V> extends Map<K, V>, Transactable {
+	@Override
+	TransactableSet<K> keySet();
+
+	@Override
+	TransactableSet<Map.Entry<K, V>> entrySet();
+
+	@Override
+	TransactableCollection<V> values();
 }

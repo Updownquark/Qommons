@@ -3,11 +3,7 @@ package org.qommons.json;
 
 import java.util.Map;
 
-import org.json.simple.JSONObject;
-
-/**
- * Represents an element that must be a json object with certain fields
- */
+/** Represents an element that must be a json object with certain fields */
 public class JsonObjectElement extends DefaultJsonElement {
 	private static enum OnExtraEl {
 		IGNORE, WARN, ERROR;
@@ -29,10 +25,10 @@ public class JsonObjectElement extends DefaultJsonElement {
 	private CustomSchemaElement theInheritance;
 
 	@Override
-	public void configure(JsonSchemaParser parser, JsonElement parent, String name, JSONObject schemaEl) {
+	public void configure(JsonSchemaParser parser, JsonElement parent, String name, JsonObject schemaEl) {
 		super.configure(parser, parent, name, schemaEl);
 		theChildren = new java.util.HashMap<>();
-		JSONObject constraints = getConstraints();
+		JsonObject constraints = getConstraints();
 		String allowExtras = null;
 		if(constraints != null)
 			allowExtras = (String) constraints.get("allowExtras");
@@ -62,9 +58,7 @@ public class JsonObjectElement extends DefaultJsonElement {
 			theChildren.put(entry.getKey(), parser.parseSchema(this, entry.getKey(), entry.getValue()));
 	}
 
-	/**
-	 * @return The names of all children of this JsonObjectElement
-	 */
+	/** @return The names of all children of this JsonObjectElement */
 	public String [] getChildNames() {
 		return theChildren.keySet().toArray(new String[0]);
 	}
@@ -84,11 +78,11 @@ public class JsonObjectElement extends DefaultJsonElement {
 			return ret;
 		if(jsonValue == null)
 			return 1;
-		if(!(jsonValue instanceof JSONObject))
+		if (!(jsonValue instanceof JsonObject))
 			return 0;
 		int total = 0;
 		float matched = 0;
-		JSONObject json = (JSONObject) jsonValue;
+		JsonObject json = (JsonObject) jsonValue;
 		for(Map.Entry<String, JsonElement> entry : theChildren.entrySet()) {
 			total++;
 			matched += entry.getValue().doesValidate(json.get(entry.getKey()));
@@ -98,7 +92,7 @@ public class JsonObjectElement extends DefaultJsonElement {
 				if(theChildren.get(entry.getKey()) == null)
 					total++;
 			}
-		return matched / total;
+		return total == 0 ? 1.0f : matched / total;
 	}
 
 	@Override
@@ -107,9 +101,9 @@ public class JsonObjectElement extends DefaultJsonElement {
 			return true;
 		if(jsonValue == null)
 			return true;
-		if(!(jsonValue instanceof JSONObject))
+		if (!(jsonValue instanceof JsonObject))
 			throw new JsonSchemaException("Element must be a JSON object", this, jsonValue);
-		JSONObject json = (JSONObject) jsonValue;
+		JsonObject json = (JsonObject) jsonValue;
 		for(Map.Entry<String, JsonElement> entry : theChildren.entrySet())
 			entry.getValue().validate(json.get(entry.getKey()));
 		for(Map.Entry<String, Object> entry : ((Map<String, Object>) jsonValue).entrySet()) {
@@ -118,7 +112,7 @@ public class JsonObjectElement extends DefaultJsonElement {
 				case ERROR:
 					throw new JsonSchemaException("Extra element " + entry.getKey() + " in JSON object", this, jsonValue);
 				case WARN:
-					JsonSchemaParser.log.warn("Extra element " + entry.getKey() + " in JSON object " + getPathString());
+					System.err.println("Extra element " + entry.getKey() + " in JSON object " + getPathString());
 					break;
 				case IGNORE:
 					break;

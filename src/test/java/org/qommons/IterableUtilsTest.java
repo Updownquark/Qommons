@@ -13,10 +13,12 @@ import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 
+/** Some tests against {@link IterableUtils} */
 public class IterableUtilsTest {
 	private List<String[]> thePaths;
 	private List<String> theSentences;
 
+	/** Sets up the test */
 	@Before
 	public void preTest() {
 		List<String[]> paths = new ArrayList<>();
@@ -47,6 +49,7 @@ public class IterableUtilsTest {
 		}
 	}
 
+	/** Tests {@link IterableUtils#compare(Iterator, Iterator, org.qommons.IterableUtils.SortedAdjuster)} */
 	@Test
 	public void testCombine() {
 		Iterable<String>[] pathIter = new Iterable[thePaths.size()];

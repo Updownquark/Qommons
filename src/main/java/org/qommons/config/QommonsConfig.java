@@ -1,10 +1,20 @@
 package org.qommons.config;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.jdom2.Attribute;
-import org.jdom2.Element;
+import org.qommons.io.SimpleXMLParser;
+import org.qommons.io.TextParseException;
+import org.w3c.dom.Element;
+import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Node;
 
 /**
  * <p>
@@ -17,9 +27,13 @@ import org.jdom2.Element;
  * </p>
  */
 public abstract class QommonsConfig implements Cloneable {
+	/** Replaces spaces in XML names */
 	protected static final String SPACE_REPLACEMENT = "._sp_.";
+	/** Prefix for XML names in which illegal characters have been replaced */
 	protected static final String PREFIX = "_.pfx._";
+	/** Pattern for finding sequences to replace in {@link #PREFIX}-marked names */
 	protected static final Pattern INVALID_REPLACEMENT_PATT = Pattern.compile("\\._ch(?<code>[0-9A-Fa-f]{4})_\\.");
+	/** Pattern for replacing sequences with characters that are illegal for XML names */
 	protected static final String INVALID_REPLACEMENT_TEXT = "._chXXXX_.";
 
 	/** The default config implementation */
@@ -27,6 +41,7 @@ public abstract class QommonsConfig implements Cloneable {
 		private final String theName;
 
 		private final String theValue;
+		private final String theUntrimmedValue;
 
 		private QommonsConfig [] theElements;
 
@@ -38,8 +53,21 @@ public abstract class QommonsConfig implements Cloneable {
 		 * @param els The child configs
 		 */
 		public DefaultConfig(String name, String value, QommonsConfig [] els) {
+			this(name, value, value, els);
+		}
+
+		/**
+		 * Creates a default config
+		 *
+		 * @param name The name for the config
+		 * @param value The value for the config
+		 * @param untrimmedValue The untrimmed value for the config
+		 * @param els The child configs
+		 */
+		public DefaultConfig(String name, String value, String untrimmedValue, QommonsConfig[] els) {
 			theName = name;
 			theValue = value;
+			theUntrimmedValue = untrimmedValue;
 			if(els == null)
 				els = new QommonsConfig[0];
 			theElements = els;
@@ -53,6 +81,11 @@ public abstract class QommonsConfig implements Cloneable {
 		@Override
 		public String getValue() {
 			return theValue;
+		}
+
+		@Override
+		public String getValueUntrimmed() {
+			return theUntrimmedValue;
 		}
 
 		@Override
@@ -98,6 +131,11 @@ public abstract class QommonsConfig implements Cloneable {
 		@Override
 		public String getValue() {
 			return theMerged[0].getValue();
+		}
+
+		@Override
+		public String getValueUntrimmed() {
+			return theMerged[0].getValueUntrimmed();
 		}
 
 		@Override
@@ -189,27 +227,30 @@ public abstract class QommonsConfig implements Cloneable {
 	/** @return The base value of this configuration */
 	public abstract String getValue();
 
+	/** @return The base value of this configuration, without any white space trimmed from the ends */
+	public abstract String getValueUntrimmed();
+
 	/** @return All of this configuration's sub-configurations */
 	public abstract QommonsConfig [] subConfigs();
 
 	/**
-	 * @param type The type of the config to get
+	 * @param name The name of the config to get
 	 * @param props The properties that a config must match to be returned by this method
 	 * @return The first configuration that would be returned from {@link #subConfigs(String, String...)}, or null if no such
 	 *         sub-configuration exists
 	 */
-	public QommonsConfig subConfig(String type, String... props) {
-		int index = type.indexOf('/');
+	public QommonsConfig subConfig(String name, String... props) {
+		int index = name.indexOf('/');
 		if(index >= 0) {
-			QommonsConfig pathEl = subConfig(type.substring(0, index));
-			type = type.substring(index + 1);
+			QommonsConfig pathEl = subConfig(name.substring(0, index));
+			name = name.substring(index + 1);
 			if(pathEl == null)
 				return null;
-			return pathEl.subConfig(type);
+			return pathEl.subConfig(name);
 		}
 
 		for(QommonsConfig config : subConfigs())
-			if(config.getName().equals(type)) {
+			if (config.getName().equals(name)) {
 				boolean propMatch = true;
 				for(int i = 0; i + 2 <= props.length; i += 2) {
 					String value = config.get(props[i]);
@@ -225,20 +266,20 @@ public abstract class QommonsConfig implements Cloneable {
 	}
 
 	/**
-	 * Gets a sub-configurations of a given type and potentially selected by a set of attributes
+	 * Gets a sub-configurations of a given name and potentially selected by a set of attributes
 	 *
-	 * @param type The type of the configs to get
+	 * @param name The name of the configs to get
 	 * @param props The properties (name, value, name, value...) that a config must match to be returned by this method
-	 * @return All configuration in this config's children (or descendants) that match the given type and properties
+	 * @return All configuration in this config's children (or descendants) that match the given name and properties
 	 */
-	public QommonsConfig [] subConfigs(String type, String... props) {
-		int index = type.indexOf('/');
+	public QommonsConfig[] subConfigs(String name, String... props) {
+		int index = name.indexOf('/');
 		if(index >= 0) {
-			QommonsConfig [] pathEls = subConfigs(type.substring(0, index));
-			type = type.substring(index + 1);
+			QommonsConfig[] pathEls = subConfigs(name.substring(0, index));
+			name = name.substring(index + 1);
 			QommonsConfig [] [] ret = new QommonsConfig[pathEls.length][];
 			for(int p = 0; p < pathEls.length; p++)
-				ret[p] = pathEls[p].subConfigs(type, props);
+				ret[p] = pathEls[p].subConfigs(name, props);
 			QommonsConfig [] ret2 = org.qommons.ArrayUtils.mergeInclusive(QommonsConfig.class, ret);
 			if(getClass() != QommonsConfig.class) {
 				QommonsConfig [] ret3 = createConfigArray(ret2.length);
@@ -250,7 +291,7 @@ public abstract class QommonsConfig implements Cloneable {
 
 		java.util.ArrayList<QommonsConfig> ret = new java.util.ArrayList<>();
 		for(QommonsConfig config : subConfigs())
-			if(config.getName().equals(type)) {
+			if (config.getName().equals(name)) {
 				boolean propMatch = true;
 				for(int i = 0; i + 2 <= props.length; i += 2) {
 					String value = config.get(props[i]);
@@ -267,8 +308,9 @@ public abstract class QommonsConfig implements Cloneable {
 
 	/**
 	 * @param size The size of the array to create
-	 * @return A config array whose type is that of this class
+	 * @return A config array whose name is that of this class
 	 */
+	@SuppressWarnings("static-method")
 	protected QommonsConfig [] createConfigArray(int size) {
 		return new QommonsConfig[size];
 	}
@@ -423,6 +465,14 @@ public abstract class QommonsConfig implements Cloneable {
 	}
 
 	@Override
+	public int hashCode() {
+		String value = getValue();
+		if (value == null)
+			value = getValueUntrimmed();
+		return Objects.hash(getName(), value, subConfigs());
+	}
+
+	@Override
 	public boolean equals(Object o) {
 		if(!(o instanceof QommonsConfig))
 			return false;
@@ -510,13 +560,42 @@ public abstract class QommonsConfig implements Cloneable {
 	 * @return The parsed config
 	 */
 	public static QommonsConfig fromXml(Element xml) {
-		QommonsConfig [] fx = fromXml(xml, null);
-		if(fx.length == 0)
-			return null;
-		else if(fx.length == 1)
-			return fx[0];
-		else
-			return create("none", null, fx);
+		List<QommonsConfig> childConfigs = new ArrayList<>();
+		NamedNodeMap atts = xml.getAttributes();
+		for (int a = 0; a < atts.getLength(); a++) {
+			DefaultConfig childConfig = new DefaultConfig(deXmlIfy(atts.item(a).getNodeName()), atts.item(a).getNodeValue(), null);
+			childConfigs.add(childConfig);
+		}
+		StringBuilder textContent = null, trimmedContent = null;
+		for (int c = 0; c < xml.getChildNodes().getLength(); c++) {
+			Node child = xml.getChildNodes().item(c);
+			QommonsConfig childConfig = null;
+			switch (child.getNodeType()) {
+			case Node.ELEMENT_NODE:
+				childConfig = fromXml((Element) child);
+				break;
+			case Node.CDATA_SECTION_NODE:
+			case Node.TEXT_NODE:
+				if (textContent == null) {
+					textContent = new StringBuilder();
+					trimmedContent = new StringBuilder();
+				}
+				textContent.append(child.getNodeValue());
+				String trim = child.getNodeValue().trim();
+				if (trimmedContent.length() > 0 && trim.length() > 0)
+					trimmedContent.append('\n');
+				trimmedContent.append(trim);
+				break;
+			}
+			if (childConfig != null)
+				childConfigs.add(childConfig);
+		}
+		if (trimmedContent != null && trimmedContent.length() == 0)
+			trimmedContent = null;
+		return create(deXmlIfy(xml.getNodeName()), //
+			trimmedContent == null ? null : trimmedContent.toString(), //
+			textContent == null ? null : textContent.toString(), //
+			childConfigs.toArray(new QommonsConfig[childConfigs.size()]));
 	}
 
 	/**
@@ -550,13 +629,7 @@ public abstract class QommonsConfig implements Cloneable {
 			}
 			throw new java.io.IOException(msg.toString());
 		}
-		QommonsConfig [] fx = fromXml(root, location, relative);
-		if(fx.length == 0)
-			return null;
-		else if(fx.length == 1)
-			return fx[0];
-		else
-			return create("none", null, fx);
+		return fromXml(root);
 	}
 
 	/**
@@ -572,10 +645,15 @@ public abstract class QommonsConfig implements Cloneable {
 				throw new java.io.FileNotFoundException("Classpath configuration URL " + s + " refers to a non-existent resource");
 			}
 			return configURL;
-		} else if(s.contains(":/"))
+		} else if (s.contains("://") || (s.startsWith("file:/")))
 			return new java.net.URL(s); // Absolute resource
-		else
-			throw new java.io.IOException("Location " + s + " is invalid");
+		else {
+			// See if it's a file path
+			File file = new File(s);
+			if (file.exists())
+				return file.toURI().toURL();
+			throw new java.io.IOException("Location " + s + " is invalid or unreachable (" + file.getCanonicalPath() + ")");
+		}
 	}
 
 	/**
@@ -585,14 +663,39 @@ public abstract class QommonsConfig implements Cloneable {
 	 * @return The root element of the XML
 	 * @throws java.io.IOException If the XML could not be read or parsed
 	 */
-	public static Element getRootElement(java.net.URL url) throws java.io.IOException {
-		Element configEl;
-		try {
-			configEl = new org.jdom2.input.SAXBuilder().build(url).getRootElement();
-		} catch(org.jdom2.JDOMException e) {
-			throw new java.io.IOException("Could not read XML file " + url, e);
+	public static Element getRootElement(java.net.URL url) throws IOException {
+		try (InputStream in = url.openStream()) {
+			return getRootElement(url.toString(), in);
+		} catch (IOException e) {
+			throw new IOException("Could not read XML file " + url, e);
 		}
-		return configEl;
+	}
+
+	/**
+	 * Parses the root element from an XML file
+	 *
+	 * @param stream The input stream of the XML resource to parse
+	 * @return The root element of the XML
+	 * @throws IOException If the XML could not be read or parsed
+	 */
+	public static Element getRootElement(InputStream stream) throws IOException {
+		return getRootElement(null, stream);
+	}
+
+	/**
+	 * Parses the root element from an XML file
+	 *
+	 * @param fileLocation The location of the file being parsed. Only used for error messaging and may be null.
+	 * @param stream The input stream of the XML resource to parse
+	 * @return The root element of the XML
+	 * @throws IOException If the XML could not be read or parsed
+	 */
+	public static Element getRootElement(String fileLocation, InputStream stream) throws IOException {
+		try {
+			return new SimpleXMLParser().parseDocument(fileLocation, stream).getDocumentElement();
+		} catch (TextParseException e) {
+			throw new IOException("Could not parse XML", e);
+		}
 	}
 
 	/**
@@ -601,9 +704,9 @@ public abstract class QommonsConfig implements Cloneable {
 	 * @param location The location of the XML file to parse
 	 * @param relative The locations to which the location may be relative
 	 * @return The root element of the given XMl file
-	 * @throws java.io.IOException If an error occurs finding, reading, or parsing the file
+	 * @throws IOException If an error occurs finding, reading, or parsing the file
 	 */
-	public static Element getRootElement(String location, String... relative) throws java.io.IOException {
+	public static Element getRootElement(String location, String... relative) throws IOException {
 		String newLocation = resolve(location, relative);
 		if(newLocation == null)
 			return null;
@@ -620,8 +723,20 @@ public abstract class QommonsConfig implements Cloneable {
 		return "classpath://" + clazz.getName().replaceAll("\\.", "/") + ".class";
 	}
 
-	private static String resolve(String location, String... relative) throws java.io.IOException {
-		if(location.contains(":/"))
+	/**
+	 * @param location The path of the resource to find
+	 * @param relative The list of paths that the location is relative to
+	 * @return The path that the given resource should be located ad
+	 * @throws IOException If any of the given paths cannot be interpreted
+	 */
+	public static String resolve(String location, String... relative) throws IOException {
+		if (location.startsWith("classpath://")) {
+			String resPath = location.substring("classpath:/".length());
+			URL resource = QommonsConfig.class.getResource(resPath);
+			if (resource == null)
+				throw new IOException("No such resource on classpath: " + resPath);
+			return resource.toString();
+		} else if (location.contains("://") || location.startsWith("file:/") || location.startsWith("jar:file:/"))
 			return location;
 		else if(relative.length > 0) {
 			String resolvedRel = resolve(relative[0], org.qommons.ArrayUtils.remove(relative, 0));
@@ -630,42 +745,26 @@ public abstract class QommonsConfig implements Cloneable {
 				if(location.startsWith("/"))
 					return resolvedRel.substring(0, protocolIdx) + ":/" + location;
 				String newLocation = location;
-				do {
-					int lastSlash = resolvedRel.lastIndexOf("/");
+				int lastSlash = resolvedRel.lastIndexOf("/");
+				if (lastSlash >= 0) {
 					resolvedRel = resolvedRel.substring(0, lastSlash);
-					if(newLocation.startsWith("../"))
-						newLocation = newLocation.substring(3);
-				} while(newLocation.startsWith("../"));
+					lastSlash = resolvedRel.lastIndexOf("/");
+				}
+				while (lastSlash > 0 && newLocation.startsWith("../")) {
+					resolvedRel = resolvedRel.substring(0, lastSlash);
+					lastSlash = resolvedRel.lastIndexOf("/");
+					newLocation = newLocation.substring(3);
+				}
 				if(!resolvedRel.contains(":/")) {
-					throw new java.io.IOException(
+					throw new IOException(
 						"Location " + location + " relative to " + org.qommons.ArrayUtils.toString(relative) + " is invalid");
 				}
 				return resolvedRel + "/" + newLocation;
 			} else
 				return null;
 		} else {
-			throw new java.io.IOException("Location " + location + " is invalid");
+			throw new IOException("Location " + location + " is invalid");
 		}
-	}
-
-	private static QommonsConfig [] fromXml(Element xml, String location, String... relative) {
-		String value = xml.getTextTrim();
-		if(value.length() == 0)
-			value = null;
-		java.util.List<Element> children = xml.getChildren();
-		java.util.List<Attribute> atts = xml.getAttributes();
-		int attSize = atts.size();
-		if(children.size() == 0 && attSize == 0)
-			return new QommonsConfig[] { new DefaultConfig(deXmlIfy(xml.getName()), value, null) };
-		java.util.ArrayList<QommonsConfig> childConfigs = new java.util.ArrayList<>();
-		if(attSize > 0)
-			for(Attribute att : atts)
-				if(!att.getName().equals("if"))
-					childConfigs.add(new DefaultConfig(deXmlIfy(att.getName()), att.getValue(), null));
-		for(Element child : children)
-			for(QommonsConfig toAdd : fromXml(child, location, relative))
-				childConfigs.add(toAdd);
-		return new QommonsConfig[] {create(xml.getName(), value, childConfigs.toArray(new QommonsConfig[childConfigs.size()]))};
 	}
 
 	private static String deXmlIfy(String name) {
@@ -704,6 +803,19 @@ public abstract class QommonsConfig implements Cloneable {
 	 * @return The new config
 	 */
 	public static QommonsConfig create(String name, String value, QommonsConfig... children) {
-		return new DefaultConfig(name, value, children);
+		return create(name, value, value, children);
+	}
+
+	/**
+	 * Creates a config
+	 *
+	 * @param name The name for the config
+	 * @param value The base value for the config
+	 * @param untrimmedValue The untrimmed value for the config
+	 * @param children The subconfigs for the new config
+	 * @return The new config
+	 */
+	public static QommonsConfig create(String name, String value, String untrimmedValue, QommonsConfig... children) {
+		return new DefaultConfig(name, value, untrimmedValue, children);
 	}
 }

@@ -1,19 +1,13 @@
 /* JsonSchemaParser.java Created Dec 21, 2009 by Andrew Butler, PSL */
 package org.qommons.json;
 
-import org.apache.log4j.Logger;
-import org.json.simple.JSONObject;
-
 /** Parses a JSON schema for validation */
 public class JsonSchemaParser {
-	/** Used by the JSON schema API for logging */
-	public static final Logger log = Logger.getLogger(JsonSchemaParser.class);
-
 	private final SAJParser theParser;
 
 	private java.util.Map<String, String> theSchemaRoots;
 
-	private java.util.Map<String, JSONObject> theStoredSchemas;
+	private java.util.Map<String, JsonObject> theStoredSchemas;
 
 	/** Creates a schema parser */
 	public JsonSchemaParser() {
@@ -22,9 +16,7 @@ public class JsonSchemaParser {
 		theParser = new SAJParser();
 	}
 
-	/**
-	 * @return The JSON parser that parses schema files for this schema parser
-	 */
+	/** @return The JSON parser that parses schema files for this schema parser */
 	public SAJParser getParser() {
 		return theParser;
 	}
@@ -49,7 +41,7 @@ public class JsonSchemaParser {
 	 */
 	public JsonElement parseSchema(JsonElement parent, String name, Object schemaEl) {
 		JsonElement ret = createElementFor(schemaEl);
-		ret.configure(this, parent, name, schemaEl instanceof JSONObject ? (JSONObject) schemaEl : null);
+		ret.configure(this, parent, name, schemaEl instanceof JsonObject ? (JsonObject) schemaEl : null);
 		return ret;
 	}
 
@@ -60,8 +52,8 @@ public class JsonSchemaParser {
 	 * @return The JsonElement to parse the given schema type
 	 */
 	public JsonElement createElementFor(Object schemaEl) {
-		if(schemaEl instanceof JSONObject) {
-			JSONObject jsonSchema = (JSONObject) schemaEl;
+		if (schemaEl instanceof JsonObject) {
+			JsonObject jsonSchema = (JsonObject) schemaEl;
 			String typeName = (String) jsonSchema.get("valueType");
 			if(typeName == null)
 				return new JsonObjectElement();
@@ -110,11 +102,11 @@ public class JsonSchemaParser {
 	 * @return The schema at the given location
 	 */
 	public JsonElement getExternalSchema(String schemaName, String schemaLocation, JsonElement parent) {
-		JSONObject schema = theStoredSchemas.get(schemaName);
+		JsonObject schema = theStoredSchemas.get(schemaName);
 		if(schema != null)
 			return createElementFor(schema);
 		try {
-			schema = (JSONObject) parseJSON(new java.net.URL(schemaLocation));
+			schema = (JsonObject) parseJSON(new java.net.URL(schemaLocation));
 		} catch(java.net.MalformedURLException e) {
 			throw new IllegalStateException("Malformed URL: " + schemaLocation, e);
 		}
@@ -135,7 +127,7 @@ public class JsonSchemaParser {
 		String jsonLoc = schemaRoot.toString();
 		jsonLoc = jsonLoc.substring(0, jsonLoc.lastIndexOf('/'));
 		parser.addSchema(schemaName, jsonLoc);
-		JSONObject jsonSchema = (JSONObject) parseJSON(schemaRoot);
+		JsonObject jsonSchema = (JsonObject) parseJSON(schemaRoot);
 
 		JsonElement ret = parser.createElementFor(jsonSchema);
 		ret.configure(parser, null, schemaName, jsonSchema);
@@ -209,12 +201,13 @@ public class JsonSchemaParser {
 				try {
 					br.close();
 				} catch(java.io.IOException e) {
-					log.error("Could not close stream", e);
+					System.err.println("Could not close stream");
+					e.printStackTrace();
 				}
 		}
-		JSONObject schema;
+		JsonObject schema;
 		try {
-			schema = (JSONObject) theParser.parse(new java.io.StringReader(json), new SAJParser.DefaultHandler());
+			schema = (JsonObject) theParser.parse(new java.io.StringReader(json), new SAJParser.DefaultHandler());
 		} catch(Throwable e) {
 			throw new IllegalStateException("Could not parse JSON at " + url + ":\n" + json, e);
 		}

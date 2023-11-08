@@ -15,8 +15,18 @@ public interface HierarchicalResourceReader {
      */
     InputStream readResource(String path) throws IOException;
 
+	/**
+	 * @param path The path to get child directories at
+	 * @return The collection of child directories in this resource matching the given path
+	 * @throws IOException If an error occurs checking this resources structure
+	 */
 	Collection<String> getSubDirs(String path) throws IOException;
 
+	/**
+	 * @param subDir The child directory in which to get child resources
+	 * @return The collection of child resources in this resource matching the given path
+	 * @throws IOException If an error occurs checking this resources structure
+	 */
 	Collection<String> getResources(String subDir) throws IOException;
 
 	/**

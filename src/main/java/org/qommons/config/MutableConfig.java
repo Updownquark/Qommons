@@ -1,8 +1,19 @@
 package org.qommons.config;
 
-import org.jdom2.Document;
-import org.jdom2.Element;
-import org.jdom2.Verifier;
+import java.io.IOException;
+import java.io.OutputStream;
+
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
 
 /** A modifiable version of QommonsConfig */
 public class MutableConfig extends QommonsConfig {
@@ -26,6 +37,8 @@ public class MutableConfig extends QommonsConfig {
 	private String theName;
 
 	private String theValue;
+
+	private String theUntrimmedValue;
 
 	private MutableConfig [] theSubConfigs;
 
@@ -81,6 +94,7 @@ public class MutableConfig extends QommonsConfig {
 		theParent = parent;
 		theName = config.getName();
 		theValue = config.getValue();
+		theUntrimmedValue = config.getValueUntrimmed();
 		theListeners = new ConfigListener[0];
 		QommonsConfig [] subs = config.subConfigs();
 		theSubConfigs = createConfigArray(subs.length);
@@ -135,6 +149,11 @@ public class MutableConfig extends QommonsConfig {
 		return theValue;
 	}
 
+	@Override
+	public String getValueUntrimmed() {
+		return theUntrimmedValue;
+	}
+
 	/**
 	 * @param key The name of the sub-configuration to store the value in
 	 * @param value The value to store for the given sub-configuration
@@ -142,7 +161,6 @@ public class MutableConfig extends QommonsConfig {
 	 */
 	public MutableConfig set(String key, String value) {
 		MutableConfig config = getOrCreate(key);
-		if (value != null)
 			config.setValue(value);
 		return this;
 	}
@@ -153,7 +171,8 @@ public class MutableConfig extends QommonsConfig {
 	 */
 	public MutableConfig setValue(String value) {
 		String preValue = theValue;
-		theValue = value;
+		theValue = value == null ? null : value.trim();
+		theUntrimmedValue = value;
 		configChanged(this, preValue);
 		return this;
 	}
@@ -208,6 +227,7 @@ public class MutableConfig extends QommonsConfig {
 	 * @param name The name for the new child
 	 * @return A new config element to be added as a child to this config
 	 */
+	@SuppressWarnings("static-method")
 	protected MutableConfig createChild(String name) {
 		return new MutableConfig(name);
 	}
@@ -331,13 +351,14 @@ public class MutableConfig extends QommonsConfig {
 
 	/**
 	 * Writes this configuration to an XML element
-	 *
+	 * 
+	 * @param doc The document to use to create the content
 	 * @return The XML element representing this configuration
 	 */
-	public Element toXML() {
-		Element ret = new Element(xmlIfy(theName));
+	public Element toXML(Document doc) {
+		Element element = doc.createElement(xmlIfy(theName));
 		if(theValue != null)
-			ret.setText(theValue);
+			element.appendChild(doc.createTextNode(theValue));
 		java.util.HashMap<String, int []> attrs = new java.util.HashMap<>();
 		for(MutableConfig sub : theSubConfigs) {
 			int [] count = attrs.get(sub.theName);
@@ -349,11 +370,11 @@ public class MutableConfig extends QommonsConfig {
 		}
 		for(MutableConfig sub : theSubConfigs) {
 			if(attrs.get(sub.theName)[0] == 1 && sub.theSubConfigs.length == 0 && sub.theValue != null && sub.theValue.indexOf('\n') < 0)
-				ret.setAttribute(xmlIfy(sub.theName), sub.theValue);
+				element.setAttribute(xmlIfy(sub.theName), sub.theValue);
 			else
-				ret.addContent(sub.toXML());
+				element.appendChild(sub.toXML(doc));
 		}
-		return ret;
+		return element;
 	}
 
 	private static String xmlIfy(String name) {
@@ -379,11 +400,86 @@ public class MutableConfig extends QommonsConfig {
 	 * @param out The stream to write the configuration to
 	 * @throws java.io.IOException If an error occurs writing the XML document
 	 */
-	public static void writeAsXml(MutableConfig config, java.io.OutputStream out) throws java.io.IOException {
-		Element root = config.toXML();
-		Document doc = new Document(root);
-		org.jdom2.output.Format format = org.jdom2.output.Format.getPrettyFormat();
-		format.setIndent("\t");
-		new org.jdom2.output.XMLOutputter(format).output(doc, out);
+	public static void writeAsXml(MutableConfig config, OutputStream out) throws IOException {
+		Document doc;
+		try {
+			doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
+		} catch (ParserConfigurationException e) {
+			throw new IllegalStateException("Could not create document?", e);
+		}
+		Element root = config.toXML(doc);
+		doc.appendChild(root);
+		try {
+			Transformer tr = TransformerFactory.newInstance().newTransformer();
+			tr.setOutputProperty(OutputKeys.STANDALONE, "yes");
+			tr.setOutputProperty(OutputKeys.INDENT, "yes");
+			tr.setOutputProperty(OutputKeys.METHOD, "xml");
+			tr.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
+			tr.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2");
+
+			// I really want tab indenting, not spaces
+			class TabConvertingOutputStream extends OutputStream {
+				boolean spaced;
+
+				@Override
+				public void write(int b) throws IOException {
+					if (b == ' ') {
+						if (spaced) {
+							spaced = false;
+							out.write('\t');
+						} else
+							spaced = true;
+					} else {
+						if (spaced) {
+							spaced = false;
+							out.write(' ');
+						}
+						out.write(b);
+					}
+				}
+
+				@Override
+				public void write(byte[] b, int off, int len) throws IOException {
+					if (len == 0)
+						return;
+					if (spaced) {
+						if (b[off] == ' ') {
+							off++;
+							len--;
+							out.write('\t');
+						} else
+							out.write(' ');
+						spaced = false;
+					}
+					for (int i = 0; i < len; i++) {
+						if (b[off + i] == ' ') {
+							if (spaced) {
+								if (i > 0)
+									out.write(b, off, i);
+								out.write('\t');
+								spaced = false;
+								off += i + 1;
+								len -= i + 1;
+								i = -1;
+							} else {
+								spaced = true;
+							}
+						} else
+							spaced = false;
+					}
+					if (len > 0)
+						out.write(b, off, len);
+				}
+
+				@Override
+				public void flush() throws IOException {
+					out.flush();
+				}
+			}
+			// tr.transform(new DOMSource(doc), new StreamResult(out));
+			tr.transform(new DOMSource(doc), new StreamResult(new TabConvertingOutputStream()));
+		} catch (TransformerException te) {
+			System.out.println(te.getMessage());
+		}
 	}
 }

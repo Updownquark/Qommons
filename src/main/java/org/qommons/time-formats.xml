@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<time-formats>
+	<!-- Elements that may be used in formats -->
+	<components>
+		<component name="W" component-type="Weekday" parser="$weekday" value-type="weekday" />
+		<component name="YY" component-type="Year" parser="\d{2}" />
+		<component name="YYYY" component-type="Year" parser="\d{4}" />
+		<component name="Y" component-type="Year" parser="\d{4,8}" /> <!-- Allow for dates beyond 9999 -->
+		<component name="M" component-type="Month" parser="\d{1,2}"  value-type="monthDig" />
+		<component name="MM" component-type="Month" parser="\d{2}" value-type="monthDig" />
+		<component name="MMM" component-type="Month" parser="$month" value-type="month"/>
+		<component name="D" component-type="Day" parser="\d{1,2}" />
+		<component name="DD" component-type="Day" parser="\d{2}" />
+		<component name="H" component-type="Hour" parser="\d{1,2}" />
+		<component name="HH" component-type="Hour" parser="\d{2}" />
+		<component name="m" component-type="Minute" parser="\d{2}" />
+		<component name="s" component-type="Second" parser="\d{2}" />
+		<component name="S" component-type="SubSecond" parser="\d+" value-type="subSecond" />
+		<component name="a" component-type="AmPm" parser="(?i)[ap]\.?m\.?" value-type="ampm"/>
+		<component name="Z" component-type="TimeZone" parser="[a-zA-Z]{1,3}" value-type="timeZone" />
+		<component name="t" component-type="None" parser="$th" />
+		<component name="/" component-type="None" parser="[\-\/\.]" />
+		<component name="-" component-type="None" parser="[\-\/\s]" />
+		<component name="." component-type="None" parser="\." />
+		<component name=":" component-type="None" parser=":" />
+	</components>
+	<!-- Time formats to support -->
+	<formats>
+		<!-- Date formats -->
+		<format>Y/M/Dt?Z?</format>
+		<format>Y/M/DZ?</format>
+		<format>YYYYMMDDZ?</format>
+		<!--<format>DDMMYYYYZ?</format>-->
+		<!--
+			Including a year-only format here frequently got it conflated with military time (e.g. "1300")
+			It also just seems to me that we should always require a minimum resolution of a day
+		-->
+		<!-- <format>YYYYZ?</format>
+		<format>MMM-YYYYZ?</format>-->
+		<format>Y-?MMM-?DZ?</format>
+		<format>YYYY-?MM-?DZ?</format>
+		<format>W?D-?MMM-?YZ?</format>
+		<format>W?D-?MMM-?YYZ?</format>
+		<format>W?D-?MMMZ?</format>
+		<format>W?M-Dt?-YZ?</format>
+		<format>W?M-Dt?-YYZ?</format>
+		<format>W?MMM-Dt?-YZ?</format>
+		<format>W?MMM-Dt?-YYZ?</format>
+		<format>W?M-Dt?Z?</format>
+		<format>W?M.YZ?</format>
+		<format>W?Dt?.M.YZ?</format>
+		<format>W?Dt?.M.YYZ?</format>
+		<format>W?Dt?.MZ?</format>
+		<format>W?MMM-?DZ?</format>
+		<format>W?DtZ?</format>
+		<format>W</format>
+		<!-- Time formats -->
+		<format>HaZ?</format>
+		<format>H:m:s.Sa?Z?</format>
+		<format>H:m:sa?Z?</format>
+		<format>HHms.SZ?</format>
+		<format>HHmsZ?</format>
+		<format>H:ma?Z?</format>
+		<format>HHma?Z?</format>
+	</formats>
+</time-formats>

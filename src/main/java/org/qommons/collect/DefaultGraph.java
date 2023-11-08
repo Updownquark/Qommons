@@ -1,11 +1,25 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
+/**
+ * A simple, default implementation of {@link MutableGraph}
+ * 
+ * @param <N> The type of node values in the graph
+ * @param <E> The type of edge values in the graph
+ */
 public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 	private final Collection<DefaultNode<N, E>> theNodes;
 	private final Collection<DefaultEdge<N, E>> theEdges;
 
+	/** Creates the graph */
 	public DefaultGraph() {
 		theNodes = new LinkedList<>();
 		theEdges = new LinkedList<>();
@@ -17,6 +31,11 @@ public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 	}
 
 	@Override
+	public Collection<? extends N> getNodeValues() {
+		return theNodes.stream().map(n -> n.get()).collect(Collectors.toList());
+	}
+
+	@Override
 	public Collection<DefaultEdge<N, E>> getEdges() {
 		return Collections.unmodifiableCollection(theEdges);
 	}
@@ -24,7 +43,7 @@ public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 	@Override
 	public Node<N, E> nodeFor(N value) {
 		for (Node<N, E> node : theNodes)
-			if (Objects.equals(node.getValue(), value))
+			if (Objects.equals(node.get(), value))
 				return node;
 		return null;
 	}
@@ -109,10 +128,10 @@ public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 			DefaultEdge<N, E> newEdge;
 			ListIterator<DefaultEdge<N, E>> edgeIter;
 			if (oldEdge.getStart() == defNode) {
-				newEdge = new DefaultEdge<>(this, newNode, oldEdge.getEnd(), oldEdge.getValue(), oldEdge.isDirected);
+				newEdge = new DefaultEdge<>(this, newNode, oldEdge.getEnd(), oldEdge.get(), oldEdge.isDirected);
 				edgeIter = oldEdge.getEnd().theEdges.listIterator();
 			} else {
-				newEdge = new DefaultEdge<>(this, oldEdge.getStart(), newNode, oldEdge.getValue(), oldEdge.isDirected);
+				newEdge = new DefaultEdge<>(this, oldEdge.getStart(), newNode, oldEdge.get(), oldEdge.isDirected);
 				edgeIter = oldEdge.getStart().theEdges.listIterator();
 			}
 			while (edgeIter.hasNext()) {
@@ -142,6 +161,12 @@ public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 		theEdges.clear();
 	}
 
+	/**
+	 * A simple implementation of org.qommons.collect.Graph.Node
+	 * 
+	 * @param <N> The type of node values in the graph
+	 * @param <E> The type of edge values in the graph
+	 */
 	public static class DefaultNode<N, E> implements Graph.Node<N, E> {
 		final DefaultGraph<N, E> theGraph;
 		private final N theValue;
@@ -155,16 +180,32 @@ public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 		}
 
 		@Override
+		public Collection<? extends Edge<N, E>> getOutward() {
+			return theEdges.stream().filter(e -> e.getStart() == this).collect(Collectors.toList());
+		}
+
+		@Override
+		public Collection<? extends Edge<N, E>> getInward() {
+			return theEdges.stream().filter(e -> e.getEnd() == this).collect(Collectors.toList());
+		}
+
+		@Override
 		public Collection<DefaultEdge<N, E>> getEdges() {
 			return Collections.unmodifiableCollection(theEdges);
 		}
 
 		@Override
-		public N getValue() {
+		public N get() {
 			return theValue;
 		}
 	}
 
+	/**
+	 * A simple implementation of org.qommons.collect.Graph.Edge
+	 * 
+	 * @param <N> The type of node values in the graph
+	 * @param <E> The type of edge values in the graph
+	 */
 	public static class DefaultEdge<N, E> implements Graph.Edge<N, E> {
 		final DefaultGraph<N, E> theGraph;
 		private final DefaultNode<N, E> theStart;
@@ -197,7 +238,7 @@ public class DefaultGraph<N, E> implements MutableGraph<N, E> {
 		}
 
 		@Override
-		public E getValue() {
+		public E get() {
 			return theValue;
 		}
 	}

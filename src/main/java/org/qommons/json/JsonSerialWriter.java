@@ -4,6 +4,8 @@
 package org.qommons.json;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Creates JSON-formatted data in a serial method. This allows a stream to be written more
@@ -86,4 +88,72 @@ public interface JsonSerialWriter
 	 * @throws IOException If an error occurs creating the data
 	 */
 	public JsonSerialWriter writeNull() throws IOException;
+
+	/**
+	 * Writes a JSON-typed something to the stream
+	 * 
+	 * @param thing The JSON thing to write
+	 * @return This writer
+	 * @throws IOException If an error occurred writing the thing to the stream
+	 * @throws IllegalArgumentException If the thing is not a recognized JSON-typed something
+	 */
+	default JsonSerialWriter writeThing(Object thing) throws IOException, IllegalArgumentException {
+		if (thing instanceof JsonObject)
+			writeObject((JsonObject) thing);
+		else if (thing instanceof List)
+			writeArray((List<?>) thing);
+		else if (thing instanceof String)
+			writeString((String) thing);
+		else if (thing instanceof Number)
+			writeNumber((Number) thing);
+		else if (thing instanceof Boolean)
+			writeBoolean((Boolean) thing);
+		else if (thing == null)
+			writeNull();
+		else
+			throw new IllegalArgumentException("Unrecognized JSON thing to write: " + thing.getClass().getName());
+		return this;
+	}
+
+	/**
+	 * Writes a JSON object something to the stream
+	 * 
+	 * @param object The JSON object to write
+	 * @return This writer
+	 * @throws IOException If an error occurred writing the object to the stream
+	 * @throws IllegalArgumentException If the object contains any properties that are not recognized JSON-typed somethings
+	 */
+	default JsonSerialWriter writeObject(JsonObject object) throws IOException, IllegalArgumentException {
+		if (object == null) { // That's ok, I guess
+			writeNull();
+			return this;
+		}
+		startObject();
+		for (Map.Entry<String, Object> property : object.entrySet()) {
+			startProperty(property.getKey());
+			writeThing(property.getValue());
+		}
+		endObject();
+		return this;
+	}
+
+	/**
+	 * Writes a JSON array something to the stream
+	 * 
+	 * @param array The JSON array to write
+	 * @return This writer
+	 * @throws IOException If an error occurred writing the array to the stream
+	 * @throws IllegalArgumentException If the array contains any elements that are not recognized JSON-typed somethings
+	 */
+	default JsonSerialWriter writeArray(List<?> array) throws IOException, IllegalArgumentException {
+		if (array == null) { // That's ok, I guess
+			writeNull();
+			return this;
+		}
+		startArray();
+		for (Object element : array)
+			writeThing(element);
+		endArray();
+		return this;
+	}
 }

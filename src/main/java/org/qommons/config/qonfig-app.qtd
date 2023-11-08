@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<qonfig-def name="Qonfig-App" version="0.1">
+	<elements>
+		<element-def name="qonfig-app">
+			<attribute name="app-file" type="string" specify="required" />
+			<child-def name="toolkit" type="toolkit" max="inf" />
+			<child-def name="promise-fulfillment" type="promise-fulfillment" min="0" max="inf" />
+			<child-def name="special-session" type="special-session" min="0" max="inf" />
+			<child-def name="interpretation" type="interpretation" max="inf" />
+		</element-def>
+		<element-def name="toolkit">
+			<attribute name="def" type="string" specify="required" />
+			<child-def name="value-type" type="value-type" min="0" max="inf" />
+		</element-def>
+		<element-def name="simple-configuration" abstract="true">
+			<value type="string" specify="required" />
+		</element-def>
+		<element-def name="value-type" extends="simple-configuration" />
+		<element-def name="promise-fulfillment" extends="simple-configuration" />
+		<element-def name="special-session" extends="simple-configuration" />
+		<element-def name="interpretation" extends="simple-configuration" />
+	</elements>
+</qonfig-def>

@@ -2,7 +2,16 @@
 package org.qommons;
 
 import java.lang.reflect.Array;
+import java.util.Arrays;
 import java.util.List;
+import java.util.function.BiPredicate;
+import java.util.function.Function;
+import java.util.function.IntToDoubleFunction;
+
+import org.qommons.collect.BetterSortedList.SortedSearchFilter;
+import org.qommons.collect.CollectionElement;
+import org.qommons.collect.CollectionUtils;
+import org.qommons.tree.BetterTreeSet;
 
 /**
  * ArrayUtils provides some static methods for manipulating arrays easily when using a tool such as {@link java.util.ArrayList} is
@@ -430,40 +439,266 @@ public final class ArrayUtils {
 	}
 
 	/**
-	 * Searches an array using binary search. If the array is not sorted by the given comparator (or by its natural order if <code>T</code>
-	 * implements {@link Comparable}), this method will give unpredictable results. By using binary search, this method can achieve much
-	 * better performance than {@link #indexOf(Object[], Object)}, especially for large arrays.
+	 * Searches an array using binary search.
+	 * 
+	 * This method has an advantage over {@link java.util.Arrays#binarySearch(Object[], Object, java.util.Comparator)} in that the
+	 * comparable given to this method need not be an actual <code>T</code>-typed value, but may be any algorithm that can find a value by
+	 * knowing whether the value it is looking for is greater or less than a given value.
 	 *
-	 * It should be noted that the compare method ({@link Comparable#compareTo(Object)} or
-	 * {@link java.util.Comparator#compare(Object, Object)}) is used for identity comparison, not {@link Object#equals(Object)}. So the
-	 * compare method may return 0 where equals returns false or vice versa, this method may return a different result than
-	 * {@link #indexOf(Object[], Object)} even for sorted arrays.
+	 * It should be noted that the compare method ({@link Comparable#compareTo(Object)} is used for identity comparison, not
+	 * {@link Object#equals(Object)}; therefore the compare method may return 0 where equals returns false or vice versa, and this method
+	 * may return a different result than {@link #indexOf(Object[], Object)} even for sorted arrays.
+	 * 
+	 * If the array is not sorted according to the search comparable, this method will give unpredictable results.
 	 *
 	 * @param <T> The type of array to search
 	 * @param array The array to search
-	 * @param anElement The element to search for
-	 * @param compare The comparator to use to compare the items. <code>T</code> implements {@link Comparable}, this may be null.
-	 * @return The index where the given item was found, or -1 if it was not found
+	 * @param search A comparable value to use to search the array
+	 * @return If there exists in the array an <code>element</code> for which <code>search.compareTo(element)==0</search>, then the index
+	 * of that element; otherwise <code>-(index+1)</code>, where <code>index</code> is the index where such an element would be inserted
+	 *         into the sorted array
 	 */
-	public static <T> int binaryIndexOf(T [] array, T anElement, java.util.Comparator<? super T> compare) {
-		int min = 0, max = array.length - 1;
-		while(min < max) {
-			int mid = (min + max) >>> 1;
-		int comp = compare == null ? ((Comparable<T>) array[mid]).compareTo(anElement) : compare.compare(array[mid], anElement);
-		if(comp > 0)
-			max = mid - 1;
-		else if(comp < 0)
-			min = mid + 1;
-		else
-			return mid;
-		}
-		if(min != max)
+	public static <T> int binarySearch(T[] array, Comparable<? super T> search) {
+		return binarySearch(java.util.Arrays.asList(array), search);
+	}
+
+	/**
+	 * Searches a list using binary search.
+	 * 
+	 * This method has an advantage over {@link java.util.Collections#binarySearch(List, Object, java.util.Comparator)} in that the
+	 * comparable given to this method need not be an actual <code>T</code>-typed value, but may be any algorithm that can find a value by
+	 * knowing whether the value it is looking for is greater or less than a given value.
+	 *
+	 * It should be noted that the compare method ({@link Comparable#compareTo(Object)} is used for identity comparison, not
+	 * {@link Object#equals(Object)}; therefore the compare method may return 0 where equals returns false or vice versa, and this method
+	 * may return a different result than {@link List#indexOf(Object)} even for sorted lists.
+	 * 
+	 * If the list is not sorted according to the search comparable, this method will give unpredictable results.
+	 *
+	 * @param <T> The type of list to search
+	 * @param list The list to search
+	 * @param search A comparable value to use to search the list
+	 * @return If there exists in the list an <code>element</code> for which <code>search.compareTo(element)==0</search>, then the index
+	 * of that element; otherwise <code>-(index+1)</code>, where <code>index</code> is the index where such an element would be inserted
+	 *         into the sorted list
+	 */
+	public static <T> int binarySearch(List<? extends T> list, Comparable<? super T> search) {
+		return binarySearch(0, list.size() - 1, index -> search.compareTo(list.get(index)));
+	}
+
+	/** A binary index searcher for {@link ArrayUtils#binarySearch(int, int, IntComparable)} */
+	@FunctionalInterface
+	public interface IntComparable {
+		/**
+		 * @param index The index to compare
+		 * @return
+		 *         <ul>
+		 *         <li>-1 if the search is searching for an element less than that at the given index</li>
+		 *         <li>0 if the given index matches the search perfectly</li>
+		 *         <li>1 if the search is searching for an element greater than that at the given index</li>
+		 *         </ul>
+		 */
+		int compareTo(int index);
+	}
+
+	/**
+	 * An abstract binary search method that can search through anything by index
+	 * 
+	 * @param min The lowest index in the search domain
+	 * @param max The highest index in the search domain
+	 * @param search The indexed search function
+	 * @return The <code>index</code> in the search domain for which
+	 *         <code>search.{@link IntComparable#compareTo(int) compareTo}(index)==0</code> if such an index exists; otherwise
+	 *         <code>-(index+1)</code>, where <code>index</code> is the index where such an index would be inserted into the search domain
+	 */
+	public static int binarySearch(int min, int max, IntComparable search) {
+		if (min > max)
 			return -1;
-		int comp = compare == null ? ((Comparable<T>) array[min]).compareTo(anElement) : compare.compare(array[min], anElement);
-		if(comp == 0)
+		int mid = -1;
+		int comp = 0;
+		while (min < max) {
+			mid = (min + max) / 2;
+			comp = search.compareTo(mid);
+			if (comp > 0)
+				min = mid + 1;
+			else if (comp < 0)
+				max = mid - 1;
+			else
+				return mid;
+		}
+		if (mid != min)
+			comp = search.compareTo(min);
+		if (comp == 0)
+			return min;
+		else if (comp > 0)
+			min++;
+		if (min < 0) // We'll tolerate negative indexes, but the information that an exact match wasn't found can't be conveyed in this case
 			return min;
 		else
+			return -(min + 1);
+	}
+
+	/**
+	 * @param min The lowest index in the search domain
+	 * @param max The highest index in the search domain
+	 * @param measure A function to produce a double measure value for each position in the search space
+	 * @return The value between min and max (both inclusive) with the largest corresponding measure value
+	 */
+	public static int optimize(int min, int max, IntToDoubleFunction measure) {
+		return optimize(min, max, measure, Double::compare);
+	}
+
+	/** Compares 2 doubles */
+	public interface DoubleComparator {
+		/**
+		 * @param d1 The first double
+		 * @param d2 The second double
+		 * @return Which value is "better {@link ArrayUtils#optimize(int, int, IntToDoubleFunction, DoubleComparator) optimized}"
+		 */
+		int compare(double d1, double d2);
+	}
+
+	/**
+	 * @param min The lowest index in the search domain
+	 * @param max The highest index in the search domain
+	 * @param measure A function to produce a double measure value for each position in the search space
+	 * @param measureCompare Compares two measure values from different positions
+	 * @return The value between min and max (both inclusive) with the best corresponding measure value
+	 */
+	public static int optimize(int min, int max, IntToDoubleFunction measure, DoubleComparator measureCompare) {
+		if (min == max)
+			return min;
+		else if (min > max)
 			return -1;
+		else if (max - min + 1 > 1000)
+			return optimizeWithSet(min, max, measure, measureCompare);
+		else
+			return optimizeWithArray(min, max, measure, measureCompare);
+	}
+
+	private static int optimizeWithSet(int min, int max, IntToDoubleFunction measure, DoubleComparator measureCompare) {
+		class PositionMeasure implements Comparable<PositionMeasure> {
+			final int position;
+			final double value;
+
+			PositionMeasure(int position, double value) {
+				this.position = position;
+				this.value = value;
+			}
+
+			@Override
+			public int compareTo(PositionMeasure o) {
+				return Integer.compare(position, o.position);
+			}
+		}
+		BetterTreeSet<PositionMeasure> values = BetterTreeSet.buildTreeSet(PositionMeasure::compareTo).build();
+		return binarySearch(min, max, pos -> {
+			double posValue, adjValue;
+			boolean adjIsLess;
+			CollectionElement<PositionMeasure> found = values.search(pm -> Integer.compare(pos, pm.position),
+				SortedSearchFilter.PreferLess);
+			if (found != null && found.get().position == pos) {
+				posValue = found.get().value;
+				CollectionElement<PositionMeasure> adjEl = values.getAdjacentElement(found.getElementId(), false);
+				if (adjEl != null && adjEl.get().position == pos - 1) {
+					adjIsLess = true;
+					adjValue = adjEl.get().value;
+				} else {
+					adjEl = values.getAdjacentElement(found.getElementId(), true);
+					if (adjEl != null && adjEl.get().position == pos + 1) {
+						adjIsLess = false;
+						adjValue = adjEl.get().value;
+					} else if (pos > min) {
+						adjIsLess = true;
+						adjValue = measure.applyAsDouble(pos - 1);
+						values.add(new PositionMeasure(pos - 1, adjValue));
+					} else {
+						adjIsLess = false;
+						adjValue = measure.applyAsDouble(pos + 1);
+						values.add(new PositionMeasure(pos + 1, adjValue));
+					}
+				}
+			} else {
+				posValue = measure.applyAsDouble(pos);
+				found = values.addElement(new PositionMeasure(pos, posValue), false);
+				if (found != null && Math.abs(found.get().position - pos) == 1) {
+					adjIsLess = found.get().position < pos;
+					adjValue = found.get().value;
+				} else if (pos > min) {
+					adjIsLess = true;
+					adjValue = measure.applyAsDouble(pos - 1);
+					values.add(new PositionMeasure(pos - 1, adjValue));
+				} else {
+					adjIsLess = false;
+					adjValue = measure.applyAsDouble(pos + 1);
+					values.add(new PositionMeasure(pos + 1, adjValue));
+				}
+			}
+			if (measureCompare.compare(adjValue, posValue) > 0)
+				return adjIsLess ? -1 : 1;
+			adjIsLess = !adjIsLess;
+			CollectionElement<PositionMeasure> adjEl = values.getAdjacentElement(found.getElementId(), !adjIsLess);
+			if (adjEl != null && Math.abs(adjEl.get().position - pos) == 1) {
+				adjValue = adjEl.get().value;
+			} else if (adjIsLess) {
+				if (pos == min)
+					return 0;
+				adjValue = measure.applyAsDouble(pos - 1);
+				values.add(new PositionMeasure(pos - 1, adjValue));
+			} else {
+				if (pos == max)
+					return 0;
+				adjValue = measure.applyAsDouble(pos + 1);
+				values.add(new PositionMeasure(pos + 1, adjValue));
+			}
+			if (measureCompare.compare(adjValue, posValue) > 0)
+				return adjIsLess ? -1 : 1;
+			return 0;
+		});
+	}
+
+	private static int optimizeWithArray(int min, int max, IntToDoubleFunction measure, DoubleComparator measureCompare) {
+		double[] values = new double[max - min + 1];
+		Arrays.fill(values, Double.NaN);
+		return min + binarySearch(0, max - min, pos -> {
+			double posValue = values[pos];
+			if (Double.isNaN(posValue))
+				values[pos] = posValue = measure.applyAsDouble(min + pos);
+			double adjValue;
+			boolean adjIsLess;
+			if (pos > 0 && !Double.isNaN(values[pos - 1])) {
+				adjIsLess = true;
+				adjValue = values[pos - 1];
+			} else if (pos < values.length - 1 && !Double.isNaN(values[pos + 1])) {
+				adjIsLess = false;
+				adjValue = values[pos + 1];
+			} else if (pos > 0) {
+				adjIsLess = true;
+				values[pos - 1] = adjValue = measure.applyAsDouble(min + pos - 1);
+			} else {
+				adjIsLess = false;
+				values[pos + 1] = adjValue = measure.applyAsDouble(min + pos + 1);
+			}
+			if (measureCompare.compare(adjValue, posValue) > 0)
+				return adjIsLess ? -1 : 1;
+			adjIsLess = !adjIsLess;
+			if (adjIsLess) {
+				if (pos == 0)
+					return 0;
+				if (Double.isNaN(values[pos - 1]))
+					values[pos - 1] = measure.applyAsDouble(min + pos - 1);
+				adjValue = values[pos - 1];
+			} else {
+				if (pos == values.length - 1)
+					return 0;
+				if (Double.isNaN(values[pos + 1]))
+					values[pos + 1] = measure.applyAsDouble(min + pos + 1);
+				adjValue = values[pos + 1];
+			}
+			if (measureCompare.compare(adjValue, posValue) > 0)
+				return adjIsLess ? -1 : 1;
+			return 0;
+		});
 	}
 
 	/**
@@ -941,7 +1176,7 @@ public final class ArrayUtils {
 	 */
 	public static String toString(Object array) {
 		if(array == null)
-			return "" + null;
+			return "null";
 		else if(array instanceof Object []) {
 			Object [] oa = (Object []) array;
 			StringBuffer ret = new StringBuffer("[");
@@ -949,6 +1184,18 @@ public final class ArrayUtils {
 				ret.append(toString(oa[i]));
 				if(i < oa.length - 1)
 					ret.append(", ");
+			}
+			ret.append("]");
+			return ret.toString();
+		} else if (array instanceof Iterable) {
+			StringBuffer ret = new StringBuffer("[");
+			boolean first = true;
+			for (Object obj : ((Iterable<?>) array)) {
+				if (first)
+					first = false;
+				else
+					ret.append(", ");
+				ret.append(toString(obj));
 			}
 			ret.append("]");
 			return ret.toString();
@@ -1295,6 +1542,38 @@ public final class ArrayUtils {
 	}
 
 	/**
+	 * @param <E> The type of the source values
+	 * @param <T> The type of the adjustment values
+	 * @param equals The equality test
+	 * @param map The map from the adjustment to the source
+	 * @return A difference listener that causes all changes between lists to be accepted into the source list
+	 */
+	public static <E, T> DifferenceListener<E, T> acceptAllDifferences(BiPredicate<? super E, ? super T> equals,
+		Function<? super T, ? extends E> map) {
+		return new DifferenceListener<E, T>() {
+			@Override
+			public boolean identity(E o1, T o2) {
+				return equals.test(o1, o2);
+			}
+
+			@Override
+			public E added(T o, int mIdx, int retIdx) {
+				return map == null ? (E) o : map.apply(o);
+			}
+
+			@Override
+			public E removed(E o, int oIdx, int incMod, int retIdx) {
+				return null;
+			}
+
+			@Override
+			public E set(E o1, int idx1, int incMod, T o2, int idx2, int retIdx) {
+				return map == null ? (E) o2 : map.apply(o2);
+			}
+		};
+	}
+
+	/**
 	 * <p>
 	 * This listener contains all information needed to reconcile two arrays using the
 	 * {@link ArrayUtils#adjust(Object[], Object[], org.qommons.ArrayUtils.DifferenceListenerE)} method.
@@ -1418,7 +1697,7 @@ public final class ArrayUtils {
 	 * </p>
 	 * <p>
 	 * For more information, see
-	 * <a href="http://code.google.com/p/prisms/wiki/ArrayUtils">http://code.google.com/p/prisms/wiki/ArrayUtils</a>
+	 * <a href="https://github.com/Updownquark/Qommons/wiki/ArrayUtils">https://github.com/Updownquark/Qommons/wiki/ArrayUtils</a>
 	 * </p>
 	 *
 	 * @param <T1> The type of the original array
@@ -1433,6 +1712,22 @@ public final class ArrayUtils {
 	public static <T1, T2, E extends Throwable> T1 [] adjust(T1 [] original, T2 [] modifier, DifferenceListenerE<T1, T2, E> dl) throws E {
 		ArrayAdjuster<T1, T2, E> adjuster = new ArrayAdjuster<>(original, modifier, dl);
 		return adjuster.adjust();
+	}
+
+	/**
+	 * @param <T1> The type of the original array
+	 * @param <T2> The type of the modifying array
+	 * @param <E> The type of exception that may be thrown
+	 * @param original The original array
+	 * @param modifier The modifying array
+	 * @param dl The listener to determine how to deal with differences between the two arrays
+	 * @throws E If the {@link DifferenceListenerE} throws an exception
+	 * @see #adjust(Object[], Object[], DifferenceListenerE)
+	 */
+	public static <T1, T2, E extends Throwable> void adjustNoCreate(T1[] original, T2[] modifier, DifferenceListenerE<T1, T2, E> dl)
+		throws E {
+		ArrayAdjuster<T1, T2, E> adjuster = new ArrayAdjuster<>(original, modifier, dl);
+		adjuster.noCreate().adjust();
 	}
 
 	static final Object NULL = new Object();
@@ -1465,6 +1760,7 @@ public final class ArrayUtils {
 		private int maxLength;
 
 		private boolean isNullElement;
+		private boolean createArray;
 
 		/**
 		 * Creates an adjuster that can adjust one array by another
@@ -1482,22 +1778,36 @@ public final class ArrayUtils {
 			mMappings = new int[m.length];
 			entriesSet = new boolean[m.length];
 			dl = listener;
+			createArray = true;
+		}
+
+		/**
+		 * Tells this adjuster to perform the operation without actually creating a new array for the result (null will be returned)
+		 * 
+		 * @return This adjuster
+		 */
+		public ArrayAdjuster<T1, T2, E> noCreate() {
+			createArray = false;
+			return this;
 		}
 
 		private void init() throws E {
 			int o, m, r = original.length + modifier.length;
 			for(m = 0; m < modifier.length; m++)
 				mMappings[m] = -1;
+			int minM = 0;
 			for(o = 0; o < original.length; o++) {
 				oIdxAdj[o] = o;
 				oMappings[o] = -1;
-				for(m = 0; m < modifier.length; m++) {
+				for (m = minM; m < modifier.length; m++) {
 					if(mMappings[m] >= 0)
 						continue;
 					if(dl.identity(original[o], modifier[m])) {
 						oMappings[o] = m;
 						mMappings[m] = o;
 						r--;
+						if (m == minM)
+							minM++;
 						break;
 					}
 				}
@@ -1555,9 +1865,12 @@ public final class ArrayUtils {
 			for(int i = 0; i < r; i++)
 				if(ret[i] == NULL)
 					ret[i] = null;
-			T1 [] actualRet = (T1 []) Array.newInstance(original.getClass().getComponentType(), r);
-			System.arraycopy(ret, 0, actualRet, 0, r);
-			return actualRet;
+			if (createArray) {
+				T1[] actualRet = (T1[]) Array.newInstance(original.getClass().getComponentType(), r);
+				System.arraycopy(ret, 0, actualRet, 0, r);
+				return actualRet;
+			} else
+				return null;
 		}
 
 		/**
@@ -1683,7 +1996,9 @@ public final class ArrayUtils {
 	 * @param modifier The modifying list
 	 * @param dl The listener to determine how to deal with differences between the two lists
 	 * @throws E If the {@link DifferenceListenerE} throws an exception
+	 * @deprecated I know there is a bug in here somewhere. Use {@link CollectionUtils#synchronize(List, List)} instead.
 	 */
+	@Deprecated
 	public static <T1, T2, E extends Throwable> void adjust(List<T1> original, List<T2> modifier, DifferenceListenerE<T1, T2, E> dl)
 		throws E {
 		ArrayAdjuster<T1, T2, E> adjuster = new ArrayAdjuster<>((T1 []) original.toArray(), (T2 []) modifier.toArray(),
@@ -1696,8 +2011,14 @@ public final class ArrayUtils {
 				@Override
 				public T1 added(T2 o, int mIdx, int retIdx) throws E {
 					T1 newValue = dl.added(o, mIdx, retIdx);
-					if(newValue != null)
+					if (newValue != null) {
+						int preSize = original.size();
 						original.add(retIdx, newValue);
+						if (original.size() == preSize) {
+							System.err.println("Could not add " + newValue);
+							newValue = null;
+						}
+					}
 					return newValue;
 				}
 
@@ -1716,12 +2037,21 @@ public final class ArrayUtils {
 					T1 replaceValue = dl.set(o1, idx1, incMod, o2, idx2, retIdx);
 					if(replaceValue == null)
 						original.remove(incMod);
-					else
+					else if (incMod == retIdx)
 						original.set(incMod, replaceValue);
+					else {
+						original.remove(incMod);
+						int preSize = original.size();
+						original.add(retIdx, replaceValue);
+						if (original.size() == preSize) {
+							System.err.println("Could not add " + replaceValue);
+							replaceValue = null;
+						}
+					}
 					return replaceValue;
 				}
 			});
-		adjuster.adjust();
+		adjuster.noCreate().adjust();
 	}
 
 	/**
@@ -1742,11 +2072,11 @@ public final class ArrayUtils {
 	}
 
 	/**
-	 * Sorts an array, allowing for complex operations during the sort, such as sorting arrays in parallel.
+	 * Sorts an array, allowing for complex operations during the sort, such as sorting related arrays simultaneously.
 	 *
 	 * This is an implementation of selection sort. Selection sort is used because although it may perform many more comparison operations
-	 * than other methods, there is no other method that performs fewer swaps. It is anticipated that this algorithm will be used most often
-	 * in the case that multiple operations must take place during a swap, while comparison should be fairly quick.
+	 * than other algorithms, there is no other sorting algorithm that performs fewer swaps. It is anticipated that this method will be used
+	 * most often in the case that multiple operations must take place during a swap, while comparison should be relatively quick.
 	 *
 	 * @param <T> The type of the array to sort
 	 * @param array The array to sort

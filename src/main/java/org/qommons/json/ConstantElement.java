@@ -3,8 +3,6 @@
  */
 package org.qommons.json;
 
-import org.json.simple.JSONObject;
-
 /** Represents an element that must have a constant value */
 public class ConstantElement implements JsonElement {
 	private JsonSchemaParser theParser;
@@ -21,7 +19,7 @@ public class ConstantElement implements JsonElement {
 	}
 
 	@Override
-	public void configure(JsonSchemaParser parser, JsonElement parent, String elementName, JSONObject schemaEl) {
+	public void configure(JsonSchemaParser parser, JsonElement parent, String elementName, JsonObject schemaEl) {
 		theParser = parser;
 		theParent = parent;
 		theName = elementName;

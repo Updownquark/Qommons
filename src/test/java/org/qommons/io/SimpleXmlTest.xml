@@ -1,0 +1,28 @@
+<?xml version="1.0"
+	encoding="UTF-8"?>
+
+<!-- This is a header comment
+blah -->
+
+<test ns1:attr1="Attribute 1" ns2:attr2="Attribute 2"
+	ns3:attr3="Attribute 3">
+	<child0>
+		<?CONTENTLESS-INSTRUCTION?>
+		<?INSTRUCTION ?>
+		<?INSTRUCTION CONTENT?>
+		<child00></child00>
+		<child01 attr010="&quot;Child Attribute&apos;&#169;"/>
+	</child0>
+	<child1 attr10="Multi-
+		-line attribute">
+		Text 1&#x00b0;
+		<!-- Comment 1-->
+		Text &lt;2&gt;>
+	</child1>
+	<![CDATA[
+		<This is some text & stuff>
+	]]>
+</test>
+
+<!-- This is a footer comment with special characters &<'
+blah -->

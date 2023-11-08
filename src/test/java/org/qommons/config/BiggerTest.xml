@@ -1,0 +1,523 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- I pulled this from the data store of an application I created to test QommonsConfig parsing and writing -->
+
+<occountant width="1106" height="823" x="494" y="77" selected-tab="upgrades" declined-release="0.9.15">__
+	<selected-account id="1">3</selected-account>
+	<accounts>__
+		<account id="1" name="Uni 1" reference-account="0" game-class="Collector" alliance-class="Trader">__
+			<officers admiral="false" commander="false" commanding-staff="false" engineer="false" geologist="true" technocrat="false" />
+			<research armor="15" astrophysics="25" combustion-drive="11" computer="19" energy="23" espionage="9" graviton="1" hyperspace="15" hyperspace-drive="8" impulse-drive="7" intergalactic-research-network="12" ion="14" laser="12" plasma="19" shielding="15" weapons="15" current-upgrade="Astrophysics" />
+			<universe collector-bonus="25" crawler-cap="8" economy-speed="8" fleet-speed="1" hyperspace-cargo-bonus="5" research-speed="14" name="Uni 1" collector-production-bonus="25" collector-energy-bonus="10" galaxies="9" circular-universe="true" circular-galaxies="true">__
+				<trade-ratios crystal="1.5E0" deuterium="1E0" metal="2.5E0" />
+			</universe>
+			<planets>
+				<planet name="Lothlorien" alliance-depot="0" base-fields="233" crawler-utilization="150" crawlers="880" crystal-bonus="0" crystal-mine="37" crystal-storage="12" crystal-utilization="100" deuterium-bonus="0" deuterium-storage="11" deuterium-synthesizer="40" deuterium-utilization="100" field-bonus="0" fusion-reactor="23" fusion-reactor-utilization="80" maximum-temperature="-90" metal-bonus="0" metal-mine="42" metal-storage="13" metal-utilization="100" minimum-temperature="-130" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-plant-utilization="100" solar-satellite-utilization="100" solar-satellites="0" space-dock="7" terraformer="5" id="0" energy-bonus="0">__
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="2" sensor-phalanx="5" shipyard="8" name="Caras Galadhon">__
+						<stationary-structures rocket-launchers="5000" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" heavy-lasers="25" ion-cannons="25" />
+						<stationed-fleet recyclers="40" large-cargos="100" path-finders="20" colony-ships="1" espionage-probes="50" cruisers="10" />
+					</moon>
+					<stationary-structures crawlers="1100" rocket-launchers="100000" light-lasers="50000" ion-cannons="500" plasma-turrets="500" small-shield-domes="1" large-shield-domes="1" gauss-cannons="500" anti-ballistic-missiles="70" heavy-lasers="500" solar-satellites="200" />
+					<stationed-fleet />
+					<coordinates galaxy="1" system="108" slot="15" />
+				</planet>
+				<planet name="Valinor" alliance-depot="0" base-fields="208" crawler-utilization="150" crawlers="800" crystal-bonus="0" crystal-mine="37" crystal-storage="12" crystal-utilization="100" deuterium-bonus="0" deuterium-storage="13" deuterium-synthesizer="40" deuterium-utilization="100" field-bonus="0" fusion-reactor="23" fusion-reactor-utilization="80" maximum-temperature="-103" metal-bonus="0" metal-mine="42" metal-storage="14" metal-utilization="100" minimum-temperature="-143" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-plant-utilization="100" solar-satellite-utilization="100" solar-satellites="0" space-dock="7" terraformer="8" id="1" energy-bonus="0">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="1" sensor-phalanx="6" shipyard="8" name="Taniquetil">__
+						<stationary-structures rocket-launchers="5000" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" heavy-lasers="25" ion-cannons="25" />
+						<stationed-fleet recyclers="40" large-cargos="100" path-finders="20" colony-ships="1" espionage-probes="50" cruisers="10" />
+					</moon>
+					<stationary-structures crawlers="1100" rocket-launchers="100000" light-lasers="50000" ion-cannons="500" plasma-turrets="500" small-shield-domes="1" large-shield-domes="1" gauss-cannons="500" anti-ballistic-missiles="70" heavy-lasers="500" solar-satellites="110" />
+					<stationed-fleet />
+					<coordinates galaxy="1" system="207" slot="15" />
+				</planet>
+				<planet name="Gondor" alliance-depot="0" base-fields="202" crawler-utilization="150" crawlers="798" crystal-bonus="0" crystal-mine="37" crystal-storage="12" crystal-utilization="100" deuterium-bonus="0" deuterium-storage="12" deuterium-synthesizer="40" deuterium-utilization="100" field-bonus="0" fusion-reactor="23" fusion-reactor-utilization="80" maximum-temperature="-130" metal-bonus="0" metal-mine="42" metal-storage="13" metal-utilization="100" minimum-temperature="-170" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-plant-utilization="100" solar-satellite-utilization="100" solar-satellites="0" space-dock="7" terraformer="7" id="2" energy-bonus="0" current-upgrade="DeuteriumSynthesizer">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="2" sensor-phalanx="5" shipyard="8" name="Minas Ithil">__
+						<stationary-structures rocket-launchers="5000" light-lasers="2500" gauss-cannons="25" plasma-turrets="60" small-shield-domes="1" large-shield-domes="1" heavy-lasers="25" ion-cannons="25" />
+						<stationed-fleet recyclers="40" colony-ships="1" large-cargos="100" path-finders="20" espionage-probes="50" cruisers="10" light-fighters="100" small-cargos="100" />
+					</moon>
+					<stationary-structures crawlers="1100" rocket-launchers="100000" light-lasers="50000" ion-cannons="500" plasma-turrets="500" small-shield-domes="1" large-shield-domes="1" gauss-cannons="500" anti-ballistic-missiles="70" heavy-lasers="500" solar-satellites="0" />
+					<stationed-fleet />
+					<coordinates galaxy="1" system="299" slot="15" />
+				</planet>
+				<planet name="Gorgoroth" alliance-depot="0" base-fields="212" crawler-utilization="150" crawlers="8500" crystal-bonus="0" crystal-mine="37" crystal-storage="12" crystal-utilization="100" deuterium-bonus="0" deuterium-storage="11" deuterium-synthesizer="39" deuterium-utilization="100" field-bonus="0" fusion-reactor="23" fusion-reactor-utilization="80" maximum-temperature="33" metal-bonus="0" metal-mine="43" metal-storage="14" metal-utilization="100" minimum-temperature="-7" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-plant-utilization="100" solar-satellite-utilization="100" solar-satellites="0" space-dock="7" terraformer="4" id="3" energy-bonus="0">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="2" sensor-phalanx="5" shipyard="8" name="Orodruin">__
+						<stationary-structures rocket-launchers="5000" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" heavy-lasers="25" ion-cannons="25" />
+						<stationed-fleet recyclers="40" large-cargos="100" path-finders="20" colony-ships="1" espionage-probes="50" cruisers="10" />
+					</moon>
+					<stationary-structures crawlers="1100" rocket-launchers="100000" light-lasers="50000" ion-cannons="500" plasma-turrets="500" small-shield-domes="1" large-shield-domes="1" gauss-cannons="500" anti-ballistic-missiles="70" heavy-lasers="500" solar-satellites="0" />
+					<stationed-fleet />
+					<coordinates galaxy="1" system="404" slot="8" />
+				</planet>
+				<planet name="Eriador" alliance-depot="0" base-fields="222" crawler-utilization="150" crawlers="880" crystal-bonus="0" crystal-mine="37" crystal-storage="13" crystal-utilization="100" deuterium-bonus="0" deuterium-storage="12" deuterium-synthesizer="40" deuterium-utilization="100" field-bonus="0" fusion-reactor="23" fusion-reactor-utilization="80" maximum-temperature="-120" metal-bonus="0" metal-mine="42" metal-storage="13" metal-utilization="100" minimum-temperature="-160" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-plant-utilization="100" solar-satellite-utilization="100" solar-satellites="0" space-dock="7" terraformer="7" id="4" energy-bonus="0" current-upgrade="DeuteriumSynthesizer">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="2" sensor-phalanx="5" shipyard="8" name="Imladris">__
+						<stationary-structures rocket-launchers="5000" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" heavy-lasers="500" ion-cannons="250" />
+						<stationed-fleet recyclers="40" large-cargos="100" path-finders="20" colony-ships="1" espionage-probes="50" cruisers="10" />
+					</moon>
+					<stationary-structures crawlers="1100" rocket-launchers="100000" light-lasers="50000" gauss-cannons="500" ion-cannons="500" plasma-turrets="500" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" heavy-lasers="500" solar-satellites="0" />
+					<stationed-fleet />
+					<coordinates galaxy="1" system="493" slot="15" />
+				</planet>
+				<planet base-fields="220" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="80" metal-utilization="100" name="Thangorodrim" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="880" crystal-bonus="0" crystal-mine="37" crystal-storage="11" deuterium-bonus="0" deuterium-storage="12" deuterium-synthesizer="40" field-bonus="0" fusion-reactor="23" maximum-temperature="-129" metal-bonus="0" metal-mine="42" metal-storage="14" minimum-temperature="-169" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-satellites="0" space-dock="7" terraformer="6" id="5" energy-bonus="0">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="2" sensor-phalanx="5" shipyard="8" name="Angband">__
+						<stationary-structures rocket-launchers="5000" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" heavy-lasers="25" ion-cannons="25" />
+						<stationed-fleet recyclers="40" large-cargos="100" path-finders="20" colony-ships="1" espionage-probes="50" cruisers="10" />
+					</moon>
+					<stationary-structures crawlers="1100" rocket-launchers="100000" light-lasers="50000" gauss-cannons="500" ion-cannons="500" plasma-turrets="500" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" heavy-lasers="500" solar-satellites="100" />
+					<stationed-fleet large-cargos="0" />
+					<coordinates galaxy="2" system="98" slot="15" />
+				</planet>
+				<planet base-fields="232" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="80" metal-utilization="100" name="Doriath" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="880" crystal-bonus="0" crystal-mine="37" crystal-storage="11" deuterium-bonus="0" deuterium-storage="11" deuterium-synthesizer="40" field-bonus="0" fusion-reactor="23" maximum-temperature="-117" metal-bonus="0" metal-mine="42" metal-storage="13" minimum-temperature="-157" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-satellites="0" space-dock="7" terraformer="5" id="6" energy-bonus="0">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="2" sensor-phalanx="5" shipyard="8" name="Menegroth">__
+						<stationary-structures rocket-launchers="5000" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" heavy-lasers="25" ion-cannons="25" />
+						<stationed-fleet recyclers="40" large-cargos="100" path-finders="20" colony-ships="1" espionage-probes="50" cruisers="10" />
+					</moon>
+					<stationary-structures crawlers="1100" rocket-launchers="100000" light-lasers="50000" gauss-cannons="500" ion-cannons="500" plasma-turrets="500" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" heavy-lasers="500" solar-satellites="0" />
+					<stationed-fleet large-cargos="0" />
+					<coordinates galaxy="2" system="204" slot="15" />
+				</planet>
+				<planet base-fields="220" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="80" metal-utilization="100" name="Caradhras" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="872" crystal-bonus="0" crystal-mine="37" crystal-storage="11" deuterium-bonus="0" deuterium-storage="11" deuterium-synthesizer="39" field-bonus="0" fusion-reactor="23" maximum-temperature="32" metal-bonus="0" metal-mine="43" metal-storage="15" minimum-temperature="-8" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-satellites="0" space-dock="7" terraformer="6" id="7" energy-bonus="0">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="2" sensor-phalanx="5" shipyard="8" name="Khazad-Dum">__
+						<stationary-structures rocket-launchers="5000" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" heavy-lasers="25" ion-cannons="25" />
+						<stationed-fleet recyclers="40" large-cargos="100" path-finders="20" colony-ships="1" espionage-probes="50" cruisers="10" />
+					</moon>
+					<stationary-structures crawlers="1100" rocket-launchers="100000" light-lasers="50000" gauss-cannons="500" ion-cannons="500" plasma-turrets="500" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" heavy-lasers="500" solar-satellites="0" />
+					<stationed-fleet large-cargos="0" />
+					<coordinates galaxy="2" system="304" slot="8" />
+				</planet>
+				<planet base-fields="230" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="80" metal-utilization="100" name="Angmar" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="872" crystal-bonus="0" crystal-mine="37" crystal-storage="11" deuterium-bonus="0" deuterium-storage="11" deuterium-synthesizer="39" field-bonus="0" fusion-reactor="23" maximum-temperature="68" metal-bonus="0" metal-mine="43" metal-storage="14" minimum-temperature="28" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-satellites="0" space-dock="7" terraformer="4" id="8" energy-bonus="0">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="2" sensor-phalanx="5" shipyard="8" name="Carn Dum">__
+						<stationary-structures rocket-launchers="5000" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" heavy-lasers="25" ion-cannons="25" />
+						<stationed-fleet recyclers="40" large-cargos="100" path-finders="20" colony-ships="1" espionage-probes="50" cruisers="10" />
+					</moon>
+					<stationary-structures crawlers="1100" rocket-launchers="100000" light-lasers="50000" gauss-cannons="500" ion-cannons="500" plasma-turrets="500" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" solar-satellites="100" heavy-lasers="500" />
+					<stationed-fleet large-cargos="0" />
+					<coordinates galaxy="2" system="399" slot="8" />
+				</planet>
+				<planet base-fields="232" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="80" metal-utilization="100" name="Gondolin" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="880" crystal-bonus="0" crystal-mine="37" crystal-storage="17" deuterium-bonus="0" deuterium-storage="16" deuterium-synthesizer="40" field-bonus="0" fusion-reactor="23" maximum-temperature="-105" metal-bonus="0" metal-mine="42" metal-storage="18" minimum-temperature="-145" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-satellites="0" space-dock="7" terraformer="7" id="9" energy-bonus="0">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="2" sensor-phalanx="5" shipyard="8" name="Amon Gwareth">__
+						<stationary-structures rocket-launchers="5000" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" heavy-lasers="25" ion-cannons="25" />
+						<stationed-fleet recyclers="40" large-cargos="100" path-finders="20" colony-ships="1" espionage-probes="50" cruisers="10" />
+					</moon>
+					<stationary-structures crawlers="1100" rocket-launchers="100000" light-lasers="50000" gauss-cannons="500" ion-cannons="500" plasma-turrets="500" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" heavy-lasers="500" solar-satellites="0" />
+					<stationed-fleet large-cargos="0" />
+					<coordinates galaxy="2" system="494" slot="15" />
+				</planet>
+				<planet base-fields="216" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="80" metal-utilization="100" name="Arnor" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="850" crystal-bonus="0" crystal-mine="37" crystal-storage="11" deuterium-bonus="0" deuterium-storage="11" deuterium-synthesizer="39" field-bonus="0" fusion-reactor="23" maximum-temperature="1" metal-bonus="0" metal-mine="42" metal-storage="13" minimum-temperature="-39" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-satellites="0" space-dock="7" terraformer="3" id="10" energy-bonus="0">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="2" sensor-phalanx="5" shipyard="8" name="Annuminas">__
+						<stationary-structures rocket-launchers="5000" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" heavy-lasers="25" ion-cannons="25" />
+						<stationed-fleet recyclers="40" path-finders="20" colony-ships="1" espionage-probes="50" large-cargos="100" cruisers="10" />
+					</moon>
+					<stationary-structures crawlers="1100" rocket-launchers="100000" light-lasers="50000" gauss-cannons="500" ion-cannons="500" plasma-turrets="500" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" solar-satellites="10" heavy-lasers="500" />
+					<stationed-fleet large-cargos="0" />
+					<coordinates galaxy="9" system="201" slot="11" />
+				</planet>
+				<planet base-fields="240" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="80" metal-utilization="100" name="Rhovanion" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="832" crystal-bonus="0" crystal-mine="37" crystal-storage="12" deuterium-bonus="0" deuterium-storage="12" deuterium-synthesizer="41" field-bonus="0" fusion-reactor="23" maximum-temperature="-114" metal-bonus="0" metal-mine="42" metal-storage="13" minimum-temperature="-154" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-satellites="0" space-dock="7" terraformer="1" id="11" energy-bonus="0">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="2" sensor-phalanx="5" shipyard="8" name="Erebor">__
+						<stationary-structures rocket-launchers="5000" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" heavy-lasers="25" ion-cannons="25" />
+						<stationed-fleet large-cargos="318270" death-stars="1" recyclers="40" path-finders="20" espionage-probes="50" colony-ships="1" cruisers="10" />
+					</moon>
+					<stationary-structures crawlers="1100" rocket-launchers="100000" light-lasers="50000" gauss-cannons="500" ion-cannons="500" plasma-turrets="500" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" heavy-lasers="500" solar-satellites="0" />
+					<stationed-fleet large-cargos="0" />
+					<coordinates galaxy="9" system="207" slot="15" />
+				</planet>
+				<planet base-fields="254" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="80" metal-utilization="100" name="Rhun" solar-plant-utilization="100" solar-satellite-utilization="100" id="13" alliance-depot="0" crystal-bonus="0" crystal-mine="37" crystal-storage="12" deuterium-bonus="0" deuterium-storage="12" deuterium-synthesizer="39" energy-bonus="0" fusion-reactor="23" maximum-temperature="36" metal-bonus="0" metal-mine="43" metal-storage="14" minimum-temperature="-4" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" space-dock="7" terraformer="1">
+					<coordinates galaxy="9" slot="8" system="310" />
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="6" sensor-phalanx="1" shipyard="8" name="Cuivienen">__
+						<stationary-structures anti-ballistic-missiles="0" crawlers="0" gauss-cannons="25" heavy-lasers="25" inter-planetary-missiles="0" ion-cannons="25" large-shield-domes="1" light-lasers="2500" plasma-turrets="25" rocket-launchers="5000" small-shield-domes="1" solar-satellites="0" />
+						<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="1" cruisers="10" death-stars="0" destroyers="0" espionage-probes="50" heavy-fighters="0" large-cargos="100" light-fighters="0" path-finders="20" reapers="0" recyclers="40" small-cargos="0" />
+					</moon>
+					<stationary-structures anti-ballistic-missiles="70" crawlers="1100" gauss-cannons="500" heavy-lasers="500" inter-planetary-missiles="0" ion-cannons="500" large-shield-domes="1" light-lasers="50000" plasma-turrets="500" rocket-launchers="100000" small-shield-domes="1" solar-satellites="0" />
+					<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planet>
+				<planet base-fields="210" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="80" metal-utilization="100" name="Rohan" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="864" crystal-bonus="0" crystal-mine="37" crystal-storage="12" deuterium-bonus="0" deuterium-storage="11" deuterium-synthesizer="39" field-bonus="0" fusion-reactor="23" maximum-temperature="0" metal-bonus="0" metal-mine="42" metal-storage="14" minimum-temperature="-40" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-satellites="0" space-dock="7" terraformer="5" id="12" energy-bonus="0">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="2" sensor-phalanx="5" shipyard="8" name="Medusheld">__
+						<stationary-structures rocket-launchers="5000" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" ion-cannons="25" heavy-lasers="25" />
+						<stationed-fleet recyclers="24" colony-ships="1" large-cargos="100" path-finders="20" espionage-probes="50" cruisers="10" />
+					</moon>
+					<stationary-structures crawlers="1100" rocket-launchers="100000" light-lasers="50000" gauss-cannons="500" ion-cannons="500" plasma-turrets="500" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" heavy-lasers="500" solar-satellites="100" />
+					<stationed-fleet large-cargos="0" />
+					<coordinates galaxy="9" system="317" slot="11" />
+				</planet>
+			</planets>
+			<holdings>
+				<holding name="In Flight" crystal="1767710000" deuterium="10530990000" level="0" metal="2862190000" />
+				<holding crystal="0" deuterium="0" level="0" metal="0">
+					<name>__</name>
+				</holding>
+				<holding name="Res Pkgs" crystal="0" deuterium="0" level="0" metal="0" />
+			</holdings>
+			<planned-flights>
+				<planned-flight dest-galaxy="6" dest-slot="11" dest-system="344" name="Trade" source-galaxy="9" source-slot="11" source-system="317" speed="80" dest-moon="false" source-moon="false">__
+					<fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="80000" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planned-flight>
+				<planned-flight dest-galaxy="1" dest-slot="1" dest-system="207" name="Long FS" source-galaxy="1" source-slot="2" source-system="201" speed="50" dest-moon="false" source-moon="false">
+					<fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="1" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planned-flight>
+				<planned-flight dest-galaxy="2" dest-slot="1" dest-system="1" name="New Flight" source-galaxy="1" source-slot="1" source-system="1" speed="40" dest-moon="false" source-moon="false">
+					<fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="1" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planned-flight>
+			</planned-flights>
+			<planned-upgrades>
+				<planned-upgrade quantity="1" type="Astrophysics" moon="false" planet="0" />
+				<planned-upgrade moon="false" planet="2" quantity="1" type="DeuteriumSynthesizer" />
+				<planned-upgrade moon="false" planet="5" quantity="1" type="DeuteriumSynthesizer" />
+				<planned-upgrade moon="false" planet="4" quantity="1" type="DeuteriumSynthesizer" />
+				<planned-upgrade moon="false" planet="6" quantity="1" type="DeuteriumSynthesizer" />
+				<planned-upgrade moon="false" planet="9" quantity="1" type="DeuteriumSynthesizer" />
+				<planned-upgrade moon="false" planet="0" quantity="1" type="DeuteriumSynthesizer" />
+				<planned-upgrade quantity="1" type="Weapons" moon="false" planet="0" />
+				<planned-upgrade quantity="1" type="Shielding" moon="false" planet="0" />
+				<planned-upgrade quantity="1" type="Armor" moon="false" planet="0" />
+				<planned-upgrade quantity="1" type="Weapons" moon="false" planet="0" />
+				<planned-upgrade quantity="1" type="Shielding" moon="false" planet="0" />
+				<planned-upgrade quantity="1" type="Armor" moon="false" planet="0" />
+				<planned-upgrade quantity="1" type="Weapons" moon="false" planet="0" />
+				<planned-upgrade quantity="1" type="Shielding" moon="false" planet="0" />
+				<planned-upgrade quantity="1" type="Armor" moon="false" planet="0" />
+				<planned-upgrade quantity="1" type="Computer" moon="false" planet="0" />
+				<planned-upgrade moon="false" planet="0" quantity="100000" type="RocketLauncher" />
+				<planned-upgrade moon="false" planet="1" quantity="100000" type="RocketLauncher" />
+				<planned-upgrade moon="false" planet="2" quantity="100000" type="RocketLauncher" />
+				<planned-upgrade moon="false" planet="3" quantity="100000" type="RocketLauncher" />
+				<planned-upgrade moon="false" planet="4" quantity="100000" type="RocketLauncher" />
+				<planned-upgrade moon="false" planet="5" quantity="100000" type="RocketLauncher" />
+				<planned-upgrade moon="false" planet="6" quantity="100000" type="RocketLauncher" />
+				<planned-upgrade moon="false" planet="7" quantity="100000" type="RocketLauncher" />
+				<planned-upgrade moon="false" planet="8" quantity="100000" type="RocketLauncher" />
+				<planned-upgrade moon="false" planet="9" quantity="100000" type="RocketLauncher" />
+				<planned-upgrade moon="false" planet="10" quantity="100000" type="RocketLauncher" />
+				<planned-upgrade moon="false" planet="11" quantity="100000" type="RocketLauncher" />
+				<planned-upgrade moon="false" planet="13" quantity="100000" type="RocketLauncher" />
+				<planned-upgrade moon="false" planet="12" quantity="100000" type="RocketLauncher" />
+				<planned-upgrade moon="true" planet="0" quantity="45000" type="RocketLauncher" />
+				<planned-upgrade moon="true" planet="1" quantity="45000" type="RocketLauncher" />
+				<planned-upgrade moon="true" planet="2" quantity="45000" type="RocketLauncher" />
+				<planned-upgrade moon="true" planet="3" quantity="45000" type="RocketLauncher" />
+				<planned-upgrade moon="true" planet="4" quantity="45000" type="RocketLauncher" />
+				<planned-upgrade moon="true" planet="5" quantity="45000" type="RocketLauncher" />
+				<planned-upgrade moon="true" planet="6" quantity="45000" type="RocketLauncher" />
+				<planned-upgrade moon="true" planet="7" quantity="45000" type="RocketLauncher" />
+				<planned-upgrade moon="true" planet="8" quantity="45000" type="RocketLauncher" />
+				<planned-upgrade moon="true" planet="9" quantity="45000" type="RocketLauncher" />
+				<planned-upgrade moon="true" planet="10" quantity="45000" type="RocketLauncher" />
+				<planned-upgrade moon="true" planet="11" quantity="45000" type="RocketLauncher" />
+				<planned-upgrade moon="true" planet="13" quantity="45000" type="RocketLauncher" />
+				<planned-upgrade moon="true" planet="12" quantity="45000" type="RocketLauncher" />
+				<planned-upgrade quantity="1" type="Astrophysics" moon="false" planet="0" />
+			</planned-upgrades>
+			<trades>
+				<trade name="Deut" type="Deuterium" resource1="0" resource2="0">__
+					<rate crystal="1.5E0" deuterium="1E0" metal="2.5E0" />
+				</trade>
+			</trades>
+		</account>
+		<account name="Zibal" id="0" game-class="Collector" alliance-class="Trader">
+			<officers admiral="false" commander="false" commanding-staff="false" engineer="false" geologist="true" technocrat="false" />
+			<research armor="15" astrophysics="17" combustion-drive="6" computer="10" energy="18" espionage="8" graviton="0" hyperspace="9" hyperspace-drive="6" impulse-drive="6" intergalactic-research-network="4" ion="5" laser="10" plasma="11" shielding="13" weapons="13" />
+			<universe circular-galaxies="true" circular-universe="true" collector-energy-bonus="10" collector-production-bonus="25" crawler-cap="8" economy-speed="7" fleet-speed="2" galaxies="9" hyperspace-cargo-bonus="5E0" research-speed="14" name="Zibal">__
+				<trade-ratios crystal="1.5E0" deuterium="1E0" metal="2.5E0" />
+			</universe>
+			<holdings>
+				<holding crystal="121040000" deuterium="539000000" level="0" metal="6120000" name="__">__</holding>
+			</holdings>
+			<planets>
+				<planet base-fields="255" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="100" metal-utilization="100" name="New Planet" solar-plant-utilization="100" solar-satellite-utilization="100" id="9" alliance-depot="0" crystal-bonus="0" crystal-mine="29" crystal-storage="13" deuterium-bonus="0" deuterium-storage="13" deuterium-synthesizer="25" energy-bonus="0" fusion-reactor="19" maximum-temperature="64" metal-bonus="0" metal-mine="31" metal-storage="13" minimum-temperature="24" missile-silo="6" nanite-factory="4" research-lab="12" robotics-factory="10" shipyard="12" solar-plant="0" space-dock="5" terraformer="0" current-upgrade="MetalMine">
+					<moon field-bonus="0" jump-gate="0" lunar-base="0" robotics-factory="0" sensor-phalanx="0" shipyard="0">
+						<stationary-structures anti-ballistic-missiles="0" crawlers="0" gauss-cannons="0" heavy-lasers="0" inter-planetary-missiles="0" ion-cannons="0" large-shield-domes="0" light-lasers="0" plasma-turrets="0" rocket-launchers="0" small-shield-domes="0" solar-satellites="0" />
+						<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+					</moon>
+					<coordinates galaxy="8" slot="8" system="6" />
+					<stationary-structures anti-ballistic-missiles="60" crawlers="800" gauss-cannons="300" heavy-lasers="300" inter-planetary-missiles="0" ion-cannons="300" large-shield-domes="1" light-lasers="30000" plasma-turrets="300" rocket-launchers="50000" small-shield-domes="1" solar-satellites="1400" />
+					<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planet>
+				<planet base-fields="211" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="80" metal-utilization="100" name="Darn" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crystal-bonus="0" crystal-mine="29" crystal-storage="14" deuterium-bonus="0" deuterium-storage="15" deuterium-synthesizer="27" energy-bonus="0" fusion-reactor="19" id="0" maximum-temperature="94" metal-bonus="0" metal-mine="32" metal-storage="13" minimum-temperature="54" missile-silo="6" nanite-factory="3" research-lab="10" robotics-factory="10" shipyard="10" solar-plant="0" space-dock="5" terraformer="0">
+					<coordinates galaxy="8" slot="5" system="8" />
+					<moon field-bonus="0" jump-gate="0" lunar-base="0" robotics-factory="0" sensor-phalanx="0" shipyard="0">__
+						<stationary-structures anti-ballistic-missiles="0" crawlers="0" gauss-cannons="0" heavy-lasers="0" inter-planetary-missiles="0" ion-cannons="0" large-shield-domes="0" light-lasers="0" plasma-turrets="0" rocket-launchers="0" small-shield-domes="0" solar-satellites="0" />
+						<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+					</moon>
+					<stationary-structures anti-ballistic-missiles="60" crawlers="800" gauss-cannons="1000" heavy-lasers="1000" inter-planetary-missiles="0" ion-cannons="1000" large-shield-domes="1" light-lasers="100000" plasma-turrets="1000" rocket-launchers="200000" small-shield-domes="1" solar-satellites="1600" />
+					<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planet>
+				<planet base-fields="229" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="100" metal-utilization="100" name="you" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crystal-bonus="0" crystal-mine="30" crystal-storage="14" deuterium-bonus="0" deuterium-storage="15" deuterium-synthesizer="27" energy-bonus="0" fusion-reactor="19" id="1" maximum-temperature="80" metal-bonus="0" metal-mine="33" metal-storage="13" minimum-temperature="40" missile-silo="6" nanite-factory="3" research-lab="10" robotics-factory="10" shipyard="10" solar-plant="0" space-dock="5" terraformer="0">
+					<coordinates galaxy="8" slot="6" system="8" />
+					<moon field-bonus="0" jump-gate="0" lunar-base="0" robotics-factory="0" sensor-phalanx="0" shipyard="0">__
+						<stationary-structures anti-ballistic-missiles="0" crawlers="0" gauss-cannons="0" heavy-lasers="0" inter-planetary-missiles="0" ion-cannons="0" large-shield-domes="0" light-lasers="0" plasma-turrets="0" rocket-launchers="0" small-shield-domes="0" solar-satellites="0" />
+						<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+					</moon>
+					<stationary-structures anti-ballistic-missiles="60" crawlers="800" gauss-cannons="1000" heavy-lasers="1000" inter-planetary-missiles="0" ion-cannons="1000" large-shield-domes="1" light-lasers="100000" plasma-turrets="1000" rocket-launchers="200000" small-shield-domes="1" solar-satellites="1414" />
+					<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planet>
+				<planet base-fields="229" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="70" metal-utilization="100" name="to" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crystal-bonus="0" crystal-mine="29" crystal-storage="14" deuterium-bonus="0" deuterium-storage="15" deuterium-synthesizer="27" energy-bonus="0" fusion-reactor="19" id="2" maximum-temperature="36" metal-bonus="0" metal-mine="32" metal-storage="13" minimum-temperature="-4" missile-silo="6" nanite-factory="3" research-lab="10" robotics-factory="10" shipyard="10" solar-plant="0" space-dock="5" terraformer="0">
+					<coordinates galaxy="8" slot="10" system="8" />
+					<moon field-bonus="0" jump-gate="0" lunar-base="0" robotics-factory="0" sensor-phalanx="0" shipyard="0">__
+						<stationary-structures anti-ballistic-missiles="0" crawlers="0" gauss-cannons="0" heavy-lasers="0" inter-planetary-missiles="0" ion-cannons="0" large-shield-domes="0" light-lasers="0" plasma-turrets="0" rocket-launchers="0" small-shield-domes="0" solar-satellites="0" />
+						<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+					</moon>
+					<stationary-structures anti-ballistic-missiles="60" crawlers="800" gauss-cannons="1000" heavy-lasers="1000" inter-planetary-missiles="0" ion-cannons="1000" large-shield-domes="1" light-lasers="100000" plasma-turrets="1000" rocket-launchers="200000" small-shield-domes="1" solar-satellites="2013" />
+					<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planet>
+				<planet base-fields="175" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="70" metal-utilization="100" name="heck" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crystal-bonus="0" crystal-mine="29" crystal-storage="15" deuterium-bonus="0" deuterium-storage="15" deuterium-synthesizer="27" energy-bonus="0" fusion-reactor="19" id="3" maximum-temperature="36" metal-bonus="0" metal-mine="32" metal-storage="14" minimum-temperature="-4" missile-silo="6" nanite-factory="3" research-lab="10" robotics-factory="10" shipyard="10" solar-plant="0" space-dock="5" terraformer="4">
+					<coordinates galaxy="8" slot="11" system="8" />
+					<moon field-bonus="0" jump-gate="0" lunar-base="0" robotics-factory="0" sensor-phalanx="0" shipyard="0">__
+						<stationary-structures anti-ballistic-missiles="0" crawlers="0" gauss-cannons="0" heavy-lasers="0" inter-planetary-missiles="0" ion-cannons="0" large-shield-domes="0" light-lasers="0" plasma-turrets="0" rocket-launchers="0" small-shield-domes="0" solar-satellites="0" />
+						<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+					</moon>
+					<stationary-structures anti-ballistic-missiles="60" crawlers="800" gauss-cannons="1000" heavy-lasers="1000" inter-planetary-missiles="0" ion-cannons="1000" large-shield-domes="1" light-lasers="100000" plasma-turrets="1000" rocket-launchers="200000" small-shield-domes="1" solar-satellites="1992" />
+					<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planet>
+				<planet base-fields="187" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="70" metal-utilization="100" name="GF" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crystal-bonus="0" crystal-mine="29" crystal-storage="14" deuterium-bonus="0" deuterium-storage="15" deuterium-synthesizer="28" energy-bonus="0" fusion-reactor="19" id="4" maximum-temperature="22" metal-bonus="0" metal-mine="32" metal-storage="13" minimum-temperature="-18" missile-silo="6" nanite-factory="3" research-lab="10" robotics-factory="10" shipyard="10" solar-plant="0" space-dock="5" terraformer="1">
+					<coordinates galaxy="8" slot="12" system="8" />
+					<moon field-bonus="0" jump-gate="0" lunar-base="0" robotics-factory="0" sensor-phalanx="0" shipyard="0">__
+						<stationary-structures anti-ballistic-missiles="0" crawlers="0" gauss-cannons="0" heavy-lasers="0" inter-planetary-missiles="0" ion-cannons="0" large-shield-domes="0" light-lasers="0" plasma-turrets="0" rocket-launchers="0" small-shield-domes="0" solar-satellites="0" />
+						<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+					</moon>
+					<stationary-structures anti-ballistic-missiles="60" crawlers="800" gauss-cannons="1000" heavy-lasers="1000" inter-planetary-missiles="0" ion-cannons="1000" large-shield-domes="1" light-lasers="100000" plasma-turrets="1000" rocket-launchers="200000" small-shield-domes="1" solar-satellites="2182" />
+					<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planet>
+				<planet base-fields="245" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="100" metal-utilization="100" name="Colony" solar-plant-utilization="100" solar-satellite-utilization="100" id="5" alliance-depot="0" crystal-bonus="0" crystal-mine="29" crystal-storage="14" deuterium-bonus="0" deuterium-storage="14" deuterium-synthesizer="27" energy-bonus="0" fusion-reactor="19" maximum-temperature="36" metal-bonus="0" metal-mine="32" metal-storage="14" minimum-temperature="-4" missile-silo="6" nanite-factory="3" research-lab="10" robotics-factory="10" shipyard="10" solar-plant="0" space-dock="5" terraformer="0">
+					<coordinates galaxy="8" slot="8" system="9" />
+					<moon field-bonus="0" jump-gate="0" lunar-base="0" robotics-factory="0" sensor-phalanx="0" shipyard="0">__
+						<stationary-structures anti-ballistic-missiles="0" crawlers="0" gauss-cannons="0" heavy-lasers="0" inter-planetary-missiles="0" ion-cannons="0" large-shield-domes="0" light-lasers="0" plasma-turrets="0" rocket-launchers="0" small-shield-domes="0" solar-satellites="0" />
+						<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+					</moon>
+					<stationary-structures anti-ballistic-missiles="60" crawlers="800" gauss-cannons="1000" heavy-lasers="1000" inter-planetary-missiles="0" ion-cannons="1000" large-shield-domes="1" light-lasers="100000" plasma-turrets="1000" rocket-launchers="200000" small-shield-domes="1" solar-satellites="1660" />
+					<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planet>
+				<planet base-fields="241" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="100" metal-utilization="100" name="Colony" solar-plant-utilization="100" solar-satellite-utilization="100" id="6" alliance-depot="0" crystal-bonus="0" crystal-mine="29" crystal-storage="13" deuterium-bonus="0" deuterium-storage="15" deuterium-synthesizer="27" energy-bonus="0" fusion-reactor="18" maximum-temperature="43" metal-bonus="0" metal-mine="32" metal-storage="14" minimum-temperature="3" missile-silo="6" nanite-factory="3" research-lab="10" robotics-factory="10" shipyard="10" solar-plant="0" space-dock="5" terraformer="0">
+					<coordinates galaxy="8" slot="8" system="10" />
+					<moon field-bonus="0" jump-gate="0" lunar-base="0" robotics-factory="0" sensor-phalanx="0" shipyard="0">__
+						<stationary-structures anti-ballistic-missiles="0" crawlers="0" gauss-cannons="0" heavy-lasers="0" inter-planetary-missiles="0" ion-cannons="0" large-shield-domes="0" light-lasers="0" plasma-turrets="0" rocket-launchers="0" small-shield-domes="0" solar-satellites="0" />
+						<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+					</moon>
+					<stationary-structures anti-ballistic-missiles="60" crawlers="800" gauss-cannons="1000" heavy-lasers="1000" inter-planetary-missiles="0" ion-cannons="1000" large-shield-domes="1" light-lasers="100000" plasma-turrets="1000" rocket-launchers="200000" small-shield-domes="1" solar-satellites="1828" />
+					<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planet>
+				<planet base-fields="236" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="90" metal-utilization="100" name="Colony" solar-plant-utilization="100" solar-satellite-utilization="100" id="8" alliance-depot="0" crystal-bonus="0" crystal-mine="29" crystal-storage="13" deuterium-bonus="0" deuterium-storage="13" deuterium-synthesizer="28" energy-bonus="0" fusion-reactor="19" maximum-temperature="49" metal-bonus="0" metal-mine="32" metal-storage="14" minimum-temperature="9" missile-silo="6" nanite-factory="4" research-lab="12" robotics-factory="10" shipyard="12" solar-plant="0" space-dock="5" terraformer="0">
+					<moon field-bonus="0" jump-gate="0" lunar-base="0" robotics-factory="0" sensor-phalanx="0" shipyard="0">__
+						<stationary-structures anti-ballistic-missiles="0" crawlers="0" gauss-cannons="0" heavy-lasers="0" inter-planetary-missiles="0" ion-cannons="0" large-shield-domes="0" light-lasers="0" plasma-turrets="0" rocket-launchers="0" small-shield-domes="0" solar-satellites="0" />
+						<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+					</moon>
+					<coordinates galaxy="8" slot="8" system="300" />
+					<stationary-structures anti-ballistic-missiles="60" crawlers="800" gauss-cannons="1000" heavy-lasers="1000" inter-planetary-missiles="0" ion-cannons="1000" large-shield-domes="1" light-lasers="100000" plasma-turrets="1000" rocket-launchers="200000" small-shield-domes="1" solar-satellites="1780" />
+					<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planet>
+				<planet base-fields="255" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="70" metal-utilization="100" name="Colony" solar-plant-utilization="100" solar-satellite-utilization="100" id="7" alliance-depot="0" crystal-bonus="0" crystal-mine="29" crystal-storage="13" deuterium-bonus="0" deuterium-storage="15" deuterium-synthesizer="28" energy-bonus="0" fusion-reactor="18" maximum-temperature="47" metal-bonus="0" metal-mine="32" metal-storage="14" minimum-temperature="7" missile-silo="6" nanite-factory="3" research-lab="11" robotics-factory="10" shipyard="11" solar-plant="0" space-dock="5" terraformer="0">
+					<coordinates galaxy="8" slot="8" system="397" />
+					<moon field-bonus="0" jump-gate="0" lunar-base="5" robotics-factory="8" sensor-phalanx="0" shipyard="2" name="Moon">__
+						<stationary-structures anti-ballistic-missiles="0" crawlers="0" gauss-cannons="0" heavy-lasers="0" inter-planetary-missiles="0" ion-cannons="0" large-shield-domes="0" light-lasers="0" plasma-turrets="0" rocket-launchers="0" small-shield-domes="0" solar-satellites="0" />
+						<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+					</moon>
+					<stationary-structures anti-ballistic-missiles="60" crawlers="800" gauss-cannons="1000" heavy-lasers="1000" inter-planetary-missiles="0" ion-cannons="1000" large-shield-domes="1" light-lasers="100000" plasma-turrets="1000" rocket-launchers="200000" small-shield-domes="1" solar-satellites="2101" />
+					<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planet>
+			</planets>
+			<planned-flights />
+			<planned-upgrades>
+				<planned-upgrade planet="9" quantity="1" type="MetalMine" moon="false" />
+				<planned-upgrade planet="9" quantity="1" type="MetalMine" moon="false" />
+				<planned-upgrade planet="9" quantity="1" type="DeuteriumSynthesizer" moon="false" />
+				<planned-upgrade planet="9" quantity="1" type="DeuteriumSynthesizer" moon="false" />
+				<planned-upgrade planet="5" quantity="1" type="MetalMine" moon="false" />
+				<planned-upgrade planet="6" quantity="1" type="MetalMine" moon="false" />
+				<planned-upgrade planet="8" quantity="1" type="MetalMine" moon="false" />
+				<planned-upgrade planet="7" quantity="1" type="MetalMine" moon="false" />
+				<planned-upgrade planet="7" quantity="1" type="FusionReactor" moon="false" />
+				<planned-upgrade planet="6" quantity="1" type="FusionReactor" moon="false" />
+				<planned-upgrade planet="3" quantity="1" type="DeuteriumSynthesizer" moon="false" />
+				<planned-upgrade planet="2" quantity="1800000" type="RocketLauncher" moon="false" />
+				<planned-upgrade planet="2" quantity="900000" type="LightLaser" moon="false" />
+				<planned-upgrade planet="2" quantity="9000" type="HeavyLaser" moon="false" />
+				<planned-upgrade planet="2" quantity="9000" type="GaussCannon" moon="false" />
+				<planned-upgrade planet="2" quantity="9000" type="IonCannon" moon="false" />
+				<planned-upgrade planet="2" quantity="9000" type="PlasmaTurret" moon="false" />
+				<planned-upgrade planet="9" quantity="1" type="CrystalMine" moon="false" />
+				<planned-upgrade quantity="1" type="CrystalMine" moon="false" planet="0" />
+				<planned-upgrade planet="2" quantity="1" type="CrystalMine" moon="false" />
+				<planned-upgrade planet="3" quantity="1" type="CrystalMine" moon="false" />
+				<planned-upgrade planet="4" quantity="1" type="CrystalMine" moon="false" />
+				<planned-upgrade planet="5" quantity="1" type="CrystalMine" moon="false" />
+				<planned-upgrade planet="6" quantity="1" type="CrystalMine" moon="false" />
+				<planned-upgrade planet="8" quantity="1" type="CrystalMine" moon="false" />
+				<planned-upgrade planet="7" quantity="1" type="CrystalMine" moon="false" />
+			</planned-upgrades>
+			<trades>
+				<trade type="Deuterium" resource1="0" resource2="51000000" name="__">__
+					<rate crystal="1.5E0" deuterium="1E0" metal="2.5E0" />
+				</trade>
+			</trades>
+		</account>
+		<account game-class="Collector" id="3" name="Zibal (2)">
+			<holdings />
+			<officers admiral="false" commander="false" commanding-staff="false" engineer="false" geologist="false" technocrat="false" />
+			<planets>__
+				<planet base-fields="173" crawler-utilization="100" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="100" metal-utilization="100" name="New Planet" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crystal-bonus="0" crystal-mine="1" crystal-storage="0" deuterium-bonus="0" deuterium-storage="0" deuterium-synthesizer="3" energy-bonus="0" fusion-reactor="2" id="0" maximum-temperature="50" metal-bonus="0" metal-mine="6" metal-storage="0" minimum-temperature="10" missile-silo="0" nanite-factory="0" research-lab="0" robotics-factory="2" shipyard="5" solar-plant="2" space-dock="0" terraformer="0">__
+					<coordinates galaxy="8" slot="8" system="8" />
+					<moon field-bonus="0" jump-gate="0" lunar-base="0" robotics-factory="0" sensor-phalanx="0" shipyard="0">__
+						<stationary-structures anti-ballistic-missiles="0" crawlers="0" gauss-cannons="0" heavy-lasers="0" inter-planetary-missiles="0" ion-cannons="0" large-shield-domes="0" light-lasers="0" plasma-turrets="0" rocket-launchers="0" small-shield-domes="0" solar-satellites="0" />
+						<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+					</moon>
+					<stationary-structures anti-ballistic-missiles="0" crawlers="0" gauss-cannons="0" heavy-lasers="0" inter-planetary-missiles="0" ion-cannons="0" large-shield-domes="0" light-lasers="0" plasma-turrets="0" rocket-launchers="0" small-shield-domes="0" solar-satellites="9" />
+					<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planet>
+			</planets>
+			<planned-flights />
+			<planned-upgrades />
+			<research armor="5" astrophysics="9" combustion-drive="6" computer="6" energy="8" espionage="4" graviton="0" hyperspace="0" hyperspace-drive="0" impulse-drive="6" intergalactic-research-network="0" ion="5" laser="10" plasma="5" shielding="5" weapons="5" />
+			<trades />
+			<universe circular-galaxies="true" circular-universe="true" collector-energy-bonus="10" collector-production-bonus="25" crawler-cap="8" economy-speed="7" fleet-speed="2" galaxies="9" hyperspace-cargo-bonus="5E0" name="Zibal" research-speed="14">
+				<trade-ratios crystal="1.5E0" deuterium="1E0" metal="2.5E0" />
+			</universe>
+		</account>
+		<account id="2" name="Old Virgo" reference-account="0" game-class="Collector">
+			<officers admiral="false" commander="false" commanding-staff="false" engineer="false" geologist="false" technocrat="false" />
+			<research armor="15" astrophysics="24" combustion-drive="11" computer="17" energy="21" espionage="8" graviton="1" hyperspace="15" hyperspace-drive="8" impulse-drive="7" intergalactic-research-network="11" ion="13" laser="12" plasma="18" shielding="15" weapons="15" />
+			<universe collector-bonus="0" crawler-cap="0" economy-speed="7" fleet-speed="2" hyperspace-cargo-bonus="5E0" research-speed="14" name="Virgo" collector-production-bonus="25" collector-energy-bonus="10" galaxies="6" circular-universe="true" circular-galaxies="true">__
+				<trade-ratios crystal="1.5E0" deuterium="1E0" metal="2.5E0" />
+			</universe>
+			<planets>
+				<planet base-fields="232" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="50" metal-utilization="100" name="Arnor" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="864" crystal-bonus="0" crystal-mine="35" crystal-storage="12" deuterium-bonus="0" deuterium-storage="13" deuterium-synthesizer="40" field-bonus="0" fusion-reactor="23" maximum-temperature="-94" metal-bonus="0" metal-mine="41" metal-storage="14" minimum-temperature="-134" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-satellites="0" space-dock="6" terraformer="0" id="0">__
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="7" sensor-phalanx="0" shipyard="8">__
+						<stationary-structures rocket-launchers="2500" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" />
+						<stationed-fleet recyclers="15" colony-ships="1" cruisers="162" />
+					</moon>
+					<stationary-structures crawlers="0" rocket-launchers="25000" light-lasers="25000" gauss-cannons="250" ion-cannons="250" plasma-turrets="250" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" solar-satellites="0" />
+					<stationed-fleet large-cargos="0" />
+					<coordinates galaxy="4" system="475" slot="15" />
+				</planet>
+				<planet base-fields="220" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="50" metal-utilization="100" name="Gondolin" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="856" crystal-bonus="0" crystal-mine="35" crystal-storage="12" deuterium-bonus="0" deuterium-storage="12" deuterium-synthesizer="39" field-bonus="0" fusion-reactor="23" maximum-temperature="7" metal-bonus="0" metal-mine="41" metal-storage="14" minimum-temperature="-33" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-satellites="0" space-dock="6" terraformer="3" id="1">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="1" sensor-phalanx="6" shipyard="8">__
+						<stationary-structures rocket-launchers="2500" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" />
+						<stationed-fleet recyclers="10" colony-ships="1" />
+					</moon>
+					<stationary-structures crawlers="0" rocket-launchers="25000" light-lasers="25000" gauss-cannons="250" ion-cannons="250" plasma-turrets="250" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" solar-satellites="0" />
+					<stationed-fleet large-cargos="0" />
+					<coordinates galaxy="5" system="51" slot="11" />
+				</planet>
+				<planet base-fields="198" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="50" metal-utilization="100" name="Caradhras" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="856" crystal-bonus="0" crystal-mine="35" crystal-storage="12" deuterium-bonus="0" deuterium-storage="12" deuterium-synthesizer="39" field-bonus="0" fusion-reactor="23" maximum-temperature="13" metal-bonus="0" metal-mine="41" metal-storage="14" minimum-temperature="-27" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-satellites="0" space-dock="6" terraformer="7" id="2">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="1" sensor-phalanx="6" shipyard="8">__
+						<stationary-structures rocket-launchers="2500" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" />
+						<stationed-fleet recyclers="10" />
+					</moon>
+					<stationary-structures crawlers="0" rocket-launchers="25000" light-lasers="25000" gauss-cannons="250" ion-cannons="250" plasma-turrets="250" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" solar-satellites="0" />
+					<stationed-fleet />
+					<coordinates galaxy="5" system="141" slot="11" />
+				</planet>
+				<planet base-fields="210" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="40" metal-utilization="100" name="Doriath" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="856" crystal-bonus="0" crystal-mine="35" crystal-storage="12" deuterium-bonus="0" deuterium-storage="12" deuterium-synthesizer="39" field-bonus="0" fusion-reactor="23" maximum-temperature="5" metal-bonus="0" metal-mine="41" metal-storage="14" minimum-temperature="-35" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="15" solar-satellites="0" space-dock="6" terraformer="7" id="3">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="1" sensor-phalanx="6" shipyard="8">__
+						<stationary-structures rocket-launchers="2500" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" />
+						<stationed-fleet recyclers="10" colony-ships="1" />
+					</moon>
+					<stationary-structures crawlers="0" rocket-launchers="25000" light-lasers="25000" gauss-cannons="250" ion-cannons="250" plasma-turrets="250" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" solar-satellites="0" />
+					<stationed-fleet />
+					<coordinates galaxy="5" system="260" slot="11" />
+				</planet>
+				<planet base-fields="190" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="50" metal-utilization="100" name="Lothlorien" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="856" crystal-bonus="0" crystal-mine="35" crystal-storage="12" deuterium-bonus="0" deuterium-storage="12" deuterium-synthesizer="39" field-bonus="0" fusion-reactor="23" maximum-temperature="3" metal-bonus="0" metal-mine="41" metal-storage="14" minimum-temperature="-37" missile-silo="7" nanite-factory="6" research-lab="13" robotics-factory="10" shipyard="12" solar-plant="0" solar-satellites="0" space-dock="6" terraformer="8" id="4">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="1" sensor-phalanx="6" shipyard="8">__
+						<stationary-structures rocket-launchers="2500" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" />
+						<stationed-fleet recyclers="10" colony-ships="1" />
+					</moon>
+					<stationary-structures crawlers="0" rocket-launchers="25000" light-lasers="25000" gauss-cannons="250" ion-cannons="250" plasma-turrets="250" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" solar-satellites="0" />
+					<stationed-fleet />
+					<coordinates galaxy="5" system="381" slot="11" />
+				</planet>
+				<planet base-fields="212" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="50" metal-utilization="100" name="Rhovanion" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crystal-bonus="0" crystal-mine="35" crystal-storage="12" deuterium-bonus="0" deuterium-storage="12" deuterium-synthesizer="39" fusion-reactor="23" maximum-temperature="0" metal-bonus="0" metal-mine="41" metal-storage="14" minimum-temperature="-40" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" space-dock="7" terraformer="4" id="5">
+					<coordinates galaxy="5" slot="11" system="469" />
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="2" sensor-phalanx="6" shipyard="8">__
+						<stationary-structures anti-ballistic-missiles="0" crawlers="0" gauss-cannons="80" heavy-lasers="0" inter-planetary-missiles="0" ion-cannons="80" large-shield-domes="1" light-lasers="2500" plasma-turrets="25" rocket-launchers="2500" small-shield-domes="1" solar-satellites="0" />
+						<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="10" small-cargos="0" />
+					</moon>
+					<stationary-structures anti-ballistic-missiles="70" crawlers="0" gauss-cannons="250" heavy-lasers="0" inter-planetary-missiles="0" ion-cannons="250" large-shield-domes="1" light-lasers="25000" plasma-turrets="250" rocket-launchers="25000" small-shield-domes="1" solar-satellites="0" />
+					<stationed-fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="0" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planet>
+				<planet base-fields="219" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="40" metal-utilization="100" name="Gorgoroth" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="856" crystal-bonus="0" crystal-mine="35" crystal-storage="12" deuterium-bonus="0" deuterium-storage="12" deuterium-synthesizer="39" field-bonus="0" fusion-reactor="23" maximum-temperature="12" metal-bonus="0" metal-mine="41" metal-storage="14" minimum-temperature="-28" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="20" solar-satellites="0" space-dock="6" terraformer="6" id="6">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="2" sensor-phalanx="6" shipyard="8">__
+						<stationary-structures rocket-launchers="2500" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" />
+						<stationed-fleet recyclers="10" colony-ships="2" />
+					</moon>
+					<stationary-structures crawlers="0" rocket-launchers="25000" light-lasers="25000" gauss-cannons="250" ion-cannons="250" plasma-turrets="250" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" solar-satellites="0" />
+					<stationed-fleet />
+					<coordinates galaxy="5" system="475" slot="11" />
+				</planet>
+				<planet base-fields="227" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="50" metal-utilization="100" name="Angmar" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="848" crystal-bonus="0" crystal-mine="35" crystal-storage="12" deuterium-bonus="0" deuterium-storage="12" deuterium-synthesizer="39" field-bonus="0" fusion-reactor="23" maximum-temperature="8" metal-bonus="0" metal-mine="41" metal-storage="14" minimum-temperature="-32" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-satellites="0" space-dock="6" terraformer="0" id="7">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="1" sensor-phalanx="6" shipyard="8">__
+						<stationary-structures rocket-launchers="2500" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" ion-cannons="25" />
+						<stationed-fleet recyclers="20" />
+					</moon>
+					<stationary-structures crawlers="0" rocket-launchers="25000" light-lasers="25000" gauss-cannons="250" ion-cannons="250" plasma-turrets="250" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" solar-satellites="0" />
+					<stationed-fleet />
+					<coordinates galaxy="6" system="52" slot="11" />
+				</planet>
+				<planet base-fields="240" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="50" metal-utilization="100" name="Rohan" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="864" crystal-bonus="0" crystal-mine="35" crystal-storage="12" deuterium-bonus="0" deuterium-storage="13" deuterium-synthesizer="40" field-bonus="0" fusion-reactor="23" maximum-temperature="-102" metal-bonus="0" metal-mine="41" metal-storage="14" minimum-temperature="-142" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-satellites="0" space-dock="6" terraformer="0" id="8">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="1" sensor-phalanx="6" shipyard="8">__
+						<stationary-structures rocket-launchers="2500" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" ion-cannons="0" />
+						<stationed-fleet large-cargos="190250" recyclers="31" death-stars="1" colony-ships="1" />
+					</moon>
+					<stationary-structures crawlers="0" rocket-launchers="25000" light-lasers="25000" gauss-cannons="250" ion-cannons="250" plasma-turrets="250" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" solar-satellites="0" />
+					<stationed-fleet large-cargos="0" />
+					<coordinates galaxy="6" system="58" slot="15" />
+				</planet>
+				<planet base-fields="216" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="40" metal-utilization="100" name="Thangorodrim" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="848" crystal-bonus="0" crystal-mine="35" crystal-storage="12" deuterium-bonus="0" deuterium-storage="12" deuterium-synthesizer="39" field-bonus="0" fusion-reactor="23" maximum-temperature="6" metal-bonus="0" metal-mine="41" metal-storage="14" minimum-temperature="-34" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="17" solar-satellites="0" space-dock="6" terraformer="6" id="9">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="1" sensor-phalanx="6" shipyard="8">__
+						<stationary-structures rocket-launchers="2500" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" />
+						<stationed-fleet recyclers="10" />
+					</moon>
+					<stationary-structures crawlers="0" rocket-launchers="25000" light-lasers="25000" gauss-cannons="250" ion-cannons="250" plasma-turrets="250" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" solar-satellites="0" />
+					<stationed-fleet large-cargos="0" />
+					<coordinates galaxy="6" system="141" slot="11" />
+				</planet>
+				<planet base-fields="203" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="50" metal-utilization="100" name="Eriador" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="856" crystal-bonus="0" crystal-mine="35" crystal-storage="12" deuterium-bonus="0" deuterium-storage="12" deuterium-synthesizer="39" field-bonus="0" fusion-reactor="23" maximum-temperature="4" metal-bonus="0" metal-mine="41" metal-storage="14" minimum-temperature="-36" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-satellites="0" space-dock="6" terraformer="6" id="10">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="1" sensor-phalanx="6" shipyard="8">__
+						<stationary-structures rocket-launchers="2500" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" />
+						<stationed-fleet recyclers="10" />
+					</moon>
+					<stationary-structures crawlers="0" rocket-launchers="25000" light-lasers="25000" gauss-cannons="250" ion-cannons="250" plasma-turrets="250" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" solar-satellites="0" />
+					<stationed-fleet large-cargos="0" />
+					<coordinates galaxy="6" system="253" slot="11" />
+				</planet>
+				<planet base-fields="198" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="50" metal-utilization="100" name="Valinor" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="850" crystal-bonus="0" crystal-mine="35" crystal-storage="12" deuterium-bonus="0" deuterium-storage="12" deuterium-synthesizer="39" field-bonus="0" fusion-reactor="23" maximum-temperature="13" metal-bonus="0" metal-mine="41" metal-storage="14" minimum-temperature="-27" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="0" solar-satellites="0" space-dock="6" terraformer="7" id="11">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="1" sensor-phalanx="6" shipyard="8">__
+						<stationary-structures rocket-launchers="2500" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" />
+						<stationed-fleet recyclers="10" colony-ships="2" path-finders="9" espionage-probes="7" large-cargos="101" />
+					</moon>
+					<stationary-structures crawlers="0" rocket-launchers="25000" light-lasers="25000" gauss-cannons="250" ion-cannons="250" plasma-turrets="250" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" solar-satellites="0" />
+					<stationed-fleet large-cargos="0" />
+					<coordinates galaxy="6" system="381" slot="11" />
+				</planet>
+				<planet base-fields="220" crawler-utilization="150" crystal-utilization="100" deuterium-utilization="100" fusion-reactor-utilization="40" metal-utilization="100" name="Gondor" solar-plant-utilization="100" solar-satellite-utilization="100" alliance-depot="0" crawlers="848" crystal-bonus="0" crystal-mine="35" crystal-storage="12" deuterium-bonus="0" deuterium-storage="12" deuterium-synthesizer="39" field-bonus="0" fusion-reactor="23" maximum-temperature="12" metal-bonus="0" metal-mine="41" metal-storage="14" minimum-temperature="-28" missile-silo="7" nanite-factory="6" research-lab="14" robotics-factory="10" shipyard="12" solar-plant="21" solar-satellites="0" space-dock="6" terraformer="6" id="12">
+					<moon field-bonus="0" jump-gate="1" lunar-base="8" robotics-factory="1" sensor-phalanx="6" shipyard="8">__
+						<stationary-structures rocket-launchers="2500" light-lasers="2500" gauss-cannons="25" plasma-turrets="25" small-shield-domes="1" large-shield-domes="1" ion-cannons="0" />
+						<stationed-fleet recyclers="170" colony-ships="1" espionage-probes="42" path-finders="12" />
+					</moon>
+					<stationary-structures crawlers="0" rocket-launchers="25000" light-lasers="25000" gauss-cannons="250" ion-cannons="250" plasma-turrets="250" small-shield-domes="1" large-shield-domes="1" anti-ballistic-missiles="70" solar-satellites="0" />
+					<stationed-fleet large-cargos="0" />
+					<coordinates galaxy="6" system="475" slot="11" />
+				</planet>
+			</planets>
+			<holdings>
+				<holding name="In Flight" crystal="520750000" deuterium="3308820000" level="0" metal="1240620000" />
+			</holdings>
+			<trades>
+				<trade type="Deuterium" resource1="5350000000" resource2="1680000000" name="__">__
+					<rate crystal="1.5E0" deuterium="1E0" metal="2.5E0" />
+				</trade>
+			</trades>
+			<planned-flights>
+				<planned-flight dest-galaxy="5" dest-slot="1" dest-system="381" name="Night" source-galaxy="6" source-slot="11" source-system="381" speed="70" dest-moon="false" source-moon="false">__
+					<fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="30000" light-fighters="0" path-finders="0" reapers="0" recyclers="1" small-cargos="0" />
+				</planned-flight>
+				<planned-flight dest-galaxy="2" dest-slot="1" dest-system="1" name="Day" source-galaxy="1" source-slot="1" source-system="1" speed="50" dest-moon="false" source-moon="false">
+					<fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="0" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="30000" light-fighters="0" path-finders="0" reapers="0" recyclers="1" small-cargos="0" />
+				</planned-flight>
+				<planned-flight dest-galaxy="1" dest-slot="1" dest-system="7" name="FS" source-galaxy="1" source-slot="1" source-system="1" speed="10" dest-moon="false" source-moon="false">
+					<fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="1" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="65000" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planned-flight>
+				<planned-flight dest-galaxy="6" dest-slot="15" dest-system="58" name="Trade FS" source-galaxy="6" source-slot="11" source-system="52" speed="30" dest-moon="false" source-moon="false">
+					<fleet battle-cruisers="0" battle-ships="0" bombers="0" colony-ships="0" cruisers="0" death-stars="1" destroyers="0" espionage-probes="0" heavy-fighters="0" large-cargos="1" light-fighters="0" path-finders="0" reapers="0" recyclers="0" small-cargos="0" />
+				</planned-flight>
+			</planned-flights>
+			<planned-upgrades />
+		</account>
+	</accounts>
+	<planet-categories production="Daily" main-facilities="false" other-facilities="false" energy="false" storage="false" fields="false" temps="false" moon-buildings="false" productionTotals="false" defense="false" moon-info="false" mines="false" columns="Mines" />
+</occountant>
