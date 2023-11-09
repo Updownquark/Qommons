@@ -364,8 +364,6 @@ public class ListenerList<E> {
 
 	private void _add(Node newNode, boolean last) {
 		boolean newInUse = theSize != null && theSize.getAndIncrement() == 0;
-		if (newInUse && theInUseListener != null)
-			theInUseListener.inUseChanged(true);
 		if (last) {
 			Node oldLast = theTerminal.previous;
 			newNode.previous = oldLast;
@@ -377,6 +375,8 @@ public class ListenerList<E> {
 			theTerminal.next = newNode;
 			oldFirst.previous = newNode;
 		}
+		if (newInUse && theInUseListener != null)
+			theInUseListener.inUseChanged(true);
 	}
 
 	void removeListener(Node node) {

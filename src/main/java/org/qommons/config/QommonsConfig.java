@@ -730,9 +730,13 @@ public abstract class QommonsConfig implements Cloneable {
 	 * @throws IOException If any of the given paths cannot be interpreted
 	 */
 	public static String resolve(String location, String... relative) throws IOException {
+		return resolve(location, QommonsConfig.class, relative);
+	}
+
+	public static String resolve(String location, Class<?> loadingClass, String... relative) throws IOException {
 		if (location.startsWith("classpath://")) {
 			String resPath = location.substring("classpath:/".length());
-			URL resource = QommonsConfig.class.getResource(resPath);
+			URL resource = loadingClass.getResource(resPath);
 			if (resource == null)
 				throw new IOException("No such resource on classpath: " + resPath);
 			return resource.toString();
@@ -742,8 +746,11 @@ public abstract class QommonsConfig implements Cloneable {
 			String resolvedRel = resolve(relative[0], org.qommons.ArrayUtils.remove(relative, 0));
 			int protocolIdx = resolvedRel.indexOf(":/");
 			if(protocolIdx >= 0) {
-				if(location.startsWith("/"))
+				if (location.startsWith("/")) {
+					if (loadingClass.getResource(location) != null)
+						return location;
 					return resolvedRel.substring(0, protocolIdx) + ":/" + location;
+				}
 				String newLocation = location;
 				int lastSlash = resolvedRel.lastIndexOf("/");
 				if (lastSlash >= 0) {
