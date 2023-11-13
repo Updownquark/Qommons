@@ -12,6 +12,7 @@ import java.util.function.Supplier;
 import org.qommons.Identifiable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
+import org.qommons.ReversedComparator;
 import org.qommons.Ternian;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
@@ -1367,7 +1368,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 
 		@Override
 		public Comparator<? super E> comparator() {
-			return reverse(getWrapped().comparator());
+			return ReversedComparator.reverse(getWrapped().comparator());
 		}
 
 		/**
@@ -1394,32 +1395,6 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 			if (search instanceof ReversedSearch)
 				return ((ReversedSearch) search).getWrapped();
 			return new ReversedSearch();
-		}
-
-		/**
-		 * @param <X> The type to compare
-		 * @param compare The comparator to reverse
-		 * @return The reversed comparator
-		 */
-		public static <X> Comparator<X> reverse(Comparator<X> compare) {
-			class ReversedCompare implements Comparator<X> {
-				Comparator<X> getWrapped() {
-					return compare;
-				}
-
-				@Override
-				public int compare(X v1, X v2) {
-					return -compare.compare(v1, v2);
-				}
-
-				@Override
-				public String toString() {
-					return "reverse(" + compare + ")";
-				}
-			}
-			if (compare instanceof ReversedCompare)
-				return ((ReversedCompare) compare).getWrapped();
-			return new ReversedCompare();
 		}
 
 		@Override
