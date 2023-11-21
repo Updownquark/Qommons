@@ -91,7 +91,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 	 * @param after The ID of the key element to be the lower bound for the new entry's insertion in the key set
 	 * @param before The ID of the key element to be the upper bound for the new entry's insertion in the key set
 	 * @param first Whether to prefer inserting the key toward the beginning or end of the key set (if supported)
-	 * @return The handle for the new or updated entry
+	 * @return The handle for the new or updated entry, or null if the entry did not exist and could not be added
 	 */
 	default MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
 		boolean[] added = new boolean[1];

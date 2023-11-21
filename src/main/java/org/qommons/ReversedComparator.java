@@ -39,7 +39,7 @@ public class ReversedComparator<T> implements Comparator<T> {
 	}
 
 	/**
-	 * @param <X> The type to compare
+	 * @param <T> The type to compare
 	 * @param compare The comparator to reverse
 	 * @return The reversed comparator
 	 */

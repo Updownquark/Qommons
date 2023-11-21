@@ -46,6 +46,7 @@ public class BetterBitSetTest {
 							System.out.println("flipping " + index + " " + pre + "->" + (!pre));
 						int preCard = target.cardinality();
 						int setIndex = target.countBitsSetBetween(0, index);
+						int clearIndex = index - setIndex;
 						int prevSet = target.previousSetBit(index - 1);
 						int nextSet = target.nextSetBit(index + 1);
 						int prevClr = target.previousClearBit(index - 1);
@@ -63,12 +64,15 @@ public class BetterBitSetTest {
 							if (nextSet >= 0)
 								Assert.assertTrue(target.previousSetBit(nextSet - 1) - 1 < index);
 							Assert.assertTrue(target.previousClearBit(nextClr - 1) == index);
+							Assert.assertEquals(index, target.indexOfNthClearBit(clearIndex));
 						} else {
 							Assert.assertEquals(index, target.nextSetBit(prevSet + 1));
 							if (nextSet < 0)
 								Assert.assertTrue(target.size() > index);
 							else
 								Assert.assertEquals(index, target.previousSetBit(nextSet - 1));
+							int newIndex = target.indexOfNthClearBit(clearIndex);
+							Assert.assertTrue(newIndex > index);
 							Assert.assertTrue(target.previousClearBit(nextClr - 1) < index);
 							int newNextClr = target.nextClearBit(prevClr + 1);
 							Assert.assertTrue(newNextClr < 0 || newNextClr > index);

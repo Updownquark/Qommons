@@ -1076,6 +1076,35 @@ public class BetterBitSet implements Cloneable {
 	}
 
 	/**
+	 * @param n The number of clear bits to determine the length for
+	 * @return The index in this bit set of the <code>n</code>th clear bit
+	 */
+	public int indexOfNthClearBit(int n) {
+		if (n < 0)
+			throw new IndexOutOfBoundsException("n < 0: " + n);
+		int count = 0;
+		for (int w = 0; w < wordsInUse; w++) {
+			int wordClearBits = BITS_PER_WORD - Long.bitCount(words[w]);
+			int nextCount = count + wordClearBits;
+			if (nextCount > n) {
+				long mask = 1L;
+				int b;
+				for (b = 0; true; b++) {
+					if ((words[w] & mask) == 0) {
+						if (count == n)
+							break;
+						count++;
+					}
+					mask <<= 1;
+				}
+				return w * BITS_PER_WORD + b;
+			} else
+				count = nextCount;
+		}
+		return wordsInUse * BITS_PER_WORD + n - count;
+	}
+
+	/**
 	 * @param other The bit set to compare to
 	 * @param index The starting index to check
 	 * @return The smallest index, <code>i &gt;= index</code>, for which <code>this.get(i)!=other.get(i)</code>, or <code>-1</code> if there
