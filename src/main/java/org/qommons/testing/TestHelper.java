@@ -4,6 +4,7 @@ import java.io.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
+import java.nio.file.Paths;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
@@ -106,7 +107,11 @@ import org.qommons.tree.BetterTreeList;
  */
 public class TestHelper extends TestUtil {
 	/** A test case to execute against a {@link TestHelper} */
-	public static interface Testable extends Consumer<TestHelper> {}
+	public static interface Testable extends Consumer<TestHelper>, AutoCloseable {
+		@Override
+		default void close() {
+		}
+	}
 
 	/** Represents a test failure */
 	public static class TestFailure implements Comparable<TestFailure> {
@@ -214,7 +219,7 @@ public class TestHelper extends TestUtil {
 		}
 	}
 
-	/** @return Whether the current test case is a reproduction of a previous failure */
+	/** @return Whether the current test case is a reproduction of a previous failure that has not yet been fixed */
 	public boolean isReproducing() {
 		return isReproducing;
 	}
@@ -403,6 +408,7 @@ public class TestHelper extends TestUtil {
 		private boolean isPrintingFailures = true;
 		private boolean isPersistingFailures = true;
 		private File theFailureDir = null;
+		private String theFailureDirName;
 		private boolean isFailureFileQualified = true;
 		private int theConcurrency;
 
@@ -569,6 +575,20 @@ public class TestHelper extends TestUtil {
 		}
 
 		/**
+		 * @param dirName The name of the directory in which to place the failure file
+		 * @param qualifiedName Whether the file should contain the qualified name of the test, or its {@link Class#getSimpleName() simple}
+		 *        name
+		 * @return This configuration
+		 */
+		public TestConfig withPersistenceDir(String dirName, boolean qualifiedName) {
+			if (dirName != null)
+				isPersistingFailures = true;
+			theFailureDirName = dirName;
+			isFailureFileQualified = qualifiedName;
+			return this;
+		}
+
+		/**
 		 * Executes the test
 		 * 
 		 * @return The results of the test
@@ -587,9 +607,12 @@ public class TestHelper extends TestUtil {
 			int successes = 0;
 			Throwable firstError = null;
 			List<TestFailure> knownFailures;
-			if (isRevisitingKnownFailures || isPersistingFailures)
+			if (isRevisitingKnownFailures || isPersistingFailures) {
+				if (theFailureDir == null && theFailureDirName != null) {
+					theFailureDir = findFailureDir(theFailureDirName, theTestable);
+				}
 				knownFailures = getKnownFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames);
-			else
+			} else
 				knownFailures = new ArrayList<>();
 			if (theMaxTotalDuration == null && maxCases == 0 && (!isRevisitingKnownFailures || knownFailures.isEmpty()))
 				throw new IllegalStateException("No cases configured.  Use withRandomCases() or withMaxTotalDuration()");
@@ -601,7 +624,7 @@ public class TestHelper extends TestUtil {
 						for (int i = 0; i < knownFailures.size() && failures < maxFailures
 							&& Instant.now().compareTo(termination) < 0; i++) {
 							TestFailure failure = knownFailures.get(i);
-							boolean repo = failure.fixed == null;
+							boolean repo = failure.fixed == null || failure.fixed.compareTo(failure.failed) < 0;
 							TestHelper helper = new TestHelper(repo, theMaxProgressInterval != null, failure.seed, 0,
 								(repo && isDebugging) ? failure.getBreakpoints() : Collections.emptyNavigableSet(), thePlacemarkNames);
 							Throwable err = exec.executeTestCase(i + 1, helper, repo);
@@ -832,7 +855,16 @@ public class TestHelper extends TestUtil {
 			} catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
 				throw new IllegalStateException("Could not instantiate tester " + theCreator.getDeclaringClass().getName(), e);
 			}
-			return doTest(tester, caseNumber, helper, reproduction);
+			try {
+				return doTest(tester, caseNumber, helper, reproduction);
+			} finally {
+				try {
+					tester.close();
+				} catch (Throwable e) {
+					System.err.println("Tester close failed");
+					e.printStackTrace();
+				}
+			}
 		}
 
 		private Throwable doTest(Testable tester, int caseNumber, TestHelper helper, boolean reproduction) {
@@ -863,7 +895,7 @@ public class TestHelper extends TestUtil {
 			Instant checkInMax = theMaxProgressInterval == null ? null : caseStart.plus(theMaxProgressInterval);
 			Instant checkInMin = theMaxProgressInterval == null ? null : caseStart;
 			Duration sleep = Duration.ofDays(1);
-			boolean debug = reproduction && BreakpointHere.isDebugEnabled() != null;
+			boolean debug = BreakpointHere.isDebugEnabled() != null;
 			if (!debug) {
 				if (totalMax != null && caseStart.plus(sleep).compareTo(totalMax) > 0)
 					sleep = Duration.between(caseStart, totalMax);
@@ -872,14 +904,13 @@ public class TestHelper extends TestUtil {
 				if (checkInMax != null && caseStart.plus(sleep).compareTo(checkInMax) > 0)
 					sleep = Duration.between(caseStart, checkInMax);
 			}
-			long caseDebugHitCount = BreakpointHere.getBreakpointCatchCount();
 			boolean first = true;
 			while (!isTestCaseDone) {
 				long debugHits = BreakpointHere.getBreakpointCatchCount();
 				if (first)
 					first = false;
 				else if (reproduction) {// No timeout checking for reproduction
-				} else if (debugHits == caseDebugHitCount) {
+				} else if (!debug) { // Bad things happen when a debugger catches a breakpoint but then process unexpectedly terminates
 					// Make sure the test case doesn't take longer than configured limits
 					Instant now = Instant.now();
 					if (caseMax != null && now.compareTo(caseMax) > 0) {
@@ -1741,6 +1772,16 @@ public class TestHelper extends TestUtil {
 		return new TestConfig(testable);
 	}
 
+	private static File findFailureDir(String failureDirName, Class<? extends Testable> testable) {
+		File failureDir = Paths.get(System.getProperty("user.dir"), failureDirName).toFile();
+		if (failureDir.isDirectory())
+			return failureDir;
+		else {
+			System.err.println("No such failure directory found at " + failureDir.getAbsolutePath());
+			return null;
+		}
+	}
+
 	private static List<TestFailure> getKnownFailures(File failureDir, Class<? extends Testable> testable, boolean qualifiedName,
 		NavigableSet<String> placemarkNames) {
 		File testFile = getFailureFile(failureDir, testable, qualifiedName, false);
@@ -1816,11 +1857,11 @@ public class TestHelper extends TestUtil {
 	private static File getFailureFile(File failureDir, Class<? extends Testable> testable, boolean qualifiedName, boolean create) {
 		File testFile = null;
 		if (failureDir != null)
-			return new File(failureDir, (qualifiedName ? testable.getName() : testable.getSimpleName()) + ".test");
+			return new File(failureDir, (qualifiedName ? testable.getName().replace(".", "/") : testable.getSimpleName()) + ".broken");
 
 		// Attempt to co-locate the failure file with the class file
 		String classFileName = testable.getName();
-		classFileName = classFileName.replaceAll("\\.", "/") + ".class";
+		classFileName = classFileName.replace(".", "/") + ".class";
 		URL classLoc = testable.getClassLoader().getResource(classFileName);
 		if (classLoc != null && classLoc.getProtocol().equals("file")) {
 			File classFile = new File(classLoc.getPath());

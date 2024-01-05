@@ -8,7 +8,19 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * A small framework to execute tasks on multiple threads, with lots of options for thread maintenance
+ * <p>
+ * A small framework to execute tasks on multiple threads, with lots of options for thread maintenance.
+ * </p>
+ * 
+ * <p>
+ * By default, this class keeps an unlimited queue of tasks to execute and employs a number of worker threads up to the number of available
+ * processors on the system minus one to execute the tasks. It attempts to keep the task queue small (&lt;=10 tasks), spawning more workers
+ * when needed. When the queue is empty, worker threads will kill themselves after a tenth of a second.
+ * </p>
+ * 
+ * <p>
+ * All these numbers are configurable. The executor can also be configured to drop tasks if the queue gets too large.
+ * </p>
  * 
  * @param <T> The type of task to execute
  */
@@ -72,7 +84,7 @@ public class ElasticExecutor<T> {
 		theGuts = taskExecutor;
 		theMinThreadCount = 0;
 		theMaxThreadCount = Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
-		theMaxQueueSize = 1000;
+		theMaxQueueSize = Integer.MAX_VALUE;
 		thePreferredQueueSize = 10;
 		theUnusedThreadLifetime = 100;
 

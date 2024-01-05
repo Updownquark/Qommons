@@ -26,7 +26,6 @@ public class QommonsTimer {
 	}, new ElasticExecutor<>("Qommon Timer Offloader", () -> Runnable::run)//
 		.setPreferredQueueSize(0)//
 		.setUsedThreadLifetime(2000)//
-		.setMaxQueueSize(1_000_000_000)// No offload rejection if we can help it
 	::execute);
 
 	/** @return A common timer that uses the system clock */

@@ -3,28 +3,54 @@ package org.qommons.collect;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
  * <p>
- * A very simple, fast, flexible, thread-safe list intended for listeners registered to an event source that provides a subset of collection
- * operations, including:
- * <ul>
- * <li>{@link #add(Object, boolean) Adding} a value to the end of the list</li>
- * <li>Removing that value via executing the {@link Runnable} returned from the {@link #add(Object, boolean) add} operation</li>
- * <li>{@link #forEach(Consumer) Performing} an action on each value in the list</li>
- * <li>{@link #clear() Clearing} the list, removing all values</li>
- * </ul>
- * The advantage of using this class over other thread-safe structures with more features is that it is extremely fast (requires no true
- * locking), light-weight, and tolerates external modification during iteration from the same thread (e.g. a listener that may remove itself
- * or adds another listener).
+ * A very simple, fast, flexible, thread-safe list originally intended for listeners registered to an event source. It has special features
+ * that lend itself to that use extremely well, but has many other uses as well.
  * </p>
  * <p>
- * This class is thread-safe, but if listeners are added or removed by * other threads during {@link #forEach(Consumer) iteration}, the
- * added or removed listeners may or may not be acted upon for that * iteration, regardless of the <code>skipCurrent</code> argument to
- * {@link #add(Object, boolean)}.
+ * This class is basically a queue, but operates differently than a java {@link Collection}:
+ * <ul>
+ * <li>When a value is {@link #add(Object, boolean) added} to a ListenerList, the return value is a reference to the element in the list
+ * where the value was added, similar to a {@link BetterCollection}. This element can be used to remove the element from the collection or
+ * replace it with a different value. This element is the only way of modifying or removing the element in the collection, other than
+ * {@link #poll(long) polling} or {@link #clear() clearing}.</li>
+ * 
+ * <li>Instead of returning an {@link Iterator} that can be used outside this list's control, this class provides a
+ * {@link #forEach(Consumer) forEach} method that performs an action on each value in the collection. The tradeoff for the loss of control
+ * is that this method can be extremely performant, not needing to obtain any locks. This feature also allows values to be added or removed
+ * from this list at any time, in any state, including from within a call to {@link #forEach(Consumer)} or during a forEach invocation on
+ * another thread. Actions on a value may remove the value or any other value, add other values to the list at any position, or perform any
+ * other operation on the list.</li>
+ * </ul>
+ * </p>
+ * 
+ * <p>
+ * This class also provides the ability to perform an action when this class goes into or falls out of use, i.e., when a value is added to
+ * an empty list, or the last value is removed from a list. See {@link Builder#withInUse(InUseListener)}.
+ * </p>
+ * 
+ * <p>
+ * This class obtains locks (if configured via {@link Builder#withSync(boolean)}) when values are added or removed, or when the list is
+ * {@link #clear() cleared}. It does not obtain any locks for {@link #forEach(Consumer) iteration}, size checks, or non-clear {@link #dump()
+ * dumping}.
+ * </p>
+ * 
+ * <p>
+ * This class is thread-safe (if so- {@link Builder#withSync(boolean) configured}), but if values are added or removed by other threads
+ * during {@link #forEach(Consumer) iteration}, the added or removed values may or may not be acted upon by that iteration, regardless of
+ * the <code>skipCurrent</code> argument to {@link #add(Object, boolean)}.
+ * </p>
+ * 
+ * <p>
+ * In general, this list does not permit re-entrancy, the invocation of {@link #forEach(Consumer)} by an action during an invocation of
+ * {@link #forEach(Consumer)} on the same thread. Many errors in code using this list can arise from re-entrant invocation of this method.
+ * Re-entrancy can be enabled with {@link Builder#allowReentrant()} if you are sure your code can handle it.
  * </p>
  * 
  * @param <E> The type of value that this list can store
@@ -33,16 +59,16 @@ public class ListenerList<E> {
 	private static boolean SWALLOW_EXCEPTIONS = true;
 
 	/**
-	 * @return Whether instances of this class (and others who use this flag) will swallow {@link RuntimeException} thrown by a listener
-	 *         (printing their stack traces first) in order that later listeners remain unaffected
+	 * @return Whether all instances of this class (and others that may use this flag) will swallow {@link RuntimeException} thrown by an
+	 *         iteration action (printing their stack traces first) in order that further iteration remains unaffected
 	 */
 	public static boolean isSwallowingExceptions() {
 		return SWALLOW_EXCEPTIONS;
 	}
 
 	/**
-	 * @param swallowExceptions Whether instances of this class (and others who use this flag) should swallow {@link RuntimeException}
-	 *        thrown by a listener (printing their stack traces first) in order that later listeners remain unaffected
+	 * @param swallowExceptions Whether all instances of this class (and others that use this flag) should swallow {@link RuntimeException}
+	 *        thrown by iteration actions (printing their stack traces first) in order that further iteration remains unaffected
 	 */
 	public static void setSwallowExceptions(boolean swallowExceptions) {
 		SWALLOW_EXCEPTIONS = swallowExceptions;
@@ -58,25 +84,26 @@ public class ListenerList<E> {
 		boolean isPresent();
 
 		/**
-		 * Removes this node from the list
+		 * Removes this element from the list
 		 * 
-		 * @return True if the node was removed as a result of this call, false if it had been removed already
+		 * @return True if the element was removed as a result of this call, false if it had been removed already
 		 */
 		boolean remove();
 
-		/** @return The value that this node contains in the list */
+		/** @return The value that this element contains in the list */
 		E get();
 
-		/** @param newValue The new value for this node */
+		/** @param newValue The new value for this element */
 		void set(E newValue);
 
+		/** Calls {@link #remove()} */
 		@Override
 		default void run() {
 			remove();
 		}
 	}
 
-	/** A listener to be invoked when a listener is added to an empty list or a solitary listener is removed from a {@link ListenerList} */
+	/** A listener to be invoked when a value is added to an empty list or a solitary value is removed from a {@link ListenerList} */
 	public interface InUseListener {
 		/** @param inUse Whether list just went in to (true) or out of (false) use */
 		void inUseChanged(boolean inUse);
@@ -99,9 +126,9 @@ public class ListenerList<E> {
 		}
 
 		/**
-		 * Configures the list to be built to allow listeners to invoke {@link ListenerList#forEach(Consumer)}, directly or indirectly.
-		 * Using this will improve the performance of {@link ListenerList#forEach(Consumer)} by avoiding the need to keep track of call
-		 * status for each thread.
+		 * Configures the list to be built to allow {@link #forEachSafe(boolean) forEach} actions to invoke
+		 * {@link ListenerList#forEach(Consumer)}, directly or indirectly. Using this will also improve the performance of
+		 * {@link ListenerList#forEach(Consumer)} by avoiding the need to keep track of call status for each thread.
 		 * 
 		 * @return This builder
 		 */
@@ -110,9 +137,10 @@ public class ListenerList<E> {
 		}
 
 		/**
-		 * @param error The message in the exception that will be thrown if {@link ListenerList#forEach(Consumer)} is invoked by a listener
-		 *        of the list, directly or indirectly. If null, this method is the same as {@link #allowReentrant()}.
+		 * @param error The message in the exception that will be thrown if {@link ListenerList#forEach(Consumer)} is invoked by an action
+		 *        in a forEach invocation, directly or indirectly. If null, this method is the same as {@link #allowReentrant()}.
 		 * @return This builder
+		 * @see #allowReentrant()
 		 */
 		public Builder reentrancyError(String error) {
 			theReentrancyError = error;
@@ -133,7 +161,7 @@ public class ListenerList<E> {
 		}
 
 		/**
-		 * @param listener The listener to be notified when a listener is added to the empty list or a solitary listener removed from it.
+		 * @param listener The listener to be notified when a value is added to the empty list or a solitary value removed from it.
 		 * @return This builder
 		 */
 		public Builder withInUse(InUseListener listener) {
@@ -162,9 +190,25 @@ public class ListenerList<E> {
 		}
 
 		/**
-		 * Optimizes the list for performance, discarding all thread safety mechanisms
+		 * <p>
+		 * Optimizes the list for performance, discarding all thread safety mechanisms.
+		 * </p>
+		 * <p>
+		 * A list will function and throw no errors with this option, no matter how it is used, but if it is used by multiple threads use
+		 * the list, errors may occur, such as:
+		 * <ul>
+		 * <li>True parameters passed to {@link ListenerList#add(Object, boolean)} may not always be respected</li>
+		 * <li>{@link ListenerList#add(Object, boolean) Additions} and {@link Element#remove() removals} on the list may not be effective,
+		 * or may cause other elements to be removed from the list (but {@link Element#isPresent()} may not report this).</li>
+		 * </ul>
+		 * <p>
+		 * Other, unanticipated errors, may occur as well.
+		 * </p>
 		 * 
 		 * @return This builder
+		 * @see #withSync(boolean)
+		 * @see #forEachSafe(boolean)
+		 * @see #allowReentrant()
 		 */
 		public Builder unsafe() {
 			return allowReentrant().forEachSafe(false).withFastSize(false).withSync(false);
@@ -179,20 +223,21 @@ public class ListenerList<E> {
 		}
 	}
 
-	/** @return A builder to build a {@link ListenerList} by option */
+	/**
+	 * @return A builder to build a {@link ListenerList}. The builder is initialized with options that lean toward safety and functionality.
+	 *         Use the builder's options if performance is more of a priority.
+	 */
 	public static Builder build() {
 		return new Builder();
 	}
 
 	private class Node implements Element<E> {
-		E theListener;
+		E theValue;
 		volatile Node next;
 		volatile Node previous;
-		volatile boolean present;
 
-		Node(E listener) {
-			theListener = listener;
-			present = true;
+		Node(E value) {
+			theValue = value;
 		}
 
 		boolean isInAddFiringRound(Object firing) {
@@ -206,12 +251,12 @@ public class ListenerList<E> {
 
 		@Override
 		public E get() {
-			return theListener;
+			return theValue;
 		}
 
 		@Override
 		public void set(E newValue) {
-			theListener = newValue;
+			theValue = newValue;
 		}
 
 		@Override
@@ -224,28 +269,15 @@ public class ListenerList<E> {
 			if (previous.next != this)
 				return false;
 
-			if (isSynchronized) {
-				synchronized (theTerminal) {
-					return _remove();
-				}
-			} else
-				return _remove();
-		}
-
-		private boolean _remove() {
-			present = false;
-			if (previous.next != this)
-				return false;
-			removeListener(this);
-			return true;
+			return removeListener(this);
 		}
 	}
 
 	private class SkipOneNode extends Node {
 		private Object skipOne;
 
-		public SkipOneNode(E listener, Object skipOne) {
-			super(listener);
+		public SkipOneNode(E value, Object skipOne) {
+			super(value);
 			this.skipOne = skipOne;
 		}
 
@@ -260,30 +292,23 @@ public class ListenerList<E> {
 	}
 
 	private class RunLastNode extends SkipOneNode {
-		RunLastNode(E listener, Object skipOne) {
-			super(listener, skipOne);
-		}
-	}
-
-	/** Added to the sequence for a listener {@link ListenerList#addLast(Object, boolean) added last} */
-	private class TempNode extends SkipOneNode {
-		TempNode(E listener, Object skipOne) {
-			super(listener, skipOne);
+		RunLastNode(E value, Object skipOne) {
+			super(value, skipOne);
 		}
 	}
 
 	private final ThreadLocal<Object> isFiringSafe;
-	final Node theTerminal;
+	private final Node theTerminal;
 	private final String theReentrancyError;
 	private final InUseListener theInUseListener;
-	final boolean isSynchronized;
+	private final boolean isSynchronized;
 
 	private final AtomicInteger theSize;
 	private volatile Object unsafeIterId;
 
 	ListenerList(String reentrancyError, boolean safeForEach, InUseListener inUseListener, boolean fastSize,
 		boolean sync) {
-		// The code is simpler if all the real listeners can know that there's a non-null node before and after them.
+		// The code is much simpler and safer if all the real elements can know that there's a non-null node before and after them.
 		// The first node's previous pointer and the last node's next pointer would always be null,
 		// so there's no need to have different nodes for first and last.
 		theTerminal = new Node(null);
@@ -299,12 +324,12 @@ public class ListenerList<E> {
 	}
 
 	/**
-	 * @param listener The listener to add
-	 * @param skipCurrent Whether to skip calling this listener the first time if this addition is a result of the action being invoked from
-	 *        a {@link #forEach(Consumer)} call
+	 * @param value The value to add
+	 * @param skipCurrent Whether to skip actions on this value during the current {@link #forEach(Consumer) forEach} iteration if this
+	 *        addition is a result of the action being invoked from a {@link #forEach(Consumer)} call
 	 * @return The added element
 	 */
-	public Element<E> add(E listener, boolean skipCurrent) {
+	public Element<E> add(E value, boolean skipCurrent) {
 		Object firing;
 		if (skipCurrent) {
 			if (isFiringSafe != null)
@@ -313,19 +338,21 @@ public class ListenerList<E> {
 				firing = unsafeIterId;
 		} else
 			firing = null;
-		Node newNode = firing == null ? new Node(listener) : new SkipOneNode(listener, firing);
+		Node newNode = firing == null ? new Node(value) : new SkipOneNode(value, firing);
 		return addNode(newNode, true);
 	}
 
 	/**
-	 * Adds a listener to this list, to be executed after all other listeners (that were not themselves added with this method)
+	 * Adds a value to this list, to be acted upon after all other values (other than those added later with this method). This terminal
+	 * preference will be respected by {@link #forEach(Consumer)}, {@link #poll(long)}, {@link #dump()}, {@link #dumpAndClear(Consumer)},
+	 * and other methods that operate on values in the list
 	 * 
-	 * @param listener The listener to add
-	 * @param skipCurrent Whether to skip calling this listener the first time if this addition is a result of the action being invoked from
-	 *        a {@link #forEach(Consumer)} call
+	 * @param value The value to add
+	 * @param skipCurrent Whether to skip actions on this value during the current {@link #forEach(Consumer) forEach} iteration if this
+	 *        addition is a result of the action being invoked from a {@link #forEach(Consumer)} call
 	 * @return The added element
 	 */
-	public Element<E> addLast(E listener, boolean skipCurrent) {
+	public Element<E> addLast(E value, boolean skipCurrent) {
 		Object firing;
 		if (skipCurrent) {
 			if (isFiringSafe != null)
@@ -334,16 +361,18 @@ public class ListenerList<E> {
 				firing = unsafeIterId;
 		} else
 			firing = null;
-		RunLastNode node = new RunLastNode(listener, firing);
+		RunLastNode node = new RunLastNode(value, firing);
 		return addNode(node, true);
 	}
 
 	/**
-	 * @param listener The listener to add
+	 * Adds a value to the beginning of this list
+	 * 
+	 * @param value The value to add
 	 * @return The added element
 	 */
-	public Element<E> addFirst(E listener) {
-		Node newNode = new Node(listener);
+	public Element<E> addFirst(E value) {
+		Node newNode = new Node(value);
 		return addNode(newNode, false);
 	}
 
@@ -379,7 +408,18 @@ public class ListenerList<E> {
 			theInUseListener.inUseChanged(true);
 	}
 
-	void removeListener(Node node) {
+	boolean removeListener(Node node) {
+		if (isSynchronized) {
+			synchronized (theTerminal) {
+				return _removeListener(node);
+			}
+		} else
+			return _removeListener(node);
+	}
+
+	private boolean _removeListener(Node node) {
+		if (node.previous.next != node)
+			return false;
 		Node prev = node.previous;
 		Node next = node.next;
 		prev.next = next;
@@ -387,13 +427,14 @@ public class ListenerList<E> {
 		boolean newNotInUse = theSize != null && theSize.decrementAndGet() == 0;
 		if (newNotInUse && theInUseListener != null)
 			theInUseListener.inUseChanged(false);
+		return true;
 	}
 
 	/**
 	 * Removes and returns the first element (the head) of this list, if the list is not empty
 	 * 
 	 * @param waitTime If &gt;0, how long to wait in this method until a value is available
-	 * @return The removed node, or null if the list was empty
+	 * @return The removed node, or null if the list was empty all through the specified wait time
 	 */
 	public Element<E> poll(long waitTime) {
 		boolean wait = waitTime > 0;
@@ -407,9 +448,6 @@ public class ListenerList<E> {
 			} else if (remove instanceof ListenerList.RunLastNode) {
 				if (runLast == null)
 					runLast = (RunLastNode) remove;
-				remove = remove.next;
-				continue;
-			} else if (remove instanceof ListenerList.TempNode) {
 				remove = remove.next;
 				continue;
 			} else if (!remove.remove()) {
@@ -428,7 +466,6 @@ public class ListenerList<E> {
 				try {
 					Thread.sleep(0, 100_000);
 				} catch (InterruptedException e) {
-					Thread.currentThread().interrupt();
 				}
 				if (timeChecking && ++waited == 10) {
 					waited = 0;
@@ -445,22 +482,25 @@ public class ListenerList<E> {
 	 * Removes and returns the first value (the head) in this list, if the list is not empty
 	 * 
 	 * @param waitTime If &gt;0, how long to wait in this method until a value is available
-	 * @return The removed value, or null if the list was empty
+	 * @return The removed value, or null if the list was empty all through the specified wait time
 	 */
 	public E pollValue(long waitTime) {
 		Element<E> polled = poll(waitTime);
 		return polled == null ? null : polled.get();
 	}
 
-	/** @return The first element in this list, or null if the list is empty */
+	/**
+	 * Returns the first element (the head) in this list (without removing it) if the list is not empty
+	 * 
+	 * @return The first element in this list, or null if the list is empty
+	 */
 	public Element<E> peekFirst(){
 		RunLastNode runLast = null;
 		Node node=theTerminal.next;
 		while (node != theTerminal) {
 			if (node instanceof ListenerList.RunLastNode) {
-				runLast = (ListenerList<E>.RunLastNode) node;
-				node = node.next;
-			} else if (node instanceof ListenerList.TempNode) {
+				if (runLast == null)
+					runLast = (ListenerList<E>.RunLastNode) node;
 				node = node.next;
 			} else
 				break;
@@ -471,7 +511,11 @@ public class ListenerList<E> {
 			return node;
 	}
 
-	/** @param action The action to perform on each listener in this list */
+	/**
+	 * Applies a specified action to each value in this list
+	 * 
+	 * @param action The action to perform on each value in this list
+	 */
 	public void forEach(Consumer<E> action) {
 		Node node = theTerminal.next;
 		Object iterId = new Object();
@@ -487,36 +531,22 @@ public class ListenerList<E> {
 				throw new ReentrantNotificationException(theReentrancyError);
 			unsafeIterId = iterId;
 		}
+		List<RunLastNode> runLast = null;
 		try {
 			while (node != theTerminal) {
-				if (node instanceof ListenerList.TempNode) {
-					if (node.isInAddFiringRound(iterId)) {
-						node.remove();
-						try {
-							action.accept(node.theListener);
-						} catch (ReentrantNotificationException | AssertionError e) {
-							throw e;
-						} catch (RuntimeException e) {
-							if (SWALLOW_EXCEPTIONS) {
-								// If the listener throws an exception, we can't have that gumming up the works
-								// If they want better handling, they can try/catch their own code
-								e.printStackTrace();
-							} else
-								throw e;
-						}
-					}
-				} else if (node.isInAddFiringRound(iterId)) { // Don't execute the same round it was added, if so configured
+				if (node.isInAddFiringRound(iterId)) { // Don't execute the same round it was added, if so specified
 				} else if (node instanceof ListenerList.RunLastNode) {
-					TempNode tempNode = new TempNode(node.theListener, iterId);
-					addNode(tempNode, true);
+					if (runLast == null)
+						runLast = new ArrayList<>();
+					runLast.add((RunLastNode) node);
 				} else {
 					try {
-						action.accept(node.theListener);
+						action.accept(node.theValue);
 					} catch (ReentrantNotificationException | AssertionError e) {
 						throw e;
 					} catch (RuntimeException e) {
 						if (SWALLOW_EXCEPTIONS) {
-							// If the listener throws an exception, we can't have that gumming up the works
+							// If the action throws an exception, we can't have that gumming up the works
 							// If they want better handling, they can try/catch their own code
 							e.printStackTrace();
 						} else
@@ -524,15 +554,34 @@ public class ListenerList<E> {
 					}
 				}
 
-				/* Now we need to get the next listener in the list.
-				 * A problem may occur, however, if the list is modified as a result of a listener call.
-				 * If, for example, a call to a listener causes it to remove itself and then the next listener in the list,
-				 * this node will still be pointing to the next listener that was removed.
-				 * We have to find the most recent listener that we called for this action that is still in the list and use its next node.
+				/* Now we need to get the next value in the list.
+				 * A problem may occur, however, if the list is modified as a result of an action.
+				 * If, for example, an action removes the value it is operating on and and also the next value in the list,
+				 * the current node will still be pointing to the next value, which has been removed.
+				 * We have to find the most recent element that we already called for this action that is still in the list
+				 * and use its next node.
 				 */
-				while (!node.present)
+				while (!node.isPresent() && node != theTerminal)
 					node = node.previous;
 				node = node.next;
+			}
+			if (runLast != null) {
+				for (RunLastNode rln : runLast) {
+					if (rln.isPresent()) {
+						try {
+							action.accept(rln.theValue);
+						} catch (ReentrantNotificationException | AssertionError e) {
+							throw e;
+						} catch (RuntimeException e) {
+							if (SWALLOW_EXCEPTIONS) {
+								// If the action throws an exception, we can't have that gumming up the works
+								// If they want better handling, they can try/catch their own code
+								e.printStackTrace();
+							} else
+								throw e;
+						}
+					}
+				}
 			}
 		} finally {
 			if (isFiringSafe != null) {
@@ -546,7 +595,7 @@ public class ListenerList<E> {
 		}
 	}
 
-	/** Removes all listeners in this list */
+	/** Removes all values from this list */
 	public void clear() {
 		synchronized (theTerminal) {
 			Node node = theTerminal;
@@ -565,20 +614,19 @@ public class ListenerList<E> {
 		}
 	}
 
-	/** @return Whether this list has no listeners in it */
+	/** @return Whether this list has no values in it */
 	public boolean isEmpty() {
 		return theTerminal.next == theTerminal;
 	}
 
-	/** @return The number of listeners in this list */
+	/** @return The number of values currently in this list */
 	public int size() {
 		if (theSize != null)
 			return theSize.get();
 		Node node = theTerminal.next;
 		int sz = 0;
 		while (node != theTerminal) {
-			if (!(node instanceof ListenerList.TempNode))
-				sz++;
+			sz++;
 			node = node.next;
 		}
 		return sz;
@@ -601,7 +649,7 @@ public class ListenerList<E> {
 	/**
 	 * Adds all of this list's content into a new list (without removing it from this one)
 	 * 
-	 * @return The list
+	 * @return The new list containing all of the values currently in this list
 	 */
 	public List<E> dump() {
 		return dumpInto(new ArrayList<>(theSize == null ? 10 : theSize.get() + 3));
@@ -611,7 +659,7 @@ public class ListenerList<E> {
 	 * Adds all of this list's content into the given collection (without removing it from this one)
 	 * 
 	 * @param <C> The type of the collection
-	 * @param collection The collection to put all of this list's listeners into
+	 * @param collection The collection to put all of this list's values into
 	 * @return The collection
 	 */
 	public <C extends Collection<? super E>> C dumpInto(C collection) {
@@ -622,9 +670,9 @@ public class ListenerList<E> {
 			if (node instanceof ListenerList.RunLastNode) {
 				if (lastNodes == null)
 					lastNodes = new ArrayList<>();
-				lastNodes.add(node.theListener);
+				lastNodes.add(node.theValue);
 			} else
-				collection.add(node.theListener);
+				collection.add(node.theValue);
 			node = node.next;
 		}
 		if (lastNodes != null)
@@ -647,9 +695,9 @@ public class ListenerList<E> {
 			if (node instanceof ListenerList.RunLastNode) {
 				if (lastNodes == null)
 					lastNodes = new ArrayList<>();
-				lastNodes.add(node.theListener);
+				lastNodes.add(node.theValue);
 			} else if (consumer != null)
-				consumer.accept(node.theListener);
+				consumer.accept(node.theValue);
 			node.remove();
 			node = node.next;
 		}
@@ -683,11 +731,12 @@ public class ListenerList<E> {
 			if (node instanceof ListenerList.RunLastNode) {
 				if (lastNodes == null)
 					lastNodes = new ArrayList<>();
-				lastNodes.add(node.theListener);
+				lastNodes.add(node.theValue);
 			} else
-				list.add(node.theListener);
+				list.add(node.theValue);
 			node.remove();
 			node = node.next;
+			i++;
 		}
 		if (lastNodes != null)
 			list.addAll(lastNodes);
@@ -719,11 +768,14 @@ public class ListenerList<E> {
 					str.append(", ");
 				s = str;
 			}
-			s.append(node.theListener);
+			s.append(node.theValue);
 			node = node.next;
 		}
-		if (lastStr != null)
+		if (lastStr != null) {
+			if (!first)
+				str.append(", ");
 			str.append(lastStr);
+		}
 		str.append(']');
 		return str.toString();
 	}

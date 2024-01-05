@@ -1191,15 +1191,8 @@ public class CircularArrayList<E> implements DequeList<E> {
 		@Override
 		public void add(E e) {
 			check(-1);
-			switch (movedForward) {
-			case FALSE:
-			case TRUE:
-				getRoot().add(theNext, e);
-				theNext++;
-				break;
-			default:
-				throw new IllegalStateException("Cannot operate on the last element in this state");
-			}
+			getRoot().add(theNext, e);
+			theNext++;
 			changed(1);
 		}
 	}

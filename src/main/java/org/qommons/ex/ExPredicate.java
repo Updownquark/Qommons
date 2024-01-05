@@ -36,6 +36,8 @@ public interface ExPredicate<T, E extends Throwable> {
 	 * @return An {@link ExPredicate} that calls the given predicate and never throws any checked exceptions
 	 */
 	static <T, E extends Throwable> ExPredicate<T, E> wrap(Predicate<T> p) {
+		if (p == null)
+			return null;
 		return value -> p.test(value);
 	}
 }

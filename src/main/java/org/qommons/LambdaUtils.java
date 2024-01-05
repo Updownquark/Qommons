@@ -2,14 +2,7 @@ package org.qommons;
 
 import java.util.Comparator;
 import java.util.Objects;
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
-import java.util.function.BiPredicate;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
-import java.util.function.UnaryOperator;
+import java.util.function.*;
 
 import org.qommons.ex.ExBiFunction;
 import org.qommons.ex.ExFunction;
@@ -158,6 +151,14 @@ public class LambdaUtils {
 	 */
 	public static Runnable printableRunnable(Runnable run, Supplier<String> print, Object identifier) {
 		return new PrintableRunnable(run, print != null ? print : () -> String.valueOf(run), identifier);
+	}
+
+	/**
+	 * @param <T> The type of the consumer
+	 * @return A consumer that does nothing
+	 */
+	public static <T> Consumer<T> consumeDoNothing() {
+		return (Consumer<T>) CONSUME_DO_NOTHING;
 	}
 
 	/**
@@ -454,6 +455,15 @@ public class LambdaUtils {
 		if (fn == null)
 			return null;
 		return new PrintableBiFunction<>(fn, print, identifier);
+	}
+
+	/**
+	 * @param <T> The first type of the consumer
+	 * @param <U> The second type of the consumer
+	 * @return A bi-consumer that does nothing
+	 */
+	public static <T, U> BiConsumer<T, U> biConsumeDoNothing() {
+		return (BiConsumer<T, U>) BI_CONSUME_DO_NOTHING;
 	}
 
 	/**

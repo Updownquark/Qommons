@@ -1,6 +1,7 @@
 package org.qommons;
 
 import java.awt.EventQueue;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -100,6 +101,39 @@ public interface ThreadConstraint {
 	 * @param task The task to execute
 	 */
 	void invoke(Runnable task);
+
+	/**
+	 * Performs the task on an acceptable thread. If the current thread is acceptable, the task will be executed inline. Otherwise, the task
+	 * will be queued to be executed on an acceptable thread and this method will wait until the task has been competed on an acceptable
+	 * thread.
+	 * 
+	 * @param task The task to execute
+	 * @throws InvocationTargetException If the task throws an exception or error
+	 */
+	default void invokeAndWait(Runnable task) throws InvocationTargetException {
+		if (isEventThread())
+			task.run();
+		else {
+			boolean[] done = new boolean[1];
+			Throwable[] e = new Throwable[1];
+			invoke(() -> {
+				try {
+					task.run();
+				} catch (Throwable x) {
+					e[0] = x;
+				}
+				done[0] = true;
+			});
+			while (!done[0]) {
+				try {
+					Thread.sleep(10);
+				} catch (InterruptedException x) {
+				}
+			}
+			if (e[0] != null)
+				throw new InvocationTargetException(e[0]);
+		}
+	}
 
 	/**
 	 * @param thread The thread that updates will be executed on
