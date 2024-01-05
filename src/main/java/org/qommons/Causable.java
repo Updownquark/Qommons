@@ -1,17 +1,10 @@
 package org.qommons;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 
 import org.qommons.collect.BetterList;
 import org.qommons.collect.CircularArrayList;
@@ -26,19 +19,31 @@ import org.qommons.collect.CircularArrayList;
  * </p>
  * 
  * <p>
- * Causables have the ability to allow code to keep track of the effects of a cause, then perform an action when they finish that is the
- * cumulative result of the cause.
+ * Causables allow code to keep track of the root cause of an action and its effects, then perform an action when the root cause of the
+ * action finishes. Code can thus delay its effects, potentially achieving great performance gains.
  * </p>
  * 
  * <p>
  * The typical use case is to grab the root causable and call {@link #onFinish(CausableKey)} with a key. The map returned may be updated
  * with the effects of the current cause. Then the terminal action of the key is called when the root cause finishes and the data in the map
- * may be used used to cause the correct effects.
+ * may be used used to cause the correct cumulative effects.
  * </p>
  * 
  * <p>
- * Use {@link Causable#simpleCause(Object [])} to create a simple cause, or create an implementation of this interface or an extension of
- * {@link AbstractCausable}.
+ * Unless explicitly supported by an implementation, a Causable may only be used on a single thread. To track causality across threads, a
+ * {@link ChainBreak} may be used. Use {@link #broken(Object...)} to create a ChainBreak object that may be used as the cause of a Causable.
+ * It will be included in the Causable and be available from {@link #getCauseLike(Function)}, but it will not be in the Causable chain.
+ * </p>
+ * 
+ * <p>
+ * A Causable may be created using {@link Causable#simpleCause(Object [])}. {@link #use()} must then be called before the Causable is used
+ * in the wild (before its {@link #onFinish(CausableKey)} method may be called) and the {@link Transaction} returned from {@link #use()}
+ * must be closed to fire off all the registered finish actions.
+ * </p>
+ * 
+ * <p>
+ * Alternatively, {@link #cause(Object...)} will return a {@link CausableInUse} which also implements {@link Transaction}. Thus the Causable
+ * itself may be used as a resource in a try statement.
  * </p>
  */
 public interface Causable extends CausalLock.Cause {
@@ -75,49 +80,102 @@ public interface Causable extends CausalLock.Cause {
 	 * </p>
 	 */
 	public static final class CausableKey {
-		private final Map<Object, Object> theValues;
-		private final AtomicInteger theCauseCount;
 		private final TerminalAction theAction;
 		private final TerminalAction theAfterAction;
 
 		private CausableKey(TerminalAction action, TerminalAction afterAction) {
-			theValues = new LinkedHashMap<>();
-			theCauseCount = new AtomicInteger();
 			theAction = action;
 			theAfterAction = afterAction;
 		}
 
-		/** @return This cause key's current value data, unmodifiable */
-		public Map<Object, Object> getData() {
-			return Collections.unmodifiableMap(theValues);
+		Transaction execute(Causable cause, Map<Object, Object> data) {
+			if (theAction != null)
+				theAction.finished(cause, data);
+			if (theAfterAction != null) {
+				return () -> theAfterAction.finished(cause, data);
+			} else
+				return null;
+		}
+
+		boolean hasPrimaryAction() {
+			return theAction != null;
+		}
+	}
+
+	/** The effect of a {@link CausableKey} in a {@link Causable} */
+	public static class Effect extends AbstractMap<Object, Object> {
+		private final CausableKey theKey;
+		private Map<Object, Object> theData;
+		private boolean isExecuted;
+
+		/** @param key The key this effect is for */
+		public Effect(CausableKey key) {
+			theKey = key;
+		}
+
+		/** @return The key this effect is for */
+		public CausableKey getKey() {
+			return theKey;
 		}
 
 		/**
-		 * @param cause The cause to use this key for
-		 * @return procedure to run on this key when the cause finishes
+		 * Executes the {@link #getKey() key}'s primary action against the cause
+		 * 
+		 * @param cause The cause to execute the key against
+		 * @return A transaction that execute's the key's secondary action against the cause, or null if the key has no secondary action
 		 */
-		public Supplier<Transaction> use(Causable cause) {
-			theCauseCount.getAndIncrement();
-			boolean[] closed = new boolean[1];
-			return () -> {
-				if (closed[0])
-					return null;
-				closed[0] = true;
-				int remaining = theCauseCount.decrementAndGet();
-				if (remaining > 0)
-					return null;
-				if (theAction != null)
-					theAction.finished(cause, theValues);
-				if (theAfterAction == null) {
-					theValues.clear();
-					return null;
-				} else {
-					return () -> {
-						theAfterAction.finished(cause, theValues);
-						theValues.clear();
-					};
-				}
-			};
+		public Transaction execute(Causable cause) {
+			isExecuted = true;
+			return theKey.execute(cause, this);
+		}
+
+		/** @return Whether this effect has been {@link #execute(Causable) executed} */
+		public boolean isExecuted() {
+			return isExecuted;
+		}
+
+		/** @return A new map to hold data for this effect */
+		protected Map<Object, Object> createData() {
+			return new LinkedHashMap<>();
+		}
+
+		/** Initializes this effect's data map if has not yet been */
+		protected void initData() {
+			if (theData == null)
+				theData = createData();
+		}
+
+		@Override
+		public Set<Map.Entry<Object, Object>> entrySet() {
+			if (theData == null)
+				return Collections.emptySet();
+			else
+				return theData.entrySet();
+		}
+
+		@Override
+		public boolean containsKey(Object key) {
+			return theData != null && theData.containsKey(key);
+		}
+
+		@Override
+		public Object put(Object key, Object value) {
+			initData();
+			return theData.put(key, value);
+		}
+
+		@Override
+		public void putAll(Map<? extends Object, ? extends Object> m) {
+			if (m.isEmpty())
+				return;
+			initData();
+			theData.putAll(m);
+		}
+
+		@Override
+		public void clear() {
+			if (theData != null)
+				theData.clear();
 		}
 	}
 
@@ -125,7 +183,7 @@ public interface Causable extends CausalLock.Cause {
 	public static class AbstractCausable implements Causable {
 		private final BetterList<Object> theCauses;
 		private final Causable theRootCausable;
-		private LinkedHashMap<CausableKey, Supplier<Transaction>> theKeys;
+		private LinkedHashMap<CausableKey, Effect> theKeys;
 		private boolean isStarted;
 		private boolean isFinished;
 		private boolean isTerminated;
@@ -188,8 +246,7 @@ public interface Causable extends CausalLock.Cause {
 				throw new IllegalStateException("This cause has already terminated");
 			if (theKeys == null)
 				theKeys = new LinkedHashMap<>();
-			theKeys.computeIfAbsent(key, k -> k.use(this));
-			return key.theValues;
+			return theKeys.computeIfAbsent(key, Effect::new);
 		}
 
 		@Override
@@ -212,27 +269,7 @@ public interface Causable extends CausalLock.Cause {
 			// These events may trigger onRootFinish calls, which add more actions to this causable
 			// Though this cycle is allowed, care must be taken by callers to ensure it does not become infinite
 			try {
-				if (theKeys != null) {
-					while (!theKeys.isEmpty()) {
-						LinkedList<Transaction> postActions = null;
-						while (!theKeys.isEmpty()) {
-							Iterator<Supplier<Transaction>> keyActionIter = theKeys.values().iterator();
-							Supplier<Transaction> keyAction = keyActionIter.next();
-							keyActionIter.remove();
-							Transaction postAction = keyAction.get();
-							if (postAction != null) {
-								if (postActions == null)
-									postActions = new LinkedList<>();
-								postActions.addFirst(postAction);
-							}
-						}
-						if (postActions != null) {
-							for (Transaction key : postActions)
-								key.close();
-							postActions.clear();
-						}
-					}
-				}
+				Causable.terminateFull(theKeys, this);
 			} finally {
 				isTerminated = true;
 			}
@@ -259,7 +296,7 @@ public interface Causable extends CausalLock.Cause {
 
 		/** @param causes The causes for this chain break */
 		public SimpleChainBreak(Object... causes) {
-			theCauses = BetterList.of(causes);
+			theCauses = QommonsUtils.filterMap(Arrays.asList(causes), v -> v != null, null);
 		}
 
 		@Override
@@ -277,6 +314,67 @@ public interface Causable extends CausalLock.Cause {
 	 */
 	public static CausableKey key(TerminalAction action) {
 		return key(action, null);
+	}
+
+	/**
+	 * Runs the termination sequence against a set of effects for a cause
+	 * 
+	 * @param keys The key->effect map to execute
+	 * @param cause The cause to execute the effects against
+	 */
+	public static void terminateFull(Map<CausableKey, Effect> keys, Causable cause) {
+		if (keys == null)
+			return;
+		while (!keys.isEmpty())
+			terminate(keys.values(), cause);
+	}
+
+	/**
+	 * Runs the termination sequence against a set of effects for a cause
+	 * 
+	 * @param effects The effects to execute
+	 * @param cause The cause to execute the effects against
+	 */
+	public static void terminate(Collection<Effect> effects, Causable cause) {
+		LinkedList<Transaction> postActions = null;
+		int onlyPostActions = 0;
+		while (effects.size() > onlyPostActions) {
+			onlyPostActions = 0;
+			int expectedSize = effects.size();
+			Iterator<Effect> keyIter = effects.iterator();
+			while (effects.size() == expectedSize && keyIter.hasNext()) {
+				Effect effect = keyIter.next();
+				if (!effect.getKey().hasPrimaryAction()) {
+					onlyPostActions++;
+					continue;
+				}
+				keyIter.remove();
+				expectedSize--;
+				Transaction postAction = effect.execute(cause);
+				if (postAction != null) {
+					if (postActions == null)
+						postActions = new LinkedList<>();
+					postActions.addFirst(postAction);
+				}
+			}
+		}
+		while (!effects.isEmpty()) {
+			Iterator<Effect> keyIter = effects.iterator();
+			int expectedSize = effects.size();
+			while (effects.size() == expectedSize && keyIter.hasNext()) {
+				Effect effect = keyIter.next();
+				keyIter.remove();
+				expectedSize--;
+				Transaction postAction = effect.execute(cause);
+				if (postAction != null)
+					postAction.close();
+			}
+		}
+		if (postActions != null) {
+			for (Transaction key : postActions)
+				key.close();
+			postActions.clear();
+		}
 	}
 
 	/**
@@ -318,7 +416,7 @@ public interface Causable extends CausalLock.Cause {
 	public static ChainBreak broken(Object... causes) {
 		return new SimpleChainBreak(causes);
 	}
-
+	
 	/** @return The causes of this event or thing--typically another event or null */
 	BetterList<Object> getCauses();
 
@@ -327,8 +425,17 @@ public interface Causable extends CausalLock.Cause {
 
 	/** @return The root cause of this causable (the root may or may not be causable itself) */
 	default Object getRootCause() {
-		Causable root = getRootCausable();
-		return root.getCauses().peekFirst();
+		Object cause = getRootCausable();
+		while (true) {
+			if (cause instanceof ChainBreak && !((ChainBreak) cause).getCauses().isEmpty())
+				cause = ((ChainBreak) cause).getCauses().peekFirst();
+			else if (cause instanceof Causable) {
+				Causable newCause = ((Causable) cause).getRootCausable();
+				if (newCause == cause)
+					break;
+			}
+		}
+		return cause;
 	}
 
 	/**

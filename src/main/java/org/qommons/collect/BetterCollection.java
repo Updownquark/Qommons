@@ -1,6 +1,7 @@
 package org.qommons.collect;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.Deque;
 import java.util.HashSet;
@@ -14,7 +15,7 @@ import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
 import org.qommons.ArrayUtils;
-import org.qommons.Causable;
+import org.qommons.CausalLock;
 import org.qommons.Identifiable;
 import org.qommons.LambdaUtils;
 import org.qommons.Lockable;
@@ -43,7 +44,7 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * 
  * @param <E> The type of value in the collection
  */
-public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>, Stamped, Identifiable {
+public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>, CausalLock, Stamped, Identifiable {
 	/** A message for an exception thrown when a view detects that it is invalid due to external modification of the underlying data */
 	public static final String BACKING_COLLECTION_CHANGED = "This collection view's backing collection has changed from underneath this view.\n"
 		+ "This view is now invalid";
@@ -222,10 +223,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	default boolean addAll(Collection<? extends E> c) {
 		if (c.isEmpty())
 			return false;
-		Causable cause = Causable.simpleCause();
-		try (Transaction cst = cause.use();
-			Transaction t = lock(true, cause);
-			Transaction ct = Transactable.lock(c, false, cause)) {
+		try (Transaction t = lock(true, null); Transaction ct = Transactable.lock(c, false, null)) {
 			boolean changed = false;
 			for (E e : c) {
 				if (canAdd(e) == null)
@@ -240,8 +238,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return This collection
 	 */
 	default BetterCollection<E> with(E... values) {
-		Causable cause = Causable.simpleCause();
-		try (Transaction cst = cause.use(); Transaction t = lock(true, cause)) {
+		try (Transaction t = lock(true, null)) {
 			for (E e : values) {
 				if (canAdd(e) == null)
 					add(e);
@@ -255,8 +252,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return This collection
 	 */
 	default BetterCollection<E> withAll(Collection<? extends E> values) {
-		Causable cause = Causable.simpleCause();
-		try (Transaction cst = cause.use(); Transaction t = lock(true, cause)) {
+		try (Transaction t = lock(true, null)) {
 			for (E e : values) {
 				if (canAdd(e) == null)
 					add(e);
@@ -957,6 +953,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return theWrapped.getCurrentCauses();
+		}
+
+		@Override
 		public CoreId getCoreId() {
 			return theWrapped.getCoreId();
 		}
@@ -1131,6 +1132,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return Collections.emptyList();
+		}
+
+		@Override
 		public CoreId getCoreId() {
 			return CoreId.EMPTY;
 		}
@@ -1290,6 +1296,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theCollection.tryLock(write, cause);
+		}
+
+		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return theCollection.getCurrentCauses();
 		}
 
 		@Override

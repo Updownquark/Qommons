@@ -4,6 +4,7 @@ import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.List;
@@ -345,7 +346,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	public static <E> BetterList<E> of(Collection<? extends E> values) {
 		if (values == null || values.isEmpty())
 			return empty();
-		return new ConstantList<>(values instanceof List ? (List<? extends E>) values : new ArrayList<>(values));
+		return new ConstantList<>(values instanceof List ? (List<? extends E>) values : QommonsUtils.unmodifiableCopy(values));
 	}
 
 	/**
@@ -776,6 +777,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				};
 			} else
 				return t;
+		}
+
+		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return theWrapped.getCurrentCauses();
 		}
 
 		@Override
@@ -1457,6 +1463,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return Collections.emptyList();
+		}
+
+		@Override
 		public CoreId getCoreId() {
 			return CoreId.EMPTY;
 		}
@@ -1515,6 +1526,13 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				@Override
 				public E get() {
 					return theValues.get(index);
+				}
+
+				@Override
+				public String toString() {
+					return new StringBuilder()//
+						.append('[').append(index).append(']').append('=').append(theValues.get(index))//
+						.toString();
 				}
 			};
 		}

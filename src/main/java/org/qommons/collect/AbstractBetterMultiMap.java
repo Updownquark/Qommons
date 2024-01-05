@@ -12,11 +12,11 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.Function;
 
+import org.qommons.CausalLock;
 import org.qommons.Identifiable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.Stamped;
 import org.qommons.ThreadConstraint;
-import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.tree.BetterTreeList;
@@ -101,7 +101,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	 * 
 	 * @param <V> The value type of the map
 	 */
-	public interface ValueCollectionBacking<V> extends Identifiable, Transactable, Stamped {
+	public interface ValueCollectionBacking<V> extends Identifiable, CausalLock, Stamped {
 		/**
 		 * @param addIfNotPresent Whether the key represented by this backing should be created if it is not present
 		 * @return The current collection of values for the key, or null if the key is not currently present in the map
@@ -380,6 +380,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	}
 
 	@Override
+	public Collection<Cause> getCurrentCauses() {
+		return theLocking.getCurrentCauses();
+	}
+
+	@Override
 	public CoreId getCoreId() {
 		return theLocking.getCoreId();
 	}
@@ -612,6 +617,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return AbstractBetterMultiMap.this.tryLock(write, cause);
+		}
+
+		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return AbstractBetterMultiMap.this.getCurrentCauses();
 		}
 
 		@Override
@@ -884,6 +894,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 
 		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return AbstractBetterMultiMap.this.getCurrentCauses();
+		}
+
+		@Override
 		public CoreId getCoreId() {
 			return AbstractBetterMultiMap.this.getCoreId();
 		}
@@ -1140,6 +1155,11 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theWrapped.tryLock(write, cause);
+		}
+
+		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return theWrapped.getCurrentCauses();
 		}
 
 		@Override

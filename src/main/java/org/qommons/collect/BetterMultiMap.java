@@ -1,11 +1,13 @@
 package org.qommons.collect;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
+import org.qommons.CausalLock;
 import org.qommons.Identifiable;
 import org.qommons.Lockable;
 import org.qommons.Lockable.CoreId;
@@ -23,7 +25,7 @@ import org.qommons.tree.BetterTreeList;
  * @param <K> The type of keys in the map
  * @param <V> The type of values in the map
  */
-public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stamped, Identifiable {
+public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, CausalLock, Stamped, Identifiable {
 	@Override
 	BetterSet<K> keySet();
 
@@ -489,6 +491,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		}
 
 		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return theMap.getCurrentCauses();
+		}
+
+		@Override
 		public CoreId getCoreId() {
 			return getMap().getCoreId();
 		}
@@ -692,6 +699,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return getMap().tryLock(write, cause);
+		}
+
+		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return getMap().getCurrentCauses();
 		}
 
 		@Override
@@ -1211,6 +1223,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theMap.tryLock(write, cause);
+		}
+
+		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return theMap.getCurrentCauses();
 		}
 
 		@Override
@@ -1809,6 +1826,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		}
 
 		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return Collections.emptyList();
+		}
+
+		@Override
 		public CoreId getCoreId() {
 			return CoreId.EMPTY;
 		}
@@ -2299,6 +2321,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Stampe
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theSource.tryLock(write, cause);
+		}
+
+		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return theSource.getCurrentCauses();
 		}
 
 		@Override

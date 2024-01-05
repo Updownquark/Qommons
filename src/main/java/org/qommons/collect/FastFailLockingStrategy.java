@@ -1,17 +1,24 @@
 package org.qommons.collect;
 
+import java.util.Collection;
+
+import org.qommons.CausalLock;
+import org.qommons.DefaultCausalLock;
 import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
+import org.qommons.Transactable;
 import org.qommons.Transaction;
 
 /** A locking strategy that is not thread-safe, but it allows fail-fast behavior; that is, detecting changes in a thread-unsafe manner. */
 public class FastFailLockingStrategy implements CollectionLockingStrategy {
 	private final ThreadConstraint theThreadConstraint;
+	private final CausalLock theCausalLock;
 	private volatile long theModCount = 0;
 
 	/** @param threadConstraint The thread constraint for this lock to obey */
 	public FastFailLockingStrategy(ThreadConstraint threadConstraint) {
 		theThreadConstraint = threadConstraint;
+		theCausalLock = new DefaultCausalLock(new TransactableCore());
 	}
 
 	@Override
@@ -26,16 +33,17 @@ public class FastFailLockingStrategy implements CollectionLockingStrategy {
 
 	@Override
 	public Transaction lock(boolean write, Object cause) {
-		if (write && !theThreadConstraint.isEventThread())
-			throw new IllegalStateException(WRONG_THREAD_MESSAGE);
-		return Transaction.NONE;
+		return theCausalLock.lock(write, cause);
 	}
 
 	@Override
 	public Transaction tryLock(boolean write, Object cause) {
-		if (write && !theThreadConstraint.isEventThread())
-			throw new IllegalStateException(WRONG_THREAD_MESSAGE);
-		return lock(write, cause);
+		return theCausalLock.tryLock(write, cause);
+	}
+
+	@Override
+	public Collection<Cause> getCurrentCauses() {
+		return theCausalLock.getCurrentCauses();
 	}
 
 	@Override
@@ -75,6 +83,37 @@ public class FastFailLockingStrategy implements CollectionLockingStrategy {
 			res = operation.apply(res, ctx);
 		} while (ctx.failed);
 		return res;
+	}
+
+	class TransactableCore implements Transactable {
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theThreadConstraint;
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return false; // We use the lock method a little, but let's don't advertise that we're thread-safe
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			if (write && !theThreadConstraint.isEventThread())
+				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
+			return Transaction.NONE;
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, Object cause) {
+			if (write && !theThreadConstraint.isEventThread())
+				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
+			return lock(write, cause);
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return CoreId.EMPTY;
+		}
 	}
 
 	class FFLSOptimisticContext implements OptimisticContext {

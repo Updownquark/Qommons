@@ -1,5 +1,6 @@
 package org.qommons.collect;
 
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -422,6 +423,11 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theWrapped.tryLock(write, cause);
+		}
+
+		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return theWrapped.getCurrentCauses();
 		}
 
 		@Override

@@ -1,7 +1,10 @@
 package org.qommons.collect;
 
+import java.util.Collection;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import org.qommons.CausalLock;
+import org.qommons.DefaultCausalLock;
 import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
@@ -9,7 +12,7 @@ import org.qommons.Transaction;
 
 /** A locking strategy backed by a {@link ReentrantReadWriteLock} or, more generically, a {@link Transactable} */
 public class RRWLockingStrategy implements CollectionLockingStrategy {
-	private final Transactable theLock;
+	private final CausalLock theLock;
 	private volatile long theStamp;
 
 	/**
@@ -33,7 +36,10 @@ public class RRWLockingStrategy implements CollectionLockingStrategy {
 
 	/** @param lock The lock to use */
 	public RRWLockingStrategy(Transactable lock) {
-		theLock = lock;
+		if (lock instanceof CausalLock)
+			theLock = (CausalLock) lock;
+		else
+			theLock = new DefaultCausalLock(lock);
 	}
 
 	@Override
@@ -56,6 +62,11 @@ public class RRWLockingStrategy implements CollectionLockingStrategy {
 	public Transaction tryLock(boolean write, Object cause) {
 		Transaction lock = theLock.tryLock(write, cause);
 		return lock;
+	}
+
+	@Override
+	public Collection<Cause> getCurrentCauses() {
+		return theLock.getCurrentCauses();
 	}
 
 	@Override

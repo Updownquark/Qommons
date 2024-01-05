@@ -1,5 +1,6 @@
 package org.qommons.collect;
 
+import java.util.AbstractCollection;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
@@ -12,6 +13,7 @@ import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import org.qommons.IterableUtils;
 import org.qommons.debug.Debug;
 import org.qommons.ex.ExBiConsumer;
 import org.qommons.ex.ExBiFunction;
@@ -576,6 +578,24 @@ public class CollectionUtils {
 	public static <L, R, X extends Throwable> SimpleCollectionSynchronizer<L, R, X, ?> simpleSyncE(
 		ExFunction<? super R, ? extends L, ? extends X> map) {
 		return new SimpleCollectionSynchronizer<>(map);
+	}
+
+	/**
+	 * @param <T> The super-type of the collections
+	 * @param collections The collections to concatenate
+	 * @return A collection containing all elements of the given collections
+	 */
+	public static <T> Collection<T> concat(Collection<? extends T>... collections) {
+		return new ConcatenatedCollection<>(Arrays.asList(collections));
+	}
+
+	/**
+	 * @param <T> The super-type of the collections
+	 * @param collections The collections to concatenate
+	 * @return A collection containing all elements of the given collections
+	 */
+	public static <T> Collection<T> concat(Collection<? extends Collection<? extends T>> collections) {
+		return new ConcatenatedCollection<>(collections);
 	}
 
 	/**
@@ -1536,6 +1556,27 @@ public class CollectionUtils {
 					str.append('@').append(targetIndex);
 				return str.toString();
 			}
+		}
+	}
+
+	static class ConcatenatedCollection<T> extends AbstractCollection<T> {
+		private final Collection<? extends Collection<? extends T>> theCollections;
+
+		public ConcatenatedCollection(Collection<? extends Collection<? extends T>> collections) {
+			theCollections = collections;
+		}
+
+		@Override
+		public Iterator<T> iterator() {
+			return IterableUtils.flatten(theCollections).iterator();
+		}
+
+		@Override
+		public int size() {
+			int size = 0;
+			for (Collection<? extends T> coll : theCollections)
+				size += coll.size();
+			return size;
 		}
 	}
 }

@@ -1,5 +1,6 @@
 package org.qommons.collect;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -339,6 +340,11 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theEntries.tryLock(write, cause);
+		}
+
+		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return theEntries.getCurrentCauses();
 		}
 
 		@Override

@@ -1,5 +1,6 @@
 package org.qommons.collect;
 
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.function.Function;
@@ -204,6 +205,11 @@ public class BetterCollections {
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theWrapped.tryLock(false, cause);
+		}
+
+		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return theWrapped.getCurrentCauses();
 		}
 
 		@Override
@@ -805,6 +811,11 @@ public class BetterCollections {
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theWrapped.tryLock(false, cause);
+		}
+
+		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return theWrapped.getCurrentCauses();
 		}
 
 		@Override

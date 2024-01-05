@@ -1,6 +1,7 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.NavigableSet;
 import java.util.NoSuchElementException;
@@ -702,6 +703,11 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theWrapped.tryLock(write, cause);
+		}
+
+		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return theWrapped.getCurrentCauses();
 		}
 
 		@Override

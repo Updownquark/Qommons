@@ -1,23 +1,26 @@
 package org.qommons.collect;
 
 import java.io.Serializable;
-import java.lang.reflect.Array;
 import java.util.AbstractList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.ListIterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.RandomAccess;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.function.Consumer;
 
 /**
- * A simple, immutable, fast-as-possible list
+ * A simple, immutable, fast-as-possible list. This is essentially the same as the result of {@link Arrays#asList(Object...)}, except that
+ * that class allows elements in the list to be set.
  * 
  * @param <E> The type of values in the list
  */
 public class SimpleImmutableList<E> extends AbstractList<E> implements Serializable, RandomAccess, Cloneable {
-	final Object[] theValues;
+	final Object[] theValues; // Package-private so the iterators can access directly without synthetic accessors
 
 	/** @param values The values for the list */
 	public SimpleImmutableList(E[] values) {
@@ -70,6 +73,11 @@ public class SimpleImmutableList<E> extends AbstractList<E> implements Serializa
 	}
 
 	@Override
+	public Spliterator<E> spliterator() {
+		return Spliterators.spliterator(theValues, Spliterator.ORDERED);
+	}
+
+	@Override
 	public Object[] toArray() {
 		return toArray(new Object[theValues.length]);
 	}
@@ -77,8 +85,9 @@ public class SimpleImmutableList<E> extends AbstractList<E> implements Serializa
 	@Override
 	public <T> T[] toArray(T[] a) {
 		if (a.length < theValues.length)
-			a = (T[]) Array.newInstance(a.getClass().getComponentType(), theValues.length);
-		System.arraycopy(theValues, 0, a, 0, theValues.length);
+			a = Arrays.copyOf(a, theValues.length);
+		else
+			System.arraycopy(theValues, 0, a, 0, theValues.length);
 		return a;
 	}
 
@@ -131,7 +140,6 @@ public class SimpleImmutableList<E> extends AbstractList<E> implements Serializa
 	/** Copied from ArrayList and trimmed down for immutability */
 	private class ListItr extends Itr implements ListIterator<E> {
 		ListItr(int index) {
-			super();
 			cursor = index;
 		}
 

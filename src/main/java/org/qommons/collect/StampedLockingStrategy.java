@@ -1,16 +1,21 @@
 package org.qommons.collect;
 
+import java.util.Collection;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.StampedLock;
 
+import org.qommons.CausalLock;
+import org.qommons.DefaultCausalLock;
 import org.qommons.LockDebug;
 import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
+import org.qommons.Transactable;
 import org.qommons.Transaction;
 
 /** A collection-locking strategy using {@link StampedLock} */
 public class StampedLockingStrategy implements CollectionLockingStrategy {
 	private final ThreadConstraint theThreadConstraint;
+	private final CausalLock theCausalLock;
 	final Object theOwner;
 	private final ThreadLocal<ThreadState> theStampCollection;
 	final StampedLock theUpdateLocker;
@@ -52,6 +57,7 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 	public StampedLockingStrategy(StampedLock lock, int optimisticTries, Object owner, ThreadConstraint threadConstraint) {
 		theThreadConstraint = threadConstraint;
 		theOwner = owner;
+		theCausalLock = new DefaultCausalLock(new TransactableCore());
 		theStampCollection = new ThreadLocal<ThreadState>() {
 			@Override
 			protected ThreadState initialValue() {
@@ -75,16 +81,17 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 
 	@Override
 	public Transaction lock(boolean write, Object cause) {
-		if (write && !theThreadConstraint.isEventThread())
-			throw new IllegalStateException(WRONG_THREAD_MESSAGE);
-		return theStampCollection.get().obtain(write);
+		return theCausalLock.lock(write, cause);
 	}
 
 	@Override
 	public Transaction tryLock(boolean write, Object cause) {
-		if (write && !theThreadConstraint.isEventThread())
-			throw new IllegalStateException(WRONG_THREAD_MESSAGE);
-		return theStampCollection.get().tryObtain(write);
+		return theCausalLock.tryLock(write, cause);
+	}
+
+	@Override
+	public Collection<Cause> getCurrentCauses() {
+		return theCausalLock.getCurrentCauses();
 	}
 
 	@Override
@@ -163,6 +170,37 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 	@Override
 	public String toString() {
 		return theOwner + " Stamped Lock";
+	}
+
+	class TransactableCore implements Transactable {
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theThreadConstraint;
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return true;
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			if (write && !theThreadConstraint.isEventThread())
+				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
+			return theStampCollection.get().obtain(write);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, Object cause) {
+			if (write && !theThreadConstraint.isEventThread())
+				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
+			return theStampCollection.get().tryObtain(write);
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return new CoreId(theUpdateLocker);
+		}
 	}
 
 	class LockStamp {

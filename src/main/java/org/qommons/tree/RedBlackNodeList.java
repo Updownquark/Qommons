@@ -169,6 +169,11 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	}
 
 	@Override
+	public Collection<Cause> getCurrentCauses() {
+		return theLocker.getCurrentCauses();
+	}
+
+	@Override
 	public CoreId getCoreId() {
 		return theLocker.getCoreId();
 	}

@@ -1,5 +1,6 @@
 package org.qommons.collect;
 
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -8,6 +9,7 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import org.qommons.CausalLock;
 import org.qommons.Identifiable;
 import org.qommons.LambdaUtils;
 import org.qommons.Lockable;
@@ -28,7 +30,7 @@ import org.qommons.collect.ValueStoredCollection.RepairListener;
  * @param <K> The type of keys stored in the map
  * @param <V> The type of values stored in the map
  */
-public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
+public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Identifiable {
 	@Override
 	BetterSet<K> keySet();
 
@@ -60,6 +62,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 	@Override
 	default Transaction tryLock(boolean write, Object cause) {
 		return keySet().tryLock(write, cause);
+	}
+
+	@Override
+	default Collection<Cause> getCurrentCauses() {
+		return keySet().getCurrentCauses();
 	}
 
 	@Override
@@ -843,6 +850,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		}
 
 		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return theMap.getCurrentCauses();
+		}
+
+		@Override
 		public CoreId getCoreId() {
 			return theMap.getCoreId();
 		}
@@ -1194,6 +1206,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, Identifiable {
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theMap.tryLock(write, cause);
+		}
+
+		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return theMap.getCurrentCauses();
 		}
 
 		@Override

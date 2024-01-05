@@ -1,5 +1,6 @@
 package org.qommons.tree;
 
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
@@ -624,6 +625,11 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			return theEntries.tryLock(write, cause);
+		}
+
+		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return theEntries.getCurrentCauses();
 		}
 
 		@Override
