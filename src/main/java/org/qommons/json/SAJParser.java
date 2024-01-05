@@ -691,8 +691,10 @@ public class SAJParser {
 		void separate(char ch) throws ParseException {
 			if(ch == ',') {
 				ParseNode top = top();
-				if(top == null)
+				if (top == null) {
 					error("Unexpected separator comma without object or array");
+					return;
+				}
 				switch (top.token) {
 				case OBJECT:
 					if(!top.hasContent())
@@ -711,8 +713,10 @@ public class SAJParser {
 				}
 			} else if(ch == ':') {
 				ParseNode top = top();
-				if(top == null)
+				if (top == null) {
 					error("Unexpected separator colon without object or array");
+					return;
+				}
 				switch (top.token) {
 				case OBJECT:
 					error("Unexpected separator colon before property declaration in object");
@@ -746,8 +750,10 @@ public class SAJParser {
 			ParseNode ret = top();
 			switch (token) {
 			case OBJECT:
-				if(ret == null)
+				if (ret == null) {
 					error("Unexpected '}' before input");
+					return null; // Won't actually get here, the above method will throw an exception
+				}
 				switch (ret.token) {
 				case ARRAY:
 					error("Expected ']' for array end but found '}'");
@@ -767,8 +773,10 @@ public class SAJParser {
 				}
 				break;
 			case ARRAY:
-				if(ret == null)
+				if (ret == null) {
 					error("Unexpected ']' before input");
+					return null; // Won't actually get here, the above method will throw an exception
+				}
 				switch (ret.token) {
 				case OBJECT:
 				case PROPERTY:
@@ -782,8 +790,10 @@ public class SAJParser {
 				}
 				break;
 			case PROPERTY:
-				if(ret == null)
+				if (ret == null) {
 					error("Unexpected property end");
+					return null; // Won't actually get here, the above method will throw an exception
+				}
 				switch (ret.token) {
 				case OBJECT:
 				case ARRAY:

@@ -2,33 +2,14 @@ package org.qommons.osgi;
 
 import java.awt.EventQueue;
 import java.awt.SplashScreen;
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.io.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -41,12 +22,7 @@ import javax.swing.JLabel;
 import javax.swing.JProgressBar;
 import javax.swing.Timer;
 
-import org.qommons.ArgumentParsing;
-import org.qommons.BiTuple;
-import org.qommons.Named;
-import org.qommons.Range;
-import org.qommons.StringUtils;
-import org.qommons.Version;
+import org.qommons.*;
 import org.qommons.collect.BetterHashSet;
 import org.qommons.collect.CollectionElement;
 import org.qommons.config.QommonsConfig;
@@ -1400,15 +1376,17 @@ public class OsgiBundleSet {
 			progress.setString("Initializing Service Component Manager");
 		}
 		Timer[] timer = new Timer[1];
-		timer[0] = new Timer(250, __ -> {
-			try {
-				progress.setString((String) statusMethod.invoke(service));
-			} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-				e.printStackTrace();
-				timer[0].stop();
-			}
-		});
-		timer[0].start();
+		if (progress != null) {
+			timer[0] = new Timer(250, __ -> {
+				try {
+					progress.setString((String) statusMethod.invoke(service));
+				} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+					e.printStackTrace();
+					timer[0].stop();
+				}
+			});
+			timer[0].start();
+		}
 		try {
 			completeMethod.invoke(service, startComponents);
 		} catch (IllegalAccessException | IllegalArgumentException e) {
@@ -1417,7 +1395,8 @@ public class OsgiBundleSet {
 			System.err.println("Exception initializing DS service " + serviceType.getName());
 			e.printStackTrace();
 		} finally {
-			timer[0].stop();
+			if (timer[0] != null)
+				timer[0].stop();
 		}
 	}
 

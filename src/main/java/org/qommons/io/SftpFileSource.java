@@ -5,13 +5,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.Reader;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
@@ -28,12 +22,7 @@ import org.qommons.io.FileUtils.DirectorySyncResults;
 import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.connection.ConnectionException;
 import net.schmizz.sshj.connection.channel.direct.Session;
-import net.schmizz.sshj.sftp.FileAttributes;
-import net.schmizz.sshj.sftp.FileMode;
-import net.schmizz.sshj.sftp.OpenMode;
-import net.schmizz.sshj.sftp.RemoteFile;
-import net.schmizz.sshj.sftp.RemoteResourceInfo;
-import net.schmizz.sshj.sftp.SFTPClient;
+import net.schmizz.sshj.sftp.*;
 import net.schmizz.sshj.transport.TransportException;
 import net.schmizz.sshj.transport.verification.PromiscuousVerifier;
 import net.schmizz.sshj.userauth.UserAuthException;
@@ -254,6 +243,9 @@ public class SftpFileSource extends RemoteFileSource {
 				ex = e;
 			}
 		}
+		// Just suppressing a code analysis warning here
+		if (ex == null)
+			throw new IllegalStateException();
 		throw new IOException("Could not connect to " + theHost + " (" + ex.getMessage() + ")", ex);
 	}
 

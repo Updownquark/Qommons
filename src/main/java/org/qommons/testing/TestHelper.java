@@ -1,14 +1,6 @@
 package org.qommons.testing;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.io.StringWriter;
+import java.io.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
@@ -16,21 +8,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Calendar;
-import java.util.Collections;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.NavigableSet;
-import java.util.Objects;
-import java.util.Random;
-import java.util.Set;
-import java.util.TimeZone;
-import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -612,7 +590,7 @@ public class TestHelper extends TestUtil {
 			if (isRevisitingKnownFailures || isPersistingFailures)
 				knownFailures = getKnownFailures(theFailureDir, theTestable, isFailureFileQualified, thePlacemarkNames);
 			else
-				knownFailures = null;
+				knownFailures = new ArrayList<>();
 			if (theMaxTotalDuration == null && maxCases == 0 && (!isRevisitingKnownFailures || knownFailures.isEmpty()))
 				throw new IllegalStateException("No cases configured.  Use withRandomCases() or withMaxTotalDuration()");
 			try (TestSetExecution exec = new TestSetExecution(theCreator, isPrintingProgress, isPrintingFailures, Instant.now(),

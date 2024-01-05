@@ -32,7 +32,7 @@ public class JsonObjectElement extends DefaultJsonElement {
 		String allowExtras = null;
 		if(constraints != null)
 			allowExtras = (String) constraints.get("allowExtras");
-		if(allowExtras != null)
+		if (allowExtras != null && constraints != null)
 			theExtraEl = OnExtraEl.byName((String) constraints.get("allowExtras"));
 		else { // If allowExtras is not specified, get it from the parent
 			JsonElement element = getParent();

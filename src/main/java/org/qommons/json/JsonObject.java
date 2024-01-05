@@ -1,20 +1,16 @@
 package org.qommons.json;
 
-import java.util.AbstractCollection;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
 
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /** Represents a JSON object */
 public class JsonObject {
-	public static final Object NULL = new Object() {
+	/**
+	 * A placeholder key in an object for a property whose value is <code>null</code>. This is semantically different than a missing key.
+	 */
+	private static final Object NULL = new Object() {
 		@Override
 		public String toString() {
 			return "null";
@@ -28,6 +24,10 @@ public class JsonObject {
 		theValues = new LinkedHashMap<>();
 	}
 
+	/**
+	 * @param key The key to check for
+	 * @return Whether the given key was defined for this object (including if its value was the literal <code>null</code>)
+	 */
 	public boolean hasProperty(String key) {
 		return theValues.containsKey(key);
 	}

@@ -2,9 +2,16 @@ package org.qommons;
 
 import java.util.Comparator;
 
+/**
+ * A simple comparator that is the reverse of another. This class handles {@link Comparator#reversed()} better, as well as
+ * {@link #hashCode()}, {@link #equals(Object)}, and {@link #toString()}
+ * 
+ * @param <T> The type of object that this comparator can compare
+ */
 public class ReversedComparator<T> implements Comparator<T> {
 	private final Comparator<T> theReversed;
 
+	/** @param reversed The comparator that this will be the reverse of */
 	public ReversedComparator(Comparator<T> reversed) {
 		theReversed = reversed;
 	}

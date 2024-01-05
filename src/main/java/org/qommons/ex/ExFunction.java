@@ -37,6 +37,11 @@ public interface ExFunction<F, T, E extends Throwable> {
 		};
 	}
 
+	/**
+	 * @param <X> The target type of the new function
+	 * @param next The function to apply after this one
+	 * @return A function that is the result of this function applied to a value, followed by <code>next</code>
+	 */
 	default <X> ExFunction<F, X, E> andThen(ExFunction<? super T, X, ? extends E> next) {
 		return new CombinedExFn<>(this, next);
 	}
@@ -64,6 +69,14 @@ public interface ExFunction<F, T, E extends Throwable> {
 		return (ExFunction<F, F, RuntimeException>) IDENTITY;
 	}
 
+	/**
+	 * Implements {@link ExFunction#andThen(ExFunction)}
+	 * 
+	 * @param <S> The source type of the primary function
+	 * @param <I> The target type of the primary function
+	 * @param <T> The target type of the secondary function
+	 * @param <E> The exception type thrown by this function
+	 */
 	static class CombinedExFn<S, I, T, E extends Throwable> implements ExFunction<S, T, E> {
 		private final ExFunction<S, I, ? extends E> theFirst;
 		private final ExFunction<? super I, T, ? extends E> theSecond;
