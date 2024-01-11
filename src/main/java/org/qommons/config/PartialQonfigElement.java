@@ -122,6 +122,17 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 		return false;
 	}
 
+	/**
+	 * @param ancestor The element to check
+	 * @return Whether this element is a descendant of the given element
+	 */
+	public boolean isDescenantOf(PartialQonfigElement ancestor) {
+		PartialQonfigElement parent = theParent;
+		while (parent != null && parent != ancestor)
+			parent = parent.theParent;
+		return parent != null;
+	}
+
 	/** @return The values of all attributes specified for this element */
 	public Map<QonfigAttributeDef.Declared, AttributeValue> getAttributes() {
 		return theAttributes;

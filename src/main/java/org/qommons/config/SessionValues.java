@@ -2,6 +2,7 @@ package org.qommons.config;
 
 import java.util.Collections;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import org.qommons.Transaction;
@@ -149,6 +150,25 @@ public interface SessionValues {
 		Object preValue = get(sessionKey);
 		put(sessionKey, value);
 		return () -> put(sessionKey, preValue);
+	}
+
+	default <T> Transaction modifyTemp(String sessionKey, Supplier<? extends T> defaultInitValue, Consumer<? super T> modify,
+		Consumer<? super T> revert) {
+		T preValue = (T) get(sessionKey);
+		T newValue;
+		if (preValue != null) {
+			newValue = preValue;
+			modify.accept(newValue);
+		} else {
+			newValue = defaultInitValue.get();
+			modify.accept(newValue);
+			put(sessionKey, newValue);
+		}
+		return () -> {
+			revert.accept(newValue);
+			if (preValue == null)
+				put(sessionKey, preValue);
+		};
 	}
 
 	/** An enum describing where a value session is from */
