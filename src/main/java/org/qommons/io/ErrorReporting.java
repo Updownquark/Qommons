@@ -58,7 +58,7 @@ public interface ErrorReporting {
 
 		@Override
 		public String toString() {
-			return theFrame.toString();
+			return theFrame.toString() + "@" + theFrame.toLocationString();
 		}
 	}
 
