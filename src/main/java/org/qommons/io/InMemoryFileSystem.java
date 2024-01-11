@@ -173,11 +173,11 @@ public class InMemoryFileSystem implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public OutputStream write() throws IOException {
+		public OutputStream write(boolean append) throws IOException {
 			AbstractMemoryFileBacking real = getRealFile();
 			if (real == null)
 				real = theParent.createChild(theName, false).theExistingFile;
-			return real.write();
+			return real.write(append);
 		}
 
 		@Override
@@ -373,7 +373,7 @@ public class InMemoryFileSystem implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public OutputStream write() throws IOException {
+		public OutputStream write(boolean append) throws IOException {
 			throw new IOException("This is a directory: " + getName());
 		}
 
@@ -522,8 +522,9 @@ public class InMemoryFileSystem implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public OutputStream write() throws IOException {
-			theContent.clear(false);
+		public OutputStream write(boolean append) throws IOException {
+			if (!append)
+				theContent.clear(false);
 			OutputStream contentOS = theContent.asOutputStream();
 			return new OutputStream() {
 				@Override

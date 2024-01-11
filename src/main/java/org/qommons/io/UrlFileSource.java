@@ -139,7 +139,7 @@ public class UrlFileSource extends RemoteFileSource {
 		}
 
 		@Override
-		public OutputStream write() throws IOException {
+		public OutputStream write(boolean append) throws IOException {
 			throw new IOException("Cannot write to a URL resource");
 		}
 

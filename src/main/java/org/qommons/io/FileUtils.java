@@ -1,27 +1,11 @@
 package org.qommons.io;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileFilter;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FilenameFilter;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.JarURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.LongConsumer;
@@ -1270,7 +1254,7 @@ public class FileUtils extends MiniFileUtils {
 		}
 
 		@Override
-		public OutputStream write() throws IOException {
+		public OutputStream write(boolean append) throws IOException {
 			throw new IOException("Not writable");
 		}
 
@@ -1475,8 +1459,8 @@ public class FileUtils extends MiniFileUtils {
 		}
 
 		@Override
-		public OutputStream write() throws IOException {
-			return theSource.write();
+		public OutputStream write(boolean append) throws IOException {
+			return theSource.write(append);
 		}
 
 		@Override
@@ -1643,7 +1627,7 @@ public class FileUtils extends MiniFileUtils {
 		}
 
 		@Override
-		public OutputStream write() throws IOException {
+		public OutputStream write(boolean append) throws IOException {
 			throw new IOException("This file is not writable");
 		}
 

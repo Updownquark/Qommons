@@ -528,11 +528,12 @@ public class SftpFileSource extends RemoteFileSource {
 		}
 
 		@Override
-		public OutputStream write() throws IOException {
+		public OutputStream write(boolean append) throws IOException {
+			long startFrom = append ? length() : 0;
 			if (doStreamsHoldSessions)
-				return new SessionHoldingOutputStream(this, 0);
+				return new SessionHoldingOutputStream(this, startFrom);
 			else
-				return new DynamicSessionOutputStream(this, 0);
+				return new DynamicSessionOutputStream(this, startFrom);
 		}
 
 		@Override

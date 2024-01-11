@@ -1,18 +1,8 @@
 package org.qommons.io;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.RandomAccessFile;
-import java.nio.file.DirectoryStream;
+import java.io.*;
+import java.nio.file.*;
 import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -304,9 +294,13 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public OutputStream write() throws IOException {
-			return Files.newOutputStream(thePath, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
-				StandardOpenOption.TRUNCATE_EXISTING);
+		public OutputStream write(boolean append) throws IOException {
+			OpenOption[] options = { StandardOpenOption.CREATE, StandardOpenOption.WRITE, null };
+			if (append)
+				options[2] = StandardOpenOption.APPEND;
+			else
+				options[2] = StandardOpenOption.TRUNCATE_EXISTING;
+			return Files.newOutputStream(thePath, options);
 		}
 
 		@Override

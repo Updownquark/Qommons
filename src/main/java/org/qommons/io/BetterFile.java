@@ -337,7 +337,16 @@ public interface BetterFile extends Named {
 	 * @return A stream to write data into this resource
 	 * @throws IOException If the data could not be accessed for write
 	 */
-	OutputStream write() throws IOException;
+	default OutputStream write() throws IOException {
+		return write(false);
+	}
+
+	/**
+	 * @param append Whether to append to the data currently in the file, or erase it and write content from scratch
+	 * @return A stream to write data into this resource
+	 * @throws IOException If the data could not be accessed for write
+	 */
+	OutputStream write(boolean append) throws IOException;
 
 	/**
 	 * @param attribute The attribute to set
@@ -573,10 +582,11 @@ public interface BetterFile extends Named {
 		void delete(DirectorySyncResults results) throws IOException;
 
 		/**
+		 * @param append Whether to append to the data currently in the file, or erase it and write content from scratch
 		 * @return A stream to write this file's content
 		 * @throws IOException If the file could not be written
 		 */
-		OutputStream write() throws IOException;
+		OutputStream write(boolean append) throws IOException;
 
 		/**
 		 * @param attribute The attribute to set
@@ -814,10 +824,10 @@ public interface BetterFile extends Named {
 		}
 
 		@Override
-		public OutputStream write() throws IOException {
+		public OutputStream write(boolean append) throws IOException {
 			FileBacking backing = createBacking(false);
 			theBacking = backing;
-			return backing.write();
+			return backing.write(append);
 		}
 
 		@Override
@@ -1152,8 +1162,8 @@ public interface BetterFile extends Named {
 		}
 
 		@Override
-		public OutputStream write() throws IOException {
-			return theSource.write();
+		public OutputStream write(boolean append) throws IOException {
+			return theSource.write(append);
 		}
 
 		@Override
@@ -1321,7 +1331,7 @@ public interface BetterFile extends Named {
 		}
 
 		@Override
-		public OutputStream write() throws IOException {
+		public OutputStream write(boolean append) throws IOException {
 			throw new IOException("Cannot create or change this file");
 		}
 

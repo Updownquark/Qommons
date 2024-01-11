@@ -1,14 +1,6 @@
 package org.qommons.io;
 
-import java.io.BufferedInputStream;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.EOFException;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
@@ -16,16 +8,7 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CoderResult;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -360,8 +343,8 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public OutputStream write() throws IOException {
-			return theBacking.write();
+		public OutputStream write(boolean append) throws IOException {
+			return theBacking.write(append);
 		}
 
 		@Override
@@ -530,12 +513,12 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public void delete(DirectorySyncResults results) throws IOException {
-			throw new IOException("Cannot delete zip entries this way");
+			throw new IOException("Deletion for archive entries not currently supported");
 		}
 
 		@Override
-		public OutputStream write() throws IOException {
-			throw new IOException("Cannot overwrite zip entries");
+		public OutputStream write(boolean append) throws IOException {
+			throw new IOException("Writability for archive entries not currently supported");
 		}
 
 		@Override
@@ -550,7 +533,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public void move(List<String> newFilePath) throws IOException {
-			throw new IOException("Cannot move archive entries");
+			throw new IOException("Movement of archive entries not currently supported");
 		}
 
 		@Override
@@ -675,7 +658,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public BetterFile.FileBacking createChild(String fileName, boolean directory) throws IOException {
-			throw new IOException("Cannot create zip entries this way");
+			throw new IOException("Creation of archive entries not currently supported");
 		}
 
 		@Override
@@ -683,8 +666,8 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		}
 
 		@Override
-		public OutputStream write() throws IOException {
-			throw new IOException("Cannot create zip entries this way");
+		public OutputStream write(boolean append) throws IOException {
+			throw new IOException("Creation of archive entries not currently supported");
 		}
 
 		@Override
@@ -1157,7 +1140,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 						ArchiveEntry oldEntry = existingRoot != null ? ((DefaultArchiveEntry) existingRoot).at(path, 0) : null;
 						forEach.accept(oldEntry != null ? oldEntry : newEntry, fileName);
 					}
-					if (children != null && children.add(path[0]))
+					if (children != null && onChild != null && children.add(path[0]))
 						onChild.accept(root.getFile(path[0]));
 					long longRead = 0;
 					while (longRead < compressedSize) {
@@ -1191,7 +1174,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 							ArchiveEntry oldEntry = existingRoot != null ? ((DefaultArchiveEntry) existingRoot).at(path, 0) : null;
 							forEach.accept(oldEntry != null ? oldEntry : newEntry, entry.getName());
 						}
-						if (children != null && children.add(path[0]))
+						if (children != null && onChild != null && children.add(path[0]))
 							onChild.accept(root.getFile(path[0]));
 					}
 				}
@@ -1342,7 +1325,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 					long lastMod = extendedDosToJavaTime(modTime);
 					String[] path = name.split("/");
 					DefaultArchiveEntry newEntry = root.add(path, 0, position, name.endsWith("/")).fill(uncompressedSize, lastMod);
-					if (children != null && children.add(path[0]))
+					if (children != null && onChild != null && children.add(path[0]))
 						onChild.accept(root.getFile(path[0]));
 					if (forEach != null) {
 						ArchiveEntry oldEntry = existingRoot != null ? existingRoot.at(path, 0) : null;
@@ -1696,7 +1679,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		public InputStream read(FileBacking file, ArchiveEntry entry, long startFrom, BooleanSupplier canceled) throws IOException {
 			InputStream fileIn = file.read(0, canceled);
 			InputStream gzIn = fileIn == null ? null : new GZIPInputStream(fileIn);
-			if (startFrom > 0) {
+			if (startFrom > 0 && gzIn != null) {
 				long skipped = gzIn.skip(startFrom);
 				long totalSkipped = skipped;
 				while (totalSkipped < startFrom && skipped >= 0) {
@@ -1980,7 +1963,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 							name = header.name;
 						String[] path = FileUtils.splitPath(name);
 						DefaultArchiveEntry newEntry = root.add(path, 0, entryPos + 512, dir).fill(header.size, header.lastModified);
-						if (children != null && children.add(path[0])) {
+						if (children != null && onChild != null && children.add(path[0])) {
 							onChild.accept(root.getFile(path[0]));
 						}
 						if (forEach != null) {
