@@ -1,6 +1,7 @@
 package org.qommons;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedList;
 
 import org.qommons.Lockable.CoreId;
@@ -81,7 +82,7 @@ public class DefaultCausalLock implements CausalLock {
 	/** @return The currently active causes of write locks. This value is not unmodifiable for performance purposes. */
 	@Override
 	public Collection<Cause> getCurrentCauses() {
-		return theTransactionCauses;
+		return Collections.unmodifiableList(theTransactionCauses);
 	}
 
 	@Override
