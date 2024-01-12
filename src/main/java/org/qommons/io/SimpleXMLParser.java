@@ -1702,46 +1702,45 @@ public class SimpleXMLParser {
 			if (isAtBeginning) {
 				isAtBeginning = false;
 				ch = getNextStreamChar();
+			} else if (wasEscapeSequence) {
+				thePosition++;
+				wasEscapeSequence = false;
+				theSequenceBuffer.append(theChar);
+				theCharNumber++;
+				ch = getNextStreamChar();
 			} else {
 				thePosition++;
-				if (wasEscapeSequence) {
-					wasEscapeSequence = false;
+				switch (theChar) {
+				case '\n':
+					if (wasCRNL) {
+						wasCRNL = false;
+						specialSequence(1, CRNL);
+						theSequenceBuffer.append('\n');
+						ch = getNextStreamChar();
+						newLine();
+					} else {
+						ch = getNextStreamChar();
+						if (ch == '\r') {
+							thePosition++;
+							specialSequence(1, NLCR);
+							ch = getNextStreamChar();
+						}
+						theSequenceBuffer.append('\n');
+						newLine();
+					}
+					theLineNumber++;
+					theCharNumber = 0;
+					break;
+				case '\t':
+					theCharNumber += theTabLength;
+					specialSequence(theTabLength, TAB);
+					theSequenceBuffer.append('\t');
+					ch = getNextStreamChar();
+					break;
+				default:
 					theSequenceBuffer.append(theChar);
 					theCharNumber++;
 					ch = getNextStreamChar();
-				} else {
-					switch (theChar) {
-					case '\n':
-						if (wasCRNL) {
-							wasCRNL = false;
-							specialSequence(1, CRNL);
-							theSequenceBuffer.append('\n');
-							ch = getNextStreamChar();
-							newLine();
-						} else {
-							ch = getNextStreamChar();
-							if (ch == '\r') {
-								thePosition++;
-								specialSequence(1, NLCR);
-								ch = getNextStreamChar();
-							}
-							theSequenceBuffer.append('\n');
-							newLine();
-						}
-						theLineNumber++;
-						theCharNumber = 0;
-						break;
-					case '\t':
-						theCharNumber += theTabLength;
-						specialSequence(theTabLength, TAB);
-						theSequenceBuffer.append('\t');
-						ch = getNextStreamChar();
-						break;
-					default:
-						theSequenceBuffer.append(theChar);
-						theCharNumber++;
-						ch = getNextStreamChar();
-					}
 				}
 			}
 			if (ch < 0) {
