@@ -1,24 +1,12 @@
 package org.qommons.io;
 
-import java.io.BufferedInputStream;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
+import java.io.*;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -1653,6 +1641,7 @@ public class SimpleXMLParser {
 		private boolean isAtBeginning = true;
 		private boolean isAtEnd;
 		private boolean wasCRNL;
+		private boolean wasEscapeSequence;
 
 		private LocatedXmlElement theElement;
 		private int theMarkPosition;
@@ -1715,37 +1704,44 @@ public class SimpleXMLParser {
 				ch = getNextStreamChar();
 			} else {
 				thePosition++;
-				switch (theChar) {
-				case '\n':
-					if (wasCRNL) {
-						wasCRNL = false;
-						specialSequence(1, CRNL);
-						theSequenceBuffer.append('\n');
-						ch = getNextStreamChar();
-						newLine();
-					} else {
-						ch = getNextStreamChar();
-						if (ch == '\r') {
-							thePosition++;
-							specialSequence(1, NLCR);
-							ch = getNextStreamChar();
-						}
-						theSequenceBuffer.append('\n');
-						newLine();
-					}
-					theLineNumber++;
-					theCharNumber = 0;
-					break;
-				case '\t':
-					theCharNumber += theTabLength;
-					specialSequence(theTabLength, TAB);
-					theSequenceBuffer.append('\t');
-					ch = getNextStreamChar();
-					break;
-				default:
+				if (wasEscapeSequence) {
+					wasEscapeSequence = false;
 					theSequenceBuffer.append(theChar);
 					theCharNumber++;
 					ch = getNextStreamChar();
+				} else {
+					switch (theChar) {
+					case '\n':
+						if (wasCRNL) {
+							wasCRNL = false;
+							specialSequence(1, CRNL);
+							theSequenceBuffer.append('\n');
+							ch = getNextStreamChar();
+							newLine();
+						} else {
+							ch = getNextStreamChar();
+							if (ch == '\r') {
+								thePosition++;
+								specialSequence(1, NLCR);
+								ch = getNextStreamChar();
+							}
+							theSequenceBuffer.append('\n');
+							newLine();
+						}
+						theLineNumber++;
+						theCharNumber = 0;
+						break;
+					case '\t':
+						theCharNumber += theTabLength;
+						specialSequence(theTabLength, TAB);
+						theSequenceBuffer.append('\t');
+						ch = getNextStreamChar();
+						break;
+					default:
+						theSequenceBuffer.append(theChar);
+						theCharNumber++;
+						ch = getNextStreamChar();
+					}
 				}
 			}
 			if (ch < 0) {
@@ -1906,6 +1902,7 @@ public class SimpleXMLParser {
 		private final StringBuilder theEntityBuffer = new StringBuilder();
 
 		private void parseEscapeSequence() throws IOException, XmlParseException {
+			wasEscapeSequence = true;
 			mark();
 			int ch = getNextStreamChar();
 			String content;
