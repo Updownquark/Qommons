@@ -1,16 +1,6 @@
 package org.qommons.config;
 
-import java.util.ArrayList;
-import java.util.BitSet;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -346,6 +336,11 @@ public final class QonfigElement extends PartialQonfigElement {
 		public Builder withAttribute(QonfigAttributeDef.Declared attr, AttributeValue value) {
 			if (theStage > 0)
 				throw new IllegalStateException("Cannot specify attributes after children");
+			if (attr.getType() instanceof QonfigAddOn && value.value != null) {
+				QonfigAddOn addOn = (QonfigAddOn) value.value;
+				if (addOn.getSuperElement() != null && !addOn.getSuperElement().isAssignableFrom(getType()))
+					theErrors.error(addOn.getSuperElement() + " required by " + addOn + " but not extended by " + getType());
+			}
 			// Can't validate this yet because we don't know our full inheritance yet
 			theProvidedAttributes.put(attr, value);
 			return this;
@@ -992,6 +987,11 @@ public final class QonfigElement extends PartialQonfigElement {
 							if (mod.getSpecification() == SpecificationType.Forbidden)
 								theErrors.error("Specification of value for attribute forbidden by type " + inh);
 						}
+					}
+					if (attr.getType() instanceof QonfigAddOn && value.value != null) {
+						QonfigAddOn addOn = (QonfigAddOn) value.value;
+						if (addOn.getSuperElement() != null && !addOn.getSuperElement().isAssignableFrom(getType()))
+							theErrors.error(addOn.getSuperElement() + " required by " + addOn + " but not extended by " + getType());
 					}
 				}
 			}
