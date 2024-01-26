@@ -25,6 +25,7 @@ public interface QonfigValueDef extends QonfigElementOwned {
 	/** @return The value to use if the user does not specify it */
 	Object getDefaultValue();
 
+	/** @return The content in the source file specifying the default value */
 	LocatedPositionedContent getDefaultValueContent();
 
 	/** Abstract {@link QonfigValueDef} implementation */
@@ -42,10 +43,11 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		 * @param type The type that must be specified
 		 * @param specify The specification of the value
 		 * @param defaultValue The value to use if it is not specified
+		 * @param defaultValueContent The content in the source file specifying the default value
 		 * @param position The position in the file where this value was defined
 		 * @param description The description for this value
 		 */
-		public Abstract(QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify, Object defaultValue,
+		protected Abstract(QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify, Object defaultValue,
 			LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
 			theOwner = owner;
 			theType = type;
@@ -124,13 +126,14 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		}
 	}
 
-	/** {@link Declared QonfigValueDef.Declared} implementation */
+	/** {@link QonfigValueDef.Declared Declared} implementation */
 	public static class DeclaredValueDef extends Abstract implements Declared {
 		/**
 		 * @param owner The element that declared the value
 		 * @param type The type that must be specified
 		 * @param specify The specification of the value
 		 * @param defaultValue The value to use if it is not specified
+		 * @param defaultValueContent The content in the source file specifying the default value
 		 * @param position The position in the file where this value was defined
 		 * @param description The description for this value
 		 */

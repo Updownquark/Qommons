@@ -40,6 +40,10 @@ public class PatternMatch {
 		return theNamedGroups;
 	}
 
+	/**
+	 * @param name The name of the capturing group
+	 * @return The value in this pattern match for the given capturing group
+	 */
 	public String getGroup(String name) {
 		QommonsUtils.NamedGroupCapture capture = theNamedGroups.get(name);
 		if (capture == null)

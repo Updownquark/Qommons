@@ -7,15 +7,8 @@ import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
-import org.qommons.CausalLock;
-import org.qommons.Identifiable;
-import org.qommons.Lockable;
+import org.qommons.*;
 import org.qommons.Lockable.CoreId;
-import org.qommons.QommonsUtils;
-import org.qommons.Stamped;
-import org.qommons.ThreadConstraint;
-import org.qommons.Transactable;
-import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.tree.BetterTreeList;
 
@@ -1276,7 +1269,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 				if (keyEntry != null)
 					valueEntry = keyEntry.getValues().getTerminalElement(next);
 			}
-			return valueEntry == null ? null : entryFor(keyEntry.getElementId(), valueEntry);
+			return keyEntry == null ? null : entryFor(keyEntry.getElementId(), valueEntry);
 		}
 
 		@Override
@@ -1353,28 +1346,29 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			MapValueId mvBefore = (MapValueId) before;
 			if (mvAfter != null && mvBefore != null && mvAfter.compareTo(mvBefore) >= 0)
 				throw new IllegalArgumentException(after + ">" + before);
-			boolean currentKey;
 			String msg = null;
-			if (after != null || before == null) {
-				currentKey = mvAfter != null;
+			if (mvAfter != null || mvBefore == null) {
 				MultiEntryHandle<K, V> keyEntry = mvAfter == null ? theMap.getTerminalEntry(true) : theMap.getEntryById(mvAfter.keyId);
 				while (keyEntry != null) {
 					msg = keyEntry.getValues().canAdd(value, //
-						currentKey ? mvAfter.valueId : null, //
+						mvAfter != null ? mvAfter.valueId : null, //
 						(mvBefore != null && mvBefore.keyId.equals(keyEntry.getElementId())) ? mvBefore.valueId : null);
 					if (msg == null)
 						return null;
 					keyEntry = theMap.getAdjacentEntry(keyEntry.getElementId(), true);
+					// After will no longer be for the current key, so don't try to use it
+					mvAfter = null;
 				}
 			} else {
-				currentKey = mvBefore != null;
 				MultiEntryHandle<K, V> keyEntry = theMap.getEntryById(mvBefore.keyId);
 				while (keyEntry != null) {
 					msg = keyEntry.getValues().canAdd(value, null, //
-						mvBefore.keyId.equals(keyEntry.getElementId()) ? mvBefore.valueId : null);
+						mvBefore == null ? null : mvBefore.valueId);
 					if (msg == null)
 						return null;
 					keyEntry = theMap.getAdjacentEntry(keyEntry.getElementId(), false);
+					// Before will no longer be for the current key, so don't try to use it
+					mvBefore = null;
 				}
 			}
 			if (msg == null)
@@ -1393,32 +1387,45 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			MapValueId mvBefore = (MapValueId) before;
 			if (mvAfter != null && mvBefore != null && mvAfter.compareTo(mvBefore) >= 0)
 				throw new IllegalArgumentException(after + ">" + before);
-			boolean currentKey;
 			String msg = null;
 			if (first) {
-				currentKey = mvAfter != null;
 				MultiEntryHandle<K, V> keyEntry = mvAfter == null ? theMap.getTerminalEntry(true) : theMap.getEntryById(mvAfter.keyId);
 				while (keyEntry != null) {
+					ElementId entryBefore;
+					if (mvBefore != null && mvBefore.keyId.equals(keyEntry.getElementId()))
+						entryBefore = mvBefore.valueId;
+					else
+						entryBefore = null;
 					msg = keyEntry.getValues().canAdd(value, //
-						currentKey ? mvAfter.valueId : null, //
-						(mvBefore != null && mvBefore.keyId.equals(keyEntry.getElementId())) ? mvBefore.valueId : null);
+						mvAfter != null ? mvAfter.valueId : null, //
+						entryBefore);
 					if (msg == null)
 						return keyEntry.getValues().addElement(value, //
-							currentKey ? mvAfter.valueId : null, //
-							(mvBefore != null && mvBefore.keyId.equals(keyEntry.getElementId())) ? mvBefore.valueId : null, true);
+							mvAfter != null ? mvAfter.valueId : null, //
+							entryBefore, true);
+					if (entryBefore != null)
+						break; // We can't add in the specified range
+					mvAfter = null; // After will no longer be for the current key, so don't try to use it
 					keyEntry = theMap.getAdjacentEntry(keyEntry.getElementId(), true);
 				}
 			} else {
-				currentKey = mvBefore != null;
 				MultiEntryHandle<K, V> keyEntry = mvBefore == null ? theMap.getTerminalEntry(false) : theMap.getEntryById(mvBefore.keyId);
 				while (keyEntry != null) {
+					ElementId entryAfter;
+					if (mvAfter != null && mvAfter.keyId.equals(keyEntry.getElementId()))
+						entryAfter = mvAfter.valueId;
+					else
+						entryAfter = null;
 					msg = keyEntry.getValues().canAdd(value, //
-						(mvBefore != null && mvBefore.keyId.equals(keyEntry.getElementId())) ? mvBefore.valueId : null, //
-						currentKey ? mvAfter.valueId : null);
+						entryAfter, //
+						mvBefore != null ? mvBefore.valueId : null);
 					if (msg == null)
 						return keyEntry.getValues().addElement(value, //
-							(mvBefore != null && mvBefore.keyId.equals(keyEntry.getElementId())) ? mvBefore.valueId : null, //
-							currentKey ? mvAfter.valueId : null, false);
+							entryAfter, //
+							mvBefore != null ? mvBefore.valueId : null, false);
+					if (entryAfter != null)
+						break; // We can't add in the specified range
+					mvBefore = null; // Before will no longer be for the current key, so don't try to use it
 					keyEntry = theMap.getAdjacentEntry(keyEntry.getElementId(), false);
 				}
 			}
@@ -1441,8 +1448,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			if (mvAfter != null && mvBefore != null && mvAfter.compareTo(mvBefore) >= 0)
 				throw new IllegalArgumentException(after + ">" + before);
 
-			int afterKeyComp = after == null ? -1 : mvAfter.keyId.compareTo(mvi.keyId);
-			int beforeKeyComp = before == null ? 1 : mvBefore.keyId.compareTo(mvi.keyId);
+			int afterKeyComp = mvAfter == null ? -1 : mvAfter.keyId.compareTo(mvi.keyId);
+			int beforeKeyComp = mvBefore == null ? 1 : mvBefore.keyId.compareTo(mvi.keyId);
 			if ((afterKeyComp < 0 || (afterKeyComp == 0 && mvAfter.valueId.compareTo(mvi.valueId) <= 0))//
 				&& (beforeKeyComp > 0 || (beforeKeyComp == 0 && mvBefore.valueId.compareTo(mvi.valueId) >= 0)))
 				return null; // Staying in the same place satisfies

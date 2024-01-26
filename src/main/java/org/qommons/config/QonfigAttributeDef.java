@@ -33,6 +33,7 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		 * @param type The type for the attribute value
 		 * @param specify The specification of the attribute
 		 * @param defaultValue The value to use if it is not specified
+		 * @param defaultValueContent The located content from the source file specifying the default value for the attribute
 		 * @param position Number The line number in the file where this attribute was defined
 		 * @param description The description for this attribute
 		 */
@@ -123,6 +124,7 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		 * @param type The type for the attribute value
 		 * @param specify The specification of the attribute
 		 * @param defaultValue The value to use if it is not specified
+		 * @param defaultValueContent The located content from the source file specifying the default value for the attribute
 		 * @param position The position in the file where this attribute was defined
 		 * @param description The description for this attribute
 		 */
@@ -168,6 +170,7 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		 * @param type The type for the attribute value
 		 * @param specify The specification of the attribute
 		 * @param defaultValue The value to use if it is not specified
+		 * @param defaultValueContent The located content from the source file specifying the default value for the attribute
 		 * @param position The position in the file where this attribute modification was defined
 		 * @param description The description for the attribute modification
 		 */

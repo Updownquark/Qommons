@@ -2,16 +2,7 @@ package org.qommons.config;
 
 import java.net.URL;
 import java.text.ParseException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.Objects;
-import java.util.Set;
-import java.util.TreeMap;
+import java.util.*;
 
 import org.qommons.MultiInheritanceMap;
 import org.qommons.MultiInheritanceSet;
@@ -405,6 +396,11 @@ public class QonfigToolkit implements Named, SelfDescribed {
 		return theDependenciesByDefinition;
 	}
 
+	/**
+	 * @param nsOrDef A reference to the toolkit, either a namespace or a name/version identifier
+	 * @return The toolkit dependency in this toolkit matching the reference
+	 * @throws ParseException If no such toolkit is a dependency of this toolkit
+	 */
 	public QonfigToolkit getDependency(String nsOrDef) throws ParseException {
 		if (nsOrDef.indexOf(' ') < 0)
 			return theDependencies.get(nsOrDef);

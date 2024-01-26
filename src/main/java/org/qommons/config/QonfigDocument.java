@@ -25,13 +25,14 @@ public class QonfigDocument {
 		return theToolkit;
 	}
 
-	/** @return The content of the document */
+	/** @return The content of the document, asserting that it is not {@link #getPartialRoot() partial} */
 	public QonfigElement getRoot() {
 		if (!(theRoot instanceof QonfigElement))
 			throw new IllegalStateException("This document is partial");
 		return (QonfigElement) theRoot;
 	}
 
+	/** @return The content of the document */
 	public PartialQonfigElement getPartialRoot() {
 		return theRoot;
 	}

@@ -15,6 +15,27 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 
 	private final boolean isPromise;
 
+	/**
+	 * @param declarer The toolkit declaring this type
+	 * @param name The name of this type
+	 * @param superElement The element that this type extends
+	 * @param inheritance Add-ons that this type is declared to inherit
+	 * @param isAbstract Whether this type is abstract
+	 * @param promise Whether this type is a promise type
+	 * @param declaredAttributes Attribute definitions declared on this type
+	 * @param attributeModifiers Attribute modifiers declared on this type to affect values that can be specified for inherited attributes
+	 * @param allAttributes All attributes specifiable on this type, by their declaration
+	 * @param attributesByName All attributes specifiable on this type, by name
+	 * @param declaredChildren Child roles declared on this type
+	 * @param childModifiers Child modifiers declared on this type to affect elements that can fulfill inherited roles
+	 * @param allChildren All child roles specifiable on this type, by their declaration
+	 * @param childrenByName All child roles specifiable on this type, by name
+	 * @param value The definition for the element value that can be declared on this type
+	 * @param fullInheritance The full add-on inheritance of this type
+	 * @param metaSpec The metadata specification for this type
+	 * @param position The position of this element's declaration in its source file
+	 * @param description The documentation description of this element
+	 */
 	protected QonfigElementDef(QonfigToolkit declarer, String name, QonfigElementDef superElement, Set<QonfigAddOn> inheritance,
 		boolean isAbstract, boolean promise, //
 		Map<String, QonfigAttributeDef.Declared> declaredAttributes, Map<QonfigAttributeDef.Declared, ValueDefModifier> attributeModifiers,
@@ -78,6 +99,7 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		return false;
 	}
 
+	/** @return Whether this element is a promise */
 	public boolean isPromise() {
 		return isPromise;
 	}
@@ -105,10 +127,15 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 			return (QonfigElementDef) super.get();
 		}
 
+		/** @return Whether this builder is building a promise element */
 		public boolean getPromise() {
 			return isPromise;
 		}
 
+		/**
+		 * @param promise Whether this builder is building a promise element
+		 * @return This builder
+		 */
 		public Builder promise(boolean promise) {
 			isPromise = promise;
 			return this;

@@ -16,6 +16,12 @@ public interface QonfigParser {
 	 */
 	QonfigParser withToolkit(QonfigToolkit... toolkits);
 
+	/**
+	 * Adds a promise fulfillment implementation to this parser
+	 * 
+	 * @param stitcher A class to load and fulfill external content for certain types of references
+	 * @return This parser
+	 */
 	QonfigParser withPromiseFulfillment(QonfigPromiseFulfillment stitcher);
 
 	/**

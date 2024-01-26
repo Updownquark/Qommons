@@ -152,6 +152,14 @@ public interface SessionValues {
 		return () -> put(sessionKey, preValue);
 	}
 
+	/**
+	 * @param <T> The type of the value to modify
+	 * @param sessionKey The key of the value to modify
+	 * @param defaultInitValue The value to modify if none is currently present for the key
+	 * @param modify The action to modify the value
+	 * @param revert The action to revert the value modification on the value
+	 * @return A transaction which, when {@link Transaction#close() closed}, will revert the modification
+	 */
 	default <T> Transaction modifyTemp(String sessionKey, Supplier<? extends T> defaultInitValue, Consumer<? super T> modify,
 		Consumer<? super T> revert) {
 		T preValue = (T) get(sessionKey);

@@ -23,6 +23,7 @@ public class ReaderInputStreamTest {
 	}
 
 	static class RISTestable implements Testable {
+		@SuppressWarnings("null")
 		@Override
 		public void accept(TestHelper helper) {
 			String chars = helper.getAlphaNumericString(1000, 10000);

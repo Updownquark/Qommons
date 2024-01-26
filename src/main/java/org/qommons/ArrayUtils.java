@@ -627,11 +627,11 @@ public final class ArrayUtils {
 				} else if (pos > min) {
 					adjIsLess = true;
 					adjValue = measure.applyAsDouble(pos - 1);
-					values.add(new PositionMeasure(pos - 1, adjValue));
+					found = values.addElement(new PositionMeasure(pos - 1, adjValue), false);
 				} else {
 					adjIsLess = false;
 					adjValue = measure.applyAsDouble(pos + 1);
-					values.add(new PositionMeasure(pos + 1, adjValue));
+					found = values.addElement(new PositionMeasure(pos + 1, adjValue), false);
 				}
 			}
 			if (measureCompare.compare(adjValue, posValue) > 0)
@@ -1290,12 +1290,13 @@ public final class ArrayUtils {
 	 */
 	public static <T, T2 extends T> T [] commonElements(T [] array1, T2 [] array2) {
 		int count = 0;
-		if(array1 == null && array2 == null)
-			return null;
-		else if(array2 == null)
-			return (T []) Array.newInstance(array1.getClass().getComponentType(), 0);
-		else if(array1 == null)
-			return (T []) Array.newInstance(array2.getClass().getComponentType(), 0);
+		if (array1 == null) {
+			if (array2 == null)
+				return null;
+			else
+				return Arrays.copyOf(array2, 0);
+		} else if (array2 == null)
+			return Arrays.copyOf(array1, 0);
 		int i, j;
 		for(i = 0; i < array1.length; i++)
 			for(j = 0; j < array2.length; j++)
@@ -1303,7 +1304,7 @@ public final class ArrayUtils {
 					count++;
 					break;
 				}
-		T [] ret = (T []) Array.newInstance(array1.getClass().getComponentType(), count);
+		T[] ret = Arrays.copyOf(array1, count);
 		count = 0;
 		for(i = 0; i < array1.length; i++)
 			for(j = 0; j < array2.length; j++)

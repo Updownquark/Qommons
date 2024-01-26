@@ -79,7 +79,7 @@ public class QonfigAutoInheritance {
 		}
 	}
 
-	/** A class to compile auto-inheritance from many sources */
+	/** A class to compile auto-inheritance for a target element from many sources */
 	public static class Compiler {
 		private final Collection<QonfigToolkit> theToolkits;
 		private final MultiInheritanceSet<QonfigElementOrAddOn> theParentTypes;
@@ -88,9 +88,7 @@ public class QonfigAutoInheritance {
 		private final MultiInheritanceSet<QonfigAddOn> theInheritance;
 		private final MultiInheritanceSet<QonfigElementOrAddOn> theTargetTypes;
 
-		/**
-		 * @param toolkits The toolkits with auto-inheritance to consider
-		 */
+		/** @param toolkits The toolkits with auto-inheritance to consider */
 		public Compiler(Collection<QonfigToolkit> toolkits) {
 			theToolkits = toolkits;
 			theParentTypes = MultiInheritanceSet.create(QonfigElementOrAddOn::isAssignableFrom);
@@ -100,10 +98,17 @@ public class QonfigAutoInheritance {
 			theTargetTypes = MultiInheritanceSet.create(QonfigElementOrAddOn::isAssignableFrom);
 		}
 
+		/** @return All add-ons automatically inherited for the element */
 		public MultiInheritanceSet<QonfigAddOn> getInheritance() {
 			return MultiInheritanceSet.unmodifiable(theInheritance);
 		}
 
+		/**
+		 * @param type The type that the target element extends/inherits
+		 * @param inheritance A consumer to be notified of add-ons that are automatically inherited by the target element as a result of
+		 *        inheriting the given type
+		 * @return This compiler
+		 */
 		public Compiler addParentType(QonfigElementOrAddOn type, Consumer<QonfigAddOn> inheritance) {
 			if (theParentTypes.add(type)) {
 				for (QonfigChildDef.Declared role : theDeclaredRoles)
@@ -112,6 +117,12 @@ public class QonfigAutoInheritance {
 			return this;
 		}
 
+		/**
+		 * @param role The role that the target element fulfills in its parent
+		 * @param inheritance A consumer to be notified of add-ons that are automatically inherited by the target element as a result of
+		 *        fulfilling the given role
+		 * @return This compiler
+		 */
 		public Compiler addRole(QonfigChildDef.Declared role, Consumer<QonfigAddOn> inheritance) {
 			if (theDeclaredRoles.add(role)) {
 				addTargetType(role.getType(), inheritance);

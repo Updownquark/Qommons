@@ -4,15 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -298,7 +290,7 @@ public class SimpleSequenceParser<E extends Enum<E>, V extends Comparable<V>> {
 			if (index < seq.size()) {
 				seq.addAll(theSequence.subList(0, index));
 				seq.add(newComponent);
-				int posDiff = text.length() - old.getText().length();
+				int posDiff = old == null ? 0 : (text.length() - old.getText().length());
 				if (posDiff == 0)
 					seq.addAll(theSequence.subList(index + 1, theSequence.size()));
 				else {

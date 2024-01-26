@@ -8,12 +8,16 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
+/**
+ * A utility class for locating a resource by string reference in situations where the reference may be relative to several root locations
+ */
 public class ResourceLocator {
 	private final Set<Object> theRelativeItems;
 	private final StringBuilder theRelativePath;
 	private boolean isWithQommonsClasspath;
 	private boolean isWithLocalDir;
 
+	/** Creates a resource locator */
 	public ResourceLocator() {
 		theRelativeItems = new LinkedHashSet<>();
 		theRelativePath = new StringBuilder();
@@ -21,26 +25,46 @@ public class ResourceLocator {
 		isWithLocalDir = true;
 	}
 
+	/**
+	 * @param withLocalDir Whether we should check for resources in the directory this application is running in
+	 * @return This locator
+	 */
 	public ResourceLocator withLocalDir(boolean withLocalDir) {
 		isWithLocalDir = withLocalDir;
 		return this;
 	}
 
+	/**
+	 * @param withQommonsClasspath Whether we should check for resources in the classpath where this class was loaded from
+	 * @return This locator
+	 */
 	public ResourceLocator withQommonsClasspath(boolean withQommonsClasspath) {
 		isWithQommonsClasspath = withQommonsClasspath;
 		return this;
 	}
 
+	/**
+	 * @param classes Classes to which the reference may be relative
+	 * @return This locator
+	 */
 	public ResourceLocator relativeTo(Class<?>... classes) {
 		theRelativeItems.addAll(Arrays.asList(classes));
 		return this;
 	}
 
+	/**
+	 * @param classLoaders Class loaders to call in an attempt to load the resource
+	 * @return This locator
+	 */
 	public ResourceLocator relativeTo(ClassLoader... classLoaders) {
 		theRelativeItems.addAll(Arrays.asList(classLoaders));
 		return this;
 	}
 
+	/**
+	 * @param files Directories that may contain the resource
+	 * @return This locator
+	 */
 	public ResourceLocator relativeTo(File... files) {
 		for (File file : files) {
 			try {
@@ -53,11 +77,19 @@ public class ResourceLocator {
 		return this;
 	}
 
+	/**
+	 * @param locations URLs of network folders that may contain the resource
+	 * @return This locator
+	 */
 	public ResourceLocator relativeTo(URL... locations) {
 		theRelativeItems.addAll(Arrays.asList(locations));
 		return this;
 	}
 
+	/**
+	 * @param relativeLocations Other resource paths that the resource may be relative to
+	 * @return This locator
+	 */
 	public ResourceLocator relativeTo(String... relativeLocations) {
 		for (String location : relativeLocations) {
 			if (location.isEmpty())
@@ -75,6 +107,13 @@ public class ResourceLocator {
 		return this;
 	}
 
+	/**
+	 * Attempts to find a resource
+	 * 
+	 * @param resourceLocation The resource location
+	 * @return The URL of the found resource
+	 * @throws IOException If the resource could not be located
+	 */
 	public URL findResource(String resourceLocation) throws IOException {
 		if (resourceLocation.isEmpty())
 			throw new IllegalArgumentException("Empty resource location string");
@@ -158,7 +197,7 @@ public class ResourceLocator {
 		return false;
 	}
 
-	private URL evaluateRelativeResource(URL relativeTo, String path) {
+	private static URL evaluateRelativeResource(URL relativeTo, String path) {
 		StringBuilder resourcePath = new StringBuilder();
 		if (relativeTo.getPath() != null)
 			resourcePath.append(relativeTo.getPath());

@@ -22,12 +22,14 @@ public class QonfigValidation {
 		public final SpecificationType specification;
 		/** The value to use if it is not specified */
 		public final Object defaultValue;
+		/** The content in the source file of the default value */
 		public final LocatedPositionedContent defaultValueContent;
 
 		/**
 		 * @param type The type that must be specified
 		 * @param specify The specification of the value
 		 * @param defaultValue The value to use if it is not specified
+		 * @param defaultValueContent The content in the source file of the default value
 		 */
 		public ValueSpec(QonfigValueType type, SpecificationType specify, Object defaultValue,
 			LocatedPositionedContent defaultValueContent) {
@@ -83,23 +85,32 @@ public class QonfigValidation {
 					newDefaultValue = oldDefaultValue;
 				}
 			}
-			switch (newSpec) {
-			case Required:
-				if (override.defaultValue != null)
-					onWarning.accept("Default value '" + override.defaultValue + "'will not be used--value must be specified");
-				break;
-			case Optional:
-			case Forbidden:
-				if (oldSpec == SpecificationType.Required && newDefaultValue == null) {
-					onError.accept("Default value required to fulfill inherited requirement if value may be unspecified");
-					newSpec = oldSpec;
+			if (newSpec != null) {
+				switch (newSpec) {
+				case Required:
+					if (override.defaultValue != null)
+						onWarning.accept("Default value '" + override.defaultValue + "'will not be used--value must be specified");
+					break;
+				case Optional:
+				case Forbidden:
+					if (oldSpec == SpecificationType.Required && newDefaultValue == null) {
+						onError.accept("Default value required to fulfill inherited requirement if value may be unspecified");
+						newSpec = oldSpec;
+					}
+					break;
 				}
-				break;
 			}
 		}
 		return new ValueSpec(type, newSpec, newDefaultValue, defaultValueContent);
 	}
 
+	/**
+	 * @param override The overriding specification
+	 * @param inherited The inherited value specifications
+	 * @param onError To report errors
+	 * @param onWarning To report warnings
+	 * @return The modified value specification
+	 */
 	public static ValueSpec validateValue(ValueSpec override, List<ValueSpec> inherited, Consumer<String> onError,
 		Consumer<String> onWarning) {
 		// Check type first

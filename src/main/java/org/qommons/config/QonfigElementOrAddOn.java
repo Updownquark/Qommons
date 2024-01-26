@@ -1,16 +1,6 @@
 package org.qommons.config;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Consumer;
 
 import org.qommons.MultiInheritanceSet;
@@ -56,9 +46,11 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 	 * @param declaredAttributes The declared attributes for the item
 	 * @param attributeModifiers The attribute modifiers for the item
 	 * @param attributesByName Declared and inherited attributes for the item
+	 * @param allAttributes All attributes specifiable on this type, by their declaration
 	 * @param declaredChildren The declared children for the item
 	 * @param childModifiers The child modifiers for the item
 	 * @param childrenByName Declared and inherited children for the item
+	 * @param allChildren All child roles specifiable on this type, by their declaration
 	 * @param value The value definition or modifier for the item
 	 * @param metaSpec The metadata specification for the element
 	 * @param position The position in the file where this element was defined
@@ -583,6 +575,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param type The type for the value
 		 * @param specification The specification for the value
 		 * @param defaultValue The value to use if not specified
+		 * @param defaultValueContent The content in the source file containing the default value
 		 * @param position The position in the file where the value was defined
 		 * @param description The description for the value
 		 * @return This builder
@@ -618,6 +611,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param type The type for the value (or null to inherit it)
 		 * @param specification The specification for the value (or null to inherit it)
 		 * @param defaultValue The value to use if the value is not specified (or null to inherit it)
+		 * @param defaultValueContent The content in the source file containing the default value
 		 * @param position The position in the file where the value modifier was defined
 		 * @param description The description for the value modification
 		 * @return This builder
@@ -648,6 +642,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param type The type for the value
 		 * @param specification The specification for the value
 		 * @param defaultValue The value to use if the value is not specified
+		 * @param defaultValueContent The content in the source file containing the default value
 		 * @param description The description for the value modification
 		 * @param position The content that specified the modifier
 		 * @return The value modifier to use for the item
@@ -662,6 +657,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param type The type for the attribute value
 		 * @param specify The specification for the attribute
 		 * @param defaultValue The value to use if the attribute is not specified
+		 * @param defaultValueContent The content in the source file containing the default value
 		 * @param position The position in the file where the attribute was defined
 		 * @param description The description for the attribute
 		 * @return This builder
@@ -701,6 +697,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param type The new type for the value (or null to inherit it)
 		 * @param specification The new specification for the value (or null to inherit it)
 		 * @param defaultValue The value to use if the attribute is not specified (or null to inherit it)
+		 * @param defaultValueContent The content in the source file containing the default value
 		 * @param position The position where the attribute modifier was defined
 		 * @param description The description for the attribute modification
 		 * @return This builder
@@ -1068,7 +1065,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 
 		/**
 		 * @param metadata Accepts an element builder to which children can be
-		 *        {@link QonfigElement.Builder#withChild(java.util.List, QonfigElementDef, Consumer, PositionedContent, String) added}
+		 *        {@link QonfigElement.Builder#withChild(List, QonfigElementOrAddOn, Consumer, PositionedContent, String) added}
 		 * @return This builder
 		 */
 		public Builder withMetaData(Consumer<QonfigElement.Builder> metadata) {

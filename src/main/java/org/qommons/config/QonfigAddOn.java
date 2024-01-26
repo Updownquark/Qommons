@@ -102,6 +102,7 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		 * @param declarer The toolkit that declared this modifier
 		 * @param specification The specification type of the attribute or element value
 		 * @param defaultValue The default value for the attribute or element value
+		 * @param defaultValueContent The content in the source file containing the default value
 		 * @param description The description for this modification
 		 * @param content The content that specified the modifier
 		 */

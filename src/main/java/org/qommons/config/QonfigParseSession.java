@@ -32,6 +32,7 @@ public class QonfigParseSession extends ErrorReporting.Default {
 		return theToolkit;
 	}
 
+	/** @return Whether this session is to parse a partial element */
 	public boolean isPartial() {
 		return isPartial;
 	}
@@ -88,6 +89,7 @@ public class QonfigParseSession extends ErrorReporting.Default {
 	/**
 	 * Creates a root session
 	 * 
+	 * @param partial Whether this session is to parse a partial element
 	 * @param toolkit The toolkit for the session
 	 * @param position The file position of the root element
 	 * @return The new parse session

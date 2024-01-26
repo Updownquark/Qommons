@@ -14,6 +14,11 @@ import org.qommons.config.QonfigElement.QonfigValue;
 import org.qommons.io.LocatedFilePosition;
 import org.qommons.io.LocatedPositionedContent;
 
+/**
+ * A Qonfig element specified in XML which may not contain all content needed for a proper {@link QonfigElement}. This is valid for elements
+ * which are references to external content which may fulfill the remaining information or which are external content definitions whose
+ * remaining information must be specified by references to it.
+ */
 public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	private final QonfigDocument theDocument;
 	private final PartialQonfigElement theParent;
@@ -31,6 +36,22 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	private final PartialQonfigElement thePromise;
 	private final PartialQonfigElement theExternalContent;
 
+	/**
+	 * @param document The document containing this element
+	 * @param parent The parent of this element
+	 * @param type The Qonfig type of this element
+	 * @param inheritance The Qonfig add-ons inherited by this element
+	 * @param parentRoles The child roles that this element fulfills in its parent
+	 * @param declaredRoles The child roles declared on this element
+	 * @param attributes The attribute values for the element
+	 * @param children The children for the element (not populated yet)
+	 * @param childrenByRole The children for the element, by the role they occupy
+	 * @param value The value of the element
+	 * @param filePosition The position of this element in its source file
+	 * @param description The documentation description of this element
+	 * @param promise The promise that is loading this element's external content
+	 * @param externalContent The external content that this element is a reference to
+	 */
 	protected PartialQonfigElement(QonfigDocument document, PartialQonfigElement parent, QonfigElementOrAddOn type,
 		MultiInheritanceSet<QonfigAddOn> inheritance, Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles,
 		Map<Declared, AttributeValue> attributes, List<? extends PartialQonfigElement> children,
@@ -99,10 +120,12 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 		return theDescription;
 	}
 
+	/** @return The promise that is loading this element's external content */
 	public PartialQonfigElement getPromise() {
 		return thePromise;
 	}
 
+	/** @return The external content that this element is a reference to */
 	public PartialQonfigElement getExternalContent() {
 		return theExternalContent;
 	}
@@ -301,16 +324,31 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 		return theValue == null ? null : theValue.toString();
 	}
 
+	/**
+	 * Copies this element's data into a new child on an element builder
+	 * 
+	 * @param parent The builder to create the child for
+	 */
 	public void copyInto(QonfigElement.Builder parent) {
 		parent.withChild2(theParentRoles, theType, this::copy, theFilePosition, theDescription);
 	}
 
+	/**
+	 * Copies this element's data into an element builder
+	 * 
+	 * @param child The builder to copy this element's data into
+	 */
 	public void copy(QonfigElement.Builder child) {
 		child.withDocument(theDocument);
 		copyAttributes(child);
 		copyChildren(child);
 	}
 
+	/**
+	 * Copies this element's attributes and value into an element builder
+	 * 
+	 * @param child The builder to copy data into
+	 */
 	public void copyAttributes(QonfigElement.Builder child) {
 		for (Map.Entry<QonfigAttributeDef.Declared, AttributeValue> attr : theAttributes.entrySet()) {
 			if (attr.getValue().fileLocation.equals(theDocument.getLocation()))
@@ -320,11 +358,17 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 			child.withValue(theValue.text, theValue.value, theValue.position);
 	}
 
+	/**
+	 * Copies this element's children into an element builder
+	 * 
+	 * @param child The builder to copy data into
+	 */
 	public void copyChildren(QonfigElement.Builder child) {
 		for (PartialQonfigElement myChild : theChildren)
 			myChild.copyInto(child);
 	}
 
+	/** @return A string representation of this element including its location in its source file */
 	public String toLocatedString() {
 		return theType.getName() + "@" + getPositionInFile().toShortString();
 	}

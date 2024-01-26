@@ -1,18 +1,8 @@
 package org.qommons;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.Reader;
-import java.io.Writer;
+import java.io.*;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.NoSuchElementException;
+import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.LongConsumer;
@@ -431,7 +421,8 @@ public class StringUtils {
 				if (delimit)
 					into.append(delimiter);
 				if (last && !first && preTerminal != null) {
-					if (delimit && delimiter.charAt(delimiter.length() - 1) == ' ' && preTerminal.charAt(0) == ' ')
+					// If delimit is true, delimiter will not be null, but I'm suppressing a warning here
+					if (delimit && delimiter != null && delimiter.charAt(delimiter.length() - 1) == ' ' && preTerminal.charAt(0) == ' ')
 						into.deleteCharAt(into.length() - 1); // No double-space
 					into.append(preTerminal);
 				}

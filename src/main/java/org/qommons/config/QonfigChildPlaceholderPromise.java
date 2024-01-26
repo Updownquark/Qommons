@@ -9,8 +9,14 @@ import java.util.Set;
 import org.qommons.config.QonfigElement.AttributeValueInput;
 import org.qommons.io.ErrorReporting;
 
+/** Default promise fulfillment for the replacement of references in external content with children specified from the reference document */
 public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
+	/** The name of the promise element that this class fulfills */
 	public static final String CHILD_PLACEHOLDER = "child-placeholder";
+	/**
+	 * The name of the attribute on this fulfillment's promise element that refers to the role in the external content that will be
+	 * fulfilled by children from the reference
+	 */
 	public static final String REF_ROLE_ATTR = "ref-role";
 
 	private QonfigElementDef theChildPlaceholder;
@@ -70,15 +76,23 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 			return;
 		}
 		
-		parent.withChild(declaredRoles, role.getType(), child -> {
-			for (QonfigAddOn inh : inheritance)
-				child.inherits(inh, false);
-			for (Map.Entry<ElementQualifiedParseItem, AttributeValueInput> attr : attributes.entrySet())
-				child.withAttribute(attr.getKey(), attr.getValue());
-			child.createVariable(role.getMin(), role.getMax(), (child2, parent2) -> fulfillChildren(parent2, child2, promise, role));
-		}, promise.getFilePosition(), promise.getDescription());
+		if (role != null) {
+			parent.withChild(declaredRoles, role.getType(), child -> {
+				for (QonfigAddOn inh : inheritance)
+					child.inherits(inh, false);
+				for (Map.Entry<ElementQualifiedParseItem, AttributeValueInput> attr : attributes.entrySet())
+					child.withAttribute(attr.getKey(), attr.getValue());
+				child.createVariable(role.getMin(), role.getMax(), (child2, parent2) -> fulfillChildren(parent2, child2, promise, role));
+			}, promise.getFilePosition(), promise.getDescription());
+		}
 	}
 
+	/**
+	 * @param parent The parent to fulfill the children into
+	 * @param childRef The variable child reference
+	 * @param promise The promise that this fulfillment is fulfilling
+	 * @param role The role in the external content that the children must fulfill
+	 */
 	protected void fulfillChildren(QonfigElement.Builder parent, VariableQonfigElement childRef, PartialQonfigElement promise,
 		QonfigChildDef role) {
 		PartialQonfigElement extRefPromise = null;
@@ -106,6 +120,14 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 		fulfillChildren(parent, childRef, role, promise, extRefPromise, parent.reporting());
 	}
 
+	/**
+	 * @param parent The parent to fulfill the children into
+	 * @param childRef The variable child reference
+	 * @param promise The promise that this fulfillment is fulfilling
+	 * @param role The role in the external content that the children must fulfill
+	 * @param extRefPromise The promise containing the data to fulfill the children
+	 * @param reporting Error reporting
+	 */
 	protected void fulfillChildren(QonfigElement.Builder parent, VariableQonfigElement childRef, QonfigChildDef role,
 		PartialQonfigElement promise, PartialQonfigElement extRefPromise, ErrorReporting reporting) {
 		PartialQonfigElement usePromise;

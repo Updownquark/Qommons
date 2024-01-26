@@ -576,10 +576,10 @@ public abstract class QommonsConfig implements Cloneable {
 				break;
 			case Node.CDATA_SECTION_NODE:
 			case Node.TEXT_NODE:
-				if (textContent == null) {
+				if (textContent == null)
 					textContent = new StringBuilder();
+				if (trimmedContent == null)
 					trimmedContent = new StringBuilder();
-				}
 				textContent.append(child.getNodeValue());
 				String trim = child.getNodeValue().trim();
 				if (trimmedContent.length() > 0 && trim.length() > 0)
@@ -733,6 +733,13 @@ public abstract class QommonsConfig implements Cloneable {
 		return resolve(location, QommonsConfig.class, relative);
 	}
 
+	/**
+	 * @param location The path of the resource to find
+	 * @param loadingClass The loading class to use if the location is a classpath reference
+	 * @param relative The list of paths that the location is relative to
+	 * @return The path that the given resource should be located ad
+	 * @throws IOException If any of the given paths cannot be interpreted
+	 */
 	public static String resolve(String location, Class<?> loadingClass, String... relative) throws IOException {
 		if (location.startsWith("classpath://")) {
 			String resPath = location.substring("classpath:/".length());

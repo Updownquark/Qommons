@@ -3,12 +3,7 @@ package org.qommons.config;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Consumer;
 
 import org.qommons.config.QonfigInterpreterCore.Builder;
@@ -221,6 +216,7 @@ public class QonfigApp {
 		return theToolkits;
 	}
 
+	/** @return All promise fulfillment implementations configured to support loading external content by the application */
 	public List<QonfigPromiseFulfillment> getPromiseFulfillment() {
 		return thePromiseFulfillment;
 	}

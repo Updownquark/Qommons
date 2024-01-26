@@ -47,14 +47,23 @@ public final class QonfigElement extends PartialQonfigElement {
 		}
 	}
 
+	/** A structure containing the value of an attribute */
 	public static class AttributeValue extends QonfigValue {
 		private final PositionedContent theNamePosition;
 
+		/**
+		 * @param text The text that was specified for the attribute
+		 * @param value The parsed value of the attribute
+		 * @param fileLocation The name of the source file that the attribute was specified in
+		 * @param position The position of the attribute in its source file
+		 * @param namePosition The source position containing the name of the attribute where it was specified
+		 */
 		public AttributeValue(String text, Object value, String fileLocation, PositionedContent position, PositionedContent namePosition) {
 			super(text, value, fileLocation, position);
 			theNamePosition = namePosition;
 		}
 
+		/** @return The source position containing the name of the attribute where it was specified */
 		public PositionedContent getNamePosition() {
 			return theNamePosition;
 		}
@@ -103,6 +112,7 @@ public final class QonfigElement extends PartialQonfigElement {
 	/**
 	 * Builds an element
 	 * 
+	 * @param partial Whether to build the element as a partial element that need not have all its attributes completely fulfilled
 	 * @param reporting The session for error logging
 	 * @param doc The document being parsed
 	 * @param type The declared type of the element
@@ -190,19 +200,24 @@ public final class QonfigElement extends PartialQonfigElement {
 			theChildrenByRole = BetterHashMultiMap.<QonfigChildDef.Declared, PartialQonfigElement> build().buildMultiMap();
 			theInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
 
-			for (QonfigChildDef child : parentRoles) {
-				if (child.getType() != null && !child.getType().isAssignableFrom(theType))
-					errors.error("This element (" + theType + ") does not inherit " + child.getType() + "--cannot fulfill role " + child);
-				theInheritance.addAll(child.getInheritance());
-				for (QonfigAddOn inh : parent.getInheritance().getExpanded(QonfigAddOn::getInheritance)) {
-					ChildDefModifier mod = inh.getChildModifiers().get(child.getDeclared());
-					if (mod != null) {
-						if (mod.getTypeRestriction() != null && !mod.getTypeRestriction().isAssignableFrom(theType))
-							errors.error("This element (" + theType + ") does not inherit " + mod.getTypeRestriction()
-								+ " specified by inheritance " + inh + "--cannot fulfill role " + child);
-						theInheritance.addAll(mod.getInheritance());
+			if (parent != null) {
+				for (QonfigChildDef child : parentRoles) {
+					if (child.getType() != null && !child.getType().isAssignableFrom(theType))
+						errors
+							.error("This element (" + theType + ") does not inherit " + child.getType() + "--cannot fulfill role " + child);
+					theInheritance.addAll(child.getInheritance());
+					for (QonfigAddOn inh : parent.getInheritance().getExpanded(QonfigAddOn::getInheritance)) {
+						ChildDefModifier mod = inh.getChildModifiers().get(child.getDeclared());
+						if (mod != null) {
+							if (mod.getTypeRestriction() != null && !mod.getTypeRestriction().isAssignableFrom(theType))
+								errors.error("This element (" + theType + ") does not inherit " + mod.getTypeRestriction()
+									+ " specified by inheritance " + inh + "--cannot fulfill role " + child);
+							theInheritance.addAll(mod.getInheritance());
+						}
 					}
 				}
+			} else if (!parentRoles.isEmpty()) {
+				throw new IllegalStateException("Parent roles but no parent");
 			}
 			theAutoInheritance = autoInheritance;
 			theInheritance.addAll(theAutoInheritance.getInheritance().values());
@@ -218,6 +233,7 @@ public final class QonfigElement extends PartialQonfigElement {
 			}
 		}
 
+		/** @return The document containing this element */
 		public QonfigDocument getDocument() {
 			return theDocument;
 		}
@@ -227,18 +243,25 @@ public final class QonfigElement extends PartialQonfigElement {
 			return theType;
 		}
 
+		/** @return The parent element of this element */
 		public PartialQonfigElement getParent() {
 			return theParent;
 		}
 
+		/**
+		 * @return Whether this builder will build a {@link PartialQonfigElement partial element}, which may not have all its content
+		 *         specified
+		 */
 		public boolean isPartial() {
 			return isPartial;
 		}
 
+		/** @return The external content that this element is a reference to */
 		public PartialQonfigElement getExternalContent() {
 			return theExternalContent;
 		}
 
+		/** @return The promise that is loading this element's external content */
 		public PartialQonfigElement getPromise() {
 			return thePromise;
 		}
@@ -255,20 +278,35 @@ public final class QonfigElement extends PartialQonfigElement {
 			return theDeclaredRoles;
 		}
 
+		/** @return Error reporting for this element */
 		public ErrorReporting reporting() {
 			return theErrors;
 		}
 
+		/**
+		 * @param document The document for this element
+		 * @return This builder
+		 */
 		public Builder withDocument(QonfigDocument document) {
 			theDocument = document;
 			return this;
 		}
 
+		/**
+		 * @param ignoringExtraAttributes Whether to ignore attributes that are not defined by any inherited elements or add-ons. This may
+		 *        be needed when dealing with references to as-yet unknown types.
+		 * @return This builder
+		 */
 		public Builder ignoreExtraAttributes(boolean ignoringExtraAttributes) {
 			isIgnoringExtraAttributes = ignoringExtraAttributes;
 			return this;
 		}
 
+		/**
+		 * @param promise The promise loading the external content for this element
+		 * @param externalContent The external content that this element is a reference to
+		 * @return This builder
+		 */
 		public Builder fulfills(PartialQonfigElement promise, PartialQonfigElement externalContent) {
 			if (!isPartial && !(promise instanceof QonfigElement))
 				throw new IllegalArgumentException("Full elements must have full promises");
@@ -333,6 +371,11 @@ public final class QonfigElement extends PartialQonfigElement {
 			return this;
 		}
 
+		/**
+		 * @param attr The attribute definition
+		 * @param value The value of the attribute
+		 * @return This builder
+		 */
 		public Builder withAttribute(QonfigAttributeDef.Declared attr, AttributeValue value) {
 			if (theStage > 0)
 				throw new IllegalStateException("Cannot specify attributes after children");
@@ -356,6 +399,10 @@ public final class QonfigElement extends PartialQonfigElement {
 			return this;
 		}
 
+		/**
+		 * @return Whether this element is ready to have {@link #withChild(List, QonfigElementOrAddOn, Consumer, PositionedContent, String)
+		 *         children} specified for it
+		 */
 		public boolean isReadyForContent() {
 			return theStage == 1;
 		}
@@ -560,6 +607,14 @@ public final class QonfigElement extends PartialQonfigElement {
 			theStage = 1;
 		}
 
+		/**
+		 * Instantiates the element for this builder as a {@link VariableQonfigElement variable element} which represents a reference to an
+		 * unknown number of elements
+		 * 
+		 * @param minCount The minimum number of elements that must be specified to fulfill the variable element
+		 * @param maxCount The maximum number of elements that must be specified to fulfill the variable element
+		 * @param builder This builder
+		 */
 		public void createVariable(int minCount, int maxCount, BiConsumer<VariableQonfigElement, Builder> builder) {
 			if (!isPartial)
 				throw new IllegalStateException("This builder is not configured to build partial elements");
@@ -591,6 +646,7 @@ public final class QonfigElement extends PartialQonfigElement {
 			return theElement;
 		}
 
+		/** @return Any extra attributes were {@link #ignoreExtraAttributes(boolean) ignored} on this element */
 		public Map<ElementQualifiedParseItem, AttributeValueInput> getUnusedAttributes() {
 			return theUnusedAttributes == null ? Collections.emptyMap() : Collections.unmodifiableMap(theUnusedAttributes);
 		}
@@ -858,7 +914,8 @@ public final class QonfigElement extends PartialQonfigElement {
 							addAttr = !attrs.isEmpty();
 						}
 					}
-					if (attr == null) {
+					// If attr==null, then attrs will always !=null, but I'm suppressing a warning here
+					if (attr == null && attrs != null) {
 						switch (attrs.size()) {
 						case 1:
 							attr = attrs.getFirst();
@@ -885,7 +942,8 @@ public final class QonfigElement extends PartialQonfigElement {
 						}
 					}
 					parsedAttrs.set(i);
-					if (attrValues.containsKey(attr.getDeclared())) {
+					// attr will never be null here, but I'm suppressing a warning
+					if (attr != null && attrValues.containsKey(attr.getDeclared())) {
 						theErrors.error("Duplicate values supplied for attribute " + attrDef.itemName, null);
 					}
 					AttributeValueInput attrValue = theDeclaredAttributeValues.get(i);
@@ -896,7 +954,7 @@ public final class QonfigElement extends PartialQonfigElement {
 						theErrors.error("Could not parse attribute " + theDeclaredAttributeValues.get(i).toString(), e);
 						continue;
 					}
-					if (addAttr) {
+					if (addAttr && attr != null) {
 						attrValues.put(attr.getDeclared(),
 							new AttributeValue(attrValue.getText(), value, theDocument.getLocation(), attrValue.getPosition(),
 								attrDef.position));
@@ -940,7 +998,8 @@ public final class QonfigElement extends PartialQonfigElement {
 							}
 						}
 					}
-					if (attr == null) {
+					// If attr==null, then attrs will always !=null, but I'm suppressing a warning here
+					if (attr == null && attrs != null) {
 						switch (attrs.size()) {
 						case 0:
 							// Already caught and error logged
@@ -966,6 +1025,9 @@ public final class QonfigElement extends PartialQonfigElement {
 						}
 					}
 
+					// attr will never be null here, but I'm suppressing a warning
+					if (attr == null)
+						throw new IllegalStateException("Should not happen!");
 					// Now check the types and specifications
 					QonfigValue value = attrValues.get(attr.getDeclared());
 					ValueDefModifier mod = theType.getAttributeModifiers().get(attr.getDeclared());
