@@ -1,15 +1,7 @@
 package org.qommons.tree;
 
 import java.lang.reflect.Field;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.Set;
-import java.util.Spliterator;
-import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
@@ -332,7 +324,7 @@ public final class RedBlackNode<E> {
 			if (ret >= 0) // Will be -1 if cont returned false
 				ret -= sizeOf(right) + 1;
 		}
-		if (ret >= 0 && cont.getAsBoolean())
+		if (ret >= 0 && (cont == null || cont.getAsBoolean()))
 			theCachedIndex = new CachedIndex(ret, treeStamp);
 		return ret;
 	}
@@ -369,6 +361,8 @@ public final class RedBlackNode<E> {
 	public static int compare(RedBlackNode<?> a, RedBlackNode<?> b, BooleanSupplier cont) {
 		QommonsUtils.assertThat(a != null && b != null, NullPointerException::new, //
 			(a == null && b == null) ? "Both null" : (a == null ? "a is null" : "b is null"));
+		if (a == null || b == null)
+			throw new IllegalStateException(); // I know I just asserted this. I'm suppressing a warning here
 		QommonsUtils.assertThat(a.theTree == b.theTree, true, "Nodes are not from the same tree");
 		/* The easy way to compare two tree nodes is to just find the indexes of both in the tree and compare them.
 		 * If both nodes have this information cached, this is constant time, so use it. */
@@ -433,6 +427,8 @@ public final class RedBlackNode<E> {
 	public static <E> RedBlackNode<E> splitBetween(RedBlackNode<E> a, RedBlackNode<E> b, BooleanSupplier cont) {
 		QommonsUtils.assertThat(a != null && b != null, NullPointerException::new, //
 			(a == null && b == null) ? "Both null" : (a == null ? "a is null" : "b is null"));
+		if (a == null || b == null)
+			throw new IllegalStateException(); // I know I just asserted this. I'm suppressing a warning here
 		QommonsUtils.assertThat(a.theTree == b.theTree, true, "Nodes are not from the same tree");
 
 		RedBlackNode<E> origA = a, origB = b;

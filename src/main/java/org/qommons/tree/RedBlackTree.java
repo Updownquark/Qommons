@@ -288,7 +288,8 @@ public class RedBlackTree<E> {
 			RedBlackNode<E> next = n.getClosest(false); // Grab next first, since we may be about to remove n
 			if (toMove.get(index)) {
 				n.delete();
-				if (listener != null)
+				// If one is not null, the other will be too. I'm suppressing a warning here
+				if (listener != null && listenerData != null)
 					listenerData.add(listener.removed(n));
 				toReAdd.add(n.getValue());
 			}
@@ -310,7 +311,8 @@ public class RedBlackTree<E> {
 		for (int i = 0; i < toReAdd.size(); i++) {
 			E value = toReAdd.get(i);
 			n = insert(value, compare, distinct);
-			if (listener != null) {
+			// If one is not null, the other will be too. I'm suppressing a warning here
+			if (listener != null && listenerData != null) {
 				if (n != null)
 					listener.transferred(n, listenerData.get(i));
 				else
