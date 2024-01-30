@@ -1,14 +1,6 @@
 package org.qommons.collect;
 
-import java.util.AbstractCollection;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.NoSuchElementException;
-import java.util.Set;
+import java.util.*;
 import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -95,20 +87,20 @@ public class CollectionUtils {
 	}
 
 	/**
-	 * An action command from a {@link CollectionSynchronizerE synchronizer}, signalling what an {@link CollectionAdjustment adjustment}
+	 * An action command from a {@link CollectionSynchronizerX synchronizer}, signalling what an {@link CollectionAdjustment adjustment}
 	 * should do with an element
 	 */
 	public interface ElementSyncAction {}
 
 	/**
-	 * Controls the {@link CollectionAdjustment#adjust(CollectionSynchronizerE, AdjustmentOrder) synchronization} of each element of two
+	 * Controls the {@link CollectionAdjustment#adjust(CollectionSynchronizerX, AdjustmentOrder) synchronization} of each element of two
 	 * lists
 	 * 
 	 * @param <L> The type of the list to adjust
 	 * @param <R> The type of the list to synchronize against
 	 * @param <X> An exception type that may be thrown by any of the element methods
 	 */
-	public interface CollectionSynchronizerE<L, R, X extends Throwable> {
+	public interface CollectionSynchronizerX<L, R, X extends Throwable> {
 		/**
 		 * @param element The left-only element to handle
 		 * @return The action to take on the element
@@ -175,12 +167,12 @@ public class CollectionUtils {
 	}
 
 	/**
-	 * A {@link CollectionSynchronizerE} that cannot throw any checked exceptions
+	 * A {@link CollectionSynchronizerX} that cannot throw any checked exceptions
 	 * 
 	 * @param <L> The type of the list to adjust
 	 * @param <R> The type of the list to synchronize against
 	 */
-	public interface CollectionSynchronizer<L, R> extends CollectionSynchronizerE<L, R, RuntimeException> {
+	public interface CollectionSynchronizer<L, R> extends CollectionSynchronizerX<L, R, RuntimeException> {
 		@Override
 		boolean getOrder(ElementSyncInput<L, R> element);
 
@@ -204,7 +196,7 @@ public class CollectionUtils {
 	 * @param <S> Self parameter, making chain methods of this class easier with subclasses
 	 */
 	public static class SimpleCollectionSynchronizer<L, R, X extends Throwable, S extends SimpleCollectionSynchronizer<L, R, X, S>>
-		implements CollectionSynchronizerE<L, R, X> {
+		implements CollectionSynchronizerX<L, R, X> {
 		private static final ExFunction<ElementSyncInput<?, ?>, ElementSyncAction, RuntimeException> PRESERVE_COMMON = el -> el.preserve();
 
 		private final ExFunction<? super R, ? extends L, ? extends X> theMap;
@@ -575,7 +567,7 @@ public class CollectionUtils {
 	 * @param map The function to produce left-type values from right-type ones
 	 * @return A simple synchronizer to configure
 	 */
-	public static <L, R, X extends Throwable> SimpleCollectionSynchronizer<L, R, X, ?> simpleSyncE(
+	public static <L, R, X extends Throwable> SimpleCollectionSynchronizer<L, R, X, ?> simpleSyncX(
 		ExFunction<? super R, ? extends L, ? extends X> map) {
 		return new SimpleCollectionSynchronizer<>(map);
 	}
@@ -605,7 +597,7 @@ public class CollectionUtils {
 	 * @return A simple synchronizer to configure
 	 */
 	public static <L, R> SimpleCollectionSynchronizer<L, R, RuntimeException, ?> simpleSync(Function<? super R, ? extends L> map) {
-		return simpleSyncE(R -> map.apply(R));
+		return simpleSyncX(map::apply);
 	}
 
 	/** The order that a {@link CollectionUtils#synchronize(List, List) synchronized} list should be in */
@@ -644,11 +636,11 @@ public class CollectionUtils {
 		 * Synchronizes the content of the two lists.
 		 * </p>
 		 * <p>
-		 * This method will, for each element in the left list, allow the {@link CollectionSynchronizerE synchronizer} to determine what to
-		 * do with the element using either the {@link CollectionSynchronizerE#leftOnly(ElementSyncInput) leftOnly} or
-		 * {@link CollectionSynchronizerE#common(ElementSyncInput) common} method, as appropriate. For each un-mapped element in the right
+		 * This method will, for each element in the left list, allow the {@link CollectionSynchronizerX synchronizer} to determine what to
+		 * do with the element using either the {@link CollectionSynchronizerX#leftOnly(ElementSyncInput) leftOnly} or
+		 * {@link CollectionSynchronizerX#common(ElementSyncInput) common} method, as appropriate. For each un-mapped element in the right
 		 * list, the synchronizer will determine whether it should be added to the left list with the
-		 * {@link CollectionSynchronizerE#rightOnly(ElementSyncInput) rightOnly} method.
+		 * {@link CollectionSynchronizerX#rightOnly(ElementSyncInput) rightOnly} method.
 		 * </p>
 		 * <p>
 		 * If the <code>indexedAdd</code> flag is false, all right-only additions will be attempted only after all left-only and common
@@ -674,14 +666,14 @@ public class CollectionUtils {
 		 * @param order The order for the adjusted list
 		 * @throws X If the synchronizer throws an exception
 		 */
-		<X extends Throwable> void adjust(CollectionSynchronizerE<L, ? super R, X> sync, AdjustmentOrder order) throws X;
+		<X extends Throwable> void adjust(CollectionSynchronizerX<L, ? super R, X> sync, AdjustmentOrder order) throws X;
 
 		/**
 		 * @param <X> An exception type that the mapping function may throw
 		 * @param map A mapping from right to left values
 		 * @return A SimpleAdjustment to configure
 		 */
-		default <X extends Throwable> SimpleAdjustment<L, R, X> simpleE(ExFunction<? super R, ? extends L, ? extends X> map) {
+		default <X extends Throwable> SimpleAdjustment<L, R, X> simpleX(ExFunction<? super R, ? extends L, ? extends X> map) {
 			return new SimpleAdjustment<>(this, map);
 		}
 
@@ -690,7 +682,7 @@ public class CollectionUtils {
 		 * @return A SimpleAdjustment to configure
 		 */
 		default SimpleAdjustment<L, R, RuntimeException> simple(Function<? super R, ? extends L> map) {
-			return simpleE(map == null ? null : R -> map.apply(R));
+			return simpleX(map == null ? null : R -> map.apply(R));
 		}
 	}
 
@@ -883,7 +875,7 @@ public class CollectionUtils {
 		/**
 		 * Synchronizes the content of the two lists.
 		 * 
-		 * @see CollectionAdjustment#adjust(CollectionSynchronizerE, AdjustmentOrder)
+		 * @see CollectionAdjustment#adjust(CollectionSynchronizerX, AdjustmentOrder)
 		 * 
 		 * @throws X If the mapping function (or {@link #handleCommon(ExFunction) custom common element handler}) throws an exception
 		 */
@@ -949,14 +941,14 @@ public class CollectionUtils {
 		}
 
 		@Override
-		public <X extends Throwable> void adjust(CollectionSynchronizerE<L, ? super R, X> sync, AdjustmentOrder order) throws X {
+		public <X extends Throwable> void adjust(CollectionSynchronizerX<L, ? super R, X> sync, AdjustmentOrder order) throws X {
 			debug = Debug.d().debug(this).is("debugging");
 			if (adjusted)
 				throw new IllegalStateException("Adjustment may only be done once");
 			adjusted = true;
 			AdjustmentState state = new AdjustmentState();
 			// This cast is safe, because R-typed values are only returned, no accepting methods exist
-			state.adjust((CollectionSynchronizerE<L, R, X>) sync, order);
+			state.adjust((CollectionSynchronizerX<L, R, X>) sync, order);
 		}
 
 		class AdjustmentState {
@@ -979,7 +971,7 @@ public class CollectionUtils {
 			int[] updatedLeftIndexes;
 			int leftTarget;
 
-			boolean init(CollectionSynchronizerE<L, R, ?> sync, AdjustmentOrder order) {
+			boolean init(CollectionSynchronizerX<L, R, ?> sync, AdjustmentOrder order) {
 				input = new SyncInputImpl<>();
 				universalLeft = sync.universalLeftOnly(input);
 				if (universalLeft instanceof ValueSyncAction)
@@ -1052,7 +1044,7 @@ public class CollectionUtils {
 				return false;
 			}
 
-			<X extends Throwable> void adjust(CollectionSynchronizerE<L, R, X> sync, AdjustmentOrder order) throws X {
+			<X extends Throwable> void adjust(CollectionSynchronizerX<L, R, X> sync, AdjustmentOrder order) throws X {
 				if (debug) {
 					System.out.println("\t" + Arrays.toString(leftToRight));
 					System.out.println("\t" + Arrays.toString(rightToLeft));
@@ -1130,7 +1122,7 @@ public class CollectionUtils {
 					System.out.println("\tValue=" + theLeft);
 			}
 
-			<X extends Throwable> boolean compare(CollectionSynchronizerE<L, R, X> sync) throws X {
+			<X extends Throwable> boolean compare(CollectionSynchronizerX<L, R, X> sync) throws X {
 				input.hasLeft = input.hasRight = true;
 				input.leftIndex = leftIndex;
 				input.updatedLeftIndex = input.targetIndex;
@@ -1144,7 +1136,7 @@ public class CollectionUtils {
 				return order;
 			}
 
-			<X extends Throwable> ElementSyncAction getRightOnlyAction(CollectionSynchronizerE<L, R, X> sync) throws X {
+			<X extends Throwable> ElementSyncAction getRightOnlyAction(CollectionSynchronizerX<L, R, X> sync) throws X {
 				ElementSyncAction action = sync.rightOnly(input);
 				if (action == PRESERVE) // Both PRESERVE and REMOVE mean do nothing for right-only
 					action = REMOVE;
@@ -1167,14 +1159,14 @@ public class CollectionUtils {
 				System.out.println("]");
 			}
 
-			private <X extends Throwable> void doElement(boolean left, CollectionSynchronizerE<L, R, X> sync) throws X {
+			private <X extends Throwable> void doElement(boolean left, CollectionSynchronizerX<L, R, X> sync) throws X {
 				if (left)
 					doLeftAction(sync);
 				else
 					doRightAction(sync);
 			}
 
-			<X extends Throwable> void doLeftAction(CollectionSynchronizerE<L, R, X> sync) throws X {
+			<X extends Throwable> void doLeftAction(CollectionSynchronizerX<L, R, X> sync) throws X {
 				input.hasLeft = true;
 				input.leftIndex = leftTarget;
 				input.updatedLeftIndex = getUpdatedLeftIndex(leftTarget);
@@ -1322,7 +1314,7 @@ public class CollectionUtils {
 				}
 			}
 
-			<X extends Throwable> void doRightAction(CollectionSynchronizerE<L, R, X> sync) throws X {
+			<X extends Throwable> void doRightAction(CollectionSynchronizerX<L, R, X> sync) throws X {
 				if (rightToLeft[rightIndex] >= 0) {
 					leftTarget = rightToLeft[rightIndex];
 					doLeftAction(sync);

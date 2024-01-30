@@ -8,20 +8,7 @@ import java.lang.reflect.Method;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.TimeZone;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -1003,7 +990,8 @@ public class QommonsUtils {
 			if (filter == null || filter.test(value))
 				list.add(map == null ? (V) value : map.apply(value));
 		}
-		list.trimToSize();
+		if (filter != null)
+			list.trimToSize();
 		return BetterList.of(list);
 	}
 
