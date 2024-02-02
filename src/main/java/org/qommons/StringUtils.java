@@ -925,6 +925,82 @@ public class StringUtils {
 		return ret.toString();
 	}
 
+	/** Recognized roman numeral digits */
+	public static final String ROMAN_NUMERALS = "IVXLCDM";
+
+	static {
+		if (ROMAN_NUMERALS.length() % 3 != 1)
+			throw new IllegalStateException("There must be N*3+1 Roman Numeral digits, where N is any integer.  Currently there are "
+				+ ROMAN_NUMERALS.length() + "(" + ROMAN_NUMERALS + ")");
+	}
+
+	/**
+	 * @param number The number to convert
+	 * @return The roman numeral representation of the number
+	 */
+	public static String toRomanNumeral(int number) {
+		if (number <= 0)
+			return "N*";
+		StringBuilder str = new StringBuilder();
+		int max = 10;
+		for (int i = 3; i < ROMAN_NUMERALS.length(); i += 3)
+			max *= 10;
+		char maxRN = ROMAN_NUMERALS.charAt(ROMAN_NUMERALS.length() - 1);
+		while (number >= max) {
+			str.append(maxRN);
+			number -= max;
+		}
+
+		max /= 10;
+		int oneIdx = ROMAN_NUMERALS.length() - 3;
+		int fiveIdx = ROMAN_NUMERALS.length() - 2;
+		int tenIdx = ROMAN_NUMERALS.length() - 1;
+		while (max > 0) {
+			char one = ROMAN_NUMERALS.charAt(oneIdx);
+			char five = ROMAN_NUMERALS.charAt(fiveIdx);
+			char ten = ROMAN_NUMERALS.charAt(tenIdx);
+			int dec = number / max;
+			switch (dec) {
+			case 1:
+				str.append(one);
+				break;
+			case 2:
+				str.append(one).append(one);
+				break;
+			case 3:
+				str.append(one).append(one).append(one);
+				break;
+			case 4:
+				str.append(one).append(five);
+				break;
+			case 5:
+				str.append(five);
+				break;
+			case 6:
+				str.append(five).append(one);
+				break;
+			case 7:
+				str.append(five).append(one).append(one);
+				break;
+			case 8:
+				str.append(five).append(one).append(one).append(one);
+				break;
+			case 9:
+				str.append(one).append(ten);
+				break;
+			default:
+				break;
+			}
+
+			number -= dec * max;
+			max /= 10;
+			tenIdx = oneIdx;
+			fiveIdx = tenIdx - 1;
+			oneIdx = tenIdx - 2;
+		}
+		return str.toString();
+	}
+
 	/** A source of binary data */
 	public interface ByteIterator {
 		/**

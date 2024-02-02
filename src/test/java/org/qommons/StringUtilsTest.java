@@ -33,4 +33,19 @@ public class StringUtilsTest {
 			throw new IllegalStateException(e);
 		}
 	}
+
+	/** Tests {@link StringUtils#toRomanNumeral(int)} */
+	@Test
+	public void testRomanNumerals() {
+		Assert.assertEquals("I", StringUtils.toRomanNumeral(1));
+		Assert.assertEquals("IV", StringUtils.toRomanNumeral(4));
+		Assert.assertEquals("VIII", StringUtils.toRomanNumeral(8));
+		Assert.assertEquals("IX", StringUtils.toRomanNumeral(9));
+		Assert.assertEquals("DCCCXLVII", StringUtils.toRomanNumeral(847));
+		Assert.assertEquals("MCMLXXXVII", StringUtils.toRomanNumeral(1987));
+		Assert.assertEquals("MMXXIV", StringUtils.toRomanNumeral(2024));
+		Assert.assertEquals("DLXXIII", StringUtils.toRomanNumeral(573));
+		Assert.assertEquals("CMXLII", StringUtils.toRomanNumeral(942));
+		Assert.assertEquals("DCCXXXVI", StringUtils.toRomanNumeral(736));
+	}
 }
