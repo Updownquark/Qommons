@@ -112,7 +112,7 @@ public interface ThreadConstraint {
 	 */
 	default void invokeAndWait(Runnable task) throws InvocationTargetException {
 		if (isEventThread())
-			task.run();
+			invoke(task);
 		else {
 			boolean[] done = new boolean[1];
 			Throwable[] e = new Throwable[1];
