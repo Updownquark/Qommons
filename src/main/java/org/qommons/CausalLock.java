@@ -14,6 +14,11 @@ public interface CausalLock extends Transactable {
 	/** @return The currently active causes of write locks. This value is not unmodifiable for performance purposes. */
 	public Collection<Cause> getCurrentCauses();
 
+	/** @return The currently active causes of write locks which are not {@link Causable#isFinished() finished} being fired */
+	default Collection<Cause> getUnfinishedCauses() {
+		return QommonsUtils.filterMap(getCurrentCauses(), c -> !(c instanceof Causable) || !((Causable) c).isFinished(), null);
+	}
+
 	/** @return The first Causable in this lock's {@link #getCurrentCauses() current causes} */
 	default Causable getRootCausable() {
 		for (Cause cause : getCurrentCauses()) {
