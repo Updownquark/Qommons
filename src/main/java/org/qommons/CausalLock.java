@@ -16,6 +16,17 @@ public interface CausalLock extends Transactable {
 
 	/** @return The currently active causes of write locks which are not {@link Causable#isFinished() finished} being fired */
 	default Collection<Cause> getUnfinishedCauses() {
+		// Most of the time, there won't be any unfinished causes here, so the most performant way to do this is to check first
+		Collection<Cause> causes = getCurrentCauses();
+		boolean anyUnfinished = false;
+		for (Cause cause : causes) {
+			if (cause instanceof Causable && ((Causable) cause).isFinished()) {
+				anyUnfinished = true;
+				break;
+			}
+		}
+		if (!anyUnfinished)
+			return causes;
 		return QommonsUtils.filterMap(getCurrentCauses(), c -> !(c instanceof Causable) || !((Causable) c).isFinished(), null);
 	}
 

@@ -2,21 +2,7 @@ package org.qommons.testing;
 
 import static java.util.Arrays.asList;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.NavigableSet;
-import java.util.Objects;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -1259,7 +1245,6 @@ public class QommonsTestUtils {
 		BiPredicate<? super T, ? super T> equals) {
 		return new Matcher<Collection<T>>() {
 			private final String DESCRIP = "collection equivalent to ";
-			private final int MAX_SIZE_LENGTH = 5;
 			private int theFirstMiss = -1;
 			private boolean isSizeMismatched;
 			private boolean wasUnorderedEqual;
@@ -1298,33 +1283,27 @@ public class QommonsTestUtils {
 
 			@Override
 			public void describeMismatch(Collection<T> item, StringBuilder description) {
-				description.append("Expected ");
-				appendSize(values.size(), description);
-				description.append(DESCRIP);
-				StringBuilder str = new StringBuilder();
+				int origDescSize = description.length();
+				description.append("\nExpected ").append(DESCRIP);
+				int prefix = description.length() - origDescSize;
+				description.append(values.size()).append(values);
+				origDescSize = description.length();
+				description.append("\nBut was ");
 				if (isSizeMismatched)
-					str.append("(size only) ");
-				else
-					str.append('@').append(theFirstMiss).append(' ');
-				if (wasUnorderedEqual)
-					str.insert(0, "(disordered) ");
-				str.insert(0, "was ");
-				int spaces = DESCRIP.length() - str.length();
-				for (int i = 0; i < spaces; i++)
-					str.insert(i, ' ');
-				description.append(str.toString());
-				appendSize(((Collection<?>) item).size(), description);
-				description.append(item);
-			}
-
-			private void appendSize(int size, StringBuilder description) {
-				int ss = 10;
-				for (int i = 1; i < MAX_SIZE_LENGTH; i++) {
-					if (size < ss)
-						description.append(" ");
-					ss *= 10;
+					description.append("(size only) ");
+				else {
+					if (wasUnorderedEqual)
+						description.append("(disordered) ");
+					description.append('@').append(theFirstMiss).append(' ');
 				}
-				description.append("" + size);
+				int spaces = prefix - (description.length() - origDescSize);
+				for (int i = 10; i < values.size(); i *= 10)
+					spaces++;
+				for (int i = 10; i < item.size(); i *= 10)
+					spaces--;
+				for (int i = 0; i < spaces; i++)
+					description.append(' ');
+				description.append(item.size()).append(item);
 			}
 		};
 	}

@@ -50,7 +50,7 @@ public class DefaultCausalLock implements CausalLock {
 			causeFinish = null;
 		}
 		if (write && tCause != null)
-			theTransactionCauses.add(tCause);
+			theTransactionCauses.addFirst(tCause);
 		return new Transaction() {
 			private boolean isClosed;
 
@@ -67,7 +67,7 @@ public class DefaultCausalLock implements CausalLock {
 					}
 				}
 				if (write && tCause != null)
-					theTransactionCauses.removeLastOccurrence(tCause);
+					theTransactionCauses.removeFirstOccurrence(tCause);
 				valueLock.close();
 			}
 		};
@@ -79,7 +79,6 @@ public class DefaultCausalLock implements CausalLock {
 		return t == null ? null : addCause(t, write, cause);
 	}
 
-	/** @return The currently active causes of write locks. This value is not unmodifiable for performance purposes. */
 	@Override
 	public Collection<Cause> getCurrentCauses() {
 		return Collections.unmodifiableList(theTransactionCauses);
