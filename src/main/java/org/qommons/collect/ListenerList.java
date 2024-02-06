@@ -14,7 +14,7 @@ import java.util.function.Consumer;
  * that lend itself to that use extremely well, but has many other uses as well.
  * </p>
  * <p>
- * This class is basically a queue, but operates differently than a java {@link Collection}:
+ * This class is basically a linked queue, but operates differently than a java {@link Collection}:
  * <ul>
  * <li>When a value is {@link #add(Object, boolean) added} to a ListenerList, the return value is a reference to the element in the list
  * where the value was added, similar to a {@link BetterCollection}. This element can be used to remove the element from the collection or
@@ -23,10 +23,11 @@ import java.util.function.Consumer;
  * 
  * <li>Instead of returning an {@link Iterator} that can be used outside this list's control, this class provides a
  * {@link #forEach(Consumer) forEach} method that performs an action on each value in the collection. The tradeoff for the loss of control
- * is that this method can be extremely performant, not needing to obtain any locks. This feature also allows values to be added or removed
- * from this list at any time, in any state, including from within a call to {@link #forEach(Consumer)} or during a forEach invocation on
- * another thread. Actions on a value may remove the value or any other value, add other values to the list at any position, or perform any
- * other operation on the list.</li>
+ * is a safety check against re-entrancy, as described below.</li>
+ * <li>Values may be added or removed from this list at any time, in any state, including from within a call to {@link #forEach(Consumer)}
+ * or during a forEach invocation on another thread. Actions on a value may remove the value or any other value, add other values to the
+ * list at any position, or perform any other operation on the list. The {@link #add(Object, boolean)} method provides a parameter to
+ * control whether the new value participates in the current iteration (on the current thread).</li>
  * </ul>
  * </p>
  * 
@@ -231,6 +232,10 @@ public class ListenerList<E> {
 		return new Builder();
 	}
 
+	private static class Iterating {
+		int iterId = -1;
+	}
+
 	private class Node implements Element<E> {
 		E theValue;
 		volatile Node next;
@@ -240,7 +245,7 @@ public class ListenerList<E> {
 			theValue = value;
 		}
 
-		boolean isInAddFiringRound(Object firing) {
+		boolean isInAddFiringRound(int firing) {
 			return false;
 		}
 
@@ -274,17 +279,17 @@ public class ListenerList<E> {
 	}
 
 	private class SkipOneNode extends Node {
-		private Object skipOne;
+		private int skipOne;
 
-		public SkipOneNode(E value, Object skipOne) {
+		public SkipOneNode(E value, int skipOne) {
 			super(value);
 			this.skipOne = skipOne;
 		}
 
 		@Override
-		boolean isInAddFiringRound(Object firing) {
+		boolean isInAddFiringRound(int firing) {
 			if (firing == skipOne) {
-				skipOne = null;
+				skipOne = -1;
 				return true;
 			}
 			return false;
@@ -292,19 +297,20 @@ public class ListenerList<E> {
 	}
 
 	private class RunLastNode extends SkipOneNode {
-		RunLastNode(E value, Object skipOne) {
+		RunLastNode(E value, int skipOne) {
 			super(value, skipOne);
 		}
 	}
 
-	private final ThreadLocal<Object> isFiringSafe;
+	private final ThreadLocal<Iterating> isFiringSafe;
 	private final Node theTerminal;
 	private final String theReentrancyError;
 	private final InUseListener theInUseListener;
 	private final boolean isSynchronized;
 
 	private final AtomicInteger theSize;
-	private volatile Object unsafeIterId;
+	private volatile int unsafeIterId = -1;
+	private final AtomicInteger theIterIdGen;
 
 	ListenerList(String reentrancyError, boolean safeForEach, InUseListener inUseListener, boolean fastSize,
 		boolean sync) {
@@ -314,13 +320,14 @@ public class ListenerList<E> {
 		theTerminal = new Node(null);
 		theTerminal.next = theTerminal.previous = theTerminal;
 
-		isFiringSafe = safeForEach ? new ThreadLocal<>() : null;
+		isFiringSafe = safeForEach ? ThreadLocal.withInitial(Iterating::new) : null;
 		theReentrancyError = reentrancyError;
 		theInUseListener = inUseListener;
 		if (inUseListener != null)
 			fastSize = true;
 		theSize = fastSize ? new AtomicInteger() : null;
 		isSynchronized = sync;
+		theIterIdGen = new AtomicInteger();
 	}
 
 	/**
@@ -330,15 +337,15 @@ public class ListenerList<E> {
 	 * @return The added element
 	 */
 	public Element<E> add(E value, boolean skipCurrent) {
-		Object firing;
+		int firing;
 		if (skipCurrent) {
 			if (isFiringSafe != null)
-				firing = isFiringSafe.get(); // Thread safe because isFiring is a ThreadLocal
+				firing = isFiringSafe.get().iterId; // Thread safe because isFiring is a ThreadLocal
 			else
 				firing = unsafeIterId;
 		} else
-			firing = null;
-		Node newNode = firing == null ? new Node(value) : new SkipOneNode(value, firing);
+			firing = -1;
+		Node newNode = firing == -1 ? new Node(value) : new SkipOneNode(value, firing);
 		return addNode(newNode, true);
 	}
 
@@ -353,14 +360,14 @@ public class ListenerList<E> {
 	 * @return The added element
 	 */
 	public Element<E> addLast(E value, boolean skipCurrent) {
-		Object firing;
+		int firing;
 		if (skipCurrent) {
 			if (isFiringSafe != null)
-				firing = isFiringSafe.get(); // Thread safe because isFiring is a ThreadLocal
+				firing = isFiringSafe.get().iterId; // Thread safe because isFiring is a ThreadLocal
 			else
 				firing = unsafeIterId;
 		} else
-			firing = null;
+			firing = -1;
 		RunLastNode node = new RunLastNode(value, firing);
 		return addNode(node, true);
 	}
@@ -437,21 +444,32 @@ public class ListenerList<E> {
 	 * @return The removed node, or null if the list was empty all through the specified wait time
 	 */
 	public Element<E> poll(long waitTime) {
+		return poll(true, waitTime);
+	}
+
+	/**
+	 * Removes and returns the first or last element of this list, if the list is not empty
+	 * 
+	 * @param first Whether to get the first or last element in the list
+	 * @param waitTime If &gt;0, how long to wait in this method until a value is available
+	 * @return The removed node, or null if the list was empty all through the specified wait time
+	 */
+	public Element<E> poll(boolean first, long waitTime) {
 		boolean wait = waitTime > 0;
 		boolean timeChecking = wait && waitTime < Long.MAX_VALUE;
 		long start = timeChecking ? System.currentTimeMillis() : 0;
 		int waited = 0;
 		RunLastNode runLast = null;
-		Node remove = theTerminal.next;
+		Node remove = first ? theTerminal.next : theTerminal.previous;
 		do {
 			if (remove == theTerminal) {//
-			} else if (remove instanceof ListenerList.RunLastNode) {
+			} else if (first && remove instanceof ListenerList.RunLastNode) {
 				if (runLast == null)
 					runLast = (RunLastNode) remove;
 				remove = remove.next;
 				continue;
 			} else if (!remove.remove()) {
-				remove = theTerminal.next;
+				remove = first ? theTerminal.next : theTerminal.previous;
 				continue; // Removed elsewhere--try again
 			} else
 				return remove;
@@ -472,7 +490,7 @@ public class ListenerList<E> {
 					if (System.currentTimeMillis() > start + waitTime)
 						return null;
 				}
-				remove = theTerminal.next;
+				remove = first ? theTerminal.next : theTerminal.previous;
 			}
 		} while (wait);
 		return null;
@@ -485,7 +503,18 @@ public class ListenerList<E> {
 	 * @return The removed value, or null if the list was empty all through the specified wait time
 	 */
 	public E pollValue(long waitTime) {
-		Element<E> polled = poll(waitTime);
+		return pollValue(true, waitTime);
+	}
+
+	/**
+	 * Removes and returns the first or last value in this list, if the list is not empty
+	 * 
+	 * @param first Whether to get the first or last value in the list
+	 * @param waitTime If &gt;0, how long to wait in this method until a value is available
+	 * @return The removed value, or null if the list was empty all through the specified wait time
+	 */
+	public E pollValue(boolean first, long waitTime) {
+		Element<E> polled = poll(first, waitTime);
 		return polled == null ? null : polled.get();
 	}
 
@@ -518,16 +547,16 @@ public class ListenerList<E> {
 	 */
 	public void forEach(Consumer<E> action) {
 		Node node = theTerminal.next;
-		Object iterId = new Object();
-		Object reentrant;
+		int iterId = theIterIdGen.getAndUpdate(ListenerList::incIterId);
+		int reentrant;
 		if (isFiringSafe != null) {
-			reentrant = isFiringSafe.get();
-			if (reentrant != null && theReentrancyError != null)
+			reentrant = isFiringSafe.get().iterId;
+			if (reentrant != -1 && theReentrancyError != null)
 				throw new ReentrantNotificationException(theReentrancyError);
-			isFiringSafe.set(iterId);
+			isFiringSafe.get().iterId = iterId;
 		} else {
 			reentrant = unsafeIterId;
-			if (reentrant != null && theReentrancyError != null)
+			if (reentrant != -1 && theReentrancyError != null)
 				throw new ReentrantNotificationException(theReentrancyError);
 			unsafeIterId = iterId;
 		}
@@ -585,14 +614,18 @@ public class ListenerList<E> {
 			}
 		} finally {
 			if (isFiringSafe != null) {
-				if (reentrant == null)
-					isFiringSafe.remove();
-				else
-					isFiringSafe.set(reentrant);
+				isFiringSafe.get().iterId = reentrant;
 			} else {
 				unsafeIterId = reentrant;
 			}
 		}
+	}
+
+	static int incIterId(int prevId) {
+		int nextId = prevId + 1;
+		if (nextId == -1)
+			nextId++;
+		return nextId;
 	}
 
 	/** Removes all values from this list */
@@ -638,12 +671,12 @@ public class ListenerList<E> {
 	 *         return true during iteration on any thread.
 	 */
 	public boolean isFiring() {
-		Object reentrant;
+		int reentrant;
 		if (isFiringSafe != null)
-			reentrant = isFiringSafe.get();
+			reentrant = isFiringSafe.get().iterId;
 		else
 			reentrant = unsafeIterId;
-		return reentrant != null;
+		return reentrant != -1;
 	}
 
 	/**

@@ -8,15 +8,7 @@ import java.text.ParsePosition;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.TimeZone;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -1170,7 +1162,7 @@ public interface Format<T> {
 
 		@Override
 		public Double parse(CharSequence text) throws ParseException {
-			if (text.length() == 1 && text.charAt(0) == '?')
+			if (text.equals("?") || StringUtils.compareNumberTolerant(text, "nan", true, false) == 0)
 				return Double.NaN;
 			StringBuilder prefix = new StringBuilder();
 			int baseIndex = theBaseUnit.length() - 1;

@@ -24,7 +24,6 @@ public class QommonsTimer {
 		Thread t = new Thread(r, "Qommon Timer");
 		t.start();
 	}, new ElasticExecutor<>("Qommon Timer Offloader", () -> Runnable::run)//
-		.setPreferredQueueSize(0)//
 		.setUsedThreadLifetime(2000)//
 	::execute);
 

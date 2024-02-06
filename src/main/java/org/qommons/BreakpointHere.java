@@ -1,21 +1,16 @@
 package org.qommons;
 
 import java.lang.management.ManagementFactory;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Scanner;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The BreakpointHere class enables applications to transfer control to the java debugger, where this is VM-enabled. Users should always
- * have a breakpoint set at the indicated line in the source. The typical application for this is an in-application debugger that may have
- * an option to transfer control to the java debugger for more detailed debugging.
+ * have a breakpoint set at the indicated line in the source. Typical applicatons for this class are:
+ * <ul>
+ * <li>A test utility reproducing a failed test, transferring control to the debugger just before the anticipated failure</li>
+ * <li>An in-application debugger that may have an option to transfer control to the java debugger for more detailed debugging</li>
+ * </ul>
  */
 public class BreakpointHere {
 	private static boolean IGNORE_ALL;
@@ -45,7 +40,28 @@ public class BreakpointHere {
 	}
 
 	/**
-	 * Invoked to transfer control to the debugger. Debugging environments should set a breakpoint on the indicated line in this method.
+	 * <p>
+	 * Attempts to transfer control to the debugger. Debugging environments should set a breakpoint on the indicated line in this method.
+	 * </p>
+	 * <p>
+	 * If debugging is not enabled, this method will print a message to that effect to {@link System#err} the first time it is called and
+	 * return immediately. Thereafter, invocations of this method will return immediately with no effect.
+	 * </p>
+	 * <p>
+	 * If debugging is enabled but a breakpoint is not set at the appropriate place, this method will print a message to {@link System#err}
+	 * instructing the user to do so, along with instructions on how to skip the breakpoint via command-line input.
+	 * </p>
+	 * <p>
+	 * Whether or not the breakpoint is caught, the user may use command-line input to skip the breakpoint and potentially others in the
+	 * future:
+	 * <ul>
+	 * <li>Simply pressing the ENTER key will cause this method to return. Future calls to this method will perform as normal.</li>
+	 * <li>Typing 'L' and pressing ENTER will also cause future calls to this method from the same calling line of code to return
+	 * immediately.</li>
+	 * <li>Typing 'C' and pressing ENTER will also cause future calls to this method from the same calling <b>class</b> to return
+	 * immediately.</li>
+	 * <li>Typing 'A' and pressing ENTER will also cause all future calls to this method to return immediately.</li>
+	 * </ul>
 	 * 
 	 * @return Whether the breakpoint was actually caught
 	 */
@@ -78,83 +94,85 @@ public class BreakpointHere {
 		boolean alerted = false;
 		AsyncInputReader reader = null;
 		IgnoreType ignore = null;
-		do {
-			long pre = System.nanoTime();
-			ignore = IgnoreType.NONE;
+		try {
+			do {
+				long pre = System.nanoTime();
+				ignore = IgnoreType.NONE;
 
+				/* ||==\\   ||==\\   ||=====     //\\     ||   //     ||    ||  ||=====  ||==\\   ||=====  || ||
+				 * ||   \\  ||   \\  ||         //  \\    ||  //      ||    ||  ||       ||   \\  ||       || ||
+				 * ||   //  ||   //  ||        ||    ||   || //       ||    ||  ||       ||   //  ||       || ||
+				 * ||===    ||===    ||===     //====\\   ||//        ||====||  ||===    ||===    ||===    || ||
+				 * ||   \\  || \\    ||       //      \\  || \\       ||    ||  ||       || \\    ||       || ||
+				 * ||   ||  ||  \\   ||       ||      ||  ||  \\      ||    ||  ||       ||  \\   ||
+				 * ||===//  ||   \\  ||=====  ||      ||  ||   \\     ||    ||  ||=====  ||   \\  ||=====  () ()
+				 *
+				 * The user should set a breakpoint on the following line */
+				/*         \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ */
+				/* >>>> */ stack = Thread.currentThread().getStackTrace(); // <<<< Yeah, right here.
+				/*         /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ */
+				// Good. If you're here, press step return now.
 
+				// Or you can choose to ignore this breakpoint or others like it in the future by changing the value the ignore variable
 
-			/* ||==\\   ||==\\   ||=====     //\\     ||   //     ||    ||  ||=====  ||==\\   ||=====  || ||
-			 * ||   \\  ||   \\  ||         //  \\    ||  //      ||    ||  ||       ||   \\  ||       || ||
-			 * ||   //  ||   //  ||        ||    ||   || //       ||    ||  ||       ||   //  ||       || ||
-			 * ||===    ||===    ||===     //====\\   ||//        ||====||  ||===    ||===    ||===    || ||
-			 * ||   \\  || \\    ||       //      \\  || \\       ||    ||  ||       || \\    ||       || ||
-			 * ||   ||  ||  \\   ||       ||      ||  ||  \\      ||    ||  ||       ||  \\   ||
-			 * ||===//  ||   \\  ||=====  ||      ||  ||   \\     ||    ||  ||=====  ||   \\  ||=====  () ()
-			 *
-			 * The user should set a breakpoint on the following line */
-			/*         \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ */
-			/* >>>> */ stack = Thread.currentThread().getStackTrace(); // <<<< Yeah, right here.
-			/*         /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ */
-			// Good. If you're here, press step return now.
+				source = stack[2];
+				if (System.nanoTime() - pre < 10000000) {
+					// There is not a breakpoint set here.
+					StackTraceElement stackTop = stack[1];
 
-			// Or you can choose to ignore this breakpoint or others like it in the future by changing the value the ignore variable
+					if (!alerted) {
+						String debugArg = isDebugEnabled();
+						if (debugArg == null) {
+							theBreakpointCatchCount.decrementAndGet();
+							System.err
+								.println("WARNING! Application is attempting to catch a breakpoint, but debugging seems to be disabled");
+							IGNORE_ALL = true;
+							return false;
+						}
+						alerted = true;
 
+						StringBuilder msg = new StringBuilder();
+						msg.append("ATTENTION! ").append(source.getClassName()).append(" is attempting to catch a breakpoint at ")
+							.append(stackTop).append(" on thread ").append(thread.getName()).append(" (").append(thread.getId())
+							.append(')');
+						msg.append("\nNo break point is set at this location. You may:");
+						msg.append("\n 1) Install a breakpoint at ").append(stackTop).append(". We'll wait for you.");
+						msg.append("\n 2) Press ENTER to skip the breakpoint and return control to the application this time.");
+						msg.append("\n 3) Type \"L\" and press ENTER to ignore this particular break point (").append(source)
+							.append(") for this session.");
+						msg.append(
+							"\n 4) Type \"C\" and press ENTER to ignore all break points from the class that is requesting this break (")
+							.append(source.getClassName()).append(") for this session.");
+						msg.append("\n 5) Type \"A\" and press ENTER to ignore all break points for this session.");
+						System.err.println(msg);
 
-
-			source = stack[2];
-			if(System.nanoTime() - pre < 10000000) {
-				// There is not a breakpoint set here.
-				StackTraceElement stackTop = stack[1];
-
-				if(!alerted) {
-					String debugArg = isDebugEnabled();
-					if (debugArg == null) {
-						theBreakpointCatchCount.decrementAndGet();
-						System.err.println("WARNING! Application is attempting to catch a breakpoint, but debugging seems to be disabled");
-						IGNORE_ALL = true;
-						return false;
+						reader = new AsyncInputReader();
 					}
-					alerted = true;
+					try {
+						Thread.sleep(100);
+					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
+					}
 
-					StringBuilder msg = new StringBuilder();
-					msg.append("ATTENTION! ").append(source.getClassName()).append(" is attempting to catch a breakpoint at ")
-						.append(stackTop).append(" on thread ").append(thread.getName()).append(" (").append(thread.getId()).append(')');
-					msg.append("\nNo break point is set at this location. You may:");
-					msg.append("\n 1) Install a breakpoint at ").append(stackTop).append(". We'll wait for you.");
-					msg.append("\n 2) Press ENTER to skip the breakpoint and return control to the application this time.");
-					msg.append("\n 3) Type \"L\" and press ENTER to ignore this particular break point (").append(source)
-						.append(") for this session.");
-					msg.append("\n 4) Type \"C\" and press ENTER to ignore all break points from the class that is requesting this break (")
-						.append(source.getClassName()).append(") for this session.");
-					msg.append("\n 5) Type \"A\" and press ENTER to ignore all break points for this session.");
-					System.err.println(msg);
-
-					reader = new AsyncInputReader();
-				}
-				try {
-					Thread.sleep(100);
-				} catch (InterruptedException e) {
-					Thread.currentThread().interrupt();
-				}
-
-				String command = reader.getCommand();
-				if (command != null) {
-					if (command.length() == 0)
+					// Reader actually can't be null here, but I'm suppressing a warning
+					String command = reader == null ? null : reader.getCommand();
+					if (command != null) {
+						if (command.length() == 0)
+							break;
+						ignore = CLI_IGNORE.get(command.toLowerCase());
+						if (ignore == null) {
+							System.err.println("Type \"L\", \"C\", \"A\", or just press ENTER");
+							continue;
+						}
 						break;
-					ignore = CLI_IGNORE.get(command.toLowerCase());
-					if (ignore == null) {
-						System.err.println("Type \"L\", \"C\", \"A\", or just press ENTER");
-						continue;
 					}
-					break;
-				}
-			} else
-				breakpointCaught = true;
-		} while(!breakpointCaught);
-
-		if (reader != null)
-			reader.close();
+				} else
+					breakpointCaught = true;
+			} while (!breakpointCaught);
+		} finally {
+			if (reader != null)
+				reader.close();
+		}
 		if(ignore!=null){
 			switch(ignore){
 			case NONE:
@@ -164,8 +182,10 @@ public class BreakpointHere {
 				IGNORING_LOCATIONS.add(source);
 				break;
 			case CLASS:
-				System.out.println("Ignoring future breakpoints from class " + source.getClassName());
-				IGNORING_CLASSES.add(source.getClassName());
+				// Source actually can't be null here, but I'm suppressing a warning
+				System.out.println("Ignoring future breakpoints from class " + (source == null ? "?" : source.getClassName()));
+				if (source != null)
+					IGNORING_CLASSES.add(source.getClassName());
 				break;
 			case ALL:
 				System.out.println("Turning all breakpoints off");

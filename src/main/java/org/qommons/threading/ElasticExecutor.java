@@ -60,7 +60,6 @@ public class ElasticExecutor<T> {
 	private volatile int theMinThreadCount;
 	private volatile int theMaxThreadCount;
 	private volatile int theMaxQueueSize;
-	private volatile int thePreferredQueueSize;
 	private int theUnusedThreadLifetime;
 
 	private final ConcurrentLinkedQueue<T> theQueue;
@@ -68,8 +67,10 @@ public class ElasticExecutor<T> {
 	private volatile Runner theRunner;
 	private final AtomicInteger theThreadCount;
 	private final AtomicInteger theActiveThreads;
+	// This next field is duplicate information that could be derived from the above 2, but that wouldn't be atomic
+	private final AtomicInteger theWaitingThreads;
 	private volatile ConcurrentLinkedQueue<TaskExecutor<? super T>> theCachedWorkers;
-	private final AtomicReference<int[]> theNextWorkerId;
+	private final AtomicReference<byte[]> theNextWorkerId;
 
 	private final Object theLock;
 
@@ -85,7 +86,6 @@ public class ElasticExecutor<T> {
 		theMinThreadCount = 0;
 		theMaxThreadCount = Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
 		theMaxQueueSize = Integer.MAX_VALUE;
-		thePreferredQueueSize = 10;
 		theUnusedThreadLifetime = 100;
 
 		theQueue = new ConcurrentLinkedQueue<>();
@@ -93,11 +93,14 @@ public class ElasticExecutor<T> {
 		theRunner = new DefaultRunner();
 		theThreadCount = new AtomicInteger();
 		theActiveThreads = new AtomicInteger();
+		theWaitingThreads= new AtomicInteger();
 
-		theNextWorkerId = new AtomicReference<>(new int[] { 0 });
+		theNextWorkerId = new AtomicReference<>(new byte[] { 0 });
 
 		theLock = new Object();
 	}
+
+	// Configuration methods
 
 	/**
 	 * @param runner The runner to use to execute task threads in this executor. This method may be used to use this class with a thread
@@ -167,7 +170,9 @@ public class ElasticExecutor<T> {
 	 * @return This executor
 	 */
 	public ElasticExecutor<T> setMaxThreadCount(int maxThreadCount) {
-		if (theMinThreadCount > maxThreadCount)
+		if (maxThreadCount <= 0)
+			throw new IllegalArgumentException("Maximum thread count must be at least 1");
+		else if (theMinThreadCount > maxThreadCount)
 			throw new IllegalArgumentException(
 				"Maximum thread count cannot be less than minimum thread count: " + theMinThreadCount + "..." + maxThreadCount);
 		theMaxThreadCount = maxThreadCount;
@@ -182,14 +187,6 @@ public class ElasticExecutor<T> {
 	}
 
 	/**
-	 * @return The {@link #getQueueSize() queue size} above which new threads will be spawned to help (if permitted by
-	 *         {@link #getMaxThreadCount()})
-	 */
-	public int getPreferredQueueSize() {
-		return thePreferredQueueSize;
-	}
-
-	/**
 	 * @param maxQueueSize The maximum {@link #getQueueSize() queue size} allowed for this executor before tasks are {@link #execute(Object)
 	 *        rejected}.
 	 * @return This executor
@@ -200,18 +197,6 @@ public class ElasticExecutor<T> {
 		else if (maxQueueSize > MAX_POSSIBLE_QUEUE_SIZE)
 			throw new IllegalArgumentException("Maximum queue size cannot exceed " + MAX_POSSIBLE_QUEUE_SIZE + ": " + maxQueueSize);
 		theMaxQueueSize = maxQueueSize;
-		return this;
-	}
-
-	/**
-	 * @param prefQueueSize The {@link #getQueueSize() queue size} above which new threads will be spawned to help (if permitted by
-	 *        {@link #getMaxThreadCount()})
-	 * @return This executor
-	 */
-	public ElasticExecutor<T> setPreferredQueueSize(int prefQueueSize) {
-		if (prefQueueSize > MAX_POSSIBLE_QUEUE_SIZE)
-			throw new IllegalArgumentException("Preferred queue size cannot exceed " + MAX_POSSIBLE_QUEUE_SIZE + ": " + prefQueueSize);
-		thePreferredQueueSize = prefQueueSize;
 		return this;
 	}
 
@@ -252,6 +237,25 @@ public class ElasticExecutor<T> {
 		return this;
 	}
 
+	// Status methods
+
+	/** @return The current size of the queue of tasks waiting to begin execution */
+	public int getQueueSize() {
+		return theQueue.size();
+	}
+
+	/** @return The current number of threads being used to execute tasks */
+	public int getThreadCount() {
+		return theThreadCount.get();
+	}
+
+	/** @return The number of threads actively working on tasks for this executor */
+	public int getActiveThreads() {
+		return theActiveThreads.get();
+	}
+
+	// Action methods
+
 	/**
 	 * Executes a task
 	 * 
@@ -265,43 +269,26 @@ public class ElasticExecutor<T> {
 			return false;
 		}
 		theQueue.add(task);
-		synchronized (theLock) {
-			theLock.notify();
-		}
-		newQueueSize = theQueueSize.get();
-		if (newQueueSize > thePreferredQueueSize) {
-			if (getActiveThreads() == getThreadCount()) {
-				int newId = theThreadCount.incrementAndGet();
-				if (newId <= theMaxThreadCount) {
-					if (!startThread(newId) && newId == 1) {
-						throw new IllegalStateException("Could not start first worker thread--task executor returned null");
-					}
-				} else
-					theThreadCount.decrementAndGet();
+		if (theWaitingThreads.get() != 0) {
+			synchronized (theLock) {
+				theLock.notify();
 			}
-		} else if (newQueueSize == 1) {
-			if (theThreadCount.incrementAndGet() == 1) {// Start the first thread
-				if (!startThread(1))
-					throw new IllegalStateException("Could not start first worker thread--task executor returned null");
-			} else
-				theThreadCount.decrementAndGet();
+		} else {
+			int maxTC = theMaxThreadCount;
+			int preTC = theThreadCount.getAndUpdate(tc -> {
+				if (tc >= maxTC)
+					return tc;
+				return tc + 1;
+			});
+			if (preTC < maxTC) {
+				if (!startThread()) {
+					theThreadCount.getAndDecrement();
+					if (preTC == 0)
+						throw new IllegalStateException("Could not start first worker thread--task executor returned null");
+				}
+			}
 		}
 		return true;
-	}
-
-	/** @return The current size of the queue of tasks waiting to begin execution */
-	public int getQueueSize() {
-		return theQueueSize.get();
-	}
-
-	/** @return The current number of threads being used to execute tasks */
-	public int getThreadCount() {
-		return theThreadCount.get();
-	}
-
-	/** @return The number of threads actively working on tasks for this executor */
-	public int getActiveThreads() {
-		return theActiveThreads.get();
 	}
 
 	/**
@@ -361,7 +348,7 @@ public class ElasticExecutor<T> {
 		return cleared;
 	}
 
-	private boolean startThread(int threadNumber) {
+	private boolean startThread() {
 		TaskExecutor<? super T> taskExecutor = null;
 		ConcurrentLinkedQueue<TaskExecutor<? super T>> cache = theCachedWorkers;
 		if (cache != null)
@@ -372,25 +359,25 @@ public class ElasticExecutor<T> {
 			theThreadCount.getAndDecrement();
 			return false;
 		} else {
-			new ElasticExecutorWorker(threadNumber, taskExecutor).start();
+			new ElasticExecutorWorker(taskExecutor).start();
 			return true;
 		}
 	}
 	private static final char[] WORKER_ID_CHAR_SEQ;
 	static {
-		String workerCharSeq = "0123456789";
+		String workerCharSeq = "1234567890";
 		WORKER_ID_CHAR_SEQ = workerCharSeq.toCharArray();
 	}
 
 	private String getNextWorkerId() {
-		int[] workerId = theNextWorkerId.getAndUpdate(ElasticExecutor::incrementWorkerId);
+		byte[] workerId = theNextWorkerId.getAndUpdate(ElasticExecutor::incrementWorkerId);
 		char[] workerIdChars = new char[workerId.length];
 		for (int i = 0; i < workerId.length; i++)
 			workerIdChars[i] = WORKER_ID_CHAR_SEQ[workerId[i]];
 		return new String(workerIdChars);
 	}
 
-	static int[] incrementWorkerId(int[] previous) {
+	static byte[] incrementWorkerId(byte[] previous) {
 		int idx = previous.length - 1;
 		int dig = previous[idx] + 1;
 		while (dig == WORKER_ID_CHAR_SEQ.length) {
@@ -399,28 +386,26 @@ public class ElasticExecutor<T> {
 				break;
 			dig = previous[idx];
 		}
-		int[] newId;
+		byte[] newId;
 		if (idx < 0)
-			newId = new int[previous.length + 1];
+			newId = new byte[previous.length + 1];
 		else {
-			newId = new int[previous.length];
+			newId = new byte[previous.length];
 			if (idx > 0)
 				System.arraycopy(previous, 0, newId, 0, idx);
-			newId[idx] = dig;
+			newId[idx] = (byte) dig;
 			if (idx < previous.length - 1)
-				Arrays.fill(newId, idx + 1, newId.length, 0);
+				Arrays.fill(newId, idx + 1, newId.length, (byte) 0);
 		}
 		return newId;
 	}
 
 	private class ElasticExecutorWorker implements Runnable {
 		private final String theWorkerId;
-		private final int theThreadNumber;
 		private final TaskExecutor<? super T> theTaskExecutor;
 
-		ElasticExecutorWorker(int threadNumber, TaskExecutor<? super T> taskExecutor) {
+		ElasticExecutorWorker(TaskExecutor<? super T> taskExecutor) {
 			theWorkerId = getNextWorkerId();
-			theThreadNumber = threadNumber;
 			theTaskExecutor = taskExecutor;
 		}
 
@@ -434,30 +419,32 @@ public class ElasticExecutor<T> {
 			long lastUsed = now;
 			T task = theQueue.poll();
 			boolean die = false;
+			boolean active = true; // Assume we'll be active since we've just been spawned
+			theActiveThreads.getAndIncrement();
 			while (!die) {
 				if (task != null) {
-					theActiveThreads.getAndIncrement();
+					if (!active) {
+						active = true;
+						theActiveThreads.getAndIncrement();
+						theWaitingThreads.getAndDecrement();
+					}
 					do {
-						if (theQueueSize.decrementAndGet() > thePreferredQueueSize) {
-							// Think about allocating a new writer
-							int newId = theThreadCount.incrementAndGet();
-							if (newId <= theMaxThreadCount) {
-								startThread(newId);
-							} else {
-								theThreadCount.decrementAndGet();
-							}
-						}
 						try {
 							theTaskExecutor.execute(task);
 						} catch (RuntimeException | Error e) {
 							e.printStackTrace();
 						}
-						task = theQueue.poll();
 						now = System.currentTimeMillis();
 						lastUsed = now;
+						task = theQueue.poll();
 					} while (task != null);
 					theActiveThreads.decrementAndGet();
 				} else {
+					if (active) {
+						active = false;
+						theActiveThreads.getAndDecrement();
+						theWaitingThreads.getAndIncrement();
+					}
 					synchronized (theLock) {
 						try {
 							theLock.wait(theUnusedThreadLifetime);
@@ -465,29 +452,20 @@ public class ElasticExecutor<T> {
 					}
 					now = System.currentTimeMillis();
 					task = theQueue.poll();
-				}
-				if (task != null)
-					die = false;
-				else if (theThreadNumber <= theMinThreadCount)
-					die = false;// We stay alive forever
-				else if (theThreadNumber > theMaxThreadCount)
-					die = true;
-				else if ((now - lastUsed) >= theUnusedThreadLifetime)
-					die = true;
-				else
-					die = false;
-				if (die) {
-					if (theThreadCount.decrementAndGet() == 0 && theQueueSize.get() > 0) {
-						// Make sure we don't orphan any just-queued tasks
-						if (theThreadCount.incrementAndGet() > theMaxThreadCount)
-							theThreadCount.decrementAndGet();
-						else {
-							die = false;
-							now = System.currentTimeMillis();
-						}
+					if (task == null && (now - lastUsed) >= theUnusedThreadLifetime) {
+						// No tasks available, see if we should die now
+						int minTC = theMinThreadCount;
+						int preTC = theThreadCount.getAndUpdate(tc -> {
+							if (tc <= minTC)
+								return tc;
+							return tc - 1;
+						});
+						if (preTC > minTC)
+							die = true;
 					}
 				}
 			}
+			theWaitingThreads.getAndDecrement();
 			ConcurrentLinkedQueue<TaskExecutor<? super T>> cache = theCachedWorkers;
 			if (cache != null)
 				cache.add(theTaskExecutor);

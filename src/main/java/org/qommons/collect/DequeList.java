@@ -1,15 +1,9 @@
 package org.qommons.collect;
 
-import java.util.Collection;
-import java.util.ConcurrentModificationException;
-import java.util.Deque;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
+import java.util.*;
 
 import org.qommons.Stamped;
+import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
  * A {@link List} that is also a {@link Deque} and contains a few other enhancements as well
@@ -17,6 +11,60 @@ import org.qommons.Stamped;
  * @param <E> The type of values in the list
  */
 public interface DequeList<E> extends Deque<E>, RRList<E>, Stamped {
+	/**
+	 * @param <E> The type of the list
+	 * @return An immutable empty {@link DequeList} of the given type
+	 */
+	public static <E> DequeList<E> empty() {
+		return (DequeList<E>) EMPTY;
+	}
+
+	/**
+	 * @param <E> The type of the list
+	 * @param value The value for the list's single element
+	 * @return An immutable {@link DequeList} with only the given value
+	 */
+	public static <E> DequeList<E> singleton(E value) {
+		return new SingletonDequeList<>(value);
+	}
+
+	/**
+	 * @param <E> The type of the list
+	 * @param values The values for the list
+	 * @return An immutable {@link DequeList} with the given values
+	 */
+	public static <E> DequeList<E> of(E... values) {
+		return of(Arrays.asList(values));
+	}
+
+	/**
+	 * @param <E> The type of the list
+	 * @param values The values for the list
+	 * @return An immutable {@link DequeList} with the given values
+	 */
+	public static <E> DequeList<E> of(Collection<? extends E> values) {
+		if (values.isEmpty())
+			return empty();
+		else if (values.size() == 1)
+			return singleton(values.iterator().next());
+		else
+			return new SimpleImmutableList<>(values);
+	}
+
+	/**
+	 * @param <E> The type of the list
+	 * @param firstValues The values for the beginning of the list (may be null)
+	 * @param lastValue The last value for the list
+	 * @return A {@link DequeList} containing all elements in the given collection, followed by the given last value
+	 */
+	public static <E> DequeList<E> concat(Collection<? extends E> firstValues, E lastValue) {
+		Object[] newValues = new Object[firstValues == null ? 1 : (firstValues.size() + 1)];
+		if (firstValues != null)
+			firstValues.toArray(newValues);
+		newValues[newValues.length - 1] = lastValue;
+		return (DequeList<E>) of(newValues);
+	}
+
 	/**
 	 * @param start The lower bound of the iterator
 	 * @param end The upper bound of the iterator
@@ -464,6 +512,397 @@ public interface DequeList<E> extends Deque<E>, RRList<E>, Stamped {
 		@Override
 		public String toString() {
 			return BetterCollection.toString(this);
+		}
+	}
+
+	/** An immutable {@link DequeList} with no values */
+	static class EmptyDequeList implements DequeList<Object> {
+		@Override
+		public boolean offerFirst(Object e) {
+			return false;
+		}
+
+		@Override
+		public boolean offerLast(Object e) {
+			return false;
+		}
+
+		@Override
+		public Object pollFirst() {
+			return null;
+		}
+
+		@Override
+		public Object pollLast() {
+			return null;
+		}
+
+		@Override
+		public Object peekFirst() {
+			return null;
+		}
+
+		@Override
+		public Object peekLast() {
+			return null;
+		}
+
+		@Override
+		public boolean removeLastOccurrence(Object o) {
+			return false;
+		}
+
+		@Override
+		public boolean remove(Object o) {
+			return false;
+		}
+
+		@Override
+		public int size() {
+			return 0;
+		}
+
+		@Override
+		public boolean addAll(int index, Collection<? extends Object> c) {
+			return false;
+		}
+
+		@Override
+		public Object get(int index) {
+			throw new IndexOutOfBoundsException(index + " of 0");
+		}
+
+		@Override
+		public Object set(int index, Object element) {
+			throw new IndexOutOfBoundsException(index + " of 0");
+		}
+
+		@Override
+		public void add(int index, Object element) {
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public Object remove(int index) {
+			throw new IndexOutOfBoundsException(index + " of 0");
+		}
+
+		@Override
+		public int indexOf(Object o) {
+			return -1;
+		}
+
+		@Override
+		public int lastIndexOf(Object o) {
+			return -1;
+		}
+
+		@Override
+		public <T> T[] toArray(T[] a) {
+			return a;
+		}
+
+		@Override
+		public boolean containsAll(Collection<?> c) {
+			return c.isEmpty();
+		}
+
+		@Override
+		public void clear() {
+		}
+
+		@Override
+		public long getStamp() {
+			return 0;
+		}
+
+		@Override
+		public ListIterator<Object> iterator(int start, int end, int next, boolean forward) {
+			if (start != 0 || end != 0)
+				throw new IndexOutOfBoundsException(start + " to " + end + " of 0");
+			return Collections.emptyListIterator();
+		}
+
+		@Override
+		public boolean containsAny(Collection<?> c) {
+			return false;
+		}
+
+		@Override
+		public DequeList<Object> subList(int fromIndex, int toIndex) {
+			if (fromIndex != 0 || toIndex != 0)
+				throw new IndexOutOfBoundsException(fromIndex + " to " + toIndex + " of 0");
+			return this;
+		}
+
+		@Override
+		public int hashCode() {
+			return 0;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof Collection && ((Collection<?>) obj).isEmpty();
+		}
+
+		@Override
+		public String toString() {
+			return "[]";
+		}
+	}
+
+	/** Singleton empty {@link DequeList} */
+	static final EmptyDequeList EMPTY = new EmptyDequeList();
+
+	/**
+	 * An immutable {@link DequeList} with a single value
+	 * 
+	 * @param <E> The type of the value in the list
+	 */
+	static class SingletonDequeList<E> implements DequeList<E> {
+		private final E theValue;
+
+		public SingletonDequeList(E value) {
+			theValue = value;
+		}
+
+		@Override
+		public boolean offerFirst(E e) {
+			return false;
+		}
+
+		@Override
+		public boolean offerLast(E e) {
+			return false;
+		}
+
+		@Override
+		public E pollFirst() {
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public E pollLast() {
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public E peekFirst() {
+			return theValue;
+		}
+
+		@Override
+		public E peekLast() {
+			return theValue;
+		}
+
+		@Override
+		public boolean removeLastOccurrence(Object o) {
+			if (Objects.equals(theValue, o))
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			return false;
+		}
+
+		@Override
+		public boolean remove(Object o) {
+			if (contains(0))
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			return false;
+		}
+
+		@Override
+		public int size() {
+			return 1;
+		}
+
+		@Override
+		public boolean addAll(int index, Collection<? extends E> c) {
+			if (!c.isEmpty())
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			return false;
+		}
+
+		@Override
+		public E get(int index) {
+			if (index == 0)
+				return theValue;
+			else
+				throw new IndexOutOfBoundsException(index + " of 1");
+		}
+
+		@Override
+		public E set(int index, E element) {
+			if (index == 0)
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			else
+				throw new IndexOutOfBoundsException(index + " of 1");
+		}
+
+		@Override
+		public void add(int index, E element) {
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public E remove(int index) {
+			if (index == 0)
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			else
+				throw new IndexOutOfBoundsException(index + " of 1");
+		}
+
+		@Override
+		public int indexOf(Object o) {
+			if (Objects.equals(theValue, o))
+				return 0;
+			else
+				return -1;
+		}
+
+		@Override
+		public int lastIndexOf(Object o) {
+			if (Objects.equals(theValue, o))
+				return 0;
+			else
+				return -1;
+		}
+
+		@Override
+		public <T> T[] toArray(T[] a) {
+			if (a.length == 0)
+				a = Arrays.copyOf(a, 1);
+			a[0] = (T) theValue;
+			return a;
+		}
+
+		@Override
+		public boolean containsAll(Collection<?> c) {
+			for (Object v : c) {
+				if (!Objects.equals(theValue, v))
+					return false;
+			}
+			return true;
+		}
+
+		@Override
+		public void clear() {
+		}
+
+		@Override
+		public long getStamp() {
+			return 0;
+		}
+
+		@Override
+		public ListIterator<E> iterator(int start, int end, int next, boolean forward) {
+			if (start < 0 || end > 1 || start > end)
+				throw new IndexOutOfBoundsException(start + " to " + end + " of 1");
+			else if (start == end)
+				return Collections.emptyListIterator();
+			else
+				return new SingletonIterator(!forward, start == 0);
+		}
+
+		@Override
+		public boolean containsAny(Collection<?> c) {
+			return c.contains(theValue);
+		}
+
+		@Override
+		public DequeList<E> subList(int fromIndex, int toIndex) {
+			if (fromIndex == toIndex)
+				return empty();
+			else if (fromIndex == 0 && toIndex == 1)
+				return this;
+			else
+				throw new IndexOutOfBoundsException(fromIndex + " to " + toIndex + " of 1");
+		}
+
+		@Override
+		public int hashCode() {
+			return theValue == null ? 0 : theValue.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof Collection))
+				return false;
+			Collection<?> other = (Collection<?>) obj;
+			return other.size() == 1 && Objects.equals(theValue, other.iterator().next());
+		}
+
+		@Override
+		public String toString() {
+			return new StringBuilder("[").append(theValue).append(']').toString();
+		}
+
+		class SingletonIterator implements ListIterator<E> {
+			private final boolean isReversed;
+			private boolean isBefore;
+
+			SingletonIterator(boolean isReversed, boolean isBefore) {
+				this.isReversed = isReversed;
+				this.isBefore = isBefore;
+			}
+
+			@Override
+			public boolean hasNext() {
+				return isReversed ^ isBefore;
+			}
+
+			@Override
+			public E next() {
+				if (!hasNext())
+					throw new NoSuchElementException();
+				isBefore = isReversed;
+				return theValue;
+			}
+
+			@Override
+			public boolean hasPrevious() {
+				return !isReversed ^ isBefore;
+			}
+
+			@Override
+			public E previous() {
+				if (!hasPrevious())
+					throw new NoSuchElementException();
+				isBefore = !isReversed;
+				return theValue;
+			}
+
+			@Override
+			public int nextIndex() {
+				if (hasNext())
+					return 0;
+				else
+					return 1;
+			}
+
+			@Override
+			public int previousIndex() {
+				if (hasPrevious())
+					return 0;
+				else
+					return -1;
+			}
+
+			@Override
+			public void remove() {
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			}
+
+			@Override
+			public void set(E e) {
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			}
+
+			@Override
+			public void add(E e) {
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			}
 		}
 	}
 }
