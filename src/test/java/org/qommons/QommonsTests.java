@@ -4,7 +4,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 import org.junit.runners.Suite.SuiteClasses;
 import org.qommons.collect.BetterBitSetTest;
-import org.qommons.collect.CLQTest;
 import org.qommons.collect.CircularListTest;
 import org.qommons.collect.CollectionUtilsTests;
 import org.qommons.collect.HashSetTest;
@@ -26,7 +25,6 @@ import org.qommons.tree.TreeUtilsTest;
 	StringUtilsTest.class, //
 	ArgumentParsingTest.class, //
 	CircularListTest.class,
-	CLQTest.class, //
 	CollectionUtilsTests.class, //
 	HashSetTest.class, //
 	ListenerListTest.class, //
