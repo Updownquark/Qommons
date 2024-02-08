@@ -1,20 +1,10 @@
 package org.qommons.io;
 
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.Reader;
-import java.io.Writer;
+import java.io.*;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Matcher;
 
 import org.qommons.ArgumentParsing;
@@ -44,6 +34,15 @@ import org.qommons.collect.QuickSet.QuickMap;
  * </p>
  * <p>
  * This class does not deal specifically with a header, which may be parsed the same as any other line.
+ * </p>
+ * <p>
+ * This class does not provide for validation of the column content (beyond valid CSV) or parsing of column values into structures. It is an
+ * easy-to-use, single-purpose utility for parsing CSV files, upon which other higher-level APIs may be developed.
+ * </p>
+ * <p>
+ * When errors are found in CSV, this class throws {@link TextParseException}s, which provide the {@link TextParseException#getErrorOffset()
+ * absolute position offset}, {@link TextParseException#getLineNumber() line number}, and {@link TextParseException#getColumnNumber() column
+ * number} of the location in the file where the error was observed.
  * </p>
  */
 public class CsvParser {
@@ -428,14 +427,29 @@ public class CsvParser {
 	}
 
 	/**
+	 * <p>
+	 * The only method in this class for <b>outputting</b> CSV, this method accepts any string and returns a string that, when encountered
+	 * in a CSV file, this class would parse as a single column value equivalent to the given string.
+	 * </p>
+	 * <p>
+	 * CSV is such a simple format that this method is the only functionality complicated enough to justify a utility method.
+	 * </p>
+	 * 
 	 * @param string The string to format to CSV
 	 * @param delimiter The delimiter of the format
 	 * @return The CSV-formatted cell value
 	 */
 	public static String toCsv(String string, char delimiter) {
-		if (string.indexOf(delimiter) < 0)
+		boolean simple = true;
+		for (int c = 0; simple && c < string.length(); c++) {
+			char ch = string.charAt(c);
+			if (ch == delimiter || ch == '\n')
+				simple = false;
+		}
+		if (simple)
 			return string;
-		StringBuilder str = new StringBuilder().append('"');
+		StringBuilder str = new StringBuilder(string.length() + 10);
+		str.append('"');
 		for (int c = 0; c < string.length(); c++) {
 			if (string.charAt(c) == '"')
 				str.append("\"\"");
