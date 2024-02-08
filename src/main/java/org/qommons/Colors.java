@@ -1769,7 +1769,7 @@ public class Colors {
 	/**
 	 * <p>
 	 * Represents a 2D hexagonal image that is a continuum of colors from red (left corner) to yellow (top-left corner) to green (top-right
-	 * corner) to cyan (right corner) to blue (bottom-right corner) to magenta (bottom-left corner.
+	 * corner) to cyan (right corner) to blue (bottom-right corner) to magenta (bottom-left corner).
 	 * </p>
 	 * <p>
 	 * This class is intended to support a color chooser user interface.
