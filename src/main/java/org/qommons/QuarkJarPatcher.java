@@ -2,39 +2,16 @@ package org.qommons;
 
 import java.awt.BorderLayout;
 import java.awt.HeadlessException;
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
+import java.io.*;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.attribute.FileTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import javax.swing.BoxLayout;
-import javax.swing.JDialog;
-import javax.swing.JEditorPane;
-import javax.swing.JFileChooser;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JProgressBar;
+import javax.swing.*;
 import javax.swing.Timer;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -96,6 +73,7 @@ public class QuarkJarPatcher {
 				"To create a patch specify the location of the '*.patch' file as the only command-line argument");
 	}
 
+	/** Represents a patch to be applied to an application */
 	public static class Patch {
 		private final String theAppName;
 		private final String theTargetVersion;
@@ -105,6 +83,16 @@ public class QuarkJarPatcher {
 		private final String thePatchDescription;
 		private final List<PatchFileSet> thePatchContents;
 
+		/**
+		 * @param appName The name of the application to patch
+		 * @param targetVersion The version of the application that this patch should be applied to
+		 * @param patchName The name of this patch
+		 * @param author The author of this patch
+		 * @param patchDate The date this patch was created
+		 * @param patchDescription A description of this patch
+		 * @param patchContents The file contents of the patch-the modifications to make to effect the change that is the purpose of this
+		 *        patch
+		 */
 		public Patch(String appName, String targetVersion, String patchName, String author, String patchDate, String patchDescription,
 			List<PatchFileSet> patchContents) {
 			theAppName = appName;
@@ -116,62 +104,79 @@ public class QuarkJarPatcher {
 			thePatchContents = patchContents;
 		}
 
+		/** @return The name of the application to patch */
 		public String getAppName() {
 			return theAppName;
 		}
 
+		/** @return The version of the application that this patch should be applied to */
 		public String getTargetVersion() {
 			return theTargetVersion;
 		}
 
+		/** @return The name of this patch */
 		public String getPatchName() {
 			return thePatchName;
 		}
 
+		/** @return The author of this patch */
 		public String getPatchAuthor() {
 			return thePatchAuthor;
 		}
 
+		/** @return The date this patch was created */
 		public String getPatchDate() {
 			return thePatchDate;
 		}
 
+		/** @return A description of this patch */
 		public String getPatchDescription() {
 			return thePatchDescription;
 		}
 
+		/** @return The file contents of the patch-the modifications to make to effect the change that is the purpose of this patch */
 		public List<PatchFileSet> getPatchContents() {
 			return thePatchContents;
 		}
 	}
 
+	/** An archive file or directory to update in a patch */
 	public static class PatchFileSet {
 		private final String theUpdateTarget;
 		private final String theSourceDir;
 		private final List<String> theFileSetContents;
 
+		/**
+		 * @param updateTarget The installation directory or archive file to be updated
+		 * @param sourceDir The path to the source directory containing the patch contents to be packaged
+		 * @param fileSetContents The paths to the files that need to be replaced in the installation
+		 */
 		public PatchFileSet(String updateTarget, String sourceDir, List<String> fileSetContents) {
 			theUpdateTarget = updateTarget;
 			theSourceDir = sourceDir;
 			theFileSetContents = fileSetContents;
 		}
 
+		/** @return The installation directory or archive file to be updated */
 		public String getUpdateTarget() {
 			return theUpdateTarget;
 		}
 
+		/** @return The path to the source directory containing the patch contents to be packaged */
 		public String getSourceDir() {
 			return theSourceDir;
 		}
 
+		/** @return The paths to the files that need to be replaced in the installation */
 		public List<String> getFileSetContents() {
 			return theFileSetContents;
 		}
 	}
 
+	/** Called from the executable patch jar to apply the patch */
 	public static void applyPatch() {
 		// IMPORTANT!! This method uses very few java-external utilities, including other Qommons classes,
-		// because they are not packaged in the patch file for size
+		// so they don't have to be packaged into the patch file for size
 		URL classFile = QuarkJarPatcher.class.getResource(QuarkJarPatcher.class.getSimpleName() + ".class");
 
 		JDialog dialog = null;
@@ -266,7 +271,7 @@ public class QuarkJarPatcher {
 							System.out.println("Read configuration for " + patch[0].getAppName() + " patch " + patch[0].getPatchName());
 							System.out.println("By " + patch[0].getPatchAuthor() + " " + patch[0].getPatchDate());
 							System.out.println(patch[0].getPatchDescription());
-							if (fDialog != null) {
+							if (fDialog != null && fDescrip != null) {
 								fDialog.setTitle("Applying " + patch[0].getAppName() + " patch " + patch[0].getPatchName());
 								fDescrip.setText("<html>For " + patch[0].getAppName() + " " + patch[0].getTargetVersion() + "<br>"//
 									+ "By " + patch[0].getPatchAuthor() + " " + patch[0].getPatchDate() + "<br>"//
@@ -501,7 +506,16 @@ public class QuarkJarPatcher {
 		}
 	}
 
-	public static File createPatch(String patchFileLocation) throws IOException {
+	/**
+	 * Creates a patch file
+	 * 
+	 * @param patchFileLocation The location of the patch file--a URL or an absolute or relative file path
+	 * @return The executable patch jar
+	 * @throws IOException If the patch file could not be read or parsed, or any resources referred to by the patch could not be read
+	 * @throws IllegalArgumentException If the patch file was invalid or if a patch could not be created based on the configuration in the
+	 *         patch file
+	 */
+	public static File createPatch(String patchFileLocation) throws IOException, IllegalArgumentException {
 		// This method is free to use any utilities it needs, as this isn't called from the patch installation
 		BetterFile patchConfigFile;
 		InputStream patchStream = null;
@@ -595,7 +609,7 @@ public class QuarkJarPatcher {
 			}
 			return patchFile;
 		} catch (IOException e) {
-			throw new IOException("Patch creation failed", e);
+			throw new IllegalArgumentException("Patch creation failed", e);
 		}
 	}
 
@@ -614,13 +628,13 @@ public class QuarkJarPatcher {
 		return classFile;
 	}
 
-	private static String className(String name) {
-		int dot = name.lastIndexOf('.');
-		if (dot >= 0)
-			name = name.substring(dot + 1);
-		return name;
-	}
-
+	/**
+	 * Parses patch content from an XML element
+	 * 
+	 * @param rootElement The XML element to parse
+	 * @return The parsed patch content
+	 * @throws IllegalArgumentException If the XML element could not be parsed as a patch
+	 */
 	public static final Patch parsePatch(Element rootElement) throws IllegalArgumentException {
 		if (!"patch".equals(rootElement.getNodeName()))
 			throw new IllegalArgumentException("Expected 'patch' as root element, not '" + rootElement.getNodeName() + "'");

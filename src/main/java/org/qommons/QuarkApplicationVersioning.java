@@ -1,55 +1,44 @@
 package org.qommons;
 
 import java.awt.GraphicsEnvironment;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
+import java.io.*;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.attribute.FileTime;
 import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import javax.swing.BoxLayout;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JProgressBar;
-import javax.swing.UIManager;
-import javax.swing.UnsupportedLookAndFeelException;
+import javax.swing.*;
 
 import org.qommons.TimeUtils.ParsedInstant;
 import org.qommons.collect.BetterList;
 import org.qommons.config.StrictXmlReader;
 import org.qommons.ex.ExFunction;
-import org.qommons.io.ArchiveEnabledFileSource;
-import org.qommons.io.BetterFile;
+import org.qommons.io.*;
 import org.qommons.io.BetterFile.CheckSumType;
-import org.qommons.io.FileUtils;
-import org.qommons.io.NativeFileSource;
 import org.qommons.io.SimpleXMLParser.XmlParseException;
-import org.qommons.io.TextParseException;
-import org.qommons.io.UrlFileSource;
-import org.qommons.io.XmlSerialWriter;
 import org.qommons.io.XmlSerialWriter.Element;
 
+/**
+ * <p>
+ * This class was built to facilitate auto-update of an application.
+ * </p>
+ * <p>
+ * Its full capability is satisfied only for free applications that can publish their contents to a public repository (e.g. a file server).
+ * This class can poll that repository, to report the available versions of the application, enabling the application to report to the user
+ * that a newer version is available. This tool is able to patch itself with the latest minor release of the application, or download a
+ * published version of an application to replace it.
+ * </p>
+ * <p>
+ * This tool has only had limited testing. It worked at one point, but the code is quite complex and warrants much more testing than it has
+ * had.
+ * </p>
+ */
 public class QuarkApplicationVersioning {
 	public static class ApplicationVersionDescription implements Named, Comparable<ApplicationVersionDescription> {
 		private final String theName;
@@ -57,17 +46,20 @@ public class QuarkApplicationVersioning {
 		private final ReleaseDate theReleaseDate;
 		private final String theDescription;
 		private final String theUpdateJar;
+		private final ContactInfo theContactInfo;
 		private final List<ApplicationChange> theChangeList;
 		private final List<Distribution> theDistributions;
 		private final BetterFile.CheckSumType theHashType;
 
 		public ApplicationVersionDescription(String name, Version version, ReleaseDate releaseDate, String description, String updateJar,
-			List<ApplicationChange> changeList, List<Distribution> distributions, BetterFile.CheckSumType hashType) {
+			ContactInfo contactInfo, List<ApplicationChange> changeList, List<Distribution> distributions,
+			BetterFile.CheckSumType hashType) {
 			theName = name;
 			theVersion = version;
 			theReleaseDate = releaseDate;
 			theDescription = description;
 			theUpdateJar = updateJar;
+			theContactInfo = contactInfo;
 			theChangeList = changeList;
 			theDistributions = distributions;
 			theHashType = hashType;
@@ -92,6 +84,10 @@ public class QuarkApplicationVersioning {
 
 		public String getUpdateJar() {
 			return theUpdateJar;
+		}
+
+		public ContactInfo getContactInfo() {
+			return theContactInfo;
 		}
 
 		public List<ApplicationChange> getChangeList() {
@@ -202,6 +198,48 @@ public class QuarkApplicationVersioning {
 		}
 	}
 
+	public static class ContactInfo {
+		private final String theName;
+		private final String theEmailAddress;
+		private final String theEmailSubject;
+		private final String theEmailBody;
+		private final String thePhoneNumber;
+		private final String theEtc;
+
+		public ContactInfo(String name, String email, String emailSubject, String emailBody, String phoneNumber, String etc) {
+			theName = name;
+			theEmailAddress = email;
+			theEmailSubject = emailSubject;
+			theEmailBody = emailBody;
+			thePhoneNumber = phoneNumber;
+			theEtc = etc;
+		}
+
+		public String getName() {
+			return theName;
+		}
+
+		public String getEmailAddress() {
+			return theEmailAddress;
+		}
+
+		public String getEmailSubject() {
+			return theEmailSubject;
+		}
+
+		public String getEmailBody() {
+			return theEmailBody;
+		}
+
+		public String getPhoneNumber() {
+			return thePhoneNumber;
+		}
+
+		public String getEtc() {
+			return theEtc;
+		}
+	}
+
 	public static class ApplicationChange implements Named {
 		private final String theName;
 		private final String theDescription;
@@ -225,9 +263,9 @@ public class QuarkApplicationVersioning {
 		private final DirectoryDeployment theDeployPolicy;
 
 		public ApplicationVersionDeployment(String name, Version version, ReleaseDate releaseDate, String description, String updateJar,
-			List<ApplicationChange> changeList, List<Distribution> distributions, BetterFile.CheckSumType hashType,
+			ContactInfo contactInfo, List<ApplicationChange> changeList, List<Distribution> distributions, BetterFile.CheckSumType hashType,
 			DirectoryDeployment deployPolicy) {
-			super(name, version, releaseDate, description, updateJar, changeList, distributions, hashType);
+			super(name, version, releaseDate, description, updateJar, contactInfo, changeList, distributions, hashType);
 			theDeployPolicy = deployPolicy;
 		}
 
@@ -375,9 +413,9 @@ public class QuarkApplicationVersioning {
 		private final ApplicationDirectory theRootDirectory;
 
 		public ApplicationVersionFull(String name, Version version, ReleaseDate releaseDate, String description, String updateJar,
-			List<ApplicationChange> changeList, BetterFile.CheckSumType hashType, List<Distribution> distributions,
+			ContactInfo contactInfo, List<ApplicationChange> changeList, BetterFile.CheckSumType hashType, List<Distribution> distributions,
 			ApplicationDirectory rootDirectory) {
-			super(name, version, releaseDate, description, updateJar, changeList, distributions, hashType);
+			super(name, version, releaseDate, description, updateJar, contactInfo, changeList, distributions, hashType);
 			theRootDirectory = rootDirectory;
 		}
 
@@ -403,14 +441,16 @@ public class QuarkApplicationVersioning {
 		private final Map<String, ApplicationDirectory> theSubDirectories;
 		private final List<Pattern> theIgnoredFiles;
 		private final List<Pattern> theIgnoredDirectories;
+		private final boolean isSealed;
 
 		public ApplicationDirectory(String rename, Map<String, ApplicationFile> files, Map<String, ApplicationDirectory> subDirectories,
-			List<Pattern> ignoredFiles, List<Pattern> ignoredDirectories) {
+			List<Pattern> ignoredFiles, List<Pattern> ignoredDirectories, boolean sealed) {
 			super(rename);
 			theFiles = files;
 			theSubDirectories = subDirectories;
 			theIgnoredFiles = ignoredFiles;
 			theIgnoredDirectories = ignoredDirectories;
+			isSealed = sealed;
 		}
 
 		public Map<String, ApplicationFile> getFiles() {
@@ -427,6 +467,10 @@ public class QuarkApplicationVersioning {
 
 		public List<Pattern> getIgnoredDirectories() {
 			return theIgnoredDirectories;
+		}
+
+		public boolean isSealed() {
+			return isSealed;
 		}
 	}
 
@@ -459,8 +503,8 @@ public class QuarkApplicationVersioning {
 		DirectoryDeployment deploy = parseDeployPolicy(root.getElement("deploy"), true);
 		List<Distribution> distributions = new ArrayList<>();
 		ApplicationVersionDeployment deployment = new ApplicationVersionDeployment(app.getName(), app.getVersion(), app.getReleaseDate(),
-			app.getDescription(), app.getUpdateJar(), app.getChangeList(), Collections.unmodifiableList(distributions), app.getHashType(),
-			deploy);
+			app.getDescription(), app.getUpdateJar(), app.getContactInfo(), app.getChangeList(),
+			Collections.unmodifiableList(distributions), app.getHashType(), deploy);
 		for (Distribution dist : app.getDistributions()) {
 			distributions.add(new Distribution(deployment, dist.getName(), dist.getDescription(), dist.getFile(), dist.getHash(),
 				dist.isExplode(), dist.getRequirements()));
@@ -483,8 +527,8 @@ public class QuarkApplicationVersioning {
 			deployment.getHashType());
 		List<Distribution> distributions = new ArrayList<>(deployment.getDistributions().size());
 		ApplicationVersionFull full = new ApplicationVersionFull(deployment.getName(), deployment.getVersion(), deployment.getReleaseDate(),
-			deployment.getDescription(), deployment.getUpdateJar(), deployment.getChangeList(), deployment.getHashType(),
-			Collections.unmodifiableList(distributions), dir);
+			deployment.getDescription(), deployment.getUpdateJar(), deployment.getContactInfo(), deployment.getChangeList(),
+			deployment.getHashType(), Collections.unmodifiableList(distributions), dir);
 		for (Distribution deployDist : deployment.getDistributions()) {
 			String deployFile = deployDist.getFile();
 			int lastSlash = deployFile.lastIndexOf('/');
@@ -569,6 +613,8 @@ public class QuarkApplicationVersioning {
 		try (InputStream in = applicationXml.read()) {
 			fullVersion = parseFullVersion(StrictXmlReader.ofRoot(in), false);
 		}
+		if (fullVersion.getUpdateJar() == null)
+			throw new IllegalStateException("This deployment does not support auto-update");
 		BetterFile deployedAppXml = tempDir.at(applicationXml.getName());
 		if (progress != null) {
 			int[] files = new int[] { 1 };
@@ -595,6 +641,17 @@ public class QuarkApplicationVersioning {
 			tempDir.delete(null);
 			throw e;
 		}
+	}
+
+	public ApplicationVersionFull getFullVersion(BetterFile baseServiceRoot, ApplicationVersionDescription version)
+		throws IOException, XmlParseException, TextParseException {
+		BetterFile versionServiceRoot = baseServiceRoot.at(version.getName() + "-" + version.getVersion());
+		BetterFile applicationXml = versionServiceRoot.at("application-version.xml");
+		ApplicationVersionFull fullVersion;
+		try (InputStream in = applicationXml.read()) {
+			fullVersion = parseFullVersion(StrictXmlReader.ofRoot(in), false);
+		}
+		return fullVersion;
 	}
 
 	public void shutdownAndUpdate(ApplicationVersionDescription version, BetterFile installDirectory, BetterFile replacementDirectory,
@@ -880,7 +937,8 @@ public class QuarkApplicationVersioning {
 		String versionS = appXml.getAttribute("version");
 		String releaseS = appXml.getAttribute("release-date");
 		String description = appXml.getAttribute("description").replaceAll("\\s+", " ");
-		String updateJar = appXml.getAttribute("update-jar");
+		String updateJar = appXml.getAttributeIfExists("update-jar");
+		ContactInfo contactInfo = parseContactInfo(appXml.getElementIfExists("contact-info"));
 		String hashTypeS = appXml.getAttribute("hash-type");
 
 		Version version;
@@ -928,7 +986,7 @@ public class QuarkApplicationVersioning {
 		}
 		List<Distribution> distributions = new ArrayList<>();
 		ApplicationVersionDescription app = new ApplicationVersionDescription(name, version, releaseDate, description, updateJar,
-			Collections.unmodifiableList(changeList), Collections.unmodifiableList(distributions), hashType);
+			contactInfo, Collections.unmodifiableList(changeList), Collections.unmodifiableList(distributions), hashType);
 		if (withDistributions) {
 			try (StrictXmlReader distributionsXml = appXml.getElement("distributions")) {
 				for (StrictXmlReader distXml : distributionsXml.getElements("distribution"))
@@ -938,6 +996,37 @@ public class QuarkApplicationVersioning {
 			}
 		}
 		return app;
+	}
+
+	private static ContactInfo parseContactInfo(StrictXmlReader ciXml) throws TextParseException {
+		if (ciXml == null)
+			return null;
+		StrictXmlReader el;
+
+		el = ciXml.getElement("name");
+		String name = el.getTextTrim();
+		el.check();
+
+		el = ciXml.getElement("email");
+		String email = el.getAttribute("address");
+		StrictXmlReader emailEl;
+		emailEl = el.getElement("subject");
+		String subject = emailEl.getTextTrim();
+		emailEl.check();
+		emailEl = el.getElement("body");
+		String emailBody = emailEl.getTextTrim();
+		emailEl.check();
+		el.check();
+
+		el = ciXml.getElement("phone");
+		String phone = el.getTextTrim();
+		el.check();
+
+		el = ciXml.getElementIfExists("etc");
+		String etc = el == null ? null : el.getTextTrim();
+		if (el != null)
+			el.check();
+		return new ContactInfo(name, email, subject, emailBody, phone, etc);
 	}
 
 	private static Distribution parseDistribution(StrictXmlReader distXml, BetterFile distributionDir,
@@ -1128,7 +1217,7 @@ public class QuarkApplicationVersioning {
 			path.setLength(pathLen);
 		}
 		return new ApplicationDirectory(sourceDirectory.getName(), Collections.unmodifiableMap(files), Collections.unmodifiableMap(dirs),
-			ignoredFiles, ignoredDirs);
+			ignoredFiles, ignoredDirs, false);
 	}
 	private static final Pattern GROUP_REPLACE_PATTERN = Pattern.compile("\\$(?<group>\\d+)");
 
@@ -1302,8 +1391,8 @@ public class QuarkApplicationVersioning {
 			xml.check();
 		List<Distribution> distributions = new ArrayList<>();
 		ApplicationVersionFull full = new ApplicationVersionFull(app.getName(), app.getVersion(), app.getReleaseDate(),
-			app.getDescription(), app.getUpdateJar(), app.getChangeList(), app.getHashType(), Collections.unmodifiableList(distributions),
-			root);
+			app.getDescription(), app.getUpdateJar(), app.getContactInfo(), app.getChangeList(), app.getHashType(),
+			Collections.unmodifiableList(distributions), root);
 		for (Distribution dist : app.getDistributions()) {
 			distributions.add(new Distribution(full, dist.getName(), dist.getDescription(), dist.getFile(), dist.getHash(),
 				dist.isExplode(), dist.getRequirements()));
@@ -1353,10 +1442,11 @@ public class QuarkApplicationVersioning {
 			} else
 				subDirs.put(dirName, parseAppDirectory(dirXml, dirName, strict));
 		}
+		String text = xml.getAttributeIfExists("sealed");
 		if (strict)
 			xml.check();
 		return new ApplicationDirectory(rename, Collections.unmodifiableMap(files), Collections.unmodifiableMap(subDirs), ignoredFiles,
-			ignoredDirs);
+			ignoredDirs, "true".equalsIgnoreCase(text));
 	}
 
 	private long getTotalSize(ApplicationDirectory appDir, BetterFile deployDir, BetterFile installDir, CheckSumType hashType, int[] files,

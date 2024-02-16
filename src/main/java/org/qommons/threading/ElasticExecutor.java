@@ -254,6 +254,14 @@ public class ElasticExecutor<T> {
 		return theActiveThreads.get();
 	}
 
+	/**
+	 * @return True if this executor has been given any tasks to {@link #execute(Object) execute} that have not finished. False if all tasks
+	 *         have finished.
+	 */
+	public boolean isActive() {
+		return theActiveThreads.get() > 0 && theQueueSize.get() > 0;
+	}
+
 	// Action methods
 
 	/**
@@ -312,7 +320,7 @@ public class ElasticExecutor<T> {
 			try {
 				Thread.sleep(sleepTime);
 			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt(); // Just wake up normally
+				// Just wake up normally
 			}
 		}
 		return true;

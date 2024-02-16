@@ -1450,16 +1450,19 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 
 			int afterKeyComp = mvAfter == null ? -1 : mvAfter.keyId.compareTo(mvi.keyId);
 			int beforeKeyComp = mvBefore == null ? 1 : mvBefore.keyId.compareTo(mvi.keyId);
-			if ((afterKeyComp < 0 || (afterKeyComp == 0 && mvAfter.valueId.compareTo(mvi.valueId) <= 0))//
-				&& (beforeKeyComp > 0 || (beforeKeyComp == 0 && mvBefore.valueId.compareTo(mvi.valueId) >= 0)))
+			// Note that if after/mvAfter==null, afterKeyComp will be <0, so checking this integer ensures that mvAfter!=null
+			// but my code analysis tools aren't catching this, so I'm adding duplicate null checks to suppress warning noise.
+			// Similarly with mvBefore
+			if ((afterKeyComp < 0 || (afterKeyComp == 0 && mvAfter != null && mvAfter.valueId.compareTo(mvi.valueId) <= 0))//
+				&& (beforeKeyComp > 0 || (beforeKeyComp == 0 && mvBefore != null && mvBefore.valueId.compareTo(mvi.valueId) >= 0)))
 				return null; // Staying in the same place satisfies
 
 			// Next, see if we can move it within its key collection
 			String msg = null;
 			if (afterKeyComp <= 0 && beforeKeyComp >= 0)
 				msg = theMap.getEntryById(mvi.keyId).getValues().canMove(mvi.valueId, //
-					afterKeyComp == 0 ? mvAfter.valueId : null, //
-					beforeKeyComp == 0 ? mvBefore.valueId : null);
+					(afterKeyComp == 0 && mvAfter != null) ? mvAfter.valueId : null, //
+					(beforeKeyComp == 0 && mvBefore != null) ? mvBefore.valueId : null);
 			if (msg == null)
 				return null;
 
@@ -1468,14 +1471,14 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			if (msg != null)
 				return msg;
 			V value = theMap.getEntryById(mvi.keyId, mvi.valueId).get();
-			MultiEntryHandle<K, V> entry = after == null ? theMap.getTerminalEntry(true) : theMap.getEntryById(mvAfter.keyId);
+			MultiEntryHandle<K, V> entry = mvAfter == null ? theMap.getTerminalEntry(true) : theMap.getEntryById(mvAfter.keyId);
 			int entryBefore = 0;
-			while (entry != null && (before == null || (entryBefore = entry.getElementId().compareTo(mvBefore.keyId)) <= 0)) {
+			while (entry != null && (mvBefore == null || (entryBefore = entry.getElementId().compareTo(mvBefore.keyId)) <= 0)) {
 				if (entry.getElementId().equals(mvi.keyId))
 					continue;
 				msg = entry.getValues().canAdd(value, //
-					(after != null && entry.getElementId().equals(mvAfter.keyId)) ? mvAfter.valueId : null, //
-					(before != null && entryBefore == 0) ? mvBefore.valueId : null);
+					(mvAfter != null && entry.getElementId().equals(mvAfter.keyId)) ? mvAfter.valueId : null, //
+					(mvBefore != null && entryBefore == 0) ? mvBefore.valueId : null);
 				if (msg == null)
 					return null;
 			}
@@ -1500,7 +1503,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			MultiEntryHandle<K, V> entry;
 			int afterKeyComp, beforeKeyComp;
 			if (first) {
-				if (after == null) {
+				if (mvAfter == null) {
 					afterKeyComp = -1;
 					entry = theMap.getTerminalEntry(true);
 				} else {
@@ -1509,7 +1512,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 				}
 				beforeKeyComp = 0;
 			} else {
-				if (before == null) {
+				if (mvBefore == null) {
 					beforeKeyComp = 1;
 					entry = theMap.getTerminalEntry(false);
 				} else {
@@ -1518,58 +1521,62 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 				}
 				afterKeyComp = 0;
 			}
+			// Note that if after/mvAfter==null, afterKeyComp will be <0, so checking this integer ensures that mvAfter!=null
+			// but my code analysis tools aren't catching this, so I'm adding duplicate null checks to suppress warning noise.
+			// Similarly with mvBefore
 			MutableMultiMapHandle<K, V> valueEntry = theMap.mutableElement(mvi.keyId, mvi.valueId);
 			String removable = theMap.mutableElement(mvi.keyId, mvi.valueId).canRemove();
 			String msg = null;
 			if (removable != null) {
-				afterKeyComp = after == null ? -1 : mvAfter.keyId.compareTo(mvi.keyId);
-				beforeKeyComp = before == null ? 1 : mvBefore.keyId.compareTo(mvi.keyId);
+				afterKeyComp = mvAfter == null ? -1 : mvAfter.keyId.compareTo(mvi.keyId);
+				beforeKeyComp = mvBefore == null ? 1 : mvBefore.keyId.compareTo(mvi.keyId);
 				if (afterKeyComp > 0 || beforeKeyComp < 0) {
 					if (removable.equals(StdMsg.UNSUPPORTED_OPERATION))
 						throw new UnsupportedOperationException(removable);
 					else
 						throw new IllegalArgumentException(removable);
 				}
-				return theMap.getEntryById(mvi.keyId).getValues().move(mvi.valueId, afterKeyComp == 0 ? mvAfter.valueId : null, //
-					beforeKeyComp == 0 ? mvBefore.valueId : null, //
+				return theMap.getEntryById(mvi.keyId).getValues().move(mvi.valueId,
+					(afterKeyComp == 0 && mvAfter != null) ? mvAfter.valueId : null, //
+					(beforeKeyComp == 0 && mvBefore != null) ? mvBefore.valueId : null, //
 					first, afterRemove);
 			}
 			V value = valueEntry.get();
 			while (entry != null) {
 				boolean terminal;
 				if (first) {
-					beforeKeyComp = (before != null && entry.getElementId().equals(mvBefore.keyId)) ? 0 : 1;
+					beforeKeyComp = (mvBefore != null && entry.getElementId().equals(mvBefore.keyId)) ? 0 : 1;
 					terminal = beforeKeyComp == 0;
 				} else {
-					afterKeyComp = (after != null && entry.getElementId().equals(mvAfter.keyId)) ? 0 : -1;
+					afterKeyComp = (mvAfter != null && entry.getElementId().equals(mvAfter.keyId)) ? 0 : -1;
 					terminal = afterKeyComp == 0;
 				}
 				if (entry.getElementId().equals(mvi.keyId)) {
 					msg = entry.getValues().canMove(mvi.valueId, //
-						afterKeyComp == 0 ? mvAfter.valueId : null, //
-						beforeKeyComp == 0 ? mvBefore.valueId : null);
+						(afterKeyComp == 0 && mvAfter != null) ? mvAfter.valueId : null, //
+						(beforeKeyComp == 0 && mvBefore != null) ? mvBefore.valueId : null);
 					if (msg == null)
 						return entry.getValues().move(mvi.valueId, //
-							afterKeyComp == 0 ? mvAfter.valueId : null, //
-							beforeKeyComp == 0 ? mvBefore.valueId : null, first, afterRemove);
+							(afterKeyComp == 0 && mvAfter != null) ? mvAfter.valueId : null, //
+							(beforeKeyComp == 0 && mvBefore != null) ? mvBefore.valueId : null, first, afterRemove);
 				} else {
 					msg = entry.getValues().canAdd(value, //
-						afterKeyComp == 0 ? mvAfter.valueId : null, //
-						beforeKeyComp == 0 ? mvBefore.valueId : null);
+						(afterKeyComp == 0 && mvAfter != null) ? mvAfter.valueId : null, //
+						(beforeKeyComp == 0 && mvBefore != null) ? mvBefore.valueId : null);
 					if (msg == null) {
 						theMap.mutableElement(mvi.keyId, mvi.valueId).remove();
 					}
 				}
 				msg = entry.getValues().canAdd(value, //
-					afterKeyComp == 0 ? mvAfter.valueId : null, //
-					beforeKeyComp == 0 ? mvBefore.valueId : null);
+					(afterKeyComp == 0 && mvAfter != null) ? mvAfter.valueId : null, //
+					(beforeKeyComp == 0 && mvBefore != null) ? mvBefore.valueId : null);
 				if (msg == null) {
 					valueEntry.remove();
 					if (afterRemove != null)
 						afterRemove.run();
 					return entry.getValues().addElement(value, //
-						afterKeyComp == 0 ? mvAfter.valueId : null, //
-						beforeKeyComp == 0 ? mvBefore.valueId : null, first);
+						(afterKeyComp == 0 && mvAfter != null) ? mvAfter.valueId : null, //
+						(beforeKeyComp == 0 && mvBefore != null) ? mvBefore.valueId : null, first);
 				}
 				if (terminal)
 					break;
