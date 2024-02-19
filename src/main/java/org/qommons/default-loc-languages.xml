@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+	Default language configuration for LinesOfCode.java
+-->
+<languages>
+	<language name="Java" file-extension="java">
+		<comment start="//">
+			<end>&#10;</end>
+		</comment>
+		<comment start="/*">
+			<end>*/</end>
+		</comment>
+	</language>
+	<language name="XML" file-extension="xml,qml,qtd,qss">
+		<comment start="&lt;!--">
+			<end>--></end>
+		</comment>
+		<!-- Documentation for Qonfig counts as comments -->
+		<comment start="&lt;?DOC">
+			<end>?></end>
+		</comment>
+	</language>
+</languages>
