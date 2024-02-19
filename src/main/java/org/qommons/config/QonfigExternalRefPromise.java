@@ -24,8 +24,8 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 	public static final QonfigToolkit.ToolkitDef REFERENCE_TOOLKIT = new QonfigToolkit.ToolkitDef("Qonfig-Reference", 0, 1);
 	/** This fulfillment's promise type */
 	public static final String EXT_REFERENCE_TYPE = "external-reference";
-	/** The name of the external content element this type loads */
-	public static final String EXT_CONTENT_TYPE = "external-content";
+	/** The name of the external document element this type loads */
+	public static final String EXT_DOCUMENT_TYPE = "external-document";
 
 	private QonfigElementDef theExtReferenceType;
 	private QonfigElementDef theExtContentType;
@@ -54,7 +54,7 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 	public void setQonfigType(QonfigElementOrAddOn qonfigType) {
 		theExtReferenceType = (QonfigElementDef) qonfigType;
 		theReferenceAttribute = qonfigType.getAttribute("ref").getDeclared();
-		theExtContentType = qonfigType.getDeclarer().getElement(EXT_CONTENT_TYPE);
+		theExtContentType = qonfigType.getDeclarer().getElement(EXT_DOCUMENT_TYPE);
 		theFulfillsAttribute = theExtContentType.getAttribute("fulfills").getDeclared();
 		theFulfillmentChild = theExtContentType.getChild("fulfillment").getDeclared();
 	}

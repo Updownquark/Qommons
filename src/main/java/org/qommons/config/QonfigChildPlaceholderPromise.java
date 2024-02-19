@@ -37,7 +37,7 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 	public void setQonfigType(QonfigElementOrAddOn qonfigType) {
 		theChildPlaceholder = (QonfigElementDef) qonfigType;
 		theRefRole = theChildPlaceholder.getAttribute(REF_ROLE_ATTR).getDeclared();
-		theFulfillsAttribute = qonfigType.getDeclarer().getAttribute(QonfigExternalRefPromise.EXT_CONTENT_TYPE, "fulfills");
+		theFulfillsAttribute = qonfigType.getDeclarer().getAttribute(QonfigExternalRefPromise.EXT_DOCUMENT_TYPE, "fulfills");
 	}
 
 	@Override
@@ -46,7 +46,7 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 		QonfigParseSession session) throws IOException, QonfigParseException {
 		PartialQonfigElement extContentRoot = promise.getDocument().getPartialRoot();
 		if (!extContentRoot.isInstance(theFulfillsAttribute.getOwner())) {
-			session.error("This element is only valid within an " + QonfigExternalRefPromise.EXT_CONTENT_TYPE + " document");
+			session.error("This element is only valid within an " + QonfigExternalRefPromise.EXT_DOCUMENT_TYPE + " document");
 			return;
 		}
 		QonfigElementDef refType = session.getToolkit().getElement(extContentRoot.getAttributeText(theFulfillsAttribute));

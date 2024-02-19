@@ -14,13 +14,13 @@
 			<attribute name="ref" type="string" />
 		</element-def>
 		<?DOC The root of the qonfig file referenced by &lt;external-reference>.ref?>
-		<element-def name="external-content" abstract="true">
+		<element-def name="external-document" abstract="true">
 			<?DOC The name of the &lt;external-reference> extension that this content fulfills?>
 			<attribute name="fulfills" type="qonfig-type" />
 			<?DOC The content to be stitched into the place of the &lt;external-reference> referring to this document?>
 			<child-def name="fulfillment" />
 		</element-def>
-		<?DOC A reference from an &lt;external-content> document to a child of the &lt;external-reference> that called for it.<br>
+		<?DOC A reference from an &lt;external-document> document to a child of the &lt;external-reference> that called for it.<br>
 			The child of the reference will be stiched into the external document in place of this child.?>
 		<element-def name="child-placeholder" promise="true">
 			<?DOC The role of the &lt;external-reference> whose children will replace this element?>
