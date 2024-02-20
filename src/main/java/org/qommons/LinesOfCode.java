@@ -3,11 +3,9 @@ package org.qommons;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.function.ToIntFunction;
+import java.util.stream.Collectors;
 
 import org.qommons.config.StrictXmlReader;
 import org.qommons.io.BetterFile;
@@ -20,13 +18,22 @@ import org.qommons.io.TextParseException;
  * A fairly simple lines-of-code counter that takes language-specific comments into account.
  * </p>
  * <p>
- * The main method accepts 2 arguments:
+ * The main method accepts 2 main arguments:
  * <ul>
  * <li>--lang-config=path/to/language-config-file.xml The language XML file allows the specification of languages, each of which may specify
  * file extensions that identify a file as belonging to the language, and comment structures of the language.</li>
  * <li>--project=path/to/project-dir. A project directory to scan for source files.</li>
  * </ul>
  * Both of these arguments may be specified multiple times, or multiple values may be specified for the arguments, separated by commas.
+ * </p>
+ * <p>
+ * Other accepted arguments are:
+ * <ul>
+ * <li>--as-repo. If this flag is present, the files from the --project argument will not be treated as projects, but as directories holding
+ * any number of projects. All directories under each --project argument will be treated as projects.</li>
+ * <li>--include=&lt;path> If specified, only directories matching a specified --include path will be scanned for source files.</li>
+ * <li>--exclude=&lt;path> Any files or directories ending with a --exclude path will be ignored.</li>
+ * </ul>
  * </p>
  * <p>
  * Results are printed for each project and language independently, as well as totals. Metrics include:
@@ -52,6 +59,12 @@ public class LinesOfCode {
 			.forMultiValuePattern(p -> p//
 				.addBetterFileArgument("lang-config", f -> f.mustExist(true).directory(false).anyTimes())//
 				.addBetterFileArgument("project", f -> f.mustExist(true).directory(true).times(1, Integer.MAX_VALUE))//
+				.addStringArgument("include", a -> a.anyTimes())//
+				.addStringArgument("exclude", a -> a.anyTimes())//
+			)//
+			.forFlagPattern(p -> p//
+				.add("as-repo", arg -> arg.withDescription(
+					"Whether the files in the 'project' argument should be interpreted as repositories, with each directory under it being a project"))//
 			)//
 			.build()//
 			.parse(clArgs);
@@ -62,20 +75,47 @@ public class LinesOfCode {
 		if (languages.isEmpty())
 			parseLangConfig(languages, FileUtils.getClassFile(LinesOfCode.class).at("../default-loc-languages.xml"));
 
-		Map<LanguageConfig, FileStats> total = new HashMap<>();
+		Map<LanguageConfig, Map<String, FileStats>> results = new TreeMap<>();
 
-		int projCount = 0;
-		for (BetterFile project : args.getAll("project", BetterFile.class)) {
-			Map<LanguageConfig, FileStats> projectStats = new HashMap<>();
-			findProjectFiles(project, languages, projectStats);
-
-			reportStats(project + ":", projectStats);
-			for (Map.Entry<LanguageConfig, FileStats> stat : projectStats.entrySet())
-				total.computeIfAbsent(stat.getKey(), __ -> new FileStats()).add(stat.getValue());
-			projCount++;
+		List<String> includes = args.getAll("include", String.class).stream().map(s -> s.replace("\\", "/")).collect(Collectors.toList());
+		List<String> excludes = args.getAll("exclude", String.class).stream().map(s -> s.replace("\\", "/")).collect(Collectors.toList());
+		List<? extends BetterFile> projects = args.getAll("project", BetterFile.class);
+		for (BetterFile project : projects) {
+			if (args.has("as-repo")) {
+				for (BetterFile realProject : project.listFiles()) {
+					if (realProject.isDirectory()) {
+						String projectName;
+						if (projects.size() == 1)
+							projectName = realProject.getName();
+						else
+							projectName = project.getName() + "/" + realProject.getName();
+						scanProject(realProject, projectName, languages, results, includes, excludes);
+					}
+				}
+			} else {
+				scanProject(project, project.getName(), languages, results, includes, excludes);
+			}
 		}
-		if (projCount > 0)
-			reportStats("All Projects:", total);
+		if (results.isEmpty()) {
+			System.out.println("No recognized files found in any projects");
+			return;
+		}
+		System.out.println("Analysis Completed");
+		Set<String> projectNames = results.values().stream().flatMap(m -> m.keySet().stream())
+			.collect(Collectors.toCollection(TreeSet::new));
+
+		System.out.println("\nFiles");
+		printResults(results, projectNames, stat -> stat.files);
+		System.out.println("\nContent Lines");
+		printResults(results, projectNames, stat -> stat.contentLines);
+		System.out.println("\nComment Lines");
+		printResults(results, projectNames, stat -> stat.commentLines);
+		System.out.println("\nBlank Lines");
+		printResults(results, projectNames, stat -> stat.blankLines);
+		System.out.println("\nContent Chars");
+		printResults(results, projectNames, stat -> stat.contentChars);
+		System.out.println("\nComment Chars");
+		printResults(results, projectNames, stat -> stat.commentChars);
 	}
 
 	private static void parseLangConfig(Map<String, LanguageConfig> languages, BetterFile langConfig) {
@@ -112,49 +152,110 @@ public class LinesOfCode {
 		}
 	}
 
-	private static void findProjectFiles(BetterFile file, Map<String, LanguageConfig> languages, Map<LanguageConfig, FileStats> stats)
+	private static void scanProject(BetterFile project, String name, Map<String, LanguageConfig> languages,
+		Map<LanguageConfig, Map<String, FileStats>> stats, List<String> includes, List<String> excludes) throws IOException {
+		System.out.println("Scanning project directory " + project);
+		findProjectFiles(project, name, languages, stats, includes, excludes, includes.isEmpty());
+	}
+
+	private static void findProjectFiles(BetterFile file, String project, Map<String, LanguageConfig> languages,
+		Map<LanguageConfig, Map<String, FileStats>> stats, List<String> includes, List<String> excludes, boolean included)
 		throws IOException {
+		if (!excludes.isEmpty() || !included) {
+			String path = file.getPath();
+			for (String exclude : excludes) {
+				if (pathEndsWith(path, exclude))
+					return; // Excluded
+			}
+			if (!included) {
+				for (String include : includes) {
+					if (pathEndsWith(path, include)) {
+						included = true;
+						break;
+					}
+				}
+			}
+		}
 		if (file.isDirectory()) {
 			for (BetterFile child : file.listFiles())
-				findProjectFiles(child, languages, stats);
-		} else {
+				findProjectFiles(child, project, languages, stats, includes, excludes, included);
+		} else if (included) {
 			int lastDot = file.getName().lastIndexOf('.');
 			if (lastDot < 0)
 				return;
 			LanguageConfig language = languages.get(file.getName().substring(lastDot + 1).toLowerCase());
 			if (language != null) {
 				try (Reader r = new InputStreamReader(file.read())) {
-					FileStats langStats = stats.computeIfAbsent(language, __ -> new FileStats());
+					FileStats langStats = stats//
+						.computeIfAbsent(language, __ -> new HashMap<>())//
+						.computeIfAbsent(project, __ -> new FileStats());
 					language.parse(r, langStats);
 				}
 			}
 		}
 	}
 
-	private static void reportStats(String label, Map<LanguageConfig, FileStats> stats) {
-		System.out.println(label);
-		FileStats total = new FileStats();
-		for (Map.Entry<LanguageConfig, FileStats> lang : stats.entrySet()) {
-			System.out.println("\t" + lang.getKey().getName() + ":");
-			reportStats(lang.getValue());
-			total.add(lang.getValue());
-		}
-		if (stats.size() > 1) {
-			System.out.println("\tAll Languages:");
-			reportStats(total);
-		}
+	private static boolean pathEndsWith(String path, String test) {
+		return path.endsWith(test) //
+			&& path.length() > test.length()//
+			&& path.charAt(path.length() - test.length() - 1) == '/';
 	}
 
 	private static final Format<Integer> INT_FORMAT = Format.INT.withGroupingSeparator(',');
 
-	private static void reportStats(FileStats stats) {
-		System.out.println("\t\t            Files: " + INT_FORMAT.format(stats.files));
-		System.out.println("\t\t    Content Lines: " + INT_FORMAT.format(stats.contentLines));
-		System.out.println("\t\t    Comment Lines: " + INT_FORMAT.format(stats.commentLines));
-		System.out.println("\t\t      Blank Lines: " + INT_FORMAT.format(stats.blankLines));
-		System.out.println("\t\t    Content Chars: " + INT_FORMAT.format(stats.contentChars));
-		System.out.println("\t\t    Comment Chars: " + INT_FORMAT.format(stats.commentChars));
-		System.out.println("\t\tWhite Space Chars: " + INT_FORMAT.format(stats.whiteSpaceChars));
+	private static void printResults(Map<LanguageConfig, Map<String, FileStats>> results, Set<String> projects,
+		ToIntFunction<FileStats> metric) {
+		int maxProjLength = projects.stream().mapToInt(String::length).max().getAsInt();
+		System.out.print("Project");
+		for (int c = "Project".length(); c < maxProjLength + 1; c++)
+			System.out.print(' ');
+		for (LanguageConfig lang : results.keySet()) {
+			System.out.print(lang.getName());
+			// Leave space for 100M lines/chars and a space
+			for (int c = lang.getName().length(); c < 12; c++)
+				System.out.print(' ');
+		}
+		if (results.size() > 1)
+			System.out.println("Total");
+		else
+			System.out.println();
+
+		Map<LanguageConfig, FileStats> total = new HashMap<>();
+		for (String project : projects) {
+			System.out.print(project);
+			for (int c = project.length(); c < maxProjLength + 1; c++)
+				System.out.print(' ');
+			FileStats projectTotal = new FileStats();
+			for (Map.Entry<LanguageConfig, Map<String, FileStats>> langStats : results.entrySet()) {
+				FileStats projLangStats = langStats.getValue().get(project);
+				String result;
+				if (projLangStats == null) {
+					result = "----";
+				} else {
+					result = INT_FORMAT.format(metric.applyAsInt(projLangStats));
+					total.computeIfAbsent(langStats.getKey(), __ -> new FileStats()).add(projLangStats);
+					projectTotal.add(projLangStats);
+				}
+				System.out.print(result);
+				for (int c = result.length(); c < 12; c++)
+					System.out.print(' ');
+			}
+			System.out.println(INT_FORMAT.format(metric.applyAsInt(projectTotal)));
+		}
+		if (projects.size() > 1) {
+			System.out.print("Total");
+			for (int c = "Total".length(); c < maxProjLength + 1; c++)
+				System.out.print(' ');
+			FileStats grandTotal = new FileStats();
+			for (FileStats langStat : total.values()) {
+				String result = INT_FORMAT.format(metric.applyAsInt(langStat));
+				System.out.print(result);
+				for (int c = result.length(); c < 12; c++)
+					System.out.print(' ');
+				grandTotal.add(langStat);
+			}
+			System.out.println(INT_FORMAT.format(metric.applyAsInt(grandTotal)));
+		}
 	}
 
 	static class FileStats {
@@ -177,7 +278,7 @@ public class LinesOfCode {
 		}
 	}
 
-	static class LanguageConfig implements Named {
+	static class LanguageConfig implements Named, Comparable<LanguageConfig> {
 		private final String theName;
 		private final List<CommentType> theComments;
 
@@ -189,6 +290,11 @@ public class LinesOfCode {
 		@Override
 		public String getName() {
 			return theName;
+		}
+
+		@Override
+		public int compareTo(LanguageConfig o) {
+			return StringUtils.compareNumberTolerant(theName, o.theName, true, true);
 		}
 
 		public FileStats parse(Reader r, FileStats stats) throws IOException {
