@@ -305,11 +305,6 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public boolean belongs(Object o) {
-		return true;
-	}
-
-	@Override
 	public ThreadConstraint getThreadConstraint() {
 		return theLocker.getThreadConstraint();
 	}

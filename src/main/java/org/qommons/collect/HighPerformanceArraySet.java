@@ -129,11 +129,6 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 	}
 
 	@Override
-	default boolean belongs(Object o) {
-		return true;
-	}
-
-	@Override
 	default BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
 		if (sourceCollection == this)
 			return BetterList.of(getElement(sourceEl));

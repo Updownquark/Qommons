@@ -7,17 +7,8 @@ import java.util.function.Function;
 
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
-import org.qommons.collect.BetterCollection;
-import org.qommons.collect.BetterSortedList;
-import org.qommons.collect.CollectionElement;
-import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.ElementId;
-import org.qommons.collect.FastFailLockingStrategy;
-import org.qommons.collect.MutableCollectionElement;
+import org.qommons.collect.*;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
-import org.qommons.collect.OptimisticContext;
-import org.qommons.collect.SplitSpliterable;
-import org.qommons.collect.StampedLockingStrategy;
 
 /**
  * A {@link org.qommons.collect.BetterList} backed by a tree structure that sorts its values, with duplicates allowed
@@ -516,8 +507,6 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 		public String isAcceptable(E value) {
 			if (value == get())
 				return null;
-			if (!belongs(value))
-				return StdMsg.ILLEGAL_ELEMENT;
 			BinaryTreeNode<E> previous = getClosest(true);
 			BinaryTreeNode<E> next = getClosest(false);
 			if (previous != null) {

@@ -159,9 +159,7 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 
 	@Override
 	public String canPut(K key, V value) {
-		if (!keySet().belongs(key))
-			return StdMsg.ILLEGAL_ELEMENT;
-		else if (containsKey(key))
+		if (containsKey(key))
 			return StdMsg.ELEMENT_EXISTS;
 		else
 			return null;
@@ -581,11 +579,6 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 		@Override
 		protected Object createIdentity() {
 			return Identifiable.wrap(BetterTreeMap.this.getIdentity(), "keySet");
-		}
-
-		@Override
-		public boolean belongs(Object o) {
-			return true;
 		}
 
 		@Override

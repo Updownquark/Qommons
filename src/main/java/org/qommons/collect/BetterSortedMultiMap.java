@@ -12,7 +12,6 @@ import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterSortedList.SortedSearchFilter;
-import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
  * A {@link BetterMultiMap} whose {@link #keySet() key set} is sorted by a comparator
@@ -454,23 +453,17 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 
 		@Override
 		public BetterCollection<V> get(K key) {
-			if (!keySet().belongs(key))
-				return BetterCollection.empty();
 			return theWrapped.get(key);
 		}
 
 		@Override
 		public MultiEntryValueHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first) {
-			if (!theKeySet.belongs(key))
-				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 			return theWrapped.putEntry(key, value, afterKey, beforeKey, first);
 		}
 
 		@Override
 		public MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, ElementId afterKey,
 			ElementId beforeKey, boolean first, Runnable preAdd, Runnable postAdd) {
-			if (!theKeySet.belongs(key))
-				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 			return theWrapped.getOrPutEntry(key, value, afterKey, beforeKey, first, preAdd, postAdd);
 		}
 
@@ -514,8 +507,6 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 
 		@Override
 		public MultiEntryHandle<K, V> getEntry(K key) {
-			if (!theKeySet.belongs(key))
-				return null;
 			return theWrapped.getEntry(key);
 		}
 
@@ -530,8 +521,6 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		@Override
 		public MultiEntryHandle<K, V> getEntryById(ElementId entryId) {
 			MultiEntryHandle<K, V> entry = theWrapped.getEntryById(entryId);
-			if (!theKeySet.belongs(entry.getKey()))
-				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 			return entry;
 		}
 

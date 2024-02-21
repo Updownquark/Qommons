@@ -1,22 +1,12 @@
 package org.qommons.collect;
 
-import java.lang.reflect.Array;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.NavigableSet;
-import java.util.NoSuchElementException;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import org.qommons.Identifiable;
+import org.qommons.*;
 import org.qommons.Lockable.CoreId;
-import org.qommons.QommonsUtils;
-import org.qommons.ReversedComparator;
-import org.qommons.Ternian;
-import org.qommons.ThreadConstraint;
-import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
@@ -784,11 +774,6 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 			return new BoundedSearch<>(this, search);
 		}
 
-		@Override
-		public boolean belongs(Object o) {
-			return theWrapped.belongs(o) && isInRange((E) o) == 0;
-		}
-
 		/** @return The first index in the wrapped sorted sequence that is included in this sequence */
 		protected int getMinIndex() {
 			if (from == null)
@@ -880,7 +865,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 
 		@Override
 		public <T> T[] toArray(T[] a) {
-			T[] array = a.length >= size() ? a : (T[]) Array.newInstance(a.getClass().getComponentType(), size());
+			T[] array = a.length >= size() ? a : Arrays.copyOf(a, size());
 			for (int i = 0; i < array.length; i++)
 				array[i] = (T) get(i);
 			return array;
@@ -904,7 +889,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 
 		@Override
 		public E set(int index, E element) {
-			if (!belongs(element))
+			if (isInRange(element) != 0)
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 			try (Transaction t = lock(true, null)) {
 				return theWrapped.set(checkIndex(index, false), element);
@@ -913,7 +898,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 
 		@Override
 		public String canAdd(E value, ElementId after, ElementId before) {
-			if (!belongs(value))
+			if (isInRange(value) != 0)
 				return StdMsg.ILLEGAL_ELEMENT;
 			after = strip(after);
 			before = strip(before);
@@ -927,7 +912,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		@Override
 		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			if (!belongs(value))
+			if (isInRange(value) != 0)
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 			after = strip(after);
 			before = strip(before);
@@ -940,7 +925,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 
 		@Override
 		public void add(int index, E element) {
-			if (!belongs(element))
+			if (isInRange(element) != 0)
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 			try (Transaction t = lock(true, null)) {
 				theWrapped.add(checkIndex(index, true), element);
@@ -976,7 +961,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 
 		@Override
 		public CollectionElement<E> getElement(E value, boolean first) {
-			if (!belongs(value))
+			if (isInRange(value) != 0)
 				return null;
 			return getElement(theWrapped.getElement(value, first));
 		}
@@ -1074,7 +1059,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 
 		@Override
 		public boolean removeLast(Object o) {
-			if ((o != null && !theWrapped.belongs(o)) || isInRange((E) o) != 0)
+			if (isInRange((E) o) != 0)
 				return false;
 			return theWrapped.removeLast(o);
 		}

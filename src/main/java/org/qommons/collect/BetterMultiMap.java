@@ -375,11 +375,6 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 
 		@Override
-		public boolean belongs(Object o) {
-			return o instanceof BetterMultiMapEntrySet.EntrySetElement && ((EntrySetElement) o).getCollection() == this;
-		}
-
-		@Override
 		public CollectionElement<MultiEntryHandle<K, V>> getElement(MultiEntryHandle<K, V> value, boolean first) {
 			return entryFor(getMap().getEntryById(value.getElementId()));
 		}
@@ -727,11 +722,6 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 
 		@Override
-		public boolean belongs(Object o) {
-			return o instanceof MultiEntryValueHandle && getMap().keySet().belongs(((MultiEntryValueHandle<?, ?>) o).getKey());
-		}
-
-		@Override
 		public CollectionElement<MultiEntryValueHandle<K, V>> getElement(MultiEntryValueHandle<K, V> value, boolean first) {
 			return entryFor(getMap().getEntryById(value.getKeyId(), value.getElementId()));
 		}
@@ -971,8 +961,6 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 				String msg;
 				if (entry.getElementId().equals(kvValueEl.keyId))
 					msg = entry.getValues().canMove(kvValueEl.valueId, low, high);
-				else if (!entry.getValues().belongs(valueCollEl.get()))
-					msg = StdMsg.ILLEGAL_ELEMENT_POSITION;
 				else if (removable != null)
 					msg = removable;
 				else
@@ -1019,9 +1007,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 						ElementId newValueId = entry.getValues().move(kvValueEl.valueId, low, high, first, afterRemove).getElementId();
 						return entryFor(theMap.getEntryById(entry.getElementId(), newValueId));
 					}
-				} else if (!entry.getValues().belongs(valueCollEl.get()))
-					msg = StdMsg.ILLEGAL_ELEMENT_POSITION;
-				else if (removable != null)
+				} else if (removable != null)
 					msg = removable;
 				else {
 					msg = entry.getValues().canAdd(valueCollEl.get(), low, high);
@@ -1226,11 +1212,6 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		@Override
 		public CoreId getCoreId() {
 			return theMap.getCoreId();
-		}
-
-		@Override
-		public boolean belongs(Object o) {
-			return false;
 		}
 
 		@Override
@@ -2101,8 +2082,6 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			String msg = canReverse();
 			if (msg != null)
 				return StdMsg.UNSUPPORTED_OPERATION;
-			if (!keySet().belongs(key))
-				return StdMsg.ILLEGAL_ELEMENT;
 			BetterCollection<V> values = theSource.get(key);
 			return canReverse(values, value);
 		}

@@ -1,30 +1,13 @@
 package org.qommons.collect;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.ConcurrentModificationException;
-import java.util.Deque;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
-import org.qommons.ArrayUtils;
-import org.qommons.CausalLock;
-import org.qommons.Identifiable;
-import org.qommons.LambdaUtils;
-import org.qommons.Lockable;
+import org.qommons.*;
 import org.qommons.Lockable.CoreId;
-import org.qommons.QommonsUtils;
-import org.qommons.Stamped;
-import org.qommons.ThreadConstraint;
-import org.qommons.Transactable;
-import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
@@ -48,16 +31,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	/** A message for an exception thrown when a view detects that it is invalid due to external modification of the underlying data */
 	public static final String BACKING_COLLECTION_CHANGED = "This collection view's backing collection has changed from underneath this view.\n"
 		+ "This view is now invalid";
-
-	/**
-	 * Determines whether a value could belong to the collection. This is not the same as whether the value is {@link #canAdd(Object)
-	 * addable} to the collection. This may return true for unmodifiable collections as long as the value's type or immutable properties are
-	 * valid for this collection.
-	 * 
-	 * @param o The value to check
-	 * @return Whether the given value might in any situation belong to this collection
-	 */
-	boolean belongs(Object o);
 
 	/**
 	 * @param value The value to get the element for
@@ -271,8 +244,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return Null if given value could possibly be removed from this collection, or a message why it can't
 	 */
 	default String canRemove(Object value) {
-		if (!belongs(value))
-			return StdMsg.NOT_FOUND;
 		try (Transaction t = lock(false, null)) {
 			CollectionElement<E> found = getElement((E) value, true);
 			return mutableElement(found.getElementId()).canRemove();
@@ -281,8 +252,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	@Override
 	default boolean contains(Object o) {
-		if (!belongs(o))
-			return false;
 		CollectionElement<E> el = getElement((E) o, true);
 		return el != null;
 	}
@@ -366,8 +335,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	@Override
 	default boolean remove(Object o) {
-		if (!belongs(o))
-			return false;
 		try (Transaction t = lock(true, null)) {
 			CollectionElement<E> found = getElement((E) o, true);
 			if (found == null)
@@ -384,8 +351,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @return Whether the value was found and removed
 	 */
 	default boolean removeLast(Object o) {
-		if (!belongs(o))
-			return false;
 		try (Transaction t = lock(true, null)) {
 			CollectionElement<E> found = getElement((E) o, false);
 			if (found == null)
@@ -968,11 +933,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public boolean belongs(Object o) {
-			return getWrapped().belongs(o);
-		}
-
-		@Override
 		public int size() {
 			return getWrapped().size();
 		}
@@ -1147,11 +1107,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public boolean belongs(Object o) {
-			return false;
-		}
-
-		@Override
 		public int size() {
 			return 0;
 		}
@@ -1316,12 +1271,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		@Override
 		public Object createIdentity() {
 			return Identifiable.wrap(theCollection.getIdentity(), "elements");
-		}
-
-		@Override
-		public boolean belongs(Object o) {
-			return o instanceof CollectionElement//
-				&& !theCollection.getSourceElements(((CollectionElement<?>) o).getElementId(), theCollection).isEmpty();
 		}
 
 		@Override

@@ -9,16 +9,8 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import org.qommons.CausalLock;
-import org.qommons.Identifiable;
-import org.qommons.LambdaUtils;
-import org.qommons.Lockable;
+import org.qommons.*;
 import org.qommons.Lockable.CoreId;
-import org.qommons.QommonsUtils;
-import org.qommons.ThreadConstraint;
-import org.qommons.Transactable;
-import org.qommons.Transaction;
-import org.qommons.ValueHolder;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.ValueStoredCollection.RepairListener;
 
@@ -210,16 +202,12 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 
 	@Override
 	default V get(Object key) {
-		if (!keySet().belongs(key))
-			return null;
 		MapEntryHandle<K, V> entry = getEntry((K) key);
 		return entry == null ? null : entry.get();
 	}
 
 	@Override
 	default V remove(Object key) {
-		if (!keySet().belongs(key))
-			return null;
 		try (Transaction t = lock(true, null)) {
 			MapEntryHandle<K, V> entry = getEntry((K) key);
 			if (entry == null)
@@ -430,16 +418,12 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 
 	@Override
 	default V getOrDefault(Object key, V defaultValue) {
-		if (!keySet().belongs(key))
-			return defaultValue;
 		MapEntryHandle<K, V> handle = getEntry((K) key);
 		return handle == null ? defaultValue : handle.get();
 	}
 
 	@Override
 	default boolean remove(Object key, Object value) {
-		if (!keySet().belongs(key))
-			return false;
 		MapEntryHandle<K, V> handle = getEntry((K) key);
 		if (handle != null && Objects.equals(handle.get(), value)) {
 			mutableEntry(handle.getElementId()).remove();
@@ -830,11 +814,6 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 		}
 
 		@Override
-		public boolean belongs(Object o) {
-			return o instanceof Map.Entry && theMap.keySet().belongs(((Map.Entry<?, ?>) o).getKey());
-		}
-
-		@Override
 		public boolean isLockSupported() {
 			return theMap.isLockSupported();
 		}
@@ -1221,11 +1200,6 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 		@Override
 		public long getStamp() {
 			return theMap.getStamp();
-		}
-
-		@Override
-		public boolean belongs(Object o) {
-			return true; // I guess?
 		}
 
 		@Override

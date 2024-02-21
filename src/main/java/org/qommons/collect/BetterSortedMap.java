@@ -496,7 +496,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		protected Comparable<? super K> keyCompare(Comparable<? super Map.Entry<K, V>> entryCompare) {
-			return k -> entryCompare.compareTo(new ImmutableMapEntry<K, V>(k, null));
+			return k -> entryCompare.compareTo(new ImmutableMapEntry<>(k, null));
 		}
 
 		@Override
@@ -553,16 +553,12 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 		@Override
 		public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
-			if (!theKeySet.belongs(key))
-				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 			return wrap(theSource.putEntry(key, value, //
 				theKeySet.strip(after), theKeySet.strip(before), first));
 		}
 
 		@Override
 		public MapEntryHandle<K, V> getEntry(K key) {
-			if (!theKeySet.belongs(key))
-				return null;
 			return wrap(theSource.getEntry(key));
 		}
 
@@ -570,8 +566,6 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		public MapEntryHandle<K, V> getEntryById(ElementId entryId) {
 			MapEntryHandle<K, V> entry = theSource.getEntryById(//
 				theKeySet.strip(entryId));
-			if (!theKeySet.belongs(entry.getKey()))
-				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 			return wrap(entry);
 		}
 
@@ -608,15 +602,11 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		@Override
 		public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
 			MutableMapEntryHandle<K, V> entry = theSource.mutableEntry(theKeySet.strip(entryId));
-			if (!keySet().belongs(entry.getKey()))
-				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 			return wrap(entry);
 		}
 
 		@Override
 		public String canPut(K key, V value) {
-			if (!keySet().belongs(key))
-				return StdMsg.ILLEGAL_ELEMENT;
 			return theSource.canPut(key, value);
 		}
 

@@ -318,11 +318,6 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 
 		@Override
-		public boolean belongs(Object o) {
-			return true;
-		}
-
-		@Override
 		public ThreadConstraint getThreadConstraint() {
 			return BetterHashMap.this.getThreadConstraint();
 		}

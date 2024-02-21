@@ -1,16 +1,7 @@
 package org.qommons.collect;
 
 import java.lang.reflect.Array;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.ConcurrentModificationException;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
@@ -90,8 +81,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 */
 	@Override
 	default int indexOf(Object value) {
-		if (!belongs(value))
-			return -1;
 		CollectionElement<E> element = getElement((E) value, true);
 		return element == null ? -1 : getElementsBefore(element.getElementId());
 	}
@@ -103,8 +92,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 */
 	@Override
 	default int lastIndexOf(Object value) {
-		if (!belongs(value))
-			return -1;
 		CollectionElement<E> element = getElement((E) value, false);
 		return element == null ? -1 : getElementsBefore(element.getElementId());
 	}
@@ -252,8 +239,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 	@Override
 	default E set(int index, E element) {
-		if (!belongs(element))
-			throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 		try (Transaction t = lock(true, null)) {
 			CollectionElement<E> el = getElement(index);
 			E value = el.get();
@@ -941,11 +926,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public boolean belongs(Object o) {
-			return theWrapped.belongs(o);
-		}
-
-		@Override
 		public int size() {
 			int sz = theWrapped.size();
 			if (sz <= theStart)
@@ -1438,11 +1418,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public boolean belongs(Object o) {
-			return true;
-		}
-
-		@Override
 		public ThreadConstraint getThreadConstraint() {
 			return ThreadConstraint.NONE;
 		}
@@ -1606,6 +1581,13 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				@Override
 				public void remove() throws UnsupportedOperationException {
 					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+				}
+
+				@Override
+				public String toString() {
+					return new StringBuilder()//
+						.append('[').append(index).append(']').append('=').append(theValues.get(index))//
+						.toString();
 				}
 			};
 		}

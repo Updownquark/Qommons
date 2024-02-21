@@ -1,15 +1,6 @@
 package org.qommons.collect;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.Function;
 
 import org.qommons.CausalLock;
@@ -446,8 +437,6 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 
 	@Override
 	public BetterCollection<V> get(Object key) {
-		if (!theEntries.keySet().belongs(key))
-			return theValues.createEmptyValues();
 		return theValues.createWrapperCollection(createBacking((K) key, null));
 	}
 
@@ -572,11 +561,6 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		/** @return The key set of the backing multi-map's backing {@link BetterMap} */
 		protected BetterSet<K> getBacking() {
 			return theBacking;
-		}
-
-		@Override
-		public boolean belongs(Object o) {
-			return getBacking().belongs(o);
 		}
 
 		@Override
@@ -974,11 +958,6 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		@Override
 		public Object getIdentity() {
 			return theWrapped.getIdentity();
-		}
-
-		@Override
-		public boolean belongs(Object o) {
-			return true;
 		}
 
 		@Override
