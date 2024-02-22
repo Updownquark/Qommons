@@ -1,11 +1,6 @@
 package org.qommons.config;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import org.qommons.BiTuple;
 import org.qommons.ClassMap;
@@ -356,15 +351,17 @@ public class QonfigInterpreterCore {
 			Map<QonfigValueModifier<T>, QonfigModifierHolder<T>> modifiers2) throws QonfigInterpretationException {
 			if (modifierType == null)
 				return;
-			ClassMap<QonfigModifierHolder<?>> modifiers = theInterpreter.theModifiers.get(modifierType);
+			ClassMap<List<QonfigModifierHolder<?>>> modifiers = theInterpreter.theModifiers.get(modifierType);
 			if (modifiers == null)
 				return;
-			List<BiTuple<Class<?>, QonfigModifierHolder<?>>> typeModifiers = modifiers.getAllEntries(type, ClassMap.TypeMatch.SUPER_TYPE);
+			List<BiTuple<Class<?>, List<QonfigModifierHolder<?>>>> typeModifiers = modifiers.getAllEntries(type,
+				ClassMap.TypeMatch.SUPER_TYPE);
 			if (typeModifiers == null)
 				return;
-			for (BiTuple<Class<?>, QonfigModifierHolder<?>> modifier : typeModifiers) {
-				modifiers2.putIfAbsent((QonfigValueModifier<T>) modifier.getValue2().modifier,
-					(QonfigModifierHolder<T>) modifier.getValue2());
+			for (BiTuple<Class<?>, List<QonfigModifierHolder<?>>> modifiers3 : typeModifiers) {
+				for (QonfigModifierHolder<?> modifier : modifiers3.getValue2()) {
+					modifiers2.putIfAbsent((QonfigValueModifier<T>) modifier.modifier, (QonfigModifierHolder<T>) modifier);
+				}
 			}
 		}
 
@@ -538,7 +535,7 @@ public class QonfigInterpreterCore {
 
 	private final Set<QonfigToolkit> theKnownToolkits;
 	private final Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> theCreators;
-	private final Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> theModifiers;
+	private final Map<QonfigElementOrAddOn, ClassMap<List<QonfigModifierHolder<?>>>> theModifiers;
 	private final ClassMap<SpecialSessionImplementation<?>> theSpecialSessions;
 	private final ExceptionThrowingReporting theReporting;
 
@@ -551,8 +548,8 @@ public class QonfigInterpreterCore {
 	 */
 	protected QonfigInterpreterCore(Set<QonfigToolkit> allKnownToolkits,
 		Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
-		Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> modifiers, ClassMap<SpecialSessionImplementation<?>> specialSessions,
-		ExceptionThrowingReporting reporting) {
+		Map<QonfigElementOrAddOn, ClassMap<List<QonfigModifierHolder<?>>>> modifiers,
+		ClassMap<SpecialSessionImplementation<?>> specialSessions, ExceptionThrowingReporting reporting) {
 		theKnownToolkits = allKnownToolkits;
 		theCreators = creators;
 		theModifiers = modifiers;
@@ -624,7 +621,7 @@ public class QonfigInterpreterCore {
 		private final QonfigToolkit theToolkit;
 		private final ExceptionThrowingReporting theReporting;
 		private final Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> theCreators;
-		private final Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> theModifiers;
+		private final Map<QonfigElementOrAddOn, ClassMap<List<QonfigModifierHolder<?>>>> theModifiers;
 		private final ClassMap<SpecialSessionImplementation<?>> theSpecialSessions;
 
 		/**
@@ -664,7 +661,7 @@ public class QonfigInterpreterCore {
 		 */
 		protected Builder(Set<QonfigToolkit> toolkits, QonfigToolkit toolkit, ExceptionThrowingReporting reporting,
 			Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
-			Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> modifiers,
+			Map<QonfigElementOrAddOn, ClassMap<List<QonfigModifierHolder<?>>>> modifiers,
 			ClassMap<SpecialSessionImplementation<?>> specialSessions) {
 			theToolkits = toolkits;
 			theToolkit = toolkit;
@@ -685,7 +682,7 @@ public class QonfigInterpreterCore {
 		 */
 		protected Builder builderFor(Set<QonfigToolkit> toolkits, QonfigToolkit toolkit,
 			ExceptionThrowingReporting reporting, Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
-			Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> modifiers,
+			Map<QonfigElementOrAddOn, ClassMap<List<QonfigModifierHolder<?>>>> modifiers,
 			ClassMap<SpecialSessionImplementation<?>> specialSessions) {
 			return new Builder(toolkits, toolkit, reporting, creators, modifiers, specialSessions);
 		}
@@ -712,7 +709,7 @@ public class QonfigInterpreterCore {
 		}
 
 		/** @return The value modifiers configured in this builder */
-		protected Map<QonfigElementOrAddOn, ClassMap<QonfigModifierHolder<?>>> getModifiers() {
+		protected Map<QonfigElementOrAddOn, ClassMap<List<QonfigModifierHolder<?>>>> getModifiers() {
 			return QommonsUtils.unmodifiableCopy(theModifiers);
 		}
 
@@ -907,10 +904,9 @@ public class QonfigInterpreterCore {
 			if (!dependsOn(elementOrAddOn.getDeclarer()))
 				throw new IllegalArgumentException(
 					"Element " + elementOrAddOn.getName() + " is from a toolkit not included in " + theToolkits);
-			if (theModifiers.containsKey(elementOrAddOn))
-				return this; // Assume it's the same caller
-			theModifiers.computeIfAbsent(elementOrAddOn, __ -> new ClassMap<>()).with(type,
-				new QonfigModifierHolder<>(elementOrAddOn, type, modifier));
+			theModifiers.computeIfAbsent(elementOrAddOn, __ -> new ClassMap<>())//
+				.computeIfAbsent(type, ArrayList::new)//
+				.add(new QonfigModifierHolder<>(elementOrAddOn, type, modifier));
 			return this;
 		}
 
