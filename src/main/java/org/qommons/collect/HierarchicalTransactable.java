@@ -1,9 +1,6 @@
 package org.qommons.collect;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
+import java.util.*;
 import java.util.function.Function;
 
 import org.qommons.*;
@@ -36,11 +33,18 @@ import org.qommons.Lockable.CoreId;
 public class HierarchicalTransactable implements CausalLock {
 	private final Root theRoot;
 	private final HierarchicalTransactable theParent;
+	private final int theDepth;
 	private final CausalLock myLock;
 	private final List<HierarchicalTransactable> theChildren;
 
 	HierarchicalTransactable(HierarchicalTransactable parent, CausalLock myLock) {
-		theRoot = parent == null ? (Root) this : parent.theRoot;
+		if (parent == null) {
+			theRoot = (Root) this;
+			theDepth = 0;
+		} else {
+			theRoot = parent.theRoot;
+			theDepth = parent.theDepth + 1;
+		}
 		theParent = parent;
 		this.myLock = myLock;
 		theChildren = new ArrayList<>();
@@ -49,7 +53,13 @@ public class HierarchicalTransactable implements CausalLock {
 	/** @return The currently active causes of write locks. This value is not unmodifiable for performance purposes. */
 	@Override
 	public Collection<Cause> getCurrentCauses() {
-		return myLock.getCurrentCauses();
+		List<Collection<Cause>> causeStack = new ArrayList<>(theDepth + 1);
+		HierarchicalTransactable node = this;
+		while (node != null) {
+			causeStack.add(node.myLock.getCurrentCauses());
+			node = node.theParent;
+		}
+		return new FlattenedCollection<>(causeStack);
 	}
 
 	@Override
@@ -204,6 +214,27 @@ public class HierarchicalTransactable implements CausalLock {
 
 		CausalLock makeLock(CausalLock parent) {
 			return theLockCreator.apply(parent);
+		}
+	}
+
+	static class FlattenedCollection<T> extends AbstractCollection<T> {
+		private final Collection<? extends Collection<? extends T>> theCollections;
+
+		public FlattenedCollection(Collection<? extends Collection<? extends T>> collections) {
+			theCollections = collections;
+		}
+
+		@Override
+		public Iterator<T> iterator() {
+			return IterableUtils.flatten(theCollections).iterator();
+		}
+
+		@Override
+		public int size() {
+			int size = 0;
+			for (Collection<? extends T> coll : theCollections)
+				size += coll.size();
+			return size;
 		}
 	}
 }

@@ -255,6 +255,40 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 				};
 			}
 		}
+
+		/**
+		 * Default implementation of {@link HPAMap#values()}
+		 * 
+		 * @param <K> The key type of the map
+		 * @param <V> The value type of the map
+		 */
+		static class Values<K, V> extends BetterMap.BetterMapValueCollection<K, V> {
+			Values(BetterMap<K, V> map) {
+				super(map);
+			}
+
+			@Override
+			protected HPAMap<K, V> getMap() {
+				return (HPAMap<K, V>) super.getMap();
+			}
+
+			@Override
+			public Iterator<V> iterator() {
+				return new Iterator<V>() {
+					private int theIndex;
+
+					@Override
+					public boolean hasNext() {
+						return theIndex < size();
+					}
+
+					@Override
+					public V next() {
+						return getMap().get(theIndex++);
+					}
+				};
+			}
+		}
 	}
 
 	/** Implementations for this class */
@@ -1249,6 +1283,11 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 
 			@Override
+			public BetterCollection<V> values() {
+				return new Values<>(this);
+			}
+
+			@Override
 			public HPAMap<K, V> unmodifiable() {
 				return new UnmodifiableHPAMap<>(this);
 			}
@@ -1391,6 +1430,16 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			@Override
 			public HighPerformanceArraySet<K> keySet() {
 				return theWrapped.keySet(); // High-performance array sets are immutable
+			}
+
+			@Override
+			public BetterSortedSet<Entry<K, V>> entrySet() {
+				return BetterCollections.unmodifiableSortedSet(theWrapped.entrySet());
+			}
+
+			@Override
+			public BetterCollection<V> values() {
+				return BetterCollections.unmodifiableCollection(theWrapped.values());
 			}
 
 			@Override

@@ -346,7 +346,8 @@ public class ListenerList<E> {
 		} else
 			firing = -1;
 		Node newNode = firing == -1 ? new Node(value) : new SkipOneNode(value, firing);
-		return addNode(newNode, true);
+		addNode(newNode, true);
+		return newNode;
 	}
 
 	/**
@@ -369,7 +370,8 @@ public class ListenerList<E> {
 		} else
 			firing = -1;
 		RunLastNode node = new RunLastNode(value, firing);
-		return addNode(node, true);
+		addNode(node, true);
+		return node;
 	}
 
 	/**
@@ -380,10 +382,22 @@ public class ListenerList<E> {
 	 */
 	public Element<E> addFirst(E value) {
 		Node newNode = new Node(value);
+		addNode(newNode, false);
+		return newNode;
+	}
+
+	/**
+	 * @param value The value to add
+	 * @param skipCurrent Whether to skip actions on this value during the current {@link #forEach(Consumer) forEach} iteration if this
+	 *        addition is a result of the action being invoked from a {@link #forEach(Consumer)} call
+	 * @return True if the list was empty prior to this add
+	 */
+	public boolean addWasFirst(E value, boolean skipCurrent) {
+		Node newNode = new Node(value);
 		return addNode(newNode, false);
 	}
 
-	private Element<E> addNode(Node newNode, boolean last) {
+	private boolean addNode(Node newNode, boolean last) {
 		if (last)
 			newNode.next = theTerminal;// We know we'll be adding this node as the last node (excluding the terminal)
 		else
@@ -391,14 +405,13 @@ public class ListenerList<E> {
 		// The next part affects the list's state, so only one at a time
 		if (isSynchronized) {
 			synchronized (theTerminal) {
-				_add(newNode, last);
+				return _add(newNode, last);
 			}
 		} else
-			_add(newNode, last);
-		return newNode;
+			return _add(newNode, last);
 	}
 
-	private void _add(Node newNode, boolean last) {
+	private boolean _add(Node newNode, boolean last) {
 		boolean newInUse = theSize != null && theSize.getAndIncrement() == 0;
 		if (last) {
 			Node oldLast = theTerminal.previous;
@@ -413,6 +426,7 @@ public class ListenerList<E> {
 		}
 		if (newInUse && theInUseListener != null)
 			theInUseListener.inUseChanged(true);
+		return newInUse;
 	}
 
 	boolean removeListener(Node node) {

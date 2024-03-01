@@ -2,6 +2,7 @@ package org.qommons.collect;
 
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -162,6 +163,24 @@ public class BetterCollections {
 		return entry == null ? null : new UnmodifiableMultiEntry<>(entry);
 	}
 
+	private static class UnmodifiableIterator<E> implements Iterator<E> {
+		private final Iterator<? extends E> theWrapped;
+
+		UnmodifiableIterator(Iterator<? extends E> wrapped) {
+			theWrapped = wrapped;
+		}
+
+		@Override
+		public boolean hasNext() {
+			return theWrapped.hasNext();
+		}
+
+		@Override
+		public E next() {
+			return theWrapped.next();
+		}
+	}
+
 	/**
 	 * Implements {@link BetterCollections#unmodifiableCollection(BetterCollection)}
 	 * 
@@ -230,6 +249,11 @@ public class BetterCollections {
 		@Override
 		public long getStamp() {
 			return theWrapped.getStamp();
+		}
+
+		@Override
+		public Iterator<E> iterator() {
+			return new UnmodifiableIterator<>(theWrapped.iterator());
 		}
 
 		@Override
