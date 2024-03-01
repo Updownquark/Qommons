@@ -553,12 +553,16 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 		@Override
 		public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
+			if (isInRange(key) != 0)
+				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
 			return wrap(theSource.putEntry(key, value, //
 				theKeySet.strip(after), theKeySet.strip(before), first));
 		}
 
 		@Override
 		public MapEntryHandle<K, V> getEntry(K key) {
+			if (isInRange(key) != 0)
+				return null;
 			return wrap(theSource.getEntry(key));
 		}
 
@@ -607,6 +611,8 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 		@Override
 		public String canPut(K key, V value) {
+			if (isInRange(key) != 0)
+				return StdMsg.ILLEGAL_ELEMENT;
 			return theSource.canPut(key, value);
 		}
 
