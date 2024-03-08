@@ -180,6 +180,10 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 			theLastModified = theBacking.getLastModified();
 		}
 
+		ArchiveEnabledFileSource getFileSource() {
+			return ArchiveEnabledFileSource.this;
+		}
+
 		BetterFile.FileBacking getSource() {
 			return theBacking;
 		}
@@ -257,7 +261,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		public boolean isDirectory() {
 			if (theRootEntry != null)
 				return true;
-			else if (!hasCheckedForArchive && isArchive(theBacking))
+			else if (!hasCheckedForArchive && theArchiveDepth < getMaxArchiveDepth() && isArchive(theBacking))
 				return true;
 			else
 				return theBacking.isDirectory();
@@ -275,35 +279,37 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public boolean discoverContents(Consumer<? super FileBacking> onDiscovered, BooleanSupplier canceled) {
-			try {
-				if (getArchiveData(entry -> {
-					onDiscovered.accept(new ArchiveEnabledFileBacking(this, new ArchiveFileBacking(this, entry), theArchiveDepth + 1));
-				}, null, canceled) != null)
-					return true;
-			} catch (IOException e) {
-				e.printStackTrace();
-				return false;
+			if (theArchiveDepth < getMaxArchiveDepth()) {
+				try {
+					if (getArchiveData(entry -> {
+						onDiscovered.accept(new ArchiveEnabledFileBacking(this, new ArchiveFileBacking(this, entry), theArchiveDepth + 1));
+					}, null, canceled) != null)
+						return true;
+				} catch (IOException e) {
+					e.printStackTrace();
+					return false;
+				}
+				if (canceled.getAsBoolean())
+					return false;
 			}
-			if (canceled.getAsBoolean())
-				return false;
-			else {
-				return theBacking.discoverContents(f -> {
-					onDiscovered.accept(new ArchiveEnabledFileBacking(this, f, theArchiveDepth));
-				}, canceled);
-			}
+			return theBacking.discoverContents(f -> {
+				onDiscovered.accept(new ArchiveEnabledFileBacking(this, f, theArchiveDepth));
+			}, canceled);
 		}
 
 		@Override
 		public FileBacking getChild(String fileName) {
-			try {
-				ArchiveEntry root = getArchiveData(null, null, () -> false);
-				if (root != null) {
-					ArchiveEntry child = root.getFile(fileName);
-					return child == null ? null
-						: new ArchiveEnabledFileBacking(this, new ArchiveFileBacking(this, child), theArchiveDepth + 1);
+			if (theArchiveDepth < getMaxArchiveDepth()) {
+				try {
+					ArchiveEntry root = getArchiveData(null, null, () -> false);
+					if (root != null) {
+						ArchiveEntry child = root.getFile(fileName);
+						return child == null ? null
+							: new ArchiveEnabledFileBacking(this, new ArchiveFileBacking(this, child), theArchiveDepth + 1);
+					}
+				} catch (IOException e) {
+					e.printStackTrace();
 				}
-			} catch (IOException e) {
-				e.printStackTrace();
 			}
 			FileBacking f = theBacking.getChild(fileName);
 			return f == null ? null : new ArchiveEnabledFileBacking(this, f, theArchiveDepth);
@@ -366,10 +372,12 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		public void visitAll(ExBiConsumer<? super FileBacking, CharSequence, IOException> forEach, BooleanSupplier canceled)
 			throws IOException {
 			forEach.accept(this, "");
-			if (getArchiveData(null, (entry, path) -> {
-				forEach.accept(new ArchiveEnabledFileBacking(this, new ArchiveFileBacking(this, entry), theArchiveDepth + 1), path);
-			}, canceled) != null)
-				return;
+			if (theArchiveDepth < getMaxArchiveDepth()) {
+				if (getArchiveData(null, (entry, path) -> {
+					forEach.accept(new ArchiveEnabledFileBacking(this, new ArchiveFileBacking(this, entry), theArchiveDepth + 1), path);
+				}, canceled) != null)
+					return;
+			}
 			theBacking.visitAll(forEach, canceled);
 		}
 
