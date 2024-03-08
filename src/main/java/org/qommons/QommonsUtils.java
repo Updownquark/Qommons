@@ -3,6 +3,8 @@ package org.qommons;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.text.ParseException;
@@ -1451,6 +1453,52 @@ public class QommonsUtils {
 			return d1Neg ? -1 : 1;
 		else
 			return 0;
+	}
+
+	/** Just a magic number I found that makes the speed come out about right for {@link #getCoreSpeed()} */
+	private static final long CORE_SPEED_CONST = 498_500_000_000L;
+
+	/**
+	 * <p>
+	 * Java doesn't contain any out-of-the-box means to determine the speed of the CPU, so this method does it experimentally.
+	 * </p>
+	 * <p>
+	 * This method is experimental, meaning it has the processor do some work, records how long it took, and derives the speed. The time
+	 * measurements involved are not precise, so this method is slow (to mitigate this), but still imprecise. Callers can expect results
+	 * that vary as much as 30% of the true speed of the CPU, or occasionally even more. It should only be relied upon for a ballpark
+	 * estimation of the capacity of the machine.
+	 * </p>
+	 * <p>
+	 * This call takes around a tenth of a second and does not cache its own result, so callers should generally cache the result and not
+	 * call this method very often.
+	 * </p>
+	 * <p>
+	 * If this computer is operating multiple cores of different speeds, the result may be for any core, or even possibly a number between
+	 * those of two or more cores.
+	 * </p>
+	 *
+	 * @return The approximate core speed of the computer, in Hz
+	 */
+	public static long getCoreSpeed() {
+		ThreadMXBean threadDetection = ManagementFactory.getThreadMXBean();
+		if (threadDetection == null || !threadDetection.isCurrentThreadCpuTimeSupported())
+			return 0;
+
+		long start = threadDetection.getCurrentThreadCpuTime();
+		@SuppressWarnings("unused")
+		int sum;
+		int mult = 0;
+		long runtime;
+		do {
+			sum = 0;
+			mult++;
+			for (int i = 0; i < 1_000_000; i++)
+				sum += i;
+			runtime = threadDetection.getCurrentThreadCpuTime() - start;
+		} while (runtime < 100_000_000);
+
+		long coreSpeed = CORE_SPEED_CONST * mult / runtime;
+		return coreSpeed;
 	}
 
 	/**
