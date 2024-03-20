@@ -15,7 +15,13 @@ import org.qommons.TransactableBuilder;
 public interface CollectionBuilder<B extends CollectionBuilder<? extends B>> extends TransactableBuilder<B> {
 	@Override
 	default B withLocking(Function<Object, Transactable> locker) {
-		return withCollectionLocking(LambdaUtils.printableFn(obj -> new RRWLockingStrategy(locker.apply(obj)), locker::toString, locker));
+		return withCollectionLocking(LambdaUtils.printableFn(obj -> {
+			Transactable lock = locker.apply(obj);
+			if (lock instanceof CollectionLockingStrategy)
+				return (CollectionLockingStrategy) lock;
+			else
+				return new RRWLockingStrategy(lock);
+		}, locker::toString, locker));
 	}
 
 	/**

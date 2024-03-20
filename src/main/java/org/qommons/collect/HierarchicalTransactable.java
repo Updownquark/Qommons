@@ -50,13 +50,13 @@ public class HierarchicalTransactable implements CausalLock {
 		theChildren = new ArrayList<>();
 	}
 
-	/** @return The currently active causes of write locks. This value is not unmodifiable for performance purposes. */
+	/** @return The currently active causes of write locks. This value may not be unmodifiable for performance purposes. */
 	@Override
 	public Collection<Cause> getCurrentCauses() {
 		List<Collection<Cause>> causeStack = new ArrayList<>(theDepth + 1);
 		HierarchicalTransactable node = this;
 		while (node != null) {
-			causeStack.add(node.myLock.getCurrentCauses());
+			causeStack.add(0, node.myLock.getCurrentCauses());
 			node = node.theParent;
 		}
 		return new FlattenedCollection<>(causeStack);
@@ -65,10 +65,20 @@ public class HierarchicalTransactable implements CausalLock {
 	@Override
 	public Causable getRootCausable() {
 		for (Cause cause : myLock.getCurrentCauses()) {
-			if (cause instanceof Causable)
+			if (cause instanceof Causable && !((Causable) cause).isTerminated())
 				return (Causable) cause;
 		}
 		return null;
+	}
+
+	@Override
+	public <T> T doOptimistically(T init, OptimisticOperation<T> operation) {
+		return myLock.doOptimistically(init, operation);
+	}
+
+	@Override
+	public int doOptimistically(int init, OptimisticIntOperation operation) {
+		return myLock.doOptimistically(init, operation);
 	}
 
 	/** @return A Transactable that locks this transactable as its parent */

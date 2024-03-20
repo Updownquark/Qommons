@@ -33,7 +33,7 @@ public interface CausalLock extends Transactable {
 	/** @return The first Causable in this lock's {@link #getCurrentCauses() current causes} */
 	default Causable getRootCausable() {
 		for (Cause cause : getCurrentCauses()) {
-			if (cause instanceof Causable)
+			if (cause instanceof Causable && !((Causable) cause).isTerminated())
 				return (Causable) cause;
 		}
 		return null;

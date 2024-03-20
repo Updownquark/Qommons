@@ -9,6 +9,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.qommons.Lockable.CoreId;
+import org.qommons.collect.OptimisticContext;
 
 /**
  * Represents a mutable object whose modifications may possibly be batched for increased efficiency.
@@ -79,6 +80,64 @@ public interface Transactable extends ThreadConstrained {
 	 */
 	default Lockable asLockable(boolean write, Object cause) {
 		return Lockable.lockable(this, write, cause);
+	}
+
+	/**
+	 * A read-only operation that can be done optimistically, without obtaining a lock
+	 * 
+	 * @param <T> The type of the operation's result
+	 */
+	@FunctionalInterface
+	interface OptimisticOperation<T> {
+		T apply(T init, OptimisticContext ctx);
+	}
+
+	/** A read-only operation that can be done optimistically, without obtaining a lock */
+	@FunctionalInterface
+	interface OptimisticIntOperation {
+		int apply(int init, OptimisticContext ctx);
+	}
+
+	/**
+	 * Performs a safe, read-only operation, potentially without obtaining any locks.
+	 * 
+	 * The operation must have no side effects (i.e. it must not modify fields or values outside of the scope of the operation). A typical
+	 * operation will:
+	 * <ol>
+	 * <li>Copy the set of fields it needs into local variables</li>
+	 * <li>Check the stamp to ensure that the copied values are consistent</li>
+	 * <li>Perform one or more operations on the local variables which only affect local variables declared in the scope, checking the stamp
+	 * in between operations to continuously ensure consistency and to avoid unnecessary work</li>
+	 * <li>Compile and return a value that can be used outside the operation scope</li>
+	 * </ol>
+	 * The default implementation of this method does not do anything optimistically, but merely performs the operation inside of a read
+	 * lock. Implementations that support optimism may override this method.
+	 * 
+	 * @param <T> The type of value produced by the operation
+	 * @param init The initial value to feed to the operation
+	 * @param operation The operation to perform
+	 * @return The result of the operation
+	 */
+	default <T> T doOptimistically(T init, OptimisticOperation<T> operation) {
+		// Optimism is not supported by default
+		try (Transaction t = lock(false, null)) {
+			return operation.apply(init, OptimisticContext.TRUE);
+		}
+	}
+
+	/**
+	 * Same as {@link #doOptimistically(Object, OptimisticOperation)} but for a primitive integer, to avoid wrapping/unwrapping since this
+	 * is a common use-case
+	 * 
+	 * @param init The initial value to feed to the operation
+	 * @param operation The operation to perform
+	 * @return The result of the operation
+	 */
+	default int doOptimistically(int init, OptimisticIntOperation operation) {
+		// Optimism is not supported by default
+		try (Transaction t = lock(false, null)) {
+			return operation.apply(init, OptimisticContext.TRUE);
+		}
 	}
 
 	/**

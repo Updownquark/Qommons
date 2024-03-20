@@ -86,18 +86,12 @@ public class RRWLockingStrategy implements CollectionLockingStrategy {
 
 	@Override
 	public <T> T doOptimistically(T init, OptimisticOperation<T> operation) {
-		// Optimism not supported
-		try (Transaction t = lock(false, null)) {
-			return operation.apply(init, OptimisticContext.TRUE);
-		}
+		return theLock.doOptimistically(init, operation);
 	}
 
 	@Override
 	public int doOptimistically(int init, OptimisticIntOperation operation) {
-		// Optimism not supported
-		try (Transaction t = lock(false, null)) {
-			return operation.apply(init, OptimisticContext.TRUE);
-		}
+		return theLock.doOptimistically(init, operation);
 	}
 
 	@Override

@@ -4,13 +4,8 @@ import java.util.Collection;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.StampedLock;
 
-import org.qommons.CausalLock;
-import org.qommons.DefaultCausalLock;
-import org.qommons.LockDebug;
+import org.qommons.*;
 import org.qommons.Lockable.CoreId;
-import org.qommons.ThreadConstraint;
-import org.qommons.Transactable;
-import org.qommons.Transaction;
 
 /** A collection-locking strategy using {@link StampedLock} */
 public class StampedLockingStrategy implements CollectionLockingStrategy {
@@ -58,12 +53,7 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 		theThreadConstraint = threadConstraint;
 		theOwner = owner;
 		theCausalLock = new DefaultCausalLock(new TransactableCore());
-		theStampCollection = new ThreadLocal<ThreadState>() {
-			@Override
-			protected ThreadState initialValue() {
-				return new ThreadState();
-			}
-		};
+		theStampCollection = ThreadLocal.withInitial(ThreadState::new);
 		theUpdateLocker = new StampedLock();
 		theModCount = new AtomicLong(0);
 		this.optimisticTries = optimisticTries;
@@ -111,12 +101,24 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 
 	@Override
 	public <T> T doOptimistically(T init, OptimisticOperation<T> operation) {
-		if (optimisticTries == 0)
+		if (optimisticTries == 0) {
 			try (Transaction t = lock(false, null)) {
 				return operation.apply(init, OptimisticContext.TRUE);
 			}
+		}
 		T res = init;
 		long[] updateStamp = new long[] { theUpdateLocker.tryOptimisticRead() };
+		if (updateStamp[0] == 0) { // Write lock held
+			ThreadState thread = theStampCollection.get();
+			if (thread.write) // We might own it
+				return operation.apply(init, OptimisticContext.TRUE);
+			else { // Someone else owns it. Nothing to do but wait.
+				try (Transaction t = thread.obtain(true)) {
+					return operation.apply(init, OptimisticContext.TRUE);
+				}
+			}
+		}
+
 		boolean[] keepTrying = new boolean[] { true };
 		for (int i = 0; keepTrying[0] && updateStamp[0] != 0 && i < optimisticTries; i++) {
 			keepTrying[0] = false;
@@ -140,12 +142,24 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 
 	@Override
 	public int doOptimistically(int init, OptimisticIntOperation operation) {
-		if (optimisticTries == 0)
+		if (optimisticTries == 0) {
 			try (Transaction t = lock(false, null)) {
 				return operation.apply(init, OptimisticContext.TRUE);
 			}
+		}
 		int res = init;
 		long[] updateStamp = new long[] { theUpdateLocker.tryOptimisticRead() };
+		if (updateStamp[0] == 0) { // Write lock held
+			ThreadState thread = theStampCollection.get();
+			if (thread.write) // We might own it
+				return operation.apply(init, OptimisticContext.TRUE);
+			else { // Someone else owns it. Nothing to do but wait.
+				try (Transaction t = thread.obtain(true)) {
+					return operation.apply(init, OptimisticContext.TRUE);
+				}
+			}
+		}
+
 		boolean[] keepTrying = new boolean[] { true };
 		for (int i = 0; keepTrying[0] && updateStamp[0] != 0 && i < optimisticTries; i++) {
 			keepTrying[0] = false;
@@ -203,13 +217,23 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 		}
 	}
 
-	class LockStamp {
+	class ThreadState {
 		long stamp;
 		boolean write;
+
+		Transaction obtain(boolean forWrite) {
+			return LockDebug.debug(theUpdateLocker, theOwner, forWrite, false, () -> lock(theUpdateLocker, forWrite));
+		}
+
+		Transaction tryObtain(boolean forWrite) {
+			Transaction updateTrans = LockDebug.debug(theUpdateLocker, theOwner, forWrite, true, () -> tryLock(theUpdateLocker, forWrite));
+			return updateTrans;
+		}
 
 		Transaction lock(StampedLock locker, boolean forWrite) {
 			if (stamp > 0) {
 				if (forWrite && !this.write) {
+					// We have a read lock
 					// Alright, I'll try
 					long newStamp = locker.tryConvertToWriteLock(stamp);
 					if (newStamp == 0)
@@ -284,25 +308,6 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 		private void unlockedWrite() {
 			if (STORE_WRITERS)
 				updateWriteLocker = null;
-		}
-	}
-
-	class ThreadState {
-		final LockStamp updateStamp;
-
-		ThreadState() {
-			updateStamp = new LockStamp();
-		}
-
-		Transaction obtain(boolean write) {
-			return LockDebug.debug(theUpdateLocker, theOwner, write, false,
-				() -> updateStamp.lock(theUpdateLocker, write));
-		}
-
-		Transaction tryObtain(boolean write) {
-			Transaction updateTrans = LockDebug.debug(theUpdateLocker, theOwner, write, true,
-				() -> updateStamp.tryLock(theUpdateLocker, write));
-			return updateTrans;
 		}
 	}
 }

@@ -88,4 +88,14 @@ public class DefaultCausalLock implements CausalLock {
 	public CoreId getCoreId() {
 		return theLock.getCoreId();
 	}
+
+	@Override
+	public <T> T doOptimistically(T init, OptimisticOperation<T> operation) {
+		return theLock.doOptimistically(init, operation);
+	}
+
+	@Override
+	public int doOptimistically(int init, OptimisticIntOperation operation) {
+		return theLock.doOptimistically(init, operation);
+	}
 }
