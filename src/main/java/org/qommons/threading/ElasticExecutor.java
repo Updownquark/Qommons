@@ -1,9 +1,8 @@
 package org.qommons.threading;
 
-import java.util.Arrays;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -31,8 +30,9 @@ import java.util.function.Supplier;
  * <ol>
  * <li>The {@link #waitWhileActive(long)} method provides the ability to be notified when the executor has finished its tasks without being
  * shut down.</li>
- * <li>Performance. This class is much faster than Java's executor. Around 3x faster, according to my test (see ElasticExecutorTest in the
- * testing sources).</li>
+ * <li>Performance. This class is much faster than Java's executor, especially with lots of quick tasks. Up to 9x faster, measured by the
+ * amount of time between beginning to queue the tasks and all tasks finishing, according to my test (see ElasticExecutorTest in the testing sources).
+ * The time it takes to enqueue tasks (the {@link #execute(Object) execute} method) is much slower, though.</li>
  * </ol>
  * This class does not provide visibility into the execution status of each executed task. This could be added, but it can easily be done by
  * the tasks themselves.
@@ -67,7 +67,8 @@ public class ElasticExecutor<T> {
 		void execute(T task);
 
 		@Override
-		default void close() throws Exception {}
+		default void close() throws Exception {
+		}
 	}
 
 	/** An interface to facilitate custom handling of threads for an {@link ElasticExecutor} */
@@ -79,22 +80,20 @@ public class ElasticExecutor<T> {
 		void execute(Runnable task, String name);
 	}
 
-	private String theName;
+	private final String theName;
 	private final Supplier<? extends TaskExecutor<? super T>> theGuts;
 	private volatile int theMinThreadCount;
 	private volatile int theMaxThreadCount;
 	private volatile int theMaxQueueSize;
-	private int theUnusedThreadLifetime;
+	private volatile int theUnusedThreadLifetime;
 
-	private final ConcurrentLinkedQueue<T> theQueue;
-	private final AtomicInteger theQueueSize;
+	final ConcurrentLinkedQueue<T> theTaskQueue;
 	private volatile Runner theRunner;
-	private final AtomicInteger theThreadCount;
-	private final AtomicInteger theActiveWorkers;
-	// This next field is duplicate information that could be derived from the above 2, but that wouldn't be atomic
-	private final AtomicInteger theWaitingWorkers;
+	private final AtomicInteger theWorkerCount;
+	private final AtomicInteger theUnfinishedTaskCount;
+	private volatile int theWaitingWorkers;
 	private volatile ConcurrentLinkedQueue<TaskExecutor<? super T>> theCachedWorkers;
-	private final AtomicReference<byte[]> theNextWorkerId;
+	private final AtomicLong theNextWorkerId;
 
 	private final Object theLock;
 
@@ -109,17 +108,15 @@ public class ElasticExecutor<T> {
 		theGuts = taskExecutor;
 		theMinThreadCount = 0;
 		theMaxThreadCount = Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
-		theMaxQueueSize = Integer.MAX_VALUE;
+		theMaxQueueSize = 0;
 		theUnusedThreadLifetime = 100;
 
-		theQueue = new ConcurrentLinkedQueue<>();
-		theQueueSize = new AtomicInteger();
+		theTaskQueue = new ConcurrentLinkedQueue<>();
 		theRunner = new DefaultRunner();
-		theThreadCount = new AtomicInteger();
-		theActiveWorkers = new AtomicInteger();
-		theWaitingWorkers = new AtomicInteger();
+		theWorkerCount = new AtomicInteger();
+		theUnfinishedTaskCount = new AtomicInteger();
 
-		theNextWorkerId = new AtomicReference<>(new byte[] { 0 });
+		theNextWorkerId = new AtomicLong(1);
 
 		theLock = new Object();
 	}
@@ -216,12 +213,12 @@ public class ElasticExecutor<T> {
 
 	/**
 	 * @param maxQueueSize The maximum {@link #getQueueSize() queue size} allowed for this executor before tasks are {@link #execute(Object)
-	 *        rejected}.
+	 *        rejected}. A value of zero means no limit
 	 * @return This executor
 	 */
 	public ElasticExecutor<T> setMaxQueueSize(int maxQueueSize) {
-		if (maxQueueSize < 0)
-			throw new IllegalArgumentException("Maximum queue size cannot be less than zero: " + maxQueueSize);
+		if (maxQueueSize > 0 && maxQueueSize < 10)
+			throw new IllegalArgumentException("Maximum queue size must be at least 10: " + maxQueueSize);
 		else if (maxQueueSize > MAX_POSSIBLE_QUEUE_SIZE)
 			throw new IllegalArgumentException("Maximum queue size cannot exceed " + MAX_POSSIBLE_QUEUE_SIZE + ": " + maxQueueSize);
 		theMaxQueueSize = maxQueueSize;
@@ -276,17 +273,17 @@ public class ElasticExecutor<T> {
 
 	/** @return The current size of the queue of tasks waiting to begin execution */
 	public int getQueueSize() {
-		return theQueue.size();
+		return theTaskQueue.size();
 	}
 
 	/** @return The current number of threads being used to execute tasks */
 	public int getThreadCount() {
-		return theThreadCount.get();
+		return theWorkerCount.get();
 	}
 
 	/** @return The number of threads actively working on tasks for this executor */
 	public int getActiveThreads() {
-		return theActiveWorkers.get();
+		return Math.max(0, theWorkerCount.get() - theWaitingWorkers);
 	}
 
 	/**
@@ -294,7 +291,7 @@ public class ElasticExecutor<T> {
 	 *         have finished.
 	 */
 	public boolean isActive() {
-		return theActiveWorkers.get() != 0 || theQueueSize.get() != 0;
+		return theUnfinishedTaskCount.get() != 0;
 	}
 
 	// Action methods
@@ -307,36 +304,31 @@ public class ElasticExecutor<T> {
 	 */
 	public boolean execute(T task) {
 		int maxSize = theMaxQueueSize;
-		int preQueueSize = theQueueSize.getAndUpdate(size -> incrementQueueSize(size, maxSize));
-		if (preQueueSize == maxSize)
-			return false;
-		theQueue.add(task);
-		if (theWaitingWorkers.get() != 0) {
+		if (maxSize == 0)
+			theUnfinishedTaskCount.getAndIncrement();
+		else {
+			int preQueueSize = theUnfinishedTaskCount.getAndUpdate(count -> incrementQueueSize(count, maxSize));
+			if (preQueueSize >= maxSize)
+				return false;
+		}
+		theTaskQueue.add(task);
+		boolean wokeWorker = false;
+		while (theWaitingWorkers > 0) {
 			synchronized (theLock) {
-				theLock.notify();
-			}
-		} else {
-			int maxTC = theMaxThreadCount;
-			int preTC = theThreadCount.getAndUpdate(tc -> {
-				if (tc >= maxTC)
-					return tc;
-				return tc + 1;
-			});
-			if (preTC < maxTC) {
-				if (!startThread()) {
-					theThreadCount.getAndDecrement();
-					if (preTC == 0)
-						throw new IllegalStateException("Could not start first worker thread--task executor returned null");
+				wokeWorker = theWaitingWorkers != 0;
+				if (wokeWorker) {
+					theLock.notifyAll();
+					break;
 				}
 			}
 		}
+		if (!wokeWorker) {
+			int maxTC = theMaxThreadCount;
+			if (theWorkerCount.getAndUpdate(tc -> incrementThreadCount(tc, maxTC)) < maxTC) {
+				startWorker();
+			}
+		}
 		return true;
-	}
-
-	private static int incrementQueueSize(int currentSize, int maxSize) {
-		if (currentSize == maxSize)
-			return currentSize;
-		return currentSize + 1;
 	}
 
 	/**
@@ -352,7 +344,7 @@ public class ElasticExecutor<T> {
 			if (!isActive())
 				return true;
 			long endTime = timeout <= 0 ? 0 : System.currentTimeMillis() + timeout;
-			while (true) {
+			while (isActive()) {
 				long sleepTime;
 				if (timeout > 0) {
 					long now = System.currentTimeMillis();
@@ -367,9 +359,8 @@ public class ElasticExecutor<T> {
 				} catch (InterruptedException e) {
 					// Just wake up normally
 				}
-				if (!isActive())
-					return true;
 			}
+			return true;
 		}
 	}
 
@@ -392,151 +383,146 @@ public class ElasticExecutor<T> {
 	 */
 	public int clear(Consumer<? super T> onEachCleared) {
 		int cleared = 0;
-		T task = theQueue.poll();
+		T task = theTaskQueue.poll();
 		while (task != null) {
 			cleared++;
-			theQueueSize.decrementAndGet();
-			if (onEachCleared != null)
-				onEachCleared.accept(task);
-			task = theQueue.poll();
+			if (onEachCleared != null) {
+				try {
+					onEachCleared.accept(task);
+				} finally {
+					taskFinished();
+				}
+			} else
+				taskFinished();
+
+			task = theTaskQueue.poll();
 		}
 		return cleared;
 	}
 
-	private boolean startThread() {
+	// Internal methods. Some of these are package-private to avoid the overhead of synthetic methods.
+
+	private void startWorker() {
 		TaskExecutor<? super T> taskExecutor = null;
 		ConcurrentLinkedQueue<TaskExecutor<? super T>> cache = theCachedWorkers;
 		if (cache != null)
 			taskExecutor = cache.poll();
 		if (taskExecutor == null)
 			taskExecutor = theGuts.get();
-		if (taskExecutor == null) {
-			theThreadCount.getAndDecrement();
-			return false;
-		} else {
-			new ElasticExecutorWorker(getNextWorkerId(), taskExecutor).start();
-			return true;
+		String workerId = String.valueOf(theNextWorkerId.getAndIncrement());
+		theRunner.execute(new Worker(workerId, taskExecutor), theName + ":" + workerId);
+	}
+
+	private static int incrementQueueSize(int currentSize, int maxSize) {
+		if (currentSize >= maxSize)
+			return currentSize;
+		return currentSize + 1;
+	}
+
+	private static int incrementThreadCount(int currentCount, int max) {
+		if (currentCount >= max)
+			return currentCount;
+		else
+			return currentCount + 1;
+	}
+
+	private static int decrementThreadCount(int currentCount, int min) {
+		if (currentCount <= min)
+			return currentCount;
+		else
+			return currentCount - 1;
+	}
+
+	void taskFinished() {
+		if (0 == theUnfinishedTaskCount.decrementAndGet()) {
+			synchronized (this) {
+				notifyAll();
+			}
 		}
 	}
-	private static final char[] WORKER_ID_CHAR_SEQ;
-	static {
-		String workerCharSeq = "1234567890";
-		WORKER_ID_CHAR_SEQ = workerCharSeq.toCharArray();
-	}
 
-	private String getNextWorkerId() {
-		byte[] workerId = theNextWorkerId.getAndUpdate(ElasticExecutor::incrementWorkerId);
-		char[] workerIdChars = new char[workerId.length];
-		for (int i = 0; i < workerId.length; i++)
-			workerIdChars[i] = WORKER_ID_CHAR_SEQ[workerId[i]];
-		return new String(workerIdChars);
-	}
-
-	static byte[] incrementWorkerId(byte[] previous) {
-		int idx = previous.length - 1;
-		int dig = previous[idx] + 1;
-		while (dig == WORKER_ID_CHAR_SEQ.length) {
-			idx--;
-			if (idx < 0)
+	T waitForTask(Worker worker) {
+		T task;
+		long waitStart = System.currentTimeMillis();
+		long now = waitStart;
+		do {
+			int lifetime = theUnusedThreadLifetime;
+			long waitUntil = waitStart + lifetime;
+			synchronized (theLock) {
+				task = theTaskQueue.poll();
+				if (task == null && lifetime > 0) {
+					theWaitingWorkers++;
+					try {
+						theLock.wait(waitUntil - now);
+					} catch (InterruptedException e) {
+					} finally {
+						theWaitingWorkers--;
+					}
+				}
+			}
+			if (task == null)
+				task = theTaskQueue.poll();
+			if (task != null)
 				break;
-			dig = previous[idx];
-		}
-		byte[] newId;
-		if (idx < 0)
-			newId = new byte[previous.length + 1];
-		else {
-			newId = new byte[previous.length];
-			if (idx > 0)
-				System.arraycopy(previous, 0, newId, 0, idx);
-			newId[idx] = (byte) dig;
-			if (idx < previous.length - 1)
-				Arrays.fill(newId, idx + 1, newId.length, (byte) 0);
-		}
-		return newId;
+			else {
+				now = System.currentTimeMillis();
+				if (now >= waitUntil) {
+					// No tasks available, see if we should die now
+					int minTC = theMinThreadCount;
+					worker.isDead = theWorkerCount.getAndUpdate(tc -> decrementThreadCount(tc, minTC)) > minTC;
+				}
+			}
+		} while (!worker.isDead);
+
+		return task;
 	}
 
-	synchronized void notifyWaitingThreads() {
-		notifyAll();
-	}
-
-	private class ElasticExecutorWorker implements Runnable {
+	class Worker implements Runnable {
 		private final String theWorkerId;
 		private final TaskExecutor<? super T> theTaskExecutor;
+		boolean isDead;
 
-		ElasticExecutorWorker(String id, TaskExecutor<? super T> taskExecutor) {
+		Worker(String id, TaskExecutor<? super T> taskExecutor) {
 			theWorkerId = id;
 			theTaskExecutor = taskExecutor;
 		}
 
-		void start() {
-			theRunner.execute(this, theName + " " + theWorkerId);
-		}
-
 		@Override
 		public void run() {
-			long now = System.currentTimeMillis();
-			long lastUsed = now;
-			T task = theQueue.poll();
-			boolean die = false;
-			boolean active = true; // Assume we'll be active since we've just been spawned
-			theActiveWorkers.getAndIncrement();
-			while (!die) {
-				if (task != null) {
-					if (!active) {
-						active = true;
-						theActiveWorkers.getAndIncrement();
-						theWaitingWorkers.getAndDecrement();
+			T task = theTaskQueue.poll();
+			do {
+				while (task != null) {
+					try {
+						theTaskExecutor.execute(task);
+					} catch (Throwable e) {
+						e.printStackTrace();
 					}
-					do {
-						theQueueSize.decrementAndGet();
-						try {
-							theTaskExecutor.execute(task);
-						} catch (RuntimeException | Error e) {
-							e.printStackTrace();
-						}
-						now = System.currentTimeMillis();
-						lastUsed = now;
-						task = theQueue.poll();
-					} while (task != null);
-				} else {
-					if (active) {
-						active = false;
-						if (0 == theActiveWorkers.decrementAndGet()) {
-							notifyWaitingThreads();
-						}
-						theWaitingWorkers.getAndIncrement();
-					}
-					synchronized (theLock) {
-						try {
-							theLock.wait(theUnusedThreadLifetime);
-						} catch (InterruptedException e) {}
-					}
-					now = System.currentTimeMillis();
-					task = theQueue.poll();
-					if (task == null && (now - lastUsed) >= theUnusedThreadLifetime) {
-						// No tasks available, see if we should die now
-						int minTC = theMinThreadCount;
-						int preTC = theThreadCount.getAndUpdate(tc -> {
-							if (tc <= minTC)
-								return tc;
-							return tc - 1;
-						});
-						if (preTC > minTC)
-							die = true;
-					}
+					taskFinished();
+					task = theTaskQueue.poll();
 				}
-			}
-			theWaitingWorkers.getAndDecrement();
+
+				task = waitForTask(this);
+			} while (!isDead);
+
+			// Re-cache or destroy the executor
 			ConcurrentLinkedQueue<TaskExecutor<? super T>> cache = theCachedWorkers;
 			if (cache != null)
 				cache.add(theTaskExecutor);
 			else {
 				try {
 					theTaskExecutor.close();
-				} catch (Exception e) {
+				} catch (Throwable e) {
 					e.printStackTrace();
 				}
 			}
+		}
+
+		@Override
+		public String toString() {
+			StringBuilder str = new StringBuilder(theName).append(':').append(theWorkerId);
+			if (isDead)
+				str.append("(x)");
+			return str.toString();
 		}
 	}
 
