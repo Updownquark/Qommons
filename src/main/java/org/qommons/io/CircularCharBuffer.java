@@ -315,6 +315,12 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 	}
 
 	private void moveContent(int srcStart, int length, int dest) {
+		srcStart += theOffset;
+		if (srcStart >= theBuffer.length)
+			srcStart -= theBuffer.length;
+		dest += theOffset;
+		if (dest >= theBuffer.length)
+			dest -= theBuffer.length;
 		// There may be up to 3 moves that are required depending on whether the source range, the destination range, or both are wrapped
 		int srcLen1 = Math.min(length, theBuffer.length - srcStart);
 		int destLen1 = Math.min(length, theBuffer.length - dest);

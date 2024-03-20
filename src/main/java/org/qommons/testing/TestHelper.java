@@ -914,21 +914,18 @@ public class TestHelper extends TestUtil {
 					// Make sure the test case doesn't take longer than configured limits
 					Instant now = Instant.now();
 					if (caseMax != null && now.compareTo(caseMax) > 0) {
-						theTestCaseError = new IllegalStateException("Timeout: Test case took longer than "
+						theTestCaseError = captureVMState("Timeout: Test case took longer than "
 							+ QommonsUtils.printTimeLength(theMaxCaseDuration.getSeconds(), theMaxCaseDuration.getNano()));
-						theTestCaseError.setStackTrace(theTestExecThread.getStackTrace());
 						break;
 					} else if (debugHits == theDebugHitCount && totalMax != null && now.compareTo(totalMax) > 0) {
-						theTestCaseError = new IllegalStateException("Timeout: Test set took longer than "
+						theTestCaseError = captureVMState("Timeout: Test set took longer than "
 							+ QommonsUtils.printTimeLength(theMaxTotalDuration.getSeconds(), theMaxTotalDuration.getNano()));
-						theTestCaseError.setStackTrace(theTestExecThread.getStackTrace());
 						break;
 					} else if (checkInMax != null && now.compareTo(checkInMax) > 0) {
 						Instant checkIn = helper.getLastCheckIn();
 						if (checkIn == null || checkIn.compareTo(checkInMin) < 0) {
-							theTestCaseError = new IllegalStateException("Timeout: No progress in longer than "
+							theTestCaseError = captureVMState("Timeout: No progress in longer than "
 								+ QommonsUtils.printTimeLength(theMaxProgressInterval.getSeconds(), theMaxProgressInterval.getNano()));
-							theTestCaseError.setStackTrace(theTestExecThread.getStackTrace());
 							break;
 						}
 						checkInMax = checkIn.plus(theMaxProgressInterval);
@@ -982,6 +979,19 @@ public class TestHelper extends TestUtil {
 				System.out.println(msg);
 			}
 			return null;
+		}
+
+		private Throwable captureVMState(String message) {
+			IllegalStateException tcx = new IllegalStateException(message);
+			tcx.setStackTrace(theTestExecThread.getStackTrace());
+			for (Map.Entry<Thread, StackTraceElement[]> stack : Thread.getAllStackTraces().entrySet()) {
+				if (stack.getKey() == Thread.currentThread() || stack.getKey() == theTestExecThread)
+					continue;
+				Exception threadX = new Exception("State of Thread '" + stack.getKey().getName() + " (" + stack.getKey().getId() + ")");
+				threadX.setStackTrace(stack.getValue());
+				tcx.addSuppressed(threadX);
+			}
+			return tcx;
 		}
 
 		@SuppressWarnings("deprecation")

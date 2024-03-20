@@ -249,6 +249,11 @@ public class Qonsole implements Named, AutoCloseable {
 			}
 			// Interpret the stream for commands, if present
 			for (int i = preLen; i < thePrivateBuffer.length(); i++) {
+				if (thePrivateBuffer.charAt(i) == '\r') {// Trash
+					thePrivateBuffer.delete(i, i + 1);
+					if (i == thePrivateBuffer.length())
+						break;
+				}
 				if (thePrivateBuffer.charAt(i) == '\n') {
 					if (theCurrentPlugin != null) {
 						CharSequence command = thePrivateBuffer.subSequence(0, thePrivateBuffer.length() - 1);
