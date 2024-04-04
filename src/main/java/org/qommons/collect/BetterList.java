@@ -1387,6 +1387,31 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				throw new NoSuchElementException("Element is not included in this sub-list: " + id);
 			return ea;
 		}
+
+		@Override
+		public void clear() {
+			if (theLowBound == null && theHighBound == null)
+				super.clear();
+			else {
+				int low;
+				if (theLowBound == null)
+					low = 0;
+				else {
+					low = getCollection().getElementsBefore(theLowBound);
+					if (!isLowIncluded)
+						low++;
+				}
+				int high;
+				if (theHighBound == null)
+					high = getCollection().size();
+				else {
+					high = getCollection().getElementsBefore(theHighBound);
+					if (isHighIncluded)
+						high++;
+				}
+				getCollection().removeRange(low, high);
+			}
+		}
 	}
 
 	/**

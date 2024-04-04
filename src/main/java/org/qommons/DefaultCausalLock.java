@@ -50,7 +50,7 @@ public class DefaultCausalLock implements CausalLock {
 			causeFinish = null;
 		}
 		if (write && tCause != null)
-			theTransactionCauses.addFirst(tCause);
+			theTransactionCauses.add(tCause);
 		return new Transaction() {
 			private boolean isClosed;
 
@@ -67,7 +67,7 @@ public class DefaultCausalLock implements CausalLock {
 					}
 				}
 				if (write && tCause != null)
-					theTransactionCauses.removeFirstOccurrence(tCause);
+					theTransactionCauses.removeLastOccurrence(tCause);
 				valueLock.close();
 			}
 		};

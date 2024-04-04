@@ -11,6 +11,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -95,7 +96,60 @@ public class QommonsUtils {
 		}
 	}
 
-	private static final java.util.Random theRandom = new java.util.Random();
+	private static final ConcurrentLinkedQueue<String> PRINT_QUEUE = new ConcurrentLinkedQueue<>();
+	private static volatile boolean IS_PRINTING;
+
+	/**
+	 * This method is effectively the same as {@link System}.{@link System#out out}.{@link PrintStream#println(String) println} with 2
+	 * useful differences:
+	 * <ul>
+	 * <li>It accepts varargs input and does the concatenation for you</li>
+	 * <li>This method returns very quickly, and the actual slow print call is done on a dedicated thread. This can be extra useful when
+	 * using print outs to debug multi-threaded code. Frequently print calls can slow down the program enough to affect (and often "fix")
+	 * bugs due to race conditions.</li>
+	 * </ul>
+	 * 
+	 * @param line The content to print
+	 */
+	public static void println(Object... line) {
+		StringBuilder str = new StringBuilder();
+		for (Object component : line)
+			str.append(component);
+		PRINT_QUEUE.add(str.toString());
+		boolean printing = IS_PRINTING;
+		if (!printing) {
+			synchronized (QommonsUtils.class) {
+				printing = IS_PRINTING;
+				if (!printing) {
+					IS_PRINTING = true;
+					new Thread(QommonsUtils::printQueue, "Qommons Printing").start();
+				}
+			}
+		}
+	}
+
+	private static void printQueue() {
+		String line = PRINT_QUEUE.poll();
+		int sleepCount = 0;
+		while (sleepCount < 100) {
+			while (line != null) {
+				System.out.println(line);
+				line = PRINT_QUEUE.poll();
+			}
+			try {
+				Thread.sleep(5);
+			} catch (InterruptedException e) {
+			}
+			line = PRINT_QUEUE.poll();
+			if (line == null)
+				sleepCount++;
+			else
+				sleepCount = 0;
+		}
+		IS_PRINTING = false;
+	}
+
+	private static final java.util.Random RANDOM = new java.util.Random();
 
 	/**
 	 * Creates a random hexadecimal string with the given length
@@ -106,7 +160,7 @@ public class QommonsUtils {
 	public static String getRandomString(int chars) {
 		StringBuilder ret = new StringBuilder();
 		while (ret.length() < chars) {
-			int next = theRandom.nextInt();
+			int next = RANDOM.nextInt();
 			ret.append(Integer.toHexString(next));
 		}
 		if (ret.length() != chars)
@@ -118,7 +172,7 @@ public class QommonsUtils {
 	 * @return A non-negative random integer
 	 */
 	public static int getRandomInt() {
-		return theRandom.nextInt() >>> 1;
+		return RANDOM.nextInt() >>> 1;
 	}
 
 	/**

@@ -64,6 +64,11 @@ public class HierarchicalTransactable implements CausalLock {
 
 	@Override
 	public Causable getRootCausable() {
+		if (theParent != null) {
+			Causable causable = theParent.getRootCausable();
+			if (causable != null)
+				return causable;
+		}
 		for (Cause cause : myLock.getCurrentCauses()) {
 			if (cause instanceof Causable && !((Causable) cause).isTerminated())
 				return (Causable) cause;

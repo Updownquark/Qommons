@@ -1345,6 +1345,11 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 			theCollection.clear();
 		}
 
+		@Override
+		public String toString() {
+			return BetterCollection.toString(this);
+		}
+
 		protected CollectionElement<CollectionElement<E>> wrap(CollectionElement<E> el) {
 			return el == null ? null : new WrappedCollectionElement(el);
 		}
