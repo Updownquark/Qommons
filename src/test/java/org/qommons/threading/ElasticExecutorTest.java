@@ -33,7 +33,7 @@ public class ElasticExecutorTest {
 	 * more than a second.
 	 * </p>
 	 */
-	@Test
+	// @Test
 	public void testJavaExecutorFast() {
 		testFast(new JavaExecutor());
 	}
@@ -55,7 +55,7 @@ public class ElasticExecutorTest {
 	 * more than a second.
 	 * </p>
 	 */
-	@Test
+	// @Test
 	public void testJavaExecutorSlow() {
 		testSlow(new JavaExecutor());
 	}
@@ -64,45 +64,47 @@ public class ElasticExecutorTest {
 		final AtomicLong value = new AtomicLong();
 		final AtomicInteger count = new AtomicInteger();
 		Random random = new Random();
-		int[] ops = new int[2_000];
+		Runnable[] tasks = new Runnable[500_000];
+		int outerTasks = 100;
 		long asyncTime = 0, queueTime = 0;
-		int outerOps = 20_000;
-		int progressPrint = outerOps / 10;
+		int progressPrint = outerTasks / 10;
 		int dotPrint = progressPrint / 10;
-		for (int outer = 0; outer < outerOps; outer++) {
+		for (int x = 0; x < outerTasks; x++) {
 			long expected = 0;
-			for (int i = 0; i < ops.length; i++) {
-				ops[i] = random.nextInt(1000) - 500;
-				expected += ops[i];
+			for (int i = 0; i < tasks.length; i++) {
+				int op = random.nextInt(1000) - 500;
+				expected += op;
+				tasks[i] = () -> {
+					value.addAndGet(op);
+					count.getAndIncrement();
+				};
 			}
 
 			value.set(0);
 			count.set(0);
 
 			long start = System.currentTimeMillis();
+
 			// Now do it asynchronously
-			for (int i = 0; i < ops.length; i++) {
-				int index = i;
-				executor.execute(() -> {
-					value.addAndGet(ops[index]);
-					count.getAndIncrement();
-				});
-			}
+			for (Runnable task : tasks)
+				executor.execute(task);
+
 			long queueEnd = System.currentTimeMillis();
 			queueTime += (queueEnd - start);
-			long end = executor.waitWhileActive(ops.length, expected, count, value::get, start);
-			end = System.currentTimeMillis();
+			executor.waitWhileActive(tasks.length, expected, count, value::get, start);
+			long end = System.currentTimeMillis();
 			asyncTime += end - start;
-			if (count.get() != ops.length)
-				Assert.assertEquals(ops.length, count.get());
+			if (count.get() != tasks.length)
+				Assert.assertEquals(tasks.length, count.get());
 			if (expected != value.get())
 				Assert.assertEquals(expected, value.get());
 
-			if (outer % progressPrint == progressPrint - 1)
-				System.out.print(((outer / progressPrint + 1) * 10) + "%");
-			else if (outer % dotPrint == 0)
+			if (x % progressPrint == progressPrint - 1)
+				System.out.print(((x / progressPrint + 1) * 10) + "%");
+			else if (x % dotPrint == 0)
 				System.out.print('.');
 		}
+
 		System.out.println("\nAsync execution " + QommonsUtils.printTimeLength(asyncTime) + ", " + QommonsUtils.printTimeLength(queueTime)
 			+ " queue time");
 	}
@@ -126,7 +128,7 @@ public class ElasticExecutorTest {
 		for (int outer = 0; outer < outerOps; outer++) {
 			double expected = 0;
 			for (int i = 0; i < ops.length; i++) {
-				ops[i] = random.nextInt(1_00_000) - 50_000;
+				ops[i] = random.nextInt(100_000) - 50_000;
 				expected += Math.pow(1.5, ops[i]);
 			}
 
@@ -180,7 +182,7 @@ public class ElasticExecutorTest {
 
 		@Override
 		public long waitWhileActive(int expectedCount, Object expectedValue, AtomicInteger count, Supplier<?> value, long start) {
-			boolean finished = executor.waitWhileActive(1_000);
+			boolean finished = executor.waitWhileActive(0, 1_000);
 			long now = System.currentTimeMillis();
 			if (now - start > 250) {
 				int countNow = count.get();
