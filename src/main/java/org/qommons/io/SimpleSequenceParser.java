@@ -429,6 +429,11 @@ public class SimpleSequenceParser<E extends Enum<E>, V extends Comparable<V>> {
 				throw new IndexOutOfBoundsException(i + " of " + (theSize / 2));
 			return theMatches[idx + 1];
 		}
+
+		@Override
+		public String toString() {
+			return theSize + Arrays.toString(theMatches);
+		}
 	}
 
 	/**

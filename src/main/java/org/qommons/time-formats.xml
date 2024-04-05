@@ -39,15 +39,14 @@
 		<!-- <format>YYYYZ?</format>
 		<format>MMM-YYYYZ?</format>-->
 		<format>Y-?MMM-?DZ?</format>
-		<format>YYYY-?MM-?DZ?</format>
+		<format>YYYY/?MM/?DZ?</format>
 		<format>W?D-?MMM-?YZ?</format>
-		<format>W?D-?MMM-?YYZ?</format>
 		<format>W?D-?MMMZ?</format>
-		<format>W?M-Dt?-YZ?</format>
-		<format>W?M-Dt?-YYZ?</format>
+		<format>W?M/Dt?/YZ?</format>
+		<format>W?M/Dt?/YYZ?</format>
 		<format>W?MMM-Dt?-YZ?</format>
 		<format>W?MMM-Dt?-YYZ?</format>
-		<format>W?M-Dt?Z?</format>
+		<format>W?M/Dt?Z?</format>
 		<format>W?M.YZ?</format>
 		<format>W?Dt?.M.YZ?</format>
 		<format>W?Dt?.M.YYZ?</format>
