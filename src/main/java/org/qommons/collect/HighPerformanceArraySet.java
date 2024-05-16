@@ -789,6 +789,8 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 
 			@Override
 			public int indexOf(Object value) {
+				if (value == null)
+					return -1;
 				int comp = theSorting.compare((E) value, theFirst);
 				if (comp == 0)
 					return 0;

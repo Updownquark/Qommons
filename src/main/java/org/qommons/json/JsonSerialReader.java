@@ -748,6 +748,20 @@ public class JsonSerialReader {
 	}
 
 	/**
+	 * @param propertyName The name of the property to expect next
+	 * @throws IOException If an error occurs reading the data from the stream
+	 * @throws ParseException If an error occurs parsing to the next property, or there is no next property, or the next property does not
+	 *         match the expected name
+	 */
+	public void startProperty(String propertyName) throws IOException, ParseException {
+		String property = getNextProperty();
+		if (property == null)
+			throw new ParseException("Expected property '" + propertyName + "' but found end of object", theState);
+		if (!propertyName.equals(property))
+			throw new ParseException("Expected property '" + propertyName + "' but found '" + property + "'", theState);
+	}
+
+	/**
 	 * Skips to the end of the current object
 	 * 
 	 * @param state The object state to end, or null to end the current object

@@ -437,6 +437,8 @@ public class StringUtils {
 
 		/** @param components The components of the name */
 		public Name(String[] components) {
+			for (int c = 0; c < components.length; c++)
+				components[c] = components[c].toLowerCase();
 			theComponents = components;
 		}
 
@@ -455,6 +457,8 @@ public class StringUtils {
 		 * @return The StringBuilder
 		 */
 		public StringBuilder toCaseScheme(StringBuilder str, boolean initialCapital, boolean intermediateCapital, CharSequence delimiter) {
+			if (str == null)
+				str = new StringBuilder();
 			for (int i = 0; i < theComponents.length; i++) {
 				if (i == 0) {
 					if (initialCapital) {

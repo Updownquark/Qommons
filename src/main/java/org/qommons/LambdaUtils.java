@@ -663,6 +663,34 @@ public class LambdaUtils {
 	}
 
 	/**
+	 * @param <T> The first argument type of the predicate
+	 * @param <U> The second argument type of the predicate
+	 * @param <V> The third argument type of the predicate
+	 * @param test The predicate
+	 * @param print The printed representation of the predicate
+	 * @return The printable predicate
+	 */
+	public static <T, U, V> TriPredicate<T, U, V> printableTriPredicate(TriPredicate<T, U, V> test, Supplier<String> print) {
+		return printableTriPredicate(test, print, null);
+	}
+
+	/**
+	 * @param <T> The first argument type of the predicate
+	 * @param <U> The second argument type of the predicate
+	 * @param <V> The third argument type of the predicate
+	 * @param test The predicate
+	 * @param print The printed representation of the predicate
+	 * @param identifier The identifier for the predicate
+	 * @return The printable predicate
+	 */
+	public static <T, U, V> TriPredicate<T, U, V> printableTriPredicate(TriPredicate<T, U, V> test, Supplier<String> print,
+		Object identifier) {
+		if (test == null)
+			return null;
+		return new PrintableTriPredicate<>(test, print, identifier);
+	}
+
+	/**
 	 * @param <T> The type to compare
 	 * @param compare The comparable to wrap
 	 * @param print The toString for the comparable
@@ -781,7 +809,7 @@ public class LambdaUtils {
 		private PrintableLambda(L lambda, Supplier<String> print, Object identifier) {
 			theLambda = lambda;
 			thePrint = print;
-			this.identifier = identifier;
+			this.identifier = identifier instanceof PrintableLambda ? ((PrintableLambda<?>) identifier).identifier : identifier;
 			if (identifier != null) {
 				hashCode = identifier.hashCode();
 			} else {
@@ -791,6 +819,14 @@ public class LambdaUtils {
 
 		protected L getLambda() {
 			return theLambda;
+		}
+
+		protected Object getIdentifier() {
+			return identifier;
+		}
+
+		protected Supplier<String> getPrint() {
+			return thePrint;
 		}
 
 		@Override
@@ -962,6 +998,73 @@ public class LambdaUtils {
 		public boolean isTrivial() {
 			return false;
 		}
+
+		@Override
+		public Predicate<T> negate() {
+			Supplier<String> str = getPrint();
+			return new PrintablePredicate<>(getLambda().negate(), () -> "!" + str.get(), new Not(getIdentifier()));
+		}
+
+		@Override
+		public Predicate<T> and(Predicate<? super T> other) {
+			Predicate<T> lambda = getLambda();
+			Supplier<String> otherStr;
+			Object otherId;
+			if (other instanceof PrintablePredicate) {
+				otherStr = ((PrintablePredicate<?>) other).getPrint();
+				otherId = ((PrintablePredicate<?>) other).getIdentifier();
+			} else {
+				otherStr = other::toString;
+				otherId = other;
+			}
+			Supplier<String> str = getPrint();
+			Object id = getIdentifier();
+			return new PrintablePredicate<>(lambda.and(other), () -> str.get() + "&&" + otherStr.get(), new BiTuple<>(id, otherId));
+		}
+
+		@Override
+		public Predicate<T> or(Predicate<? super T> other) {
+			Predicate<T> lambda = getLambda();
+			Supplier<String> otherStr;
+			Object otherId;
+			if (other instanceof PrintablePredicate) {
+				otherStr = ((PrintablePredicate<?>) other).getPrint();
+				otherId = ((PrintablePredicate<?>) other).getIdentifier();
+			} else {
+				otherStr = other::toString;
+				otherId = other;
+			}
+			Supplier<String> str = getPrint();
+			Object id = getIdentifier();
+			return new PrintablePredicate<>(lambda.or(other), () -> str.get() + "||" + otherStr.get(), new BiTuple<>(id, otherId));
+		}
+
+		private static class Not {
+			private final Object identifier;
+
+			Not(Object identifier) {
+				this.identifier = identifier;
+			}
+
+			@Override
+			public int hashCode() {
+				return Objects.hashCode(identifier);
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				if (obj == this)
+					return true;
+				else if (!(obj instanceof Not))
+					return false;
+				return Objects.equals(identifier, ((Not) obj).identifier);
+			}
+
+			@Override
+			public String toString() {
+				return "!" + identifier;
+			}
+		}
 	}
 
 	static class PrintableBiPredicate<T, U> extends PrintableLambda<BiPredicate<T, U>> implements BiPredicate<T, U> {
@@ -980,6 +1083,30 @@ public class LambdaUtils {
 		@Override
 		public boolean test(T t, U u) {
 			return getLambda().test(t, u);
+		}
+
+		@Override
+		public boolean isTrivial() {
+			return false;
+		}
+	}
+
+	static class PrintableTriPredicate<T, U, V> extends PrintableLambda<TriPredicate<T, U, V>> implements TriPredicate<T, U, V> {
+		PrintableTriPredicate(TriPredicate<T, U, V> function, String print, Object identifier) {
+			super(function, print, identifier);
+		}
+
+		PrintableTriPredicate(TriPredicate<T, U, V> function, Supplier<String> print, Object identifier) {
+			super(function, print, identifier);
+		}
+
+		PrintableTriPredicate(TriPredicate<T, U, V> function, Supplier<String> print) {
+			super(function, print);
+		}
+
+		@Override
+		public boolean test(T t, U u, V v) {
+			return getLambda().test(t, u, v);
 		}
 
 		@Override

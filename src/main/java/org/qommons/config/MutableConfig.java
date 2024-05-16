@@ -160,8 +160,19 @@ public class MutableConfig extends QommonsConfig {
 	 * @return This config, for chaining
 	 */
 	public MutableConfig set(String key, String value) {
-		MutableConfig config = getOrCreate(key);
+		MutableConfig config;
+		if (value == null) {
+			config = subConfig(key);
+			if (config != null) {
+				if (config.subConfigs().length == 0)
+					removeSubConfig(config);
+				else
+					config.setValue(null);
+			}
+		} else {
+			config = getOrCreate(key);
 			config.setValue(value);
+		}
 		return this;
 	}
 

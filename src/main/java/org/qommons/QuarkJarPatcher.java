@@ -420,9 +420,11 @@ public class QuarkJarPatcher {
 									progress, uiDirty);
 							}, null);
 							// Now insert added files
-							for (Map.Entry<String, File> file : extractedFiles.entrySet()) {
-								File patchFile = file.getValue();
-								ZipEntry entry = new ZipEntry(file.getKey());
+							for (String content : patch[0].getPatchContents().get(i).getFileSetContents()) {
+								File patchFile = extractedFiles.remove(content);
+								if (patchFile == null)
+									continue; // Already replaced
+								ZipEntry entry = new ZipEntry(content);
 								status[1] = entry.getName();
 								status(null, entry.getName(), progress[0], status, progress, uiDirty);
 								entry.setLastModifiedTime(FileTime.fromMillis(patchFile.lastModified()));

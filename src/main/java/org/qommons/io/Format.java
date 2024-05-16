@@ -436,6 +436,14 @@ public interface Format<T> {
 		if (pos.getErrorIndex() >= 0 || pos.getIndex() < text.length()) {
 			if (ALT_DEC_PATTERN.matcher(str).matches())
 				n = format.parse(str.replace(',', '.'), pos);
+			if (pos.getErrorIndex() >= 0 || pos.getIndex() < text.length()) {
+				try {
+					n = Double.parseDouble(str);
+					pos.setErrorIndex(-1);
+					pos.setIndex(text.length());
+				} catch (NumberFormatException e) {
+				}
+			}
 		}
 		if (pos.getErrorIndex() >= 0 || pos.getIndex() < text.length())
 			throw new ParseException("Invalid number: " + text, pos.getIndex());

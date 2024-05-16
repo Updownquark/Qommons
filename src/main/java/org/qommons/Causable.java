@@ -172,6 +172,28 @@ public interface Causable extends CausalLock.Cause {
 			theData.putAll(m);
 		}
 
+		/**
+		 * Same as {@link #put(Object, Object)}, but returns this effect
+		 * 
+		 * @param key The key to insert the value for
+		 * @param value The value to map to the key
+		 * @return This effect
+		 */
+		public Effect with(Object key, Object value) {
+			put(key, value);
+			return this;
+		}
+
+		/**
+		 * @param key The key to compute the value for
+		 * @param value Produces a value from the previous value associated with the key
+		 * @return This effect
+		 */
+		public Effect withCompute(Object key, Function<Object, Object> value) {
+			compute(key, (k, old) -> value.apply(old));
+			return this;
+		}
+
 		@Override
 		public void clear() {
 			if (theData != null)
@@ -239,7 +261,7 @@ public interface Causable extends CausalLock.Cause {
 		}
 
 		@Override
-		public Map<Object, Object> onFinish(CausableKey key) {
+		public Effect onFinish(CausableKey key) {
 			if (!isStarted)
 				throw new IllegalStateException("Not started!  Use Causable.use(Causable)");
 			else if (isTerminated)
@@ -480,7 +502,7 @@ public interface Causable extends CausalLock.Cause {
 	 * @param key The key to add the action for. An action will only be added once to a causable for a given key.
 	 * @return A map of key-values that may be modified to keep track of information from multiple sub-causes of this cause
 	 */
-	Map<Object, Object> onFinish(CausableKey key);
+	Effect onFinish(CausableKey key);
 
 	/** @return Whether this causable has finished or is finishing */
 	boolean isFinished();
@@ -612,7 +634,7 @@ public interface Causable extends CausalLock.Cause {
 		}
 
 		@Override
-		public Map<Object, Object> onFinish(CausableKey key) {
+		public Effect onFinish(CausableKey key) {
 			return theDelegate.onFinish(key);
 		}
 

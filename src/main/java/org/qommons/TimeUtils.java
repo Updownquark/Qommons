@@ -5,18 +5,7 @@ import java.text.ParseException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Calendar;
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.TimeZone;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -1997,20 +1986,23 @@ public class TimeUtils {
 	}
 
 	/** Default time evaluation options */
-	public static final TimeEvaluationOptions DEFAULT_OPTIONS = new TimeEvaluationOptions(TimeZone.getDefault(), DateElementType.SubSecond,
-		false, RelativeInstantEvaluation.Closest);
+	public static final TimeEvaluationOptions DEFAULT_OPTIONS = new TimeEvaluationOptions(TimeZone.getDefault(), DateElementType.Day,
+		DateElementType.SubSecond, false, RelativeInstantEvaluation.Closest);
 
 	/** Different options that can be used when evaluating and parsing times */
 	public static class TimeEvaluationOptions {
 		private final TimeZone theTimeZone;
+		private final DateElementType theMinResolution;
 		private final DateElementType theMaxResolution;
 		private final boolean is24HourFormat;
 		private final RelativeInstantEvaluation theEvaluationType;
 
-		private TimeEvaluationOptions(TimeZone timeZone, DateElementType resolution, boolean is24HourFormat,
+		private TimeEvaluationOptions(TimeZone timeZone, DateElementType minResolution, DateElementType maxResolution,
+			boolean is24HourFormat,
 			RelativeInstantEvaluation evaluationType) {
 			theTimeZone = timeZone;
-			theMaxResolution = resolution;
+			theMinResolution = minResolution;
+			theMaxResolution = maxResolution;
 			this.is24HourFormat = is24HourFormat;
 			theEvaluationType = evaluationType;
 		}
@@ -2018,6 +2010,11 @@ public class TimeUtils {
 		/** @return The time zone to parse/format in */
 		public TimeZone getTimeZone() {
 			return theTimeZone;
+		}
+
+		/** @return The minimum resolution to print times in */
+		public DateElementType getMinResolution() {
+			return theMinResolution;
 		}
 
 		/** @return The maximum resolution to print times in */
@@ -2042,7 +2039,7 @@ public class TimeUtils {
 		public TimeEvaluationOptions withTimeZone(TimeZone timeZone) {
 			if (timeZone.equals(theTimeZone))
 				return this;
-			return new TimeEvaluationOptions(timeZone, theMaxResolution, is24HourFormat, theEvaluationType);
+			return new TimeEvaluationOptions(timeZone, theMinResolution, theMaxResolution, is24HourFormat, theEvaluationType);
 		}
 
 		/**
@@ -2067,10 +2064,20 @@ public class TimeUtils {
 		 * @param resolution The maximum resolution to print times in
 		 * @return A set of time evaluation options identical to this but with the given max resolution
 		 */
+		public TimeEvaluationOptions withMinResolution(DateElementType resolution) {
+			if (theMaxResolution == resolution)
+				return this;
+			return new TimeEvaluationOptions(theTimeZone, resolution, theMaxResolution, is24HourFormat, theEvaluationType);
+		}
+
+		/**
+		 * @param resolution The maximum resolution to print times in
+		 * @return A set of time evaluation options identical to this but with the given max resolution
+		 */
 		public TimeEvaluationOptions withMaxResolution(DateElementType resolution) {
 			if (theMaxResolution == resolution)
 				return this;
-			return new TimeEvaluationOptions(theTimeZone, resolution, is24HourFormat, theEvaluationType);
+			return new TimeEvaluationOptions(theTimeZone, theMinResolution, resolution, is24HourFormat, theEvaluationType);
 		}
 
 		/**
@@ -2080,7 +2087,7 @@ public class TimeUtils {
 		public TimeEvaluationOptions with24HourFormat(boolean twentyFourHourFormat) {
 			if (is24HourFormat == twentyFourHourFormat)
 				return this;
-			return new TimeEvaluationOptions(theTimeZone, theMaxResolution, twentyFourHourFormat, theEvaluationType);
+			return new TimeEvaluationOptions(theTimeZone, theMinResolution, theMaxResolution, twentyFourHourFormat, theEvaluationType);
 		}
 
 		/**
@@ -2090,7 +2097,7 @@ public class TimeUtils {
 		public TimeEvaluationOptions withEvaluationType(RelativeInstantEvaluation evalutionType) {
 			if (theEvaluationType == evalutionType)
 				return this;
-			return new TimeEvaluationOptions(theTimeZone, theMaxResolution, is24HourFormat, evalutionType);
+			return new TimeEvaluationOptions(theTimeZone, theMinResolution, theMaxResolution, is24HourFormat, evalutionType);
 		}
 	}
 
@@ -2879,9 +2886,9 @@ public class TimeUtils {
 					break;
 				case Month:
 					if (spec.length() == 3)
-						format.append(str, cal.get(Calendar.MONTH - Calendar.JANUARY));
+						format.append(str, cal.get(Calendar.MONTH - Calendar.JANUARY) + 1);
 					else
-						StringUtils.printInt(cal.get(Calendar.MONTH) - Calendar.JANUARY, spec.length(), str);
+						StringUtils.printInt(cal.get(Calendar.MONTH) - Calendar.JANUARY + 1, spec.length(), str);
 					break;
 				case Year:
 					StringUtils.printInt(cal.get(Calendar.YEAR), spec.length(), str);
@@ -3081,6 +3088,8 @@ public class TimeUtils {
 			resolution = DateElementType.Minute;
 		} else
 			resolution = DateElementType.Day;
+		if (resolution.compareTo(options.getMinResolution()) < 0)
+			resolution = options.getMinResolution();
 		if (resolution.compareTo(DateElementType.Hour) >= 0) {
 			str.append(' ');
 			int index = str.length();

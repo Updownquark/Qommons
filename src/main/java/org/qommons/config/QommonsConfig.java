@@ -744,6 +744,11 @@ public abstract class QommonsConfig implements Cloneable {
 		if (location.startsWith("classpath://")) {
 			String resPath = location.substring("classpath:/".length());
 			URL resource = loadingClass.getResource(resPath);
+			if (resource == null) {
+				ClassLoader loader = Thread.currentThread().getContextClassLoader();
+				if (loader != null && loader != loadingClass.getClassLoader())
+					resource = loader.getResource(resPath);
+			}
 			if (resource == null)
 				throw new IOException("No such resource on classpath: " + resPath);
 			return resource.toString();

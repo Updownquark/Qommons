@@ -504,7 +504,7 @@ public class QommonsTimer {
 	private volatile boolean isRunning;
 	private volatile Thread theSchedulerThread;
 	private final AtomicBoolean isSleeping;
-	private final ConcurrentHashMap<Object, TaskHandle> theInactityTasks;
+	private final ConcurrentHashMap<Object, TaskHandle> theInactivityTasks;
 
 	/**
 	 * @param clock The clock implementation to use for scheduling
@@ -516,7 +516,7 @@ public class QommonsTimer {
 		theClock = clock;
 		theMainRunner = mainRunner;
 		theAccessoryRunner = accessoryRunner;
-		theInactityTasks = new ConcurrentHashMap<>();
+		theInactivityTasks = new ConcurrentHashMap<>();
 		theTaskQueue = ListenerList.build().allowReentrant().withFastSize(false).withInUse(inUse -> {
 			if (inUse) {
 				synchronized (this) {
@@ -613,7 +613,7 @@ public class QommonsTimer {
 	 * @return The task handle for the task
 	 */
 	public TaskHandle doAfterInactivity(Object taskKey, Runnable task, Duration inactiveTime) {
-		return theInactityTasks.compute(taskKey, (k, existing) -> {
+		return theInactivityTasks.compute(taskKey, (k, existing) -> {
 			if (existing == null) {
 				TaskHandle[] handle = new TaskHandle[1];
 				return handle[0] = build(() -> {
@@ -621,7 +621,7 @@ public class QommonsTimer {
 						task.run();
 					} finally {
 						if (!handle[0].isActive())
-							theInactityTasks.remove(taskKey);
+							theInactivityTasks.remove(taskKey);
 					}
 				}, Duration.ofSeconds(1_000_000_000), false).times(1).runNextIn(inactiveTime);
 			} else {
