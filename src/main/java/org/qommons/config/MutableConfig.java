@@ -12,6 +12,7 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
+import org.qommons.ArrayUtils;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
@@ -186,6 +187,21 @@ public class MutableConfig extends QommonsConfig {
 		theUntrimmedValue = value;
 		configChanged(this, preValue);
 		return this;
+	}
+
+	/**
+	 * Moves this child config to a new position in its parent
+	 * 
+	 * @param toIndex The child index to move to
+	 */
+	public void moveInParent(int toIndex) {
+		if (theParent == null)
+			return;
+		MutableConfig[] parentChildren = theParent.theSubConfigs;
+		if (toIndex < 0 || toIndex >= parentChildren.length)
+			throw new IndexOutOfBoundsException(toIndex + " of " + parentChildren.length);
+		int index = ArrayUtils.indexOf(parentChildren, this);
+		ArrayUtils.move(parentChildren, index, toIndex);
 	}
 
 	@Override

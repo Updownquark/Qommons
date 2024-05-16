@@ -5,6 +5,7 @@ import java.net.JarURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Files;
+import java.text.ParseException;
 import java.util.*;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -24,6 +25,20 @@ import org.qommons.io.BetterFile.FileBooleanAttribute;
 /** Utilities to use on {@link File}s, {@link BetterFile}s, or similar structures */
 public class FileUtils extends MiniFileUtils {
 	private FileUtils() {}
+
+	/** A simple format for java Files */
+	public static final Format<File> FILE_FORMAT = new Format<File>() {
+		@Override
+		public void append(StringBuilder text, File value) {
+			if (value != null)
+				text.append(value);
+		}
+
+		@Override
+		public File parse(CharSequence text) throws ParseException {
+			return new File(text.toString());
+		}
+	};
 
 	/**
 	 * @param path The path for the resource

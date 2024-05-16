@@ -467,7 +467,7 @@ public class CsvParser {
 	 * </p>
 	 * 
 	 * <p>
-	 * The non-trivial part is that this program has the capability to filter columns and rows out of the ouput. Columns can be filtered
+	 * The non-trivial part is that this program has the capability to filter columns and rows out of the output. Columns can be filtered
 	 * using the "--include=header1,header2..." or "--exclude=header1,header2..." arguments. Rows can be filtered using one or more
 	 * "--filter=column=value" arguments.
 	 * </p>

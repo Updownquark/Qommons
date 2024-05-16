@@ -58,6 +58,16 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 		return new Builder<>();
 	}
 
+	/**
+	 * Shorthand for {@link #build() build()}.{@link Builder#build() build()}
+	 * 
+	 * @param <E> The type elements for the list
+	 * @return The new list
+	 */
+	public static <E> BetterTreeList<E> create() {
+		return BetterTreeList.<E> build().build();
+	}
+
 	BetterTreeList(boolean safe, ThreadConstraint threadConstraint) {
 		this(v -> safe ? new StampedLockingStrategy(v, threadConstraint) : new FastFailLockingStrategy(threadConstraint),
 			DEFAULT_DESCRIPTION);

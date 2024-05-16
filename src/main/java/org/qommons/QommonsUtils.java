@@ -1394,6 +1394,18 @@ public class QommonsUtils {
 	}
 
 	/**
+	 * @param values The values to test
+	 * @return False if any of the values are null, true otherwise
+	 */
+	public static boolean nonNull(Object... values) {
+		for (Object value : values) {
+			if (value == null)
+				return false;
+		}
+		return true;
+	}
+
+	/**
 	 * A utility to assist with optimizing for code coverage. May be used instead of <code>
 	 * if(condition)
 	 * 		throw SomeException(message);
