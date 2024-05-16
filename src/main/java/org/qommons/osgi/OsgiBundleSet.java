@@ -1280,7 +1280,7 @@ public class OsgiBundleSet {
 				"DS service " + serviceType.getName() + " must implement " + ComponentBasedExecutor.class.getName());
 		Method loadComponentMethod, completeMethod, statusMethod;
 		try {
-			loadComponentMethod = executorIntf.getMethod("loadComponent", Class.class);
+			loadComponentMethod = executorIntf.getMethod("loadComponent", Class.class, ClassLoader.class, Map.class);
 			completeMethod = executorIntf.getMethod("loadingComplete", Set.class);
 			statusMethod = executorIntf.getMethod("getLoadStatus");
 		} catch (NoSuchMethodException | SecurityException e) {
@@ -1301,10 +1301,31 @@ public class OsgiBundleSet {
 			progress.setIndeterminate(true);
 			progress.setString("Searching for Service Components");
 		}
-		List<BiTuple<Bundle, String>> components = new ArrayList<>();
+		class ComponentConfiguration {
+			final String componentClass;
+			final Map<String, String> componentConfig;
+
+			ComponentConfiguration(OsgiManifest.ManifestEntry entry) {
+				componentClass = entry.getValue();
+				Map<String, String> config = null;
+				for (Map.Entry<String, String> configEntry : entry.getAttributes().entrySet()) {
+					switch (configEntry.getKey()) {
+					case "exclude-configurations":
+					case "include-configurations":
+						break;
+					default:
+						if (config == null)
+							config = new LinkedHashMap<>();
+						config.put(configEntry.getKey(), configEntry.getValue());
+						break;
+					}
+				}
+				this.componentConfig = config == null ? Collections.emptyMap() : Collections.unmodifiableMap(config);
+			}
+		}
+		List<BiTuple<Bundle, ComponentConfiguration>> components = new ArrayList<>();
 		for (Bundle bundle : getBundles()) {
 			for (OsgiManifest.ManifestEntry component : bundle.getManifest().getAll("Service-Component")) {
-				String componentName = component.getValue();
 				if (!configuration.isEmpty()) {
 					String excludes = component.getAttributes().get("exclude-configurations");
 					if (excludes != null) {
@@ -1333,11 +1354,12 @@ public class OsgiBundleSet {
 					if (!found)
 						continue;
 				}
-				if (componentName.endsWith(".xml")) {
-					System.err.println("Unconverted service component: " + componentName);
+				if (component.getValue().endsWith(".xml")) {
+					System.err.println("Unconverted service component: " + component.getValue());
 					continue;
 				}
-				components.add(new BiTuple<>(bundle, componentName));
+
+				components.add(new BiTuple<>(bundle, new ComponentConfiguration(component)));
 			}
 		}
 
@@ -1346,9 +1368,9 @@ public class OsgiBundleSet {
 			progress.setValue(0);
 			progress.setIndeterminate(false);
 		}
-		for (BiTuple<Bundle, String> component : components) {
+		for (BiTuple<Bundle, ComponentConfiguration> component : components) {
 			Bundle bundle = component.getValue1();
-			String componentName = component.getValue2();
+			String componentName = component.getValue2().componentClass;
 			if (progress != null) {
 				String name = componentName;
 				int dot = name.lastIndexOf('.');
@@ -1358,8 +1380,8 @@ public class OsgiBundleSet {
 			}
 			Class<?> componentType;
 			try {
-				componentType = bundle.loadClass(componentName);
-				loadComponentMethod.invoke(service, componentType);
+				componentType = bundle.findClass(componentName);
+				loadComponentMethod.invoke(service, componentType, bundle, component.getValue2().componentConfig);
 			} catch (ClassNotFoundException e) {
 				System.err.println("Could not find class " + componentName + ": " + e.getMessage());
 			} catch (InvocationTargetException e) {
@@ -1637,6 +1659,8 @@ public class OsgiBundleSet {
 				}
 			}
 			success = true;
+		} catch (Throwable e) {
+			e.printStackTrace();
 		} finally {
 			if (dialog != null) {
 				dialog.setVisible(false);
