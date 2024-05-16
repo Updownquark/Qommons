@@ -86,11 +86,14 @@ public class QonfigApp {
 
 		Set<QonfigToolkit> toolkits = new LinkedHashSet<>();
 		// Resolve the dependency toolkits
+		ClassLoader loader = Thread.currentThread().getContextClassLoader();
 		for (QonfigElement toolkitEl : appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "toolkit")) {
 			List<CustomValueType> valueTypes = create(toolkitEl.getChildrenInRole(qonfigAppTK, "toolkit", "value-type"),
 				CustomValueType.class);
 			String toolkitDef = toolkitEl.getAttributeText(qonfigAppTK.getAttribute("toolkit", "def"));
-			URL toolkitURL = QonfigApp.class.getResource(toolkitDef);
+			URL toolkitURL = loader == null ? null : loader.getResource(toolkitDef);
+			if (toolkitURL == null)
+				toolkitURL = QonfigApp.class.getResource(toolkitDef);
 			if (toolkitURL == null)
 				throw new IllegalArgumentException("Could not find toolkit " + toolkitDef);
 			try (InputStream tkIn = toolkitURL.openStream()) {
@@ -129,15 +132,30 @@ public class QonfigApp {
 	 * @throws QonfigParseException If one of the values could not be instantiated
 	 */
 	public static <T> List<T> create(Collection<QonfigElement> elements, Class<T> type) throws QonfigParseException {
+		ClassLoader loader = Thread.currentThread().getContextClassLoader();
 		ArrayList<T> values = new ArrayList<>(elements.size());
 		for (QonfigElement el : elements) {
 			Class<?> elType;
+			if (loader != null) {
+				try {
+					elType = loader.loadClass(el.getValueText());
+				} catch (ClassNotFoundException e) {
+					try {
+						elType = QonfigApp.class.getClassLoader().loadClass(el.getValueText());
+					} catch (ClassNotFoundException e2) {
+						throw QonfigParseException.createSimple(
+							new LocatedFilePosition(el.getDocument().getLocation(), el.getValue().position.getPosition(0)),
+							"No such " + type.getSimpleName() + " findable: " + el.getValueText(), e);
+					}
+				}
+			} else {
 			try {
-				elType = Class.forName(el.getValueText());
+					elType = QonfigApp.class.getClassLoader().loadClass(el.getValueText());
 			} catch (ClassNotFoundException e) {
 				throw QonfigParseException.createSimple(
 					new LocatedFilePosition(el.getDocument().getLocation(), el.getValue().position.getPosition(0)),
 					"No such " + type.getSimpleName() + " findable: " + el.getValueText(), e);
+			}
 			}
 			if (!type.isAssignableFrom(elType))
 				throw new IllegalArgumentException("Class " + elType.getName() + " is not a " + type.getName());
