@@ -910,6 +910,163 @@ public class SimpleXMLParser {
 		}
 	}
 
+	/** A ParseHandler that writes the XML data to a {@link Writer}, with configurable formatting */
+	public static class ReformatPrinter implements ParseHandler {
+		private final Writer theWriter;
+		private final String theIndent;
+		private final int theMaxLineLength;
+		private final int theIndentLength;
+		private int theIndentLevel;
+		private int theLineLength;
+		private boolean isElementMultiLine;
+
+		/**
+		 * @param writer The writer to write the XML data to
+		 * @param indent The indent String
+		 * @param maxLineLength The maximum line length configuration. This is not respected absolutely, but used as a guide.
+		 */
+		public ReformatPrinter(Writer writer, String indent, int maxLineLength) {
+			theWriter = writer;
+			theIndent = indent;
+			theMaxLineLength = maxLineLength;
+			int indentLength = 0;
+			for (int c = 0; c < indent.length(); c++) {
+				if (indent.charAt(c) == '\t')
+					indentLength += 4;
+				else
+					indentLength++;
+			}
+			theIndentLength = indentLength;
+		}
+
+		private int indent() throws IOException {
+			isElementMultiLine = true;
+			theWriter.append('\n');
+			int length = 0;
+			for (int i = 0; i < theIndentLevel; i++) {
+				theWriter.append(theIndent);
+				length += theIndentLength;
+			}
+			return length;
+		}
+
+		@Override
+		public void handleDeclaration(XmlDeclaration declaration) {
+			try {
+				theWriter.append(declaration.getContent());
+			} catch (IOException e) {
+				throw new IllegalStateException("Could not write XML data", e);
+			}
+		}
+
+		@Override
+		public void handleProcessingInstruction(XmlProcessingInstruction pi) {
+			try {
+				indent();
+				theWriter.append(pi.getContent());
+			} catch (IOException e) {
+				throw new IllegalStateException("Could not write XML data", e);
+			}
+		}
+
+		@Override
+		public void handleComment(XmlComment comment) {
+			try {
+				indent();
+				theWriter.append(comment.getContent());
+			} catch (IOException e) {
+				throw new IllegalStateException("Could not write XML data", e);
+			}
+		}
+
+		@Override
+		public void handleElementStart(XmlElementTerminal element) {
+			try {
+				theLineLength = indent() + element.getContent().length();
+				theWriter.append(element.getContent());
+			} catch (IOException e) {
+				throw new IllegalStateException("Could not write XML data", e);
+			}
+		}
+
+		@Override
+		public void handleElementOpen(String elementName, PositionedContent openEnd) {
+			try {
+				theWriter.append(openEnd);
+			} catch (IOException e) {
+				throw new IllegalStateException("Could not write XML data", e);
+			}
+			theIndentLevel++;
+			isElementMultiLine = false;
+		}
+
+		@Override
+		public void handleAttribute(XmlAttribute attribute) {
+			try {
+				if (theLineLength + attribute.getContent().length() > theMaxLineLength) {
+					theLineLength = indent();
+				} else {
+					theWriter.append(' ');
+					theLineLength++;
+				}
+				theLineLength += attribute.getContent().length();
+				theWriter.append(attribute.getContent());
+			} catch (IOException e) {
+				throw new IllegalStateException("Could not write XML data", e);
+			}
+		}
+
+		@Override
+		public void handleElementContent(String elementName, PositionedContent elementValue) {
+			try {
+				if (theLineLength + elementValue.length() > theMaxLineLength) {
+					theLineLength = indent();
+				} else {
+					theLineLength++;
+				}
+				theLineLength += elementValue.length();
+				theWriter.append(elementValue);
+			} catch (IOException e) {
+				throw new IllegalStateException("Could not write XML data", e);
+			}
+		}
+
+		@Override
+		public void handleCDataContent(String elementName, XmlCdata cdata) {
+			try {
+				indent();
+				theWriter.append(cdata.getContent());
+			} catch (IOException e) {
+				throw new IllegalStateException("Could not write XML data", e);
+			}
+		}
+
+		@Override
+		public void handleElementEnd(XmlElementTerminal element, boolean selfClosing) {
+			theIndentLevel--;
+			try {
+				if (!selfClosing && isElementMultiLine)
+					indent();
+				theWriter.append(element.getContent());
+			} catch (IOException e) {
+				throw new IllegalStateException("Could not write XML data", e);
+			}
+			isElementMultiLine = true;
+		}
+
+		@Override
+		public void handleIgnorableWhitespace(PositionedContent whitespace) {
+		}
+
+		@Override
+		public void handleIOError(IOException ioError, FilePosition position) {
+		}
+
+		@Override
+		public void handleParseError(XmlParseException parseError) {
+		}
+	}
+
 	private int theTabLength = 4;
 	private final Map<String, String> theNamedEntities = new HashMap<>(STANDARD_NAMED_ENTITIES);
 
@@ -1288,9 +1445,13 @@ public class SimpleXMLParser {
 
 			// The declaration is handled.
 			// Now we need to move to the root element, where the code below expects, just like if there had been no XML declaration.
-			ch = session.skipWS(handler);
-			if (ch != '<')
-				session.throwException(false, "The first non-whitespace character after the XML declaration must be '<', not '" + ch + "'");
+			ch = session.currentChar();
+			if (ch != '<') {
+				ch = session.skipWS(handler);
+				if (ch != '<')
+					session.throwException(false,
+						"The first non-whitespace character after the XML declaration must be '<', not '" + ch + "'");
+			}
 			ch = session.nextChar();
 		}
 
@@ -1323,9 +1484,8 @@ public class SimpleXMLParser {
 		}
 
 		// Now we should be at the name of the root element
-		handleElement(session, handler);
+		handleElement(session, handler, true);
 
-		session.setContentComplete(true);
 		session.skipWS(handler);
 		while (!session.isAtEnd()) {
 			session.setContentComplete(false);
@@ -1477,7 +1637,7 @@ public class SimpleXMLParser {
 		}
 	}
 
-	private static void handleElement(ParseSession session, ParseHandler handler) throws IOException, XmlParseException {
+	private static void handleElement(ParseSession session, ParseHandler handler, boolean root) throws IOException, XmlParseException {
 		if (Character.isWhitespace(session.currentChar()))
 			session.skipWS(null); // White space is part of the element start
 		int startPos = session.getPosition() - session.getSequenceStartPosition();
@@ -1541,12 +1701,14 @@ public class SimpleXMLParser {
 						session.skipWS(null);// White space is part of the closing tag
 					if (session.currentChar() != '>')
 						session.throwException(false, "'>' expected");
+					if (root)
+						session.setContentComplete(true);
 					session.nextChar(); // Include the terminal '>'
 					handler.handleElementEnd(new XmlElementTerminal(elementName, closePos, session.dumpSequence()), false);
 					session.closeElement();
 					return;
 				} else // Child element
-					handleElement(session, handler);
+					handleElement(session, handler, false);
 			} else { // Element content
 				session.parseXmlContent(false, ELEMENT_CONTENT_TERMINATION);
 				handler.handleElementContent(elementName, session.dumpSequence());
