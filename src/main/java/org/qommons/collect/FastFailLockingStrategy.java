@@ -13,10 +13,12 @@ import org.qommons.Transaction;
 public class FastFailLockingStrategy implements CollectionLockingStrategy {
 	private final ThreadConstraint theThreadConstraint;
 	private final CausalLock theCausalLock;
-	private volatile long theModCount = 0;
+	private volatile long theStamp = 0;
 
 	/** @param threadConstraint The thread constraint for this lock to obey */
 	public FastFailLockingStrategy(ThreadConstraint threadConstraint) {
+		if (threadConstraint == null)
+			throw new NullPointerException();
 		theThreadConstraint = threadConstraint;
 		theCausalLock = new DefaultCausalLock(new TransactableCore());
 	}
@@ -53,12 +55,12 @@ public class FastFailLockingStrategy implements CollectionLockingStrategy {
 
 	@Override
 	public long getStamp() {
-		return theModCount;
+		return theStamp;
 	}
 
 	@Override
 	public void modified() {
-		theModCount++;
+		theStamp++;
 	}
 
 	@Override

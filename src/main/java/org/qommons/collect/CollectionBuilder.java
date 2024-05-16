@@ -69,7 +69,12 @@ public interface CollectionBuilder<B extends CollectionBuilder<? extends B>> ext
 		public B withThreadConstraint(ThreadConstraint threadConstraint) {
 			if (theLocker != DEFAULT_LOCKER)
 				System.err.println("WARNING: Using withThreadConstraint() after modifying the locking--locking policy will be reset");
-			theLocker = LambdaUtils.constantFn(new FastFailLockingStrategy(threadConstraint), "fast-fail on " + threadConstraint, null);
+			if (threadConstraint == ThreadConstraint.ANY) {
+				theLocker = LambdaUtils.constantFn(new FastFailLockingStrategy(threadConstraint), "fast-fail on " + threadConstraint, null);
+			} else {
+				theLocker = LambdaUtils.constantFn(new ThreadConstrainedLockingStrategy(threadConstraint),
+					"thread-constrained on " + threadConstraint, null);
+			}
 			return (B) this;
 		}
 

@@ -35,6 +35,11 @@ public interface ThreadConstraint {
 		}
 
 		@Override
+		public void invokeLater(Runnable task) {
+			task.run();
+		}
+
+		@Override
 		public String toString() {
 			return "Unconstrained";
 		}
@@ -53,6 +58,11 @@ public interface ThreadConstraint {
 
 		@Override
 		public void invoke(Runnable task) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public void invokeLater(Runnable task) {
 			throw new UnsupportedOperationException();
 		}
 
@@ -84,6 +94,9 @@ public interface ThreadConstraint {
 		}
 	};
 
+	/** Message for an exception thrown when attempting to modify a thread-constrained structure on an illegal thread */
+	public static final String MOD_ON_WRONG_THREAD = "This structure cannot be modified on the current thread";
+
 	/** @return Whether events might be fired on the current thread */
 	boolean isEventThread();
 
@@ -101,6 +114,14 @@ public interface ThreadConstraint {
 	 * @param task The task to execute
 	 */
 	void invoke(Runnable task);
+
+	/**
+	 * Performs the task on an acceptable thread. Unlike {@link #invoke(Runnable)}, this will never execute the task inline. The task will
+	 * be queued to be executed on an acceptable thread and this method will return immediately, likely before the task is executed.
+	 * 
+	 * @param task The task to execute
+	 */
+	void invokeLater(Runnable task);
 
 	/**
 	 * Performs the task on an acceptable thread. If the current thread is acceptable, the task will be executed inline. Otherwise, the task
@@ -197,6 +218,11 @@ public interface ThreadConstraint {
 				task.run();
 		}
 
+		@Override
+		public void invokeLater(Runnable task) {
+			reallyInvokeLater(task);
+		}
+
 		private void flushCachedEvents() {
 			theQueuedRuns.getAndDecrement();
 			int emptyRuns;
@@ -254,6 +280,13 @@ public interface ThreadConstraint {
 		}
 
 		@Override
+		public void invokeLater(Runnable task) {
+			if (theInvoke == null)
+				throw new UnsupportedOperationException();
+			theInvoke.accept(task);
+		}
+
+		@Override
 		public int hashCode() {
 			return theThread.hashCode();
 		}
@@ -304,6 +337,11 @@ public interface ThreadConstraint {
 		@Override
 		public void invoke(Runnable task) {
 			theConstraints.get(0).invoke(task);
+		}
+
+		@Override
+		public void invokeLater(Runnable task) {
+			theConstraints.get(0).invokeLater(task);
 		}
 
 		@Override
