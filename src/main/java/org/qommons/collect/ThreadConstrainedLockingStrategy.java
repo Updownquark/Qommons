@@ -90,7 +90,7 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 	public Transaction tryLock(boolean write, Object cause) {
 		boolean onPublicThread = getThreadConstraint().isEventThread();
 		if (write) {
-			if (!onPublicThread)
+			if (onPublicThread)
 				return getWriteLock(true, cause);
 			else
 				throw new IllegalStateException(ThreadConstraint.MOD_ON_WRONG_THREAD);
@@ -116,8 +116,14 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 	 * @return The transaction to release the lock
 	 */
 	private Transaction getWriteLock(boolean tryOnly, Object cause) {
-		if (theSafeReadLock > 0)
-			throw new IllegalStateException("Attempting to upgrade from a read lock to a write lock");
+		// Almost all locks share the constraint that it is impossible to safely upgrade from a read (non-exclusive) lock
+		// to a write (exclusive) lock.
+		// But in this lock we can do this safely because unlike those other locks, non-exclusive locks obtained on the event thread
+		// are fundamentally different from those obtained from other threads.
+		// So we can wait for all non-exclusive locks from other threads to be released without needing to concern ourselves
+		// with non-exclusive locks obtained on the event thread, which is the current thread.
+		// if (theSafeReadLock > 0)
+		// throw new IllegalStateException("Attempting to upgrade from a read lock to a write lock");
 		theWriteLock++;
 		boolean initial = theWriteLock == 1;
 		if (initial && theReadLock.get() != 0) {
