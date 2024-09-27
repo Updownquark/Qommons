@@ -87,6 +87,15 @@ public class BetterCollections {
 	}
 
 	/**
+	 * @param <E> The type of the sorted list
+	 * @param sortedList The sorted list to get an unmodifiable view of
+	 * @return A BetterSortedList backed by the given sorted list but though which the source list cannot be modified in any way
+	 */
+	public static <E> BetterSortedList<E> unmodifiableSortedList(BetterSortedList<? extends E> sortedList) {
+		return new UnmodifiableBetterSortedList<>(sortedList);
+	}
+
+	/**
 	 * @param <E> The type of the sorted set
 	 * @param sortedSet The sorted set to get an unmodifiable view of
 	 * @return A BetterSortedSet backed by the given sorted set but though which the source set cannot be modified in any way
@@ -510,19 +519,19 @@ public class BetterCollections {
 	}
 
 	/**
-	 * Implements {@link BetterCollections#unmodifiableSortedSet(BetterSortedSet)}
+	 * Implements {@link BetterCollections#unmodifiableSortedList(BetterSortedList)}
 	 * 
-	 * @param <E> The type of the set
+	 * @param <E> The type of the list
 	 */
-	public static class UnmodifiableBetterSortedSet<E> extends UnmodifiableBetterList<E> implements BetterSortedSet<E> {
-		/** @param wrapped The set to wrap */
-		protected UnmodifiableBetterSortedSet(BetterSortedSet<? extends E> wrapped) {
+	public static class UnmodifiableBetterSortedList<E> extends UnmodifiableBetterList<E> implements BetterSortedList<E> {
+		/** @param wrapped The list to wrap */
+		protected UnmodifiableBetterSortedList(BetterSortedList<? extends E> wrapped) {
 			super(wrapped);
 		}
 
 		@Override
-		protected BetterSortedSet<? extends E> getWrapped() {
-			return (BetterSortedSet<? extends E>) super.getWrapped();
+		protected BetterSortedList<? extends E> getWrapped() {
+			return (BetterSortedList<? extends E>) super.getWrapped();
 		}
 
 		@Override
@@ -557,24 +566,36 @@ public class BetterCollections {
 
 		@Override
 		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
-			// Kinda weird here since this involves modification, but the caller itself isn't doing the modification
+			// Kinda weird here since this involves modification, but the caller itself isn't controlling the modification
 			return ((BetterSet<E>) getWrapped()).repair(element, listener);
 		}
 
 		@Override
 		public <X> boolean repair(RepairListener<E, X> listener) {
-			// Kinda weird here since this involves modification, but the caller itself isn't doing the modification
+			// Kinda weird here since this involves modification, but the caller itself isn't controlling the modification
 			return ((BetterSet<E>) getWrapped()).repair(listener);
 		}
 
 		@Override
 		public <T> T[] toArray(T[] array) {
-			return BetterSortedSet.super.toArray(array);
+			return BetterSortedList.super.toArray(array);
 		}
 
 		@Override
 		public Object[] toArray() {
-			return BetterSortedSet.super.toArray();
+			return BetterSortedList.super.toArray();
+		}
+	}
+
+	/**
+	 * Implements {@link BetterCollections#unmodifiableSortedSet(BetterSortedSet)}
+	 * 
+	 * @param <E> The type of the set
+	 */
+	public static class UnmodifiableBetterSortedSet<E> extends UnmodifiableBetterSortedList<E> implements BetterSortedSet<E> {
+		/** @param wrapped The set to wrap */
+		protected UnmodifiableBetterSortedSet(BetterSortedSet<? extends E> wrapped) {
+			super(wrapped);
 		}
 	}
 

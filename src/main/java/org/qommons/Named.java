@@ -1,6 +1,6 @@
 package org.qommons;
 
-import java.util.Comparator;
+import org.qommons.collect.NullTolerantComparator;
 
 /** An item that has a name */
 public interface Named {
@@ -32,15 +32,7 @@ public interface Named {
 	}
 
 	/** A comparator to sort named items in a way that sorts embedded numbers well */
-	public static final Comparator<Named> DISTINCT_NUMBER_TOLERANT = (o1, o2) -> {
-		if (o1 == null) {
-			if (o2 == null)
-				return 0;
-			else
-				return 1;
-		} else if (o2 == null)
-			return -1;
-		else
-			return StringUtils.compareNumberTolerant(o1.getName(), o2.getName(), true, true);
-	};
+	public static final NullTolerantComparator<Named> DISTINCT_NUMBER_TOLERANT = new NullTolerantComparator<>(LambdaUtils
+		.printableComparator((n1, n2) -> StringUtils.compareNumberTolerant(n1.getName(), n2.getName(), true, true), () -> "By Name"),
+		false);
 }

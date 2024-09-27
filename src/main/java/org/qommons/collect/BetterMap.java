@@ -1,10 +1,6 @@
 package org.qommons.collect;
 
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -608,6 +604,17 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 	static final BetterMap<Object, Object> EMPTY = new EmptyBetterMap<>();
 
 	/**
+	 * @param <K> The key type for the map
+	 * @param <V> The value type for the map
+	 * @param key The key for the map
+	 * @param value The value for the map
+	 * @return An immutable BetterMap with a single entry for the given key/value pair
+	 */
+	static <K, V> BetterMap<K, V> of(K key, V value) {
+		return new SingletonMap<>(key, value);
+	}
+
+	/**
 	 * Implements {@link BetterMap#empty()}
 	 * 
 	 * @param <K> The key type of the map
@@ -716,9 +723,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 		@Override
 		public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before,
 			boolean first, Runnable preAdd, Runnable postAdd) {
-			return MapEntryHandle
-				.reverse(
-					theWrapped.getOrPutEntry(key, value, ElementId.reverse(before), ElementId.reverse(after), !first, preAdd, postAdd));
+			return MapEntryHandle.reverse(
+				theWrapped.getOrPutEntry(key, value, ElementId.reverse(before), ElementId.reverse(after), !first, preAdd, postAdd));
 		}
 
 		@Override
@@ -1308,6 +1314,437 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 		@Override
 		public String toString() {
 			return BetterCollection.toString(this);
+		}
+	}
+
+	/**
+	 * Implements {@link BetterMap#of(Object, Object)}
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
+	class SingletonMap<K, V> implements BetterMap<K, V> {
+		private final K theKey;
+		private final V theValue;
+		private final Entry theEntry;
+
+		SingletonMap(K key, V value) {
+			theKey = key;
+			theValue = value;
+			theEntry = new Entry();
+		}
+
+		@Override
+		public Object getIdentity() {
+			return Identifiable.baseId("BetterMap", new BetterMapEntryImpl<>(theKey, theValue));
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return true;
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return Transaction.NONE;
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, Object cause) {
+			return Transaction.NONE;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return ThreadConstraint.NONE;
+		}
+
+		@Override
+		public BetterSet<K> keySet() {
+			return new KeySet();
+		}
+
+		@Override
+		public MapEntryHandle<K, V> getEntry(K key) {
+			if (Objects.equals(theKey, key))
+				return theEntry;
+			else
+				return null;
+		}
+
+		@Override
+		public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before,
+			boolean first, Runnable preAdd, Runnable postAdd) {
+			return getEntry(key);
+		}
+
+		@Override
+		public MapEntryHandle<K, V> getEntryById(ElementId entryId) {
+			if (entryId == theEntry.getElementId())
+				return theEntry;
+			else
+				throw new NoSuchElementException(entryId.toString());
+		}
+
+		@Override
+		public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
+			return new MutableEntry();
+		}
+
+		@Override
+		public String canPut(K key, V value) {
+			return StdMsg.UNSUPPORTED_OPERATION;
+		}
+
+		@Override
+		public int hashCode() {
+			return BetterMap.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterMap.equals(this, obj);
+		}
+
+		@Override
+		public String toString() {
+			return new StringBuilder().append('{').append(theKey).append('=').append(theValue).append('}').toString();
+		}
+
+		static class ElId implements ElementId {
+			@Override
+			public int compareTo(ElementId o) {
+				if (o == this)
+					return 0;
+				else
+					throw new IllegalArgumentException("Cannot compare IDs from different sources");
+			}
+
+			@Override
+			public boolean isPresent() {
+				return true;
+			}
+		}
+
+		class Entry implements MapEntryHandle<K, V> {
+			private final ElId theId;
+
+			Entry() {
+				theId = new ElId();
+			}
+
+			@Override
+			public ElementId getElementId() {
+				return theId;
+			}
+
+			@Override
+			public V get() {
+				return theValue;
+			}
+
+			@Override
+			public K getKey() {
+				return theKey;
+			}
+
+			@Override
+			public String toString() {
+				return SingletonMap.this.toString();
+			}
+		}
+
+		class MutableEntry implements MutableMapEntryHandle<K, V> {
+			@Override
+			public BetterCollection<V> getCollection() {
+				return SingletonMap.this.values();
+			}
+
+			@Override
+			public String isEnabled() {
+				return StdMsg.UNSUPPORTED_OPERATION;
+			}
+
+			@Override
+			public String isAcceptable(V value) {
+				return StdMsg.UNSUPPORTED_OPERATION;
+			}
+
+			@Override
+			public void set(V value) throws UnsupportedOperationException, IllegalArgumentException {
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			}
+
+			@Override
+			public String canRemove() {
+				return StdMsg.UNSUPPORTED_OPERATION;
+			}
+
+			@Override
+			public void remove() throws UnsupportedOperationException {
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			}
+
+			@Override
+			public K getKey() {
+				return theKey;
+			}
+
+			@Override
+			public ElementId getElementId() {
+				return theEntry.getElementId();
+			}
+
+			@Override
+			public V get() {
+				return theValue;
+			}
+
+			@Override
+			public String toString() {
+				return theEntry.toString();
+			}
+		}
+
+		class KeySet implements BetterSet<K> {
+			@Override
+			public CollectionElement<K> getOrAdd(K value, ElementId after, ElementId before, boolean first, Runnable preAdd,
+				Runnable postAdd) {
+				return getElement(value, first);
+			}
+
+			@Override
+			public boolean isConsistent(ElementId element) {
+				return true;
+			}
+
+			@Override
+			public boolean checkConsistency() {
+				return true;
+			}
+
+			@Override
+			public <X> boolean repair(ElementId element, RepairListener<K, X> listener) {
+				return false;
+			}
+
+			@Override
+			public <X> boolean repair(RepairListener<K, X> listener) {
+				return false;
+			}
+
+			@Override
+			public CollectionElement<K> getElement(K value, boolean first) {
+				if (Objects.equals(theKey, value))
+					return new Element();
+				else
+					return null;
+			}
+
+			@Override
+			public CollectionElement<K> getElement(ElementId id) {
+				if (id == theEntry.getElementId())
+					return new Element();
+				else
+					throw new NoSuchElementException(id.toString());
+			}
+
+			@Override
+			public CollectionElement<K> getTerminalElement(boolean first) {
+				return new Element();
+			}
+
+			@Override
+			public CollectionElement<K> getAdjacentElement(ElementId elementId, boolean next) {
+				getElement(elementId); // Check that it's our element
+				return null;
+			}
+
+			@Override
+			public MutableCollectionElement<K> mutableElement(ElementId id) {
+				getElement(id); // check that it's our element
+				return new MutableElement();
+			}
+
+			@Override
+			public BetterList<CollectionElement<K>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
+				if (sourceEl != theEntry.getElementId())
+					return BetterList.empty();
+				if (sourceCollection == this)
+					return BetterList.of(new Element());
+				return BetterList.empty();
+			}
+
+			@Override
+			public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+				if (localElement != theEntry.getElementId())
+					return BetterList.empty();
+				if (sourceCollection == this)
+					return BetterList.of(theEntry.getElementId());
+				return BetterList.empty();
+			}
+
+			@Override
+			public ElementId getEquivalentElement(ElementId equivalentEl) {
+				if (equivalentEl == theEntry.getElementId())
+					return equivalentEl;
+				return null;
+			}
+
+			@Override
+			public String canAdd(K value, ElementId after, ElementId before) {
+				if (Objects.equals(theKey, value))
+					return null;
+				return StdMsg.UNSUPPORTED_OPERATION;
+			}
+
+			@Override
+			public CollectionElement<K> addElement(K value, ElementId after, ElementId before, boolean first)
+				throws UnsupportedOperationException, IllegalArgumentException {
+				if (Objects.equals(theKey, value))
+					return null;
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			}
+
+			@Override
+			public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+				if (after != null && valueEl.compareTo(after) < 0)
+					return StdMsg.UNSUPPORTED_OPERATION;
+				else if (before != null && valueEl.compareTo(before) > 0)
+					return StdMsg.UNSUPPORTED_OPERATION;
+				else
+					return null;
+			}
+
+			@Override
+			public CollectionElement<K> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+				throws UnsupportedOperationException, IllegalArgumentException {
+				String msg = canMove(valueEl, after, before);
+				if (msg != null)
+					throw new UnsupportedOperationException(msg);
+				return getElement(valueEl);
+			}
+
+			@Override
+			public void clear() {
+			}
+
+			@Override
+			public int size() {
+				return 1;
+			}
+
+			@Override
+			public boolean isEmpty() {
+				return false;
+			}
+
+			@Override
+			public Transaction lock(boolean write, Object cause) {
+				return Transaction.NONE;
+			}
+
+			@Override
+			public Transaction tryLock(boolean write, Object cause) {
+				return Transaction.NONE;
+			}
+
+			@Override
+			public CoreId getCoreId() {
+				return CoreId.EMPTY;
+			}
+
+			@Override
+			public Object getIdentity() {
+				return Identifiable.wrap(SingletonMap.this.getIdentity(), "keySet");
+			}
+
+			@Override
+			public Collection<Cause> getCurrentCauses() {
+				return Collections.emptyList();
+			}
+
+			@Override
+			public long getStamp() {
+				return 0;
+			}
+
+			@Override
+			public ThreadConstraint getThreadConstraint() {
+				return ThreadConstraint.NONE;
+			}
+
+			@Override
+			public <T> T[] toArray(T[] a) {
+				if (a.length == 0)
+					a = Arrays.copyOf(a, 1);
+				a[0] = (T) theKey;
+				return a;
+			}
+
+			@Override
+			public int hashCode() {
+				return BetterSet.hashCode(this);
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return BetterSet.equals(this, obj);
+			}
+
+			@Override
+			public String toString() {
+				return BetterSet.toString(this);
+			}
+
+			class Element implements CollectionElement<K> {
+				@Override
+				public ElementId getElementId() {
+					return theEntry.getElementId();
+				}
+
+				@Override
+				public K get() {
+					return theKey;
+				}
+
+				@Override
+				public String toString() {
+					return String.valueOf(theKey);
+				}
+			}
+
+			class MutableElement extends Element implements MutableCollectionElement<K> {
+				@Override
+				public BetterCollection<K> getCollection() {
+					return KeySet.this;
+				}
+
+				@Override
+				public String isEnabled() {
+					return StdMsg.UNSUPPORTED_OPERATION;
+				}
+
+				@Override
+				public String isAcceptable(K value) {
+					return StdMsg.UNSUPPORTED_OPERATION;
+				}
+
+				@Override
+				public void set(K value) throws UnsupportedOperationException, IllegalArgumentException {
+					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+				}
+
+				@Override
+				public String canRemove() {
+					return StdMsg.UNSUPPORTED_OPERATION;
+				}
+
+				@Override
+				public void remove() throws UnsupportedOperationException {
+					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+				}
+			}
 		}
 	}
 }

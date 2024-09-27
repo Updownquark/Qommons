@@ -20,6 +20,7 @@ import java.util.regex.Pattern;
 import org.qommons.collect.BetterHashSet;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.BetterSet;
+import org.qommons.collect.NullTolerantComparator;
 import org.qommons.collect.SimpleImmutableList;
 import org.qommons.ex.ExFunction;
 import org.qommons.ex.ExPredicate;
@@ -860,6 +861,16 @@ public class QommonsUtils {
 	}
 
 	/**
+	 * @param <T> The type of values to compare
+	 * @param wrapped The comparator to compare non-null values
+	 * @param nullsFirst Whether null values should sort to the beginning or the end of a collection
+	 * @return A comparator that tolerates null values
+	 */
+	public static <T> NullTolerantComparator<T> nullTolerant(Comparator<T> wrapped, boolean nullsFirst) {
+		return new NullTolerantComparator<>(wrapped, nullsFirst);
+	}
+
+	/**
 	 * @param <T> The type of values in the list
 	 * @param values The values to include
 	 * @return An unmodifiable copy of the given list
@@ -1041,10 +1052,63 @@ public class QommonsUtils {
 		ExPredicate<? super T, ? extends FE> filter, ExFunction<? super T, ? extends V, ? extends ME> map) throws FE, ME {
 		if (values.isEmpty())
 			return BetterList.empty();
+		if (filter == null) {
+			if (map == null)
+				return (BetterList<V>) BetterList.of(values);
+			Object[] mapped = new Object[values.size()];
+			int i = 0;
+			for (T value : values)
+				mapped[i++] = map.apply(value);
+			return (BetterList<V>) BetterList.of(mapped);
+		} else {
+			ArrayList<V> list = new ArrayList<>(values.size());
+			for (T value : values) {
+				if (filter.test(value))
+					list.add(map == null ? (V) value : map.apply(value));
+			}
+			list.trimToSize();
+			return BetterList.of(list);
+		}
+	}
+
+	/**
+	 * Like {@link #filterMap(Collection, Predicate, Function)}, except that the filtering happens AFTER the mapping
+	 * 
+	 * @param <T> The type of the source values
+	 * @param <V> The type of the mapped values
+	 * @param values The values to map
+	 * @param map The mapping function, may be null if source and value types are the same
+	 * @param filter The mapped value filter, may be null to use all source values
+	 * @return An unmodifiable BetterList containing all source values passing the given filter, mapped with the given map
+	 */
+	public static <T, V> BetterList<V> mapAndFilter(Collection<? extends T> values, Function<? super T, ? extends V> map,
+		Predicate<? super V> filter) {
+		return mapAndFilterE(values, ExFunction.of(map), ExPredicate.wrap(filter));
+	}
+
+	/**
+	 * Like {@link #filterMapE(Collection, ExPredicate, ExFunction)}, except that the filtering happens AFTER the mapping
+	 * 
+	 * @param <T> The type of the source values
+	 * @param <V> The type of the mapped values
+	 * @param <FE> The type of exception that may be thrown by the filter
+	 * @param <ME> The type of exception that may be thrown by the map
+	 * @param values The values to map
+	 * @param filter The source value filter, may be null to use all source values
+	 * @param map The mapping function, may be null if source and value types are the same
+	 * @return An unmodifiable BetterList containing all source values passing the given filter, mapped with the given map
+	 * @throws FE If the filter throws an exception
+	 * @throws ME If the map throws an exception
+	 */
+	public static <T, V, FE extends Throwable, ME extends Throwable> BetterList<V> mapAndFilterE(Collection<? extends T> values,
+		ExFunction<? super T, ? extends V, ? extends ME> map, ExPredicate<? super V, ? extends FE> filter) throws FE, ME {
+		if (values.isEmpty())
+			return BetterList.empty();
 		ArrayList<V> list = new ArrayList<>(values.size());
 		for (T value : values) {
-			if (filter == null || filter.test(value))
-				list.add(map == null ? (V) value : map.apply(value));
+			V mapped = map == null ? (V) value : map.apply(value);
+			if (filter == null || filter.test(mapped))
+				list.add(mapped);
 		}
 		if (filter != null)
 			list.trimToSize();

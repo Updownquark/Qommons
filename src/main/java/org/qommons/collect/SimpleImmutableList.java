@@ -21,7 +21,7 @@ public class SimpleImmutableList<E> extends AbstractList<E> implements DequeList
 	}
 
 	/**
-	 * @param values The array contining values for the list
+	 * @param values The array containing values for the list
 	 * @param off The offset in the array for the first value for this list
 	 * @param length The number of objects in the array to put in the list
 	 */

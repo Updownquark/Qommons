@@ -107,9 +107,9 @@ public interface ErrorReporting {
 		@Override
 		public String toString() {
 			StringBuilder str = new StringBuilder();
-			str.append(severity).append(": ");
 			if (fileLocation != null)
 				str.append(fileLocation.toShortString()).append(' ');
+			str.append(severity).append(": ");
 			if (message != null) {
 				str.append(message);
 				if (cause != null)
@@ -125,15 +125,16 @@ public interface ErrorReporting {
 		 * @param w The printer to print this issue to
 		 */
 		public void printStackTrace(PrintWriter w) {
+			if (fileLocation != null)
+				w.append(fileLocation.toShortString()).append(": ");
 			w.append(severity.toString());
 			if (message != null) {
-				w.append(": ");
-				w.append(message);
+				w.append(' ').append(message);
 			}
-			if (codeLocation != null)
-				w.append("\n\t at ").append(codeLocation.toString());
 			if (fileLocation != null)
 				w.append("\n\t at ").append(fileLocation.toString());
+			if (codeLocation != null)
+				w.append("\n\t at ").append(codeLocation.toString());
 			if (cause != null) {
 				w.append("\nCaused by: ");
 				cause.printStackTrace(w);
@@ -146,15 +147,16 @@ public interface ErrorReporting {
 		 * @param w The printer to print this issue to
 		 */
 		public void printStackTrace(PrintStream w) {
+			if (fileLocation != null)
+				w.append(fileLocation.toShortString()).append(": ");
 			w.append(severity.toString());
 			if (message != null) {
-				w.append(": ");
-				w.append(message);
+				w.append(' ').append(message);
 			}
-			if (codeLocation != null)
-				w.append("\n\t at ").append(codeLocation.toString());
 			if (fileLocation != null)
 				w.append("\n\t at ").append(fileLocation.toString());
+			if (codeLocation != null)
+				w.append("\n\t at ").append(codeLocation.toString());
 			w.append('\n');
 			if (cause != null) {
 				w.append("Caused by: ");

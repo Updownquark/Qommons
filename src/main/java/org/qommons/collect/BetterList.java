@@ -7,12 +7,8 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.qommons.Identifiable;
+import org.qommons.*;
 import org.qommons.Lockable.CoreId;
-import org.qommons.QommonsUtils;
-import org.qommons.ThreadConstraint;
-import org.qommons.Transactable;
-import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.ex.CheckedExceptionWrapper;
 import org.qommons.ex.ExFunction;
@@ -1425,6 +1421,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 		/** @param values The values for this list. The backing list should never be modified. */
 		public ConstantList(List<? extends E> values) {
+			if (values == null)
+				throw new NullPointerException();
 			theValues = values;
 		}
 
@@ -1639,6 +1637,62 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 			if (equivalentEl instanceof ConstantList.IndexElementId && ((IndexElementId) equivalentEl).getList() == this)
 				return equivalentEl;
 			return null;
+		}
+
+		@Override
+		public E getFirst() {
+			if (theValues.isEmpty())
+				throw new NoSuchElementException();
+			return theValues.get(0);
+		}
+
+		@Override
+		public E getLast() {
+			if (theValues.isEmpty())
+				throw new NoSuchElementException();
+			return theValues.get(theValues.size() - 1);
+		}
+
+		@Override
+		public E peekFirst() {
+			return theValues.isEmpty() ? null : theValues.get(0);
+		}
+
+		@Override
+		public E peekLast() {
+			return theValues.isEmpty() ? null : theValues.get(theValues.size() - 1);
+		}
+
+		@Override
+		public E element() {
+			if (theValues.isEmpty())
+				throw new NoSuchElementException();
+			return theValues.get(0);
+		}
+
+		@Override
+		public E peek() {
+			return theValues.isEmpty() ? null : theValues.get(0);
+		}
+
+		@Override
+		public int indexOf(Object value) {
+			return theValues.indexOf(value);
+		}
+
+		@Override
+		public E get(int index) {
+			return theValues.get(index);
+		}
+
+		@Override
+		public boolean contains(Object o) {
+			return theValues.contains(o);
+		}
+
+		@Override
+		public Iterator<E> iterator() {
+			return IterableUtils.immutableIterator((Iterator<E>) theValues.iterator());
 		}
 
 		@Override

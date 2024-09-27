@@ -418,6 +418,17 @@ public class XmlSerialWriter {
 		}
 	}
 
+	/**
+	 * Writes the given String as content to an XML stream, escaping characters as needed
+	 * 
+	 * @param writer The XML writer to write to
+	 * @param content The content string to write
+	 * @throws IOException If the content cannot be written
+	 */
+	public static void writeXmlContent(Writer writer, String content) throws IOException {
+		writeXmlContent(writer, content, XmlContentType.CONTENT);
+	}
+
 	enum XmlContentType {
 		CONTENT, COMMENT, ATTRIBUTE_NAME, ATTRIBUTE_VALUE, ELEMENT_NAME;
 	}
@@ -481,11 +492,11 @@ public class XmlSerialWriter {
 				if (idx >= 0) {
 					writer.write(content, start, c);
 					writer.write(BAD_CHAR_ESCAPES[idx]);
-					start = c;
+					start = c + 1;
 				}
 			}
 			if (start < content.length())
-				writer.write(content, start, content.length());
+				writer.write(content, start, content.length() - start);
 			break;
 		case COMMENT:
 			boolean wasDash = false;

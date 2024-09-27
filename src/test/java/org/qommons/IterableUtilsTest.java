@@ -57,7 +57,7 @@ public class IterableUtilsTest {
 			pathIter[i] = Arrays.asList(thePaths.get(i));
 		}
 
-		Iterator<List<String>> paths = IterableUtils.combine(Arrays.asList(pathIter).iterator()).iterator();
+		Iterator<List<String>> paths = IterableUtils.combine(Arrays.asList(pathIter)).iterator();
 		for (String sentence2 : theSentences) {
 			assertTrue(paths.hasNext());
 			String pathSentence = String.join(" ", paths.next());

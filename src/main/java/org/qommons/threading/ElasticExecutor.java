@@ -422,8 +422,6 @@ public class ElasticExecutor<T> {
 		ConcurrentLinkedQueue<TaskExecutor<? super T>> cache = theCachedWorkers;
 		if (cache != null)
 			taskExecutor = cache.poll();
-		if (taskExecutor == null)
-			taskExecutor = theGuts.get();
 		theRunner.execute(new Worker(id, taskExecutor), theName + ":" + (id + 1));
 	}
 
@@ -520,7 +518,7 @@ public class ElasticExecutor<T> {
 
 	class Worker implements Runnable {
 		final int id;
-		private final TaskExecutor<? super T> theTaskExecutor;
+		private TaskExecutor<? super T> theTaskExecutor;
 		boolean isDead;
 
 		Worker(int id, TaskExecutor<? super T> taskExecutor) {
@@ -530,6 +528,8 @@ public class ElasticExecutor<T> {
 
 		@Override
 		public void run() {
+			if (theTaskExecutor == null)
+				theTaskExecutor = theGuts.get();
 			T task = pollTask();
 			do {
 				while (task != null) {

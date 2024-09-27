@@ -7,6 +7,7 @@ import java.util.function.IntUnaryOperator;
 import org.qommons.Identifiable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
+import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
@@ -85,7 +86,7 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 	 * </ul>
 	 * 
 	 * @param value The value to search for in the set
-	 * @return The index of the element in this set whose value {@link Object#equals(Object)} the give nvalue, or a number &lt;0 if no such
+	 * @return The index of the element in this set whose value {@link Object#equals(Object)} the given value, or a number &lt;0 if no such
 	 *         element exists in this set
 	 */
 	@Override
@@ -296,19 +297,23 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 		private static final Object[] EMPTY_VALUES = new Object[0];
 
 		static <E> HighPerformanceArraySet<E> create(Comparator<? super E> sorting, Collection<? extends E> values) {
-			if (values.size() > MAX_SIZE)
-				throw new IllegalArgumentException("Max size of a " + HighPerformanceArraySet.class.getSimpleName() + " is " + MAX_SIZE);
-			if (values.isEmpty())
-				return new Empty<>(sorting);
-			else if (values.size() == 1) {
-				E value = values.iterator().next();
-				if (value == null)
+			Object[] valuesA;
+			try (Transaction t = Transactable.lock(values, false, null)) {
+				if (values.size() > MAX_SIZE)
 					throw new IllegalArgumentException(
-						"Null values are not allowed in " + HighPerformanceArraySet.class.getSimpleName() + "s");
-				return new Singleton<>(sorting, value);
-			}
+						"Max size of a " + HighPerformanceArraySet.class.getSimpleName() + " is " + MAX_SIZE);
+				if (values.isEmpty())
+					return new Empty<>(sorting);
+				else if (values.size() == 1) {
+					E value = values.iterator().next();
+					if (value == null)
+						throw new IllegalArgumentException(
+							"Null values are not allowed in " + HighPerformanceArraySet.class.getSimpleName() + "s");
+					return new Singleton<>(sorting, value);
+				}
 
-			Object[] valuesA = values.toArray();
+				valuesA = values.toArray();
+			}
 			Arrays.sort(valuesA, (Comparator<Object>) sorting);
 			for (int i = 1; i < valuesA.length; i++) {
 				if (valuesA[i] == null)
@@ -656,9 +661,92 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 
 			@Override
+			public boolean contains(Object c) {
+				return theValue.equals(c);
+			}
+
+			@Override
+			public int lastIndexOf(Object o) {
+				return indexOf(o);
+			}
+
+			@Override
+			public E getFirst() {
+				return theValue;
+			}
+
+			@Override
+			public E getLast() {
+				return theValue;
+			}
+
+			@Override
+			public E peekFirst() {
+				return theValue;
+			}
+
+			@Override
+			public E peekLast() {
+				return theValue;
+			}
+
+			@Override
+			public E element() {
+				return theValue;
+			}
+
+			@Override
+			public E peek() {
+				return theValue;
+			}
+
+			@Override
+			public E first() {
+				return theValue;
+			}
+
+			@Override
+			public E last() {
+				return theValue;
+			}
+
+			@Override
+			public E pollLast() {
+				return theValue;
+			}
+
+			@Override
+			public E pollFirst() {
+				return theValue;
+			}
+
+			@Override
+			public Singleton<E> descendingSet() {
+				return this;
+			}
+
+			@Override
+			public BetterList<E> subList(int fromIndex, int toIndex) {
+				if (fromIndex == 0) {
+					if (toIndex == 0)
+						return BetterList.empty();
+					else if (toIndex == 1)
+						return this;
+					else
+						throw new IndexOutOfBoundsException(fromIndex + " to " + toIndex + " of 1");
+				} else if (fromIndex == 1) {
+					if (toIndex == 1)
+						return BetterList.empty();
+					else
+						throw new IndexOutOfBoundsException(fromIndex + " to " + toIndex + " of 1");
+				} else
+					throw new IndexOutOfBoundsException(fromIndex + " to " + toIndex + " of 1");
+			}
+
+			@Override
 			public <T> T[] toArray(T[] a) {
 				if (a.length == 0)
-					a = (T[]) Array.newInstance(a.getClass().getComponentType(), 1);
+					a = Arrays.copyOf(a, 1);
 				a[0] = (T) theValue;
 				return a;
 			}
@@ -806,6 +894,61 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 
 			@Override
+			public boolean contains(Object c) {
+				return theFirst.equals(c) || theSecond.equals(c);
+			}
+
+			@Override
+			public E getFirst() {
+				return theFirst;
+			}
+
+			@Override
+			public E getLast() {
+				return theSecond;
+			}
+
+			@Override
+			public E peekFirst() {
+				return theFirst;
+			}
+
+			@Override
+			public E peekLast() {
+				return theSecond;
+			}
+
+			@Override
+			public E element() {
+				return theFirst;
+			}
+
+			@Override
+			public E peek() {
+				return theFirst;
+			}
+
+			@Override
+			public E first() {
+				return theFirst;
+			}
+
+			@Override
+			public E last() {
+				return theSecond;
+			}
+
+			@Override
+			public E pollLast() {
+				return theFirst;
+			}
+
+			@Override
+			public E pollFirst() {
+				return theSecond;
+			}
+
+			@Override
 			public <T> T[] toArray(T[] a) {
 				if (a.length < 2)
 					a = (T[]) Array.newInstance(a.getClass().getComponentType(), 2);
@@ -883,6 +1026,65 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 				if (theMutableElements[index] == null)
 					theMutableElements[index] = createMutableElement(index);
 				return theMutableElements[index];
+			}
+
+			@Override
+			public boolean contains(Object c) {
+				for (Object value : theValues) {
+					if (value.equals(c))
+						return true;
+				}
+				return false;
+			}
+
+			@Override
+			public E getFirst() {
+				return (E) theValues[0];
+			}
+
+			@Override
+			public E getLast() {
+				return (E) theValues[theValues.length - 1];
+			}
+
+			@Override
+			public E peekFirst() {
+				return (E) theValues[0];
+			}
+
+			@Override
+			public E peekLast() {
+				return (E) theValues[theValues.length - 1];
+			}
+
+			@Override
+			public E element() {
+				return (E) theValues[0];
+			}
+
+			@Override
+			public E peek() {
+				return (E) theValues[0];
+			}
+
+			@Override
+			public E first() {
+				return (E) theValues[0];
+			}
+
+			@Override
+			public E last() {
+				return (E) theValues[theValues.length - 1];
+			}
+
+			@Override
+			public E pollLast() {
+				return (E) theValues[theValues.length - 1];
+			}
+
+			@Override
+			public E pollFirst() {
+				return (E) theValues[0];
 			}
 
 			@Override

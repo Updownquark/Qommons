@@ -3729,6 +3729,7 @@ public class ArgumentParsing {
 					}
 					return parsedArgs;
 				} catch (RuntimeException e) {
+					System.err.println(e.getMessage());
 					if (!printedHelp && isPrintingHelpOnError)
 						System.err.println(printHelp());
 					throw e;

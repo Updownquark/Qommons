@@ -360,6 +360,24 @@ public abstract class QommonsConfig implements Cloneable {
 	}
 
 	/**
+	 * Parses a long int from an attribute of this config
+	 *
+	 * @param key The name of the attribute to get the value of
+	 * @param def The value to return if the attribute is missing from the config
+	 * @return The long parsed from the given attribute of this config, or the given default value if the attribute is missing
+	 */
+	public long getLong(String key, long def) {
+		String ret = get(key);
+		if (ret == null)
+			return def;
+		try {
+			return Long.parseLong(ret);
+		} catch (NumberFormatException e) {
+			throw new IllegalArgumentException("Value of property " + key + " (" + ret + ") is not a long integer", e);
+		}
+	}
+
+	/**
 	 * Parses a float from an attribute of this config
 	 *
 	 * @param key The name of the attribute to get the value of

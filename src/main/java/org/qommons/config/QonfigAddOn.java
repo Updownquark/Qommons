@@ -258,10 +258,11 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 				found = addOns.getFirst();
 				break;
 			case 0:
-				session.error("No such add-on '" + value + "' in toolkit " + tk.getLocation());
+				session.error("No such add-on '" + value + "'" + (tk.getLocation() == null ? "" : (" in toolkit " + tk.getLocation())));
 				break;
 			default:
-				session.error("Multiple add-ons named '" + value + "' in toolkit " + tk.getLocation());
+				session.error(
+					"Multiple add-ons named '" + value + "'" + (tk.getLocation() == null ? "" : (" in toolkit " + tk.getLocation())));
 			}
 		}
 		if (found == null)

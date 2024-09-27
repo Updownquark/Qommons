@@ -44,7 +44,16 @@ public interface QonfigChildDef extends QonfigElementOwned {
 	 * @param child The child to test
 	 * @return Whether the given child also fulfills this role
 	 */
-	boolean isFulfilledBy(QonfigChildDef child);
+	default boolean isFulfilledBy(QonfigChildDef child) {
+		if (equals(child))
+			return true;
+		else if (child instanceof Inherited)
+			return isFulfilledBy(((Inherited) child).getInherited());
+		else if (child instanceof Modified)
+			return isFulfilledBy(((Modified) child).getDeclared());
+		else
+			return false;
+	}
 
 	/**
 	 * @param element The element type to test
@@ -85,7 +94,7 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param position The position in the file where this child was defined
 		 * @param description The description for this child
 		 */
-		public Abstract(QonfigElementOrAddOn owner, QonfigElementOrAddOn type, Set<QonfigChildDef.Declared> fulfillment,
+		protected Abstract(QonfigElementOrAddOn owner, QonfigElementOrAddOn type, Set<QonfigChildDef.Declared> fulfillment,
 			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, PositionedContent position, String description) {
 			theOwner = owner;
 			theType = type;
@@ -188,7 +197,8 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param position The position in the file where this child was defined
 		 * @param description The description for this child
 		 */
-		public DeclaredChildDef(QonfigElementOrAddOn owner, String name, QonfigElementOrAddOn type, Set<QonfigChildDef.Declared> fulfillment,
+		public DeclaredChildDef(QonfigElementOrAddOn owner, String name, QonfigElementOrAddOn type,
+			Set<QonfigChildDef.Declared> fulfillment,
 			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, PositionedContent position, String description) {
 			super(owner, type, fulfillment, inheritance, requirement, min, max, position, description);
 			theName = name;
@@ -202,16 +212,6 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		@Override
 		public String getName() {
 			return theName;
-		}
-
-		@Override
-		public boolean isFulfilledBy(QonfigChildDef child) {
-			if (equals(child))
-				return true;
-			for (QonfigChildDef fulfills : child.getFulfillment())
-				if (isFulfilledBy(fulfills))
-					return true;
-			return false;
 		}
 
 		@Override
@@ -280,16 +280,6 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		/** @return Additional add-ons that elements fulfilling this role will inherit over and above the parent's role */
 		public Set<QonfigAddOn> getDeclaredInheritance() {
 			return theDeclaredInheritance;
-		}
-
-		@Override
-		public boolean isFulfilledBy(QonfigChildDef child) {
-			if (equals(child))
-				return true;
-			for (QonfigChildDef fulfills : child.getFulfillment())
-				if (isFulfilledBy(fulfills))
-					return true;
-			return false;
 		}
 	}
 

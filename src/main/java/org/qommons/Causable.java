@@ -47,6 +47,9 @@ import org.qommons.collect.CircularArrayList;
  * </p>
  */
 public interface Causable extends CausalLock.Cause {
+	/** Just a zero-length Object array */
+	public static final Object[] EMPTY_CAUSES = new Object[0];
+
 	/** An action to be fired when a causable finishes */
 	@FunctionalInterface
 	public interface TerminalAction {
@@ -213,7 +216,7 @@ public interface Causable extends CausalLock.Cause {
 		/** @param causes The causes of this causable */
 		public AbstractCausable(Object... causes) {
 			// There are prettier ways to do this, but this is a hot spot, so we need to save as many cycles as possible
-			if (causes == null) {
+			if (causes == null || causes.length == 0) {
 				theRootCausable = this;
 				theCauses = BetterList.EMPTY;
 			} else {
@@ -594,11 +597,10 @@ public interface Causable extends CausalLock.Cause {
 		}
 
 		static CausableInUse cause(Object... causes) {
-			List<Object> nnCauses = BetterList.of(causes).quickFilter(c -> c != null);
-			if (nnCauses.isEmpty())
+			if (causes == null || causes.length == 0)
 				return new SimpleCauseInUse();
-			else
-				return CAUSES.computeIfAbsent(nnCauses, __ -> new CauseInUseImpl(nnCauses)).descend();
+			List<Object> nnCauses = BetterList.of(causes).quickFilter(c -> c != null);
+			return CAUSES.computeIfAbsent(nnCauses, __ -> new CauseInUseImpl(nnCauses)).descend();
 		}
 	}
 

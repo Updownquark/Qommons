@@ -2,6 +2,8 @@ package org.qommons;
 
 import java.util.function.Function;
 
+import org.qommons.collect.ThreadConstrainedLockingStrategy;
+
 /**
  * Builds some kind of object with identity and locking
  * 
@@ -67,7 +69,7 @@ public interface TransactableBuilder<B extends TransactableBuilder<? extends B>>
 		public B withThreadConstraint(ThreadConstraint threadConstraint) {
 			if (theLocker != DEFAULT_LOCKER)
 				System.err.println("WARNING: Using withThreadConstraint() after modifying the locking--locking policy will be reset");
-			theLocker = LambdaUtils.constantFn(Transactable.noLock(threadConstraint), "UNSAFE on " + threadConstraint, null);
+			theLocker = LambdaUtils.constantFn(new ThreadConstrainedLockingStrategy(threadConstraint), threadConstraint::toString, null);
 			return (B) this;
 		}
 

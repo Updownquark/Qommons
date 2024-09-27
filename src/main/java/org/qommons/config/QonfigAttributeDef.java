@@ -37,7 +37,7 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		 * @param position Number The line number in the file where this attribute was defined
 		 * @param description The description for this attribute
 		 */
-		public Abstract(QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify, Object defaultValue,
+		protected Abstract(QonfigElementOrAddOn owner, QonfigValueType type, SpecificationType specify, Object defaultValue,
 			LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
 			theOwner = owner;
 			theType = type;

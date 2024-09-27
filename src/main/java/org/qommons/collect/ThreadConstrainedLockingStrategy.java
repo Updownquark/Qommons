@@ -116,26 +116,39 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 	 * @return The transaction to release the lock
 	 */
 	private Transaction getWriteLock(boolean tryOnly, Object cause) {
-		// Almost all locks share the constraint that it is impossible to safely upgrade from a read (non-exclusive) lock
-		// to a write (exclusive) lock.
-		// But in this lock we can do this safely because unlike those other locks, non-exclusive locks obtained on the event thread
-		// are fundamentally different from those obtained from other threads.
-		// So we can wait for all non-exclusive locks from other threads to be released without needing to concern ourselves
-		// with non-exclusive locks obtained on the event thread, which is the current thread.
-		// if (theSafeReadLock > 0)
-		// throw new IllegalStateException("Attempting to upgrade from a read lock to a write lock");
+		/* Almost all locks share the constraint that it is impossible to safely upgrade from a read (non-exclusive) lock
+		 * to a write (exclusive) lock.
+		 * But in this lock we can do this safely because unlike those other locks, non-exclusive locks obtained on the event thread
+		 * are tracked differently from those obtained from other threads.
+		 * So we can wait for all non-exclusive locks from other threads to be released without needing to concern ourselves
+		 * with non-exclusive locks obtained on the event thread, which is the current thread.
+		 * if (theSafeReadLock > 0)
+		 * throw new IllegalStateException("Attempting to upgrade from a read lock to a write lock");
+		 */
+
 		theWriteLock++;
 		boolean initial = theWriteLock == 1;
 		if (initial && theReadLock.get() != 0) {
 			if (tryOnly)
 				return null; // Can't obtain an exclusive lock immediately as requested
+			/* I had thought that here I could grab the write lock and merely wait for all the external read locks to release,
+			 * without releasing the lock.
+			 * This would give write locks high priority, and only wait for threads that already held read locks to release them.
+			 * The external read lock attempts release the lock while waiting, so I thought this was safe.
+			 * But eventually this system encountered a deadlock, when an external thread was trying to obtain a *reentrant* read lock.
+			 * The thread was releasing the deeper lock while waiting for the write lock to release,
+			 * but the shallower read lock was still held lower down on the stack.
+			 * So actually, I do have to release the write lock here while waiting for read locks to release,
+			 * as this is the best way to allow reentrant read locks to do their work and then be released.
+			 */
 			// Wait for all external read locks to be released
-			// Keep our exclusive lock so no new non-exclusive locks can be obtained. Wait until all current read locks have been released.
 			while (theReadLock.get() != 0) {
+				theWriteLock = 0;
 				try {
 					Thread.sleep(5);
 				} catch (InterruptedException e) {
 				}
+				theWriteLock = 1;
 			}
 		}
 		Transaction t = new WriteLockRelease(super.lock(true, cause));
@@ -158,6 +171,11 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 			throw new IllegalStateException(ThreadConstraint.MOD_ON_WRONG_THREAD);
 		else
 			super.modified();
+	}
+
+	@Override
+	public String toString() {
+		return "Safe on " + getThreadConstraint();
 	}
 
 	class ExtReadLockRelease implements Transaction {
@@ -196,9 +214,13 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 
 	class WriteLockRelease implements Transaction {
 		private final Transaction theSuperTransaction;
+		// This is for debugging
+		// private final Exception theCallSite;
 
 		WriteLockRelease(Transaction superTransaction) {
 			theSuperTransaction = superTransaction;
+			// theCallSite = new Exception();
+			// theCallSite.fillInStackTrace();
 		}
 
 		private boolean isClosed;
@@ -213,8 +235,17 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 		}
 
 		@Override
+		protected void finalize() throws Throwable {
+			if (!isClosed) {
+				System.out.println("Failed to close " + this);
+				// theCallSite.printStackTrace();
+			}
+			super.finalize();
+		}
+
+		@Override
 		public String toString() {
-			return "TCLS write release";
+			return getThreadConstraint() + " TCLS write release";
 		}
 	}
 }

@@ -4,7 +4,15 @@ package org.qommons;
 @FunctionalInterface
 public interface Transaction extends AutoCloseable {
 	/** A transaction that does nothing */
-	static Transaction NONE = () -> {
+	static Transaction NONE = new Transaction() {
+		@Override
+		public void close() {
+		}
+
+		@Override
+		public String toString() {
+			return "NONE";
+		}
 	};
 
 	@Override
@@ -38,5 +46,43 @@ public interface Transaction extends AutoCloseable {
 					t.close();
 			}
 		};
+	}
+
+	/** A Transaction that will only execute its close action the first time it is {@link #close() closed} */
+	public static class ReleaseOnceTransaction implements Transaction {
+		private final Runnable theCloseAction;
+		private boolean isClosed;
+
+		/** @param closeAction The action to take when the transaction is closed */
+		public ReleaseOnceTransaction(Runnable closeAction) {
+			theCloseAction = closeAction;
+		}
+
+		@Override
+		public void close() {
+			if (isClosed)
+				return;
+			synchronized (this) {
+				if (isClosed)
+					return;
+				isClosed = true;
+			}
+			theCloseAction.run();
+		}
+
+		@Override
+		public int hashCode() {
+			return theCloseAction.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof ReleaseOnceTransaction && theCloseAction.equals(((ReleaseOnceTransaction) obj).theCloseAction);
+		}
+
+		@Override
+		public String toString() {
+			return theCloseAction.toString();
+		}
 	}
 }

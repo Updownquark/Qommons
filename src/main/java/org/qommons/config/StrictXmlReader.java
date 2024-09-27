@@ -3,13 +3,7 @@ package org.qommons.config;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
@@ -21,8 +15,8 @@ import org.qommons.io.PositionedContent;
 import org.qommons.io.SimpleXMLParser;
 import org.qommons.io.SimpleXMLParser.XmlParseException;
 import org.qommons.io.TextParseException;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
+import org.qommons.io.XmlSerialWriter;
+import org.w3c.dom.*;
 
 /**
  * Wraps an XML element and allows easier access to its structure. This class also checks the structure as it is used as well as afterward
@@ -569,6 +563,29 @@ public class StrictXmlReader implements Named, Transaction {
 			throw new TextParseException(getPath() + ": Between " + min + " and " + max + " text section"
 				+ ((min == max && max == 1) ? "" : "s") + " expected," + " but found " + text.size(), getNamePosition().getPosition(0));
 		return text;
+	}
+
+	/**
+	 * @param writer The writer to write this elemen'ts content to
+	 * @throws IOException If the XML could not be written
+	 */
+	public void writeTo(XmlSerialWriter.Element writer) throws IOException {
+		for (Map.Entry<String, String> attr : getAllAttributes().entrySet()) {
+			writer.addAttribute(attr.getKey(), attr.getValue());
+		}
+		for (int n = 0; n < theElement.getChildNodes().getLength(); n++) {
+			Node node = theElement.getChildNodes().item(n);
+			if (node instanceof Attr)
+				writer.addAttribute(((Attr) node).getName(), ((Attr) node).getValue());
+			else if (node instanceof Text)
+				writer.addContent(((Text) node).getData());
+			else if (node instanceof Comment)
+				writer.writeComment(((Comment) node).getTextContent());
+			else if (node instanceof CDATASection) {
+				// TODO Not supported by the writer yet
+			} else if (node instanceof Element)
+				writer.child(((Element) node).getNodeName(), child -> new StrictXmlReader(this, (Element) node));
+		}
 	}
 
 	/** @return This element's path under the root */

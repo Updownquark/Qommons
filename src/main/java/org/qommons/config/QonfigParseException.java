@@ -38,14 +38,26 @@ public class QonfigParseException extends Exception {
 
 	@Override
 	public void printStackTrace(PrintStream s) {
-		for (ErrorReporting.Issue issue : theIssues)
+		boolean first = true;
+		for (ErrorReporting.Issue issue : theIssues) {
+			if (first)
+				first = false;
+			else
+				s.println();
 			issue.printStackTrace(s);
+		}
 	}
 
 	@Override
 	public void printStackTrace(PrintWriter s) {
-		for (ErrorReporting.Issue issue : theIssues)
+		boolean first = true;
+		for (ErrorReporting.Issue issue : theIssues) {
+			if (first)
+				first = false;
+			else
+				s.println();
 			issue.printStackTrace(s);
+		}
 	}
 
 	/**

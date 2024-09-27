@@ -3,18 +3,7 @@ package org.qommons.config;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -26,14 +15,8 @@ import org.qommons.MultiInheritanceMap;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterHashSet;
 import org.qommons.collect.BetterSet;
-import org.qommons.io.ErrorReporting;
-import org.qommons.io.FilePosition;
-import org.qommons.io.LocatedFilePosition;
-import org.qommons.io.LocatedPositionedContent;
-import org.qommons.io.PositionedContent;
-import org.qommons.io.SimpleXMLParser;
+import org.qommons.io.*;
 import org.qommons.io.SimpleXMLParser.XmlParseException;
-import org.qommons.io.TextParseException;
 import org.w3c.dom.Comment;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -137,7 +120,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				uses.put(refName, dep);
 			}
 			if (uses.isEmpty())
-				throw new IllegalArgumentException("No toolkit uses declared");
+				throw new IllegalArgumentException("No toolkit uses (xmlns:<namespace>=\"<Toolkit-Name vM.m\") declared");
 			QonfigElementDef rootDef;
 			if (rootReader.getPrefix() != null) {
 				QonfigToolkit primary = uses.get(rootReader.getPrefix());
@@ -1153,12 +1136,16 @@ public class DefaultQonfigParser implements QonfigParser {
 			}
 			builder.setStage(QonfigElementOrAddOn.Builder.Stage.ModifyAttributes);
 			for (StrictXmlReader attr : element.getElements("attr-mod")) {
+				QonfigParseSession attrSession = builder.getSession().at(attr.getNamePosition());
 				String attrName = attr.getAttributeIfExists("name");
 				if (attrName == null) {
-					builder.getSession().error("No name attribute for attribute definition");
+					if (attr.getAttributeIfExists("attr") != null)
+						attrSession.at(attr.getAttributeNamePosition("attr"))
+							.error("Use 'name=' instead of 'attr=' to specify the name of the attribute to modify");
+					else
+						attrSession.error("No name attribute for attribute definition");
 					continue;
 				}
-				QonfigParseSession attrSession = builder.getSession().at(attr.getNamePosition());
 				if (attrName.lastIndexOf('.') < 0) {
 					attrSession.at(attr.getAttributeValuePosition("name")).error("Attribute modification must specify 'element.name'");
 					continue;

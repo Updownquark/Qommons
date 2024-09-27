@@ -696,10 +696,11 @@ public class CollectionUtils {
 		/**
 		 * @param list The list to find the value in
 		 * @param value The value to find
+		 * @param start The index to start looking in the list at
 		 * @param after The index after which to find the value (strictly after)
 		 * @return The index of the element in the list with given value, or -1 if the value could not be found after the given index
 		 */
-		int findElement(List<L> list, R value, int after);
+		int findElement(List<L> list, R value, int start);
 	}
 
 	/**
@@ -718,19 +719,30 @@ public class CollectionUtils {
 		int[] rightToLeft = new int[right.size()];
 		Arrays.fill(leftToRight, -1);
 		Arrays.fill(rightToLeft, -1);
+		int startLeft = 0;
 		int add = right.size(), remove = left.size(), common = 0;
 		int rightIndex = 0;
+		if (finder == null)
+			finder = new DefaultElementFinder<>(leftToRight);
 		for (R r : right) {
-			int leftIndex = -1;
-			do {
-				leftIndex = finder.findElement(left, r, leftIndex);
-			} while (leftIndex >= 0 && leftToRight[leftIndex] >= 0);
+			if (startLeft == leftToRight.length)
+				break;
+			int leftIndex = startLeft;
+			leftIndex = finder.findElement(left, r, leftIndex);
+			while (leftIndex >= 0 && leftToRight[leftIndex] >= 0)
+				leftIndex = finder.findElement(left, r, leftIndex + 1);
+
 			if (leftIndex >= 0) {
 				add--;
 				remove--;
 				common++;
 				rightToLeft[rightIndex] = leftIndex;
 				leftToRight[leftIndex] = rightIndex;
+				if (leftIndex == startLeft) {
+					do {
+						startLeft++;
+					} while (startLeft < leftToRight.length && leftToRight[startLeft] >= 0);
+				}
 			}
 			rightIndex++;
 		}
@@ -749,13 +761,7 @@ public class CollectionUtils {
 	 * @return An adjustment detailing the synchronization goals and the ability to do the adjustment
 	 */
 	public static <L, R extends L> CollectionAdjustment<L, R> synchronize(List<L> left, List<R> right) {
-		return synchronize2(left, right, new ElementFinder<L, R>() {
-			@Override
-			public int findElement(List<L> list, R value, int after) {
-				List<L> search = after < 0 ? list : list.subList(after + 1, list.size());
-				return search.indexOf(value);
-			}
-		});
+		return synchronize2(left, right, null);
 	}
 
 	/**
@@ -772,8 +778,8 @@ public class CollectionUtils {
 		BiPredicate<? super L, ? super R> equals) {
 		return synchronize2(left, right, new ElementFinder<L, R>() {
 			@Override
-			public int findElement(List<L> list, R value, int after) {
-				int index = after + 1;
+			public int findElement(List<L> list, R value, int start) {
+				int index = start;
 				ListIterator<L> iter = list.listIterator(index);
 				while (iter.hasNext()) {
 					if (equals.test(iter.next(), value))
@@ -881,6 +887,28 @@ public class CollectionUtils {
 		 */
 		public void adjust() throws X {
 			theAdjustment.adjust(this, theOrder);
+		}
+	}
+
+	/** An element finder that is slightly more efficient when none other is provided */
+	static class DefaultElementFinder<L> implements ElementFinder<L, Object> {
+		private final int[] leftToRight;
+
+		DefaultElementFinder(int[] leftToRight) {
+			this.leftToRight = leftToRight;
+		}
+
+		@Override
+		public int findElement(List<L> list, Object value, int start) {
+			int index = start;
+			ListIterator<L> iter = list.listIterator(index);
+			while (iter.hasNext()) {
+				L next = iter.next();
+				if (leftToRight[index] < 0 && Objects.equals(next, value))
+					return index;
+				index++;
+			}
+			return -1;
 		}
 	}
 
@@ -1296,6 +1324,12 @@ public class CollectionUtils {
 								adjustLeftIndexes(false, leftTarget);
 								debugMsg = addValue(value, debugMsg);
 							}
+
+							// Because movement consists of 2 operations internally (remove and add),
+							// this operation voids the contract of the iterator, meaning we need to re-obtain it
+							leftIter = theLeft.listIterator(getUpdatedLeftIndex(leftIndex));
+							if (hasLeft)
+								leftIter.next();
 						} else
 							debugMsg = addValue(value, debugMsg);
 						input.targetIndex++;

@@ -161,17 +161,15 @@ public class MutableConfig extends QommonsConfig {
 	 * @return This config, for chaining
 	 */
 	public MutableConfig set(String key, String value) {
-		MutableConfig config;
 		if (value == null) {
-			config = subConfig(key);
-			if (config != null) {
+			for (MutableConfig config : subConfigs(key)) {
 				if (config.subConfigs().length == 0)
 					removeSubConfig(config);
 				else
 					config.setValue(null);
 			}
 		} else {
-			config = getOrCreate(key);
+			MutableConfig config = getOrCreate(key);
 			config.setValue(value);
 		}
 		return this;
@@ -346,6 +344,16 @@ public class MutableConfig extends QommonsConfig {
 	void configChanged(MutableConfig config, String previousValue) {
 		for(ConfigListener listener : theListeners)
 			listener.configChanged(config, previousValue);
+	}
+
+	/**
+	 * Removes all {@link #subConfigs() sub-configs} in this config
+	 * 
+	 * @return This config
+	 */
+	public MutableConfig clear() {
+		setSubConfigs(createConfigArray(0));
+		return this;
 	}
 
 	@Override

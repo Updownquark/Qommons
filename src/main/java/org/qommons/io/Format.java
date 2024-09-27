@@ -414,9 +414,9 @@ public interface Format<T> {
 		String str = text.toString();
 		if ("NaN".equals(str))
 			return Double.NaN;
-		else if ("-Inf".equals(str) || "-Infinity".equals(str))
+		else if ("-Inf".equals(str) || "-Infinity".equals(str) || "-\u221E".equals(str))
 			return Double.NEGATIVE_INFINITY;
-		else if ("Inf".equals(str) || "Infinity".equals(str))
+		else if ("Inf".equals(str) || "Infinity".equals(str) || "\u221E".equals(str))
 			return Double.POSITIVE_INFINITY;
 		// FlexibleFormat.FormatSolution<DecimalComponent> soln = DOUBLE_FORMAT.parse(text, true, true);
 		// double d = 0;
@@ -657,7 +657,6 @@ public interface Format<T> {
 
 	/** Default {@link Long} format */
 	public static class LongFormat implements Format<Long> {
-		private static final String MAX_TEXT = "" + Long.MAX_VALUE;
 		private static final long[] GROUPS = new long[] { //
 			0, 1_000, 1_000_000, 1_000_000_000, 1_000_000_000_000L, 1_000_000_000_000_000L, 1_000_000_000_000_000_000L };
 
@@ -704,9 +703,9 @@ public interface Format<T> {
 				boolean first = true;
 				while (group >= 0) {
 					long dig;
-					if(group==0)
-						dig=val;
-					else{
+					if (group == 0)
+						dig = val;
+					else {
 						dig = val / GROUPS[group];
 						val %= GROUPS[group];
 					}
@@ -732,14 +731,14 @@ public interface Format<T> {
 			}
 			if (text.length() == i)
 				throw new ParseException("Must be an integer value", i);
-			else if (text.length() - i > MAX_TEXT.length())
-				throw new ParseException("Text is too large to be an integer", 0);
 			long value = 0;
 			while (i < text.length()) {
 				char c = text.charAt(i);
-				if (c >= '0' && c <= '9')
+				if (c >= '0' && c <= '9') {
 					value = value * 10 + (c - '0');
-				else if (c != theGroupingSeparator)
+					if (value < 0)
+						throw new ParseException("Text is too large to be an integer", 0);
+				} else if (c != theGroupingSeparator)
 					throw new ParseException("'" + c + "' is not valid for integer text", i);
 				i++;
 			}
@@ -1140,9 +1139,8 @@ public interface Format<T> {
 		private final ThreadLocal<NumberFormat> theDoubleFormat; // DecimalFormat instances are not thread-safe
 
 		SuperDoubleFormat(int significantDigits, int maxIntDigits, boolean intWithPrefixes, int maxNormalExp, int minNormalExp,
-			boolean spaceBetween, String baseUnit,
-			boolean baseUnitRequired, boolean baseUnitCaseSensitive, boolean arePrefixesCaseSensitive,
-			NavigableMap<Double, String> prefixes, Map<String, Double> reversePrefixes) {
+			boolean spaceBetween, String baseUnit, boolean baseUnitRequired, boolean baseUnitCaseSensitive,
+			boolean arePrefixesCaseSensitive, NavigableMap<Double, String> prefixes, Map<String, Double> reversePrefixes) {
 			theSignificantDigits = significantDigits;
 			theMaxIntDigits = maxIntDigits;
 			printIntsWithPrefixes = intWithPrefixes;
@@ -1280,12 +1278,14 @@ public interface Format<T> {
 				if (expNotation)
 					text.append('E').append(exp);
 
-				if (isSpaceBetween && theBaseUnit != null && !theBaseUnit.isEmpty())
-					text.append(' ');
+				if (theBaseUnit != null && !theBaseUnit.isEmpty()) {
+					if (isSpaceBetween)
+						text.append(' ');
 
-				if (prefix != null)
-					text.append(prefix.getValue());
-				text.append(theBaseUnit);
+					if (prefix != null)
+						text.append(prefix.getValue());
+					text.append(theBaseUnit);
+				}
 			}
 		}
 

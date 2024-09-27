@@ -1,7 +1,8 @@
 package org.qommons;
 
+import java.util.AbstractCollection;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedList;
 
 import org.qommons.Lockable.CoreId;
@@ -9,7 +10,7 @@ import org.qommons.Lockable.CoreId;
 /** A lock that keeps track of the causes by which it is write-locked for eventing */
 public class DefaultCausalLock implements CausalLock {
 	private final Transactable theLock;
-	private final LinkedList<Cause> theTransactionCauses;
+	private final LinkedList<CauseSupplier> theTransactionCauses;
 
 	/** @param lock The backing for this lock */
 	public DefaultCausalLock(Transactable lock) {
@@ -34,17 +35,17 @@ public class DefaultCausalLock implements CausalLock {
 	}
 
 	private Transaction addCause(Transaction valueLock, boolean write, Object cause) {
-		Cause tCause;
+		CauseSupplier tCause;
 		Transaction causeFinish;
-		if (cause == null && !theTransactionCauses.isEmpty()) {
+		if (cause == null && (!write || hasCause())) {
 			causeFinish = null;
 			tCause = null;
 		} else if (cause instanceof Cause) {
-			tCause = (Cause) cause;
+			tCause = new ConstantCause((Cause) cause);
 			causeFinish = null;
 		} else if (write) {
-			tCause = Causable.simpleCause(cause);
-			causeFinish = ((Causable) tCause).use();
+			tCause = new LazyCause(cause);
+			causeFinish = ((LazyCause) tCause)::close;
 		} else {
 			tCause = null;
 			causeFinish = null;
@@ -79,9 +80,22 @@ public class DefaultCausalLock implements CausalLock {
 		return t == null ? null : addCause(t, write, cause);
 	}
 
+	private boolean hasCause() {
+		Iterator<CauseSupplier> causeIter = theTransactionCauses.iterator();
+		boolean hasCause = false;
+		while (causeIter.hasNext()) {
+			CauseSupplier cause = causeIter.next();
+			if (cause.isTerminated())
+				causeIter.remove();
+			else
+				hasCause = true;
+		}
+		return hasCause;
+	}
+
 	@Override
 	public Collection<Cause> getCurrentCauses() {
-		return Collections.unmodifiableList(theTransactionCauses);
+		return new CurrentCauses(theTransactionCauses);
 	}
 
 	@Override
@@ -97,5 +111,100 @@ public class DefaultCausalLock implements CausalLock {
 	@Override
 	public int doOptimistically(int init, OptimisticIntOperation operation) {
 		return theLock.doOptimistically(init, operation);
+	}
+
+	private interface CauseSupplier {
+		Cause get();
+
+		boolean isTerminated();
+	}
+
+	static class CurrentCauses extends AbstractCollection<Cause> {
+		private final Collection<CauseSupplier> theCauses;
+
+		CurrentCauses(Collection<CauseSupplier> causes) {
+			theCauses = causes;
+		}
+
+		@Override
+		public Iterator<Cause> iterator() {
+			Iterator<CauseSupplier> causesIter = theCauses.iterator();
+			return new Iterator<Cause>() {
+				@Override
+				public boolean hasNext() {
+					return causesIter.hasNext();
+				}
+
+				@Override
+				public Cause next() {
+					return causesIter.next().get();
+				}
+			};
+		}
+
+		@Override
+		public int size() {
+			return theCauses.size();
+		}
+	}
+
+	static class ConstantCause implements CauseSupplier {
+		private final Cause theCause;
+
+		ConstantCause(Cause cause) {
+			theCause = cause;
+		}
+
+		@Override
+		public Cause get() {
+			return theCause;
+		}
+
+		@Override
+		public boolean isTerminated() {
+			return theCause instanceof Causable && ((Causable) theCause).isTerminated();
+		}
+
+		@Override
+		public String toString() {
+			return theCause.toString();
+		}
+	}
+
+	static class LazyCause implements CauseSupplier, Transaction {
+		private final Object theSource;
+		private Causable theCause;
+		private Transaction theFinish;
+
+		LazyCause(Object source) {
+			theSource = source;
+		}
+
+		@Override
+		public Cause get() {
+			if (theCause == null) {
+				theCause = Causable.simpleCause(theSource);
+				theFinish = theCause.use();
+			}
+			return theCause;
+		}
+
+		@Override
+		public boolean isTerminated() {
+			return theCause != null && theCause.isTerminated();
+		}
+
+		@Override
+		public void close() {
+			if (theFinish != null) {
+				theFinish.close();
+				theFinish = null;
+			}
+		}
+
+		@Override
+		public String toString() {
+			return "LazyCause:" + theSource;
+		}
 	}
 }

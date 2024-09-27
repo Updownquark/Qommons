@@ -29,7 +29,8 @@ public class DynamicCache<T, X extends Throwable> {
 	 * 
 	 * @param <T> The type of the resource
 	 */
-	public interface Resource<T> extends Supplier<T>, Transaction {}
+	public interface Resource<T> extends Supplier<T>, Transaction {
+	}
 
 	private final ExSupplier<T, X> theCreator;
 	private final Consumer<? super T> theDestroyer;
@@ -123,10 +124,10 @@ public class DynamicCache<T, X extends Throwable> {
 	}
 
 	/**
-	 * Purges idle resources older than a given time
+	 * Purges resources that have been idle since before a given time
 	 * 
 	 * @param idledBefore The epoch time before which resources will be deleted
-	 * @return The number of idle resources purged from the cache
+	 * @return The number of idle resources purged from the cache by this call
 	 */
 	public int purgeResources(long idledBefore) {
 		ListenerList.Element<IdleResource<T>> resource = theIdleResourceCache.peekFirst();
@@ -182,6 +183,8 @@ public class DynamicCache<T, X extends Throwable> {
 		// If we can create one, do that
 		if (theLiveResourceCount < theLiveResourceLimit) {
 			T value = theCreator.get();
+			if (value == null)
+				throw new IllegalStateException("The resource creator returned a null value--this is not allowed");
 			theLiveResourceCount++;
 			return new ActiveResource(value);
 		}
@@ -259,14 +262,21 @@ public class DynamicCache<T, X extends Throwable> {
 			 * while items at the end of the cache will be more likely to become stagnant and be purged.
 			 * This will help the cache to maintain only as many resources as it needs to meet demand. */
 			theIdleResourceCache.addFirst(new IdleResource<>(value));
-		}
-		else // There's no place for the resource. Dispose of it.
+		} else // There's no place for the resource. Dispose of it.
 			theDestroyer.accept(value);
 	}
 
+	@Override
+	protected void finalize() throws Throwable {
+		theIdleResourceCache.dumpAndClear(res -> {
+			if (theDestroyer != null)
+				theDestroyer.accept(res.value);
+		});
+		super.finalize();
+	}
+
 	private class ActiveResource implements Resource<T> {
-		private final T theValue;
-		private boolean isClosed;
+		private volatile T theValue;
 
 		ActiveResource(T value) {
 			theValue = value;
@@ -274,22 +284,24 @@ public class DynamicCache<T, X extends Throwable> {
 
 		@Override
 		public T get() {
-			if (isClosed)
+			T value = theValue;
+			if (value == null)
 				throw new IllegalStateException("This resource has been released, use the cache to obtain a new one");
-			return theValue;
+			return value;
 		}
 
 		@Override
 		public void close() {
-			if (!isClosed) {
-				isClosed = true;
-				released(theValue);
-			}
+			T value = theValue;
+			theValue = null;
+			if (value != null)
+				released(value);
 		}
 
 		@Override
 		public String toString() {
-			return String.valueOf(theValue);
+			T value = theValue;
+			return value == null ? "(released resource)" : value.toString();
 		}
 	}
 
@@ -314,7 +326,7 @@ public class DynamicCache<T, X extends Throwable> {
 
 	/** @return A Builder to build a {@link DynamicCache} */
 	public static Builder build() {
-		return build();
+		return new Builder();
 	}
 
 	/**
@@ -358,6 +370,8 @@ public class DynamicCache<T, X extends Throwable> {
 		 * @return This builder
 		 */
 		public B withLiveCacheLimit(int liveCacheLimit) {
+			if (liveCacheLimit < 1)
+				throw new IllegalArgumentException("Live cache limit must be at least 1");
 			theLiveResourceLimit = liveCacheLimit;
 			return (B) this;
 		}
@@ -371,7 +385,8 @@ public class DynamicCache<T, X extends Throwable> {
 		 * @return The new cache
 		 */
 		protected <T, X extends Throwable> DynamicCache<T, X> build(ExSupplier<T, X> creator) {
-			return build(creator, __ -> {});
+			return build(creator, __ -> {
+			});
 		}
 
 		/**

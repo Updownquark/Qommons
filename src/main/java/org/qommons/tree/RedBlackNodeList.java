@@ -388,9 +388,11 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 
 	@Override
 	public void clear() {
-		if (theTree.getRoot() != null)
-			theLocker.modified();
-		theTree.setRoot(null);
+		try (Transaction t = lock(true, null)) {
+			if (theTree.getRoot() != null)
+				theLocker.modified();
+			theTree.setRoot(null);
+		}
 	}
 
 	/**

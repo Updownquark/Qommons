@@ -635,6 +635,41 @@ public class ListenerList<E> {
 		}
 	}
 
+	/**
+	 * Iterates over each element stored in this list. This method does not obey the {@link #addLast(Object, boolean)} or skipNext
+	 * contracts.
+	 * 
+	 * @param action The action to call for each element in the list
+	 */
+	public void forEachElement(Consumer<? super Element<E>> action) {
+		Node node = theTerminal.next;
+		while (node != theTerminal) {
+			try {
+				action.accept(node);
+			} catch (ReentrantNotificationException | AssertionError e) {
+				throw e;
+			} catch (RuntimeException e) {
+				if (SWALLOW_EXCEPTIONS) {
+					// If the action throws an exception, we can't have that gumming up the works
+					// If they want better handling, they can try/catch their own code
+					e.printStackTrace();
+				} else
+					throw e;
+			}
+
+			/* Now we need to get the next value in the list.
+			 * A problem may occur, however, if the list is modified as a result of an action.
+			 * If, for example, an action removes the value it is operating on and and also the next value in the list,
+			 * the current node will still be pointing to the next value, which has been removed.
+			 * We have to find the most recent element that we already called for this action that is still in the list
+			 * and use its next node.
+			 */
+			while (!node.isPresent() && node != theTerminal)
+				node = node.previous;
+			node = node.next;
+		}
+	}
+
 	static int incIterId(int prevId) {
 		int nextId = prevId + 1;
 		if (nextId == -1)

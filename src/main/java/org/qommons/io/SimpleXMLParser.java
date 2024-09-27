@@ -910,7 +910,6 @@ public class SimpleXMLParser {
 		}
 	}
 
-	/** A ParseHandler that writes the XML data to a {@link Writer}, with configurable formatting */
 	public static class ReformatPrinter implements ParseHandler {
 		private final Writer theWriter;
 		private final String theIndent;
@@ -920,11 +919,6 @@ public class SimpleXMLParser {
 		private int theLineLength;
 		private boolean isElementMultiLine;
 
-		/**
-		 * @param writer The writer to write the XML data to
-		 * @param indent The indent String
-		 * @param maxLineLength The maximum line length configuration. This is not respected absolutely, but used as a guide.
-		 */
 		public ReformatPrinter(Writer writer, String indent, int maxLineLength) {
 			theWriter = writer;
 			theIndent = indent;

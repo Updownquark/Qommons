@@ -1,17 +1,12 @@
 package org.qommons;
 
-import java.util.ArrayDeque;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Queue;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import org.qommons.collect.BetterHashSet;
+import org.qommons.collect.CircularArrayList;
 import org.qommons.ex.ExIterable;
-import org.qommons.ex.ExIterator;
 
 /** Utilities dealing with {@link Iterable}s and {@link Iterator}s */
 public class IterableUtils {
@@ -27,6 +22,15 @@ public class IterableUtils {
 		 * @return The value to return from the returned iterator, or null to not accept the value
 		 */
 		V accept(T value);
+	}
+
+	/**
+	 * @param start The index to start at (inclusive)
+	 * @param end The index to end at (exclusive)
+	 * @return An iterable that iterates through integers starting at the given start and incrementing or decrementing until the given end
+	 */
+	public static Iterable<Integer> indexIterator(int start, int end) {
+		return () -> new IndexIterator(start, end);
 	}
 
 	/**
@@ -578,8 +582,8 @@ public class IterableUtils {
 	 *         method reuses the list instance returned from the path iterator to save memory, so the consumer of the values must process or
 	 *         copy the values it receives.
 	 */
-	public static <T> Iterable<List<T>> combine(Iterator<? extends Iterable<? extends T>> elements) {
-		ExIterator<? extends ExIterable<? extends T, RuntimeException>, RuntimeException> exArg = ExIterator.fromIterator(elements)
+	public static <T> Iterable<List<T>> combine(Iterable<? extends Iterable<? extends T>> elements) {
+		ExIterable<? extends ExIterable<? extends T, RuntimeException>, RuntimeException> exArg = ExIterable.fromIterable(elements)
 			.map(elIter -> ExIterable.fromIterable(elIter));
 		ExIterable<List<T>, RuntimeException> exRes = ExIterable.combine(exArg);
 		return exRes.unsafe();
@@ -664,6 +668,126 @@ public class IterableUtils {
 			adjuster.added(laIter2.current, laIter1.previous, null);
 
 			laIter2.proceed();
+		}
+	}
+
+	public static <T> Iterable<List<T>> fullPermutation(Iterable<T> source, int maxDim, boolean distinct, boolean withEmpty) {
+		if (maxDim < 0)
+			throw new IllegalArgumentException("Maximum dimension must not be negative: " + maxDim);
+		return () -> new Iterator<List<T>>() {
+			private final CircularArrayList<Iterator<T>> theIterators = new CircularArrayList<>();
+			private int theCurrentDim;
+			private final Deque<T> theValues;
+			private boolean knownHasNext;
+
+			{
+				if (distinct)
+					theValues = BetterHashSet.build().build();
+				else
+					theValues = CircularArrayList.build().build();
+				if (withEmpty)
+					knownHasNext = true;
+				else
+					knownHasNext = hasNext();
+			}
+
+			@Override
+			public boolean hasNext() {
+				if (knownHasNext)
+					return true;
+				else if (theCurrentDim == 0) {
+					if (maxDim == 0)
+						return false;
+					theCurrentDim = 1;
+					// Special one-time test for if the source is empty
+					Iterator<T> iter = source.iterator();
+					theIterators.add(iter);
+					if (!iter.hasNext())
+						return false;
+					theValues.add(iter.next());
+					return (knownHasNext = true);
+				}
+
+				do {
+					// Remove spent iterators
+					while (!theIterators.isEmpty()) {
+						if (theValues.size() == theIterators.size())
+							theValues.removeLast();
+						if (theIterators.getLast().hasNext()) {
+							break;
+						} else {
+							theIterators.removeLast();
+						}
+					}
+
+					if (theIterators.isEmpty()) {// No more permutations in the current dimension. Next dimension.
+						if (theCurrentDim == maxDim)
+							return false;
+						theCurrentDim++;
+					}
+
+					// Fill out the iterators up to the current dimension
+					while (theIterators.size() < theCurrentDim) {
+						Iterator<T> iter = source.iterator();
+						theIterators.add(iter);
+					}
+					if (theIterators.size() == theCurrentDim)
+						knownHasNext = fillValues();
+				} while (!knownHasNext);
+				return knownHasNext;
+			}
+
+			private boolean fillValues() {
+				while (theValues.size() < theIterators.size()) {
+					if (!theIterators.get(theValues.size()).hasNext())
+						return false;
+					else if (!theValues.add(theIterators.get(theValues.size()).next()))
+						return false;
+				}
+				return true;
+			}
+
+			@Override
+			public List<T> next() {
+				if (!knownHasNext) {
+					if (!hasNext())
+						throw new NoSuchElementException();
+				}
+				knownHasNext = false;
+				return QommonsUtils.unmodifiableCopy(theValues);
+			}
+		};
+	}
+
+	static class IndexIterator implements Iterator<Integer> {
+		private final int theEnd;
+		private final boolean isIncrement;
+		private int theNextValue;
+
+		IndexIterator(int start, int end) {
+			theEnd = end;
+			isIncrement = end >= start;
+			theNextValue = start;
+		}
+
+		@Override
+		public boolean hasNext() {
+			if (isIncrement)
+				return theNextValue < theEnd;
+			else
+				return theNextValue > theEnd;
+		}
+
+		@Override
+		public Integer next() {
+			if (!hasNext())
+				throw new NoSuchElementException("Index iteration reached " + theEnd);
+			int value = theNextValue;
+			if (isIncrement)
+				theNextValue++;
+			else
+				theNextValue--;
+			return value;
 		}
 	}
 }

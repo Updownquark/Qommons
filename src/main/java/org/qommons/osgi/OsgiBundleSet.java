@@ -9,7 +9,9 @@ import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.security.CodeSource;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -24,6 +26,7 @@ import javax.swing.Timer;
 
 import org.qommons.*;
 import org.qommons.collect.BetterHashSet;
+import org.qommons.collect.BetterList;
 import org.qommons.collect.CollectionElement;
 import org.qommons.config.QommonsConfig;
 import org.qommons.ex.CheckedExceptionWrapper;
@@ -108,7 +111,7 @@ public class OsgiBundleSet {
 		 */
 		public Bundle(OsgiBundleSet bundleSet, BetterFile bundle, BetterFile nativeDir, OsgiManifest manifest) {
 			super(new URL[0]);
-			theBundleSet=bundleSet;
+			theBundleSet = bundleSet;
 			theLastModified = bundle.at(MANIFEST_PATH).getLastModified();
 			theName = manifest.get("Bundle-SymbolicName", true).getValue();
 			theVersion = Version.parse(manifest.get("Bundle-Version", true).getValue());
@@ -211,7 +214,7 @@ public class OsgiBundleSet {
 								file = nativeDir.at(toString() + "/" + path);
 							}
 							if (file == null || !file.exists()) {
-								file=theBundle.at(path);
+								file = theBundle.at(path);
 							}
 							int lastDot = file.getName().lastIndexOf('.');
 							String libName = lastDot < 0 ? file.getName() : file.getName().substring(0, lastDot);
@@ -332,10 +335,22 @@ public class OsgiBundleSet {
 			bundlePath.remove(this);
 			return theExportedPackages;
 		}
-		
+
 		/** @return The bundle set that loaded this bundle */
 		public OsgiBundleSet getBundleSet() {
 			return theBundleSet;
+		}
+
+		@Override
+		public URL[] getURLs() {
+			List<URL> urls = new ArrayList<>();
+			for (ResourceSource src : theClassPath.values()) {
+				try {
+					urls.addAll(src.getRoots());
+				} catch (MalformedURLException e) {
+				}
+			}
+			return urls.toArray(new URL[urls.size()]);
 		}
 
 		@Override
@@ -636,7 +651,8 @@ public class OsgiBundleSet {
 					loaded = getPreviouslyLoaded(className);
 					if (loaded == null) {
 						try {
-							loaded = new LoadedClass(defineClass(className, buffer.toByteArray(), 0, buffer.length()), this);
+							loaded = new LoadedClass(defineClass(className, buffer.toByteArray(), 0, buffer.length(), //
+								new CodeSource(res, new java.security.cert.Certificate[0])), this);
 						} catch (ClassFormatError | SecurityException e) {
 							throw e;
 						}
@@ -676,7 +692,7 @@ public class OsgiBundleSet {
 			if (name.isEmpty()) {
 				return null;
 			} else if (name.charAt(0) == '/') {
-				name=name.substring(1);
+				name = name.substring(1);
 			}
 			int lastSlash = name.lastIndexOf('/');
 			String pkg = lastSlash < 0 ? "" : name.substring(0, lastSlash);
@@ -725,9 +741,9 @@ public class OsgiBundleSet {
 				return definePackage(name, //
 					theName, //
 					version, vendor == null ? null : vendor.getValue(), //
-						bundleName == null ? null : bundleName.getValue(), //
-							version, //
-							bundleName == null ? null : bundleName.getValue(), null);
+					bundleName == null ? null : bundleName.getValue(), //
+					version, //
+					bundleName == null ? null : bundleName.getValue(), null);
 			} else {
 				return super.getPackage(name);
 			}
@@ -817,6 +833,12 @@ public class OsgiBundleSet {
 	/** Represents a set of resources in a package */
 	public interface ResourceSource extends Named {
 		/**
+		 * @return The root(s) of this resource source
+		 * @throws MalformedURLException If this source's root(s) could not be expressed as a URL
+		 */
+		BetterList<URL> getRoots() throws MalformedURLException;
+
+		/**
 		 * @param name The name of the file
 		 * @return The location of the file in this package, or null if not found
 		 */
@@ -856,6 +878,11 @@ public class OsgiBundleSet {
 		@Override
 		public String getName() {
 			return theName;
+		}
+
+		@Override
+		public BetterList<URL> getRoots() throws MalformedURLException {
+			return BetterList.of(new URL(theFile.toUrl(new StringBuilder()).toString()));
 		}
 
 		@Override
@@ -937,6 +964,14 @@ public class OsgiBundleSet {
 		@Override
 		public String getName() {
 			return thePackages.get(0).getName();
+		}
+
+		@Override
+		public BetterList<URL> getRoots() throws MalformedURLException {
+			List<URL> roots = new ArrayList<>();
+			for (ResourceSource pkg : thePackages)
+				roots.addAll(pkg.getRoots());
+			return BetterList.of(roots);
 		}
 
 		@Override
@@ -1077,27 +1112,27 @@ public class OsgiBundleSet {
 		}
 		return null;
 	}
-	
+
 	/**
 	 * @param name The name of the package to get
 	 * @param version The range of versions acceptable for the package
 	 * @return All packages exported in this bundle set with the given name and a version in the given range
 	 */
-	public Set<ExportedPackage> getExportedPackages(String name, Range<Version> version){
+	public Set<ExportedPackage> getExportedPackages(String name, Range<Version> version) {
 		name = name.replaceAll("\\.", "/");
 		Set<ExportedPackage> packages = theExportedPackages.get(name);
 		if (packages == null) {
 			return null;
 		}
-		Set<ExportedPackage> ret=null;
+		Set<ExportedPackage> ret = null;
 		for (ExportedPackage pkg : packages) {
 			if (version.contains(pkg.getVersion())) {
-				if(ret==null)
-					ret=new LinkedHashSet<>();
+				if (ret == null)
+					ret = new LinkedHashSet<>();
 				ret.add(pkg);
 			}
 		}
-		return ret==null ? Collections.emptySet() : Collections.unmodifiableSet(ret);
+		return ret == null ? Collections.emptySet() : Collections.unmodifiableSet(ret);
 	}
 
 	/**
@@ -1197,14 +1232,15 @@ public class OsgiBundleSet {
 
 	/**
 	 * @param className The name of the class to load
+	 * @param init Whether to initialize the loaded class immediately
 	 * @return The loaded class
 	 * @throws ClassNotFoundException If no bundle in this bundle set contains the definition of the given class
 	 */
-	public Class<?> loadClass(String className) throws ClassNotFoundException {
+	public Class<?> loadClass(String className, boolean init) throws ClassNotFoundException {
 		if (!isInitialized) {
 			init();
 		}
-		String classPath = className.replaceAll("\\.", "/");
+		String classPath = className.replace(".", "/");
 		int lastSlash = classPath.lastIndexOf('/');
 		String pkgName = lastSlash < 0 ? "" : classPath.substring(0, lastSlash);
 		List<Bundle> bundles = theAvailablePackages.get(pkgName);
@@ -1213,8 +1249,12 @@ public class OsgiBundleSet {
 		}
 		classPath += ".class";
 		for (Bundle bundle : bundles) {
-			if (bundle.findResource(classPath) != null)
-				return bundle.loadClass(className);
+			if (bundle.findResource(classPath) != null) {
+				if (init)
+					return Class.forName(className, true, bundle);
+				else
+					return bundle.loadClass(className);
+			}
 		}
 		throw new ClassNotFoundException(className);
 	}
@@ -1259,10 +1299,10 @@ public class OsgiBundleSet {
 		// So we have to assume they'll be using the same version (hopefully it won't ever change) as we have,
 		// and we have to use reflection.
 		// We could improve this code to get the names of the methods we're calling from the class we have some day.
-		
+
 		Class<?> serviceType;
 		try {
-			serviceType = loadClass(dsClassName);
+			serviceType = loadClass(dsClassName, true);
 		} catch (ClassNotFoundException e) {
 			throw new IllegalArgumentException("No such DS service type found: " + dsClassName, e);
 		}
@@ -1297,10 +1337,10 @@ public class OsgiBundleSet {
 			// Populate the system property
 			System.setProperty(CONFIGURATION_SYSTEM_PROPERTY, StringUtils.print(",", configuration, v -> v).toString());
 		}
-		if (progress != null) {
-			progress.setIndeterminate(true);
-			progress.setString("Searching for Service Components");
-		}
+		doProgressAction(progress, p -> {
+			p.setIndeterminate(true);
+			p.setString("Searching for Service Components");
+		});
 		class ComponentConfiguration {
 			final String componentClass;
 			final Map<String, String> componentConfig;
@@ -1363,21 +1403,21 @@ public class OsgiBundleSet {
 			}
 		}
 
-		if (progress != null) {
-			progress.setMaximum(components.size());
-			progress.setValue(0);
-			progress.setIndeterminate(false);
-		}
+		doProgressAction(progress, p -> {
+			p.setMaximum(components.size());
+			p.setValue(0);
+			p.setIndeterminate(false);
+		});
 		for (BiTuple<Bundle, ComponentConfiguration> component : components) {
 			Bundle bundle = component.getValue1();
 			String componentName = component.getValue2().componentClass;
-			if (progress != null) {
+			doProgressAction(progress, p -> {
 				String name = componentName;
 				int dot = name.lastIndexOf('.');
 				if (dot >= 0)
 					name = name.substring(dot + 1);
-				progress.setString("Loading " + name);
-			}
+				p.setString("Loading " + name);
+			});
 			Class<?> componentType;
 			try {
 				componentType = bundle.findClass(componentName);
@@ -1390,13 +1430,12 @@ public class OsgiBundleSet {
 			} catch (IllegalAccessException | IllegalArgumentException e) {
 				throw new IllegalStateException("Could not access " + loadComponentMethod.getName(), e);
 			}
-			if (progress != null)
-				progress.setValue(progress.getValue() + 1);
+			doProgressAction(progress, p -> p.setValue(p.getValue() + 1));
 		}
-		if (progress != null) {
-			progress.setIndeterminate(true);
-			progress.setString("Initializing Service Component Manager");
-		}
+		doProgressAction(progress, p -> {
+			p.setIndeterminate(true);
+			p.setString("Initializing Service Component Manager");
+		});
 		Timer[] timer = new Timer[1];
 		if (progress != null) {
 			timer[0] = new Timer(250, __ -> {
@@ -1443,30 +1482,31 @@ public class OsgiBundleSet {
 	 *        </ul>
 	 */
 	public static void main(String[] clArgs) {
-		JDialog dialog;
-		JProgressBar progress;
+		JDialog[] dialog = new JDialog[1];
+		JProgressBar[] progress = new JProgressBar[1];
 		SplashScreen splashScreen = SplashScreen.getSplashScreen();
-		if (splashScreen != null && splashScreen.isVisible()) {
-			progress = new JProgressBar();
-			dialog = new JDialog();
+		boolean withProgress = splashScreen != null && splashScreen.isVisible();
+		if (withProgress && splashScreen != null) {
 			try {
 				EventQueue.invokeAndWait(() -> {
-					int progressH = progress.getPreferredSize().height;
-					dialog.setUndecorated(true);
-					dialog.setBounds(splashScreen.getBounds().x, splashScreen.getBounds().y, //
+					progress[0] = new JProgressBar();
+					dialog[0] = new JDialog();
+					int progressH = progress[0].getPreferredSize().height;
+					dialog[0].setUndecorated(true);
+					dialog[0].setBounds(splashScreen.getBounds().x, splashScreen.getBounds().y, //
 						splashScreen.getSize().width, splashScreen.getSize().height + progressH);
 					JLabel image = new JLabel(new ImageIcon(splashScreen.getImageURL()));
 					image.setSize(splashScreen.getSize());
-					progress.setBounds(0, splashScreen.getSize().height, splashScreen.getSize().width, progressH);
-					dialog.getContentPane().setLayout(null);
-					dialog.getContentPane().add(image);
-					dialog.getContentPane().add(progress);
+					progress[0].setBounds(0, splashScreen.getSize().height, splashScreen.getSize().width, progressH);
+					dialog[0].getContentPane().setLayout(null);
+					dialog[0].getContentPane().add(image);
+					dialog[0].getContentPane().add(progress[0]);
 
-					progress.setIndeterminate(true);
-					progress.setStringPainted(true);
-					progress.setString("Parsing Application Configuration");
+					progress[0].setIndeterminate(true);
+					progress[0].setStringPainted(true);
+					progress[0].setString("Parsing Application Configuration");
 
-					dialog.setVisible(true);
+					dialog[0].setVisible(true);
 				});
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
@@ -1476,9 +1516,6 @@ public class OsgiBundleSet {
 				e.printStackTrace();
 				return;
 			}
-		} else {
-			dialog = null;
-			progress = null;
 		}
 		boolean success = false;
 		try {
@@ -1528,36 +1565,33 @@ public class OsgiBundleSet {
 			}
 			Set<String> excludeBundles = new HashSet<>(args.getAll("exclude-bundles", String.class));
 			try {
-				if (progress != null)
-					progress.setString("Searching for application bundles");
+				doProgressAction(progress[0], p -> p.setString("Searching for application bundles"));
 				Set<BetterFile> bundleFiles = new LinkedHashSet<>();
 				for (BetterFile file : args.getAll("osgi-bundles-in", BetterFile.class))
 					bundles.findBundleFilesIn(file, false, bundleFiles);
 				List<? extends BetterFile> firstBundles = args.getAll("osgi-bundle", BetterFile.class);
-				if (progress != null) {
-					progress.setMaximum(firstBundles.size() + bundleFiles.size());
-					progress.setValue(0);
-					progress.setIndeterminate(false);
-				}
+				doProgressAction(progress[0], p -> {
+					p.setMaximum(firstBundles.size() + bundleFiles.size());
+					p.setValue(0);
+					p.setIndeterminate(false);
+				});
 				for (BetterFile file : firstBundles) {
 					String bundleName = file.getName();
 					if (bundleName.endsWith(".jar"))
 						bundleName = bundleName.substring(0, bundleName.length() - 4);
-					if (progress != null)
-						progress.setString("Loading " + bundleName);
+					String name = bundleName;
+					doProgressAction(progress[0], p -> p.setString("Loading " + name));
 					bundles.addBundle(file);
-					if (progress != null)
-						progress.setValue(progress.getValue() + 1);
+					doProgressAction(progress[0], p -> p.setValue(p.getValue() + 1));
 				}
 				for (BetterFile file : bundleFiles) {
 					String bundleName = file.getName();
 					if (bundleName.endsWith(".jar"))
 						bundleName = bundleName.substring(0, bundleName.length() - 4);
-					if (progress != null)
-						progress.setString("Loading " + bundleName);
+					String name = bundleName;
+					doProgressAction(progress[0], p -> p.setString("Loading " + name));
 					bundles.maybeAddBundle(file, bundle -> !excludeBundles.contains(bundle.getName()));
-					if (progress != null)
-						progress.setValue(progress.getValue() + 1);
+					doProgressAction(progress[0], p -> p.setValue(p.getValue() + 1));
 				}
 			} catch (IOException e) {
 				throw new IllegalStateException("Misconfigured bundle set", e);
@@ -1565,28 +1599,28 @@ public class OsgiBundleSet {
 				e.printStackTrace(); // If I don't do it here, the VM may die without ever printing why
 				throw e;
 			}
-			if (progress != null) {
-				progress.setIndeterminate(true);
-				progress.setString("Initializing bundle dependencies");
-			}
+			doProgressAction(progress[0], p -> {
+				p.setIndeterminate(true);
+				p.setString("Initializing bundle dependencies");
+			});
 			bundles.init();
 
 			List<? extends String> preInits = args.getAll("pre-init", String.class);
-			if (progress != null && !preInits.isEmpty()) {
-				progress.setMaximum(preInits.size());
-				progress.setValue(0);
-				progress.setIndeterminate(false);
+			if (!preInits.isEmpty()) {
+				doProgressAction(progress[0], p -> {
+					p.setMaximum(preInits.size());
+					p.setValue(0);
+					p.setIndeterminate(false);
+				});
 			}
 			for (String preInit : preInits) {
-				if (progress != null)
-					progress.setString("Initializing " + preInit);
+				doProgressAction(progress[0], p -> p.setString("Initializing " + preInit));
 				try {
-					bundles.loadClass(preInit);
+					bundles.loadClass(preInit, true);
 				} catch (ClassNotFoundException e) {
 					System.err.println("No such class found: " + preInit);
 				}
-				if (progress != null)
-					progress.setValue(progress.getValue() + 1);
+				doProgressAction(progress[0], p -> p.setValue(p.getValue() + 1));
 			}
 
 			if (args.has("jar")) {
@@ -1613,28 +1647,28 @@ public class OsgiBundleSet {
 						e.printStackTrace();
 					}
 				}
-				if (dialog != null)
+				if (withProgress)
 					System.exit(0); // Process won't die by itself if we've started the EDT
 			} else if (args.get("start-ds") != null) {
 				if (!args.getUnmatched().isEmpty()) {
 					throw new IllegalStateException("Unrecognized arguments: " + args.getUnmatched());
 				}
-				if (progress != null) {
-					progress.setIndeterminate(true);
-					progress.setString("Loading Service Component Manager");
-				}
+				doProgressAction(progress[0], p -> {
+					p.setIndeterminate(true);
+					p.setString("Loading Service Component Manager");
+				});
 				Set<String> configuration = new LinkedHashSet<>(args.getAll("ds-configuration", String.class));
 				Set<String> startComponents = new LinkedHashSet<>(args.getAll("start-components", String.class));
-				bundles.startDS(args.get("start-ds", String.class), configuration, startComponents, progress);
+				bundles.startDS(args.get("start-ds", String.class), configuration, startComponents, progress[0]);
 			} else {
-				if (progress != null) {
-					progress.setIndeterminate(true);
-					progress.setString("Starting application");
-				}
+				doProgressAction(progress[0], p -> {
+					p.setIndeterminate(true);
+					p.setString("Starting application");
+				});
 				String mainClassName = args.get("osgi-main-class", String.class);
 				Class<?> mainClass;
 				try {
-					mainClass = bundles.loadClass(mainClassName);
+					mainClass = bundles.loadClass(mainClassName, true);
 				} catch (ClassNotFoundException e) {
 					throw new IllegalStateException(e.getMessage(), e);
 				}
@@ -1662,12 +1696,17 @@ public class OsgiBundleSet {
 		} catch (Throwable e) {
 			e.printStackTrace();
 		} finally {
-			if (dialog != null) {
-				dialog.setVisible(false);
+			if (dialog[0] != null) {
+				doProgressAction(dialog[0], d -> d.setVisible(false));
 				if (!success)
 					System.exit(1);
 			}
 		}
+	}
+
+	private static <T> void doProgressAction(T progressItem, Consumer<T> action) {
+		if (progressItem != null)
+			EventQueue.invokeLater(() -> action.accept(progressItem));
 	}
 
 	private static Class<?> getExecutorIntf(Class<?> serviceType) {

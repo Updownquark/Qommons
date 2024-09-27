@@ -12,7 +12,7 @@ public interface CausalLock extends Transactable {
 	}
 
 	/** @return The currently active causes of write locks. This value is not unmodifiable for performance purposes. */
-	public Collection<Cause> getCurrentCauses();
+	Collection<Cause> getCurrentCauses();
 
 	/** @return The currently active causes of write locks which are not {@link Causable#isFinished() finished} being fired */
 	default Collection<Cause> getUnfinishedCauses() {

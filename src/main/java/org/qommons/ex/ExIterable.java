@@ -1,12 +1,6 @@
 package org.qommons.ex;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.NoSuchElementException;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -408,8 +402,10 @@ public interface ExIterable<T, E extends Throwable> {
 	 *         copy the values it receives.
 	 */
 	public static <T, E extends Throwable> ExIterable<List<T>, E> combine(
-		ExIterator<? extends ExIterable<? extends T, ? extends E>, ? extends E> elements) {
+		ExIterable<? extends ExIterable<? extends T, ? extends E>, ? extends E> elements) {
 		return new ExIterable<List<T>, E>() {
+			private final ExIterator<? extends ExIterable<? extends T, ? extends E>, ? extends E> theElementIter = elements.iterator();
+
 			@Override
 			public ExIterator<List<T>, E> iterator() {
 				return new ExIterator<List<T>, E>() {
@@ -429,8 +425,8 @@ public interface ExIterable<T, E extends Throwable> {
 
 					private void initialize() throws E {
 						isInitialized = true;
-						if (elements.hasNext()) {
-							ExIterable<? extends T, ? extends E> iterable = elements.next();
+						if (theElementIter.hasNext()) {
+							ExIterable<? extends T, ? extends E> iterable = theElementIter.next();
 							iterables.add(iterable);
 							ExIterator<? extends T, ? extends E> iterator = iterable.iterator();
 							iterators.add(iterator);
@@ -490,8 +486,8 @@ public interface ExIterable<T, E extends Throwable> {
 
 						// After cached iterables exhausted, get new iterables and cache them
 						if (!pathComplete) {
-							while (elements.hasNext()) {
-								ExIterable<? extends T, ? extends E> iterable = elements.next();
+							while (theElementIter.hasNext()) {
+								ExIterable<? extends T, ? extends E> iterable = theElementIter.next();
 								iterables.add(iterable);
 								ExIterator<? extends T, ? extends E> iterator = iterable.iterator();
 								if (!iterator.hasNext()) {

@@ -2,7 +2,7 @@ package org.qommons.collect;
 
 import java.util.function.BooleanSupplier;
 
-/** Provides feedback to an {@link CollectionLockingStrategy.OptimisticIntOperation} about whether the operation is still valid */
+/** Provides feedback to an {@link org.qommons.Transactable.OptimisticIntOperation} about whether the operation is still valid */
 public interface OptimisticContext extends BooleanSupplier {
 	/** @return Whether the current operation is still valid */
 	@Override

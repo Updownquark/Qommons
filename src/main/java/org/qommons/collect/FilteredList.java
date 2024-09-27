@@ -10,17 +10,33 @@ import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
+/**
+ * <p>
+ * A {@link BetterList} backed by another {@link BetterList}. A {@link FilteredList} cannot be modified except by removing elements, and
+ * removing elements from a {@link FilteredList} does not remove them from the source list, but only marks them as removed locally.
+ * </p>
+ * <p>
+ * The inclusion of an element in the source list can be queried via the {@link #isIncluded(int)} method.
+ * </p>
+ * 
+ * @param <T>
+ */
 public class FilteredList<T> implements BetterList<T> {
 	private final BetterList<? extends T> theWrapped;
 	private final BetterBitSet theFilter;
 
+	/** @param filterValues The source list to filter */
 	public FilteredList(BetterList<? extends T> filterValues) {
 		theWrapped = filterValues;
 		theFilter = new BetterBitSet();
 	}
 
+	/**
+	 * @param index The index of the element in the source list to check
+	 * @return Whether the element in the source list at the given index is included in this list
+	 */
 	public boolean isIncluded(int index) {
-		return theFilter.get(index);
+		return !theFilter.get(index);
 	}
 
 	@Override

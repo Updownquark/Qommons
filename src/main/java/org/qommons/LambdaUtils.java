@@ -792,21 +792,40 @@ public class LambdaUtils {
 		}
 	}
 
-	private static abstract class PrintableLambda<L> implements LambdaUtility {
+	/**
+	 * The base class for most of the implementations for printable lambdas in this utility class
+	 * 
+	 * @param <L> The type of lambda this wraps
+	 */
+	public static abstract class PrintableLambda<L> implements LambdaUtility {
 		private final L theLambda;
 		private final Supplier<String> thePrint;
 		private final Object identifier;
 		private final int hashCode;
 
-		PrintableLambda(L lambda, String print, Object identifier) {
+		/**
+		 * @param lambda The wrapped lambda
+		 * @param print The {@link Object#toString()} implementation for this lambda
+		 * @param identifier The identifier for this lambda
+		 */
+		protected PrintableLambda(L lambda, String print, Object identifier) {
 			this(lambda, print != null ? new ConstantSupply(print) : lambda::toString, identifier);
 		}
 
-		PrintableLambda(L lambda, Supplier<String> print) {
+		/**
+		 * @param lambda The wrapped lambda
+		 * @param print The {@link Object#toString()} implementation for this lambda
+		 */
+		protected PrintableLambda(L lambda, Supplier<String> print) {
 			this(lambda, print, null);
 		}
 
-		private PrintableLambda(L lambda, Supplier<String> print, Object identifier) {
+		/**
+		 * @param lambda The wrapped lambda
+		 * @param print The {@link Object#toString()} implementation for this lambda
+		 * @param identifier The identifier for this lambda
+		 */
+		protected PrintableLambda(L lambda, Supplier<String> print, Object identifier) {
 			theLambda = lambda;
 			thePrint = print;
 			this.identifier = identifier instanceof PrintableLambda ? ((PrintableLambda<?>) identifier).identifier : identifier;
@@ -817,14 +836,17 @@ public class LambdaUtils {
 			}
 		}
 
+		/** @return The lambda wrapped by this printable lambda */
 		protected L getLambda() {
 			return theLambda;
 		}
 
+		/** @return This lambda's identifier */
 		protected Object getIdentifier() {
 			return identifier;
 		}
 
+		/** @return This lambda's {@link #toString()} implementation */
 		protected Supplier<String> getPrint() {
 			return thePrint;
 		}

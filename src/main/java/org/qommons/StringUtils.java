@@ -51,6 +51,22 @@ public class StringUtils {
 	public static final Comparator<CharSequence> DISTINCT_NUMBER_TOLERANT = distinctNumberTolerant(true, true);
 
 	/**
+	 * An object comparator that returns the result of {@link #compareNumberTolerant(CharSequence, CharSequence, boolean, boolean)
+	 * compareNumberTolerant}<code>(object1.toString(), object2.toString(), true, true)</code>
+	 */
+	public static final Comparator<Object> TO_STRING_NUMBER_TOLERANT = LambdaUtils.printableComparator(//
+		(obj1, obj2) -> compareNumberTolerant(obj1 == null ? null : obj1.toString(), obj2 == null ? null : obj2.toString(), true, true),
+		() -> "toStringNumberTolerant", null);
+
+	/**
+	 * An enum comparator that returns the result of {@link #compareNumberTolerant(CharSequence, CharSequence, boolean, boolean)
+	 * compareNumberTolerant}<code>(enum1.name(), enum2.name(), true, true)</code>
+	 */
+	public static final Comparator<Enum<?>> ENUM_NAME_NUMBER_TOLERANT = LambdaUtils.printableComparator(//
+		(obj1, obj2) -> compareNumberTolerant(obj1 == null ? null : obj1.name(), obj2 == null ? null : obj2.name(), true, true),
+		() -> "toStringNumberTolerant", null);
+
+	/**
 	 * Compares two strings in such a way that strings with embedded multi-digit numbers in the same position are sorted intuitively.
 	 * 
 	 * @param s1 The first string to compare
