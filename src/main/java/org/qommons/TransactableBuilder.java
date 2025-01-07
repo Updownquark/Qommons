@@ -46,7 +46,7 @@ public interface TransactableBuilder<B extends TransactableBuilder<? extends B>>
 		private String theDescription;
 
 		/** @param defaultDescrip The initial (default) description for objects built with this builder */
-		public Default(String defaultDescrip) {
+		protected Default(String defaultDescrip) {
 			theLocker = DEFAULT_LOCKER;
 			theDescription = defaultDescrip;
 		}

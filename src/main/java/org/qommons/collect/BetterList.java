@@ -690,7 +690,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 * 
 	 * @param <E> The type of values in the list
 	 */
-	class SubList<E> implements BetterList<E> {
+	class SubList<E> extends AbstractIdentifiable implements BetterList<E> {
 		private final BetterList<E> theWrapped;
 		private int theStart;
 		private int theEnd;
@@ -717,7 +717,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public Object getIdentity() {
+		protected Object createIdentity() {
 			// Since this sub-list's start and end values can change as modifications are made via the sub-list,
 			// different sub-lists created from the same base list with the same initial parameters can diverge later.
 			// This means that identity cannot be represented as a function of the wrapped list's identity,
@@ -1415,9 +1415,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	 * 
 	 * @param <E> The type of values in the list
 	 */
-	class ConstantList<E> implements BetterList<E> {
+	class ConstantList<E> extends AbstractIdentifiable implements BetterList<E> {
 		private final List<? extends E> theValues;
-		private Object theIdentity;
 
 		/** @param values The values for this list. The backing list should never be modified. */
 		public ConstantList(List<? extends E> values) {
@@ -1427,17 +1426,14 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		}
 
 		@Override
-		public Object getIdentity() {
-			if (theIdentity == null) {
-				List<Object> identities = QommonsUtils.map(theValues, v -> {
-					if (v instanceof Identifiable)
-						return ((Identifiable) v).getIdentity();
-					else
-						return v;
-				}, true);
-				theIdentity = Identifiable.idFor(identities, identities::toString, identities::hashCode, identities::equals);
-			}
-			return theIdentity;
+		protected Object createIdentity() {
+			List<Object> identities = QommonsUtils.map(theValues, v -> {
+				if (v instanceof Identifiable)
+					return ((Identifiable) v).getIdentity();
+				else
+					return v;
+			}, true);
+			return Identifiable.idFor(identities, identities::toString, identities::hashCode, identities::equals);
 		}
 
 		@Override

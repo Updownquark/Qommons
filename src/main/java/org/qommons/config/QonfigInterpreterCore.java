@@ -202,8 +202,6 @@ public class QonfigInterpreterCore {
 
 		@Override
 		public CoreSession interpretRoot(QonfigElement root) throws QonfigInterpretationException {
-			if (root.getParent() != null)
-				throw new IllegalArgumentException("Not a root");
 			return theInterpreter.interpret(root);
 		}
 
@@ -225,7 +223,8 @@ public class QonfigInterpreterCore {
 					creator = creators == null ? null : (QonfigCreatorHolder<T>) creators.get(asType, ClassMap.TypeMatch.SUB_TYPE);
 				}
 				if (creator == null) {
-					String msg = "No creator registered for element " + as.getName() + " and target type " + asType.getName();
+					String msg = "No creator registered for element " + as.getDeclarer() + ":" + as + " and target type "
+						+ asType.getName();
 					reporting().error(msg);
 					return null;
 				}
@@ -235,7 +234,7 @@ public class QonfigInterpreterCore {
 				else if (theElement.isInstance(creator.element))
 					session = asElement(as);
 				else {
-					String msg = "Element " + theElement + " is not an instance of " + as;
+					String msg = "Element " + theElement + " is not an instance of " + as.getDeclarer() + ":" + as;
 					reporting().error(msg);
 					throw new IllegalStateException(msg);
 				}

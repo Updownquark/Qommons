@@ -185,6 +185,7 @@ public class QonfigToolkit implements Named, SelfDescribed {
 	private final Map<String, QonfigAddOn> theDeclaredAddOns;
 	private final BetterMultiMap<String, QonfigAddOn> theCompiledAddOns;
 	private final List<QonfigAutoInheritance> theDeclaredAutoInheritance;
+	private final MultiInheritanceSet<QonfigAddOn> theUniversalAutoInheritance;
 	private final MultiInheritanceMap<QonfigElementOrAddOn, MultiInheritanceSet<QonfigAddOn>> theTypeAutoInheritance;
 	private final MultiInheritanceMap<QonfigChildDef, MultiInheritanceSet<QonfigAddOn>> theRoleAutoInheritance;
 	private final MultiInheritanceMap<QonfigElementOrAddOn, MultiInheritanceMap<QonfigChildDef, MultiInheritanceSet<QonfigAddOn>>> theTypeAndRoleAutoInheritance;
@@ -222,7 +223,7 @@ public class QonfigToolkit implements Named, SelfDescribed {
 		theLocationString = theLocation != null ? theLocation.toString() : name;
 
 		if (builder != null) {
-			QonfigParseSession session = QonfigParseSession.forRoot(false, this, position);
+			QonfigParseSession session = QonfigParseSession.forRoot(this, position);
 			builder.parseTypes(session);
 
 			Map<String, QonfigValueType.Declared> compiledTypes = new HashMap<>(theDeclaredAttributeTypes);
@@ -273,10 +274,16 @@ public class QonfigToolkit implements Named, SelfDescribed {
 
 			session.throwErrors(location == null ? "Document" : location.toString());
 
+			MultiInheritanceSet<QonfigAddOn> universalAutoInheritance = null;
 			theTypeAutoInheritance = MultiInheritanceMap.create(QonfigElementOrAddOn::isAssignableFrom);
 			theRoleAutoInheritance = MultiInheritanceMap.create(QonfigChildDef::isFulfilledBy);
 			theTypeAndRoleAutoInheritance = MultiInheritanceMap.create(QonfigElementOrAddOn::isAssignableFrom);
 			for (QonfigToolkit dep : theDependencies.values()) {
+				if (!dep.theUniversalAutoInheritance.isEmpty()) {
+					if (universalAutoInheritance == null)
+						universalAutoInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+					universalAutoInheritance.addAll(dep.theUniversalAutoInheritance.values());
+				}
 				for (Map.Entry<QonfigElementOrAddOn, MultiInheritanceSet<QonfigAddOn>> typeInh : dep.theTypeAutoInheritance.entrySet()) {
 					theTypeAutoInheritance.compute(typeInh.getKey(), (t, old) -> {
 						if (old == null)
@@ -312,6 +319,12 @@ public class QonfigToolkit implements Named, SelfDescribed {
 				}
 			}
 			for (QonfigAutoInheritance autoInherit : theDeclaredAutoInheritance) {
+				if (autoInherit.isUniversal()) {
+					if (universalAutoInheritance == null)
+						universalAutoInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+					universalAutoInheritance.addAll(autoInherit.getInheritance().values());
+					continue;
+				}
 				for (QonfigAutoInheritance.AutoInheritTarget target : autoInherit.getTargets()) {
 					if (target.getTarget() != null) {
 						if (target.getRole() != null) {
@@ -345,6 +358,7 @@ public class QonfigToolkit implements Named, SelfDescribed {
 					}
 				}
 			}
+			theUniversalAutoInheritance = MultiInheritanceSet.unmodifiable(universalAutoInheritance);
 		} else { // PLACEHOLDER
 			theDependenciesByDefinition = null;
 			theCompiledElements = null;
@@ -353,6 +367,7 @@ public class QonfigToolkit implements Named, SelfDescribed {
 			theTypeAutoInheritance = null;
 			theRoleAutoInheritance = null;
 			theTypeAndRoleAutoInheritance = null;
+			theUniversalAutoInheritance = null;
 		}
 	}
 
@@ -639,6 +654,10 @@ public class QonfigToolkit implements Named, SelfDescribed {
 			// Normal, happens during building. Means we have to do this the slow way.
 			inheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
 			for (QonfigAutoInheritance inh : theDeclaredAutoInheritance) {
+				if (inh.isUniversal()) {
+					inheritance.addAll(inh.getInheritance().values());
+					continue;
+				}
 				for (AutoInheritTarget aiTarget : inh.getTargets()) {
 					if (aiTarget.applies(target, roles)) {
 						inheritance.addAll(inh.getInheritance().values());
@@ -651,6 +670,10 @@ public class QonfigToolkit implements Named, SelfDescribed {
 			}
 			return MultiInheritanceSet.unmodifiable(inheritance);
 		} else {
+			if (!theUniversalAutoInheritance.isEmpty()) {
+				inheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+				inheritance.addAll(theUniversalAutoInheritance.values());
+			}
 			for (MultiInheritanceSet<QonfigAddOn> autoInherit : theTypeAutoInheritance.getAll(target)) {
 				if (inheritance == null)
 					inheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);

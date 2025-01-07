@@ -629,6 +629,17 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 		}
 
 		@Override
+		public Identifiable alias(String alias) {
+			// Cannot alias this constant
+			return this;
+		}
+
+		@Override
+		public Set<String> getAliases() {
+			return Collections.emptySet();
+		}
+
+		@Override
 		public ThreadConstraint getThreadConstraint() {
 			return ThreadConstraint.NONE;
 		}
@@ -686,9 +697,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 	 * @param <K> The key type of the map
 	 * @param <V> The value type of the map
 	 */
-	class ReversedMap<K, V> implements BetterMap<K, V> {
+	class ReversedMap<K, V> extends AbstractIdentifiable implements BetterMap<K, V> {
 		private final BetterMap<K, V> theWrapped;
-		private Object theIdentity;
 
 		public ReversedMap(BetterMap<K, V> wrapped) {
 			theWrapped = wrapped;
@@ -704,10 +714,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 		}
 
 		@Override
-		public Object getIdentity() {
-			if (theIdentity == null)
-				theIdentity = Identifiable.wrap(theWrapped.getIdentity(), "reverse");
-			return theIdentity;
+		protected Object createIdentity() {
+			return Identifiable.wrap(theWrapped.getIdentity(), "reverse");
 		}
 
 		@Override
@@ -795,9 +803,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 	 * @param <K> The key type of the map
 	 * @param <V> The value type of the map
 	 */
-	class BetterEntrySet<K, V> implements BetterSet<Map.Entry<K, V>> {
+	class BetterEntrySet<K, V> extends AbstractIdentifiable implements BetterSet<Map.Entry<K, V>> {
 		private final BetterMap<K, V> theMap;
-		private Object theIdentity;
 
 		public BetterEntrySet(BetterMap<K, V> map) {
 			theMap = map;
@@ -813,10 +820,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 		}
 
 		@Override
-		public Object getIdentity() {
-			if (theIdentity == null)
-				theIdentity = Identifiable.wrap(theMap.getIdentity(), "entrySet");
-			return theIdentity;
+		protected Object createIdentity() {
+			return Identifiable.wrap(theMap.getIdentity(), "entrySet");
 		}
 
 		@Override
@@ -1154,9 +1159,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 	 * @param <K> The key type of the map
 	 * @param <V> The value type of the map
 	 */
-	class BetterMapValueCollection<K, V> implements BetterCollection<V> {
+	class BetterMapValueCollection<K, V> extends AbstractIdentifiable implements BetterCollection<V> {
 		private final BetterMap<K, V> theMap;
-		private Object theIdentity;
 
 		public BetterMapValueCollection(BetterMap<K, V> map) {
 			theMap = map;
@@ -1172,10 +1176,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 		}
 
 		@Override
-		public Object getIdentity() {
-			if (theIdentity == null)
-				theIdentity = Identifiable.wrap(theMap.getIdentity(), "values");
-			return theIdentity;
+		protected Object createIdentity() {
+			return Identifiable.wrap(theMap.getIdentity(), "values");
 		}
 
 		@Override
@@ -1323,7 +1325,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 	 * @param <K> The key type of the map
 	 * @param <V> The value type of the map
 	 */
-	class SingletonMap<K, V> implements BetterMap<K, V> {
+	class SingletonMap<K, V> extends AbstractIdentifiable implements BetterMap<K, V> {
 		private final K theKey;
 		private final V theValue;
 		private final Entry theEntry;
@@ -1335,7 +1337,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 		}
 
 		@Override
-		public Object getIdentity() {
+		protected Object createIdentity() {
 			return Identifiable.baseId("BetterMap", new BetterMapEntryImpl<>(theKey, theValue));
 		}
 
@@ -1361,7 +1363,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 
 		@Override
 		public BetterSet<K> keySet() {
-			return new KeySet();
+			return new BetterSet.SingletonSet<>(theKey);
 		}
 
 		@Override
@@ -1503,247 +1505,6 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 			@Override
 			public String toString() {
 				return theEntry.toString();
-			}
-		}
-
-		class KeySet implements BetterSet<K> {
-			@Override
-			public CollectionElement<K> getOrAdd(K value, ElementId after, ElementId before, boolean first, Runnable preAdd,
-				Runnable postAdd) {
-				return getElement(value, first);
-			}
-
-			@Override
-			public boolean isConsistent(ElementId element) {
-				return true;
-			}
-
-			@Override
-			public boolean checkConsistency() {
-				return true;
-			}
-
-			@Override
-			public <X> boolean repair(ElementId element, RepairListener<K, X> listener) {
-				return false;
-			}
-
-			@Override
-			public <X> boolean repair(RepairListener<K, X> listener) {
-				return false;
-			}
-
-			@Override
-			public CollectionElement<K> getElement(K value, boolean first) {
-				if (Objects.equals(theKey, value))
-					return new Element();
-				else
-					return null;
-			}
-
-			@Override
-			public CollectionElement<K> getElement(ElementId id) {
-				if (id == theEntry.getElementId())
-					return new Element();
-				else
-					throw new NoSuchElementException(id.toString());
-			}
-
-			@Override
-			public CollectionElement<K> getTerminalElement(boolean first) {
-				return new Element();
-			}
-
-			@Override
-			public CollectionElement<K> getAdjacentElement(ElementId elementId, boolean next) {
-				getElement(elementId); // Check that it's our element
-				return null;
-			}
-
-			@Override
-			public MutableCollectionElement<K> mutableElement(ElementId id) {
-				getElement(id); // check that it's our element
-				return new MutableElement();
-			}
-
-			@Override
-			public BetterList<CollectionElement<K>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
-				if (sourceEl != theEntry.getElementId())
-					return BetterList.empty();
-				if (sourceCollection == this)
-					return BetterList.of(new Element());
-				return BetterList.empty();
-			}
-
-			@Override
-			public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
-				if (localElement != theEntry.getElementId())
-					return BetterList.empty();
-				if (sourceCollection == this)
-					return BetterList.of(theEntry.getElementId());
-				return BetterList.empty();
-			}
-
-			@Override
-			public ElementId getEquivalentElement(ElementId equivalentEl) {
-				if (equivalentEl == theEntry.getElementId())
-					return equivalentEl;
-				return null;
-			}
-
-			@Override
-			public String canAdd(K value, ElementId after, ElementId before) {
-				if (Objects.equals(theKey, value))
-					return null;
-				return StdMsg.UNSUPPORTED_OPERATION;
-			}
-
-			@Override
-			public CollectionElement<K> addElement(K value, ElementId after, ElementId before, boolean first)
-				throws UnsupportedOperationException, IllegalArgumentException {
-				if (Objects.equals(theKey, value))
-					return null;
-				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-			}
-
-			@Override
-			public String canMove(ElementId valueEl, ElementId after, ElementId before) {
-				if (after != null && valueEl.compareTo(after) < 0)
-					return StdMsg.UNSUPPORTED_OPERATION;
-				else if (before != null && valueEl.compareTo(before) > 0)
-					return StdMsg.UNSUPPORTED_OPERATION;
-				else
-					return null;
-			}
-
-			@Override
-			public CollectionElement<K> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
-				throws UnsupportedOperationException, IllegalArgumentException {
-				String msg = canMove(valueEl, after, before);
-				if (msg != null)
-					throw new UnsupportedOperationException(msg);
-				return getElement(valueEl);
-			}
-
-			@Override
-			public void clear() {
-			}
-
-			@Override
-			public int size() {
-				return 1;
-			}
-
-			@Override
-			public boolean isEmpty() {
-				return false;
-			}
-
-			@Override
-			public Transaction lock(boolean write, Object cause) {
-				return Transaction.NONE;
-			}
-
-			@Override
-			public Transaction tryLock(boolean write, Object cause) {
-				return Transaction.NONE;
-			}
-
-			@Override
-			public CoreId getCoreId() {
-				return CoreId.EMPTY;
-			}
-
-			@Override
-			public Object getIdentity() {
-				return Identifiable.wrap(SingletonMap.this.getIdentity(), "keySet");
-			}
-
-			@Override
-			public Collection<Cause> getCurrentCauses() {
-				return Collections.emptyList();
-			}
-
-			@Override
-			public long getStamp() {
-				return 0;
-			}
-
-			@Override
-			public ThreadConstraint getThreadConstraint() {
-				return ThreadConstraint.NONE;
-			}
-
-			@Override
-			public <T> T[] toArray(T[] a) {
-				if (a.length == 0)
-					a = Arrays.copyOf(a, 1);
-				a[0] = (T) theKey;
-				return a;
-			}
-
-			@Override
-			public int hashCode() {
-				return BetterSet.hashCode(this);
-			}
-
-			@Override
-			public boolean equals(Object obj) {
-				return BetterSet.equals(this, obj);
-			}
-
-			@Override
-			public String toString() {
-				return BetterSet.toString(this);
-			}
-
-			class Element implements CollectionElement<K> {
-				@Override
-				public ElementId getElementId() {
-					return theEntry.getElementId();
-				}
-
-				@Override
-				public K get() {
-					return theKey;
-				}
-
-				@Override
-				public String toString() {
-					return String.valueOf(theKey);
-				}
-			}
-
-			class MutableElement extends Element implements MutableCollectionElement<K> {
-				@Override
-				public BetterCollection<K> getCollection() {
-					return KeySet.this;
-				}
-
-				@Override
-				public String isEnabled() {
-					return StdMsg.UNSUPPORTED_OPERATION;
-				}
-
-				@Override
-				public String isAcceptable(K value) {
-					return StdMsg.UNSUPPORTED_OPERATION;
-				}
-
-				@Override
-				public void set(K value) throws UnsupportedOperationException, IllegalArgumentException {
-					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-				}
-
-				@Override
-				public String canRemove() {
-					return StdMsg.UNSUPPORTED_OPERATION;
-				}
-
-				@Override
-				public void remove() throws UnsupportedOperationException {
-					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-				}
 			}
 		}
 	}

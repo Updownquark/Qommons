@@ -6,6 +6,7 @@ import java.util.NoSuchElementException;
 import java.util.function.Function;
 
 import org.qommons.Identifiable;
+import org.qommons.Identifiable.AbstractIdentifiable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
@@ -19,7 +20,7 @@ import org.qommons.collect.ValueStoredCollection.RepairListener;
  * 
  * @param <E> The type of values in the list
  */
-public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
+public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implements TreeBasedList<E> {
 	/**
 	 * @param <E> The type of elements for the list
 	 * @param <L> The type of the list
@@ -55,7 +56,6 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 
 	private final RedBlackTree<E> theTree;
 	private final CollectionLockingStrategy theLocker;
-	private final Object theIdentity;
 
 	/**
 	 * Creates a list
@@ -66,7 +66,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	public RedBlackNodeList(Function<Object, CollectionLockingStrategy> locker, String description) {
 		theLocker = locker.apply(this);
 		theTree = new RedBlackTree<>();
-		theIdentity = Identifiable.baseId(description, this);
+		initIdentity(Identifiable.baseId(description, this));
 	}
 
 	/**
@@ -78,7 +78,7 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	protected RedBlackNodeList(Function<Object, CollectionLockingStrategy> locker, Object identity) {
 		theLocker = locker.apply(this);
 		theTree = new RedBlackTree<>();
-		theIdentity = identity;
+		initIdentity(identity);
 	}
 
 	/**
@@ -114,8 +114,8 @@ public abstract class RedBlackNodeList<E> implements TreeBasedList<E> {
 	}
 
 	@Override
-	public Object getIdentity() {
-		return theIdentity;
+	protected Object createIdentity() {
+		throw new IllegalStateException("Should have been initialized");
 	}
 
 	@Override

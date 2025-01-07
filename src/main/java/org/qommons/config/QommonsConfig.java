@@ -4,12 +4,14 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.qommons.io.Format;
 import org.qommons.io.SimpleXMLParser;
 import org.qommons.io.TextParseException;
 import org.w3c.dom.Element;
@@ -353,8 +355,8 @@ public abstract class QommonsConfig implements Cloneable {
 		if(ret == null)
 			return def;
 		try {
-			return Integer.parseInt(ret);
-		} catch(NumberFormatException e) {
+			return Format.INT.parse(ret);
+		} catch (ParseException e) {
 			throw new IllegalArgumentException("Value of property " + key + " (" + ret + ") is not an integer", e);
 		}
 	}
@@ -371,8 +373,8 @@ public abstract class QommonsConfig implements Cloneable {
 		if (ret == null)
 			return def;
 		try {
-			return Long.parseLong(ret);
-		} catch (NumberFormatException e) {
+			return Format.LONG.parse(ret);
+		} catch (ParseException e) {
 			throw new IllegalArgumentException("Value of property " + key + " (" + ret + ") is not a long integer", e);
 		}
 	}

@@ -38,7 +38,6 @@ import org.w3c.dom.Node;
  * For uses that do not require schema validation in the parser, this class is a nice alternative. As a bonus, it is not subject to many
  * vulnerabilities that typical XML parsers are susceptible to due to their ability to pull in files as directed by the XML data.
  * </p>
- * </p>
  */
 public class SimpleXMLParser {
 	/** The name of the version attribute for the XML declaration */
@@ -910,6 +909,7 @@ public class SimpleXMLParser {
 		}
 	}
 
+	/** A parse handler that writes the XML content to another stream, re-formatting it with indents and new lines */
 	public static class ReformatPrinter implements ParseHandler {
 		private final Writer theWriter;
 		private final String theIndent;
@@ -919,6 +919,11 @@ public class SimpleXMLParser {
 		private int theLineLength;
 		private boolean isElementMultiLine;
 
+		/**
+		 * @param writer The stream to write the XML to
+		 * @param indent The indent string to reformat with
+		 * @param maxLineLength The max line length to use to wrap elements onto new lines
+		 */
 		public ReformatPrinter(Writer writer, String indent, int maxLineLength) {
 			theWriter = writer;
 			theIndent = indent;

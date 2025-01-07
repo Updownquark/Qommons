@@ -878,9 +878,8 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 *
 	 * @param <E> The type of elements in the collection
 	 */
-	class ReversedCollection<E> implements BetterCollection<E> {
+	class ReversedCollection<E> extends AbstractIdentifiable implements BetterCollection<E> {
 		private final BetterCollection<E> theWrapped;
-		private Object theIdentity;
 
 		protected ReversedCollection(BetterCollection<E> wrap) {
 			theWrapped = wrap;
@@ -896,10 +895,8 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public Object getIdentity() {
-			if (theIdentity == null)
-				theIdentity = Identifiable.wrap(theWrapped.getIdentity(), "reverse");
-			return theIdentity;
+		protected Object createIdentity() {
+			return Identifiable.wrap(theWrapped.getIdentity(), "reverse");
 		}
 
 		@Override
@@ -1072,6 +1069,17 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
+		public Identifiable alias(String alias) {
+			// Can't alias this constant
+			return this;
+		}
+
+		@Override
+		public Set<String> getAliases() {
+			return Collections.emptySet();
+		}
+
+		@Override
 		public ThreadConstraint getThreadConstraint() {
 			return ThreadConstraint.NONE;
 		}
@@ -1203,6 +1211,250 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		@Override
 		public String toString() {
 			return "[]";
+		}
+	}
+
+	/**
+	 * An immutable {@link BetterCollection} with a single element
+	 * 
+	 * @param <E> The type of the collection
+	 */
+	class SingletonCollection<E> extends AbstractIdentifiable implements BetterCollection<E> {
+		private final SingletonElement theElement;
+
+		/** @param value The value for the collection's only element */
+		public SingletonCollection(E value) {
+			theElement = new SingletonElement(value);
+		}
+
+		@Override
+		protected Object createIdentity() {
+			return Identifiable.baseId("singleton(" + theElement.get() + ")", theElement.get());
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return ThreadConstraint.NONE;
+		}
+
+		@Override
+		public boolean isEmpty() {
+			return false;
+		}
+
+		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return Collections.emptyList();
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return Transaction.NONE;
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, Object cause) {
+			return Transaction.NONE;
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return CoreId.EMPTY;
+		}
+
+		@Override
+		public long getStamp() {
+			return 0;
+		}
+
+		@Override
+		public int size() {
+			return 1;
+		}
+
+		@Override
+		public CollectionElement<E> getElement(E value, boolean first) {
+			if (Objects.equals(theElement.get(), value))
+				return theElement;
+			return null;
+		}
+
+		@Override
+		public CollectionElement<E> getElement(ElementId id) {
+			if (theElement.getElementId() == id)
+				return theElement;
+			else
+				throw new NoSuchElementException(String.valueOf(id));
+		}
+
+		@Override
+		public CollectionElement<E> getTerminalElement(boolean first) {
+			return theElement;
+		}
+
+		@Override
+		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
+			if (theElement.getElementId() == elementId)
+				return null;
+			else
+				throw new NoSuchElementException(String.valueOf(elementId));
+		}
+
+		@Override
+		public MutableCollectionElement<E> mutableElement(ElementId id) {
+			if (theElement.getElementId() == id)
+				return theElement;
+			else
+				throw new NoSuchElementException(String.valueOf(id));
+		}
+
+		@Override
+		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this) {
+				if (sourceEl == theElement.getElementId())
+					return BetterList.of(theElement);
+				throw new NoSuchElementException(sourceEl.toString());
+			}
+			return BetterList.empty();
+		}
+
+		@Override
+		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
+			if (sourceCollection == this) {
+				if (localElement == theElement.getElementId())
+					return BetterList.of(localElement);
+				throw new NoSuchElementException(localElement.toString());
+			}
+			return BetterList.empty();
+		}
+
+		@Override
+		public ElementId getEquivalentElement(ElementId equivalentEl) {
+			if (theElement.getElementId() == equivalentEl)
+				return equivalentEl;
+			return null;
+		}
+
+		@Override
+		public String canAdd(E value, ElementId after, ElementId before) {
+			return StdMsg.UNSUPPORTED_OPERATION;
+		}
+
+		@Override
+		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return null;
+		}
+
+		@Override
+		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
+			if (valueEl != theElement.getElementId())
+				throw new NoSuchElementException(valueEl.toString());
+			return null;
+		}
+
+		@Override
+		public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			if (valueEl != theElement.getElementId())
+				throw new NoSuchElementException(valueEl.toString());
+			return theElement;
+		}
+
+		@Override
+		public void clear() {
+		}
+
+		@Override
+		public String toString() {
+			return new StringBuilder().append('[').append(theElement.get()).append(']').toString();
+		}
+
+		class SingletonElement implements MutableCollectionElement<E> {
+			private final SingletonElementId<E> theId;
+
+			SingletonElement(E value) {
+				theId = new SingletonElementId<>(value);
+			}
+
+			@Override
+			public int compareTo(CollectionElement<E> o) {
+				if (o == this)
+					return 0;
+				else
+					throw new IllegalArgumentException("Cannot compare elements from different collections (" + this + " and " + o + ")");
+			}
+
+			@Override
+			public ElementId getElementId() {
+				return theId;
+			}
+
+			@Override
+			public E get() {
+				return theId.theValue;
+			}
+
+			@Override
+			public BetterCollection<E> getCollection() {
+				return SingletonCollection.this;
+			}
+
+			@Override
+			public String isEnabled() {
+				return StdMsg.UNSUPPORTED_OPERATION;
+			}
+
+			@Override
+			public String isAcceptable(E value) {
+				return StdMsg.UNSUPPORTED_OPERATION;
+			}
+
+			@Override
+			public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			}
+
+			@Override
+			public String canRemove() {
+				return StdMsg.UNSUPPORTED_OPERATION;
+			}
+
+			@Override
+			public void remove() throws UnsupportedOperationException {
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			}
+
+			@Override
+			public String toString() {
+				return "singletonElement(" + theId.theValue + ")";
+			}
+		}
+
+		static class SingletonElementId<E> implements ElementId {
+			final E theValue;
+
+			SingletonElementId(E value) {
+				theValue = value;
+			}
+
+			@Override
+			public boolean isPresent() {
+				return true;
+			}
+
+			@Override
+			public int compareTo(ElementId o) {
+				if (o == this)
+					return 0;
+				else
+					throw new IllegalArgumentException("Cannot compare elements from different collections (" + this + " and " + o + ")");
+			}
+
+			@Override
+			public String toString() {
+				return "singletonElementId(" + theValue + ")";
+			}
 		}
 	}
 

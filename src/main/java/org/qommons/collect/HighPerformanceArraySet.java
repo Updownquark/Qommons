@@ -365,9 +365,8 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 		}
 
-		static abstract class AbstractHPAS<E> implements HighPerformanceArraySet<E> {
+		static abstract class AbstractHPAS<E> extends AbstractIdentifiable implements HighPerformanceArraySet<E> {
 			protected final Comparator<? super E> theSorting;
-			private Object theIdentity;
 
 			protected AbstractHPAS(Comparator<? super E> sorting) {
 				theSorting = sorting;
@@ -447,10 +446,8 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 
 			@Override
-			public Object getIdentity() {
-				if (theIdentity == null)
-					theIdentity = Identifiable.baseId("HPAS", this);
-				return theIdentity;
+			protected Object createIdentity() {
+				return Identifiable.baseId("HPAS", this);
 			}
 
 			@Override
@@ -1372,12 +1369,11 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 		}
 
-		static class HighPerformanceArrayMap<K, V> implements HPAMap<K, V> {
+		static class HighPerformanceArrayMap<K, V> extends AbstractIdentifiable implements HPAMap<K, V> {
 			private final HighPerformanceArraySet<K> theKeySet;
 			private final Object[] theValues;
 			private final Entry[] theEntries;
 			private MutableMapEntryHandle<K, V>[] theMutableEntries;
-			private Object theIdentity;
 
 			HighPerformanceArrayMap(HighPerformanceArraySet<K> keySet) {
 				theKeySet = keySet;
@@ -1386,10 +1382,8 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 
 			@Override
-			public Object getIdentity() {
-				if (theIdentity == null)
-					theIdentity = Identifiable.wrap(theKeySet.getIdentity(), "map", this);
-				return theIdentity;
+			protected Object createIdentity() {
+				return Identifiable.wrap(theKeySet.getIdentity(), "map", this);
 			}
 
 			@Override
@@ -1589,7 +1583,7 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 		}
 
-		static class UnmodifiableHPAMap<K, V> implements HPAMap<K, V> {
+		static class UnmodifiableHPAMap<K, V> extends AbstractIdentifiable implements HPAMap<K, V> {
 			private final HPAMap<K, V> theWrapped;
 
 			UnmodifiableHPAMap(HPAMap<K, V> wrapped) {
@@ -1627,7 +1621,7 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 
 			@Override
-			public Object getIdentity() {
+			protected Object createIdentity() {
 				return theWrapped.getIdentity();
 			}
 

@@ -106,7 +106,7 @@ public final class QonfigElement extends PartialQonfigElement {
 
 	@Override
 	public QonfigElement getPromise() {
-		return (QonfigElement) super.getPromise();
+		return super.getPromise();
 	}
 
 	/**
@@ -167,13 +167,11 @@ public final class QonfigElement extends PartialQonfigElement {
 		private QonfigValue theValue;
 
 		private PartialQonfigElement theExternalContent;
-		private PartialQonfigElement thePromise;
+		private QonfigElement thePromise;
 
 		private PartialQonfigElement theElement;
 		private int theStage;
-
-		private boolean isIgnoringExtraAttributes;
-		private Map<ElementQualifiedParseItem, AttributeValueInput> theUnusedAttributes;
+		private boolean dontAddToParent;
 
 		Builder(boolean partial, ErrorReporting errors, QonfigDocument doc, PartialQonfigElement parent, QonfigElementOrAddOn type,
 			Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles, QonfigAutoInheritance.Compiler autoInheritance,
@@ -201,10 +199,9 @@ public final class QonfigElement extends PartialQonfigElement {
 			theInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
 
 			if (parent != null) {
+				// The withChild2() method already checked the roles for legality, so we don't need to worry
+				// about whether we can legally fulfill the given roles
 				for (QonfigChildDef child : parentRoles) {
-					if (child.getType() != null && !child.getType().isAssignableFrom(theType))
-						errors
-							.error("This element (" + theType + ") does not inherit " + child.getType() + "--cannot fulfill role " + child);
 					theInheritance.addAll(child.getInheritance());
 					for (QonfigAddOn inh : parent.getInheritance().getExpanded(QonfigAddOn::getInheritance)) {
 						ChildDefModifier mod = inh.getChildModifiers().get(child.getDeclared());
@@ -262,7 +259,7 @@ public final class QonfigElement extends PartialQonfigElement {
 		}
 
 		/** @return The promise that is loading this element's external content */
-		public PartialQonfigElement getPromise() {
+		public QonfigElement getPromise() {
 			return thePromise;
 		}
 
@@ -293,21 +290,11 @@ public final class QonfigElement extends PartialQonfigElement {
 		}
 
 		/**
-		 * @param ignoringExtraAttributes Whether to ignore attributes that are not defined by any inherited elements or add-ons. This may
-		 *        be needed when dealing with references to as-yet unknown types.
-		 * @return This builder
-		 */
-		public Builder ignoreExtraAttributes(boolean ignoringExtraAttributes) {
-			isIgnoringExtraAttributes = ignoringExtraAttributes;
-			return this;
-		}
-
-		/**
 		 * @param promise The promise loading the external content for this element
 		 * @param externalContent The external content that this element is a reference to
 		 * @return This builder
 		 */
-		public Builder fulfills(PartialQonfigElement promise, PartialQonfigElement externalContent) {
+		public Builder fulfills(QonfigElement promise, PartialQonfigElement externalContent) {
 			if (!isPartial && !(promise instanceof QonfigElement))
 				throw new IllegalArgumentException("Full elements must have full promises");
 			thePromise = promise;
@@ -324,26 +311,49 @@ public final class QonfigElement extends PartialQonfigElement {
 		public Builder inherits(QonfigAddOn addOn, boolean appliedDirect) {
 			if (theStage > 0)
 				throw new IllegalStateException("Cannot specify inheritance after children");
-			boolean ok = true;
 			if (appliedDirect && addOn.isAbstract()) {
 				theErrors.error("Add-on " + addOn + " is abstract and cannot be applied directly");
-				ok = false;
-			}
-			if (addOn.getSuperElement() != null && !addOn.getSuperElement().isAssignableFrom(theType)) {
-				theErrors.error("Add-on " + addOn + " requires " + addOn.getSuperElement() + ", which " + theType + " does not extend");
-				ok = false;
-			}
-			for (QonfigAddOn inh : addOn.getFullInheritance().getExpanded(QonfigAddOn::getInheritance)) {
-				if (inh.getSuperElement() != null && !inh.getSuperElement().isAssignableFrom(theType)) {
+				return this;
+			} else if (!isSupported(addOn)) {
+				if (theType instanceof QonfigPromiseDef) {
+					QonfigPromiseDef promise = (QonfigPromiseDef) theType;
+					theErrors.error("Add-on " + addOn + " requires " + addOn.getSuperElement() + ", which promised type "
+						+ promise.getPromisedType() + " of " + theType + " does not extend");
+				} else
 					theErrors.error("Add-on " + addOn + " requires " + addOn.getSuperElement() + ", which " + theType + " does not extend");
-					ok = false;
+				return this;
+			}
+			theInheritance.add(addOn);
+			theAutoInheritance.addTargetType(addOn, theInheritance::add);
+			return this;
+		}
+
+		/**
+		 * @param addOn The add-on to test
+		 * @return Whether the add-on's {@link QonfigAddOn#getSuperElement() requirements} are me by this builder's type
+		 */
+		public boolean isSupported(QonfigAddOn addOn) {
+			if (theType instanceof QonfigPromiseDef) {
+				QonfigPromiseDef promise = (QonfigPromiseDef) theType;
+				if (addOn.getSuperElement() != null && !addOn.getSuperElement().isAssignableFrom(promise.getPromisedType())) {
+					return false;
+				}
+				for (QonfigAddOn inh : addOn.getFullInheritance().getExpanded(QonfigAddOn::getInheritance)) {
+					if (inh.getSuperElement() != null && !inh.getSuperElement().isAssignableFrom(promise.getPromisedType())) {
+						return false;
+					}
+				}
+			} else {
+				if (addOn.getSuperElement() != null && !addOn.getSuperElement().isAssignableFrom(theType)) {
+					return false;
+				}
+				for (QonfigAddOn inh : addOn.getFullInheritance().getExpanded(QonfigAddOn::getInheritance)) {
+					if (inh.getSuperElement() != null && !inh.getSuperElement().isAssignableFrom(theType)) {
+						return false;
+					}
 				}
 			}
-			if (ok) {
-				theInheritance.add(addOn);
-				theAutoInheritance.addTargetType(addOn, theInheritance::add);
-			}
-			return this;
+			return true;
 		}
 
 		/**
@@ -426,9 +436,9 @@ public final class QonfigElement extends PartialQonfigElement {
 		 * @param child Consumer to configure the child element
 		 * @param position The position in the file where the child was defined
 		 * @param description A description for the new child
-		 * @return This builder
+		 * @return The built child element, if it was successfully built
 		 */
-		public Builder withChild(List<ElementQualifiedParseItem> declaredRoles, QonfigElementOrAddOn type,
+		public PartialQonfigElement withChild(List<ElementQualifiedParseItem> declaredRoles, QonfigElementOrAddOn type,
 			Consumer<QonfigElement.Builder> child, PositionedContent position, String description) {
 			if (theStage > 1)
 				throw new IllegalStateException("Cannot add children after the element has been built");
@@ -485,10 +495,9 @@ public final class QonfigElement extends PartialQonfigElement {
 							roles.add(role);
 					}
 				}
-				withChild2(Collections.unmodifiableSet(roles), type, child, position, description);
+				return withChild2(Collections.unmodifiableSet(roles), type, child, position, description);
 			} else
-				withChild2(Collections.emptySet(), type, child, position, description);
-			return this;
+				return withChild2(Collections.emptySet(), type, child, position, description);
 		}
 
 		/**
@@ -497,9 +506,10 @@ public final class QonfigElement extends PartialQonfigElement {
 		 * @param child Consumer to configure the child element
 		 * @param position The position in the file where the child was defined
 		 * @param description A description for the new child
-		 * @return This builder
+		 * @return The built child element, if it was successfully built
 		 */
-		public Builder withChild2(Set<QonfigChildDef> declaredRoles, QonfigElementOrAddOn type, Consumer<QonfigElement.Builder> child,
+		public PartialQonfigElement withChild2(Set<QonfigChildDef> declaredRoles, QonfigElementOrAddOn type,
+			Consumer<QonfigElement.Builder> child,
 			PositionedContent position, String description) {
 			if (theStage > 1)
 				throw new IllegalStateException("Cannot add children after the element has been built");
@@ -514,6 +524,13 @@ public final class QonfigElement extends PartialQonfigElement {
 			for (QonfigAddOn inh : theInheritance.values())
 				autoInheritance.addParentType(inh, null);
 			autoInheritance.addTargetType(type, null);
+			if (theType instanceof QonfigPromiseDef) {
+				QonfigPromiseDef promise = (QonfigPromiseDef) theType;
+				if (promise.getPromisedType() != null)
+					autoInheritance.addParentType(promise.getPromisedType(), null);
+				for (QonfigAddOn inh : promise.getPromisedInheritance().values())
+					autoInheritance.addParentType(inh, null);
+			}
 			if (!declaredRoles.isEmpty()) {
 				for (QonfigChildDef role : declaredRoles) {
 					boolean matches = role.getOwner().isAssignableFrom(theType);
@@ -522,6 +539,18 @@ public final class QonfigElement extends PartialQonfigElement {
 							matches = role.getOwner().isAssignableFrom(inh);
 							if (matches)
 								break;
+						}
+					}
+					if (!matches && theType instanceof QonfigPromiseDef) {
+						QonfigPromiseDef promise = (QonfigPromiseDef) theType;
+						if (promise.getPromisedType() != null)
+							matches = role.getOwner().isAssignableFrom(promise.getPromisedType());
+						if (!matches) {
+							for (QonfigAddOn inh : promise.getPromisedInheritance().values()) {
+								matches = role.getOwner().isAssignableFrom(inh);
+								if (matches)
+									break;
+							}
 						}
 					}
 					if (!matches) {
@@ -537,10 +566,12 @@ public final class QonfigElement extends PartialQonfigElement {
 				for (Map.Entry<QonfigChildDef.Declared, QonfigChildDef> childDef : theType.getAllChildren().entrySet()) {
 					if (type instanceof QonfigElementDef
 						&& childDef.getValue().isCompatible((QonfigElementDef) type, autoInheritance.getInheritance())) {
-						if (role != null) {
+						if (role == null)
+							role = childDef.getValue();
+						else if (!role.getDeclared().equals(childDef.getValue().getDeclared())) {
 							errors.error("Child of type " + type + " is compatible with multiple roles: " + role + " and "
 								+ childDef.getValue() + "--role must be specified");
-							return this;
+							return null;
 						}
 						role = childDef.getValue();
 					}
@@ -551,17 +582,113 @@ public final class QonfigElement extends PartialQonfigElement {
 							&& childDef.getValue().isCompatible((QonfigElementDef) type, autoInheritance.getInheritance())) {
 							if (role == null)
 								role = childDef.getValue();
-							else if (!role.getDeclared().equals(childDef.getValue())) {
+							else if (!role.getDeclared().equals(childDef.getValue().getDeclared())) {
 								errors.error("Child of type " + type + " is compatible with multiple roles: " + role + " and "
 									+ childDef.getValue() + "--role must be specified");
-								return this;
+								return null;
+							}
+						}
+					}
+				}
+				if (type instanceof QonfigPromiseDef) {
+					QonfigPromiseDef childPromise = (QonfigPromiseDef) type;
+					if (childPromise.getPromisedType() != null) {
+						for (Map.Entry<QonfigChildDef.Declared, QonfigChildDef> childDef : theType.getAllChildren().entrySet()) {
+							if (childDef.getValue().isCompatible(childPromise.getPromisedType(), autoInheritance.getInheritance())) {
+								if (role == null)
+									role = childDef.getValue();
+								else if (!role.getDeclared().equals(childDef.getValue().getDeclared())) {
+									errors.error("Child of type " + type + " is compatible with multiple roles: " + role + " and "
+										+ childDef.getValue() + "--role must be specified");
+									return null;
+								}
+								role = childDef.getValue();
+							}
+						}
+					}
+					for (QonfigAddOn inh : theInheritance.getExpanded(QonfigAddOn::getInheritance)) {
+						for (Map.Entry<String, QonfigChildDef.Declared> childDef : inh.getDeclaredChildren().entrySet()) {
+							if (childPromise.getPromisedType() != null
+								&& childDef.getValue().isCompatible(childPromise.getPromisedType(), autoInheritance.getInheritance())) {
+								if (role == null)
+									role = childDef.getValue();
+								else if (!role.getDeclared().equals(childDef.getValue().getDeclared())) {
+									errors.error("Child of type " + type + " is compatible with multiple roles: " + role + " and "
+										+ childDef.getValue() + "--role must be specified");
+									return null;
+								}
+							}
+						}
+					}
+				}
+				if (theType instanceof QonfigPromiseDef) {
+					QonfigPromiseDef promise = (QonfigPromiseDef) theType;
+					if (promise.getPromisedType() != null) {
+						for (Map.Entry<QonfigChildDef.Declared, QonfigChildDef> childDef : promise.getPromisedType().getAllChildren()
+							.entrySet()) {
+							if (type instanceof QonfigElementDef
+								&& childDef.getValue().isCompatible((QonfigElementDef) type, autoInheritance.getInheritance())) {
+								if (role == null)
+									role = childDef.getValue();
+								else if (!role.getDeclared().equals(childDef.getValue().getDeclared())) {
+									errors.error("Child of type " + type + " is compatible with multiple roles: " + role + " and "
+										+ childDef.getValue() + "--role must be specified");
+									return null;
+								}
+								role = childDef.getValue();
+							}
+						}
+					}
+					for (QonfigAddOn inh : promise.getPromisedInheritance().getExpanded(QonfigAddOn::getInheritance)) {
+						for (Map.Entry<String, QonfigChildDef.Declared> childDef : inh.getDeclaredChildren().entrySet()) {
+							if (type instanceof QonfigElementDef
+								&& childDef.getValue().isCompatible((QonfigElementDef) type, autoInheritance.getInheritance())) {
+								if (role == null)
+									role = childDef.getValue();
+								else if (!role.getDeclared().equals(childDef.getValue().getDeclared())) {
+									errors.error("Child of type " + type + " is compatible with multiple roles: " + role + " and "
+										+ childDef.getValue() + "--role must be specified");
+									return null;
+								}
+							}
+						}
+					}
+					if (type instanceof QonfigPromiseDef) {
+						QonfigPromiseDef childPromise = (QonfigPromiseDef) type;
+						if (promise.getPromisedType() != null && childPromise.getPromisedType() != null) {
+							for (Map.Entry<QonfigChildDef.Declared, QonfigChildDef> childDef : promise.getPromisedType().getAllChildren()
+								.entrySet()) {
+								if (childDef.getValue().isCompatible(childPromise.getPromisedType(), autoInheritance.getInheritance())) {
+									if (role == null)
+										role = childDef.getValue();
+									else if (!role.getDeclared().equals(childDef.getValue().getDeclared())) {
+										errors.error("Child of type " + type + " is compatible with multiple roles: " + role + " and "
+											+ childDef.getValue() + "--role must be specified");
+										return null;
+									}
+									role = childDef.getValue();
+								}
+							}
+						}
+						for (QonfigAddOn inh : promise.getPromisedInheritance().getExpanded(QonfigAddOn::getInheritance)) {
+							for (Map.Entry<String, QonfigChildDef.Declared> childDef : inh.getDeclaredChildren().entrySet()) {
+								if (childPromise.getPromisedType() != null
+									&& childDef.getValue().isCompatible(childPromise.getPromisedType(), autoInheritance.getInheritance())) {
+									if (role == null)
+										role = childDef.getValue();
+									else if (!role.getDeclared().equals(childDef.getValue().getDeclared())) {
+										errors.error("Child of type " + type + " is compatible with multiple roles: " + role + " and "
+											+ childDef.getValue() + "--role must be specified");
+										return null;
+									}
+								}
 							}
 						}
 					}
 				}
 				if (role == null) {
 					errors.error("Child of type " + type + " is not compatible with any roles of parent " + theType);
-					return this;
+					return null;
 				}
 				roles.add(role);
 				realRoles.add(role.getDeclared());
@@ -581,9 +708,21 @@ public final class QonfigElement extends PartialQonfigElement {
 				Collections.unmodifiableSet(realRoles), autoInheritance, description);
 			child.accept(childBuilder);
 			PartialQonfigElement builtChild = childBuilder.build();
-			theChildren.add(builtChild);
-			for (QonfigChildDef.Declared role : realRoles)
-				theChildrenByRole.add(role, builtChild);
+			if (!childBuilder.dontAddToParent) {
+				theChildren.add(builtChild);
+				for (QonfigChildDef.Declared role : realRoles)
+					theChildrenByRole.add(role, builtChild);
+			}
+			return builtChild;
+		}
+
+		/**
+		 * Tells this builder not to add the built element to its parent. For use with promises.
+		 * 
+		 * @return This builder
+		 */
+		public Builder dontAddToParent() {
+			dontAddToParent = true;
 			return this;
 		}
 
@@ -602,7 +741,7 @@ public final class QonfigElement extends PartialQonfigElement {
 					theParentRoles, theDeclaredRoles, Collections.unmodifiableMap(attrs.attrValues),
 					(List<QonfigElement>) (List<?>) theChildren, //
 					(BetterMultiMap<QonfigChildDef.Declared, QonfigElement>) (BetterMultiMap<?, ?>) theChildrenByRole, //
-					theValue, theErrors.getFileLocation(), theDescription, (QonfigElement) thePromise, theExternalContent);
+					theValue, theErrors.getFileLocation(), theDescription, thePromise, theExternalContent);
 			}
 			theStage = 1;
 		}
@@ -644,11 +783,6 @@ public final class QonfigElement extends PartialQonfigElement {
 			if (theStage < 2)
 				checkChildren();
 			return theElement;
-		}
-
-		/** @return Any extra attributes were {@link #ignoreExtraAttributes(boolean) ignored} on this element */
-		public Map<ElementQualifiedParseItem, AttributeValueInput> getUnusedAttributes() {
-			return theUnusedAttributes == null ? Collections.emptyMap() : Collections.unmodifiableMap(theUnusedAttributes);
 		}
 
 		private void checkChildren() {
@@ -718,9 +852,6 @@ public final class QonfigElement extends PartialQonfigElement {
 			}
 
 			void compile() {
-				if (isIgnoringExtraAttributes)
-					theUnusedAttributes = new LinkedHashMap<>();
-
 				// Primary attribute parsing. Since values can confer inheritance, which can affect attributes,
 				// we need to go through all declared attributes, parsing those we understand, ignoring those we don't,
 				// and updating inheritance.
@@ -731,11 +862,8 @@ public final class QonfigElement extends PartialQonfigElement {
 				for (int i = parsedAttrs.nextClearBit(0); i >= 0; i = parsedAttrs.nextClearBit(i + 1)) {
 					if (i >= theDeclaredAttributes.size())
 						break;
-					if (isIgnoringExtraAttributes)
-						theUnusedAttributes.put(theDeclaredAttributes.get(i), theDeclaredAttributeValues.get(i));
-					else
-						theErrors.at(theDeclaredAttributes.get(i).position)
-							.error("Unrecognized attribute: '" + theDeclaredAttributes.get(i) + "'");
+					theErrors.at(theDeclaredAttributes.get(i).position)
+						.error("Unrecognized attribute: '" + theDeclaredAttributes.get(i) + "'");
 				}
 
 				// Now that we know our inheritance completely, we need to check all the attributes we've parsed
@@ -768,8 +896,6 @@ public final class QonfigElement extends PartialQonfigElement {
 					QonfigElementOrAddOn owner = attr.getKey().getOwner();
 					if (owner.isAssignableFrom(theType) //
 						|| (owner instanceof QonfigAddOn && completeInheritance.contains((QonfigAddOn) owner))) {//
-					} else if (isIgnoringExtraAttributes) {
-						attrValues.remove(attr.getKey());
 					} else
 						theErrors.at(attr.getValue().getNamePosition())
 							.error("Element does not inherit element " + owner + "--cannot specify attribute " + attr.getKey());
@@ -890,9 +1016,6 @@ public final class QonfigElement extends PartialQonfigElement {
 							attr = attrDef.declaredElement.getDeclaredAttributes().get(attrDef.itemName);
 							if (attr == null)
 								attrs = attrDef.declaredElement.getAttributesByName().get(attrDef.itemName);
-						} else if (isIgnoringExtraAttributes) {
-							theUnusedAttributes.put(attrDef, theDeclaredAttributeValues.get(i));
-							continue;
 						} else {
 							theErrors.error("Element does not inherit element " + attrDef.declaredElement + "--cannot specify attribute "
 								+ attrDef.itemName);
@@ -901,6 +1024,8 @@ public final class QonfigElement extends PartialQonfigElement {
 						}
 					} else {
 						attr = theType.getDeclaredAttributes().get(attrDef.itemName);
+						if (attr == null && theType instanceof QonfigPromiseDef && ((QonfigPromiseDef) theType).getPromisedType() != null)
+							attr = ((QonfigPromiseDef) theType).getPromisedType().getDeclaredAttributes().get(attrDef.itemName);
 						if (attr != null) {
 							addAttr = true;
 						} else {
@@ -910,6 +1035,17 @@ public final class QonfigElement extends PartialQonfigElement {
 							for (QonfigAddOn inh : theInheritance.values()) {
 								for (QonfigAttributeDef inhAtt : inh.getAttributesByName().get(attrDef.itemName))
 									attrs.add(inhAtt.getDeclared());
+							}
+							if (theType instanceof QonfigPromiseDef) {
+								if (((QonfigPromiseDef) theType).getPromisedType() != null) {
+									for (QonfigAttributeDef inhAtt : ((QonfigPromiseDef) theType).getPromisedType().getAttributesByName()
+										.get(attrDef.itemName))
+										attrs.add(inhAtt.getDeclared());
+								}
+								for (QonfigAddOn inh : ((QonfigPromiseDef) theType).getPromisedInheritance().values()) {
+									for (QonfigAttributeDef inhAtt : inh.getAttributesByName().get(attrDef.itemName))
+										attrs.add(inhAtt.getDeclared());
+								}
 							}
 							addAttr = !attrs.isEmpty();
 						}
@@ -943,8 +1079,19 @@ public final class QonfigElement extends PartialQonfigElement {
 					}
 					parsedAttrs.set(i);
 					// attr will never be null here, but I'm suppressing a warning
-					if (attr != null && attrValues.containsKey(attr.getDeclared())) {
-						theErrors.error("Duplicate values supplied for attribute " + attrDef.itemName, null);
+					if (attr != null) {
+						if (attrValues.containsKey(attr.getDeclared())) {
+							theErrors.error("Duplicate values supplied for attribute " + attrDef.itemName, null);
+						} else if (attr.getDeclared().getDeclarer().getName().equals(QonfigElementDef.QONFIG_REFERENCE_TK)//
+							&& attr.getDeclared().getOwner().getName().equals(QonfigElementDef.QONFIG_PROMISE_ELEMENT)) {
+							switch (attr.getName()) {
+							case QonfigElementDef.QONFIG_EXT_PROMISED_TYPE_ATTR:
+							case QonfigElementDef.QONFIG_EXT_PROMISED_INH_ATTR:
+								theErrors.error(
+									"Attribute " + QonfigElementDef.QONFIG_REFERENCE_TK + ":" + QonfigElementDef.QONFIG_PROMISE_ELEMENT
+										+ "." + attr.getName() + " cannot be specified in a document");
+							}
+						}
 					}
 					AttributeValueInput attrValue = theDeclaredAttributeValues.get(i);
 					Object value;

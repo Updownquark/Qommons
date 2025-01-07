@@ -4,10 +4,9 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
@@ -459,20 +458,24 @@ public interface SpinnerFormat<T> extends Format<T> {
 	 * Formats lists of values, with each individual element adjustable
 	 * 
 	 * @param <T> The type of value in the list
+	 * @param <C> The type of the collection
 	 */
-	public static class ListFormat<T> extends Format.ListFormat<T> implements SpinnerFormat<List<T>> {
+	public static class CollectionFormat<T, C extends Collection<T>> extends Format.CollectionFormat<T, C> implements SpinnerFormat<C> {
 		/**
 		 * @param format The format for list elements
 		 * @param delimiter The delimiter between elements
 		 * @param postDelimit An optional sequence to insert after the delimiter (e.g. whitespace in a UI text field)
+		 * @param addFailMessage The error message to throw when a value cannot be added to a collection
+		 * @param collectionCreator The supplier to create collections for putting parsed values into
 		 */
-		public ListFormat(SpinnerFormat<T> format, String delimiter, String postDelimit) {
-			super(format, delimiter, postDelimit);
+		public CollectionFormat(SpinnerFormat<T> format, String delimiter, String postDelimit, String addFailMessage,
+			Supplier<C> collectionCreator) {
+			super(format, delimiter, postDelimit, addFailMessage, collectionCreator);
 		}
 
 		@Override
-		public SpinnerFormat<T> getFormat() {
-			return (SpinnerFormat<T>) super.getFormat();
+		public SpinnerFormat<T> getElementFormat() {
+			return (SpinnerFormat<T>) super.getElementFormat();
 		}
 
 		@Override
@@ -481,30 +484,32 @@ public interface SpinnerFormat<T> extends Format<T> {
 		}
 
 		@Override
-		public BiTuple<List<T>, String> adjust(List<T> value, String formatted, int cursor, boolean up) {
+		public BiTuple<C, String> adjust(C value, String formatted, int cursor, boolean up) {
+			if (value.isEmpty())
+				return null;
 			int start = 0;
 			int delimitIdx = 0;
-			int index = 0;
+			Iterator<T> iter = value.iterator();
+			C newValue = createCollection();
+			String newFormatted = null;
 			int i;
 			for (i = 0; i < formatted.length(); i++) {
 				if (formatted.charAt(i) == getDelimiter().charAt(delimitIdx)) {
 					delimitIdx++;
 					if (delimitIdx == getDelimiter().length()) {
-						if (i > cursor) {
+						T oldElement = iter.next();
+						if (i > cursor && newFormatted == null) {
 							if (i - cursor < getDelimiter().length())
 								return null; // Adjustment on the delimiter
-							BiTuple<T, String> adjusted = getFormat().adjust(//
-								value.get(index), formatted.substring(start, i - getDelimiter().length()), cursor - start, up);
+							BiTuple<T, String> adjusted = getElementFormat().adjust(//
+								oldElement, formatted.substring(start, i - getDelimiter().length()), cursor - start, up);
 							if (adjusted == null)
 								return null;
-							List<T> newValue = new ArrayList<>(value.size());
-							newValue.addAll(value);
-							newValue.set(i, adjusted.getValue1());
-							String newFormatted = formatted.substring(0, start) + adjusted.getValue2()
+							newValue.add(adjusted.getValue1());
+							newFormatted = formatted.substring(0, start) + adjusted.getValue2()
 								+ formatted.substring(i - getDelimiter().length());
-							return new BiTuple<>(newValue, newFormatted);
-						}
-						index++;
+						} else
+							newValue.add(oldElement);
 						delimitIdx = 0;
 						while (i < formatted.length() - 1 && Character.isWhitespace(formatted.charAt(i + 1)))
 							i++;
@@ -512,17 +517,17 @@ public interface SpinnerFormat<T> extends Format<T> {
 					}
 				}
 			}
+			if (newFormatted != null)
+				return new BiTuple<>(newValue, newFormatted);
 			if (delimitIdx > 0) {
 				return null;
 			}
-			BiTuple<T, String> adjusted = getFormat().adjust(//
-				value.get(index), formatted.substring(start, i - getDelimiter().length()), cursor - start, up);
+			BiTuple<T, String> adjusted = getElementFormat().adjust(//
+				iter.next(), formatted.substring(start, i - getDelimiter().length()), cursor - start, up);
 			if (adjusted == null)
 				return null;
-			List<T> newValue = new ArrayList<>(value.size());
-			newValue.addAll(value);
-			newValue.set(i, adjusted.getValue1());
-			String newFormatted = formatted.substring(0, start) + adjusted.getValue2() + formatted.substring(i - getDelimiter().length());
+			newValue.add(adjusted.getValue1());
+			newFormatted = formatted.substring(0, start) + adjusted.getValue2() + formatted.substring(i - getDelimiter().length());
 			return new BiTuple<>(newValue, newFormatted);
 		}
 	}

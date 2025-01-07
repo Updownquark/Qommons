@@ -644,13 +644,11 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	 *
 	 * @param <E> The type of elements in the list
 	 */
-	public static class BetterSubSequence<E> implements BetterSortedList<E> {
+	public static class BetterSubSequence<E> extends AbstractIdentifiable implements BetterSortedList<E> {
 		private final BetterSortedList<E> theWrapped;
 
 		private final Comparable<? super E> from;
 		private final Comparable<? super E> to;
-
-		private Object theIdentity;
 
 		/**
 		 * @param list The sorted list that this sub sequence is for
@@ -664,10 +662,8 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		}
 
 		@Override
-		public Object getIdentity() {
-			if (theIdentity == null)
-				theIdentity = Identifiable.wrap(theWrapped.getIdentity(), "subSequence", from, to);
-			return theIdentity;
+		protected Object createIdentity() {
+			return Identifiable.wrap(theWrapped.getIdentity(), "subSequence", from, to);
 		}
 
 		/** @return The sorted list that this is a sub-sequence of */

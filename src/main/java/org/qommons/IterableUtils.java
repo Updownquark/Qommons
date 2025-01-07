@@ -671,6 +671,32 @@ public class IterableUtils {
 		}
 	}
 
+	/**
+	 * @param <T> The type of values to permutate
+	 * @param source The values to permutate
+	 * @param maxDim The maximum number of values in each permutation
+	 * @param distinct Whether the permutations should only contain distinct values
+	 * @param withEmpty Whether to return the empty permutation first
+	 * @return An iterable of all possible permutations of the given source values with the given constraints. E.g. If {0, 1, 2, 3} is given
+	 *         for the source with maxDim={@link Integer#MAX_VALUE}, distinct=true, withEmpty=false, the result will be an iterator that
+	 *         iterates over:
+	 *         <ol>
+	 *         <li>{0}</li>
+	 *         <li>{1}</li>
+	 *         <li>{2}</li>
+	 *         <li>{3}</li>
+	 *         <li>{0,1}</li>
+	 *         <li>{0,2}</li>
+	 *         <li>{0,3}</li>
+	 *         <li>{1,2}</li>
+	 *         <li>{1,3}</li>
+	 *         <li>{2,3}</li>
+	 *         <li>{0,1,2}</li>
+	 *         <li>{0,1,3}</li>
+	 *         <li>{0,2,3}</li>
+	 *         <li>{0,1,2,3}</li>
+	 *         </ol>
+	 */
 	public static <T> Iterable<List<T>> fullPermutation(Iterable<T> source, int maxDim, boolean distinct, boolean withEmpty) {
 		if (maxDim < 0)
 			throw new IllegalArgumentException("Maximum dimension must not be negative: " + maxDim);

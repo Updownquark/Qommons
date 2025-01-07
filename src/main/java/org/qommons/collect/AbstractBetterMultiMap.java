@@ -5,6 +5,7 @@ import java.util.function.Function;
 
 import org.qommons.CausalLock;
 import org.qommons.Identifiable;
+import org.qommons.Identifiable.AbstractIdentifiable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.Stamped;
 import org.qommons.ThreadConstraint;
@@ -24,7 +25,7 @@ import org.qommons.tree.SortedTreeList;
  * @param <K> The key type of the map
  * @param <V> The value type of the map
  */
-public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, V> {
+public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable implements BetterMultiMap<K, V> {
 	/**
 	 * Backs a {@link AbstractBetterMultiMap} by supplying value collections for each key
 	 * 
@@ -301,7 +302,6 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		public abstract BetterMultiMap<K, V> buildMultiMap();
 	}
 
-	private final Object theIdentity;
 	private final CollectionLockingStrategy theLocking;
 	private final BetterMap<K, BetterCollection<V>> theEntries;
 	private final ValueCollectionSupplier<? super K, ? super V> theValues;
@@ -319,7 +319,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	 */
 	protected AbstractBetterMultiMap(Function<Object, CollectionLockingStrategy> locking, BetterMap<K, BetterCollection<V>> entries,
 		ValueCollectionSupplier<? super K, ? super V> values, String description, Map<K, List<V>> initialValues) {
-		theIdentity = Identifiable.baseId(description, this);
+		initIdentity(Identifiable.baseId(description, this));
 		theLocking = locking.apply(this);
 		theEntries = entries;
 		theValues = values;
@@ -351,8 +351,8 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	}
 
 	@Override
-	public Object getIdentity() {
-		return theIdentity;
+	protected Object createIdentity() {
+		throw new IllegalStateException("Should have initialized");
 	}
 
 	@Override
@@ -925,7 +925,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 	 * 
 	 * @param <E> The type of values in the collection
 	 */
-	protected static abstract class WrappingBetterCollection<E> implements BetterCollection<E> {
+	protected static abstract class WrappingBetterCollection<E> extends AbstractIdentifiable implements BetterCollection<E> {
 		private final ValueCollectionBacking<E> theWrapped;
 
 		/** @param wrapped The backing from the map for the key */
@@ -956,7 +956,7 @@ public abstract class AbstractBetterMultiMap<K, V> implements BetterMultiMap<K, 
 		}
 
 		@Override
-		public Object getIdentity() {
+		protected Object createIdentity() {
 			return theWrapped.getIdentity();
 		}
 

@@ -20,7 +20,7 @@ public class ConditionalChainAccess<E, T> implements ConditionalValueAccess<E, T
 	ConditionalChainAccess(ConditionalFieldAccess<?, ?>[] fields) {
 		ConditionalEntity<?> entity = null;
 		for (int f = 0; f < fields.length; f++) {
-			if (f > 0) {
+			if (entity != null) {
 				if (entity.owns(fields[f])) {// Fine
 				} else if (entity.isAssignableFrom(fields[f].getSourceEntity())) {
 					fields[f] = entity.getOverriddenField(fields[f]);
@@ -34,6 +34,7 @@ public class ConditionalChainAccess<E, T> implements ConditionalValueAccess<E, T
 		theFieldSequence = BetterList.of(fields);
 	}
 
+	/** @return The sequence of fields in this chain */
 	public BetterList<? extends ConditionalFieldAccess<?, ?>> getFieldSequence() {
 		return theFieldSequence;
 	}

@@ -45,10 +45,12 @@ public class QonfigValidation {
 	 * @param override The overriding specification
 	 * @param onError To report errors
 	 * @param onWarning To report warnings
+	 * @param asModifier Whether the returned spec includes only differences from the overridden spec, as opposed to the full modified value
+	 *        specification
 	 * @return The modified value specification
 	 */
 	public static ValueSpec validateSpecification(ValueSpec old, ValueSpec override, //
-		Consumer<String> onError, Consumer<String> onWarning) {
+		Consumer<String> onError, Consumer<String> onWarning, boolean asModifier) {
 		QonfigValueType type = old.type;
 		if (override.type != null && !override.type.equals(old.type)) {
 			if (!(type instanceof QonfigAddOn) || !(override.type instanceof QonfigAddOn)
@@ -99,6 +101,16 @@ public class QonfigValidation {
 					}
 					break;
 				}
+			}
+		}
+		if (asModifier) {
+			if (type == old.type)
+				type = null;
+			if (newSpec == old.specification)
+				newSpec = null;
+			if (newDefaultValue == old.defaultValue) {
+				newDefaultValue = null;
+				defaultValueContent = null;
 			}
 		}
 		return new ValueSpec(type, newSpec, newDefaultValue, defaultValueContent);
@@ -222,7 +234,7 @@ public class QonfigValidation {
 						new ValueSpec(valueModifier.getTypeRestriction(), valueModifier.getSpecification(), valueModifier.getDefaultValue(),
 							valueModifier.getDefaultValueContent()), //
 						err -> session.at(root.getFilePosition()).error(err), //
-						warn -> session.at(root.getFilePosition()).warn(warn));
+						warn -> session.at(root.getFilePosition()).warn(warn), false);
 				} else if (valueModifier.getSpecification() != ao.getValueModifier().getSpecification()
 					|| !Objects.equals(valueModifier.getDefaultValue(), ao.getValueModifier().getDefaultValue())) {
 					session.at(root.getFilePosition()).error("Inherited add-ons " + textModSource + " and " + inh.getValue()

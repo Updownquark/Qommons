@@ -6,6 +6,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.function.Function;
 
+import org.qommons.Identifiable.AbstractIdentifiable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
@@ -195,7 +196,7 @@ public class BetterCollections {
 	 * 
 	 * @param <E> The type of the collection
 	 */
-	public static class UnmodifiableBetterCollection<E> implements BetterCollection<E> {
+	public static class UnmodifiableBetterCollection<E> extends AbstractIdentifiable implements BetterCollection<E> {
 		private final BetterCollection<? extends E> theWrapped;
 
 		/** @param wrapped The collection to wrap */
@@ -211,7 +212,7 @@ public class BetterCollections {
 		}
 
 		@Override
-		public Object getIdentity() {
+		protected Object createIdentity() {
 			return theWrapped.getIdentity();
 		}
 
@@ -605,7 +606,7 @@ public class BetterCollections {
 	 * @param <K> The key type of the map
 	 * @param <V> The value type of the map
 	 */
-	public static class UnmodifiableBetterMap<K, V> implements BetterMap<K, V> {
+	public static class UnmodifiableBetterMap<K, V> extends AbstractIdentifiable implements BetterMap<K, V> {
 		private final BetterMap<? extends K, ? extends V> theWrapped;
 
 		/** @param wrapped The map to wrap */
@@ -624,7 +625,7 @@ public class BetterCollections {
 		}
 
 		@Override
-		public Object getIdentity() {
+		protected Object createIdentity() {
 			return theWrapped.getIdentity();
 		}
 
@@ -808,7 +809,7 @@ public class BetterCollections {
 	 * @param <K> The key type of the map
 	 * @param <V> The value type of the map
 	 */
-	public static class UnmodifiableBetterMultiMap<K, V> implements BetterMultiMap<K, V> {
+	public static class UnmodifiableBetterMultiMap<K, V> extends AbstractIdentifiable implements BetterMultiMap<K, V> {
 		private final BetterMultiMap<? extends K, ? extends V> theWrapped;
 		private BetterSet<K> theKeySet;
 
@@ -818,7 +819,7 @@ public class BetterCollections {
 		}
 
 		@Override
-		public Object getIdentity() {
+		protected Object createIdentity() {
 			return theWrapped.getIdentity();
 		}
 

@@ -72,7 +72,7 @@ public interface ThreadConstraint {
 		}
 	};
 	/** Thread constraint for the AWT {@link EventQueue} thread */
-	public static final ThreadConstraint EDT = new CachedThreadConstraint() {
+	public static final CachedThreadConstraint EDT = new CachedThreadConstraint() {
 		@Override
 		public boolean isEventThread() {
 			return EventQueue.isDispatchThread();
@@ -221,6 +221,18 @@ public interface ThreadConstraint {
 		@Override
 		public void invokeLater(Runnable task) {
 			reallyInvokeLater(task);
+		}
+
+		/**
+		 * Executes all tasks given to {@link #invoke(Runnable)} that have not yet been executed. This must be called from an event thread.
+		 */
+		public void flush() {
+			if (theEventCache.isEmpty())
+				return;
+			else if (!isEventThread())
+				throw new IllegalStateException("flush() cannot be called except on the event thread");
+			else
+				runCache();
 		}
 
 		private void flushCachedEvents() {

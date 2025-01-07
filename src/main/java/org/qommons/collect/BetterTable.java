@@ -248,7 +248,7 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 	 * @param <C> The type of columns in this table (the type of rows in the source table)
 	 * @param <V> The type of values in the table
 	 */
-	class PivotedTable<R, C, V> implements BetterTable<C, R, V> {
+	class PivotedTable<R, C, V> extends AbstractIdentifiable implements BetterTable<C, R, V> {
 		private final BetterTable<R, C, V> theWrapped;
 
 		public PivotedTable(BetterTable<R, C, V> wrapped) {
@@ -256,8 +256,8 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 		}
 
 		@Override
-		public Object getIdentity() {
-			return Identifiable.wrap(theWrapped.getIdentity(), "reverse");
+		protected Object createIdentity() {
+			return Identifiable.wrap(theWrapped.getIdentity(), "pivoted");
 		}
 
 		@Override

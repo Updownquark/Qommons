@@ -224,8 +224,18 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 	public boolean isAssignableFrom(QonfigElementOrAddOn other) {
 		if (equals(other))
 			return true;
-		else
-			return other.getFullInheritance().contains(this);
+		else if (other.getFullInheritance().contains(this))
+			return true;
+		if (other instanceof QonfigPromiseDef) {
+			QonfigPromiseDef promise = (QonfigPromiseDef) other;
+			if (promise.getPromisedType() != null && isAssignableFrom(promise.getPromisedType()))
+				return true;
+			for (QonfigAddOn inh : promise.getPromisedInheritance().values()) {
+				if (isAssignableFrom(inh))
+					return true;
+			}
+		}
+		return false;
 	}
 
 	@Override

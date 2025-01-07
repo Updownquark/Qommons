@@ -413,8 +413,8 @@ public class InMemoryFileSystem implements BetterFile.FileDataSource {
 		@Override
 		public synchronized AbstractMemoryFileBacking createChild(String fileName, boolean directory) throws IOException {
 			AbstractMemoryFileBacking file = theChildren.get(fileName);
-			if (file != null)
-				throw new IOException("File '" + fileName + "' already exists");
+			if (file != null && file.isDirectory() != directory)
+				throw new IOException("File '" + fileName + "' already exists as a " + (directory ? "file" : "directory"));
 			AbstractMemoryFileBacking newFile = directory ? new MemoryDirectory(this, fileName) : new MemoryFile(this, fileName);
 			theChildren.put(fileName, newFile);
 			return newFile;

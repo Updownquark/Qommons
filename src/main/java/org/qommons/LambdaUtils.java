@@ -725,7 +725,9 @@ public class LambdaUtils {
 		return new PrintableComparator<>(compare, print, identifier);
 	}
 
-	interface LambdaUtility {
+	/** An interface recognized by the {@link LambdaUtils} class which can report whether or not its operation is trivial */
+	public interface LambdaUtility {
+		/** @return Whether this operation is trivial */
 		boolean isTrivial();
 	}
 
@@ -801,7 +803,7 @@ public class LambdaUtils {
 		private final L theLambda;
 		private final Supplier<String> thePrint;
 		private final Object identifier;
-		private final int hashCode;
+		private int hashCode = -1;
 
 		/**
 		 * @param lambda The wrapped lambda
@@ -829,11 +831,6 @@ public class LambdaUtils {
 			theLambda = lambda;
 			thePrint = print;
 			this.identifier = identifier instanceof PrintableLambda ? ((PrintableLambda<?>) identifier).identifier : identifier;
-			if (identifier != null) {
-				hashCode = identifier.hashCode();
-			} else {
-				hashCode = 0;
-			}
 		}
 
 		/** @return The lambda wrapped by this printable lambda */
@@ -853,11 +850,12 @@ public class LambdaUtils {
 
 		@Override
 		public int hashCode() {
-			if (identifier != null) {
-				return hashCode;
-			} else {
+			if (identifier == null)
 				return theLambda.hashCode();
+			else if (hashCode == -1) {
+				hashCode = identifier.hashCode();
 			}
+			return hashCode;
 		}
 
 		@Override
@@ -867,7 +865,7 @@ public class LambdaUtils {
 			} else if (obj == null || obj.getClass() != getClass()) {
 				return false;
 			} else if (identifier != null) {
-				if (hashCode != obj.hashCode()) {
+				if (hashCode() != obj.hashCode()) {
 					return false;
 				}
 				return identifier.equals(((PrintableLambda<?>) obj).identifier);

@@ -623,17 +623,22 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			else if (theValue != null)
 				throw new IllegalStateException("Value has already been modified");
 
-			if (getSuperElement() == null || getSuperElement().getValue() == null)
+			if (!hasValue())
 				throw new IllegalStateException(this + ": No inherited value to modify");
 			ValueSpec newSpec = QonfigValidation.validateSpecification(//
 				new ValueSpec(theSuperElement.getValue().getType(), theSuperElement.getValue().getSpecification(),
 					theSuperElement.getValue().getDefaultValue(), theSuperElement.getValue().getDefaultValueContent()), //
 				new ValueSpec(type, specification, defaultValue, defaultValueContent), //
-				err -> theSession.at(position).error(err), warn -> theSession.at(position).warn(warn));
+				err -> theSession.at(position).error(err), warn -> theSession.at(position).warn(warn), true);
 			if (newSpec.specification != theSuperElement.getValue().getSpecification()
 				|| !Objects.equals(newSpec.defaultValue, theSuperElement.getValue().getDefaultValue()))
 				theValue = valueModifier(type, specification, defaultValue, defaultValueContent, description, position);
 			return this;
+		}
+
+		/** @return Whether this builder has an element value definition */
+		protected boolean hasValue() {
+			return getSuperElement() != null && getSuperElement().getValue() != null;
 		}
 
 		/**
@@ -721,7 +726,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					oldSpec = new ValueSpec(attribute.getType(), attribute.getSpecification(), attribute.getDefaultValue(),
 						attribute.getDefaultValueContent());
 				} else {
-					ext = owner.isAssignableFrom(theSuperElement);
+					ext = isAssignableTo(owner);
 					oldSpec = new ValueSpec(attribute.getDeclared().getType(), attribute.getDeclared().getSpecification(),
 						attribute.getDeclared().getDefaultValue(), attribute.getDeclared().getDefaultValueContent());
 					ValueDefModifier mod = theSuperElement.getAttributeModifiers().get(attribute.getDeclared());
@@ -730,11 +735,11 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 							new ValueSpec(null, mod.getSpecification(), mod.getDefaultValue(), mod.getDefaultValueContent()), //
 							__ -> {
 							}, __ -> {
-							});
+							}, false);
 					}
 				}
 			} else {
-				ext = theFullInheritance.contains((QonfigAddOn) owner);
+				ext = isAssignableTo(owner);
 				oldSpec = new ValueSpec(attribute.getType(), attribute.getSpecification(), attribute.getDefaultValue(),
 					attribute.getDefaultValueContent());
 			}
@@ -746,11 +751,21 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			theAttributeModifierOrigSpecs.put(attribute.getDeclared(), oldSpec);
 			ValueSpec newSpec = QonfigValidation.validateSpecification(//
 				oldSpec, new ValueSpec(null, specification, defaultValue, defaultValueContent), //
-				err -> theSession.at(position).error(err), warn -> theSession.at(position).warn(warn));
+				err -> theSession.at(position).error(err), warn -> theSession.at(position).warn(warn), true);
 			theAttributeModifiers.put(attribute.getDeclared(), valueModifier(newSpec.type, newSpec.specification, newSpec.defaultValue,
 				newSpec.defaultValueContent, description, position));
 
 			return this;
+		}
+
+		/**
+		 * @param type The element type to test
+		 * @return Whether the element that will be built by this builder will be an instance of the given type
+		 */
+		protected boolean isAssignableTo(QonfigElementOrAddOn type) {
+			if (theSuperElement != null && type.isAssignableFrom(theSuperElement))
+				return true;
+			return type instanceof QonfigAddOn && theFullInheritance.contains((QonfigAddOn) type);
 		}
 
 		/**
@@ -837,14 +852,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				throw new IllegalStateException(
 					"Bad child " + child + ": owner " + child.getDeclared().getOwner() + " does not recognize it");
 			QonfigParseSession childSession = theSession.at(position);
-			boolean inherited = theSuperElement != null && child.getOwner().isAssignableFrom(theSuperElement);
-			if (!inherited && child.getOwner() instanceof QonfigAddOn) {
-				for (QonfigAddOn inh : theInheritance) {
-					inherited = inh.isAssignableFrom(child.getOwner());
-					if (inherited)
-						break;
-				}
-			}
+			boolean inherited = isAssignableTo(child.getOwner());
 			if (!inherited) {
 				childSession.error("Cannot modify child, because its owner is not inherited");
 				return this;

@@ -8,11 +8,27 @@ import java.util.function.Function;
 
 import org.qommons.StringUtils;
 
+/**
+ * Partially handles {@link Condition#or(Function)} and {@link Condition#and(Function)}
+ * 
+ * @param <E> The type of entities this condition is for
+ * @param <C> The super-type of conditions in this condition's domain
+ * @param <A> The type of the {@link All} condition in this condition's domain
+ */
 public interface ConditionImpl<E, C extends Condition<E, C, A>, A extends All<E, C, A>> extends Condition<E, C, A> {
+	/** @return An integer representing the type of this condition */
 	int getConditionType();
 
+	/**
+	 * @param conditions The conditions to OR
+	 * @return The or condition instance
+	 */
 	C createOrCondition(Collection<? extends C> conditions);
 
+	/**
+	 * @param conditions The conditions to AND
+	 * @return The and condition instance
+	 */
 	C createAndCondition(Collection<? extends C> conditions);
 
 	/**
@@ -55,6 +71,8 @@ public interface ConditionImpl<E, C extends Condition<E, C, A>, A extends All<E,
 	 * Either an {@link ConditionImpl.OrCondition OR} or an {@link ConditionImpl.AndCondition AND} condition
 	 *
 	 * @param <E> The entity type of the condition
+	 * @param <C> The super-type of conditions in this condition's domain
+	 * @param <A> The type of the {@link All} condition in this condition's domain
 	 */
 	public interface CompositeCondition<E, C extends Condition<E, C, A>, A extends All<E, C, A>> extends ConditionImpl<E, C, A> {
 		/** @return The component conditions of this composite */
@@ -83,12 +101,23 @@ public interface ConditionImpl<E, C extends Condition<E, C, A>, A extends All<E,
 			return Integer.compare(getComponents().size(), other.getComponents().size());
 		}
 
+		/**
+		 * We can't implement {@link Object#hashCode()} here, so this method is available for implementations
+		 * 
+		 * @return The hash code for this composite condition
+		 */
 		default int _hashCode() {
 			int hash = getClass().hashCode();
 			hash = hash * 31 + getComponents().hashCode();
 			return hash;
 		}
 
+		/**
+		 * We can't implement {@link Object#equals(Object)} here, so this method is available for implementations
+		 * 
+		 * @param obj The object to compare to
+		 * @return Whether this condition is equal to the given object
+		 */
 		default boolean _equals(Object obj) {
 			if (this == obj)
 				return true;
@@ -102,6 +131,11 @@ public interface ConditionImpl<E, C extends Condition<E, C, A>, A extends All<E,
 			return true;
 		}
 
+		/**
+		 * We can't implement {@link Object#toString()} here, so this method is available for implementations
+		 * 
+		 * @return The string representation of this condition
+		 */
 		default String _toString() {
 			return StringUtils.print(new StringBuilder('('), ",", getComponents(), null).append(')').toString();
 		}
@@ -111,6 +145,8 @@ public interface ConditionImpl<E, C extends Condition<E, C, A>, A extends All<E,
 	 * A condition that passes if any one of its component conditions does
 	 *
 	 * @param <E> The entity type of the condition
+	 * @param <C> The super-type of conditions in this condition's domain
+	 * @param <A> The type of the {@link All} condition in this condition's domain
 	 */
 	public interface OrCondition<E, C extends Condition<E, C, A>, A extends All<E, C, A>> extends CompositeCondition<E, C, A> {
 		@Override
@@ -176,6 +212,8 @@ public interface ConditionImpl<E, C extends Condition<E, C, A>, A extends All<E,
 	 * A condition that passes if all of its component conditions do
 	 *
 	 * @param <E> The entity type of the condition
+	 * @param <C> The super-type of conditions in this condition's domain
+	 * @param <A> The type of the {@link All} condition in this condition's domain
 	 */
 	public interface AndCondition<E, C extends Condition<E, C, A>, A extends All<E, C, A>> extends CompositeCondition<E, C, A> {
 		@Override

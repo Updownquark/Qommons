@@ -1,9 +1,19 @@
 package org.qommons.config;
 
+import java.text.ParseException;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import org.qommons.MultiInheritanceSet;
 import org.qommons.Named;
+import org.qommons.QommonsUtils;
 import org.qommons.io.ErrorReporting;
+import org.qommons.io.LocatedPositionedContent;
 import org.qommons.io.PositionedContent;
 
 /** A type of values that can be parsed from attribute or element text values */
@@ -98,6 +108,213 @@ public interface QonfigValueType extends Named, FileSourced {
 			}
 		}
 	};
+
+	/**
+	 * An element-def or add-on type parsed from a {@link QonfigTypeValueType}
+	 * 
+	 * @param <T> element-def or add-on
+	 */
+	public static class QonfigTypeReference<T extends QonfigElementOrAddOn> {
+		/** The element-def or add-on type value */
+		public final T reference;
+		/** The parsed content */
+		public final LocatedPositionedContent content;
+
+		/**
+		 * @param reference The element-def or add-on type value
+		 * @param content The parsed content
+		 */
+		public QonfigTypeReference(T reference, LocatedPositionedContent content) {
+			this.reference = reference;
+			this.content = content;
+		}
+
+		@Override
+		public String toString() {
+			return content.toString();
+		}
+	}
+
+	/** A value type referencing a Qonfig element or add-on type */
+	public static class QonfigTypeValueType implements QonfigValueType {
+		/** The pattern for matching element names */
+		public static final Pattern PATTERN = Pattern.compile("((?<ns>[a-zA-Z0-9_\\-]+\\s+v?\\d+\\.\\d+)\\:)?(?<name>[a-zA-Z0-9_\\-]+)");
+
+		@Override
+		public String getName() {
+			return "qonfig-type";
+		}
+
+		@Override
+		public PositionedContent getFilePosition() {
+			return null;
+		}
+
+		@Override
+		public QonfigTypeReference<?> parse(String value, QonfigToolkit tk, ErrorReporting errors) {
+			Matcher match = PATTERN.matcher(value);
+			if (!match.matches()) {
+				errors.error("`" + value + " is not a valid Qonfig type reference");
+				return null;
+			}
+			String ns = match.group("ns");
+			if (ns != null) {
+				try {
+					tk = tk.getDependency(ns);
+				} catch (ParseException e) {
+					errors.at(e.getErrorOffset()).error(e.getMessage(), e);
+					return null;
+				} catch (RuntimeException e) {
+					errors.error(e.getMessage(), e);
+					return null;
+				}
+			}
+			QonfigElementOrAddOn type;
+			try {
+				type = tk.getElementOrAddOn(match.group("name"));
+			} catch (RuntimeException e) {
+				errors.at(match.start("name")).error(e.getMessage(), e);
+				return null;
+			}
+			if (type == null) {
+				errors.at(match.start("name")).error("No such type '" + match.group("name") + "' available to toolkit " + tk);
+				return null;
+			}
+			return new QonfigTypeReference<>(type, errors.getFileLocation());
+		}
+
+		@Override
+		public boolean isInstance(Object value) {
+			return value instanceof QonfigTypeReference;
+		}
+	}
+
+	/** Singleton {@link QonfigTypeValueType} */
+	public static final QonfigTypeValueType QONFIG_TYPE = new QonfigTypeValueType();
+
+	/** {@link QonfigTypeValueType} parsing element-def references */
+	public static class QonfigElementTypeValueType extends QonfigTypeValueType {
+		@Override
+		public String getName() {
+			return "qonfig-element-type";
+		}
+
+		@Override
+		public QonfigTypeReference<QonfigElementDef> parse(String value, QonfigToolkit tk, ErrorReporting errors) {
+			QonfigTypeReference<?> eoao = super.parse(value, tk, errors);
+			if (eoao != null && !(eoao.reference instanceof QonfigElementDef)) {
+				errors.error(eoao.reference + " is an add-on, not an element-def");
+				return null;
+			}
+			return (QonfigTypeReference<QonfigElementDef>) eoao;
+		}
+
+		@Override
+		public boolean isInstance(Object value) {
+			return super.isInstance(value) && ((QonfigTypeReference<?>) value).reference instanceof QonfigElementDef;
+		}
+	}
+
+	/** Singleton {@link QonfigElementTypeValueType} */
+	public static final QonfigElementTypeValueType QONFIG_ELEMENT_TYPE = new QonfigElementTypeValueType();
+
+	/** {@link QonfigTypeValueType} parsing add-on references */
+	public static class QonfigAddOnTypeValueType extends QonfigTypeValueType {
+		@Override
+		public String getName() {
+			return "qonfig-add-on";
+		}
+
+		@Override
+		public QonfigTypeReference<QonfigAddOn> parse(String value, QonfigToolkit tk, ErrorReporting errors) {
+			QonfigTypeReference<?> eoao = super.parse(value, tk, errors);
+			if (eoao != null && !(eoao.reference instanceof QonfigAddOn)) {
+				errors.error(eoao.reference + " is an element-def, not an add-on");
+				return null;
+			}
+			return (QonfigTypeReference<QonfigAddOn>) eoao;
+		}
+
+		@Override
+		public boolean isInstance(Object value) {
+			return super.isInstance(value) && ((QonfigTypeReference<?>) value).reference instanceof QonfigAddOn;
+		}
+	}
+
+	/** Singleton {@link QonfigAddOnTypeValueType} */
+	public static final QonfigAddOnTypeValueType QONFIG_ADD_ON = new QonfigAddOnTypeValueType();
+
+	/** A value type parsing sets of add-on references */
+	public static class QonfigAddOnSetValueType implements QonfigValueType {
+		@Override
+		public String getName() {
+			return "qonfig-add-on-set";
+		}
+
+		@Override
+		public PositionedContent getFilePosition() {
+			return null;
+		}
+
+		@Override
+		public Set<QonfigTypeReference<QonfigAddOn>> parse(String value, QonfigToolkit tk, ErrorReporting errors) {
+			if (value.isEmpty())
+				return Collections.emptySet();
+			int comma = value.indexOf(',');
+			if (comma < 0)
+				return Collections.singleton(QONFIG_ADD_ON.parse(value, tk, errors));
+			MultiInheritanceSet<QonfigAddOn> addOns = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+			Set<QonfigTypeReference<QonfigAddOn>> refs = new LinkedHashSet<>();
+			int start = 0;
+			do {
+				while (start < value.length() && Character.isWhitespace(value.charAt(start)))
+					start++;
+				if (start == value.length()) {
+					errors.at(comma).warn("Missing terminal element");
+					break;
+				}
+				int nextComma = value.indexOf(',', start);
+				if (nextComma == start) {
+					errors.at(comma).warn("Missing element");
+					continue;
+				}
+				comma = nextComma;
+				ErrorReporting elementErrors = errors.at(errors.getFileLocation().subSequence(start, comma < 0 ? value.length() : comma));
+				QonfigTypeReference<QonfigAddOn> addOn = QONFIG_ADD_ON.parse(value.substring(0, comma).trim(), tk, elementErrors);
+				refs.add(addOn);
+				if (!addOns.add(addOn.reference)) {
+					elementErrors.warn("Add-on " + addOn.reference + " is a duplicate");
+				}
+			} while (comma >= 0);
+			return Collections.unmodifiableSet(refs);
+		}
+
+		@Override
+		public boolean isInstance(Object value) {
+			if (value instanceof Set) {
+				for (Object v : ((Set<?>) value)) {
+					if (!(v instanceof QonfigAddOn))
+						return false;
+				}
+				return true;
+			} else
+				return false;
+		}
+	}
+
+	/** Singleton {@link QonfigAddOnSetValueType} */
+	public static final QonfigAddOnSetValueType QONFIG_ADD_ON_SET = new QonfigAddOnSetValueType();
+
+	/** All standard Qonfig value types by name */
+	public static final Map<String, QonfigValueType> STANDARD_TYPES = QommonsUtils.<String, QonfigValueType> buildMap(null)//
+		.with(STRING.getName(), STRING)//
+		.with(BOOLEAN.getName(), BOOLEAN)//
+		.with(INT.getName(), INT)//
+		.with(QONFIG_TYPE.getName(), QONFIG_TYPE)//
+		.with(QONFIG_ELEMENT_TYPE.getName(), QONFIG_ELEMENT_TYPE)//
+		.with(QONFIG_ADD_ON.getName(), QONFIG_ADD_ON)//
+		.with(QONFIG_ADD_ON_SET.getName(), QONFIG_ADD_ON_SET)//
+		.getUnmodifiable();
 
 	/** A declared type (as opposed to a modified one */
 	public static interface Declared extends QonfigValueType, QonfigType {
@@ -209,7 +426,7 @@ public interface QonfigValueType extends Named, FileSourced {
 
 		@Override
 		public Object parse(String value, QonfigToolkit tk, ErrorReporting session) {
-			QonfigParseSession testEnv = QonfigParseSession.forRoot(false, tk, thePosition);
+			QonfigParseSession testEnv = QonfigParseSession.forRoot(tk, thePosition);
 			QonfigValueType best = null;
 			for (QonfigValueType component : theComponents) {
 				testEnv.getErrors().clear();

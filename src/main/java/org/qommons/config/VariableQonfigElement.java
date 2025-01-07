@@ -39,7 +39,7 @@ public class VariableQonfigElement extends PartialQonfigElement {
 	public VariableQonfigElement(QonfigDocument document, PartialQonfigElement parent, QonfigElementOrAddOn type,
 		MultiInheritanceSet<QonfigAddOn> inheritance, Set<QonfigChildDef> parentRoles, Set<Declared> declaredRoles,
 		Map<QonfigAttributeDef.Declared, AttributeValue> attributes, QonfigValue value, LocatedPositionedContent filePosition,
-		String description, PartialQonfigElement promise, PartialQonfigElement externalContent, int minimumCount, int maximumCount,
+		String description, QonfigElement promise, PartialQonfigElement externalContent, int minimumCount, int maximumCount,
 		BiConsumer<VariableQonfigElement, Builder> builder) {
 		super(document, parent, type, inheritance, parentRoles, declaredRoles, attributes, Collections.emptyList(), BetterMultiMap.empty(),
 			value, filePosition, description, promise, externalContent);
@@ -61,9 +61,9 @@ public class VariableQonfigElement extends PartialQonfigElement {
 	private boolean isCopying;
 
 	@Override
-	public void copyInto(QonfigElement.Builder parent) {
+	public void copyInto(QonfigElement.Builder parent, QonfigParser parser, QonfigParseSession session) {
 		if (isCopying) // Recursive call from the builder
-			super.copyInto(parent);
+			super.copyInto(parent, parser, session);
 		else
 			theBuilder.accept(this, parent);
 	}

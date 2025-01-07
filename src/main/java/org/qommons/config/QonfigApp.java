@@ -149,13 +149,13 @@ public class QonfigApp {
 					}
 				}
 			} else {
-			try {
+				try {
 					elType = QonfigApp.class.getClassLoader().loadClass(el.getValueText());
-			} catch (ClassNotFoundException e) {
-				throw QonfigParseException.createSimple(
-					new LocatedFilePosition(el.getDocument().getLocation(), el.getValue().position.getPosition(0)),
-					"No such " + type.getSimpleName() + " findable: " + el.getValueText(), e);
-			}
+				} catch (ClassNotFoundException e) {
+					throw QonfigParseException.createSimple(
+						new LocatedFilePosition(el.getDocument().getLocation(), el.getValue().position.getPosition(0)),
+						"No such " + type.getSimpleName() + " findable: " + el.getValueText(), e);
+				}
 			}
 			if (!type.isAssignableFrom(elType))
 				throw new IllegalArgumentException("Class " + elType.getName() + " is not a " + type.getName());
@@ -175,13 +175,6 @@ public class QonfigApp {
 		}
 		values.trimToSize();
 		return Collections.unmodifiableList(values);
-	}
-
-	private static void addToolkits(QonfigToolkit toolkit, Set<QonfigToolkit> toolkits) {
-		for (QonfigToolkit dep : toolkit.getDependencies().values()) {
-			if (toolkits.add(dep))
-				addToolkits(dep, toolkits);
-		}
 	}
 
 	private static <QIS extends SpecialSession<QIS>> void addSpecial(SpecialSessionImplementation<QIS> ssi, Builder coreBuilder) {
@@ -316,10 +309,9 @@ public class QonfigApp {
 		}
 
 		// Build the interpreter
-		Set<QonfigToolkit> toolkits = new LinkedHashSet<>();
-		addToolkits(qonfigDoc.getDocToolkit(), toolkits);
 		QonfigInterpreterCore.Builder coreBuilder = QonfigInterpreterCore
-			.build(new ErrorReporting.Default(qonfigDoc.getRoot().getFilePosition()), toolkits.toArray(new QonfigToolkit[toolkits.size()]));
+			.build(new ErrorReporting.Default(qonfigDoc.getRoot().getFilePosition()),
+				getToolkits().toArray(new QonfigToolkit[getToolkits().size()]));
 
 		for (SpecialSessionImplementation<?> ssi : getSessionTypes())
 			addSpecial(ssi, coreBuilder);

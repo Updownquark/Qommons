@@ -22,9 +22,9 @@ public class QonsoleTest {
 	static class QTestable implements Testable {
 		@Override
 		public void accept(TestHelper helper) {
-			BufferedReaderWriter rw = new BufferedReaderWriter();
+			CircularCharBuffer rw = new CircularCharBuffer(-1);
 			int[] testValues = new int[2];
-			try (Reader reader = rw.read();
+			try (Reader reader = rw.asDeletingReader();
 				Qonsole qonsole = new Qonsole("Test", reader, ":", () -> false)//
 				.addPlugin("test0", content -> {
 					int line = indexOf(content, '\n');
@@ -71,13 +71,9 @@ public class QonsoleTest {
 					int whichValue = helper.getBoolean() ? 0 : 1;
 					boolean add = helper.getBoolean();
 					int value = helper.getAnyInt();
-					try {
-						rw.write().append(//
-							"test" + whichValue + ":" + (add ? "add" : "sub") + "\n");
-						rw.write().append(String.valueOf(value) + "\n");
-					} catch (IOException e) {
-						Assert.assertFalse(true);
-					}
+					rw.append(//
+						"test" + whichValue + ":" + (add ? "add" : "sub") + "\n");
+					rw.append(String.valueOf(value) + "\n");
 					expectedValues[whichValue] += (add ? value : -value);
 					try {
 						Thread.sleep(2);

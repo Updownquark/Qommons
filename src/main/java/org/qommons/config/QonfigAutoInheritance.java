@@ -1,6 +1,7 @@
 package org.qommons.config;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -163,6 +164,7 @@ public class QonfigAutoInheritance {
 				for (QonfigToolkit toolkit : theToolkits) {
 					MultiInheritanceSet<QonfigAddOn> autoInh = toolkit.getAutoInheritance(type, theFullRoles);
 					for (QonfigAddOn inh : autoInh.values()) {
+						addInheritance(inh, inheritance);
 						if (theInheritance.add(inh)) {
 							if (inheritance != null)
 								inheritance.accept(inh);
@@ -170,18 +172,35 @@ public class QonfigAutoInheritance {
 						}
 					}
 				}
+				addInheritance(type, inheritance);
 			}
 			return this;
+		}
+
+		private void addInheritance(QonfigElementOrAddOn type, Consumer<QonfigAddOn> inheritance) {
+			if (type instanceof QonfigAddOn) {
+				if (!theInheritance.add((QonfigAddOn) type))
+					return;
+				if (inheritance != null)
+					inheritance.accept((QonfigAddOn) type);
+			}
+			for (QonfigAddOn inh : type.getInheritance())
+				addInheritance(inh, inheritance);
+			if (type.getSuperElement() != null)
+				addInheritance(type.getSuperElement(), inheritance);
 		}
 	}
 
 	private final QonfigToolkit theDeclarer;
 	private final MultiInheritanceSet<QonfigAddOn> theInheritance;
+	private final boolean isUniversal;
 	private final Set<AutoInheritTarget> theTargets;
 
-	QonfigAutoInheritance(QonfigToolkit declarer, MultiInheritanceSet<QonfigAddOn> inheritance, Set<AutoInheritTarget> targets) {
+	QonfigAutoInheritance(QonfigToolkit declarer, MultiInheritanceSet<QonfigAddOn> inheritance, boolean universal,
+		Set<AutoInheritTarget> targets) {
 		theDeclarer = declarer;
 		theInheritance = inheritance;
+		isUniversal = universal;
 		theTargets = targets;
 	}
 
@@ -193,6 +212,11 @@ public class QonfigAutoInheritance {
 	/** @return The add-ons for the targets to inherit */
 	public MultiInheritanceSet<QonfigAddOn> getInheritance() {
 		return theInheritance;
+	}
+
+	/** @return True if this inheritance is universal, meaning it applies to all elements regardless of type */
+	public boolean isUniversal() {
+		return isUniversal;
 	}
 
 	/** @return The targets for this auto-inheritance */
@@ -243,6 +267,14 @@ public class QonfigAutoInheritance {
 			return this;
 		}
 
+		/** @return A universal auto-inheritance with the configured inheritance */
+		public QonfigAutoInheritance universal() {
+			if (!theTargets.isEmpty())
+				throw new IllegalStateException("Universal auto-inheritance may specify no targets");
+			return new QonfigAutoInheritance(theSession.getToolkit(), MultiInheritanceSet.unmodifiable(theInheritance.copy()), true,
+				Collections.emptySet());
+		}
+
 		/**
 		 * Adds a target to inherit the add-ons automatically
 		 * 
@@ -281,7 +313,7 @@ public class QonfigAutoInheritance {
 		/** @return The new auto-inheritance object */
 		public QonfigAutoInheritance build() {
 			return new QonfigAutoInheritance(theSession.getToolkit(), MultiInheritanceSet.unmodifiable(theInheritance.copy()),
-				QommonsUtils.unmodifiableDistinctCopy(theTargets));
+				false, QommonsUtils.unmodifiableDistinctCopy(theTargets));
 		}
 	}
 }

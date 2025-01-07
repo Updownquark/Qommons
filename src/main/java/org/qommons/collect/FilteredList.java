@@ -5,6 +5,8 @@ import java.util.Collections;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
+import org.qommons.Identifiable;
+import org.qommons.Identifiable.AbstractIdentifiable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
@@ -21,7 +23,7 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * 
  * @param <T>
  */
-public class FilteredList<T> implements BetterList<T> {
+public class FilteredList<T> extends AbstractIdentifiable implements BetterList<T> {
 	private final BetterList<? extends T> theWrapped;
 	private final BetterBitSet theFilter;
 
@@ -40,8 +42,8 @@ public class FilteredList<T> implements BetterList<T> {
 	}
 
 	@Override
-	public Object getIdentity() {
-		return this; // Meh
+	protected Object createIdentity() {
+		return Identifiable.wrap(theWrapped, "filtered", theFilter);
 	}
 
 	@Override

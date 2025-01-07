@@ -251,4 +251,45 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 			return false;
 		}
 	}
+
+	/**
+	 * An immutable {@link BetterSet} with a single element
+	 * 
+	 * @param <E> The type of the collection
+	 */
+	class SingletonSet<E> extends BetterCollection.SingletonCollection<E> implements BetterSet<E> {
+		public SingletonSet(E value) {
+			super(value);
+		}
+
+		@Override
+		public CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
+			return null;
+		}
+
+		@Override
+		public boolean isConsistent(ElementId element) {
+			return true;
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return false;
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+			return false;
+		}
+
+		@Override
+		public <X> boolean repair(RepairListener<E, X> listener) {
+			return false;
+		}
+
+		@Override
+		public <T> T[] toArray(T[] array) {
+			return super.toArray(array);
+		}
+	}
 }

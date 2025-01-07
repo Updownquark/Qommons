@@ -84,6 +84,11 @@ public interface ValueCondition<E, C extends Condition<E, C, A>, A extends All<E
 		return comp;
 	}
 
+	/**
+	 * @param conditionValue The condition value to test
+	 * @param targetValue The target value to test
+	 * @return Whether this condition is true for the 2 values
+	 */
 	default boolean test(F conditionValue, F targetValue) {
 		if (getComparison() == 0) {
 			boolean equal = Objects.equals(conditionValue, targetValue);
@@ -98,8 +103,19 @@ public interface ValueCondition<E, C extends Condition<E, C, A>, A extends All<E
 			return getComparison() > 0;
 	}
 
+	/**
+	 * We can't implement {@link Object#hashCode()} here, so this method is available for implementations
+	 * 
+	 * @return The hash code for this composite condition
+	 */
 	int _hashCode();
 
+	/**
+	 * We can't implement {@link Object#equals(Object)} here, so this method is available for implementations
+	 * 
+	 * @param obj The object to compare to
+	 * @return Whether this condition is equal to the given object
+	 */
 	default boolean _equals(Object obj) {
 		if (obj == this)
 			return true;
@@ -111,6 +127,11 @@ public interface ValueCondition<E, C extends Condition<E, C, A>, A extends All<E
 			&& compareValue((ValueCondition<E, ?, ?, F>) other) == 0;
 	}
 
+	/**
+	 * We can't implement {@link Object#toString()} here, so this method is available for implementations
+	 * 
+	 * @return The string representation of this condition
+	 */
 	default String _toString() {
 		return new StringBuilder().append(getField()).append(getSymbol()).toString();
 	}

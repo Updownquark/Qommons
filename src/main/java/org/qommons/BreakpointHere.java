@@ -1,8 +1,11 @@
 package org.qommons;
 
 import java.lang.management.ManagementFactory;
+import java.text.ParseException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
+
+import org.qommons.io.Format;
 
 /**
  * The BreakpointHere class enables applications to transfer control to the java debugger, where this is VM-enabled. Users should always
@@ -13,9 +16,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * </ul>
  */
 public class BreakpointHere {
-	private static boolean IGNORE_ALL;
-	private static final Set<String> IGNORING_CLASSES = new java.util.LinkedHashSet<>();
-	private static final Set<StackTraceElement> IGNORING_LOCATIONS = new java.util.LinkedHashSet<>();
+	private static long IGNORE_ALL;
+	private static final Map<String, Long> IGNORING_CLASSES = new java.util.LinkedHashMap<>();
+	private static final Map<StackTraceElement, Long> IGNORING_LOCATIONS = new java.util.LinkedHashMap<>();
 	private static final Map<String, IgnoreType> CLI_IGNORE;
 	private static boolean HAS_PRINTED_INPUT_UNRESPONSIVE = false;
 	static {
@@ -66,7 +69,8 @@ public class BreakpointHere {
 	 * @return Whether the breakpoint was actually caught
 	 */
 	public static boolean breakpoint() {
-		if(IGNORE_ALL)
+		long now = System.currentTimeMillis();
+		if (IGNORE_ALL > now)
 			return false;
 		Thread thread=Thread.currentThread();
 		StackTraceElement [] stack;
@@ -78,34 +82,37 @@ public class BreakpointHere {
 		} else {
 			stack = thread.getStackTrace();
 			if(stack == null || stack.length == 0) {
-				IGNORE_ALL = true;
+				IGNORE_ALL = Long.MAX_VALUE;
 				System.err.println("WARNING! Application is attempting to catch a breakpoint, but line numbers seem to not be included");
 				return false;
 			}
 			source = stack[2];
-			if(IGNORING_CLASSES.contains(source.getClassName()))
+			Long ignoreTime = IGNORING_CLASSES.get(source.getClassName());
+			if (ignoreTime != null && ignoreTime.longValue() > now)
 				return false;
-			if(IGNORING_LOCATIONS.contains(source))
+			ignoreTime = IGNORING_LOCATIONS.get(source);
+			if (ignoreTime != null && ignoreTime.longValue() > now)
 				return false;
 		}
 
 		theBreakpointCatchCount.incrementAndGet();
 		boolean breakpointCaught = false;
 		boolean alerted = false;
-		AsyncInputReader reader = null;
+		AsyncInputReader reader = new AsyncInputReader();
 		IgnoreType ignore = null;
+		long ignoreTime = -1;
 		try {
 			do {
 				long pre = System.nanoTime();
 				ignore = IgnoreType.NONE;
 
-				/* ||==\\   ||==\\   ||=====     //\\     ||   //     ||    ||  ||=====  ||==\\   ||=====  || ||
-				 * ||   \\  ||   \\  ||         //  \\    ||  //      ||    ||  ||       ||   \\  ||       || ||
-				 * ||   //  ||   //  ||        ||    ||   || //       ||    ||  ||       ||   //  ||       || ||
-				 * ||===    ||===    ||===     //====\\   ||//        ||====||  ||===    ||===    ||===    || ||
-				 * ||   \\  || \\    ||       //      \\  || \\       ||    ||  ||       || \\    ||       || ||
-				 * ||   ||  ||  \\   ||       ||      ||  ||  \\      ||    ||  ||       ||  \\   ||
-				 * ||===//  ||   \\  ||=====  ||      ||  ||   \\     ||    ||  ||=====  ||   \\  ||=====  () ()
+				/* ||==\\   ||==\\   ||=====     /\     ||   //     ||    ||  ||=====  ||==\\   ||=====  || ||
+				 * ||   \\  ||   \\  ||         //\\    ||  //      ||    ||  ||       ||   \\  ||       || ||
+				 * ||   //  ||   //  ||        //  \\   || //       ||    ||  ||       ||   //  ||       || ||
+				 * ||===    ||===    ||===    //====\\  ||//        ||====||  ||===    ||===    ||===    || ||
+				 * ||   \\  || \\    ||      ||      || || \\       ||    ||  ||       || \\    ||       || ||
+				 * ||   ||  ||  \\   ||      ||      || ||  \\      ||    ||  ||       ||  \\   ||
+				 * ||===//  ||   \\  ||===== ||      || ||   \\     ||    ||  ||=====  ||   \\  ||=====  () ()
 				 *
 				 * The user should set a breakpoint on the following line */
 				/*         \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ */
@@ -126,7 +133,7 @@ public class BreakpointHere {
 							theBreakpointCatchCount.decrementAndGet();
 							System.err
 								.println("WARNING! Application is attempting to catch a breakpoint, but debugging seems to be disabled");
-							IGNORE_ALL = true;
+							IGNORE_ALL = Long.MAX_VALUE;
 							return false;
 						}
 						alerted = true;
@@ -144,56 +151,93 @@ public class BreakpointHere {
 							"\n 4) Type \"C\" and press ENTER to ignore all break points from the class that is requesting this break (")
 							.append(source.getClassName()).append(") for this session.");
 						msg.append("\n 5) Type \"A\" and press ENTER to ignore all break points for this session.");
+						msg.append("\n If a duration is appended to the end of the line after a space,")
+							.append(" the command will only be effective for the given amount of time.");
 						System.err.println(msg);
-
-						reader = new AsyncInputReader();
 					}
 					try {
 						Thread.sleep(100);
 					} catch (InterruptedException e) {
 						Thread.currentThread().interrupt();
 					}
-
-					// Reader actually can't be null here, but I'm suppressing a warning
-					String command = reader == null ? null : reader.getCommand();
-					if (command != null) {
-						if (command.length() == 0)
-							break;
-						ignore = CLI_IGNORE.get(command.toLowerCase());
-						if (ignore == null) {
-							System.err.println("Type \"L\", \"C\", \"A\", or just press ENTER");
-							continue;
-						}
-						break;
-					}
 				} else
 					breakpointCaught = true;
+
+				String command = reader.getCommand();
+				if (command != null) {
+					if (command.length() == 0)
+						break;
+					int space = command.indexOf(' ');
+					if (space > 0) {
+						try {
+							ignoreTime = Format.DURATION.parse(command.substring(space).trim()).toMillis();
+						} catch (ParseException | RuntimeException e) {
+							e.printStackTrace();
+							continue;
+						}
+						command = command.substring(0, space);
+					}
+					ignore = CLI_IGNORE.get(command.toLowerCase());
+					if (ignore == null) {
+						System.err.println("Type \"L\", \"C\", \"A\", or just press ENTER");
+						continue;
+					}
+					break;
+				}
 			} while (!breakpointCaught);
 		} finally {
 			if (reader != null)
 				reader.close();
 		}
-		if(ignore!=null){
+		if (ignore != null && ignore != IgnoreType.NONE) {
+			StringBuilder msg = new StringBuilder("Ignoring ");
 			switch(ignore){
 			case NONE:
 				break;
 			case LOCAL:
-				System.out.println("Ignoring future breakpoints from " + source);
-				IGNORING_LOCATIONS.add(source);
+				msg.append("future breakpoints from ").append(source);
+				IGNORING_LOCATIONS.put(source, ignoreTime > 0 ? System.currentTimeMillis() + ignoreTime : Long.MAX_VALUE);
 				break;
 			case CLASS:
 				// Source actually can't be null here, but I'm suppressing a warning
-				System.out.println("Ignoring future breakpoints from class " + (source == null ? "?" : source.getClassName()));
+				msg.append("future breakpoints from class ").append(source == null ? "?" : source.getClassName());
 				if (source != null)
-					IGNORING_CLASSES.add(source.getClassName());
+					IGNORING_CLASSES.put(source.getClassName(), ignoreTime > 0 ? System.currentTimeMillis() + ignoreTime : Long.MAX_VALUE);
 				break;
 			case ALL:
-				System.out.println("Turning all breakpoints off");
-				IGNORE_ALL = true;
+				msg.append("all future breakpoints");
+				IGNORE_ALL = ignoreTime > 0 ? System.currentTimeMillis() + ignoreTime : Long.MAX_VALUE;
 				break;
 			}
+			if (ignoreTime > 0)
+				QommonsUtils.printTimeLength(ignoreTime, msg.append(" for "), true);
+			System.out.println(msg.toString());
 		}
 		return breakpointCaught;
+	}
+
+	/**
+	 * No complexity here, just breaks if the condition is true. I've found use cases where this is useful as a single expression.
+	 * 
+	 * @param condition The condition to break on
+	 */
+	public static void breakpointIf(boolean condition) {
+		if (condition)
+			breakpoint();
+	}
+
+	/**
+	 * Same as {@link #breakpoint()}, but since stupid Java doesn't allow any statements before the super constructor invocation in a
+	 * constructor, this method allows the placement of breakpoints in constructors prior to the super invocation with parameter, as in
+	 * <code>super(BreakpointHere.breakpoint(parameter))</code>.
+	 * 
+	 * @param <T> The type of the value
+	 * @param value The parameter value
+	 * @return The input value
+	 */
+	public static <T> T breakpoint(T value) {
+		breakpoint();
+		return value;
 	}
 
 	/** @return The (approximate) number of times a {@link #breakpoint()} was caught during this VM run */

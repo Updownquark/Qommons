@@ -8,6 +8,7 @@ import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 
 import org.qommons.Identifiable;
+import org.qommons.Identifiable.AbstractIdentifiable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
 import org.qommons.ThreadConstraint;
@@ -20,7 +21,7 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * @param <K> The type of keys for the map
  * @param <V> The type of values for the map
  */
-public class BetterHashMap<K, V> implements BetterMap<K, V> {
+public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterMap<K, V> {
 	/**
 	 * Builds a {@link BetterHashMap}
 	 * 
@@ -157,7 +158,7 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 	}
 
 	@Override
-	public Object getIdentity() {
+	protected Object createIdentity() {
 		return theEntries.getIdentity();
 	}
 
@@ -307,14 +308,10 @@ public class BetterHashMap<K, V> implements BetterMap<K, V> {
 		}
 	}
 
-	class KeySet implements BetterSet<K> {
-		private Object theIdentity;
-
+	class KeySet extends AbstractIdentifiable implements BetterSet<K> {
 		@Override
-		public Object getIdentity() {
-			if (theIdentity == null)
-				theIdentity = Identifiable.wrap(BetterHashMap.this.getIdentity(), "keySet");
-			return theIdentity;
+		protected Object createIdentity() {
+			return Identifiable.wrap(BetterHashMap.this.getIdentity(), "keySet");
 		}
 
 		@Override

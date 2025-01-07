@@ -19,7 +19,10 @@ public interface QonfigValueDef extends QonfigElementOwned {
 	/** @return The type of value that must be specified */
 	QonfigValueType getType();
 
-	/** @return The specification of the value (whether the user must, may, or cannot specify the value) */
+	/**
+	 * @return The specification of the value (whether the user {@link SpecificationType#Required must}, {@link SpecificationType#Optional
+	 *         may}, or {@link SpecificationType#Forbidden cannot} specify the value)
+	 */
 	SpecificationType getSpecification();
 
 	/** @return The value to use if the user does not specify it */
@@ -56,6 +59,8 @@ public interface QonfigValueDef extends QonfigElementOwned {
 			theDefaultValueContent = defaultValueContent;
 			thePosition = position;
 			theDescription = description;
+			if (theOwner == null || theType == null || theSpecification == null)
+				throw new NullPointerException();
 		}
 
 		@Override

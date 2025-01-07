@@ -71,6 +71,17 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 	}
 
 	@Override
+	public SortedEnumMap<K, V> alias(String alias) {
+		theIdentity = Identifiable.AliasedIdentity.alias(getIdentity(), alias);
+		return this;
+	}
+
+	@Override
+	public Set<String> getAliases() {
+		return Identifiable.AliasedIdentity.getAliases(theIdentity);
+	}
+
+	@Override
 	public boolean isLockSupported() {
 		return theLocker.isLockSupported();
 	}
@@ -464,7 +475,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 	}
 
-	class KeySet implements BetterSortedSet<K> {
+	class KeySet extends AbstractIdentifiable implements BetterSortedSet<K> {
 		@Override
 		public long getStamp() {
 			return SortedEnumMap.this.getStamp();
@@ -496,7 +507,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public Object getIdentity() {
+		protected Object createIdentity() {
 			return Identifiable.wrap(SortedEnumMap.this.getIdentity(), "keySet");
 		}
 
@@ -843,9 +854,9 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 	}
 
-	class EntrySet implements BetterSortedSet<Map.Entry<K, V>> {
+	class EntrySet extends AbstractIdentifiable implements BetterSortedSet<Map.Entry<K, V>> {
 		@Override
-		public Object getIdentity() {
+		protected Object createIdentity() {
 			return Identifiable.wrap(SortedEnumMap.this.getIdentity(), "entrySet");
 		}
 
@@ -1094,7 +1105,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 	}
 
-	class Values implements BetterList<V> {
+	class Values extends AbstractIdentifiable implements BetterList<V> {
 		@Override
 		public ThreadConstraint getThreadConstraint() {
 			return SortedEnumMap.this.getThreadConstraint();
@@ -1111,7 +1122,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public Object getIdentity() {
+		protected Object createIdentity() {
 			return Identifiable.wrap(SortedEnumMap.this.getIdentity(), "values");
 		}
 

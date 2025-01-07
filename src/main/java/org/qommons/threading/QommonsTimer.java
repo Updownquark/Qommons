@@ -15,6 +15,7 @@ import org.qommons.ArgumentParsing;
 import org.qommons.ArgumentParsing.Argument;
 import org.qommons.ArgumentParsing.MatchedArgument;
 import org.qommons.QommonsUtils;
+import org.qommons.ThreadConstraint;
 import org.qommons.TimeUtils;
 import org.qommons.collect.ListenerList;
 
@@ -231,7 +232,7 @@ public class QommonsTimer {
 			Instant nextRun = theNextRun;
 			theNextRun = time;
 			if (!isActive()) {
-				if (theRemainingExecCount <= 0)
+				if (theRemainingExecCount == 0)
 					theRemainingExecCount = 1;
 				setActive(true);
 			} else if (nextRun == null || time.compareTo(nextRun) < 0)
@@ -284,7 +285,7 @@ public class QommonsTimer {
 		 * @return This task
 		 */
 		public TaskHandle times(long times) {
-			theRemainingExecCount = times;
+			theRemainingExecCount = times == 0 ? -1 : times;
 			return this;
 		}
 
@@ -320,6 +321,24 @@ public class QommonsTimer {
 			if (threading == null)
 				throw new NullPointerException();
 			theThreading = threading;
+			return this;
+		}
+
+		/**
+		 * @param threading The threading scheme for this task
+		 * @return This task
+		 */
+		public TaskHandle withThreading(ThreadConstraint threading) {
+			if (threading == null)
+				throw new NullPointerException();
+			else if (threading == ThreadConstraint.NONE)
+				throw new IllegalArgumentException(threading + " is not allowed here");
+			if (threading == ThreadConstraint.ANY)
+				return onAnyThread();
+			theThreading = (task, timer) -> {
+				threading.invoke(task);
+				return true;
+			};
 			return this;
 		}
 
@@ -469,14 +488,13 @@ public class QommonsTimer {
 							theLastRun = null;
 					}
 					long rem = theRemainingExecCount;
-					if (rem > 0) {
-						rem--;
-						theRemainingExecCount = rem;
-						if (rem == 0) {
-							terminate = true;
-							nextRun = null;
-						}
-					}
+					if (rem < 0) {
+					} else if (rem == 1) {
+						theRemainingExecCount = 0;
+						terminate = true;
+						nextRun = null;
+					} else
+						theRemainingExecCount = rem - 1;
 					theNextRun = nextRun;
 					if (terminate) {
 						setActive(false);

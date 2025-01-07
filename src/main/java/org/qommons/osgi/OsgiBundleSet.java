@@ -861,14 +861,19 @@ public class OsgiBundleSet {
 	}
 
 	static class PackageImpl implements ResourceSource {
+
 		private final Bundle theOwner;
 		private final String theName;
 		private final BetterFile theFile;
+		private final Map<String, BetterFile> theResources;
 
 		public PackageImpl(Bundle owner, String name, BetterFile file) {
 			theOwner = owner;
 			theName = name;
 			theFile = file;
+			theResources = new HashMap<>();
+			for (BetterFile rsrc : file.listFiles())
+				theResources.put(rsrc.getName(), rsrc);
 		}
 
 		public Bundle getOwner() {
@@ -887,38 +892,27 @@ public class OsgiBundleSet {
 
 		@Override
 		public URL getResource(String name) {
-			BetterFile file = theFile.at(name);
-			if (file.exists()) {
-				try {
-					return new URL(file.toUrl(null).toString());
-				} catch (MalformedURLException e) {
-					e.printStackTrace();
-				}
+			BetterFile file = theResources.get(name);
+			if (file == null)
+				return null;
+			try {
+				return new URL(file.toUrl(null).toString());
+			} catch (MalformedURLException e) {
+				e.printStackTrace();
 			}
 			return null;
 		}
 
 		@Override
 		public List<URL> getResources(String name) {
-			BetterFile file = theFile.at(name);
-			if (file.exists()) {
-				try {
-					return Arrays.asList(new URL(file.toUrl(null).toString()));
-				} catch (MalformedURLException e) {
-					e.printStackTrace();
-				}
-			}
-			return Collections.emptyList();
+			URL resource = getResource(name);
+			return resource == null ? Collections.emptyList() : Arrays.asList(resource);
 		}
 
 		@Override
 		public Bundle getOwner(String name) {
-			BetterFile file = theFile.at(name);
-			if (file.exists()) {
-				return theOwner;
-			} else {
-				return null;
-			}
+			BetterFile file = theResources.get(name);
+			return file == null ? null : theOwner;
 		}
 
 		@Override

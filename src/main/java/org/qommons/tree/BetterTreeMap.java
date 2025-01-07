@@ -6,6 +6,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.qommons.Identifiable;
+import org.qommons.Identifiable.AbstractIdentifiable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
 import org.qommons.ThreadConstraint;
@@ -19,7 +20,7 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * @param <K> The type of keys in the map
  * @param <V> The type of values in the map
  */
-public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
+public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBasedSortedMap<K, V> {
 	private static final String DEFAULT_DESCRIPTION = "better-tree-map";
 
 	/**
@@ -66,7 +67,6 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	private final BetterTreeEntrySet<K, V> theEntries;
 	private final KeySet theKeySet;
 	private final EntrySet theEntrySet;
-	private final Object theIdentity;
 
 	BetterTreeMap(boolean threadSafe, Comparator<? super K> compare, ThreadConstraint threadConstraint) {
 		this(v -> threadSafe ? new StampedLockingStrategy(v, threadConstraint) : new FastFailLockingStrategy(threadConstraint),
@@ -83,8 +83,8 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	 */
 	public BetterTreeMap(Function<Object, CollectionLockingStrategy> locker, SortedMap<K, ? extends V> map) {
 		theCompare = map.comparator();
-		theIdentity = Identifiable.baseId(DEFAULT_DESCRIPTION, this);
-		theEntries = new BetterTreeEntrySet<>(locker, theIdentity, map, this::newEntry);
+		initIdentity(Identifiable.baseId(DEFAULT_DESCRIPTION, this));
+		theEntries = new BetterTreeEntrySet<>(locker, getIdentity(), map, this::newEntry);
 		theKeySet = new KeySet();
 		theEntrySet = new EntrySet(this);
 	}
@@ -96,15 +96,15 @@ public class BetterTreeMap<K, V> implements TreeBasedSortedMap<K, V> {
 	 */
 	protected BetterTreeMap(Function<Object, CollectionLockingStrategy> locker, String description, Comparator<? super K> compare) {
 		theCompare = compare;
-		theIdentity = Identifiable.baseId(description, this);
+		initIdentity(Identifiable.baseId(description, this));
 		theEntries = new BetterTreeEntrySet<>(locker, description, compare);
 		theKeySet = new KeySet();
 		theEntrySet = new EntrySet(this);
 	}
 
 	@Override
-	public Object getIdentity() {
-		return theIdentity;
+	protected Object createIdentity() {
+		throw new IllegalStateException("Should have been initialized");
 	}
 
 	/** Checks this map's structure for errors */

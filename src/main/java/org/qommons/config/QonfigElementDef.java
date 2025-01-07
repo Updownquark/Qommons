@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.qommons.MultiInheritanceSet;
+import org.qommons.ValueHolder;
 import org.qommons.collect.BetterMultiMap;
 import org.qommons.config.QonfigAttributeDef.Declared;
 import org.qommons.io.LocatedPositionedContent;
@@ -11,9 +12,16 @@ import org.qommons.io.PositionedContent;
 
 /** The definition of an element that can be declared in a document */
 public class QonfigElementDef extends QonfigElementOrAddOn {
-	private final QonfigValueDef theValue;
+	/** The name of the default reference toolkit */
+	public static final String QONFIG_REFERENCE_TK = "Qonfig-Reference";
+	/** The name of the promise element in the default reference toolkit */
+	public static final String QONFIG_PROMISE_ELEMENT = "promise";
+	/** The name of the promised type attribute in the promise element in the default reference toolkit */
+	public static final String QONFIG_EXT_PROMISED_TYPE_ATTR = "promised";
+	/** The name of the promised inheritance attribute in the promise element in the default reference toolkit */
+	public static final String QONFIG_EXT_PROMISED_INH_ATTR = "promised-inheritance";
 
-	private final boolean isPromise;
+	private final QonfigValueDef theValue;
 
 	/**
 	 * @param declarer The toolkit declaring this type
@@ -21,7 +29,6 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 	 * @param superElement The element that this type extends
 	 * @param inheritance Add-ons that this type is declared to inherit
 	 * @param isAbstract Whether this type is abstract
-	 * @param promise Whether this type is a promise type
 	 * @param declaredAttributes Attribute definitions declared on this type
 	 * @param attributeModifiers Attribute modifiers declared on this type to affect values that can be specified for inherited attributes
 	 * @param allAttributes All attributes specifiable on this type, by their declaration
@@ -37,7 +44,7 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 	 * @param description The documentation description of this element
 	 */
 	protected QonfigElementDef(QonfigToolkit declarer, String name, QonfigElementDef superElement, Set<QonfigAddOn> inheritance,
-		boolean isAbstract, boolean promise, //
+		boolean isAbstract, //
 		Map<String, QonfigAttributeDef.Declared> declaredAttributes, Map<QonfigAttributeDef.Declared, ValueDefModifier> attributeModifiers,
 		Map<QonfigAttributeDef.Declared, QonfigAttributeDef> allAttributes, BetterMultiMap<String, QonfigAttributeDef> attributesByName, //
 		Map<String, QonfigChildDef.Declared> declaredChildren, Map<QonfigChildDef.Declared, ChildDefModifier> childModifiers,
@@ -48,7 +55,6 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 			attributesByName, allAttributes, declaredChildren, childModifiers, childrenByName, allChildren, value, metaSpec, position,
 			description);
 
-		isPromise = promise;
 		if (value == null)
 			theValue = superElement == null ? null : superElement.getValue();
 		else if (superElement == null || superElement.getValue() == null)
@@ -62,7 +68,7 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 					value.getDefaultValueContent()), //
 				__ -> {
 				}, __ -> {
-				});
+				}, false);
 			theValue = new QonfigValueDef.Modified(superElement.getValue(), this, spec.type, spec.specification, spec.defaultValue,
 				spec.defaultValueContent, null, value.getDescription());
 		}
@@ -96,12 +102,16 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 				return true;
 			el = el.getSuperElement();
 		}
+		if (other instanceof QonfigPromiseDef) {
+			QonfigPromiseDef promise = (QonfigPromiseDef) other;
+			if (promise.getPromisedType() != null && isAssignableFrom(promise.getPromisedType()))
+				return true;
+			for (QonfigAddOn inh : promise.getPromisedInheritance().values()) {
+				if (isAssignableFrom(inh))
+					return true;
+			}
+		}
 		return false;
-	}
-
-	/** @return Whether this element is a promise */
-	public boolean isPromise() {
-		return isPromise;
 	}
 
 	/**
@@ -117,9 +127,16 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 	/** Builds element-defs */
 	public static class Builder extends QonfigElementOrAddOn.Builder {
 		private boolean isPromise;
+		private ValueHolder<QonfigElementDef> thePromisedType;
+		private MultiInheritanceSet<QonfigAddOn> thePromisedInheritance;
 
 		Builder(String name, QonfigParseSession session, String description) {
 			super(name, session, description);
+			if (session.getToolkit().getName().equals(QONFIG_REFERENCE_TK) && name.equals(QONFIG_PROMISE_ELEMENT)) {
+				isPromise = true;
+				thePromisedType = new ValueHolder<>();
+				thePromisedInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+			}
 		}
 
 		@Override
@@ -127,17 +144,43 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 			return (QonfigElementDef) super.get();
 		}
 
-		/** @return Whether this builder is building a promise element */
-		public boolean getPromise() {
-			return isPromise;
+		@Override
+		public Builder setSuperElement(QonfigElementDef superElement) {
+			super.setSuperElement(superElement);
+			if (superElement instanceof QonfigPromiseDef) {
+				isPromise = true;
+				thePromisedType = new ValueHolder<>(((QonfigPromiseDef) superElement).getPromisedType());
+				thePromisedInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
+				thePromisedInheritance.addAll(((QonfigPromiseDef) superElement).getPromisedInheritance().values());
+			}
+			return this;
 		}
 
-		/**
-		 * @param promise Whether this builder is building a promise element
-		 * @return This builder
-		 */
-		public Builder promise(boolean promise) {
-			isPromise = promise;
+		@Override
+		public Builder modifyAttribute(QonfigAttributeDef attribute, QonfigValueType type, SpecificationType specification,
+			Object defaultValue, LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
+			super.modifyAttribute(attribute, type, specification, defaultValue, defaultValueContent, position, description);
+			if (defaultValue != null && isPromise && attribute.getDeclared().getDeclarer().getName().equals(QONFIG_REFERENCE_TK)
+				&& attribute.getDeclared().getOwner().getName().equals(QONFIG_PROMISE_ELEMENT)) {
+				switch (attribute.getName()) {
+				case QONFIG_EXT_PROMISED_TYPE_ATTR:
+					QonfigValueType.QonfigTypeReference<QonfigElementDef> promised = (QonfigValueType.QonfigTypeReference<QonfigElementDef>) defaultValue;
+					if (thePromisedType.get() != null && !thePromisedType.get().isAssignableFrom(promised.reference)) {
+						theSession.at(promised.content)
+							.error(promised.reference + " does not extend " + thePromisedType.get() + ", promised by " + getSuperElement());
+					} else
+						thePromisedType.accept(promised.reference);
+					break;
+				case QONFIG_EXT_PROMISED_INH_ATTR:
+					Set<QonfigValueType.QonfigTypeReference<QonfigAddOn>> inh = (Set<QonfigValueType.QonfigTypeReference<QonfigAddOn>>) defaultValue;
+					for (QonfigValueType.QonfigTypeReference<QonfigAddOn> ao : inh) {
+						if (!thePromisedInheritance.add(ao.reference)) {
+							theSession.at(ao.content).warn(ao.reference + " is a duplicate");
+						}
+					}
+					break;
+				}
+			}
 			return this;
 		}
 
@@ -160,16 +203,43 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 		}
 
 		@Override
-		protected QonfigElementOrAddOn create() {
-			return new QonfigElementDef(theSession.getToolkit(), getName(), getSuperElement(), getInheritance(), isAbstract(), //
-				isPromise || (getSuperElement() != null && getSuperElement().isPromise()), //
-				getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueDefModifier>) super.getAttributeModifiers(),
-				getCompiledAttributes(), getAttributesByName(), //
-				getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildDefModifier>) super.getChildModifiers(), getCompiledChildren(),
-				getChildrenByName(), //
-				super.getValue(), getFullInheritance(), //
-				super.getMetaSpec() == null ? null : (QonfigElementDef) super.getMetaSpec().get(), getSession().getFileLocation(),
-				getDescription());
+		protected boolean hasValue() {
+			return super.hasValue() || (thePromisedType.get() != null && thePromisedType.get().getValue() != null);
+		}
+
+		@Override
+		protected boolean isAssignableTo(QonfigElementOrAddOn type) {
+			if (super.isAssignableTo(type))
+				return true;
+			else if (thePromisedType != null && thePromisedType.get() != null && type.isAssignableFrom(thePromisedType.get()))
+				return true;
+			else if (type instanceof QonfigAddOn && thePromisedInheritance != null && thePromisedInheritance.contains((QonfigAddOn) type))
+				return true;
+			else
+				return false;
+		}
+
+		@Override
+		protected QonfigElementDef create() {
+			if (isPromise) {
+				return new QonfigPromiseDef(theSession.getToolkit(), getName(), getSuperElement(), getInheritance(), isAbstract(), //
+					getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueDefModifier>) super.getAttributeModifiers(),
+					getCompiledAttributes(), getAttributesByName(), //
+					getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildDefModifier>) super.getChildModifiers(),
+					getCompiledChildren(), getChildrenByName(), //
+					super.getValue(), getFullInheritance(), //
+					super.getMetaSpec() == null ? null : (QonfigElementDef) super.getMetaSpec().get(), getSession().getFileLocation(),
+					getDescription(), thePromisedType, MultiInheritanceSet.unmodifiable(thePromisedInheritance));
+			} else {
+				return new QonfigElementDef(theSession.getToolkit(), getName(), getSuperElement(), getInheritance(), isAbstract(), //
+					getDeclaredAttributes(), (Map<QonfigAttributeDef.Declared, ValueDefModifier>) super.getAttributeModifiers(),
+					getCompiledAttributes(), getAttributesByName(), //
+					getDeclaredChildren(), (Map<QonfigChildDef.Declared, ChildDefModifier>) super.getChildModifiers(),
+					getCompiledChildren(), getChildrenByName(), //
+					super.getValue(), getFullInheritance(), //
+					super.getMetaSpec() == null ? null : (QonfigElementDef) super.getMetaSpec().get(), getSession().getFileLocation(),
+					getDescription());
+			}
 		}
 	}
 }

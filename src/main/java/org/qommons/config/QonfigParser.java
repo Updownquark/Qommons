@@ -48,4 +48,11 @@ public interface QonfigParser {
 	 */
 	QonfigDocument parseDocument(boolean partial, String location, InputStream content)
 		throws IOException, TextParseException, QonfigParseException;
+
+	/**
+	 * @param promise The promise to fulfill
+	 * @param parent The element builder to build the fulfilled promise into
+	 * @param session The parse session to use in parsing external content
+	 */
+	void fulfillPromise(QonfigElement promise, QonfigElement.Builder parent, QonfigParseSession session);
 }

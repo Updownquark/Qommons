@@ -63,9 +63,6 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 	MapEntryHandle<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, BetterSortedList.SortedSearchFilter filter);
 
 	@Override
-	MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first);
-
-	@Override
 	default MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before,
 		boolean first, Runnable preAdd, Runnable postAdd) {
 		if (after != null || before != null) {
@@ -511,13 +508,12 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 	 * @param <K> The key type of the map
 	 * @param <V> The value type of the map
 	 */
-	class BetterSubMap<K, V> implements BetterSortedMap<K, V> {
+	class BetterSubMap<K, V> extends AbstractIdentifiable implements BetterSortedMap<K, V> {
 		private final BetterSortedMap<K, V> theSource;
 		private final Comparable<? super K> theLowerBound;
 		private final Comparable<? super K> theUpperBound;
 
 		private final BetterSortedSet.BetterSubSet<K> theKeySet;
-		private Object theIdentity;
 
 		public BetterSubMap(BetterSortedMap<K, V> source, Comparable<? super K> lowerBound, Comparable<? super K> upperBound) {
 			theSource = source;
@@ -540,10 +536,8 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 
 		@Override
-		public Object getIdentity() {
-			if (theIdentity == null)
-				theIdentity = Identifiable.wrap(theSource.getIdentity(), "subMap", theLowerBound, theUpperBound);
-			return theIdentity;
+		protected Object createIdentity() {
+			return Identifiable.wrap(theSource.getIdentity(), "subMap", theLowerBound, theUpperBound);
 		}
 
 		@Override

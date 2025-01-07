@@ -4,12 +4,18 @@
 	into the first document.?>
 <qonfig-def name="Qonfig-Reference" version="0.1">
 	<value-types>
-		<pattern name="qonfig-type">((?&lt;ns&gt;[a-zA-Z0-9_\-]+\s+v?\d+\.\d+)\:)?(?&lt;name&gt;[a-zA-Z0-9_\-]+)</pattern>
 		<pattern name="qonfig-member">(((?&lt;ns&gt;[a-zA-Z0-9_\-]+\s+v?\d+\.\d+)\:)?(?&lt;name&gt;[a-zA-Z0-9_\-]+)\.)?(?&lt;member&gt;[a-zA-Z0-9_\-]+)</pattern>
 	</value-types>
 	<elements>
+		<?DOC The super-type of all promise elements--elements that are placeholders for externally- or dynamically-provided content?>
+		<element-def name="promise" abstract="true">
+			<?DOC The type of element that the fulfillment of this reference is promised to be?>
+			<attribute name="promised" type="qonfig-element-type" specify="optional" />
+			<?DOC The add-ons that the fulfillment of this reference is promised to inherit?>
+			<attribute name="promised-inheritance" type="qonfig-add-on-set" specify="optional" />
+		</element-def>
 		<?DOC The element in a qonfig file that calls for external content to be stitched into its place?>
-		<element-def name="external-reference" abstract="true" promise="true">
+		<element-def name="external-reference" extends="promise" abstract="true">
 			<?DOC The location of the qonfig file containing the content to stitch into this element's place?>
 			<attribute name="ref" type="string" />
 		</element-def>
@@ -22,7 +28,7 @@
 		</element-def>
 		<?DOC A reference from an &lt;external-document> document to a child of the &lt;external-reference> that called for it.<br>
 			The child of the reference will be stiched into the external document in place of this child.?>
-		<element-def name="child-placeholder" promise="true">
+		<element-def name="child-placeholder" extends="promise">
 			<?DOC The role of the &lt;external-reference> whose children will replace this element?>
 			<attribute name="ref-role" type="qonfig-member" />
 		</element-def>

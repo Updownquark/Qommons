@@ -11,6 +11,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 
+import org.qommons.Identifiable.AbstractIdentifiable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
@@ -25,7 +26,7 @@ import org.qommons.tree.MutableBinaryTreeNode;
  * 
  * @param <E> The type of values in the set
  */
-public class BetterHashSet<E> implements BetterSet<E> {
+public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<E> {
 	/** The minimum allowed {@link HashSetBuilder#withLoadFactor(double) load factor} for maps of this type */
 	public static final double MIN_LOAD_FACTOR = 0.2;
 	/** The maximum allowed {@link HashSetBuilder#withLoadFactor(double) load factor} for maps of this type */
@@ -139,7 +140,6 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	private final BiFunction<Object, Object, Boolean> theEquals;
 	private final AtomicLong theFirstIdCreator;
 	private final AtomicLong theLastIdCreator;
-	private final Object theIdentity;
 
 	private final double theLoadFactor;
 
@@ -156,7 +156,7 @@ public class BetterHashSet<E> implements BetterSet<E> {
 		theEquals = equals;
 		theFirstIdCreator = new AtomicLong(-1);
 		theLastIdCreator = new AtomicLong(0);
-		theIdentity = identity;
+		initIdentity(identity);
 
 		if (loadFactor < MIN_LOAD_FACTOR || loadFactor > MAX_LOAD_FACTOR)
 			throw new IllegalArgumentException("Load factor must be between " + MIN_LOAD_FACTOR + " and " + MAX_LOAD_FACTOR);
@@ -170,8 +170,8 @@ public class BetterHashSet<E> implements BetterSet<E> {
 	}
 
 	@Override
-	public Object getIdentity() {
-		return theIdentity;
+	protected Object createIdentity() {
+		throw new IllegalStateException("Should have initialized");
 	}
 
 	/** @return The function producing hash codes for this set's values */

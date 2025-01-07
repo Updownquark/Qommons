@@ -1,17 +1,6 @@
 package org.qommons.debug;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.LinkedList;
-import java.util.Map;
-import java.util.NavigableSet;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -447,6 +436,8 @@ public class Debug {
 		}
 
 		public DebugData with(String path, boolean create, Consumer<DebugData> action) {
+			if (theDebug == null)
+				return this;
 			try (Transaction t = theDebug.lock(true)) {
 				return _with(path, create, action);
 			}

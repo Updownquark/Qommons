@@ -1,12 +1,6 @@
 package org.qommons;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Objects;
+import java.util.*;
 
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.tree.BetterTreeList;
@@ -115,7 +109,9 @@ public interface MultiInheritanceSet<T> {
 	 * @return An inheritance set with the same content as the one given, but that cannot be modified
 	 */
 	public static <T> MultiInheritanceSet<T> unmodifiable(MultiInheritanceSet<T> set) {
-		if (set instanceof Unmodifiable || set == EMPTY || set instanceof Singleton)
+		if (set == null)
+			return empty();
+		else if (set instanceof Unmodifiable || set == EMPTY || set instanceof Singleton)
 			return set;
 		return new Unmodifiable<>(set);
 	}

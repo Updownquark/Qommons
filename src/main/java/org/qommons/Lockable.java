@@ -202,6 +202,8 @@ public interface Lockable extends ThreadConstrained {
 	 * @return A lockable that can safely lock all the given locks
 	 */
 	static Lockable collapse(Collection<? extends Lockable> locks) {
+		if (locks.isEmpty())
+			return NONE;
 		return new CollapsedLockable(null, () -> locks, true);
 	}
 

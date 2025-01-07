@@ -8,6 +8,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import org.qommons.Identifiable;
+import org.qommons.Identifiable.AbstractIdentifiable;
 import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
 import org.qommons.ThreadConstraint;
@@ -22,14 +23,13 @@ import org.qommons.tree.BetterTreeList;
  * @param <C> The type of columns in the table
  * @param <V> The type of values in the table
  */
-public class DefaultTable<R, C, V> implements BetterTable<R, C, V> {
+public class DefaultTable<R, C, V> extends AbstractIdentifiable implements BetterTable<R, C, V> {
 	private final BiFunction<? super R, ? super C, ? extends V> theFill;
 	private final BetterMap<R, ElementId> theRowMap;
 	private final BetterMap<C, ElementId> theColumnMap;
 	private final BetterList<List<V>> theRows;
 	private final BetterList<ElementId> theColumns;
 	private final CollectionLockingStrategy theLock;
-	private final Object theIdentity;
 
 	DefaultTable(BiFunction<? super R, ? super C, ? extends V> fill, String description,
 		Function<Object, CollectionLockingStrategy> locking) {
@@ -39,7 +39,7 @@ public class DefaultTable<R, C, V> implements BetterTable<R, C, V> {
 		theRows = BetterTreeList.<List<V>> build().build();
 		theColumns = BetterTreeList.<ElementId> build().build();
 		theLock = locking.apply(this);
-		theIdentity = Identifiable.baseId(description, this);
+		initIdentity(Identifiable.baseId(description, this));
 	}
 
 	@Override
@@ -48,8 +48,8 @@ public class DefaultTable<R, C, V> implements BetterTable<R, C, V> {
 	}
 
 	@Override
-	public Object getIdentity() {
-		return theIdentity;
+	protected Object createIdentity() {
+		throw new IllegalStateException("Should be initialized");
 	}
 
 	@Override
@@ -139,7 +139,7 @@ public class DefaultTable<R, C, V> implements BetterTable<R, C, V> {
 		return new Builder();
 	}
 
-	class Rows implements TableView<R, C, V> {
+	class Rows extends AbstractIdentifiable implements TableView<R, C, V> {
 		@Override
 		public CoreId getCoreId() {
 			return DefaultTable.this.getCoreId();
@@ -307,7 +307,7 @@ public class DefaultTable<R, C, V> implements BetterTable<R, C, V> {
 		}
 
 		@Override
-		public Object getIdentity() {
+		protected Object createIdentity() {
 			return Identifiable.wrap(DefaultTable.this.getIdentity(), "rows");
 		}
 
@@ -332,7 +332,7 @@ public class DefaultTable<R, C, V> implements BetterTable<R, C, V> {
 		}
 	}
 
-	class Columns implements TableView<C, R, V> {
+	class Columns extends AbstractIdentifiable implements TableView<C, R, V> {
 		@Override
 		public CoreId getCoreId() {
 			return DefaultTable.this.getCoreId();
@@ -507,7 +507,7 @@ public class DefaultTable<R, C, V> implements BetterTable<R, C, V> {
 		}
 
 		@Override
-		public Object getIdentity() {
+		protected Object createIdentity() {
 			return Identifiable.wrap(DefaultTable.this.getIdentity(), "columns");
 		}
 
@@ -532,7 +532,7 @@ public class DefaultTable<R, C, V> implements BetterTable<R, C, V> {
 		}
 	}
 
-	class RowEntry implements TableEntry<R, C, V> {
+	class RowEntry extends AbstractIdentifiable implements TableEntry<R, C, V> {
 		private final MapEntryHandle<R, ElementId> theRowEntry;
 
 		RowEntry(MapEntryHandle<R, ElementId> rowEntry) {
@@ -578,7 +578,7 @@ public class DefaultTable<R, C, V> implements BetterTable<R, C, V> {
 		}
 
 		@Override
-		public Object getIdentity() {
+		protected Object createIdentity() {
 			return Identifiable.wrap(DefaultTable.this.getIdentity(), "row", theRowEntry.getElementId());
 		}
 
@@ -724,7 +724,7 @@ public class DefaultTable<R, C, V> implements BetterTable<R, C, V> {
 		}
 	}
 
-	class ColumnEntry implements TableEntry<C, R, V> {
+	class ColumnEntry extends AbstractIdentifiable implements TableEntry<C, R, V> {
 		private final MapEntryHandle<C, ElementId> theColumnEntry;
 
 		ColumnEntry(MapEntryHandle<C, ElementId> columnEntry) {
@@ -770,7 +770,7 @@ public class DefaultTable<R, C, V> implements BetterTable<R, C, V> {
 		}
 
 		@Override
-		public Object getIdentity() {
+		protected Object createIdentity() {
 			return Identifiable.wrap(DefaultTable.this.getIdentity(), "column", theColumnEntry.getElementId());
 		}
 
@@ -910,7 +910,7 @@ public class DefaultTable<R, C, V> implements BetterTable<R, C, V> {
 		}
 	}
 
-	class RowEntryValues implements BetterCollection<V> {
+	class RowEntryValues extends AbstractIdentifiable implements BetterCollection<V> {
 		private final MapEntryHandle<R, ElementId> theRowEntry;
 
 		RowEntryValues(MapEntryHandle<R, ElementId> rowEntry) {
@@ -938,7 +938,7 @@ public class DefaultTable<R, C, V> implements BetterTable<R, C, V> {
 		}
 
 		@Override
-		public Object getIdentity() {
+		protected Object createIdentity() {
 			return Identifiable.wrap(DefaultTable.this.getIdentity(), "rowValues", theRowEntry.getElementId());
 		}
 

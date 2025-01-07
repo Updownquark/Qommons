@@ -4,6 +4,7 @@ import java.text.ParseException;
 import java.util.*;
 
 import org.qommons.MultiInheritanceSet;
+import org.qommons.QommonsUtils;
 import org.qommons.collect.BetterList;
 import org.qommons.config.QonfigElement.AttributeValue;
 import org.qommons.config.QonfigElement.QonfigValue;
@@ -931,6 +932,47 @@ public interface QonfigElementView<E extends PartialQonfigElement, X extends Thr
 	 */
 	default BetterList<V> forChildren(String role) throws X {
 		return children().get(role).get();
+	}
+
+	/**
+	 * Gets all children in this element matching any of the given roles. This may seem like a trivial feature, but there may be situations
+	 * where simply getting the values for multiple children and combining them into a single list is undesirable because the order of the
+	 * elements in their parent is important. The list returned from this method contains all children matching any of the roles in the
+	 * order in which they appeared in their parent.
+	 * 
+	 * @param roles The names of the child roles to get the children for
+	 * @return A view of all children specified in this view's element for any of the given roles
+	 * @throws IllegalArgumentException If for any of the roles:
+	 *         <ul>
+	 *         <li>no such role was declared for any type visible to this view</li>
+	 *         <li>no role with the given name is declared by this view's {@link QonfigElementView#getFocusType() focus type} and multiple
+	 *         roles with the given name are declared by other visible types</li>
+	 *         </ul>
+	 * @throws X If the views could not be created
+	 */
+	default BetterList<V> forChildren(String... roles) throws X {
+		if (roles.length == 0)
+			throw new IllegalArgumentException("No roles given");
+		List<E> children = (List<E>) getElement().getChildren();
+		if (children.isEmpty())
+			return BetterList.empty();
+		ChildSet<E, X, V> childSet = children();
+		Set<QonfigChildDef> qonfigRoles = new HashSet<>(roles.length * 3 / 2 + 1);
+		for (String role : roles)
+			qonfigRoles.add(childSet.getDefinition(role));
+		List<V> sessions = new ArrayList<>(children.size());
+		List<QonfigChildDef> childRoles = new ArrayList<>();
+		for (E child : children) {
+			childRoles.clear();
+			for (QonfigChildDef role : qonfigRoles) {
+				if (child.fulfills(role)) {
+					childRoles.add(role);
+				}
+			}
+			if (!childRoles.isEmpty())
+				sessions.add(forChild(child, QommonsUtils.unmodifiableCopy(childRoles)));
+		}
+		return BetterList.of(sessions);
 	}
 
 	/**

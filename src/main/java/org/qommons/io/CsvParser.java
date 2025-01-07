@@ -10,11 +10,8 @@ import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.qommons.ArgumentParsing;
-import org.qommons.ArrayUtils;
-import org.qommons.BiTuple;
-import org.qommons.IntList;
-import org.qommons.TriTuple;
+import org.qommons.*;
+import org.qommons.collect.BetterList;
 import org.qommons.collect.QuickSet;
 import org.qommons.collect.QuickSet.QuickMap;
 import org.qommons.ex.ExFunction;
@@ -159,6 +156,13 @@ public class CsvParser {
 		return true;
 	}
 
+	/**
+	 * @return A builder for a structure ({@link TypedLineParser}) that facilitates the parsing of lines from a CSV file with a header into
+	 *         typed structures
+	 * @throws IllegalStateException If this method is called after parsing has begun
+	 * @throws IOException If the CSV file's header could not be read
+	 * @throws TextParseException If the CSV file is empty--without a header
+	 */
 	public TypedLineParser0 parseTyped() throws IllegalStateException, IOException, TextParseException {
 		if (theLastLineNumber != 0)
 			throw new IllegalStateException("This method may only be called at the beginning of a file");
@@ -167,7 +171,7 @@ public class CsvParser {
 			throwParseException(0, 0, "No CSV header line");
 			throw new IllegalStateException("Shouldn't happen");
 		}
-		return new TypedLineParser0(header, new String[header.length], true);
+		return new TypedLineParser0(header, new String[header.length], true, false);
 	}
 
 	private interface ColumnAccepter {
@@ -203,10 +207,10 @@ public class CsvParser {
 			}
 
 			onColumn.accept(value);
-			theLastLineColumnOffsets.add((int) (theParseState.getValueOffset() - theParseState.theOffset));
+			theLastLineColumnOffsets.add((int) (theParseState.getValueOffset() - theLastLineOffset));
 			do {
 				onColumn.accept(theParseState.parseColumn());
-				theLastLineColumnOffsets.add((int) (theParseState.getValueOffset() - theParseState.theOffset));
+				theLastLineColumnOffsets.add((int) (theParseState.getValueOffset() - theLastLineOffset));
 			} while (theParseState.getLastTerminal() == CsvValueTerminal.COLUMN_END);
 			theEntryNumber++;
 			return true;
@@ -299,7 +303,8 @@ public class CsvParser {
 	 */
 	public void throwParseException(int columnIndex, int errorOffset, String message) throws TextParseException {
 		int colOffset = getColumnOffset(columnIndex);
-		throw new TextParseException(message, colOffset + errorOffset, theLastLineNumber, columnIndex);
+		throw new TextParseException(message, (int) theLastLineOffset + colOffset + errorOffset, theLastLineNumber,
+			colOffset + errorOffset);
 	}
 
 	/**
@@ -318,101 +323,541 @@ public class CsvParser {
 		throw new TextParseException(message, colOffset + errorOffset, theLastLineNumber, columnIndex, cause);
 	}
 
-	public class AbstractTypedLineParser {
-		protected final String[] theHeader;
-		protected final String[] theLine;
-		protected final boolean isIgnoreCase;
+	/** A line produced by a {@link TypedLineParser}, containing structures parsed from the column values of a single CSV line */
+	public interface TypedLine {
+		/** @return The number of columns available in this line (some may be absent) */
+		int getColumnCount();
 
-		AbstractTypedLineParser(String[] header, String[] line, boolean isIgnoreCase) {
+		/**
+		 * @param index The index of the column to get. This index corresponds to the order in which columns were
+		 *        {@link TypedLineParser#with(Pattern, boolean, ExFunction) added} to the parser, not their order in the file
+		 * @return The value parsed from the given column in this line. Null if the column was absent in the file (and optional) or if the
+		 *         parser returned null.
+		 */
+		Object get(int index);
+
+		/**
+		 * A strongly-typed version of {@link #get(int)}
+		 * 
+		 * @param <T> The type of the column value
+		 * @param index The index of the column to get (according to the order the column was
+		 *        {@link TypedLineParser#with(Pattern, boolean, ExFunction) added} to the parser, not the order in the file)
+		 * @param type The type of the column value
+		 * @return The value parsed from the given column in this line, or null if the column was not present in the file or its parser
+		 *         returned null
+		 * @throws ClassCastException If the column was present but the parsed value was not of the given type
+		 */
+		default <T> T get(int index, Class<T> type) throws ClassCastException {
+			return get(index, type, null);
+		}
+
+		/**
+		 * A strongly-typed version of {@link #get(int)}
+		 * 
+		 * @param <T> The type of the column value
+		 * @param index The index of the column to get (according to the order the column was
+		 *        {@link TypedLineParser#with(Pattern, boolean, ExFunction) added} to the parser, not the order in the file)
+		 * @param type The type of the column value
+		 * @param defaultValue The value to return if the column was missing from the file or if its parser returned null
+		 * @return The value parsed from the given column in this line, or <code>defaultValue</code> if the column was not present in the
+		 *         file or its parser returned null
+		 * @throws ClassCastException If the column was present but the parsed value was not of the given type
+		 */
+		default <T> T get(int index, Class<T> type, T defaultValue) throws ClassCastException {
+			Object value = get(index);
+			if (value == null)
+				return defaultValue;
+			else if (type.isInstance(value))
+				return (T) value;
+			else if (type.isPrimitive()) {
+				Class<T> wrapper = QommonsUtils.wrap(type);
+				if (wrapper != type && wrapper.isInstance(value))
+					return (T) value;
+			}
+			throw new ClassCastException("Value [" + index + "] is of type " + value.getClass().getName() + ", not " + type.getName());
+		}
+	}
+
+	/**
+	 * A typed line with a single configured column
+	 * 
+	 * @param <T> The type of the column
+	 */
+	public static class SingleTypedLine<T> implements TypedLine, Supplier<T> {
+		private static final SingleTypedLine<?> NULL = new SingleTypedLine<>(null);
+
+		/**
+		 * @param <T> The type for the line
+		 * @return A {@link SingleTypedLine} with a null value
+		 */
+		public static <T> SingleTypedLine<T> NULL() {
+			return (SingleTypedLine<T>) NULL;
+		}
+
+		/**
+		 * @param <T> The type for the line
+		 * @param value The value for the line
+		 * @return A {@link SingleTypedLine} with the given value
+		 */
+		public static <T> SingleTypedLine<T> of(T value) {
+			return value == null ? (SingleTypedLine<T>) NULL : new SingleTypedLine<>(value);
+		}
+
+		private final T theValue;
+
+		private SingleTypedLine(T value) {
+			theValue = value;
+		}
+
+		@Override
+		public int getColumnCount() {
+			return 1;
+		}
+
+		@Override
+		public T get() {
+			return theValue;
+		}
+
+		@Override
+		public T get(int index) {
+			if (index != 0)
+				throw new IndexOutOfBoundsException(index + " of 1");
+			return get();
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hashCode(theValue);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof SingleTypedLine))
+				return false;
+			else
+				return Objects.equals(theValue, ((SingleTypedLine<?>) obj).theValue);
+		}
+
+		@Override
+		public String toString() {
+			return String.valueOf(theValue);
+		}
+	}
+
+	/**
+	 * A typed line with 2 configured columns
+	 * 
+	 * @param <T> The type of the first column
+	 * @param <U> The type of the second column
+	 */
+	public static class DoubleTypedLine<T, U> extends BiTuple<T, U> implements TypedLine {
+		/**
+		 * @param v1 The parsed value of the first column
+		 * @param v2 The parsed value of the second column
+		 */
+		public DoubleTypedLine(T v1, U v2) {
+			super(v1, v2);
+		}
+
+		@Override
+		public int getColumnCount() {
+			return 2;
+		}
+
+		@Override
+		public Object get(int index) {
+			switch (index) {
+			case 0:
+				return getValue1();
+			case 1:
+				return getValue2();
+			default:
+				throw new IndexOutOfBoundsException(index + " of 2");
+			}
+		}
+	}
+
+	/**
+	 * A typed line with 3 configured columns
+	 * 
+	 * @param <T> The type of the first column
+	 * @param <U> The type of the second column
+	 * @param <V> The type of the third column
+	 */
+	public static class TripleTypedLine<T, U, V> extends TriTuple<T, U, V> implements TypedLine {
+		/**
+		 * @param v1 The parsed value of the first column
+		 * @param v2 The parsed value of the second column
+		 * @param v3 The parsed value of the third column
+		 */
+		public TripleTypedLine(T v1, U v2, V v3) {
+			super(v1, v2, v3);
+		}
+
+		@Override
+		public int getColumnCount() {
+			return 3;
+		}
+
+		@Override
+		public Object get(int index) {
+			switch (index) {
+			case 0:
+				return getValue1();
+			case 1:
+				return getValue2();
+			case 2:
+				return getValue3();
+			default:
+				throw new IndexOutOfBoundsException(index + " of 3");
+			}
+		}
+	}
+
+	/**
+	 * A typed line with 4 or more configured columns
+	 * 
+	 * @param <T> The type of the first column
+	 * @param <U> The type of the second column
+	 * @param <V> The type of the third column
+	 */
+	public static class NTypedLine<T, U, V> implements TypedLine {
+		private final Object[] theValues;
+
+		/** @param values The parsed column values */
+		public NTypedLine(Object[] values) {
+			theValues = values;
+		}
+
+		@Override
+		public int getColumnCount() {
+			return theValues.length;
+		}
+
+		@Override
+		public Object get(int index) {
+			if (index < 0 || index >= theValues.length)
+				throw new IndexOutOfBoundsException(index + " of " + theValues.length);
+			return theValues[index];
+		}
+
+		/** @return The first column value */
+		public T getValue1() {
+			return (T) theValues[0];
+		}
+
+		/** @return The second column value */
+		public U getValue2() {
+			return (U) theValues[1];
+		}
+
+		/** @return The third column value */
+		public V getValue3() {
+			return (V) theValues[2];
+		}
+
+		/**
+		 * @param extraIdx The index of the column <b>beyond the third value</b>
+		 * @return The value of the extra column
+		 */
+		public Object getExtra(int extraIdx) {
+			return theValues[extraIdx - 3];
+		}
+
+		/**
+		 * @param <X> The type of the column value
+		 * @param extraIdx The index of the column <b>beyond the third value</b>
+		 * @param type The type of the column value
+		 * @return The value of the extra column
+		 * @throws ClassCastException If the column was present but the parsed value was not of the given type
+		 */
+		public <X> X getExtra(int extraIdx, Class<X> type) throws ClassCastException {
+			return get(extraIdx - 3, type);
+		}
+
+		@Override
+		public int hashCode() {
+			return Arrays.hashCode(theValues);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (obj == this)
+				return true;
+			else if (!(obj instanceof NTypedLine))
+				return false;
+			else
+				return ArrayUtils.equals(theValues, ((NTypedLine<?, ?, ?>) obj).theValues);
+		}
+
+		@Override
+		public String toString() {
+			return Arrays.toString(theValues);
+		}
+	}
+
+	/**
+	 * A structure that facilitates the parsing of lines from a CSV file with a header into typed structures
+	 * 
+	 * @param <L> The sub-type of typed line this parser produces
+	 */
+	public interface TypedLineParser<L extends TypedLine> {
+		/** @return The CSV parser that this typed line parser was created by */
+		CsvParser getCsvParser();
+
+		/** @return The header parsed from the file */
+		List<String> getHeader();
+
+		/**
+		 * @param index The index of the column to check (according to the order in which it was
+		 *        {@link TypedLineParser#with(Pattern, boolean, ExFunction) added} to the parser, not the order in the file)
+		 * @return Whether the column was found in the CSV file header. Always true for non-optional columns.
+		 */
+		default boolean hasColumn(int index) {
+			return translateColumn(index) >= 0;
+		}
+
+		/**
+		 * @param index The index of the column in this line parser according to the order in which it was
+		 *        {@link TypedLineParser#with(Pattern, boolean, ExFunction) added} to the parser
+		 * @return The index of the column as found in the file header
+		 */
+		int translateColumn(int index);
+
+		/**
+		 * @return The next line in the file, or null if the CSV file has no more content lines
+		 * @throws IOException If the file could not be read
+		 * @throws TextParseException If the CSV line contains a syntax error, or if any of the parsers for the typed columns throws a
+		 *         {@link ParseException}
+		 */
+		L parseNextLine() throws IOException, TextParseException;
+
+		/**
+		 * Creates a parser that parses all of this parser's columns as well as another
+		 * 
+		 * @param <T> The type of the column to parse
+		 * @param column The name of the column
+		 * @param optional Whether the column may be absent (all values for the column will be null)
+		 * @param parser The parser to parse the column value
+		 * @param otherPossibilities Other possible names for the column
+		 * @return A new parser that can parse lines containing the given column
+		 * @throws TextParseException If <code>optional</code> is false and the column is not present in the file header
+		 */
+		<T> AbstractTypedLineParser with(String column, boolean optional, ExFunction<String, ? extends T, ParseException> parser,
+			String... otherPossibilities) throws TextParseException;
+
+		/**
+		 * Creates a parser that parses all of this parser's columns as well as another
+		 * 
+		 * @param <T> The type of the column to parse
+		 * @param column A pattern to match the name of the target column
+		 * @param optional Whether the column may be absent (all values for the column will be null)
+		 * @param parser The parser to parse the column value
+		 * @return A new parser that can parse lines containing the given column
+		 * @throws TextParseException If <code>optional</code> is false and the column is not present in the file header
+		 */
+		<T> AbstractTypedLineParser with(Pattern column, boolean optional, ExFunction<String, ? extends T, ParseException> parser)
+			throws TextParseException;
+	}
+
+	/** Abstract class with utilities useful to {@link TypedLineParser}s */
+	public abstract class AbstractTypedLineParser {
+		/** The column names parsed from the CSV header */
+		protected final String[] theHeader;
+		/** The most recently parsed CSV line (for efficiency) */
+		protected final String[] theLine;
+		/** Whether letter case is ignored when matching column names for {@link #with(String, boolean, ExFunction, String...)} */
+		protected final boolean isIgnoreCase;
+		/** Whether space characters are ignored when matching column names for {@link #with(String, boolean, ExFunction, String...)} */
+		protected final boolean isIgnoreSpace;
+
+		AbstractTypedLineParser(String[] header, String[] line, boolean isIgnoreCase, boolean ignoreSpace) {
 			theHeader = header;
 			theLine = line;
 			this.isIgnoreCase = isIgnoreCase;
+			this.isIgnoreSpace = ignoreSpace;
 		}
 
-		int findColumn(String column, boolean optional) throws IllegalArgumentException {
+		/** @return The CSV parser that this typed line parser was created by */
+		public CsvParser getCsvParser() {
+			return CsvParser.this;
+		}
+
+		/**
+		 * @param columnName The column name--either the name to look for or a column name found in the file header
+		 * @return The reduced column name to match against
+		 */
+		protected String reduce(String columnName) {
+			if (isIgnoreSpace)
+				columnName = columnName.replace(" ", "");
+			if (isIgnoreCase)
+				columnName = columnName.toLowerCase();
+			return columnName;
+		}
+
+		int findColumn(String column, String[] otherPossibilities, boolean optional) throws TextParseException {
+			column = reduce(column);
+			for (int c = 0; c < otherPossibilities.length; c++)
+				otherPossibilities[c] = reduce(otherPossibilities[c]);
 			for (int c = 0; c < theHeader.length; c++) {
 				boolean match;
-				if (isIgnoreCase)
-					match = theHeader[c].equalsIgnoreCase(column);
-				else
-					match = theHeader[c].equals(column);
+				String h = reduce(theHeader[c]);
+				match = h.equals(column);
+				for (String other : otherPossibilities) {
+					if (match)
+						break;
+					match = h.equals(other);
+				}
 				if (match)
 					return c;
 			}
 			if (optional)
 				return -1;
 			else
-				throw new IllegalArgumentException("No such column found: " + column);
+				throw new TextParseException("No such column found: " + column, 0, 0, 0);
 		}
 
-		int findColumn(Pattern column, boolean optional) throws IllegalArgumentException {
+		int findColumn(Pattern column, boolean optional) throws TextParseException {
+			// First try without reducing
 			for (int c = 0; c < theHeader.length; c++) {
 				if (column.matcher(theHeader[c]).matches())
+					return c;
+			}
+			for (int c = 0; c < theHeader.length; c++) {
+				if (column.matcher(reduce(theHeader[c])).matches())
 					return c;
 			}
 			if (optional)
 				return -1;
 			else
-				throw new IllegalArgumentException("No column found matching '" + column.pattern() + "'");
+				throw new TextParseException("No column found matching '" + column.pattern() + "'", 0, 0, 0);
 		}
+
+		/** @return The header parsed from the file */
+		public List<String> getHeader() {
+			return BetterList.of(theHeader);
+		}
+
+		/**
+		 * Implements {@link TypedLineParserN#with(String, boolean, ExFunction, String...)}
+		 * 
+		 * @param <T> The type of the column to parse
+		 * @param column The name of the column
+		 * @param optional Whether the column may be absent (all values for the column will be null)
+		 * @param parser The parser to parse the column value
+		 * @param otherPossibilities Other possible names for the column
+		 * @return A new parser that can parse lines containing the given column
+		 * @throws TextParseException If <code>optional</code> is false and the column is not present in the file header
+		 */
+		protected <T> AbstractTypedLineParser with(String column, boolean optional, ExFunction<String, ? extends T, ParseException> parser,
+			String... otherPossibilities) throws TextParseException {
+			return with(findColumn(column, otherPossibilities, optional), parser);
+		}
+
+		/**
+		 * Implements {@link TypedLineParserN#with(Pattern, boolean, ExFunction)}
+		 * 
+		 * @param <T> The type of the column to parse
+		 * @param column A pattern to match the name of the target column
+		 * @param optional Whether the column may be absent (all values for the column will be null)
+		 * @param parser The parser to parse the column value
+		 * @return A new parser that can parse lines containing the given column
+		 * @throws TextParseException If <code>optional</code> is false and the column is not present in the file header
+		 */
+		protected <T> AbstractTypedLineParser with(Pattern column, boolean optional, ExFunction<String, ? extends T, ParseException> parser)
+			throws TextParseException {
+			return with(findColumn(column, optional), parser);
+		}
+
+		/**
+		 * Implementation for the {@link #with(String, boolean, ExFunction, String...)} methods
+		 * 
+		 * @param <T> The type of the column to parse
+		 * @param columnIndex The index of the column (or -1 if the column was not present and optional)
+		 * @param parser The parser to parse the column value
+		 * @return A new parser that can parse lines containing the given column
+		 */
+		protected abstract <T> AbstractTypedLineParser with(int columnIndex, ExFunction<String, ? extends T, ParseException> parser);
 	}
 
+	/** A builder for {@link TypedLineParser}s */
 	public class TypedLineParser0 extends AbstractTypedLineParser {
-		TypedLineParser0(String[] header, String[] line, boolean isIgnoreCase) {
-			super(header, line, isIgnoreCase);
+		TypedLineParser0(String[] header, String[] line, boolean isIgnoreCase, boolean isIgnoreSpace) {
+			super(header, line, isIgnoreCase, isIgnoreSpace);
 		}
 
+		/**
+		 * @param ignoreCase Whether the parser should ignore case when looking for columns in the CSV header
+		 * @return A new parser with the given setting for respecting column name case
+		 */
 		public TypedLineParser0 ignoreCase(boolean ignoreCase) {
-			return new TypedLineParser0(theHeader, theLine, ignoreCase);
+			return new TypedLineParser0(theHeader, theLine, ignoreCase, isIgnoreSpace);
 		}
 
-		public <T> TypedLineParser1<T> parse(String column, boolean optional, ExFunction<String, ? extends T, ParseException> parser)
-			throws IllegalArgumentException {
-			return new TypedLineParser1<>(theHeader, theLine, isIgnoreCase, findColumn(column, optional), parser);
+		/**
+		 * @param ignoreSpace Whether the parser should ignore spaces when looking for columns in the CSV header
+		 * @return A new parser with the given setting for respecting spaces in column names
+		 */
+		public TypedLineParser0 ignoreSpace(boolean ignoreSpace) {
+			return new TypedLineParser0(theHeader, theLine, isIgnoreCase, ignoreSpace);
 		}
 
-		public <T> TypedLineParser1<T> parse(Pattern column, boolean optional, ExFunction<String, ? extends T, ParseException> parser)
-			throws IllegalArgumentException {
-			return new TypedLineParser1<>(theHeader, theLine, isIgnoreCase, findColumn(column, optional), parser);
+		@Override
+		public <T> TypedLineParser1<T> with(String column, boolean optional, ExFunction<String, ? extends T, ParseException> parser,
+			String... otherPossibilities) throws TextParseException {
+			return (TypedLineParser1<T>) super.with(column, optional, parser, otherPossibilities);
+		}
+
+		@Override
+		public <T> TypedLineParser1<T> with(Pattern column, boolean optional, ExFunction<String, ? extends T, ParseException> parser)
+			throws TextParseException {
+			return (TypedLineParser1<T>) super.with(column, optional, parser);
+		}
+
+		@Override
+		protected <T> TypedLineParser1<T> with(int columnIndex, ExFunction<String, ? extends T, ParseException> parser) {
+			return new TypedLineParser1<>(theHeader, theLine, isIgnoreCase, isIgnoreSpace, columnIndex, parser);
 		}
 	}
 
-	public interface TypedLineParser<T> {
-		boolean hasColumn(int index);
-
-		T parseNextLine() throws IOException, TextParseException;
-	}
-
-	public class TypedLineParser1<T> extends AbstractTypedLineParser implements TypedLineParser<Single<T>> {
+	/**
+	 * A {@link TypedLineParser} for a single typed column
+	 * 
+	 * @param <T> The type of the column
+	 */
+	public class TypedLineParser1<T> extends AbstractTypedLineParser implements TypedLineParser<SingleTypedLine<T>> {
 		private final int theColumnIndex;
 		private final ExFunction<String, ? extends T, ParseException> theParser;
 
-		TypedLineParser1(String[] header, String[] line, boolean isIgnoreCase, int columnIndex,
+		TypedLineParser1(String[] header, String[] line, boolean ignoreCase, boolean ignoreSpace, int columnIndex,
 			ExFunction<String, ? extends T, ParseException> parser) {
-			super(header, line, isIgnoreCase);
+			super(header, line, ignoreCase, ignoreSpace);
 			theColumnIndex = columnIndex;
 			theParser = parser;
 		}
 
 		@Override
-		public boolean hasColumn(int index) {
+		public int translateColumn(int index) {
 			if (index == 0)
-				return theColumnIndex >= 0;
+				return theColumnIndex;
 			else
 				throw new IndexOutOfBoundsException(index + " of 1");
 		}
 
 		@Override
-		public Single<T> parseNextLine() throws IOException, TextParseException {
+		public SingleTypedLine<T> parseNextLine() throws IOException, TextParseException {
 			if (!CsvParser.this.parseNextLine(theLine))
 				return null;
 			if (theColumnIndex < 0)
-				return Single.NULL();
+				return SingleTypedLine.NULL();
 			String text = theLine[theColumnIndex];
 			if (text.isEmpty())
-				return Single.NULL();
+				return SingleTypedLine.NULL();
 			try {
-				return new Single<>(theParser.apply(theLine[theColumnIndex]));
+				return new SingleTypedLine<>(theParser.apply(theLine[theColumnIndex]));
 			} catch (ParseException e) {
 				throwParseException(theColumnIndex, e.getErrorOffset(), e.getMessage());
 				return null;
@@ -422,22 +867,39 @@ public class CsvParser {
 			}
 		}
 
-		public <U> TypedLineParser2<T, U> and(String column, boolean optional, ExFunction<String, ? extends U, ParseException> parser)
-			throws IllegalArgumentException {
-			return new TypedLineParser2<>(theHeader, theLine, isIgnoreCase, theColumnIndex, findColumn(column, optional), theParser,
-				parser);
+		@Override
+		public <U> TypedLineParser2<T, U> with(String column, boolean optional, ExFunction<String, ? extends U, ParseException> parser,
+			String... otherPossibilities) throws TextParseException {
+			return (TypedLineParser2<T, U>) super.with(column, optional, parser, otherPossibilities);
+		}
+
+		@Override
+		public <U> TypedLineParser2<T, U> with(Pattern column, boolean optional, ExFunction<String, ? extends U, ParseException> parser)
+			throws TextParseException {
+			return (TypedLineParser2<T, U>) super.with(column, optional, parser);
+		}
+
+		@Override
+		protected <U> TypedLineParser2<T, U> with(int columnIndex, ExFunction<String, ? extends U, ParseException> parser) {
+			return new TypedLineParser2<>(theHeader, theLine, isIgnoreCase, isIgnoreSpace, theColumnIndex, columnIndex, theParser, parser);
 		}
 	}
 
-	public class TypedLineParser2<T, U> extends AbstractTypedLineParser implements TypedLineParser<BiTuple<T, U>> {
+	/**
+	 * A {@link TypedLineParser} for 2 typed columns
+	 * 
+	 * @param <T> The type of the first column
+	 * @param <U> The type of the second column
+	 */
+	public class TypedLineParser2<T, U> extends AbstractTypedLineParser implements TypedLineParser<DoubleTypedLine<T, U>> {
 		private final int theColumnIndex1;
 		private final int theColumnIndex2;
 		private final ExFunction<String, ? extends T, ParseException> theParser1;
 		private final ExFunction<String, ? extends U, ParseException> theParser2;
 
-		TypedLineParser2(String[] header, String[] line, boolean isIgnoreCase, int columnIndex1, int columnIndex2,
+		TypedLineParser2(String[] header, String[] line, boolean ignoreCase, boolean ignoreSpace, int columnIndex1, int columnIndex2,
 			ExFunction<String, ? extends T, ParseException> parser1, ExFunction<String, ? extends U, ParseException> parser2) {
-			super(header, line, isIgnoreCase);
+			super(header, line, ignoreCase, ignoreSpace);
 			theColumnIndex1 = columnIndex1;
 			theColumnIndex2 = columnIndex2;
 			theParser1 = parser1;
@@ -445,19 +907,19 @@ public class CsvParser {
 		}
 
 		@Override
-		public boolean hasColumn(int index) {
+		public int translateColumn(int index) {
 			switch (index) {
 			case 0:
-				return theColumnIndex1 >= 0;
+				return theColumnIndex1;
 			case 1:
-				return theColumnIndex2 >= 0;
+				return theColumnIndex2;
 			default:
 				throw new IndexOutOfBoundsException(index + " of 2");
 			}
 		}
 
 		@Override
-		public BiTuple<T, U> parseNextLine() throws IOException, TextParseException {
+		public DoubleTypedLine<T, U> parseNextLine() throws IOException, TextParseException {
 			if (!CsvParser.this.parseNextLine(theLine))
 				return null;
 			String text;
@@ -483,25 +945,37 @@ public class CsvParser {
 				throwParseException(theColumnIndex2, 0, e.toString());
 				return null;
 			}
-			return new BiTuple<>(value1, value2);
+			return new DoubleTypedLine<>(value1, value2);
 		}
 
-		public <V> TypedLineParser3<T, U, V> and(String column, boolean optional, ExFunction<String, ? extends V, ParseException> parser)
-			throws IllegalArgumentException {
-			return new TypedLineParser3<>(theHeader, theLine, isIgnoreCase, //
-				theColumnIndex1, theColumnIndex2, findColumn(column, optional), //
-				theParser1, theParser2, parser);
+		@Override
+		public <V> TypedLineParser3<T, U, V> with(String column, boolean optional, ExFunction<String, ? extends V, ParseException> parser,
+			String... otherPossibilities) throws TextParseException {
+			return (TypedLineParser3<T, U, V>) super.with(column, optional, parser, otherPossibilities);
 		}
 
-		public <V> TypedLineParser3<T, U, V> and(Pattern column, boolean optional, ExFunction<String, ? extends V, ParseException> parser)
-			throws IllegalArgumentException {
-			return new TypedLineParser3<>(theHeader, theLine, isIgnoreCase, //
-				theColumnIndex1, theColumnIndex2, findColumn(column, optional), //
+		@Override
+		public <V> TypedLineParser3<T, U, V> with(Pattern column, boolean optional, ExFunction<String, ? extends V, ParseException> parser)
+			throws TextParseException {
+			return (TypedLineParser3<T, U, V>) super.with(column, optional, parser);
+		}
+
+		@Override
+		protected <V> TypedLineParser3<T, U, V> with(int columnIndex, ExFunction<String, ? extends V, ParseException> parser) {
+			return new TypedLineParser3<>(theHeader, theLine, isIgnoreCase, isIgnoreSpace, //
+				theColumnIndex1, theColumnIndex2, columnIndex, //
 				theParser1, theParser2, parser);
 		}
 	}
 
-	public class TypedLineParser3<T, U, V> extends AbstractTypedLineParser implements TypedLineParser<TriTuple<T, U, V>> {
+	/**
+	 * A {@link TypedLineParser} for 3 typed columns
+	 * 
+	 * @param <T> The type of the first column
+	 * @param <U> The type of the second column
+	 * @param <V> The type of the third column
+	 */
+	public class TypedLineParser3<T, U, V> extends AbstractTypedLineParser implements TypedLineParser<TripleTypedLine<T, U, V>> {
 		private final int theColumnIndex1;
 		private final int theColumnIndex2;
 		private final int theColumnIndex3;
@@ -509,10 +983,11 @@ public class CsvParser {
 		private final ExFunction<String, ? extends U, ParseException> theParser2;
 		private final ExFunction<String, ? extends V, ParseException> theParser3;
 
-		TypedLineParser3(String[] header, String[] line, boolean isIgnoreCase, int columnIndex1, int columnIndex2, int columnIndex3,
+		TypedLineParser3(String[] header, String[] line, boolean ignoreCase, boolean ignoreSpace, int columnIndex1, int columnIndex2,
+			int columnIndex3,
 			ExFunction<String, ? extends T, ParseException> parser1, ExFunction<String, ? extends U, ParseException> parser2,
 			ExFunction<String, ? extends V, ParseException> parser3) {
-			super(header, line, isIgnoreCase);
+			super(header, line, ignoreCase, ignoreSpace);
 			theColumnIndex1 = columnIndex1;
 			theColumnIndex2 = columnIndex2;
 			theColumnIndex3 = columnIndex3;
@@ -522,21 +997,21 @@ public class CsvParser {
 		}
 
 		@Override
-		public boolean hasColumn(int index) {
+		public int translateColumn(int index) {
 			switch (index) {
 			case 0:
-				return theColumnIndex1 >= 0;
+				return theColumnIndex1;
 			case 1:
-				return theColumnIndex2 >= 0;
+				return theColumnIndex2;
 			case 3:
-				return theColumnIndex3 >= 0;
+				return theColumnIndex3;
 			default:
 				throw new IndexOutOfBoundsException(index + " of 3");
 			}
 		}
 
 		@Override
-		public TriTuple<T, U, V> parseNextLine() throws IOException, TextParseException {
+		public TripleTypedLine<T, U, V> parseNextLine() throws IOException, TextParseException {
 			if (!CsvParser.this.parseNextLine(theLine))
 				return null;
 			String text;
@@ -573,42 +1048,54 @@ public class CsvParser {
 				throwParseException(theColumnIndex3, 0, e.toString());
 				return null;
 			}
-			return new TriTuple<>(value1, value2, value3);
+			return new TripleTypedLine<>(value1, value2, value3);
 		}
 
-		public <X> TypedLineParserN<T, U, V> and(String column, boolean optional, ExFunction<String, ? extends X, ParseException> parser)
-			throws IllegalArgumentException {
-			return new TypedLineParserN<T, U, V>(theHeader, theLine, isIgnoreCase, //
-				new int[] { theColumnIndex1, theColumnIndex2, theColumnIndex3, findColumn(column, optional) }, //
-				new ExFunction[] { theParser1, theParser2, theParser3, parser });
+		@Override
+		public <X> TypedLineParserN<T, U, V> with(String column, boolean optional, ExFunction<String, ? extends X, ParseException> parser,
+			String... otherPossibilities) throws TextParseException {
+			return (TypedLineParserN<T, U, V>) super.with(column, optional, parser, otherPossibilities);
 		}
 
-		public <X> TypedLineParserN<T, U, V> and(Pattern column, boolean optional, ExFunction<String, ? extends X, ParseException> parser)
-			throws IllegalArgumentException {
-			return new TypedLineParserN<T, U, V>(theHeader, theLine, isIgnoreCase, //
-				new int[] { theColumnIndex1, theColumnIndex2, theColumnIndex3, findColumn(column, optional) }, //
+		@Override
+		public <X> TypedLineParserN<T, U, V> with(Pattern column, boolean optional, ExFunction<String, ? extends X, ParseException> parser)
+			throws TextParseException {
+			return (TypedLineParserN<T, U, V>) super.with(column, optional, parser);
+		}
+
+		@Override
+		protected <X> TypedLineParserN<T, U, V> with(int columnIndex, ExFunction<String, ? extends X, ParseException> parser) {
+			return new TypedLineParserN<T, U, V>(theHeader, theLine, isIgnoreCase, isIgnoreSpace, //
+				new int[] { theColumnIndex1, theColumnIndex2, theColumnIndex3, columnIndex }, //
 				new ExFunction[] { theParser1, theParser2, theParser3, parser });
 		}
 	}
 
-	public class TypedLineParserN<T, U, V> extends AbstractTypedLineParser implements TypedLineParser<NTuple<T, U, V>> {
+	/**
+	 * A {@link TypedLineParser} for 4 or more typed columns
+	 * 
+	 * @param <T> The type of the first column
+	 * @param <U> The type of the second column
+	 * @param <V> The type of the third column
+	 */
+	public class TypedLineParserN<T, U, V> extends AbstractTypedLineParser implements TypedLineParser<NTypedLine<T, U, V>> {
 		private final int[] theColumnIndices;
 		private final ExFunction<String, ?, ParseException>[] theParsers;
 
-		TypedLineParserN(String[] header, String[] line, boolean isIgnoreCase, int[] columnIndices,
+		TypedLineParserN(String[] header, String[] line, boolean ignoreCase, boolean ignoreSpace, int[] columnIndices,
 			ExFunction<String, ?, ParseException>[] parsers) {
-			super(header, line, isIgnoreCase);
+			super(header, line, ignoreCase, ignoreSpace);
 			theColumnIndices = columnIndices;
 			theParsers = parsers;
 		}
 
 		@Override
-		public boolean hasColumn(int index) {
-			return theColumnIndices[index] >= 0;
+		public int translateColumn(int index) {
+			return theColumnIndices[index];
 		}
 
 		@Override
-		public NTuple<T, U, V> parseNextLine() throws IOException, TextParseException {
+		public NTypedLine<T, U, V> parseNextLine() throws IOException, TextParseException {
 			if (!CsvParser.this.parseNextLine(theLine))
 				return null;
 			Object[] values = new Object[theColumnIndices.length];
@@ -627,114 +1114,27 @@ public class CsvParser {
 					return null;
 				}
 			}
-			return new NTuple<>(values);
+			return new NTypedLine<>(values);
 		}
 
-		public <X> TypedLineParserN<T, U, V> and(String column, boolean optional, ExFunction<String, ? extends X, ParseException> parser)
-			throws IllegalArgumentException {
+		@Override
+		public <X> TypedLineParserN<T, U, V> with(String column, boolean optional, ExFunction<String, ? extends X, ParseException> parser,
+			String... otherPossibilities) throws TextParseException {
+			return (TypedLineParserN<T, U, V>) super.with(column, optional, parser, otherPossibilities);
+		}
+
+		@Override
+		public <X> TypedLineParserN<T, U, V> with(Pattern column, boolean optional, ExFunction<String, ? extends X, ParseException> parser)
+			throws TextParseException {
+			return (TypedLineParserN<T, U, V>) super.with(column, optional, parser);
+		}
+
+		@Override
+		protected <X> TypedLineParserN<T, U, V> with(int columnIndex, ExFunction<String, ? extends X, ParseException> parser) {
 			int[] newColumns = Arrays.copyOf(theColumnIndices, theColumnIndices.length + 1);
-			newColumns[theColumnIndices.length] = findColumn(column, optional);
-			return new TypedLineParserN<>(theHeader, theLine, isIgnoreCase, //
+			newColumns[theColumnIndices.length] = columnIndex;
+			return new TypedLineParserN<>(theHeader, theLine, isIgnoreCase, isIgnoreSpace, //
 				newColumns, ArrayUtils.add(theParsers, parser));
-		}
-
-		public <X> TypedLineParserN<T, U, V> and(Pattern column, boolean optional, ExFunction<String, ? extends X, ParseException> parser)
-			throws IllegalArgumentException {
-			int[] newColumns = Arrays.copyOf(theColumnIndices, theColumnIndices.length + 1);
-			newColumns[theColumnIndices.length] = findColumn(column, optional);
-			return new TypedLineParserN<>(theHeader, theLine, isIgnoreCase, //
-				newColumns, ArrayUtils.add(theParsers, parser));
-		}
-	}
-
-	public static class Single<T> implements Supplier<T> {
-		private static final Single<?> NULL = new Single<>(null);
-
-		public static <T> Single<T> NULL() {
-			return (Single<T>) NULL;
-		}
-
-		public static <T> Single<T> of(T value) {
-			return value == null ? (Single<T>) NULL : new Single<>(value);
-		}
-
-		public static <T> T unwrap(Single<T> value) {
-			return value == null ? null : value.theValue;
-		}
-
-		private final T theValue;
-
-		private Single(T value) {
-			theValue = value;
-		}
-
-		@Override
-		public T get() {
-			return theValue;
-		}
-
-		@Override
-		public int hashCode() {
-			return Objects.hashCode(theValue);
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			if (this == obj)
-				return true;
-			else if (!(obj instanceof Single))
-				return false;
-			else
-				return Objects.equals(theValue, ((Single<?>) obj).theValue);
-		}
-
-		@Override
-		public String toString() {
-			return String.valueOf(theValue);
-		}
-	}
-
-	public static class NTuple<T, U, V> {
-		private final Object[] theValues;
-
-		NTuple(Object[] values) {
-			theValues = values;
-		}
-
-		public T getValue1() {
-			return (T) theValues[0];
-		}
-
-		public U getValue2() {
-			return (U) theValues[1];
-		}
-
-		public V getValue3() {
-			return (V) theValues[2];
-		}
-
-		public Object getExtra(int extraIdx) {
-			return theValues[extraIdx - 3];
-		}
-
-		@Override
-		public int hashCode() {
-			return Arrays.hashCode(theValues);
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			if (obj == this)
-				return true;
-			else if (!(obj instanceof NTuple))
-				return false;
-			else
-				return ArrayUtils.equals(theValues, ((NTuple<?, ?, ?>) obj).theValues);
-		}
-
-		@Override
-		public String toString() {
-			return Arrays.toString(theValues);
 		}
 	}
 

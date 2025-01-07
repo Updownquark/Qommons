@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -1806,6 +1807,17 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 
 		@Override
+		public Identifiable alias(String alias) {
+			// Cannot alias this constant
+			return this;
+		}
+
+		@Override
+		public Set<String> getAliases() {
+			return Collections.emptySet();
+		}
+
+		@Override
 		public long getStamp() {
 			return 0;
 		}
@@ -1874,11 +1886,10 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 	 * @param <V> The value type of the multi-map
 	 * @param <X> The value type of this map
 	 */
-	abstract class AbstractSingleMap<K, V, X> implements BetterMap<K, X> {
+	abstract class AbstractSingleMap<K, V, X> extends AbstractIdentifiable implements BetterMap<K, X> {
 		private final BetterMultiMap<K, V> theSource;
-		private Object theIdentity;
 
-		public AbstractSingleMap(BetterMultiMap<K, V> outer) {
+		protected AbstractSingleMap(BetterMultiMap<K, V> outer) {
 			theSource = outer;
 		}
 
@@ -1892,10 +1903,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 
 		@Override
-		public Object getIdentity() {
-			if (theIdentity == null)
-				theIdentity = Identifiable.wrap(theSource.getIdentity(), "single");
-			return theIdentity;
+		protected Object createIdentity() {
+			return Identifiable.wrap(theSource.getIdentity(), "single");
 		}
 
 		@Override
@@ -2282,9 +2291,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 	 * @param <K> The key type of the map
 	 * @param <V> The value type of the map
 	 */
-	class ReversedMultiMap<K, V> implements BetterMultiMap<K, V> {
+	class ReversedMultiMap<K, V> extends AbstractIdentifiable implements BetterMultiMap<K, V> {
 		private final BetterMultiMap<K, V> theSource;
-		private Object theIdentity;
 
 		public ReversedMultiMap(BetterMultiMap<K, V> source) {
 			theSource = source;
@@ -2295,10 +2303,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 
 		@Override
-		public Object getIdentity() {
-			if (theIdentity == null)
-				theIdentity = Identifiable.wrap(theSource.getIdentity(), "reverse");
-			return theIdentity;
+		protected Object createIdentity() {
+			return Identifiable.wrap(theSource.getIdentity(), "reverse");
 		}
 
 		@Override

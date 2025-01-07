@@ -27,8 +27,6 @@ import org.w3c.dom.Text;
 public class DefaultQonfigParser implements QonfigParser {
 	/** The name of the attribute to use to directly specify inheritance in Qonfig documents */
 	public static final String DOC_ELEMENT_INHERITANCE_ATTR = "with-extension";
-	/** The name of the attribute to use to directly specify inheritance on a promise element in Qonfig documents */
-	public static final String DOC_ELEMENT_PROMISE_INHERITANCE_ATTR = "with-promise-extension";
 	/** Names that cannot be used for Qonfig attributes */
 	public static final Set<String> RESERVED_ATTR_NAMES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(//
 		DOC_ELEMENT_INHERITANCE_ATTR, "role"//
@@ -155,8 +153,8 @@ public class DefaultQonfigParser implements QonfigParser {
 					@Override
 					public void fillOutTypes(QonfigParseSession s) {}
 				});
-			session = QonfigParseSession.forRoot(partial, docToolkit, position);
-			if (rootDef.isPromise())
+			session = QonfigParseSession.forRoot(docToolkit, position);
+			if (rootDef instanceof QonfigPromiseDef)
 				session.error("The root of a document cannot be a promise");
 			doc = new QonfigDocument(location, docToolkit);
 			parseDocElement(partial, session, QonfigElement.buildRoot(partial, session, doc, rootDef, getDocumentation(rootReader)),
@@ -183,10 +181,6 @@ public class DefaultQonfigParser implements QonfigParser {
 					if (withInheritance)
 						parseInheritance(attr.getValue(), el.getAttributeValuePosition(attr.getKey()), session,
 							inh -> builder.inherits(inh, true));
-				} else if (DOC_ELEMENT_PROMISE_INHERITANCE_ATTR.equals(attr.getKey())) {
-					if (withInheritance)
-						session.at(el.getAttributeNamePosition(attr.getKey()))
-							.error("Attribute " + attr.getKey() + " may only be specified on promise elements");
 				} else if ("role".equals(attr.getKey())) {//
 				} else {
 					ElementQualifiedParseItem qAttr = ElementQualifiedParseItem.parse(attr.getKey(), session,
@@ -240,47 +234,31 @@ public class DefaultQonfigParser implements QonfigParser {
 				roles = parseRoles(roleAttr, child.getAttributeValuePosition("role"), childSession);
 
 			String descrip=getDocumentation(child);
-			if(childType.isPromise()) {
-				QonfigPromiseFulfillment stitcher = theStitchers.getAny(childType);
-				if (stitcher == null) {
-					childSession.error("No promise fulfillment configured for type '" + childType + "'");
-					continue;
-				}
-				String promiseInhStr = child.getAttributeIfExists(DOC_ELEMENT_PROMISE_INHERITANCE_ATTR);
-				Set<QonfigAddOn> promiseInh;
-				if (promiseInhStr == null)
-					promiseInh = Collections.emptySet();
-				else {
-					promiseInh = new LinkedHashSet<>();
-					parseInheritance(promiseInhStr, child.getAttributeValuePosition(DOC_ELEMENT_PROMISE_INHERITANCE_ATTR), childSession,
-						promiseInh::add);
-				}
-				QonfigElement.Builder promiseBuilder = QonfigElement.buildRoot(partial, childSession, builder.getDocument(), childType,
-					descrip).ignoreExtraAttributes(true);
-				for (QonfigAddOn inh : promiseInh)
-					promiseBuilder.inherits(inh, true);
-				PartialQonfigElement promise = parseDocElement(partial, childSession, promiseBuilder, child, true, false, __ -> true);
-				String inhStr = child.getAttributeIfExists(DOC_ELEMENT_INHERITANCE_ATTR);
-				Set<QonfigAddOn> inh;
-				if (inhStr == null)
-					inh = Collections.emptySet();
-				else {
-					inh = new LinkedHashSet<>();
-					parseInheritance(inhStr, child.getAttributeValuePosition(DOC_ELEMENT_INHERITANCE_ATTR), childSession, inh::add);
-				}
-
-				try {
-					stitcher.fulfillPromise(promise, builder, roles, inh, promiseBuilder.getUnusedAttributes(), this, childSession);
-				} catch (IOException | QonfigParseException e) {
-					childSession.error("Unable to fulfill promise", e);
-				}
-			} else {
-				builder.withChild(roles, childType, cb -> {
-					parseDocElement(partial, childSession, cb, child, true, true, __ -> true);
-				}, namePosition, descrip);
+			boolean fulfillPromise = !partial && childType instanceof QonfigPromiseDef;
+			PartialQonfigElement builtChild = builder.withChild(roles, childType, cb -> {
+				parseDocElement(partial, childSession, cb, child, true, true, __ -> true);
+				if (fulfillPromise)
+					cb.dontAddToParent();
+			}, namePosition, descrip);
+			if (fulfillPromise && builtChild != null) {
+				fulfillPromise((QonfigElement) builtChild, builder, childSession);
 			}
 		}
 		return builder.build();
+	}
+
+	@Override
+	public void fulfillPromise(QonfigElement promise, QonfigElement.Builder parent, QonfigParseSession session) {
+		QonfigPromiseFulfillment stitcher = theStitchers.getAny(promise.getType());
+		if (stitcher == null) {
+			session.error("No promise fulfillment configured for type '" + promise.getType() + "'");
+			return;
+		}
+		try {
+			stitcher.fulfillPromise(promise, parent, this, session);
+		} catch (IOException | QonfigParseException e) {
+			session.error("Unable to fulfill promise", e);
+		}
 	}
 
 	private static void parseInheritance(String inh, PositionedContent content, QonfigParseSession session, Consumer<QonfigAddOn> addOn) {
@@ -565,6 +543,10 @@ public class DefaultQonfigParser implements QonfigParser {
 						continue;
 					}
 					QonfigParseSession patternSession = patternsSession.at(pattern.getNamePosition());
+					if (QonfigValueType.STANDARD_TYPES.containsKey(name)) {
+						patternSession.error("'" + name + "' is a standard type and cannot be declared as a <" + pattern.getName() + ">");
+						continue;
+					}
 					if (declaredTypes.containsKey(name)) {
 						patternSession.error("A value type named " + name + " has already been declared");
 						continue;
@@ -711,28 +693,16 @@ public class DefaultQonfigParser implements QonfigParser {
 				throw QonfigParseException.createSimple(new LocatedFilePosition(fileLocation, patternContent.getPosition(0)),
 					e.getMessage(), e);
 			}
+			QonfigValueType standardType = QonfigValueType.STANDARD_TYPES.get(pattern.getName());
+			if (standardType != null) {
+				try {
+					pattern.check();
+				} catch (TextParseException e) {
+					session.warn(e.getMessage());
+				}
+				return standardType;
+			}
 			switch (pattern.getName()) {
-			case "string":
-				try {
-					pattern.check();
-				} catch (TextParseException e) {
-					session.warn(e.getMessage());
-				}
-				return QonfigValueType.STRING;
-			case "boolean":
-				try {
-					pattern.check();
-				} catch (TextParseException e) {
-					session.warn(e.getMessage());
-				}
-				return QonfigValueType.BOOLEAN;
-			case "int":
-				try {
-					pattern.check();
-				} catch (TextParseException e) {
-					session.warn(e.getMessage());
-				}
-				return QonfigValueType.INT;
 			case "pattern":
 				String text;
 				try {
@@ -914,17 +884,6 @@ public class DefaultQonfigParser implements QonfigParser {
 			String inheritsS = element.getAttributeIfExists("inherits");
 			if (completed.contains(name))
 				return builder.get(); // Already filled out
-
-			if (!addOn) {
-				String promiseS = element.getAttributeIfExists("promise");
-				if (promiseS == null) {//
-				} else if (promiseS.equals("false")) { // OK, but why even bother
-				} else if (!promiseS.equals("true"))
-					elsSession.at(element.getAttributeValuePosition("promise"))
-						.error("Unrecognized 'promise': expected 'true' or 'false', not '" + promiseS + "'");
-				else
-					((QonfigElementDef.Builder) builder).promise(true);
-			}
 
 			if (extendsS == null && (inheritsS == null || inheritsS.isEmpty())) {
 				completed.add(name);// No extensions
@@ -1189,9 +1148,10 @@ public class DefaultQonfigParser implements QonfigParser {
 					QonfigValueType type2 = type;
 					if (type2 == null)
 						type2 = overridden.getType();
-					defaultV = type2.parse(defaultS.toString(), attrSession.getToolkit(), attrSession);
+					QonfigParseSession defaultSession = builder.getSession().at(defaultS);
+					defaultV = type2.parse(defaultS.toString(), attrSession.getToolkit(), defaultSession);
 					if (defaultV == null)
-						builder.getSession()
+						defaultSession
 							.error("Default value '" + defaultS + "' parsed to null by attribute type " + type2 + "--this is not allowed");
 				}
 				if (overridden != null)
@@ -1554,11 +1514,26 @@ public class DefaultQonfigParser implements QonfigParser {
 				else
 					builder.inherits(addOn);
 			});
+			String universalAttr = element.getAttributeIfExists("universal");
+			boolean universal;
 			List<StrictXmlReader> targets = element.getElements();
-			if (targets.isEmpty()) {
-				session.error("No targets");
+			if (universalAttr == null || "false".equalsIgnoreCase(universalAttr)) {
+				universal = false;
+				if (targets.isEmpty()) {
+					session.error("No targets");
+					return;
+				}
+			} else if ("true".equalsIgnoreCase(universalAttr)) {
+				universal = true;
+				if (!targets.isEmpty()) {
+					session.at(targets.get(0).getNamePosition()).error("A universal auto-inheritance may specify no targets");
+					return;
+				}
+			} else {
+				session.at(element.getAttributeValuePosition("universal")).error("'universal' may be 'true' or 'false'");
 				return;
 			}
+
 			for (StrictXmlReader target : targets) {
 				QonfigParseSession targetSession = session.at(target.getNamePosition());
 				String typeStr = target.getAttributeIfExists("element");
@@ -1602,7 +1577,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					targetSession.error(e.getMessage(), e);
 				}
 			}
-			declaredAutoInheritance.add(builder.build());
+			declaredAutoInheritance.add(universal ? builder.universal() : builder.build());
 			try {
 				element.check();
 			} catch (TextParseException e) {
@@ -1690,14 +1665,9 @@ public class DefaultQonfigParser implements QonfigParser {
 	}
 
 	static QonfigValueType parseAttributeType(QonfigParseSession session, String typeName, boolean withElement) {
-		switch (typeName) {
-		case "string":
-			return QonfigValueType.STRING;
-		case "boolean":
-			return QonfigValueType.BOOLEAN;
-		case "int":
-			return QonfigValueType.INT;
-		}
+		QonfigValueType standardType = QonfigValueType.STANDARD_TYPES.get(typeName);
+		if (standardType != null)
+			return standardType;
 		QonfigValueType.Declared type = session.getToolkit().getAttributeType(typeName);
 		if (type != null)
 			return type;

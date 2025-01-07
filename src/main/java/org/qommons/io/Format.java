@@ -23,6 +23,7 @@ import org.qommons.QommonsUtils;
 import org.qommons.StringUtils;
 import org.qommons.TimeUtils;
 import org.qommons.TimeUtils.TimeEvaluationOptions;
+import org.qommons.collect.BetterCollection;
 
 /**
  * Knows how to parse a type of value from text and to print a type of value into text
@@ -414,9 +415,9 @@ public interface Format<T> {
 		String str = text.toString();
 		if ("NaN".equals(str))
 			return Double.NaN;
-		else if ("-Inf".equals(str) || "-Infinity".equals(str) || "-\u221E".equals(str))
+		else if (StringUtils.equalsIgnoreCase("-inf", str) || StringUtils.equalsIgnoreCase("-infinity", str) || "-\u221E".equals(str))
 			return Double.NEGATIVE_INFINITY;
-		else if ("Inf".equals(str) || "Infinity".equals(str) || "\u221E".equals(str))
+		else if (StringUtils.equalsIgnoreCase("inf", str) || StringUtils.equalsIgnoreCase("infinity", str) || "\u221E".equals(str))
 			return Double.POSITIVE_INFINITY;
 		// FlexibleFormat.FormatSolution<DecimalComponent> soln = DOUBLE_FORMAT.parse(text, true, true);
 		// double d = 0;
@@ -875,8 +876,8 @@ public interface Format<T> {
 		}
 	}
 
-	/** All standard metric prefixes mapped to their corresponding powers of 10 */
-	public static final Map<String, Integer> METRIC_PREFIXES = QommonsUtils.<String, Integer> buildMap(new LinkedHashMap<>())//
+	/** All standard metric prefixes that are powers of 1000 mapped to their corresponding powers of 10 */
+	public static final Map<String, Integer> METRIC_PREFIXES_3K = QommonsUtils.<String, Integer> buildMap(new LinkedHashMap<>())//
 		.with("y", -24) // yocto
 		.with("z", -21) // zepto
 		.with("a", -18) // atto
@@ -886,10 +887,6 @@ public interface Format<T> {
 		.with("\03bc", -6) // Greek mu, micro
 		.with("u", -6) // micro
 		.with("m", -3) // milli
-		.with("c", -2) // centi
-		.with("d", -1) // deci
-		.with("da", 1) // deka
-		.with("h", 2) // hecto
 		.with("k", 3) // kilo
 		.with("M", 6) // mega
 		.with("G", 9) // giga
@@ -898,6 +895,15 @@ public interface Format<T> {
 		.with("E", 18) // exa
 		.with("Z", 21) // zetta
 		.with("Y", 24) // yotta
+		.getUnmodifiable();
+
+	/** All standard metric prefixes mapped to their corresponding powers of 10 */
+	public static final Map<String, Integer> METRIC_PREFIXES = QommonsUtils.<String, Integer> buildMap(new LinkedHashMap<>())//
+		.withAll(METRIC_PREFIXES_3K)//
+		.with("c", -2) // centi
+		.with("d", -1) // deci
+		.with("da", 1) // deka
+		.with("h", 2) // hecto
 		.getUnmodifiable();
 	/**
 	 * All standard 10^3 metric prefixes mapped to their corresponding multipliers, except that instead of 1000 multipliers, 1024 is used
@@ -925,23 +931,28 @@ public interface Format<T> {
 	/** A builder for a {@link SuperDoubleFormat} */
 	public static class SuperDoubleFormatBuilder {
 
-		private final int theSignificantDigits;
+		private int theMinSignificantDigits;
+		private int theMaxSignificantDigits;
 		private int theMaxIntDigits;
 		private boolean printIntsWithPrefixes;
 		private int theMaxNormalExp;
 		private int theMinNormalExp;
+		private int theZeroExp;
 
+		private boolean isEmptyAllowed;
 		private boolean isSpaceBetween;
 		private String theBaseUnit;
 		private boolean isBaseUnitRequired;
 		private boolean isBaseUnitCaseSensitive;
 		private boolean arePrefixesCaseSensitive;
 		private final TreeMap<Double, String> thePrefixes;
+		private double theDefaultPrefixMultiplier;
 
 		SuperDoubleFormatBuilder(int sigDigs) {
-			theSignificantDigits = sigDigs;
+			theMinSignificantDigits = sigDigs;
+			theMaxSignificantDigits = sigDigs;
 			theMaxIntDigits = -1;
-			theMaxNormalExp = sigDigs;
+			theMaxNormalExp = -1;
 			theMinNormalExp = 1;
 			isSpaceBetween = true;
 			theBaseUnit = "";
@@ -949,6 +960,32 @@ public interface Format<T> {
 			isBaseUnitCaseSensitive = true;
 			arePrefixesCaseSensitive = true;
 			thePrefixes = new TreeMap<>();
+			theDefaultPrefixMultiplier = 1;
+			theZeroExp = -1;
+		}
+
+		/**
+		 * @param min The minimum number of significant digits the format should print
+		 * @param max The maximum number of significant digits the format should print
+		 * @return This builder
+		 */
+		public SuperDoubleFormatBuilder withSigDigs(int min, int max) {
+			if (min <= 0)
+				throw new IllegalArgumentException("Minimum significant digits must be positive: " + min);
+			else if (min > max)
+				throw new IllegalArgumentException("Minimum significant digits must be <= maximum: " + min + ", " + max);
+			theMinSignificantDigits = min;
+			theMaxSignificantDigits = max;
+			return this;
+		}
+
+		/**
+		 * @param allowed Whether the user should be allowed to enter empty text, which will result in a null value
+		 * @return This builder
+		 */
+		public SuperDoubleFormatBuilder emptyAllowed(boolean allowed) {
+			isEmptyAllowed = allowed;
+			return this;
 		}
 
 		/**
@@ -970,6 +1007,16 @@ public interface Format<T> {
 		public SuperDoubleFormatBuilder withExpCondition(int maxNormalExp, int minNormalExp) {
 			theMaxNormalExp = maxNormalExp;
 			theMinNormalExp = Math.abs(minNormalExp); // Always treated as a positive, which is then negated by the format
+			return this;
+		}
+
+		/**
+		 * @param zeroExp The minimum negative exponential that a number may have to be treated as zero by this format. E.g. if this is 5, a
+		 *        value of 1E-5 will be rendered as zero.
+		 * @return This builder
+		 */
+		public SuperDoubleFormatBuilder withZeroExp(int zeroExp) {
+			theZeroExp = Math.abs(zeroExp); // Always treated as a positive, which is then negated by the format
 			return this;
 		}
 
@@ -1037,6 +1084,28 @@ public interface Format<T> {
 		}
 
 		/**
+		 * Adds prefixes for all standard metric prefixes that are powers of 1000 (e.g. not centi- or hecto-)
+		 * 
+		 * @return This builder
+		 */
+		public SuperDoubleFormatBuilder withMetricPrefixesPower3K() {
+			for (Map.Entry<String, Integer> prefix : METRIC_PREFIXES_3K.entrySet())
+				withPrefix(prefix.getKey(), prefix.getValue());
+			return this;
+		}
+
+		/**
+		 * @param defaultPrefixMult The multiplier to use in case the unit is unspecified. This allows for e.g. the user to specify that the
+		 *        value they specify is in GHz, but if they don't specify a unit, the value would be interpreted as MHz.
+		 * @return This builder
+		 */
+		public SuperDoubleFormatBuilder withDefaultPrefixMultiplier(double defaultPrefixMult) {
+			theDefaultPrefixMultiplier = defaultPrefixMult;
+			isBaseUnitRequired = false;
+			return this;
+		}
+
+		/**
 		 * @param unitCaseSensitive Whether the unit must be specified case-sensitively
 		 * @param prefixCaseSensitive Whether the prefixes must be specified case-sensitively
 		 * @return This builder
@@ -1060,12 +1129,15 @@ public interface Format<T> {
 						throw new IllegalStateException("Duplicate prefixes: " + prefix.getValue());
 				}
 			}
+			int maxNormalExp = theMaxNormalExp;
+			if (maxNormalExp < 0)
+				maxNormalExp = theMaxSignificantDigits;
 			int maxIntDigits = theMaxIntDigits;
 			if (maxIntDigits < 0)
-				maxIntDigits = theMaxNormalExp;
-			return new SuperDoubleFormat(theSignificantDigits, maxIntDigits, printIntsWithPrefixes, theMaxNormalExp, theMinNormalExp,
-				isSpaceBetween, theBaseUnit, isBaseUnitRequired, isBaseUnitCaseSensitive, arePrefixesCaseSensitive, prefixCopy,
-				reversePrefixes);
+				maxIntDigits = maxNormalExp;
+			return new SuperDoubleFormat(theMinSignificantDigits, theMaxSignificantDigits, maxIntDigits, printIntsWithPrefixes,
+				maxNormalExp, theMinNormalExp, theZeroExp, isEmptyAllowed, isSpaceBetween, theBaseUnit, isBaseUnitRequired,
+				theDefaultPrefixMultiplier, isBaseUnitCaseSensitive, arePrefixesCaseSensitive, prefixCopy, reversePrefixes);
 		}
 
 		/** @return A new {@link Float}-typed format configured by this builder */
@@ -1123,37 +1195,49 @@ public interface Format<T> {
 	 * </p>
 	 */
 	public static class SuperDoubleFormat implements Format<Double> {
-		private final int theSignificantDigits;
+		private final int theMinSignificantDigits;
+		private final int theMaxSignificantDigits;
 		private final int theMaxIntDigits;
 		private final boolean printIntsWithPrefixes;
 		private final int theMaxNormalExp;
 		private final int theMinNormalExp;
+		private final int theZeroExp;
 
+		private final boolean isEmptyAllowed;
 		private final boolean isSpaceBetween;
 		private final String theBaseUnit;
 		private final boolean isBaseUnitRequired;
 		private final boolean isBaseUnitCaseSensitive;
 		private final boolean arePrefixesCaseSensitive;
+		private final double theDefaultPrefixMultiplier;
 		private final NavigableMap<Double, String> thePrefixes;
 		private final Map<String, Double> theReversePrefixes;
 		private final ThreadLocal<NumberFormat> theDoubleFormat; // DecimalFormat instances are not thread-safe
 
-		SuperDoubleFormat(int significantDigits, int maxIntDigits, boolean intWithPrefixes, int maxNormalExp, int minNormalExp,
-			boolean spaceBetween, String baseUnit, boolean baseUnitRequired, boolean baseUnitCaseSensitive,
-			boolean arePrefixesCaseSensitive, NavigableMap<Double, String> prefixes, Map<String, Double> reversePrefixes) {
-			theSignificantDigits = significantDigits;
+		private final double theExpMult;
+
+		SuperDoubleFormat(int minSignificantDigits, int maxSignificantDigits, int maxIntDigits, boolean intWithPrefixes, int maxNormalExp,
+			int minNormalExp, int zeroExp, boolean emptyAllowed, boolean spaceBetween, String baseUnit, boolean baseUnitRequired,
+			double defaultPrefixMultiplier, boolean baseUnitCaseSensitive, boolean arePrefixesCaseSensitive,
+			NavigableMap<Double, String> prefixes, Map<String, Double> reversePrefixes) {
+			theMinSignificantDigits = minSignificantDigits;
+			theMaxSignificantDigits = maxSignificantDigits;
 			theMaxIntDigits = maxIntDigits;
 			printIntsWithPrefixes = intWithPrefixes;
 			theMaxNormalExp = maxNormalExp;
 			theMinNormalExp = minNormalExp;
+			theZeroExp = zeroExp;
+			isEmptyAllowed = emptyAllowed;
 			isSpaceBetween = spaceBetween;
 			theBaseUnit = baseUnit;
 			isBaseUnitRequired = baseUnitRequired;
+			theDefaultPrefixMultiplier = defaultPrefixMultiplier;
 			isBaseUnitCaseSensitive = baseUnitCaseSensitive;
 			this.arePrefixesCaseSensitive = arePrefixesCaseSensitive;
 			thePrefixes = prefixes;
 			theReversePrefixes = reversePrefixes;
-			theDoubleFormat = ThreadLocal.withInitial(() -> DecimalFormat.getInstance());
+			theDoubleFormat = ThreadLocal.withInitial(DecimalFormat::getInstance);
+			theExpMult = 1 + Math.pow(10, -theMaxSignificantDigits);
 		}
 
 		/** @return The base unit of this format */
@@ -1168,10 +1252,12 @@ public interface Format<T> {
 
 		@Override
 		public Double parse(CharSequence text) throws ParseException {
+			if (isEmptyAllowed && text.length() == 0)
+				return null;
 			if (text.equals("?") || StringUtils.compareNumberTolerant(text, "nan", true, false) == 0)
 				return Double.NaN;
 			StringBuilder prefix = new StringBuilder();
-			int baseIndex = theBaseUnit.length() - 1;
+			int baseIndex = theBaseUnit == null ? -1 : theBaseUnit.length() - 1;
 			int i;
 			for (i = text.length() - 1; i >= 0; i--) {
 				if (Character.isWhitespace(text.charAt(i))) {
@@ -1198,13 +1284,17 @@ public interface Format<T> {
 			}
 			Double exp;
 			if (prefix.length() == 0)
-				exp = 1.0;
+				exp = theDefaultPrefixMultiplier;
 			else if (arePrefixesCaseSensitive)
 				exp = theReversePrefixes.get(prefix.toString());
 			else
 				exp = theReversePrefixes.get(prefix.toString().toLowerCase());
-			if (exp == null)
-				throw new ParseException("Unrecognized prefix '" + prefix + "'", i + 1);
+			if (exp == null) {
+				if (baseIndex == 0)
+					throw new ParseException("Unrecognized prefix '" + prefix + "'", i + 1);
+				else
+					throw new ParseException("Unrecognized unit '" + prefix + "'", i + 1);
+			}
 			while (i >= 0 && !Character.isDigit(text.charAt(i)))
 				i--;
 			if (i < 0)
@@ -1222,9 +1312,9 @@ public interface Format<T> {
 			else if (Double.isNaN(value))
 				text.append("?");
 			else if (value.doubleValue() == Double.POSITIVE_INFINITY)
-				text.append("Infinity");
+				text.append("\u221E");
 			else if (value.doubleValue() == Double.NEGATIVE_INFINITY)
-				text.append("-Infinity");
+				text.append("-\u221E");
 			else {
 				double abs = Math.abs(value);
 				Map.Entry<Double, String> prefix;
@@ -1232,29 +1322,36 @@ public interface Format<T> {
 					prefix = null;
 				else {
 					prefix = thePrefixes.floorEntry(abs);
-					if (prefix != null && prefix.getKey() < 1 && abs >= 1)
+					if (prefix != null && prefix.getKey() < 1.0 && abs >= 1)
 						prefix = null;
 					if (prefix == null && abs < 1) {
 						prefix = thePrefixes.firstEntry();
-						if (prefix != null && prefix.getKey().intValue() > 0)
+						if (prefix != null && prefix.getKey().doubleValue() > 0.0)
 							prefix = null;
 					}
 				}
 				int exp;
 				boolean printInt;
-				if (prefix != null && prefix.getKey().intValue() != 0)
+				if (prefix != null && prefix.getKey().doubleValue() != 0.0)
 					value /= prefix.getKey();
 				int sign = Double.compare(value, 0.0);
 				if (sign == 0)
 					exp = 0;
 				else if (sign > 0)
-					exp = (int) Math.log10(value);
+					exp = (int) Math.log10(value * theExpMult);
 				else
-					exp = (int) Math.log10(-value);
+					exp = (int) Math.log10(-value * theExpMult);
+
+				if (theZeroExp > 0 && -exp >= theZeroExp) {
+					value = 0.0;
+					exp = 0;
+				}
+
 				if (!printIntsWithPrefixes && prefix != null)
 					printInt = false;
-				else
-					printInt = exp >= 0 && exp <= theMaxIntDigits && value == value.longValue();
+				else {
+					printInt = exp >= 0 && exp < theMaxIntDigits && value == value.longValue();
+				}
 
 				boolean expNotation;
 				if (printInt)
@@ -1270,10 +1367,10 @@ public interface Format<T> {
 					digits = 0;
 				else if (expNotation) {
 					value /= Math.pow(10, exp);
-					digits = theSignificantDigits - 1;
+					digits = theMinSignificantDigits - 1;
 				} else
-					digits = theSignificantDigits - exp - 1;
-				DecimalFormat format = getFormat(Math.max(0, digits));
+					digits = theMinSignificantDigits - exp - 1;
+				DecimalFormat format = getFormat(Math.max(0, digits), theMaxSignificantDigits - theMinSignificantDigits);
 				text.append(format.format(value));
 				if (expNotation)
 					text.append('E').append(exp);
@@ -1289,24 +1386,27 @@ public interface Format<T> {
 			}
 		}
 
-		private static final ThreadLocal<List<DecimalFormat>> DECIMAL_FORMATS = ThreadLocal.withInitial(ArrayList::new);
+		/** Indexed by minimum decimal digits, then optional digits */
+		private static final ThreadLocal<List<List<DecimalFormat>>> DECIMAL_FORMATS = ThreadLocal.withInitial(ArrayList::new);
 
-		static DecimalFormat getFormat(int decimalDigits) {
-			List<DecimalFormat> formats = DECIMAL_FORMATS.get();
-			if (decimalDigits >= formats.size()) {
+		static DecimalFormat getFormat(int minDecimalDigits, int optionalDigits) {
+			List<List<DecimalFormat>> formats = DECIMAL_FORMATS.get();
+			while (minDecimalDigits >= formats.size())
+				formats.add(new ArrayList<>());
+			List<DecimalFormat> targetFormats = formats.get(minDecimalDigits);
+			if (minDecimalDigits + optionalDigits >= targetFormats.size()) {
 				StringBuilder format = new StringBuilder("#,##0");
-				if (formats.isEmpty()) {
-					formats.add(new DecimalFormat(format.toString()));
-				}
 				format.append('.');
-				for (int i = 1; i < formats.size(); i++)
+				for (int i = 0; i < minDecimalDigits; i++)
 					format.append('0');
-				while (decimalDigits >= formats.size()) {
-					format.append('0');
-					formats.add(new DecimalFormat(format.toString()));
+
+				for (int i = 0; i <= optionalDigits; i++) {
+					format.append('#');
+					if (i == targetFormats.size())
+						targetFormats.add(new DecimalFormat(format.toString()));
 				}
 			}
-			return formats.get(decimalDigits);
+			return targetFormats.get(optionalDigits);
 		}
 	}
 
@@ -1554,29 +1654,37 @@ public interface Format<T> {
 	}
 
 	/**
-	 * Persists lists of objects to a single string
+	 * Persists collections of objects to a single string and formats those strings into collections
 	 * 
-	 * @param <T> The type of elements in the list
+	 * @param <T> The type of elements in the collection
+	 * @param <C> The type of the collection
 	 */
-	public static class ListFormat<T> implements Format<List<T>> {
-		private final Format<T> theFormat;
+	public static class CollectionFormat<T, C extends Collection<T>> implements Format<C> {
+		private final Format<T> theElementFormat;
 		private final String theDelimiter;
 		private final String postDelimit;
+		private final String theAddFailMessage;
+		private final Supplier<C> theCollectionCreator;
 
 		/**
-		 * @param format The format for list elements
+		 * @param elementFormat The format for collection elements
 		 * @param delimiter The delimiter between elements
 		 * @param postDelimit An optional sequence to insert after the delimiter (e.g. whitespace in a UI text field)
+		 * @param addFailMessage The error message to throw when a value cannot be added to a collection
+		 * @param collectionCreator The supplier to create collections for putting parsed values into
 		 */
-		public ListFormat(Format<T> format, String delimiter, String postDelimit) {
-			theFormat = format;
+		public CollectionFormat(Format<T> elementFormat, String delimiter, String postDelimit, String addFailMessage,
+			Supplier<C> collectionCreator) {
+			theElementFormat = elementFormat;
 			theDelimiter = delimiter;
 			this.postDelimit = postDelimit;
+			theAddFailMessage = addFailMessage;
+			theCollectionCreator = collectionCreator;
 		}
 
 		/** @return The format for list elements */
-		public Format<T> getFormat() {
-			return theFormat;
+		public Format<T> getElementFormat() {
+			return theElementFormat;
 		}
 
 		/** @return The delimiter between elements */
@@ -1590,7 +1698,7 @@ public interface Format<T> {
 		}
 
 		@Override
-		public void append(StringBuilder text, List<T> value) {
+		public void append(StringBuilder text, C value) {
 			if (value == null)
 				return;
 			boolean first = true;
@@ -1602,22 +1710,33 @@ public interface Format<T> {
 					if (postDelimit != null)
 						text.append(postDelimit);
 				}
-				theFormat.append(text, v);
+				theElementFormat.append(text, v);
 			}
 		}
 
+		/** @return A new collection to parse values into */
+		protected C createCollection() {
+			return theCollectionCreator.get();
+		}
+
 		@Override
-		public List<T> parse(CharSequence text) throws ParseException {
+		public C parse(CharSequence text) throws ParseException {
 			int start = 0;
 			int delimitIdx = 0;
-			List<T> list = new ArrayList<>();
+			C collection = createCollection();
 			for (int i = 0; i < text.length(); i++) {
 				if (text.charAt(i) == theDelimiter.charAt(delimitIdx)) {
 					delimitIdx++;
 					if (delimitIdx == theDelimiter.length()) {
 						delimitIdx = 0;
-						T value = theFormat.parse(text.subSequence(start, i + 1 - theDelimiter.length()));
-						list.add(value);
+						T value = theElementFormat.parse(text.subSequence(start, i + 1 - theDelimiter.length()));
+						if (collection instanceof BetterCollection) {
+							String msg = ((BetterCollection<T>) collection).canAdd(value);
+							if (msg != null)
+								throw new ParseException("Could not add element[" + collection.size() + "]: " + msg, start);
+						}
+						if (!collection.add(value) && theAddFailMessage != null)
+							throw new ParseException("Could not add element [" + collection.size() + "]: " + theAddFailMessage, start);
 						while (i < text.length() - 1 && Character.isWhitespace(text.charAt(i + 1)))
 							i++;
 						start = i + 1;
@@ -1625,10 +1744,10 @@ public interface Format<T> {
 				}
 			}
 			if (start < text.length()) {
-				T value = theFormat.parse(text.subSequence(start, text.length()));
-				list.add(value);
+				T value = theElementFormat.parse(text.subSequence(start, text.length()));
+				collection.add(value);
 			}
-			return list;
+			return collection;
 		}
 	}
 

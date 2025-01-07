@@ -4,14 +4,10 @@ import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.text.ParseException;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
-import org.qommons.config.QonfigElement.AttributeValueInput;
+import org.qommons.config.QonfigElement.AttributeValue;
 import org.qommons.config.QonfigElement.QonfigValue;
 import org.qommons.io.ErrorReporting;
 import org.qommons.io.LocatedPositionedContent;
@@ -60,8 +56,7 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 	}
 
 	@Override
-	public void fulfillPromise(PartialQonfigElement promise, QonfigElement.Builder parent, List<ElementQualifiedParseItem> declaredRoles,
-		Set<QonfigAddOn> inheritance, Map<ElementQualifiedParseItem, AttributeValueInput> attributes, QonfigParser parser,
+	public void fulfillPromise(QonfigElement promise, QonfigElement.Builder parent, QonfigParser parser,
 		QonfigParseSession session) throws IOException, QonfigParseException {
 		QonfigValue refValue = promise.getAttributes().get(theReferenceAttribute);
 		String ref = refValue.text;
@@ -98,7 +93,8 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 			return;
 		}
 
-		fulfillWithExternalReference(parent, declaredRoles, inheritance, attributes, content, promise, session);
+		fulfillWithExternalReference(parent, content, promise, parser,
+			session == null ? null : session.at(content.getFulfillment().getFilePosition()));
 	}
 
 	/**
@@ -109,7 +105,7 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 	 * @return The loaded external content fulfilling the promise
 	 */
 	protected QonfigExternalContent resolveExternalContent(String ref, QonfigParser parser, QonfigParseSession session,
-		PartialQonfigElement promise) {
+		QonfigElement promise) {
 		QonfigDocument doc;
 		try (InputStream in = new BufferedInputStream(new URL(ref).openStream())) {
 			doc = parser.parseDocument(true, ref, in);
@@ -120,58 +116,61 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 			return new QonfigExternalContent(e.getMessage(), null, e);
 		}
 		QonfigValue fulfills = doc.getPartialRoot().getAttributes().get(theFulfillsAttribute);
-		String ns = ((PatternMatch) fulfills.value).getGroup("ns");
-		String element = ((PatternMatch) fulfills.value).getGroup("name");
-		QonfigToolkit declarer;
-		if (ns != null) {
-			QonfigToolkit.ToolkitDef nsDef;
-			try {
-				nsDef = QonfigToolkit.ToolkitDef.parse(ns);
-			} catch (ParseException e) {
-				return new QonfigExternalContent("Could not parse toolkit definition for " + theFulfillsAttribute,
-					LocatedPositionedContent.of(fulfills.fileLocation, fulfills.position), e);
-			}
-			declarer = session.getToolkit().getDependenciesByDefinition().getOrDefault(nsDef.name, Collections.emptyNavigableMap())//
-				.get(nsDef);
-			if (declarer == null)
-				return new QonfigExternalContent("No such toolkit found: " + nsDef,
-					LocatedPositionedContent.of(fulfills.fileLocation, fulfills.position), null);
-		} else
-			declarer = session.getToolkit();
-		QonfigElementOrAddOn fulfillsType = declarer.getElementOrAddOn(element);
+		QonfigValueType.QonfigTypeReference<?> fulfillsType = (QonfigValueType.QonfigTypeReference<?>) fulfills.value;
 		if (fulfillsType == null)
 			return new QonfigExternalContent("No such element found: " + fulfills.text,
 				LocatedPositionedContent.of(fulfills.fileLocation, fulfills.position), null);
-		if (!theExtReferenceType.isAssignableFrom(fulfillsType))
+		if (!theExtReferenceType.isAssignableFrom(fulfillsType.reference))
 			return new QonfigExternalContent(
 				"Fulfills target '" + fulfillsType + "' does not extent " + theExtReferenceType
 					+ ", as this external reference fulfillment expects",
 				LocatedPositionedContent.of(fulfills.fileLocation, fulfills.position), null);
-		return new QonfigExternalContent(doc.getPartialRoot().getChildrenByRole().get(theFulfillmentChild).getFirst(), fulfillsType);
+		return new QonfigExternalContent(doc.getPartialRoot().getChildrenByRole().get(theFulfillmentChild).getFirst(),
+			fulfillsType.reference);
 	}
 
 	/**
-	 * @param builder The element builder to build the external content into
-	 * @param declaredRoles The child roles that the external content will fill
-	 * @param inheritance The add-ons that the external content will inherit
-	 * @param attributes The externally-specified attributes for the external content
+	 * @param parent The element builder of the parent element to add the external content into
 	 * @param content The external content template to fulfill the element with
 	 * @param promise The promise to fulfill
+	 * @param parser The parser for parsing external content
 	 * @param session The parse session for error handling
 	 */
-	protected void fulfillWithExternalReference(QonfigElement.Builder builder, List<ElementQualifiedParseItem> declaredRoles,
-		Set<QonfigAddOn> inheritance, Map<ElementQualifiedParseItem, AttributeValueInput> attributes, QonfigExternalContent content,
-		PartialQonfigElement promise, QonfigParseSession session) {
+	protected void fulfillWithExternalReference(QonfigElement.Builder parent, QonfigExternalContent content, QonfigElement promise,
+		QonfigParser parser, QonfigParseSession session) {
 		PartialQonfigElement fulfillment = content.getFulfillment();
-		builder.withChild(declaredRoles, fulfillment.getType(), child -> {
+		parent.withChild2(promise.getParentRoles(), fulfillment.getType(), child -> {
 			for (QonfigAddOn inh : fulfillment.getInheritance().values())
 				child.inherits(inh, false);
-			for (QonfigAddOn inh : inheritance)
-				child.inherits(inh, false);
+			for (QonfigAddOn inh : promise.getInheritance().values()) {
+				if (child.isSupported(inh))
+					child.inherits(inh, false);
+			}
+			QonfigPromiseDef promiseType = (QonfigPromiseDef) promise.getType();
 			child.fulfills(promise, content.getFulfillment());
-			for (Map.Entry<ElementQualifiedParseItem, AttributeValueInput> attr : attributes.entrySet())
-				child.withAttribute(attr.getKey(), attr.getValue());
-			buildContent(child, fulfillment, promise, session);
+			for (Map.Entry<QonfigAttributeDef.Declared, AttributeValue> attr : promise.getAttributes().entrySet()) {
+				QonfigAttributeDef found = promiseType.getPromisedType() == null ? null
+					: promiseType.getPromisedType().getAllAttributes().get(attr.getKey());
+				if (found == null) {
+					for (QonfigAddOn inh : promiseType.getPromisedInheritance().values()) {
+						found = inh.getAllAttributes().get(attr.getKey());
+						if (found != null)
+							break;
+					}
+				}
+				if (found == null) {
+					for (QonfigChildDef role : promise.getParentRoles()) {
+						for (QonfigAddOn inh : role.getInheritance()) {
+							found = inh.getAllAttributes().get(attr.getKey());
+							if (found != null)
+								break;
+						}
+					}
+				}
+				if (found != null && found.getSpecification() != SpecificationType.Forbidden)
+					child.withAttribute(attr.getKey(), attr.getValue());
+			}
+			buildContent(child, fulfillment, promise, parser, session);
 		}, fulfillment.getFilePosition(), fulfillment.getDescription());
 	}
 
@@ -179,11 +178,12 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 	 * @param builder The element builder to build the external content into
 	 * @param content The content to copy into the builder
 	 * @param promise The promise to fulfill
+	 * @param parser The parser for parsing external content
 	 * @param session The parse session for error handling
 	 */
 	protected void buildContent(QonfigElement.Builder builder, PartialQonfigElement content, PartialQonfigElement promise,
-		QonfigParseSession session) {
-		content.copy(builder);
+		QonfigParser parser, QonfigParseSession session) {
+		content.copy(builder, parser, session);
 	}
 
 	/** External content loaded from a file */

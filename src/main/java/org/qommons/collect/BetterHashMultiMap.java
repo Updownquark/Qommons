@@ -16,6 +16,15 @@ public class BetterHashMultiMap<K, V> extends AbstractBetterMultiMap<K, V> {
 	/**
 	 * @param <K> The key-type for the map
 	 * @param <V> The value-type for the map
+	 * @return The new multi-map
+	 */
+	public static <K, V> BetterHashMultiMap<K, V> create() {
+		return BetterHashMultiMap.<K, V> build().buildMultiMap();
+	}
+
+	/**
+	 * @param <K> The key-type for the map
+	 * @param <V> The value-type for the map
 	 * @return A builder to build a multi-map
 	 */
 	public static <K, V> Builder<K, V, ?> build() {
@@ -80,7 +89,7 @@ public class BetterHashMultiMap<K, V> extends AbstractBetterMultiMap<K, V> {
 		}
 
 		@Override
-		public BetterMultiMap<K, V> buildMultiMap() {
+		public BetterHashMultiMap<K, V> buildMultiMap() {
 			return new BetterHashMultiMap<>(getLocker(), getValues(), getDescription(), //
 				theMapBuilder.withCollectionLocking(getLocker()).withDescription(getDescription() + " entries").build(),
 				getInitialValues());

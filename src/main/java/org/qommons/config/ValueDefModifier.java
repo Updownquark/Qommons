@@ -94,16 +94,16 @@ public interface ValueDefModifier extends SelfDescribed {
 		public String toString() {
 			StringBuilder str = new StringBuilder();
 			if (theTypeRestriction != null)
-				str.append("type ").append(theTypeRestriction);
+				str.append("type:").append(theTypeRestriction);
 			if (theSpecification != null) {
 				if (str.length() > 0)
-					str.append(", ");
-				str.append("specify " + theSpecification);
+					str.append(';');
+				str.append("specify:").append(theSpecification);
 			}
 			if (theDefaultValue != null) {
 				if (str.length() > 0)
-					str.append(", ");
-				str.append("default " + theDefaultValue);
+					str.append(';');
+				str.append("default:`").append(theDefaultValue).append("`");
 			}
 			return str.toString();
 		}

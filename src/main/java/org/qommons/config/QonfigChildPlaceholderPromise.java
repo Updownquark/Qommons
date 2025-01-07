@@ -1,13 +1,9 @@
 package org.qommons.config;
 
 import java.io.IOException;
-import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
-import org.qommons.config.QonfigElement.AttributeValueInput;
-import org.qommons.io.ErrorReporting;
+import org.qommons.config.QonfigElement.AttributeValue;
 
 /** Default promise fulfillment for the replacement of references in external content with children specified from the reference document */
 public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
@@ -41,8 +37,7 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 	}
 
 	@Override
-	public void fulfillPromise(PartialQonfigElement promise, QonfigElement.Builder parent, List<ElementQualifiedParseItem> declaredRoles,
-		Set<QonfigAddOn> inheritance, Map<ElementQualifiedParseItem, AttributeValueInput> attributes, QonfigParser parser,
+	public void fulfillPromise(QonfigElement promise, QonfigElement.Builder parent, QonfigParser parser,
 		QonfigParseSession session) throws IOException, QonfigParseException {
 		PartialQonfigElement extContentRoot = promise.getDocument().getPartialRoot();
 		if (!extContentRoot.isInstance(theFulfillsAttribute.getOwner())) {
@@ -77,12 +72,36 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 		}
 		
 		if (role != null) {
-			parent.withChild(declaredRoles, role.getType(), child -> {
-				for (QonfigAddOn inh : inheritance)
-					child.inherits(inh, false);
-				for (Map.Entry<ElementQualifiedParseItem, AttributeValueInput> attr : attributes.entrySet())
-					child.withAttribute(attr.getKey(), attr.getValue());
-				child.createVariable(role.getMin(), role.getMax(), (child2, parent2) -> fulfillChildren(parent2, child2, promise, role));
+			parent.withChild2(promise.getParentRoles(), role.getType(), child -> {
+				for (QonfigAddOn inh : promise.getInheritance().values()) {
+					if (child.isSupported(inh))
+						child.inherits(inh, false);
+				}
+				QonfigPromiseDef promiseType = (QonfigPromiseDef) promise.getType();
+				for (Map.Entry<QonfigAttributeDef.Declared, AttributeValue> attr : promise.getAttributes().entrySet()) {
+					QonfigAttributeDef found = promiseType.getPromisedType() == null ? null
+						: promiseType.getPromisedType().getAllAttributes().get(attr.getKey());
+					if (found == null) {
+						for (QonfigAddOn inh : promiseType.getPromisedInheritance().values()) {
+							found = inh.getAllAttributes().get(attr.getKey());
+							if (found != null)
+								break;
+						}
+					}
+					if (found == null) {
+						for (QonfigChildDef r : promise.getParentRoles()) {
+							for (QonfigAddOn inh : r.getInheritance()) {
+								found = inh.getAllAttributes().get(attr.getKey());
+								if (found != null)
+									break;
+							}
+						}
+					}
+					if (found != null && found.getSpecification() != SpecificationType.Forbidden)
+						child.withAttribute(attr.getKey(), attr.getValue());
+				}
+				child.createVariable(role.getMin(), role.getMax(), (child2, parent2) -> fulfillChildren(parent2, child2, promise, role,
+					parser, session == null ? null : session.at(child.reporting().getFileLocation())));
 			}, promise.getFilePosition(), promise.getDescription());
 		}
 	}
@@ -92,10 +111,12 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 	 * @param childRef The variable child reference
 	 * @param promise The promise that this fulfillment is fulfilling
 	 * @param role The role in the external content that the children must fulfill
+	 * @param parser The parser to parse external content
+	 * @param session The parse session to parse external content
 	 */
-	protected void fulfillChildren(QonfigElement.Builder parent, VariableQonfigElement childRef, PartialQonfigElement promise,
-		QonfigChildDef role) {
-		PartialQonfigElement extRefPromise = null;
+	protected void fulfillChildren(QonfigElement.Builder parent, VariableQonfigElement childRef, QonfigElement promise,
+		QonfigChildDef role, QonfigParser parser, QonfigParseSession session) {
+		QonfigElement extRefPromise = null;
 		if (parent.getDocument() == promise.getDocument()) {
 			extRefPromise = parent.getPromise();
 			for (PartialQonfigElement p = parent.getParent(); p != null && extRefPromise == null; p = p.getParent())
@@ -117,7 +138,7 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 			parent.reporting().error("Could not locate external document in element hierarchy");
 			return;
 		}
-		fulfillChildren(parent, childRef, role, promise, extRefPromise, parent.reporting());
+		fulfillChildren(parent, childRef, role, promise, extRefPromise, parser, session);
 	}
 
 	/**
@@ -126,37 +147,39 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 	 * @param promise The promise that this fulfillment is fulfilling
 	 * @param role The role in the external content that the children must fulfill
 	 * @param extRefPromise The promise containing the data to fulfill the children
-	 * @param reporting Error reporting
+	 * @param parser The parser to parse external content
+	 * @param session Error reporting
 	 */
 	protected void fulfillChildren(QonfigElement.Builder parent, VariableQonfigElement childRef, QonfigChildDef role,
-		PartialQonfigElement promise, PartialQonfigElement extRefPromise, ErrorReporting reporting) {
-		PartialQonfigElement usePromise;
-		if (extRefPromise instanceof QonfigElement) {
+		QonfigElement promise, QonfigElement extRefPromise, QonfigParser parser, QonfigParseSession session) {
+		// PartialQonfigElement usePromise;
+		// if (extRefPromise instanceof QonfigElement) {
 			// Building fully. Full elements must have full promises, so we need to synthesize the promise element
 			// child-placeholder doesn't fulfill any roles in any parent, it's just a placeholder.
 			// So it can only be synthesized as a root element.
-			QonfigElement.Builder promiseBuilder = QonfigElement.buildRoot(false, reporting, promise.getDocument(),
-				(QonfigElementDef) promise.getType(), promise.getDescription());
-			promise.copy(promiseBuilder);
-			usePromise = promiseBuilder.buildFull();
-		} else
-			usePromise = promise;
-		Set<QonfigChildDef> roles = new LinkedHashSet<>();
-		for (PartialQonfigElement extChild : extRefPromise.getChildrenByRole().get(role.getDeclared())) {
-			roles.addAll(childRef.getParentRoles());
-			parent.withChild2(roles, extChild.getType(), child -> {
-				child.withDocument(extChild.getDocument());
-				child.fulfills(usePromise, extChild);
-				for (QonfigAddOn inh : childRef.getInheritance().values())
-					child.inherits(inh, false);
-				for (QonfigAddOn inh : extChild.getInheritance().values())
-					child.inherits(inh, false);
-
-				childRef.copyAttributes(child);
-				extChild.copyAttributes(child);
-
-				extChild.copyChildren(child);
-			}, extChild.getFilePosition(), extChild.getDescription());
-		}
+		QonfigElement.Builder promiseBuilder = QonfigElement.buildRoot(false, session, promise.getDocument(),
+				promise.getType(), promise.getDescription());
+		promise.copy(promiseBuilder, parser, session);
+			// usePromise =
+			promiseBuilder.buildFull();
+			// } else
+			// usePromise = promise;
+			// Set<QonfigChildDef> roles = new LinkedHashSet<>();
+			// for (PartialQonfigElement extChild : extRefPromise.getChildrenByRole().get(role.getDeclared())) {
+			// roles.addAll(childRef.getParentRoles());
+			// parent.withChild2(roles, extChild.getType(), child -> {
+			// child.withDocument(extChild.getDocument());
+			// child.fulfills(usePromise, extChild);
+			// for (QonfigAddOn inh : childRef.getInheritance().values())
+			// child.inherits(inh, false);
+			// for (QonfigAddOn inh : extChild.getInheritance().values())
+			// child.inherits(inh, false);
+			//
+			// childRef.copyAttributes(child);
+			// extChild.copyAttributes(child);
+			//
+			// extChild.copyChildren(child);
+			// }, extChild.getFilePosition(), extChild.getDescription());
+			// }
 	}
 }

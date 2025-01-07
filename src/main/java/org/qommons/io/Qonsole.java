@@ -170,7 +170,7 @@ public class Qonsole implements Named, AutoCloseable {
 	private final Map<String, QonsolePlugin> thePlugins;
 	// This buffer is used circularly for efficiency
 	private final CircularCharBuffer thePrivateBuffer;
-	private final BufferedReaderWriter thePublicBuffer;
+	private final CircularCharBuffer thePublicBuffer;
 	private QonsolePlugin theCurrentPlugin;
 	private int theCommandOffset;
 
@@ -187,7 +187,7 @@ public class Qonsole implements Named, AutoCloseable {
 		isClosed = closed != null ? closed : () -> false;
 		thePlugins = new LinkedHashMap<>();
 		thePrivateBuffer = new CircularCharBuffer(-1);
-		thePublicBuffer = new BufferedReaderWriter();
+		thePublicBuffer = new CircularCharBuffer(-1);
 
 		theListener = new Thread(new Runnable() {
 			@Override
@@ -213,7 +213,7 @@ public class Qonsole implements Named, AutoCloseable {
 
 	/** @return The Reader for content not used by any plugin */
 	public Reader read() {
-		return thePublicBuffer.read();
+		return thePublicBuffer.asDeletingReader();
 	}
 
 	/**
@@ -279,7 +279,7 @@ public class Qonsole implements Named, AutoCloseable {
 							theCurrentPlugin = null;
 						}
 					} else {
-						thePublicBuffer.write().append(thePrivateBuffer.subSequence(0, i + 1));
+						thePublicBuffer.append(thePrivateBuffer.subSequence(0, i + 1));
 						thePrivateBuffer.delete(0, i + 1);
 						i = -1;
 					}
@@ -299,7 +299,6 @@ public class Qonsole implements Named, AutoCloseable {
 	@Override
 	public void close() throws IOException {
 		theInput.close();
-		thePublicBuffer.write().close();
 		isDone = true;
 	}
 

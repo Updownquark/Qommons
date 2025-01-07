@@ -374,13 +374,12 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 	 * @param <K> The key type of the map
 	 * @param <V> The value type of the map
 	 */
-	class BetterSubMultiMap<K, V> implements BetterSortedMultiMap<K, V> {
+	class BetterSubMultiMap<K, V> extends AbstractIdentifiable implements BetterSortedMultiMap<K, V> {
 		private final BetterSortedMultiMap<K, V> theWrapped;
 		private final Comparable<? super K> theLowerBound;
 		private final Comparable<? super K> theUpperBound;
 
 		private final BetterSortedSet<K> theKeySet;
-		private Object theIdentity;
 
 		public BetterSubMultiMap(BetterSortedMultiMap<K, V> wrapped, Comparable<? super K> lowerBound, Comparable<? super K> upperBound) {
 			theWrapped = wrapped;
@@ -403,10 +402,8 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public Object getIdentity() {
-			if (theIdentity == null)
-				theIdentity = Identifiable.wrap(theWrapped.getIdentity(), "subMap", theLowerBound, theUpperBound);
-			return theIdentity;
+		protected Object createIdentity() {
+			return Identifiable.wrap(theWrapped.getIdentity(), "subMap", theLowerBound, theUpperBound);
 		}
 
 		@Override

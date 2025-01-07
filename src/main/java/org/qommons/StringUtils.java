@@ -179,6 +179,15 @@ public class StringUtils {
 	}
 
 	/**
+	 * @param seq1 The first character sequence to compare
+	 * @param seq2 The second sequence to compare
+	 * @return Whether the 2 sequences are equivalent, regardless of case
+	 */
+	public static boolean equalsIgnoreCase(CharSequence seq1, CharSequence seq2) {
+		return subSequenceMatches(seq1, 0, seq2, 0, -1, true) == seq1.length();
+	}
+
+	/**
 	 * @param full The character sequence to test
 	 * @param prefix The prefix to look for
 	 * @return Whether the given prefix is at the beginning of the full sequence, regardless of case
@@ -211,6 +220,31 @@ public class StringUtils {
 			hashCode = hashCode * 31 + ch;
 		}
 		return hashCode;
+	}
+
+	/**
+	 * @param str The character sequence to search
+	 * @param ch The character to search for
+	 * @return The index in the sequence containing the first instance of the given character, or -1 if the character was not present in the
+	 *         sequence
+	 */
+	public static int indexOf(CharSequence str, char ch) {
+		return indexOf(str, ch, 0);
+	}
+
+	/**
+	 * @param str The character sequence to search
+	 * @param ch The character to search for
+	 * @param startAt The index to start searching from
+	 * @return The index in the sequence containing the first instance of the given character, or -1 if the character was not present in the
+	 *         sequence
+	 */
+	public static int indexOf(CharSequence str, char ch, int startAt) {
+		for (int i = startAt; i < str.length(); i++) {
+			if (str.charAt(i) == ch)
+				return i;
+		}
+		return -1;
 	}
 
 	/**

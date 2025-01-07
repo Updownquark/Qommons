@@ -7,7 +7,8 @@ import java.util.function.Function;
  * Represents a boolean condition against an entity of some kind.
  * </p>
  * <p>
- * This API makes it very easy to create conditions
+ * This API facilitates creation of dynamic conditions that could be used e.g. for creating queries against a data source.
+ * </p>
  * 
  * @param <E> The type of the entity against which this condition can be evaluated
  * @param <C> The sub-type of this condition

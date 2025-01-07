@@ -96,9 +96,21 @@ public class JsonObject {
 		return new EntrySet(theValues.entrySet());
 	}
 
-	/** @return The map backing this object's values */
-	public Map<String, Object> getMap() {
-		return Collections.unmodifiableMap(theValues);
+	/** @return A map containing this object's values */
+	public Map<String, Object> toMap() {
+		boolean hasNull = false;
+		for (Object v : theValues.values()) {
+			if (v == NULL)
+				hasNull = true;
+		}
+		if (!hasNull)
+			return Collections.unmodifiableMap(theValues);
+		Map<String, Object> map = new LinkedHashMap<>(theValues.size() * 3 / 2 + 1);
+		for (Map.Entry<String, Object> entry : theValues.entrySet()) {
+			if (entry.getValue() != NULL)
+				map.put(entry.getKey(), entry.getValue());
+		}
+		return Collections.unmodifiableMap(map);
 	}
 
 	@Override

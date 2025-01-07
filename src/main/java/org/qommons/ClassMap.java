@@ -1,12 +1,6 @@
 package org.qommons;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -253,6 +247,17 @@ public class ClassMap<V> {
 			for (ClassMapEntry<? extends C, V> child : theSubMaps)
 				child.append(str.append('\n'), indent + 1);
 			return str;
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (o == this)
+				return true;
+			else if (!(o instanceof ClassMapEntry))
+				return false;
+			ClassMapEntry<?, ?> other = (ClassMapEntry<?, ?>) o;
+			return theType == other.theType && theSize == other.theSize && Objects.equals(theValue, other.theValue)
+				&& theSubMaps.equals(other.theSubMaps);
 		}
 
 		@Override
@@ -531,6 +536,15 @@ public class ClassMap<V> {
 	/** Removes all values from this map */
 	public void clear() {
 		theRoot.clear();
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o)
+			return true;
+		else if (!(o instanceof ClassMap))
+			return false;
+		return theRoot.equals(((ClassMap<?>) o).theRoot);
 	}
 
 	/** @return An independent copy of this class map */

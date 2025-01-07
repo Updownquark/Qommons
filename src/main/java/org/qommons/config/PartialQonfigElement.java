@@ -33,7 +33,7 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	private final LocatedPositionedContent theFilePosition;
 	private final String theDescription;
 
-	private final PartialQonfigElement thePromise;
+	private final QonfigElement thePromise;
 	private final PartialQonfigElement theExternalContent;
 
 	/**
@@ -56,7 +56,7 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 		MultiInheritanceSet<QonfigAddOn> inheritance, Set<QonfigChildDef> parentRoles, Set<QonfigChildDef.Declared> declaredRoles,
 		Map<Declared, AttributeValue> attributes, List<? extends PartialQonfigElement> children,
 		BetterMultiMap<QonfigChildDef.Declared, ? extends PartialQonfigElement> childrenByRole, QonfigValue value,
-		LocatedPositionedContent filePosition, String description, PartialQonfigElement promise, PartialQonfigElement externalContent) {
+		LocatedPositionedContent filePosition, String description, QonfigElement promise, PartialQonfigElement externalContent) {
 		if (document.getPartialRoot() == null)
 			document.setRoot(this);
 		theDocument = document;
@@ -110,6 +110,20 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 		return theDeclaredRoles;
 	}
 
+	/**
+	 * @param role The role to query with
+	 * @return Whether this element fulfills the given role in its parent
+	 */
+	public boolean fulfills(QonfigChildDef role) {
+		if (theParentRoles.contains(role))
+			return true;
+		for (QonfigChildDef r : theParentRoles) {
+			if (role.isFulfilledBy(r))
+				return true;
+		}
+		return false;
+	}
+
 	/** @return All add-ons that this element inherits */
 	public MultiInheritanceSet<QonfigAddOn> getInheritance() {
 		return theInheritance;
@@ -121,7 +135,7 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	}
 
 	/** @return The promise that is loading this element's external content */
-	public PartialQonfigElement getPromise() {
+	public QonfigElement getPromise() {
 		return thePromise;
 	}
 
@@ -328,20 +342,31 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	 * Copies this element's data into a new child on an element builder
 	 * 
 	 * @param parent The builder to create the child for
+	 * @param parser The parser to parse any documents which may need to be externally loaded
+	 * @param session The parse session to use for externally-loaded documents
 	 */
-	public void copyInto(QonfigElement.Builder parent) {
-		parent.withChild2(theParentRoles, theType, this::copy, theFilePosition, theDescription);
+	public void copyInto(QonfigElement.Builder parent, QonfigParser parser, QonfigParseSession session) {
+		boolean fulfillPromise = !parent.isPartial() && theType instanceof QonfigPromiseDef;
+		PartialQonfigElement builtChild = parent.withChild2(theParentRoles, theType, child -> {
+			copy(child, parser, session);
+			if (fulfillPromise)
+				child.dontAddToParent();
+		}, theFilePosition, theDescription);
+		if (fulfillPromise && parser != null && builtChild != null)
+			parser.fulfillPromise((QonfigElement) builtChild, parent, session);
 	}
 
 	/**
 	 * Copies this element's data into an element builder
 	 * 
 	 * @param child The builder to copy this element's data into
+	 * @param parser The parser to parse any documents which may need to be externally loaded
+	 * @param session The parse session to use for externally-loaded documents
 	 */
-	public void copy(QonfigElement.Builder child) {
+	public void copy(QonfigElement.Builder child, QonfigParser parser, QonfigParseSession session) {
 		child.withDocument(theDocument);
 		copyAttributes(child);
-		copyChildren(child);
+		copyChildren(child, parser, session);
 	}
 
 	/**
@@ -362,10 +387,12 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	 * Copies this element's children into an element builder
 	 * 
 	 * @param child The builder to copy data into
+	 * @param parser The parser to parse any documents which may need to be externally loaded
+	 * @param session The parse session to use for externally-loaded documents
 	 */
-	public void copyChildren(QonfigElement.Builder child) {
+	public void copyChildren(QonfigElement.Builder child, QonfigParser parser, QonfigParseSession session) {
 		for (PartialQonfigElement myChild : theChildren)
-			myChild.copyInto(child);
+			myChild.copyInto(child, parser, session);
 	}
 
 	/** @return A string representation of this element including its location in its source file */

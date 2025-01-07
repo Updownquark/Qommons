@@ -8,10 +8,16 @@ import org.qommons.QommonsUtils;
 import org.qommons.condition.All.ConditionIntermediate1;
 import org.qommons.condition.All.ConditionIntermediate2;
 
+/**
+ * Abstract {@link Condition} implementation
+ * 
+ * @param <E> The type of entity this condition is for
+ */
 public abstract class DefaultCondition<E> implements ConditionImpl<E, DefaultCondition<E>, DefaultCondition.DefaultAll<E>> {
 	private final ConditionalEntity<E> theEntity;
 
-	public DefaultCondition(ConditionalEntity<E> entity) {
+	/** @param entity The entity this condition is for */
+	protected DefaultCondition(ConditionalEntity<E> entity) {
 		theEntity = entity;
 	}
 
@@ -30,7 +36,13 @@ public abstract class DefaultCondition<E> implements ConditionImpl<E, DefaultCon
 		return new DefaultAndCondition<>(conditions);
 	}
 
+	/**
+	 * Default {@link All} implementation
+	 * 
+	 * @param <E> The type of entity this condition is for
+	 */
 	public static class DefaultAll<E> extends DefaultCondition<E> implements All<E, DefaultCondition<E>, DefaultAll<E>> {
+		/** @param entity The entity this condition is for */
 		public DefaultAll(ConditionalEntity<E> entity) {
 			super(entity);
 		}
@@ -63,10 +75,20 @@ public abstract class DefaultCondition<E> implements ConditionImpl<E, DefaultCon
 		}
 	}
 
+	/**
+	 * Default {@link All.ConditionIntermediate1} implementation
+	 * 
+	 * @param <E> The type of entity to create the condition for
+	 * @param <F> The type of field that the condition operates on
+	 */
 	public static class DefaultCI1<E, F> implements ConditionIntermediate1<E, DefaultCondition<E>, DefaultAll<E>, F> {
 		private final DefaultAll<E> theSource;
 		private final ConditionalValueAccess<E, F> theField;
 
+		/**
+		 * @param source The {@link All} source for this condition intermediate
+		 * @param field The field that the condition will operate on
+		 */
 		public DefaultCI1(DefaultAll<E> source, ConditionalValueAccess<E, F> field) {
 			theSource = source;
 			theField = field;
@@ -88,11 +110,22 @@ public abstract class DefaultCondition<E> implements ConditionImpl<E, DefaultCon
 		}
 	}
 
+	/**
+	 * Default {@link All.ConditionIntermediate2} implementation
+	 * 
+	 * @param <E> The type of entity to create the condition for
+	 * @param <F> The type of field that the condition operates on
+	 */
 	public static class DefaultCI2<E, F> implements ConditionIntermediate2<E, DefaultCondition<E>, DefaultAll<E>, F> {
 		private final DefaultCI1<E, F> thePrecursor;
 		private final int theComparison;
 		private final boolean isWithEqual;
 
+		/**
+		 * @param precursor The precursor to this second-stage condition intermediate
+		 * @param comparison The comparison for the condition (-1 for &lt; or &lt;=, 0 for == or !=, 1 for &gt; or &gte;)
+		 * @param isWithEqual Whether equality results in true
+		 */
 		public DefaultCI2(DefaultCI1<E, F> precursor, int comparison, boolean isWithEqual) {
 			thePrecursor = precursor;
 			theComparison = comparison;
@@ -120,11 +153,21 @@ public abstract class DefaultCondition<E> implements ConditionImpl<E, DefaultCon
 		}
 	}
 
+	/**
+	 * A literal condition
+	 * 
+	 * @param <E> The type of entity this condition is for
+	 * @param <F> The type of field that the condition operates on
+	 */
 	public static class DefaultLiteralCondition<E, F> extends DefaultCondition<E>
 		implements LiteralCondition<E, DefaultCondition<E>, DefaultAll<E>, F> {
 		private final DefaultCI2<E, F> theIntermediate;
 		private final F theValue;
 
+		/**
+		 * @param intermediate The stage 2 intermediate producing this condition
+		 * @param value The literal value to compare the field value against
+		 */
 		public DefaultLiteralCondition(DefaultCI2<E, F> intermediate, F value) {
 			super(intermediate.getPrecursor().getSource().getEntityType());
 			theIntermediate = intermediate;
@@ -157,11 +200,17 @@ public abstract class DefaultCondition<E> implements ConditionImpl<E, DefaultCon
 		}
 	}
 
+	/**
+	 * Abstract OR/AND condition implementation
+	 * 
+	 * @param <E> The type of entity this condition is for
+	 */
 	public static abstract class DefaultCompositeCondition<E> extends DefaultCondition<E>
 		implements ConditionImpl.CompositeCondition<E, DefaultCondition<E>, DefaultAll<E>> {
 		private final List<DefaultCondition<E>> theComponents;
 
-		public DefaultCompositeCondition(Collection<? extends DefaultCondition<E>> components) {
+		/** @param components The components of this condition */
+		protected DefaultCompositeCondition(Collection<? extends DefaultCondition<E>> components) {
 			super(components.iterator().next().getEntityType());
 			theComponents = QommonsUtils.unmodifiableCopy(components);
 		}
@@ -187,15 +236,27 @@ public abstract class DefaultCondition<E> implements ConditionImpl<E, DefaultCon
 		}
 	}
 
+	/**
+	 * Default OR implementation
+	 * 
+	 * @param <E> The type of entity this condition is for
+	 */
 	public static class DefaultOrCondition<E> extends DefaultCompositeCondition<E>
 		implements ConditionImpl.OrCondition<E, DefaultCondition<E>, DefaultAll<E>> {
+		/** @param components The components of this condition */
 		public DefaultOrCondition(Collection<? extends DefaultCondition<E>> components) {
 			super(components);
 		}
 	}
 
+	/**
+	 * Default AND implementation
+	 * 
+	 * @param <E> The type of entity this condition is for
+	 */
 	public static class DefaultAndCondition<E> extends DefaultCompositeCondition<E>
 		implements ConditionImpl.AndCondition<E, DefaultCondition<E>, DefaultAll<E>> {
+		/** @param components The components of this condition */
 		public DefaultAndCondition(Collection<? extends DefaultCondition<E>> components) {
 			super(components);
 		}
