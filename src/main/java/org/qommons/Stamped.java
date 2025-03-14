@@ -1,6 +1,7 @@
 package org.qommons;
 
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.PrimitiveIterator;
 import java.util.function.ToLongFunction;
 import java.util.stream.LongStream;
@@ -28,16 +29,50 @@ public interface Stamped {
 	/**
 	 * Creates a composite stamp from a collection of other stamped items
 	 * 
-	 * @param <T> The type of the stamped values
 	 * @param values The stamped values to create the composite stamp for
 	 * @return The composite stamp
 	 */
-	public static <T> long compositeStamp(Collection<? extends Stamped> values) {
-		if (values.isEmpty())
+	public static long compositeStamp(Collection<? extends Stamped> values) {
+		switch (values.size()) {
+		case 0:
 			return 0;
+		case 1:
+			Stamped value0 = values.iterator().next();
+			return value0 == null ? 0 : value0.getStamp();
+		case 2:
+			Iterator<? extends Stamped> iter = values.iterator();
+			value0 = iter.next();
+			Stamped value1 = iter.next();
+			return compositeOf2Stamps(//
+				value0 == null ? 0 : value0.getStamp(), //
+				value1 == null ? 0 : value1.getStamp());
+		}
 		CompositeStamping stamp = new CompositeStamping(values.size());
 		for (Stamped value : values)
 			stamp.add(value.getStamp());
+		return stamp.getStamp();
+	}
+
+	/**
+	 * Creates a composite stamp from an array of other stamped items
+	 * 
+	 * @param values The stamped values to create the composite stamp for
+	 * @return The composite stamp
+	 */
+	public static long compositeStamp(Stamped... values) {
+		switch (values.length) {
+		case 0:
+			return 0;
+		case 1:
+			return values[0] == null ? 0 : values[0].getStamp();
+		case 2:
+			return compositeOf2Stamps(//
+				values[0] == null ? 0 : values[0].getStamp(), //
+				values[1] == null ? 0 : values[1].getStamp());
+		}
+		CompositeStamping stamp = new CompositeStamping(values.length);
+		for (Stamped value : values)
+			stamp.add(value == null ? 0 : value.getStamp());
 		return stamp.getStamp();
 	}
 
@@ -50,12 +85,32 @@ public interface Stamped {
 	 * @return The composite stamp
 	 */
 	public static <T> long compositeStamp(Collection<? extends T> values, ToLongFunction<? super T> stampFn) {
-		if (values.isEmpty())
+		switch (values.size()) {
+		case 0:
 			return 0;
+		case 1:
+			return stampFn.applyAsLong(values.iterator().next());
+		case 2:
+			Iterator<? extends T> iter = values.iterator();
+			return compositeOf2Stamps(//
+				stampFn.applyAsLong(iter.next()), //
+				stampFn.applyAsLong(iter.next()));
+		}
 		CompositeStamping stamp = new CompositeStamping(values.size());
 		for (T value : values)
 			stamp.add(stampFn.applyAsLong(value));
 		return stamp.getStamp();
+	}
+
+	/**
+	 * Creates a composite stamp from 2 component stamps
+	 * 
+	 * @param stamp1 The first stamp to create the composite stamp for
+	 * @param stamp2 The second stamp to create the composite stamp for
+	 * @return The composite stamp
+	 */
+	static long compositeOf2Stamps(long stamp1, long stamp2) {
+		return (stamp1 ^ Long.rotateRight(stamp2, 31)) + stamp2;
 	}
 
 	/**
@@ -65,8 +120,14 @@ public interface Stamped {
 	 * @return The composite stamp
 	 */
 	static long compositeStamp(long... stamps) {
-		if (stamps.length == 0)
+		switch (stamps.length) {
+		case 0:
 			return 0;
+		case 1:
+			return stamps[0];
+		case 2:
+			return compositeOf2Stamps(stamps[0], stamps[1]);
+		}
 		CompositeStamping stamp = new CompositeStamping(stamps.length);
 		for (long s : stamps)
 			stamp.add(s);
@@ -81,6 +142,15 @@ public interface Stamped {
 	 * @return The composite stamp
 	 */
 	static long compositeStamp(LongStream stamps, int count) {
+		switch (count) {
+		case 0:
+			return 0;
+		case 1:
+			return stamps.iterator().nextLong();
+		case 2:
+			PrimitiveIterator.OfLong stampIter = stamps.iterator();
+			return compositeOf2Stamps(stampIter.nextLong(), stampIter.nextLong());
+		}
 		CompositeStamping stamp = new CompositeStamping(count);
 		PrimitiveIterator.OfLong stampsIter = stamps.iterator();
 		while (stampsIter.hasNext())

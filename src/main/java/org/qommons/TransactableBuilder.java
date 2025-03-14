@@ -67,9 +67,11 @@ public interface TransactableBuilder<B extends TransactableBuilder<? extends B>>
 
 		@Override
 		public B withThreadConstraint(ThreadConstraint threadConstraint) {
+			if (threadConstraint == ThreadConstraint.ANY)
+				return (B) this; // No-op
 			if (theLocker != DEFAULT_LOCKER)
 				System.err.println("WARNING: Using withThreadConstraint() after modifying the locking--locking policy will be reset");
-			theLocker = LambdaUtils.constantFn(new ThreadConstrainedLockingStrategy(threadConstraint), threadConstraint::toString, null);
+			theLocker = LambdaUtils.constantFn(ThreadConstrainedLockingStrategy.get(threadConstraint), threadConstraint::toString, null);
 			return (B) this;
 		}
 

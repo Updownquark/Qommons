@@ -69,12 +69,25 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 	private final EntrySet theEntrySet;
 
 	BetterTreeMap(boolean threadSafe, Comparator<? super K> compare, ThreadConstraint threadConstraint) {
-		this(v -> threadSafe ? new StampedLockingStrategy(v, threadConstraint) : new FastFailLockingStrategy(threadConstraint),
-			DEFAULT_DESCRIPTION, compare);
+		this(v -> {
+			if (threadSafe)
+				return new StampedLockingStrategy(v, threadConstraint);
+			else if (threadConstraint != ThreadConstraint.ANY && threadConstraint.supportsInvoke())
+				return ThreadConstrainedLockingStrategy.get(threadConstraint);
+			else
+				return new FastFailLockingStrategy();
+		}, DEFAULT_DESCRIPTION, compare);
 	}
 
 	BetterTreeMap(boolean threadSafe, SortedMap<K, ? extends V> map, ThreadConstraint threadConstraint) {
-		this(v -> threadSafe ? new StampedLockingStrategy(v, threadConstraint) : new FastFailLockingStrategy(threadConstraint), map);
+		this(v -> {
+			if (threadSafe)
+				return new StampedLockingStrategy(v, threadConstraint);
+			else if (threadConstraint != ThreadConstraint.ANY && threadConstraint.supportsInvoke())
+				return ThreadConstrainedLockingStrategy.get(threadConstraint);
+			else
+				return new FastFailLockingStrategy();
+		}, map);
 	}
 
 	/**

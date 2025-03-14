@@ -146,30 +146,9 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 				if (child.isSupported(inh))
 					child.inherits(inh, false);
 			}
-			QonfigPromiseDef promiseType = (QonfigPromiseDef) promise.getType();
 			child.fulfills(promise, content.getFulfillment());
-			for (Map.Entry<QonfigAttributeDef.Declared, AttributeValue> attr : promise.getAttributes().entrySet()) {
-				QonfigAttributeDef found = promiseType.getPromisedType() == null ? null
-					: promiseType.getPromisedType().getAllAttributes().get(attr.getKey());
-				if (found == null) {
-					for (QonfigAddOn inh : promiseType.getPromisedInheritance().values()) {
-						found = inh.getAllAttributes().get(attr.getKey());
-						if (found != null)
-							break;
-					}
-				}
-				if (found == null) {
-					for (QonfigChildDef role : promise.getParentRoles()) {
-						for (QonfigAddOn inh : role.getInheritance()) {
-							found = inh.getAllAttributes().get(attr.getKey());
-							if (found != null)
-								break;
-						}
-					}
-				}
-				if (found != null && found.getSpecification() != SpecificationType.Forbidden)
-					child.withAttribute(attr.getKey(), attr.getValue());
-			}
+			for (Map.Entry<QonfigAttributeDef.Declared, AttributeValue> attr : promise.getAttributes().entrySet())
+				child.withAttribute(attr.getKey(), attr.getValue());
 			buildContent(child, fulfillment, promise, parser, session);
 		}, fulfillment.getFilePosition(), fulfillment.getDescription());
 	}
@@ -183,7 +162,7 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 	 */
 	protected void buildContent(QonfigElement.Builder builder, PartialQonfigElement content, PartialQonfigElement promise,
 		QonfigParser parser, QonfigParseSession session) {
-		content.copy(builder, parser, session);
+		content.copy(builder, parser, session, session == null ? null : session.at(promise.getFilePosition()));
 	}
 
 	/** External content loaded from a file */

@@ -7,13 +7,7 @@ import java.util.Iterator;
 
 import org.junit.Assert;
 import org.junit.Test;
-import org.qommons.io.SimpleXMLParser.XmlAttribute;
-import org.qommons.io.SimpleXMLParser.XmlCdata;
-import org.qommons.io.SimpleXMLParser.XmlComment;
-import org.qommons.io.SimpleXMLParser.XmlDeclaration;
-import org.qommons.io.SimpleXMLParser.XmlElementTerminal;
-import org.qommons.io.SimpleXMLParser.XmlParseException;
-import org.qommons.io.SimpleXMLParser.XmlProcessingInstruction;
+import org.qommons.io.SimpleXMLParser.*;
 
 /** Unit test for {@link SimpleXMLParser} */
 public class SimpleXMLParserTest {
@@ -77,7 +71,8 @@ public class SimpleXMLParserTest {
 				new ExpectedComment(" This is a footer comment with special characters &<'\nblah ", 505, 26, 4), //
 				new ExpectedWhitespace("\n", 567, 27, 8)//
 			);
-			new SimpleXMLParser().setTabLength(4).parseXml(null, in, tester);
+			new SimpleXMLParser().setTabLength(4)//
+				.parseXml(null, in, tester);
 			tester.done();
 		}
 	}
@@ -106,7 +101,7 @@ public class SimpleXMLParserTest {
 		}
 
 		@Override
-		public void handleIgnorableWhitespace(PositionedContent whitespace) {
+		public void handleIgnorableWhitespace(XmlIgnorableWhitespace whitespace) {
 			next(ExpectedWhitespace.class, "Whitespace: " + toString(whitespace)).validate(whitespace);
 		}
 
@@ -133,7 +128,7 @@ public class SimpleXMLParserTest {
 		}
 
 		@Override
-		public void handleElementContent(String elementName, PositionedContent elementValue) {
+		public void handleElementContent(String elementName, XmlElementContent elementValue) {
 			next(ExpectedElementContent.class, "element content " + toString(elementValue)).validateContent(elementValue);
 		}
 

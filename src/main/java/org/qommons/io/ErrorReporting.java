@@ -179,7 +179,8 @@ public interface ErrorReporting {
 	 * @return This error reporting instance
 	 */
 	default ErrorReporting info(String message, Throwable cause) {
-		return report(new Issue(getFileLocation().getPosition(0), IssueSeverity.INFO, message, getCodeLocation(), cause));
+		return report(new Issue(getFileLocation() == null ? null : getFileLocation().getPosition(0), IssueSeverity.INFO, message,
+			getCodeLocation(), cause));
 	}
 
 	/**
@@ -196,7 +197,8 @@ public interface ErrorReporting {
 	 * @return This error reporting instance
 	 */
 	default ErrorReporting warn(String message, Throwable cause) {
-		return report(new Issue(getFileLocation().getPosition(0), IssueSeverity.WARN, message, getCodeLocation(), cause));
+		return report(new Issue(getFileLocation() == null ? null : getFileLocation().getPosition(0), IssueSeverity.WARN, message,
+			getCodeLocation(), cause));
 	}
 
 	/**

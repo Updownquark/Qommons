@@ -53,6 +53,10 @@ public class MutableConfig extends QommonsConfig {
 	 * @param name The name for the configuration
 	 */
 	public MutableConfig(String name) {
+		if (name == null)
+			throw new NullPointerException((theParent == null ? "(root)" : theParent.getPath()) + ": No name");
+		else if (name.isEmpty())
+			throw new IllegalArgumentException((theParent == null ? "(root)" : theParent.getPath()) + ": Name cannot be empty");
 		theName = name;
 		theSubConfigs = createConfigArray(0);
 		theListeners = new ConfigListener[0];

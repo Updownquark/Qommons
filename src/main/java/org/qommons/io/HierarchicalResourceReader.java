@@ -34,33 +34,47 @@ public interface HierarchicalResourceReader {
 	 * @return A resource writer that reads all its files relative to the given sub-directory
 	 */
 	default HierarchicalResourceReader subReader(String subDir) {
-		final String subPath;
-		if (subDir.endsWith("/") || subDir.endsWith("\\"))
-			subPath = subDir;
-		else
-			subPath = subDir + "/";
-		HierarchicalResourceReader outer = this;
-		class SubDirReader implements HierarchicalResourceReader {
-			@Override
-			public InputStream readResource(String path) throws IOException {
-				return outer.readResource(subPath + path);
-			}
+		return new SubReader(this, subDir);
+	}
 
-			@Override
-			public Collection<String> getSubDirs(String path) throws IOException {
-				return outer.getSubDirs(path == null ? subPath : subPath + path);
-			}
+	public static class SubReader implements HierarchicalResourceReader {
+		private final HierarchicalResourceReader theParent;
+		private final String theSubPath;
 
-			@Override
-			public Collection<String> getResources(String subDir2) throws IOException {
-				return outer.getResources(subDir2 == null ? subPath : subPath + subDir2);
-			}
-
-			@Override
-			public HierarchicalResourceReader subReader(String subDir2) {
-				return outer.subReader(subPath + subDir2);
-			}
+		public SubReader(HierarchicalResourceReader parent, String subDir) {
+			this.theParent = parent;
+			if (subDir.endsWith("/") || subDir.endsWith("\\"))
+				theSubPath = subDir;
+			else
+				theSubPath = subDir + "/";
 		}
-		return new SubDirReader();
+
+		public HierarchicalResourceReader getParent() {
+			return theParent;
+		}
+
+		public String getSubPath() {
+			return theSubPath;
+		}
+
+		@Override
+		public InputStream readResource(String path) throws IOException {
+			return theParent.readResource(theSubPath + path);
+		}
+
+		@Override
+		public Collection<String> getSubDirs(String path) throws IOException {
+			return theParent.getSubDirs(path == null ? theSubPath : theSubPath + path);
+		}
+
+		@Override
+		public Collection<String> getResources(String subDir2) throws IOException {
+			return theParent.getResources(subDir2 == null ? theSubPath : theSubPath + subDir2);
+		}
+
+		@Override
+		public HierarchicalResourceReader subReader(String subDir2) {
+			return theParent.subReader(theSubPath + subDir2);
+		}
 	}
 }

@@ -208,7 +208,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					session.at(el.getTextTrimPosition()).error("No value expected or accepted: " + text);
 			}
 		}
-		builder.doneWithAttributes();
+		builder.doneWithAttributes(session);
 
 		for (StrictXmlReader child : el.getElements()) {
 			if (!childApplies.test(child))

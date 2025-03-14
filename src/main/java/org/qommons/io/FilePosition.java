@@ -1,7 +1,7 @@
 package org.qommons.io;
 
 /** The position of a single character in a text file */
-public class FilePosition {
+public class FilePosition implements Comparable<FilePosition> {
 	/** Zero position */
 	public static final FilePosition START = new FilePosition(0, 0, 0);
 
@@ -33,6 +33,11 @@ public class FilePosition {
 	/** @return The character number (within the line) in the file, indexed from zero */
 	public int getCharNumber() {
 		return theCharNumber;
+	}
+
+	@Override
+	public int compareTo(FilePosition o) {
+		return Integer.compare(thePosition, o.thePosition);
 	}
 
 	@Override

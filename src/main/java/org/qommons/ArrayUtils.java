@@ -86,7 +86,7 @@ public final class ArrayUtils {
 			ret[0] = anElement;
 			return ret;
 		}
-		ret = (T []) Array.newInstance(anArray.getClass().getComponentType(), anArray.length + 1);
+		ret = Arrays.copyOf(anArray, anArray.length + 1);
 		System.arraycopy(anArray, 0, ret, 0, anIndex);
 		put(ret, anElement, anIndex);
 		System.arraycopy(anArray, anIndex, ret, anIndex + 1, anArray.length - anIndex);
@@ -110,7 +110,7 @@ public final class ArrayUtils {
 				throw new ArrayIndexOutOfBoundsException("Cannot set " + anIndex + " element in a null array");
 			return elements;
 		}
-		ret = (T []) Array.newInstance(anArray.getClass().getComponentType(), anArray.length + elements.length);
+		ret = Arrays.copyOf(anArray, anArray.length + elements.length);
 		System.arraycopy(anArray, 0, ret, 0, anIndex);
 		System.arraycopy(elements, 0, ret, anIndex, elements.length);
 		System.arraycopy(anArray, anIndex, ret, anIndex + elements.length, anArray.length - anIndex);

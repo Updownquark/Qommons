@@ -11,6 +11,7 @@ import org.qommons.collect.BetterMultiMap;
 import org.qommons.config.QonfigAttributeDef.Declared;
 import org.qommons.config.QonfigElement.AttributeValue;
 import org.qommons.config.QonfigElement.QonfigValue;
+import org.qommons.io.ErrorReporting;
 import org.qommons.io.LocatedFilePosition;
 import org.qommons.io.LocatedPositionedContent;
 
@@ -345,10 +346,10 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	 * @param parser The parser to parse any documents which may need to be externally loaded
 	 * @param session The parse session to use for externally-loaded documents
 	 */
-	public void copyInto(QonfigElement.Builder parent, QonfigParser parser, QonfigParseSession session) {
+	public void copyInto(QonfigElement.Builder parent, QonfigParser parser, QonfigParseSession session, ErrorReporting parentSession) {
 		boolean fulfillPromise = !parent.isPartial() && theType instanceof QonfigPromiseDef;
 		PartialQonfigElement builtChild = parent.withChild2(theParentRoles, theType, child -> {
-			copy(child, parser, session);
+			copy(child, parser, session, parentSession);
 			if (fulfillPromise)
 				child.dontAddToParent();
 		}, theFilePosition, theDescription);
@@ -363,9 +364,10 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	 * @param parser The parser to parse any documents which may need to be externally loaded
 	 * @param session The parse session to use for externally-loaded documents
 	 */
-	public void copy(QonfigElement.Builder child, QonfigParser parser, QonfigParseSession session) {
+	public void copy(QonfigElement.Builder child, QonfigParser parser, QonfigParseSession session, ErrorReporting parentSession) {
 		child.withDocument(theDocument);
 		copyAttributes(child);
+		child.doneWithAttributes(parentSession);
 		copyChildren(child, parser, session);
 	}
 
@@ -392,7 +394,7 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	 */
 	public void copyChildren(QonfigElement.Builder child, QonfigParser parser, QonfigParseSession session) {
 		for (PartialQonfigElement myChild : theChildren)
-			myChild.copyInto(child, parser, session);
+			myChild.copyInto(child, parser, session, null);
 	}
 
 	/** @return A string representation of this element including its location in its source file */

@@ -135,7 +135,7 @@ public class ClassMap<V> {
 			} else if (theType.isAssignableFrom(targetType))
 				descend = action.onEntry(theType, theValue, TypeMatch.SUPER_TYPE);
 			else
-				descend = false;
+				descend = targetType.isInterface();
 			if (descend) {
 				for (ClassMapEntry<? extends C, V> subMap : theSubMaps)
 					subMap.descend(targetType, action, subTarget);

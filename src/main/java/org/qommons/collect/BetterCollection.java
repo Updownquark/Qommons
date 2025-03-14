@@ -250,6 +250,69 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 	}
 
+	/**
+	 * @param value The value to find in this collection
+	 * @param first Whether to search for the first or last element in this collection whose value is equivalent to the given one
+	 * @return The value of the found element, or null if the value was not found in this collection
+	 */
+	default E getEquivalentValue(Object value, boolean first) {
+		return CollectionElement.get(getElement((E) value, first));
+	}
+
+	/**
+	 * Finds the first (or last) element in this collection whose value is equivalent to the given one, and sets it to its own value (which
+	 * may not be identical to the given value) if possible.
+	 * 
+	 * @param value The value to find and update
+	 * @param first Whether to find and update the first or last element in this collection whose value is equivalent to the given one
+	 * @return
+	 *         <ol>
+	 *         <li>{@link StdMsg#NOT_FOUND} if no such element exists in this collection,</li>
+	 *         <li><code>null</code> if the element was updated, or</li>
+	 *         <li>The reason why the element could not be updated.</li>
+	 *         </ol>
+	 */
+	default String update(Object value, boolean first) {
+		try (Transaction t = lock(true, null)) {
+			CollectionElement<E> found = getElement((E) value, first);
+			if (found == null)
+				return StdMsg.NOT_FOUND;
+			MutableCollectionElement<E> mutable = mutableElement(found.getElementId());
+			String enabled = mutable.isAcceptable(found.get());
+			if (enabled != null)
+				return enabled;
+			mutable.set(found.get());
+			return null;
+		}
+	}
+
+	/**
+	 * Finds the first (or last) element in this collection whose value is equivalent to the given one, and sets it to the given value
+	 * (which may not be identical to the given value) if possible.
+	 * 
+	 * @param value The value to find and replace
+	 * @param first Whether to find and replace the first or last element in this collection whose value is equivalent to the given one
+	 * @return
+	 *         <ol>
+	 *         <li>{@link StdMsg#NOT_FOUND} if no such element exists in this collection,</li>
+	 *         <li><code>null</code> if the element was replaced, or</li>
+	 *         <li>The reason why the element could not be replaced.</li>
+	 *         </ol>
+	 */
+	default String replace(Object value, boolean first) {
+		try (Transaction t = lock(true, null)) {
+			CollectionElement<E> found = getElement((E) value, first);
+			if (found == null)
+				return StdMsg.NOT_FOUND;
+			MutableCollectionElement<E> mutable = mutableElement(found.getElementId());
+			String enabled = mutable.isAcceptable(found.get());
+			if (enabled != null)
+				return enabled;
+			mutable.set(found.get());
+			return null;
+		}
+	}
+
 	@Override
 	default boolean contains(Object o) {
 		CollectionElement<E> el = getElement((E) o, true);

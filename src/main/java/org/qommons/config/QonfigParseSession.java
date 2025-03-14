@@ -75,7 +75,7 @@ public class QonfigParseSession extends ErrorReporting.Default {
 
 	@Override
 	public String toString() {
-		return theToolkit + ":" + getFileLocation();
+		return theToolkit + "@" + getPosition().toShortString() + ":\"" + getFileLocation() + "\"";
 	}
 
 	/**

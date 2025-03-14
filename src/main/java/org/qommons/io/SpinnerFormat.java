@@ -239,7 +239,13 @@ public interface SpinnerFormat<T> extends Format<T> {
 		 * @return A new format with the given grouping separator
 		 */
 		public IntFormat withGroupingSeparator(char sep) {
-			return new IntFormat(getFormat().withGroupingSeparator(sep));
+			Format.IntFormat f = getFormat().withGroupingSeparator(sep);
+			return f == getFormat() ? this : new IntFormat(f);
+		}
+
+		public IntFormat withEmptyAllowed(boolean emptyAllowed) {
+			Format.IntFormat f = getFormat().withEmptyAllowed(emptyAllowed);
+			return f == getFormat() ? this : new IntFormat(f);
 		}
 
 		@Override
@@ -273,7 +279,13 @@ public interface SpinnerFormat<T> extends Format<T> {
 		 * @return A new format with the given grouping separator
 		 */
 		public LongFormat withGroupingSeparator(char sep) {
-			return new LongFormat(getFormat().withGroupingSeparator(sep));
+			Format.LongFormat f = getFormat().withGroupingSeparator(sep);
+			return f == getFormat() ? this : new LongFormat(f);
+		}
+
+		public LongFormat withEmptyAllowed(boolean emptyAllowed) {
+			Format.LongFormat f = getFormat().withEmptyAllowed(emptyAllowed);
+			return f == getFormat() ? this : new LongFormat(f);
 		}
 
 		@Override

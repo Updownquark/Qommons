@@ -11,6 +11,7 @@ import org.qommons.config.QonfigChildDef.Declared;
 import org.qommons.config.QonfigElement.AttributeValue;
 import org.qommons.config.QonfigElement.Builder;
 import org.qommons.config.QonfigElement.QonfigValue;
+import org.qommons.io.ErrorReporting;
 import org.qommons.io.LocatedPositionedContent;
 
 /** A partial Qonfig element that represents a placeholder which must be replaced by a variable number of elements */
@@ -61,9 +62,9 @@ public class VariableQonfigElement extends PartialQonfigElement {
 	private boolean isCopying;
 
 	@Override
-	public void copyInto(QonfigElement.Builder parent, QonfigParser parser, QonfigParseSession session) {
+	public void copyInto(QonfigElement.Builder parent, QonfigParser parser, QonfigParseSession session, ErrorReporting parentSession) {
 		if (isCopying) // Recursive call from the builder
-			super.copyInto(parent, parser, session);
+			super.copyInto(parent, parser, session, parentSession);
 		else
 			theBuilder.accept(this, parent);
 	}

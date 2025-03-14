@@ -11,21 +11,17 @@ import org.qommons.Transaction;
 
 /** A locking strategy that is not thread-safe, but it allows fail-fast behavior; that is, detecting changes in a thread-unsafe manner. */
 public class FastFailLockingStrategy implements CollectionLockingStrategy {
-	private final ThreadConstraint theThreadConstraint;
 	private final CausalLock theCausalLock;
 	private volatile long theStamp = 0;
 
-	/** @param threadConstraint The thread constraint for this lock to obey */
-	public FastFailLockingStrategy(ThreadConstraint threadConstraint) {
-		if (threadConstraint == null)
-			throw new NullPointerException();
-		theThreadConstraint = threadConstraint;
+	/** Creates the lock */
+	public FastFailLockingStrategy() {
 		theCausalLock = new DefaultCausalLock(new TransactableCore());
 	}
 
 	@Override
 	public ThreadConstraint getThreadConstraint() {
-		return theThreadConstraint;
+		return ThreadConstraint.ANY;
 	}
 
 	@Override
@@ -90,7 +86,7 @@ public class FastFailLockingStrategy implements CollectionLockingStrategy {
 	class TransactableCore implements Transactable {
 		@Override
 		public ThreadConstraint getThreadConstraint() {
-			return theThreadConstraint;
+			return ThreadConstraint.ANY;
 		}
 
 		@Override
@@ -100,15 +96,11 @@ public class FastFailLockingStrategy implements CollectionLockingStrategy {
 
 		@Override
 		public Transaction lock(boolean write, Object cause) {
-			if (write && !theThreadConstraint.isEventThread())
-				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
 			return Transaction.NONE;
 		}
 
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
-			if (write && !theThreadConstraint.isEventThread())
-				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
 			return lock(write, cause);
 		}
 

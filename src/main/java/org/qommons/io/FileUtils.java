@@ -15,6 +15,7 @@ import java.util.function.Predicate;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import org.qommons.AbstractCharSequence;
 import org.qommons.ArrayUtils;
 import org.qommons.StringUtils;
 import org.qommons.ex.ExConsumer;
@@ -356,6 +357,43 @@ public class FileUtils extends MiniFileUtils {
 		if (lastSlash < path.length() - 1)
 			splitPath[slashCount] = path.substring(lastSlash + 1);
 		return splitPath;
+	}
+
+	private static class FileExtCharSeq extends AbstractCharSequence {
+		private String theExtension;
+
+		public FileExtCharSeq setExtension(String extension) {
+			theExtension = extension;
+			return this;
+		}
+
+		@Override
+		public int length() {
+			return theExtension.length() + 1;
+		}
+
+		@Override
+		public char charAt(int index) {
+			if (index == 0)
+				return '.';
+			return theExtension.charAt(index - 1);
+		}
+	}
+
+	public static String hasExtension(File file, String... extensions) {
+		if (file == null)
+			return null;
+		return hasExtension(file.getName(), extensions);
+	}
+
+	public static String hasExtension(String fileName, String... extensions) {
+		FileExtCharSeq extCS = new FileExtCharSeq();
+		for (String ext : extensions) {
+			if (StringUtils.endsWithIgnoreCase(fileName, extCS.setExtension(ext)))
+				return null;
+		}
+		return StringUtils.conversational(", ", "or ").print(new StringBuilder("Only "), extensions, StringBuilder::append)
+			.append(" files are acceptable").toString();
 	}
 
 	/**

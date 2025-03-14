@@ -19,12 +19,37 @@ public interface HierarchicalResourceWriter {
 	 * @return A resource writer that writes all its files relative to the given sub-directory
 	 */
 	default HierarchicalResourceWriter subWriter(String subDir) {
-		final String subPath;
-		if (subDir.endsWith("/") || subDir.endsWith("\\"))
-			subPath = subDir;
-		else
-			subPath = subDir + "/";
-		HierarchicalResourceWriter outer = this;
-		return path -> outer.writeResource(subPath + path);
+		return new SubWriter(this, subDir);
+	}
+
+	public static class SubWriter implements HierarchicalResourceWriter {
+		private final HierarchicalResourceWriter theParent;
+		private final String theSubPath;
+
+		public SubWriter(HierarchicalResourceWriter parent, String subDir) {
+			this.theParent = parent;
+			if (subDir.endsWith("/") || subDir.endsWith("\\"))
+				theSubPath = subDir;
+			else
+				theSubPath = subDir + "/";
+		}
+
+		public HierarchicalResourceWriter getParent() {
+			return theParent;
+		}
+
+		public String getSubPath() {
+			return theSubPath;
+		}
+
+		@Override
+		public OutputStream writeResource(String path) throws IOException {
+			return theParent.writeResource(getSubPath() + path);
+		}
+
+		@Override
+		public HierarchicalResourceWriter subWriter(String subDir) {
+			return new SubWriter(theParent, getSubPath() + subDir);
+		}
 	}
 }

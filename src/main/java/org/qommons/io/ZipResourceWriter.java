@@ -1,12 +1,6 @@
 package org.qommons.io;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.nio.file.Files;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -23,16 +17,19 @@ public class ZipResourceWriter implements HierarchicalResourceWriter, AutoClosea
 		void doTask(HierarchicalResourceReader reader) throws IOException;
 	}
 
-	private OutputStream theZipFile;
+	private final String theName;
+	private final OutputStream theZipFile;
 
 	private ZipOutputStream theOutput;
 
 	private boolean hadEntry;
 
 	/**
+	 * @param name The name for this writer (for {@link Object#toString()})
 	 * @param stream The stream to write the zip data to
 	 */
-	public ZipResourceWriter(OutputStream stream) {
+	public ZipResourceWriter(String name, OutputStream stream) {
+		theName = name;
 		theZipFile = stream;
 		theOutput = new ZipOutputStream(theZipFile);
 	}
@@ -80,6 +77,11 @@ public class ZipResourceWriter implements HierarchicalResourceWriter, AutoClosea
 			theOutput.closeEntry();
 		}
 		theOutput.close();
+	}
+
+	@Override
+	public String toString() {
+		return theName;
 	}
 
 	/**

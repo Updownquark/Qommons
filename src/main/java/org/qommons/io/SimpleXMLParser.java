@@ -15,6 +15,7 @@ import javax.xml.parsers.ParserConfigurationException;
 import org.qommons.ArrayUtils;
 import org.qommons.Named;
 import org.qommons.QommonsUtils;
+import org.qommons.ex.ExFunction;
 import org.w3c.dom.Attr;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -79,6 +80,7 @@ public class SimpleXMLParser {
 	/** An element as given by an {@link XmlParseException} */
 	public static class LocatedXmlElement implements Named {
 		private final LocatedXmlElement theParent;
+		private final int theDepth;
 		private final String theName;
 		private final FilePosition thePosition;
 
@@ -89,6 +91,7 @@ public class SimpleXMLParser {
 		 */
 		public LocatedXmlElement(LocatedXmlElement parent, String name, FilePosition position) {
 			theParent = parent;
+			theDepth = parent == null ? 0 : parent.theDepth + 1;
 			theName = name;
 			thePosition = position;
 		}
@@ -96,6 +99,11 @@ public class SimpleXMLParser {
 		/** @return This element's parent */
 		public LocatedXmlElement getParent() {
 			return theParent;
+		}
+
+		/** @return The number of element ancestors this element has */
+		public int getDepth() {
+			return theDepth;
 		}
 
 		@Override
@@ -106,6 +114,11 @@ public class SimpleXMLParser {
 		/** @return The position of the name of the element in its opening tag in the file */
 		public FilePosition getPosition() {
 			return thePosition;
+		}
+
+		@Override
+		public String toString() {
+			return "<" + theName + ">@" + thePosition;
 		}
 	}
 
@@ -134,8 +147,14 @@ public class SimpleXMLParser {
 		}
 	}
 
+	public enum XmlComponentType {
+		Declaration, ProcessingInstruction, Comment, ElementTerminal, ElementOpen, Attribute, ElementContent, CData, IgnorableWhitespace;
+	}
+
 	/** Super interface for any XML structure passed to a {@link ParseHandler handler} */
 	public interface XmlComponent {
+		XmlComponentType getComponentType();
+
 		/** @return The character content defining the entire XML structure */
 		PositionedContent getContent();
 	}
@@ -187,6 +206,11 @@ public class SimpleXMLParser {
 			theStandaloneNameOffset = standaloneNameOffset;
 			theStandaloneValueOffset = standaloneValueOffset;
 			theDeclarationContent = declarationContent;
+		}
+
+		@Override
+		public XmlComponentType getComponentType() {
+			return XmlComponentType.Declaration;
 		}
 
 		/** @return The XML version. This string is not validated. */
@@ -490,6 +514,11 @@ public class SimpleXMLParser {
 			theContent = content;
 		}
 
+		@Override
+		public XmlComponentType getComponentType() {
+			return XmlComponentType.ProcessingInstruction;
+		}
+
 		/** @return The name of the processing instruction's target */
 		public String getTargetName() {
 			return theTargetName;
@@ -533,6 +562,11 @@ public class SimpleXMLParser {
 		}
 
 		@Override
+		public XmlComponentType getComponentType() {
+			return XmlComponentType.Comment;
+		}
+
+		@Override
 		public PositionedContent getContent() {
 			return theContent;
 		}
@@ -551,8 +585,11 @@ public class SimpleXMLParser {
 	/** Represents an open or close tag of an XML element being parsed by a {@link SimpleXMLParser} */
 	public static class XmlElementTerminal implements XmlComponent, Named {
 		private final String theName;
+		private final boolean isOpen;
+		private final int theDepth;
 		private final int theNameOffset;
 		private final PositionedContent theContent;
+		private final boolean isSelfClosing;
 
 		/**
 		 * @param elementName The name of the element
@@ -560,15 +597,32 @@ public class SimpleXMLParser {
 		 * @param content The content defining the element's open (everything between and including the initial <code>&lt;</code> and the
 		 *        element's name) or close tag (everything between and including <code>&lt;/</code> and <code>></code>
 		 */
-		public XmlElementTerminal(String elementName, int nameOffset, PositionedContent content) {
+		public XmlElementTerminal(String elementName, boolean open, int depth, int nameOffset, PositionedContent content,
+			boolean selfClosing) {
 			theName = elementName;
+			isOpen = open;
+			theDepth = depth;
 			theNameOffset = nameOffset;
 			theContent = content;
+			isSelfClosing = selfClosing;
+		}
+
+		@Override
+		public XmlComponentType getComponentType() {
+			return XmlComponentType.ElementTerminal;
 		}
 
 		@Override
 		public String getName() {
 			return theName;
+		}
+
+		public boolean isOpen() {
+			return isOpen;
+		}
+
+		public int getDepth() {
+			return theDepth;
 		}
 
 		/** @return The offset of the name of the element in the open or close tag */
@@ -593,9 +647,90 @@ public class SimpleXMLParser {
 			return theContent.subSequence(theNameOffset);
 		}
 
+		public boolean isSelfClosing() {
+			return isSelfClosing;
+		}
+
 		@Override
 		public String toString() {
 			return theContent.toString();
+		}
+	}
+
+	public static abstract class ContentOnlyXmlComponent implements XmlComponent, PositionedContent {
+		private final PositionedContent theContent;
+
+		protected ContentOnlyXmlComponent(PositionedContent content) {
+			theContent = content;
+		}
+
+		@Override
+		public PositionedContent getContent() {
+			return theContent;
+		}
+
+		@Override
+		public int length() {
+			return theContent.length();
+		}
+
+		@Override
+		public char charAt(int index) {
+			return theContent.charAt(index);
+		}
+
+		@Override
+		public FilePosition getPosition(int index) {
+			return theContent.getPosition(index);
+		}
+
+		@Override
+		public int getSourceLength(int from, int to) {
+			return theContent.getSourceLength(from, to);
+		}
+
+		@Override
+		public CharSequence getSourceContent(int from, int to) {
+			return theContent.getSourceContent(from, to);
+		}
+
+		@Override
+		public int hashCode() {
+			return theContent.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return theContent.equals(obj);
+		}
+
+		@Override
+		public String toString() {
+			return theContent.toString();
+		}
+	}
+
+	public static abstract class XmlElementContentComponent extends ContentOnlyXmlComponent {
+		private final String theElementName;
+
+		protected XmlElementContentComponent(String elementName, PositionedContent content) {
+			super(content);
+			theElementName = elementName;
+		}
+
+		public String getElementName() {
+			return theElementName;
+		}
+	}
+
+	public static class XmlElementOpen extends XmlElementContentComponent {
+		public XmlElementOpen(String elementName, PositionedContent content) {
+			super(elementName, content);
+		}
+
+		@Override
+		public XmlComponentType getComponentType() {
+			return XmlComponentType.ElementOpen;
 		}
 	}
 
@@ -615,6 +750,11 @@ public class SimpleXMLParser {
 			theName = attributeName;
 			theValueStartOffset = valueStartOffset;
 			theContent = content;
+		}
+
+		@Override
+		public XmlComponentType getComponentType() {
+			return XmlComponentType.Attribute;
 		}
 
 		@Override
@@ -648,36 +788,90 @@ public class SimpleXMLParser {
 		}
 	}
 
-	/** An XML CDATA structure parsed by a {@link SimpleXMLParser} */
-	public static class XmlCdata implements XmlComponent {
-		private final PositionedContent theContent;
+	public static class XmlElementContent extends XmlElementContentComponent {
+		public XmlElementContent(String elementName, PositionedContent content) {
+			super(elementName, content);
+		}
 
+		@Override
+		public XmlComponentType getComponentType() {
+			return XmlComponentType.ElementContent;
+		}
+	}
+
+	/** An XML CDATA structure parsed by a {@link SimpleXMLParser} */
+	public static class XmlCdata extends XmlElementContentComponent {
 		/**
 		 * @param content The content defining the CDATA, everything between and including the terminal {@link SimpleXMLParser#CDATA_START
 		 *        &lt;![CDATA[} and {@link SimpleXMLParser#CDATA_END ]]>}
 		 */
-		public XmlCdata(PositionedContent content) {
-			theContent = content;
+		public XmlCdata(String elementName, PositionedContent content) {
+			super(elementName, content);
 		}
 
 		@Override
-		public PositionedContent getContent() {
-			return theContent;
+		public XmlComponentType getComponentType() {
+			return XmlComponentType.CData;
 		}
 
 		/** @return The text content containing the character data in the CDATA structure */
 		public PositionedContent getValueContent() {
-			return theContent.subSequence(CDATA_START.length(), theContent.length() - CDATA_END.length());
+			return getContent().subSequence(CDATA_START.length(), getContent().length() - CDATA_END.length());
+		}
+	}
+
+	public static class XmlIgnorableWhitespace extends ContentOnlyXmlComponent {
+		public XmlIgnorableWhitespace(PositionedContent content) {
+			super(content);
 		}
 
 		@Override
-		public String toString() {
-			return theContent.toString();
+		public XmlComponentType getComponentType() {
+			return XmlComponentType.IgnorableWhitespace;
 		}
 	}
 
 	/** A handler to be notified for each item of content in an XML document */
 	public interface ParseHandler {
+		default void handleXmlComponent(XmlComponent component) {
+			switch (component.getComponentType()) {
+			case Declaration:
+				handleDeclaration((XmlDeclaration) component);
+				break;
+			case ProcessingInstruction:
+				handleProcessingInstruction((XmlProcessingInstruction) component);
+				break;
+			case Comment:
+				handleComment((XmlComment) component);
+				break;
+			case ElementTerminal:
+				XmlElementTerminal terminal = (XmlElementTerminal) component;
+				if (terminal.isOpen())
+					handleElementStart(terminal);
+				else
+					handleElementEnd(terminal, terminal.isSelfClosing());
+				break;
+			case Attribute:
+				handleAttribute((XmlAttribute) component);
+				break;
+			case ElementOpen:
+				XmlElementOpen open = (XmlElementOpen) component;
+				handleElementOpen(open.getElementName(), open);
+				break;
+			case ElementContent:
+				XmlElementContent content = (XmlElementContent) component;
+				handleElementContent(content.getElementName(), content);
+				break;
+			case CData:
+				XmlCdata cdata = (XmlCdata) component;
+				handleCDataContent(cdata.getElementName(), cdata);
+				break;
+			case IgnorableWhitespace:
+				handleIgnorableWhitespace((XmlIgnorableWhitespace) component);
+				break;
+			}
+		}
+
 		/**
 		 * Called for the XML declaration at the top of the document. An XML declaration is not required, and this method will not be called
 		 * if it is missing.
@@ -717,7 +911,7 @@ public class SimpleXMLParser {
 		 * @param elementName The name of the element
 		 * @param openEnd The content closing the open tag
 		 */
-		default void handleElementOpen(String elementName, PositionedContent openEnd) {
+		default void handleElementOpen(String elementName, XmlElementOpen openEnd) {
 		}
 
 		/**
@@ -760,7 +954,7 @@ public class SimpleXMLParser {
 		 * @param elementName The name of the element under which the content is occurring
 		 * @param elementValue The positioned content text
 		 */
-		default void handleElementContent(String elementName, PositionedContent elementValue) {
+		default void handleElementContent(String elementName, XmlElementContent elementValue) {
 		}
 
 		/**
@@ -787,7 +981,7 @@ public class SimpleXMLParser {
 		 * 
 		 * @param whitespace The positioned white space content
 		 */
-		default void handleIgnorableWhitespace(PositionedContent whitespace) {
+		default void handleIgnorableWhitespace(XmlIgnorableWhitespace whitespace) {
 		}
 
 		/**
@@ -890,7 +1084,7 @@ public class SimpleXMLParser {
 		}
 
 		@Override
-		public void handleElementContent(String elementName, PositionedContent elementValue) {
+		public void handleElementContent(String elementName, XmlElementContent elementValue) {
 			Node node = theDocument.createTextNode(elementValue.toString());
 			node.setUserData(CONTENT_POSITION_KEY, elementValue, null);
 			theStack.getLast().appendChild(node);
@@ -989,7 +1183,7 @@ public class SimpleXMLParser {
 		}
 
 		@Override
-		public void handleElementOpen(String elementName, PositionedContent openEnd) {
+		public void handleElementOpen(String elementName, XmlElementOpen openEnd) {
 			try {
 				theWriter.append(openEnd);
 			} catch (IOException e) {
@@ -1016,7 +1210,7 @@ public class SimpleXMLParser {
 		}
 
 		@Override
-		public void handleElementContent(String elementName, PositionedContent elementValue) {
+		public void handleElementContent(String elementName, XmlElementContent elementValue) {
 			try {
 				if (theLineLength + elementValue.length() > theMaxLineLength) {
 					theLineLength = indent();
@@ -1042,7 +1236,8 @@ public class SimpleXMLParser {
 
 		@Override
 		public void handleElementEnd(XmlElementTerminal element, boolean selfClosing) {
-			theIndentLevel--;
+			if (!selfClosing)
+				theIndentLevel--;
 			try {
 				if (!selfClosing && isElementMultiLine)
 					indent();
@@ -1051,18 +1246,6 @@ public class SimpleXMLParser {
 				throw new IllegalStateException("Could not write XML data", e);
 			}
 			isElementMultiLine = true;
-		}
-
-		@Override
-		public void handleIgnorableWhitespace(PositionedContent whitespace) {
-		}
-
-		@Override
-		public void handleIOError(IOException ioError, FilePosition position) {
-		}
-
-		@Override
-		public void handleParseError(XmlParseException parseError) {
 		}
 	}
 
@@ -1109,6 +1292,18 @@ public class SimpleXMLParser {
 		return this;
 	}
 
+	public ComponentParser parseByComponent(String fileLocation, InputStream in) {
+		if (in == null)
+			throw new NullPointerException("Stream cannot be null");
+		return new ComponentParser(fileLocation, in);
+	}
+
+	public ComponentParser parseByComponent(String fileLocation, Reader in) {
+		if (in == null)
+			throw new NullPointerException("Reader cannot be null");
+		return new ComponentParser(fileLocation, in);
+	}
+
 	/**
 	 * Parses XML from a binary stream. The character encoding may be specified by the XML declaration in the document, or is defaulted to
 	 * UTF-8.
@@ -1124,10 +1319,8 @@ public class SimpleXMLParser {
 	 * @throws XmlParseException If an error occurs parsing the XML
 	 */
 	public <H extends ParseHandler> H parseXml(String fileLocation, InputStream in, H handler) throws IOException, XmlParseException {
-		if (in == null)
-			throw new NullPointerException("Stream cannot be null");
-		parseXml(new ParseSession(fileLocation, in), handler);
-		return handler;
+		return parseByComponent(fileLocation, in)//
+			.parse(handler);
 	}
 
 	/**
@@ -1145,10 +1338,8 @@ public class SimpleXMLParser {
 	 * @throws XmlParseException If an error occurs parsing the XML
 	 */
 	public <H extends ParseHandler> H parseXml(String fileLocation, Reader in, H handler) throws IOException, XmlParseException {
-		if (in == null)
-			throw new NullPointerException("Reader cannot be null");
-		parseXml(new ParseSession(fileLocation, in), handler);
-		return handler;
+		return parseByComponent(fileLocation, in)//
+			.parse(handler);
 	}
 
 	/**
@@ -1166,11 +1357,9 @@ public class SimpleXMLParser {
 	 * @see #getPositionContent(Node)
 	 */
 	public Document parseDocument(String fileLocation, InputStream in) throws IOException, XmlParseException {
-		if (in == null)
-			throw new NullPointerException("Stream cannot be null");
-		return parseXml(//
-			new ParseSession(fileLocation, in), new DomCreatorHandler(DOM_BUILDERS.get().createDocument()))//
-				.getDocument();
+		return parseByComponent(fileLocation, in)//
+			.parse(new DomCreatorHandler(DOM_BUILDERS.get().createDocument()))//
+			.getDocument();
 	}
 
 	/**
@@ -1188,11 +1377,9 @@ public class SimpleXMLParser {
 	 * @see #getPositionContent(Node)
 	 */
 	public Document parseDocument(String fileLocation, Reader in) throws IOException, XmlParseException {
-		if (in == null)
-			throw new NullPointerException("Reader cannot be null");
-		return parseXml(//
-			new ParseSession(fileLocation, in), new DomCreatorHandler(DOM_BUILDERS.get().createDocument()))//
-				.getDocument();
+		return parseByComponent(fileLocation, in)//
+			.parse(new DomCreatorHandler(DOM_BUILDERS.get().createDocument()))//
+			.getDocument();
 	}
 
 	/**
@@ -1261,22 +1448,15 @@ public class SimpleXMLParser {
 				return in.markSupported();
 			}
 		};
-		ParseSession session = new ParseSession(fileLocation, wrapped);
+		// First, find the declaration, if it exists, or the start of the root element if not
 		Charset[] charSet = new Charset[1];
+		ComponentParser session = new ComponentParser(fileLocation, wrapped);
+		XmlComponent first;
 		try {
-			// First, find the declaration, if it exists, or the start of the root element if not
-			char ch = session.skipWS(null);
-			if (ch == '<') {
-				// Found the '<'. This is either the XML declaration or the start of the root element if the declaration is missing
-				ch = session.nextChar();
-				if (ch == '?') // XML Declaration
-					handleXmlDeclaration(session, new ParseHandler() {
-						@Override
-						public void handleDeclaration(XmlDeclaration declaration) {
-							buffer.append(declaration.getContent()).append(session.currentChar());
-							charSet[0] = declaration.getEncoding();
-						}
-					});
+			first = session.getNextComponent();
+			if (first instanceof XmlDeclaration) {
+				buffer.append(first.getContent()).append(session.currentChar());
+				charSet[0] = ((XmlDeclaration) first).getEncoding();
 			}
 		} catch (XmlParseException e) {
 			// Bad XML, but we don't throw exceptions here, we just assume UTF-8
@@ -1371,428 +1551,15 @@ public class SimpleXMLParser {
 		};
 	}
 
-	/**
-	 * Gets the name position stored in a node, if it was parsed using this class and name position is relevant for the node
-	 * 
-	 * @param node The XML node to get the name position for
-	 * @return The name position stored in the node
-	 * @see #parseDocument(String, InputStream)
-	 * @see DomCreatorHandler
-	 */
-	public static PositionedContent getNamePosition(Node node) {
-		return (PositionedContent) node.getUserData(DomCreatorHandler.NAME_POSITION_KEY);
+	public enum XmlParseState {
+		PreDeclaration, PreRoot, ElementDeclaration, ElementContent, EndOfContent
 	}
 
-	/**
-	 * Gets the content position stored in a node, if it was parsed using this class and content position is relevant for the node
-	 * 
-	 * @param node The XML node to get the content position for
-	 * @return The content position stored in the node
-	 * @see #parseDocument(String, InputStream)
-	 * @see DomCreatorHandler
-	 */
-	public static PositionedContent getPositionContent(Node node) {
-		return (PositionedContent) node.getUserData(DomCreatorHandler.CONTENT_POSITION_KEY);
-	}
-
-	private static class DomBuilderSet {
-		final DocumentBuilderFactory docBuilderFactory;
-		DocumentBuilder docBuilder;
-
-		DomBuilderSet() {
-			docBuilderFactory = DocumentBuilderFactory.newInstance();
-		}
-
-		Document createDocument() throws IllegalStateException {
-			if (docBuilder == null) {
-				try {
-					docBuilder = docBuilderFactory.newDocumentBuilder();
-				} catch (ParserConfigurationException e) {
-					throw new IllegalStateException("Could not configure DOM builder", e);
-				}
-			}
-			return docBuilder.newDocument();
-		}
-	}
-
-	private static final ThreadLocal<DomBuilderSet> DOM_BUILDERS = ThreadLocal.withInitial(DomBuilderSet::new);
-
-	private static <H extends ParseHandler> H parseXml(ParseSession session, H handler) throws IOException, XmlParseException {
-		if (handler == null)
-			throw new NullPointerException("Handler cannot be null");
-		try {
-			_parseXml(session, handler);
-		} catch (IOException e) {
-			handler.handleIOError(e, session.getFilePosition(false));
-			throw e;
-		} catch (XmlParseException e) {
-			handler.handleParseError(e);
-			throw e;
-		}
-		return handler;
-	}
-
-	private static void _parseXml(ParseSession session, ParseHandler handler) throws IOException, XmlParseException {
-		// First, find the declaration, if it exists, or the start of the root element if not
-		char ch = session.skipWS(handler);
-		if (ch != '<')
-			session.throwException(false, "The first non-whitespace character in an XML document must be '<', not '" + ch + "'");
-		// Found the '<'. This is either the XML declaration or the start of the root element if the declaration is missing
-		ch = session.nextChar();
-		if (ch == '?') { // XML Declaration
-			handleXmlDeclaration(session, handler);
-
-			// The declaration is handled.
-			// Now we need to move to the root element, where the code below expects, just like if there had been no XML declaration.
-			ch = session.currentChar();
-			if (ch != '<') {
-				ch = session.skipWS(handler);
-				if (ch != '<')
-					session.throwException(false,
-						"The first non-whitespace character after the XML declaration must be '<', not '" + ch + "'");
-			}
-			ch = session.nextChar();
-		}
-
-		while (ch == '!' || ch == '?') { // DOCTYPE declaration or comment, or processing instruction
-			if (ch == '!') {
-				ch = session.nextChar();
-				session.mark();
-				if (ch == 'D') {// DOCTYPE declaration
-					if (!session.expect("OCTYPE"))
-						session.throwException(false, "'<!DOCTYPE' expected but not found");
-					session.throwException(true, "DOCTYPE declarations are not supported by this parser");
-				} else if (ch == '-') { // Comment
-					handleComment(session, handler);
-
-					ch = session.skipWS(handler);
-					if (ch != '<')
-						session.throwException(false, "'<' expected, not '" + ch + "'");
-					ch = session.nextChar();
-				} else
-					session.throwException(false,
-						"'<!' here is expected to be followed by 'DOCTYPE' for a DOCTYPE declaration or '--' for a comment");
-			} else { // Processing instruction
-				handleProcessingInstruction(session, handler);
-
-				ch = session.skipWS(handler);
-				if (ch != '<')
-					session.throwException(false, "'<' expected, not '" + ch + "'");
-				ch = session.nextChar();
-			}
-		}
-
-		// Now we should be at the name of the root element
-		handleElement(session, handler, true);
-
-		session.skipWS(handler);
-		while (!session.isAtEnd()) {
-			session.setContentComplete(false);
-			session.mark();
-			if (session.currentChar() == '<') {
-				if (session.nextChar() == '!') {
-					if (session.nextChar() != '-')
-						session.throwException(true, "Comment expected");
-					handleComment(session, handler);
-				} else if (session.currentChar() == '?') // Processing instruction
-					handleProcessingInstruction(session, handler);
-				else
-					session.throwException(true, "Unexpected character sequence in XML after root element");
-			} else
-				session.throwException(false, "Unexpected character in XML after root element");
-
-			session.setContentComplete(true);
-			session.skipWS(handler);
-		}
-	}
-
-	private static void handleXmlDeclaration(ParseSession session, ParseHandler handler) throws IOException, XmlParseException {
-		int decPos = session.getPosition();
-		if (decPos != 1)
-			session.throwException(false, "XML declaration must be at the first position of the first line of the XML document");
-		session.mark();
-		if (!session.expect("xml"))
-			session.throwException(true, "XML Declaration must start with '<?xml'");
-		if (!Character.isWhitespace(session.nextChar()))
-			session.throwException(false, "Expected whitespace after beginning of XML declaration");
-
-		String versionStr = null;
-		Charset encoding = null;
-		Boolean standalone = null;
-		int versionNameOffset = -1, versionValueOffset = -1;
-		int encodingNameOffset = -1, encodingValueOffset = -1;
-		int standaloneNameOffset = -1, standaloneValueOffset = -1;
-		char ch = session.skipWS(null); // White space is part of the XML declaration
-		session.mark();
-		while (ch >= 'a' && ch <= 'z') {
-			// New declaration attribute
-			int namePos = session.getPosition();
-			String attrName = session.getName();
-			boolean version, enc;
-			switch (attrName) {
-			case VERSION:
-				if (versionStr != null)
-					session.throwException(true, "Duplicate '" + VERSION + "' attribute on XML declaration");
-				version = true;
-				enc = false;
-				break;
-			case ENCODING:
-				if (encoding != null)
-					session.throwException(true, "Duplicate '" + ENCODING + "' attribute on XML declaration");
-				enc = true;
-				version = false;
-				break;
-			case STANDALONE:
-				if (standalone != null)
-					session.throwException(true, "Duplicate '" + STANDALONE + "' attribute on XML declaration");
-				version = enc = false;
-				break;
-			default:
-				session.throwException(true,
-					"Only '" + VERSION + "', '" + ENCODING + "', or '" + STANDALONE
-						+ "' attributes are allowed on the XML declaration, not '" + attrName + "'");
-				return;
-			}
-			session.startAttribute(attrName);
-			int valuePos = session.getPosition();
-			session.mark();
-			String value = session.parseXmlContent(false, ATTRIBUTE_TERMINATION);
-			if (version) {
-				// validate the version number?
-				versionStr = value;
-				versionNameOffset = namePos - decPos + 1;
-				versionValueOffset = valuePos - decPos + 1;
-			} else if (enc) {
-				encodingNameOffset = namePos - decPos + 1;
-				encodingValueOffset = valuePos - decPos + 1;
-				try {
-					encoding = Charset.forName(value);
-				} catch (IllegalCharsetNameException e) {
-					session.throwException(true, "Illegal character set name: " + value);
-				} catch (UnsupportedCharsetException e) {
-					session.throwException(true, "Unsupported character set: " + value);
-				}
-			} else {
-				standaloneNameOffset = namePos - decPos + 1;
-				standaloneValueOffset = valuePos - decPos + 1;
-				switch (value) {
-				case "yes":
-					standalone = Boolean.TRUE;
-					break;
-				case "no":
-					standalone = Boolean.FALSE;
-					break;
-				default:
-					session.throwException(true, STANDALONE + " must be 'yes' or 'no', not '" + value + "'");
-					break;
-				}
-			}
-
-			ch = session.currentChar();
-			if (Character.isWhitespace(ch))
-				ch = session.skipWS(null); // White space is part of the XML declaration
-		}
-		session.mark();
-		if (ch != '?' || session.nextChar() != '>')
-			session.throwException(false, "XML declaration must end with '?>");
-		if (versionStr == null)
-			session.throwException(false, "XML declaration must include the '" + VERSION + "' attribute");
-		session.nextChar(); // Move past the whole declaration so it's all in the sequence
-		handler.handleDeclaration(new XmlDeclaration(versionStr, encoding, standalone, session.dumpSequence(), //
-			versionNameOffset, versionValueOffset, encodingNameOffset, encodingValueOffset, standaloneNameOffset, standaloneValueOffset));
-
-		session.setEncoding(encoding == null ? StandardCharsets.UTF_8 : encoding);
-	}
-
-	private static void handleComment(ParseSession session, ParseHandler handler) throws IOException, XmlParseException {
-		if (!session.expect("-"))
-			session.throwException(false, "'<!-' here should be followed by another '-' for a comment");
-		session.nextChar();
-		session.parseXmlContent(true, COMMENT_TERMINATION);
-		if (session.currentChar() != '>')
-			session.throwException(true, "'--' is not allowed in comments");
-		session.nextChar(); // Get the entire comment into the sequence
-		handler.handleComment(new XmlComment(session.dumpSequence()));
-	}
-
-	private static void handleProcessingInstruction(ParseSession session, ParseHandler handler) throws IOException, XmlParseException {
-		session.nextChar();
-		session.mark();
-		String target = session.getName();
-		if (target.equalsIgnoreCase("xml"))
-			session.throwException(true, "Processing instruction cannot be 'xml' with any character case");
-		if (!Character.isWhitespace(session.currentChar())) {
-			session.mark();
-			if (session.currentChar() != '?' || session.nextChar() != '>') // No content
-				session.throwException(true, "Processing instruction target must be followed by '?>' or whitespace");
-			session.nextChar(); // Include the terminal '>'
-			handler.handleProcessingInstruction(new XmlProcessingInstruction(target, -1, session.dumpSequence()));
-		} else {
-			session.skipWS(null); // Initial white space is part of the processing instruction, but not of the value
-			int valuePos = session.getPosition();
-			session.parseXmlContent(true, PI_TERMINATION);
-			handler.handleProcessingInstruction(
-				new XmlProcessingInstruction(target, valuePos - session.getSequenceStartPosition(), session.dumpSequence()));
-		}
-	}
-
-	private static void handleElement(ParseSession session, ParseHandler handler, boolean root) throws IOException, XmlParseException {
-		if (Character.isWhitespace(session.currentChar()))
-			session.skipWS(null); // White space is part of the element start
-		int startPos = session.getPosition() - session.getSequenceStartPosition();
-		FilePosition namePos = session.getFilePosition(false);
-		String elementName = session.getName();
-		session.openElement(elementName, namePos);
-		handler.handleElementStart(new XmlElementTerminal(elementName, startPos, session.dumpSequence()));
-		Set<String> attributes = null;
-		if (Character.isWhitespace(session.currentChar()))
-			session.skipWS(handler); // White space between element start and attribute or terminal is not part of any component
-		while (session.currentChar() != '/' && session.currentChar() != '>') {
-			// Attribute
-			session.mark();
-			String attributeName = session.getName();
-			if (attributes == null)
-				attributes = new HashSet<>();
-			if (!attributes.add(attributeName))
-				session.throwException(true, "Multiple '" + attributeName + "' attributes specified on this element");
-			session.startAttribute(attributeName);
-			int attrValuePos = session.getPosition() - session.getSequenceStartPosition();
-			session.parseXmlContent(false, ATTRIBUTE_TERMINATION);
-			handler.handleAttribute(new XmlAttribute(attributeName, attrValuePos, session.dumpSequence()));
-			if (Character.isWhitespace(session.currentChar()))
-				session.skipWS(handler);// White space between attributes or the terminal is not part of any component
-		}
-		if (session.currentChar() == '/') {// Self-closing element
-			if (session.nextChar() != '>')
-				session.throwException(false, "'>' expected");
-			session.nextChar(); // Include the terminal '>'
-			handler.handleElementEnd(new XmlElementTerminal(elementName, -1, session.dumpSequence()), true);
-			session.closeElement();
-			return;
-		}
-
-		session.nextChar(); // Include the '>' in the sequence
-		handler.handleElementOpen(elementName, session.dumpSequence());
-		while (true) {
-			session.mark();
-			if (session.currentChar() == '<') { // Comment, CDATA, or child element
-				if (session.nextChar() == '!') { // Comment or CDATA
-					if (session.nextChar() == '[') { // CDATA
-						if (!session.expect("CDATA["))
-							session.throwException(true, "Bad CDATA initializer");
-						session.nextChar(); // Move to the beginning of the CDATA content
-						session.parseXmlContent(true, CDATA_TERMINATION);
-						handler.handleCDataContent(elementName, new XmlCdata(session.dumpSequence()));
-					} else if (session.currentChar() == '-') { // Comment
-						handleComment(session, handler);
-					} else
-						session.throwException(true, "Misplaced '<' or malformed XML construct");
-				} else if (session.currentChar() == '?') // Processing instruction
-					handleProcessingInstruction(session, handler);
-				else if (session.currentChar() == '/') { // Closing element
-					session.skipWS(null); // White space is part of the closing tag
-					session.mark();
-					int closePos = session.getPosition() - session.getSequenceStartPosition();
-					String closingElement = session.getName();
-					if (!closingElement.equals(elementName))
-						session.throwException(true, "Closing element for '" + elementName + "' expected, not '" + closingElement + "'");
-					if (Character.isWhitespace(session.currentChar()))
-						session.skipWS(null);// White space is part of the closing tag
-					if (session.currentChar() != '>')
-						session.throwException(false, "'>' expected");
-					if (root)
-						session.setContentComplete(true);
-					session.nextChar(); // Include the terminal '>'
-					handler.handleElementEnd(new XmlElementTerminal(elementName, closePos, session.dumpSequence()), false);
-					session.closeElement();
-					return;
-				} else // Child element
-					handleElement(session, handler, false);
-			} else { // Element content
-				session.parseXmlContent(false, ELEMENT_CONTENT_TERMINATION);
-				handler.handleElementContent(elementName, session.dumpSequence());
-			}
-		}
-	}
-
-	static boolean isNameChar(int ch) {
-		switch (ch) {
-		case '-':
-		case '_':
-		case '.':
-		case ':':
-			return true;
-		default:
-			return Character.isLetter(ch) || Character.isDigit(ch);
-		}
-	}
-
-	interface Termination {
-		int isTerminator(char ch, int prevT);
-
-		boolean isTerminated(int t);
-
-		boolean isLastTerminatorCharIncluded();
-	}
-
-	static class CharTermination implements Termination {
-		private final char theTerminator;
-		private final boolean isLastIncluded;
-
-		CharTermination(char terminator, boolean lastIncluded) {
-			theTerminator = terminator;
-			isLastIncluded = lastIncluded;
-		}
-
-		@Override
-		public int isTerminator(char ch, int prevT) {
-			return ch == theTerminator ? 1 : 0;
-		}
-
-		@Override
-		public boolean isTerminated(int t) {
-			return true; // Only called after a match
-		}
-
-		@Override
-		public boolean isLastTerminatorCharIncluded() {
-			return isLastIncluded;
-		}
-	}
-
-	static class StringTermination implements Termination {
-		private final String theTerminator;
-
-		StringTermination(String terminator) {
-			theTerminator = terminator;
-		}
-
-		@Override
-		public int isTerminator(char ch, int prevT) {
-			return ch == theTerminator.charAt(prevT) ? prevT + 1 : 0;
-		}
-
-		@Override
-		public boolean isTerminated(int t) {
-			return t == theTerminator.length();
-		}
-
-		@Override
-		public boolean isLastTerminatorCharIncluded() {
-			return true;
-		}
-	}
-
-	static final Termination ATTRIBUTE_TERMINATION = new CharTermination('"', true);
-	static final Termination ELEMENT_CONTENT_TERMINATION = new CharTermination('<', false);
-	static final Termination COMMENT_TERMINATION = new StringTermination("--");
-	static final Termination PI_TERMINATION = new StringTermination(PROCESSING_INSTRUCTION_END);
-	static final Termination CDATA_TERMINATION = new StringTermination(CDATA_END);
-
-	class ParseSession {
+	public class ComponentParser {
 		private final String theFileLocation;
 		private final InputStream theStream;
 		private Reader theReader;
+		private XmlParseState theState;
 		private char theChar;
 		private int theNextChar = -1;
 		private int thePosition;
@@ -1805,6 +1572,7 @@ public class SimpleXMLParser {
 		private boolean wasEscapeSequence;
 
 		private LocatedXmlElement theElement;
+		private Set<String> theAttributes;
 		private int theMarkPosition;
 		private int theMarkLineNumber;
 		private int theMarkCharNumber;
@@ -1816,6 +1584,449 @@ public class SimpleXMLParser {
 		private int lineStart;
 		private int linePosition;
 		private final List<SpecialCharSequence> lineSpecialSequences = new ArrayList<>();
+
+		ComponentParser(String fileLocation, InputStream stream) {
+			theFileLocation = fileLocation;
+			theStream = stream;
+			theState = XmlParseState.PreDeclaration;
+			theAttributes = new LinkedHashSet<>();
+		}
+
+		ComponentParser(String fileLocation, Reader reader) {
+			theFileLocation = fileLocation;
+			theStream = null;
+			theReader = reader;
+			theState = XmlParseState.PreDeclaration;
+			theAttributes = new LinkedHashSet<>();
+		}
+
+		public String getFileLocation() {
+			return theFileLocation;
+		}
+
+		public XmlParseState getState() {
+			return theState;
+		}
+
+		public boolean isAtEnd() {
+			return isAtEnd;
+		}
+
+		public char currentChar() {
+			return theChar;
+		}
+
+		public LocatedXmlElement getCurrentElement() {
+			return theElement;
+		}
+
+		public int getPosition() {
+			return thePosition; // This method returns the position of the current character
+		}
+
+		public FilePosition getFilePosition() {
+			return getFilePosition(false);
+		}
+
+		public <H extends ParseHandler> H parse(H handler) throws IOException, XmlParseException {
+			if (handler == null)
+				throw new NullPointerException("Handler cannot be null");
+			try {
+				while (!isAtEnd()) {
+					XmlComponent component = getNextComponent();
+					handler.handleXmlComponent(component);
+				}
+			} catch (IOException e) {
+				handler.handleIOError(e, getFilePosition(false));
+				throw e;
+			} catch (XmlParseException e) {
+				handler.handleParseError(e);
+				throw e;
+			}
+			return handler;
+		}
+
+		public XmlElementTerminal startNextElement(String elementName, boolean required) throws IOException, TextParseException {
+			int currentDepth = theElement == null ? 0 : (theElement.getDepth() + 1);
+			XmlElementTerminal terminal = this.<XmlElementTerminal> parseUntil(component -> {
+				if (!(component instanceof XmlElementTerminal))
+					return null;
+				XmlElementTerminal el = (XmlElementTerminal) component;
+				if (el.getDepth() == currentDepth && (elementName == null || elementName.equals(el.getName())))
+					return el;
+				else if (el.getDepth() < currentDepth) {
+					if (required) {
+						if (elementName != null)
+							throw new TextParseException("Element '" + elementName + "' expected", getFilePosition());
+						else
+							throw new TextParseException("Element expected", getFilePosition());
+					}
+					return el;
+				} else
+					return null;
+			});
+			if (terminal == null) {
+				if (required) {
+					if (elementName != null)
+						throw new TextParseException("Element '" + elementName + "' expected", getFilePosition());
+					else
+						throw new TextParseException("Element expected", getFilePosition());
+				}
+			} else if (terminal.getDepth() < currentDepth)
+				return null;
+			return terminal;
+		}
+
+		public XmlAttribute getAttribute(String attributeName, boolean required)
+			throws IOException, TextParseException, IllegalStateException {
+			if (theState != XmlParseState.ElementDeclaration)
+				throw new IllegalStateException("This method must be called within an element declaration");
+			XmlComponent found = parseUntil(component -> {
+				if (component instanceof XmlElementOpen || component instanceof XmlElementTerminal) {
+					if (required) {
+						if (attributeName != null)
+							throw new TextParseException("Attribute '" + attributeName + "' expected", getFilePosition());
+						else
+							throw new TextParseException("Attribute expected", getFilePosition());
+					}
+					return component;
+				} else if (component instanceof XmlAttribute) {
+					XmlAttribute attr = (XmlAttribute) component;
+					if (attributeName == null || attributeName.equals(attr.getName()))
+						return attr;
+					else
+						return null;
+				} else
+					return null;
+			});
+			return found instanceof XmlAttribute ? (XmlAttribute) found : null;
+		}
+
+		public XmlElementContent getElementContent(boolean required) throws IOException, TextParseException {
+			if (theState != XmlParseState.ElementDeclaration && theState != XmlParseState.ElementContent)
+				throw new IllegalStateException("This method must be called within an element's declaration or content");
+			int currentDepth = theElement == null ? 0 : theElement.getDepth();
+			XmlComponent found = parseUntil(component -> {
+				if (component instanceof XmlElementTerminal) {
+					XmlElementTerminal terminal = (XmlElementTerminal) component;
+					if (!terminal.isOpen() && terminal.getDepth() == currentDepth) {
+						if (required)
+							throw new TextParseException("'" + getCurrentElement().getName() + "' element content expected",
+								getFilePosition());
+						return terminal;
+					} else
+						return null;
+				} else if (component instanceof XmlElementContent && getCurrentElement().getDepth() == currentDepth) {
+					return component;
+				} else
+					return null;
+			});
+			return found instanceof XmlElementContent ? (XmlElementContent) found : null;
+		}
+
+		public XmlElementTerminal closeCurrentElement() throws IOException, TextParseException {
+			if (theState != XmlParseState.ElementDeclaration && theState != XmlParseState.ElementContent)
+				throw new IllegalStateException("This method must be called within an element's declaration or content");
+			int currentDepth = theElement == null ? 0 : theElement.getDepth();
+			return this.<XmlElementTerminal> parseUntil(component -> {
+				if (component instanceof XmlElementTerminal) {
+					XmlElementTerminal terminal = (XmlElementTerminal) component;
+					if (!terminal.isOpen() && terminal.getDepth() == currentDepth) {
+						return terminal;
+					} else
+						return null;
+				} else
+					return null;
+			});
+		}
+
+		public <C extends XmlComponent> C parseUntil(ExFunction<XmlComponent, C, TextParseException> until)
+			throws IOException, TextParseException {
+			while (!isAtEnd()) {
+				XmlComponent component = getNextComponent();
+				C found = until.apply(component);
+				if (found != null)
+					return found;
+			}
+			return null;
+		}
+
+		public XmlComponent getNextComponent() throws IOException, XmlParseException{
+			if (isAtBeginning)
+				nextChar();
+			// If we're parsing element content, whitespace is part of the element's content text, not ignorable whitespace
+			else if (theState != XmlParseState.ElementContent) {
+				if (Character.isWhitespace(theChar)) {
+					while (Character.isWhitespace(nextChar())) { //
+					}
+					return new XmlIgnorableWhitespace(dumpSequence());
+				}
+			}
+			boolean preDecl=false;
+			switch(theState) {
+			case PreDeclaration:
+				preDecl=true;
+				//$FALL-THROUGH$
+			case PreRoot:
+				if (theChar != '<') {
+					if(preDecl)
+						throwException(false, "The first non-whitespace character in an XML document must be '<', not '" + theChar + "'");
+					else
+						throwException(false,
+							"The first non-whitespace character after the XML declaration must be '<', not '" + theChar + "'");
+				}
+				// Found the '<'. This is either the XML declaration or the start of the root element if the declaration is missing
+				char ch = nextChar();
+				if (preDecl && ch == '?') { // XML Declaration
+					theState=XmlParseState.PreRoot;
+					return parseXmlDeclaration();
+				}
+				return parsePostLT();
+			case ElementDeclaration:
+				switch (theChar) {
+				case '>': // Element open
+					theState = XmlParseState.ElementContent;
+					nextChar();
+					theAttributes.clear();
+					return new XmlElementOpen(theElement.getName(), dumpSequence());
+				case '/': // Self-closing element
+					if (nextChar() != '>')
+						throwException(false, "'>' expected");
+					nextChar(); // Include the terminal '>'
+					theAttributes.clear();
+					theState=XmlParseState.ElementContent;
+					String elementName = theElement.getName();
+					int depth = theElement.getDepth();
+					if (theElement.getParent() == null)
+						setContentComplete();
+					theElement = theElement.getParent();
+					return new XmlElementTerminal(elementName, false, depth, -1, dumpSequence(), true);
+				default: // Attribute
+					return parseAttribute();
+				}
+			case ElementContent:
+			case EndOfContent:
+				if (theChar == '<') {
+					nextChar();
+					return parsePostLT();
+				} else {
+					parseXmlContent(false, ELEMENT_CONTENT_TERMINATION);
+					return new XmlElementContent(theElement.getName(), dumpSequence());
+				}
+			}
+			throw new IllegalStateException("Unrecognized XML parse state '" + theState + "'");
+		}
+
+		private XmlDeclaration parseXmlDeclaration() throws IOException, XmlParseException {
+			int decPos = getPosition();
+			if (decPos != 1)
+				throwException(false, "XML declaration must be at the first position of the first line of the XML document");
+			mark();
+			if (!expect("xml"))
+				throwException(true, "XML Declaration must start with '<?xml'");
+			if (!Character.isWhitespace(nextChar()))
+				throwException(false, "Expected whitespace after beginning of XML declaration");
+
+			String versionStr = null;
+			Charset encoding = null;
+			Boolean standalone = null;
+			int versionNameOffset = -1, versionValueOffset = -1;
+			int encodingNameOffset = -1, encodingValueOffset = -1;
+			int standaloneNameOffset = -1, standaloneValueOffset = -1;
+			char ch = skipWS(null); // White space is part of the XML declaration
+			mark();
+			while (ch >= 'a' && ch <= 'z') {
+				// New declaration attribute
+				int namePos = getPosition();
+				String attrName = parseXmlName();
+				boolean version, enc;
+				switch (attrName) {
+				case VERSION:
+					if (versionStr != null)
+						throwException(true, "Duplicate '" + VERSION + "' attribute on XML declaration");
+					version = true;
+					enc = false;
+					break;
+				case ENCODING:
+					if (encoding != null)
+						throwException(true, "Duplicate '" + ENCODING + "' attribute on XML declaration");
+					enc = true;
+					version = false;
+					break;
+				case STANDALONE:
+					if (standalone != null)
+						throwException(true, "Duplicate '" + STANDALONE + "' attribute on XML declaration");
+					version = enc = false;
+					break;
+				default:
+					throwException(true, "Only '" + VERSION + "', '" + ENCODING + "', or '" + STANDALONE
+						+ "' attributes are allowed on the XML declaration, not '" + attrName + "'");
+					return null;
+				}
+				startAttribute(attrName);
+				int valuePos = getPosition();
+				mark();
+				String value = parseXmlContent(false, ATTRIBUTE_TERMINATION);
+				if (version) {
+					// validate the version number?
+					versionStr = value;
+					versionNameOffset = namePos - decPos + 1;
+					versionValueOffset = valuePos - decPos + 1;
+				} else if (enc) {
+					encodingNameOffset = namePos - decPos + 1;
+					encodingValueOffset = valuePos - decPos + 1;
+					try {
+						encoding = Charset.forName(value);
+					} catch (IllegalCharsetNameException e) {
+						throwException(true, "Illegal character set name: " + value);
+					} catch (UnsupportedCharsetException e) {
+						throwException(true, "Unsupported character set: " + value);
+					}
+				} else {
+					standaloneNameOffset = namePos - decPos + 1;
+					standaloneValueOffset = valuePos - decPos + 1;
+					switch (value) {
+					case "yes":
+						standalone = Boolean.TRUE;
+						break;
+					case "no":
+						standalone = Boolean.FALSE;
+						break;
+					default:
+						throwException(true, STANDALONE + " must be 'yes' or 'no', not '" + value + "'");
+						break;
+					}
+				}
+
+				ch = currentChar();
+				if (Character.isWhitespace(ch))
+					ch = skipWS(null); // White space is part of the XML declaration
+			}
+			mark();
+			if (ch != '?' || nextChar() != '>')
+				throwException(false, "XML declaration must end with '?>");
+			if (versionStr == null)
+				throwException(false, "XML declaration must include the '" + VERSION + "' attribute");
+			nextChar(); // Move past the whole declaration so it's all in the sequence
+			setEncoding(encoding == null ? StandardCharsets.UTF_8 : encoding);
+			return new XmlDeclaration(versionStr, encoding, standalone, dumpSequence(), //
+				versionNameOffset, versionValueOffset, encodingNameOffset, encodingValueOffset, standaloneNameOffset,
+				standaloneValueOffset);
+		}
+
+		private XmlComponent parsePostLT() throws IOException, XmlParseException {
+			switch (theChar) {
+			case '?': // Processing instruction
+				return parseProcessingInstruction();
+			case '!':// DOCTYPE declaration, comment, or CDATA
+				char ch = nextChar();
+				mark();
+				switch (ch) {
+				case 'D':// DOCTYPE declaration
+					if (!expect("OCTYPE"))
+						throwException(false, "'<!DOCTYPE' expected but not found");
+					throwException(true, "DOCTYPE declarations are not supported by this parser");
+					return null;
+				case '-': // Comment
+					return parseComment();
+				case '[':
+					return parseCData();
+				default:
+					throwException(true, "Misplaced '<' or malformed XML construct");
+					return null;
+				}
+			case '/':
+				return parseElementClose();
+			default:
+				return parseElementStart();
+			}
+		}
+
+		private XmlComment parseComment() throws IOException, XmlParseException {
+			if (!expect("-"))
+				throwException(false, "'<!-' here should be followed by another '-' for a comment");
+			nextChar();
+			parseXmlContent(true, COMMENT_TERMINATION);
+			if (currentChar() != '>')
+				throwException(true, "'--' is not allowed in comments");
+			nextChar(); // Get the entire comment into the sequence
+			return new XmlComment(dumpSequence());
+		}
+
+		private XmlProcessingInstruction parseProcessingInstruction() throws IOException, XmlParseException {
+			nextChar();
+			mark();
+			String target = parseXmlName();
+			if (target.equalsIgnoreCase("xml"))
+				throwException(true, "Processing instruction cannot be 'xml' with any character case");
+			if (!Character.isWhitespace(currentChar())) {
+				mark();
+				if (currentChar() != '?' || nextChar() != '>') // No content
+					throwException(true, "Processing instruction target must be followed by '?>' or whitespace");
+				nextChar(); // Include the terminal '>'
+				return new XmlProcessingInstruction(target, -1, dumpSequence());
+			} else {
+				skipWS(null); // Initial white space is part of the processing instruction, but not of the value
+				int valuePos = getPosition();
+				parseXmlContent(true, PI_TERMINATION);
+				return new XmlProcessingInstruction(target, valuePos - getSequenceStartPosition(), dumpSequence());
+			}
+		}
+
+		private XmlElementTerminal parseElementStart() throws IOException, XmlParseException {
+			if (isContentComplete)
+				throwException(false, "Multiple root elements are not allowed");
+			theState = XmlParseState.ElementDeclaration;
+			if (Character.isWhitespace(currentChar()))
+				skipWS(null); // White space is part of the element start
+			int startPos = getPosition() - getSequenceStartPosition();
+			FilePosition namePos = getFilePosition(false);
+			String elementName = parseXmlName();
+			theElement = new LocatedXmlElement(theElement, elementName, namePos);
+			return new XmlElementTerminal(elementName, true, theElement.getDepth(), startPos, dumpSequence(), false);
+		}
+
+		private XmlCdata parseCData() throws IOException, XmlParseException {
+			if (!expect("CDATA["))
+				throwException(true, "Bad CDATA initializer");
+			else if (theElement == null)
+				throwException(true, "CDATA not allowed outside of the root element");
+			nextChar(); // Move to the beginning of the CDATA content
+			parseXmlContent(true, CDATA_TERMINATION);
+			return new XmlCdata(theElement.getName(), dumpSequence());
+		}
+
+		private XmlAttribute parseAttribute() throws IOException, XmlParseException {
+			mark();
+			String attributeName = parseXmlName();
+			if (!theAttributes.add(attributeName))
+				throwException(true, "Multiple '" + attributeName + "' attributes specified on this element");
+			startAttribute(attributeName);
+			int attrValuePos = getPosition() - getSequenceStartPosition();
+			parseXmlContent(false, ATTRIBUTE_TERMINATION);
+			return new XmlAttribute(attributeName, attrValuePos, dumpSequence());
+		}
+
+		private XmlElementTerminal parseElementClose() throws IOException, XmlParseException {
+			skipWS(null); // White space is part of the closing tag
+			mark();
+			int closePos = getPosition() - getSequenceStartPosition();
+			String closingElement = parseXmlName();
+			if (theElement == null)
+				throwException(true, "Unmatched closing element '" + closingElement + "'");
+			if (!closingElement.equals(theElement.getName()))
+				throwException(true, "Closing element for '" + theElement.getName() + "' expected, not '" + closingElement + "'");
+			if (Character.isWhitespace(currentChar()))
+				skipWS(null);// White space is part of the closing tag
+			if (currentChar() != '>')
+				throwException(false, "'>' expected");
+			if (theElement.getParent() == null)
+				setContentComplete();
+			nextChar(); // Include the terminal '>'
+			int depth = theElement.getDepth();
+			theElement = theElement.getParent();
+			return new XmlElementTerminal(closingElement, false, depth, closePos, dumpSequence(), false);
+		}
 
 		private void specialSequence(int length, String chars) {
 			lineSpecialSequences.add(new SpecialCharSequence(theSequenceBuffer.length(), length, chars));
@@ -1834,31 +2045,12 @@ public class SimpleXMLParser {
 			linePosition = thePosition;
 		}
 
-		ParseSession(String fileLocation, InputStream stream) {
-			theFileLocation = fileLocation;
-			theStream = stream;
+		private void setContentComplete() {
+			isContentComplete = true;
+			theState = XmlParseState.EndOfContent;
 		}
 
-		ParseSession(String fileLocation, Reader reader) {
-			theFileLocation = fileLocation;
-			theStream = null;
-			theReader = reader;
-		}
-
-		ParseSession setContentComplete(boolean complete) {
-			isContentComplete = complete;
-			return this;
-		}
-
-		boolean isAtEnd() {
-			return isAtEnd;
-		}
-
-		char currentChar() {
-			return theChar;
-		}
-
-		char nextChar() throws IOException, XmlParseException {
+		private char nextChar() throws IOException, XmlParseException {
 			int ch;
 			if (isAtBeginning) {
 				isAtBeginning = false;
@@ -1934,7 +2126,7 @@ public class SimpleXMLParser {
 			return ch;
 		}
 
-		PositionedContent dumpSequence() throws IOException, XmlParseException {
+		private PositionedContent dumpSequence() throws IOException, XmlParseException {
 			if (theSequenceBuffer.length() > 0)
 				newLine();
 			LineContent[] dumped = lines.toArray(new LineContent[lines.size()]);
@@ -1949,15 +2141,15 @@ public class SimpleXMLParser {
 			return new PositionedContentImpl(content, seqPos, dumped);
 		}
 
-		char skipWS(ParseHandler handler) throws IOException, XmlParseException {
+		private char skipWS(ParseHandler handler) throws IOException, XmlParseException {
 			while (Character.isWhitespace(nextChar())) { //
 			}
 			if (theSequenceBuffer.length() > 0 && handler != null)
-				handler.handleIgnorableWhitespace(dumpSequence());
+				handler.handleIgnorableWhitespace(new XmlIgnorableWhitespace(dumpSequence()));
 			return theChar;
 		}
 
-		String parseXmlContent(boolean permissive, Termination terminator) throws IOException, XmlParseException {
+		private String parseXmlContent(boolean permissive, Termination terminator) throws IOException, XmlParseException {
 			int preLen = theSequenceBuffer.length();
 			char ch = currentChar();
 			int t = 0;
@@ -1983,15 +2175,8 @@ public class SimpleXMLParser {
 				nextChar(); // Move past the terminator
 			return theSequenceBuffer.subSequence(preLen, preTerm).toString();
 		}
-		void openElement(String name, FilePosition position) {
-			theElement = new LocatedXmlElement(theElement, name, position);
-		}
 
-		void closeElement() {
-			theElement = theElement.getParent();
-		}
-
-		boolean expect(String text) throws IOException, XmlParseException {
+		private boolean expect(String text) throws IOException, XmlParseException {
 			for (int c = 0; c < text.length(); c++) {
 				if (nextChar() != text.charAt(c))
 					return false;
@@ -1999,34 +2184,29 @@ public class SimpleXMLParser {
 			return true;
 		}
 
-		ParseSession mark() {
+		private void mark() {
 			theMarkPosition = thePosition;
 			theMarkLineNumber = theLineNumber;
 			theMarkCharNumber = theCharNumber;
-			return this;
 		}
 
-		void throwException(boolean atMark, String message) throws XmlParseException {
+		private void throwException(boolean atMark, String message) throws XmlParseException {
 			int pos = atMark ? theMarkPosition : thePosition;
 			int line = atMark ? theMarkLineNumber : theLineNumber;
 			int ch = atMark ? theMarkCharNumber : theCharNumber;
 			throw new XmlParseException(theElement, theFileLocation, message, pos, line, ch);
 		}
 
-		void setEncoding(Charset charSet) {
+		private void setEncoding(Charset charSet) {
 			if (theReader == null)
 				theReader = new InputStreamReader(theStream, charSet);
 		}
 
-		int getPosition() {
-			return thePosition; // This method returns the position of the current character
-		}
-
-		int getSequenceStartPosition() {
+		private int getSequenceStartPosition() {
 			return theSequencePosition[0];
 		}
 
-		FilePosition getFilePosition(boolean atMark) {
+		private FilePosition getFilePosition(boolean atMark) {
 			return new FilePosition(//
 				atMark ? theMarkPosition : thePosition, //
 				atMark ? theMarkLineNumber : theLineNumber, //
@@ -2034,7 +2214,7 @@ public class SimpleXMLParser {
 		}
 
 		/** Parses an XML element or attribute name from the stream, including the current character */
-		String getName() throws IOException, XmlParseException {
+		private String parseXmlName() throws IOException, XmlParseException {
 			// When we get here, the current character is the first character of the element's name
 			if (theChar != '_' && !Character.isLetter(theChar))
 				throwException(false, "Names must start with a letter or underscore, not '" + theChar + "'");
@@ -2048,7 +2228,7 @@ public class SimpleXMLParser {
 		}
 
 		/** Moves past the '="' sequence between an attribute's name and its value */
-		void startAttribute(String attributeName) throws IOException, XmlParseException {
+		private void startAttribute(String attributeName) throws IOException, XmlParseException {
 			// White space here is part of the attribute--don't report it as ignorable white space
 			if (Character.isWhitespace(theChar))
 				skipWS(null);
@@ -2160,6 +2340,126 @@ public class SimpleXMLParser {
 			return "L" + theLineNumber + "C" + theCharNumber + "'" + theChar + "'";
 		}
 	}
+
+	/**
+	 * Gets the name position stored in a node, if it was parsed using this class and name position is relevant for the node
+	 * 
+	 * @param node The XML node to get the name position for
+	 * @return The name position stored in the node
+	 * @see #parseDocument(String, InputStream)
+	 * @see DomCreatorHandler
+	 */
+	public static PositionedContent getNamePosition(Node node) {
+		return (PositionedContent) node.getUserData(DomCreatorHandler.NAME_POSITION_KEY);
+	}
+
+	/**
+	 * Gets the content position stored in a node, if it was parsed using this class and content position is relevant for the node
+	 * 
+	 * @param node The XML node to get the content position for
+	 * @return The content position stored in the node
+	 * @see #parseDocument(String, InputStream)
+	 * @see DomCreatorHandler
+	 */
+	public static PositionedContent getPositionContent(Node node) {
+		return (PositionedContent) node.getUserData(DomCreatorHandler.CONTENT_POSITION_KEY);
+	}
+
+	private static class DomBuilderSet {
+		final DocumentBuilderFactory docBuilderFactory;
+		DocumentBuilder docBuilder;
+
+		DomBuilderSet() {
+			docBuilderFactory = DocumentBuilderFactory.newInstance();
+		}
+
+		Document createDocument() throws IllegalStateException {
+			if (docBuilder == null) {
+				try {
+					docBuilder = docBuilderFactory.newDocumentBuilder();
+				} catch (ParserConfigurationException e) {
+					throw new IllegalStateException("Could not configure DOM builder", e);
+				}
+			}
+			return docBuilder.newDocument();
+		}
+	}
+
+	private static final ThreadLocal<DomBuilderSet> DOM_BUILDERS = ThreadLocal.withInitial(DomBuilderSet::new);
+
+	static boolean isNameChar(int ch) {
+		switch (ch) {
+		case '-':
+		case '_':
+		case '.':
+		case ':':
+			return true;
+		default:
+			return Character.isLetter(ch) || Character.isDigit(ch);
+		}
+	}
+
+	interface Termination {
+		int isTerminator(char ch, int prevT);
+
+		boolean isTerminated(int t);
+
+		boolean isLastTerminatorCharIncluded();
+	}
+
+	static class CharTermination implements Termination {
+		private final char theTerminator;
+		private final boolean isLastIncluded;
+
+		CharTermination(char terminator, boolean lastIncluded) {
+			theTerminator = terminator;
+			isLastIncluded = lastIncluded;
+		}
+
+		@Override
+		public int isTerminator(char ch, int prevT) {
+			return ch == theTerminator ? 1 : 0;
+		}
+
+		@Override
+		public boolean isTerminated(int t) {
+			return true; // Only called after a match
+		}
+
+		@Override
+		public boolean isLastTerminatorCharIncluded() {
+			return isLastIncluded;
+		}
+	}
+
+	static class StringTermination implements Termination {
+		private final String theTerminator;
+
+		StringTermination(String terminator) {
+			theTerminator = terminator;
+		}
+
+		@Override
+		public int isTerminator(char ch, int prevT) {
+			return ch == theTerminator.charAt(prevT) ? prevT + 1 : 0;
+		}
+
+		@Override
+		public boolean isTerminated(int t) {
+			return t == theTerminator.length();
+		}
+
+		@Override
+		public boolean isLastTerminatorCharIncluded() {
+			return true;
+		}
+	}
+
+	static final Termination ATTRIBUTE_TERMINATION = new CharTermination('"', true);
+	static final Termination ELEMENT_CONTENT_TERMINATION = new CharTermination('<', false);
+	static final Termination COMMENT_TERMINATION = new StringTermination("--");
+	static final Termination PI_TERMINATION = new StringTermination(PROCESSING_INSTRUCTION_END);
+	static final Termination CDATA_TERMINATION = new StringTermination(CDATA_END);
 
 	static final SpecialCharSequence[] EMPTY_SPECIAL_SEQUENCE = new SpecialCharSequence[0];
 
@@ -2445,7 +2745,7 @@ public class SimpleXMLParser {
 				}
 
 				@Override
-				public void handleElementContent(String elementName, PositionedContent elementValue) {
+				public void handleElementContent(String elementName, XmlElementContent elementValue) {
 					indent();
 					System.out.println("Content @" + printStart(elementValue) + ": " + printContent(elementValue.toString()));
 				}

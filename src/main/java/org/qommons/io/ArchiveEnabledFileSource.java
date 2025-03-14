@@ -1034,7 +1034,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 			long seekPos = len - buffer.length;
 			boolean zip64 = false;
 			EndOfCentralDirectoryRecord eocd = null;
-			// Although it's allowed in the spec for the terminal comment to be arbitrarily long (which I think it stupid),
+			// Although it's allowed in the spec for the terminal comment to be arbitrarily long (which I think is stupid),
 			// allowing it here could cause some pretty severe performance problems for very large corrupted zip files.
 			// This cap allows for a terminal comment that's 6.4MB long.
 			for (int tryCount = 0; eocd == null && tryCount < 100; tryCount++) {
@@ -1201,6 +1201,8 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 			}
 			if (read < 0)
 				throw new EOFException();
+			else
+				total += read;
 			return total;
 		}
 

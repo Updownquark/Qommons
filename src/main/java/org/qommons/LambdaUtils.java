@@ -317,6 +317,15 @@ public class LambdaUtils {
 
 	/**
 	 * @param <T> The type of the supplier
+	 * @param value The value to supply
+	 * @return A supplier that always returns the given value
+	 */
+	public static <T> Supplier<T> constantSupplier(T value) {
+		return constantSupplier(value, (value == null ? () -> "null" : value::toString), value);
+	}
+
+	/**
+	 * @param <T> The type of the supplier
 	 * @param <X> The type of exception thrown by the supplier
 	 * @param supplier Supplier for the value to supply
 	 * @param print The printed supplier representation
@@ -800,7 +809,8 @@ public class LambdaUtils {
 	 * @param <L> The type of lambda this wraps
 	 */
 	public static abstract class PrintableLambda<L> implements LambdaUtility {
-		private final L theLambda;
+		/** The implementation function */
+		protected final L theLambda;
 		private final Supplier<String> thePrint;
 		private final Object identifier;
 		private int hashCode = -1;
@@ -887,12 +897,12 @@ public class LambdaUtils {
 
 		@Override
 		public void run() {
-			getLambda().run();
+			theLambda.run();
 		}
 
 		@Override
 		public boolean isTrivial() {
-			return LambdaUtils.isTrivial(getLambda());
+			return LambdaUtils.isTrivial(theLambda);
 		}
 	}
 
@@ -907,12 +917,12 @@ public class LambdaUtils {
 
 		@Override
 		public void accept(T t) {
-			getLambda().accept(t);
+			theLambda.accept(t);
 		}
 
 		@Override
 		public boolean isTrivial() {
-			return LambdaUtils.isTrivial(getLambda());
+			return LambdaUtils.isTrivial(theLambda);
 		}
 	}
 
@@ -927,7 +937,7 @@ public class LambdaUtils {
 
 		@Override
 		public T get() {
-			return getLambda().get();
+			return theLambda.get();
 		}
 
 		@Override
@@ -947,7 +957,7 @@ public class LambdaUtils {
 
 		@Override
 		public T get() throws X {
-			return getLambda().get();
+			return theLambda.get();
 		}
 
 		@Override
@@ -1011,7 +1021,7 @@ public class LambdaUtils {
 
 		@Override
 		public boolean test(T t) {
-			return getLambda().test(t);
+			return theLambda.test(t);
 		}
 
 		@Override
@@ -1022,12 +1032,12 @@ public class LambdaUtils {
 		@Override
 		public Predicate<T> negate() {
 			Supplier<String> str = getPrint();
-			return new PrintablePredicate<>(getLambda().negate(), () -> "!" + str.get(), new Not(getIdentifier()));
+			return new PrintablePredicate<>(theLambda.negate(), () -> "!" + str.get(), new Not(getIdentifier()));
 		}
 
 		@Override
 		public Predicate<T> and(Predicate<? super T> other) {
-			Predicate<T> lambda = getLambda();
+			Predicate<T> lambda = theLambda;
 			Supplier<String> otherStr;
 			Object otherId;
 			if (other instanceof PrintablePredicate) {
@@ -1044,7 +1054,7 @@ public class LambdaUtils {
 
 		@Override
 		public Predicate<T> or(Predicate<? super T> other) {
-			Predicate<T> lambda = getLambda();
+			Predicate<T> lambda = theLambda;
 			Supplier<String> otherStr;
 			Object otherId;
 			if (other instanceof PrintablePredicate) {
@@ -1102,7 +1112,7 @@ public class LambdaUtils {
 
 		@Override
 		public boolean test(T t, U u) {
-			return getLambda().test(t, u);
+			return theLambda.test(t, u);
 		}
 
 		@Override
@@ -1126,7 +1136,7 @@ public class LambdaUtils {
 
 		@Override
 		public boolean test(T t, U u, V v) {
-			return getLambda().test(t, u, v);
+			return theLambda.test(t, u, v);
 		}
 
 		@Override
@@ -1146,7 +1156,7 @@ public class LambdaUtils {
 
 		@Override
 		public X apply(T t) {
-			return getLambda().apply(t);
+			return theLambda.apply(t);
 		}
 
 		@Override
@@ -1163,7 +1173,7 @@ public class LambdaUtils {
 
 		@Override
 		public boolean isTrivial() {
-			return LambdaUtils.isTrivial(getLambda());
+			return LambdaUtils.isTrivial(theLambda);
 		}
 	}
 
@@ -1179,12 +1189,12 @@ public class LambdaUtils {
 
 		@Override
 		public X apply(T t) throws E {
-			return getLambda().apply(t);
+			return theLambda.apply(t);
 		}
 
 		@Override
 		public boolean isTrivial() {
-			return LambdaUtils.isTrivial(getLambda());
+			return LambdaUtils.isTrivial(theLambda);
 		}
 	}
 
@@ -1200,12 +1210,12 @@ public class LambdaUtils {
 
 		@Override
 		public X apply(S arg0, T arg1) throws E {
-			return getLambda().apply(arg0, arg1);
+			return theLambda.apply(arg0, arg1);
 		}
 
 		@Override
 		public boolean isTrivial() {
-			return LambdaUtils.isTrivial(getLambda());
+			return LambdaUtils.isTrivial(theLambda);
 		}
 	}
 
@@ -1224,12 +1234,12 @@ public class LambdaUtils {
 
 		@Override
 		public X apply(T t, U u) {
-			return getLambda().apply(t, u);
+			return theLambda.apply(t, u);
 		}
 
 		@Override
 		public boolean isTrivial() {
-			return LambdaUtils.isTrivial(getLambda());
+			return LambdaUtils.isTrivial(theLambda);
 		}
 	}
 
@@ -1240,12 +1250,12 @@ public class LambdaUtils {
 
 		@Override
 		public void accept(T t, U u) {
-			getLambda().accept(t, u);
+			theLambda.accept(t, u);
 		}
 
 		@Override
 		public boolean isTrivial() {
-			return LambdaUtils.isTrivial(getLambda());
+			return LambdaUtils.isTrivial(theLambda);
 		}
 	}
 
@@ -1537,12 +1547,12 @@ public class LambdaUtils {
 
 		@Override
 		public X apply(T t, U u, V v) {
-			return getLambda().apply(t, u, v);
+			return theLambda.apply(t, u, v);
 		}
 
 		@Override
 		public boolean isTrivial() {
-			return LambdaUtils.isTrivial(getLambda());
+			return LambdaUtils.isTrivial(theLambda);
 		}
 	}
 
@@ -1553,7 +1563,7 @@ public class LambdaUtils {
 
 		@Override
 		public int compareTo(T o1) {
-			return getLambda().compareTo(o1);
+			return theLambda.compareTo(o1);
 		}
 
 		@Override
@@ -1569,7 +1579,7 @@ public class LambdaUtils {
 
 		@Override
 		public int compare(T o1, T o2) {
-			return getLambda().compare(o1, o2);
+			return theLambda.compare(o1, o2);
 		}
 
 		@Override

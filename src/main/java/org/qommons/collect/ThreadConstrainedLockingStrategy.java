@@ -1,7 +1,10 @@
 package org.qommons.collect;
 
+import java.util.Collection;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 
@@ -25,14 +28,14 @@ import org.qommons.Transaction;
  * </p>
  */
 public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
+	private final ThreadConstraint theThreadConstraint;
 	// These are package-private for lock release performance
 	final AtomicInteger theReadLock;
 	int theSafeReadLock;
 	volatile int theWriteLock;
-	private final Runnable onInitialWriteLock;
 
 	/** @param threading The ThreadConstraint defining on which thread exclusive (write) locks may be obtained */
-	public ThreadConstrainedLockingStrategy(ThreadConstraint threading) {
+	private ThreadConstrainedLockingStrategy(ThreadConstraint threading) {
 		this(threading, null);
 	}
 
@@ -41,13 +44,17 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 	 * @param onInitialWriteLock An optional task that will run each time an exclusive lock is initially obtained--i.e. each time the lock
 	 *        changes from being NOT exclusively held to being exclusively held
 	 */
-	public ThreadConstrainedLockingStrategy(ThreadConstraint threading, Runnable onInitialWriteLock) {
-		super(threading);
+	private ThreadConstrainedLockingStrategy(ThreadConstraint threading, Runnable onInitialWriteLock) {
 		if (threading == ThreadConstraint.ANY)
 			throw new IllegalArgumentException(
 				ThreadConstrainedLockingStrategy.class.getSimpleName() + " cannot be used with ThreadConstraint.ANY");
-		this.onInitialWriteLock = onInitialWriteLock;
+		theThreadConstraint = threading;
 		theReadLock = new AtomicInteger();
+	}
+
+	@Override
+	public ThreadConstraint getThreadConstraint() {
+		return theThreadConstraint;
 	}
 
 	@Override
@@ -57,7 +64,7 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 
 	@Override
 	public Transaction lock(boolean write, Object cause) {
-		boolean onPublicThread = getThreadConstraint().isEventThread();
+		boolean onPublicThread = theThreadConstraint.isEventThread();
 		if (write) {
 			if (!onPublicThread)
 				throw new IllegalStateException(ThreadConstraint.MOD_ON_WRONG_THREAD);
@@ -88,7 +95,7 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 
 	@Override
 	public Transaction tryLock(boolean write, Object cause) {
-		boolean onPublicThread = getThreadConstraint().isEventThread();
+		boolean onPublicThread = theThreadConstraint.isEventThread();
 		if (write) {
 			if (onPublicThread)
 				return getWriteLock(true, cause);
@@ -151,16 +158,7 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 				theWriteLock = 1;
 			}
 		}
-		Transaction t = new WriteLockRelease(super.lock(true, cause));
-		if (initial && onInitialWriteLock != null) {
-			try {
-				onInitialWriteLock.run();
-			} catch (RuntimeException | Error e) {
-				t.close();
-				throw e;
-			}
-		}
-		return t;
+		return new WriteLockRelease(super.lock(true, cause));
 	}
 
 	@Override
@@ -174,8 +172,43 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 	}
 
 	@Override
+	public CoreId getCoreId() {
+		return new ThreadSafeCore(theThreadConstraint);
+	}
+
+	@Override
 	public String toString() {
 		return "Safe on " + getThreadConstraint();
+	}
+
+	/** A thread-safe lock core */
+	public static class ThreadSafeCore extends CoreId {
+		private final ThreadConstraint theThreadConstraint;
+
+		/** @param threadConstraint The thread constraint of the core */
+		public ThreadSafeCore(ThreadConstraint threadConstraint) {
+			theThreadConstraint = threadConstraint;
+		}
+
+		/** @return The thread constraint of the core */
+		public ThreadConstraint getThreadConstraint() {
+			return theThreadConstraint;
+		}
+
+		@Override
+		public int hashCode() {
+			return theThreadConstraint.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof ThreadSafeCore && theThreadConstraint.equals(((ThreadSafeCore) obj).theThreadConstraint);
+		}
+
+		@Override
+		public String toString() {
+			return "Safe:" + theThreadConstraint;
+		}
 	}
 
 	class ExtReadLockRelease implements Transaction {
@@ -244,8 +277,132 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 		}
 
 		@Override
+		public int hashCode() {
+			return super.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (obj instanceof WithInitialWriteLock)
+				return equals(((WithInitialWriteLock) obj).theBacking);
+			return super.equals(obj);
+		}
+
+		@Override
 		public String toString() {
 			return getThreadConstraint() + " TCLS write release";
+		}
+	}
+
+	private static final ConcurrentHashMap<ThreadConstraint, ThreadConstrainedLockingStrategy> LOCKS = new ConcurrentHashMap<>();
+
+	/**
+	 * @param constraint The thread constraint to get the locking for
+	 * @return The locking strategy for the given thread constraint
+	 */
+	public static CollectionLockingStrategy get(ThreadConstraint constraint) {
+		return get(constraint, null);
+	}
+
+	/**
+	 * @param constraint The thread constraint to get the locking for
+	 * @param onInitialWriteLock An optional task to be executed each time this particular lock is initially locked for write
+	 * @return The locking strategy for the given thread constraint
+	 */
+	public static CollectionLockingStrategy get(ThreadConstraint constraint, Runnable onInitialWriteLock) {
+		ThreadConstrainedLockingStrategy tcls = LOCKS.computeIfAbsent(constraint, ThreadConstrainedLockingStrategy::new);
+		if (onInitialWriteLock == null)
+			return tcls;
+		else
+			return new WithInitialWriteLock(tcls, onInitialWriteLock);
+	}
+
+	static class WithInitialWriteLock implements CollectionLockingStrategy {
+		private final ThreadConstrainedLockingStrategy theBacking;
+		private final Runnable onInitialWriteLock;
+		private int theWriteLockCount;
+
+		WithInitialWriteLock(ThreadConstrainedLockingStrategy backing, Runnable onInitialWriteLock) {
+			theBacking = backing;
+			this.onInitialWriteLock = onInitialWriteLock;
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			Transaction lock = theBacking.lock(write, cause);
+			if (!write)
+				return lock;
+			if (write && 0 == theWriteLockCount++) {
+				try {
+					onInitialWriteLock.run();
+				} catch (RuntimeException | Error e) {
+					lock.close();
+					throw e;
+				}
+			}
+			return new Transaction.ReleaseOnceTransaction(() -> {
+				theWriteLockCount--;
+				lock.close();
+			});
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, Object cause) {
+			Transaction lock = theBacking.tryLock(write, cause);
+			if (lock == null || !write)
+				return lock;
+			if (0 == theWriteLockCount++) {
+				try {
+					onInitialWriteLock.run();
+				} catch (RuntimeException | Error e) {
+					lock.close();
+					throw e;
+				}
+			}
+			return new Transaction.ReleaseOnceTransaction(() -> {
+				theWriteLockCount--;
+				lock.close();
+			});
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return theBacking.getCoreId();
+		}
+
+		@Override
+		public long getStamp() {
+			return theBacking.getStamp();
+		}
+
+		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return theBacking.getCurrentCauses();
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theBacking.getThreadConstraint();
+		}
+
+		@Override
+		public void modified() {
+			theBacking.modified();
+		}
+
+		@Override
+		public int hashCode() {
+			return theBacking.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return theBacking.equals(obj);
+		}
+
+		@Override
+		public String toString() {
+			return theBacking.toString();
 		}
 	}
 }

@@ -2886,7 +2886,7 @@ public class TimeUtils {
 					break;
 				case Month:
 					if (spec.length() == 3)
-						format.append(str, cal.get(Calendar.MONTH - Calendar.JANUARY) + 1);
+						format.append(str, cal.get(Calendar.MONTH));
 					else
 						StringUtils.printInt(cal.get(Calendar.MONTH) - Calendar.JANUARY + 1, spec.length(), str);
 					break;
@@ -4456,6 +4456,16 @@ public class TimeUtils {
 		if (neg)
 			secs = -secs;
 		return secs;
+	}
+
+	/**
+	 * @param seconds The decimal number of seconds
+	 * @return The duration matching the given number of seconds
+	 */
+	public static Duration ofSeconds(double seconds) {
+		long secs = (long) seconds;
+		seconds -= secs;
+		return Duration.ofSeconds(secs, Math.round(seconds * 1E9));
 	}
 
 	/**

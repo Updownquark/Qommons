@@ -56,8 +56,14 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 	private final boolean isDistinct;
 
 	SortedTreeList(boolean safe, Comparator<? super E> compare, ThreadConstraint threadConstraint) {
-		this(v -> safe ? new StampedLockingStrategy(v, threadConstraint) : new FastFailLockingStrategy(threadConstraint), DEFAULT_DESCRIP,
-			compare);
+		this(v -> {
+			if (safe)
+				return new StampedLockingStrategy(v, threadConstraint);
+			else if (threadConstraint != ThreadConstraint.ANY && threadConstraint.supportsInvoke())
+				return ThreadConstrainedLockingStrategy.get(threadConstraint);
+			else
+				return new FastFailLockingStrategy();
+		}, DEFAULT_DESCRIP, compare);
 	}
 
 	/**

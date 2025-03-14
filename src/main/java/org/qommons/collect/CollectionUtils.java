@@ -4,6 +4,7 @@ import java.util.*;
 import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.IntPredicate;
 
 import org.qommons.IterableUtils;
 import org.qommons.debug.Debug;
@@ -38,7 +39,8 @@ public class CollectionUtils {
 		/**
 		 * @return The index of the left element in a hypothetical list that was equal to the left list before the adjustment and has been
 		 *         updated with appropriate add/remove/move operations during the adjustment, or -1 if this element does not have a
-		 *         representation in the left list.
+		 *         representation in the left list.<br />
+		 *         This is only different from {@link #getTargetIndex()} if the element is to be moved within the collection.
 		 */
 		int getUpdatedLeftIndex();
 
@@ -697,10 +699,132 @@ public class CollectionUtils {
 		 * @param list The list to find the value in
 		 * @param value The value to find
 		 * @param start The index to start looking in the list at
+		 * @param filter A test for whether a particular index in the left list is as yet unmatched
 		 * @param after The index after which to find the value (strictly after)
 		 * @return The index of the element in the list with given value, or -1 if the value could not be found after the given index
 		 */
-		int findElement(List<L> list, R value, int start);
+		int findElement(List<? extends L> list, R value, int start, IntPredicate filter);
+	}
+
+	/**
+	 * Enables probabilistic matching between elements in lists
+	 * 
+	 * @param <L> The type of values in the left list (the one to be modified)
+	 * @param <R> The type of values in the right list (the one whose content is being used to modify the left list)
+	 */
+	public interface ProbabilisticMatcher<L, R> {
+		/**
+		 * @return The minimum threshold for a combination of elements for a potential match. The result of
+		 *         {@link #getMatchProbability(Object, Object)} between 2 elements must be <b>GREATER</b> than this value for a potential
+		 *         match.
+		 */
+		double getMinimumMatchThreshold();
+
+		/**
+		 * @param leftValue The value from the left list (the one to be modified)
+		 * @param rightValue The value from the right list (the one whose content is being used to modify the left list)
+		 * @return The probability that the two values are a match. No constraints are placed on the range of values that may be returned
+		 *         here (e.g. no assumption is made that it will be between 0 and 1). The only meaning assumed is that values
+		 *         &lt;={@link #getMinimumMatchThreshold()} cannot be matches, and larger numbers will take precedence over smaller ones.
+		 */
+		double getMatchProbability(L leftValue, R rightValue);
+	}
+
+	/**
+	 * Just a simple functional interface that returns a double value given two typed arguments
+	 * 
+	 * @param <L> The type of the first argument
+	 * @param <R> The type of the second argument
+	 */
+	public interface BiDoubleFunction<L, R> {
+		/**
+		 * @param lv The first argument
+		 * @param rv The second argument
+		 * @return The result of the operation
+		 */
+		double apply(L lv, R rv);
+	}
+
+	/**
+	 * A structure returned from {@link CollectionUtils#buildSync(List, List)} that allows configuration of a synchronization operation
+	 * between two lists.
+	 * 
+	 * @param <L> The type of values in the left list (the one to be modified)
+	 * @param <R> The type of values in the right list (the one whose content is being used to modify the left list)
+	 */
+	public static class CollectionAdjustmentPrecursor<L, R> {
+		private final List<L> theLeft;
+		private final List<? extends R> theRight;
+		private ProbabilisticMatcher<? super L, ? super R> theProbabilisticMatcher;
+
+		CollectionAdjustmentPrecursor(List<L> left, List<? extends R> right) {
+			theLeft = left;
+			theRight = right;
+		}
+
+		/**
+		 * @param finder The function to find values from the right list in the left list
+		 * @return The adjustment operation
+		 */
+		public CollectionAdjustment<L, R> withFinder(ElementFinder<? super L, ? super R> finder) {
+			return synchronize2(theLeft, theRight, finder, theProbabilisticMatcher);
+		}
+
+		/**
+		 * @param matcher Tests values from the left and right lists for a positive match
+		 * @return The adjustment operation
+		 */
+		public CollectionAdjustment<L, R> withMatcher(BiPredicate<? super L, ? super R> matcher) {
+			return withFinder(new DefaultElementFinder<>(matcher));
+		}
+
+		/**
+		 * Enables probabilistic matching between elements that are not matched by the non-probabilistic matcher, which has precedence
+		 * 
+		 * @param matcher A probabilistic matcher for finding matches between elements in the two lists
+		 * @return This adjustment precursor
+		 */
+		public CollectionAdjustmentPrecursor<L, R> withProbabilisticMatcher(ProbabilisticMatcher<? super L, ? super R> matcher) {
+			theProbabilisticMatcher = matcher;
+			return this;
+		}
+
+		/**
+		 * Enables probabilistic matching between elements that are not matched by the non-probabilistic matcher, which has precedence
+		 * 
+		 * @param minMatchThreshold The minimum threshold for a possible match. The value returned by the probability function must be
+		 *        <b>GREATER</b> than this value for a match to be made.
+		 * @param matchProbability A function to produce a probability of a match between an element in the left list and one in the right
+		 *        list
+		 * @return This adjustment precursor
+		 */
+		public CollectionAdjustmentPrecursor<L, R> withProbabilisticMatcher(double minMatchThreshold,
+			BiDoubleFunction<? super L, ? super R> matchProbability) {
+			return withProbabilisticMatcher(new ProbabilisticMatcher<L, R>() {
+				@Override
+				public double getMinimumMatchThreshold() {
+					return minMatchThreshold;
+				}
+
+				@Override
+				public double getMatchProbability(L leftValue, R rightValue) {
+					return matchProbability.apply(leftValue, rightValue);
+				}
+			});
+		}
+	}
+
+	/**
+	 * Creates a precursor structure for configuring an adjustment operation between the two lists
+	 * 
+	 * @param <L> The type of values in the left list
+	 * @param <R> The type of values in the right list
+	 * @param left The list to adjust based on the content of the right list
+	 * @param right The list whose content to use to adjust the content of the left list
+	 * @return A precursor structure for configuring the adjustment operation
+	 */
+	public static <L, R> CollectionAdjustmentPrecursor<L, R> buildSync(List<L> left, List<? extends R> right) {
+		return new CollectionAdjustmentPrecursor<>(left, right);
 	}
 
 	/**
@@ -714,40 +838,113 @@ public class CollectionUtils {
 	 * @return An adjustment detailing the synchronization goals and the ability to do the adjustment
 	 */
 	public static <L, R> CollectionAdjustment<L, R> synchronize2(List<L> left, List<? extends R> right,
-		ElementFinder<L, ? super R> finder) {
+		ElementFinder<? super L, ? super R> finder) {
+		return synchronize2(left, right, finder, null);
+	}
+
+	/**
+	 * Produces a {@link CollectionAdjustment} for two lists
+	 * 
+	 * @param <L> The type of the list to adjust
+	 * @param <R> The type of the list to synchronize against
+	 * @param left The list to adjust
+	 * @param right The list to synchronize against
+	 * @param finder The function to find values from the right list in the left list
+	 * @param probabilisiticMatcher A probabilistic matcher for finding matches between elements in the two lists
+	 * @return An adjustment detailing the synchronization goals and the ability to do the adjustment
+	 */
+	public static <L, R> CollectionAdjustment<L, R> synchronize2(List<L> left, List<? extends R> right,
+		ElementFinder<? super L, ? super R> finder, ProbabilisticMatcher<? super L, ? super R> probabilisiticMatcher) {
+		if (finder == null && probabilisiticMatcher == null)
+			throw new IllegalArgumentException("Either an element finder or a probabilistic matcher must be provided");
 		int[] leftToRight = new int[left.size()];
 		int[] rightToLeft = new int[right.size()];
 		Arrays.fill(leftToRight, -1);
 		Arrays.fill(rightToLeft, -1);
 		int startLeft = 0;
 		int add = right.size(), remove = left.size(), common = 0;
-		int rightIndex = 0;
-		if (finder == null)
-			finder = new DefaultElementFinder<>(leftToRight);
-		for (R r : right) {
-			if (startLeft == leftToRight.length)
-				break;
-			int leftIndex = startLeft;
-			leftIndex = finder.findElement(left, r, leftIndex);
-			while (leftIndex >= 0 && leftToRight[leftIndex] >= 0)
-				leftIndex = finder.findElement(left, r, leftIndex + 1);
+		if (finder != null) {
+			int rightIndex = 0;
+			IntPredicate filter = idx -> leftToRight[idx] < 0;
+			for (R r : right) {
+				if (startLeft == leftToRight.length)
+					break;
+				int leftIndex = startLeft;
+				leftIndex = finder.findElement(left, r, leftIndex, filter);
+				while (leftIndex >= 0 && leftToRight[leftIndex] >= 0)
+					leftIndex = finder.findElement(left, r, leftIndex + 1, filter);
 
-			if (leftIndex >= 0) {
-				add--;
-				remove--;
-				common++;
-				rightToLeft[rightIndex] = leftIndex;
-				leftToRight[leftIndex] = rightIndex;
-				if (leftIndex == startLeft) {
-					do {
-						startLeft++;
-					} while (startLeft < leftToRight.length && leftToRight[startLeft] >= 0);
+				if (leftIndex >= 0) {
+					add--;
+					remove--;
+					common++;
+					rightToLeft[rightIndex] = leftIndex;
+					leftToRight[leftIndex] = rightIndex;
+					if (leftIndex == startLeft) {
+						do {
+							startLeft++;
+						} while (startLeft < leftToRight.length && leftToRight[startLeft] >= 0);
+					}
+				}
+				rightIndex++;
+			}
+		}
+		if (probabilisiticMatcher != null && !isFilled(leftToRight) && !isFilled(rightToLeft)) {
+			// Find most probable matches for left-to-right and right-to-left.
+			ProbableMatch[] leftToRightMatches = new ProbableMatch[leftToRight.length];
+			ProbableMatch[] rightToLeftMatches = new ProbableMatch[rightToLeft.length];
+			int leftIndex = 0;
+			double threshold = probabilisiticMatcher.getMinimumMatchThreshold();
+			for (L lv : left) {
+				if (leftToRight[leftIndex] < 0) {
+					int rightIndex = 0;
+					for (R rv : right) {
+						if (rightToLeft[rightIndex] < 0) {
+							double matchProbability = probabilisiticMatcher.getMatchProbability(lv, rv);
+							if (matchProbability > threshold) {
+								if (leftToRightMatches[leftIndex] == null || matchProbability > leftToRightMatches[leftIndex].probability)
+									leftToRightMatches[leftIndex] = new ProbableMatch(rightIndex, matchProbability);
+								if (rightToLeftMatches[rightIndex] == null || matchProbability > rightToLeftMatches[rightIndex].probability)
+									rightToLeftMatches[rightIndex] = new ProbableMatch(leftIndex, matchProbability);
+							}
+						}
+						rightIndex++;
+					}
+				}
+				leftIndex++;
+			}
+
+			// For each left element, if the most probable right match matches the corresponding most probable left match
+			// for that right element, the match them.
+			// Otherwise, it means that the right element was a better match to a different left element
+			for (leftIndex = 0; leftIndex < leftToRight.length; leftIndex++) {
+				ProbableMatch rightMatch = leftToRightMatches[leftIndex];
+				if (rightMatch != null && rightToLeftMatches[rightMatch.index].index == leftIndex) {
+					leftToRight[leftIndex] = rightMatch.index;
+					rightToLeft[rightMatch.index] = leftIndex;
 				}
 			}
-			rightIndex++;
 		}
 
 		return new AdjustmentImpl<>(left, right, leftToRight, rightToLeft, add, remove, common);
+	}
+
+	private static boolean isFilled(int[] indexes) {
+		for (int idx : indexes) {
+			if (idx < 0)
+				return false;
+		}
+		return true;
+	}
+
+	private static class ProbableMatch {
+		final int index;
+		final double probability;
+
+		ProbableMatch(int index, double probability) {
+			this.index = index;
+			this.probability = probability;
+		}
 	}
 
 	/**
@@ -761,7 +958,7 @@ public class CollectionUtils {
 	 * @return An adjustment detailing the synchronization goals and the ability to do the adjustment
 	 */
 	public static <L, R extends L> CollectionAdjustment<L, R> synchronize(List<L> left, List<R> right) {
-		return synchronize2(left, right, null);
+		return synchronize2(left, right, new DefaultElementFinder<>(Objects::equals));
 	}
 
 	/**
@@ -778,11 +975,12 @@ public class CollectionUtils {
 		BiPredicate<? super L, ? super R> equals) {
 		return synchronize2(left, right, new ElementFinder<L, R>() {
 			@Override
-			public int findElement(List<L> list, R value, int start) {
+			public int findElement(List<? extends L> list, R value, int start, IntPredicate filter) {
 				int index = start;
-				ListIterator<L> iter = list.listIterator(index);
+				ListIterator<? extends L> iter = list.listIterator(index);
 				while (iter.hasNext()) {
-					if (equals.test(iter.next(), value))
+					L next = iter.next();
+					if (filter.test(iter.previousIndex()) && equals.test(next, value))
 						return index;
 					index++;
 				}
@@ -891,20 +1089,20 @@ public class CollectionUtils {
 	}
 
 	/** An element finder that is slightly more efficient when none other is provided */
-	static class DefaultElementFinder<L> implements ElementFinder<L, Object> {
-		private final int[] leftToRight;
+	static class DefaultElementFinder<L, R> implements ElementFinder<L, R> {
+		private final BiPredicate<? super L, ? super R> theMatcher;
 
-		DefaultElementFinder(int[] leftToRight) {
-			this.leftToRight = leftToRight;
+		public DefaultElementFinder(BiPredicate<? super L, ? super R> matcher) {
+			theMatcher = matcher;
 		}
 
 		@Override
-		public int findElement(List<L> list, Object value, int start) {
+		public int findElement(List<? extends L> list, R value, int start, IntPredicate filter) {
 			int index = start;
-			ListIterator<L> iter = list.listIterator(index);
+			ListIterator<? extends L> iter = list.listIterator(index);
 			while (iter.hasNext()) {
 				L next = iter.next();
-				if (leftToRight[index] < 0 && Objects.equals(next, value))
+				if (filter.test(index) && theMatcher.test(next, value))
 					return index;
 				index++;
 			}
@@ -1307,7 +1505,7 @@ public class CollectionUtils {
 								leftIter.set(value);
 							}
 						} else if (betterMove) {
-							if (action == PRESERVE) {
+							if (action == PRESERVE || value == leftVal) {
 								if (debug)
 									debugMsg += " (moving " + input.updatedLeftIndex + "->" + input.targetIndex + ")";
 								BetterList<L> betterLeft = (BetterList<L>) theLeft;

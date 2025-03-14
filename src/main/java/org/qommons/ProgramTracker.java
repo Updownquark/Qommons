@@ -3,13 +3,9 @@ package org.qommons;
 
 import java.text.SimpleDateFormat;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 import org.qommons.json.JsonObject;
 import org.qommons.threading.QommonsTimer;
@@ -905,6 +901,12 @@ public class ProgramTracker implements Cloneable {
 		ret.start();
 		theCurrentNode = ret;
 		return ret;
+	}
+
+	public final TrackNode start(Supplier<String> routine) {
+		if (!isOn)
+			return INACTIVE;
+		return start(routine.get());
 	}
 
 	/**

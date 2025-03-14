@@ -40,6 +40,11 @@ public interface ThreadConstraint {
 		}
 
 		@Override
+		public boolean isDedicated() {
+			return false;
+		}
+
+		@Override
 		public String toString() {
 			return "Unconstrained";
 		}
@@ -67,6 +72,11 @@ public interface ThreadConstraint {
 		}
 
 		@Override
+		public boolean isDedicated() {
+			return false;
+		}
+
+		@Override
 		public String toString() {
 			return "Uneventable";
 		}
@@ -86,6 +96,11 @@ public interface ThreadConstraint {
 		@Override
 		protected void reallyInvokeLater(Runnable task) {
 			EventQueue.invokeLater(task);
+		}
+
+		@Override
+		public boolean isDedicated() {
+			return true;
 		}
 
 		@Override
@@ -122,6 +137,9 @@ public interface ThreadConstraint {
 	 * @param task The task to execute
 	 */
 	void invokeLater(Runnable task);
+
+	/** @return Whether this threading is for a dedicated thread */
+	boolean isDedicated();
 
 	/**
 	 * Performs the task on an acceptable thread. If the current thread is acceptable, the task will be executed inline. Otherwise, the task
@@ -299,6 +317,11 @@ public interface ThreadConstraint {
 		}
 
 		@Override
+		public boolean isDedicated() {
+			return true;
+		}
+
+		@Override
 		public int hashCode() {
 			return theThread.hashCode();
 		}
@@ -354,6 +377,11 @@ public interface ThreadConstraint {
 		@Override
 		public void invokeLater(Runnable task) {
 			theConstraints.get(0).invokeLater(task);
+		}
+
+		@Override
+		public boolean isDedicated() {
+			return false;
 		}
 
 		@Override

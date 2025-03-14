@@ -871,6 +871,18 @@ public class QommonsUtils {
 	}
 
 	/**
+	 * @param <T> The type of the iterable
+	 * @param values The iterable to get the first value of
+	 * @return The first value in the iterable, or null if the iterable was empty or is null
+	 */
+	public static <T> T peekFirst(Iterable<T> values) {
+		if (values == null)
+			return null;
+		Iterator<T> iter = values.iterator();
+		return iter.hasNext() ? iter.next() : null;
+	}
+
+	/**
 	 * @param <T> The type of values in the list
 	 * @param values The values to include
 	 * @return An unmodifiable copy of the given list
@@ -1070,11 +1082,16 @@ public class QommonsUtils {
 				mapped[i++] = map.apply(value);
 			return (BetterList<V>) BetterList.of(mapped);
 		} else {
-			ArrayList<V> list = new ArrayList<>(values.size());
+			ArrayList<V> list = null;
 			for (T value : values) {
-				if (filter.test(value))
+				if (filter.test(value)) {
+					if (list == null)
+						list = new ArrayList<>(values.size());
 					list.add(map == null ? (V) value : map.apply(value));
+				}
 			}
+			if (list == null)
+				return BetterList.empty();
 			list.trimToSize();
 			return BetterList.of(list);
 		}

@@ -45,13 +45,13 @@ public interface CollectionBuilder<B extends CollectionBuilder<? extends B>> ext
 	 */
 	public abstract class Default<B extends Default<? extends B>> implements CollectionBuilder<B> {
 		private static final Function<Object, CollectionLockingStrategy> DEFAULT_LOCKER = LambdaUtils
-			.printableFn(__ -> new FastFailLockingStrategy(ThreadConstraint.ANY), "fast-fail", "fast-fail-collection-locker");
+			.printableFn(__ -> new FastFailLockingStrategy(), "fast-fail", "fast-fail-collection-locker");
 
 		private Function<Object, CollectionLockingStrategy> theLocker;
 		private String theDescription;
 
 		/** @param defaultDescrip The initial (default) description for objects built with this builder */
-		public Default(String defaultDescrip) {
+		protected Default(String defaultDescrip) {
 			theLocker = DEFAULT_LOCKER;
 			theDescription = defaultDescrip;
 		}
@@ -70,9 +70,9 @@ public interface CollectionBuilder<B extends CollectionBuilder<? extends B>> ext
 			if (theLocker != DEFAULT_LOCKER)
 				System.err.println("WARNING: Using withThreadConstraint() after modifying the locking--locking policy will be reset");
 			if (threadConstraint == ThreadConstraint.ANY) {
-				theLocker = LambdaUtils.constantFn(new FastFailLockingStrategy(threadConstraint), "fast-fail on " + threadConstraint, null);
+				theLocker = LambdaUtils.constantFn(new FastFailLockingStrategy(), "fast-fail on " + threadConstraint, null);
 			} else {
-				theLocker = LambdaUtils.constantFn(new ThreadConstrainedLockingStrategy(threadConstraint),
+				theLocker = LambdaUtils.constantFn(ThreadConstrainedLockingStrategy.get(threadConstraint),
 					"thread-constrained on " + threadConstraint, null);
 			}
 			return (B) this;

@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -57,6 +58,18 @@ public interface Format<T> {
 	 * @throws ParseException If a value of this type was not recognized in the text
 	 */
 	T parse(CharSequence text) throws ParseException;
+
+	/**
+	 * Creates a format from this format via a simple mapping
+	 * 
+	 * @param <T2> The type of value the mapped format can parse and print
+	 * @param map The map from this format type to the mapped type
+	 * @param reverse The reverse mapping
+	 * @return The mapped format
+	 */
+	default <T2> Format<T2> map(Function<? super T, ? extends T2> map, Function<? super T2, ? extends T> reverse) {
+		return new MappedFormat<>(this, map, reverse);
+	}
 
 	/** Stupid-simple text format that just formats and parses text as-is */
 	public static final Format<String> TEXT = new Format<String>() {
@@ -499,32 +512,52 @@ public interface Format<T> {
 	 * @see SimpleDateFormat#SimpleDateFormat(String)
 	 */
 	public static Format<Instant> date(String dateFormat) {
-		return date(new SimpleDateFormat(dateFormat));
+		return date(dateFormat, null);
+	}
+
+	/**
+	 * @param dateFormat The date format pattern
+	 * @param config Configuration for the SimpleDateFormat
+	 * @return A date format with the given pattern
+	 * @see SimpleDateFormat#SimpleDateFormat(String)
+	 */
+	public static Format<Instant> date(String dateFormat, Consumer<SimpleDateFormat> config) {
+		return date(() -> {
+			SimpleDateFormat sdf = new SimpleDateFormat(dateFormat);
+			if (config != null)
+				config.accept(sdf);
+			return sdf;
+		});
 	}
 
 	/**
 	 * @param dateFormat The date format
 	 * @return A {@link Format} backed by the given {@link SimpleDateFormat}
 	 */
-	public static Format<Instant> date(SimpleDateFormat dateFormat) {
+	public static Format<Instant> date(Supplier<SimpleDateFormat> dateFormat) {
 		return new Format<Instant>() {
+			private final ThreadLocal<SimpleDateFormat> theSDF = ThreadLocal.withInitial(dateFormat);
+
 			@Override
 			public void append(StringBuilder text, Instant value) {
 				if (value == null)
 					return;
-				text.append(dateFormat.format(Date.from(value)));
+				SimpleDateFormat sdf = theSDF.get();
+				text.append(sdf.format(Date.from(value)));
 			}
 
 			@Override
 			public Instant parse(CharSequence text) throws ParseException {
 				if (text.length() == 0)
 					return null;
-				return dateFormat.parse(text.toString()).toInstant();
+				SimpleDateFormat sdf = theSDF.get();
+				return sdf.parse(text.toString()).toInstant();
 			}
 
 			@Override
 			public String toString() {
-				return "DATE(" + dateFormat.toPattern() + ")";
+				SimpleDateFormat sdf = theSDF.get();
+				return "DATE(" + sdf.toPattern() + ")";
 			}
 		};
 	}
@@ -632,7 +665,17 @@ public interface Format<T> {
 		 * @return This format
 		 */
 		public IntFormat withGroupingSeparator(char sep) {
-			return new IntFormat(theLongFormat.withGroupingSeparator(sep));
+			LongFormat f = theLongFormat.withGroupingSeparator(sep);
+			return f == theLongFormat ? this : new IntFormat(f);
+		}
+
+		/**
+		 * @param emptyAllowed Whether the user may enter the empty string, resulting in a null value
+		 * @return A format obeying the given empty-allowed setting
+		 */
+		public IntFormat withEmptyAllowed(boolean emptyAllowed) {
+			LongFormat f = theLongFormat.withEmptyAllowed(emptyAllowed);
+			return f == theLongFormat ? this : new IntFormat(f);
 		}
 
 		@Override
@@ -661,15 +704,21 @@ public interface Format<T> {
 		private static final long[] GROUPS = new long[] { //
 			0, 1_000, 1_000_000, 1_000_000_000, 1_000_000_000_000L, 1_000_000_000_000_000L, 1_000_000_000_000_000_000L };
 
+		private final boolean isEmptyAllowed;
 		private final char theGroupingSeparator;
 
 		/** Creates a new Long format */
 		public LongFormat() {
+			isEmptyAllowed = false;
 			theGroupingSeparator = 0;
 		}
 
-		/** @param groupingSeparator The grouping separator for this format */
-		public LongFormat(char groupingSeparator) {
+		/**
+		 * @param emptyAllowed Whether the user may enter the empty string, resulting in a null value
+		 * @param groupingSeparator The grouping separator for this format
+		 */
+		public LongFormat(boolean emptyAllowed, char groupingSeparator) {
+			isEmptyAllowed = emptyAllowed;
 			theGroupingSeparator = groupingSeparator;
 		}
 
@@ -683,7 +732,19 @@ public interface Format<T> {
 		 * @return This format
 		 */
 		public LongFormat withGroupingSeparator(char sep) {
-			return new LongFormat(sep);
+			if (sep == theGroupingSeparator)
+				return this;
+			return new LongFormat(isEmptyAllowed, sep);
+		}
+
+		/**
+		 * @param emptyAllowed Whether the user may enter the empty string, resulting in a null value
+		 * @return A format obeying the given empty-allowed setting
+		 */
+		public LongFormat withEmptyAllowed(boolean emptyAllowed) {
+			if (emptyAllowed == isEmptyAllowed)
+				return this;
+			return new LongFormat(emptyAllowed, theGroupingSeparator);
 		}
 
 		@Override
@@ -884,7 +945,7 @@ public interface Format<T> {
 		.with("f", -15) // femto
 		.with("p", -12) // pico
 		.with("n", -9) // nano
-		.with("\03bc", -6) // Greek mu, micro
+		.with("\u03bc", -6) // Greek mu, micro
 		.with("u", -6) // micro
 		.with("m", -3) // milli
 		.with("k", 3) // kilo
@@ -915,7 +976,7 @@ public interface Format<T> {
 		.with("f", Math.pow(1024, -5)) // femto
 		.with("p", Math.pow(1024, -4)) // pico
 		.with("n", Math.pow(1024, -3)) // nano
-		.with("\03bc", Math.pow(1024, -2)) // Greek mu, micro
+		.with("\u03bc", Math.pow(1024, -2)) // Greek mu, micro
 		.with("u", Math.pow(1024, -2)) // micro
 		.with("m", Math.pow(1024, -1)) // milli
 		.with("k", Math.pow(1024, 1)) // kilo
@@ -945,7 +1006,8 @@ public interface Format<T> {
 		private boolean isBaseUnitRequired;
 		private boolean isBaseUnitCaseSensitive;
 		private boolean arePrefixesCaseSensitive;
-		private final TreeMap<Double, String> thePrefixes;
+		private final TreeMap<Double, String> thePrefixesByMultiplier;
+		private final Map<String, Double> theMultipliersByPrefix;
 		private double theDefaultPrefixMultiplier;
 
 		SuperDoubleFormatBuilder(int sigDigs) {
@@ -959,7 +1021,8 @@ public interface Format<T> {
 			isBaseUnitRequired = true;
 			isBaseUnitCaseSensitive = true;
 			arePrefixesCaseSensitive = true;
-			thePrefixes = new TreeMap<>();
+			thePrefixesByMultiplier = new TreeMap<>();
+			theMultipliersByPrefix = new LinkedHashMap<>();
 			theDefaultPrefixMultiplier = 1;
 			theZeroExp = -1;
 		}
@@ -1046,8 +1109,7 @@ public interface Format<T> {
 		 * @return This builder
 		 */
 		public SuperDoubleFormatBuilder withPrefix(String prefix, int exponent) {
-			thePrefixes.put(Math.pow(10.0, exponent), prefix);
-			return this;
+			return withPrefix(prefix, Math.pow(10.0, exponent));
 		}
 
 		/**
@@ -1056,7 +1118,8 @@ public interface Format<T> {
 		 * @return This builder
 		 */
 		public SuperDoubleFormatBuilder withPrefix(String prefix, double mult) {
-			thePrefixes.put(mult, prefix);
+			thePrefixesByMultiplier.putIfAbsent(mult, prefix);
+			theMultipliersByPrefix.put(prefix, mult);
 			return this;
 		}
 
@@ -1118,11 +1181,11 @@ public interface Format<T> {
 
 		/** @return A new {@link SuperDoubleFormat} configured by this builder */
 		public SuperDoubleFormat build() {
-			TreeMap<Double, String> prefixCopy = new TreeMap<>(thePrefixes);
+			TreeMap<Double, String> prefixCopy = new TreeMap<>(thePrefixesByMultiplier);
 			Map<String, Double> reversePrefixes = new LinkedHashMap<>();
-			for (Map.Entry<Double, String> prefix : prefixCopy.entrySet()) {
-				if (reversePrefixes.put(arePrefixesCaseSensitive ? prefix.getValue() : prefix.getValue().toLowerCase(),
-					prefix.getKey()) != null) {
+			for (Map.Entry<String, Double> prefix : theMultipliersByPrefix.entrySet()) {
+				if (reversePrefixes.put(arePrefixesCaseSensitive ? prefix.getKey() : prefix.getKey().toLowerCase(),
+					prefix.getValue()) != null) {
 					if (!arePrefixesCaseSensitive)
 						throw new IllegalStateException("Duplicate case-insensitive prefixes matching: " + prefix.getValue());
 					else
@@ -1741,7 +1804,8 @@ public interface Format<T> {
 							i++;
 						start = i + 1;
 					}
-				}
+				} else
+					delimitIdx = 0;
 			}
 			if (start < text.length()) {
 				T value = theElementFormat.parse(text.subSequence(start, text.length()));
@@ -1774,6 +1838,39 @@ public interface Format<T> {
 			if (text.length() == 0)
 				return null;
 			throw new ParseException("Print-only formatting cannot parse", 0);
+		}
+	}
+
+	/**
+	 * Implements {@link Format#map(Function, Function)}
+	 * 
+	 * @param <T1> The type of the source format
+	 * @param <T2> The type of this format
+	 */
+	public static class MappedFormat<T1, T2> implements Format<T2> {
+		private final Format<T1> theSource;
+		private final Function<? super T1, ? extends T2> theMap;
+		private final Function<? super T2, ? extends T1> theReverse;
+
+		/**
+		 * @param source The source format to do the parsing/printing work
+		 * @param map The map from the source format type to the mapped type
+		 * @param reverse The reverse mapping
+		 */
+		public MappedFormat(Format<T1> source, Function<? super T1, ? extends T2> map, Function<? super T2, ? extends T1> reverse) {
+			theSource = source;
+			theMap = map;
+			theReverse = reverse;
+		}
+
+		@Override
+		public void append(StringBuilder text, T2 value) {
+			theSource.append(text, theReverse.apply(value));
+		}
+
+		@Override
+		public T2 parse(CharSequence text) throws ParseException {
+			return theMap.apply(theSource.parse(text));
 		}
 	}
 }

@@ -58,6 +58,11 @@ public interface Transaction extends AutoCloseable {
 			theCloseAction = closeAction;
 		}
 
+		/** @return Whether this transaction has been {@link #close()}d */
+		public boolean isClosed() {
+			return isClosed;
+		}
+
 		@Override
 		public void close() {
 			if (isClosed)

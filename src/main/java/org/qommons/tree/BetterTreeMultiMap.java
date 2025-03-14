@@ -5,18 +5,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
-import org.qommons.collect.AbstractBetterMultiMap;
-import org.qommons.collect.BetterCollection;
-import org.qommons.collect.BetterSet;
-import org.qommons.collect.BetterSortedList;
-import org.qommons.collect.BetterSortedMultiMap;
-import org.qommons.collect.CollectionLockingStrategy;
-import org.qommons.collect.ElementId;
-import org.qommons.collect.FastFailLockingStrategy;
-import org.qommons.collect.MutableCollectionElement;
-import org.qommons.collect.OptimisticContext;
+import org.qommons.collect.*;
 
 /**
  * A tree-based {@link BetterSortedMultiMap}
@@ -66,7 +56,7 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 
 	private BetterTreeMultiMap(Function<Object, CollectionLockingStrategy> locking, Comparator<? super K> keyCompare,
 		ValueCollectionSupplier<? super K, ? super V> values, String description, Map<K, List<V>> initialValues) {
-		super(locking, new BetterTreeMap<>(__ -> new FastFailLockingStrategy(ThreadConstraint.ANY), description, keyCompare), values,
+		super(locking, new BetterTreeMap<>(__ -> new FastFailLockingStrategy(), description, keyCompare), values,
 			description, initialValues);
 		theKeyCompare = keyCompare;
 	}

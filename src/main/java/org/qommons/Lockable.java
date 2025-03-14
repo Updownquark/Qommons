@@ -1,5 +1,8 @@
 package org.qommons;
 
+import static org.qommons.Lockable.lockAll;
+import static org.qommons.Lockable.tryLockAll;
+
 import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -547,6 +550,10 @@ public interface Lockable extends ThreadConstrained {
 			if (outerLock != null)
 				outerLock.close();
 		}
+	}
+
+	static Lockable lockable(Lockable outer, Supplier<Lockable> getInner) {
+		return new CollapsedLockable(outer, () -> Collections.singleton(getInner.get()), false);
 	}
 
 	/**

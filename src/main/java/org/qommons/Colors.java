@@ -1428,15 +1428,15 @@ public class Colors {
 	 * @return The darkness of the color on a scale of 1 (completely black) to 0 (completely white)
 	 */
 	public static float getDarkness(Color color) {
-		float ret = color.getRed() + color.getGreen() + color.getBlue() / 10;
-		ret /= (255 + 255 + 255 / 10);
-		ret = 1 - ret;
-		final float lightDarkBorder = 0.7f;
-		if (ret > lightDarkBorder)
-			ret = 0.5f + (ret - lightDarkBorder) * 0.5f / (1 - lightDarkBorder);
-		else
-			ret = ret * 0.5f / lightDarkBorder;
-		return ret;
+		return 1 - getBrightness(color);
+	}
+
+	public static float getBrightness(Color color) {
+		int r = color.getRed();
+		int g = color.getGreen();
+		int b = color.getBlue();
+
+		return 0.299f * r / 255f + 0.587f / 255f * g + 0.114f * b / 255f;
 	}
 
 	/**

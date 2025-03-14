@@ -1,5 +1,7 @@
 package org.qommons.io;
 
+import org.qommons.StringUtils;
+
 /** A file position that also specifies the location of the document */
 public class LocatedFilePosition extends FilePosition {
 	/** A file position with null location and zero position */
@@ -68,6 +70,16 @@ public class LocatedFilePosition extends FilePosition {
 		if (lastSlash >= 0)
 			loc = loc.substring(lastSlash + 1);
 		return loc + "@" + super.toString();
+	}
+
+	@Override
+	public int compareTo(FilePosition o) {
+		if (o instanceof LocatedFilePosition) {
+			int comp = StringUtils.compareNumberTolerant(theFileLocation, ((LocatedFilePosition) o).theFileLocation, true, true);
+			if (comp != 0)
+				return comp;
+		}
+		return super.compareTo(o);
 	}
 
 	@Override

@@ -6,7 +6,14 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
+
+import org.qommons.LambdaUtils;
+import org.qommons.LongList;
+import org.qommons.Stamped;
+import org.qommons.Transaction;
 
 /**
  * <p>
@@ -56,7 +63,7 @@ import java.util.function.Consumer;
  * 
  * @param <E> The type of value that this list can store
  */
-public class ListenerList<E> {
+public class ListenerList<E> implements Stamped {
 	private static boolean SWALLOW_EXCEPTIONS = true;
 
 	/**
@@ -112,15 +119,16 @@ public class ListenerList<E> {
 
 	/** Builds a ListenerList with customizable options */
 	public static class Builder {
-		private String theReentrancyError;
+		private Supplier<String> theReentrancyError;
 		private boolean isForEachSafe;
 		private InUseListener theInUseListener;
 		private boolean fastSize;
 		private boolean isSynchronized;
+		private Consumer<Throwable> theErrorLogger;
 
 		Builder() {
 			// Initialize with defaults, which mostly lean toward safety and functionality, away from performance
-			theReentrancyError = "Reentrancy not allowed";
+			theReentrancyError = LambdaUtils.constantSupplier("Reentrancy not allowed", "Reentrancy not allowed", null);
 			isForEachSafe = true;
 			fastSize = true;
 			isSynchronized = true;
@@ -134,7 +142,7 @@ public class ListenerList<E> {
 		 * @return This builder
 		 */
 		public Builder allowReentrant() {
-			return reentrancyError(null);
+			return reentrancyError((String) null);
 		}
 
 		/**
@@ -144,6 +152,17 @@ public class ListenerList<E> {
 		 * @see #allowReentrant()
 		 */
 		public Builder reentrancyError(String error) {
+			theReentrancyError = error == null ? null : LambdaUtils.constantSupplier(error, error, null);
+			return this;
+		}
+
+		/**
+		 * @param error Supplies the message in the exception that will be thrown if {@link ListenerList#forEach(Consumer)} is invoked by an
+		 *        action in a forEach invocation, directly or indirectly. If null, this method is the same as {@link #allowReentrant()}.
+		 * @return This builder
+		 * @see #allowReentrant()
+		 */
+		public Builder reentrancyError(Supplier<String> error) {
 			theReentrancyError = error;
 			return this;
 		}
@@ -216,11 +235,20 @@ public class ListenerList<E> {
 		}
 
 		/**
+		 * @param errorLogger A logger to accept errors that occur during listener actions in {@link ListenerList#forEach(Consumer)}
+		 * @return This builder
+		 */
+		public Builder withErrorLogging(Consumer<Throwable> errorLogger) {
+			theErrorLogger = errorLogger;
+			return this;
+		}
+
+		/**
 		 * @param <E> The type of the list to build
 		 * @return The new list
 		 */
 		public <E> ListenerList<E> build() {
-			return new ListenerList<>(theReentrancyError, isForEachSafe, theInUseListener, fastSize, isSynchronized);
+			return new ListenerList<>(theReentrancyError, isForEachSafe, theInUseListener, fastSize, isSynchronized, theErrorLogger);
 		}
 	}
 
@@ -232,10 +260,6 @@ public class ListenerList<E> {
 		return new Builder();
 	}
 
-	private static class Iterating {
-		int iterId = -1;
-	}
-
 	private class Node implements Element<E> {
 		E theValue;
 		volatile Node next;
@@ -245,7 +269,7 @@ public class ListenerList<E> {
 			theValue = value;
 		}
 
-		boolean isInAddFiringRound(int firing) {
+		boolean isInAddFiringRound(long firing) {
 			return false;
 		}
 
@@ -279,15 +303,15 @@ public class ListenerList<E> {
 	}
 
 	private class SkipOneNode extends Node {
-		private int skipOne;
+		private long skipOne;
 
-		public SkipOneNode(E value, int skipOne) {
+		public SkipOneNode(E value, long skipOne) {
 			super(value);
 			this.skipOne = skipOne;
 		}
 
 		@Override
-		boolean isInAddFiringRound(int firing) {
+		boolean isInAddFiringRound(long firing) {
 			if (firing == skipOne) {
 				skipOne = -1;
 				return true;
@@ -297,37 +321,135 @@ public class ListenerList<E> {
 	}
 
 	private class RunLastNode extends SkipOneNode {
-		RunLastNode(E value, int skipOne) {
+		RunLastNode(E value, long skipOne) {
 			super(value, skipOne);
 		}
 	}
 
-	private final ThreadLocal<Iterating> isFiringSafe;
+	private static abstract class FiringSafety implements Stamped {
+		private final AtomicLong theIterIdGen;
+		private final Supplier<String> theReentrancyError;
+
+		protected FiringSafety(Supplier<String> reentrancyError) {
+			theReentrancyError = reentrancyError;
+			theIterIdGen = new AtomicLong();
+		}
+
+		long incrementIterId() {
+			return theIterIdGen.updateAndGet(FiringSafety::incIterId);
+		}
+
+		static long incIterId(long prevId) {
+			long nextId = prevId + 1;
+			if (nextId == -1L)
+				nextId = 0;
+			return nextId;
+		}
+
+		@SuppressWarnings("resource")
+		long getCurrentFiringId() {
+			return getFiring().current;
+		}
+
+		@Override
+		public long getStamp() {
+			return theIterIdGen.get();
+		}
+
+		Firing startFiring() {
+			long iterId = incrementIterId();
+			Firing firing = getFiring();
+			if (firing.current != -1L) {
+				if (theReentrancyError != null) {
+					String msg = theReentrancyError.get();
+					if (msg != null)
+						throw new ReentrantNotificationException(msg);
+				}
+				firing.start(iterId, true);
+			} else
+				firing.start(iterId, false);
+			return firing;
+		}
+
+		boolean isFiring() {
+			return getCurrentFiringId() != -1L;
+		}
+
+		abstract Firing getFiring();
+	}
+
+	static class Firing implements Transaction {
+		volatile long current = -1L;
+		private LongList previous;
+
+		void start(long newId, boolean reentrant) {
+			if (reentrant) {
+				if (previous == null)
+					previous = new LongList();
+				previous.add(current);
+			}
+			current = newId;
+		}
+
+		@Override
+		public void close() {
+			if (previous != null && !previous.isEmpty())
+				current = previous.remove(previous.size() - 1);
+			else
+				current = -1L;
+		}
+	}
+
+	private static class SafeFiring extends FiringSafety {
+		private final ThreadLocal<Firing> theFiring;
+
+		SafeFiring(Supplier<String> reentrancyError) {
+			super(reentrancyError);
+			theFiring = ThreadLocal.withInitial(Firing::new);
+		}
+
+		@Override
+		Firing getFiring() {
+			return theFiring.get();
+		}
+	}
+
+	private static class UnsafeFiring extends FiringSafety {
+		private final Firing theFiring = new Firing();
+
+		UnsafeFiring(Supplier<String> reentrancyError) {
+			super(reentrancyError);
+		}
+
+		@Override
+		Firing getFiring() {
+			return theFiring;
+		}
+	}
+
+	private final FiringSafety theFiringSafety;
 	private final Node theTerminal;
-	private final String theReentrancyError;
 	private final InUseListener theInUseListener;
 	private final boolean isSynchronized;
+	private final Consumer<Throwable> theErrorLogger;
 
 	private final AtomicInteger theSize;
-	private volatile int unsafeIterId = -1;
-	private final AtomicInteger theIterIdGen;
 
-	ListenerList(String reentrancyError, boolean safeForEach, InUseListener inUseListener, boolean fastSize,
-		boolean sync) {
+	ListenerList(Supplier<String> reentrancyError, boolean safeForEach, InUseListener inUseListener, boolean fastSize,
+		boolean sync, Consumer<Throwable> errorLogger) {
 		// The code is much simpler and safer if all the real elements can know that there's a non-null node before and after them.
 		// The first node's previous pointer and the last node's next pointer would always be null,
 		// so there's no need to have different nodes for first and last.
 		theTerminal = new Node(null);
 		theTerminal.next = theTerminal.previous = theTerminal;
 
-		isFiringSafe = safeForEach ? ThreadLocal.withInitial(Iterating::new) : null;
-		theReentrancyError = reentrancyError;
+		theFiringSafety = safeForEach ? new SafeFiring(reentrancyError) : new UnsafeFiring(reentrancyError);
 		theInUseListener = inUseListener;
 		if (inUseListener != null)
 			fastSize = true;
 		theSize = fastSize ? new AtomicInteger() : null;
 		isSynchronized = sync;
-		theIterIdGen = new AtomicInteger();
+		theErrorLogger = errorLogger;
 	}
 
 	/**
@@ -337,13 +459,10 @@ public class ListenerList<E> {
 	 * @return The added element
 	 */
 	public Element<E> add(E value, boolean skipCurrent) {
-		int firing;
-		if (skipCurrent) {
-			if (isFiringSafe != null)
-				firing = isFiringSafe.get().iterId; // Thread safe because isFiring is a ThreadLocal
-			else
-				firing = unsafeIterId;
-		} else
+		long firing;
+		if (skipCurrent)
+			firing = theFiringSafety.getCurrentFiringId();
+		else
 			firing = -1;
 		Node newNode = firing == -1 ? new Node(value) : new SkipOneNode(value, firing);
 		addNode(newNode, true);
@@ -361,13 +480,10 @@ public class ListenerList<E> {
 	 * @return The added element
 	 */
 	public Element<E> addLast(E value, boolean skipCurrent) {
-		int firing;
-		if (skipCurrent) {
-			if (isFiringSafe != null)
-				firing = isFiringSafe.get().iterId; // Thread safe because isFiring is a ThreadLocal
-			else
-				firing = unsafeIterId;
-		} else
+		long firing;
+		if (skipCurrent)
+			firing = theFiringSafety.getCurrentFiringId();
+		else
 			firing = -1;
 		RunLastNode node = new RunLastNode(value, firing);
 		addNode(node, true);
@@ -559,23 +675,15 @@ public class ListenerList<E> {
 	 * 
 	 * @param action The action to perform on each value in this list
 	 */
-	public void forEach(Consumer<E> action) {
+	public void forEach(Consumer<? super E> action) {
 		Node node = theTerminal.next;
-		int iterId = theIterIdGen.getAndUpdate(ListenerList::incIterId);
-		int reentrant;
-		if (isFiringSafe != null) {
-			reentrant = isFiringSafe.get().iterId;
-			if (reentrant != -1 && theReentrancyError != null)
-				throw new ReentrantNotificationException(theReentrancyError);
-			isFiringSafe.get().iterId = iterId;
-		} else {
-			reentrant = unsafeIterId;
-			if (reentrant != -1 && theReentrancyError != null)
-				throw new ReentrantNotificationException(theReentrancyError);
-			unsafeIterId = iterId;
+		if (node == theTerminal) {
+			theFiringSafety.incrementIterId(); // Quick exit *AFTER STAMP INCREMENT* if nothing to do
+			return;
 		}
-		List<RunLastNode> runLast = null;
-		try {
+		try (Firing firing = theFiringSafety.startFiring()) {
+			long iterId = firing.current;
+			List<RunLastNode> runLast = null;
 			while (node != theTerminal) {
 				if (node.isInAddFiringRound(iterId)) { // Don't execute the same round it was added, if so specified
 				} else if (node instanceof ListenerList.RunLastNode) {
@@ -586,12 +694,17 @@ public class ListenerList<E> {
 					try {
 						action.accept(node.theValue);
 					} catch (ReentrantNotificationException | AssertionError e) {
+						if (theErrorLogger != null)
+							theErrorLogger.accept(e);
 						throw e;
 					} catch (RuntimeException e) {
 						if (SWALLOW_EXCEPTIONS) {
 							// If the action throws an exception, we can't have that gumming up the works
 							// If they want better handling, they can try/catch their own code
-							e.printStackTrace();
+							if (theErrorLogger != null)
+								theErrorLogger.accept(e);
+							else
+								e.printStackTrace();
 						} else
 							throw e;
 					}
@@ -614,23 +727,22 @@ public class ListenerList<E> {
 						try {
 							action.accept(rln.theValue);
 						} catch (ReentrantNotificationException | AssertionError e) {
+							if (theErrorLogger != null)
+								theErrorLogger.accept(e);
 							throw e;
 						} catch (RuntimeException e) {
 							if (SWALLOW_EXCEPTIONS) {
 								// If the action throws an exception, we can't have that gumming up the works
 								// If they want better handling, they can try/catch their own code
-								e.printStackTrace();
+								if (theErrorLogger != null)
+									theErrorLogger.accept(e);
+								else
+									e.printStackTrace();
 							} else
 								throw e;
 						}
 					}
 				}
-			}
-		} finally {
-			if (isFiringSafe != null) {
-				isFiringSafe.get().iterId = reentrant;
-			} else {
-				unsafeIterId = reentrant;
 			}
 		}
 	}
@@ -647,12 +759,17 @@ public class ListenerList<E> {
 			try {
 				action.accept(node);
 			} catch (ReentrantNotificationException | AssertionError e) {
+				if (theErrorLogger != null)
+					theErrorLogger.accept(e);
 				throw e;
 			} catch (RuntimeException e) {
 				if (SWALLOW_EXCEPTIONS) {
 					// If the action throws an exception, we can't have that gumming up the works
 					// If they want better handling, they can try/catch their own code
-					e.printStackTrace();
+					if (theErrorLogger != null)
+						theErrorLogger.accept(e);
+					else
+						e.printStackTrace();
 				} else
 					throw e;
 			}
@@ -668,13 +785,6 @@ public class ListenerList<E> {
 				node = node.previous;
 			node = node.next;
 		}
-	}
-
-	static int incIterId(int prevId) {
-		int nextId = prevId + 1;
-		if (nextId == -1)
-			nextId++;
-		return nextId;
 	}
 
 	/** Removes all values from this list */
@@ -720,12 +830,12 @@ public class ListenerList<E> {
 	 *         return true during iteration on any thread.
 	 */
 	public boolean isFiring() {
-		int reentrant;
-		if (isFiringSafe != null)
-			reentrant = isFiringSafe.get().iterId;
-		else
-			reentrant = unsafeIterId;
-		return reentrant != -1;
+		return theFiringSafety.isFiring();
+	}
+
+	@Override
+	public long getStamp() {
+		return theFiringSafety.getStamp();
 	}
 
 	/**

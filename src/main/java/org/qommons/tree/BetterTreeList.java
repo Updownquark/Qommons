@@ -64,8 +64,14 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 	}
 
 	BetterTreeList(boolean safe, ThreadConstraint threadConstraint) {
-		this(v -> safe ? new StampedLockingStrategy(v, threadConstraint) : new FastFailLockingStrategy(threadConstraint),
-			DEFAULT_DESCRIPTION);
+		this(v -> {
+			if (safe)
+				return new StampedLockingStrategy(v, threadConstraint);
+			else if (threadConstraint != ThreadConstraint.ANY && threadConstraint.supportsInvoke())
+				return ThreadConstrainedLockingStrategy.get(threadConstraint);
+			else
+				return new FastFailLockingStrategy();
+		}, DEFAULT_DESCRIPTION);
 	}
 
 	/**

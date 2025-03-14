@@ -320,7 +320,7 @@ public interface Identifiable {
 		 * @return This builder
 		 */
 		public CustomIdentityBuilder id(Object id) {
-			theIdentityComponents.add(() -> id);
+			theIdentityComponents.add(LambdaUtils.constantSupplier(id));
 			return this;
 		}
 
@@ -346,7 +346,7 @@ public interface Identifiable {
 		 * @return This builder
 		 */
 		public CustomIdentityBuilder append(Object toString) {
-			theToStringComponents.add(() -> toString);
+			theToStringComponents.add(LambdaUtils.constantSupplier(toString));
 			return this;
 		}
 
@@ -373,7 +373,7 @@ public interface Identifiable {
 		 * @return This builder
 		 */
 		public CustomIdentityBuilder withPrintedId(Object id) {
-			return withPrintedIdS(() -> id);
+			return withPrintedIdS(LambdaUtils.constantSupplier(id));
 		}
 
 		/** @return The built identity object */

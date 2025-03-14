@@ -77,29 +77,8 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 					if (child.isSupported(inh))
 						child.inherits(inh, false);
 				}
-				QonfigPromiseDef promiseType = (QonfigPromiseDef) promise.getType();
-				for (Map.Entry<QonfigAttributeDef.Declared, AttributeValue> attr : promise.getAttributes().entrySet()) {
-					QonfigAttributeDef found = promiseType.getPromisedType() == null ? null
-						: promiseType.getPromisedType().getAllAttributes().get(attr.getKey());
-					if (found == null) {
-						for (QonfigAddOn inh : promiseType.getPromisedInheritance().values()) {
-							found = inh.getAllAttributes().get(attr.getKey());
-							if (found != null)
-								break;
-						}
-					}
-					if (found == null) {
-						for (QonfigChildDef r : promise.getParentRoles()) {
-							for (QonfigAddOn inh : r.getInheritance()) {
-								found = inh.getAllAttributes().get(attr.getKey());
-								if (found != null)
-									break;
-							}
-						}
-					}
-					if (found != null && found.getSpecification() != SpecificationType.Forbidden)
-						child.withAttribute(attr.getKey(), attr.getValue());
-				}
+				for (Map.Entry<QonfigAttributeDef.Declared, AttributeValue> attr : promise.getAttributes().entrySet())
+					child.withAttribute(attr.getKey(), attr.getValue());
 				child.createVariable(role.getMin(), role.getMax(), (child2, parent2) -> fulfillChildren(parent2, child2, promise, role,
 					parser, session == null ? null : session.at(child.reporting().getFileLocation())));
 			}, promise.getFilePosition(), promise.getDescription());
@@ -159,7 +138,7 @@ public class QonfigChildPlaceholderPromise implements QonfigPromiseFulfillment {
 			// So it can only be synthesized as a root element.
 		QonfigElement.Builder promiseBuilder = QonfigElement.buildRoot(false, session, promise.getDocument(),
 				promise.getType(), promise.getDescription());
-		promise.copy(promiseBuilder, parser, session);
+		promise.copy(promiseBuilder, parser, session, session.at(promise.getFilePosition()));
 			// usePromise =
 			promiseBuilder.buildFull();
 			// } else

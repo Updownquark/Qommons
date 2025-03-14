@@ -38,4 +38,16 @@ public interface CausalLock extends Transactable {
 		}
 		return null;
 	}
+
+	default boolean hasFinishingCauses() {
+		Collection<Cause> causes = getCurrentCauses();
+		for (Cause cause : causes) {
+			if (cause instanceof Causable) {
+				Causable causable = (Causable) cause;
+				if (causable.isFinished() && !causable.isTerminated())
+					return true;
+			}
+		}
+		return false;
+	}
 }
