@@ -13,6 +13,17 @@ import org.qommons.io.SimpleXMLParser.XmlAttribute;
 import org.qommons.io.SimpleXMLParser.XmlComponent;
 import org.qommons.io.SimpleXMLParser.XmlElementTerminal;
 
+/**
+ * <p>
+ * A very simplistic view of an XLSX-formatted spreadsheet. This parser fulfills the {@link TabularFileParser} API, which was originally
+ * designed for CSV files, against a spreadsheet.
+ * </p>
+ * <p>
+ * The spreadsheet is parsed line-by-line, without any looking ahead (other than buffering). Previously-encountered data is not kept (except
+ * shared data). This allows very large spreadsheets to be parsed very quickly and efficiently. E.g. the spreadsheet's header row can be
+ * parsed and inspected, then the parser closed without reading any of the rest of the spreadsheet.
+ * </p>
+ */
 public class XlsxParser implements TabularFileParser {
 	public enum MultipleSheetHandling {
 		UseFirst, Append, Error;
@@ -134,6 +145,16 @@ public class XlsxParser implements TabularFileParser {
 			return end.relativeTo(start);
 		}
 
+		@Override
+		public long getFileLength() {
+			return theRowCount;
+		}
+
+		@Override
+		public long getParseProgress() {
+			return theEncounteredRowCount;
+		}
+
 		public Row parseNextRow(boolean passEmpties) throws IOException, TextParseException {
 			thePassedBlankLines = 0;
 			Row row = parseNextRow();
@@ -222,6 +243,31 @@ public class XlsxParser implements TabularFileParser {
 			CellType cellType = CellType.getType(t.toString());
 			switch (cellType) {
 			case Boolean:
+				theParser.startNextElement("v", true);
+				v = theParser.getElementContent(true);
+				String boolStr;
+				// This is always "0" or "1", but what the heck
+				switch (v.toString().trim().toUpperCase()) {
+				case "0":
+				case "F":
+				case "FALSE":
+				case "N":
+				case "NO":
+					boolStr = "FALSE";
+					break;
+				case "1":
+				case "T":
+				case "TRUE":
+				case "Y":
+				case "YES":
+					boolStr = "TRUE";
+					break;
+				default:
+					System.err.println("Unrecognized boolean: '" + v + "'");
+					boolStr = "FALSE";
+					break;
+				}
+				return new Cell(cellPosition, cellType, boolStr);
 			case Date:
 			case Formula:
 			case Number:
@@ -372,12 +418,17 @@ public class XlsxParser implements TabularFileParser {
 		public int getColumnOffset(int columnIndex) {
 			if (theLastRow == null)
 				return 0;
-			return theLastRow.getCells().get(columnIndex).getPosition().getPosition();
+			Cell cell = theLastRow.getCells().get(columnIndex);
+			if (cell.getPosition() != null)
+				return cell.getPosition().getPosition();
+			else
+				return (int) getLastLineOffset() + columnIndex;
 		}
 
 		@Override
 		public void close() throws IOException {
-			theFileInput.close();
+			if (theFileInput != null)
+				theFileInput.close();
 			theFileInput = null;
 			theParser = null;
 		}
@@ -540,12 +591,14 @@ public class XlsxParser implements TabularFileParser {
 		}
 
 		void close(boolean atEnd) throws IOException {
-			if (theParsedStrings.size() != theUniqueCount)
+			if (atEnd && theParsedStrings.size() != theUniqueCount)
 				System.err.println("Encountered the end of " + theParser.getFileLocation() + " with only " + theParsedStrings.size()
 					+ " of " + theUniqueCount + " strings encountered");
-			theFileInput.close();
-			theFileInput = null;
-			theParser = null;
+			if (theFileInput != null) {
+				theFileInput.close();
+				theFileInput = null;
+				theParser = null;
+			}
 		}
 	}
 
@@ -567,6 +620,7 @@ public class XlsxParser implements TabularFileParser {
 	private final BetterFile theRoot;
 	private final SimpleXMLParser theXmlParser;
 	private final List<Sheet> theSheets;
+	private final long theOverallFileLength;
 
 	private SharedStrings theSharedStrings;
 
@@ -576,6 +630,9 @@ public class XlsxParser implements TabularFileParser {
 	private int theOverallLineNumber;
 
 	public XlsxParser(BetterFile root, MultipleSheetHandling multiSheet) throws IOException, TextParseException {
+		if (root.getSource() != getZipFileRoot()) {
+			root = getZipFileRoot().at(root.getPath());
+		}
 		theRoot = root;
 		theXmlParser = new SimpleXMLParser();
 		theSheets = new ArrayList<>();
@@ -583,6 +640,7 @@ public class XlsxParser implements TabularFileParser {
 		BetterFile workBook = theRoot.at(WORKBOOK_PATH);
 		if (!workBook.exists())
 			throw new IOException("No " + WORKBOOK_PATH + " found--not a valid XLSX file");
+		long overallFileLength = 0;
 		try (InputStream in = workBook.read()) {
 			ComponentParser parser = theXmlParser.parseByComponent(WORKBOOK_PATH, in);
 			parser.startNextElement("workbook", true);
@@ -624,9 +682,11 @@ public class XlsxParser implements TabularFileParser {
 					throw new TextParseException("Sheet '" + name[0] + "' (ID " + id + ") not found", id.getPosition(0));
 				Sheet sheet = new Sheet(this, name[0], sheetFile.read(), sheetPath);
 				theSheets.add(sheet);
+				overallFileLength += sheet.getFileLength();
 			}
 		}
 		theSheetIterator = theSheets.iterator();
+		theOverallFileLength = overallFileLength;
 	}
 
 	public XlsxParser(File file, MultipleSheetHandling multiSheet) throws IOException, TextParseException {
@@ -652,6 +712,16 @@ public class XlsxParser implements TabularFileParser {
 	}
 
 	@Override
+	public long getFileLength() {
+		return theOverallFileLength;
+	}
+
+	@Override
+	public long getParseProgress() {
+		return getCurrentLineNumber();
+	}
+
+	@Override
 	public String[] parseNextLine() throws IOException, TextParseException {
 		getSheets(); // Initialize sheets if we haven't yet
 		do {
@@ -671,7 +741,6 @@ public class XlsxParser implements TabularFileParser {
 
 	@Override
 	public boolean parseNextLine(String[] columns) throws IOException, TextParseException {
-		getSheets(); // Initialize sheets if we haven't yet
 		do {
 			if (theCurrentSheet != null) {
 				if (theCurrentSheet.parseNextLine(columns))

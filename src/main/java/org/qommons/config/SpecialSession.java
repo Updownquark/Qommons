@@ -17,6 +17,11 @@ public interface SpecialSession<QIS extends SpecialSession<QIS>> extends Abstrac
 	CoreSession getWrapped();
 
 	@Override
+	default String getInterpretingDocument() {
+		return getWrapped().getInterpretingDocument();
+	}
+
+	@Override
 	default QonfigElement getElement() {
 		return getWrapped().getElement();
 	}

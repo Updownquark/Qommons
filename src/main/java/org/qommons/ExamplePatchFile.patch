@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+
+<patch app-name="App" target-version="1.0.0" patch-name="This patch fixes some bug or adds some small enhancement"
+	author="Path Author" patch-date="11Apr2025">
+	<look-in>C:/Program Files (x86)</look-in>
+	<look-in>C:/Program Files</look-in>
+	<look-in>${user.home}/AppData/Local/Programs</look-in>
+	<file-set target="plugins/PluginName_1.0.0.jar" source="PluginName/target/classes">
+		<file>some/package/name/ClassName.class</file>
+		<file>some/package/name/ClassName$InnerClass.class</file>
+		<file>some/package/name/ClassName$1.class</file>
+	</file-set>
+</patch>

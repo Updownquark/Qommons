@@ -8,6 +8,7 @@ import java.util.function.Function;
 
 import org.qommons.Identifiable;
 import org.qommons.Transaction;
+import org.qommons.collect.BetterSortedList.SortedSearchFilter;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
@@ -370,6 +371,16 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 	}
 
 	/**
+	 * @param <K> The key-type for the map
+	 * @param <V> The value-type for the map
+	 * @param sorting The sorting for the map's key set
+	 * @return An immutable {@link BetterSortedMap} with the given key sorting and no entries
+	 */
+	static <K, V> BetterSortedMap<K, V> empty(Comparator<? super K> sorting) {
+		return new EmptyBetterSortedMap<>(sorting);
+	}
+
+	/**
 	 * A map entry whose {@link java.util.Map.Entry#setValue(Object) setValue} method is disabled
 	 * 
 	 * @param <K>
@@ -720,6 +731,30 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 			public void remove() throws UnsupportedOperationException {
 				getSourceEntry().remove();
 			}
+		}
+	}
+
+	/**
+	 * An immutable {@link BetterSortedMap} with the given key sorting and no entries
+	 * 
+	 * @param <K> The key-type for the map
+	 * @param <V> The value-type for the map
+	 */
+	class EmptyBetterSortedMap<K, V> extends BetterMap.EmptyBetterMap<K, V> implements BetterSortedMap<K, V> {
+		private final BetterSortedSet<K> theKeySet;
+
+		public EmptyBetterSortedMap(Comparator<? super K> sorting) {
+			theKeySet = BetterSortedSet.empty(sorting);
+		}
+
+		@Override
+		public MapEntryHandle<K, V> searchEntries(Comparable<? super Entry<K, V>> search, SortedSearchFilter filter) {
+			return null;
+		}
+
+		@Override
+		public BetterSortedSet<K> keySet() {
+			return theKeySet;
 		}
 	}
 }

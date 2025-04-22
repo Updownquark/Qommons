@@ -6,6 +6,11 @@ import java.util.Collection;
 
 /** Acts as a directory structure for reading sources of streamed data */
 public interface HierarchicalResourceReader {
+	/**
+	 * @param path The path of the resource to check
+	 * @return Whether there is a resource at the given path that can be {@link #readResource(String) read}
+	 */
+	boolean resourceExists(String path);
     /**
      * @param path
      *            The path of the resources to get
@@ -55,6 +60,11 @@ public interface HierarchicalResourceReader {
 
 		public String getSubPath() {
 			return theSubPath;
+		}
+
+		@Override
+		public boolean resourceExists(String path) {
+			return theParent.resourceExists(theSubPath + path);
 		}
 
 		@Override

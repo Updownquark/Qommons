@@ -359,6 +359,26 @@ public class FileUtils extends MiniFileUtils {
 		return splitPath;
 	}
 
+	public static long getDeepSize(File file) {
+		if (file.isDirectory()) {
+			long size = 0;
+			for (File f : file.listFiles())
+				size += getDeepSize(f);
+			return size;
+		} else
+			return file.length();
+	}
+
+	public static long getDeepSize(BetterFile file) {
+		if (file.isDirectory()) {
+			long size = 0;
+			for (BetterFile f : file.listFiles())
+				size += getDeepSize(f);
+			return size;
+		} else
+			return Math.max(0, file.length());
+	}
+
 	private static class FileExtCharSeq extends AbstractCharSequence {
 		private String theExtension;
 

@@ -1798,8 +1798,7 @@ public class TestHelper extends TestUtil {
 		if (testFile == null || !testFile.exists())
 			return new ArrayList<>();
 
-		try (BufferedReader reader = new BufferedReader(new FileReader(testFile))) {
-			CsvParser parser = new CsvParser(reader, ',');
+		try (CsvParser parser = new CsvParser(new BufferedReader(new FileReader(testFile)), ',', testFile.length())) {
 			String[] headers = parser.parseNextLine();
 			if (headers.length < 4 || !headers[0].equals("Failed") || !headers[1].equals("Fixed") || !headers[2].equals("Seed")
 				|| !headers[3].equals("Position")) {

@@ -348,7 +348,7 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	 */
 	public void copyInto(QonfigElement.Builder parent, QonfigParser parser, QonfigParseSession session, ErrorReporting parentSession) {
 		boolean fulfillPromise = !parent.isPartial() && theType instanceof QonfigPromiseDef;
-		PartialQonfigElement builtChild = parent.withChild2(theParentRoles, theType, child -> {
+		PartialQonfigElement builtChild = parent.withChild2(theParentRoles, theType, null, child -> {
 			copy(child, parser, session, parentSession);
 			if (fulfillPromise)
 				child.dontAddToParent();

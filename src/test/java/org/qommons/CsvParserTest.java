@@ -22,7 +22,7 @@ public class CsvParserTest {
 		String csv = "This is a test, a very, very simple test\n"//
 			+ "It's so marvelously, ridiculously simple, but it does have multiple lines";
 		String[] columns = new String[3];
-		CsvParser parser = new CsvParser(new StringReader(csv), ',');
+		CsvParser parser = new CsvParser(new StringReader(csv), ',', csv.length());
 
 		Assert.assertTrue("No line", parser.parseNextLine(columns));
 		Assert.assertEquals("This is a test", columns[0]);
@@ -51,7 +51,7 @@ public class CsvParserTest {
 			+ "This line also uses quotes,\" but it doesn't have a comma (,) or a newline character.\"\n"//
 			+ "If it doesn't parse, the " + CsvParser.class.getSimpleName() + " class is broken.";
 		String[] columns = new String[2];
-		CsvParser parser = new CsvParser(new StringReader(csv), ',');
+		CsvParser parser = new CsvParser(new StringReader(csv), ',', csv.length());
 
 		Assert.assertTrue("No line", parser.parseNextLine(columns));
 		Assert.assertEquals("This is a test", columns[0]);
@@ -84,7 +84,7 @@ public class CsvParserTest {
 		String csv = "This is a test that is designed to fail, specifically by throwing exceptions."//
 			+ "The first error is that this csv file should have been separated by a newline char, but isn't";
 		String[] columns = new String[2];
-		CsvParser parser = new CsvParser(new StringReader(csv), ',');
+		CsvParser parser = new CsvParser(new StringReader(csv), ',', csv.length());
 
 		try {
 			parser.parseNextLine(columns);
@@ -93,7 +93,7 @@ public class CsvParserTest {
 
 		csv = "This is a similar failure-bound test,\" differing only by quotes.\""//
 			+ "The first error is that this csv file should have been separated by a newline char, but isn't";
-		parser = new CsvParser(new StringReader(csv), ',');
+		parser = new CsvParser(new StringReader(csv), ',', csv.length());
 		try {
 			parser.parseNextLine(columns);
 			Assert.assertTrue("Should have thrown an exception", false);
@@ -113,7 +113,7 @@ public class CsvParserTest {
 			+ "\n"//
 			+ "It should ignore both empty lines; the one between the content-filled lines, and the terminal one.";
 		String[] columns = new String[2];
-		CsvParser parser = new CsvParser(new StringReader(csv), ',');
+		CsvParser parser = new CsvParser(new StringReader(csv), ',', csv.length());
 
 		Assert.assertTrue("No line", parser.parseNextLine(columns));
 		Assert.assertEquals("This is a test that uses blank", columns[0]);

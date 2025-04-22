@@ -44,6 +44,12 @@ public class BetterFileSource implements HierarchicalResourceReader, Hierarchica
 	}
 
 	@Override
+	public boolean resourceExists(String path) {
+		BetterFile f = theDir.at(path);
+		return f.isFile();
+	}
+
+	@Override
 	public InputStream readResource(String path) throws IOException {
 		BetterFile f = theDir.at(path);
 		if (!f.isFile()) {

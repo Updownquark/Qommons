@@ -42,6 +42,11 @@ public interface MultiMap<K, V> {
 	 */
 	Collection<V> get(K key);
 
+	/** @return True if there are no keys or values in this map */
+	default boolean isEmpty() {
+		return keySet().isEmpty();
+	}
+
 	/** @return The number of values in this multi-map */
 	int valueSize();
 

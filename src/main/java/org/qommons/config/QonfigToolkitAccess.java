@@ -6,7 +6,9 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 
 import org.qommons.QommonsUtils;
@@ -19,6 +21,7 @@ public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
 	private URL theLocation;
 
 	private final List<QonfigToolkitAccess> theDependencies;
+	private final Map<String, QonfigPromiseFulfillment> thePromiseFulfillment;
 	private final List<CustomValueType> theCustomValueTypes;
 
 	private volatile QonfigToolkit theToolkit;
@@ -35,6 +38,7 @@ public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
 		theResourceClass = resourceClass;
 		theLocationString = location;
 		theDependencies = QommonsUtils.unmodifiableCopy(dependencies);
+		thePromiseFulfillment = new LinkedHashMap<>();
 		theCustomValueTypes = new ArrayList<>(3);
 	}
 
@@ -48,6 +52,7 @@ public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
 		theResourceClass = null;
 		theLocationString = location;
 		theDependencies = QommonsUtils.unmodifiableCopy(dependencies);
+		thePromiseFulfillment = new LinkedHashMap<>();
 		theCustomValueTypes = new ArrayList<>(3);
 	}
 
@@ -62,7 +67,18 @@ public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
 		theLocation = location;
 		theLocationString = location.toString();
 		theDependencies = QommonsUtils.unmodifiableCopy(dependencies);
+		thePromiseFulfillment = new LinkedHashMap<>();
 		theCustomValueTypes = new ArrayList<>(3);
+	}
+
+	/**
+	 * @param promiseName The name of the promise type to fulfill
+	 * @param fulfillment The fulfillment for the promise type
+	 * @return This accessor
+	 */
+	public QonfigToolkitAccess withPromiseFulfillment(String promiseName, QonfigPromiseFulfillment fulfillment) {
+		thePromiseFulfillment.put(promiseName, fulfillment);
+		return this;
 	}
 
 	/**
@@ -139,7 +155,7 @@ public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {
 			for (QonfigToolkitAccess dep : theDependencies)
 				addDependency(parser, dep.get());
 			try (InputStream in = theLocation.openStream()) {
-				toolkit = parser.parseToolkit(theLocation, in, //
+				toolkit = parser.parseToolkit(theLocation, in, thePromiseFulfillment, //
 					theCustomValueTypes.toArray(new CustomValueType[theCustomValueTypes.size()]));
 			} catch (IOException | XmlParseException | QonfigParseException e) {
 				theError = new IllegalStateException("Unable to parse toolkit " + theLocationString, e);

@@ -12,6 +12,7 @@ import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -1071,7 +1072,7 @@ public class QommonsUtils {
 	 */
 	public static <T, V, FE extends Throwable, ME extends Throwable> BetterList<V> filterMapE(Collection<? extends T> values,
 		ExPredicate<? super T, ? extends FE> filter, ExFunction<? super T, ? extends V, ? extends ME> map) throws FE, ME {
-		if (values.isEmpty())
+		if (values == null || values.isEmpty())
 			return BetterList.empty();
 		if (filter == null) {
 			if (map == null)
@@ -1541,6 +1542,21 @@ public class QommonsUtils {
 			}
 		}
 		return ret;
+	}
+
+	/**
+	 * Blocks until the given condition is true
+	 * 
+	 * @param interval The number of milliseconds to wait between checking the condition
+	 * @param condition The condition to wait for
+	 */
+	public static void waitFor(long interval, BooleanSupplier condition) {
+		while (!condition.getAsBoolean()) {
+			try {
+				Thread.sleep(interval);
+			} catch (InterruptedException e) {
+			}
+		}
 	}
 
 	/**

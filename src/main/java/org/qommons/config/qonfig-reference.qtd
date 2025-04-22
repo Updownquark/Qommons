@@ -7,30 +7,27 @@
 		<pattern name="qonfig-member">(((?&lt;ns&gt;[a-zA-Z0-9_\-]+\s+v?\d+\.\d+)\:)?(?&lt;name&gt;[a-zA-Z0-9_\-]+)\.)?(?&lt;member&gt;[a-zA-Z0-9_\-]+)</pattern>
 	</value-types>
 	<elements>
-		<?DOC The super-type of all promise elements--elements that are placeholders for externally- or dynamically-provided content?>
-		<element-def name="promise" abstract="true">
+		<?DOC The element in a qonfig file that calls for external content to be stitched into its place?>
+		<promise-def name="external-reference" abstract="true">
+			<?DOC The location of the qonfig file containing the content to stitch into this element's place?>
+			<attribute name="ref" type="string" />
 			<?DOC The type of element that the fulfillment of this reference is promised to be?>
 			<attribute name="promised" type="qonfig-element-type" specify="optional" />
 			<?DOC The add-ons that the fulfillment of this reference is promised to inherit?>
 			<attribute name="promised-inheritance" type="qonfig-add-on-set" specify="optional" />
-		</element-def>
-		<?DOC The element in a qonfig file that calls for external content to be stitched into its place?>
-		<element-def name="external-reference" extends="promise" abstract="true">
-			<?DOC The location of the qonfig file containing the content to stitch into this element's place?>
-			<attribute name="ref" type="string" />
-		</element-def>
+		</promise-def>
 		<?DOC The root of the qonfig file referenced by &lt;external-reference>.ref?>
 		<element-def name="external-document" abstract="true">
 			<?DOC The name of the &lt;external-reference> extension that this content fulfills?>
-			<attribute name="fulfills" type="qonfig-type" />
+			<attribute name="fulfills" type="qonfig-element-type" />
 			<?DOC The content to be stitched into the place of the &lt;external-reference> referring to this document?>
 			<child-def name="fulfillment" />
 		</element-def>
 		<?DOC A reference from an &lt;external-document> document to a child of the &lt;external-reference> that called for it.<br>
 			The child of the reference will be stiched into the external document in place of this child.?>
-		<element-def name="child-placeholder" extends="promise">
+		<promise-def name="child-placeholder">
 			<?DOC The role of the &lt;external-reference> whose children will replace this element?>
 			<attribute name="ref-role" type="qonfig-member" />
-		</element-def>
+		</promise-def>
 	</elements>
 </qonfig-def>

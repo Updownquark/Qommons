@@ -1,13 +1,6 @@
 package org.qommons.io;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -55,6 +48,12 @@ public class DefaultFileSource implements HierarchicalResourceReader, Hierarchic
     }
 
     @Override
+	public boolean resourceExists(String path) {
+		File f = new File(theDir, path);
+		return f.exists() && !f.isDirectory();
+	}
+
+	@Override
     public InputStream readResource(String path) throws IOException {
         File f = new File(theDir, path);
         if (!f.exists() || f.isDirectory()) {

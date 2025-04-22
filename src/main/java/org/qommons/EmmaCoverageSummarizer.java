@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.Reader;
 import java.io.Writer;
 import java.text.DecimalFormat;
 import java.util.Map;
@@ -40,8 +39,7 @@ public class EmmaCoverageSummarizer {
 	public static void main(String... args) throws IOException, TextParseException {
 		CoveragePackage root = new CoveragePackage(null);
 		File coverageCsv = new File(args[0]);
-		try (Reader r = new FileReader(coverageCsv)) {
-			CsvParser parser = new CsvParser(r, ',');
+		try (CsvParser parser = new CsvParser(new FileReader(coverageCsv), ',', coverageCsv.length())) {
 			String[] line = parser.parseNextLine();
 			int pkgIdx = -1, classIdx = -1, coveredIdx = -1, missedIdx = -1;
 			for (int i = 0; i < line.length; i++) {

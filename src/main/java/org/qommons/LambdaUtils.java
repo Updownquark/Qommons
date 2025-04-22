@@ -80,6 +80,9 @@ public class LambdaUtils {
 		}
 	};
 
+	/** Static predicate for {@link Objects#nonNull(Object) Objects::nonNull} */
+	public static final Predicate<Object> NON_NULL = printablePred(Objects::nonNull, "nonNull", "nonNull");
+
 	/**
 	 * @param o The lambda to check
 	 * @return Whether the given lambda has been configured to print
@@ -322,6 +325,15 @@ public class LambdaUtils {
 	 */
 	public static <T> Supplier<T> constantSupplier(T value) {
 		return constantSupplier(value, (value == null ? () -> "null" : value::toString), value);
+	}
+
+	/**
+	 * @param <T> The type of value to supplier
+	 * @param impl The implementation to supply the value for the first call
+	 * @return A supplier that calls its implementation for the first call and returns that value for every subsequent call
+	 */
+	public static <T> Supplier<T> cachingSupplier(Supplier<T> impl) {
+		return new CachingSupplier<>(impl);
 	}
 
 	/**
@@ -943,6 +955,40 @@ public class LambdaUtils {
 		@Override
 		public boolean isTrivial() {
 			return false;
+		}
+	}
+
+	static class CachingSupplier<T> implements Supplier<T> {
+		private final Supplier<T> theImpl;
+		private T theCachedValue;
+		private boolean isCached;
+
+		public CachingSupplier(Supplier<T> impl) {
+			theImpl = impl;
+		}
+
+		@Override
+		public T get() {
+			if (!isCached) {
+				theCachedValue = theImpl.get();
+				isCached = true;
+			}
+			return theCachedValue;
+		}
+
+		@Override
+		public int hashCode() {
+			return theImpl.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return this == obj || (obj instanceof CachingSupplier && theImpl.equals(((CachingSupplier<?>) obj).theImpl));
+		}
+
+		@Override
+		public String toString() {
+			return theImpl.toString();
 		}
 	}
 

@@ -22,6 +22,7 @@ public class QonfigValidation {
 		public final SpecificationType specification;
 		/** The value to use if it is not specified */
 		public final Object defaultValue;
+		public final LocatedPositionedContent namePosition;
 		/** The content in the source file of the default value */
 		public final LocatedPositionedContent defaultValueContent;
 
@@ -31,11 +32,12 @@ public class QonfigValidation {
 		 * @param defaultValue The value to use if it is not specified
 		 * @param defaultValueContent The content in the source file of the default value
 		 */
-		public ValueSpec(QonfigValueType type, SpecificationType specify, Object defaultValue,
+		public ValueSpec(QonfigValueType type, SpecificationType specify, Object defaultValue, LocatedPositionedContent namePosition,
 			LocatedPositionedContent defaultValueContent) {
 			this.type = type;
 			this.specification = specify;
 			this.defaultValue = defaultValue;
+			this.namePosition = namePosition;
 			this.defaultValueContent = defaultValueContent;
 		}
 	}
@@ -113,7 +115,7 @@ public class QonfigValidation {
 				defaultValueContent = null;
 			}
 		}
-		return new ValueSpec(type, newSpec, newDefaultValue, defaultValueContent);
+		return new ValueSpec(type, newSpec, newDefaultValue, override.namePosition, defaultValueContent);
 	}
 
 	/**
@@ -200,7 +202,7 @@ public class QonfigValidation {
 			specification = SpecificationType.Optional;
 		else
 			specification = SpecificationType.Required;
-		return new ValueSpec(type, specification, defaultValue, defaultValueContent);
+		return new ValueSpec(type, specification, defaultValue, override.namePosition, defaultValueContent);
 	}
 
 	/**
@@ -230,9 +232,9 @@ public class QonfigValidation {
 					QonfigValidation.validateSpecification( //
 						new ValueSpec(root.getType() == null ? null : root.getType().getValue().getType(),
 							ao.getValueModifier().getSpecification(), ao.getValueModifier().getDefaultValue(),
-							ao.getValueModifier().getDefaultValueContent()), //
+							ao.getValueModifier().getNamePosition(), ao.getValueModifier().getDefaultValueContent()), //
 						new ValueSpec(valueModifier.getTypeRestriction(), valueModifier.getSpecification(), valueModifier.getDefaultValue(),
-							valueModifier.getDefaultValueContent()), //
+							valueModifier.getNamePosition(), valueModifier.getDefaultValueContent()), //
 						err -> session.at(root.getFilePosition()).error(err), //
 						warn -> session.at(root.getFilePosition()).warn(warn), false);
 				} else if (valueModifier.getSpecification() != ao.getValueModifier().getSpecification()

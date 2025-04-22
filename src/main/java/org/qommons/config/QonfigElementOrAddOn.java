@@ -322,7 +322,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			if (name.endsWith(ELEMENT_METADATA_SUFFIX) || name.endsWith(ELEMENT_METADATA_SUFFIX + ADD_ON_METADATA_ELEMENT)) {
 				theMetaSpec = null;
 			} else if (this instanceof QonfigElementDef.Builder)
-				theMetaSpec = QonfigElementDef.build(name + ELEMENT_METADATA_SUFFIX, session,
+				theMetaSpec = QonfigElementDef.build(name + ELEMENT_METADATA_SUFFIX, session, false,
 					"Metadata for the " + session.getToolkit().getName() + "." + name + " element");
 			else
 				theMetaSpec = QonfigAddOn.build(name + ELEMENT_METADATA_SUFFIX, session,
@@ -411,6 +411,10 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			return theMetaSpec;
 		}
 
+		protected Stage getStage() {
+			return theStage;
+		}
+
 		/**
 		 * Advances the stage of the builder, potentially performing intermediate build steps
 		 * 
@@ -418,7 +422,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 */
 		public void setStage(Stage stage) {
 			if (!checkStage(stage))
-				throw new IllegalArgumentException("Cannot revert from stage " + theStage + " to " + stage);
+				throw new IllegalArgumentException("Cannot revert from stage " + getStage() + " to " + stage);
 		}
 
 		/**
@@ -478,13 +482,13 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 						mdType = (QonfigElementDef) theMetaSpec.get();
 					else if (theMetaSpec.getSuperElement() != null)
 						mdType = (QonfigElementDef) QonfigElementDef
-							.build(theMetaSpec.get().getName() + ADD_ON_METADATA_ELEMENT, theSession, theMetaSpec.getDescription())//
+							.build(theMetaSpec.get().getName() + ADD_ON_METADATA_ELEMENT, theSession, false, theMetaSpec.getDescription())//
 							.setSuperElement(theMetaSpec.getSuperElement())//
 							.inherits((QonfigAddOn) theMetaSpec.get())//
 							.build();
 					else
 						mdType = (QonfigElementDef) QonfigElementDef
-							.build(theMetaSpec.get().getName() + ADD_ON_METADATA_ELEMENT, theSession, theMetaSpec.getDescription())//
+							.build(theMetaSpec.get().getName() + ADD_ON_METADATA_ELEMENT, theSession, false, theMetaSpec.getDescription())//
 							.inherits((QonfigAddOn) theMetaSpec.get())//
 							.build();
 					theMetadataBuilder = QonfigElement.buildRoot(false, theSession, theMetadata, mdType,
@@ -505,7 +509,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 */
 		public Builder setAbstract(boolean abst) {
 			if (!checkStage(Stage.Initial)) {
-				theSession.error("Abstract cannot be changed at this stage: " + theStage);
+				theSession.error("Abstract cannot be changed at this stage: " + getStage());
 				return this;
 			}
 			isAbstract = abst;
@@ -523,7 +527,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 */
 		public Builder setSuperElement(QonfigElementDef superElement) {
 			if (!checkStage(Stage.Initial))
-				throw new IllegalStateException("Super element cannot be set at this stage: " + theStage);
+				throw new IllegalStateException("Super element cannot be set at this stage: " + getStage());
 			else if (theSuperElement != null)
 				throw new IllegalStateException("Super element has already been set");
 			theSuperElement = superElement;
@@ -541,7 +545,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			// Inheritance doesn't have its own stage.
 			// This call can be mingled with withAttribute(), since that call can also affect inheritance
 			if (!checkStage(Stage.Initial))
-				throw new IllegalStateException("Inheritance cannot be modified at this stage: " + theStage);
+				throw new IllegalStateException("Inheritance cannot be modified at this stage: " + getStage());
 			String msg = _inherits(addOn);
 			if (msg != null)
 				theSession.error(msg);
@@ -583,7 +587,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		public Builder withValue(QonfigValueType type, SpecificationType specification, Object defaultValue,
 			LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
 			if (!checkStage(Stage.Initial))
-				throw new IllegalStateException("Value cannot be specified at this stage: " + theStage);
+				throw new IllegalStateException("Value cannot be specified at this stage: " + getStage());
 			else if (theValue != null)
 				throw new IllegalStateException("Value has already been specified");
 
@@ -601,7 +605,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 					specification = SpecificationType.Required;
 			} else if (specification == SpecificationType.Forbidden && defaultValue == null)
 				theSession.at(position).error("No default specified");
-			theValue = valueModifier(type, specification, defaultValue, defaultValueContent, description, position);
+			theValue = valueModifier(type, specification, defaultValue, null, defaultValueContent, description, position);
 			return this;
 		}
 
@@ -619,7 +623,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		public Builder modifyValue(QonfigValueType type, SpecificationType specification, Object defaultValue,
 			LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
 			if (!checkStage(Stage.ModifyAttributes))
-				throw new IllegalStateException("Value cannot be modified at this stage: " + theStage);
+				throw new IllegalStateException("Value cannot be modified at this stage: " + getStage());
 			else if (theValue != null)
 				throw new IllegalStateException("Value has already been modified");
 
@@ -627,12 +631,12 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				throw new IllegalStateException(this + ": No inherited value to modify");
 			ValueSpec newSpec = QonfigValidation.validateSpecification(//
 				new ValueSpec(theSuperElement.getValue().getType(), theSuperElement.getValue().getSpecification(),
-					theSuperElement.getValue().getDefaultValue(), theSuperElement.getValue().getDefaultValueContent()), //
-				new ValueSpec(type, specification, defaultValue, defaultValueContent), //
+					theSuperElement.getValue().getDefaultValue(), null, theSuperElement.getValue().getDefaultValueContent()), //
+				new ValueSpec(type, specification, defaultValue, null, defaultValueContent), //
 				err -> theSession.at(position).error(err), warn -> theSession.at(position).warn(warn), true);
 			if (newSpec.specification != theSuperElement.getValue().getSpecification()
 				|| !Objects.equals(newSpec.defaultValue, theSuperElement.getValue().getDefaultValue()))
-				theValue = valueModifier(type, specification, defaultValue, defaultValueContent, description, position);
+				theValue = valueModifier(type, specification, defaultValue, null, defaultValueContent, description, position);
 			return this;
 		}
 
@@ -653,7 +657,8 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @return The value modifier to use for the item
 		 */
 		protected abstract ValueDefModifier valueModifier(QonfigValueType type, SpecificationType specification, Object defaultValue,
-			LocatedPositionedContent defaultValueContent, String description, PositionedContent position);
+			LocatedPositionedContent namePosition, LocatedPositionedContent defaultValueContent, String description,
+			PositionedContent position);
 
 		/**
 		 * Declares an attribute
@@ -668,9 +673,10 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @return This builder
 		 */
 		public Builder withAttribute(String name, QonfigValueType type, SpecificationType specify, Object defaultValue,
-			LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
+			LocatedPositionedContent nameContent, LocatedPositionedContent defaultValueContent, PositionedContent position,
+			String description) {
 			if (!checkStage(Stage.NewAttributes))
-				throw new IllegalStateException("Attributes cannot be added at this stage: " + theStage);
+				throw new IllegalStateException("Attributes cannot be added at this stage: " + getStage());
 			else if (theDeclaredAttributes.containsKey(name)) {
 				theSession.error("Cannot declare multiple attributes with the same name: " + name);
 				return this;
@@ -691,7 +697,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				}
 			}
 			theDeclaredAttributes.put(name, new QonfigAttributeDef.DeclaredAttributeDef(theBuilt, name, type, specify, defaultValue,
-				defaultValueContent, position, description));
+				nameContent, defaultValueContent, position, description));
 			return this;
 		}
 
@@ -708,9 +714,10 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @return This builder
 		 */
 		public Builder modifyAttribute(QonfigAttributeDef attribute, QonfigValueType type, SpecificationType specification,
-			Object defaultValue, LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
+			Object defaultValue, LocatedPositionedContent namePosition, LocatedPositionedContent defaultValueContent,
+			PositionedContent position, String description) {
 			if (!checkStage(Stage.ModifyAttributes))
-				throw new IllegalStateException("Attributes cannot be added at this stage: " + theStage);
+				throw new IllegalStateException("Attributes cannot be added at this stage: " + getStage());
 			else if (theAttributeModifiers.containsKey(attribute)) {
 				theSession.error("Attribute " + attribute + " is already modified here");
 				return this;
@@ -724,15 +731,17 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				if (theSuperElement == null) {
 					ext = false;
 					oldSpec = new ValueSpec(attribute.getType(), attribute.getSpecification(), attribute.getDefaultValue(),
-						attribute.getDefaultValueContent());
+						attribute.getNamePosition(), attribute.getDefaultValueContent());
 				} else {
 					ext = isAssignableTo(owner);
 					oldSpec = new ValueSpec(attribute.getDeclared().getType(), attribute.getDeclared().getSpecification(),
-						attribute.getDeclared().getDefaultValue(), attribute.getDeclared().getDefaultValueContent());
+						attribute.getDeclared().getDefaultValue(), attribute.getDeclared().getNamePosition(),
+						attribute.getDeclared().getDefaultValueContent());
 					ValueDefModifier mod = theSuperElement.getAttributeModifiers().get(attribute.getDeclared());
 					if (mod != null) {
 						oldSpec = QonfigValidation.validateSpecification(oldSpec, //
-							new ValueSpec(null, mod.getSpecification(), mod.getDefaultValue(), mod.getDefaultValueContent()), //
+							new ValueSpec(null, mod.getSpecification(), mod.getDefaultValue(), mod.getNamePosition(),
+								mod.getDefaultValueContent()), //
 							__ -> {
 							}, __ -> {
 							}, false);
@@ -741,7 +750,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			} else {
 				ext = isAssignableTo(owner);
 				oldSpec = new ValueSpec(attribute.getType(), attribute.getSpecification(), attribute.getDefaultValue(),
-					attribute.getDefaultValueContent());
+					attribute.getNamePosition(), attribute.getDefaultValueContent());
 			}
 			if (!ext) {
 				theSession.error("Attribute " + attribute.getOwner() + "." + attribute.getName() + " does not apply to this element--"
@@ -750,10 +759,10 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			}
 			theAttributeModifierOrigSpecs.put(attribute.getDeclared(), oldSpec);
 			ValueSpec newSpec = QonfigValidation.validateSpecification(//
-				oldSpec, new ValueSpec(null, specification, defaultValue, defaultValueContent), //
+				oldSpec, new ValueSpec(null, specification, defaultValue, namePosition, defaultValueContent), //
 				err -> theSession.at(position).error(err), warn -> theSession.at(position).warn(warn), true);
 			theAttributeModifiers.put(attribute.getDeclared(), valueModifier(newSpec.type, newSpec.specification, newSpec.defaultValue,
-				newSpec.defaultValueContent, description, position));
+				newSpec.namePosition, newSpec.defaultValueContent, description, position));
 
 			return this;
 		}
@@ -786,7 +795,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		public Builder withChild(String name, QonfigElementOrAddOn type, Set<QonfigChildDef.Declared> fulfillment,
 			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, PositionedContent position, String description) {
 			if (!checkStage(Stage.NewChildren))
-				throw new IllegalStateException("Attributes cannot be added at this stage: " + theStage);
+				throw new IllegalStateException("Children cannot be added at this stage: " + getStage());
 			else if (theDeclaredChildren.containsKey(name)) {
 				theSession.error("Cannot declare multiple children with the same name: " + name);
 				return this;
@@ -847,7 +856,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		public Builder modifyChild(QonfigChildDef.Declared child, QonfigElementDef type, Set<QonfigAddOn> inheritance,
 			Set<QonfigAddOn> requirement, Integer min, Integer max, PositionedContent position, String description) {
 			if (!checkStage(Stage.ModifyChildren))
-				throw new IllegalStateException("Children cannot be modified at this stage: " + theStage);
+				throw new IllegalStateException("Children cannot be modified at this stage: " + getStage());
 			else if (child.getDeclared().getOwner().getDeclaredChildren().get(child.getName()) != child.getDeclared())
 				throw new IllegalStateException(
 					"Bad child " + child + ": owner " + child.getDeclared().getOwner() + " does not recognize it");
@@ -1066,19 +1075,20 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		public Builder withMetaSpec(String name, QonfigElementOrAddOn type, Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement,
 			int min, int max, PositionedContent position, String description) {
 			if (!checkStage(Stage.MetaSpec))
-				throw new IllegalStateException("Metadata specifications cannot be added at this stage: " + theStage);
+				throw new IllegalStateException("Metadata specifications cannot be added at this stage: " + getStage());
 			theMetaSpec.withChild(name, type, Collections.emptySet(), inheritance, requirement, min, max, position, description);
 			return this;
 		}
 
 		/**
 		 * @param metadata Accepts an element builder to which children can be
-		 *        {@link QonfigElement.Builder#withChild(List, QonfigElementOrAddOn, Consumer, PositionedContent, String) added}
+		 *        {@link QonfigElement.Builder#withChild(List, QonfigElementOrAddOn, org.qommons.config.QonfigPromiseFulfillment.PromisedType, Consumer, PositionedContent, String)
+		 *        added}
 		 * @return This builder
 		 */
 		public Builder withMetaData(Consumer<QonfigElement.Builder> metadata) {
 			if (!checkStage(Stage.MetaData))
-				throw new IllegalStateException("Metadata cannot be added at this stage: " + theStage);
+				throw new IllegalStateException("Metadata cannot be added at this stage: " + getStage());
 			metadata.accept(theMetadataBuilder);
 			return this;
 		}
@@ -1105,8 +1115,9 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			Map<QonfigAttributeDef.Declared, List<ValueSpec>> inheritedAttrs = new HashMap<>();
 			if (theSuperElement != null) {
 				for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : theSuperElement.getAllAttributes().entrySet())
-					inheritedAttrs.computeIfAbsent(attr.getKey(), __ -> new ArrayList<>()).add(new ValueSpec(attr.getValue().getType(),
-						attr.getValue().getSpecification(), attr.getValue().getDefaultValue(), attr.getValue().getDefaultValueContent()));
+					inheritedAttrs.computeIfAbsent(attr.getKey(), __ -> new ArrayList<>())
+						.add(new ValueSpec(attr.getValue().getType(), attr.getValue().getSpecification(), attr.getValue().getDefaultValue(),
+							attr.getValue().getNamePosition(), attr.getValue().getDefaultValueContent()));
 			}
 			for (QonfigAddOn inh : theFullInheritance.values())
 				addAttributes(inheritedAttrs, inh);
@@ -1117,21 +1128,22 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				ValueSpec modSpec;
 				if (modifier != null)
 					modSpec = new ValueSpec(modifier.getTypeRestriction(), modifier.getSpecification(), modifier.getDefaultValue(),
-						modifier.getDefaultValueContent());
+						modifier.getNamePosition(), modifier.getDefaultValueContent());
 				else if (attr.getValue().size() == 1 && theSuperElement != null
 					&& theSuperElement.getAllAttributes().containsKey(attr.getKey())) {
 					theCompiledAttributes.put(attr.getKey(), theSuperElement.getAllAttributes().get(attr.getKey()));
 					continue;
 				} else
-					modSpec = new ValueSpec(null, null, null, null);
+					modSpec = new ValueSpec(null, null, null, attr.getKey().getNamePosition(), attr.getKey().getDefaultValueContent());
 				ValueSpec spec = QonfigValidation.validateValue(//
 					modSpec, attr.getValue(), theSession::error, theSession::warn);
 				if (modifier != null)
-					theCompiledAttributes.put(attr.getKey(), new QonfigAttributeDef.Modified(attr.getKey(), theBuilt, spec.type,
-						spec.specification, spec.defaultValue, spec.defaultValueContent, modifier.getContent(), modifier.getDescription()));
+					theCompiledAttributes.put(attr.getKey(),
+						new QonfigAttributeDef.Modified(attr.getKey(), theBuilt, spec.type, spec.specification, spec.defaultValue,
+							modifier.getNamePosition(), spec.defaultValueContent, modifier.getContent(), modifier.getDescription()));
 				else
 					theCompiledAttributes.put(attr.getKey(), new QonfigAttributeDef.Modified(attr.getKey(), theBuilt, spec.type,
-						spec.specification, spec.defaultValue, spec.defaultValueContent, null, null));
+						spec.specification, spec.defaultValue, spec.namePosition, spec.defaultValueContent, null, null));
 			}
 			inheritedAttrs.clear();
 
@@ -1139,21 +1151,21 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			if (theSuperElement != null && theSuperElement.getValue() != null) {
 				List<ValueSpec> inheritedValues = new ArrayList<>();
 				inheritedValues.add(new ValueSpec(theSuperElement.getValue().getType(), theSuperElement.getValue().getSpecification(),
-					theSuperElement.getValue().getDefaultValue(), theSuperElement.getValue().getDefaultValueContent()));
+					theSuperElement.getValue().getDefaultValue(), null, theSuperElement.getValue().getDefaultValueContent()));
 				for (QonfigAddOn inh : theInheritance) {
 					if (inh.getValue() != null && !inh.getSuperElement().isAssignableFrom(theSuperElement))
 						inheritedValues.add(new ValueSpec(inh.getValue().getType(), inh.getValue().getSpecification(),
-							inh.getValue().getDefaultValue(), inh.getValue().getDefaultValueContent()));
+							inh.getValue().getDefaultValue(), null, inh.getValue().getDefaultValueContent()));
 				}
 
 				ValueSpec modSpec;
 				if (theValue != null)
-					modSpec = new ValueSpec(theValue.getTypeRestriction(), theValue.getSpecification(), theValue.getDefaultValue(),
+					modSpec = new ValueSpec(theValue.getTypeRestriction(), theValue.getSpecification(), theValue.getDefaultValue(), null,
 						theValue.getDefaultValueContent());
 				else if (inheritedValues.size() == 1) // No add-on modifications to worry about
 					modSpec = null;
 				else
-					modSpec = new ValueSpec(null, null, null, null);
+					modSpec = new ValueSpec(null, null, null, null, null);
 				if (modSpec != null) {
 					ValueSpec spec = QonfigValidation.validateValue(//
 						modSpec, inheritedValues, theSession::error, theSession::warn);
@@ -1161,10 +1173,11 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 						if (spec.type != theValue.getTypeRestriction() || spec.specification != theValue.getSpecification()
 							|| spec.defaultValue != theValue.getDefaultValue())
 							theValue = new ValueDefModifier.Default(theBuilt.getDeclarer(), spec.type, spec.specification,
-								spec.defaultValue, spec.defaultValueContent, theValue.getDescription(), theValue.getContent());
+								spec.defaultValue, spec.namePosition, spec.defaultValueContent, theValue.getDescription(),
+								theValue.getContent());
 						else
 							theValue = new ValueDefModifier.Default(theBuilt.getDeclarer(), spec.type, spec.specification,
-								spec.defaultValue, spec.defaultValueContent, null, null);
+								spec.defaultValue, spec.namePosition, spec.defaultValueContent, null, null);
 				}
 			}
 			// //For attributes we've explicitly modified, verify that the modification is valid given all inheritance
@@ -1237,13 +1250,14 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 
 		private static void addAttributes(Map<QonfigAttributeDef.Declared, List<ValueSpec>> inheritedAttrs, QonfigAddOn addOn) {
 			for (QonfigAttributeDef.Declared attr : addOn.getDeclaredAttributes().values())
-				inheritedAttrs.computeIfAbsent(attr, __ -> new ArrayList<>())
-					.add(new ValueSpec(attr.getType(), attr.getSpecification(), attr.getDefaultValue(), attr.getDefaultValueContent()));
+				inheritedAttrs.computeIfAbsent(attr, __ -> new ArrayList<>()).add(new ValueSpec(attr.getType(), attr.getSpecification(),
+					attr.getDefaultValue(), attr.getNamePosition(), attr.getDefaultValueContent()));
 			if (addOn.getSuperElement() != null) {
 				for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : addOn.getSuperElement().getAllAttributes()
 					.entrySet())
-					inheritedAttrs.computeIfAbsent(attr.getKey(), __ -> new ArrayList<>()).add(new ValueSpec(attr.getValue().getType(),
-						attr.getValue().getSpecification(), attr.getValue().getDefaultValue(), attr.getValue().getDefaultValueContent()));
+					inheritedAttrs.computeIfAbsent(attr.getKey(), __ -> new ArrayList<>())
+						.add(new ValueSpec(attr.getValue().getType(), attr.getValue().getSpecification(), attr.getValue().getDefaultValue(),
+							attr.getValue().getNamePosition(), attr.getValue().getDefaultValueContent()));
 			}
 			for (QonfigAddOn inh : addOn.getInheritance())
 				addAttributes(inheritedAttrs, inh);

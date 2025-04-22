@@ -2,24 +2,32 @@ package org.qommons;
 
 import java.lang.management.ManagementFactory;
 import java.text.ParseException;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.qommons.io.Format;
 
 /**
- * The BreakpointHere class enables applications to transfer control to the java debugger, where this is VM-enabled. Users should always
- * have a breakpoint set at the indicated line in the source. Typical applicatons for this class are:
+ * <p>
+ * This class enables applications to transfer control to the java debugger, where this is VM-enabled. Users should always have a breakpoint
+ * set at the indicated line in the source (currently line 145, but this may change occasionally).
+ * </p>
+ * Typical applications for this class are:
  * <ul>
  * <li>A test utility reproducing a failed test, transferring control to the debugger just before the anticipated failure</li>
  * <li>An in-application debugger that may have an option to transfer control to the java debugger for more detailed debugging</li>
+ * <li>Locations in code that are editable but not accessible to the debugger (less common, but not unheard-of)</li>
  * </ul>
  */
 public class BreakpointHere {
-	private static long IGNORE_ALL;
-	private static final Map<String, Long> IGNORING_CLASSES = new java.util.LinkedHashMap<>();
-	private static final Map<StackTraceElement, Long> IGNORING_LOCATIONS = new java.util.LinkedHashMap<>();
+	private static final TimeUtils.RelativeTimeFormat TIME_FORMAT = TimeUtils.relativeFormat().with24HourFormat(true)
+		.withMaxPrecision(TimeUtils.DurationComponentType.Millisecond);
+	private static IgnoredBreakpoint IGNORE_ALL;
+	private static final Map<String, IgnoredBreakpoint> IGNORING_CLASSES = new java.util.LinkedHashMap<>();
+	private static final Map<StackTraceElement, IgnoredBreakpoint> IGNORING_LOCATIONS = new java.util.LinkedHashMap<>();
 	private static final Map<String, IgnoreType> CLI_IGNORE;
+	private static final ThreadLocal<Boolean> DEBUGGER_RECURSIVE_STOP = new ThreadLocal<>();
 	private static boolean HAS_PRINTED_INPUT_UNRESPONSIVE = false;
 	static {
 		Map<String, IgnoreType> cliIgnore = new LinkedHashMap<>();
@@ -69,11 +77,16 @@ public class BreakpointHere {
 	 * @return Whether the breakpoint was actually caught
 	 */
 	public static boolean breakpoint() {
+		StackTraceElement[] stack;
 		long now = System.currentTimeMillis();
-		if (IGNORE_ALL > now)
-			return false;
+		IgnoredBreakpoint ignored = IGNORE_ALL;
+		if (ignored != null) {
+			if (ignored.stillIgnored(now, null)) {
+				return false;
+			} else
+				IGNORE_ALL = null;
+		}
 		Thread thread=Thread.currentThread();
-		StackTraceElement [] stack;
 		StackTraceElement source;
 		if(IGNORING_CLASSES.isEmpty() && IGNORING_LOCATIONS.isEmpty()) {
 			// If there's nothing to ignore, don't unwind the stack twice
@@ -82,17 +95,30 @@ public class BreakpointHere {
 		} else {
 			stack = thread.getStackTrace();
 			if(stack == null || stack.length == 0) {
-				IGNORE_ALL = Long.MAX_VALUE;
+				IGNORE_ALL = new IgnoredBreakpoint(IgnoreType.ALL, Long.MAX_VALUE, false);
 				System.err.println("WARNING! Application is attempting to catch a breakpoint, but line numbers seem to not be included");
 				return false;
 			}
 			source = stack[2];
-			Long ignoreTime = IGNORING_CLASSES.get(source.getClassName());
-			if (ignoreTime != null && ignoreTime.longValue() > now)
-				return false;
-			ignoreTime = IGNORING_LOCATIONS.get(source);
-			if (ignoreTime != null && ignoreTime.longValue() > now)
-				return false;
+			ignored = IGNORING_CLASSES.get(source.getClassName());
+			if (ignored != null) {
+				if (ignored.stillIgnored(now, source))
+					return false;
+				else
+					IGNORING_CLASSES.remove(source.getClassName());
+			}
+			ignored = IGNORING_LOCATIONS.get(source);
+			if (ignored != null) {
+				if (ignored.stillIgnored(now, source))
+					return false;
+				else
+					IGNORING_LOCATIONS.remove(source);
+			}
+		}
+		if (DEBUGGER_RECURSIVE_STOP.get() != null) {
+			// If this happens recursively, it's because the debugger called it
+			System.out.println("Ignoring recursive breakpoint at " + source);
+			return false;
 		}
 
 		theBreakpointCatchCount.incrementAndGet();
@@ -100,7 +126,9 @@ public class BreakpointHere {
 		boolean alerted = false;
 		AsyncInputReader reader = new AsyncInputReader();
 		IgnoreType ignore = null;
-		long ignoreTime = -1;
+		boolean printInstead = false;
+		long ignoreUntil = Long.MAX_VALUE;
+		DEBUGGER_RECURSIVE_STOP.set(Boolean.TRUE);
 		try {
 			do {
 				long pre = System.nanoTime();
@@ -133,7 +161,7 @@ public class BreakpointHere {
 							theBreakpointCatchCount.decrementAndGet();
 							System.err
 								.println("WARNING! Application is attempting to catch a breakpoint, but debugging seems to be disabled");
-							IGNORE_ALL = Long.MAX_VALUE;
+							IGNORE_ALL = new IgnoredBreakpoint(IgnoreType.ALL, Long.MAX_VALUE, false);
 							return false;
 						}
 						alerted = true;
@@ -153,6 +181,8 @@ public class BreakpointHere {
 						msg.append("\n 5) Type \"A\" and press ENTER to ignore all break points for this session.");
 						msg.append("\n If a duration is appended to the end of the line after a space,")
 							.append(" the command will only be effective for the given amount of time.");
+						msg.append("\n If the letter is proceeded by the letter 'p' (or 'P'),")//
+							.append(" ignored breakpoint hits will trigger a System.out.println");
 						System.err.println(msg);
 					}
 					try {
@@ -169,13 +199,23 @@ public class BreakpointHere {
 						break;
 					int space = command.indexOf(' ');
 					if (space > 0) {
+						long ignoreTime;
 						try {
 							ignoreTime = Format.DURATION.parse(command.substring(space).trim()).toMillis();
 						} catch (ParseException | RuntimeException e) {
 							e.printStackTrace();
 							continue;
 						}
+						ignoreUntil = System.currentTimeMillis() + ignoreTime;
 						command = command.substring(0, space);
+					} else
+						ignoreUntil = Long.MAX_VALUE;
+					if (command.length() > 1) {
+						char lastChar = command.charAt(command.length() - 1);
+						if (lastChar == 'p' || lastChar == 'P') {
+							printInstead = true;
+							command = command.substring(0, command.length() - 1);
+						}
 					}
 					ignore = CLI_IGNORE.get(command.toLowerCase());
 					if (ignore == null) {
@@ -186,32 +226,27 @@ public class BreakpointHere {
 				}
 			} while (!breakpointCaught);
 		} finally {
-			if (reader != null)
-				reader.close();
+			DEBUGGER_RECURSIVE_STOP.remove();
+			reader.close();
 		}
 		if (ignore != null && ignore != IgnoreType.NONE) {
-			StringBuilder msg = new StringBuilder("Ignoring ");
+			ignored = new IgnoredBreakpoint(ignore, ignoreUntil, printInstead);
 			switch(ignore){
 			case NONE:
 				break;
 			case LOCAL:
-				msg.append("future breakpoints from ").append(source);
-				IGNORING_LOCATIONS.put(source, ignoreTime > 0 ? System.currentTimeMillis() + ignoreTime : Long.MAX_VALUE);
+				IGNORING_LOCATIONS.put(source, ignored);
 				break;
 			case CLASS:
 				// Source actually can't be null here, but I'm suppressing a warning
-				msg.append("future breakpoints from class ").append(source == null ? "?" : source.getClassName());
 				if (source != null)
-					IGNORING_CLASSES.put(source.getClassName(), ignoreTime > 0 ? System.currentTimeMillis() + ignoreTime : Long.MAX_VALUE);
+					IGNORING_CLASSES.put(source.getClassName(), ignored);
 				break;
 			case ALL:
-				msg.append("all future breakpoints");
-				IGNORE_ALL = ignoreTime > 0 ? System.currentTimeMillis() + ignoreTime : Long.MAX_VALUE;
+				IGNORE_ALL = ignored;
 				break;
 			}
-			if (ignoreTime > 0)
-				QommonsUtils.printTimeLength(ignoreTime, msg.append(" for "), true);
-			System.out.println(msg.toString());
+			ignored.printInstall(now, source);
 		}
 		return breakpointCaught;
 	}
@@ -328,6 +363,64 @@ public class BreakpointHere {
 
 		void close() {
 			keepReading = false;
+		}
+	}
+
+	private static class IgnoredBreakpoint {
+		final IgnoreType type;
+		final long until;
+		final boolean printInstead;
+
+		IgnoredBreakpoint(IgnoreType type, long until, boolean printInstead) {
+			this.type = type;
+			this.until = until;
+			this.printInstead = printInstead;
+		}
+
+		void printInstall(long now, StackTraceElement source) {
+			StringBuilder msg = new StringBuilder("Ignoring ");
+			switch (type) {
+			case NONE:
+				break;
+			case LOCAL:
+				msg.append("breakpoint ");
+				printSource(source, msg);
+				break;
+			case CLASS:
+				// Source actually can't be null here, but I'm suppressing a warning
+				msg.append("breakpoints in class ");
+				msg.append(StringUtils.getReallySimpleClassName(source.getClassName()));
+				break;
+			case ALL:
+				msg.append("all breakpoints");
+				break;
+			}
+			if (until != Long.MAX_VALUE)
+				msg.append(" until ")
+					.append(TIME_FORMAT.relative(Instant.ofEpochMilli(until), Instant.ofEpochMilli(now), TIME_FORMAT.getDayFormat()));
+			System.out.println(msg.toString());
+		}
+
+		boolean stillIgnored(long now, StackTraceElement source) {
+			boolean ignore = until > now;
+			if (ignore && printInstead) {
+				if (source == null)
+					source = Thread.currentThread().getStackTrace()[3];
+				StringBuilder msg = new StringBuilder("Ignoring breakpoint ");
+				printSource(source, msg);
+				msg.append(" (").append(type).append(')');
+				if (until < Long.MAX_VALUE)
+					msg.append(" for another ");
+				QommonsUtils.printTimeLength(until - now, msg, true);
+				System.out.println(msg.toString());
+			}
+			return ignore;
+		}
+
+		private static void printSource(StackTraceElement source, StringBuilder msg) {
+			msg.append(StringUtils.getReallySimpleClassName(source.getClassName()));
+			msg.append('.').append(source.getMethodName()).append('(').append(source.getFileName()).append(':')
+				.append(source.getLineNumber()).append(')');
 		}
 	}
 }

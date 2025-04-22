@@ -18,6 +18,8 @@ public interface ValueDefModifier extends SelfDescribed {
 	/** @return The default value to use if the value is not specified. Null means to inherit from the super-specified value. */
 	Object getDefaultValue();
 
+	LocatedPositionedContent getNamePosition();
+
 	/** @return The content in the source file specifying the default value */
 	LocatedPositionedContent getDefaultValueContent();
 
@@ -30,6 +32,7 @@ public interface ValueDefModifier extends SelfDescribed {
 		private final QonfigValueType theTypeRestriction;
 		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
+		private final LocatedPositionedContent theNamePosition;
 		private final LocatedPositionedContent theDefaultValueContent;
 		private final String theDescription;
 		private final PositionedContent theContent;
@@ -45,11 +48,13 @@ public interface ValueDefModifier extends SelfDescribed {
 		 * @param content The content that specified the modifier
 		 */
 		public Default(QonfigToolkit declarer, QonfigValueType typeRestriction, SpecificationType specify, Object defaultValue,
-			LocatedPositionedContent defaultValueContent, String description, PositionedContent content) {
+			LocatedPositionedContent namePosition, LocatedPositionedContent defaultValueContent, String description,
+			PositionedContent content) {
 			theDeclarer = declarer;
 			theTypeRestriction = typeRestriction;
 			theSpecification = specify;
 			theDefaultValue = defaultValue;
+			theNamePosition = namePosition;
 			theDefaultValueContent = defaultValueContent;
 			theDescription = description;
 			theContent = content;
@@ -78,6 +83,11 @@ public interface ValueDefModifier extends SelfDescribed {
 		@Override
 		public String getDescription() {
 			return theDescription;
+		}
+
+		@Override
+		public LocatedPositionedContent getNamePosition() {
+			return theNamePosition;
 		}
 
 		@Override

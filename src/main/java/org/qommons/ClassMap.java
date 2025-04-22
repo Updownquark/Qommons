@@ -397,6 +397,10 @@ public class ClassMap<V> {
 		return values[0] == null ? BetterList.empty() : BetterList.of(values[0]);
 	}
 
+	public int size() {
+		return theRoot.size();
+	}
+
 	/** @return A set containing all top-level classes with values in this map */
 	public synchronized Set<Class<?>> getTopLevelKeys() {
 		if (isEmpty())

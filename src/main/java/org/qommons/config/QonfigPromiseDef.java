@@ -2,7 +2,6 @@ package org.qommons.config;
 
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Supplier;
 
 import org.qommons.MultiInheritanceSet;
 import org.qommons.collect.BetterMultiMap;
@@ -11,7 +10,8 @@ import org.qommons.io.PositionedContent;
 
 /** A sub-type of element-def that specifies an element that refers to some content that is promised to extend/inherit certain types */
 public class QonfigPromiseDef extends QonfigElementDef {
-	private final Supplier<QonfigElementDef> thePromisedType;
+	private final QonfigPromiseFulfillment theFulfillment;
+	private final QonfigElementDef thePromisedType;
 	private final MultiInheritanceSet<QonfigAddOn> thePromisedInheritance;
 
 	/**
@@ -43,17 +43,23 @@ public class QonfigPromiseDef extends QonfigElementDef {
 		Map<org.qommons.config.QonfigChildDef.Declared, ChildDefModifier> childModifiers,
 		Map<org.qommons.config.QonfigChildDef.Declared, QonfigChildDef> allChildren, BetterMultiMap<String, QonfigChildDef> childrenByName,
 		ValueDefModifier value, MultiInheritanceSet<QonfigAddOn> fullInheritance, QonfigElementDef metaSpec, PositionedContent position,
-		String description, Supplier<QonfigElementDef> promisedType, MultiInheritanceSet<QonfigAddOn> promisedInheritance) {
+		String description, QonfigPromiseFulfillment fulfillment, QonfigElementDef promisedType,
+		MultiInheritanceSet<QonfigAddOn> promisedInheritance) {
 		super(declarer, name, superElement, inheritance, isAbstract, declaredAttributes, attributeModifiers, allAttributes,
 			attributesByName, declaredChildren, childModifiers, allChildren, childrenByName, value, fullInheritance, metaSpec, position,
 			description);
+		theFulfillment = fulfillment;
 		thePromisedType = promisedType;
 		thePromisedInheritance = promisedInheritance;
 	}
 
+	public QonfigPromiseFulfillment getFulfillment() {
+		return theFulfillment;
+	}
+
 	/** @return The element type that elements fulfilled by this promise must extend */
 	public QonfigElementDef getPromisedType() {
-		return thePromisedType.get();
+		return thePromisedType;
 	}
 
 	/** @return The inheritance that elements fulfilled by this promise will inherit */

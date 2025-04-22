@@ -38,7 +38,7 @@ public class ElementQualifiedParseItem {
 		this.position = position;
 	}
 
-	/** @return The qualifier, as it wa specified, or the empty string if there was no qualifier */
+	/** @return The qualifier, as it was specified, or the empty string if there was no qualifier */
 	public String printQualifier() {
 		if (declaredElementName == null)
 			return "";

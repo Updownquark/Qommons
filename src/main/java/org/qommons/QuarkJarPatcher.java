@@ -30,7 +30,41 @@ import org.w3c.dom.Node;
 import org.w3c.dom.Text;
 import org.xml.sax.SAXException;
 
-/** A class for creating and applying patches to applications */
+/**
+ * <p>
+ * A class for creating and applying patches to applications.
+ * </p>
+ * <p>
+ * The use case for this class is a very small modification (consisting of changes to and/or additions of a small number of classes or other
+ * files) to a large application. The patch files created by this class are extremely small--currently less than 30KB in addition to the
+ * (compressed) application files needed for the patched functionality. These files can usually be sent over email (though, being executable
+ * jar files, they are sometimes blocked by email filters and firewalls), as opposed to sending a new version of the application, which may
+ * require large uploads and downloads using commercial applications facilitating transfer of large files.
+ * </p>
+ * <p>
+ * The patch files created by this class are executable jar files. To apply them, the end user should:
+ * <ol>
+ * <li>Shut down the application if it is running.</li>
+ * <li>Execute the patch file (e.g. via double-click) on the system where the application is installed. (The Java runtime environment (or
+ * SDK) must be installed on the system as well.)</li>
+ * <li>In the file chooser the patch shows, select the installation directory of the application (the patch file may contain one or more
+ * initial guesses for the parent file of the installation directory).</li>
+ * <li>After the patch apples itself, restart the application.</li>
+ * </ol>
+ * </p>
+ * <p>
+ * To create a patch:
+ * <ol>
+ * <li>Create an XML file with extension ".patch". This patch file contains the list of files to add or replace in the installed
+ * application, including the resource location in the source environment (where the patch creation is executing). An example patch file is
+ * provided co-located with this source file.</li>
+ * <li>Run the main method for this class, with a single command-line argument that is the location of the patch file.</li>
+ * <li>This class will create a file with the same name as the patch file with ".jar" appended in the location where this class is executed
+ * from (not necessarily co-located with the patch file).</li>
+ * <li>Send the patch file to the end user with the above instructions for applying it.</li>
+ * </ol>
+ * </p>
+ */
 public class QuarkJarPatcher {
 	private static final String PATCH_MANIFEST = "Manifest-Version: 1.0"//
 		+ "\nMain-Class: " + QuarkJarPatcher.class.getName()//
@@ -49,7 +83,8 @@ public class QuarkJarPatcher {
 			.with(CountingInputStream.class, "")//
 			.with(MiniFileUtils.class, "Zip extraction utility class")//
 			.with(MiniFileUtils.ArchiveEntry.class, "").with(MiniFileUtils.ArchiveEntry.Default.class, "")//
-			.with(ExBiConsumer.class, "").with(ExConsumer.class, "").with(CheckedExceptionWrapper.class, "")//
+			.with(ExBiConsumer.class, "").with(ExConsumer.class, "").with(ExConsumer.DO_NOTHING.getClass(), "")//
+			.with(CheckedExceptionWrapper.class, "")//
 			.getUnmodifiable();
 	}
 
@@ -389,9 +424,7 @@ public class QuarkJarPatcher {
 							if (!parent.exists() && !parent.mkdirs())
 								throw new IOException("Could not create " + parent.getAbsolutePath());
 							File patchFile = extractedFiles.remove(content.getValue());
-							try (
-								CountingInputStream in = new CountingInputStream(
-									new BufferedInputStream(new FileInputStream(patchFile))); //
+							try (CountingInputStream in = new CountingInputStream(new BufferedInputStream(new FileInputStream(patchFile))); //
 								OutputStream out = new BufferedOutputStream(new FileOutputStream(targetFile))) {
 								int read = in.read(buffer);
 								while (read >= 0) {
@@ -447,8 +480,7 @@ public class QuarkJarPatcher {
 									zipOut.putNextEntry(zipEntry);
 									MiniFileUtils.copy(entry.getContent(), zipOut);
 								}
-								status(null, entry.getPath(),
-									Math.round((fcsf + targetIn.getPosition() * 0.9f) * 1000.0f / tl), status,
+								status(null, entry.getPath(), Math.round((fcsf + targetIn.getPosition() * 0.9f) * 1000.0f / tl), status,
 									progress, uiDirty);
 							}, null);
 							// Now insert added files
@@ -544,24 +576,24 @@ public class QuarkJarPatcher {
 
 	private static File getStartingDir(Patch patch) {
 		for (String dir : patch.getLookInDirs()) {
-			Matcher match=SYS_PROP_PATTERN.matcher(dir);
-			int offset=0;
-			boolean valid=true;
+			Matcher match = SYS_PROP_PATTERN.matcher(dir);
+			int offset = 0;
+			boolean valid = true;
 			while (match.find()) {
-				String propName=match.group("prop");
-				String propValue=System.getProperty(propName);
-				if(propValue==null) {
-					valid=false;
-					System.out.println("No such property found: '"+propName+"'");
+				String propName = match.group("prop");
+				String propValue = System.getProperty(propName);
+				if (propValue == null) {
+					valid = false;
+					System.out.println("No such property found: '" + propName + "'");
 					break;
 				}
 				int matchLength = match.end() - match.start();
 				dir = dir.substring(0, offset + match.start())//
-					+propValue//
+					+ propValue//
 					+ dir.substring(offset + matchLength);
 				offset += propValue.length() - matchLength;
 			}
-			if(!valid)
+			if (!valid)
 				continue;
 			File f = new File(dir);
 			if (!f.exists()) {
@@ -638,6 +670,8 @@ public class QuarkJarPatcher {
 		}
 		File patchFile = new File(patchFileName + ".jar"); // Create patch file in current working dir
 		try (ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(patchFile)))) {
+			zip.setLevel(9);
+			zip.setComment(patch.getPatchDescription());
 			// First, the patch file itself
 			ZipEntry entry = new ZipEntry(patchFileName); // Put in the root of the patch file
 			entry.setLastModifiedTime(FileTime.fromMillis(patchConfigFile.getLastModified()));

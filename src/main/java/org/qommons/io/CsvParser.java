@@ -48,6 +48,7 @@ import org.qommons.collect.QuickSet.QuickMap;
 public class CsvParser implements TabularFileParser {
 	final Reader theReader;
 	final char theDelimiter;
+	private final long theFileLength;
 	int theTabColumnOffset;
 	private final CsvParseState theParseState;
 	private int thePassedBlankLines;
@@ -65,9 +66,10 @@ public class CsvParser implements TabularFileParser {
 	 * @param reader The reader to parse CSV data from
 	 * @param delimiter The delimiter character for the CSV file
 	 */
-	public CsvParser(Reader reader, char delimiter) {
+	public CsvParser(Reader reader, char delimiter, long fileLength) {
 		theReader = reader;
 		theDelimiter = delimiter;
+		theFileLength = fileLength;
 		theTabColumnOffset = 1;
 		theEntryNumber = -1;
 		theParseState = new CsvParseState();
@@ -77,6 +79,16 @@ public class CsvParser implements TabularFileParser {
 	/** @return The delimiter character used to parse CSV */
 	public char getDelimiter() {
 		return theDelimiter;
+	}
+
+	@Override
+	public long getFileLength() {
+		return theFileLength;
+	}
+
+	@Override
+	public long getParseProgress() {
+		return theCurrentByteOffset;
 	}
 
 	/**
@@ -476,7 +488,7 @@ public class CsvParser implements TabularFileParser {
 		try (CountingInputStream stream = new CountingInputStream(src.read()); //
 			Reader in = new InputStreamReader(stream); //
 			Writer out = new BufferedWriter(new OutputStreamWriter(parsedArgs.get("target", BetterFile.class).write()))) {
-			CsvParser parser = new CsvParser(in, delimiter.charAt(0));
+			CsvParser parser = new CsvParser(in, delimiter.charAt(0), src.length());
 			String[] header = parser.parseNextLine();
 			for (String f : filters.keySet()) {
 				boolean found = false;

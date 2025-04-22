@@ -103,7 +103,15 @@ public class QonfigToolkit implements Named, SelfDescribed {
 		public ToolkitDef(QonfigToolkit toolkit) {
 			this(toolkit.getName(), toolkit.getMajorVersion(), toolkit.getMinorVersion());
 		}
-	
+
+		/**
+		 * @param toolkit The toolkit to test
+		 * @return Whether the given toolkit matches this definition
+		 */
+		public boolean matches(QonfigToolkit toolkit) {
+			return name.equals(toolkit.getName()) && majorVersion == toolkit.getMajorVersion() && minorVersion == toolkit.getMinorVersion();
+		}
+
 		@Override
 		public int hashCode() {
 			return Objects.hash(name, majorVersion);

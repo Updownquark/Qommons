@@ -1,6 +1,13 @@
 package org.qommons;
 
-/** Abstract implementation of {@link CharSequence} that handles {@link #subSequence(int, int)} and the Object methods */
+/**
+ * <p>
+ * Abstract implementation of {@link CharSequence} that handles {@link #subSequence(int, int)} and the Object methods.
+ * </p>
+ * <p>
+ * This class also has the property that its {@link #hashCode()} method produces the same results as equivalent {@link String}s.
+ * </p>
+ */
 public abstract class AbstractCharSequence implements CharSequence {
 	private int hash; // Default to 0
 
@@ -48,5 +55,72 @@ public abstract class AbstractCharSequence implements CharSequence {
 		for (int i = 0; i < ch.length; i++)
 			ch[i] = charAt(i);
 		return new String(ch);
+	}
+
+	public static LowerCase toLowerCase(CharSequence seq) {
+		return new LowerCase(seq);
+	}
+
+	public static Reversed reverse(CharSequence seq) {
+		return new Reversed(seq);
+	}
+
+	public static class Simple extends AbstractCharSequence {
+		private final char[] chars;
+
+		public Simple(char[] chars) {
+			this.chars = chars;
+		}
+
+		@Override
+		public int length() {
+			return chars.length;
+		}
+
+		@Override
+		public char charAt(int index) {
+			return chars[index];
+		}
+	}
+
+	public static class LowerCase extends AbstractCharSequence {
+		private final CharSequence theWrapped;
+
+		public LowerCase(CharSequence wrapped) {
+			theWrapped = wrapped;
+		}
+
+		@Override
+		public int length() {
+			return theWrapped.length();
+		}
+
+		@Override
+		public char charAt(int index) {
+			char ch = theWrapped.charAt(index);
+			if (ch >= 'A' && ch <= 'Z')
+				return (char) (ch - 'A' + 'a');
+			return ch;
+		}
+	}
+
+	public static class Reversed extends AbstractCharSequence {
+		private final CharSequence theWrapped;
+
+		public Reversed(CharSequence wrapped) {
+			theWrapped = wrapped;
+		}
+
+		@Override
+		public int length() {
+			return theWrapped.length();
+		}
+
+		@Override
+		public char charAt(int index) {
+			if (index < 0 || index >= theWrapped.length())
+				throw new IndexOutOfBoundsException(index + " of " + theWrapped.length());
+			return theWrapped.charAt(theWrapped.length() - index - 1);
+		}
 	}
 }

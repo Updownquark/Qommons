@@ -2,10 +2,10 @@ package org.qommons.config;
 
 import java.util.*;
 
-import org.qommons.BiTuple;
-import org.qommons.ClassMap;
-import org.qommons.ClassMap.TypeMatch;
 import org.qommons.MultiInheritanceSet;
+import org.qommons.MultiInheritanceView;
+import org.qommons.MultiInheritanceView.MultiInheritanceMap2;
+import org.qommons.MultiInheritanceView.TypeMatch;
 import org.qommons.QommonsUtils;
 import org.qommons.Transaction;
 import org.qommons.ex.ExBiConsumer;
@@ -25,7 +25,7 @@ public class QonfigInterpreterCore {
 		private final MultiInheritanceSet<QonfigElementOrAddOn> theTypes;
 		private final int theChildIndex;
 		private final SessionValues.Default theValues;
-		private final ClassMap<SpecialSession<?>> theToolkitSessions;
+		private final MultiInheritanceMap2<Class<?>, SpecialSession<?>> theToolkitSessions;
 
 		/**
 		 * Creates the root session for interpretation
@@ -47,7 +47,7 @@ public class QonfigInterpreterCore {
 			theTypes = MultiInheritanceSet.empty();
 			theValues = SessionValues.newRoot();
 			theChildIndex = 0;
-			theToolkitSessions = new ClassMap<>();
+			theToolkitSessions = MultiInheritanceView.createClassMap();
 		}
 
 		/**
@@ -69,7 +69,7 @@ public class QonfigInterpreterCore {
 			theFocusType = focusType;
 			theTypes = types;
 			theChildIndex = childIndex;
-			theToolkitSessions = new ClassMap<>();
+			theToolkitSessions = MultiInheritanceView.createClassMap();
 			if (parent.getElement() == element) {
 				theReporting = parent.theReporting;
 				theValues = parent.theValues;
@@ -77,6 +77,14 @@ public class QonfigInterpreterCore {
 				theReporting = parent.theReporting.at(element.getFilePosition());
 				theValues = parent.theValues.createChild();
 			}
+		}
+
+		@Override
+		public String getInterpretingDocument() {
+			CoreSession session = this;
+			while (session.theElement.getDocument() instanceof QonfigMetadata)
+				session = session.theParent;
+			return session.theElement.getDocument().getLocation();
 		}
 
 		@Override
@@ -139,7 +147,8 @@ public class QonfigInterpreterCore {
 
 		@Override
 		public <QIS extends SpecialSession<QIS>> QIS as(Class<QIS> interpreter) throws QonfigInterpretationException {
-			BiTuple<Class<QIS>, SpecialSessionImplementation<QIS>> found = (BiTuple<Class<QIS>, SpecialSessionImplementation<QIS>>) (BiTuple<?, ?>) theInterpreter.theSpecialSessions
+			Map.Entry<Class<QIS>, SpecialSessionImplementation<QIS>> found;
+			found = (Map.Entry<Class<QIS>, SpecialSessionImplementation<QIS>>) (Map.Entry<?, ?>) theInterpreter.theSpecialSessions
 				.getEntry(interpreter, TypeMatch.SUB_TYPE);
 			if (found == null)
 				throw new IllegalArgumentException("Unsupported toolkit interpreter: " + interpreter.getName());
@@ -158,35 +167,36 @@ public class QonfigInterpreterCore {
 		 * @see SpecialSession#interpretRoot(QonfigElement)
 		 */
 		public <QIS extends SpecialSession<QIS>> QIS recast(QIS interpreter) throws QonfigInterpretationException {
-			BiTuple<Class<QIS>, SpecialSessionImplementation<QIS>> found = (BiTuple<Class<QIS>, SpecialSessionImplementation<QIS>>) (BiTuple<?, ?>) theInterpreter.theSpecialSessions
+			Map.Entry<Class<QIS>, SpecialSessionImplementation<QIS>> found;
+			found = (Map.Entry<Class<QIS>, SpecialSessionImplementation<QIS>>) (Map.Entry<?, ?>) theInterpreter.theSpecialSessions
 				.getEntry(interpreter.getClass(), TypeMatch.SUPER_TYPE);
 			if (found == null)
 				throw new IllegalArgumentException("Unsupported toolkit interpreter: " + interpreter.getClass().getName());
 			return special(found);
 		}
 
-		private <QIS extends SpecialSession<QIS>> QIS special(BiTuple<Class<QIS>, SpecialSessionImplementation<QIS>> found)
+		private <QIS extends SpecialSession<QIS>> QIS special(Map.Entry<Class<QIS>, SpecialSessionImplementation<QIS>> found)
 			throws QonfigInterpretationException {
-			QIS session = (QIS) theToolkitSessions.get(found.getValue1(), TypeMatch.EXACT);
+			QIS session = (QIS) theToolkitSessions.get(found.getKey(), TypeMatch.EXACT);
 			if (session == null) {
 				if (theParent == null) {
-					session = found.getValue2().viewOfRoot(this, null);
-					theToolkitSessions.with(found.getValue1(), session);
-					found.getValue2().postInitRoot(session, null);
+					session = found.getValue().viewOfRoot(this, null);
+					theToolkitSessions.with(found.getKey(), session);
+					found.getValue().postInitRoot(session, null);
 				} else {
-					QIS parent = theParent.as(found.getValue1());
+					QIS parent = theParent.as(found.getKey());
 					if (theParent.getElement() == getElement()) {
-						session = found.getValue2().parallelView(parent, this);
-						theToolkitSessions.with(found.getValue1(), session);
-						found.getValue2().postInitParallel(session, parent);
+						session = found.getValue().parallelView(parent, this);
+						theToolkitSessions.with(found.getKey(), session);
+						found.getValue().postInitParallel(session, parent);
 					} else if (theElement.getParent() == null) {
-						session = found.getValue2().viewOfRoot(this, parent);
-						theToolkitSessions.with(found.getValue1(), session);
-						found.getValue2().postInitRoot(session, parent);
+						session = found.getValue().viewOfRoot(this, parent);
+						theToolkitSessions.with(found.getKey(), session);
+						found.getValue().postInitRoot(session, parent);
 					} else {
-						session = found.getValue2().viewOfChild(parent, this);
-						theToolkitSessions.with(found.getValue1(), session);
-						found.getValue2().postInitChild(session, parent);
+						session = found.getValue().viewOfChild(parent, this);
+						theToolkitSessions.with(found.getKey(), session);
+						found.getValue().postInitChild(session, parent);
 					}
 				}
 			}
@@ -214,13 +224,13 @@ public class QonfigInterpreterCore {
 		public <T> T interpret(QonfigElementOrAddOn as, Class<T> asType,
 			ExBiConsumer<? super T, ? super CoreSession, QonfigInterpretationException> action) throws QonfigInterpretationException {
 			try (Transaction t = theReporting.interpreting()) {
-				ClassMap<QonfigCreatorHolder<?>> creators = theInterpreter.theCreators.get(as);
+				MultiInheritanceView<Class<?>, QonfigCreatorHolder<?>> creators = theInterpreter.theCreators.get(as);
 				QonfigCreatorHolder<T> creator = creators == null ? null
-					: (QonfigCreatorHolder<T>) creators.get(asType, ClassMap.TypeMatch.SUB_TYPE);
+					: (QonfigCreatorHolder<T>) creators.get(asType, TypeMatch.SUB_TYPE);
 				if (creator == null) {
 					as = getElement().getType();
 					creators = theInterpreter.theCreators.get(as);
-					creator = creators == null ? null : (QonfigCreatorHolder<T>) creators.get(asType, ClassMap.TypeMatch.SUB_TYPE);
+					creator = creators == null ? null : (QonfigCreatorHolder<T>) creators.get(asType, TypeMatch.SUB_TYPE);
 				}
 				if (creator == null) {
 					String msg = "No creator registered for element " + as.getDeclarer() + ":" + as + " and target type "
@@ -303,8 +313,8 @@ public class QonfigInterpreterCore {
 
 		@Override
 		public <T> Class<? extends T> getInterpretationSupport(Class<T> asType) {
-			ClassMap<QonfigCreatorHolder<?>> creators = theInterpreter.theCreators.get(theFocusType);
-			QonfigCreatorHolder<?> creator = creators == null ? null : creators.get(asType, ClassMap.TypeMatch.SUB_TYPE);
+			MultiInheritanceView<Class<?>, QonfigCreatorHolder<?>> creators = theInterpreter.theCreators.get(theFocusType);
+			QonfigCreatorHolder<?> creator = creators == null ? null : creators.get(asType, TypeMatch.SUB_TYPE);
 			return creator == null ? null : ((QonfigCreatorHolder<? extends T>) creator).type;
 		}
 
@@ -350,15 +360,15 @@ public class QonfigInterpreterCore {
 			Map<QonfigValueModifier<T>, QonfigModifierHolder<T>> modifiers2) throws QonfigInterpretationException {
 			if (modifierType == null)
 				return;
-			ClassMap<List<QonfigModifierHolder<?>>> modifiers = theInterpreter.theModifiers.get(modifierType);
+			MultiInheritanceView<Class<?>, List<QonfigModifierHolder<?>>> modifiers = theInterpreter.theModifiers.get(modifierType);
 			if (modifiers == null)
 				return;
-			List<BiTuple<Class<?>, List<QonfigModifierHolder<?>>>> typeModifiers = modifiers.getAllEntries(type,
-				ClassMap.TypeMatch.SUPER_TYPE);
+			Iterable<? extends Map.Entry<Class<?>, List<QonfigModifierHolder<?>>>> typeModifiers = modifiers.getEntries(type,
+				TypeMatch.SUPER_TYPE);
 			if (typeModifiers == null)
 				return;
-			for (BiTuple<Class<?>, List<QonfigModifierHolder<?>>> modifiers3 : typeModifiers) {
-				for (QonfigModifierHolder<?> modifier : modifiers3.getValue2()) {
+			for (Map.Entry<Class<?>, List<QonfigModifierHolder<?>>> modifiers3 : typeModifiers) {
+				for (QonfigModifierHolder<?> modifier : modifiers3.getValue()) {
 					modifiers2.putIfAbsent((QonfigValueModifier<T>) modifier.modifier, (QonfigModifierHolder<T>) modifier);
 				}
 			}
@@ -533,9 +543,9 @@ public class QonfigInterpreterCore {
 	}
 
 	private final Set<QonfigToolkit> theKnownToolkits;
-	private final Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> theCreators;
-	private final Map<QonfigElementOrAddOn, ClassMap<List<QonfigModifierHolder<?>>>> theModifiers;
-	private final ClassMap<SpecialSessionImplementation<?>> theSpecialSessions;
+	private final Map<QonfigElementOrAddOn, MultiInheritanceView<Class<?>, QonfigCreatorHolder<?>>> theCreators;
+	private final Map<QonfigElementOrAddOn, MultiInheritanceView<Class<?>, List<QonfigModifierHolder<?>>>> theModifiers;
+	private final MultiInheritanceView.MultiInheritanceMap2<Class<?>, SpecialSessionImplementation<?>> theSpecialSessions;
 	private final ExceptionThrowingReporting theReporting;
 
 	/**
@@ -546,9 +556,9 @@ public class QonfigInterpreterCore {
 	 * @param reporting The error reporting for the interpretation
 	 */
 	protected QonfigInterpreterCore(Set<QonfigToolkit> allKnownToolkits,
-		Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
-		Map<QonfigElementOrAddOn, ClassMap<List<QonfigModifierHolder<?>>>> modifiers,
-		ClassMap<SpecialSessionImplementation<?>> specialSessions, ExceptionThrowingReporting reporting) {
+		Map<QonfigElementOrAddOn, MultiInheritanceView<Class<?>, QonfigCreatorHolder<?>>> creators,
+		Map<QonfigElementOrAddOn, MultiInheritanceView<Class<?>, List<QonfigModifierHolder<?>>>> modifiers,
+		MultiInheritanceView<Class<?>, SpecialSessionImplementation<?>> specialSessions, ExceptionThrowingReporting reporting) {
 		theKnownToolkits = allKnownToolkits;
 		theCreators = creators;
 		theModifiers = modifiers;
@@ -619,9 +629,9 @@ public class QonfigInterpreterCore {
 		private final Set<QonfigToolkit> theToolkits;
 		private final QonfigToolkit theToolkit;
 		private final ExceptionThrowingReporting theReporting;
-		private final Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> theCreators;
-		private final Map<QonfigElementOrAddOn, ClassMap<List<QonfigModifierHolder<?>>>> theModifiers;
-		private final ClassMap<SpecialSessionImplementation<?>> theSpecialSessions;
+		private final Map<QonfigElementOrAddOn, MultiInheritanceMap2<Class<?>, QonfigCreatorHolder<?>>> theCreators;
+		private final Map<QonfigElementOrAddOn, MultiInheritanceMap2<Class<?>, List<QonfigModifierHolder<?>>>> theModifiers;
+		private final MultiInheritanceMap2<Class<?>, SpecialSessionImplementation<?>> theSpecialSessions;
 
 		/**
 		 * Initial constructor called from {@link QonfigInterpreterCore#build(ErrorReporting, QonfigToolkit...)}
@@ -637,7 +647,7 @@ public class QonfigInterpreterCore {
 			theReporting = reporting;
 			theCreators = new HashMap<>();
 			theModifiers = new HashMap<>();
-			theSpecialSessions = new ClassMap<>();
+			theSpecialSessions = MultiInheritanceView.createClassMap();
 
 			reporting.ignoreClass(QonfigParseSession.class.getName());
 			reporting.ignoreClass(QonfigInterpreterCore.class.getName());
@@ -659,9 +669,9 @@ public class QonfigInterpreterCore {
 		 * @param specialSessions Special session implementations configured for the builder
 		 */
 		protected Builder(Set<QonfigToolkit> toolkits, QonfigToolkit toolkit, ExceptionThrowingReporting reporting,
-			Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
-			Map<QonfigElementOrAddOn, ClassMap<List<QonfigModifierHolder<?>>>> modifiers,
-			ClassMap<SpecialSessionImplementation<?>> specialSessions) {
+			Map<QonfigElementOrAddOn, MultiInheritanceMap2<Class<?>, QonfigCreatorHolder<?>>> creators,
+			Map<QonfigElementOrAddOn, MultiInheritanceMap2<Class<?>, List<QonfigModifierHolder<?>>>> modifiers,
+			MultiInheritanceMap2<Class<?>, SpecialSessionImplementation<?>> specialSessions) {
 			theToolkits = toolkits;
 			theToolkit = toolkit;
 			theReporting = reporting;
@@ -680,9 +690,10 @@ public class QonfigInterpreterCore {
 		 * @return A new builder with the given data
 		 */
 		protected Builder builderFor(Set<QonfigToolkit> toolkits, QonfigToolkit toolkit,
-			ExceptionThrowingReporting reporting, Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> creators,
-			Map<QonfigElementOrAddOn, ClassMap<List<QonfigModifierHolder<?>>>> modifiers,
-			ClassMap<SpecialSessionImplementation<?>> specialSessions) {
+			ExceptionThrowingReporting reporting,
+			Map<QonfigElementOrAddOn, MultiInheritanceMap2<Class<?>, QonfigCreatorHolder<?>>> creators,
+			Map<QonfigElementOrAddOn, MultiInheritanceMap2<Class<?>, List<QonfigModifierHolder<?>>>> modifiers,
+			MultiInheritanceMap2<Class<?>, SpecialSessionImplementation<?>> specialSessions) {
 			return new Builder(toolkits, toolkit, reporting, creators, modifiers, specialSessions);
 		}
 
@@ -703,12 +714,12 @@ public class QonfigInterpreterCore {
 		}
 
 		/** @return The value creators configured in this builder */
-		protected Map<QonfigElementOrAddOn, ClassMap<QonfigCreatorHolder<?>>> getCreators() {
+		protected Map<QonfigElementOrAddOn, MultiInheritanceView<Class<?>, QonfigCreatorHolder<?>>> getCreators() {
 			return QommonsUtils.unmodifiableCopy(theCreators);
 		}
 
 		/** @return The value modifiers configured in this builder */
-		protected Map<QonfigElementOrAddOn, ClassMap<List<QonfigModifierHolder<?>>>> getModifiers() {
+		protected Map<QonfigElementOrAddOn, MultiInheritanceView<Class<?>, List<QonfigModifierHolder<?>>>> getModifiers() {
 			return QommonsUtils.unmodifiableCopy(theModifiers);
 		}
 
@@ -778,7 +789,7 @@ public class QonfigInterpreterCore {
 				throw new IllegalArgumentException("Element " + element.getName() + " is from a toolkit not included in " + theToolkits);
 			theCreators.compute(element, (el, old) -> {
 				if (old == null)
-					old = new ClassMap<>();
+					old = MultiInheritanceView.createClassMap();
 				// If it already exists, assume this just called twice via dependencies
 				old.computeIfAbsent(type, () -> new QonfigCreatorHolder<>(element, type, creator));
 				return old;
@@ -903,7 +914,7 @@ public class QonfigInterpreterCore {
 			if (!dependsOn(elementOrAddOn.getDeclarer()))
 				throw new IllegalArgumentException(
 					"Element " + elementOrAddOn.getName() + " is from a toolkit not included in " + theToolkits);
-			theModifiers.computeIfAbsent(elementOrAddOn, __ -> new ClassMap<>())//
+			theModifiers.computeIfAbsent(elementOrAddOn, __ -> MultiInheritanceView.createClassMap())//
 				.computeIfAbsent(type, ArrayList::new)//
 				.add(new QonfigModifierHolder<>(elementOrAddOn, type, modifier));
 			return this;
@@ -981,16 +992,16 @@ public class QonfigInterpreterCore {
 				for (QonfigElementDef el : tk.getAllElements().values()) {
 					if (el.isAbstract())
 						continue;
-					ClassMap<QonfigCreatorHolder<?>> creators = theCreators.get(el);
+					MultiInheritanceMap2<Class<?>, QonfigCreatorHolder<?>> creators = theCreators.get(el);
 					if (creators == null) {
 						// theStatus.error(el, "No creator configured for element");
 					} else {
-						for (BiTuple<Class<?>, QonfigCreatorHolder<?>> holder : creators.getAllEntries()) {
-							if (holder.getValue2().creator instanceof QonfigExtensionCreator) {
-								QonfigExtensionCreator<?, ?> ext = (QonfigExtensionCreator<?, ?>) holder.getValue2().creator;
-								ClassMap<QonfigCreatorHolder<?>> superHolders = theCreators.get(ext.theSuperElement);
+						for (Map.Entry<Class<?>, QonfigCreatorHolder<?>> holder : creators.entries()) {
+							if (holder.getValue().creator instanceof QonfigExtensionCreator) {
+								QonfigExtensionCreator<?, ?> ext = (QonfigExtensionCreator<?, ?>) holder.getValue().creator;
+								MultiInheritanceMap2<Class<?>, QonfigCreatorHolder<?>> superHolders = theCreators.get(ext.theSuperElement);
 								QonfigCreatorHolder<?> superHolder = superHolders == null ? null
-									: superHolders.get(holder.getValue1(), ClassMap.TypeMatch.SUB_TYPE);
+									: superHolders.get(holder.getKey(), TypeMatch.SUB_TYPE);
 								if (superHolder == null) {
 									// If the super element is not abstract, there will be a separate error for its not having a creator
 									// If it is abstract, we need one here

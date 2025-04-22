@@ -9,6 +9,27 @@ import java.util.function.Consumer;
  * @param <X> The type of exception to throw
  */
 public interface ExConsumer<T, X extends Throwable> {
+	/** Does nothing */
+	public static final ExConsumer<Object, NeverThrown> DO_NOTHING = new ExConsumer<Object, NeverThrown>() {
+		@Override
+		public void accept(Object value) {
+		}
+
+		@Override
+		public String toString() {
+			return "DoNothing";
+		}
+	};
+
+	/**
+	 * @param <T> The type to consume
+	 * @param <X> The type to (not) throw
+	 * @return A consumer that does nothing
+	 */
+	public static <T, X extends Throwable> ExConsumer<T, X> doNothing() {
+		return (ExConsumer<T, X>) DO_NOTHING;
+	}
+
 	/**
 	 * @param value The value to consume
 	 * @throws X If an error occurs

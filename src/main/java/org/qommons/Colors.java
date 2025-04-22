@@ -1431,6 +1431,12 @@ public class Colors {
 		return 1 - getBrightness(color);
 	}
 
+	/**
+	 * Performs a somewhat subjective analysis of a color to determine how bright it looks to a user
+	 * 
+	 * @param color The color to analyze
+	 * @return The darkness of the color on a scale of 1 (completely white) to 0 (completely black)
+	 */
 	public static float getBrightness(Color color) {
 		int r = color.getRed();
 		int g = color.getGreen();

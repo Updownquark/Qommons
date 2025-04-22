@@ -3,6 +3,7 @@ package org.qommons.config;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.util.Map;
 
 import org.qommons.io.TextParseException;
 
@@ -17,14 +18,6 @@ public interface QonfigParser {
 	QonfigParser withToolkit(QonfigToolkit... toolkits);
 
 	/**
-	 * Adds a promise fulfillment implementation to this parser
-	 * 
-	 * @param stitcher A class to load and fulfill external content for certain types of references
-	 * @return This parser
-	 */
-	QonfigParser withPromiseFulfillment(QonfigPromiseFulfillment stitcher);
-
-	/**
 	 * @param location The location of the toolkit to parse
 	 * @param content The stream content to parse
 	 * @param customValueTypes Custom value types to be used by the toolkit
@@ -33,8 +26,8 @@ public interface QonfigParser {
 	 * @throws TextParseException If the document structure itself cannot be parsed
 	 * @throws QonfigParseException If the toolkit cannot be parsed from the stream
 	 */
-	QonfigToolkit parseToolkit(URL location, InputStream content, CustomValueType... customValueTypes)
-		throws IOException, TextParseException, QonfigParseException;
+	QonfigToolkit parseToolkit(URL location, InputStream content, Map<String, QonfigPromiseFulfillment> promiseFulfillment,
+		CustomValueType... customValueTypes) throws IOException, TextParseException, QonfigParseException;
 
 	/**
 	 * @param partial Whether to create a partially-validated document structure. These are useful as templates for creating full content

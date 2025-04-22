@@ -363,5 +363,10 @@ public interface SessionValues {
 			ValueContainer container = theValues.get(sessionKey);
 			return container == null ? null : container.getSource();
 		}
+
+		@Override
+		public String toString() {
+			return theValues.toString();
+		}
 	}
 }

@@ -94,6 +94,7 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		private final QonfigToolkit theDeclarer;
 		private final SpecificationType theSpecification;
 		private final Object theDefaultValue;
+		private final LocatedPositionedContent theNamePosition;
 		private final LocatedPositionedContent theDefaultValueContent;
 		private final String theDescription;
 		private final PositionedContent theContent;
@@ -107,9 +108,11 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		 * @param content The content that specified the modifier
 		 */
 		public ValueModifier(QonfigToolkit declarer, SpecificationType specification, Object defaultValue,
-			LocatedPositionedContent defaultValueContent, String description, PositionedContent content) {
+			LocatedPositionedContent namePosition, LocatedPositionedContent defaultValueContent, String description,
+			PositionedContent content) {
 			theDeclarer = declarer;
 			theDefaultValue = defaultValue;
+			theNamePosition = namePosition;
 			theDefaultValueContent = defaultValueContent;
 			theSpecification = specification;
 			theDescription = description;
@@ -134,6 +137,11 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		@Override
 		public Object getDefaultValue() {
 			return theDefaultValue;
+		}
+
+		@Override
+		public LocatedPositionedContent getNamePosition() {
+			return theNamePosition;
 		}
 
 		@Override
@@ -226,15 +234,6 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 			return true;
 		else if (other.getFullInheritance().contains(this))
 			return true;
-		if (other instanceof QonfigPromiseDef) {
-			QonfigPromiseDef promise = (QonfigPromiseDef) other;
-			if (promise.getPromisedType() != null && isAssignableFrom(promise.getPromisedType()))
-				return true;
-			for (QonfigAddOn inh : promise.getPromisedInheritance().values()) {
-				if (isAssignableFrom(inh))
-					return true;
-			}
-		}
 		return false;
 	}
 
@@ -359,25 +358,29 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 
 		@Override
 		protected ValueModifier valueModifier(QonfigValueType type, SpecificationType specification, Object defaultValue,
-			LocatedPositionedContent defaultValueContent, String description, PositionedContent position) {
-			return new ValueModifier(getSession().getToolkit(), specification, defaultValue, defaultValueContent, description, position);
+			LocatedPositionedContent namePosition, LocatedPositionedContent defaultValueContent, String description,
+			PositionedContent position) {
+			return new ValueModifier(getSession().getToolkit(), specification, defaultValue, namePosition, defaultValueContent, description,
+				position);
 		}
 
 		@Override
 		public Builder withAttribute(String name, QonfigValueType type, SpecificationType specify, Object defaultValue,
-			LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
-			super.withAttribute(name, type, specify, defaultValue, defaultValueContent, position, description);
+			LocatedPositionedContent namePosition, LocatedPositionedContent defaultValueContent, PositionedContent position,
+			String description) {
+			super.withAttribute(name, type, specify, defaultValue, namePosition, defaultValueContent, position, description);
 			return this;
 		}
 
 		@Override
 		public Builder modifyAttribute(QonfigAttributeDef attribute, QonfigValueType type, SpecificationType specification,
-			Object defaultValue, LocatedPositionedContent defaultValueContent, PositionedContent position, String description) {
+			Object defaultValue, LocatedPositionedContent namePosition, LocatedPositionedContent defaultValueContent,
+			PositionedContent position, String description) {
 			if (type != null && !type.equals(attribute.getType())) {
 				theSession.at(position).error("Attribute type cannot be modified by an add-on");
 				type = null;
 			}
-			super.modifyAttribute(attribute, type, specification, defaultValue, defaultValueContent, position, description);
+			super.modifyAttribute(attribute, type, specification, defaultValue, namePosition, defaultValueContent, position, description);
 			return this;
 		}
 

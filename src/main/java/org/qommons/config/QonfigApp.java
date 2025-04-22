@@ -34,7 +34,7 @@ public class QonfigApp {
 			throw new IllegalStateException("Could not locate toolkit definition '" + qonfigAppTKUrl.getPath() + "'", e);
 		}
 		try {
-			QONFIG_APP_TOOLKIT = qonfigParser.parseToolkit(qonfigAppTKUrl, aTKIn);
+			QONFIG_APP_TOOLKIT = qonfigParser.parseToolkit(qonfigAppTKUrl, aTKIn, null);
 			aTKIn.close();
 		} catch (IOException e) {
 			throw new IllegalStateException("Could not read app toolkit definition '" + qonfigAppTKUrl.getPath() + "'", e);
@@ -64,7 +64,7 @@ public class QonfigApp {
 		for (URL appToolkit : appToolkits) {
 			QonfigToolkit appTK;
 			try (InputStream aTKIn = appToolkit.openStream()) {
-				appTK = qonfigParser.parseToolkit(appToolkit, aTKIn);
+				appTK = qonfigParser.parseToolkit(appToolkit, aTKIn, null);
 			} catch (IOException e) {
 				throw new IOException("Could not read app toolkit definition '" + appToolkit.getPath() + "'", e);
 			} catch (XmlParseException e) {
@@ -86,10 +86,16 @@ public class QonfigApp {
 
 		Set<QonfigToolkit> toolkits = new LinkedHashSet<>();
 		// Resolve the dependency toolkits
+		QonfigAttributeDef.Declared promiseNameAttr = qonfigAppTK.getAttribute("promise-fulfillment", "fulfills");
 		ClassLoader loader = Thread.currentThread().getContextClassLoader();
 		for (QonfigElement toolkitEl : appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "toolkit")) {
 			List<CustomValueType> valueTypes = create(toolkitEl.getChildrenInRole(qonfigAppTK, "toolkit", "value-type"),
 				CustomValueType.class);
+			Map<String, QonfigPromiseFulfillment> promiseFulfillment = new LinkedHashMap<>();
+			for (QonfigElement pfEl : toolkitEl.getChildrenInRole(qonfigAppTK, "toolkit", "promise-fulfillment")) {
+				String promiseName = pfEl.getAttributeText(promiseNameAttr);
+				promiseFulfillment.put(promiseName, create(Collections.singleton(pfEl), QonfigPromiseFulfillment.class).get(0));
+			}
 			String toolkitDef = toolkitEl.getAttributeText(qonfigAppTK.getAttribute("toolkit", "def"));
 			URL toolkitURL = loader == null ? null : loader.getResource(toolkitDef);
 			if (toolkitURL == null)
@@ -97,7 +103,7 @@ public class QonfigApp {
 			if (toolkitURL == null)
 				throw new IllegalArgumentException("Could not find toolkit " + toolkitDef);
 			try (InputStream tkIn = toolkitURL.openStream()) {
-				toolkits.add(qonfigParser.parseToolkit(toolkitURL, tkIn, //
+				toolkits.add(qonfigParser.parseToolkit(toolkitURL, tkIn, promiseFulfillment, //
 					valueTypes.toArray(new CustomValueType[valueTypes.size()])));
 			} catch (IOException e) {
 				throw new IllegalStateException("Could not read toolkit " + toolkitDef + ": " + e.getMessage(), e);
@@ -110,9 +116,6 @@ public class QonfigApp {
 			}
 		}
 
-		List<QonfigPromiseFulfillment> promiseFulfillment = create(
-			appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "promise-fulfillment"), QonfigPromiseFulfillment.class);
-
 		List<SpecialSessionImplementation<?>> sessionTypes = create(
 			appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "special-session"),
 			(Class<SpecialSessionImplementation<?>>) (Class<?>) SpecialSessionImplementation.class);
@@ -120,8 +123,7 @@ public class QonfigApp {
 		List<QonfigInterpretation> interpretations = create(appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "interpretation"),
 			QonfigInterpretation.class);
 
-		return new QonfigApp(appDef, appFile, Collections.unmodifiableSet(toolkits), Collections.unmodifiableList(promiseFulfillment),
-			sessionTypes, interpretations);
+		return new QonfigApp(appDef, appFile, Collections.unmodifiableSet(toolkits), sessionTypes, interpretations);
 	}
 
 	/**
@@ -184,7 +186,6 @@ public class QonfigApp {
 	private final QonfigDocument theDocument;
 	private final String theAppFile;
 	private final Set<QonfigToolkit> theToolkits;
-	private final List<QonfigPromiseFulfillment> thePromiseFulfillment;
 	private final List<SpecialSessionImplementation<?>> theSessionTypes;
 	private final List<QonfigInterpretation> theInterpretations;
 
@@ -194,15 +195,13 @@ public class QonfigApp {
 	 * @param toolkits All toolkits configured to support the application
 	 * @param sessionTypes All Qonfig session types configured to support the application
 	 * @param interpretations All Qonfig interpretations configured to support the application
-	 * @param promiseFulfillment
 	 */
 	protected QonfigApp(QonfigDocument document, String appFile, Set<QonfigToolkit> toolkits,
-		List<QonfigPromiseFulfillment> promiseFulfillment, List<SpecialSessionImplementation<?>> sessionTypes,
+		List<SpecialSessionImplementation<?>> sessionTypes,
 		List<QonfigInterpretation> interpretations) {
 		theDocument = document;
 		theAppFile = appFile;
 		theToolkits = toolkits;
-		thePromiseFulfillment = promiseFulfillment;
 		theSessionTypes = sessionTypes;
 		theInterpretations = interpretations;
 	}
@@ -225,11 +224,6 @@ public class QonfigApp {
 	/** @return All toolkits configured to support the application */
 	public Set<QonfigToolkit> getToolkits() {
 		return theToolkits;
-	}
-
-	/** @return All promise fulfillment implementations configured to support loading external content by the application */
-	public List<QonfigPromiseFulfillment> getPromiseFulfillment() {
-		return thePromiseFulfillment;
 	}
 
 	/** @return All Qonfig session types configured to support the application */
@@ -295,9 +289,6 @@ public class QonfigApp {
 		for (QonfigToolkit dep : getToolkits())
 			qonfigParser.withToolkit(dep);
 
-		for (QonfigPromiseFulfillment promise : thePromiseFulfillment)
-			qonfigParser.withPromiseFulfillment(promise);
-
 		// Parse the application file
 		QonfigDocument qonfigDoc;
 		try (InputStream appFileIn = appFileURL.openStream()) {
@@ -307,6 +298,8 @@ public class QonfigApp {
 		} catch (XmlParseException e) {
 			throw new TextParseException("Could not parse application file XML: " + appFileURL + "\n" + e.getMessage(), e.getPosition(), e);
 		}
+
+		appFileParsed(qonfigDoc);
 
 		// Build the interpreter
 		QonfigInterpreterCore.Builder coreBuilder = QonfigInterpreterCore
@@ -325,6 +318,9 @@ public class QonfigApp {
 		if (session != null)
 			session.accept(coreSession);
 		return coreSession.interpret(type);
+	}
+
+	protected void appFileParsed(QonfigDocument doc) {
 	}
 
 	@Override

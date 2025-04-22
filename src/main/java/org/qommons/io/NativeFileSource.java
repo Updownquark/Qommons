@@ -175,7 +175,7 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 			if (canceled.getAsBoolean())
 				return null;
 			InputStream stream = null;
-			// More efficient to use RandomAccessFile if we can
+			// More efficient to use RandomAccessFile if we can, not sure why
 			try {
 				File file = thePath.toFile();
 				RandomAccessFile raf = new RandomAccessFile(file, "r");

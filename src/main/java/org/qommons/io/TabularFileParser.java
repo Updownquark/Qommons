@@ -112,6 +112,32 @@ public interface TabularFileParser extends AutoCloseable {
 	int getColumnOffset(int columnIndex);
 
 	/**
+	 * @param columnIndex The index of the column in the last line parsed
+	 * @return The file position of the specified column in the previous line
+	 */
+	default FilePosition getColumnPosition(int columnIndex) {
+		int lineOffset = (int) getLastLineOffset();
+		int columnOffset = getColumnOffset(columnIndex);
+		return new FilePosition(columnOffset, getLastLineNumber(), columnOffset - lineOffset);
+	}
+
+	/**
+	 * The "length" of this file in some unit specific to this file. This may be e.g. the size of the file in bytes, or the number of rows
+	 * of text in the file, or any other unit the parser can support. This must be consistent with the value returned from
+	 * {@link #getParseProgress()}.
+	 * 
+	 * @return The length of this file, or -1 if this feature is unsupported
+	 */
+	long getFileLength();
+
+	/**
+	 * @return The amount of this file that has been parsed so far in some unit specific to this file. This may be e.g. the number of bytes
+	 *         that have been read from the file, or the number of rows of text that have been parsed, or any other unit the parser can
+	 *         support. This must be consistent with the value returned from {@link #getFileLength()}.
+	 */
+	long getParseProgress();
+
+	/**
 	 * Throws a {@link TextParseException} pointing to the given column of the previously-parsed line in the file. Never called internally,
 	 * this method is useful for when the actual file content was correctly parsed, but a column's data is malformed for the use of the
 	 * calling application.
@@ -151,6 +177,8 @@ public interface TabularFileParser extends AutoCloseable {
 			return null;
 		else if (FileUtils.hasExtension(fileName, "csv") == null)
 			return null;
+		else if (FileUtils.hasExtension(fileName, "tsv") == null)
+			return null;
 		else
 			return "Only CSV and XLSX files are supported";
 	}
@@ -159,7 +187,9 @@ public interface TabularFileParser extends AutoCloseable {
 		if (FileUtils.hasExtension(file, "xlsx") == null)
 			return new XlsxParser(file, XlsxParser.MultipleSheetHandling.UseFirst);
 		else if (FileUtils.hasExtension(file, "csv") == null)
-			return new CsvParser(new BufferedReader(new FileReader(file)), ',');
+			return new CsvParser(new BufferedReader(new FileReader(file)), ',', file.length());
+		else if (FileUtils.hasExtension(file, "tsv") == null)
+			return new CsvParser(new BufferedReader(new FileReader(file)), '\t', file.length());
 		else
 			throw new IllegalArgumentException(isFileTypeSupported(file.getName()));
 	}
@@ -168,7 +198,9 @@ public interface TabularFileParser extends AutoCloseable {
 		if (FileUtils.hasExtension(file.getName(), "xlsx") == null)
 			return new XlsxParser(file, XlsxParser.MultipleSheetHandling.UseFirst);
 		else if (FileUtils.hasExtension(file.getName(), "csv") == null)
-			return new CsvParser(new InputStreamReader(file.read()), ',');
+			return new CsvParser(new InputStreamReader(file.read()), ',', file.length());
+		else if (FileUtils.hasExtension(file.getName(), "tsv") == null)
+			return new CsvParser(new InputStreamReader(file.read()), '\t', file.length());
 		else
 			throw new IllegalArgumentException(isFileTypeSupported(file.getName()));
 	}

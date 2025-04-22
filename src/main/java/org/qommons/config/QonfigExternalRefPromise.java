@@ -6,7 +6,10 @@ import java.io.InputStream;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+import org.qommons.MultiInheritanceSet;
 import org.qommons.config.QonfigElement.AttributeValue;
 import org.qommons.config.QonfigElement.QonfigValue;
 import org.qommons.io.ErrorReporting;
@@ -22,8 +25,12 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 	public static final String EXT_REFERENCE_TYPE = "external-reference";
 	/** The name of the external document element this type loads */
 	public static final String EXT_DOCUMENT_TYPE = "external-document";
+	public static final String FULFILLS = "fulfills";
+	public static final String FULFILLMENT = "fulfillment";
+	public static final String PROMISED = "promised";
+	public static final String PROMISED_INHERITANCE = "promised-inheritance";
 
-	private QonfigElementDef theExtReferenceType;
+	private QonfigPromiseDef theExtReferenceType;
 	private QonfigElementDef theExtContentType;
 	private QonfigAttributeDef.Declared theReferenceAttribute;
 	private QonfigAttributeDef.Declared theFulfillsAttribute;
@@ -42,17 +49,40 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 	}
 
 	@Override
-	public String getQonfigType() {
-		return EXT_REFERENCE_TYPE;
+	public void setPromiseType(QonfigPromiseDef promiseType) {
+		theExtReferenceType = promiseType;
+		theReferenceAttribute = promiseType.getAttribute("ref").getDeclared();
+		theExtContentType = promiseType.getDeclarer().getElement(EXT_DOCUMENT_TYPE);
+		theFulfillsAttribute = theExtContentType.getAttribute(FULFILLS).getDeclared();
+		theFulfillmentChild = theExtContentType.getChild(FULFILLMENT).getDeclared();
 	}
 
 	@Override
-	public void setQonfigType(QonfigElementOrAddOn qonfigType) {
-		theExtReferenceType = (QonfigElementDef) qonfigType;
-		theReferenceAttribute = qonfigType.getAttribute("ref").getDeclared();
-		theExtContentType = qonfigType.getDeclarer().getElement(EXT_DOCUMENT_TYPE);
-		theFulfillsAttribute = theExtContentType.getAttribute("fulfills").getDeclared();
-		theFulfillmentChild = theExtContentType.getChild("fulfillment").getDeclared();
+	public PromisedType getPromisedType(String typeName, QonfigElementDef superType, PromiseAttributeGetter attrs) {
+		QonfigElementDef promisedType;
+		QonfigValue promisedTypeV = attrs.getAttribute(EXT_REFERENCE_TYPE + "." + PROMISED);
+		if (promisedTypeV != null)
+			promisedType = ((QonfigValueType.QonfigTypeReference<QonfigElementDef>) promisedTypeV.value).reference;
+		else if (superType != null)
+			promisedType = ((QonfigPromiseDef) superType).getPromisedType();
+		else
+			promisedType = null;
+		MultiInheritanceSet<QonfigAddOn> promisedInh;
+		QonfigValue promisedInhV = attrs.getAttribute(EXT_REFERENCE_TYPE + "." + PROMISED_INHERITANCE);
+		if (promisedInhV != null) {
+			promisedInh = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom).withAll(//
+				((Set<QonfigValueType.QonfigTypeReference<QonfigAddOn>>) promisedInhV.value).stream()//
+					.map(ref -> ref.reference).collect(Collectors.toSet()));
+		} else if (superType != null)
+			promisedInh = ((QonfigPromiseDef) superType).getPromisedInheritance();
+		else
+			promisedInh = MultiInheritanceSet.empty();
+		return new PromisedType(promisedType, promisedInh);
+	}
+
+	@Override
+	public PromisedType getPromisedType(QonfigPromiseDef type, PartialQonfigElement parent, PromiseAttributeGetter attrs) {
+		return getPromisedType(type.getName(), type, attrs);
 	}
 
 	@Override
@@ -139,7 +169,7 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 	protected void fulfillWithExternalReference(QonfigElement.Builder parent, QonfigExternalContent content, QonfigElement promise,
 		QonfigParser parser, QonfigParseSession session) {
 		PartialQonfigElement fulfillment = content.getFulfillment();
-		parent.withChild2(promise.getParentRoles(), fulfillment.getType(), child -> {
+		parent.withChild2(promise.getParentRoles(), fulfillment.getType(), null, child -> {
 			for (QonfigAddOn inh : fulfillment.getInheritance().values())
 				child.inherits(inh, false);
 			for (QonfigAddOn inh : promise.getInheritance().values()) {

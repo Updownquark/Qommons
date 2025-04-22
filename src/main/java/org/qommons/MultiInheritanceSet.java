@@ -3,7 +3,6 @@ package org.qommons;
 import java.util.*;
 
 import org.qommons.collect.MutableCollectionElement.StdMsg;
-import org.qommons.tree.BetterTreeList;
 
 /**
  * A set of items in a hierarchy. For any item inserted into this set, the set will then also contain all items that the new item extends.
@@ -55,6 +54,14 @@ public interface MultiInheritanceSet<T> {
 	 */
 	boolean contains(T value);
 
+	default boolean containsAll(Collection<? extends T> values) {
+		for (T value : values) {
+			if (!contains(value))
+				return false;
+		}
+		return true;
+	}
+
 	/**
 	 * @param value The value to query
 	 * @return An item included directly in this set which is an extension of the given item
@@ -84,6 +91,12 @@ public interface MultiInheritanceSet<T> {
 				added++;
 		}
 		return added;
+	}
+
+	default MultiInheritanceSet<T> withAll(Collection<? extends T> values) {
+		for (T value : values)
+			add(value);
+		return this;
 	}
 
 	/** Removes all values from this set */
@@ -219,8 +232,7 @@ public interface MultiInheritanceSet<T> {
 		/** @param inheritance The inheritance for the set to use */
 		public Default(MultiInheritanceSet.Inheritance<T> inheritance) {
 			theInheritance = inheritance;
-			// Make it better to avoid ConcurrentModificationExceptions
-			theNodes = BetterTreeList.<T> build().build();
+			theNodes = new ArrayList<>();
 		}
 
 		@Override
@@ -230,7 +242,10 @@ public interface MultiInheritanceSet<T> {
 
 		@Override
 		public Collection<T> values() {
-			return Collections.unmodifiableList(theNodes);
+			/* This collection uses indexes for its iterator, bypassing ArrayList's concurrent modification tests.
+			 * This allows the modification methods for this class to be used concurrently with a values iterator. 
+			 */
+			return new Values();
 		}
 
 		@Override
@@ -248,34 +263,29 @@ public interface MultiInheritanceSet<T> {
 
 		@Override
 		public Iterable<T> getExpanded(InheritanceEnumerator<T> enumerator) {
-			return () -> new InheritanceIterator<>(enumerator, theNodes.iterator());
+			return () -> new InheritanceIterator<>(enumerator, new ValuesIterator());
 		}
 
 		@Override
 		public boolean add(T value) {
 			if (value == null)
 				throw new NullPointerException();
-			int added = -1;
-			int size = theNodes.size();
-			for (int i = 0; i < size; i++) {
-				if (theInheritance.isExtension(value, theNodes.get(i))) {
-					if (added >= 0) {
-						theNodes.remove(added);
-						size--;
-					}
+			boolean added = false;
+			ListIterator<T> iter = theNodes.listIterator();
+			while (iter.hasNext()) {
+				T next = iter.next();
+				if (theInheritance.isExtension(value, next))
 					return false;
-				} else if (theInheritance.isExtension(theNodes.get(i), value)) {
-					if (added >= 0) {
-						theNodes.remove(i);
-						size--;
-						i--;
-					} else {
-						added = i;
-						theNodes.set(i, value);
+				else if (theInheritance.isExtension(next, value)) {
+					if (added)
+						iter.remove();
+					else {
+						added = true;
+						iter.set(value);
 					}
 				}
 			}
-			if (added < 0)
+			if (!added)
 				theNodes.add(value);
 			return true;
 		}
@@ -288,7 +298,7 @@ public interface MultiInheritanceSet<T> {
 		@Override
 		public MultiInheritanceSet<T> copy() {
 			Default<T> copy = new Default<>(theInheritance);
-			copy.addAll(values());
+			copy.addAll(theNodes);
 			return copy;
 		}
 
@@ -305,6 +315,33 @@ public interface MultiInheritanceSet<T> {
 		@Override
 		public String toString() {
 			return theNodes.toString();
+		}
+
+		class Values extends AbstractCollection<T> {
+			@Override
+			public Iterator<T> iterator() {
+				return new ValuesIterator();
+			}
+
+			@Override
+			public int size() {
+				return theNodes.size();
+			}
+		}
+
+		class ValuesIterator implements Iterator<T> {
+			private int index = 0;
+
+			@Override
+			public boolean hasNext() {
+				return index < theNodes.size();
+			}
+
+			@Override
+			public T next() {
+				T next = theNodes.get(index++);
+				return next;
+			}
 		}
 	}
 

@@ -394,6 +394,34 @@ public class BetterBitSet implements Cloneable {
 	}
 
 	/**
+	 * Sets the bit at the specified index to the specified value, returning the previous value at the index.
+	 *
+	 * @param bitIndex a bit index
+	 * @param value a boolean value to set
+	 * @return The previous value at the index
+	 * @throws IndexOutOfBoundsException if the specified index is negative
+	 */
+	public boolean getAndSet(int bitIndex, boolean value) {
+		if (bitIndex < 0)
+			throw new IndexOutOfBoundsException("bitIndex < 0: " + bitIndex);
+
+		int wordIndex = wordIndex(bitIndex);
+		expandTo(wordIndex);
+
+		long word = words[wordIndex];
+		long newWord;
+		if (value)
+			newWord = word | (1L << bitIndex);
+		else
+			newWord = word & ~(1L << bitIndex);
+
+		words[wordIndex] = newWord;
+
+		checkInvariants();
+		return value ^ (word != newWord);
+	}
+
+	/**
 	 * Sets many bits in one call
 	 * 
 	 * @param bits The indexes of the bits to set
@@ -411,7 +439,6 @@ public class BetterBitSet implements Cloneable {
 	 * @param bitIndex a bit index
 	 * @param value a boolean value to set
 	 * @throws IndexOutOfBoundsException if the specified index is negative
-	 * @since 1.4
 	 */
 	public void set(int bitIndex, boolean value) {
 		if (value)
@@ -427,7 +454,6 @@ public class BetterBitSet implements Cloneable {
 	 * @param toIndex index after the last bit to be set
 	 * @throws IndexOutOfBoundsException if {@code fromIndex} is negative, or {@code toIndex} is negative, or {@code fromIndex} is larger
 	 *         than {@code toIndex}
-	 * @since 1.4
 	 */
 	public void set(int fromIndex, int toIndex) {
 		checkRange(fromIndex, toIndex);

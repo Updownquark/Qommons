@@ -237,10 +237,35 @@ public class StringUtils {
 	 * @param ch The character to search for
 	 * @param startAt The index to start searching from
 	 * @return The index in the sequence containing the first instance of the given character, or -1 if the character was not present in the
-	 *         sequence
+	 *         sequence at or after <code>startAt</code>
 	 */
 	public static int indexOf(CharSequence str, char ch, int startAt) {
 		for (int i = startAt; i < str.length(); i++) {
+			if (str.charAt(i) == ch)
+				return i;
+		}
+		return -1;
+	}
+
+	/**
+	 * @param str The character sequence to search
+	 * @param ch The character to search for
+	 * @return The index in the sequence containing the last instance of the given character, or -1 if the character was not present in the
+	 *         sequence
+	 */
+	public static int lastIndexOf(CharSequence str, char ch) {
+		return lastIndexOf(str, ch, 0);
+	}
+
+	/**
+	 * @param str The character sequence to search
+	 * @param ch The character to search for
+	 * @param startAt The index to start searching backwards from
+	 * @return The index in the sequence containing the last instance of the given character, or -1 if the character was not present in the
+	 *         sequence at or before <code>startAt</code>
+	 */
+	public static int lastIndexOf(CharSequence str, char ch, int startAt) {
+		for (int i = Math.min(str.length() - 1, startAt); i >= 0; i--) {
 			if (str.charAt(i) == ch)
 				return i;
 		}
@@ -347,7 +372,7 @@ public class StringUtils {
 	 * @param <T> The type of values to print
 	 * @param delimiter The character sequence to place between each value
 	 * @param values The sequence to print
-	 * @param format The formatter for the sequence (e.g. <code>StringBuilder::append</code>)
+	 * @param format The formatter for the sequence (e.g. <code>Objects::toString</code>)
 	 * @return The printed StringBuilder
 	 */
 	public static <T> StringBuilder print(CharSequence delimiter, Iterable<? extends T> values,
@@ -771,6 +796,45 @@ public class StringUtils {
 	}
 
 	/**
+	 * @param className The fully-(dot-)qualified name of the class
+	 * @return The simple class name. This differs from {@link Class#getSimpleName()} in that for non-anonymous inner classes, the name of
+	 *         the inner class is printed without the owner class name. E.g. a class named "a.pkg.name.SomeClass$SomeInnerClass" will be
+	 *         rendered as simply "SomeInnerClass". An anonymous inner class named "a.pkg.name.SomeClass$SomeInnerClass$3" will be rendered
+	 *         "SomeInnerClass$3".
+	 */
+	public static CharSequence getReallySimpleClassName(CharSequence className) {
+		int idx = lastIndexOf(className, '$');
+		if (idx > 0) {
+			int end = className.length();
+			while (idx > 0 && isInt(className, idx + 1, end)) {
+				end = idx;
+				idx = lastIndexOf(className, '$', idx - 1);
+			}
+			if (idx > 0)
+				return className.subSequence(idx + 1, className.length());
+		}
+		idx = lastIndexOf(className, '.');
+		if (idx > 0)
+			return className.subSequence(idx + 1, className.length());
+		return className;
+	}
+
+	/**
+	 * @param str The character sequence to inspect
+	 * @param from The starting index (inclusive) to check
+	 * @param to The end index (exclusive) to check
+	 * @return Whether the characters in the sequence between <code>from</code> and <code>to</code> are all integer characters
+	 */
+	public static boolean isInt(CharSequence str, int from, int to) {
+		for (int i = from; i < to; i++) {
+			char ch = str.charAt(i);
+			if (ch < '0' || ch > '9')
+				return false;
+		}
+		return true;
+	}
+
+	/**
 	 * A naming scheme to detect and produce duplicate names for
 	 * {@link StringUtils#getNewItemName(Iterable, Function, String, DuplicateItemNamer) getNewItemName}
 	 */
@@ -977,6 +1041,19 @@ public class StringUtils {
 			ret.append(text, currentLineStart, text.length());
 		}
 		return ret.toString();
+	}
+
+	/**
+	 * Just adds the specified number of tabs to the sequence
+	 * 
+	 * @param str The string builder to append to
+	 * @param tabCount The number of tabs to append
+	 * @return The string builder
+	 */
+	public static StringBuilder indent(StringBuilder str, int tabCount) {
+		for (int t = 0; t < tabCount; t++)
+			str.append('\t');
+		return str;
 	}
 
 	/** Recognized roman numeral digits */

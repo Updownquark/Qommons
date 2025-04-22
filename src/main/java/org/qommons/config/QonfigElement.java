@@ -154,6 +154,7 @@ public final class QonfigElement extends PartialQonfigElement {
 		private QonfigDocument theDocument;
 		private final PartialQonfigElement theParent;
 		private final QonfigElementOrAddOn theType;
+		private final Set<QonfigAddOn> theDeclaredInheritance;
 		private final MultiInheritanceSet<QonfigAddOn> theInheritance;
 		private final QonfigAutoInheritance.Compiler theAutoInheritance;
 		private final List<ElementQualifiedParseItem> theDeclaredAttributes;
@@ -196,6 +197,7 @@ public final class QonfigElement extends PartialQonfigElement {
 			theProvidedAttributes = new LinkedHashMap<>();
 			theChildren = new ArrayList<>();
 			theChildrenByRole = BetterHashMultiMap.<QonfigChildDef.Declared, PartialQonfigElement> build().buildMultiMap();
+			theDeclaredInheritance = new LinkedHashSet<>();
 			theInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
 
 			if (parent != null) {
@@ -323,6 +325,8 @@ public final class QonfigElement extends PartialQonfigElement {
 					theErrors.error("Add-on " + addOn + " requires " + addOn.getSuperElement() + ", which " + theType + " does not extend");
 				return this;
 			}
+			if (appliedDirect)
+				theDeclaredInheritance.add(addOn);
 			theInheritance.add(addOn);
 			theAutoInheritance.addTargetType(addOn, theInheritance::add);
 			return this;
@@ -401,11 +405,11 @@ public final class QonfigElement extends PartialQonfigElement {
 		 * Called when all attributes have been declared
 		 * 
 		 * @param errors The error reporting if an error occurs building the childless element
-		 * @return This builder
+		 * @return The partially-built element
 		 */
-		public Builder doneWithAttributes(ErrorReporting errors) {
+		public PartialQonfigElement doneWithAttributes(ErrorReporting errors) {
 			create(errors == null ? theErrors : errors);
-			return this;
+			return theElement;
 		}
 
 		/**
@@ -438,7 +442,8 @@ public final class QonfigElement extends PartialQonfigElement {
 		 * @return The built child element, if it was successfully built
 		 */
 		public PartialQonfigElement withChild(List<ElementQualifiedParseItem> declaredRoles, QonfigElementOrAddOn type,
-			Consumer<QonfigElement.Builder> child, PositionedContent position, String description) {
+			QonfigPromiseFulfillment.PromisedType promisedType, Consumer<QonfigElement.Builder> child, PositionedContent position,
+			String description) {
 			if (theStage > 1)
 				throw new IllegalStateException("Cannot add children after the element has been built");
 			// At this stage, we have all the information we need to determine the complete inheritance of the element
@@ -494,9 +499,9 @@ public final class QonfigElement extends PartialQonfigElement {
 							roles.add(role);
 					}
 				}
-				return withChild2(Collections.unmodifiableSet(roles), type, child, position, description);
+				return withChild2(Collections.unmodifiableSet(roles), type, promisedType, child, position, description);
 			} else
-				return withChild2(Collections.emptySet(), type, child, position, description);
+				return withChild2(Collections.emptySet(), type, promisedType, child, position, description);
 		}
 
 		/**
@@ -507,8 +512,9 @@ public final class QonfigElement extends PartialQonfigElement {
 		 * @param description A description for the new child
 		 * @return The built child element, if it was successfully built
 		 */
-		public PartialQonfigElement withChild2(Set<QonfigChildDef> declaredRoles, QonfigElementOrAddOn type,
-			Consumer<QonfigElement.Builder> child, PositionedContent position, String description) {
+		public PartialQonfigElement withChild2(Set<? extends QonfigChildDef> declaredRoles, QonfigElementOrAddOn type,
+			QonfigPromiseFulfillment.PromisedType promisedType, Consumer<QonfigElement.Builder> child, PositionedContent position,
+			String description) {
 			if (theStage > 1)
 				throw new IllegalStateException("Cannot add children after the element has been built");
 			// At this stage, we have all the information we need to determine the complete inheritance of the element
@@ -529,6 +535,16 @@ public final class QonfigElement extends PartialQonfigElement {
 				for (QonfigAddOn inh : promise.getPromisedInheritance().values())
 					autoInheritance.addParentType(inh, null);
 			}
+			QonfigElementOrAddOn childType = type;
+			if (promisedType != null) {
+				if (promisedType.type != null) {
+					childType = promisedType.type;
+					autoInheritance.addTargetType(childType, null);
+				}
+				for (QonfigAddOn inh : promisedType.inheritance.values())
+					autoInheritance.addTargetType(inh, null);
+			}
+
 			if (!declaredRoles.isEmpty()) {
 				for (QonfigChildDef role : declaredRoles) {
 					boolean matches = role.getOwner().isAssignableFrom(theType);
@@ -562,12 +578,12 @@ public final class QonfigElement extends PartialQonfigElement {
 			} else { // Alright, we have to guess
 				QonfigChildDef role = null;
 				for (Map.Entry<QonfigChildDef.Declared, QonfigChildDef> childDef : theType.getAllChildren().entrySet()) {
-					if (type instanceof QonfigElementDef
-						&& childDef.getValue().isCompatible((QonfigElementDef) type, autoInheritance.getInheritance())) {
+					if (childType instanceof QonfigElementDef
+						&& childDef.getValue().isCompatible((QonfigElementDef) childType, autoInheritance.getInheritance())) {
 						if (role == null)
 							role = childDef.getValue();
 						else if (!role.getDeclared().equals(childDef.getValue().getDeclared())) {
-							errors.error("Child of type " + type + " is compatible with multiple roles: " + role + " and "
+							errors.error("Child of type " + childType + " is compatible with multiple roles: " + role + " and "
 								+ childDef.getValue() + "--role must be specified");
 							return null;
 						}
@@ -576,60 +592,27 @@ public final class QonfigElement extends PartialQonfigElement {
 				}
 				for (QonfigAddOn inh : theInheritance.getExpanded(QonfigAddOn::getInheritance)) {
 					for (Map.Entry<String, QonfigChildDef.Declared> childDef : inh.getDeclaredChildren().entrySet()) {
-						if (type instanceof QonfigElementDef
-							&& childDef.getValue().isCompatible((QonfigElementDef) type, autoInheritance.getInheritance())) {
+						if (childType instanceof QonfigElementDef
+							&& childDef.getValue().isCompatible((QonfigElementDef) childType, autoInheritance.getInheritance())) {
 							if (role == null)
 								role = childDef.getValue();
 							else if (!role.getDeclared().equals(childDef.getValue().getDeclared())) {
-								errors.error("Child of type " + type + " is compatible with multiple roles: " + role + " and "
+								errors.error("Child of type " + childType + " is compatible with multiple roles: " + role + " and "
 									+ childDef.getValue() + "--role must be specified");
 								return null;
 							}
 						}
 					}
 				}
-				if (type instanceof QonfigPromiseDef) {
-					QonfigPromiseDef childPromise = (QonfigPromiseDef) type;
-					if (childPromise.getPromisedType() != null) {
-						for (Map.Entry<QonfigChildDef.Declared, QonfigChildDef> childDef : theType.getAllChildren().entrySet()) {
-							if (childDef.getValue().isCompatible(childPromise.getPromisedType(), autoInheritance.getInheritance())) {
-								if (role == null)
-									role = childDef.getValue();
-								else if (!role.getDeclared().equals(childDef.getValue().getDeclared())) {
-									errors.error("Child of type " + type + " is compatible with multiple roles: " + role + " and "
-										+ childDef.getValue() + "--role must be specified");
-									return null;
-								}
-								role = childDef.getValue();
-							}
-						}
-					}
-					for (QonfigAddOn inh : theInheritance.getExpanded(QonfigAddOn::getInheritance)) {
-						for (Map.Entry<String, QonfigChildDef.Declared> childDef : inh.getDeclaredChildren().entrySet()) {
-							if (childPromise.getPromisedType() != null
-								&& childDef.getValue().isCompatible(childPromise.getPromisedType(), autoInheritance.getInheritance())) {
-								if (role == null)
-									role = childDef.getValue();
-								else if (!role.getDeclared().equals(childDef.getValue().getDeclared())) {
-									errors.error("Child of type " + type + " is compatible with multiple roles: " + role + " and "
-										+ childDef.getValue() + "--role must be specified");
-									return null;
-								}
-							}
-						}
-					}
-				}
 				if (theType instanceof QonfigPromiseDef) {
 					QonfigPromiseDef promise = (QonfigPromiseDef) theType;
-					if (promise.getPromisedType() != null) {
-						for (Map.Entry<QonfigChildDef.Declared, QonfigChildDef> childDef : promise.getPromisedType().getAllChildren()
-							.entrySet()) {
-							if (type instanceof QonfigElementDef
-								&& childDef.getValue().isCompatible((QonfigElementDef) type, autoInheritance.getInheritance())) {
-								if (role == null)
-									role = childDef.getValue();
-								else if (!role.getDeclared().equals(childDef.getValue().getDeclared())) {
-									errors.error("Child of type " + type + " is compatible with multiple roles: " + role + " and "
+					QonfigElementDef myPromised = promise.getPromisedType();
+					if (myPromised != null) {
+						for (Map.Entry<QonfigChildDef.Declared, QonfigChildDef> childDef : myPromised.getAllChildren().entrySet()) {
+							if (childType instanceof QonfigElementDef
+								&& childDef.getValue().isCompatible((QonfigElementDef) childType, autoInheritance.getInheritance())) {
+								if (role != null && !role.getDeclared().equals(childDef.getValue().getDeclared())) {
+									errors.error("Child of type " + childType + " is compatible with multiple roles: " + role + " and "
 										+ childDef.getValue() + "--role must be specified");
 									return null;
 								}
@@ -639,46 +622,14 @@ public final class QonfigElement extends PartialQonfigElement {
 					}
 					for (QonfigAddOn inh : promise.getPromisedInheritance().getExpanded(QonfigAddOn::getInheritance)) {
 						for (Map.Entry<String, QonfigChildDef.Declared> childDef : inh.getDeclaredChildren().entrySet()) {
-							if (type instanceof QonfigElementDef
-								&& childDef.getValue().isCompatible((QonfigElementDef) type, autoInheritance.getInheritance())) {
+							if (childType instanceof QonfigElementDef
+								&& childDef.getValue().isCompatible((QonfigElementDef) childType, autoInheritance.getInheritance())) {
 								if (role == null)
 									role = childDef.getValue();
 								else if (!role.getDeclared().equals(childDef.getValue().getDeclared())) {
-									errors.error("Child of type " + type + " is compatible with multiple roles: " + role + " and "
+									errors.error("Child of type " + childType + " is compatible with multiple roles: " + role + " and "
 										+ childDef.getValue() + "--role must be specified");
 									return null;
-								}
-							}
-						}
-					}
-					if (type instanceof QonfigPromiseDef) {
-						QonfigPromiseDef childPromise = (QonfigPromiseDef) type;
-						if (promise.getPromisedType() != null && childPromise.getPromisedType() != null) {
-							for (Map.Entry<QonfigChildDef.Declared, QonfigChildDef> childDef : promise.getPromisedType().getAllChildren()
-								.entrySet()) {
-								if (childDef.getValue().isCompatible(childPromise.getPromisedType(), autoInheritance.getInheritance())) {
-									if (role == null)
-										role = childDef.getValue();
-									else if (!role.getDeclared().equals(childDef.getValue().getDeclared())) {
-										errors.error("Child of type " + type + " is compatible with multiple roles: " + role + " and "
-											+ childDef.getValue() + "--role must be specified");
-										return null;
-									}
-									role = childDef.getValue();
-								}
-							}
-						}
-						for (QonfigAddOn inh : promise.getPromisedInheritance().getExpanded(QonfigAddOn::getInheritance)) {
-							for (Map.Entry<String, QonfigChildDef.Declared> childDef : inh.getDeclaredChildren().entrySet()) {
-								if (childPromise.getPromisedType() != null
-									&& childDef.getValue().isCompatible(childPromise.getPromisedType(), autoInheritance.getInheritance())) {
-									if (role == null)
-										role = childDef.getValue();
-									else if (!role.getDeclared().equals(childDef.getValue().getDeclared())) {
-										errors.error("Child of type " + type + " is compatible with multiple roles: " + role + " and "
-											+ childDef.getValue() + "--role must be specified");
-										return null;
-									}
 								}
 							}
 						}
@@ -727,8 +678,8 @@ public final class QonfigElement extends PartialQonfigElement {
 		private void create(ErrorReporting errors) {
 			if (theStage > 0)
 				return;
-			AttributeCompiler attrs = new AttributeCompiler();
-			attrs.compile(errors);
+			AttributeCompiler attrs = new AttributeCompiler(errors);
+			attrs.compile();
 
 			if (isPartial) {
 				theElement = new PartialQonfigElement(theDocument, theParent, theType, theInheritance, theParentRoles, theDeclaredRoles,
@@ -757,8 +708,8 @@ public final class QonfigElement extends PartialQonfigElement {
 				throw new IllegalStateException("This builder is not configured to build partial elements");
 			if (theStage > 0)
 				throw new IllegalStateException("Element is already created");
-			AttributeCompiler attrs = new AttributeCompiler();
-			attrs.compile(theErrors);
+			AttributeCompiler attrs = new AttributeCompiler(theErrors);
+			attrs.compile();
 
 			theElement = new VariableQonfigElement(theDocument, theParent, theType, theInheritance, theParentRoles, theDeclaredRoles,
 				Collections.unmodifiableMap(attrs.attrValues), theValue, theErrors.getFileLocation(), theDescription, thePromise,
@@ -837,25 +788,57 @@ public final class QonfigElement extends PartialQonfigElement {
 		}
 
 		private class AttributeCompiler {
+			final ErrorReporting errors;
 			final Map<QonfigAttributeDef.Declared, AttributeValue> attrValues;
 			final MultiInheritanceSet<QonfigAddOn> completeInheritance;
 			final BitSet parsedAttrs;
+			// Now populate default values for optional/forbidden attributes
+			final Map<QonfigAttributeDef.Declared, Boolean> defaultedAttributes;
+			private boolean inheritanceChanged;
 
-			AttributeCompiler() {
+			AttributeCompiler(ErrorReporting errors) {
+				this.errors = errors;
 				attrValues = new LinkedHashMap<>();
 				completeInheritance = MultiInheritanceSet.create(QonfigAddOn::isAssignableFrom);
 				completeInheritance.addAll(theType.getInheritance());
 				completeInheritance.addAll(theInheritance.values());
 				parsedAttrs = new BitSet(theDeclaredAttributes.size());
+
+				defaultedAttributes = new HashMap<>();
 			}
 
-			void compile(ErrorReporting errors) {
-				// Primary attribute parsing. Since values can confer inheritance, which can affect attributes,
-				// we need to go through all declared attributes, parsing those we understand, ignoring those we don't,
-				// and updating inheritance.
-				// Stop only after we don't understand anymore attributes
-				while (parsedAttrs.cardinality() < theDeclaredAttributes.size() && parseMoreAttrs(errors)) {
+			void compile() {
+				/* Attribute values can change inheritance, so it's very possible we can't understand all our attributes
+				 * immediately because some are specified by add-ons we don't yet inherit.
+				 * 
+				 * This includes attributes specified in the source file, provided from the promise, or defaults from the definitions.
+				 * 
+				 * We need to go through cycles of doing our best to parse all the attributes we know,
+				 * then applying provided or default values,
+				 * then doing it again until we know all we can.
+				 */
+				// The round variable here is just for debugging
+				@SuppressWarnings("unused")
+				int round = 0;
+				do {
+					round++;
+					inheritanceChanged = false;
+					// First, parse all specified attributes we can understand
+					parseMoreAttrs();
+					if (!inheritanceChanged)
+						applyProvidedAttributes(); // When use provided attributes as defaults
+					if (!inheritanceChanged)
+						populateAttributeDefaults(true); // Apply a single default of an add-on-typed attribute, if any
+				} while (inheritanceChanged);
+
+				if (thePromise != null) {
+					for (Map.Entry<QonfigAttributeDef.Declared, AttributeValue> attr : thePromise.getAttributes().entrySet())
+						attrValues.putIfAbsent(attr.getKey(), attr.getValue());
+					if (theValue == null)
+						theValue = thePromise.getValue();
 				}
+
+				populateAttributeDefaults(false); // Populate defaults for non-add-on-typed attributes
 
 				// Now we understand all the attributes we can. Make errors for those we don't.
 				for (int i = parsedAttrs.nextClearBit(0); i >= 0; i = parsedAttrs.nextClearBit(i + 1)) {
@@ -869,132 +852,12 @@ public final class QonfigElement extends PartialQonfigElement {
 				// to make sure they still match exactly one attribute definition.
 				// We also need to verify that declared attributes satisfy all inherited constraints
 				checkParsedAttrs();
-
-				// Now for the provided attributes, only using these as defaults
-				boolean inheritanceChanged = true;
-				while (inheritanceChanged) {
-					inheritanceChanged = false;
-					for (Map.Entry<QonfigAttributeDef.Declared, AttributeValue> attr : theProvidedAttributes.entrySet()) {
-						QonfigElementOrAddOn owner = attr.getKey().getOwner();
-						if (owner.isAssignableFrom(theType) //
-							|| (owner instanceof QonfigAddOn && completeInheritance.contains((QonfigAddOn) owner))) {
-							if (!attrValues.containsKey(attr.getKey())) {
-								attrValues.put(attr.getKey(), attr.getValue());
-								if (attr.getValue().value instanceof QonfigAddOn) {
-									QonfigAddOn inh = (QonfigAddOn) attr.getValue().value;
-									if (completeInheritance.add(inh)) {
-										inheritanceChanged = true;
-										theInheritance.add(inh);
-									}
-								}
-							}
-						}
-					}
-				}
-
-				if (!isPartial) {
-					// Now populate default values for optional/forbidden attributes
-					Map<QonfigAttributeDef.Declared, Boolean> defaultedAttributes = populateAttributeDefaults();
-					// Now for defaulted values, verify that we don't inherit attribute specifications that conflict
-					for (QonfigAddOn inh : theInheritance.getExpanded(inh -> inh.getFullInheritance().values())) {
-						if (inh.isAssignableFrom(theType))
-							continue;
-						for (Map.Entry<QonfigAttributeDef.Declared, ? extends ValueDefModifier> mod : inh.getAttributeModifiers()
-							.entrySet()) {
-							QonfigValue value = attrValues.get(mod.getKey());
-							if (mod.getValue().getSpecification() != null) {
-								switch (mod.getValue().getSpecification()) {
-								case Required:
-									break; // Can't require an attribute that doesn't start out that way
-								case Forbidden:
-									Boolean defaulted = defaultedAttributes.get(mod.getKey());
-									if (value != null) {
-										if (defaulted == null)
-											errors.at(value.position)
-												.error("Specification of value for attribute '" + mod.getKey() + "' forbidden by " + inh);
-										else if (!Objects.equals(value.value, mod.getValue().getDefaultValue())) {
-											if (defaulted) // Forbidden
-												errors.error("Default values for forbidden attribute '" + mod.getKey()
-													+ "' specified from multiple sources, including " + inh);
-											else {
-												defaultedAttributes.put(mod.getKey(), true);
-												Object defValue = mod.getValue().getDefaultValue();
-												attrValues.put(mod.getKey(),
-													new AttributeValue(String.valueOf(defValue), defValue,
-														mod.getValue().getDeclarer().getLocationString(),
-														mod.getValue().getDefaultValueContent(), mod.getValue().getContent()));
-											}
-										}
-									}
-									break;
-								case Optional:
-									defaulted = defaultedAttributes.get(mod.getKey());
-									if (value == null && defaulted == null) {
-										Object defValue = mod.getValue().getDefaultValue();
-										if (defValue != null) {
-											attrValues.put(mod.getKey(),
-												new AttributeValue(String.valueOf(defValue), defValue,
-													mod.getValue().getDeclarer().getLocationString(),
-													mod.getValue().getDefaultValueContent(), mod.getValue().getContent()));
-											defaultedAttributes.put(mod.getKey(), false);
-										}
-									}
-									break;
-								}
-							}
-						}
-					}
-					for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : theType.getAllAttributes().entrySet()) {
-						if (attrValues.get(attr.getKey()) != null)
-							continue;
-						else if (attr.getValue().getSpecification() == SpecificationType.Required) {
-							errors.error("Attribute " + attr.getKey() + " required by type " + theType);
-							continue;
-						}
-						for (QonfigAddOn inh : completeInheritance.getExpanded(QonfigAddOn::getInheritance)) {
-							if (!attr.getKey().getOwner().isAssignableFrom(inh))
-								continue;
-							QonfigAddOn.ValueModifier mod = inh.getAttributeModifiers().get(attr.getKey());
-							if (mod != null && mod.getSpecification() == SpecificationType.Required) {
-								errors.error("Attribute " + attr.getKey() + " required by type " + inh);
-								break;
-							}
-						}
-					}
-					for (QonfigAddOn inh : completeInheritance.getExpanded(QonfigAddOn::getInheritance)) {
-						if (inh.isAssignableFrom(theType))
-							continue;
-						for (QonfigAttributeDef.Declared attr : inh.getDeclaredAttributes().values()) {
-							if (attrValues.get(attr) == null && attr.getSpecification() == SpecificationType.Required) {
-								errors.error("Attribute " + attr + " required by type " + inh);
-								break;
-							}
-						}
-					}
-				} else {
-					for (QonfigAddOn inh : theInheritance.getExpanded(QonfigAddOn::getInheritance)) {
-						if (inh.isAssignableFrom(theType))
-							continue;
-						for (Map.Entry<QonfigAttributeDef.Declared, ? extends ValueDefModifier> mod : inh.getAttributeModifiers()
-							.entrySet()) {
-							QonfigValue value = attrValues.get(mod.getKey());
-							if (value != null && mod.getValue().getSpecification() != null
-								&& mod.getValue().getSpecification() == SpecificationType.Forbidden) {
-								errors.at(value.position)
-									.error("Specification of value for attribute '" + mod.getKey() + "' forbidden by " + inh);
-							}
-						}
-					}
-				}
-
+				checkAttributes();
 				checkValue();
 			}
 
-			private boolean parseMoreAttrs(ErrorReporting errors) {
-				boolean inheritanceChanged = false;
-				for (int i = parsedAttrs.nextClearBit(0); i >= 0; i = parsedAttrs.nextClearBit(i + 1)) {
-					if (i >= theDeclaredAttributes.size())
-						break;
+			private void parseMoreAttrs() {
+				for (int i = parsedAttrs.nextClearBit(0); i >= 0 && i < theDeclaredAttributes.size(); i = parsedAttrs.nextClearBit(i + 1)) {
 					ElementQualifiedParseItem attrDef = theDeclaredAttributes.get(i);
 					QonfigAttributeDef attr;
 					BetterCollection<QonfigAttributeDef> attrs = null;
@@ -1070,20 +933,8 @@ public final class QonfigElement extends PartialQonfigElement {
 					}
 					parsedAttrs.set(i);
 					// attr will never be null here, but I'm suppressing a warning
-					if (attr != null) {
-						if (attrValues.containsKey(attr.getDeclared())) {
-							errors.error("Duplicate values supplied for attribute " + attrDef.itemName, null);
-						} else if (attr.getDeclared().getDeclarer().getName().equals(QonfigElementDef.QONFIG_REFERENCE_TK)//
-							&& attr.getDeclared().getOwner().getName().equals(QonfigElementDef.QONFIG_PROMISE_ELEMENT)) {
-							switch (attr.getName()) {
-							case QonfigElementDef.QONFIG_EXT_PROMISED_TYPE_ATTR:
-							case QonfigElementDef.QONFIG_EXT_PROMISED_INH_ATTR:
-								errors.error(
-									"Attribute " + QonfigElementDef.QONFIG_REFERENCE_TK + ":" + QonfigElementDef.QONFIG_PROMISE_ELEMENT
-										+ "." + attr.getName() + " cannot be specified in a document");
-							}
-						}
-					}
+					if (attr != null && attrValues.containsKey(attr.getDeclared()))
+						errors.error("Duplicate values supplied for attribute " + attrDef.itemName, null);
 					AttributeValueInput attrValue = theDeclaredAttributeValues.get(i);
 					Object value;
 					try {
@@ -1093,20 +944,164 @@ public final class QonfigElement extends PartialQonfigElement {
 						continue;
 					}
 					if (addAttr && attr != null) {
-						attrValues.put(attr.getDeclared(),
-							new AttributeValue(attrValue.getText(), value, theDocument.getLocation(), attrValue.getPosition(),
-								attrDef.position));
-						if (value != null) {
-							if (attr.getType() instanceof QonfigAddOn) {
-								if (completeInheritance.add((QonfigAddOn) value)) {
+						attrValues.put(attr.getDeclared(), new AttributeValue(attrValue.getText(), value, theDocument.getLocation(),
+							attrValue.getPosition(), attrDef.position));
+						if (value != null && attr.getType() instanceof QonfigAddOn//
+							&& completeInheritance.add((QonfigAddOn) value)) {
+							inheritanceChanged = true;
+							theInheritance.add((QonfigAddOn) value);
+						}
+					}
+				}
+			}
+
+			private void applyProvidedAttributes() {
+				for (Map.Entry<QonfigAttributeDef.Declared, AttributeValue> attr : theProvidedAttributes.entrySet()) {
+					QonfigElementOrAddOn owner = attr.getKey().getOwner();
+					if (owner.isAssignableFrom(theType) //
+						|| (owner instanceof QonfigAddOn && completeInheritance.contains((QonfigAddOn) owner))) {
+						if (!attrValues.containsKey(attr.getKey())) {
+							attrValues.put(attr.getKey(), attr.getValue());
+							if (attr.getValue().value instanceof QonfigAddOn) {
+								QonfigAddOn inh = (QonfigAddOn) attr.getValue().value;
+								if (completeInheritance.add(inh)) {
 									inheritanceChanged = true;
-									theInheritance.add((QonfigAddOn) value);
+									theInheritance.add(inh);
 								}
 							}
 						}
 					}
 				}
-				return inheritanceChanged;
+			}
+
+			private void populateAttributeDefaults(boolean singleAddOnOnly) {
+				for (QonfigAddOn inh : completeInheritance.getExpanded(inh -> inh.getFullInheritance().values())) {
+					for (QonfigAttributeDef.Declared attr : inh.getDeclaredAttributes().values()) {
+						boolean addOnAttr = attr.getType() instanceof QonfigAddOn;
+						if (!addOnAttr && singleAddOnOnly)
+							continue;
+						if (attrValues.get(attr) == null && attr.getSpecification() != SpecificationType.Required) {
+							Object defValue = attr.getDefaultValue();
+							if (defValue != null) {
+								attrValues.put(attr, new AttributeValue(defValue.toString(), defValue,
+									attr.getDeclarer().getLocationString(), attr.getDefaultValueContent(), attr.getNamePosition()));
+								defaultedAttributes.put(attr, attr.getSpecification() == SpecificationType.Forbidden);
+								if (addOnAttr && completeInheritance.add((QonfigAddOn) defValue)) {
+									theInheritance.add((QonfigAddOn) defValue);
+									inheritanceChanged = true;
+									if (singleAddOnOnly)
+										return;
+								}
+							}
+						}
+					}
+					for (Map.Entry<QonfigAttributeDef.Declared, ? extends ValueDefModifier> attr : inh.getAttributeModifiers().entrySet()) {
+						boolean addOnAttr = attr.getKey().getType() instanceof QonfigAddOn;
+						if (!addOnAttr && singleAddOnOnly)
+							continue;
+						if (attrValues.get(attr.getKey()) == null && attr.getValue().getSpecification() != SpecificationType.Required) {
+							Object defValue = attr.getValue().getDefaultValue();
+							attrValues.put(attr.getKey(),
+								new AttributeValue(defValue == null ? null : defValue.toString(), defValue,
+									attr.getValue().getDeclarer().getLocationString(), attr.getValue().getDefaultValueContent(),
+									attr.getValue().getNamePosition()));
+							defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
+							if (addOnAttr && completeInheritance.add((QonfigAddOn) defValue)) {
+								theInheritance.add((QonfigAddOn) defValue);
+								inheritanceChanged = true;
+								if (singleAddOnOnly)
+									return;
+							}
+						}
+					}
+				}
+				for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : theType.getAllAttributes().entrySet()) {
+					boolean addOnAttr = attr.getKey().getType() instanceof QonfigAddOn;
+					if (!addOnAttr && singleAddOnOnly)
+						continue;
+					if (attrValues.get(attr.getKey()) == null && attr.getValue().getSpecification() != SpecificationType.Required) {
+						Object defValue = attr.getValue().getDefaultValue();
+						if (defValue != null) {
+							attrValues.put(attr.getKey(),
+								new AttributeValue(defValue.toString(), defValue, attr.getValue().getDeclarer().getLocationString(),
+									attr.getValue().getDefaultValueContent(), attr.getValue().getNamePosition()));
+							defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
+							if (addOnAttr && completeInheritance.add((QonfigAddOn) defValue)) {
+								theInheritance.add((QonfigAddOn) defValue);
+								inheritanceChanged = true;
+								if (singleAddOnOnly)
+									return;
+							}
+						}
+					}
+				}
+
+				if (!isPartial) {
+					// Now for defaulted values, verify that we don't inherit attribute specifications that conflict
+					for (QonfigAddOn inh : theInheritance.getExpanded(inh -> inh.getFullInheritance().values())) {
+						if (inh.isAssignableFrom(theType))
+							continue;
+						for (Map.Entry<QonfigAttributeDef.Declared, ? extends ValueDefModifier> mod : inh.getAttributeModifiers()
+							.entrySet()) {
+							boolean addOnAttr = mod.getKey().getType() instanceof QonfigAddOn;
+							if (!addOnAttr && singleAddOnOnly)
+								continue;
+							QonfigValue value = attrValues.get(mod.getKey());
+							if (mod.getValue().getSpecification() != null) {
+								switch (mod.getValue().getSpecification()) {
+								case Required:
+									break; // Can't require an attribute that doesn't start out that way
+								case Forbidden:
+									Boolean defaulted = defaultedAttributes.get(mod.getKey());
+									if (value != null) {
+										if (defaulted == null)
+											errors.at(value.position)
+												.error("Specification of value for attribute '" + mod.getKey() + "' forbidden by " + inh);
+										else if (!Objects.equals(value.value, mod.getValue().getDefaultValue())) {
+											if (defaulted) // Forbidden
+												errors.error("Default values for forbidden attribute '" + mod.getKey()
+													+ "' specified from multiple sources, including " + inh);
+											else {
+												defaultedAttributes.put(mod.getKey(), true);
+												Object defValue = mod.getValue().getDefaultValue();
+												attrValues.put(mod.getKey(),
+													new AttributeValue(String.valueOf(defValue), defValue,
+														mod.getValue().getDeclarer().getLocationString(),
+														mod.getValue().getDefaultValueContent(), mod.getValue().getNamePosition()));
+												if (addOnAttr && completeInheritance.add((QonfigAddOn) defValue)) {
+													theInheritance.add((QonfigAddOn) defValue);
+													inheritanceChanged = true;
+													if (singleAddOnOnly)
+														return;
+												}
+											}
+										}
+									}
+									break;
+								case Optional:
+									defaulted = defaultedAttributes.get(mod.getKey());
+									if (value == null && defaulted == null) {
+										Object defValue = mod.getValue().getDefaultValue();
+										if (defValue != null) {
+											attrValues.put(mod.getKey(),
+												new AttributeValue(String.valueOf(defValue), defValue,
+													mod.getValue().getDeclarer().getLocationString(),
+													mod.getValue().getDefaultValueContent(), mod.getValue().getNamePosition()));
+											defaultedAttributes.put(mod.getKey(), false);
+											if (addOnAttr && completeInheritance.add((QonfigAddOn) defValue)) {
+												theInheritance.add((QonfigAddOn) defValue);
+												inheritanceChanged = true;
+												if (singleAddOnOnly)
+													return;
+											}
+										}
+									}
+									break;
+								}
+							}
+						}
+					}
+				}
 			}
 
 			private void checkParsedAttrs() {
@@ -1196,42 +1191,51 @@ public final class QonfigElement extends PartialQonfigElement {
 				}
 			}
 
-			private Map<QonfigAttributeDef.Declared, Boolean> populateAttributeDefaults() {
-				Map<QonfigAttributeDef.Declared, Boolean> defaultedAttributes = new HashMap<>();
-				for (QonfigAddOn inh : completeInheritance.getExpanded(inh -> inh.getFullInheritance().values())) {
-					for (QonfigAttributeDef.Declared attr : inh.getDeclaredAttributes().values()) {
-						if (attrValues.get(attr) == null && attr.getSpecification() != SpecificationType.Required) {
-							Object defValue = attr.getDefaultValue();
-							if (defValue != null) {
-								attrValues.put(attr, new AttributeValue(defValue.toString(), defValue,
-									attr.getDeclarer().getLocationString(), attr.getDefaultValueContent(), attr.getFilePosition()));
-								defaultedAttributes.put(attr, attr.getSpecification() == SpecificationType.Forbidden);
+			private void checkAttributes() {
+				if (!isPartial) {
+					for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : theType.getAllAttributes().entrySet()) {
+						if (attrValues.get(attr.getKey()) != null)
+							continue;
+						else if (attr.getValue().getSpecification() == SpecificationType.Required) {
+							errors.error("Attribute " + attr.getKey() + " required by type " + theType);
+							continue;
+						}
+						for (QonfigAddOn inh : completeInheritance.getExpanded(QonfigAddOn::getInheritance)) {
+							if (!attr.getKey().getOwner().isAssignableFrom(inh))
+								continue;
+							QonfigAddOn.ValueModifier mod = inh.getAttributeModifiers().get(attr.getKey());
+							if (mod != null && mod.getSpecification() == SpecificationType.Required) {
+								errors.error("Attribute " + attr.getKey() + " required by type " + inh);
+								break;
 							}
 						}
 					}
-					for (Map.Entry<QonfigAttributeDef.Declared, ? extends ValueDefModifier> attr : inh.getAttributeModifiers().entrySet()) {
-						if (attrValues.get(attr.getKey()) == null && attr.getValue().getSpecification() != SpecificationType.Required) {
-							Object defValue = attr.getValue().getDefaultValue();
-							attrValues.put(attr.getKey(),
-								new AttributeValue(defValue == null ? null : defValue.toString(), defValue,
-									attr.getValue().getDeclarer().getLocationString(), attr.getValue().getDefaultValueContent(),
-									attr.getValue().getContent()));
-							defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
+					for (QonfigAddOn inh : completeInheritance.getExpanded(QonfigAddOn::getInheritance)) {
+						if (inh.isAssignableFrom(theType))
+							continue;
+						for (QonfigAttributeDef.Declared attr : inh.getDeclaredAttributes().values()) {
+							if (attrValues.get(attr) == null && attr.getSpecification() == SpecificationType.Required) {
+								errors.error("Attribute " + attr + " required by type " + inh);
+								break;
+							}
+						}
+					}
+				} else {
+					for (QonfigAddOn inh : theInheritance.getExpanded(QonfigAddOn::getInheritance)) {
+						if (inh.isAssignableFrom(theType))
+							continue;
+						for (Map.Entry<QonfigAttributeDef.Declared, ? extends ValueDefModifier> mod : inh.getAttributeModifiers()
+							.entrySet()) {
+							QonfigValue value = attrValues.get(mod.getKey());
+							if (value != null && mod.getValue().getSpecification() != null
+								&& mod.getValue().getSpecification() == SpecificationType.Forbidden//
+								&& !defaultedAttributes.containsKey(mod.getKey())) {
+								errors.at(value.position)
+									.error("Specification of value for attribute '" + mod.getKey() + "' forbidden by " + inh);
+							}
 						}
 					}
 				}
-				for (Map.Entry<QonfigAttributeDef.Declared, QonfigAttributeDef> attr : theType.getAllAttributes().entrySet()) {
-					if (attrValues.get(attr.getKey()) == null && attr.getValue().getSpecification() != SpecificationType.Required) {
-						Object defValue = attr.getValue().getDefaultValue();
-						if (defValue != null) {
-							attrValues.put(attr.getKey(),
-								new AttributeValue(defValue.toString(), defValue, attr.getValue().getDeclarer().getLocationString(),
-									attr.getValue().getDefaultValueContent(), attr.getValue().getFilePosition()));
-							defaultedAttributes.put(attr.getKey(), attr.getValue().getSpecification() == SpecificationType.Forbidden);
-						}
-					}
-				}
-				return defaultedAttributes;
 			}
 
 			private void checkValue() {

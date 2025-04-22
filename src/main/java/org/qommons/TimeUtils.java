@@ -2,6 +2,7 @@ package org.qommons;
 
 import java.io.IOException;
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -35,25 +36,34 @@ public class TimeUtils {
 	/** Components of a parsed date */
 	public enum DateElementType {
 		/** The year, either 2-digit or full */
-		Year,
+		Year(Calendar.YEAR, 0),
 		/** The month, represented by digits or a full or partial name, starting at 0 */
-		Month,
+		Month(Calendar.MONTH, Calendar.JANUARY - 1),
 		/** The day of the month, starting at 1 */
-		Day,
+		Day(Calendar.DAY_OF_MONTH, 0),
 		/** The day of the week, starting at 0=Sunday */
-		Weekday,
+		Weekday(Calendar.DAY_OF_WEEK, Calendar.SUNDAY),
 		/** The hour, either 24-hour format or 12-hour, depending on the present of an {@link #AmPm} element */
-		Hour,
+		Hour(Calendar.HOUR_OF_DAY, 0),
 		/** The minute within the hour */
-		Minute,
+		Minute(Calendar.MINUTE, 0),
 		/** The second within the minute */
-		Second,
+		Second(Calendar.SECOND, 0),
 		/** The sub-second within the second. Any number of digits may be specified up to 9 (nanoseconds). */
-		SubSecond,
+		SubSecond(Calendar.MILLISECOND, 0),
 		/** The "a.m." or "p.m." marker for 12-hour time format */
-		AmPm,
+		AmPm(Calendar.YEAR, Calendar.AM),
 		/** The time zone specified in the format */
-		TimeZone;
+		TimeZone(Calendar.ZONE_OFFSET, 0);
+
+		/** The {@link Calendar} field to retrieve this component with using {@link Calendar#get(int)} */
+		public final int calendarField;
+		final int calendarValueOffset;
+
+		private DateElementType(int calendarField, int calendarValueOffset) {
+			this.calendarField = calendarField;
+			this.calendarValueOffset = calendarValueOffset;
+		}
 
 		/**
 		 * @param name The text to parse
@@ -119,34 +129,50 @@ public class TimeUtils {
 		}
 	}
 
+	static final Map<DateElementType, DurationComponentType> ABS_TO_REL_MAP = new EnumMap<>(DateElementType.class);
+
 	/** Time units in a parsed duration */
 	public enum DurationComponentType {
 		/** Years */
-		Year(ChronoUnit.YEARS),
+		Year(DateElementType.Year, ChronoUnit.YEARS),
 		/** Months */
-		Month(ChronoUnit.MONTHS),
+		Month(DateElementType.Month, ChronoUnit.MONTHS),
 		/** Weeks */
-		Week(ChronoUnit.WEEKS),
+		Week(null, ChronoUnit.WEEKS),
 		/** Days */
-		Day(ChronoUnit.DAYS),
+		Day(DateElementType.Day, ChronoUnit.DAYS),
 		/** Hours */
-		Hour(ChronoUnit.HOURS),
+		Hour(DateElementType.Hour, ChronoUnit.HOURS),
 		/** Minutes */
-		Minute(ChronoUnit.MINUTES),
+		Minute(DateElementType.Minute, ChronoUnit.MINUTES),
 		/** Seconds */
-		Second(ChronoUnit.SECONDS),
+		Second(DateElementType.Second, ChronoUnit.SECONDS),
 		/** Milliseconds */
-		Millisecond(ChronoUnit.MILLIS),
+		Millisecond(DateElementType.SubSecond, ChronoUnit.MILLIS),
 		/** Microseconds */
-		Microsecond(ChronoUnit.MICROS),
+		Microsecond(null, ChronoUnit.MICROS),
 		/** Nanoseconds */
-		Nanosecond(ChronoUnit.NANOS);
+		Nanosecond(null, ChronoUnit.NANOS);
 
+		/** The {@link DateElementType} that means essentially the same thing as this component */
+		public final DateElementType absoluteParallel;
 		/** The {@link ChronoUnit} corresponding to this duration component */
 		public final ChronoUnit unit;
 
-		private DurationComponentType(ChronoUnit unit) {
+		private DurationComponentType(DateElementType absoluteParallel, ChronoUnit unit) {
+			this.absoluteParallel = absoluteParallel;
 			this.unit = unit;
+			if (absoluteParallel != null)
+				ABS_TO_REL_MAP.put(absoluteParallel, this);
+		}
+		
+		/**
+		 * @param absolute The {@link DateElementType} to get the relative parallel for
+		 * @return The {@link DurationComponentType} that means essentially the same thing as the given date component, or null if it has no
+		 *         parallel
+		 */
+		public static DurationComponentType relative(DateElementType absolute) {
+			return ABS_TO_REL_MAP.get(absolute);
 		}
 	}
 
@@ -1107,6 +1133,9 @@ public class TimeUtils {
 	private static final Duration DAY = Duration.ofDays(1);
 	private static final Duration HOUR = Duration.ofHours(1);
 	private static final Duration MINUTE = Duration.ofMinutes(1);
+	static final long MILLIS_IN_MINUTE = 60000;
+	static final long MILLIS_IN_HOUR = 60 * MILLIS_IN_MINUTE;
+	static final long MILLIS_IN_DAY = 24 * MILLIS_IN_HOUR;
 
 	static abstract class ParsedInstantImpl implements ParsedInstant {
 		private final String theText;
@@ -2308,6 +2337,15 @@ public class TimeUtils {
 
 	private static final String[] MONTHS = new String[] { "january", "february", "march", "april", "may", "june", "july", "august",
 		"september", "october", "november", "december" };
+	static final int[] DAYS_IN_MONTH = new int[] { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30 };
+	static final int[] MONTH_DAYS = new int[12];
+	static {
+		int days = 0;
+		for (int m = 0; m < DAYS_IN_MONTH.length; m++) {
+			days += DAYS_IN_MONTH[m];
+			MONTH_DAYS[m + 1] = days;
+		}
+	}
 
 	// public static final String FLEX_FORMAT_DESCRIP;
 
@@ -2415,7 +2453,7 @@ public class TimeUtils {
 
 	private static final SimpleSequenceParser<DateElementType, Integer> DATE_PARSER;
 
-	private static int parseWeekday(CharSequence text, int start) {
+	static int parseWeekday(CharSequence text, int start) {
 		switch (text.charAt(start)) {
 		case 's':
 		case 'S':
@@ -2452,7 +2490,7 @@ public class TimeUtils {
 		return -1;
 	}
 
-	private static int parseMonth(CharSequence text, int start) {
+	static int parseMonth(CharSequence text, int start) {
 		switch (text.charAt(start)) {
 		case 'j':
 		case 'J':
@@ -2517,7 +2555,7 @@ public class TimeUtils {
 		return -1;
 	}
 
-	private static int parseTh(CharSequence str, int start) {
+	static int parseTh(CharSequence str, int start) {
 		switch (str.charAt(start)) {
 		case 's':
 		case 'S':
@@ -2533,6 +2571,39 @@ public class TimeUtils {
 			return 4;
 		}
 		return -1;
+	}
+
+	static Boolean parseAmPm(CharSequence str, int start) {
+		if (str.length() < start + 2)
+			return null;
+		switch (str.charAt(start)) {
+		case 'a':
+		case 'A':
+			return Boolean.FALSE;
+		case 'p':
+		case 'P':
+			return Boolean.TRUE;
+		default:
+			return null;
+		}
+	}
+
+	static int parseInt(CharSequence str, int start, int end) {
+		int i = 0;
+		boolean first = true;
+		for (int c = start; c < end; c++) {
+			char ch = str.charAt(c);
+			if (ch < '0' || ch > '9') {
+				return Integer.MIN_VALUE;
+			}
+			if (first) {
+				first = false;
+			} else {
+				i *= 10;
+			}
+			i += ch - '0';
+		}
+		return i;
 	}
 
 	private static int startsWithLowerCase(CharSequence str, String test, int strStart, int testStart) {
@@ -2637,15 +2708,10 @@ public class TimeUtils {
 
 		@Override
 		public Integer parse(CharSequence text) throws ParseException {
-			char ch = Character.toLowerCase(text.charAt(0));
-			switch (ch) {
-			case 'a':
-				return Calendar.AM;
-			case 'p':
-				return Calendar.PM;
-			default:
+			Boolean amPm = parseAmPm(text, 0);
+			if (amPm == null)
 				throw new ParseException("Expected [ap].?m.?", 0);
-			}
+			return amPm.booleanValue() ? Calendar.PM : Calendar.AM;
 		}
 	};
 	private static final Format<Integer> SUB_SECOND_FORMAT = new Format<Integer>() {
@@ -2678,6 +2744,41 @@ public class TimeUtils {
 			if (zone == null)
 				throw new ParseException("Unrecognized time zone", 0);
 			return zone.getRawOffset();
+		}
+	};
+
+	private static final Format<Integer> TZ_OFFSET_FORMAT = new Format<Integer>() {
+		@Override
+		public void append(StringBuilder text, Integer value) {
+			if (value >= 0)
+				text.append('+');
+			StringUtils.printInt(value, 4, text);
+		}
+
+		@Override
+		public Integer parse(CharSequence text) throws ParseException {
+			if (text.length() == 0)
+				throw new ParseException("No text", 0);
+			if (text.charAt(0) == '+') {
+				if (text.length() == 1)
+					throw new ParseException("No text", 1);
+				int offset = parseInt(text, 1, text.length());
+				if (offset < 0)
+					return Format.INT.parse(new DefaultCharSubSequence(text, 1, text.length()));
+				return offset;
+			} else if (text.charAt(0) == '-') {
+				if (text.length() == 1)
+					throw new ParseException("No text", 1);
+				int offset = parseInt(text, 1, text.length());
+				if (offset < 0)
+					return -Format.INT.parse(new DefaultCharSubSequence(text, 1, text.length()));
+				return -offset;
+			} else {
+				int offset = parseInt(text, 0, text.length());
+				if (offset < 0)
+					return Format.INT.parse(new DefaultCharSubSequence(text, 1, text.length()));
+				return offset;
+			}
 		}
 	};
 
@@ -2853,6 +2954,24 @@ public class TimeUtils {
 
 	/** Parses the day format for {@link TimeUtils#asFlexInstant(Instant, String, Function)} */
 	public static class DayFormat {
+		/** Prints the day component of a date like "01Jun2025" */
+		public static final DayFormat DDMMMYYYY = new DayFormat(//
+			Arrays.asList(//
+				new DayComponent("DD", DateElementType.Day, Format.INT), //
+				new DayComponent("MMM", DateElementType.Month, MONTH_FORMAT), //
+				new DayComponent("yyyy", DateElementType.Year, Format.INT)), //
+			Arrays.asList("", "", "", ""));
+		/** Prints a date like "01Jun2025 19:32:15.432" */
+		public static final DayFormat DDMMMYYYY_HH_MM_SS_SSS = new DayFormat(//
+			Arrays.asList(DDMMMYYYY.components.get(0), //
+				DDMMMYYYY.components.get(1), //
+				DDMMMYYYY.components.get(2), //
+				new DayComponent("HH", DateElementType.Hour, Format.INT), //
+				new DayComponent("mm", DateElementType.Minute, Format.INT), //
+				new DayComponent("ss", DateElementType.Second, Format.INT), //
+				new DayComponent("SSS", DateElementType.SubSecond, Format.INT)), //
+			Arrays.asList("", "", "", " ", ":", ":", ".", ""));
+
 		/** A component of a {@link DayFormat} */
 		public static class DayComponent {
 			/** The component as specified in the input text */
@@ -2880,28 +2999,11 @@ public class TimeUtils {
 			 * @param str The string to print the value to
 			 */
 			public void append(Calendar cal, StringBuilder str) {
-				switch (type) {
-				case Day:
-					StringUtils.printInt(cal.get(Calendar.DAY_OF_MONTH), spec.length(), str);
-					break;
-				case Month:
-					if (spec.length() == 3)
-						format.append(str, cal.get(Calendar.MONTH));
-					else
-						StringUtils.printInt(cal.get(Calendar.MONTH) - Calendar.JANUARY + 1, spec.length(), str);
-					break;
-				case Year:
-					StringUtils.printInt(cal.get(Calendar.YEAR), spec.length(), str);
-					break;
-				case Weekday:
-					if (spec.length() == 3)
-						str.append(DAYS_ABBREV[cal.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY]);
-					else
-						str.append(DAYS[cal.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY]);
-					break;
-				default:
-					throw new IllegalStateException("Unrecognized day component: " + type);
-				}
+				int value = cal.get(type.calendarField);
+				if (spec.length() > 1 && format instanceof Format.IntFormat) {
+					StringUtils.printInt(value - type.calendarValueOffset, spec.length(), str);
+				} else
+					format.append(str, value);
 			}
 
 			@Override
@@ -2930,6 +3032,13 @@ public class TimeUtils {
 		public final Map<DateElementType, DayComponent> componentsByType;
 		/** The separators between each component */
 		public final List<String> separators;
+		/**
+		 * Whether this day format is fast-parsing, meaning it can parse dates <b><i>in its format</i></b> with
+		 * {@link #parseTime(CharSequence)} extremely quickly
+		 */
+		public final boolean isFastParsing;
+		/** Only valid and used for fast parsing */
+		private final int theLength;
 
 		/**
 		 * @param components The components for the format
@@ -2938,18 +3047,172 @@ public class TimeUtils {
 		public DayFormat(List<DayComponent> components, List<String> separators) {
 			this.components = components;
 			Map<DateElementType, DayComponent> cbt = new EnumMap<>(DateElementType.class);
-			for (DayComponent comp : components)
+			boolean fastParsing = true;
+			int length = 0;
+			for (DayComponent comp : components) {
 				cbt.put(comp.type, comp);
+				if (comp.type == DateElementType.AmPm) {
+					length += 4;
+				} else if (comp.type == DateElementType.TimeZone) {
+					if (comp.format == TZ_OFFSET_FORMAT)
+						length += 5;
+					else
+						fastParsing = false;
+				} else if (comp.spec.length() < 2)
+					fastParsing = false;
+				else if (comp.type == DateElementType.Weekday) {// Doesn't help us parse
+				} else if (!(comp.format instanceof Format.IntFormat
+					|| comp.format.getClass().getName().startsWith(TimeUtils.class.getName() + "$"))) {
+					fastParsing = false;
+				} else
+					length += comp.spec.length();
+			}
+			isFastParsing = fastParsing;
+			if (isFastParsing) {
+				for (String sep : separators)
+					length += sep.length();
+			}
+			theLength = length;
 			componentsByType = Collections.unmodifiableMap(cbt);
 			this.separators = separators;
 		}
 
 		/**
-		 * @param dayFormat The string to pares the day format from
+		 * For {@link #isFastParsing fast-parsing} day formats, parses a date <b><i>in this format</i></b>. This method is much, much faster
+		 * than {@link SimpleDateFormat} or {@link TimeUtils#parseInstant(CharSequence, boolean, boolean, Function)} (around 15x as fast).
+		 * If the date is not formatted according to this format or this format is not fast-parsing, {@link Long#MIN_VALUE} will be
+		 * returned.
+		 * 
+		 * @param text The text to parse
+		 * @return The parsed date, in milliseconds since the epoch
+		 */
+		public long parseTime(CharSequence text) {
+			if (!isFastParsing)
+				return Long.MIN_VALUE;
+			else if (text.length() != theLength //
+				|| !new DefaultCharSubSequence(text, 0, separators.get(0).length()).equals(separators.get(0)))
+				return Long.MIN_VALUE;
+			int year = 0, month = 0, day = 0, millis = 0;
+			int c = 0;
+			for (int i = 0; i < components.size(); i++) {
+				String sep = separators.get(i);
+				if (!new DefaultCharSubSequence(text, c, c + sep.length()).equals(sep))
+					return Long.MIN_VALUE;
+				c += sep.length();
+				DayComponent comp = components.get(i);
+				int length = comp.spec.length();
+				switch (comp.type) {
+				case Weekday:
+					break;
+				case Month:
+					if (comp.format == MONTH_FORMAT)
+						month = parseMonth(text, c);
+					else
+						month = parseInt(text, c, c + comp.spec.length());
+					if (month < 0 || month >= 12)
+						return Long.MIN_VALUE;
+					break;
+				case Year:
+					year = parseInt(text, c, c + comp.spec.length());
+					if (year == Integer.MIN_VALUE)
+						return Long.MIN_VALUE;
+					break;
+				case Day:
+					day = parseInt(text, c, c + comp.spec.length());
+					if (day <= 0 || day > 31)
+						return Long.MIN_VALUE;
+					break;
+				case AmPm:
+					length = 2;
+					Boolean pm = parseAmPm(text, c);
+					if (pm == null)
+						return Long.MIN_VALUE;
+					millis += 12 * MILLIS_IN_HOUR;
+					break;
+				case Hour:
+					int hour = parseInt(text, c, c + comp.spec.length());
+					if (hour < 0 || hour > 23)
+						return Long.MIN_VALUE;
+					millis += hour * MILLIS_IN_HOUR;
+					break;
+				case Minute:
+					int minute = parseInt(text, c, c + comp.spec.length());
+					if (minute < 0 || minute > 59)
+						return Long.MIN_VALUE;
+					millis += minute * MILLIS_IN_MINUTE;
+					break;
+				case Second:
+					int sec = parseInt(text, c, c + comp.spec.length());
+					if (sec < 0 || sec > 59)
+						return Long.MIN_VALUE;
+					millis += sec * 1000;
+					break;
+				case SubSecond:
+					int ss = parseInt(text, c, c + comp.spec.length());
+					if (ss < 0)
+						return Long.MIN_VALUE;
+					for (int j = comp.spec.length(); j > 3; j--)
+						ss /= 10;
+					for (int j = comp.spec.length(); j < 3; j++)
+						ss *= 10;
+					millis += ss;
+					break;
+				case TimeZone:
+					int tz;
+					try {
+						tz = comp.format.parse(text);
+					} catch (ParseException e) {
+						return Long.MIN_VALUE;
+					}
+					millis -= tz * MILLIS_IN_HOUR;
+					break;
+				}
+				c += length;
+			}
+			String lastSep = separators.get(components.size());
+			if (!new DefaultCharSubSequence(text, c, c + lastSep.length()).equals(lastSep))
+				return Long.MIN_VALUE;
+
+			int days = MONTH_DAYS[month] + (day - 1);
+			if (year != 0)
+				days += (year - 1970) * 365//
+					+ getLeapDaysSinceEpoch(year, month);
+			return days * MILLIS_IN_DAY + millis;
+		}
+
+		/**
+		 * Writes a date
+		 * 
+		 * @param str The string builder to write to
+		 * @param time The date to write (millis since the epoch)
+		 */
+		public void append(StringBuilder str, long time) {
+			Calendar cal = CALENDAR.get();
+			cal.setTimeZone(GMT);
+			cal.setTimeInMillis(time);
+			for (int c = 0; c < components.size(); c++) {
+				str.append(separators.get(c));
+				components.get(c).append(cal, str);
+			}
+			str.append(separators.get(components.size()));
+		}
+
+		/**
+		 * @param dayFormat The string to parse the day format from
 		 * @return The parsed day format
 		 * @throws IllegalArgumentException If the format could not be parsed
 		 */
 		public static DayFormat parse(String dayFormat) throws IllegalArgumentException {
+			return parse(dayFormat, true);
+		}
+
+		/**
+		 * @param format The string to parse the day format from
+		 * @param dayOnly Whether to accept only day-level components or higher
+		 * @return The parsed day format
+		 * @throws IllegalArgumentException If the format could not be parsed
+		 */
+		public static DayFormat parse(String format, boolean dayOnly) throws IllegalArgumentException {
 			List<DayComponent> components = new ArrayList<>(5);
 			List<String> separators = new ArrayList<>(6);
 			StringBuilder separator = new StringBuilder();
@@ -2957,8 +3220,15 @@ public class TimeUtils {
 			{
 				char type = 0;
 				int start = 0;
-				for (int i = 0; i <= dayFormat.length(); i++) {
-					char newType = i < dayFormat.length() ? dayFormat.charAt(i) : 0;
+				boolean escape = false;
+				for (int i = 0; i <= format.length(); i++) {
+					if (escape) {
+						separator.append(format.charAt(i));
+						type = 0;
+						escape = false;
+						continue;
+					}
+					char newType = i < format.length() ? format.charAt(i) : 0;
 					switch (newType) {
 					case 'd':
 					case 'D':
@@ -2979,6 +3249,13 @@ public class TimeUtils {
 					case 'e':
 						newType = 'E';
 						break;
+					case 'H':
+					case 'h':
+						newType = 'H';
+						break;
+					case '\\':
+						escape = true;
+						continue;
 					default:
 						newType = 1;
 						break;
@@ -2988,28 +3265,91 @@ public class TimeUtils {
 						case 'D':
 							separators.add(separator.toString());
 							separator.setLength(0);
-							components.add(new DayComponent(dayFormat.substring(start, i), DateElementType.Day, Format.INT));
+							components.add(new DayComponent(format.substring(start, i), DateElementType.Day, Format.INT));
 							break;
 						case 'M':
 							separators.add(separator.toString());
 							separator.setLength(0);
 							if (i - start == 2)
-								components.add(new DayComponent(dayFormat.substring(start, i), DateElementType.Month, Format.INT));
+								components.add(new DayComponent(format.substring(start, i), DateElementType.Month, Format.INT));
 							else
-								components.add(new DayComponent(dayFormat.substring(start, i), DateElementType.Month, MONTH_FORMAT));
+								components.add(new DayComponent(format.substring(start, i), DateElementType.Month, MONTH_FORMAT));
 							break;
 						case 'Y':
 							separators.add(separator.toString());
 							separator.setLength(0);
-							components.add(new DayComponent(dayFormat.substring(start, i), DateElementType.Year, Format.INT));
+							components.add(new DayComponent(format.substring(start, i), DateElementType.Year, Format.INT));
 							break;
 						case 'E':
 							separators.add(separator.toString());
 							separator.setLength(0);
-							components.add(new DayComponent(dayFormat.substring(start, i), DateElementType.Weekday, WEEKDAY_FORMAT));
+							components.add(new DayComponent(format.substring(start, i), DateElementType.Weekday, WEEKDAY_FORMAT));
+							break;
+						case 'H':
+							if (dayOnly)
+								separator.append(format.substring(start, i));
+							else {
+								separators.add(separator.toString());
+								separator.setLength(0);
+								components.add(new DayComponent(format.substring(start, i), DateElementType.Hour, Format.INT));
+							}
+							break;
+						case 'm':
+							if (dayOnly)
+								separator.append(format.substring(start, i));
+							else {
+								separators.add(separator.toString());
+								separator.setLength(0);
+								components.add(new DayComponent(format.substring(start, i), DateElementType.Minute, Format.INT));
+							}
+							break;
+						case 's':
+							if (dayOnly)
+								separator.append(format.substring(start, i));
+							else {
+								separators.add(separator.toString());
+								separator.setLength(0);
+								components.add(new DayComponent(format.substring(start, i), DateElementType.Second, Format.INT));
+							}
+							break;
+						case 'S':
+							if (dayOnly)
+								separator.append(format.substring(start, i));
+							else {
+								separators.add(separator.toString());
+								separator.setLength(0);
+								components.add(new DayComponent(format.substring(start, i), DateElementType.SubSecond, Format.INT));
+							}
+							break;
+						case 'a':
+							if (dayOnly)
+								separator.append(format.substring(start, i));
+							else {
+								separators.add(separator.toString());
+								separator.setLength(0);
+								components.add(new DayComponent(format.substring(start, i), DateElementType.AmPm, AM_PM_PARSER));
+							}
+							break;
+						case 'z':
+							if (dayOnly)
+								separator.append(format.substring(start, i));
+							else {
+								separators.add(separator.toString());
+								separator.setLength(0);
+								components.add(new DayComponent(format.substring(start, i), DateElementType.TimeZone, TIME_ZONE_FORMAT));
+							}
+							break;
+						case 'Z':
+							if (dayOnly)
+								separator.append(format.substring(start, i));
+							else {
+								separators.add(separator.toString());
+								separator.setLength(0);
+								components.add(new DayComponent(format.substring(start, i), DateElementType.TimeZone, TZ_OFFSET_FORMAT));
+							}
 							break;
 						default:
-							separator.append(dayFormat.substring(start, i));
+							separator.append(format.substring(start, i));
 							break;
 						}
 
@@ -3050,6 +3390,96 @@ public class TimeUtils {
 				str.append(separators.get(i + 1));
 			}
 			return str.toString();
+		}
+	}
+
+	/** An {@link Instant} format that uses {@link DayFormat#DDMMMYYYY_HH_MM_SS_SSS} */
+	public static final Format<Instant> INSTANT_DDMMMYYYY_HH_MM_SS_SSS = new FastInstantFormat(TimeUtils.DayFormat.DDMMMYYYY_HH_MM_SS_SSS);
+
+	/** A {@link Date} format that uses {@link DayFormat#DDMMMYYYY_HH_MM_SS_SSS} */
+	public static final Format<Date> DATE_DDMMMYYYY_HH_MM_SS_SSS = new FastDateFormat(TimeUtils.DayFormat.DDMMMYYYY_HH_MM_SS_SSS);
+
+	/**
+	 * <p>
+	 * An {@link Instant} format that uses {@link DayFormat} for performance.
+	 * </p>
+	 * <p>
+	 * {@link DayFormat#isFastParsing Fast-parsing} day formats can parse dates in their format around 15 times faster than
+	 * {@link SimpleDateFormat} or {@link TimeUtils#parseInstant(CharSequence, boolean, boolean, Function)}, and can format dates almost
+	 * twice as fast.
+	 * </p>
+	 * <p>
+	 * For dates written in a different format, this class defers to
+	 * {@link TimeUtils#parseInstant(CharSequence, boolean, boolean, Function)}.
+	 * </p>
+	 * <p>
+	 * This class is also thread-safe, unlike {@link SimpleDateFormat}.
+	 * </p>
+	 */
+	public static class FastInstantFormat implements Format<Instant> {
+		private final TimeUtils.DayFormat theDayFormat;
+
+		/** @param dayFormat The day format to parse with */
+		public FastInstantFormat(DayFormat dayFormat) {
+			theDayFormat = dayFormat;
+			if (!theDayFormat.isFastParsing)
+				throw new IllegalArgumentException("The given day format is not fast-parsing: " + dayFormat);
+		}
+
+		@Override
+		public void append(StringBuilder text, Instant value) {
+			theDayFormat.append(text, value.toEpochMilli());
+		}
+
+		@Override
+		public Instant parse(CharSequence text) throws ParseException {
+			long time = theDayFormat.parseTime(text);
+			if (time != Long.MIN_VALUE)
+				return Instant.ofEpochMilli(time);
+			else
+				return TimeUtils.parseInstant(text, true, true, opt -> opt.gmt()).evaluate(Instant::now);
+		}
+	}
+
+	/**
+	 * <p>
+	 * A {@link Date} format that uses {@link DayFormat} for performance.
+	 * </p>
+	 * <p>
+	 * {@link DayFormat#isFastParsing Fast-parsing} day formats can parse dates in their format around 15 times faster than
+	 * {@link SimpleDateFormat} or {@link TimeUtils#parseInstant(CharSequence, boolean, boolean, Function)}, and can format dates almost
+	 * twice as fast.
+	 * </p>
+	 * <p>
+	 * For dates written in a different format, this class defers to
+	 * {@link TimeUtils#parseInstant(CharSequence, boolean, boolean, Function)}.
+	 * </p>
+	 * <p>
+	 * This class is also thread-safe, unlike {@link SimpleDateFormat}.
+	 * </p>
+	 */
+	public static class FastDateFormat implements Format<Date> {
+		private final TimeUtils.DayFormat theDayFormat;
+
+		/** @param dayFormat The day format to parse with */
+		public FastDateFormat(DayFormat dayFormat) {
+			theDayFormat = dayFormat;
+			if (!theDayFormat.isFastParsing)
+				throw new IllegalArgumentException("The given day format is not fast-parsing: " + dayFormat);
+		}
+
+		@Override
+		public void append(StringBuilder text, Date value) {
+			theDayFormat.append(text, value.getTime());
+		}
+
+		@Override
+		public Date parse(CharSequence text) throws ParseException {
+			long time = theDayFormat.parseTime(text);
+			if (time != Long.MIN_VALUE)
+				return new Date(time);
+			else
+				return Date.from(TimeUtils.parseInstant(text, true, true, opt -> opt.gmt()).evaluate(Instant::now));
 		}
 	}
 
@@ -3397,6 +3827,38 @@ public class TimeUtils {
 	}
 
 	/**
+	 * <p>
+	 * Leap years are years divisible by 4 except those divisible by 100 and not 400.
+	 * </p>
+	 * <p>
+	 * There were 1968/4 = 492 years divisible by 4 between year zero and 1970. There were 19 years divisible by 100 and 4 years divisible
+	 * by 400.
+	 * </p>
+	 * <p>
+	 * 492-(19-4)=477
+	 * </p>
+	 */
+	public static final int LEAP_DAYS_BTW_Y0_AND_EPOCH = 477;
+
+	/**
+	 * @param year The year
+	 * @param month The month (0=January)
+	 * @return The number of leap days that occurred between 1970 (which was not a leap year) and the given date. If the year is earlier
+	 *         than March of 1968, the value will be negative.
+	 */
+	public static int getLeapDaysSinceEpoch(int year, int month) {
+		if (month <= 1) { // If we're not to February, then the current year doesn't count
+			year--;
+		}
+		// See LEAP_DAYS_BTW_Y0_AND_EPOCH for details on leap year calculation
+		int div4 = year / 4;
+		int div100 = div4 / 25;
+		int div400 = div100 / 4;
+		int days = div4 - div100 + div400;
+		return days - LEAP_DAYS_BTW_Y0_AND_EPOCH;
+	}
+
+	/**
 	 * @param years The number of years to convert
 	 * @return The number of days in the given number of years
 	 */
@@ -3660,7 +4122,7 @@ public class TimeUtils {
 		private List<String> thePrecisionNames;
 		private AboveDaysStrategy theAboveDayStrategy;
 		private Duration theAgoTransition;
-		private String theDayFormat;
+		private DayFormat theDayFormat;
 		private boolean isPluralized;
 		private String theJustNow;
 		private Duration theJustNowTransition;
@@ -3673,7 +4135,7 @@ public class TimeUtils {
 			theMaxElements = 1;
 			thePrecisionNames = DURATION_PRECISION_ABBREVS;
 			theAboveDayStrategy = AboveDaysStrategy.None;
-			theDayFormat = "ddMMMyyyy";
+			theDayFormat = DayFormat.DDMMMYYYY;
 			theAgo = "ago";
 		}
 
@@ -3713,7 +4175,7 @@ public class TimeUtils {
 		}
 
 		/** @return The month/day/year format to use if a time is beyond the {@link #getAgoTransition() ago transition} */
-		public String getDayFormat() {
+		public DayFormat getDayFormat() {
 			return theDayFormat;
 		}
 
@@ -3784,6 +4246,15 @@ public class TimeUtils {
 		 * @return This format
 		 */
 		public RelativeTimeFormat withDayFormat(String dayFormat) {
+			theDayFormat = DayFormat.parse(dayFormat);
+			return this;
+		}
+
+		/**
+		 * @param dayFormat The month/day/year format to use if a time is beyond the {@link #getAgoTransition() ago transition}
+		 * @return This format
+		 */
+		public RelativeTimeFormat withDayFormat(DayFormat dayFormat) {
 			theDayFormat = dayFormat;
 			return this;
 		}
@@ -4069,6 +4540,16 @@ public class TimeUtils {
 		 * @return The instant
 		 */
 		public ParsedInstant relative(Instant time, Instant reference, String dayFormat) {
+			return relative(time, reference, DayFormat.parse(dayFormat));
+		}
+
+		/**
+		 * @param time The time to turn into an instant
+		 * @param reference The reference time to determine the precision of the result
+		 * @param dayFormat The day format to use if the time difference is >= 1 day
+		 * @return The instant
+		 */
+		public ParsedInstant relative(Instant time, Instant reference, DayFormat dayFormat) {
 			DurationComponents comps = new DurationComponents(between(reference, time));
 			fill(comps, time, reference);
 			computePrecision(comps);
@@ -4080,10 +4561,9 @@ public class TimeUtils {
 			String lastSep = "";
 			StringBuilder str = new StringBuilder();
 			if (comps.minPrecision <= DurationComponentType.Day.ordinal()) {
-				DayFormat df = DayFormat.parse(dayFormat);
-				str.append(df.separators.get(0));
-				for (int c = 0; c < df.components.size(); c++) {
-					DayFormat.DayComponent comp = df.components.get(c);
+				str.append(dayFormat.separators.get(0));
+				for (int c = 0; c < dayFormat.components.size(); c++) {
+					DayFormat.DayComponent comp = dayFormat.components.get(c);
 					DurationComponentType durationType = null;
 					switch (comp.type) {
 					case Year:
@@ -4104,7 +4584,7 @@ public class TimeUtils {
 					if (durationType == null || durationType.ordinal() < comps.minPrecision)
 						continue;
 					comp.append(cal, str);
-					lastSep = df.separators.get(c + 1);
+					lastSep = dayFormat.separators.get(c + 1);
 					str.append(lastSep);
 				}
 			}
@@ -4151,10 +4631,12 @@ public class TimeUtils {
 					nanoDigits = 9;
 
 					StringUtils.printInt(time.getNano(), nanoDigits, text);
-					while (text.charAt(text.length() - 1) == '0') {
+					while (text.length() > 0 && text.charAt(text.length() - 1) == '0') {
 						nanoDigits--;
 						text.setLength(text.length() - 1);
 					}
+					if (text.length() == 0)
+						str.setLength(str.length() - 1);
 					break;
 				default:
 					break;

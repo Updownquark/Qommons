@@ -3,8 +3,11 @@ package org.qommons;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 
-import org.qommons.collect.BetterHashSet;
+import org.qommons.collect.BetterBitSet;
+import org.qommons.collect.BetterList;
 import org.qommons.collect.CircularArrayList;
 import org.qommons.ex.ExIterable;
 
@@ -30,7 +33,7 @@ public class IterableUtils {
 	 * @return An iterable that iterates through integers starting at the given start and incrementing or decrementing until the given end
 	 */
 	public static Iterable<Integer> indexIterator(int start, int end) {
-		return () -> new IndexIterator(start, end);
+		return new ToStringIterable<>(() -> new IndexIterator(start, end));
 	}
 
 	/**
@@ -39,13 +42,8 @@ public class IterableUtils {
 	 * @param forward Whether to iterate forward through the array or backward
 	 * @return An iterable that returns an iterator to iterate over each element in the array
 	 */
-	public static <T> Iterable<T> iterable(final T [] array, final boolean forward) {
-		return new Iterable<T>() {
-			@Override
-			public Iterator<T> iterator() {
-				return IterableUtils.iterator(array, forward);
-			}
-		};
+	public static <T> Iterable<T> iterable(final T[] array, final boolean forward) {
+		return new ToStringIterable<>(() -> IterableUtils.iterator(array, forward));
 	}
 
 	/**
@@ -54,29 +52,29 @@ public class IterableUtils {
 	 * @param forward Whether to iterate forward through the array or backward
 	 * @return An iterator to iterate over each element in the array
 	 */
-	public static <T> Iterator<T> iterator(final T [] array, final boolean forward) {
+	public static <T> Iterator<T> iterator(final T[] array, final boolean forward) {
 		return new Iterator<T>() {
 			private int theIndex;
-	
+
 			{
 				theIndex = forward ? 0 : array.length - 1;
 			}
-	
+
 			@Override
 			public boolean hasNext() {
 				return forward ? theIndex < array.length : theIndex >= 0;
 			}
-	
+
 			@Override
 			public T next() {
 				T ret = array[theIndex];
-				if(forward)
+				if (forward)
 					theIndex++;
 				else
 					theIndex--;
 				return ret;
 			}
-	
+
 			@Override
 			public void remove() {
 				throw new UnsupportedOperationException();
@@ -88,9 +86,20 @@ public class IterableUtils {
 	 * @param <T> The type of the values to iterate over
 	 * @param compound The iterables to compound in a single iterable
 	 * @return An Iterable that iterates through all elements in the given iterables
+	 * @deprecated Use {@link #concat(Iterable...)}
 	 */
+	@Deprecated
 	public static <T> Iterable<T> iterable(final Iterable<? extends T>... compound) {
-		return IterableUtils.flatten(Arrays.asList(compound));
+		return concat(compound);
+	}
+
+	/**
+	 * @param <T> The type of the values to iterate over
+	 * @param components The iterables to concatenate in a single iterable
+	 * @return An Iterable that iterates through all elements in the given iterables
+	 */
+	public static <T> Iterable<T> concat(final Iterable<? extends T>... components) {
+		return IterableUtils.flatten(Arrays.asList(components));
 	}
 
 	/**
@@ -99,54 +108,49 @@ public class IterableUtils {
 	 * @return An Iterable that iterates through all elements in the given iterables
 	 */
 	public static <T> Iterable<T> flatten(final Iterable<? extends Iterable<? extends T>> compound) {
-		return new Iterable<T>() {
+		return new ToStringIterable<>(() -> new Iterator<T>() {
+			private final Iterator<? extends Iterable<? extends T>> theCompoundIter = compound.iterator();
+			private Iterator<? extends T> theLastValueIter;
+
+			private Iterator<? extends T> theCurrentIter;
+
+			private boolean calledHasNext;
+			private boolean currentIterHasValue;
+
 			@Override
-			public Iterator<T> iterator() {
-				return new Iterator<T>() {
-					private final Iterator<? extends Iterable<? extends T>> theCompoundIter = compound.iterator();
-					private Iterator<? extends T> theLastValueIter;
-	
-					private Iterator<? extends T> theCurrentIter;
-	
-					private boolean calledHasNext;
-					private boolean currentIterHasValue;
-	
-					@Override
-					public boolean hasNext() {
-						calledHasNext = true;
-						if (currentIterHasValue)
-							theLastValueIter = theCurrentIter;
-	
-						currentIterHasValue = theCurrentIter != null && theCurrentIter.hasNext();
-						while (!currentIterHasValue && theCompoundIter.hasNext()) {
-							theCurrentIter = theCompoundIter.next().iterator();
-							currentIterHasValue = theCurrentIter != null && theCurrentIter.hasNext();
-						}
-						return currentIterHasValue;
-					}
-	
-					@Override
-					public T next() {
-						if (!calledHasNext && !hasNext())
-							throw new NoSuchElementException();
-						if (theCurrentIter == null)
-							throw new NoSuchElementException();
-						calledHasNext = false;
-						return theCurrentIter.next();
-					}
-	
-					@Override
-					public void remove() {
-						if (!currentIterHasValue && theLastValueIter == null)
-							throw new IllegalStateException("remove() must be called after next()");
-						if (currentIterHasValue)
-							theCurrentIter.remove();
-						else
-							theLastValueIter.remove();
-					}
-				};
+			public boolean hasNext() {
+				calledHasNext = true;
+				if (currentIterHasValue)
+					theLastValueIter = theCurrentIter;
+
+				currentIterHasValue = theCurrentIter != null && theCurrentIter.hasNext();
+				while (!currentIterHasValue && theCompoundIter.hasNext()) {
+					theCurrentIter = theCompoundIter.next().iterator();
+					currentIterHasValue = theCurrentIter != null && theCurrentIter.hasNext();
+				}
+				return currentIterHasValue;
 			}
-		};
+
+			@Override
+			public T next() {
+				if (!calledHasNext && !hasNext())
+					throw new NoSuchElementException();
+				if (theCurrentIter == null)
+					throw new NoSuchElementException();
+				calledHasNext = false;
+				return theCurrentIter.next();
+			}
+
+			@Override
+			public void remove() {
+				if (!currentIterHasValue && theLastValueIter == null)
+					throw new IllegalStateException("remove() must be called after next()");
+				if (currentIterHasValue)
+					theCurrentIter.remove();
+				else
+					theLastValueIter.remove();
+			}
+		});
 	}
 
 	/**
@@ -157,44 +161,44 @@ public class IterableUtils {
 	public static <T> Iterator<T> iterator(final Iterator<? extends T>... compound) {
 		return new Iterator<T>() {
 			private Iterator<? extends T> theLastValueIter;
-	
+
 			private Iterator<? extends T> theCurrentIter;
-	
+
 			private int theNextIndex;
-	
+
 			private boolean calledHasNext;
-	
+
 			private boolean currentIterHasValue;
-	
+
 			@Override
 			public boolean hasNext() {
 				calledHasNext = true;
-				if(theCurrentIter != null && !theCurrentIter.hasNext()) {
-					if(currentIterHasValue)
+				if (theCurrentIter != null && !theCurrentIter.hasNext()) {
+					if (currentIterHasValue)
 						theLastValueIter = theCurrentIter;
 					theCurrentIter = null;
 				}
-				while(theCurrentIter == null && theNextIndex < compound.length) {
+				while (theCurrentIter == null && theNextIndex < compound.length) {
 					currentIterHasValue = false;
 					theCurrentIter = compound[theNextIndex++];
-					if(!theCurrentIter.hasNext())
+					if (!theCurrentIter.hasNext())
 						theCurrentIter = null;
 				}
 				return theCurrentIter != null;
 			}
-	
+
 			@Override
 			public T next() {
-				if(!calledHasNext && !hasNext())
+				if (!calledHasNext && !hasNext())
 					throw new java.util.NoSuchElementException();
 				return theCurrentIter.next();
 			}
-	
+
 			@Override
 			public void remove() {
-				if(!currentIterHasValue && theLastValueIter == null)
+				if (!currentIterHasValue && theLastValueIter == null)
 					throw new IllegalStateException("remove() must be called after next()");
-				if(currentIterHasValue)
+				if (currentIterHasValue)
 					theCurrentIter.remove();
 				else
 					theLastValueIter.remove();
@@ -206,14 +210,33 @@ public class IterableUtils {
 	 * @param <T> The type of the values to iterate over
 	 * @param iterable The iterable to wrap
 	 * @return An immutable iterable that returns the same information as <code>iterable</code> but disallows modification
+	 * @deprecated Use {@link #unmodifiable(Iterable)}
 	 */
-	public static <T> Iterable<T> immutableIterable(final Iterable<T> iterable) {
-		return new Iterable<T>() {
-			@Override
-			public Iterator<T> iterator() {
-				return IterableUtils.immutableIterator(iterable.iterator());
-			}
-		};
+	@Deprecated
+	public static <T> Iterable<T> immutableIterable(final Iterable<? extends T> iterable) {
+		return unmodifiable(iterable);
+	}
+
+	/**
+	 * @param <T> The type of the values to iterate over
+	 * @param iterable The iterable to wrap
+	 * @return An unmodifiable iterable that returns the same information as <code>iterable</code> but disallows modification
+	 */
+	public static <T> Iterable<T> unmodifiable(final Iterable<? extends T> iterable) {
+		if (iterable == null)
+			throw new NullPointerException();
+		return new ToStringIterable<>(() -> IterableUtils.unmodifiable(iterable.iterator()));
+	}
+
+	/**
+	 * @param <T> The type of the values to iterate over
+	 * @param iterator The iterator to wrap
+	 * @return An immutable iterator that returns the same information as <code>iterator</code> but disallows modification
+	 * @deprecated Use {@link #unmodifiable(Iterator)}
+	 */
+	@Deprecated
+	public static <T> Iterator<T> immutableIterator(final Iterator<? extends T> iterator) {
+		return unmodifiable(iterator);
 	}
 
 	/**
@@ -221,18 +244,20 @@ public class IterableUtils {
 	 * @param iterator The iterator to wrap
 	 * @return An immutable iterator that returns the same information as <code>iterator</code> but disallows modification
 	 */
-	public static <T> Iterator<T> immutableIterator(final Iterator<T> iterator) {
+	public static <T> Iterator<T> unmodifiable(final Iterator<? extends T> iterator) {
+		if (iterator == null)
+			throw new NullPointerException();
 		return new Iterator<T>() {
 			@Override
 			public boolean hasNext() {
 				return iterator.hasNext();
 			}
-	
+
 			@Override
 			public T next() {
 				return iterator.next();
 			}
-	
+
 			@Override
 			public void remove() {
 				throw new UnsupportedOperationException();
@@ -247,26 +272,28 @@ public class IterableUtils {
 	 *         of times
 	 */
 	public static <T> Iterable<T> cachingIterable(Iterator<T> iterator) {
-		final Iterator<T> [] backing = new Iterator[] {iterator};
+		if (iterator == null)
+			throw new NullPointerException();
+		final Iterator<T>[] backing = new Iterator[] { iterator };
 		return new Iterable<T>() {
 			private final java.util.ArrayList<T> theCache = new java.util.ArrayList<>();
-	
+
 			private Object theLock = new Object();
-	
+
 			@Override
 			public Iterator<T> iterator() {
 				return new Iterator<T>() {
 					private int theIndex;
-	
+
 					@Override
 					public boolean hasNext() {
 						Object lock = theLock;
-						if(lock != null && theIndex == theCache.size()) {
-							synchronized(lock) {
+						if (lock != null && theIndex == theCache.size()) {
+							synchronized (lock) {
 								if (backing[0] == null)
 									return false;
-								if(theIndex == theCache.size()) {
-									if(backing[0].hasNext())
+								if (theIndex == theCache.size()) {
+									if (backing[0].hasNext())
 										return true;
 									else {
 										theLock = null;
@@ -278,13 +305,13 @@ public class IterableUtils {
 						}
 						return theIndex < theCache.size();
 					}
-	
+
 					@Override
 					public T next() {
 						Object lock = theLock;
-						if(lock != null && theIndex == theCache.size()) {
-							synchronized(lock) {
-								if(theIndex == theCache.size()) {
+						if (lock != null && theIndex == theCache.size()) {
+							synchronized (lock) {
+								if (theIndex == theCache.size()) {
 									T ret = backing[0].next();
 									theCache.add(ret);
 									theIndex++;
@@ -294,7 +321,7 @@ public class IterableUtils {
 						}
 						return theCache.get(theIndex++);
 					}
-	
+
 					@Override
 					public void remove() {
 						throw new UnsupportedOperationException();
@@ -314,22 +341,24 @@ public class IterableUtils {
 	 */
 	public static <T, V> Iterator<V> conditionalIterator(final Iterator<T> wrap, final Accepter<? super T, ? extends V> accepter,
 		final boolean removable) {
+		if (wrap == null)
+			throw new NullPointerException();
 		return new Iterator<V>() {
 			private V theNextReturn;
-	
+
 			private boolean calledHasNext;
-	
+
 			@Override
 			public boolean hasNext() {
 				calledHasNext = true;
-				while(theNextReturn == null && wrap.hasNext())
+				while (theNextReturn == null && wrap.hasNext())
 					theNextReturn = accepter.accept(wrap.next());
 				return theNextReturn != null;
 			}
-	
+
 			@Override
 			public V next() {
-				if(!calledHasNext && !hasNext()) {
+				if (!calledHasNext && !hasNext()) {
 					wrap.next(); // Let the wrapped iterator throw the exception
 					throw new java.util.NoSuchElementException();
 				}
@@ -337,10 +366,10 @@ public class IterableUtils {
 				theNextReturn = null;
 				return ret;
 			}
-	
+
 			@Override
 			public void remove() {
-				if(removable)
+				if (removable)
 					wrap.remove();
 				else
 					throw new UnsupportedOperationException();
@@ -355,10 +384,11 @@ public class IterableUtils {
 	 * @param value The value at the root level
 	 * @param childGetter Gets children of each node
 	 * @param filter An optional filter that, if it fails for a value, will prevent the value's children (but not the value itself) from
-	 *            being iterated through
+	 *        being iterated through
 	 * @return An iterable that can iterate depth-first through the hierarchy
 	 */
-	public static <T> Iterable<T> depthFirst(T value, Function<? super T, Iterable<T>> childGetter, Predicate<? super T> filter) {
+	public static <T> Iterable<T> depthFirst(T value, Function<? super T, ? extends Iterable<? extends T>> childGetter,
+		Predicate<? super T> filter) {
 		return IterableUtils.depthFirstMulti(java.util.Arrays.asList(value), childGetter, filter);
 	}
 
@@ -369,43 +399,41 @@ public class IterableUtils {
 	 * @param values The values at the top level to iterate through
 	 * @param childGetter Gets children of each node
 	 * @param filter An optional filter that, if it fails for a value, will prevent the value's children (but not the value itself) from
-	 *            being iterated through
+	 *        being iterated through
 	 * @return An iterable that can iterate depth-first through the hierarchy
 	 */
-	public static <T> Iterable<T> depthFirstMulti(Iterable<T> values, Function<? super T, Iterable<T>> childGetter,
+	public static <T> Iterable<T> depthFirstMulti(Iterable<? extends T> values,
+		Function<? super T, ? extends Iterable<? extends T>> childGetter,
 		Predicate<? super T> filter) {
-		return new Iterable<T>() {
+		if (values == null)
+			throw new NullPointerException();
+		return new ToStringIterable<>(() -> new Iterator<T>() {
+			private Iterator<? extends T> theTopLevel = values.iterator();
+
+			private Iterator<? extends T> theChildren;
+
 			@Override
-			public Iterator<T> iterator() {
-				return new Iterator<T>() {
-					private Iterator<T> theTopLevel = values.iterator();
-	
-					private Iterator<T> theChildren;
-	
-					@Override
-					public boolean hasNext() {
-						if(theChildren != null) {
-							if(theChildren.hasNext())
-								return true;
-							theChildren = null;
-						}
-						return theTopLevel.hasNext();
-					}
-	
-					@Override
-					public T next() {
-						if(theChildren != null && theChildren.hasNext())
-							return theChildren.next();
-						T ret = theTopLevel.next();
-						if(filter == null || filter.test(ret)) {
-							Iterable<T> childIter = childGetter.apply(ret);
-							theChildren = depthFirstMulti(childIter, childGetter, filter).iterator();
-						}
-						return ret;
-					}
-				};
+			public boolean hasNext() {
+				if (theChildren != null) {
+					if (theChildren.hasNext())
+						return true;
+					theChildren = null;
+				}
+				return theTopLevel.hasNext();
 			}
-		};
+
+			@Override
+			public T next() {
+				if (theChildren != null && theChildren.hasNext())
+					return theChildren.next();
+				T ret = theTopLevel.next();
+				if (filter == null || filter.test(ret)) {
+					Iterable<? extends T> childIter = childGetter.apply(ret);
+					theChildren = depthFirstMulti(childIter, childGetter, filter).iterator();
+				}
+				return ret;
+			}
+		});
 	}
 
 	/**
@@ -415,11 +443,12 @@ public class IterableUtils {
 	 * @param value The value at the root level
 	 * @param childGetter Gets children of each node
 	 * @param filter An optional filter that, if it fails for a value, will prevent the value's children (but not the value itself) from
-	 *            being iterated through
+	 *        being iterated through
 	 * @return An iterable that can iterate depth-first through the hierarchy
 	 */
-	public static <T> Iterable<T> breadthFirst(T value, Function<? super T, Iterable<T>> childGetter, Predicate<? super T> filter) {
-		return IterableUtils.breadthFirstMulti(java.util.Arrays.asList(value), childGetter, filter);
+	public static <T> Iterable<T> breadthFirst(T value, Function<? super T, ? extends Iterable<? extends T>> childGetter,
+		Predicate<? super T> filter) {
+		return IterableUtils.breadthFirstMulti(Collections.singleton(value), childGetter, filter);
 	}
 
 	/**
@@ -429,38 +458,48 @@ public class IterableUtils {
 	 * @param values The value at the top level to iterate through
 	 * @param childGetter Gets children of each node
 	 * @param filter An optional filter that, if it fails for a value, will prevent the value's children (but not the value itself) from
-	 *            being iterated through
+	 *        being iterated through
 	 * @return An iterable that can iterate depth-first through the hierarchy
 	 */
-	public static <T> Iterable<T> breadthFirstMulti(Iterable<T> values, Function<? super T, Iterable<T>> childGetter,
-		Predicate<? super T> filter) {
-		return new Iterable<T>() {
+	public static <T> Iterable<T> breadthFirstMulti(Iterable<? extends T> values,
+		Function<? super T, ? extends Iterable<? extends T>> childGetter, Predicate<? super T> filter) {
+		if (values == null)
+			throw new NullPointerException();
+		return new ToStringIterable<>(() -> new Iterator<T>() {
+			private Queue<T> queue;
+			private Iterator<? extends T> currentIterator = values.iterator();
+			private T currentValue;
+			private boolean hasValue;
+
 			@Override
-			public Iterator<T> iterator() {
-				return new Iterator<T>() {
-					private Queue<T> queue = new ArrayDeque<>();
-	
-					{
-						for(T value : values)
-							queue.add(value);
+			public boolean hasNext() {
+				while (true) {
+					if (currentIterator != null && currentIterator.hasNext())
+						return true;
+					if (hasValue) {
+						if (filter == null || filter.test(currentValue)) {
+							if (queue == null)
+								queue = new ArrayDeque<>();
+							queue.add(currentValue);
+						}
+						hasValue = false;
+						currentValue = null;
 					}
-	
-					@Override
-					public boolean hasNext() {
-						return !queue.isEmpty();
-					}
-	
-					@Override
-					public T next() {
-						T ret = queue.poll();
-						if(filter == null || filter.test(ret))
-							for(T child : childGetter.apply(ret))
-								queue.add(child);
-						return ret;
-					}
-				};
+					if (queue == null || queue.isEmpty())
+						return false;
+					currentIterator = childGetter.apply(queue.poll()).iterator();
+				}
 			}
-		};
+
+			@Override
+			public T next() {
+				if (!hasNext())
+					throw new NoSuchElementException();
+				currentValue = currentIterator.next();
+				hasValue = true;
+				return currentValue;
+			}
+		});
 	}
 
 	/**
@@ -471,7 +510,9 @@ public class IterableUtils {
 	 * @return An iterable whose values are those of the given iterable, mapped via the given function
 	 */
 	public static <T, V> Iterable<V> map(Iterable<T> iterable, Function<? super T, V> map) {
-		return () -> new Iterator<V>() {
+		if (iterable == null)
+			throw new NullPointerException();
+		return new ToStringIterable<>(() -> new Iterator<V>() {
 			private final Iterator<T> backing = iterable.iterator();
 
 			@Override
@@ -488,7 +529,7 @@ public class IterableUtils {
 			public void remove() {
 				backing.remove();
 			}
-		};
+		});
 	}
 
 	/**
@@ -498,7 +539,9 @@ public class IterableUtils {
 	 * @return The filtered iterable
 	 */
 	public static <T> Iterable<T> filter(Iterable<T> iterable, Predicate<? super T> filter) {
-		return () -> new Iterator<T>() {
+		if (iterable == null)
+			throw new NullPointerException();
+		return new ToStringIterable<>(() -> new Iterator<T>() {
 			private final Iterator<T> backing = iterable.iterator();
 			private T theNext;
 			boolean hasNext;
@@ -527,7 +570,7 @@ public class IterableUtils {
 			public void remove() {
 				backing.remove();
 			}
-		};
+		});
 	}
 
 	/**
@@ -583,6 +626,8 @@ public class IterableUtils {
 	 *         copy the values it receives.
 	 */
 	public static <T> Iterable<List<T>> combine(Iterable<? extends Iterable<? extends T>> elements) {
+		if (elements == null)
+			throw new NullPointerException();
 		ExIterable<? extends ExIterable<? extends T, RuntimeException>, RuntimeException> exArg = ExIterable.fromIterable(elements)
 			.map(elIter -> ExIterable.fromIterable(elIter));
 		ExIterable<List<T>, RuntimeException> exRes = ExIterable.combine(exArg);
@@ -671,118 +716,98 @@ public class IterableUtils {
 		}
 	}
 
-	/**
-	 * @param <T> The type of values to permutate
-	 * @param source The values to permutate
-	 * @param maxDim The maximum number of values in each permutation
-	 * @param distinct Whether the permutations should only contain distinct values
-	 * @param withEmpty Whether to return the empty permutation first
-	 * @return An iterable of all possible permutations of the given source values with the given constraints. E.g. If {0, 1, 2, 3} is given
-	 *         for the source with maxDim={@link Integer#MAX_VALUE}, distinct=true, withEmpty=false, the result will be an iterator that
-	 *         iterates over:
-	 *         <ol>
-	 *         <li>{0}</li>
-	 *         <li>{1}</li>
-	 *         <li>{2}</li>
-	 *         <li>{3}</li>
-	 *         <li>{0,1}</li>
-	 *         <li>{0,2}</li>
-	 *         <li>{0,3}</li>
-	 *         <li>{1,2}</li>
-	 *         <li>{1,3}</li>
-	 *         <li>{2,3}</li>
-	 *         <li>{0,1,2}</li>
-	 *         <li>{0,1,3}</li>
-	 *         <li>{0,2,3}</li>
-	 *         <li>{0,1,2,3}</li>
-	 *         </ol>
-	 */
-	public static <T> Iterable<List<T>> fullPermutation(Iterable<T> source, int maxDim, boolean distinct, boolean withEmpty) {
-		if (maxDim < 0)
-			throw new IllegalArgumentException("Maximum dimension must not be negative: " + maxDim);
-		return () -> new Iterator<List<T>>() {
-			private final CircularArrayList<Iterator<T>> theIterators = new CircularArrayList<>();
-			private int theCurrentDim;
-			private final Deque<T> theValues;
-			private boolean knownHasNext;
+	static class ToStringIterable<T> implements Iterable<T> {
+		private final Supplier<Iterator<T>> theIterator;
 
-			{
-				if (distinct)
-					theValues = BetterHashSet.build().build();
+		public ToStringIterable(Supplier<Iterator<T>> iterator) {
+			theIterator = iterator;
+		}
+
+		@Override
+		public Iterator<T> iterator() {
+			return theIterator.get();
+		}
+
+		@Override
+		public String toString() {
+			StringBuilder str = new StringBuilder("[");
+			boolean first = true;
+			for (T value : this) {
+				if (first)
+					first = false;
 				else
-					theValues = CircularArrayList.build().build();
-				if (withEmpty)
-					knownHasNext = true;
-				else
-					knownHasNext = hasNext();
+					str.append(", ");
+				str.append(value);
 			}
+			return str.append(']').toString();
+		}
+	}
+
+	/**
+	 * @param <T> The type of the value to iterate over
+	 * @param initial The first value in the sequence
+	 * @param op The operator to generate subsequent values
+	 * @param count The number of values for the sequence
+	 * @return The iterable sequence
+	 */
+	public static <T> Iterable<T> createCount(T initial, UnaryOperator<T> op, int count) {
+		return () -> new Iterator<T>() {
+			private T theNext;
+			private int theReturned;
 
 			@Override
 			public boolean hasNext() {
-				if (knownHasNext)
-					return true;
-				else if (theCurrentDim == 0) {
-					if (maxDim == 0)
-						return false;
-					theCurrentDim = 1;
-					// Special one-time test for if the source is empty
-					Iterator<T> iter = source.iterator();
-					theIterators.add(iter);
-					if (!iter.hasNext())
-						return false;
-					theValues.add(iter.next());
-					return (knownHasNext = true);
-				}
-
-				do {
-					// Remove spent iterators
-					while (!theIterators.isEmpty()) {
-						if (theValues.size() == theIterators.size())
-							theValues.removeLast();
-						if (theIterators.getLast().hasNext()) {
-							break;
-						} else {
-							theIterators.removeLast();
-						}
-					}
-
-					if (theIterators.isEmpty()) {// No more permutations in the current dimension. Next dimension.
-						if (theCurrentDim == maxDim)
-							return false;
-						theCurrentDim++;
-					}
-
-					// Fill out the iterators up to the current dimension
-					while (theIterators.size() < theCurrentDim) {
-						Iterator<T> iter = source.iterator();
-						theIterators.add(iter);
-					}
-					if (theIterators.size() == theCurrentDim)
-						knownHasNext = fillValues();
-				} while (!knownHasNext);
-				return knownHasNext;
-			}
-
-			private boolean fillValues() {
-				while (theValues.size() < theIterators.size()) {
-					if (!theIterators.get(theValues.size()).hasNext())
-						return false;
-					else if (!theValues.add(theIterators.get(theValues.size()).next()))
-						return false;
-				}
-				return true;
+				return theReturned < count;
 			}
 
 			@Override
-			public List<T> next() {
-				if (!knownHasNext) {
-					if (!hasNext())
-						throw new NoSuchElementException();
-				}
-				knownHasNext = false;
-				return QommonsUtils.unmodifiableCopy(theValues);
+			public T next() {
+				if (!hasNext())
+					throw new NoSuchElementException();
+				theReturned++;
+				T value = theNext;
+				theNext = op.apply(value);
+				return value;
 			}
 		};
+	}
+
+	/**
+	 * @param <T> The type of the comparable value to iterate over
+	 * @param initial The first value in the sequence
+	 * @param op The operator to generate subsequent values
+	 * @param until The value to stop before
+	 * @return The iterable sequence
+	 */
+	public static <T extends Comparable<T>> Iterable<T> createUntil(T initial, UnaryOperator<T> op, T until) {
+		return () -> new Iterator<T>() {
+			private T theNext;
+
+			@Override
+			public boolean hasNext() {
+				return theNext.compareTo(until) < 0;
+			}
+
+			@Override
+			public T next() {
+				if (!hasNext())
+					throw new NoSuchElementException();
+				T value = theNext;
+				theNext = op.apply(value);
+				return value;
+			}
+		};
+	}
+
+	/**
+	 * @param <T> The type of values to permutate
+	 * @param source The values to permutate
+	 * @return A {@link PermutationIterable} with {@link PermutationIterable#getMinSize() minSize}=1,
+	 *         {@link PermutationIterable#getMaxSize() maxSize}={@link Integer#MAX_VALUE}, and {@link PermutationIterable#isDistinct()
+	 *         distinct}=false
+	 */
+	public static <T> PermutationIterable<T> fullPermutation(Iterable<T> source) {
+		return new PermutationIterable<>(source);
 	}
 
 	static class IndexIterator implements Iterator<Integer> {
@@ -814,6 +839,278 @@ public class IterableUtils {
 			else
 				theNextValue--;
 			return value;
+		}
+	}
+
+	/**
+	 * <p>
+	 * An iterable of all possible permutations of the given source values with the given constraints.
+	 * </p>
+	 * <p>
+	 * E.g. If {0, 1, 2, 3} is given for the source with {@link #setMinSize(int) minSize}=1{@link #setMaxSize(int) max
+	 * size}={@link Integer#MAX_VALUE}, {@link #setDistinct(boolean) distinct}=true, the result will be an iterator that iterates over:
+	 * <ol>
+	 * <li>[0]</li>
+	 * <li>[1]</li>
+	 * <li>[2]</li>
+	 * <li>[3]</li>
+	 * <li>[0,1]</li>
+	 * <li>[0,2]</li>
+	 * <li>[0,3]</li>
+	 * <li>[1,2]</li>
+	 * <li>[1,3]</li>
+	 * <li>[2,3]</li>
+	 * <li>[0,1,2]</li>
+	 * <li>[0,1,3]</li>
+	 * <li>[0,2,3]</li>
+	 * <li>[0,1,2,3]</li>
+	 * </ol>
+	 * </p>
+	 * <p>
+	 * For efficiency, the list returned from {@link Iterator#next()} will be the same instance each time--an unmodifiable wrapper around a
+	 * list that is updated internally for each iteration.
+	 * </p>
+	 * 
+	 * @param <T> The type of values to permutate
+	 */
+	public static class PermutationIterable<T> implements Iterable<BetterList<T>> {
+		private final Iterable<T> theSource;
+		private int theMinSize;
+		private int theMaxSize;
+		private boolean isDistinct;
+
+		PermutationIterable(Iterable<T> source) {
+			theSource = source;
+			theMinSize = 1;
+			theMaxSize = Integer.MAX_VALUE;
+		}
+
+		/** @return The minimum size of the lists to iterate over */
+		public int getMinSize() {
+			return theMinSize;
+		}
+
+		/**
+		 * @param minSize The minimum number of values in each permutation
+		 * @return This iterable
+		 */
+		public PermutationIterable<T> setMinSize(int minSize) {
+			if (minSize < 0)
+				throw new IllegalArgumentException("Min size must not be negative");
+			else if (minSize > theMaxSize)
+				theMaxSize = minSize;
+			theMinSize = minSize;
+			return this;
+		}
+
+		/** @return The maximum number of values in each permutation */
+		public int getMaxSize() {
+			return theMaxSize;
+		}
+
+		/**
+		 * @param maxSize The maximum number of values in each permutation
+		 * @return This iterable
+		 */
+		public PermutationIterable<T> setMaxSize(int maxSize) {
+			if (maxSize < 0)
+				throw new IllegalArgumentException("Max size must not be negative");
+			else if (maxSize < theMinSize)
+				theMinSize = maxSize;
+			theMaxSize = maxSize;
+			return this;
+		}
+
+		/**
+		 * Sets {@link #getMinSize() minSize} and {@link #getMaxSize() maxSize} at once
+		 * 
+		 * @param size The number of values in each permutation
+		 * @return This iterable
+		 */
+		public PermutationIterable<T> setSize(int size) {
+			if (size < 0)
+				throw new IllegalArgumentException("Size must not be negative");
+			theMinSize = theMaxSize = size;
+			return this;
+		}
+
+		/**
+		 * @return Whether this iterable only uses distinct values from its source iterable. This distinct-ness is not based on
+		 *         {@link Object#equals(Object)} or identity, but rather on the assumption that the source iterable provides distinct values
+		 *         in a consistent order.
+		 */
+		public boolean isDistinct() {
+			return isDistinct;
+		}
+
+		/**
+		 * @param isDistinct Whether to provide only combinations with {@link #isDistinct() distinct} values
+		 * @return This iterable
+		 */
+		public PermutationIterable<T> setDistinct(boolean isDistinct) {
+			this.isDistinct = isDistinct;
+			return this;
+		}
+
+		@Override
+		public Iterator<BetterList<T>> iterator() {
+			return new PermutationIterator(theMinSize, theMaxSize, isDistinct);
+		}
+
+		@Override
+		public String toString() {
+			StringBuilder str = new StringBuilder();
+			boolean first = true;
+			for (List<T> value : this) {
+				if (first)
+					first = false;
+				else
+					str.append('\n');
+				str.append(value);
+			}
+			return str.toString();
+		}
+
+		class PermutationIterator implements Iterator<BetterList<T>> {
+			private final int myMinSize;
+			private final int myMaxSize;
+
+			private final CircularArrayList<Iterator<T>> theIterators = new CircularArrayList<>();
+			private int theCurrentDim;
+			private final CircularArrayList<T> theValues;
+			private final BetterList<T> theExposedValues;
+			private final BetterBitSet theUsedValues;
+			private boolean knownHasNext;
+
+			PermutationIterator(int minSize, int maxSize, boolean distinct) {
+				myMinSize = minSize;
+				myMaxSize = maxSize;
+
+				theValues = CircularArrayList.build().build();
+				theExposedValues = new BetterList.ConstantList<T>(theValues) {
+					@Override
+					protected Object createIdentity() {
+						return Identifiable.wrap(theSource, "permutate", myMinSize, myMaxSize, theUsedValues != null);
+					}
+				};
+				theUsedValues = distinct ? new BetterBitSet() : null;
+				knownHasNext = myMinSize == 0;
+			}
+
+			private Iterator<T> createIterator() {
+				Iterator<T> source = theSource.iterator();
+				if (theUsedValues != null)
+					return new DistinctIterator<>(source, theUsedValues);
+				else
+					return source;
+			}
+
+			@Override
+			public boolean hasNext() {
+				if (knownHasNext)
+					return true;
+				if (theCurrentDim < myMinSize) {
+					do {
+						theCurrentDim++;
+						Iterator<T> iter = createIterator();
+						theIterators.add(iter);
+						if (!iter.hasNext())
+							return false;
+						theValues.add(iter.next());
+					} while (theCurrentDim < myMinSize);
+					return (knownHasNext = true);
+				}
+
+				do {
+					// Remove spent iterators
+					while (!theIterators.isEmpty()) {
+						if (theValues.size() == theIterators.size())
+							theValues.removeLast();
+						if (theIterators.getLast().hasNext()) {
+							break;
+						} else {
+							theIterators.removeLast();
+						}
+					}
+
+					if (theIterators.isEmpty()) {// No more permutations in the current dimension. Next dimension.
+						if (theCurrentDim == myMaxSize)
+							return false;
+						theCurrentDim++;
+					}
+
+					// Fill out the iterators up to the current dimension
+					while (theIterators.size() < theCurrentDim) {
+						Iterator<T> iter = createIterator();
+						theIterators.add(iter);
+					}
+					if (theIterators.size() == theCurrentDim)
+						knownHasNext = fillValues();
+				} while (!knownHasNext);
+				return knownHasNext;
+			}
+
+			private boolean fillValues() {
+				while (theValues.size() < theIterators.size()) {
+					Iterator<T> iter = theIterators.get(theValues.size());
+					if (!iter.hasNext())
+						return false;
+					theValues.add(iter.next());
+				}
+				return true;
+			}
+
+			@Override
+			public BetterList<T> next() {
+				if (!knownHasNext) {
+					if (!hasNext())
+						throw new NoSuchElementException();
+				}
+				knownHasNext = false;
+				return theExposedValues;
+			}
+		}
+
+		static class DistinctIterator<T> implements Iterator<T> {
+			private final Iterator<T> iterator;
+			private final BetterBitSet theUsedValues;
+			private int index;
+			private boolean knownHasNext;
+			private boolean hasNext;
+
+			DistinctIterator(Iterator<T> iterator, BetterBitSet usedValues) {
+				this.iterator = iterator;
+				theUsedValues = usedValues;
+			}
+
+			@Override
+			public boolean hasNext() {
+				if (!knownHasNext) {
+					hasNext = checkHasNext();
+					knownHasNext = true;
+				}
+				return hasNext;
+			}
+
+			private boolean checkHasNext() {
+				theUsedValues.clear(index);
+				while (iterator.hasNext()) {
+					if (theUsedValues.get(++index))
+						iterator.next(); // Value already in use. Skip it.
+					else
+						return true;
+				}
+				return false;
+			}
+
+			@Override
+			public T next() {
+				if (!hasNext())
+					throw new NoSuchElementException();
+				knownHasNext = false;
+				theUsedValues.set(index);
+				return iterator.next();
+			}
 		}
 	}
 }

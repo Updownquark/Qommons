@@ -17,6 +17,8 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>>
 	/** The property that the {@link #getElementRepresentation() element representation} is stored under */
 	static final String ELEMENT_REPRESENTATION = "ELEMENT.REPRESENTATION";
 
+	String getInterpretingDocument();
+
 	/**
 	 * Obtains a view of this session as a {@link SpecialSession}. This must have been enabled when the interpreter was built.
 	 * 

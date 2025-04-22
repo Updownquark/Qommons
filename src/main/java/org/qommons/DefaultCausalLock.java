@@ -2,6 +2,7 @@ package org.qommons;
 
 import java.util.AbstractCollection;
 import java.util.Collection;
+import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.LinkedList;
 
@@ -102,17 +103,23 @@ public class DefaultCausalLock implements CausalLock {
 
 	private boolean hasCause(ProgramTracker tracker) {
 		TrackNode node = tracker.start("hasCause");
-		Iterator<CauseSupplier> causeIter = theTransactionCauses.iterator();
-		boolean hasCause = false;
-		while (causeIter.hasNext()) {
-			CauseSupplier cause = causeIter.next();
-			if (cause.isTerminated())
-				causeIter.remove();
-			else
-				hasCause = true;
-		}
+		boolean exception = false;
+		do {
+			try {
+				Iterator<CauseSupplier> causeIter = theTransactionCauses.iterator();
+				while (causeIter.hasNext()) {
+					CauseSupplier cause = causeIter.next();
+					if (cause.isTerminated())
+						causeIter.remove();
+					else
+						return true;
+				}
+			} catch (ConcurrentModificationException e) {
+				exception = true;
+			}
+		} while (exception);
 		node.close();
-		return hasCause;
+		return false;
 	}
 
 	@Override
