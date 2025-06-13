@@ -148,6 +148,20 @@ public interface Format<T> {
 		return new EnumFormat<>(type);
 	}
 
+	/**
+	 * The {@link Enum#valueOf(Class, String)} method is so type-restrictive that it's basically impossible to call if you don't know have a
+	 * reference to the enum class without resorting to raw types. This method gets around that.
+	 * 
+	 * @param <E> Unused enum-type parameter needed to get around the generic requirements of the {@link Enum#valueOf(Class, String)} method
+	 * @param type The enum type
+	 * @param value The value name
+	 * @return The value of the given enum with the given name
+	 * @throws IllegalArgumentException If the given enum does not have a value with the given name
+	 */
+	public static <E extends Enum<E>> Enum<?> parseEnum(Class<? extends Enum<?>> type, String value) throws IllegalArgumentException {
+		return Enum.valueOf((Class<E>) type, value);
+	}
+
 	/** Parses durations from text */
 	public static final Format<Duration> DURATION = new Format<Duration>() {
 		@Override
@@ -869,7 +883,7 @@ public interface Format<T> {
 
 		@Override
 		public File parse(CharSequence text) throws ParseException {
-			if (text.length() == 0) {
+			if (text == null || text.length() == 0) {
 				if (allowNull)
 					return null;
 				else
@@ -886,7 +900,7 @@ public interface Format<T> {
 
 	/** A flexible date format */
 	public static class FlexDateFormat implements Format<Instant> {
-		private final String theDayFormat;
+		private final TimeUtils.DayFormat theDayFormat;
 		private TimeEvaluationOptions theOptions;
 
 		/**
@@ -894,7 +908,7 @@ public interface Format<T> {
 		 * @param timeZone The time zone for the format (may be null)
 		 */
 		public FlexDateFormat(String dayFormat, TimeZone timeZone) {
-			theDayFormat = dayFormat;
+			theDayFormat = TimeUtils.DayFormat.parse(dayFormat);
 			theOptions = TimeUtils.DEFAULT_OPTIONS.withTimeZone(timeZone);
 		}
 
@@ -921,7 +935,7 @@ public interface Format<T> {
 		public void append(StringBuilder text, Instant value) {
 			if (value == null)
 				return;
-			text.append(TimeUtils.asFlexInstant(value, theDayFormat, __ -> theOptions).toString());
+			text.append(TimeUtils.asFlexInstant(value, null, theDayFormat, __ -> theOptions).toString());
 		}
 
 		@Override
@@ -1401,9 +1415,9 @@ public interface Format<T> {
 				if (sign == 0)
 					exp = 0;
 				else if (sign > 0)
-					exp = (int) Math.log10(value * theExpMult);
+					exp = (int) Math.log10(value * theExpMult) - 1;
 				else
-					exp = (int) Math.log10(-value * theExpMult);
+					exp = (int) Math.log10(-value * theExpMult) - 1;
 
 				if (theZeroExp > 0 && -exp >= theZeroExp) {
 					value = 0.0;

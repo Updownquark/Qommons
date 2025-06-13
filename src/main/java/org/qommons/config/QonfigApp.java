@@ -9,7 +9,7 @@ import java.util.function.Consumer;
 import org.qommons.config.QonfigInterpreterCore.Builder;
 import org.qommons.io.ErrorReporting;
 import org.qommons.io.LocatedFilePosition;
-import org.qommons.io.SimpleXMLParser.XmlParseException;
+import org.qommons.io.MinML.XmlParseException;
 import org.qommons.io.TextParseException;
 
 /** Provides a utility method for interpreting an application from a setup XML file formatted as qonfig-app.qtd */
@@ -320,6 +320,11 @@ public class QonfigApp {
 		return coreSession.interpret(type);
 	}
 
+	/**
+	 * Called after the app file has been parsed
+	 * 
+	 * @param doc The parsed application document
+	 */
 	protected void appFileParsed(QonfigDocument doc) {
 	}
 

@@ -20,6 +20,7 @@ public interface QonfigParser {
 	/**
 	 * @param location The location of the toolkit to parse
 	 * @param content The stream content to parse
+	 * @param promiseFulfillment Promise fulfillment for all promise types in the toolkit
 	 * @param customValueTypes Custom value types to be used by the toolkit
 	 * @return The parsed toolkit
 	 * @throws IOException If the stream cannot be read

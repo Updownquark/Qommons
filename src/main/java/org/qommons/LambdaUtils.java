@@ -4,9 +4,7 @@ import java.util.Comparator;
 import java.util.Objects;
 import java.util.function.*;
 
-import org.qommons.ex.ExBiFunction;
-import org.qommons.ex.ExFunction;
-import org.qommons.ex.ExSupplier;
+import org.qommons.ex.*;
 
 /** A bunch of utilities to easily make functions that are prettier and more useful than ordinary lambdas */
 public class LambdaUtils {
@@ -46,6 +44,9 @@ public class LambdaUtils {
 		}
 	};
 
+	/** Always returns null */
+	public static final Supplier<Object> NULL = constantSupplier(null, "null", null);
+
 	/** A Consumer that does nothing */
 	public static final Consumer<Object> CONSUME_DO_NOTHING = new Consumer<Object>() {
 		@Override
@@ -55,6 +56,18 @@ public class LambdaUtils {
 		@Override
 		public Consumer<Object> andThen(Consumer<? super Object> after) {
 			return after;
+		}
+
+		@Override
+		public String toString() {
+			return "Nothing";
+		}
+	};
+
+	/** A exception-enabled Consumer that does nothing */
+	public static final ExConsumer<Object, RuntimeException> EX_CONSUME_DO_NOTHING = new ExConsumer<Object, RuntimeException>() {
+		@Override
+		public void accept(Object v) {
 		}
 
 		@Override
@@ -80,8 +93,86 @@ public class LambdaUtils {
 		}
 	};
 
+	/** A exception-enabled Bi-Consumer that does nothing */
+	public static final ExBiConsumer<Object, Object, RuntimeException> EX_BI_CONSUME_DO_NOTHING = new ExBiConsumer<Object, Object, RuntimeException>() {
+		@Override
+		public void accept(Object v1, Object v2) {
+		}
+
+		@Override
+		public String toString() {
+			return "Nothing";
+		}
+	};
+
+	/** A predicate that always returns true */
+	public static final Predicate<Object> TRUE = new Predicate<Object>() {
+		@Override
+		public boolean test(Object t) {
+			return true;
+		}
+
+		@Override
+		public Predicate<Object> and(Predicate<? super Object> other) {
+			return other;
+		}
+
+		@Override
+		public Predicate<Object> negate() {
+			return FALSE;
+		}
+
+		@Override
+		public Predicate<Object> or(Predicate<? super Object> other) {
+			return this;
+		}
+
+		@Override
+		public String toString() {
+			return "true";
+		}
+	};
+
+	/** A predicate that always returns false */
+	public static final Predicate<Object> FALSE = new Predicate<Object>() {
+		@Override
+		public boolean test(Object t) {
+			return false;
+		}
+
+		@Override
+		public Predicate<Object> and(Predicate<? super Object> other) {
+			return this;
+		}
+
+		@Override
+		public Predicate<Object> negate() {
+			return TRUE;
+		}
+
+		@Override
+		public Predicate<Object> or(Predicate<? super Object> other) {
+			return other;
+		}
+
+		@Override
+		public String toString() {
+			return "false";
+		}
+	};
+
+	/** Static predicate for {@link Objects#isNull(Object) Objects::isNull} */
+	public static final Predicate<Object> IS_NULL = printablePred(Objects::isNull, "isNull", "isNull");
+
 	/** Static predicate for {@link Objects#nonNull(Object) Objects::nonNull} */
 	public static final Predicate<Object> NON_NULL = printablePred(Objects::nonNull, "nonNull", "nonNull");
+
+	/** Static binary predicate for two objects being {@link Object#equals(Object) equal} */
+	public static final BiPredicate<Object, Object> EQUALS = printableBiPredicate(Objects::equals, () -> "equals", "equals");
+
+	/** Static binary predicate for two objects being {@link Object#equals(Object) equal} */
+	public static final BiPredicate<Object, Object> NOT_EQUALS = printableBiPredicate(
+		(v1, v2) -> v1 == null ? (v2 != null) : !v1.equals(v2), () -> "notEquals", "notEquals");
 
 	/**
 	 * @param o The lambda to check
@@ -111,7 +202,11 @@ public class LambdaUtils {
 			return true;
 		else if (function == RUN_DO_NOTHING || function == CONSUME_DO_NOTHING || function == BI_CONSUME_DO_NOTHING)
 			return true;
+		else if (function == EX_CONSUME_DO_NOTHING || function == EX_BI_CONSUME_DO_NOTHING)
+			return true;
 		else if (function == IdentityFunction.INSTANCE)
+			return true;
+		else if (function == TRUE || function == FALSE)
 			return true;
 		else if (function instanceof LambdaUtility)
 			return ((LambdaUtility) function).isTrivial();
@@ -125,6 +220,14 @@ public class LambdaUtils {
 	 */
 	public static <T> UnaryOperator<T> identity() {
 		return (UnaryOperator<T>) IdentityFunction.INSTANCE;
+	}
+
+	/**
+	 * @param <T> The type for the supplier
+	 * @return A supplier that always returns null
+	 */
+	public static <T> Supplier<T> alwaysNull() {
+		return (Supplier<T>) NULL;
 	}
 
 	/**
@@ -184,6 +287,15 @@ public class LambdaUtils {
 	 */
 	public static <T> Consumer<T> printableConsumer(Consumer<T> consumer, Supplier<String> print, Object identifier) {
 		return new PrintableConsumer<>(consumer, print != null ? print : () -> String.valueOf(consumer), identifier);
+	}
+
+	/**
+	 * @param <T> The type of the consumer
+	 * @param <X> The type of exception that will not be thrown
+	 * @return A consumer that does nothing
+	 */
+	public static <T, X extends Throwable> ExConsumer<T, X> exConsumeDoNothing() {
+		return (ExConsumer<T, X>) EX_CONSUME_DO_NOTHING;
 	}
 
 	/**
@@ -342,11 +454,46 @@ public class LambdaUtils {
 	 * @param supplier Supplier for the value to supply
 	 * @param print The printed supplier representation
 	 * @param identifier The identifier for the supplier
-	 * @return A supplier that always returns the given value
+	 * @return The printable consumer
 	 */
 	public static <T, X extends Throwable> ExSupplier<T, X> printableExSupplier(ExSupplier<T, X> supplier, Supplier<String> print,
 		Object identifier) {
 		return new PrintableExSupplier<>(supplier, print != null ? print : supplier::toString, identifier);
+	}
+
+	/**
+	 * @param <T> The type of the value for the supplier
+	 * @param <X> The type of exception (not) thrown by the supplier
+	 * @param value The value to return from the supplier
+	 * @return A printable supplier that always returns the given value
+	 */
+	public static <T, X extends Throwable> ExSupplier<T, X> constantExSupplier(T value) {
+		return constantExSupplier(value, (value == null ? () -> "null" : value::toString), value);
+	}
+
+	/**
+	 * @param <T> The type of the value for the supplier
+	 * @param <X> The type of exception (not) thrown by the supplier
+	 * @param value The value to return from the supplier
+	 * @param toString The {@link Object#toString()} implementation for the supplier
+	 * @param identifier The identifier for the supplier
+	 * @return A printable supplier that always returns the given value
+	 */
+	public static <T, X extends Throwable> ExSupplier<T, X> constantExSupplier(T value, Supplier<String> toString, Object identifier) {
+		return new PrintableExSupplier<>(() -> value, toString != null ? toString : () -> String.valueOf(value), identifier);
+	}
+
+	/**
+	 * @param <T> The type of the consumer
+	 * @param <X> The type of exception thrown by the consumer
+	 * @param consumer Consumer to accept values
+	 * @param print The printed consumer representation
+	 * @param identifier The identifier for the consumer
+	 * @return The printable consumer
+	 */
+	public static <T, X extends Throwable> ExConsumer<T, X> printableExConsumer(ExConsumer<T, X> consumer, Supplier<String> print,
+		Object identifier) {
+		return new PrintableExConsumer<>(consumer, print != null ? print : consumer::toString, identifier);
 	}
 
 	/**
@@ -388,6 +535,12 @@ public class LambdaUtils {
 		if (fn == null)
 			return null;
 		return new PrintableFunction<>(fn, print, identifier);
+	}
+
+	public static <T> UnaryOperator<T> printableUnaryOp(UnaryOperator<T> fn, Supplier<String> print, Object identifier) {
+		if (fn == null)
+			return null;
+		return new PrintableUnaryOp<>(fn, print, identifier);
 	}
 
 	/**
@@ -446,6 +599,16 @@ public class LambdaUtils {
 	public static <S, T, V, X extends Throwable> ExBiFunction<S, T, V, X> printableExBiFn(ExBiFunction<S, T, V, X> function,
 		Supplier<String> print, Object identifier) {
 		return new PrintableExBiFunction<>(function, print, identifier);
+	}
+
+	/**
+	 * @param <T> The first type of the consumer
+	 * @param <U> The second type of the consumer
+	 * @param <X> The type of exception that will not be thrown
+	 * @return A exception-enabled bi-consumer that does nothing
+	 */
+	public static <T, U, X extends Throwable> ExBiConsumer<T, U, X> exBiConsumeDoNothing() {
+		return (ExBiConsumer<T, U, X>) EX_BI_CONSUME_DO_NOTHING;
 	}
 
 	/**
@@ -681,6 +844,72 @@ public class LambdaUtils {
 		if (fn == null)
 			return null;
 		return new PrintableTriFunction<>(fn, print, identifier);
+	}
+
+	/**
+	 * @param <T> The first argument type of the function
+	 * @param <U> The second argument type of the function
+	 * @param <V> The third argument type of the function
+	 * @param <R> The return type of the function
+	 * @param <X> The type of exception the function may throw
+	 * @param fn The function
+	 * @param print The printed representation of the function
+	 * @param identifier The identifier for the function
+	 * @return The printable function
+	 */
+	public static <T, U, V, R, X extends Throwable> ExTriFunction<T, U, V, R, X> printableExTriFn(ExTriFunction<T, U, V, R, X> fn,
+		String print, Object identifier) {
+		return printableExTriFn(fn, () -> print, identifier);
+	}
+
+	/**
+	 * @param <T> The first argument type of the function
+	 * @param <U> The second argument type of the function
+	 * @param <V> The third argument type of the function
+	 * @param <R> The return type of the function
+	 * @param <X> The type of exception the function may throw
+	 * @param fn The function
+	 * @param print The printed representation of the function
+	 * @param identifier The identifier for the function
+	 * @return The printable function
+	 */
+	public static <T, U, V, R, X extends Throwable> ExTriFunction<T, U, V, R, X> printableExTriFn(ExTriFunction<T, U, V, R, X> fn,
+		Supplier<String> print, Object identifier) {
+		if (fn == null)
+			return null;
+		return new PrintableExTriFunction<>(fn, print, identifier);
+	}
+
+	/**
+	 * @param <T> The first argument type of the test
+	 * @param <U> The second argument type of the test
+	 * @param <V> The third argument type of the test
+	 * @param <X> The type of exception the test may throw
+	 * @param fn The test
+	 * @param print The printed representation of the test
+	 * @param identifier The identifier for the test
+	 * @return The printable test
+	 */
+	public static <T, U, V, X extends Throwable> ExTriPredicate<T, U, V, X> printableExTriPred(ExTriPredicate<T, U, V, X> fn, String print,
+		Object identifier) {
+		return printableExTriPred(fn, () -> print, identifier);
+	}
+
+	/**
+	 * @param <T> The first argument type of the test
+	 * @param <U> The second argument type of the test
+	 * @param <V> The third argument type of the test
+	 * @param <X> The type of exception the test may throw
+	 * @param fn The test
+	 * @param print The printed representation of the test
+	 * @param identifier The identifier for the test
+	 * @return The printable test
+	 */
+	public static <T, U, V, X extends Throwable> ExTriPredicate<T, U, V, X> printableExTriPred(ExTriPredicate<T, U, V, X> fn,
+		Supplier<String> print, Object identifier) {
+		if (fn == null)
+			return null;
+		return new PrintableExTriPredicate<>(fn, print, identifier);
 	}
 
 	/**
@@ -1012,6 +1241,26 @@ public class LambdaUtils {
 		}
 	}
 
+	static class PrintableExConsumer<T, X extends Throwable> extends PrintableLambda<ExConsumer<T, X>> implements ExConsumer<T, X> {
+		PrintableExConsumer(ExConsumer<T, X> lambda, Supplier<String> print, Object identifier) {
+			super(lambda, print, identifier);
+		}
+
+		PrintableExConsumer(ExConsumer<T, X> lambda, Supplier<String> print) {
+			super(lambda, print);
+		}
+
+		@Override
+		public void accept(T value) throws X {
+			theLambda.accept(value);
+		}
+
+		@Override
+		public boolean isTrivial() {
+			return false;
+		}
+	}
+
 	static class FilterFor<T> implements Predicate<T> {
 		private final T theValue;
 		private final boolean isEqual;
@@ -1212,6 +1461,38 @@ public class LambdaUtils {
 			else {
 				return new PrintableFunction<>(v -> {
 					X interm = apply(v);
+					return after.apply(interm);
+				}, () -> toString() + "->" + after.toString());
+			}
+		}
+
+		@Override
+		public boolean isTrivial() {
+			return LambdaUtils.isTrivial(theLambda);
+		}
+	}
+
+	static class PrintableUnaryOp<T> extends PrintableLambda<UnaryOperator<T>> implements UnaryOperator<T> {
+		PrintableUnaryOp(UnaryOperator<T> function, Supplier<String> print, Object identifier) {
+			super(function, print, identifier);
+		}
+
+		PrintableUnaryOp(UnaryOperator<T> function, Supplier<String> print) {
+			super(function, print);
+		}
+
+		@Override
+		public T apply(T t) {
+			return theLambda.apply(t);
+		}
+
+		@Override
+		public <V> Function<T, V> andThen(Function<? super T, ? extends V> after) {
+			if (after instanceof IdentityFunction)
+				return (Function<T, V>) this;
+			else {
+				return new PrintableFunction<>(v -> {
+					T interm = apply(v);
 					return after.apply(interm);
 				}, () -> toString() + "->" + after.toString());
 			}
@@ -1599,6 +1880,56 @@ public class LambdaUtils {
 		@Override
 		public boolean isTrivial() {
 			return LambdaUtils.isTrivial(theLambda);
+		}
+	}
+
+	static class PrintableExTriFunction<T, U, V, R, X extends Throwable> extends PrintableLambda<ExTriFunction<T, U, V, R, X>>
+		implements ExTriFunction<T, U, V, R, X> {
+		PrintableExTriFunction(ExTriFunction<T, U, V, R, X> function, String print, Object identifier) {
+			super(function, print, identifier);
+		}
+
+		PrintableExTriFunction(ExTriFunction<T, U, V, R, X> function, Supplier<String> print, Object identifier) {
+			super(function, print, identifier);
+		}
+
+		PrintableExTriFunction(ExTriFunction<T, U, V, R, X> function, Supplier<String> print) {
+			super(function, print);
+		}
+
+		@Override
+		public R apply(T t, U u, V v) throws X {
+			return theLambda.apply(t, u, v);
+		}
+
+		@Override
+		public boolean isTrivial() {
+			return LambdaUtils.isTrivial(theLambda);
+		}
+	}
+
+	static class PrintableExTriPredicate<T, U, V, X extends Throwable> extends PrintableLambda<ExTriPredicate<T, U, V, X>>
+		implements ExTriPredicate<T, U, V, X> {
+		PrintableExTriPredicate(ExTriPredicate<T, U, V, X> function, String print, Object identifier) {
+			super(function, print, identifier);
+		}
+
+		PrintableExTriPredicate(ExTriPredicate<T, U, V, X> function, Supplier<String> print, Object identifier) {
+			super(function, print, identifier);
+		}
+
+		PrintableExTriPredicate(ExTriPredicate<T, U, V, X> function, Supplier<String> print) {
+			super(function, print);
+		}
+
+		@Override
+		public boolean test(T t, U u, V v) throws X {
+			return theLambda.test(t, u, v);
+		}
+
+		@Override
+		public boolean isTrivial() {
+			return false;
 		}
 	}
 

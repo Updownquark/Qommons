@@ -53,7 +53,18 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 		Iterable<? extends K> getParents(K key);
 	}
 
+	/**
+	 * Directions for navigating a {@link Node}
+	 * 
+	 * @param <K> The key-type of the node's view
+	 * @param <V> The value-type of the node's view
+	 * @see Node#visitChildren(Navigator)
+	 */
 	public interface Navigator<K, V> {
+		/**
+		 * @param node The node to visit
+		 * @return An iterator of nodes to visit within the give node
+		 */
 		Iterator<Node<K, V>> visit(Node<K, V> node);
 	}
 
@@ -196,6 +207,10 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 				return allDescendants;
 		}
 
+		/**
+		 * @param navigator The navigator to use to visit this node's children
+		 * @return The iterator to visit the children according to the navigator's direction
+		 */
 		default Iterator<Node<K, V>> visitChildren(Navigator<K, V> navigator) {
 			Iterable<Node<K, V>> flat = IterableUtils.flatten(IterableUtils.map(getChildren(), child -> () -> navigator.visit(child)));
 			return flat.iterator();
@@ -352,13 +367,16 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 	/** @return All entries with values in this map */
 	Iterable<Node<K, V>> entries();
 
-	/**
-	 * @return Entries for all top-level keys with values in this map (valued entries which do not extend any other valued entries)
-	 */
+	/** @return Entries for all top-level keys with values in this map (valued entries which do not extend any other valued entries) */
 	default Iterable<Node<K, V>> getTopLevelEntries() {
 		Iterable<Node<K, V>> allEntriesStopAtValues = IterableUtils.breadthFirstMulti(getRoots(), Node::getChildren,
 			node -> !node.hasValue());
 		return IterableUtils.filter(allEntriesStopAtValues, Node::hasValue);
+	}
+
+	/** @return All top-level keys with values in this map (valued entries which do not extend any other valued entries) */
+	default Iterable<K> getTopLevelKeys() {
+		return IterableUtils.map(getTopLevelEntries(), Node::getKey);
 	}
 
 	/**
@@ -396,6 +414,11 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 		return entry == null ? defaultValue : entry.getValue();
 	}
 
+	/**
+	 * @param key The key to get values for
+	 * @param match The match type to get values for
+	 * @return All values in this map whose key matches the given key/match type
+	 */
 	default Iterable<V> getAll(K key, TypeMatch match) {
 		return IterableUtils.map(getEntries(key, match, true), Node::getValue);
 	}
@@ -430,8 +453,17 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 	 *         entry in this map related to the key in that way, filtered by <code>valuedOnly</code>
 	 */
 	default Node<K, V> getEntry(K key, TypeMatch match, boolean valuedOnly) {
-		Iterator<Node<K, V>> all = getDirectEntries(key, match, valuedOnly).iterator();
-		return all.hasNext() ? all.next() : null;
+		Node<K, V> exact = getExactEntry(key);
+		if (exact != null)
+			return exact;
+		switch (match) {
+		case SUB_TYPE:
+			return Impl.findDirectDescendant(getRoots(), key, valuedOnly, getInheritance());
+		case SUPER_TYPE:
+			return Impl.findDirectAncestor(getRoots(), key, valuedOnly, getInheritance());
+		default:
+			return null;
+		}
 	}
 
 	/**
@@ -460,23 +492,35 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 	 * @param match The type of key-matches to accept:
 	 *        <ul>
 	 *        <li>{@link TypeMatch#EXACT} to return only the entries for exactly the given key (if it exists)</li>
-	 *        <li>{@link TypeMatch#SUB_TYPE} to return entries for the given key and all sub-keys</li>
-	 *        <li>{@link TypeMatch#SUPER_TYPE} to return entries for the given key and all super-keys</li>
-	 *        <li><code>null</code> to return entries that are related to the given key in either direction</li>
+	 *        <li>{@link TypeMatch#SUB_TYPE} to return entries for the given key and all sub-keys, breadth-first</li>
+	 *        <li>{@link TypeMatch#SUPER_TYPE} to return entries for the given key and all super-keys, depth-first</li>
+	 *        <li><code>null</code> to return entries that are related to the given key in either direction, most-specific first
 	 *        </ul>
 	 * @param valuedOnly Whether to return only entries that {@link Node#hasValue() have values} or all matching entries
 	 * @return All entries in this map for keys matching the query
 	 */
 	default Iterable<Node<K, V>> getEntries(K key, TypeMatch match, boolean valuedOnly) {
+		if (match == null) {
+		Iterable<Node<K, V>> nodes;
+			if (key == null) {
+				nodes = IterableUtils.depthFirstMulti(getRoots(), Node::getChildren, null);
+			} else {
+				Iterable<Node<K, V>> subs = IterableUtils.depthFirstMulti(getDirectEntries(key, TypeMatch.SUB_TYPE, valuedOnly),
+					Node::getChildren, null);
+				Iterable<Node<K, V>> exact = IterableUtils.filter(IterableUtils.single(() -> getExactEntry(key)), Objects::nonNull);
+				Iterable<Node<K, V>> supers = IterableUtils.breadthFirstMulti(getDirectEntries(key, TypeMatch.SUPER_TYPE, valuedOnly),
+					Node::getParents, null);
+				nodes = IterableUtils.concat(subs, exact, supers);
+			}
+			return valuedOnly ? IterableUtils.filter(nodes, Node::hasValue) : nodes;
+		}
 		switch (match) {
 		case EXACT:
 			return getDirectEntries(key, match, valuedOnly);
 		case SUB_TYPE:
-			return IterableUtils.breadthFirstMulti(getDirectEntries(key, match, valuedOnly), node -> node.descendants(valuedOnly, false),
-				null);
+			return IterableUtils.depthFirstMulti(getDirectEntries(key, TypeMatch.SUB_TYPE, valuedOnly), Node::getChildren, null);
 		case SUPER_TYPE:
-			return IterableUtils.breadthFirstMulti(getDirectEntries(key, match, valuedOnly), node -> node.ancestors(valuedOnly, false),
-				null);
+			return IterableUtils.breadthFirstMulti(getDirectEntries(key, TypeMatch.SUPER_TYPE, valuedOnly), Node::getParents, null);
 		}
 		throw new IllegalStateException("Unrecognized type match " + match);
 	}
@@ -498,7 +542,7 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 		if (exact != null)
 			return Collections.singletonList(exact);
 		else if (match == null)
-			return getTopLevelEntries();
+			throw new IllegalArgumentException("TypeMatch required for this call");
 		else {
 			switch (match) {
 			case EXACT:
@@ -582,6 +626,7 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 		return new KeyMappedView<>(this, new MappedInheritance<>(getInheritance(), map, reverse));
 	}
 
+	/** @return An unliked copy of this view as a modifiable map */
 	default MultiInheritanceMap2<K, V> copy() {
 		return MultiInheritanceView.<K, V> create(getInheritance()).putAll(this);
 	}
@@ -740,7 +785,7 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 			theInheritance = inheritance;
 			theRoots = new ArrayList<>();
 			theNodesByKey = new HashMap<>();
-			theValuedEntries = new HashMap<>();
+			theValuedEntries = new LinkedHashMap<>();
 		}
 
 		@Override
@@ -776,6 +821,46 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 		@Override
 		public Collection<Node<K, V>> entries() {
 			return new ValuedEntryCollection();
+		}
+
+		@Override
+		public Node<K, V> getEntry(K key, TypeMatch match, boolean valuedOnly) {
+			NodeImpl exact = theValuedEntries.get(key);
+			if (exact != null)
+				return exact;
+			switch (match) {
+			case SUB_TYPE:
+				return findDirectDescendant(theRoots, key, valuedOnly, theInheritance);
+			case SUPER_TYPE:
+				return findDirectAncestor(theRoots, key, valuedOnly, theInheritance);
+			default:
+				return null;
+			}
+		}
+
+		private NodeImpl findDirectDescendant(Collection<NodeImpl> nodes, K key, boolean valuedOnly, Inheritance<? super K> inh) {
+			for (NodeImpl node : nodes) {
+				if (inh.isExtension(key, node.theKey)) {
+					if (!valuedOnly || node.theValue != null)
+						return node;
+					else
+						findDirectDescendant(node.theChildren, key, valuedOnly, inh);
+				}
+			}
+			return null;
+		}
+
+		private NodeImpl findDirectAncestor(Collection<NodeImpl> nodes, K key, boolean valuedOnly, Inheritance<? super K> inh) {
+			for (NodeImpl node : nodes) {
+				if (inh.isExtension(node.theKey, key)) {
+					NodeImpl found = findDirectAncestor(node.theChildren, key, valuedOnly, inh);
+					if (found != null)
+						return found;
+					else if (!valuedOnly || node.theValue != null)
+						return node;
+				}
+			}
+			return null;
 		}
 
 		@Override
@@ -828,9 +913,9 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 
 		class NodeImpl implements Node<K, V> {
 			private final List<NodeImpl> theParents;
-			private final K theKey;
-			private V theValue;
-			private final List<NodeImpl> theChildren;
+			final K theKey;
+			V theValue;
+			final List<NodeImpl> theChildren;
 
 			NodeImpl(K key) {
 				theParents = new ArrayList<>();
@@ -1202,6 +1287,11 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 		}
 
 		@Override
+		public Node<K, V> getEntry(K key, TypeMatch match, boolean valuedOnly) {
+			return theWrapped.getEntry(key, match, valuedOnly);
+		}
+
+		@Override
 		public MultiInheritanceView<K, V> unmodifiable() {
 			return this;
 		}
@@ -1468,6 +1558,12 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 		}
 
 		@Override
+		public Node<K2, V> getEntry(K2 key, TypeMatch match, boolean valuedOnly) {
+			Node<K1, V> entry = theWrapped.getEntry(theInheritance.reverse(key), match, valuedOnly);
+			return entry == null ? null : new KeyMappedNode<>(entry, theInheritance);
+		}
+
+		@Override
 		public int hashCode() {
 			return MultiInheritanceView.hashCode(this);
 		}
@@ -1594,6 +1690,36 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 		@Override
 		public <X extends Throwable> V computeEx(K2 key, ExBiFunction<? super K2, ? super V, ? extends V, X> value) throws X {
 			return getWrapped().computeEx(getInheritance().reverse(key), (__, oldV) -> value.apply(key, oldV));
+		}
+	}
+
+	/** Implementation methods for this class */
+	static class Impl {
+		static <K, V> Node<K, V> findDirectDescendant(Iterable<? extends Node<K, V>> nodes, K key, boolean valuedOnly,
+			Inheritance<? super K> inh) {
+			for (Node<K, V> node : nodes) {
+				if (inh.isExtension(key, node.getKey())) {
+					if (!valuedOnly || node.hasValue())
+						return node;
+					else
+						findDirectDescendant(node.getChildren(), key, valuedOnly, inh);
+				}
+			}
+			return null;
+		}
+
+		static <K, V> Node<K, V> findDirectAncestor(Iterable<? extends Node<K, V>> nodes, K key, boolean valuedOnly,
+			Inheritance<? super K> inh) {
+			for (Node<K, V> node : nodes) {
+				if (inh.isExtension(node.getKey(), key)) {
+					Node<K, V> found = findDirectAncestor(node.getChildren(), key, valuedOnly, inh);
+					if (found != null)
+						return found;
+					else if (!valuedOnly || node.hasValue())
+						return node;
+				}
+			}
+			return null;
 		}
 	}
 }

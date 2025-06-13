@@ -508,17 +508,17 @@ public class StringUtils {
 
 	/** Represents a composite name made up of joined components */
 	public static class Name {
-		private final String[] theComponents;
+		private final List<String> theComponents;
 
 		/** @param components The components of the name */
 		public Name(String[] components) {
 			for (int c = 0; c < components.length; c++)
 				components[c] = components[c].toLowerCase();
-			theComponents = components;
+			theComponents = QommonsUtils.unmodifiableCopy(components);
 		}
 
 		/** @return The comonents of this name */
-		public String[] getComponents() {
+		public List<String> getComponents() {
 			return theComponents;
 		}
 
@@ -534,21 +534,21 @@ public class StringUtils {
 		public StringBuilder toCaseScheme(StringBuilder str, boolean initialCapital, boolean intermediateCapital, CharSequence delimiter) {
 			if (str == null)
 				str = new StringBuilder();
-			for (int i = 0; i < theComponents.length; i++) {
+			for (int i = 0; i < theComponents.size(); i++) {
 				if (i == 0) {
 					if (initialCapital) {
-						str.append(Character.toUpperCase(theComponents[i].charAt(0)));
-						str.append(theComponents[i], 1, theComponents[i].length());
+						str.append(Character.toUpperCase(theComponents.get(i).charAt(0)));
+						str.append(theComponents.get(i), 1, theComponents.get(i).length());
 					} else
-						str.append(theComponents[i]);
+						str.append(theComponents.get(i));
 				} else {
 					if (delimiter != null)
 						str.append(delimiter);
 					if (intermediateCapital) {
-						str.append(Character.toUpperCase(theComponents[i].charAt(0)));
-						str.append(theComponents[i], 1, theComponents[i].length());
+						str.append(Character.toUpperCase(theComponents.get(i).charAt(0)));
+						str.append(theComponents.get(i), 1, theComponents.get(i).length());
 					} else
-						str.append(theComponents[i]);
+						str.append(theComponents.get(i));
 				}
 			}
 			return str;

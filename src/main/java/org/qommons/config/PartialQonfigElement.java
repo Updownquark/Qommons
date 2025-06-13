@@ -345,6 +345,7 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	 * @param parent The builder to create the child for
 	 * @param parser The parser to parse any documents which may need to be externally loaded
 	 * @param session The parse session to use for externally-loaded documents
+	 * @param parentSession The parse session of the loading document
 	 */
 	public void copyInto(QonfigElement.Builder parent, QonfigParser parser, QonfigParseSession session, ErrorReporting parentSession) {
 		boolean fulfillPromise = !parent.isPartial() && theType instanceof QonfigPromiseDef;
@@ -363,6 +364,7 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	 * @param child The builder to copy this element's data into
 	 * @param parser The parser to parse any documents which may need to be externally loaded
 	 * @param session The parse session to use for externally-loaded documents
+	 * @param parentSession The parse session of the loading document
 	 */
 	public void copy(QonfigElement.Builder child, QonfigParser parser, QonfigParseSession session, ErrorReporting parentSession) {
 		child.withDocument(theDocument);

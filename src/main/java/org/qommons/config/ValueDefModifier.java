@@ -18,6 +18,7 @@ public interface ValueDefModifier extends SelfDescribed {
 	/** @return The default value to use if the value is not specified. Null means to inherit from the super-specified value. */
 	Object getDefaultValue();
 
+	/** @return The position of the element name in this value declaration */
 	LocatedPositionedContent getNamePosition();
 
 	/** @return The content in the source file specifying the default value */
@@ -43,6 +44,7 @@ public interface ValueDefModifier extends SelfDescribed {
 		 *        value.
 		 * @param specify The specification for the value. Null means to inherit from the super-specified value.
 		 * @param defaultValue The default value to use if the value is not specified. Null means to inherit from the super-specified value.
+		 * @param namePosition The position of the element name in this value declaration
 		 * @param defaultValueContent The content in the source file specifying the default value
 		 * @param description The description for this modification
 		 * @param content The content that specified the modifier

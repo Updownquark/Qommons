@@ -1,23 +1,20 @@
 package org.qommons;
 
-import java.util.AbstractCollection;
-import java.util.Collection;
-import java.util.ConcurrentModificationException;
-import java.util.Iterator;
-import java.util.LinkedList;
+import java.util.*;
 
 import org.qommons.Lockable.CoreId;
 import org.qommons.ProgramTracker.TrackNode;
+import org.qommons.collect.SimpleDeque;
 
 /** A lock that keeps track of the causes by which it is write-locked for eventing */
 public class DefaultCausalLock implements CausalLock {
 	private final Transactable theLock;
-	private final LinkedList<CauseSupplier> theTransactionCauses;
+	private final Deque<CauseSupplier> theTransactionCauses;
 
 	/** @param lock The backing for this lock */
 	public DefaultCausalLock(Transactable lock) {
 		theLock = lock;
-		theTransactionCauses = new LinkedList<>();
+		theTransactionCauses = new SimpleDeque<>();
 	}
 
 	@Override
@@ -174,6 +171,23 @@ public class DefaultCausalLock implements CausalLock {
 		@Override
 		public int size() {
 			return theCauses.size();
+		}
+
+		@Override
+		public Object[] toArray() {
+			Object[] array = theCauses.toArray();
+			for (int i = 0; i < array.length; i++)
+				array[i] = ((CauseSupplier) array[i]).get();
+			return array;
+		}
+
+		@Override
+		public <T> T[] toArray(T[] a) {
+			Object[] array = toArray();
+			if (a.length < array.length)
+				a = Arrays.copyOf(a, array.length);
+			System.arraycopy(array, 0, a, 0, array.length);
+			return a;
 		}
 	}
 

@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 import org.qommons.QommonsUtils;
-import org.qommons.io.SimpleXMLParser.XmlParseException;
+import org.qommons.io.MinML.XmlParseException;
 
 /** A convenient structure for defining and providing toolkit instances */
 public class QonfigToolkitAccess implements Supplier<QonfigToolkit> {

@@ -213,7 +213,7 @@ public class Qonsole implements Named, AutoCloseable {
 
 	/** @return The Reader for content not used by any plugin */
 	public Reader read() {
-		return thePublicBuffer.asDeletingReader();
+		return thePublicBuffer.asDeletingReader(false);
 	}
 
 	/**

@@ -4,6 +4,8 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -294,6 +296,15 @@ public interface BetterFile extends Named {
 	 * @return The string builder with this file appended to it, as a URL
 	 */
 	StringBuilder toUrl(StringBuilder str);
+
+	/**
+	 * @return This file, as a URL
+	 * @throws MalformedURLException If this file could not be interpreted as a URL. Generally, this would mean the file represents a
+	 *         resource that is not accessible via URL, like an in-memory file.
+	 */
+	default URL toUrl() throws MalformedURLException {
+		return new URL(toUrl(new StringBuilder()).toString());
+	}
 
 	/** @return The files contained in this directory, or null if this is not a directory */
 	default List<? extends BetterFile> listFiles() {
@@ -655,6 +666,26 @@ public interface BetterFile extends Named {
 				backing = findBacking();
 			} else if (!backing.check()) {
 				backing.check();
+				backing = findBacking();
+			}
+			theBacking = backing;
+			return backing;
+		}
+
+		/**
+		 * <p>
+		 * If {@link #theBacking} has not been retrieved, retrieves it.
+		 * </p>
+		 * <p>
+		 * This method differs from {@link #check()} in that {@link FileBacking#check()} is not called, so this method may return an invalid
+		 * backing.
+		 * </p>
+		 * 
+		 * @return The file backing instance for this file, if it currently exists (null if not)
+		 */
+		protected FileBacking getBacking() {
+			FileBacking backing = theBacking;
+			if (backing == null) {//
 				backing = findBacking();
 			}
 			theBacking = backing;
@@ -1048,7 +1079,7 @@ public interface BetterFile extends Named {
 			if (str.charAt(str.length() - 1) != '/')
 				str.append('/');
 			str.append(theName);
-			FileBacking backing = check();
+			FileBacking backing = getBacking();
 			if (backing != null)
 				str = backing.alterUrl(str);
 			return str;

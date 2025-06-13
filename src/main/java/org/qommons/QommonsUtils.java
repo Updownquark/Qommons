@@ -939,6 +939,7 @@ public class QommonsUtils {
 			set.add(v);
 		return Collections.unmodifiableSet(set);
 	}
+
 	/**
 	 * @param <K> The key type of the map
 	 * @param <V> The value type of the map
@@ -996,6 +997,37 @@ public class QommonsUtils {
 		 */
 		public MapBuilder<K, V> withAll(Map<? extends K, ? extends V> map) {
 			theMap.putAll(map);
+			return this;
+		}
+
+		/**
+		 * @param keys The keys to add
+		 * @param value The value for all the new keys
+		 * @return This builder
+		 */
+		public MapBuilder<K, V> withAll(Collection<? extends K> keys, V value) {
+			for (K key : keys)
+				theMap.putIfAbsent(key, value);
+			return this;
+		}
+
+		/**
+		 * @param value The value to insert for all the keys
+		 * @param keys The keys to add to the map
+		 * @return This builder
+		 */
+		public MapBuilder<K, V> withMultiKey(V value, K... keys) {
+			return withMultiKey(value, Arrays.asList(keys));
+		}
+
+		/**
+		 * @param value The value to insert for all the keys
+		 * @param keys The keys to add to the map
+		 * @return This builder
+		 */
+		public MapBuilder<K, V> withMultiKey(V value, Collection<? extends K> keys) {
+			for (K key : keys)
+				theMap.put(key, value);
 			return this;
 		}
 
@@ -1389,7 +1421,8 @@ public class QommonsUtils {
 	 */
 	public static String encodeUnicode(String str) {
 		int c;
-		for (c = 0; c < str.length() && str.codePointAt(c) <= 0x7f; c++) {}
+		for (c = 0; c < str.length() && str.codePointAt(c) <= 0x7f; c++) {
+		}
 		if (c == str.length())
 			return str;
 
@@ -1405,7 +1438,8 @@ public class QommonsUtils {
 	public static int encodeUnicode(StringBuilder str) {
 		int ret = 0;
 		int c;
-		for (c = 0; c < str.length() && str.codePointAt(c) <= 0x7f; c++) {}
+		for (c = 0; c < str.length() && str.codePointAt(c) <= 0x7f; c++) {
+		}
 		if (c == str.length())
 			return ret;
 
@@ -1529,7 +1563,8 @@ public class QommonsUtils {
 		int ret = 0;
 		for (int i = 0; i <= str.length() - srch.length(); i++) {
 			int j;
-			for (j = 0; j < srch.length() && str.charAt(i + j) == srch.charAt(j); j++) {}
+			for (j = 0; j < srch.length() && str.charAt(i + j) == srch.charAt(j); j++) {
+			}
 			if (j == srch.length()) {
 				ret++;
 				for (j = 0; j < srch.length() && j < replacement.length(); j++)
@@ -1569,6 +1604,98 @@ public class QommonsUtils {
 				return false;
 		}
 		return true;
+	}
+
+	/** Sometimes I want a statement where I can put a breakpoint between for loops or something */
+	public static void doNothing() {
+	}
+
+	/**
+	 * @param <T> The type of the values to compare
+	 * @param values The values to compare
+	 * @return The first non-null value in the array which {@link Comparable#compareTo(Object) compares} greater than or equal to all the
+	 *         rest
+	 */
+	public static <T extends Comparable<? super T>> T max(T... values) {
+		return max(Arrays.asList(values), Comparable::compareTo);
+	}
+
+	/**
+	 * @param <T> The type of the values to compare
+	 * @param values The values to compare
+	 * @return The first non-null value in the iterable which {@link Comparable#compareTo(Object) compares} greater than or equal to all the
+	 *         rest
+	 */
+	public static <T extends Comparable<? super T>> T max(Iterable<? extends T> values) {
+		return max(values, Comparable::compareTo);
+	}
+
+	/**
+	 * @param <T> The type of the values to compare
+	 * @param compare The comparator to use to compare the values
+	 * @param values The values to compare
+	 * @return The first non-null value in the array which {@link Comparator#compare(Object, Object) compares} greater than or equal to all
+	 *         the rest
+	 */
+	public static <T> T max(Comparator<? super T> compare, T... values) {
+		return max(Arrays.asList(values), compare);
+	}
+
+	/**
+	 * @param <T> The type of the values to compare
+	 * @param compare The comparator to use to compare the values
+	 * @param values The values to compare
+	 * @return The first non-null value in the iterable which {@link Comparator#compare(Object, Object) compares} greater than or equal to
+	 *         all the rest
+	 */
+	public static <T> T max(Iterable<? extends T> values, Comparator<? super T> compare) {
+		T max = null;
+		for (T value : values) {
+			if (value != null && (max == null || compare.compare(value, max) > 0))
+				max = value;
+		}
+		return max;
+	}
+
+	/**
+	 * @param <T> The type of the values to compare
+	 * @param values The values to compare
+	 * @return The first non-null value in the array which {@link Comparable#compareTo(Object) compares} less than or equal to all the rest
+	 */
+	public static <T extends Comparable<? super T>> T min(T... values) {
+		return min(Arrays.asList(values), Comparable::compareTo);
+	}
+
+	/**
+	 * @param <T> The type of the values to compare
+	 * @param values The values to compare
+	 * @return The first non-null value in the iterable which {@link Comparable#compareTo(Object) compares} less than or equal to all the
+	 *         rest
+	 */
+	public static <T extends Comparable<? super T>> T min(Iterable<? extends T> values) {
+		return min(values, Comparable::compareTo);
+	}
+
+	/**
+	 * @param <T> The type of the values to compare
+	 * @param compare The comparator to use to compare the values
+	 * @param values The values to compare
+	 * @return The first non-null value in the array which {@link Comparator#compare(Object, Object) compares} less than or equal to all the
+	 *         rest
+	 */
+	public static <T> T min(Comparator<? super T> compare, T... values) {
+		return min(Arrays.asList(values), compare);
+	}
+
+	/**
+	 * @param <T> The type of the values to compare
+	 * @param compare The comparator to use to compare the values
+	 * @param values The values to compare
+	 * @return The first non-null value in the iterable which {@link Comparator#compare(Object, Object) compares} less than or equal to all
+	 *         the rest
+	 */
+	public static <T> T min(Iterable<? extends T> values, Comparator<? super T> compare) {
+		return max(values, compare.reversed());
 	}
 
 	/**

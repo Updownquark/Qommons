@@ -21,7 +21,7 @@ import org.qommons.config.StrictXmlReader;
 import org.qommons.ex.ExFunction;
 import org.qommons.io.*;
 import org.qommons.io.BetterFile.CheckSumType;
-import org.qommons.io.SimpleXMLParser.XmlParseException;
+import org.qommons.io.MinML.XmlParseException;
 import org.qommons.io.XmlSerialWriter.Element;
 
 /**

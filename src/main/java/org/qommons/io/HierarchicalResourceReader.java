@@ -42,10 +42,15 @@ public interface HierarchicalResourceReader {
 		return new SubReader(this, subDir);
 	}
 
+	/** Implements {@link HierarchicalResourceReader#subReader(String)} */
 	public static class SubReader implements HierarchicalResourceReader {
 		private final HierarchicalResourceReader theParent;
 		private final String theSubPath;
 
+		/**
+		 * @param parent The parent reader
+		 * @param subDir The sub-directory path
+		 */
 		public SubReader(HierarchicalResourceReader parent, String subDir) {
 			this.theParent = parent;
 			if (subDir.endsWith("/") || subDir.endsWith("\\"))
@@ -54,10 +59,12 @@ public interface HierarchicalResourceReader {
 				theSubPath = subDir + "/";
 		}
 
+		/** @return This reader's parent reader */
 		public HierarchicalResourceReader getParent() {
 			return theParent;
 		}
 
+		/** @return The sub-directory path */
 		public String getSubPath() {
 			return theSubPath;
 		}

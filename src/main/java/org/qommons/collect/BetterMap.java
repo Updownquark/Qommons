@@ -1330,10 +1330,15 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 		private final V theValue;
 		private final Entry theEntry;
 
+		private final BetterSet<K> theKeySet;
+
 		SingletonMap(K key, V value) {
 			theKey = key;
 			theValue = value;
-			theEntry = new Entry();
+
+			theKeySet = new BetterSet.SingletonSet<>(theKey);
+
+			theEntry = new Entry(theKeySet.getTerminalElement(true).getElementId());
 		}
 
 		@Override
@@ -1363,7 +1368,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 
 		@Override
 		public BetterSet<K> keySet() {
-			return new BetterSet.SingletonSet<>(theKey);
+			return theKeySet;
 		}
 
 		@Override
@@ -1413,26 +1418,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 			return new StringBuilder().append('{').append(theKey).append('=').append(theValue).append('}').toString();
 		}
 
-		static class ElId implements ElementId {
-			@Override
-			public int compareTo(ElementId o) {
-				if (o == this)
-					return 0;
-				else
-					throw new IllegalArgumentException("Cannot compare IDs from different sources");
-			}
-
-			@Override
-			public boolean isPresent() {
-				return true;
-			}
-		}
-
 		class Entry implements MapEntryHandle<K, V> {
-			private final ElId theId;
+			private final ElementId theId;
 
-			Entry() {
-				theId = new ElId();
+			Entry(ElementId id) {
+				theId = id;
 			}
 
 			@Override

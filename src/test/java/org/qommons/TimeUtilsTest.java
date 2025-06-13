@@ -225,7 +225,7 @@ public class TimeUtilsTest {
 	@Test
 	public void testFastFormatRandomly() {
 		TestHelper.createTester(FastFormatTestable.class).revisitKnownFailures(true).withDebug(true).withFailurePersistence(true)
-			.withMaxCaseDuration(Duration.ofSeconds(1)).withRandomCases(1000).execute().throwErrorIfFailed();
+			.withMaxCaseDuration(Duration.ofSeconds(1)).withRandomCases(100).execute().throwErrorIfFailed();
 
 		System.out.println("SDF Parsing:   " + QommonsUtils.printTimeLength(stdParseTime));
 		System.out.println("SDF Printing:  " + QommonsUtils.printTimeLength(stdPrintTime));

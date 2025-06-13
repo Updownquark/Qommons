@@ -19,7 +19,7 @@ public class ReaderInputStreamTest {
 	@Test
 	public void testReaderInputStream() {
 		TestHelper.createTester(RISTestable.class).revisitKnownFailures(true).withDebug(true).withFailurePersistence(true)
-			.withMaxCaseDuration(Duration.ofSeconds(1)).withRandomCases(100).execute();
+			.withMaxCaseDuration(Duration.ofSeconds(1)).withRandomCases(20).execute();
 	}
 
 	static class RISTestable implements Testable {

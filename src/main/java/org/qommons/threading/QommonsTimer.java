@@ -1,6 +1,7 @@
 package org.qommons.threading;
 
 import java.awt.EventQueue;
+import java.lang.ref.WeakReference;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
@@ -21,12 +22,35 @@ import org.qommons.collect.ListenerList;
 
 /** A timer class that allows very flexible scheduling of tasks without needing to create a thread per task */
 public class QommonsTimer {
+	// These gymnastics here are to manage the cyclical dependency between this class and ElasticExecutor
+
+	private static ElasticExecutor<Runnable> COMMON_INSTANCE_EXECUTOR = new ElasticExecutor<>("Qommon Timer Offloader", () -> Runnable::run)//
+		.setUsedThreadLifetime(2000);
+
+	static void startProcessorTracking(ElasticExecutor<?> executor) {
+		if (COMMON_INSTANCE == null) {
+			return; // Inside the static initializer for this class--we'll start its tracking explicitly later
+		}
+		WeakReference<ElasticExecutor<?>> executorRef = new WeakReference<>(executor);
+		QommonsTimer.TaskHandle[] handle = new QommonsTimer.TaskHandle[1];
+		// This operation is expensive, don't do it very often
+		handle[0] = COMMON_INSTANCE.execute(() -> {
+			ElasticExecutor<?> exec = executorRef.get();
+			if (exec == null) // The executor has been garbage-collected
+				handle[0].setActive(false);
+			else
+				exec.trackProcessorCount();
+		}, Duration.ofMillis(1000), false);
+	}
+
 	private static final QommonsTimer COMMON_INSTANCE = new QommonsTimer(new SystemClock(), r -> {
 		Thread t = new Thread(r, "Qommon Timer");
 		t.start();
-	}, new ElasticExecutor<>("Qommon Timer Offloader", () -> Runnable::run)//
-		.setUsedThreadLifetime(2000)//
-	::execute);
+	}, COMMON_INSTANCE_EXECUTOR::execute);
+
+	static {
+		startProcessorTracking(COMMON_INSTANCE_EXECUTOR);
+	}
 
 	/** @return A common timer that uses the system clock */
 	public static QommonsTimer getCommonInstance() {
@@ -62,10 +86,14 @@ public class QommonsTimer {
 
 		@Override
 		public void sleep(Duration sleepTime) throws InterruptedException {
-			if (sleepTime.getSeconds() != 0 || sleepTime.getNano() >= 5_000_000)
+			if (sleepTime.getSeconds() != 0)
 				Thread.sleep(sleepTime.toMillis());
-			else
+			else if (sleepTime.getNano() >= 5_000_000)
+				Thread.sleep(sleepTime.getNano() / 1_000_000L);
+			else if (sleepTime.getNano() >= 1_000_000)
 				Thread.sleep(sleepTime.getNano() / 1_000_000, sleepTime.getNano() % 1_000_000);
+			else
+				Thread.sleep(0, sleepTime.getNano() % 1_000_000);
 		}
 	}
 

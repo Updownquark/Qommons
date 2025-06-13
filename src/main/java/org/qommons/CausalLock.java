@@ -39,6 +39,10 @@ public interface CausalLock extends Transactable {
 		return null;
 	}
 
+	/**
+	 * @return Whether this lock has any causes that are {@link Causable#isFinished() finished } but not yet {@link Causable#isTerminated()
+	 *         terminated}
+	 */
 	default boolean hasFinishingCauses() {
 		Collection<Cause> causes = getCurrentCauses();
 		for (Cause cause : causes) {

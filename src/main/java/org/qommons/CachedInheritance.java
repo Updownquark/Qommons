@@ -7,6 +7,11 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.qommons.collect.BetterList;
 
+/**
+ * A class that allows fast access to Java class inheritance structure
+ * 
+ * @param <T> The Java type that this inheritance is for
+ */
 public class CachedInheritance<T> implements Named {
 	private static final Map<Class<?>, Class<?>> PRIMITIVE_WRAPPERS = QommonsUtils.<Class<?>, Class<?>> buildMap(null)//
 		.with(void.class, Void.class)//
@@ -20,8 +25,14 @@ public class CachedInheritance<T> implements Named {
 		.with(double.class, Double.class)//
 		.getUnmodifiable();
 	private static final Map<Class<?>, CachedInheritance<?>> INHERITANCE_CACHE = new ConcurrentHashMap<>();
+	/** Inheritance for {@link Object} */
 	public static final CachedInheritance<Object> OBJECT = createInheritance(Object.class);
 
+	/**
+	 * @param <T> The type to get inheritance information for
+	 * @param type The java class to get inheritance information for
+	 * @return Inheritance information for the given type
+	 */
 	public static <T> CachedInheritance<T> get(Class<T> type) {
 		if (type == Object.class)
 			return (CachedInheritance<T>) OBJECT;
@@ -71,7 +82,9 @@ public class CachedInheritance<T> implements Named {
 		return inh;
 	}
 
+	/** The Java type that this inheritance is for */
 	public final Class<T> type;
+	@SuppressWarnings("unused")
 	private final CachedInheritance<? super T>[] parents;
 	private final int[] parentIndexes;
 	private final CachedInheritance<? super T>[] primaryDescent;
@@ -106,6 +119,7 @@ public class CachedInheritance<T> implements Named {
 		return index;
 	}
 
+	/** @return The Java type that this inheritance is for */
 	public Class<T> getType() {
 		return type;
 	}
@@ -115,32 +129,34 @@ public class CachedInheritance<T> implements Named {
 		return type.getName();
 	}
 
+	/*
 	public int getPrimaryDepth() {
 		return primaryDescent.length;
 	}
-
+	
 	public CachedInheritance<? super T> getPrimaryDescent(int index) {
 		if (index == primaryDescent.length)
 			return this;
 		return primaryDescent[index];
-	}
-
+	}*/
+	
+	/** @return All parent types of this type */
 	public BetterList<CachedInheritance<? super T>> getParents() {
 		return BetterList.of(parents);
 	}
-
-	public int getParentCount() {
+	
+	/*public int getParentCount() {
 		return parents.length;
 	}
-
+	
 	public CachedInheritance<? super T> getParent(int index) {
 		return parents[index];
 	}
-
+	
 	public int getParentIndex(int index) {
 		return parentIndexes[index];
 	}
-
+	
 	public boolean isParentOf(CachedInheritance<?> other) {
 		for (int i = 0; i < extensionCount; i++) {
 			if (extensions[i] == other)
@@ -148,150 +164,19 @@ public class CachedInheritance<T> implements Named {
 		}
 		return false;
 	}
-
+	
 	public BetterList<CachedInheritance<? extends T>> getExtensions() {
 		return BetterList.of(extensions);
 	}
-
+	
 	public int getExtensionCount() {
 		return extensionCount;
 	}
-
+	
 	public CachedInheritance<? extends T> getExtension(int index) {
 		return extensions[index];
 	}
-
-	// public boolean isAssignableFrom(CachedInheritance<?> other) {
-	// if (other == this)
-	// return true;
-	// else if (parents.length == 0)
-	// return true;
-	// else if (primaryDescent.length >= other.primaryDescent.length)
-	// return false;
-	// else if (parents[0] != other.primaryDescent[primaryDescent.length - 1])
-	// return false;
-	// CachedInheritance<?> directInh;
-	// if (other.primaryDescent.length == primaryDescent.length + 1)
-	// directInh = other;
-	// else
-	// directInh = other.primaryDescent[primaryDescent.length + 1];
-	// CachedInheritance<? extends T>[] exts = extensions;
-	// if (exts == null)
-	// return false;
-	// else if (exts.length == 1)
-	// return exts[0] == directInh;
-	// // Parents aren't sorted, so we have to search linearly,
-	// // but the comparison may be much faster
-	// if (directInh.parents.length <= log2(exts.length) * 2)
-	// return ArrayUtils.contains((CachedInheritance<?>[]) directInh.parents, this);
-	// else {
-	// int index = Arrays.binarySearch(exts, directInh, Named.DISTINCT_NUMBER_TOLERANT);
-	// /* It's possible that there may be classes from multiple classloaders stored in a single map.
-	// * IClasses from different class loaders with are not related to each other
-	// */
-	// if (index < 0)
-	// return false;
-	// for (int i = index; i >= 0 && directInh.getName().equals(exts[i].getName()); i--) {
-	// if (exts[i] == directInh)
-	// return true;
-	// }
-	// for (int i = index + 1; i < exts.length && directInh.getName().equals(exts[i].getName()); i++) {
-	// if (exts[i] == directInh)
-	// return true;
-	// }
-	// return false;
-	// }
-	// }
-	//
-	//
-	// public static class IntPathList {
-	// private int[][] theValues = new int[1][1];
-	// private int theSize;
-	//
-	// public int size() {
-	// return theSize;
-	// }
-	//
-	// public int get(int index) {
-	// int sizeMinusOne = theSize - 1;
-	// return theValues[sizeMinusOne][sizeMinusOne - index];
-	// }
-	//
-	// public int getLast() {
-	// int sizeMinusOne = theSize - 1;
-	// return theValues[sizeMinusOne][sizeMinusOne];
-	// }
-	//
-	// private void pop() {
-	// theSize--;
-	// }
-	//
-	// private void add(int value) {
-	// if (theSize == theValues.length)
-	// theValues = ArrayUtils.add(theValues, Arrays.copyOf(theValues[theSize - 1], theSize + 1));
-	// theValues[theSize][theSize] = value;
-	// theSize++;
-	// }
-	//
-	// private void incrementLast() {
-	// int sizeMinusOne = theSize - 1;
-	// theValues[sizeMinusOne][sizeMinusOne]++;
-	// }
-	// }
-	//
-	// Iterable<IntPathList> getAllDescentPaths(CachedInheritance<?> to) {
-	// if (to == this)
-	// return Collections.emptySet();
-	// else if (primaryDescent.length > to.primaryDescent.length || to.primaryDescent[primaryDescent.length] != this)
-	// return null;
-	// return () -> new Iterator<IntPathList>() {
-	// private final IntPathList path = new IntPathList();
-	// private AtomicStack<CachedInheritance<?>> parentPath = AtomicStack.empty();
-	// private boolean isOnNext;
-	//
-	// {
-	// for (CachedInheritance<?> p = to; p != CachedInheritance.this; p = p.parents[0]) {
-	// parentPath = parentPath.push(p);
-	// path.add(p.parentIndexes[0]);
-	// }
-	// isOnNext = true;
-	// }
-	//
-	// @Override
-	// public boolean hasNext() {
-	// if (isOnNext)
-	// return !parentPath.isEmpty();
-	// while (!parentPath.isEmpty()) {
-	// boolean foundExtension = false;
-	// for (path.incrementLast(); !foundExtension && path.getLast() < parentPath.top().parents.length; path.incrementLast()) {
-	// CachedInheritance<?> top = parentPath.top();
-	// if (CachedInheritance.this.isAssignableFrom(top.parents[path.getLast()])) {
-	// foundExtension = true;
-	// while (parentPath.top().parents[0] != CachedInheritance.this) {
-	// path.add(parentPath.top().parentIndexes[0]);
-	// parentPath = parentPath.push(parentPath.top().parents[0]);
-	// }
-	// }
-	// }
-	// if (foundExtension)
-	// break;
-	// else {
-	// path.pop();
-	// parentPath = parentPath.pop();
-	// }
-	// }
-	// isOnNext = true;
-	// return !parentPath.isEmpty();
-	// }
-	//
-	// @Override
-	// public IntPathList next() {
-	// if (!hasNext())
-	// throw new NoSuchElementException();
-	// return path;
-	// }
-	// };
-	// }
+	*/
 
 	@Override
 	public String toString() {

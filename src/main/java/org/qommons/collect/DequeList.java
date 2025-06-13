@@ -10,7 +10,7 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * 
  * @param <E> The type of values in the list
  */
-public interface DequeList<E> extends Deque<E>, RRList<E>, Stamped {
+public interface DequeList<E> extends SequencedDeque<E>, RRList<E> {
 	/**
 	 * @param <E> The type of the list
 	 * @return An immutable empty {@link DequeList} of the given type
@@ -65,6 +65,35 @@ public interface DequeList<E> extends Deque<E>, RRList<E>, Stamped {
 		return (DequeList<E>) of(newValues);
 	}
 
+	@Override
+	default ListSequence<E> sequence() {
+		return sequence(0, Integer.MAX_VALUE, true);
+	}
+
+	@Override
+	default ListSequence<E> sequence(boolean fromBeginning) {
+		return sequence(0, Integer.MAX_VALUE, fromBeginning);
+	}
+
+	/**
+	 * @param start The minimum index (inclusive) that the sequence will travel
+	 * @param end The maximum index (exclusive) that the sequence will travel
+	 * @param fromBeginning Whether the sequence should iterate forward or in the reverse direction of this list
+	 * @return The sequence
+	 */
+	default ListSequence<E> sequence(int start, int end, boolean fromBeginning) {
+		return sequence(start, end, fromBeginning ? (start - 1) : Math.min(end, size()), fromBeginning);
+	}
+
+	/**
+	 * @param start The minimum index (inclusive) that the sequence will travel
+	 * @param end The maximum index (exclusive) that the sequence will travel
+	 * @param position The initial position for the sequence
+	 * @param forward Whether the sequence should iterate forward or in the reverse direction of this list
+	 * @return The sequence
+	 */
+	ListSequence<E> sequence(int start, int end, int position, boolean forward);
+
 	/**
 	 * @param start The lower bound of the iterator
 	 * @param end The upper bound of the iterator
@@ -72,11 +101,18 @@ public interface DequeList<E> extends Deque<E>, RRList<E>, Stamped {
 	 * @param forward Whether the iterator should move forward or backward
 	 * @return The iterator
 	 */
-	ListIterator<E> iterator(int start, int end, int next, boolean forward);
+	default ListIterator<E> iterator(int start, int end, int next, boolean forward) {
+		return new ListSequence.ListSequenceIterator<>(sequence(start, end, next, forward));
+	}
+
+	@Override
+	default boolean add(E e) {
+		return SequencedDeque.super.add(e);
+	}
 
 	@Override
 	default Iterator<E> iterator() {
-		return iterator(0, size(), 0, true);
+		return SequencedDeque.super.iterator();
 	}
 
 	@Override
@@ -88,12 +124,6 @@ public interface DequeList<E> extends Deque<E>, RRList<E>, Stamped {
 	default boolean contains(Object o) {
 		return indexOf(o) >= 0;
 	}
-
-	/**
-	 * @param c The collection
-	 * @return Whether this collection contains any elements of the given collection
-	 */
-	boolean containsAny(Collection<?> c);
 
 	@Override
 	default boolean isEmpty() {
@@ -125,106 +155,6 @@ public interface DequeList<E> extends Deque<E>, RRList<E>, Stamped {
 			return ret;
 		}
 		return removeIf(v -> !c.contains(v));
-	}
-
-	@Override
-	default void addFirst(E e) {
-		if (!offerFirst(e))
-			throw new IllegalStateException("List is full");
-	}
-
-	@Override
-	default void addLast(E e) {
-		if (!offerLast(e))
-			throw new IllegalStateException("List is full");
-	}
-
-	@Override
-	default boolean add(E e) {
-		return offerLast(e);
-	}
-
-	@Override
-	default E removeFirst() {
-		if (isEmpty())
-			throw new NoSuchElementException("List is empty");
-		E v = pollFirst();
-		return v;
-	}
-
-	@Override
-	default E removeLast() {
-		if (isEmpty())
-			throw new NoSuchElementException("List is empty");
-		E v = pollLast();
-		return v;
-	}
-
-	@Override
-	default E getFirst() {
-		long stamp = getStamp();
-		if (isEmpty())
-			throw new NoSuchElementException("List is empty");
-		E v = peekFirst();
-		if (stamp != getStamp())
-			throw new ConcurrentModificationException("List was modified externally");
-		return v;
-	}
-
-	@Override
-	default E getLast() {
-		long stamp = getStamp();
-		if (isEmpty())
-			throw new NoSuchElementException("List is empty");
-		E v = peekLast();
-		if (stamp != getStamp())
-			throw new ConcurrentModificationException("List was modified externally");
-		return v;
-	}
-
-	@Override
-	default boolean removeFirstOccurrence(Object o) {
-		return remove(o);
-	}
-
-	@Override
-	default boolean offer(E e) {
-		return offerLast(e);
-	}
-
-	@Override
-	default E remove() {
-		return removeFirst();
-	}
-
-	@Override
-	default E poll() {
-		return pollFirst();
-	}
-
-	@Override
-	default E element() {
-		return getFirst();
-	}
-
-	@Override
-	default E peek() {
-		return peekFirst();
-	}
-
-	@Override
-	default void push(E e) {
-		addFirst(e);
-	}
-
-	@Override
-	default E pop() {
-		return removeFirst();
-	}
-
-	@Override
-	default Iterator<E> descendingIterator() {
-		return iterator(0, size(), size(), false);
 	}
 
 	@Override
@@ -312,6 +242,87 @@ public interface DequeList<E> extends Deque<E>, RRList<E>, Stamped {
 		public long getStamp() {
 			return check(-1);
 		}
+
+		/**
+		 * Wraps a sequence so actions on the sequence don't invalidate this view
+		 * 
+		 * @param sequence The sequence to wrap
+		 * @return The wrapped sequence
+		 */
+		protected ListSequence<E> wrap(ListSequence<E> sequence) {
+			return new WrappedSequence(sequence);
+		}
+
+		class WrappedSequence implements ListSequence<E> {
+			private final ListSequence<E> theWrapped;
+
+			WrappedSequence(ListSequence<E> sequence) {
+				theWrapped = sequence;
+			}
+
+			@Override
+			public boolean advance(boolean forward) {
+				return theWrapped.advance(forward);
+			}
+
+			@Override
+			public boolean has(boolean next) {
+				return theWrapped.has(next);
+			}
+
+			@Override
+			public boolean exists() {
+				return theWrapped.exists();
+			}
+
+			@Override
+			public E get() throws NoSuchElementException {
+				return theWrapped.get();
+			}
+
+			@Override
+			public int getIndex() throws IllegalStateException {
+				return theWrapped.getIndex();
+			}
+
+			@Override
+			public String canRemove() {
+				return theWrapped.canRemove();
+			}
+
+			@Override
+			public void remove() throws UnsupportedOperationException, IllegalStateException {
+				theWrapped.remove();
+				changed(-1);
+			}
+
+			@Override
+			public String isSettable() {
+				return theWrapped.isSettable();
+			}
+
+			@Override
+			public String isAcceptable(E newValue) {
+				return theWrapped.isAcceptable(newValue);
+			}
+
+			@Override
+			public void set(E newValue) throws UnsupportedOperationException, IllegalArgumentException, IllegalStateException {
+				theWrapped.set(newValue);
+				changed(0);
+			}
+
+			@Override
+			public String canAdd(E value, boolean before) {
+				return theWrapped.canAdd(value, before);
+			}
+
+			@Override
+			public void add(E newValue, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+				theWrapped.add(newValue, before);
+				changed(1);
+			}
+		}
 	}
 
 	/**
@@ -326,7 +337,7 @@ public interface DequeList<E> extends Deque<E>, RRList<E>, Stamped {
 		 * @param start The lower bound of this sub-list in the root list
 		 * @param end The upper bound (exclusive) of this sub-list in the root list
 		 */
-		public AbstractSubDequeList(DequeList<E> list, SubView<E> parent, int start, int end) {
+		protected AbstractSubDequeList(DequeList<E> list, SubView<E> parent, int start, int end) {
 			super(list, parent, start, end);
 		}
 
@@ -500,6 +511,19 @@ public interface DequeList<E> extends Deque<E>, RRList<E>, Stamped {
 		}
 
 		@Override
+		public ListSequence<E> sequence(int fromIndex, int toIndex, int position, boolean reverse) {
+			int size = size();
+			if (fromIndex < 0 || fromIndex > toIndex || fromIndex > size)
+				throw new IndexOutOfBoundsException(fromIndex + " to " + toIndex + " of " + size);
+			if (toIndex > size)
+				toIndex = size;
+			int end = getStart() + toIndex;
+			if (end < 0)
+				end = Integer.MAX_VALUE;
+			return wrap(getRoot().sequence(getStart() + fromIndex, end, getStart() + position, reverse));
+		}
+
+		@Override
 		public int hashCode() {
 			return BetterCollection.hashCode(this);
 		}
@@ -617,10 +641,10 @@ public interface DequeList<E> extends Deque<E>, RRList<E>, Stamped {
 		}
 
 		@Override
-		public ListIterator<Object> iterator(int start, int end, int next, boolean forward) {
-			if (start != 0 || end != 0)
-				throw new IndexOutOfBoundsException(start + " to " + end + " of 0");
-			return Collections.emptyListIterator();
+		public ListSequence<Object> sequence(int start, int end, int position, boolean reverse) {
+			if (start < 0 || start > end || position < start - 1 || position > end || position > size())
+				throw new IllegalArgumentException(position + " in " + start + " to " + end);
+			return ListSequence.empty();
 		}
 
 		@Override
@@ -653,6 +677,178 @@ public interface DequeList<E> extends Deque<E>, RRList<E>, Stamped {
 
 	/** Singleton empty {@link DequeList} */
 	static final EmptyDequeList EMPTY = new EmptyDequeList();
+
+	/**
+	 * Default index-based implementation of {@link DequeList#sequence(int, int, int, boolean)}
+	 * 
+	 * @param <E> The type of values in the sequence
+	 */
+	static class IndexedSequence<E> implements ListSequence<E> {
+		private final List<E> theList;
+		private int theStart;
+		private int theEnd;
+		private final boolean isReversed;
+		private int theIndex;
+		private E theValue;
+
+		public IndexedSequence(List<E> list, int start, int end, int position, boolean forward) {
+			if (start < 0 || start > end)
+				throw new IndexOutOfBoundsException(start + " to " + end);
+			if (position < start - 1 || position > end)
+				throw new IndexOutOfBoundsException(position + " between" + start + " and " + end);
+			theList = list;
+			theStart = start;
+			theEnd = end;
+			isReversed = !forward;
+
+			theIndex = position;
+			theValue = exists() ? list.get(position) : null;
+		}
+
+		@Override
+		public boolean exists() {
+			int index = theIndex;
+			return index >= theStart && index < theEnd && index < theList.size();
+		}
+
+		@Override
+		public E get() {
+			if (!exists())
+				throw new NoSuchElementException();
+			return theValue;
+		}
+
+		@Override
+		public boolean advance(boolean forward) {
+			boolean realForward = forward ^ isReversed;
+			int index = theIndex;
+			int size = theList.size();
+			if (size > theEnd)
+				size = theEnd;
+			if (realForward) {
+				if (index < theStart - 1)
+					index = theStart - 1;
+				if (index >= size - 1)
+					return false;
+				index++;
+			} else {
+				if (index > size)
+					index = size;
+				if (index <= theStart)
+					return false;
+				index--;
+			}
+			theIndex = index;
+			if (exists()) {
+				try {
+					theValue = theList.get(index);
+				} catch (IndexOutOfBoundsException e) {
+					theValue = null;
+				}
+			}
+			return true;
+		}
+
+		@Override
+		public boolean has(boolean next) {
+			boolean realForward = next ^ isReversed;
+			int index = theIndex;
+			if (realForward)
+				return index < theEnd - 1 && index < theList.size() - 1;
+			else
+				return index > theStart;
+		}
+
+		@Override
+		public int getIndex() {
+			if (isReversed)
+				return theEnd - theIndex - 1;
+			else
+				return theIndex - theStart;
+		}
+
+		@Override
+		public String canRemove() {
+			if (!exists())
+				return NO_ELEMENT_AT_POSTION;
+			return null; // Can't know till we try
+		}
+
+		@Override
+		public void remove() throws UnsupportedOperationException, IllegalStateException {
+			if (!exists())
+				throw new IllegalStateException(NO_ELEMENT_AT_POSTION);
+			int index = theIndex;
+			theList.remove(index);
+			theEnd--;
+			if (isReversed && index > theStart)
+				index--;
+			if (exists())
+				theValue = theList.get(index);
+		}
+
+		@Override
+		public String isSettable() {
+			if (!exists())
+				return NO_ELEMENT_AT_POSTION;
+			return null; // Can't know till we try
+		}
+
+		@Override
+		public String isAcceptable(E newValue) {
+			if (!exists())
+				return NO_ELEMENT_AT_POSTION;
+			return null; // Can't know till we try
+		}
+
+		@Override
+		public void set(E newValue) throws UnsupportedOperationException, IllegalArgumentException, IllegalStateException {
+			if (!exists())
+				throw new IllegalStateException(NO_ELEMENT_AT_POSTION);
+			int index = theIndex;
+			theList.set(index, newValue);
+			theValue = newValue;
+		}
+
+		@Override
+		public String canAdd(E value, boolean before) {
+			if (theIndex + (before ? 0 : 1) > theList.size())
+				return NO_ELEMENT_AT_POSTION;
+			return null; // Can't know till we try
+		}
+
+		@Override
+		public void add(E newValue, boolean before) throws UnsupportedOperationException, IllegalArgumentException, IllegalStateException {
+			if (theStart == theEnd) {
+				theList.add(theStart, newValue);
+				theEnd++;
+				theIndex = before ? theStart + 1 : theStart;
+				return;
+			}
+			int index = theIndex;
+			int size = theList.size();
+			if (size > theEnd)
+				size = theEnd;
+			if (index < theStart) {
+				index = theStart;
+				if (index >= theEnd)
+					throw new IllegalStateException(NO_ELEMENT_AT_POSTION);
+			} else if (index >= theEnd) {
+				index = theEnd - 1;
+				if (index < theStart)
+					throw new IllegalStateException(NO_ELEMENT_AT_POSTION);
+			}
+			if (!before && index < size)
+				index++;
+			int preSize = theList.size();
+			theList.add(index, newValue);
+			if (theList.size() > preSize) {
+				if (before)
+					theIndex++;
+				theEnd++;
+			}
+		}
+	}
 
 	/**
 	 * An immutable {@link DequeList} with a single value
@@ -794,16 +990,6 @@ public interface DequeList<E> extends Deque<E>, RRList<E>, Stamped {
 		}
 
 		@Override
-		public ListIterator<E> iterator(int start, int end, int next, boolean forward) {
-			if (start < 0 || end > 1 || start > end)
-				throw new IndexOutOfBoundsException(start + " to " + end + " of 1");
-			else if (start == end)
-				return Collections.emptyListIterator();
-			else
-				return new SingletonIterator(!forward, start == 0);
-		}
-
-		@Override
 		public boolean containsAny(Collection<?> c) {
 			return c.contains(theValue);
 		}
@@ -816,6 +1002,16 @@ public interface DequeList<E> extends Deque<E>, RRList<E>, Stamped {
 				return this;
 			else
 				throw new IndexOutOfBoundsException(fromIndex + " to " + toIndex + " of 1");
+		}
+
+		@Override
+		public ListSequence<E> sequence(int start, int end, int position, boolean reverse) {
+			if (start < 0 || start > end || position < start - 1 || position > end || position > size())
+				throw new IndexOutOfBoundsException(position + " in " + start + " to " + end);
+			if (start == 0 && end >= 1)
+				return ListSequence.single(theValue, position);
+			else
+				return ListSequence.empty();
 		}
 
 		@Override
@@ -836,73 +1032,6 @@ public interface DequeList<E> extends Deque<E>, RRList<E>, Stamped {
 		@Override
 		public String toString() {
 			return new StringBuilder("[").append(theValue).append(']').toString();
-		}
-
-		class SingletonIterator implements ListIterator<E> {
-			private final boolean isReversed;
-			private boolean isBefore;
-
-			SingletonIterator(boolean isReversed, boolean isBefore) {
-				this.isReversed = isReversed;
-				this.isBefore = isBefore;
-			}
-
-			@Override
-			public boolean hasNext() {
-				return isReversed ^ isBefore;
-			}
-
-			@Override
-			public E next() {
-				if (!hasNext())
-					throw new NoSuchElementException();
-				isBefore = isReversed;
-				return theValue;
-			}
-
-			@Override
-			public boolean hasPrevious() {
-				return !isReversed ^ isBefore;
-			}
-
-			@Override
-			public E previous() {
-				if (!hasPrevious())
-					throw new NoSuchElementException();
-				isBefore = !isReversed;
-				return theValue;
-			}
-
-			@Override
-			public int nextIndex() {
-				if (hasNext())
-					return 0;
-				else
-					return 1;
-			}
-
-			@Override
-			public int previousIndex() {
-				if (hasPrevious())
-					return 0;
-				else
-					return -1;
-			}
-
-			@Override
-			public void remove() {
-				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-			}
-
-			@Override
-			public void set(E e) {
-				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-			}
-
-			@Override
-			public void add(E e) {
-				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-			}
 		}
 	}
 }

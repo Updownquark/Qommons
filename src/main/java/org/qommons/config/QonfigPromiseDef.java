@@ -33,6 +33,7 @@ public class QonfigPromiseDef extends QonfigElementDef {
 	 * @param metaSpec The metadata specification for this type
 	 * @param position The position of this element's declaration in its source file
 	 * @param description The documentation description of this element
+	 * @param fulfillment The promise fulfillment for this promise type
 	 * @param promisedType The element type that elements fulfilled by this promise must extend
 	 * @param promisedInheritance The inheritance that elements fulfilled by this promise will inherit
 	 */
@@ -53,6 +54,7 @@ public class QonfigPromiseDef extends QonfigElementDef {
 		thePromisedInheritance = promisedInheritance;
 	}
 
+	/** @return The promise fulfillment for this promise type */
 	public QonfigPromiseFulfillment getFulfillment() {
 		return theFulfillment;
 	}

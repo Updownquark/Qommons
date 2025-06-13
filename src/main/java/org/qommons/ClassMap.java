@@ -397,6 +397,7 @@ public class ClassMap<V> {
 		return values[0] == null ? BetterList.empty() : BetterList.of(values[0]);
 	}
 
+	/** @return The number of class entries in this map */
 	public int size() {
 		return theRoot.size();
 	}

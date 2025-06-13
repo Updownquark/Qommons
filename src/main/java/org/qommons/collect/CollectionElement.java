@@ -1,5 +1,7 @@
 package org.qommons.collect;
 
+import java.util.function.Supplier;
+
 /**
  * Represents an element in a {@link BetterCollection} occupied by a (potentially null) value. In addition to very fast (usually
  * constant-time) access to the element's value, CollectionElements may be used to keep a parallel, ordered collection or map of a
@@ -10,11 +12,12 @@ package org.qommons.collect;
  * 
  * @param <E> The type of value in the element
  */
-public interface CollectionElement<E> extends Comparable<CollectionElement<E>> {
+public interface CollectionElement<E> extends Comparable<CollectionElement<E>>, Supplier<E> {
 	/** @return The ID of this element */
 	ElementId getElementId();
 
 	/** @return The current value of this element */
+	@Override
 	E get();
 
 	@Override

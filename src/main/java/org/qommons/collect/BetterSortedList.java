@@ -592,6 +592,16 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	}
 
 	/**
+	 * @param <E> The type for the list
+	 * @param value The value for the list
+	 * @param compare The sorting for the list
+	 * @return An immutable {@link BetterSortedList} with the given value
+	 */
+	public static <E> BetterSortedList<E> single(E value, Comparator<? super E> compare) {
+		return new SingletonSortedList<>(value, compare);
+	}
+
+	/**
 	 * Implements {@link BetterSortedList#empty(Comparator)}
 	 * 
 	 * @param <E> The type of the list
@@ -636,6 +646,63 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		@Override
 		public int indexFor(Comparable<? super E> search) {
 			return -1;
+		}
+	}
+
+	/**
+	 * Implements {@link BetterSortedList#single(Object, Comparator)}
+	 * 
+	 * @param <E> The type of the list
+	 */
+	class SingletonSortedList<E> extends BetterList.SingletonList<E> implements BetterSortedList<E> {
+		private final Comparator<? super E> theSorting;
+
+		SingletonSortedList(E value, Comparator<? super E> sorting) {
+			super(value);
+			theSorting = sorting;
+		}
+
+		@Override
+		public boolean isConsistent(ElementId element) {
+			return true;
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return true;
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, org.qommons.collect.ValueStoredCollection.RepairListener<E, X> listener) {
+			return false;
+		}
+
+		@Override
+		public <X> boolean repair(org.qommons.collect.ValueStoredCollection.RepairListener<E, X> listener) {
+			return false;
+		}
+
+		@Override
+		public Comparator<? super E> comparator() {
+			return theSorting;
+		}
+
+		@Override
+		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+			if (search.compareTo(getFirst()) == 0)
+				return getTerminalElement(true);
+			return null;
+		}
+
+		@Override
+		public int indexFor(Comparable<? super E> search) {
+			int comp = search.compareTo(getFirst());
+			if (comp == 0)
+				return 0;
+			else if (comp < 0)
+				return -1;
+			else
+				return 1;
 		}
 	}
 

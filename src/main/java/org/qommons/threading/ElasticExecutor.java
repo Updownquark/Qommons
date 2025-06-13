@@ -3,8 +3,10 @@ package org.qommons.threading;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.IntUnaryOperator;
 import java.util.function.Supplier;
 
+import org.qommons.Named;
 import org.qommons.collect.BetterBitSet;
 
 /**
@@ -49,9 +51,15 @@ import org.qommons.collect.BetterBitSet;
  * 
  * @param <T> The type of task to execute
  */
-public class ElasticExecutor<T> {
+public class ElasticExecutor<T> implements Named {
 	/** The maximum possible {@link #getMaxQueueSize() maximum queue size} allowed for this class */
 	public static final int MAX_POSSIBLE_QUEUE_SIZE = 1_000_000_000;
+
+	/**
+	 * The default {@link #isTrackingProcessorCount() processor tracking} operation for executors--keeps the executor's
+	 * {@link #getMaxThreadCount() maximum thread count} at the number of available processors minus one
+	 */
+	public static final IntUnaryOperator DEFAULT_PROCESSOR_TRACKING = p -> p - 1;
 
 	/**
 	 * Executes tasks on a single thread for an {@link ElasticExecutor}. The {@link AutoCloseable#close()} method will be called when this
@@ -85,6 +93,7 @@ public class ElasticExecutor<T> {
 	private final Supplier<? extends TaskExecutor<? super T>> theGuts;
 	private volatile int theMinWorkerCount;
 	private volatile int theMaxWorkerCount;
+	private volatile IntUnaryOperator isTrackingProcessorCount;
 	private volatile int theMaxQueueSize;
 	private volatile int theUnusedWorkerLifetime;
 
@@ -108,7 +117,9 @@ public class ElasticExecutor<T> {
 		theName = name;
 		theGuts = taskExecutor;
 		theMinWorkerCount = 0;
-		theMaxWorkerCount = Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
+		isTrackingProcessorCount = DEFAULT_PROCESSOR_TRACKING;
+		int processors = Runtime.getRuntime().availableProcessors();
+		theMaxWorkerCount = Math.max(1, isTrackingProcessorCount.applyAsInt(processors));
 		theMaxQueueSize = 0;
 		theUnusedWorkerLifetime = 100;
 
@@ -120,9 +131,16 @@ public class ElasticExecutor<T> {
 		theWaitingWorkers = new BetterBitSet();
 
 		theLock = new Object();
+
+		QommonsTimer.startProcessorTracking(this);
 	}
 
 	// Configuration methods
+
+	@Override
+	public String getName() {
+		return theName;
+	}
 
 	/**
 	 * @param runner The runner to use to execute task threads in this executor. This method may be used to use this class with a thread
@@ -161,6 +179,7 @@ public class ElasticExecutor<T> {
 		else if (minThreadCount > maxThreadCount)
 			throw new IllegalArgumentException(
 				"Minimum thread count cannot be greater than maximum thread count: " + minThreadCount + "..." + maxThreadCount);
+		isTrackingProcessorCount = null;
 		if (minThreadCount < theMinWorkerCount) {
 			theMinWorkerCount = minThreadCount;
 			theMaxWorkerCount = maxThreadCount;
@@ -201,8 +220,74 @@ public class ElasticExecutor<T> {
 		else if (theMinWorkerCount > maxThreadCount)
 			throw new IllegalArgumentException(
 				"Maximum thread count cannot be less than minimum thread count: " + theMinWorkerCount + "..." + maxThreadCount);
+		isTrackingProcessorCount = null;
 		theMaxWorkerCount = maxThreadCount;
 		return this;
+	}
+
+	/**
+	 * <p>
+	 * A function to determine this executor's {@link #getMaxThreadCount() maximum thread count} using this Java {@link Runtime runtime}'s
+	 * {@link Runtime#availableProcessors() available processor} count.
+	 * </p>
+	 * <p>
+	 * While this operator is non-null, a task will execute periodically to poll this value and update the max thread count if/when it
+	 * changes.
+	 * </p>
+	 * <p>
+	 * Note that if an executor is created near the very beginning of a Java process's lifetime, the available processor count may not have
+	 * yet polled the hardware for its available CPU count, in which case the runtime method will return 1. Leaving or setting this value
+	 * non-null will allow this executor to run multiple threads when the processor count is updated.
+	 * </p>
+	 * <p>
+	 * If this operator ever returns a value less than the maximum of one and this executor's {@link #getMinThreadCount()}, that value will
+	 * be silently substituted.
+	 * </p>
+	 * <p>
+	 * The default value ({@link #DEFAULT_PROCESSOR_TRACKING}) is the available processor count minus one.
+	 * </p>
+	 * 
+	 * @return Whether this processor's max thread count tracks the available processor count
+	 */
+	public IntUnaryOperator isTrackingProcessorCount() {
+		return isTrackingProcessorCount;
+	}
+
+	/**
+	 * @param tracking A function to produce a {@link #getMaxThreadCount() maximum thread count} for this executor by this {@link Runtime
+	 *        runtime}'s {@link Runtime#availableProcessors() available processor} count, or null if this executor's max thread count should
+	 *        not track the processor count.
+	 * @return This executor
+	 * @see #isTrackingProcessorCount()
+	 */
+	public ElasticExecutor<T> setTrackingProcessorCount(IntUnaryOperator tracking) {
+		isTrackingProcessorCount = tracking;
+		trackProcessorCount();
+		return this;
+	}
+
+	/**
+	 * Adjusts this executor's {@link #getMaxThreadCount() maximum thread count} using the {@link #isTrackingProcessorCount() processor
+	 * tracking} operator and this Java {@link Runtime runtime}'s {@link Runtime#availableProcessors() available processor} count.
+	 * 
+	 * @return Whether this executor's max thread count changed as a result
+	 */
+	public boolean trackProcessorCount() {
+		IntUnaryOperator tracking = isTrackingProcessorCount;
+		if (tracking == null)
+			return false;
+		int minCount = theMinWorkerCount;
+		int maxCount = theMaxWorkerCount;
+		int processors = Runtime.getRuntime().availableProcessors();
+		int newMaxWorkers = tracking.applyAsInt(processors);
+		if (newMaxWorkers < minCount)
+			newMaxWorkers = minCount;
+		else if (newMaxWorkers < 1)
+			newMaxWorkers = 1;
+		if (maxCount == newMaxWorkers)
+			return false;
+		theMaxWorkerCount = newMaxWorkers;
+		return true;
 	}
 
 	/**
@@ -312,6 +397,8 @@ public class ElasticExecutor<T> {
 	 * @return Whether the task was successfully queued or was rejected (due to {@link #getMaxQueueSize() max queue size})
 	 */
 	public boolean execute(T task) {
+		if (task == null)
+			throw new NullPointerException("Null tasks are not allowed");
 		int maxSize = theMaxQueueSize;
 		if (maxSize == 0) {
 			theUnfinishedTaskCount.incrementAndGet();
@@ -357,6 +444,26 @@ public class ElasticExecutor<T> {
 	public boolean waitWhileActive(int maxUnfinished, long timeout) {
 		if (theUnfinishedTaskCount.get() <= maxUnfinished)
 			return true;
+		if (maxUnfinished >= getActiveThreads() && !theTaskQueue.isEmpty()) {
+			// If X tasks are waiting for all but themselves to be completed,
+			// but there are max <=X workers total, this would otherwise result in deadlock
+			try (TaskExecutor<? super T> executor = theGuts.get()) {
+				while (theUnfinishedTaskCount.get() > maxUnfinished) {
+					T task = pollTask();
+					if (task != null) {
+						try {
+							executor.execute(task);
+						} catch (Throwable e) {
+							System.err.println("Error executing " + task);
+							e.printStackTrace();
+						}
+						taskFinished();
+					}
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
 		synchronized (this) {
 			long endTime = timeout <= 0 ? 0 : System.currentTimeMillis() + timeout;
 			while (theUnfinishedTaskCount.get() > maxUnfinished) {

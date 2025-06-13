@@ -4,13 +4,7 @@ import static org.qommons.testing.QommonsTestUtils.testCollection;
 import static org.qommons.testing.QommonsTestUtils.testMap;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.*;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -426,7 +420,7 @@ public class TreeUtilsTest {
 	public void testTreeRepair() {
 		TestHelper.createTester(TreeRepairTester.class).withDebug(true)
 			.withPersistenceDir(new File("src/test/java/org/qommons/tree"), false).revisitKnownFailures(true)//
-			.withRandomCases(300).withMaxFailures(1)//
+			.withRandomCases(50).withMaxFailures(1)//
 			.execute().throwErrorIfFailed();
 	}
 

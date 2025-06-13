@@ -133,7 +133,7 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public boolean isFile() {
-			return !isDirectory();
+			return Files.isRegularFile(thePath);
 		}
 
 		@Override

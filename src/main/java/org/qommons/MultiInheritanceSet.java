@@ -54,6 +54,10 @@ public interface MultiInheritanceSet<T> {
 	 */
 	boolean contains(T value);
 
+	/**
+	 * @param values The values to check
+	 * @return Whether this set contains all values in the given collection
+	 */
 	default boolean containsAll(Collection<? extends T> values) {
 		for (T value : values) {
 			if (!contains(value))
@@ -93,6 +97,10 @@ public interface MultiInheritanceSet<T> {
 		return added;
 	}
 
+	/**
+	 * @param values The values to add
+	 * @return This set, with the given values added
+	 */
 	default MultiInheritanceSet<T> withAll(Collection<? extends T> values) {
 		for (T value : values)
 			add(value);

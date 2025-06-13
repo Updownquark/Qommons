@@ -238,8 +238,10 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		return getDeclarer().equals(other.getDeclarer()) && getName().equals(other.getName());
 	}
 
-	static final String ELEMENT_METADATA_SUFFIX = "$META";
-	static final String ADD_ON_METADATA_ELEMENT = "$ELEMENT";
+	/** Suffix on the element names of &lt;element-def> metadata */
+	public static final String ELEMENT_METADATA_SUFFIX = "$META";
+	/** Suffix on the element names of &lt;add-on> metadata */
+	public static final String ADD_ON_METADATA_ELEMENT = "$ELEMENT";
 
 	/** Abstract builder for element-defs or add-ons */
 	protected static abstract class Builder {
@@ -411,6 +413,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			return theMetaSpec;
 		}
 
+		/** @return This builder's current stage */
 		protected Stage getStage() {
 			return theStage;
 		}
@@ -651,6 +654,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param type The type for the value
 		 * @param specification The specification for the value
 		 * @param defaultValue The value to use if the value is not specified
+		 * @param namePosition The position of the XML element name defining the modification
 		 * @param defaultValueContent The content in the source file containing the default value
 		 * @param description The description for the value modification
 		 * @param position The content that specified the modifier
@@ -667,13 +671,14 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param type The type for the attribute value
 		 * @param specify The specification for the attribute
 		 * @param defaultValue The value to use if the attribute is not specified
+		 * @param namePosition The position of the XML element name defining the attribute
 		 * @param defaultValueContent The content in the source file containing the default value
 		 * @param position The position in the file where the attribute was defined
 		 * @param description The description for the attribute
 		 * @return This builder
 		 */
 		public Builder withAttribute(String name, QonfigValueType type, SpecificationType specify, Object defaultValue,
-			LocatedPositionedContent nameContent, LocatedPositionedContent defaultValueContent, PositionedContent position,
+			LocatedPositionedContent namePosition, LocatedPositionedContent defaultValueContent, PositionedContent position,
 			String description) {
 			if (!checkStage(Stage.NewAttributes))
 				throw new IllegalStateException("Attributes cannot be added at this stage: " + getStage());
@@ -697,7 +702,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 				}
 			}
 			theDeclaredAttributes.put(name, new QonfigAttributeDef.DeclaredAttributeDef(theBuilt, name, type, specify, defaultValue,
-				nameContent, defaultValueContent, position, description));
+				namePosition, defaultValueContent, position, description));
 			return this;
 		}
 
@@ -708,6 +713,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param type The new type for the value (or null to inherit it)
 		 * @param specification The new specification for the value (or null to inherit it)
 		 * @param defaultValue The value to use if the attribute is not specified (or null to inherit it)
+		 * @param namePosition The position of the XML element name defining the modification
 		 * @param defaultValueContent The content in the source file containing the default value
 		 * @param position The position where the attribute modifier was defined
 		 * @param description The description for the attribute modification
@@ -830,11 +836,12 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 			for (QonfigChildDef.Declared fulfilled : fulfillment)
 				theCompiledChildren.compute(fulfilled, (__, old) -> {
 					if (old == null)
-						return new QonfigChildDef.Overridden(get(), fulfilled, Collections.singleton(child), position, description);
+						return new QonfigChildDef.Overridden(get(), fulfilled, Collections.singleton(child), min, max, position,
+							description);
 					Set<QonfigChildDef.Declared> overriding = new LinkedHashSet<>();
 					overriding.addAll(((QonfigChildDef.Overridden) old).getOverriding());
 					overriding.add(child);
-					return new QonfigChildDef.Overridden(get(), fulfilled, overriding, position, description);
+					return new QonfigChildDef.Overridden(get(), fulfilled, overriding, min, max, position, description);
 				});
 			return this;
 		}
@@ -1063,6 +1070,7 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * 
 		 * @param name The role name for the metadata definition
 		 * @param type The super type for metadata of the element
+		 * @param fulfillment The roles in its element or add-on that the metadata is intended to fulfill
 		 * @param inheritance The add-ons inherited by the metadata
 		 * @param requirement {@link QonfigAddOn#isAbstract()} add-ons that an element must inherit from elsewhere in order to fulfill this
 		 *        role
@@ -1072,11 +1080,11 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		 * @param description The description for the metadata element
 		 * @return This builder
 		 */
-		public Builder withMetaSpec(String name, QonfigElementOrAddOn type, Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement,
-			int min, int max, PositionedContent position, String description) {
+		public Builder withMetaSpec(String name, QonfigElementOrAddOn type, Set<QonfigChildDef.Declared> fulfillment,
+			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, PositionedContent position, String description) {
 			if (!checkStage(Stage.MetaSpec))
 				throw new IllegalStateException("Metadata specifications cannot be added at this stage: " + getStage());
-			theMetaSpec.withChild(name, type, Collections.emptySet(), inheritance, requirement, min, max, position, description);
+			theMetaSpec.withChild(name, type, fulfillment, inheritance, requirement, min, max, position, description);
 			return this;
 		}
 

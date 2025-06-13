@@ -31,6 +31,9 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	}
 
 	@Override
+	boolean isEmpty();
+
+	@Override
 	default Spliterator<E> spliterator() {
 		return NavigableSet.super.spliterator();
 	}
@@ -291,6 +294,16 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	}
 
 	/**
+	 * @param <E> The type of the set
+	 * @param value The value for the set
+	 * @param compare The comparator for the set
+	 * @return An immutable sorted set with the given element
+	 */
+	public static <E> BetterSortedSet<E> single(E value, Comparator<? super E> compare) {
+		return new SingletonSortedSet<>(value, compare);
+	}
+
+	/**
 	 * Implements {@link BetterSortedSet#subSet(Comparable, Comparable)}
 	 *
 	 * @param <E> The type of elements in the set
@@ -383,6 +396,22 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	public static class EmptySortedSet<E> extends EmptySortedList<E> implements BetterSortedSet<E> {
 		EmptySortedSet(Comparator<? super E> compare) {
 			super(compare);
+		}
+
+		@Override
+		public String toString() {
+			return BetterSet.toString(this);
+		}
+	}
+
+	/**
+	 * Implements {@link BetterSortedSet#single(Object, Comparator)}
+	 * 
+	 * @param <E> The type of the set
+	 */
+	public static class SingletonSortedSet<E> extends BetterSortedList.SingletonSortedList<E> implements BetterSortedSet<E> {
+		SingletonSortedSet(E value, Comparator<? super E> compare) {
+			super(value, compare);
 		}
 
 		@Override

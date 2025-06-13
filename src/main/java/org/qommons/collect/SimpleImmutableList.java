@@ -2,7 +2,6 @@ package org.qommons.collect;
 
 import java.io.Serializable;
 import java.util.*;
-import java.util.function.Consumer;
 
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
@@ -51,21 +50,6 @@ public class SimpleImmutableList<E> extends AbstractList<E> implements DequeList
 	}
 
 	@Override
-	public Iterator<E> iterator() {
-		return new Itr();
-	}
-
-	@Override
-	public ListIterator<E> listIterator() {
-		return listIterator(0);
-	}
-
-	@Override
-	public ListIterator<E> listIterator(int index) {
-		return new ListItr(0, theValues.length, index);
-	}
-
-	@Override
 	public Spliterator<E> spliterator() {
 		return Spliterators.spliterator(theValues, Spliterator.ORDERED);
 	}
@@ -79,8 +63,7 @@ public class SimpleImmutableList<E> extends AbstractList<E> implements DequeList
 	public <T> T[] toArray(T[] a) {
 		if (a.length < theValues.length)
 			a = Arrays.copyOf(a, theValues.length);
-		else
-			System.arraycopy(theValues, 0, a, 0, theValues.length);
+		System.arraycopy(theValues, 0, a, 0, theValues.length);
 		return a;
 	}
 
@@ -135,11 +118,8 @@ public class SimpleImmutableList<E> extends AbstractList<E> implements DequeList
 	}
 
 	@Override
-	public ListIterator<E> iterator(int start, int end, int next, boolean forward) {
-		if (forward)
-			return new ListItr(start, end, next);
-		else
-			return new ReversedListItr(start, end, next);
+	public ListSequence<E> sequence(int start, int end, int position, boolean forward) {
+		return new IndexedSequence<>(this, start, end, position, forward);
 	}
 
 	@Override
@@ -159,182 +139,6 @@ public class SimpleImmutableList<E> extends AbstractList<E> implements DequeList
 	@Override
 	public SimpleImmutableList<E> clone() {
 		return this; // Immutable, so no need to create a copy
-	}
-
-	/** Copied from ArrayList and trimmed down for immutability */
-	private class Itr implements Iterator<E> {
-		private int cursor; // index of next element to return
-
-		// prevent creating a synthetic constructor
-		Itr() {
-		}
-
-		@Override
-		public boolean hasNext() {
-			return cursor != theValues.length;
-		}
-
-		@Override
-		public E next() {
-			int i = cursor;
-			if (i >= theValues.length)
-				throw new NoSuchElementException();
-			cursor = i + 1;
-			return (E) theValues[i];
-		}
-
-		@Override
-		public void forEachRemaining(Consumer<? super E> action) {
-			Objects.requireNonNull(action);
-			final int size = theValues.length;
-			int i = cursor;
-			if (i < size) {
-				for (; i < size; i++)
-					action.accept((E) theValues[i]);
-				// update once at end to reduce heap write traffic
-				cursor = i;
-			}
-		}
-
-		@Override
-		public void remove() {
-			throw new UnsupportedOperationException();
-		}
-	}
-
-	private abstract class AbstractListItr implements ListIterator<E> {
-		private final int offset;
-		private final int limit;
-		private int cursor;
-
-		AbstractListItr(int offset, int limit, int index) {
-			this.offset = offset;
-			this.limit = limit;
-			cursor = index;
-		}
-
-		protected int itrSize() {
-			return limit - offset;
-		}
-
-		protected boolean hasForward() {
-			return cursor != limit;
-		}
-
-		public E forward() {
-			int i = cursor;
-			if (i >= limit)
-				throw new NoSuchElementException();
-			cursor = i + 1;
-			return (E) theValues[i];
-		}
-
-		@Override
-		public void remove() {
-			throw new UnsupportedOperationException();
-		}
-
-		protected boolean hasBackward() {
-			return cursor != offset;
-		}
-
-		protected int forwardIndex() {
-			return cursor - offset;
-		}
-
-		protected int backwardIndex() {
-			return cursor - offset - 1;
-		}
-
-		protected E backward() {
-			int i = cursor - 1;
-			if (i < offset)
-				throw new NoSuchElementException();
-			cursor = i;
-			return (E) theValues[i];
-		}
-
-		@Override
-		public void set(E e) {
-			throw new UnsupportedOperationException();
-		}
-
-		@Override
-		public void add(E e) {
-			throw new UnsupportedOperationException();
-		}
-	}
-
-	private class ListItr extends AbstractListItr {
-		ListItr(int offset, int limit, int index) {
-			super(offset, limit, index);
-		}
-
-		@Override
-		public boolean hasNext() {
-			return hasForward();
-		}
-
-		@Override
-		public E next() {
-			return forward();
-		}
-
-		@Override
-		public boolean hasPrevious() {
-			return hasBackward();
-		}
-
-		@Override
-		public int nextIndex() {
-			return forwardIndex();
-		}
-
-		@Override
-		public int previousIndex() {
-			return backwardIndex();
-		}
-
-		@Override
-		public E previous() {
-			return backward();
-		}
-	}
-
-	private class ReversedListItr extends AbstractListItr {
-		ReversedListItr(int offset, int limit, int index) {
-			super(offset, limit, index);
-		}
-
-		@Override
-		public boolean hasNext() {
-			return hasBackward();
-		}
-
-		@Override
-		public E next() {
-			return backward();
-		}
-
-		@Override
-		public boolean hasPrevious() {
-			return hasForward();
-		}
-
-		@Override
-		public int nextIndex() {
-			return itrSize() - backwardIndex();
-		}
-
-		@Override
-		public int previousIndex() {
-			return itrSize() - forwardIndex();
-		}
-
-		@Override
-		public E previous() {
-			return forward();
-		}
 	}
 
 	private static class SubList<E> extends DequeList.AbstractSubDequeList<E> {

@@ -2,30 +2,24 @@ package org.qommons.ex;
 
 import java.util.function.Supplier;
 
+import org.qommons.LambdaUtils;
+
 /**
  * A {@link Supplier} look-alike that can throw a checked exception
  * 
- * @param <T> The type to supply
- * @param <E> The exception type
+ * @param <R> The type to supply
+ * @param <X> The exception type
  */
-public interface ExSupplier<T, E extends Throwable> {
+public interface ExSupplier<R, X extends Throwable> {
 	/**
 	 * @return The supplied value
-	 * @throws E An exception
+	 * @throws X An exception
 	 */
-	T get() throws E;
+	R get() throws X;
 
 	/** @return A {@link Supplier} that calls this supplier, wrapping any checked exceptions with {@link CheckedExceptionWrapper} */
-	default Supplier<T> unsafe() {
-		return () -> {
-			try {
-				return ExSupplier.this.get();
-			} catch (RuntimeException | Error e) {
-				throw e;
-			} catch (Throwable e) {
-				throw new CheckedExceptionWrapper(e);
-			}
-		};
+	default Supplier<R> unsafe() {
+		return new Unsafe<>(this);
 	}
 
 	/**
@@ -37,6 +31,49 @@ public interface ExSupplier<T, E extends Throwable> {
 	static <T, E extends Throwable> ExSupplier<T, E> of(Supplier<T> s) {
 		if (s == null)
 			return null;
-		return () -> s.get();
+		return LambdaUtils.printableExSupplier(s::get, s::toString, s);
+	}
+
+	/**
+	 * Implements {@link ExSupplier#unsafe()}
+	 * 
+	 * @param <R> The type to supply
+	 * @param <X> The exception type
+	 */
+	class Unsafe<R, X extends Throwable> implements Supplier<R> {
+		private ExSupplier<R, X> theSupplier;
+
+		public Unsafe(ExSupplier<R, X> supplier) {
+			theSupplier = supplier;
+		}
+
+		@Override
+		public R get() {
+			try {
+				return theSupplier.get();
+			} catch (RuntimeException | Error e) {
+				throw e;
+			} catch (Throwable e) {
+				throw new CheckedExceptionWrapper(e);
+			}
+		}
+
+		@Override
+		public int hashCode() {
+			return theSupplier.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else
+				return obj instanceof Unsafe && theSupplier.equals(((Unsafe<?, ?>) obj).theSupplier);
+		}
+
+		@Override
+		public String toString() {
+			return theSupplier.toString();
+		}
 	}
 }

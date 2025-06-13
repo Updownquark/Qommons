@@ -22,6 +22,7 @@ public class QonfigValidation {
 		public final SpecificationType specification;
 		/** The value to use if it is not specified */
 		public final Object defaultValue;
+		/** The position of the name in this value spec's declaration */
 		public final LocatedPositionedContent namePosition;
 		/** The content in the source file of the default value */
 		public final LocatedPositionedContent defaultValueContent;
@@ -30,6 +31,7 @@ public class QonfigValidation {
 		 * @param type The type that must be specified
 		 * @param specify The specification of the value
 		 * @param defaultValue The value to use if it is not specified
+		 * @param namePosition The position of the name in this value spec's declaration
 		 * @param defaultValueContent The content in the source file of the default value
 		 */
 		public ValueSpec(QonfigValueType type, SpecificationType specify, Object defaultValue, LocatedPositionedContent namePosition,

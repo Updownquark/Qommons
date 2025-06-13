@@ -13,14 +13,14 @@ import java.util.Set;
  */
 public class ResourceLocator {
 	private final Set<Object> theRelativeItems;
-	private final StringBuilder theRelativePath;
+	private final Set<String> theRelativePaths;
 	private boolean isWithQommonsClasspath;
 	private boolean isWithLocalDir;
 
 	/** Creates a resource locator */
 	public ResourceLocator() {
 		theRelativeItems = new LinkedHashSet<>();
-		theRelativePath = new StringBuilder();
+		theRelativePaths = new LinkedHashSet<>();
 		isWithQommonsClasspath = true;
 		isWithLocalDir = true;
 	}
@@ -78,6 +78,22 @@ public class ResourceLocator {
 	}
 
 	/**
+	 * @param files Directories that may contain the resource
+	 * @return This locator
+	 */
+	public ResourceLocator relativeTo(BetterFile... files) {
+		for (BetterFile file : files) {
+			try {
+				theRelativeItems.add(new URL(file.toUrl(new StringBuilder()).toString()));
+			} catch (MalformedURLException e) {
+				System.err.println("Could not transform " + file.getPath() + " to a URL");
+				e.printStackTrace();
+			}
+		}
+		return this;
+	}
+
+	/**
 	 * @param locations URLs of network folders that may contain the resource
 	 * @return This locator
 	 */
@@ -95,16 +111,33 @@ public class ResourceLocator {
 			if (location.isEmpty())
 				continue;
 			location = location.replace('\\', '/');
-			if (location.charAt(0) == '/') {
-				if (location.length() == 1)
+			int slash = location.lastIndexOf('/');
+			int dot = location.lastIndexOf('.');
+			if (dot > 1 // For '..'
+				&& dot > slash) {
+				if (slash < 0) // File with no leading path
 					continue;
-				location = location.substring(1);
-			}
-			if (theRelativePath.length() > 0 && theRelativePath.charAt(theRelativePath.length() - 1) != '/')
-				theRelativePath.append('/');
-			theRelativePath.append(location);
+				else
+					location = location.substring(0, slash + 1);
+			} else if (!location.endsWith("/"))
+				location += '/';
+			if (isURL(location)) {
+				try {
+					relativeTo(new URL(location));
+				} catch (MalformedURLException e) {
+					e.printStackTrace();
+				}
+			} else
+				theRelativePaths.add(location);
 		}
 		return this;
+	}
+
+	private static boolean isURL(String location) {
+		if (location.startsWith("classpath://")) {
+			return false; // Treated specially
+		} else
+			return location.contains("://") || location.startsWith("file:/") || location.startsWith("jar:file:/");
 	}
 
 	/**
@@ -132,36 +165,51 @@ public class ResourceLocator {
 			}
 			return findFromClassPath(resourceLocation);
 		} else {
-			if (theRelativePath.length() > 0)
-				resourceLocation = new StringBuilder(theRelativePath.toString()).append(resourceLocation).toString();
-			if (isWithLocalDir) {
-				File file = new File(new File(System.getProperty("user.dir")), resourceLocation);
-				if (file.exists())
-					return file.toURI().toURL();
+			URL found = findRelative(resourceLocation);
+			for (String rel : theRelativePaths) {
+				if (found != null)
+					break;
+				found = findRelative(rel + resourceLocation);
 			}
-			if (isWithQommonsClasspath) {
-				URL resource = ResourceLocator.class.getClassLoader().getResource(resourceLocation);
+			return found;
+		}
+	}
+
+	private URL findRelative(String resourceLocation) throws IOException {
+		if (resourceLocation.startsWith("classpath://")) {
+			String resPath = resourceLocation.substring("classpath:/".length());
+			return findFromClassPath(resPath);
+		} else if (resourceLocation.contains("://") || resourceLocation.startsWith("file:/") || resourceLocation.startsWith("jar:file:/")) {
+			return new URL(resourceLocation);
+		}
+
+		if (isWithLocalDir) {
+			File file = new File(new File(System.getProperty("user.dir")), resourceLocation);
+			if (file.exists())
+				return file.toURI().toURL();
+		}
+		if (isWithQommonsClasspath) {
+			URL resource = ResourceLocator.class.getClassLoader().getResource(resourceLocation);
+			if (resource != null)
+				return resource;
+		}
+		for (Object item : theRelativeItems) {
+			if (item instanceof Class) {
+				URL resource = ((Class<?>) item).getResource(resourceLocation);
 				if (resource != null)
 					return resource;
-			}
-			for (Object item : theRelativeItems) {
-				if (item instanceof Class) {
-					URL resource = ((Class<?>) item).getResource(resourceLocation);
-					if (resource != null)
-						return resource;
-				} else if (item instanceof ClassLoader) {
-					URL resource = ((ClassLoader) item).getResource(resourceLocation);
-					if (resource != null)
-						return resource;
-				} else if (item instanceof File) {
-					File file = new File((File) item, resourceLocation);
-					if (file.exists())
-						return file.toURI().toURL();
-				} else if (item instanceof URL) {
-					URL resource = evaluateRelativeResource((URL) item, resourceLocation);
-					if (resource != null)
-						return resource;
-				}
+			} else if (item instanceof ClassLoader) {
+				URL resource = ((ClassLoader) item).getResource(resourceLocation);
+				if (resource != null)
+					return resource;
+			} else if (item instanceof File) {
+				File file = new File((File) item, resourceLocation);
+				if (file.exists())
+					return file.toURI().toURL();
+			} else if (item instanceof URL) {
+				URL resource = evaluateRelativeResource((URL) item, resourceLocation);
+				if (resource != null)
+					return resource;
 			}
 		}
 		return null;

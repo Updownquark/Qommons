@@ -57,17 +57,29 @@ public abstract class AbstractCharSequence implements CharSequence {
 		return new String(ch);
 	}
 
+	/**
+	 * @param seq The sequence to lower-case
+	 * @return A character sequence that is the same as the given sequence, but with all lower-case characters. The new sequence tracks the
+	 *         source, changing as the source does
+	 */
 	public static LowerCase toLowerCase(CharSequence seq) {
 		return new LowerCase(seq);
 	}
 
+	/**
+	 * @param seq The sequence to reverse
+	 * @return A character sequence that is the reverse of the given sequence. The new sequence tracks the source, changing as the source
+	 *         does
+	 */
 	public static Reversed reverse(CharSequence seq) {
 		return new Reversed(seq);
 	}
 
+	/** A simple, immutable implementation of {@link AbstractCharSequence} */
 	public static class Simple extends AbstractCharSequence {
 		private final char[] chars;
 
+		/** @param chars The content for this character sequence */
 		public Simple(char[] chars) {
 			this.chars = chars;
 		}
@@ -83,9 +95,11 @@ public abstract class AbstractCharSequence implements CharSequence {
 		}
 	}
 
+	/** Implements {@link AbstractCharSequence#toLowerCase(CharSequence)} */
 	public static class LowerCase extends AbstractCharSequence {
 		private final CharSequence theWrapped;
 
+		/** @param wrapped The character sequence to lower-case */
 		public LowerCase(CharSequence wrapped) {
 			theWrapped = wrapped;
 		}
@@ -104,9 +118,11 @@ public abstract class AbstractCharSequence implements CharSequence {
 		}
 	}
 
+	/** Implements {@link AbstractCharSequence#reverse(CharSequence)} */
 	public static class Reversed extends AbstractCharSequence {
 		private final CharSequence theWrapped;
 
+		/** @param wrapped The character sequence to reverse */
 		public Reversed(CharSequence wrapped) {
 			theWrapped = wrapped;
 		}
@@ -118,9 +134,10 @@ public abstract class AbstractCharSequence implements CharSequence {
 
 		@Override
 		public char charAt(int index) {
-			if (index < 0 || index >= theWrapped.length())
-				throw new IndexOutOfBoundsException(index + " of " + theWrapped.length());
-			return theWrapped.charAt(theWrapped.length() - index - 1);
+			int length = theWrapped.length();
+			if (index < 0 || index >= length)
+				throw new IndexOutOfBoundsException(index + " of " + length);
+			return theWrapped.charAt(length - index - 1);
 		}
 	}
 }

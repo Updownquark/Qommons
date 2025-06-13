@@ -47,6 +47,16 @@ import org.qommons.io.TextParseException;
  * <li>White Space Chars</li>
  * </ul>
  * </p>
+ * <p>
+ * Since this class does not do a full parse of the structure of any files, its results are susceptible to certain inaccuracies. E.g.:
+ * <ul>
+ * <li>Boilerplate such as start and end braces on their own lines count as content lines unless they are specifically configured as
+ * comments.</li>
+ * <li>String containing the beginning of comments will be mis-read as the beginning of a comment. In the case of block-style comments, this
+ * could potentially cause the rest of the file to be interpreted as a comment. This can be worked around in the file by splitting up the
+ * comment start string into multiple appended strings, but this tool is not typically on a developer's mind when writing such code.</li>
+ * </ul>
+ * </p>
  */
 public class LinesOfCode {
 	/**

@@ -161,10 +161,16 @@ public interface SpinnerFormat<T> extends Format<T> {
 	 */
 	public static SpinnerFormat<Instant> flexDate(Supplier<Instant> reference, String dayFormat,
 		Function<TimeUtils.TimeEvaluationOptions, TimeUtils.TimeEvaluationOptions> options) {
+		TimeUtils.DayFormat parsedDayFormat = TimeUtils.DayFormat.parse(dayFormat);
 		return SpinnerFormat.<TimeUtils.ParsedInstant, Instant> wrapAdjustable(
 			forAdjustable(text -> TimeUtils.parseInstant(text, true, true, options)), //
 			time -> time == null ? null : time.evaluate(Instant::now),
-			instant -> instant == null ? null : TimeUtils.asFlexInstant(instant, dayFormat, options));
+			instant -> {
+				if (instant == null)
+					return null;
+				Instant ref = reference == null ? null : reference.get();
+				return TimeUtils.asFlexInstant(instant, ref, parsedDayFormat, options);
+			});
 	}
 
 	/**
@@ -243,6 +249,10 @@ public interface SpinnerFormat<T> extends Format<T> {
 			return f == getFormat() ? this : new IntFormat(f);
 		}
 
+		/**
+		 * @param emptyAllowed Whether the empty string will be parsed to null, as opposed to throwing an exception
+		 * @return The new format
+		 */
 		public IntFormat withEmptyAllowed(boolean emptyAllowed) {
 			Format.IntFormat f = getFormat().withEmptyAllowed(emptyAllowed);
 			return f == getFormat() ? this : new IntFormat(f);
@@ -283,6 +293,10 @@ public interface SpinnerFormat<T> extends Format<T> {
 			return f == getFormat() ? this : new LongFormat(f);
 		}
 
+		/**
+		 * @param emptyAllowed Whether the empty string will be parsed to null, as opposed to throwing an exception
+		 * @return The new format
+		 */
 		public LongFormat withEmptyAllowed(boolean emptyAllowed) {
 			Format.LongFormat f = getFormat().withEmptyAllowed(emptyAllowed);
 			return f == getFormat() ? this : new LongFormat(f);

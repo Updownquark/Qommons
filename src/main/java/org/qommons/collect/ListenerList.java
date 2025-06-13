@@ -838,6 +838,11 @@ public class ListenerList<E> implements Stamped {
 		return theFiringSafety.getStamp();
 	}
 
+	/** Increment's this list's {@link #getStamp() stamp} without firing any listeners */
+	public void incrementStamp() {
+		theFiringSafety.incrementIterId();
+	}
+
 	/**
 	 * Adds all of this list's content into a new list (without removing it from this one)
 	 * 

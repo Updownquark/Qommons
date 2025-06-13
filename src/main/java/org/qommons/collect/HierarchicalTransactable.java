@@ -35,12 +35,19 @@ import org.qommons.Lockable.CoreId;
  * </p>
  */
 public class HierarchicalTransactable implements CausalLock {
+	public interface LockListener {
+		void preLock(boolean write);
+
+		void onLock(boolean write);
+	}
+
 	private final HierarchicalTransactable theParent;
 	private final Function<? super HierarchicalTransactable, ? extends CausalLock> theLockMaker;
 
 	private final int theDepth;
 	private final CausalLock myLock;
 	private final List<HierarchicalTransactable> theChildren;
+	private final ListenerList<LockListener> theListeners;
 	// private final List<HierarchicalLockTransaction> theLocks;
 	private boolean isRemoved;
 
@@ -53,6 +60,7 @@ public class HierarchicalTransactable implements CausalLock {
 		}
 		theLockMaker = lockMaker;
 		this.myLock = theLockMaker.apply(this);
+		theListeners = ListenerList.build().build();
 		theChildren = new ArrayList<>();
 		// theLocks = new ArrayList<>();
 	}
@@ -79,6 +87,10 @@ public class HierarchicalTransactable implements CausalLock {
 	@Override
 	public int doOptimistically(int init, OptimisticIntOperation operation) {
 		return myLock.doOptimistically(init, operation);
+	}
+
+	public Runnable addListener(LockListener listener) {
+		return theListeners.add(listener, true);
 	}
 
 	/** @return A Transactable that locks this transactable as its parent */
@@ -152,16 +164,37 @@ public class HierarchicalTransactable implements CausalLock {
 				cause = parentCause;
 		}
 
+		// Now, try to obtain our own lock
 		Transaction myT;
 		try {
-			// Now, try to obtain our own lock
-			myT = justTry ? myLock.tryLock(write, cause) : myLock.lock(write, cause);
-			if (myT == null)
-				return null;
-			success = true;
+			do {
+				if (!theListeners.isEmpty()) {
+					// Clean the state before each lock attempt
+					try {
+						theListeners.forEach(//
+							l -> l.preLock(write));
+					} catch (Throwable e) {
+						e.printStackTrace();
+					}
+				}
+
+				myT = myLock.tryLock(write, cause);
+			} while (!justTry && myT == null);
+			success = myT != null;
 		} finally {
-			if (!success)
+			if (!success) {
 				parentT.close();
+				return null;
+			}
+		}
+
+		if (!theListeners.isEmpty()) {
+			try {
+				theListeners.forEach(//
+					l -> l.onLock(write));
+			} catch (Throwable e) {
+				e.printStackTrace();
+			}
 		}
 
 		HierarchicalLockTransaction release = new HierarchicalLockTransaction(parentT, myT);

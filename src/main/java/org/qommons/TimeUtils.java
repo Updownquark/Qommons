@@ -1264,7 +1264,7 @@ public class TimeUtils {
 					newText = StringUtils.printInt(newValue, 2, null).toString();
 			} else if (element.getParser() == Format.INT)
 				newText = StringUtils.add(element.getText(), element.getText().length() - 1, newValue - element.getValue());
-			else if (element.getParser() == MONTH_FORMAT) {
+			else if (element.getParser() == MonthFormat.INSTANCE) {
 				if (element.getText().length() != 3
 					&& element.getText().toString().toLowerCase().equals(MONTHS[element.getValue() - Calendar.JANUARY]))
 					newText = MONTHS[newValue];
@@ -1420,7 +1420,7 @@ public class TimeUtils {
 			if (!elements.containsKey(field))
 				throw new IllegalArgumentException("Field " + field + " not present in this parsed time");
 			int nanos = time.getNano();
-			Calendar cal = CALENDAR.get();
+			Calendar cal = CALENDAR.get().get(0);
 			cal.setTimeZone(getTimeZone() == null ? GMT : getTimeZone());
 			cal.setTimeInMillis(time.toEpochMilli());
 			switch (field) {
@@ -1585,7 +1585,7 @@ public class TimeUtils {
 
 		@Override
 		public Instant evaluate(Supplier<Instant> reference) {
-			Calendar cal = CALENDAR.get();
+			Calendar cal = CALENDAR.get().get(0);
 			Instant ref = reference.get();
 			cal.setTimeInMillis(ref.getEpochSecond() * 1000);
 			cal.setTimeZone(getTimeZone());
@@ -1774,7 +1774,7 @@ public class TimeUtils {
 
 		@Override
 		public boolean mayMatch(Instant time) {
-			Calendar cal = CALENDAR.get();
+			Calendar cal = CALENDAR.get().get(0);
 			cal.setTimeInMillis(time.getEpochSecond() * 1000);
 			for (Map.Entry<DateElementType, ParsedElement<DateElementType, Integer>> element : elements.entrySet()) {
 				switch (element.getKey()) {
@@ -2086,7 +2086,7 @@ public class TimeUtils {
 
 		/** @return A new time options set that uses Greenwich Mean Time */
 		public TimeEvaluationOptions gmt() {
-			return withTimeZone("GMT");
+			return withTimeZone(GMT);
 		}
 
 		/**
@@ -2252,7 +2252,7 @@ public class TimeUtils {
 			else
 				text = str.subSequence(0, firstInfo.getLength()).toString();
 			if (year != null && year.getText().length() >= 4) {
-				Calendar cal = CALENDAR.get();
+				Calendar cal = CALENDAR.get().get(0);
 				cal.clear();
 				cal.setTimeZone(timeZone);
 
@@ -2332,8 +2332,31 @@ public class TimeUtils {
 		return value;
 	}
 
+	/** Supplies any number of calendars for TimeUtils#CALENDAR */
+	public static class CalendarSet implements Supplier<Calendar> {
+		private final List<Calendar> theCalendars = new ArrayList<>();
+
+		private CalendarSet() {
+		}
+
+		/**
+		 * @param index The index of the calendar to get
+		 * @return The calendar for the index
+		 */
+		public Calendar get(int index) {
+			while (index >= theCalendars.size())
+				theCalendars.add(Calendar.getInstance());
+			return theCalendars.get(index);
+		}
+
+		@Override
+		public Calendar get() {
+			return get(0);
+		}
+	}
+
 	/** A thread-local calendar. Calendars are rather heavy objects but are thread-unsafe. */
-	public static final ThreadLocal<Calendar> CALENDAR = ThreadLocal.withInitial(Calendar::getInstance);
+	public static final ThreadLocal<CalendarSet> CALENDAR = ThreadLocal.withInitial(CalendarSet::new);
 
 	private static final String[] MONTHS = new String[] { "january", "february", "march", "april", "may", "june", "july", "august",
 		"september", "october", "november", "december" };
@@ -2651,7 +2674,10 @@ public class TimeUtils {
 			return parseWeekday(text, 0);
 		}
 	};
-	private static final Format<Integer> MONTH_FORMAT = new Format<Integer>() {
+
+	static class MonthFormat implements Format<Integer> {
+		static final MonthFormat INSTANCE = new MonthFormat();
+
 		@Override
 		public void append(StringBuilder text, Integer value) {
 			switch (value - Calendar.JANUARY) {
@@ -2699,7 +2725,7 @@ public class TimeUtils {
 			// This should only be called if there is, in fact, a match
 			return parseMonth(text, 0);
 		}
-	};
+	}
 	private static final Format<Integer> AM_PM_PARSER = new Format<Integer>() {
 		@Override
 		public void append(StringBuilder text, Integer value) {
@@ -2932,7 +2958,7 @@ public class TimeUtils {
 				return -1;
 			return len;
 		});
-		parserBuilder.withFormat("month", MONTH_FORMAT);
+		parserBuilder.withFormat("month", MonthFormat.INSTANCE);
 		parserBuilder.withFormat("timeZone", TIME_ZONE_FORMAT);
 		parserBuilder.withFormat("monthDig", new OffsetFormat(-1));
 		parserBuilder.withFormat("subSecond", SUB_SECOND_FORMAT);
@@ -2952,13 +2978,13 @@ public class TimeUtils {
 	private static final String[] DAYS = new String[] { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
 	private static final String[] DAYS_ABBREV = new String[] { "Sun", "Mon", "Tues", "Wed", "Thurs", "Fri", "Sat" };
 
-	/** Parses the day format for {@link TimeUtils#asFlexInstant(Instant, String, Function)} */
+	/** Parses the day format for {@link TimeUtils#asFlexInstant(Instant, Instant, DayFormat, Function)} */
 	public static class DayFormat {
 		/** Prints the day component of a date like "01Jun2025" */
 		public static final DayFormat DDMMMYYYY = new DayFormat(//
 			Arrays.asList(//
 				new DayComponent("DD", DateElementType.Day, Format.INT), //
-				new DayComponent("MMM", DateElementType.Month, MONTH_FORMAT), //
+				new DayComponent("MMM", DateElementType.Month, MonthFormat.INSTANCE), //
 				new DayComponent("yyyy", DateElementType.Year, Format.INT)), //
 			Arrays.asList("", "", "", ""));
 		/** Prints a date like "01Jun2025 19:32:15.432" */
@@ -3105,7 +3131,7 @@ public class TimeUtils {
 				case Weekday:
 					break;
 				case Month:
-					if (comp.format == MONTH_FORMAT)
+					if (comp.format == MonthFormat.INSTANCE)
 						month = parseMonth(text, c);
 					else
 						month = parseInt(text, c, c + comp.spec.length());
@@ -3187,7 +3213,7 @@ public class TimeUtils {
 		 * @param time The date to write (millis since the epoch)
 		 */
 		public void append(StringBuilder str, long time) {
-			Calendar cal = CALENDAR.get();
+			Calendar cal = CALENDAR.get().get(0);
 			cal.setTimeZone(GMT);
 			cal.setTimeInMillis(time);
 			for (int c = 0; c < components.size(); c++) {
@@ -3273,7 +3299,7 @@ public class TimeUtils {
 							if (i - start == 2)
 								components.add(new DayComponent(format.substring(start, i), DateElementType.Month, Format.INT));
 							else
-								components.add(new DayComponent(format.substring(start, i), DateElementType.Month, MONTH_FORMAT));
+								components.add(new DayComponent(format.substring(start, i), DateElementType.Month, MonthFormat.INSTANCE));
 							break;
 						case 'Y':
 							separators.add(separator.toString());
@@ -3485,27 +3511,60 @@ public class TimeUtils {
 
 	/**
 	 * @param time The time
+	 * @param reference The reference time to print the time relative to, or null to print the time absolutely
 	 * @param dayFormat The date format to use to format the year, month, and day
 	 * @param opts Configures parsing options
 	 * @return A parsed time whose minimum resolution may be days, hours, minutes, seconds, or sub-second
 	 */
-	public static ParsedInstant asFlexInstant(Instant time, String dayFormat, Function<TimeEvaluationOptions, TimeEvaluationOptions> opts) {
+	public static ParsedInstant asFlexInstant(Instant time, Instant reference, DayFormat dayFormat,
+		Function<TimeEvaluationOptions, TimeEvaluationOptions> opts) {
 		TimeEvaluationOptions options = DEFAULT_OPTIONS;
 		if (opts != null)
 			options = opts.apply(options);
 		EnumMap<DateElementType, ParsedElement<DateElementType, Integer>> elements = new EnumMap<>(DateElementType.class);
 		StringBuilder str = new StringBuilder();
-		Calendar cal = TimeUtils.CALENDAR.get();
-		cal.setTimeZone(options.getTimeZone());
-		cal.setTimeInMillis(time.toEpochMilli());
+		Calendar cal1 = TimeUtils.CALENDAR.get().get(0);
+		cal1.setTimeZone(options.getTimeZone());
+		cal1.setTimeInMillis(time.toEpochMilli());
+		Calendar cal2;
+		if (reference != null) {
+			cal2 = TimeUtils.CALENDAR.get().get(1);
+			cal2.setTimeZone(options.getTimeZone());
+			cal2.setTimeInMillis(reference.toEpochMilli());
+		} else
+			cal2 = null;
 
-		DayFormat df = DayFormat.parse(dayFormat);
-
-		for (int i = 0; i < df.components.size(); i++) {
-			str.append(df.separators.get(i));
-			df.components.get(i).append(cal, str);
+		for (int i = 0; i < dayFormat.components.size(); i++) {
+			boolean print;
+			if (cal2 == null)
+				print = true;
+			else {
+				int field;
+				print = false;
+				switch (dayFormat.components.get(i).type) {
+				case Weekday:
+				case Day:
+					field = Calendar.DAY_OF_MONTH;
+					print |= cal1.get(field) != cal2.get(field);
+					//$FALL-THROUGH$
+				case Month:
+					field = Calendar.MONTH;
+					print |= cal1.get(field) != cal2.get(field);
+					//$FALL-THROUGH$
+				case Year:
+					field = Calendar.YEAR;
+					print |= cal1.get(field) != cal2.get(field);
+					break;
+				default:
+					break;
+				}
+			}
+			if (print) {
+				str.append(dayFormat.separators.get(i));
+				dayFormat.components.get(i).append(cal1, str);
+			}
 		}
-		str.append(df.separators.get(df.components.size()));
+		str.append(dayFormat.separators.get(dayFormat.components.size()));
 
 		DateElementType resolution;
 		int nanoDigits = 0;
@@ -3523,7 +3582,7 @@ public class TimeUtils {
 		if (resolution.compareTo(DateElementType.Hour) >= 0) {
 			str.append(' ');
 			int index = str.length();
-			int hour = cal.get(Calendar.HOUR_OF_DAY);
+			int hour = cal1.get(Calendar.HOUR_OF_DAY);
 			boolean am = hour < 12;
 			if (options.is24HourFormat())
 				StringUtils.printInt(hour, 2, str);
@@ -3536,19 +3595,19 @@ public class TimeUtils {
 					str.append(hour);
 			}
 			elements.put(DateElementType.Hour,
-				new ParsedElement<>(Format.INT, index, DateElementType.Hour, cal.get(Calendar.HOUR_OF_DAY), str.substring(index)));
+				new ParsedElement<>(Format.INT, index, DateElementType.Hour, cal1.get(Calendar.HOUR_OF_DAY), str.substring(index)));
 			if (resolution.compareTo(DateElementType.Minute) >= 0) {
 				str.append(':');
 				index = str.length();
-				StringUtils.printInt(cal.get(Calendar.MINUTE), 2, str);
+				StringUtils.printInt(cal1.get(Calendar.MINUTE), 2, str);
 				elements.put(DateElementType.Minute,
-					new ParsedElement<>(Format.INT, index, DateElementType.Minute, cal.get(Calendar.MINUTE), str.substring(index)));
+					new ParsedElement<>(Format.INT, index, DateElementType.Minute, cal1.get(Calendar.MINUTE), str.substring(index)));
 				if (resolution.compareTo(DateElementType.Second) >= 0) {
 					str.append(':');
 					index = str.length();
-					StringUtils.printInt(cal.get(Calendar.SECOND), 2, str);
+					StringUtils.printInt(cal1.get(Calendar.SECOND), 2, str);
 					elements.put(DateElementType.Second,
-						new ParsedElement<>(Format.INT, index, DateElementType.Second, cal.get(Calendar.SECOND), str.substring(index)));
+						new ParsedElement<>(Format.INT, index, DateElementType.Second, cal1.get(Calendar.SECOND), str.substring(index)));
 					if (resolution.compareTo(DateElementType.SubSecond) >= 0) {
 						str.append('.');
 						nanoDigits = 9;
@@ -3567,11 +3626,11 @@ public class TimeUtils {
 				index = str.length();
 				str.append(am ? 'a' : 'p').append('m');
 				elements.put(DateElementType.AmPm,
-					new ParsedElement<>(AM_PM_PARSER, index, DateElementType.AmPm, cal.get(Calendar.AM_PM), str.substring(index)));
+					new ParsedElement<>(AM_PM_PARSER, index, DateElementType.AmPm, cal1.get(Calendar.AM_PM), str.substring(index)));
 			}
 		}
-		if (df.componentsByType.containsKey(DateElementType.Year))
-			return new AbsoluteInstant(str.toString(), time, cal, options.getTimeZone(), resolution, nanoDigits, elements);
+		if (dayFormat.componentsByType.containsKey(DateElementType.Year))
+			return new AbsoluteInstant(str.toString(), time, cal1, options.getTimeZone(), resolution, nanoDigits, elements);
 		else
 			return new RelativeInstant(str.toString(), options.getTimeZone(), elements, options.is24HourFormat(),
 				options.getEvaluationType());
@@ -3922,7 +3981,7 @@ public class TimeUtils {
 	 * @return The day of the week that the given time occurs on in the given time zone--Sunday==0, Saturday=7
 	 */
 	public static int getDayOfWeek(Instant time, TimeZone timeZone) {
-		Calendar cal = CALENDAR.get();
+		Calendar cal = CALENDAR.get().get(0);
 		cal.setTimeZone(timeZone);
 		cal.setTimeInMillis(time.toEpochMilli());
 		return cal.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY;
@@ -4370,7 +4429,7 @@ public class TimeUtils {
 			if (theAboveDayStrategy == AboveDaysStrategy.MonthYear) {
 				Instant t1 = comps.negative ? time : reference;
 				Instant t2 = comps.negative ? reference : time;
-				Calendar cal = CALENDAR.get();
+				Calendar cal = CALENDAR.get().get(0);
 				cal.setTimeZone(theTimeZone);
 				cal.setTimeInMillis(t1.toEpochMilli());
 				comps.diffs[DurationComponentType.Year.ordinal()] = cal.get(Calendar.YEAR);
@@ -4553,7 +4612,7 @@ public class TimeUtils {
 			DurationComponents comps = new DurationComponents(between(reference, time));
 			fill(comps, time, reference);
 			computePrecision(comps);
-			Calendar cal = CALENDAR.get();
+			Calendar cal = CALENDAR.get().get(0);
 			cal.setTimeZone(theTimeZone);
 			cal.setTimeInMillis(time.toEpochMilli());
 			Map<DateElementType, ParsedElement<DateElementType, Integer>> components = new LinkedHashMap<>();
@@ -4801,7 +4860,7 @@ public class TimeUtils {
 	 */
 	public static Duration between(Instant t1, Instant t2) {
 		long seconds = t2.getEpochSecond() - t1.getEpochSecond();
-		long nanos = t2.getNano() - t1.getNano();
+		int nanos = t2.getNano() - t1.getNano();
 		return Duration.ofSeconds(seconds, nanos);
 	}
 
@@ -5086,7 +5145,7 @@ public class TimeUtils {
 			if (relative == null) {
 				return reference;
 			} else if (theDay >= 0) {
-				Calendar cal = TimeUtils.CALENDAR.get();
+				Calendar cal = TimeUtils.CALENDAR.get().get(0);
 				cal.setTimeZone(TimeZone.getDefault());
 				cal.setTimeInMillis(reference.toEpochMilli());
 				cal.set(Calendar.DAY_OF_MONTH, 1);
@@ -5144,7 +5203,7 @@ public class TimeUtils {
 		public Instant adjacentOccurrence(Instant occurrence, boolean next) {
 			if (theWeek >= 0) { // Xth [weekday] of the month
 				long millis = occurrence.toEpochMilli();
-				Calendar cal = TimeUtils.CALENDAR.get();
+				Calendar cal = TimeUtils.CALENDAR.get().get(0);
 				cal.setTimeInMillis(millis);
 				cal.set(Calendar.DAY_OF_MONTH, 1);
 				cal.add(Calendar.MONTH, theMonths * (next ? 1 : -1));
@@ -5157,7 +5216,7 @@ public class TimeUtils {
 				cal.add(Calendar.DAY_OF_MONTH, (theWeek - 1) * 7);
 				return Instant.ofEpochMilli(cal.getTimeInMillis());
 			} else if (theDay >= 0) {// X days before the end of the month
-				Calendar cal = TimeUtils.CALENDAR.get();
+				Calendar cal = TimeUtils.CALENDAR.get().get(0);
 				cal.setTimeInMillis(occurrence.toEpochMilli());
 				cal.set(Calendar.DAY_OF_MONTH, 1);
 				cal.add(Calendar.MONTH, theMonths * (next ? 1 : -1));
@@ -5285,7 +5344,7 @@ public class TimeUtils {
 		switch (lastChar) {
 		case '-': // Code for days from the last of the month
 			dStr = recur.substring(0, recur.length() - 1);
-			Calendar cal = TimeUtils.CALENDAR.get();
+			Calendar cal = TimeUtils.CALENDAR.get().get(0);
 			cal.setTimeZone(TimeZone.getDefault());
 			cal.setTimeInMillis(occurrence.toEpochMilli());
 			day = cal.getActualMaximum(Calendar.DAY_OF_MONTH) - cal.get(Calendar.DAY_OF_MONTH);
@@ -5293,7 +5352,7 @@ public class TimeUtils {
 			break;
 		case '#': // Code for Xth [weekday] of the month
 			dStr = recur.substring(0, recur.length() - 1);
-			cal = TimeUtils.CALENDAR.get();
+			cal = TimeUtils.CALENDAR.get().get(0);
 			cal.setTimeZone(TimeZone.getDefault());
 			cal.setTimeInMillis(occurrence.toEpochMilli());
 			day = cal.get(Calendar.DAY_OF_WEEK);

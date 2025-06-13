@@ -609,7 +609,7 @@ public class OsgiBundleSet {
 		private LoadedClass findClass0(String name) throws ClassNotFoundException {
 			LoadedClass loaded = getPreviouslyLoaded(name);
 			if (loaded == null) {
-				String path = name.replaceAll("\\.", "/");
+				String path = name.replace(".", "/");
 				int lastSlash = path.lastIndexOf('/');
 				String pkg = lastSlash < 0 ? "" : path.substring(0, lastSlash);
 				String file = (lastSlash < 0 ? path : path.substring(lastSlash + 1)) + ".class";
@@ -1511,6 +1511,7 @@ public class OsgiBundleSet {
 				return;
 			}
 		}
+		Thread.currentThread().setName("OSGi Application Initialization");
 		boolean success = false;
 		try {
 			BetterFile.FileDataSource fds = new ArchiveEnabledFileSource(new NativeFileSource())//

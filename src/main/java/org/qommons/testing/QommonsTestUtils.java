@@ -7,6 +7,7 @@ import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import org.qommons.QommonsUtils;
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterList;
 
@@ -289,7 +290,8 @@ public class QommonsTestUtils {
 		Iterator<Integer> iter = coll.iterator(); // Test iterator
 		assertEquals(true, iter.hasNext());
 		assertEquals(0, (int) iter.next());
-		assertEquals(false, iter.hasNext());
+		if (iter.hasNext())
+			assertEquals(false, iter.hasNext());
 		iter = coll.iterator();
 		assertEquals(true, iter.hasNext());
 		assertEquals(0, (int) iter.next());
@@ -735,7 +737,7 @@ public class QommonsTestUtils {
 			switch (i % 4) {
 			case 0:
 				helper.placemark();
-				int toAdd = i * 17 + 100;
+				Integer toAdd = i * 17 + 100;
 				listIter1.add(toAdd);
 				listIter2.add(toAdd);
 				assertEquals("On Iteration " + i, listIter2.previousIndex(), listIter1.previousIndex());
@@ -769,14 +771,16 @@ public class QommonsTestUtils {
 			if (check != null)
 				check.accept(list);
 		}
+		QommonsUtils.doNothing();
 		for (i = 0; listIter2.hasNext(); i++) {
 			assertTrue("On Iteration " + i, listIter1.hasNext());
 			int next = listIter1.next();
-			assertThat("On Iteration " + i, next, equalTo(listIter2.next()));
+			assertThat("On Iteration " + i, next, equalTo(//
+				listIter2.next()));
 			switch (i % 4) {
 			case 0:
 				helper.placemark();
-				int toAdd = i * 53 + 1000;
+				Integer toAdd = i * 53 + 1000;
 				listIter1.add(toAdd);
 				listIter2.add(toAdd);
 				assertTrue("On Iteration " + i, listIter1.hasPrevious());

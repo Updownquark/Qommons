@@ -1072,6 +1072,14 @@ public class BetterBitSet implements Cloneable {
 	}
 
 	/**
+	 * @param fromIndex The start index
+	 * @return The number of true bits at or after fromIndex
+	 */
+	public int countBitsSetfrom(int fromIndex) {
+		return countBitsSetBetween(fromIndex, wordsInUse * BITS_PER_WORD);
+	}
+
+	/**
 	 * @param n The number of set bits to determine the length for
 	 * @return The index in this bit set of the <code>n</code>th set bit if <code>n&lt;{@link #cardinality()}</code>, or
 	 *         <code>-{@link #cardinality()}-1</code> otherwise

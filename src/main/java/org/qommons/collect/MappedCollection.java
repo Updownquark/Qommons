@@ -13,13 +13,13 @@ import java.util.function.Function;
  */
 public class MappedCollection<S, T> extends AbstractCollection<T> {
 	private final Collection<S> theWrapped;
-	private final Function<? super S, T> theMap;
+	private final Function<? super S, ? extends T> theMap;
 
 	/**
 	 * @param wrapped The source collection to map
 	 * @param map The mapping function
 	 */
-	public MappedCollection(Collection<S> wrapped, Function<? super S, T> map) {
+	public MappedCollection(Collection<S> wrapped, Function<? super S, ? extends T> map) {
 		theWrapped = wrapped;
 		theMap = map;
 	}
@@ -47,13 +47,13 @@ public class MappedCollection<S, T> extends AbstractCollection<T> {
 	 */
 	public static class MappedIterator<S, T> implements Iterator<T> {
 		private final Iterator<S> theWrapedIter;
-		private final Function<? super S, T> theMap;
+		private final Function<? super S, ? extends T> theMap;
 
 		/**
 		 * @param wrapedIter The iterator to map
 		 * @param map The mapping function
 		 */
-		public MappedIterator(Iterator<S> wrapedIter, Function<? super S, T> map) {
+		public MappedIterator(Iterator<S> wrapedIter, Function<? super S, ? extends T> map) {
 			theWrapedIter = wrapedIter;
 			theMap = map;
 		}

@@ -25,9 +25,13 @@ public class QonfigExternalRefPromise implements QonfigPromiseFulfillment {
 	public static final String EXT_REFERENCE_TYPE = "external-reference";
 	/** The name of the external document element this type loads */
 	public static final String EXT_DOCUMENT_TYPE = "external-document";
+	/** The name of the attribute an external document uses to tell this fulfillment what type it was written to fulfill */
 	public static final String FULFILLS = "fulfills";
+	/** The role of the content in an external document to be stitched in to the source document in place of an external reference */
 	public static final String FULFILLMENT = "fulfillment";
+	/** The name of the attribute a promise type uses to tell Qonfig what type the promise extends */
 	public static final String PROMISED = "promised";
+	/** The name of the attribute a promise type uses to tell Qonfig what type(s) the promise inherits */
 	public static final String PROMISED_INHERITANCE = "promised-inheritance";
 
 	private QonfigPromiseDef theExtReferenceType;

@@ -18,7 +18,7 @@ import org.qommons.collect.BetterSet;
 import org.qommons.config.QonfigElement.QonfigValue;
 import org.qommons.config.QonfigValueType.QonfigTypeReference;
 import org.qommons.io.*;
-import org.qommons.io.SimpleXMLParser.XmlParseException;
+import org.qommons.io.MinML.XmlParseException;
 import org.w3c.dom.Comment;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -78,7 +78,7 @@ public class DefaultQonfigParser implements QonfigParser {
 	@Override
 	public QonfigDocument parseDocument(boolean partial, String location, InputStream content)
 		throws IOException, XmlParseException, QonfigParseException {
-		Element root = new SimpleXMLParser().parseDocument(location, content).getDocumentElement();
+		Element root = new MinML().parseDocument(location, content).getDocumentElement();
 		content.close();
 		QonfigParseSession session;
 		QonfigDocument doc;
@@ -129,7 +129,7 @@ public class DefaultQonfigParser implements QonfigParser {
 					throw new IllegalArgumentException("No such element-def: '" + rootReader.getName() + "'");
 				rootDef = rootDef2;
 			}
-			PositionedContent position = SimpleXMLParser.getNamePosition(root);
+			PositionedContent position = MinML.getNamePosition(root);
 			QonfigToolkit docToolkit = new QonfigToolkit(location, 1, 0, null, position, getDocumentation(rootReader),
 				Collections.unmodifiableMap(uses), Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(),
 				Collections.emptyList(), new QonfigToolkit.ToolkitBuilder() {
@@ -202,7 +202,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			if (!childApplies.test(child))
 				continue;
 			String roleAttr = child.getAttributeIfExists("role");
-			PositionedContent namePosition = SimpleXMLParser.getNamePosition(child.getElement());
+			PositionedContent namePosition = MinML.getNamePosition(child.getElement());
 			QonfigParseSession childSession = session.at(namePosition);
 			QonfigElementDef childType;
 			try {
@@ -512,7 +512,7 @@ public class DefaultQonfigParser implements QonfigParser {
 	private QonfigToolkit _parseToolkitXml(URL location, InputStream xml, LinkedList<String> path,
 		Map<String, QonfigPromiseFulfillment> promiseFulfillment, CustomValueType... customValueTypes)
 		throws IOException, XmlParseException, QonfigParseException {
-		Element root = new SimpleXMLParser().parseDocument(location.toString(), xml).getDocumentElement();
+		Element root = new MinML().parseDocument(location.toString(), xml).getDocumentElement();
 		xml.close();
 		QonfigToolkit.ToolkitDef def;
 		QonfigToolkit toolkit;
@@ -1515,39 +1515,58 @@ public class DefaultQonfigParser implements QonfigParser {
 					childSession.at(child.getAttributeValuePosition("name")).error("Bad " + elementName + " name");
 				Set<QonfigChildDef.Declared> roles;
 				String rolesS = child.getAttributeIfExists("role");
-				if (rolesS != null && metadata) {
-					childSession.at(child.getAttributeNamePosition("role")).error("role cannot be specified for " + elementName);
-					rolesS = null;
-				}
 				if (rolesS != null) {
 					List<ElementQualifiedParseItem> parsedRoles = parseRoles(rolesS, child.getAttributeValuePosition("role"), childSession);
 					roles = new LinkedHashSet<>(parsedRoles.size() * 3 / 2);
 					for (ElementQualifiedParseItem parsedRole : parsedRoles) {
-						QonfigElementOrAddOn qualifier;
-						if (parsedRole.declaredElement != null)
-							qualifier = parsedRole.declaredElement;
-						else
-							qualifier = builder.getSuperElement();
-						QonfigChildDef.Declared role = qualifier.getDeclaredChildren().get(parsedRole.itemName);
-						if (role == null) {
-							BetterCollection<? extends QonfigChildDef> children = findChildren(qualifier, parsedRole.itemName,
-								session.getToolkit());
-							switch (children.size()) {
-							case 0:
-								childSession.at(parsedRole.position)
-									.error("No such role '" + parsedRole.itemName + "' on element " + qualifier);
-								break;
-							case 1:
-								role = children.getFirst().getDeclared();
-								break;
-							default:
-								childSession.at(parsedRole.position)
-									.error("Multiple roles named '" + parsedRole.itemName + "' on element " + qualifier);
-								break;
+						QonfigChildDef.Declared role;
+						if (parsedRole.declaredElement != null) {
+							QonfigElementOrAddOn qualifier = parsedRole.declaredElement;
+							role = qualifier.getDeclaredChildren().get(parsedRole.itemName);
+							if (role == null) {
+								BetterCollection<? extends QonfigChildDef> children = findChildren(qualifier, parsedRole.itemName,
+									session.getToolkit());
+								boolean addOn = qualifier instanceof QonfigAddOn;
+								switch (children.size()) {
+								case 0:
+									childSession.at(parsedRole.position).error(
+										"No such role '" + parsedRole.itemName + "' on " + (addOn ? "add-on" : "element-def") + qualifier);
+									break;
+								case 1:
+									role = children.getFirst().getDeclared();
+									break;
+								default:
+									childSession.at(parsedRole.position).error("Multiple roles named '" + parsedRole.itemName + "' on "
+										+ (addOn ? "add-on" : "element-def") + qualifier);
+									break;
+								}
+							}
+						} else {
+							role = builder.getDeclaredChildren().get(parsedRole.itemName);
+							if (role == null) {
+								BetterCollection<? extends QonfigChildDef> children = builder.getChildrenByName().get(parsedRole.itemName);
+								boolean addOn = builder instanceof QonfigAddOn.Builder;
+								switch (children.size()) {
+								case 0:
+									childSession.at(parsedRole.position).error("No such role '" + parsedRole.itemName + "' on "
+										+ (addOn ? "add-on" : "element-def") + builder.getName());
+									break;
+								case 1:
+									role = children.getFirst().getDeclared();
+									break;
+								default:
+									childSession.at(parsedRole.position).error("Multiple roles named '" + parsedRole.itemName + "' on "
+										+ (addOn ? "add-on" : "element-def") + builder.getName());
+									break;
+								}
 							}
 						}
-						if (role != null)
-							roles.add(role);
+						if (role != null) {
+							if (!metadata && role.getOwner() == builder.get())
+								childSession.at(parsedRole.position).error("A child cannot fulfill a role declared by the same owner");
+							else
+								roles.add(role);
+						}
 					}
 				} else
 					roles = Collections.emptySet();
@@ -1592,6 +1611,8 @@ public class DefaultQonfigParser implements QonfigParser {
 				}
 				String inheritsS = child.getAttributeIfExists("inherits");
 				Set<QonfigAddOn> inherits = new LinkedHashSet<>();
+				for (QonfigChildDef.Declared role : roles)
+					inherits.addAll(role.getInheritance());
 				if (inheritsS != null) {
 					splitAttribute(inheritsS, child.getAttributeValuePosition("inherits"), session, (inherit, pos) -> {
 						QonfigAddOn el;
@@ -1628,7 +1649,8 @@ public class DefaultQonfigParser implements QonfigParser {
 				}
 				// if (elType != null) { Allow child with no type specified
 				if (metadata)
-					builder.withMetaSpec(name, elType, inherits, requires, min, max, child.getNamePosition(), getDocumentation(child));
+					builder.withMetaSpec(name, elType, roles, inherits, requires, min, max, child.getNamePosition(),
+						getDocumentation(child));
 				else
 					builder.withChild(name, elType, roles, inherits, requires, min, max, child.getNamePosition(), getDocumentation(child));
 				// }
@@ -2013,6 +2035,9 @@ public class DefaultQonfigParser implements QonfigParser {
 	private static boolean checkName(String name) {
 		if (DOC_ELEMENT_INHERITANCE_ATTR.equals(name))
 			return false;
-		return Verifier.checkAttributeName(name) == null;
+		else if (name.endsWith(QonfigElementDef.ADD_ON_METADATA_ELEMENT) || name.endsWith(QonfigElementDef.ELEMENT_METADATA_SUFFIX))
+			return false;
+		else
+			return Verifier.checkAttributeName(name) == null;
 	}
 }

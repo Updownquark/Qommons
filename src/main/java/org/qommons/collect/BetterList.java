@@ -7,8 +7,12 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.qommons.*;
+import org.qommons.Identifiable;
 import org.qommons.Lockable.CoreId;
+import org.qommons.QommonsUtils;
+import org.qommons.ThreadConstraint;
+import org.qommons.Transactable;
+import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.ex.CheckedExceptionWrapper;
 import org.qommons.ex.ExFunction;
@@ -20,7 +24,7 @@ import org.qommons.ex.ExFunction;
  * 
  * @param <E> The type of value in the list
  */
-public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> {
+public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>, DequeList<E> {
 	/**
 	 * @param index The index to get the element for
 	 * @return The element in this list at the given index
@@ -59,6 +63,128 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 	@Override
 	void clear();
+
+	// Reconciling BetterCollection and DequeList
+
+	@Override
+	default E pop() {
+		return BetterCollection.super.pop();
+	}
+
+	@Override
+	default boolean removeLast(Object o) {
+		return BetterCollection.super.removeLast(o);
+	}
+
+	@Override
+	default boolean removeIf(Predicate<? super E> filter) {
+		return BetterCollection.super.removeIf(filter);
+	}
+
+	@Override
+	default void addFirst(E e) {
+		BetterCollection.super.addFirst(e);
+	}
+
+	@Override
+	default void addLast(E e) {
+		BetterCollection.super.addLast(e);
+	}
+
+	@Override
+	default boolean offerFirst(E e) {
+		return BetterCollection.super.offerFirst(e);
+	}
+
+	@Override
+	default boolean offerLast(E e) {
+		return BetterCollection.super.offerLast(e);
+	}
+
+	@Override
+	default E removeFirst() {
+		return BetterCollection.super.removeFirst();
+	}
+
+	@Override
+	default E removeLast() {
+		return BetterCollection.super.removeLast();
+	}
+
+	@Override
+	default E pollFirst() {
+		return BetterCollection.super.pollFirst();
+	}
+
+	@Override
+	default E pollLast() {
+		return BetterCollection.super.pollLast();
+	}
+
+	@Override
+	default E getFirst() {
+		return BetterCollection.super.getFirst();
+	}
+
+	@Override
+	default E getLast() {
+		return BetterCollection.super.getLast();
+	}
+
+	@Override
+	default E peekFirst() {
+		return BetterCollection.super.peekFirst();
+	}
+
+	@Override
+	default E peekLast() {
+		return BetterCollection.super.peekLast();
+	}
+
+	@Override
+	default boolean removeFirstOccurrence(Object o) {
+		return BetterCollection.super.removeFirstOccurrence(o);
+	}
+
+	@Override
+	default boolean removeLastOccurrence(Object o) {
+		return BetterCollection.super.removeLastOccurrence(o);
+	}
+
+	@Override
+	default boolean offer(E e) {
+		return BetterCollection.super.offer(e);
+	}
+
+	@Override
+	default E remove() {
+		return BetterCollection.super.remove();
+	}
+
+	@Override
+	default E poll() {
+		return BetterCollection.super.poll();
+	}
+
+	@Override
+	default E element() {
+		return BetterCollection.super.element();
+	}
+
+	@Override
+	default E peek() {
+		return BetterCollection.super.peek();
+	}
+
+	@Override
+	default void push(E e) {
+		BetterCollection.super.push(e);
+	}
+
+	@Override
+	default Iterator<E> descendingIterator() {
+		return BetterCollection.super.descendingIterator();
+	}
 
 	@Override
 	default Object[] toArray() {
@@ -132,6 +258,29 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 				}
 			}
 			return modified;
+		}
+	}
+
+	/**
+	 * @param index The index to add the value at
+	 * @param element The value to add
+	 * @return The reason why the given value cannot be added to this list at the given position, or null if it can
+	 */
+	default String canAdd(int index, E element) {
+		if (index < 0 || index > size())
+			throw new IndexOutOfBoundsException(index + " of " + size());
+		else if (isEmpty())
+			return canAdd(element);
+		else if (index == 0) {
+			CollectionElement<E> first = getTerminalElement(false);
+			return canAdd(element, null, first.getElementId());
+		} else if (index == size()) {
+			CollectionElement<E> last = getTerminalElement(false);
+			return canAdd(element, last.getElementId(), null);
+		} else {
+			CollectionElement<E> before = getElement(index);
+			CollectionElement<E> after = getAdjacentElement(before.getElementId(), false);
+			return canAdd(element, after.getElementId(), before.getElementId());
 		}
 	}
 
@@ -245,18 +394,74 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	}
 
 	@Override
+	default BetterListSequence<E> sequence(boolean fromBeginning) {
+		return sequence(null, null, fromBeginning, null, fromBeginning);
+	}
+
+	@Override
+	default BetterListSequence<E> sequence(ElementId after, ElementId before, boolean forward) {
+		return sequence(after, before, forward, null, forward);
+	}
+
+	@Override
+	default BetterListSequence<E> sequence(ElementId after, ElementId before, boolean forward, ElementId position, boolean atStart) {
+		return new BetterListSequence<>(this, after, before, forward, position, atStart);
+	}
+
+	@Override
+	default ListSequence<E> sequence(int start, int end, int position, boolean forward) {
+		if (start < 0 || start > end)
+			throw new IndexOutOfBoundsException(start + " to " + end);
+		int size = size();
+		if (position < start - 1 || position > end || position > size)
+			throw new IndexOutOfBoundsException(position + " of " + start + " to " + end);
+		CollectionElement<E> startEl, endEl;
+		switch (start) {
+		case 0:
+			startEl = null;
+			break;
+		case 1:
+			startEl = getTerminalElement(true);
+			break;
+		default:
+			startEl = getAdjacentElement(getElement(start).getElementId(), false);
+			break;
+		}
+		if (end >= size)
+			endEl = null;
+		else if (end == size - 1)
+			endEl = getTerminalElement(false);
+		else
+			endEl = getAdjacentElement(getElement(end).getElementId(), true);
+		ElementId positionEl;
+		boolean atStart;
+		if (position == -1) {
+			positionEl = null;
+			atStart = true;
+		} else if (position == end || position == size) {
+			positionEl = null;
+			atStart = false;
+		} else {
+			positionEl = getElement(position).getElementId();
+			atStart = true; // Ignored
+		}
+		return sequence(//
+			CollectionElement.getElementId(startEl), CollectionElement.getElementId(endEl), forward, positionEl, atStart);
+	}
+
+	@Override
 	default BetterList<E> reverse() {
 		return new ReversedList<>(this);
 	}
 
 	@Override
 	default Iterator<E> iterator() {
-		return BetterCollection.super.iterator();
+		return new Sequence.SequenceIterator<>(sequence());
 	}
 
 	@Override
 	default ListIterator<E> listIterator(int index) {
-		return new BetterListIterator<>(this, index == size() ? null : getElement(index));
+		return DequeList.super.listIterator(index);
 	}
 
 	@Override
@@ -302,10 +507,19 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 
 	/**
 	 * @param <E> The type of the list
-	 * @return An empty reversible list
+	 * @return An immutable, empty list
 	 */
 	public static <E> BetterList<E> empty() {
 		return (BetterList<E>) (BetterList<?>) EMPTY;
+	}
+
+	/**
+	 * @param <E> The type of the list
+	 * @param value The value for the list
+	 * @return An immutable list with the given value
+	 */
+	public static <E> BetterList<E> single(E value) {
+		return new SingletonList<>(value);
 	}
 
 	/**
@@ -316,6 +530,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	public static <E> BetterList<E> of(E... values) {
 		if (values == null || values.length == 0)
 			return empty();
+		else if (values.length == 1)
+			return new SingletonList<>(values[0]);
 		return new ConstantList<>(Arrays.asList(values));
 	}
 
@@ -327,6 +543,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	public static <E> BetterList<E> of(Collection<? extends E> values) {
 		if (values == null || values.isEmpty())
 			return empty();
+		else if (values.size() == 1)
+			return new SingletonList<>(values.iterator().next());
 		return new ConstantList<>(values instanceof List ? (List<? extends E>) values : QommonsUtils.unmodifiableCopy(values));
 	}
 
@@ -340,6 +558,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		values.collect(Collectors.toCollection(() -> list));
 		if (list.isEmpty())
 			return empty();
+		else if (list.size() == 1)
+			return new SingletonList<>(list.get(0));
 		list.trimToSize();
 		return new ConstantList<>(list);
 	}
@@ -510,178 +730,65 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 	}
 
 	/**
-	 * Implements {@link BetterList#listIterator(int)}
+	 * An immutable {@link BetterList} with a single value
 	 * 
 	 * @param <E> The type of the list
 	 */
-	public static class BetterListIterator<E> implements ListIterator<E> {
-		private final BetterList<E> theList;
-		private CollectionElement<E> element;
-		/**
-		 * If {@link #element} is non-null, then whether that element is prepped to be used for {@link #next()} or {@link #previous()}.
-		 * 
-		 * Otherwise, whether {@link #next()} or {@link #previous()} method was called more recently
-		 */
-		private boolean elementIsNext;
-		private boolean isReadyForMod;
-
-		/**
-		 * @param list The list to iterate
-		 * @param next The next element to iterate toward
-		 */
-		public BetterListIterator(BetterList<E> list, CollectionElement<E> next) {
-			theList = list;
-			this.element = next;
-			elementIsNext = true;
+	class SingletonList<E> extends SingletonCollection<E> implements BetterList<E> {
+		SingletonList(E value) {
+			super(value);
 		}
 
 		@Override
-		public boolean hasNext() {
-			if (element != null && !element.getElementId().isPresent()) {
-				element = theList.getAdjacentElement(element.getElementId(), true);
-				elementIsNext = true;
-			}
-			if (elementIsNext)
-				return element != null;
-			else if (element == null)
-				return !theList.isEmpty();
-			else {
-				isReadyForMod = false;
-				element = theList.getAdjacentElement(element.getElementId(), true);
-				elementIsNext = true;
-				return element != null;
-			}
+		public boolean isContentControlled() {
+			return true;
 		}
 
 		@Override
-		public E next() {
-			if (!hasNext())
-				throw new NoSuchElementException();
-			if (!elementIsNext) {
-				if (element != null)
-					element = theList.getAdjacentElement(element.getElementId(), true);
-				else
-					element = theList.getTerminalElement(true);
-			}
-			E value = element.get();
-			elementIsNext = false;
-			isReadyForMod = true;
-			return value;
+		public CollectionElement<E> getElement(int index) {
+			if (index == 0)
+				return getTerminalElement(true);
+			throw new IndexOutOfBoundsException(index + " of 1");
 		}
 
 		@Override
-		public boolean hasPrevious() {
-			if (element != null && !element.getElementId().isPresent()) {
-				element = theList.getAdjacentElement(element.getElementId(), false);
-				elementIsNext = false;
-			}
-			if (!elementIsNext)
-				return element != null;
-			else if (element == null)
-				return !theList.isEmpty();
-			else {
-				isReadyForMod = false;
-				element = theList.getAdjacentElement(element.getElementId(), false);
-				elementIsNext = false;
-				return element != null;
-			}
+		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
+			getElement(elementId); // Make sure the element exists, let the super class throw the exception
+			return null;
 		}
 
 		@Override
-		public E previous() {
-			if (!hasPrevious())
-				throw new NoSuchElementException();
-			if (elementIsNext) {
-				if (element != null)
-					element = theList.getAdjacentElement(element.getElementId(), false);
-				else
-					element = theList.getTerminalElement(false);
-			}
-			E value = element.get();
-			elementIsNext = true;
-			isReadyForMod = true;
-			return value;
+		public int getElementsBefore(ElementId id) {
+			getElement(id); // Make sure the element exists, let the super class throw the exception
+			return 0;
 		}
 
 		@Override
-		public int nextIndex() {
-			if (elementIsNext) {
-				if (element != null)
-					return theList.getElementsBefore(element.getElementId());
-				else
-					return 0;
-			} else {
-				if (element != null) {
-					if (element.getElementId().isPresent())
-						return theList.getElementsBefore(element.getElementId()) + 1;
-					else
-						return theList.getElementsBefore(element.getElementId());
-				} else
-					return theList.size();
-			}
+		public int getElementsAfter(ElementId id) {
+			getElement(id); // Make sure the element exists, let the super class throw the exception
+			return 0;
+		}
+	}
+
+	/**
+	 * {@link BetterCollection.BetterSequence}/{@link ListSequence} combination for {@link BetterList}s
+	 * 
+	 * @param <E> The type of values in the sequence
+	 */
+	class BetterListSequence<E> extends BetterSequence<E> implements ListSequence<E> {
+		public BetterListSequence(BetterList<E> collection, ElementId lowBound, ElementId highBound, boolean forward, ElementId position,
+			boolean atStart) {
+			super(collection, lowBound, highBound, forward, position, atStart);
 		}
 
 		@Override
-		public int previousIndex() {
-			if (elementIsNext) {
-				if (element != null)
-					return theList.getElementsBefore(element.getElementId()) - 1;
-				else
-					return -1;
-			} else {
-				if (element != null) {
-					if (element.getElementId().isPresent())
-						return theList.getElementsBefore(element.getElementId());
-					else
-						return theList.getElementsBefore(element.getElementId()) - 1;
-				} else
-					return -1;
-			}
+		protected BetterList<E> getCollection() {
+			return (BetterList<E>) super.getCollection();
 		}
 
 		@Override
-		public void remove() {
-			if (!isReadyForMod)
-				throw new IllegalStateException(
-					"Modification must come after a call to next() or previous() and before the next call to hasNext() or hasPrevious()");
-			CollectionElement<E> adjacent = theList.getAdjacentElement(element.getElementId(), elementIsNext);
-			theList.mutableElement(element.getElementId()).remove();
-			element = adjacent;
-			isReadyForMod = false;
-		}
-
-		@Override
-		public void set(E e) {
-			if (!isReadyForMod)
-				throw new IllegalStateException(
-					"Modification must come after a call to next() or previous() and before the next call to hasNext() or hasPrevious()");
-
-			theList.mutableElement(element.getElementId()).set(e);
-		}
-
-		@Override
-		public void add(E e) {
-			ElementId after, before;
-			boolean first;
-			if (!hasNext()) {
-				after = CollectionElement.getElementId(theList.getTerminalElement(false));
-				before = null;
-				first = false;
-			} else if (elementIsNext) {
-				before = element.getElementId();
-				after = CollectionElement.getElementId(theList.getAdjacentElement(before, false));
-				first = false;
-			} else {
-				after = element.getElementId();
-				before = CollectionElement.getElementId(theList.getAdjacentElement(after, true));
-				first = true;
-			}
-			CollectionElement<E> added = theList.addElement(e, after, before, first);
-			if (added != null) {
-				element = added;
-				elementIsNext = false;
-				isReadyForMod = true;
-			}
+		public int getIndex() throws IllegalStateException {
+			return getCollection().getElementsBefore(getCurrent().getElementId());
 		}
 	}
 
@@ -1684,11 +1791,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E> 
 		@Override
 		public boolean contains(Object o) {
 			return theValues.contains(o);
-		}
-
-		@Override
-		public Iterator<E> iterator() {
-			return IterableUtils.immutableIterator((Iterator<E>) theValues.iterator());
 		}
 
 		@Override

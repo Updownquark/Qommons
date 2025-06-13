@@ -27,7 +27,7 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * 
  * @param <E> The type of value in the collection
  */
-public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>, CausalLock, Stamped, Identifiable {
+public interface BetterCollection<E> extends SequencedDeque<E>, TransactableCollection<E>, CausalLock, Identifiable {
 	/** A message for an exception thrown when a view detects that it is invalid due to external modification of the underlying data */
 	public static final String BACKING_COLLECTION_CHANGED = "This collection view's backing collection has changed from underneath this view.\n"
 		+ "This view is now invalid";
@@ -323,6 +323,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	 * @param c The collection to test
 	 * @return Whether this collection contains any of the given collection's elements
 	 */
+	@Override
 	default boolean containsAny(Collection<?> c) {
 		try (Transaction t = lock(false, null); Transaction ct = Transactable.lock(c, false, null)) {
 			if (c.isEmpty())
@@ -570,11 +571,6 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		return found;
 	}
 
-	@Override
-	default Iterator<E> iterator() {
-		return new BetterCollectionIterator<>(this);
-	}
-
 	/** @return A collection of this collection's elements */
 	default BetterCollection<CollectionElement<E>> elements() {
 		return new ElementCollection<>(this);
@@ -585,7 +581,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		return new ReversedCollection<>(this);
 	}
 
-	// Deque methods
+	// Default Deque methods
 
 	@Override
 	default void addFirst(E e) {
@@ -735,8 +731,36 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	}
 
 	@Override
+	default BetterSequence<E> sequence(boolean fromBeginning) {
+		return sequence(null, null, fromBeginning, null, fromBeginning);
+	}
+
+	/**
+	 * @param after The lower bound (exclusive) of the sequence, or null for the sequence to have no lower bound
+	 * @param before The upper bound (exclusive) of the sequence, or null for the sequence to have no upper bound
+	 * @param forward Whether the sequence should move forward or backward (reversed)
+	 * @return The sequence
+	 */
+	default BetterSequence<E> sequence(ElementId after, ElementId before, boolean forward) {
+		return sequence(after, before, forward, null, forward);
+	}
+
+	/**
+	 * @param after The lower bound (exclusive) of the sequence, or null for the sequence to have no lower bound
+	 * @param before The upper bound (exclusive) of the sequence, or null for the sequence to have no upper bound
+	 * @param forward Whether the sequence should move forward or backward (reversed)
+	 * @param position The initial position for the sequence, or null to start at the beginning or end
+	 * @param atStart Whether, if <code>position</code> is null, to start before the beginning or after the end of the sequence (by this
+	 *        collection's reckoning, regardless of the <code>forward</code> parameter)
+	 * @return The sequence
+	 */
+	default BetterSequence<E> sequence(ElementId after, ElementId before, boolean forward, ElementId position, boolean atStart) {
+		return new BetterSequence<>(this, after, before, forward, position, atStart);
+	}
+
+	@Override
 	default Iterator<E> descendingIterator() {
-		return reverse().iterator();
+		return SequencedDeque.super.descendingIterator();
 	}
 
 	/**
@@ -871,7 +895,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 	/**
 	 * @param <E> The type of the collection
-	 * @return An empty {@link BetterCollection}
+	 * @return An immutable, empty {@link BetterCollection}
 	 */
 	public static <E> BetterCollection<E> empty() {
 		return (BetterCollection<E>) EMPTY;
@@ -881,58 +905,160 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 	static final BetterCollection<Object> EMPTY = new EmptyCollection<>();
 
 	/**
-	 * An {@link Iterator} based on a {@link BetterCollection}'s elements
-	 * 
-	 * @param <E> The type of values to iterate over
+	 * @param <E> The type of the collection
+	 * @param value The value for the collection
+	 * @return An immutable {@link BetterCollection} with the given value
 	 */
-	class BetterCollectionIterator<E> implements Iterator<E> {
-		private final BetterCollection<E> theCollection;
-		private ElementId previous;
-		private CollectionElement<E> next;
-		private ElementId theLastReturnedElement;
+	public static <E> BetterCollection<E> single(E value) {
+		return new SingletonCollection<>(value);
+	}
 
-		public BetterCollectionIterator(BetterCollection<E> collection) {
+	/**
+	 * Default {@link BetterCollection#sequence()} implementation for {@link BetterCollection}s
+	 * 
+	 * @param <E> The type of values in the sequence
+	 */
+	class BetterSequence<E> implements Sequence<E> {
+		protected final BetterCollection<E> theCollection;
+		private final ElementId theLowBound;
+		private final ElementId theHighBound;
+		private final boolean isReversed;
+		private CollectionElement<E> current;
+		private MutableCollectionElement<E> mutableCurrent;
+		private boolean isAtStart;
+
+		public BetterSequence(BetterCollection<E> collection, ElementId lowBound, ElementId highBound, boolean forward, ElementId position,
+			boolean atStart) {
 			theCollection = collection;
+			theLowBound = lowBound;
+			theHighBound = highBound;
+			this.isReversed = !forward;
+			if (position != null)
+				current = collection.getElement(position);
+			isAtStart = atStart;
 		}
 
-		@Override
-		public boolean hasNext() {
-			if (next != null && next.getElementId().isPresent())
-				return true;
-			else if (theLastReturnedElement != null && theLastReturnedElement.isPresent()) {
-				previous = theLastReturnedElement;
-				next = theCollection.getAdjacentElement(theLastReturnedElement, true);
-			} else if (previous != null) {
-				CollectionElement<E> oldNext = next;
-				next = theCollection.getAdjacentElement(previous, true);
-				if (oldNext != null && oldNext.getElementId().isPresent())
-					previous = oldNext.getElementId();
-			} else
-				next = theCollection.getTerminalElement(true);
-			return next != null;
+		protected BetterCollection<E> getCollection() {
+			return theCollection;
 		}
 
-		@Override
-		public E next() {
-			if (!hasNext())
+		public CollectionElement<E> getCurrent() throws NoSuchElementException {
+			if (current == null)
 				throw new NoSuchElementException();
-			if (theLastReturnedElement != null && theLastReturnedElement.isPresent())
-				previous = theLastReturnedElement;
-			theLastReturnedElement = next.getElementId();
-			if (!theLastReturnedElement.isPresent())
-				throw new ConcurrentModificationException(BACKING_COLLECTION_CHANGED);
-			E value = next.get();
-			next = theCollection.getAdjacentElement(theLastReturnedElement, true);
-			return value;
+			return current;
+		}
+
+		public MutableCollectionElement<E> mutableCurrent() throws IllegalStateException {
+			if (current == null)
+				throw new IllegalStateException(NO_ELEMENT_AT_POSTION);
+			if (mutableCurrent == null)
+				mutableCurrent = theCollection.mutableElement(current.getElementId());
+			return mutableCurrent;
 		}
 
 		@Override
-		public void remove() {
-			if (theLastReturnedElement == null)
-				throw new IllegalStateException("Iterator is not started or there were no elements");
-			else if (!theLastReturnedElement.isPresent())
-				throw new IllegalStateException("Element has already been removed");
-			theCollection.mutableElement(theLastReturnedElement).remove();
+		public boolean exists() {
+			return current != null;
+		}
+
+		public CollectionElement<E> get(boolean next) {
+			boolean realForward = next ^ isReversed;
+			ElementId bound = realForward ? theHighBound : theLowBound;
+			CollectionElement<E> adjacent;
+			if (current != null)
+				adjacent = theCollection.getAdjacentElement(current.getElementId(), realForward);
+			else if (isAtStart != realForward)
+				adjacent = null; // End of sequence
+			else if (bound != null)
+				adjacent = theCollection.getAdjacentElement(bound, realForward);
+			else
+				adjacent = theCollection.getTerminalElement(realForward);
+			if (adjacent != null && bound != null && adjacent.getElementId().equals(bound))
+				adjacent = null;
+			return adjacent;
+		}
+
+		@Override
+		public boolean advance(boolean forward) {
+			CollectionElement<E> next = get(forward);
+			if (next == null)
+				return false;
+			mutableCurrent = null;
+			current = next;
+			isAtStart = !forward;
+			return true;
+		}
+
+		@Override
+		public boolean has(boolean next) {
+			return get(next) != null;
+		}
+
+		@Override
+		public E get() throws IllegalStateException {
+			return getCurrent().get();
+		}
+
+		@Override
+		public String canRemove() {
+			return mutableCurrent().canRemove();
+		}
+
+		@Override
+		public void remove() throws UnsupportedOperationException, IllegalStateException {
+			CollectionElement<E> next = get(true);
+			if (next == null)
+				next = get(false);
+			mutableCurrent().remove();
+			mutableCurrent = null;
+			current = next;
+			if (next == null)
+				isAtStart = !isReversed;
+		}
+
+		@Override
+		public String isSettable() {
+			return mutableCurrent().isEnabled();
+		}
+
+		@Override
+		public String isAcceptable(E newValue) {
+			return mutableCurrent().isAcceptable(newValue);
+		}
+
+		@Override
+		public void set(E newValue) throws UnsupportedOperationException, IllegalArgumentException, IllegalStateException {
+			mutableCurrent().set(newValue);
+		}
+
+		@Override
+		public String canAdd(E value, boolean before) {
+			if (current == null) {
+				return theCollection.canAdd(value, //
+					isAtStart ? null : CollectionElement.getElementId(theCollection.getTerminalElement(false)), //
+					isAtStart ? CollectionElement.getElementId(theCollection.getTerminalElement(true)) : null);
+			}
+			ElementId el = current.getElementId();
+			return theCollection.canAdd(value, //
+				before ? CollectionElement.getElementId(theCollection.getAdjacentElement(el, false)) : el, //
+				before ? el : CollectionElement.getElementId(theCollection.getAdjacentElement(el, true)));
+		}
+
+		@Override
+		public void add(E newValue, boolean before) throws UnsupportedOperationException, IllegalArgumentException, IllegalStateException {
+			if (current == null) {
+				CollectionElement<E> newEl = theCollection.addElement(newValue, //
+					isAtStart ? null : CollectionElement.getElementId(theCollection.getTerminalElement(false)), //
+					isAtStart ? CollectionElement.getElementId(theCollection.getTerminalElement(true)) : null, false);
+				if (before == isAtStart)
+					current = newEl;
+			} else {
+				ElementId el = current.getElementId();
+				theCollection.addElement(newValue, //
+					before ? CollectionElement.getElementId(theCollection.getAdjacentElement(el, false)) : el, //
+					before ? el : CollectionElement.getElementId(theCollection.getAdjacentElement(el, true)), //
+					false);
+			}
 		}
 	}
 
@@ -1068,8 +1194,7 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		@Override
 		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			return CollectionElement
-				.reverse(getWrapped().addElement(value, ElementId.reverse(before), ElementId.reverse(after), !first));
+			return CollectionElement.reverse(getWrapped().addElement(value, ElementId.reverse(before), ElementId.reverse(after), !first));
 		}
 
 		@Override
@@ -1219,7 +1344,8 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 		}
 
 		@Override
-		public void clear() {}
+		public void clear() {
+		}
 
 		@Override
 		public CollectionElement<E> getTerminalElement(boolean first) {
@@ -1426,6 +1552,19 @@ public interface BetterCollection<E> extends Deque<E>, TransactableCollection<E>
 
 		@Override
 		public void clear() {
+		}
+
+		@Override
+		public Object[] toArray() {
+			return new Object[] { theElement.get() };
+		}
+
+		@Override
+		public <T> T[] toArray(T[] a) {
+			if (a.length == 0)
+				a = Arrays.copyOf(a, 1);
+			a[0] = (T) theElement.get();
+			return a;
 		}
 
 		@Override

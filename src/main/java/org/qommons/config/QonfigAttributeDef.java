@@ -18,6 +18,7 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 	@Override
 	QonfigAttributeDef.Declared getDeclared();
 
+	/** @return The location of the XML element name where this attribute or modifier was declared */
 	LocatedPositionedContent getNamePosition();
 
 	/** Abstract {@link QonfigAttributeDef} implementation */
@@ -36,6 +37,7 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		 * @param type The type for the attribute value
 		 * @param specify The specification of the attribute
 		 * @param defaultValue The value to use if it is not specified
+		 * @param namePosition The location of the XML element name where this attribute or modifier was declared
 		 * @param defaultValueContent The located content from the source file specifying the default value for the attribute
 		 * @param position Number The line number in the file where this attribute was defined
 		 * @param description The description for this attribute
@@ -134,6 +136,7 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		 * @param type The type for the attribute value
 		 * @param specify The specification of the attribute
 		 * @param defaultValue The value to use if it is not specified
+		 * @param nameContent The location of the XML element name where this attribute or modifier was declared
 		 * @param defaultValueContent The located content from the source file specifying the default value for the attribute
 		 * @param position The position in the file where this attribute was defined
 		 * @param description The description for this attribute
@@ -181,6 +184,7 @@ public interface QonfigAttributeDef extends QonfigValueDef {
 		 * @param type The type for the attribute value
 		 * @param specify The specification of the attribute
 		 * @param defaultValue The value to use if it is not specified
+		 * @param nameContent The location of the XML element name where this attribute or modifier was declared
 		 * @param defaultValueContent The located content from the source file specifying the default value for the attribute
 		 * @param position The position in the file where this attribute modification was defined
 		 * @param description The description for the attribute modification

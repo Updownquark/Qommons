@@ -294,12 +294,14 @@ public interface QonfigChildDef extends QonfigElementOwned {
 		 * @param declared The inherited child
 		 * @param owner The element-def or add-on that this child belongs to
 		 * @param overriding The new children that fulfill the role, overriding it
+		 * @param min The overridden or inherited minimum number of elements that this child role requires
+		 * @param max The overridden or inherited maximum number of elements that can be present for this child role
 		 * @param position The position in the file where this child was defined
 		 * @param description The description for this child
 		 */
 		public Overridden(QonfigElementOrAddOn owner, QonfigChildDef.Declared declared, Set<QonfigChildDef.Declared> overriding,
-			PositionedContent position, String description) {
-			super(owner, declared.getType(), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), 0, 0, position,
+			int min, int max, PositionedContent position, String description) {
+			super(owner, declared.getType(), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), min, max, position,
 				description);
 			theDeclared = declared;
 			theOverriding = overriding;

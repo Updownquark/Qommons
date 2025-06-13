@@ -7,10 +7,10 @@ import java.util.Iterator;
 
 import org.junit.Assert;
 import org.junit.Test;
-import org.qommons.io.SimpleXMLParser.*;
+import org.qommons.io.MinML.*;
 
-/** Unit test for {@link SimpleXMLParser} */
-public class SimpleXMLParserTest {
+/** Unit test for {@link MinML} */
+public class MinMLTest {
 	interface XmlExpectedItem {
 	}
 
@@ -22,7 +22,7 @@ public class SimpleXMLParserTest {
 	 */
 	@Test
 	public void testSimpleXmlParser() throws IOException, XmlParseException {
-		try (InputStream in = SimpleXMLParserTest.class.getResourceAsStream("SimpleXmlTest.xml")) {
+		try (InputStream in = MinMLTest.class.getResourceAsStream("SimpleXmlTest.xml")) {
 			SequenceTester tester = new SequenceTester(//
 				new ExpectedXmlDeclaration()//
 					.withVersion("1.0", 6, 0, 6, 15, 0, 15)//
@@ -71,13 +71,13 @@ public class SimpleXMLParserTest {
 				new ExpectedComment(" This is a footer comment with special characters &<'\nblah ", 505, 26, 4), //
 				new ExpectedWhitespace("\n", 567, 27, 8)//
 			);
-			new SimpleXMLParser().setTabLength(4)//
+			new MinML().setTabLength(4)//
 				.parseXml(null, in, tester);
 			tester.done();
 		}
 	}
 
-	static class SequenceTester implements SimpleXMLParser.ParseHandler {
+	static class SequenceTester implements MinML.ParseHandler {
 		private final Iterator<XmlExpectedItem> theSequence;
 		private int indent;
 

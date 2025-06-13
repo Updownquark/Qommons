@@ -107,6 +107,7 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 	/**
 	 * @param name The name for the element type
 	 * @param session The session for error reporting
+	 * @param promise Whether the new type is a promise
 	 * @param description The description for the new element
 	 * @return A builder to build an element-def
 	 */
@@ -131,10 +132,17 @@ public class QonfigElementDef extends QonfigElementOrAddOn {
 			return (QonfigElementDef) super.get();
 		}
 
+		/** @return Whether this builder is building a promise type */
 		public boolean isPromise() {
 			return isPromise;
 		}
 
+		/**
+		 * @param fulfillment The fulfillment for this promise
+		 * @param promisedType The element type promised by the promise
+		 * @param inheritance The inheritance promised by the promise
+		 * @return This builder
+		 */
 		public Builder fulfillPromise(QonfigPromiseFulfillment fulfillment, QonfigElementDef promisedType,
 			MultiInheritanceSet<QonfigAddOn> inheritance) {
 			if (!isPromise)

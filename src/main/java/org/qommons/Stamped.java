@@ -171,14 +171,15 @@ public interface Stamped {
 
 		/** @param valueStamp The stamp to add to this composite */
 		public void add(long valueStamp) {
-			// I'm changing this to use both XOR and addition operators in generating the composite stamp
-			// When using XOR only, I found that in some cases, e.g. with composite structures as op1(op2(v1, v2), op2(v1)),
-			// a value's stamp can annihilate itself in the composite. Addition prevents this.
-			// The XOR operation is still necessary so that ordering of the stamps is important.
 			if (theStampIndex == 0)
 				theStamp = valueStamp;
-			else
+			else if (valueStamp != 0) {
+				// I'm changing this to use both XOR and addition operators in generating the composite stamp
+				// When using XOR only, I found that in some cases, e.g. with composite structures as op1(op2(v1, v2), op2(v1)),
+				// a value's stamp can annihilate itself in the composite. Addition prevents this.
+				// The XOR operation is still necessary so that ordering of the stamps is important.
 				theStamp = (theStamp ^ Long.rotateRight(valueStamp, theShift * theStampIndex)) + valueStamp;
+			}
 			theStampIndex++;
 		}
 

@@ -359,6 +359,10 @@ public class FileUtils extends MiniFileUtils {
 		return splitPath;
 	}
 
+	/**
+	 * @param file The file or directory to check
+	 * @return The total number of bytes in the file or of all files within the directory
+	 */
 	public static long getDeepSize(File file) {
 		if (file.isDirectory()) {
 			long size = 0;
@@ -369,6 +373,10 @@ public class FileUtils extends MiniFileUtils {
 			return file.length();
 	}
 
+	/**
+	 * @param file The file or directory to check
+	 * @return The total number of bytes in the file or of all files within the directory
+	 */
 	public static long getDeepSize(BetterFile file) {
 		if (file.isDirectory()) {
 			long size = 0;
@@ -400,12 +408,24 @@ public class FileUtils extends MiniFileUtils {
 		}
 	}
 
+	/**
+	 * @param file The file to check
+	 * @param extensions The list of case-insensitive file extensions to check for
+	 * @return null if the given file's extension is one of the arguments, or a human-readable reason why the file is not acceptable with
+	 *         the given extension filter
+	 */
 	public static String hasExtension(File file, String... extensions) {
 		if (file == null)
 			return null;
 		return hasExtension(file.getName(), extensions);
 	}
 
+	/**
+	 * @param fileName The name of the file to check
+	 * @param extensions The list of case-insensitive file extensions to check for
+	 * @return null if the given file name's extension is one of the arguments, or a human-readable reason why the file is not acceptable
+	 *         with the given extension filter
+	 */
 	public static String hasExtension(String fileName, String... extensions) {
 		FileExtCharSeq extCS = new FileExtCharSeq();
 		for (String ext : extensions) {

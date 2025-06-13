@@ -22,10 +22,15 @@ public interface HierarchicalResourceWriter {
 		return new SubWriter(this, subDir);
 	}
 
+	/** Implements {@link HierarchicalResourceWriter#subWriter(String)} */
 	public static class SubWriter implements HierarchicalResourceWriter {
 		private final HierarchicalResourceWriter theParent;
 		private final String theSubPath;
 
+		/**
+		 * @param parent The parent writer
+		 * @param subDir The sub-directory path
+		 */
 		public SubWriter(HierarchicalResourceWriter parent, String subDir) {
 			this.theParent = parent;
 			if (subDir.endsWith("/") || subDir.endsWith("\\"))
@@ -34,10 +39,12 @@ public interface HierarchicalResourceWriter {
 				theSubPath = subDir + "/";
 		}
 
+		/** @return This writer's parent writer */
 		public HierarchicalResourceWriter getParent() {
 			return theParent;
 		}
 
+		/** @return This writer's sub-directory path */
 		public String getSubPath() {
 			return theSubPath;
 		}

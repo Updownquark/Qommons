@@ -3,6 +3,7 @@ package org.qommons.collect;
 import java.util.Collection;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.StampedLock;
+import java.util.function.Supplier;
 
 import org.qommons.*;
 import org.qommons.Lockable.CoreId;
@@ -113,7 +114,7 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 			if (thread.write) // We might own it
 				return operation.apply(init, OptimisticContext.TRUE);
 			else { // Someone else owns it. Nothing to do but wait.
-				try (Transaction t = thread.obtain(true)) {
+				try (Transaction t = thread.obtain(true, false)) {
 					return operation.apply(init, OptimisticContext.TRUE);
 				}
 			}
@@ -154,7 +155,7 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 			if (thread.write) // We might own it
 				return operation.apply(init, OptimisticContext.TRUE);
 			else { // Someone else owns it. Nothing to do but wait.
-				try (Transaction t = thread.obtain(true)) {
+				try (Transaction t = thread.obtain(true, false)) {
 					return operation.apply(init, OptimisticContext.TRUE);
 				}
 			}
@@ -201,14 +202,14 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 		public Transaction lock(boolean write, Object cause) {
 			if (write && !theThreadConstraint.isEventThread())
 				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
-			return theStampCollection.get().obtain(write);
+			return theStampCollection.get().obtain(write, false);
 		}
 
 		@Override
 		public Transaction tryLock(boolean write, Object cause) {
 			if (write && !theThreadConstraint.isEventThread())
 				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
-			return theStampCollection.get().tryObtain(write);
+			return theStampCollection.get().obtain(write, true);
 		}
 
 		@Override
@@ -221,82 +222,54 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 		long stamp;
 		boolean write;
 
-		Transaction obtain(boolean forWrite) {
-			return LockDebug.debug(theUpdateLocker, theOwner, forWrite, false, () -> lock(theUpdateLocker, forWrite));
+		// Avoid creating so many lambdas all the time
+		private final Supplier<Transaction> LOCK_READ = () -> lock(false, false);
+		private final Supplier<Transaction> LOCK_WRITE = () -> lock(true, false);
+		private final Supplier<Transaction> TRY_LOCK_READ = () -> lock(false, true);
+		private final Supplier<Transaction> TRY_LOCK_WRITE = () -> lock(true, true);
+		private final Transaction theReadUnlock = this::unlockRead;
+		private final Transaction theWriteUnlock = this::unlockWrite;
+		private final Transaction theWriteDowngrade = this::writeToRead;
+
+		Transaction obtain(boolean forWrite, boolean justTry) {
+			Supplier<Transaction> core;
+			if (justTry)
+				core = forWrite ? TRY_LOCK_WRITE : TRY_LOCK_READ;
+			else
+				core = forWrite ? LOCK_WRITE : LOCK_READ;
+			return LockDebug.debug(theUpdateLocker, theOwner, forWrite, false, core);
 		}
 
-		Transaction tryObtain(boolean forWrite) {
-			Transaction updateTrans = LockDebug.debug(theUpdateLocker, theOwner, forWrite, true, () -> tryLock(theUpdateLocker, forWrite));
-			return updateTrans;
-		}
-
-		Transaction lock(StampedLock locker, boolean forWrite) {
+		Transaction lock(boolean forWrite, boolean justTry) {
 			if (stamp > 0) {
 				if (forWrite && !this.write) {
 					// We have a read lock
 					// Alright, I'll try
-					long newStamp = locker.tryConvertToWriteLock(stamp);
-					if (newStamp == 0)
-						throw new IllegalStateException("Could not upgrade to write lock");
+					long newStamp = theUpdateLocker.tryConvertToWriteLock(stamp);
+					if (newStamp == 0) {
+						if (justTry)
+							return null;
+						else
+							throw new IllegalStateException("Could not upgrade to write lock");
+					}
 					// Got lucky
 					lockedWrite();
 					stamp = newStamp;
 					this.write = true;
-					return () -> {
-						unlockedWrite();
-						stamp = locker.tryConvertToReadLock(stamp);
-						this.write = false;
-					};
+					return theWriteDowngrade;
 				} else // Already have what we need
 					return Transaction.NONE;
 			} else {
-				stamp = forWrite ? locker.writeLock() : locker.readLock();
-				if (forWrite)
-					lockedWrite();
-				this.write = forWrite;
-				return () -> {
-					if (forWrite) {
-						unlockedWrite();
-						locker.unlockWrite(stamp);
-					} else
-						locker.unlockRead(stamp);
-					stamp = 0;
-				};
-			}
-		}
-
-		Transaction tryLock(StampedLock locker, boolean forWrite) {
-			if (stamp > 0) {
-				if (forWrite && !this.write) {
-					// Alright, I'll try
-					long newStamp = locker.tryConvertToWriteLock(stamp);
-					if (newStamp == 0)
+				if (justTry) {
+					stamp = forWrite ? theUpdateLocker.tryWriteLock() : theUpdateLocker.tryReadLock();
+					if (stamp == 0)
 						return null;
-					// Got lucky
-					lockedWrite();
-					stamp = newStamp;
-					this.write = true;
-					return () -> {
-						stamp = locker.tryConvertToReadLock(stamp);
-						this.write = false;
-					};
-				} else // Already have what we need
-					return Transaction.NONE;
-			} else {
-				stamp = forWrite ? locker.tryWriteLock() : locker.tryReadLock();
-				if (stamp == 0)
-					return null;
+				} else
+					stamp = forWrite ? theUpdateLocker.writeLock() : theUpdateLocker.readLock();
 				if (forWrite)
 					lockedWrite();
 				this.write = forWrite;
-				return () -> {
-					if (forWrite) {
-						unlockedWrite();
-						locker.unlockWrite(stamp);
-					} else
-						locker.unlockRead(stamp);
-					stamp = 0;
-				};
+				return forWrite ? theWriteUnlock : theReadUnlock;
 			}
 		}
 
@@ -305,9 +278,23 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 				updateWriteLocker = Thread.currentThread();
 		}
 
-		private void unlockedWrite() {
+		private void unlockRead() {
+			theUpdateLocker.unlockRead(stamp);
+			stamp = 0;
+		}
+
+		private void unlockWrite() {
 			if (STORE_WRITERS)
 				updateWriteLocker = null;
+			theUpdateLocker.unlockWrite(stamp);
+			stamp = 0;
+		}
+
+		private void writeToRead() {
+			if (STORE_WRITERS)
+				updateWriteLocker = null;
+			stamp = theUpdateLocker.tryConvertToReadLock(stamp);
+			this.write = false;
 		}
 	}
 }

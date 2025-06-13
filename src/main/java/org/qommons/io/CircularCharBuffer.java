@@ -377,8 +377,12 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 		return new CCBReader();
 	}
 
-	/** @return A {@link Reader} that reads (and removes) characters off the front of this buffer */
-	public Reader asDeletingReader() {
+	/**
+	 * @param terminating If true, this reader will return -1 when the buffer is empty; otherwise the reader will return 0
+	 * @return A {@link Reader} that reads (and removes) characters off the front of this buffer
+	 */
+	public Reader asDeletingReader(boolean terminating) {
+		int terminal = terminating ? -1 : 0;
 		class DeletingCCBReader extends Reader {
 			@Override
 			public int read() {
@@ -387,7 +391,9 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 
 			@Override
 			public int read(char[] b, int off, int len) {
-				if (len < theLength) {
+				if (theLength == 0) {
+					return terminal;
+				} else if (len < theLength) {
 					copyTo(0, b, off, len);
 					delete(0, len);
 				} else {

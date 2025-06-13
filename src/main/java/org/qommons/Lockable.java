@@ -1,8 +1,5 @@
 package org.qommons;
 
-import static org.qommons.Lockable.lockAll;
-import static org.qommons.Lockable.tryLockAll;
-
 import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -400,7 +397,7 @@ public interface Lockable extends ThreadConstrained {
 	 * @return A transaction to close to release the locks, or null if the lock could not be obtained.
 	 */
 	static Transaction tryLockAll(Lockable outer, Collection<? extends Lockable> lockables) {
-		return tryLockAll(outer, () -> lockables);
+		return tryLockAll(outer, LambdaUtils.constantSupplier(lockables));
 	}
 
 	/**
@@ -552,6 +549,11 @@ public interface Lockable extends ThreadConstrained {
 		}
 	}
 
+	/**
+	 * @param outer The first lockable to lock
+	 * @param getInner The additional lockable to lock--may supply null
+	 * @return A lockable whose {@link #lock()} method works like {@link #lock(Lockable, Supplier)}
+	 */
 	static Lockable lockable(Lockable outer, Supplier<Lockable> getInner) {
 		return new CollapsedLockable(outer, () -> Collections.singleton(getInner.get()), false);
 	}

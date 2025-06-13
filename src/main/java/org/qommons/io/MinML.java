@@ -23,24 +23,40 @@ import org.w3c.dom.Node;
 
 /**
  * <p>
- * I have need of an XML parser with more rigorous position handling than Java's native handling is capable of.
+ * A minimalist XML parser.
+ * </p>
+ * <p>
+ * I have need of an XML parser with more rigorous position handling than Java's native handling or any 3rd party parsers I can find are
+ * capable of.
  * </p>
  * <p>
  * This class facilitates full tracking of every element, attribute, and value to an exact position with the XML file.
  * </p>
  * <p>
- * <b><font color="red">This class is NOT a full-featured XML parser.</font></b> Several features of XML are not supported or treated
- * differently:
+ * <b><font color="red">This class is NOT a full-featured XML parser.</font></b> Several features of XML are not supported or are not
+ * handled traditionally:
  * <ul>
- * <li>Namespaces are not handled specially, but rather are treated as part of the element/attribute name.</li>
+ * <li>Namespaces are not handled specially, but rather are treated as part of the element/attribute name. Referenced XML schemas are not
+ * loaded.</li>
  * <li>This class completely lacks support for the DOCTYPE declaration. The parser will throw exceptions when these are encountered.</li>
  * </ul>
  * <p>
  * For uses that do not require schema validation in the parser, this class is a nice alternative. As a bonus, it is not subject to many
  * vulnerabilities that typical XML parsers are susceptible to due to their ability to pull in files as directed by the XML data.
  * </p>
+ * {@link MinML} supports 3 methods of parsing:
+ * <ul>
+ * <li>Traditional SAX-style parsing is supported via {@link #parseXml(String, InputStream, ParseHandler)} (or
+ * {@link #parseXml(String, Reader, ParseHandler)} if the source is non-binary). The parse handler is notified of each XML component as it
+ * is encountered, with almost zero read-ahead.</li>
+ * <li>DOM parsing is supported via {@link #parseDocument(String, InputStream)} (or {@link #parseDocument(String, Reader)}), which returns a
+ * standard W3C XML {@link Document}. Position information is stored in the {@link Node#getUserData(String) user data} of the XML components
+ * and can be accessed via {@link #getNamePosition(Node)} and {@link #getPositionContent(Node)}.</li>
+ * <li>The {@link #parseByComponent(String, InputStream)} (or {@link #parseByComponent(String, Reader)}) method returns a
+ * {@link ComponentParser}, which provides methods for quickly navigating an XML document. See the documentation on that class.</li>
+ * </ul>
  */
-public class SimpleXMLParser {
+public class MinML {
 	/** The name of the version attribute for the XML declaration */
 	public static final String VERSION = "version";
 	/** The name of the encoding attribute for the XML declaration */
@@ -122,7 +138,7 @@ public class SimpleXMLParser {
 		}
 	}
 
-	/** Thrown from {@link SimpleXMLParser}'s parse methods */
+	/** Thrown from {@link MinML}'s parse methods */
 	public static class XmlParseException extends TextParseException {
 		private final LocatedXmlElement theElement;
 
@@ -147,12 +163,31 @@ public class SimpleXMLParser {
 		}
 	}
 
+	/** A type of XML component */
 	public enum XmlComponentType {
-		Declaration, ProcessingInstruction, Comment, ElementTerminal, ElementOpen, Attribute, ElementContent, CData, IgnorableWhitespace;
+		/** The XML declaration at the head of the document, e.g. '&lt;?xml version="1.0" encoding="UTF-8"?>' */
+		Declaration,
+		/** A processing instruction, e.g. '&lt;?NAME Content?>' */
+		ProcessingInstruction,
+		/** An XML comment, e.g. '&lt;!-- Content -->' */
+		Comment,
+		/** Either the beginning (e.g. '&lt;name') or close (e.g. '&lt;/name>' or '/>' */
+		ElementTerminal,
+		/** Signifies the beginning of an element's content ('>') */
+		ElementOpen,
+		/** An attribute of an XML element (e.g. 'name="value"') */
+		Attribute,
+		/** Simple text content within an element */
+		ElementContent,
+		/** CDATA content within an element (e.g. '&lt;![CDATA[ Content ]]>') */
+		CData,
+		/** Content in an XML document that is not part of the syntax or content. Typically spaces, tabs, and new line characters. */
+		IgnorableWhitespace;
 	}
 
 	/** Super interface for any XML structure passed to a {@link ParseHandler handler} */
 	public interface XmlComponent {
+		/** @return The type of this component */
 		XmlComponentType getComponentType();
 
 		/** @return The character content defining the entire XML structure */
@@ -234,9 +269,9 @@ public class SimpleXMLParser {
 		/**
 		 * @return The "attributes" specified on this declaration, in order. Each element will be
 		 *         <ul>
-		 *         <li>{@link SimpleXMLParser#VERSION version}</li>
-		 *         <li>{@link SimpleXMLParser#ENCODING encoding}</li>
-		 *         <li>or {@link SimpleXMLParser#STANDALONE standalone}</li>
+		 *         <li>{@link MinML#VERSION version}</li>
+		 *         <li>{@link MinML#ENCODING encoding}</li>
+		 *         <li>or {@link MinML#STANDALONE standalone}</li>
 		 *         </ul>
 		 */
 		public List<String> getAttributes() {
@@ -283,9 +318,9 @@ public class SimpleXMLParser {
 		/**
 		 * @param attribute The "attribute" to get the name position for. Must be
 		 *        <ul>
-		 *        <li>{@link SimpleXMLParser#VERSION version}</li>
-		 *        <li>{@link SimpleXMLParser#ENCODING encoding}</li>
-		 *        <li>or {@link SimpleXMLParser#STANDALONE standalone}</li>
+		 *        <li>{@link MinML#VERSION version}</li>
+		 *        <li>{@link MinML#ENCODING encoding}</li>
+		 *        <li>or {@link MinML#STANDALONE standalone}</li>
 		 *        </ul>
 		 * @return The positioned "attribute" in this declaration, or null if it was not specified
 		 */
@@ -322,9 +357,9 @@ public class SimpleXMLParser {
 		/**
 		 * @param attribute The "attribute" to get the name position for. Must be
 		 *        <ul>
-		 *        <li>{@link SimpleXMLParser#VERSION version}</li>
-		 *        <li>{@link SimpleXMLParser#ENCODING encoding}</li>
-		 *        <li>or {@link SimpleXMLParser#STANDALONE standalone}</li>
+		 *        <li>{@link MinML#VERSION version}</li>
+		 *        <li>{@link MinML#ENCODING encoding}</li>
+		 *        <li>or {@link MinML#STANDALONE standalone}</li>
 		 *        </ul>
 		 * @return The position of the name of the given "attribute" in this declaration, or null if it was not specified
 		 */
@@ -349,9 +384,9 @@ public class SimpleXMLParser {
 		/**
 		 * @param attribute The "attribute" to get the value content for. Must be
 		 *        <ul>
-		 *        <li>{@link SimpleXMLParser#VERSION version}</li>
-		 *        <li>{@link SimpleXMLParser#ENCODING encoding}</li>
-		 *        <li>or {@link SimpleXMLParser#STANDALONE standalone}</li>
+		 *        <li>{@link MinML#VERSION version}</li>
+		 *        <li>{@link MinML#ENCODING encoding}</li>
+		 *        <li>or {@link MinML#STANDALONE standalone}</li>
 		 *        </ul>
 		 * @return The value content of the given "attribute" in this declaration, or null if it was not specified
 		 */
@@ -379,9 +414,9 @@ public class SimpleXMLParser {
 		/**
 		 * @param attribute The "attribute" to get the end position for. Must be
 		 *        <ul>
-		 *        <li>{@link SimpleXMLParser#VERSION version}</li>
-		 *        <li>{@link SimpleXMLParser#ENCODING encoding}</li>
-		 *        <li>or {@link SimpleXMLParser#STANDALONE standalone}</li>
+		 *        <li>{@link MinML#VERSION version}</li>
+		 *        <li>{@link MinML#ENCODING encoding}</li>
+		 *        <li>or {@link MinML#STANDALONE standalone}</li>
 		 *        </ul>
 		 * @return The position of the end quote of the value of the given "attribute" in this declaration, or null if it was not specified
 		 */
@@ -406,32 +441,32 @@ public class SimpleXMLParser {
 			return theDeclarationContent.getPosition(start + length + 1);
 		}
 
-		/** @return The offset of the name of the {@link SimpleXMLParser#VERSION version} attribute, or -1 if it was not specified */
+		/** @return The offset of the name of the {@link MinML#VERSION version} attribute, or -1 if it was not specified */
 		public int getVersionNameOffset() {
 			return theVersionNameOffset;
 		}
 
-		/** @return The offset of the value of the {@link SimpleXMLParser#VERSION version} attribute, or -1 if it was not specified */
+		/** @return The offset of the value of the {@link MinML#VERSION version} attribute, or -1 if it was not specified */
 		public int getVersionValueOffset() {
 			return theVersionValueOffset;
 		}
 
-		/** @return The offset of the name of the {@link SimpleXMLParser#ENCODING encoding} attribute, or -1 if it was not specified */
+		/** @return The offset of the name of the {@link MinML#ENCODING encoding} attribute, or -1 if it was not specified */
 		public int getEncodingNameOffset() {
 			return theEncodingNameOffset;
 		}
 
-		/** @return The offset of the value of the {@link SimpleXMLParser#ENCODING encoding} attribute, or -1 if it was not specified */
+		/** @return The offset of the value of the {@link MinML#ENCODING encoding} attribute, or -1 if it was not specified */
 		public int getEncodingValueOffset() {
 			return theEncodingValueOffset;
 		}
 
-		/** @return The offset of the name of the {@link SimpleXMLParser#STANDALONE standalone} attribute, or -1 if it was not specified */
+		/** @return The offset of the name of the {@link MinML#STANDALONE standalone} attribute, or -1 if it was not specified */
 		public int getStandaloneNameOffset() {
 			return theStandaloneNameOffset;
 		}
 
-		/** @return The offset of the value of the {@link SimpleXMLParser#STANDALONE standalone} attribute, or -1 if it was not specified */
+		/** @return The offset of the value of the {@link MinML#STANDALONE standalone} attribute, or -1 if it was not specified */
 		public int getStandaloneValueOffset() {
 			return theStandaloneValueOffset;
 		}
@@ -493,7 +528,7 @@ public class SimpleXMLParser {
 
 	/**
 	 * <p>
-	 * An XML processing instruction parsed by a {@link SimpleXMLParser}.
+	 * An XML processing instruction parsed by a {@link MinML}.
 	 * </p>
 	 * <p>
 	 * A processing instruction is of the form <code>&lt;?TARGET VALUE?></code>, where VALUE is optional
@@ -552,7 +587,7 @@ public class SimpleXMLParser {
 		}
 	}
 
-	/** An XML comment parsed by a {@link SimpleXMLParser} */
+	/** An XML comment parsed by a {@link MinML} */
 	public static class XmlComment implements XmlComponent {
 		private final PositionedContent theContent;
 
@@ -582,7 +617,7 @@ public class SimpleXMLParser {
 		}
 	}
 
-	/** Represents an open or close tag of an XML element being parsed by a {@link SimpleXMLParser} */
+	/** Represents an open or close tag of an XML element being parsed by a {@link MinML} */
 	public static class XmlElementTerminal implements XmlComponent, Named {
 		private final String theName;
 		private final boolean isOpen;
@@ -593,9 +628,12 @@ public class SimpleXMLParser {
 
 		/**
 		 * @param elementName The name of the element
+		 * @param open Whether this is an open or close tag
+		 * @param depth The depth of this element below the root (root=0)
 		 * @param nameOffset The offset of the name of the element in the open or close tag
 		 * @param content The content defining the element's open (everything between and including the initial <code>&lt;</code> and the
 		 *        element's name) or close tag (everything between and including <code>&lt;/</code> and <code>></code>
+		 * @param selfClosing
 		 */
 		public XmlElementTerminal(String elementName, boolean open, int depth, int nameOffset, PositionedContent content,
 			boolean selfClosing) {
@@ -617,10 +655,12 @@ public class SimpleXMLParser {
 			return theName;
 		}
 
+		/** @return Whether this is an open or close tag */
 		public boolean isOpen() {
 			return isOpen;
 		}
 
+		/** @return The depth of this element below the root (root=0) */
 		public int getDepth() {
 			return theDepth;
 		}
@@ -647,6 +687,7 @@ public class SimpleXMLParser {
 			return theContent.subSequence(theNameOffset);
 		}
 
+		/** @return If this is a close tag (see {@link #isOpen()}), then whether this represents the self-close of an element ('/>') */
 		public boolean isSelfClosing() {
 			return isSelfClosing;
 		}
@@ -657,9 +698,11 @@ public class SimpleXMLParser {
 		}
 	}
 
+	/** An XML component that has no variability other than its content */
 	public static abstract class ContentOnlyXmlComponent implements XmlComponent, PositionedContent {
 		private final PositionedContent theContent;
 
+		/** @param content The content for this component */
 		protected ContentOnlyXmlComponent(PositionedContent content) {
 			theContent = content;
 		}
@@ -710,20 +753,31 @@ public class SimpleXMLParser {
 		}
 	}
 
+	/** Member components of an XML element */
 	public static abstract class XmlElementContentComponent extends ContentOnlyXmlComponent {
 		private final String theElementName;
 
+		/**
+		 * @param elementName The name of the owner element
+		 * @param content The content of this component
+		 */
 		protected XmlElementContentComponent(String elementName, PositionedContent content) {
 			super(content);
 			theElementName = elementName;
 		}
 
+		/** @return The name of the element owning this component */
 		public String getElementName() {
 			return theElementName;
 		}
 	}
 
+	/** The beginning of an XML element's content ('>') */
 	public static class XmlElementOpen extends XmlElementContentComponent {
+		/**
+		 * @param elementName The name of the element
+		 * @param content The content of the opening characters
+		 */
 		public XmlElementOpen(String elementName, PositionedContent content) {
 			super(elementName, content);
 		}
@@ -734,7 +788,7 @@ public class SimpleXMLParser {
 		}
 	}
 
-	/** An XML attribute parsed by a {@link SimpleXMLParser} */
+	/** An XML attribute parsed by a {@link MinML} */
 	public static class XmlAttribute implements XmlComponent, Named {
 		private final String theName;
 		private final int theValueStartOffset;
@@ -788,7 +842,12 @@ public class SimpleXMLParser {
 		}
 	}
 
+	/** Text content between an XML element's opening and closing tags */
 	public static class XmlElementContent extends XmlElementContentComponent {
+		/**
+		 * @param elementName The name of the XML element owning this content
+		 * @param content The text in the XML content
+		 */
 		public XmlElementContent(String elementName, PositionedContent content) {
 			super(elementName, content);
 		}
@@ -799,11 +858,12 @@ public class SimpleXMLParser {
 		}
 	}
 
-	/** An XML CDATA structure parsed by a {@link SimpleXMLParser} */
+	/** An XML CDATA structure parsed by a {@link MinML} */
 	public static class XmlCdata extends XmlElementContentComponent {
 		/**
-		 * @param content The content defining the CDATA, everything between and including the terminal {@link SimpleXMLParser#CDATA_START
-		 *        &lt;![CDATA[} and {@link SimpleXMLParser#CDATA_END ]]>}
+		 * @param elementName The name of the XML element containing this CDATA content
+		 * @param content The content defining the CDATA, everything between and including the terminal {@link MinML#CDATA_START
+		 *        &lt;![CDATA[} and {@link MinML#CDATA_END ]]>}
 		 */
 		public XmlCdata(String elementName, PositionedContent content) {
 			super(elementName, content);
@@ -820,7 +880,9 @@ public class SimpleXMLParser {
 		}
 	}
 
+	/** Ignorable white space encountered by the parser */
 	public static class XmlIgnorableWhitespace extends ContentOnlyXmlComponent {
+		/** @param content The content of the whitespace */
 		public XmlIgnorableWhitespace(PositionedContent content) {
 			super(content);
 		}
@@ -833,6 +895,7 @@ public class SimpleXMLParser {
 
 	/** A handler to be notified for each item of content in an XML document */
 	public interface ParseHandler {
+		/** @param component The encountered component */
 		default void handleXmlComponent(XmlComponent component) {
 			switch (component.getComponentType()) {
 			case Declaration:
@@ -1261,7 +1324,7 @@ public class SimpleXMLParser {
 	 * @param tabLength The number of spaces to interpret tabs as in the character numbers provided by this parser
 	 * @return This parser
 	 */
-	public SimpleXMLParser setTabLength(int tabLength) {
+	public MinML setTabLength(int tabLength) {
 		if (tabLength < 0)
 			throw new IllegalArgumentException("Tab length must not be less than zero");
 		theTabLength = tabLength;
@@ -1275,7 +1338,7 @@ public class SimpleXMLParser {
 	 * @param sequence The sequence to be represented by the entity
 	 * @return This parser
 	 */
-	public SimpleXMLParser withNamedEntity(String name, String sequence) {
+	public MinML withNamedEntity(String name, String sequence) {
 		theNamedEntities.put(name, sequence);
 		return this;
 	}
@@ -1287,17 +1350,31 @@ public class SimpleXMLParser {
 	 *        whose values are the sequences to be represented by each entity
 	 * @return This parser
 	 */
-	public SimpleXMLParser withNamedEntities(Map<String, String> entities) {
+	public MinML withNamedEntities(Map<String, String> entities) {
 		theNamedEntities.putAll(entities);
 		return this;
 	}
 
+	/**
+	 * @param fileLocation The location of the file. This can be anything, including null, and only matters when errors are thrown. When
+	 *        given, any {@link XmlParseException}s thrown will have a {@link LocatedFilePosition} for their
+	 *        {@link TextParseException#getPosition() position}.
+	 * @param in The input stream to parse XML from
+	 * @return A {@link ComponentParser} for navigating the document
+	 */
 	public ComponentParser parseByComponent(String fileLocation, InputStream in) {
 		if (in == null)
 			throw new NullPointerException("Stream cannot be null");
 		return new ComponentParser(fileLocation, in);
 	}
 
+	/**
+	 * @param fileLocation The location of the file. This can be anything, including null, and only matters when errors are thrown. When
+	 *        given, any {@link XmlParseException}s thrown will have a {@link LocatedFilePosition} for their
+	 *        {@link TextParseException#getPosition() position}.
+	 * @param in The reader stream to parse XML from
+	 * @return A {@link ComponentParser} for navigating the document
+	 */
 	public ComponentParser parseByComponent(String fileLocation, Reader in) {
 		if (in == null)
 			throw new NullPointerException("Reader cannot be null");
@@ -1551,10 +1628,37 @@ public class SimpleXMLParser {
 		};
 	}
 
+	/** A type of location in an XML document */
 	public enum XmlParseState {
-		PreDeclaration, PreRoot, ElementDeclaration, ElementContent, EndOfContent
+		/** Before the XML declaration statement--at the very beginning of the document */
+		PreDeclaration,
+		/** After the XML declaration statement but prior to the beginning of the root element */
+		PreRoot,
+		/**
+		 * Within an element declaration--after its name and before the '>' declaring the beginning of its content or the self-closing '/>'
+		 */
+		ElementDeclaration,
+		/** Within an element's content, outside of an element declaration */
+		ElementContent,
+		/** After the closing of the root element */
+		EndOfContent
 	}
 
+	/**
+	 * <p>
+	 * A view of an XML document that allows navigation (one-way only) of an XML document.
+	 * </p>
+	 * <p>
+	 * Callers can examine each element as it is encountered, or they can skip forward in the document looking for specific content.
+	 * </p>
+	 * 
+	 * @see #startNextElement(String, boolean)
+	 * @see #getAttribute(String, boolean)
+	 * @see #getElementContent(boolean)
+	 * @see #closeCurrentElement()
+	 * @see #parseUntil(ExFunction)
+	 * @see #getNextComponent()
+	 */
 	public class ComponentParser {
 		private final String theFileLocation;
 		private final InputStream theStream;
@@ -1600,34 +1704,50 @@ public class SimpleXMLParser {
 			theAttributes = new LinkedHashSet<>();
 		}
 
+		/** @return The location of the file being parsed */
 		public String getFileLocation() {
 			return theFileLocation;
 		}
 
+		/** @return The current location of this parser within the document */
 		public XmlParseState getState() {
 			return theState;
 		}
 
+		/** @return Whether the XML document has been completely read */
 		public boolean isAtEnd() {
 			return isAtEnd;
 		}
 
+		/** @return The character that was the end of the most-recently parsed XML component */
 		public char currentChar() {
 			return theChar;
 		}
 
+		/** @return The XML element whose content is currently (or has just finished) being parsed */
 		public LocatedXmlElement getCurrentElement() {
 			return theElement;
 		}
 
+		/** @return The number of characters that have been read before the {@link #currentChar() current character} */
 		public int getPosition() {
 			return thePosition; // This method returns the position of the current character
 		}
 
+		/** @return The file position of the {@link #currentChar() current character} */
 		public FilePosition getFilePosition() {
 			return getFilePosition(false);
 		}
 
+		/**
+		 * Handles the remainder of the XML document using the given parse handler
+		 * 
+		 * @param <H> The type of the handler
+		 * @param handler The parse handler
+		 * @return The handler
+		 * @throws IOException If the document data could not be read
+		 * @throws XmlParseException If the document could not be parsed
+		 */
 		public <H extends ParseHandler> H parse(H handler) throws IOException, XmlParseException {
 			if (handler == null)
 				throw new NullPointerException("Handler cannot be null");
@@ -1646,6 +1766,18 @@ public class SimpleXMLParser {
 			return handler;
 		}
 
+		/**
+		 * Skips to the next child of the {@link #getCurrentElement() current element} (or the root element if this parser has not yet
+		 * encountered the root) named <code>elementName</code>, or the next sibling encountered if <code>elementName</code> is null
+		 * 
+		 * @param elementName The name of the element to search for, or null to return the next child of the current element
+		 * @param required Whether to throw a {@link TextParseException} exception if no such element is found before the end of the current
+		 *        element
+		 * @return The beginning of the next such element, or null if no such element was found (and <code>required</code> was false)
+		 * @throws IOException If the document data could not be read
+		 * @throws TextParseException If the document could not be parsed, or if no such element was found and <code>required</code> was
+		 *         true
+		 */
 		public XmlElementTerminal startNextElement(String elementName, boolean required) throws IOException, TextParseException {
 			int currentDepth = theElement == null ? 0 : (theElement.getDepth() + 1);
 			XmlElementTerminal terminal = this.<XmlElementTerminal> parseUntil(component -> {
@@ -1677,6 +1809,20 @@ public class SimpleXMLParser {
 			return terminal;
 		}
 
+		/**
+		 * Returns the attribute in the {@link #getCurrentElement() current element} named <code>attributeName</code> (or the next attribute
+		 * of any name if <code>attributeName</code> is null)
+		 * 
+		 * @param attributeName The name of the attribute to search for, or null to return the next attribute in the current element
+		 * @param required Whether to throw a {@link TextParseException} exception if no such attribute is found before the end of the
+		 *        current element's declaration
+		 * @return The next such attribute, or null if no such attribute was found (and <code>required</code> was false)
+		 * @throws IOException If the document data could not be read
+		 * @throws TextParseException If the document could not be parsed, or if no such attribute was found and <code>required</code> was
+		 *         true
+		 * @throws IllegalStateException If this is called while the parser is not just after the beginning of an XML element (such as just
+		 *         after a successful call to {@link #startNextElement(String, boolean)} or this method)
+		 */
 		public XmlAttribute getAttribute(String attributeName, boolean required)
 			throws IOException, TextParseException, IllegalStateException {
 			if (theState != XmlParseState.ElementDeclaration)
@@ -1702,7 +1848,18 @@ public class SimpleXMLParser {
 			return found instanceof XmlAttribute ? (XmlAttribute) found : null;
 		}
 
-		public XmlElementContent getElementContent(boolean required) throws IOException, TextParseException {
+		/**
+		 * Returns the next text content of the {@link #getCurrentElement() current element}. An element may have multiple text content
+		 * blocks separated by child elements.
+		 * 
+		 * @param required Whether to throw a {@link TextParseException} if the element has no content
+		 * @return The current element's next text content, or null if the element had no more (and <code>required</code> was false)
+		 * @throws IOException If the document data could not be read
+		 * @throws TextParseException If the document could not be parsed, or if no text content was found and <code>required</code> was
+		 *         true
+		 * @throws IllegalStateException If this is called while the parser is not in an element declaration or content
+		 */
+		public XmlElementContent getElementContent(boolean required) throws IOException, TextParseException, IllegalStateException {
 			if (theState != XmlParseState.ElementDeclaration && theState != XmlParseState.ElementContent)
 				throw new IllegalStateException("This method must be called within an element's declaration or content");
 			int currentDepth = theElement == null ? 0 : theElement.getDepth();
@@ -1724,7 +1881,15 @@ public class SimpleXMLParser {
 			return found instanceof XmlElementContent ? (XmlElementContent) found : null;
 		}
 
-		public XmlElementTerminal closeCurrentElement() throws IOException, TextParseException {
+		/**
+		 * Skips to the end of the {@link #getCurrentElement() current element}
+		 * 
+		 * @return The element close content
+		 * @throws IOException If the document data could not be read
+		 * @throws TextParseException If the document could not be parsed
+		 * @throws IllegalStateException If this is called while the parser is not in an element declaration or content
+		 */
+		public XmlElementTerminal closeCurrentElement() throws IOException, TextParseException, IllegalStateException {
 			if (theState != XmlParseState.ElementDeclaration && theState != XmlParseState.ElementContent)
 				throw new IllegalStateException("This method must be called within an element's declaration or content");
 			int currentDepth = theElement == null ? 0 : theElement.getDepth();
@@ -1740,6 +1905,16 @@ public class SimpleXMLParser {
 			});
 		}
 
+		/**
+		 * Parses content in the document until a target component is found
+		 * 
+		 * @param <C> The type of component to search for
+		 * @param until A function that accepts each XML component encountered and returns the component if it matches the search, or null
+		 *        otherwise
+		 * @return The first encountered component matching the search
+		 * @throws IOException If the document data could not be read
+		 * @throws TextParseException If the document could not be parsed, or the search function throws an exception
+		 */
 		public <C extends XmlComponent> C parseUntil(ExFunction<XmlComponent, C, TextParseException> until)
 			throws IOException, TextParseException {
 			while (!isAtEnd()) {
@@ -1751,6 +1926,11 @@ public class SimpleXMLParser {
 			return null;
 		}
 
+		/**
+		 * @return The next encountered XML component
+		 * @throws IOException If the document data could not be read
+		 * @throws XmlParseException If the document could not be parsed
+		 */
 		public XmlComponent getNextComponent() throws IOException, XmlParseException{
 			if (isAtBeginning)
 				nextChar();
@@ -2694,7 +2874,7 @@ public class SimpleXMLParser {
 	 */
 	public static void main(String... args) throws IOException, XmlParseException {
 		try (InputStream in = new BufferedInputStream(new FileInputStream(args[0]))) {
-			new SimpleXMLParser().setTabLength(3).parseXml(null, in, new ParseHandler() {
+			new MinML().setTabLength(3).parseXml(null, in, new ParseHandler() {
 				int indent = 0;
 
 				private void indent() {

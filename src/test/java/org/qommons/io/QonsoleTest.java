@@ -24,7 +24,7 @@ public class QonsoleTest {
 		public void accept(TestHelper helper) {
 			CircularCharBuffer rw = new CircularCharBuffer(-1);
 			int[] testValues = new int[2];
-			try (Reader reader = rw.asDeletingReader();
+			try (Reader reader = rw.asDeletingReader(false); // Keep the Qonsole alive
 				Qonsole qonsole = new Qonsole("Test", reader, ":", () -> false)//
 				.addPlugin("test0", content -> {
 					int line = indexOf(content, '\n');
@@ -67,19 +67,35 @@ public class QonsoleTest {
 					})) {
 				int[] expectedValues = new int[testValues.length];
 
+				// The Qonsole is reading things off of a different thread, so we need to add to the buffer all at once
+				StringBuilder str = new StringBuilder();
 				for (int i = 0; i < 50; i++) {
 					int whichValue = helper.getBoolean() ? 0 : 1;
 					boolean add = helper.getBoolean();
-					int value = helper.getAnyInt();
-					rw.append(//
-						"test" + whichValue + ":" + (add ? "add" : "sub") + "\n");
-					rw.append(String.valueOf(value) + "\n");
+					int value;
+					do {
+						value = helper.getAnyInt();
+					} while (value == 0);
+
+					str.append("test").append(whichValue).append(':').append(add ? "add" : "sub").append('\n');
+					str.append(value).append('\n');
+					int preValue = testValues[whichValue];
+					rw.append(str);
 					expectedValues[whichValue] += (add ? value : -value);
-					try {
-						Thread.sleep(2);
-					} catch (InterruptedException e) {
+					/* Give Qonsole a bit to read, parse, and act
+					 * The GC (I guess) sometimes causes hitches, so most of the time this only takes 1 sleep,
+					 * but other times it takes 30 or more
+					 */
+					int tries;
+					for (tries = 0; tries < 100 && testValues[whichValue] == preValue; tries++) {
+						try {
+							Thread.sleep(2);
+						} catch (InterruptedException e) {
+						}
 					}
+					// System.out.println("Tries=" + tries);
 					Assert.assertArrayEquals(expectedValues, testValues);
+					str.setLength(0);
 				}
 				System.out.print("");
 			} catch (IOException e) {

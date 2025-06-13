@@ -8,10 +8,10 @@ import java.util.*;
 import org.qommons.StringUtils;
 import org.qommons.collect.BetterList;
 import org.qommons.io.BetterFile.FileDataSource;
-import org.qommons.io.SimpleXMLParser.ComponentParser;
-import org.qommons.io.SimpleXMLParser.XmlAttribute;
-import org.qommons.io.SimpleXMLParser.XmlComponent;
-import org.qommons.io.SimpleXMLParser.XmlElementTerminal;
+import org.qommons.io.MinML.ComponentParser;
+import org.qommons.io.MinML.XmlAttribute;
+import org.qommons.io.MinML.XmlComponent;
+import org.qommons.io.MinML.XmlElementTerminal;
 
 /**
  * <p>
@@ -25,13 +25,26 @@ import org.qommons.io.SimpleXMLParser.XmlElementTerminal;
  * </p>
  */
 public class XlsxParser implements TabularFileParser {
+	/** A directive for how to handle spreadsheet files with multiple sheets in them */
 	public enum MultipleSheetHandling {
-		UseFirst, Append, Error;
+		/** Use the first sheet */
+		UseFirst,
+		/** Use the lines from all sheets sequentially */
+		Append,
+		/** Throw an exception */
+		Error;
 	}
 
+	/** Represents the location of a cell in a spreadsheet */
 	public static class SheetPosition {
+		/** A1 cell location */
 		public static final SheetPosition ZERO = new SheetPosition(0, 0);
 
+		/**
+		 * @param row The row index of the cell
+		 * @param column The column index of the cell
+		 * @return The cell position
+		 */
 		public static SheetPosition of(int row, int column) {
 			if (row == 0 && column == 0)
 				return ZERO;
@@ -39,6 +52,11 @@ public class XlsxParser implements TabularFileParser {
 				return new SheetPosition(row, column);
 		}
 
+		/**
+		 * @param positionString The content containing the cell reference
+		 * @return The parsed cell reference
+		 * @throws TextParseException If the cell reference was unrecognized
+		 */
 		public static SheetPosition parse(PositionedContent positionString) throws TextParseException {
 			if (positionString.length() < 2)
 				throw new TextParseException("No position found", positionString.getPosition(positionString.length()));
@@ -80,14 +98,20 @@ public class XlsxParser implements TabularFileParser {
 			theColumn = column;
 		}
 
+		/** @return The row index of the cell */
 		public int getRow() {
 			return theRow;
 		}
 
+		/** @return The column index of the cell */
 		public int getColumn() {
 			return theColumn;
 		}
 
+		/**
+		 * @param offset The relative offset
+		 * @return This sheet position relative to the given offset
+		 */
 		public SheetPosition relativeTo(SheetPosition offset) {
 			if (offset == ZERO)
 				return this;
@@ -108,6 +132,7 @@ public class XlsxParser implements TabularFileParser {
 		}
 	}
 
+	/** A sheet within a spreadsheet file */
 	public static class Sheet implements TabularFileParser {
 		private final XlsxParser theXlsxParser;
 		private final String theSheetName;
@@ -155,6 +180,12 @@ public class XlsxParser implements TabularFileParser {
 			return theEncounteredRowCount;
 		}
 
+		/**
+		 * @param passEmpties Whether to pass {@link Row#isEmpty() empty} rows
+		 * @return The next row (or non-empty row) in the file, or null if there were no more
+		 * @throws IOException If the file could not be read
+		 * @throws TextParseException If the file could not be parsed
+		 */
 		public Row parseNextRow(boolean passEmpties) throws IOException, TextParseException {
 			thePassedBlankLines = 0;
 			Row row = parseNextRow();
@@ -439,6 +470,7 @@ public class XlsxParser implements TabularFileParser {
 		}
 	}
 
+	/** Represents a row in a spreadsheet */
 	public static class Row {
 		private final int theRowIndex;
 		private final List<Cell> theCells;
@@ -448,14 +480,17 @@ public class XlsxParser implements TabularFileParser {
 			theCells = BetterList.of(cells);
 		}
 
+		/** @return The index of this row within its sheet */
 		public int getRowIndex() {
 			return theRowIndex;
 		}
 
+		/** @return The cells in this row */
 		public List<Cell> getCells() {
 			return theCells;
 		}
 
+		/** @return True if this row has no cells with non-empty content */
 		public boolean isEmpty() {
 			for (Cell cell : theCells) {
 				if (!cell.toString().isEmpty())
@@ -464,6 +499,10 @@ public class XlsxParser implements TabularFileParser {
 			return true;
 		}
 
+		/**
+		 * @param columns The array to fill in
+		 * @return The text of this row's columns
+		 */
 		public String[] getColumnText(String[] columns) {
 			if (columns.length != theCells.size())
 				throw new IllegalArgumentException("Wrong number of columns input: " + columns.length + " vs " + theCells.size());
@@ -481,19 +520,32 @@ public class XlsxParser implements TabularFileParser {
 
 	static final Map<String, CellType> CELL_TYPE_BY_SPEC_NAME = new HashMap<>();
 
+	/** Recognized Excel cell types */
 	public static enum CellType {
+		/** A reference to a shared string */
 		SharedString("s"),
+		/** A string contained within the cell */
 		InlineString("inlineStr"),
+		/** A formula */
 		Formula("str"),
+		/** A boolean value */
 		Boolean("b"),
+		/** A date value */
 		Date("d"),
+		/** A number */
 		Number("n"),
+		/** Excel reported an error in the cell */
 		Error("e"),
+		/** An empty cell */
 		Empty(null),
+		/** The cell was missing */
 		Missing(null),
+		/** The cell's type is not specified */
 		Unspecified(null),
+		/** We don't recognize the cell's type */
 		Unrecognized("?");
 
+		/** The Excel name of this type, if applicable */
 		public final String specName;
 
 		private CellType(String specName) {
@@ -502,6 +554,10 @@ public class XlsxParser implements TabularFileParser {
 				CELL_TYPE_BY_SPEC_NAME.put(specName, this);
 		}
 
+		/**
+		 * @param t The Excel name of the cell type
+		 * @return The cell type corresponding to the Excel name
+		 */
 		public static CellType getType(String t) {
 			if (t == null)
 				return Unspecified;
@@ -512,7 +568,9 @@ public class XlsxParser implements TabularFileParser {
 		}
 	}
 
+	/** A cell within a row within a sheet within a spreadsheet file */
 	public static class Cell {
+		/** Missing cell */
 		public static final Cell MISSING = new Cell(null, CellType.Missing, "");
 		private final FilePosition thePosition;
 		private final CellType theCellType;
@@ -524,10 +582,12 @@ public class XlsxParser implements TabularFileParser {
 			theText = value;
 		}
 
+		/** @return The position of the cell within the file */
 		public FilePosition getPosition() {
 			return thePosition;
 		}
 
+		/** @return The cell's type */
 		public CellType getCellType() {
 			return theCellType;
 		}
@@ -542,13 +602,23 @@ public class XlsxParser implements TabularFileParser {
 		}
 	}
 
+	/**
+	 * <p>
+	 * In XLSX files, strings may be stored in a separate archive entry from the sheet so multiple sheets in the file and multiple cells in
+	 * each sheet may re-use the string without reproducing it.
+	 * </p>
+	 * <p>
+	 * This parser provides access to the strings in the shared strings entry. The shared strings entry is read just far enough to discover
+	 * the value for the requested reference. Shared strings are cached so the entry does not need to be read multiple times.
+	 * </p>
+	 */
 	public static class SharedStrings {
 		private InputStream theFileInput;
 		private ComponentParser theParser;
 		private final int theUniqueCount;
 		private final List<String> theParsedStrings;
 
-		private SharedStrings(InputStream fileInput, String path, SimpleXMLParser xmlParser) throws IOException, TextParseException {
+		private SharedStrings(InputStream fileInput, String path, MinML xmlParser) throws IOException, TextParseException {
 			theFileInput = fileInput;
 			theParser = xmlParser.parseByComponent(path, theFileInput);
 			theParsedStrings = new ArrayList<>();
@@ -564,6 +634,12 @@ public class XlsxParser implements TabularFileParser {
 				close(true);
 		}
 
+		/**
+		 * @param source The text reference to a shared string
+		 * @return The referenced shared string
+		 * @throws IOException If the shared string entry could not be read
+		 * @throws TextParseException If the shared string reference or the shared string entry could not be parsed
+		 */
 		public String getString(PositionedContent source) throws IOException, TextParseException {
 			int index;
 			try {
@@ -574,6 +650,13 @@ public class XlsxParser implements TabularFileParser {
 			return getString(index, source);
 		}
 
+		/**
+		 * @param index The index of the shared string to get
+		 * @param source The text reference to the shared string (for error throwing, if needed)
+		 * @return The referenced shared string
+		 * @throws IOException If the shared string entry could not be read
+		 * @throws TextParseException If the shared string entry could not be read, or if no shared string exists for the given index
+		 */
 		public String getString(int index, PositionedContent source) throws IOException, TextParseException{
 			if(index<0 || index>=theUniqueCount)
 				throw new TextParseException("Illegal shared string reference '"+source+"': only "+theUniqueCount+" shared strings", source.getPosition(0));
@@ -618,7 +701,7 @@ public class XlsxParser implements TabularFileParser {
 	}
 
 	private final BetterFile theRoot;
-	private final SimpleXMLParser theXmlParser;
+	private final MinML theXmlParser;
 	private final List<Sheet> theSheets;
 	private final long theOverallFileLength;
 
@@ -629,12 +712,18 @@ public class XlsxParser implements TabularFileParser {
 	private int theOverallEntryNumber;
 	private int theOverallLineNumber;
 
+	/**
+	 * @param root The root entry for the XLSX archive
+	 * @param multiSheet Directive for how to handle multi-sheet spreadsheet files
+	 * @throws IOException If the file could not be opened or read sufficiently to recognize it
+	 * @throws TextParseException If the file could not be parsed sufficiently to recognize it
+	 */
 	public XlsxParser(BetterFile root, MultipleSheetHandling multiSheet) throws IOException, TextParseException {
 		if (root.getSource() != getZipFileRoot()) {
 			root = getZipFileRoot().at(root.getPath());
 		}
 		theRoot = root;
-		theXmlParser = new SimpleXMLParser();
+		theXmlParser = new MinML();
 		theSheets = new ArrayList<>();
 
 		BetterFile workBook = theRoot.at(WORKBOOK_PATH);
@@ -689,18 +778,31 @@ public class XlsxParser implements TabularFileParser {
 		theOverallFileLength = overallFileLength;
 	}
 
+	/**
+	 * @param file The XLSX file
+	 * @param multiSheet Directive for how to handle multi-sheet spreadsheet files
+	 * @throws IOException If the file could not be opened or read sufficiently to recognize it
+	 * @throws TextParseException If the file could not be parsed sufficiently to recognize it
+	 */
 	public XlsxParser(File file, MultipleSheetHandling multiSheet) throws IOException, TextParseException {
 		this(getZipFileRoot().at(file.getAbsolutePath()), multiSheet);
 	}
 
-	public SimpleXMLParser getXmlParser() {
+	/** @return The XML parser for this spreadsheet */
+	public MinML getXmlParser() {
 		return theXmlParser;
 	}
 
-	public List<Sheet> getSheets() throws IOException, TextParseException {
+	/** @return The sheets in this spreadsheet file */
+	public List<Sheet> getSheets() {
 		return Collections.unmodifiableList(theSheets);
 	}
 
+	/**
+	 * @return The shared strings accessor for this spreadsheet file
+	 * @throws IOException If the shared strings archive entry could not be read
+	 * @throws TextParseException If the shared strings archive entry could not be parsed sufficiently to recognize it
+	 */
 	public SharedStrings getSharedStrings() throws IOException, TextParseException {
 		if (theSharedStrings == null) {
 			BetterFile sharedStringsFile = theRoot.at(SHARED_STRINGS_PATH);

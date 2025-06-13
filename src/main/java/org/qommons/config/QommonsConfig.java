@@ -12,7 +12,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.qommons.io.Format;
-import org.qommons.io.SimpleXMLParser;
+import org.qommons.io.MinML;
 import org.qommons.io.TextParseException;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
@@ -712,7 +712,7 @@ public abstract class QommonsConfig implements Cloneable {
 	 */
 	public static Element getRootElement(String fileLocation, InputStream stream) throws IOException {
 		try {
-			return new SimpleXMLParser().parseDocument(fileLocation, stream).getDocumentElement();
+			return new MinML().parseDocument(fileLocation, stream).getDocumentElement();
 		} catch (TextParseException e) {
 			throw new IOException("Could not parse XML", e);
 		}

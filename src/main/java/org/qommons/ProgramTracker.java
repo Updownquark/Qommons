@@ -903,6 +903,13 @@ public class ProgramTracker implements Cloneable {
 		return ret;
 	}
 
+	/**
+	 * Like {@link #start(String)} but with a supplier for the routine's name. This is useful for routines whose name cannot be determined
+	 * at compile time, as when the tracker is inactive, the routine name supplier is not called.
+	 * 
+	 * @param routine A supplier for the name of the routine
+	 * @return The new track node
+	 */
 	public final TrackNode start(Supplier<String> routine) {
 		if (!isOn)
 			return INACTIVE;

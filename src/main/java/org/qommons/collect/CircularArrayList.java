@@ -4,12 +4,8 @@ import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.ListIterator;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.Predicate;
-
-import org.qommons.Ternian;
 
 /**
  * A list/deque that uses an array that is indexed circularly. This allows performance improvements due to not having to move array contents
@@ -443,6 +439,11 @@ public class CircularArrayList<E> implements DequeList<E> {
 	}
 
 	@Override
+	public ListSequence<E> sequence(int start, int end, int position, boolean forward) {
+		return new IndexedSequence<>(this, start, end, position, forward);
+	}
+
+	@Override
 	public <T> T[] toArray(final T[] a) {
 		Object[] array = theArray;
 		int offset = theOffset;
@@ -775,11 +776,6 @@ public class CircularArrayList<E> implements DequeList<E> {
 	}
 
 	@Override
-	public ListIterator<E> iterator(int start, int end, int next, boolean forward) {
-		return new CALIterator(null, start, end, next, forward);
-	}
-
-	@Override
 	public SubList subList(int fromIndex, int toIndex) {
 		return new SubList(null, fromIndex, toIndex);
 	}
@@ -1072,131 +1068,6 @@ public class CircularArrayList<E> implements DequeList<E> {
 		return removed;
 	}
 
-	class CALIterator extends SubView<E> implements ListIterator<E> {
-		private int theNext;
-		private final boolean isForward;
-		private Ternian movedForward;
-
-		CALIterator(SubList parent, int start, int end, int next, boolean forward) {
-			super(CircularArrayList.this, parent, start, end);
-			theNext = next;
-			isForward = forward;
-			movedForward = Ternian.NONE;
-		}
-
-		@Override
-		protected void changed(int added) {
-			super.changed(added);
-			if (added > 0 && theAdvanced > 0)
-				setStart(Math.max(0, getStart() - theAdvanced));
-		}
-
-		private boolean has(boolean next) {
-			check(-1);
-			if (next)
-				return theNext < getEnd();
-			else
-				return theNext > getStart();
-		}
-
-		private E advance(boolean next) {
-			check(-1);
-			E value;
-			if (next) {
-				if (theNext >= getEnd())
-					throw new NoSuchElementException();
-				value = getRoot().get(theNext);
-				theNext++;
-			} else {
-				if (theNext <= getStart())
-					throw new NoSuchElementException();
-				theNext--;
-				value = getRoot().get(theNext);
-			}
-			movedForward = Ternian.of(next);
-			return value;
-		}
-
-		private int index(boolean next) {
-			check(-1);
-			if (next)
-				return theNext - getStart();
-			else
-				return theNext - getStart() - 1;
-		}
-
-		@Override
-		public boolean hasNext() {
-			return has(isForward);
-		}
-
-		@Override
-		public E next() {
-			return advance(isForward);
-		}
-
-		@Override
-		public boolean hasPrevious() {
-			return has(!isForward);
-		}
-
-		@Override
-		public E previous() {
-			return advance(!isForward);
-		}
-
-		@Override
-		public int nextIndex() {
-			return index(isForward);
-		}
-
-		@Override
-		public int previousIndex() {
-			return index(!isForward);
-		}
-
-		@Override
-		public void remove() {
-			check(-1);
-			switch (movedForward) {
-			case FALSE:
-				getRoot().remove(theNext);
-				break;
-			case TRUE:
-				getRoot().remove(theNext - 1);
-				theNext--;
-				break;
-			default:
-				throw new IllegalStateException("Cannot operate on the last element in this state");
-			}
-			changed(-1);
-		}
-
-		@Override
-		public void set(E e) {
-			check(-1);
-			switch (movedForward) {
-			case FALSE:
-				getRoot().set(theNext, e);
-				break;
-			case TRUE:
-				getRoot().set(theNext - 1, e);
-				break;
-			default:
-				throw new IllegalStateException("Cannot operate on the last element in this state");
-			}
-			changed(0);
-		}
-
-		@Override
-		public void add(E e) {
-			check(-1);
-			getRoot().add(theNext, e);
-			theNext++;
-			changed(1);
-		}
-	}
-
 	/**
 	 * The type of list returned from {@link CircularArrayList#subList(int, int)}. This list's {@link #subList(int, int)} also returns a
 	 * list of this type.
@@ -1211,13 +1082,6 @@ public class CircularArrayList<E> implements DequeList<E> {
 			super.changed(added);
 			if (added > 0 && theAdvanced > 0)
 				setStart(Math.max(0, getStart() - theAdvanced));
-		}
-
-		@Override
-		public ListIterator<E> iterator(int start, int end, int next, boolean forward) {
-			if (start < 0 || end > size() || start > end)
-				throw new IndexOutOfBoundsException(start + " to " + end + " of " + size());
-			return new CALIterator(this, getStart() + start, getStart() + end, getStart() + next, forward);
 		}
 
 		@Override

@@ -103,6 +103,7 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		 * @param declarer The toolkit that declared this modifier
 		 * @param specification The specification type of the attribute or element value
 		 * @param defaultValue The default value for the attribute or element value
+		 * @param namePosition The position of the name of the XML element defining this modifier
 		 * @param defaultValueContent The content in the source file containing the default value
 		 * @param description The description for this modification
 		 * @param content The content that specified the modifier
@@ -387,7 +388,7 @@ public class QonfigAddOn extends QonfigElementOrAddOn implements QonfigValueType
 		@Override
 		public Builder withChild(String name, QonfigElementOrAddOn type, Set<QonfigChildDef.Declared> fulfillment,
 			Set<QonfigAddOn> inheritance, Set<QonfigAddOn> requirement, int min, int max, PositionedContent position, String description) {
-			if (!fulfillment.isEmpty()) {
+			if (!fulfillment.isEmpty() && !getName().endsWith(ELEMENT_METADATA_SUFFIX)) { // Add-on metadata can specify roles
 				theSession.at(position).error("Children of add-ons cannot fulfill roles");
 				fulfillment = Collections.emptySet();
 			}

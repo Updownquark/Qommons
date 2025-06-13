@@ -65,6 +65,8 @@ public class CsvParser implements TabularFileParser {
 	/**
 	 * @param reader The reader to parse CSV data from
 	 * @param delimiter The delimiter character for the CSV file
+	 * @param fileLength The number of characters in the file. This is only need for the {@link #getFileLength()} method and may be -1 or
+	 *        anything else if that method will not be used
 	 */
 	public CsvParser(Reader reader, char delimiter, long fileLength) {
 		theReader = reader;
@@ -299,8 +301,8 @@ public class CsvParser implements TabularFileParser {
 					try {
 						if (isAtColumnStart)
 							parseColumn();
-						else
-							readContentChar();
+						else if (readContentChar() < 0)
+							return;
 					} catch (TextParseException e) {
 					}
 				}
@@ -487,8 +489,8 @@ public class CsvParser implements TabularFileParser {
 		int progress = 0;
 		try (CountingInputStream stream = new CountingInputStream(src.read()); //
 			Reader in = new InputStreamReader(stream); //
-			Writer out = new BufferedWriter(new OutputStreamWriter(parsedArgs.get("target", BetterFile.class).write()))) {
-			CsvParser parser = new CsvParser(in, delimiter.charAt(0), src.length());
+			Writer out = new BufferedWriter(new OutputStreamWriter(parsedArgs.get("target", BetterFile.class).write()));
+			CsvParser parser = new CsvParser(in, delimiter.charAt(0), src.length())) {
 			String[] header = parser.parseNextLine();
 			for (String f : filters.keySet()) {
 				boolean found = false;

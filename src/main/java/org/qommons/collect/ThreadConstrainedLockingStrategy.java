@@ -300,8 +300,8 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 	 * @param constraint The thread constraint to get the locking for
 	 * @return The locking strategy for the given thread constraint
 	 */
-	public static CollectionLockingStrategy get(ThreadConstraint constraint) {
-		return get(constraint, null);
+	public static ThreadConstrainedLockingStrategy get(ThreadConstraint constraint) {
+		return (ThreadConstrainedLockingStrategy) get(constraint, null);
 	}
 
 	/**

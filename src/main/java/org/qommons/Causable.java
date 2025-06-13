@@ -507,10 +507,17 @@ public interface Causable extends CausalLock.Cause {
 	 */
 	Effect onFinish(CausableKey key);
 
-	/** @return Whether this causable has finished or is finishing */
+	/**
+	 * @return Whether this causable has finished or is finishing. A finishing cause is one whose {@link #use()} transaction's
+	 *         {@link Transaction#close() close} method has been called.
+	 */
 	boolean isFinished();
 
-	/** @return Whether this causable has completely finished being fired */
+	/**
+	 * @return Whether this causable has completely finished being fired. A terminated cause is one whose {@link #use()} transaction's
+	 *         {@link Transaction#close() close} method has been called and for which all listeners added via {@link #onFinish(CausableKey)}
+	 *         have been called.
+	 */
 	boolean isTerminated();
 
 	/**

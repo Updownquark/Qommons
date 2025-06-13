@@ -413,7 +413,8 @@ public final class QonfigElement extends PartialQonfigElement {
 		}
 
 		/**
-		 * @return Whether this element is ready to have {@link #withChild(List, QonfigElementOrAddOn, Consumer, PositionedContent, String)
+		 * @return Whether this element is ready to have
+		 *         {@link #withChild(List, QonfigElementOrAddOn, org.qommons.config.QonfigPromiseFulfillment.PromisedType, Consumer, PositionedContent, String)
 		 *         children} specified for it
 		 */
 		public boolean isReadyForContent() {
@@ -436,6 +437,7 @@ public final class QonfigElement extends PartialQonfigElement {
 		/**
 		 * @param declaredRoles The role specifications that the child is declared to fulfill
 		 * @param type The declared type of the element
+		 * @param promisedType The promised type of the child, if it is a promise
 		 * @param child Consumer to configure the child element
 		 * @param position The position in the file where the child was defined
 		 * @param description A description for the new child
@@ -451,7 +453,6 @@ public final class QonfigElement extends PartialQonfigElement {
 			ErrorReporting errors = theErrors.at(position);
 			Set<QonfigChildDef> roles = new LinkedHashSet<>(declaredRoles.size() * 3 / 2 + 1);
 			if (!declaredRoles.isEmpty()) {
-				roleLoop: //
 				for (ElementQualifiedParseItem roleDef : declaredRoles) {
 					QonfigChildDef role;
 					if (roleDef.declaredElement != null) {
@@ -461,6 +462,9 @@ public final class QonfigElement extends PartialQonfigElement {
 						} else if (theParent == null) {
 							errors.error("Cannot declare a role on the root element: " + roleDef, null);
 							continue;
+						} else if (theParent.getDocument() instanceof QonfigMetadata
+							&& ((QonfigMetadata) theParent.getDocument()).getElement().isAssignableFrom(roleDef.declaredElement)) {
+							// Metadata elements can be declared as roles of the owner
 						} else if (!theParent.isInstance(roleDef.declaredElement)) {
 							errors.error("Parent does not inherit element " + roleDef.declaredElement
 								+ "--cannot declare a child with role " + roleDef, null);
@@ -489,14 +493,38 @@ public final class QonfigElement extends PartialQonfigElement {
 								.get(roleDef.itemName);
 							if (inhRoles.size() > 1) {
 								errors.error("Multiple roles named " + roleDef.itemName + " found", null);
-								continue roleLoop;
+								continue;
 							} else
 								role = inhRoles.peekFirst();
+						}
+						if (role == null && theParent != null && theParent.getDocument() instanceof QonfigMetadata) {
+							QonfigElementOrAddOn owner = ((QonfigMetadata) theParent.getDocument()).getElement();
+							// Metadata elements can be declared as roles of the owner
+							role = owner.getDeclaredChildren().get(roleDef.itemName);
+							if (role == null) {
+								BetterList<QonfigChildDef> inhRoles = (BetterList<QonfigChildDef>) owner.getChildrenByName()
+									.get(roleDef.itemName);
+								if (inhRoles.size() > 1) {
+									errors.error("Multiple " + owner + " roles named " + roleDef.itemName + " found", null);
+									continue;
+								} else
+									role = inhRoles.peekFirst();
+							}
 						}
 						if (role == null)
 							errors.error("No such role \"" + roleDef.itemName + "\" found", null);
 						else
 							roles.add(role);
+					}
+				}
+				boolean unpacking = true;
+				while (unpacking) { // Unpack fulfilled roles
+					unpacking = false;
+					for (QonfigChildDef role : roles) {
+						if (!role.getFulfillment().isEmpty() && roles.addAll(role.getFulfillment())) {
+							unpacking = true;
+							break;
+						}
 					}
 				}
 				return withChild2(Collections.unmodifiableSet(roles), type, promisedType, child, position, description);
@@ -507,6 +535,7 @@ public final class QonfigElement extends PartialQonfigElement {
 		/**
 		 * @param declaredRoles The role specifications that the child is declared to fulfill
 		 * @param type The declared type of the element
+		 * @param promisedType The promised type of the child, if it is a promise
 		 * @param child Consumer to configure the child element
 		 * @param position The position in the file where the child was defined
 		 * @param description A description for the new child
@@ -561,6 +590,17 @@ public final class QonfigElement extends PartialQonfigElement {
 							matches = role.getOwner().isAssignableFrom(promise.getPromisedType());
 						if (!matches) {
 							for (QonfigAddOn inh : promise.getPromisedInheritance().values()) {
+								matches = role.getOwner().isAssignableFrom(inh);
+								if (matches)
+									break;
+							}
+						}
+					}
+					if (!matches && theElement.getDocument() instanceof QonfigMetadata) {
+						QonfigElementOrAddOn owner = ((QonfigMetadata) theElement.getDocument()).getElement();
+						matches = role.getOwner().isAssignableFrom(owner);
+						if (!matches) {
+							for (QonfigAddOn inh : owner.getInheritance()) {
 								matches = role.getOwner().isAssignableFrom(inh);
 								if (matches)
 									break;

@@ -12,8 +12,8 @@ import org.qommons.Transaction;
 import org.qommons.ex.ExSupplier;
 import org.qommons.io.FilePosition;
 import org.qommons.io.PositionedContent;
-import org.qommons.io.SimpleXMLParser;
-import org.qommons.io.SimpleXMLParser.XmlParseException;
+import org.qommons.io.MinML;
+import org.qommons.io.MinML.XmlParseException;
 import org.qommons.io.TextParseException;
 import org.qommons.io.XmlSerialWriter;
 import org.w3c.dom.*;
@@ -30,7 +30,7 @@ public class StrictXmlReader implements Named, Transaction {
 	 * @throws XmlParseException IF the XML could not be parsed
 	 */
 	public static StrictXmlReader ofRoot(InputStream in) throws IOException, XmlParseException {
-		SimpleXMLParser parser = new SimpleXMLParser();
+		MinML parser = new MinML();
 		return new StrictXmlReader(parser.parseDocument(null, in).getDocumentElement());
 	}
 
@@ -41,7 +41,7 @@ public class StrictXmlReader implements Named, Transaction {
 	 * @throws XmlParseException IF the XML could not be parsed
 	 */
 	public static StrictXmlReader ofRoot(Reader reader) throws IOException, XmlParseException {
-		SimpleXMLParser parser = new SimpleXMLParser();
+		MinML parser = new MinML();
 		return new StrictXmlReader(parser.parseDocument(null, reader).getDocumentElement());
 	}
 
@@ -100,7 +100,7 @@ public class StrictXmlReader implements Named, Transaction {
 
 	/** @return The file position of the element's name in its opening tag */
 	public PositionedContent getNamePosition() {
-		return SimpleXMLParser.getNamePosition(theElement);
+		return MinML.getNamePosition(theElement);
 	}
 
 	/**
@@ -214,7 +214,7 @@ public class StrictXmlReader implements Named, Transaction {
 		Node node = theElement.getAttributeNode(name);
 		if (node == null)
 			return null;
-		return SimpleXMLParser.getNamePosition(node);
+		return MinML.getNamePosition(node);
 	}
 
 	/**
@@ -226,7 +226,7 @@ public class StrictXmlReader implements Named, Transaction {
 		if (node == null)
 			return null;
 		getAttributeIfExists(name); // Mark as used
-		return SimpleXMLParser.getPositionContent(node);
+		return MinML.getPositionContent(node);
 	}
 
 	/**
@@ -409,7 +409,7 @@ public class StrictXmlReader implements Named, Transaction {
 		for (int i = 0; i < theElement.getChildNodes().getLength(); i++) {
 			Node n = theElement.getChildNodes().item(i);
 			if ((n.getNodeType() == Node.TEXT_NODE || n.getNodeType() == Node.CDATA_SECTION_NODE)) {
-				PositionedContent pos = SimpleXMLParser.getPositionContent(n);
+				PositionedContent pos = MinML.getPositionContent(n);
 				if (!isWhiteSpace(n.getNodeValue())) {
 					if (anyNonWS)
 						return pos;
@@ -669,18 +669,18 @@ public class StrictXmlReader implements Named, Transaction {
 			switch (n.getNodeType()) {
 			case Node.ELEMENT_NODE:
 				errs.computeIfAbsent(path + ((Element) n).getTagName(), __ -> new ArrayList<>())
-					.add(SimpleXMLParser.getNamePosition(n).getPosition(0));
+					.add(MinML.getNamePosition(n).getPosition(0));
 				break;
 			case Node.ATTRIBUTE_NODE:
 				errs.computeIfAbsent(path + n.getNodeName(), __ -> new ArrayList<>())
-					.add(SimpleXMLParser.getNamePosition(n).getPosition(0));
+					.add(MinML.getNamePosition(n).getPosition(0));
 				break;
 			case Node.TEXT_NODE:
 				if (!isWhiteSpace(n.getNodeValue()))
-					errs.computeIfAbsent(path + " text", __ -> new ArrayList<>()).add(SimpleXMLParser.getPositionContent(n).getPosition(0));
+					errs.computeIfAbsent(path + " text", __ -> new ArrayList<>()).add(MinML.getPositionContent(n).getPosition(0));
 				break;
 			case Node.CDATA_SECTION_NODE:
-				errs.computeIfAbsent(path + " CDATA", __ -> new ArrayList<>()).add(SimpleXMLParser.getPositionContent(n).getPosition(0));
+				errs.computeIfAbsent(path + " CDATA", __ -> new ArrayList<>()).add(MinML.getPositionContent(n).getPosition(0));
 				break;
 			default:
 				continue;
