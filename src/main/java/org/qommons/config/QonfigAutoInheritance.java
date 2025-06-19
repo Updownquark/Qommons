@@ -292,8 +292,12 @@ public class QonfigAutoInheritance {
 			QonfigParseSession targetSession = theSession.at(position);
 			if (role != null && role.getMax() == 0)
 				targetSession.error("As no children are allowed in role " + role + ", this role cannot be targeted for auto-inheritance");
-			if (target != null && role != null && role.getType() != null && !role.getType().isAssignableFrom(target))
-				targetSession.error("Target " + target + " cannot fulfill role " + role + ", which requires " + role.getType());
+			if (target != null && role != null && role.getType() != null) {
+				if (role.getType().isAssignableFrom(target)) { // Fine
+				} else if (role.getType() instanceof QonfigAddOn && theInheritance.contains((QonfigAddOn) role.getType())) {// Also fine
+				} else
+					targetSession.error("Target " + target + " cannot fulfill role " + role + ", which requires " + role.getType());
+			}
 			for (QonfigAddOn inheritance : theInheritance.values())
 				checkInheritance(ait, inheritance, targetSession);
 			theTargets.add(ait);

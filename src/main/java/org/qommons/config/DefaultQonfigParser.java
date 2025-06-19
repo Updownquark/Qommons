@@ -1349,7 +1349,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				try {
 					attr.check();
 				} catch (TextParseException e) {
-					attrSession.warn(e.getMessage());
+					attrSession.error(e.getMessage());
 				}
 			}
 		}
@@ -1400,7 +1400,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			try {
 				text.check();
 			} catch (TextParseException e) {
-				textSession.warn(e.getMessage());
+				textSession.error(e.getMessage());
 			}
 		}
 
@@ -1484,7 +1484,7 @@ public class DefaultQonfigParser implements QonfigParser {
 				try {
 					attr.check();
 				} catch (TextParseException e) {
-					attrSession.warn(e.getMessage(), e);
+					attrSession.error(e.getMessage(), e);
 				}
 			}
 			parseText(element, builder, true);

@@ -775,15 +775,18 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 	 * @param <V> The type of values in the map
 	 */
 	static class Default<K, V> implements MultiInheritanceMap2<K, V> {
+		private static final Default<?, ?>.NodeImpl[] EMPTY_NODES = new Default.NodeImpl[0];
+
 		private final Inheritance<K> theInheritance;
-		private final List<NodeImpl> theRoots;
+		NodeImpl[] theRoots;
+		int theRootCount;
 		private final Map<K, NodeImpl> theNodesByKey;
 		private final Map<K, NodeImpl> theValuedEntries;
 		private long theStamp;
 
 		Default(Inheritance<K> inheritance) {
 			theInheritance = inheritance;
-			theRoots = new ArrayList<>();
+			theRoots = (Default<K, V>.NodeImpl[]) EMPTY_NODES;
 			theNodesByKey = new HashMap<>();
 			theValuedEntries = new LinkedHashMap<>();
 		}
@@ -810,7 +813,7 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 
 		@Override
 		public Collection<Node<K, V>> getRoots() {
-			return Collections.unmodifiableCollection(theRoots);
+			return new NodeList<>(theRoots, theRootCount);
 		}
 
 		@Override
@@ -830,30 +833,34 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 				return exact;
 			switch (match) {
 			case SUB_TYPE:
-				return findDirectDescendant(theRoots, key, valuedOnly, theInheritance);
+				return findDirectDescendant(theRoots, theRootCount, key, valuedOnly, theInheritance);
 			case SUPER_TYPE:
-				return findDirectAncestor(theRoots, key, valuedOnly, theInheritance);
+				return findDirectAncestor(theRoots, theRootCount, key, valuedOnly, theInheritance);
 			default:
 				return null;
 			}
 		}
 
-		private NodeImpl findDirectDescendant(Collection<NodeImpl> nodes, K key, boolean valuedOnly, Inheritance<? super K> inh) {
-			for (NodeImpl node : nodes) {
+		private static <K, V> Default<K, V>.NodeImpl findDirectDescendant(Default<K, V>.NodeImpl[] nodes, int nodeCount, K key,
+			boolean valuedOnly, Inheritance<? super K> inh) {
+			for (int i = 0; i < nodeCount; i++) {
+				Default<K, V>.NodeImpl node = nodes[i];
 				if (inh.isExtension(key, node.theKey)) {
 					if (!valuedOnly || node.theValue != null)
 						return node;
 					else
-						findDirectDescendant(node.theChildren, key, valuedOnly, inh);
+						findDirectDescendant(node.theChildren, node.theChildCount, key, valuedOnly, inh);
 				}
 			}
 			return null;
 		}
 
-		private NodeImpl findDirectAncestor(Collection<NodeImpl> nodes, K key, boolean valuedOnly, Inheritance<? super K> inh) {
-			for (NodeImpl node : nodes) {
+		private static <K, V> Default<K, V>.NodeImpl findDirectAncestor(Default<K, V>.NodeImpl[] nodes, int nodeCount, K key,
+			boolean valuedOnly, Inheritance<? super K> inh) {
+			for (int i = 0; i < nodeCount; i++) {
+				Default<K, V>.NodeImpl node = nodes[i];
 				if (inh.isExtension(node.theKey, key)) {
-					NodeImpl found = findDirectAncestor(node.theChildren, key, valuedOnly, inh);
+					Default<K, V>.NodeImpl found = findDirectAncestor(node.theChildren, node.theChildCount, key, valuedOnly, inh);
 					if (found != null)
 						return found;
 					else if (!valuedOnly || node.theValue != null)
@@ -861,6 +868,20 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 				}
 			}
 			return null;
+		}
+
+		static void removeNode(Default<?, ?>.NodeImpl[] nodes, int nodeCount, int index) {
+			System.arraycopy(nodes, index + 1, nodes, index, nodeCount - index - 1);
+		}
+
+		static boolean removeNode(Default<?, ?>.NodeImpl[] nodes, int nodeCount, Default<?, ?>.NodeImpl node) {
+			for (int i = 0; i < nodeCount; i++) {
+				if (nodes[i] == node) {
+					removeNode(nodes, nodeCount, i);
+					return true;
+				}
+			}
+			return false;
 		}
 
 		@Override
@@ -879,20 +900,26 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 			node.setValue(newValue);
 			theNodesByKey.put(key, node);
 			boolean isRoot = true;
-			Iterator<NodeImpl> roots = theRoots.iterator();
-			while (roots.hasNext()) {
-				NodeImpl root = roots.next();
+			for (int r = 0; r < theRootCount; r++) {
+				NodeImpl root = theRoots[r];
 				if (theInheritance.isExtension(root.getKey(), key)) {
 					isRoot = false;
 					root.addDescendant(node);
 				} else if (theInheritance.isExtension(key, root.getKey())) {
-					roots.remove();
-					node.theChildren.add(root);
+					removeNode(theRoots, theRootCount, r);
+					theRootCount--;
+					node.addChild(root);
 					root.theParents.add(node);
 				}
 			}
-			if (isRoot)
-				theRoots.add(node);
+			if (isRoot) {
+				if (theRoots.length == theRootCount) {
+					Default<K, V>.NodeImpl[] newRoots = new Default.NodeImpl[theRootCount * 2 + 5];
+					System.arraycopy(theRoots, 0, newRoots, 0, theRootCount);
+					theRoots = newRoots;
+				}
+				theRoots[theRootCount++] = node;
+			}
 			return newValue;
 		}
 
@@ -915,31 +942,41 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 			private final List<NodeImpl> theParents;
 			final K theKey;
 			V theValue;
-			final List<NodeImpl> theChildren;
+			NodeImpl[] theChildren;
+			int theChildCount;
 
 			NodeImpl(K key) {
 				theParents = new ArrayList<>();
 				theKey = key;
-				theChildren = new ArrayList<>();
+				theChildren = (Default<K, V>.NodeImpl[]) EMPTY_NODES;
 				theNodesByKey.put(key, this);
 			}
 
 			private void addDescendant(NodeImpl node) {
 				boolean isDirectChild = true;
-				Iterator<NodeImpl> children = theChildren.iterator();
-				while (children.hasNext()) {
-					NodeImpl child = children.next();
+				for (int c = 0; c < theChildCount; c++) {
+					NodeImpl child = theChildren[c];
 					if (theInheritance.isExtension(child.getKey(), node.getKey())) {
 						isDirectChild = false;
 						child.addDescendant(node);
 					} else if (theInheritance.isExtension(node.getKey(), child.getKey())) {
-						children.remove();
-						node.theChildren.add(child);
+						removeNode(theChildren, theChildCount, c);
+						theChildCount--;
+						node.addChild(child);
 						child.theParents.add(node);
 					}
 				}
 				if (isDirectChild)
-					theChildren.add(node);
+					addChild(node);
+			}
+
+			void addChild(NodeImpl node) {
+				if (theChildren.length == theChildCount) {
+					Default<K, V>.NodeImpl[] newRoots = new Default.NodeImpl[theChildCount * 2 + 5];
+					System.arraycopy(theChildren, 0, newRoots, 0, theChildCount);
+					theChildren = newRoots;
+				}
+				theChildren[theChildCount++] = node;
 			}
 
 			@Override
@@ -949,7 +986,7 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 
 			@Override
 			public Iterable<Node<K, V>> getChildren() {
-				return IterableUtils.unmodifiable(theChildren);
+				return new NodeList<>(theChildren, theChildCount);
 			}
 
 			@Override
@@ -981,17 +1018,20 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 			void removeValue(boolean fromValuedEntries) {
 				if (fromValuedEntries)
 					theValuedEntries.remove(theKey);
-				if (theChildren.isEmpty())
+				if (theChildCount == 0)
 					remove();
 			}
 
 			private void remove() {
 				theNodesByKey.remove(theKey);
-				if (theParents.isEmpty())
-					theRoots.remove(this);
-				else {
-					for (NodeImpl parent : theParents)
-						parent.theChildren.remove(this);
+				if (theParents.isEmpty()) {
+					if (removeNode(theRoots, theRootCount, this))
+						theRootCount--;
+				} else {
+					for (NodeImpl parent : theParents) {
+						if (removeNode(parent.theChildren, parent.theChildCount, this))
+							parent.theChildCount--;
+					}
 				}
 			}
 
@@ -1001,6 +1041,7 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 					remove();
 				else
 					removeValue(true);
+				theStamp++;
 				return this;
 			}
 
@@ -1069,6 +1110,26 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 			@Override
 			public int size() {
 				return theValuedEntries.size();
+			}
+		}
+
+		static class NodeList<K, V> extends AbstractList<Node<K, V>> {
+			private final Node<K, V>[] theNodes;
+			private final int theNodeCount;
+
+			NodeList(Node<K, V>[] nodes, int nodeCount) {
+				theNodes = nodes;
+				theNodeCount = nodeCount;
+			}
+
+			@Override
+			public Node<K, V> get(int index) {
+				return theNodes[index];
+			}
+
+			@Override
+			public int size() {
+				return theNodeCount;
 			}
 		}
 	}

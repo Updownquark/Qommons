@@ -1474,6 +1474,24 @@ public class Colors {
 	}
 
 	/**
+	 * Makes a color more or less opaque/transparent
+	 * 
+	 * @param color The color to modify
+	 * @param opacity The opacity modifier--typically a float between 0 and 1. Values greater than 1 are accepted.
+	 * @return The modified color
+	 */
+	public static Color transluce(Color color, float opacity) {
+		int newAlpha = Math.round(color.getAlpha() * opacity);
+		if (newAlpha == color.getAlpha())
+			return color;
+		else if (newAlpha <= 0)
+			return transparent;
+		else if (newAlpha > 255)
+			newAlpha = 255;
+		return new Color(color.getRed(), color.getGreen(), color.getBlue(), newAlpha);
+	}
+
+	/**
 	 * @param a The first color to merge
 	 * @param b The second color to merge
 	 * @param amount The amount to favor <code>b</code> over <code>a</b>.  A value of zero here (or less) would cause this method to
