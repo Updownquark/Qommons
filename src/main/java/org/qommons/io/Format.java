@@ -1415,9 +1415,9 @@ public interface Format<T> {
 				if (sign == 0)
 					exp = 0;
 				else if (sign > 0)
-					exp = (int) Math.log10(value * theExpMult) - 1;
+					exp = (int) Math.log10(value * theExpMult);
 				else
-					exp = (int) Math.log10(-value * theExpMult) - 1;
+					exp = (int) Math.log10(-value * theExpMult);
 
 				if (theZeroExp > 0 && -exp >= theZeroExp) {
 					value = 0.0;
@@ -1447,7 +1447,8 @@ public interface Format<T> {
 					digits = theMinSignificantDigits - 1;
 				} else
 					digits = theMinSignificantDigits - exp - 1;
-				DecimalFormat format = getFormat(Math.max(0, digits), theMaxSignificantDigits - theMinSignificantDigits);
+				DecimalFormat format = getFormat(Math.max(0, digits),
+					Math.max(0, theMaxSignificantDigits - theMinSignificantDigits - exp - 1));
 				text.append(format.format(value));
 				if (expNotation)
 					text.append('E').append(exp);

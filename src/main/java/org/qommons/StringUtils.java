@@ -181,6 +181,15 @@ public class StringUtils {
 	/**
 	 * @param seq1 The first character sequence to compare
 	 * @param seq2 The second sequence to compare
+	 * @return Whether the 2 sequences are equivalent
+	 */
+	public static boolean equals(CharSequence seq1, CharSequence seq2) {
+		return subSequenceMatches(seq1, 0, seq2, 0, -1, false) == seq1.length();
+	}
+
+	/**
+	 * @param seq1 The first character sequence to compare
+	 * @param seq2 The second sequence to compare
 	 * @return Whether the 2 sequences are equivalent, regardless of case
 	 */
 	public static boolean equalsIgnoreCase(CharSequence seq1, CharSequence seq2) {
@@ -267,6 +276,38 @@ public class StringUtils {
 	public static int lastIndexOf(CharSequence str, char ch, int startAt) {
 		for (int i = Math.min(str.length() - 1, startAt); i >= 0; i--) {
 			if (str.charAt(i) == ch)
+				return i;
+		}
+		return -1;
+	}
+
+	/**
+	 * @param toSearch The sequence to search in
+	 * @param search The sequence to search for
+	 * @return The index in the sequence being searched that is the start of the first instance of the searched sequence
+	 */
+	public static int indexOf(CharSequence toSearch, CharSequence search) {
+		return indexOf(toSearch, search, 0);
+	}
+
+	/**
+	 * @param toSearch The sequence to search in
+	 * @param search The sequence to search for
+	 * @param startAt The starting index in the sequence being searched to search from
+	 * @return The index in the sequence being searched that is the start of the first instance of the searched sequence past
+	 *         <code>startAt</code>
+	 */
+	public static int indexOf(CharSequence toSearch, CharSequence search, int startAt) {
+		int end = toSearch.length() - search.length();
+		if (startAt > end)
+			return -1;
+		for (int i = startAt; i < end; i++) {
+			int c;
+			for (c = 0; c < search.length(); c++) {
+				if (toSearch.charAt(i + c) != search.charAt(c))
+					break;
+			}
+			if (c == search.length())
 				return i;
 		}
 		return -1;
@@ -832,6 +873,18 @@ public class StringUtils {
 				return false;
 		}
 		return true;
+	}
+
+	/**
+	 * @param str The character sequence to search
+	 * @param ch The character to look for
+	 * @return All content in the sequence after the last instance of the given character, or null if the character was not found
+	 */
+	public static CharSequence getContentAfter(CharSequence str, char ch) {
+		int idx = lastIndexOf(str, ch);
+		if (idx < 0)
+			return null;
+		return str.subSequence(ch + 1, str.length());
 	}
 
 	/**

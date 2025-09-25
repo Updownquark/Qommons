@@ -10,12 +10,12 @@ import org.qommons.Transaction;
 
 /**
  * <p>
- * A {@link CollectionLockingStrategy} that uses no actual locking, but provides thread safety by restricting modification to a single
- * thread.
+ * A {@link CollectionLockingStrategy} that provides thread safety by restricting write lock acquisition to a single thread, called the
+ * "event thread".
  * </p>
  * <p>
  * This class supports obtaining a read lock from any thread, but ANY attempt to obtain a write lock on a thread other than the event thread
- * of the configured {@link ThreadConstraint} (even from {@link #tryLock(boolean, Object)}) will result in an {@link IllegalStateException}.
+ * (even from {@link #tryLock(boolean, Object)}) will result in an {@link IllegalStateException}.
  * </p>
  * <p>
  * Beyond this constraint, this lock behaves as expected:
@@ -26,12 +26,33 @@ import org.qommons.Transaction;
  * This is not checked for performance reasons, but failure to do this could result in the lock becoming unusable and blocking forever.</li>
  * </ul>
  * </p>
+ * <p>
+ * Unlike most other lock implementations, this lock supports the safe, reliable upgrade of a read lock to a write lock (like all write lock
+ * acquisitions, only on the event thread).
+ * </p>
  */
 public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
+	/**
+	 * If this is set (due to the presence of the -Dqommons.tcls.track.unclosed.writes=true VM argument), this class will track write lock
+	 * transactions (via the {@link Object#finalize()} mechanism) and print a message when a write lock transaction is garbage-collected
+	 * without being closed.
+	 * 
+	 * This behavior is expensive (the call site that obtained the lock is tracked), so it should be turned off in production.
+	 */
+	private static final boolean TRACK_UNCLOSED_WRITES = "true".equalsIgnoreCase(System.getProperty("qommons.tcls.track.unclosed.writes"));
+
+	/**
+	 * If this is set (due to the presence of the -Dqommons.tcls.track.unclosed.reads=true VM argument), this class will track read lock
+	 * transactions (via the {@link Object#finalize()} mechanism) and print a message when a read lock transaction obtained off of the event
+	 * thread is garbage-collected without being closed.
+	 * 
+	 * This behavior is expensive (the call site that obtained the lock is tracked), so it should be turned off in production.
+	 */
+	private static final boolean TRACK_UNCLOSED_READS = "true".equalsIgnoreCase(System.getProperty("qommons.tcls.track.unclosed.reads"));
+
 	private final ThreadConstraint theThreadConstraint;
-	// These are package-private for lock release performance
+	// These 2 fields are package-private for lock release performance
 	final AtomicInteger theReadLock;
-	int theSafeReadLock;
 	volatile int theWriteLock;
 
 	/** @param threading The ThreadConstraint defining on which thread exclusive (write) locks may be obtained */
@@ -40,14 +61,16 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 	}
 
 	/**
-	 * @param threading The ThreadConstraint defining on which thread exclusive (write) locks may be obtained
+	 * @param threading The ThreadConstraint defining on which thread exclusive (write) locks may be obtained. Only
+	 *        {@link ThreadConstraint#isDedicated() dedicated} threading--that is, threading where all tasks happen on a single, dedicated
+	 *        thread--are supported.
 	 * @param onInitialWriteLock An optional task that will run each time an exclusive lock is initially obtained--i.e. each time the lock
 	 *        changes from being NOT exclusively held to being exclusively held
 	 */
 	private ThreadConstrainedLockingStrategy(ThreadConstraint threading, Runnable onInitialWriteLock) {
-		if (threading == ThreadConstraint.ANY)
-			throw new IllegalArgumentException(
-				ThreadConstrainedLockingStrategy.class.getSimpleName() + " cannot be used with ThreadConstraint.ANY");
+		if (!threading.isDedicated())
+			throw new IllegalArgumentException(ThreadConstrainedLockingStrategy.class.getSimpleName()
+				+ " can only be used for dedicated thread constraints, not " + threading);
 		theThreadConstraint = threading;
 		theReadLock = new AtomicInteger();
 	}
@@ -64,55 +87,56 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 
 	@Override
 	public Transaction lock(boolean write, Object cause) {
-		boolean onPublicThread = theThreadConstraint.isEventThread();
-		if (write) {
-			if (!onPublicThread)
-				throw new IllegalStateException(ThreadConstraint.MOD_ON_WRONG_THREAD);
-			else
-				return getWriteLock(false, cause);
-		} else if (onPublicThread) {
-			theSafeReadLock++;
-			return new IntReadLockRelease();
-		} else {
-			theReadLock.getAndIncrement();
-			while (theWriteLock > 0) {
-				// Release our non-exclusive lock and wait for the exclusive lock(s) to be released
-				theReadLock.decrementAndGet();
-				do {
-					try {
-						Thread.sleep(5);
-					} catch (InterruptedException e) {
-					}
-				} while (theWriteLock > 0);
-				// The exclusive lock is released.
-				// Make another attempt to obtain a non-exclusive lock and see if we got it before another exclusive lock was obtained
-				theReadLock.getAndIncrement();
-			}
-			// Success
-			return new ExtReadLockRelease();
-		}
+		return lock(write, false, cause);
 	}
 
 	@Override
 	public Transaction tryLock(boolean write, Object cause) {
-		boolean onPublicThread = theThreadConstraint.isEventThread();
-		if (write) {
-			if (onPublicThread)
-				return getWriteLock(true, cause);
-			else
-				throw new IllegalStateException(ThreadConstraint.MOD_ON_WRONG_THREAD);
-		} else if (onPublicThread) {
-			theSafeReadLock++;
-			return new IntReadLockRelease();
-		} else {// Read lock off of the public thread
-			if (theWriteLock > 0)
+		return lock(write, true, cause);
+	}
+
+	private Transaction lock(boolean write, boolean tryOnly, Object cause) {
+		if (theThreadConstraint.isEventThread()) {
+			if (write)
+				return getWriteLock(tryOnly, cause);
+			else {
+				/* Read locks on the event thread have no effect.
+				 * This lock "supports" upgrading from a read to a write lock,
+				 * and write locks can only be obtained on the dedicated event thread,
+				 * so there's no point even keeping track of them. */
+				return Transaction.NONE;
+			}
+		} else if (write) {
+			throw new IllegalStateException(ThreadConstraint.MOD_ON_WRONG_THREAD);
+		} else {
+			if (tryOnly && theWriteLock > 0)
 				return null;
 			theReadLock.getAndIncrement();
-			if (theWriteLock > 0) {
-				theReadLock.decrementAndGet();
-				return null;
+			if (tryOnly) { // Fail if write lock is held
+				if (theWriteLock > 0) {
+					theReadLock.decrementAndGet();
+					return null;
+				}
+			} else { // May need to wait while the write lock is held
+				while (theWriteLock > 0) {
+					// Release our non-exclusive lock and wait for the exclusive lock(s) to be released
+					theReadLock.decrementAndGet();
+					do {
+						try {
+							Thread.sleep(5);
+						} catch (InterruptedException e) {
+						}
+					} while (theWriteLock > 0);
+					// The exclusive lock is released.
+					// Make another attempt to obtain a non-exclusive lock and see if we got it before another exclusive lock was obtained
+					theReadLock.getAndIncrement();
+				}
 			}
-			return new ExtReadLockRelease();
+			// Success
+			if (TRACK_UNCLOSED_READS)
+				return new TrackingReadLockRelease();
+			else
+				return new ReadLockRelease();
 		}
 	}
 
@@ -123,21 +147,23 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 	 * @return The transaction to release the lock
 	 */
 	private Transaction getWriteLock(boolean tryOnly, Object cause) {
-		/* Almost all locks share the constraint that it is impossible to safely upgrade from a read (non-exclusive) lock
+		/* Almost all locks share the constraint that it is impossible to safely and reliably upgrade from a read (non-exclusive) lock
 		 * to a write (exclusive) lock.
-		 * But in this lock we can do this safely because unlike those other locks, non-exclusive locks obtained on the event thread
+		 * But this class can because unlike most other locks, non-exclusive locks obtained from this class on the event thread
 		 * are tracked differently from those obtained from other threads.
 		 * So we can wait for all non-exclusive locks from other threads to be released without needing to concern ourselves
 		 * with non-exclusive locks obtained on the event thread, which is the current thread.
-		 * if (theSafeReadLock > 0)
+		 * if (theSafeReadLock > 0) // This class used to keep track of event thread read locks
 		 * throw new IllegalStateException("Attempting to upgrade from a read lock to a write lock");
 		 */
 
 		theWriteLock++;
 		boolean initial = theWriteLock == 1;
 		if (initial && theReadLock.get() != 0) {
-			if (tryOnly)
+			if (tryOnly) {
+				theWriteLock = 0;
 				return null; // Can't obtain an exclusive lock immediately as requested
+			}
 			/* I had thought that here I could grab the write lock and merely wait for all the external read locks to release,
 			 * without releasing the lock.
 			 * This would give write locks high priority, and only wait for threads that already held read locks to release them.
@@ -148,7 +174,7 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 			 * So actually, I do have to release the write lock here while waiting for read locks to release,
 			 * as this is the best way to allow reentrant read locks to do their work and then be released.
 			 */
-			// Wait for all external read locks to be released
+			// Wait for all non-event thread read locks to be released
 			while (theReadLock.get() != 0) {
 				theWriteLock = 0;
 				try {
@@ -158,7 +184,11 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 				theWriteLock = 1;
 			}
 		}
-		return new WriteLockRelease(super.lock(true, cause));
+		Transaction superLock = super.lock(true, cause);
+		if (TRACK_UNCLOSED_WRITES)
+			return new TrackingWriteLockRelease(superLock);
+		else
+			return new WriteLockRelease(superLock);
 	}
 
 	@Override
@@ -211,8 +241,12 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 		}
 	}
 
-	class ExtReadLockRelease implements Transaction {
+	class ReadLockRelease implements Transaction {
 		private boolean isClosed;
+
+		boolean isClosed() {
+			return isClosed;
+		}
 
 		@Override
 		public void close() {
@@ -224,39 +258,43 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 
 		@Override
 		public String toString() {
-			return "TCLS external read release";
+			return "TCLS read release";
 		}
 	}
 
-	class IntReadLockRelease implements Transaction {
-		private boolean isClosed;
+	class TrackingReadLockRelease extends ReadLockRelease {
+		private final Exception theCallSite;
 
-		@Override
-		public void close() {
-			if (isClosed)
-				return;
-			isClosed = true;
-			theSafeReadLock--;
+		TrackingReadLockRelease() {
+			theCallSite = new Exception();
+			theCallSite.fillInStackTrace();
 		}
 
 		@Override
-		public String toString() {
-			return "TCLS internal read release";
+		protected void finalize() throws Throwable {
+			if (!isClosed()) {
+				System.out.println("Failed to close " + this);
+				theCallSite.printStackTrace();
+			}
+			super.finalize();
 		}
 	}
 
 	class WriteLockRelease implements Transaction {
 		private final Transaction theSuperTransaction;
 		// This is for debugging
-		// private final Exception theCallSite;
+		// private final int myWriteLock;
 
 		WriteLockRelease(Transaction superTransaction) {
 			theSuperTransaction = superTransaction;
-			// theCallSite = new Exception();
-			// theCallSite.fillInStackTrace();
+			// myWriteLock = theWriteLock;
 		}
 
 		private boolean isClosed;
+
+		boolean isClosed() {
+			return isClosed;
+		}
 
 		@Override
 		public void close() {
@@ -264,16 +302,8 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 				return;
 			isClosed = true;
 			theWriteLock--;
+			// System.out.println("Write unlock " + myWriteLock + "->" + theWriteLock);
 			theSuperTransaction.close();
-		}
-
-		@Override
-		protected void finalize() throws Throwable {
-			if (!isClosed) {
-				System.out.println("Failed to close " + this);
-				// theCallSite.printStackTrace();
-			}
-			super.finalize();
 		}
 
 		@Override
@@ -291,6 +321,25 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 		@Override
 		public String toString() {
 			return getThreadConstraint() + " TCLS write release";
+		}
+	}
+
+	class TrackingWriteLockRelease extends WriteLockRelease {
+		private final Exception theCallSite;
+
+		TrackingWriteLockRelease(Transaction superTransaction) {
+			super(superTransaction);
+			theCallSite = new Exception();
+			theCallSite.fillInStackTrace();
+		}
+
+		@Override
+		protected void finalize() throws Throwable {
+			if (!isClosed()) {
+				System.out.println("Failed to close " + this);
+				theCallSite.printStackTrace();
+			}
+			super.finalize();
 		}
 	}
 

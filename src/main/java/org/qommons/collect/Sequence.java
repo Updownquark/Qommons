@@ -47,6 +47,15 @@ public interface Sequence<E> extends Supplier<E> {
 	boolean advance(boolean forward);
 
 	/**
+	 * Shorthand for {@link #advance(boolean) advance(true)}
+	 * 
+	 * @return Whether there was a next element and the sequence is now positioned on it
+	 */
+	default boolean next() {
+		return advance(true);
+	}
+
+	/**
 	 * Queries the existence of an adjacent element in the sequence <b>WITHOUT MOVING THE SEQUENCE</b>. Calls to {@link #get()} before and
 	 * after this call would return the same value (or throw the same exception).
 	 * 

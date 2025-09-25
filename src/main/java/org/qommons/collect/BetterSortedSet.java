@@ -1,10 +1,6 @@
 package org.qommons.collect;
 
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.NavigableSet;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -304,6 +300,33 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	}
 
 	/**
+	 * @param <E> The type for the list
+	 * @param compare the sorting for the list
+	 * @param values The values for the list
+	 * @return An immutable sorted list with the given values
+	 */
+	public static <E> BetterSortedSet<E> of(Comparator<? super E> compare, Collection<? extends E> values) {
+		switch (values.size()) {
+		case 0:
+			return empty(compare);
+		case 1:
+			return single(values.iterator().next(), compare);
+		default:
+			return new ConstantSortedSet<>(compare, values);
+		}
+	}
+
+	/**
+	 * @param <E> The type for the list
+	 * @param compare the sorting for the list
+	 * @param values The values for the list
+	 * @return An immutable sorted list with the given values
+	 */
+	public static <E> BetterSortedSet<E> of(Comparator<? super E> compare, E... values) {
+		return of(compare, Arrays.asList(values));
+	}
+
+	/**
 	 * Implements {@link BetterSortedSet#subSet(Comparable, Comparable)}
 	 *
 	 * @param <E> The type of elements in the set
@@ -417,6 +440,26 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		@Override
 		public String toString() {
 			return BetterSet.toString(this);
+		}
+	}
+
+	/**
+	 * An immutable sorted set
+	 * 
+	 * @param <E> The type of the set
+	 */
+	public static class ConstantSortedSet<E> extends BetterSortedList.ConstantSortedList<E> implements BetterSortedSet<E> {
+		/**
+		 * @param sorting The sorting for the set
+		 * @param values The values for the set
+		 */
+		public ConstantSortedSet(Comparator<? super E> sorting, Collection<? extends E> values) {
+			super(sorting, values, true);
+		}
+
+		@Override
+		public <T> T[] toArray(T[] a) {
+			return super.toArray(a);
 		}
 	}
 }

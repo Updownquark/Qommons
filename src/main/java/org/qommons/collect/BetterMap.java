@@ -18,7 +18,7 @@ import org.qommons.collect.ValueStoredCollection.RepairListener;
  * @param <K> The type of keys stored in the map
  * @param <V> The type of values stored in the map
  */
-public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Identifiable {
+public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stamped, Identifiable {
 	@Override
 	BetterSet<K> keySet();
 
@@ -66,6 +66,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Iden
 	 * @param structuralOnly Whether to obtain the structural modification stamp, or to include updates
 	 * @return The stamp of the given type
 	 */
+	@Override
 	default long getStamp() {
 		return keySet().getStamp();
 	}

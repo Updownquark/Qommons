@@ -21,6 +21,7 @@ import org.qommons.config.QommonsConfig;
 import org.qommons.ex.CheckedExceptionWrapper;
 import org.qommons.ex.ExBiConsumer;
 import org.qommons.ex.ExConsumer;
+import org.qommons.ex.ExRunnable;
 import org.qommons.io.BetterFile;
 import org.qommons.io.CountingInputStream;
 import org.qommons.io.FileUtils;
@@ -83,7 +84,7 @@ public class QuarkJarPatcher {
 			.with(CountingInputStream.class, "")//
 			.with(MiniFileUtils.class, "Zip extraction utility class")//
 			.with(MiniFileUtils.ArchiveEntry.class, "").with(MiniFileUtils.ArchiveEntry.Default.class, "")//
-			.with(ExBiConsumer.class, "").with(ExConsumer.class, "").with(ExConsumer.DO_NOTHING.getClass(), "")//
+			.with(ExBiConsumer.class, "").with(ExConsumer.class, "").with(ExConsumer.DO_NOTHING.getClass(), "").with(ExRunnable.class, "")//
 			.with(CheckedExceptionWrapper.class, "")//
 			.getUnmodifiable();
 	}

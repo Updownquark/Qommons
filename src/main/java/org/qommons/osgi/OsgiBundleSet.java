@@ -62,16 +62,18 @@ public class OsgiBundleSet {
 
 		private static class LoadedClass {
 			final Class<?> clazz;
+			final String name;
 			final Bundle owner;
 
 			LoadedClass(Class<?> clazz, Bundle owner) {
 				this.clazz = clazz;
 				this.owner = owner;
+				name = clazz.getName();
 			}
 
 			@Override
 			public int hashCode() {
-				return clazz.getName().hashCode();
+				return name.hashCode();
 			}
 
 			@Override
@@ -81,7 +83,7 @@ public class OsgiBundleSet {
 
 			@Override
 			public String toString() {
-				return clazz.getName();
+				return name;
 			}
 		}
 
@@ -633,15 +635,15 @@ public class OsgiBundleSet {
 		}
 
 		private LoadedClass getPreviouslyLoaded(String className) {
-			return CollectionElement.get(theLoadedClasses.getElement(className.hashCode(), lc -> lc.clazz.getName().equals(className)));
+			return CollectionElement.get(theLoadedClasses.getElement(className.hashCode(), lc -> lc.name.equals(className)));
 		}
 
 		private Class<?> findClass1(ResourceSource source, String fileName, String className) throws ClassNotFoundException {
 			LoadedClass loaded = getPreviouslyLoaded(className);
 			if (loaded == null) {
-				URL res = source.getResource(fileName);
-				CircularByteBuffer buffer = new CircularByteBuffer(0);
-				try (InputStream in = res.openStream()) {
+				Resource res = source.getResource(fileName);
+				CircularByteBuffer buffer = new CircularByteBuffer((int) res.length());
+				try (InputStream in = res.read()) {
 					while (buffer.appendFrom(in, -1) >= 0) {
 					}
 				} catch (IOException e) {
@@ -652,7 +654,7 @@ public class OsgiBundleSet {
 					if (loaded == null) {
 						try {
 							loaded = new LoadedClass(defineClass(className, buffer.toByteArray(), 0, buffer.length(), //
-								new CodeSource(res, new java.security.cert.Certificate[0])), this);
+								new CodeSource(res.getUrl(), new java.security.cert.Certificate[0])), this);
 						} catch (ClassFormatError | SecurityException e) {
 							throw e;
 						}
@@ -701,7 +703,8 @@ public class OsgiBundleSet {
 			if (source == null) {
 				return null;
 			}
-			return source.getResource(file);
+			Resource rsrc = source.getResource(file);
+			return rsrc == null ? null : rsrc.getUrl();
 		}
 
 		@Override
@@ -842,7 +845,7 @@ public class OsgiBundleSet {
 		 * @param name The name of the file
 		 * @return The location of the file in this package, or null if not found
 		 */
-		URL getResource(String name);
+		Resource getResource(String name);
 
 		/**
 		 * @param name The name of the file
@@ -860,12 +863,26 @@ public class OsgiBundleSet {
 		Package getPackage();
 	}
 
-	static class PackageImpl implements ResourceSource {
+	/** A resource file in a bundle */
+	public interface Resource {
+		/** @return The file as a URL */
+		URL getUrl();
 
+		/** @return The number of bytes in the resource */
+		long length();
+
+		/**
+		 * @return The input stream to read the contents of the resource
+		 * @throws IOException If the resource could not be read
+		 */
+		InputStream read() throws IOException;
+	}
+
+	static class PackageImpl implements ResourceSource {
 		private final Bundle theOwner;
 		private final String theName;
 		private final BetterFile theFile;
-		private final Map<String, BetterFile> theResources;
+		private final Map<String, Resource> theResources;
 
 		public PackageImpl(Bundle owner, String name, BetterFile file) {
 			theOwner = owner;
@@ -873,7 +890,7 @@ public class OsgiBundleSet {
 			theFile = file;
 			theResources = new HashMap<>();
 			for (BetterFile rsrc : file.listFiles())
-				theResources.put(rsrc.getName(), rsrc);
+				theResources.put(rsrc.getName(), new BetterFileResource(rsrc));
 		}
 
 		public Bundle getOwner() {
@@ -891,28 +908,21 @@ public class OsgiBundleSet {
 		}
 
 		@Override
-		public URL getResource(String name) {
-			BetterFile file = theResources.get(name);
-			if (file == null)
-				return null;
-			try {
-				return new URL(file.toUrl(null).toString());
-			} catch (MalformedURLException e) {
-				e.printStackTrace();
-			}
-			return null;
+		public Resource getResource(String name) {
+			return theResources.get(name);
 		}
 
 		@Override
 		public List<URL> getResources(String name) {
-			URL resource = getResource(name);
-			return resource == null ? Collections.emptyList() : Arrays.asList(resource);
+			Resource resource = getResource(name);
+			URL url = resource == null ? null : resource.getUrl();
+			return resource == null ? Collections.emptyList() : Arrays.asList(url);
 		}
 
 		@Override
 		public Bundle getOwner(String name) {
-			BetterFile file = theResources.get(name);
-			return file == null ? null : theOwner;
+			Resource rsrc = theResources.get(name);
+			return rsrc == null ? null : theOwner;
 		}
 
 		@Override
@@ -933,6 +943,38 @@ public class OsgiBundleSet {
 		@Override
 		public String toString() {
 			return theFile.getPath();
+		}
+	}
+
+	static class BetterFileResource implements Resource {
+		private final BetterFile theFile;
+		private URL theUrl;
+
+		BetterFileResource(BetterFile file) {
+			theFile = file;
+		}
+
+		@Override
+		public URL getUrl() {
+			if (theUrl == null) {
+				try {
+					theUrl = theFile.toUrl();
+				} catch (MalformedURLException e) {
+					e.printStackTrace();
+				}
+			}
+			return theUrl;
+		}
+
+		@Override
+		public long length() {
+			return theFile.length();
+		}
+
+		@Override
+		public InputStream read() throws IOException {
+			URL url = getUrl();
+			return url != null ? url.openStream() : theFile.read();
 		}
 	}
 
@@ -969,9 +1011,9 @@ public class OsgiBundleSet {
 		}
 
 		@Override
-		public URL getResource(String name) {
+		public Resource getResource(String name) {
 			for (ResourceSource pkg : thePackages) {
-				URL found = pkg.getResource(name);
+				Resource found = pkg.getResource(name);
 				if (found != null) {
 					return found;
 				}

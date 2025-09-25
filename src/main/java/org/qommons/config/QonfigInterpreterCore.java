@@ -543,8 +543,8 @@ public class QonfigInterpreterCore {
 	}
 
 	private final Set<QonfigToolkit> theKnownToolkits;
-	private final Map<QonfigElementOrAddOn, MultiInheritanceView<Class<?>, QonfigCreatorHolder<?>>> theCreators;
-	private final Map<QonfigElementOrAddOn, MultiInheritanceView<Class<?>, List<QonfigModifierHolder<?>>>> theModifiers;
+	private final Map<QonfigElementOrAddOn, ? extends MultiInheritanceView<Class<?>, QonfigCreatorHolder<?>>> theCreators;
+	private final Map<QonfigElementOrAddOn, ? extends MultiInheritanceView<Class<?>, List<QonfigModifierHolder<?>>>> theModifiers;
 	private final MultiInheritanceView.MultiInheritanceMap2<Class<?>, SpecialSessionImplementation<?>> theSpecialSessions;
 	private final ExceptionThrowingReporting theReporting;
 
@@ -556,8 +556,8 @@ public class QonfigInterpreterCore {
 	 * @param reporting The error reporting for the interpretation
 	 */
 	protected QonfigInterpreterCore(Set<QonfigToolkit> allKnownToolkits,
-		Map<QonfigElementOrAddOn, MultiInheritanceView<Class<?>, QonfigCreatorHolder<?>>> creators,
-		Map<QonfigElementOrAddOn, MultiInheritanceView<Class<?>, List<QonfigModifierHolder<?>>>> modifiers,
+		Map<QonfigElementOrAddOn, ? extends MultiInheritanceView<Class<?>, QonfigCreatorHolder<?>>> creators,
+		Map<QonfigElementOrAddOn, ? extends MultiInheritanceView<Class<?>, List<QonfigModifierHolder<?>>>> modifiers,
 		MultiInheritanceView<Class<?>, SpecialSessionImplementation<?>> specialSessions, ExceptionThrowingReporting reporting) {
 		theKnownToolkits = allKnownToolkits;
 		theCreators = creators;
@@ -699,8 +699,8 @@ public class QonfigInterpreterCore {
 
 		/** @return A new interpreter with this builder's configuration */
 		public QonfigInterpreterCore create() {
-			return new QonfigInterpreterCore(theToolkits, getCreators(), getModifiers(), theSpecialSessions,
-				theReporting);
+			// Pass the raw maps in for performance--don't wrap with unmodifiable ones
+			return new QonfigInterpreterCore(theToolkits, theCreators, theModifiers, theSpecialSessions, theReporting);
 		}
 
 		/** @return The toolkit that will be used to get elements/add-ons when only names are specified */

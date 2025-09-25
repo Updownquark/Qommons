@@ -92,10 +92,23 @@ public interface Causable extends CausalLock.Cause {
 		}
 
 		Transaction execute(Causable cause, Map<Object, Object> data) {
-			if (theAction != null)
-				theAction.finished(cause, data);
+			if (theAction != null) {
+				try {
+					theAction.finished(cause, data);
+				} catch (Throwable e) {
+					System.err.println("Terminal action " + theAction + " failed:");
+					e.printStackTrace();
+				}
+			}
 			if (theAfterAction != null) {
-				return () -> theAfterAction.finished(cause, data);
+				return () -> {
+					try {
+						theAfterAction.finished(cause, data);
+					} catch (Throwable e) {
+						System.err.println("Terminal action " + theAction + " failed:");
+						e.printStackTrace();
+					}
+				};
 			} else
 				return null;
 		}
@@ -227,10 +240,10 @@ public interface Causable extends CausalLock.Cause {
 						size--;
 					else if (root == null && cause instanceof Causable && !(cause instanceof ChainBreak)) {
 						if (((Causable) cause).isTerminated())
-							throw new IllegalStateException("Cannot use a finished Causable as a cause");
+							throw new IllegalStateException("Cannot use a terminated Causable as a cause");
 						root = ((Causable) cause).getRootCausable();
 						if (root.isTerminated())
-							throw new IllegalStateException("Cannot use a finished Causable as a cause");
+							throw new IllegalStateException("Cannot use a terminated Causable as a cause");
 					}
 				}
 				theRootCausable = root != null ? root : this;

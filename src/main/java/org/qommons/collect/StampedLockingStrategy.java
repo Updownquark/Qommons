@@ -20,7 +20,7 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 
 	/**
 	 * If true, locking strategies of this type will keep a record of the thread that currently holds a write lock on them in
-	 * {@link #updateWriteLocker}. This variable can be set at run time by setting the system property "qommons.locking.debug" to "true".
+	 * {@link #updateWriteLocker}. This variable can be set by setting the system property "qommons.locking.debug" to "true".
 	 */
 	public static boolean STORE_WRITERS = "true".equalsIgnoreCase(System.getProperty("qommons.locking.debug")); // A debug setting
 	volatile Thread updateWriteLocker;

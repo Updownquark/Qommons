@@ -1,5 +1,8 @@
 package org.qommons;
 
+import static org.qommons.Lockable.lockAll;
+import static org.qommons.Lockable.tryLockAll;
+
 import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -438,6 +441,9 @@ public interface Lockable extends ThreadConstrained {
 		try {
 			int i = outerLock == null ? 0 : 1;
 			for (X value : coll) {
+				if (i == locks.length) {
+					break; // The outer lock was not effective and a new value has been added
+				}
 				Lockable lockable = map.apply(value);
 				locks[i] = Lockable.tryLock(lockable);
 				if (locks[i] == null) {

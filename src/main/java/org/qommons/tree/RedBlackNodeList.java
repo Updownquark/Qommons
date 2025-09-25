@@ -2,6 +2,7 @@ package org.qommons.tree;
 
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.function.Function;
 
@@ -63,7 +64,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 	 * @param locker The locking strategy to use
 	 * @param description The description for this list
 	 */
-	public RedBlackNodeList(Function<Object, CollectionLockingStrategy> locker, String description) {
+	protected RedBlackNodeList(Function<Object, CollectionLockingStrategy> locker, String description) {
 		theLocker = locker.apply(this);
 		theTree = new RedBlackTree<>();
 		initIdentity(Identifiable.baseId(description, this));
@@ -201,6 +202,16 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 		return wrap(theTree.getTerminal(first));
 	}
 
+	/**
+	 * Same as {@link #getTerminalElement(boolean)}, but returns a mutable element
+	 * 
+	 * @param first Whether to get the first or the last element in this collection
+	 * @return The first or the last element in this collection
+	 */
+	public MutableBinaryTreeNode<E> getMutableTerminal(boolean first) {
+		return wrapMutable(theTree.getTerminal(first));
+	}
+
 	@Override
 	public BinaryTreeNode<E> getAdjacentElement(ElementId elementId, boolean next) {
 		return wrap(checkNode(elementId, false).theNode).getClosest(!next);
@@ -209,6 +220,18 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 	@Override
 	public Object[] toArray() {
 		return TreeBasedList.super.toArray();
+	}
+
+	// The tree's iterators are more performant than the default sequence-based iterators
+
+	@Override
+	public Iterator<E> iterator() {
+		return theTree.iterator();
+	}
+
+	@Override
+	public Iterator<E> iterator(boolean fromBeginning) {
+		return theTree.iterator(fromBeginning);
 	}
 
 	@Override
@@ -271,6 +294,40 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 	@Override
 	public BinaryTreeNode<E> addElement(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException {
+		return wrap(addNode(value, after, before, first));
+	}
+
+	/**
+	 * Same as {@link #addElement(Object, boolean)}, but returns a mutable element
+	 * 
+	 * @param value The value to add
+	 * @param first Whether to prefer a lower position over a higher one
+	 * @return The element at which the value was added, or null if the value was not added due to a non-erroring condition
+	 */
+	public MutableBinaryTreeNode<E> addElement2(E value, boolean first) {
+		return addElement2(value, null, null, first);
+	}
+
+	/**
+	 * Same as {@link #addElement(Object, ElementId, ElementId, boolean)}, but returns a mutable element
+	 * 
+	 * @param value The value to add
+	 * @param after The element currently occupying the position before which (exclusive) the value's insertion is desirable, or null if the
+	 *        element may be added at the end of the collection
+	 * @param before The element currently occupying the position before which (exclusive) the value's insertion is desirable, or null if
+	 *        the element may be added at the end of the collection
+	 * @param first Whether to prefer a lower position over a higher one
+	 * @return The element at which the value was added, or null if the value was not added due to a non-erroring condition
+	 * @throws IllegalArgumentException If either <code>after</code> or <code>before</code> is not null and not an element in this
+	 *         collection
+	 */
+	public MutableBinaryTreeNode<E> addElement2(E value, ElementId after, ElementId before, boolean first)
+		throws IllegalArgumentException {
+		return wrapMutable(addNode(value, after, before, first));
+	}
+
+	private RedBlackNode<E> addNode(E value, ElementId after, ElementId before, boolean first)
+		throws UnsupportedOperationException, IllegalArgumentException {
 		RedBlackNode<E> newNode = new RedBlackNode<>(theTree, value);
 		try (Transaction t = theLocker.lock(true, null)) {
 			if (first && after != null) {
@@ -287,7 +344,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 				theTree.getTerminal(first).add(newNode, first);
 			theLocker.modified();
 		}
-		return wrap(newNode);
+		return newNode;
 	}
 
 	@Override
@@ -731,7 +788,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 
 		@Override
 		public boolean equals(Object obj) {
-			return obj instanceof RedBlackNodeList.NodeWrapper && theNode.equals(((NodeWrapper) obj).theNode);
+			return obj instanceof RedBlackNodeList.NodeWrapper && theNode.equals(((RedBlackNodeList<?>.NodeWrapper) obj).theNode);
 		}
 
 		@Override

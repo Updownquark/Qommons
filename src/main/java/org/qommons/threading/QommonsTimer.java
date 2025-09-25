@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.Scanner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -15,6 +16,7 @@ import java.util.function.Supplier;
 import org.qommons.ArgumentParsing;
 import org.qommons.ArgumentParsing.Argument;
 import org.qommons.ArgumentParsing.MatchedArgument;
+import org.qommons.LambdaUtils;
 import org.qommons.QommonsUtils;
 import org.qommons.ThreadConstraint;
 import org.qommons.TimeUtils;
@@ -24,7 +26,7 @@ import org.qommons.collect.ListenerList;
 public class QommonsTimer {
 	// These gymnastics here are to manage the cyclical dependency between this class and ElasticExecutor
 
-	private static ElasticExecutor<Runnable> COMMON_INSTANCE_EXECUTOR = new ElasticExecutor<>("Qommon Timer Offloader", () -> Runnable::run)//
+	private static ElasticExecutor<Runnable> COMMON_INSTANCE_EXECUTOR = new ElasticExecutor<>("Qommon Timer Execution", () -> Runnable::run)//
 		.setUsedThreadLifetime(2000);
 
 	static void startProcessorTracking(ElasticExecutor<?> executor) {
@@ -34,13 +36,13 @@ public class QommonsTimer {
 		WeakReference<ElasticExecutor<?>> executorRef = new WeakReference<>(executor);
 		QommonsTimer.TaskHandle[] handle = new QommonsTimer.TaskHandle[1];
 		// This operation is expensive, don't do it very often
-		handle[0] = COMMON_INSTANCE.execute(() -> {
+		handle[0] = COMMON_INSTANCE.execute(LambdaUtils.printableRunnable(() -> {
 			ElasticExecutor<?> exec = executorRef.get();
 			if (exec == null) // The executor has been garbage-collected
 				handle[0].setActive(false);
 			else
 				exec.trackProcessorCount();
-		}, Duration.ofMillis(1000), false);
+		}, "Track Processors for " + executor.getName(), null), Duration.ofMillis(1000), false);
 	}
 
 	private static final QommonsTimer COMMON_INSTANCE = new QommonsTimer(new SystemClock(), r -> {
@@ -147,6 +149,7 @@ public class QommonsTimer {
 		private volatile boolean isExecuting;
 		private volatile boolean isWaiting;
 		private volatile long theExecCount;
+		private BooleanSupplier theUntil;
 		private volatile TaskThreading theThreading;
 		private volatile boolean didOffloadFail;
 		final Runnable offloadTask;
@@ -342,6 +345,16 @@ public class QommonsTimer {
 		}
 
 		/**
+		 * @param until A supplier to be tested each time this task executes (just before execution). When it returns true, this task will
+		 *        deactivate.
+		 * @return This task
+		 */
+		public TaskHandle until(BooleanSupplier until) {
+			theUntil = until;
+			return this;
+		}
+
+		/**
 		 * @param threading The threading scheme for this task
 		 * @return This task
 		 */
@@ -496,45 +509,51 @@ public class QommonsTimer {
 			if (isActive.get()) {
 				isExecuting = true;
 				try {
-					theExecCount++;
-					thePreviousRun = theClock.now();
-					Instant nextRun;
-					boolean terminate = false;
-					boolean interrupt = false;
-					if (theNextRun == null && theFrequency != null) {
-						interrupt = true;
-						nextRun = thePreviousRun.plus(theFrequency);
-					} else
-						nextRun = theNextRun;
-					Instant lastRun = theLastRun;
-					if (nextRun != null && lastRun != null) {
-						if (thePreviousRun.compareTo(lastRun) >= 0)
-							terminate = true;
-						else if (!shouldRunAfterLast && nextRun.compareTo(lastRun) > 0)
-							terminate = true;
-						if (terminate)
-							theLastRun = null;
-					}
-					long rem = theRemainingExecCount;
-					if (rem < 0) {
-					} else if (rem == 1) {
-						theRemainingExecCount = 0;
-						terminate = true;
-						nextRun = null;
-					} else
-						theRemainingExecCount = rem - 1;
-					theNextRun = nextRun;
-					if (terminate) {
+					BooleanSupplier until = theUntil;
+					if (until != null && until.getAsBoolean()) {
 						setActive(false);
-						interrupt = false;
+					} else {
+						theExecCount++;
+						thePreviousRun = theClock.now();
+						Instant nextRun;
+						boolean terminate = false;
+						boolean interrupt = false;
+						if (theNextRun == null && theFrequency != null) {
+							interrupt = true;
+							nextRun = thePreviousRun.plus(theFrequency);
+						} else
+							nextRun = theNextRun;
+						Instant lastRun = theLastRun;
+						if (nextRun != null && lastRun != null) {
+							if (thePreviousRun.compareTo(lastRun) >= 0)
+								terminate = true;
+							else if (!shouldRunAfterLast && nextRun.compareTo(lastRun) > 0)
+								terminate = true;
+							if (terminate)
+								theLastRun = null;
+						}
+						long rem = theRemainingExecCount;
+						if (rem < 0) {
+						} else if (rem == 1) {
+							theRemainingExecCount = 0;
+							terminate = true;
+							nextRun = null;
+						} else
+							theRemainingExecCount = rem - 1;
+						theNextRun = nextRun;
+						if (terminate) {
+							setActive(false);
+							interrupt = false;
+						}
+						try {
+							theTask.run();
+						} catch (Throwable e) {
+							e.printStackTrace();
+						}
+
+						if (interrupt)
+							interruptScheduler();
 					}
-					try {
-						theTask.run();
-					} catch (Throwable e) {
-						e.printStackTrace();
-					}
-					if (interrupt)
-						interruptScheduler();
 				} finally {
 					isExecuting = false;
 				}
@@ -714,6 +733,44 @@ public class QommonsTimer {
 	 */
 	public boolean tryOffload(Runnable task) {
 		return theAccessoryRunner.apply(task);
+	}
+
+	/**
+	 * Attempts to execute a task repeatedly until it determines it is time to stop.
+	 * 
+	 * @param task The task to execute. When this task returns false, it will stop repeatedly executing.
+	 * @param frequency The execution frequency
+	 * @return The handle for the task
+	 */
+	public TaskHandle doWhile(BooleanSupplier task, Duration frequency) {
+		DoWhileTask doWhile = new DoWhileTask(task);
+		TaskHandle handle = build(doWhile, frequency, false);
+		doWhile.setHandle(handle);
+		return handle.setActive(true);
+	}
+
+	private static class DoWhileTask implements Runnable {
+		private final BooleanSupplier theTask;
+		private TaskHandle theHandle;
+
+		DoWhileTask(BooleanSupplier task) {
+			theTask = task;
+		}
+
+		void setHandle(TaskHandle handle) {
+			theHandle = handle;
+		}
+
+		@Override
+		public void run() {
+			if (!theTask.getAsBoolean())
+				theHandle.setActive(false);
+		}
+
+		@Override
+		public String toString() {
+			return theTask.toString();
+		}
 	}
 
 	Runnable schedule(TaskHandle task) {

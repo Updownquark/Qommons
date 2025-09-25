@@ -1,10 +1,6 @@
 package org.qommons.collect;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -63,7 +59,7 @@ import org.qommons.Transaction;
  * 
  * @param <E> The type of value that this list can store
  */
-public class ListenerList<E> implements Stamped {
+public class ListenerList<E> implements PureQueue<E>, Stamped {
 	private static boolean SWALLOW_EXCEPTIONS = true;
 
 	/**
@@ -452,6 +448,17 @@ public class ListenerList<E> implements Stamped {
 		theErrorLogger = errorLogger;
 	}
 
+	@Override
+	public boolean offer(E e) {
+		return add(e);
+	}
+
+	@Override
+	public boolean add(E e) {
+		add(e, false);
+		return true;
+	}
+
 	/**
 	 * @param value The value to add
 	 * @param skipCurrent Whether to skip actions on this value during the current {@link #forEach(Consumer) forEach} iteration if this
@@ -670,6 +677,33 @@ public class ListenerList<E> implements Stamped {
 			return node;
 	}
 
+	@Override
+	public E remove() {
+		Element<E> el = poll(0);
+		if (el == null)
+			throw new NoSuchElementException();
+		return el.get();
+	}
+
+	@Override
+	public E poll() {
+		return pollValue(0);
+	}
+
+	@Override
+	public E element() {
+		Element<E> el = peekFirst();
+		if (el == null)
+			throw new NoSuchElementException();
+		return el.get();
+	}
+
+	@Override
+	public E peek() {
+		Element<E> el = peekFirst();
+		return el == null ? null : el.get();
+	}
+
 	/**
 	 * Applies a specified action to each value in this list
 	 * 
@@ -807,11 +841,13 @@ public class ListenerList<E> implements Stamped {
 	}
 
 	/** @return Whether this list has no values in it */
+	@Override
 	public boolean isEmpty() {
 		return theTerminal.next == theTerminal;
 	}
 
 	/** @return The number of values currently in this list */
+	@Override
 	public int size() {
 		if (theSize != null)
 			return theSize.get();
@@ -849,6 +885,8 @@ public class ListenerList<E> implements Stamped {
 	 * @return The new list containing all of the values currently in this list
 	 */
 	public List<E> dump() {
+		if (isEmpty())
+			return Collections.emptyList();
 		return dumpInto(new ArrayList<>(theSize == null ? 10 : theSize.get() + 3));
 	}
 

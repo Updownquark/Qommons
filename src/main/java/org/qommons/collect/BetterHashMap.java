@@ -2,7 +2,7 @@ package org.qommons.collect;
 
 import java.util.Collection;
 import java.util.Map;
-import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
@@ -41,7 +41,7 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 		 * @param equals The equivalence check for values in the map
 		 * @return This builder
 		 */
-		public B withEquivalence(ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals) {
+		public B withEquivalence(ToIntFunction<Object> hasher, BiPredicate<Object, Object> equals) {
 			theSetBuilder.withEquivalence(//
 				entry -> {
 					if (entry instanceof Map.Entry)
@@ -50,9 +50,9 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 						return hasher.applyAsInt(entry);
 				}, (entry1, entry2) -> {
 					if (entry1 instanceof Map.Entry && entry2 instanceof Map.Entry)
-						return equals.apply(((Map.Entry<?, ?>) entry1).getKey(), ((Map.Entry<?, ?>) entry2).getKey());
+						return equals.test(((Map.Entry<?, ?>) entry1).getKey(), ((Map.Entry<?, ?>) entry2).getKey());
 					else
-						return equals.apply(entry1, entry2);
+						return equals.test(entry1, entry2);
 				});
 			return (B) this;
 		}
@@ -214,7 +214,7 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 	@Override
 	public MapEntryHandle<K, V> getEntry(K key) {
 		CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(theEntries.getHasher().applyAsInt(key),
-			entry -> theEntries.getEquals().apply(entry.getKey(), key));
+			entry -> theEntries.getEquals().test(entry.getKey(), key));
 		return entryEl == null ? null : handleFor(entryEl);
 	}
 
@@ -222,7 +222,7 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 	public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before,
 		boolean first, Runnable preAdd, Runnable postAdd) {
 		CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getOrAdd(//
-			theEntries.getHasher().applyAsInt(key), entry -> theEntries.getEquals().apply(entry.getKey(), key), //
+			theEntries.getHasher().applyAsInt(key), entry -> theEntries.getEquals().test(entry.getKey(), key), //
 			() -> {
 				V newValue = value.apply(key);
 				return newEntry(key, newValue);

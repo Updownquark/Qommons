@@ -1,10 +1,7 @@
 package org.qommons.tree;
 
 
-import java.util.ArrayList;
-import java.util.BitSet;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 
 import org.qommons.collect.OptimisticContext;
 
@@ -13,7 +10,7 @@ import org.qommons.collect.OptimisticContext;
  * 
  * @param <E> The type of values stored in the tree
  */
-public class RedBlackTree<E> {
+public class RedBlackTree<E> implements Iterable<E> {
 	private RedBlackNode<E> theRoot;
 	RedBlackNode<E> theFirst;
 	RedBlackNode<E> theLast;
@@ -56,6 +53,19 @@ public class RedBlackTree<E> {
 	public RedBlackNode<E> getTerminal(boolean first) {
 		return first ? theFirst : theLast;
 		// return theRoot == null ? null : theRoot.getTerminal(first, () -> true);
+	}
+
+	@Override
+	public Iterator<E> iterator() {
+		return iterator(true);
+	}
+
+	/**
+	 * @param forward Whether to iterate forward from the beginning or backward from the end
+	 * @return The iterator over the values in this tree
+	 */
+	public Iterator<E> iterator(boolean forward) {
+		return new NodeIterator(forward);
 	}
 
 	/**
@@ -335,5 +345,45 @@ public class RedBlackTree<E> {
 	@Override
 	public String toString() {
 		return RedBlackNode.print(theRoot);
+	}
+
+	class NodeIterator implements Iterator<E> {
+		private final boolean isForward;
+		private boolean isOnNext;
+		private RedBlackNode<E> lastNode;
+		private RedBlackNode<E> nextNode;
+
+		NodeIterator(boolean isForward) {
+			this.isForward = isForward;
+		}
+
+		@Override
+		public boolean hasNext() {
+			if (!isOnNext) {
+				if (nextNode == null)
+					nextNode = getTerminal(isForward);
+				else
+					nextNode = nextNode.getClosest(!isForward);
+				isOnNext = true;
+			}
+			return nextNode != null;
+		}
+
+		@Override
+		public E next() {
+			if (!hasNext())
+				throw new NoSuchElementException();
+			isOnNext = false;
+			lastNode = nextNode;
+			return nextNode.getValue();
+		}
+
+		@Override
+		public void remove() {
+			if (lastNode == null)
+				throw new IllegalStateException();
+			lastNode.delete();
+			lastNode = null;
+		}
 	}
 }

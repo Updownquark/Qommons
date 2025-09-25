@@ -602,6 +602,32 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	}
 
 	/**
+	 * @param <E> The type for the list
+	 * @param compare the sorting for the list
+	 * @param values The values for the list
+	 * @return An immutable sorted list with the given values
+	 */
+	public static <E> BetterSortedList<E> of(Comparator<? super E> compare, Collection<? extends E> values) {
+		switch (values.size()) {
+		case 0:
+			return empty(compare);
+		case 1:
+			return single(values.iterator().next(), compare);
+		default:
+			return new ConstantSortedList<>(compare, values);
+		}
+	}
+
+	/**
+	 * @param <E> The type for the list
+	 * @param compare the sorting for the list
+	 * @param values The values for the list
+	 * @return An immutable sorted list with the given values
+	 */
+	public static <E> BetterSortedList<E> of(Comparator<? super E> compare, E... values) {
+		return of(compare, Arrays.asList(values));
+	}
+	/**
 	 * Implements {@link BetterSortedList#empty(Comparator)}
 	 * 
 	 * @param <E> The type of the list
@@ -703,6 +729,100 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 				return -1;
 			else
 				return 1;
+		}
+	}
+
+	/**
+	 * An immutable sorted list
+	 * 
+	 * @param <E> The type of the list
+	 */
+	class ConstantSortedList<E> extends BetterList.ConstantList<E> implements BetterSortedList<E> {
+		private final Comparator<? super E> theSorting;
+
+		/**
+		 * @param sorting The sorting for the list
+		 * @param values The values for the list
+		 */
+		public ConstantSortedList(Comparator<? super E> sorting, Collection<? extends E> values) {
+			this(sorting, values, false);
+		}
+
+		/**
+		 * @param sorting The sorting for the list
+		 * @param values The values for the list
+		 * @param distinct Whether to throw an exception if any values are given which sort identically
+		 */
+		protected ConstantSortedList(Comparator<? super E> sorting, Collection<? extends E> values, boolean distinct) {
+			super(sortValues(values, sorting, distinct));
+			theSorting = sorting;
+		}
+
+		private static <E> List<E> sortValues(Collection<? extends E> values, Comparator<? super E> sorting, boolean distinct) {
+			List<E> copy = new ArrayList<>(values.size());
+			copy.addAll(values);
+			Collections.sort(copy, sorting);
+			for (int i = 1; i < copy.size(); i++) {
+				if (sorting.compare(copy.get(i - 1), copy.get(i)) == 0)
+					throw new IllegalArgumentException("Values are not distinct: " + copy.get(i - 1) + " and " + copy.get(i));
+			}
+			return copy;
+		}
+
+		@Override
+		public Comparator<? super E> comparator() {
+			return theSorting;
+		}
+
+		@Override
+		public boolean isConsistent(ElementId element) {
+			return true;
+		}
+
+		@Override
+		public boolean checkConsistency() {
+			return false;
+		}
+
+		@Override
+		public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
+			return false;
+		}
+
+		@Override
+		public <X> boolean repair(RepairListener<E, X> listener) {
+			return false;
+		}
+
+		@Override
+		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+			if(isEmpty())
+				return null;
+			int index=indexFor(search);
+			if(index>=0)
+				return getElement(index);
+			else if(filter==SortedSearchFilter.OnlyMatch)
+				return null;
+			index=-index-1;
+			if (index == 0) {
+				if (filter == SortedSearchFilter.Less)
+					return null;
+				else
+					return getTerminalElement(true);
+			} else if (index == size()) {
+				if (filter == SortedSearchFilter.Greater)
+					return null;
+				else
+					return getTerminalElement(false);
+			}
+			if (filter.less.value)
+				index--;
+			return getElement(index);
+		}
+
+		@Override
+		public int indexFor(Comparable<? super E> search) {
+			return ArrayUtils.binarySearch(this, search);
 		}
 	}
 

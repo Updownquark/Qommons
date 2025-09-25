@@ -319,7 +319,21 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 			return (V) oldValue[0];
 		}
 
-		default MultiInheritanceView<K, V> with(K key, V value) {
+		/**
+		 * @param key The key to put the value for
+		 * @param value The value to put if there is currently no value mapped for the key in this map
+		 * @return The value that was previously in this map for the given key
+		 */
+		default V putIfAbsent(K key, V value) {
+			Object[] oldValue = new Object[1];
+			compute(key, (__, oldV) -> {
+				oldValue[0] = oldV;
+				return oldV == null ? value : oldV;
+			});
+			return (V) oldValue[0];
+		}
+
+		default MultiInheritanceMap2<K, V> with(K key, V value) {
 			put(key, value);
 			return this;
 		}

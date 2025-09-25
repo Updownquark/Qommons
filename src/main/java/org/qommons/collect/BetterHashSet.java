@@ -5,7 +5,7 @@ import java.util.Collection;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -44,7 +44,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 	 */
 	public static class HashSetBuilder<B extends HashSetBuilder<? extends B>> extends CollectionBuilder.Default<B> {
 		private ToIntFunction<Object> theHasher;
-		private BiFunction<Object, Object, Boolean> theEquals;
+		private BiPredicate<Object, Object> theEquals;
 		private int theInitExpectedSize;
 		private double theLoadFactor;
 
@@ -68,7 +68,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 		 * @param equals The equivalence check for values in the set
 		 * @return This builder
 		 */
-		public B withEquivalence(ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals) {
+		public B withEquivalence(ToIntFunction<Object> hasher, BiPredicate<Object, Object> equals) {
 			theHasher = hasher;
 			theEquals = equals;
 			return (B) this;
@@ -137,7 +137,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 
 	private final CollectionLockingStrategy theLocker;
 	private final ToIntFunction<Object> theHasher;
-	private final BiFunction<Object, Object, Boolean> theEquals;
+	private final BiPredicate<Object, Object> theEquals;
 	private final AtomicLong theFirstIdCreator;
 	private final AtomicLong theLastIdCreator;
 
@@ -149,7 +149,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 	private int theSize;
 
 	private BetterHashSet(Function<Object, CollectionLockingStrategy> locker, //
-		ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals, //
+		ToIntFunction<Object> hasher, BiPredicate<Object, Object> equals, //
 		int initExpectedSize, double loadFactor, Object identity, //
 		Iterable<? extends E> initialValues) {
 		theHasher = hasher;
@@ -180,7 +180,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 	}
 
 	/** @return The test this set uses to determine whether two potential set elements are equivalent */
-	public BiFunction<Object, Object, Boolean> getEquals() {
+	public BiPredicate<Object, Object> getEquals() {
 		return theEquals;
 	}
 
@@ -241,7 +241,8 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 		if (tableEntry == null)
 			tableEntry = table[tableIndex] = new HashTableEntry(tableIndex);
 		tableEntry.add(entry, adjacentEntry);
-		theLocker.modified();
+		if (theLocker != null) // Locker is only null for initial value addition
+			theLocker.modified();
 	}
 
 	/**
@@ -316,14 +317,14 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 
 	@Override
 	public Transaction lock(boolean write, Object cause) {
-		if (theLocker == null)
+		if (theLocker == null) // Locker is only null for initial value addition
 			return Transaction.NONE;
 		return theLocker.lock(write, cause);
 	}
 
 	@Override
 	public Transaction tryLock(boolean write, Object cause) {
-		if (theLocker == null)
+		if (theLocker == null) // Locker is only null for initial value addition
 			return Transaction.NONE;
 		return theLocker.tryLock(write, cause);
 	}
@@ -421,7 +422,6 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 			HashEntry adjacent = entry;
 			entry = linkUp(hashCode, value.get(), after, before, first);
 			theSize++;
-			theLocker.modified();
 			insert(table, entry, tableIndex, adjacent);
 			if (postAdd != null)
 				postAdd.run();
@@ -565,7 +565,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 	 * @return A predicate that returns true for values that are equivalent to the given value by this set's reckoning
 	 */
 	public Predicate<E> equalsTest(E value) {
-		return v -> theEquals.apply(v, value);
+		return v -> theEquals.test(v, value);
 	}
 
 	@Override
@@ -827,7 +827,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 			try (Transaction t = lock(false, null)) {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
-				if (theEquals.apply(theValue, value))
+				if (theEquals.test(theValue, value))
 					return null;
 				if (getEntry(theHasher.applyAsInt(value), equalsTest(value)) != null)
 					return StdMsg.ELEMENT_EXISTS;
@@ -841,7 +841,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
 				int newHash = theHasher.applyAsInt(value);
-				if (!theEquals.apply(theValue, value) && getEntry(newHash, equalsTest(value)) != null)
+				if (!theEquals.test(theValue, value) && getEntry(newHash, equalsTest(value)) != null)
 					throw new IllegalArgumentException(StdMsg.ELEMENT_EXISTS);
 				theValue = value;
 				if (hashCode != newHash) {
@@ -872,6 +872,12 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 					previous.next = next;
 				if (next != null)
 					next.previous = previous;
+				// Don't remove the table entry.
+				// For one thing, this element may not be the only entry in the table.
+				// For another, there's no reason. By removing the tree node above, we've effectively removed the entry
+				// and any references to the key and value from the table.
+				// By leaving the table entry in the table, we can re-use the tree list root.
+				// theTable[theTableEntry.theTableIndex] = null;
 				theSize--;
 				theLocker.modified();
 				checkIntegrity();

@@ -41,6 +41,16 @@ public class FilteredList<T> extends AbstractIdentifiable implements BetterList<
 		return !theFilter.get(index);
 	}
 
+	/**
+	 * @param wrappedIndex The index in the wrapped list
+	 * @return The collection element in the wrapped list at the given index
+	 */
+	public CollectionElement<T> getFilteredElement(int wrappedIndex) {
+		if (theFilter.get(wrappedIndex))
+			throw new IllegalArgumentException("The element at index " + wrappedIndex + " has been removed from this filtered list");
+		return new Element(theWrapped.getElement(wrappedIndex), wrappedIndex);
+	}
+
 	@Override
 	protected Object createIdentity() {
 		return Identifiable.wrap(theWrapped, "filtered", theFilter);

@@ -6,7 +6,7 @@ import org.qommons.Stamped;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
- * A {@link List} that is also a {@link Deque} and contains a few other enhancements as well
+ * A {@link List} that is also a {@link Sequenced} {@link Deque} and contains a few other enhancements as well
  * 
  * @param <E> The type of values in the list
  */

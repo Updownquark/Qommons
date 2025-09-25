@@ -300,7 +300,8 @@ public interface QonfigValueType extends Named, FileSourced {
 		public boolean isInstance(Object value) {
 			if (value instanceof Set) {
 				for (Object v : ((Set<?>) value)) {
-					if (!(v instanceof QonfigAddOn))
+					if (!(v instanceof QonfigTypeReference) //
+						|| !(((QonfigTypeReference<?>) v).reference instanceof QonfigAddOn))
 						return false;
 				}
 				return true;

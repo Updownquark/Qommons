@@ -428,8 +428,12 @@ public class MutableConfig extends QommonsConfig {
 				str.append(SPACE_REPLACEMENT);
 			else if (Character.isLetterOrDigit(c) || c == '-' || c == '_' || c == '.')
 				str.append(c);
-			else
-				str.append(INVALID_REPLACEMENT_TEXT.replace("XXXX", Integer.toHexString(c)));
+			else {
+				StringBuilder hex = new StringBuilder(Integer.toHexString(c));
+				while (hex.length() < 4)
+					hex.insert(0, '0');
+				str.append(INVALID_REPLACEMENT_TEXT.replace("XXXX", hex));
+			}
 		}
 		return str.toString();
 	}

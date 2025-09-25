@@ -61,7 +61,9 @@ public interface QonfigChildDef extends QonfigElementOwned {
 	 * @return Whether the given element type is able to fulfill this child role
 	 */
 	default boolean isCompatible(QonfigElementDef element, MultiInheritanceSet<QonfigAddOn> autoInheritance) {
-		if (getType() != null && !getType().isAssignableFrom(element))
+		if (getType() instanceof QonfigElementDef && !getType().isAssignableFrom(element))
+			return false;
+		else if (getType() instanceof QonfigAddOn && !autoInheritance.contains((QonfigAddOn) getType()))
 			return false;
 		for (QonfigAddOn req : getRequirement()) {
 			if (!req.isAssignableFrom(element) && !autoInheritance.contains(req))

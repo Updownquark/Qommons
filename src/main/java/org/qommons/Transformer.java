@@ -90,8 +90,8 @@ public interface Transformer<X extends Throwable> {
 	 * @param <X> The type of exception that this transformer may throw
 	 */
 	public class Builder<X extends Throwable> {
-		private final MultiInheritanceMap2<Class<?>, MultiInheritanceMap2<Class<?>, ? extends ExBiFunction<?, Transformer<X>, ?, ? extends X>>> theTypeTransformers;
-		private final MultiInheritanceMap2<Class<?>, MultiInheritanceMap2<Class<?>, ? extends Modifier<?, ?, X>>> theModifiers;
+		private final MultiInheritanceMap2<Class<?>, MultiInheritanceMap2<Class<?>, ExBiFunction<?, Transformer<X>, ?, ? extends X>>> theTypeTransformers;
+		private final MultiInheritanceMap2<Class<?>, MultiInheritanceMap2<Class<?>, Modifier<?, ?, X>>> theModifiers;
 		private BiFunction<Class<?>, Class<?>, X> theNoTransformerException;
 
 		Builder() {
@@ -99,8 +99,8 @@ public interface Transformer<X extends Throwable> {
 		}
 
 		Builder(
-			MultiInheritanceMap2<Class<?>, MultiInheritanceMap2<Class<?>, ? extends ExBiFunction<?, Transformer<X>, ?, ? extends X>>> typeTransformers,
-			MultiInheritanceMap2<Class<?>, MultiInheritanceMap2<Class<?>, ? extends Modifier<?, ?, X>>> modifiers,
+			MultiInheritanceMap2<Class<?>, MultiInheritanceMap2<Class<?>, ExBiFunction<?, Transformer<X>, ?, ? extends X>>> typeTransformers,
+			MultiInheritanceMap2<Class<?>, MultiInheritanceMap2<Class<?>, Modifier<?, ?, X>>> modifiers,
 			BiFunction<Class<?>, Class<?>, X> noTransformerException) {
 			theTypeTransformers = typeTransformers;
 			theModifiers = modifiers;
@@ -119,10 +119,10 @@ public interface Transformer<X extends Throwable> {
 		 */
 		public <S, T> Builder<X> with(Class<S> sourceType, Class<T> targetType,
 			ExBiFunction<? super S, Transformer<X>, ? extends T, ? extends X> transformer) {
-			MultiInheritanceMap2<Class<?>, ExBiFunction<?, Transformer<X>, ? extends T, ? extends X>> targetTransformers;
-			targetTransformers = (MultiInheritanceMap2<Class<?>, ExBiFunction<?, Transformer<X>, ? extends T, ? extends X>>) theTypeTransformers
-				.computeIfAbsent(targetType, MultiInheritanceView::createClassMap);
-			targetTransformers.put(sourceType, transformer);
+			theTypeTransformers.computeIfAbsent(targetType, MultiInheritanceView::createClassMap).put(sourceType, transformer);
+			for (MultiInheritanceMap2<Class<?>, ExBiFunction<?, Transformer<X>, ?, ? extends X>> targetMap : theTypeTransformers
+				.getAll(targetType, TypeMatch.SUB_TYPE))
+				targetMap.putIfAbsent(sourceType, transformer);
 			return this;
 		}
 
@@ -139,10 +139,10 @@ public interface Transformer<X extends Throwable> {
 		 */
 		public <S, T> Builder<X> modifyWith(Class<S> sourceType, Class<T> targetType, Modifier<? super S, T, X> modifier) {
 			MultiInheritanceMap2<Class<?>, Modifier<?, T, X>> targetModifiers;
-			targetModifiers = (MultiInheritanceMap2<Class<?>, Modifier<?, T, X>>) theModifiers.computeIfAbsent(targetType,
-				MultiInheritanceView::createClassMap);
+			targetModifiers = (MultiInheritanceMap2<Class<?>, Modifier<?, T, X>>) (MultiInheritanceMap2<?, ?>) theModifiers
+				.computeIfAbsent(targetType, MultiInheritanceView::createClassMap);
 			targetModifiers.compute(sourceType, (k, pre) -> {
-				if (pre == null)
+				if(pre==null)
 					return modifier;
 				else
 					return new Modifier.Composite<>((Modifier<S, T, X>) pre, modifier);
@@ -165,11 +165,12 @@ public interface Transformer<X extends Throwable> {
 			return new CompositeTransformer<>(deepCopy(theTypeTransformers), deepCopy(theModifiers), theNoTransformerException);
 		}
 
-		static <T> MultiInheritanceMap2<Class<?>, MultiInheritanceMap2<Class<?>, ? extends T>> deepCopy(
-			MultiInheritanceMap2<Class<?>, MultiInheritanceMap2<Class<?>, ? extends T>> classMap) {
-			MultiInheritanceMap2<Class<?>, MultiInheritanceMap2<Class<?>, ? extends T>> copy = classMap.copy();
-			for (Map.Entry<Class<?>, MultiInheritanceMap2<Class<?>, ? extends T>> entry : copy.entries())
-				entry.setValue(entry.getValue().copy());
+		static <T, M extends MultiInheritanceMap2<Class<?>, ? extends T>> MultiInheritanceMap2<Class<?>, M> deepCopy(
+			MultiInheritanceMap2<Class<?>, ? extends MultiInheritanceMap2<Class<?>, ? extends T>> classMap) {
+			MultiInheritanceMap2<Class<?>, M> copy;
+			copy = (MultiInheritanceMap2<Class<?>, M>) (MultiInheritanceMap2<?, ?>) classMap.copy();
+			for (Map.Entry<Class<?>, M> entry : copy.entries())
+				entry.setValue((M) entry.getValue().copy());
 			return copy;
 		}
 	}

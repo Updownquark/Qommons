@@ -17,6 +17,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import org.qommons.ArrayUtils;
+import org.qommons.DefaultCharSubSequence;
 import org.qommons.QommonsUtils;
 import org.qommons.StringUtils;
 import org.qommons.ex.ExBiConsumer;
@@ -1520,7 +1521,9 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public StringBuilder alterUrl(StringBuilder url) {
-			int idx = url.indexOf(".jar/");
+			int idx = StringUtils.indexOf(DefaultCharSubSequence.toLowerCase(url), ".jar/");
+			if (idx < 0)
+				idx = StringUtils.indexOf(DefaultCharSubSequence.toLowerCase(url), ".zip/");
 			if (idx < 0)
 				return url;
 			url.insert(idx + 4, '!');

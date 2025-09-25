@@ -2,7 +2,7 @@ package org.qommons.collect;
 
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
 
@@ -56,7 +56,7 @@ public class BetterHashMultiMap<K, V> extends AbstractBetterMultiMap<K, V> {
 		 * @param equals The equality test for keys in the map
 		 * @return This builder
 		 */
-		public B withEquivalence(ToIntFunction<Object> hasher, BiFunction<Object, Object, Boolean> equals) {
+		public B withEquivalence(ToIntFunction<Object> hasher, BiPredicate<Object, Object> equals) {
 			theMapBuilder.withEquivalence(hasher, equals);
 			return (B) this;
 		}

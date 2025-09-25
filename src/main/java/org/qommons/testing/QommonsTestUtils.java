@@ -168,7 +168,7 @@ public class QommonsTestUtils {
 	public static <T> void assertThat(Object message, T value, Matcher<T> matcher) throws AssertionError {
 		if (!matcher.matches(value)) {
 			StringBuilder msg = new StringBuilder();
-			msg.append(message).append('\n');
+			msg.append(message).append(": ");
 			matcher.describeMismatch(value, msg);
 			throw new AssertionError(msg.toString());
 		}

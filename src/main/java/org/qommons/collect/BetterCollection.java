@@ -126,7 +126,8 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 *        indicated by the parameter</li></li>
 	 * @return The element at which the value was added, or null if the value was not added due to a non-erroring condition
 	 * @throws UnsupportedOperationException If such an operation is not supported by this collection in general
-	 * @throws IllegalArgumentException If something about the value prevents this operation
+	 * @throws IllegalArgumentException If something about the value prevents this operation, or if either <code>after</code> or
+	 *         <code>before</code> is not null and not an element in this collection
 	 */
 	CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException;
@@ -731,6 +732,11 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	}
 
 	@Override
+	default BetterSequence<E> sequence() {
+		return sequence(true);
+	}
+
+	@Override
 	default BetterSequence<E> sequence(boolean fromBeginning) {
 		return sequence(null, null, fromBeginning, null, fromBeginning);
 	}
@@ -918,8 +924,8 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 * 
 	 * @param <E> The type of values in the sequence
 	 */
-	class BetterSequence<E> implements Sequence<E> {
-		protected final BetterCollection<E> theCollection;
+	public class BetterSequence<E> implements Sequence<E> {
+		private final BetterCollection<E> theCollection;
 		private final ElementId theLowBound;
 		private final ElementId theHighBound;
 		private final boolean isReversed;
@@ -927,6 +933,15 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		private MutableCollectionElement<E> mutableCurrent;
 		private boolean isAtStart;
 
+		/**
+		 * @param collection The collection to iterate over
+		 * @param lowBound The minimum element to iterate over
+		 * @param highBound The maximum element to iterate over
+		 * @param forward Whether to iterate forward as opposed to reversed
+		 * @param position The initial position for the sequence
+		 * @param atStart Whether, if <code>position</code> is null, to start before the beginning or after the end of the sequence (by this
+		 *        collection's reckoning, regardless of the <code>forward</code> parameter)
+		 */
 		public BetterSequence(BetterCollection<E> collection, ElementId lowBound, ElementId highBound, boolean forward, ElementId position,
 			boolean atStart) {
 			theCollection = collection;
@@ -938,19 +953,28 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			isAtStart = atStart;
 		}
 
+		/** @return The collection this sequence is iterating over */
 		protected BetterCollection<E> getCollection() {
 			return theCollection;
 		}
 
+		/**
+		 * @return The collection element at the current sequence position
+		 * @throws NoSuchElementException If the sequence is not positioned on an element
+		 */
 		public CollectionElement<E> getCurrent() throws NoSuchElementException {
 			if (current == null)
 				throw new NoSuchElementException();
 			return current;
 		}
 
-		public MutableCollectionElement<E> mutableCurrent() throws IllegalStateException {
+		/**
+		 * @return The mutable collection element at the current sequence position
+		 * @throws NoSuchElementException If the sequence is not positioned on an element
+		 */
+		public MutableCollectionElement<E> mutableCurrent() throws NoSuchElementException {
 			if (current == null)
-				throw new IllegalStateException(NO_ELEMENT_AT_POSTION);
+				throw new NoSuchElementException();
 			if (mutableCurrent == null)
 				mutableCurrent = theCollection.mutableElement(current.getElementId());
 			return mutableCurrent;
@@ -961,6 +985,13 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			return current != null;
 		}
 
+		/**
+		 * Retrieves either the next or previous element in the sequence relative to the current position. This method has no side effects
+		 * on the sequence.
+		 * 
+		 * @param next Whether to retrieve the next or previous element.
+		 * @return The element adjacent to this sequence's position
+		 */
 		public CollectionElement<E> get(boolean next) {
 			boolean realForward = next ^ isReversed;
 			ElementId bound = realForward ? theHighBound : theLowBound;
@@ -1059,6 +1090,16 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 					before ? el : CollectionElement.getElementId(theCollection.getAdjacentElement(el, true)), //
 					false);
 			}
+		}
+
+		@Override
+		public String toString() {
+			if (current != null)
+				return current.toString();
+			else if (isAtStart)
+				return "(start)";
+			else
+				return "(end)";
 		}
 	}
 

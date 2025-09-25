@@ -822,7 +822,7 @@ public abstract class QommonsConfig implements Cloneable {
 			if (str == null)
 				str = new StringBuilder();
 			str.append(name.substring(lastMatchEnd, matcher.start()));
-			int code = Integer.parseInt(matcher.group("code"));
+			int code = Integer.parseInt(matcher.group("code"), 16);
 			str.append((char) code);
 			lastMatchEnd = matcher.end();
 		}

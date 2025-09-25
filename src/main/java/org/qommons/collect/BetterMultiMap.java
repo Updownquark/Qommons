@@ -346,6 +346,39 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 	static final BetterMultiMap<Object, Object> EMPTY = new EmptyMultiMap<>();
 
 	/**
+	 * @param <K> The key-type for the multi-map
+	 * @param <V> The value-type for the multi-map
+	 * @param key The key for the multi-map
+	 * @param values The values for the multi-map. This may be any {@link BetterCollection} and need not be immutable.
+	 * @return A multi-map with a single entry whose key is immutable with the given values
+	 */
+	public static <K, V> BetterMultiMap<K, V> of(K key, BetterCollection<V> values) {
+		return new SingleEntryMultiMap<>(key, values);
+	}
+
+	/**
+	 * @param <K> The key-type for the multi-map
+	 * @param <V> The value-type for the multi-map
+	 * @param key The key for the multi-map
+	 * @param values The values for the multi-map. This may be any {@link BetterCollection} and need not be immutable.
+	 * @return A multi-map with a single entry whose key is immutable with the given values
+	 */
+	public static <K, V> BetterMultiMap<K, V> of(K key, Collection<V> values) {
+		return new SingleEntryMultiMap<>(key, BetterList.of(values));
+	}
+
+	/**
+	 * @param <K> The key-type for the multi-map
+	 * @param <V> The value-type for the multi-map
+	 * @param key The key for the multi-map
+	 * @param values The values for the multi-map. This may be any {@link BetterCollection} and need not be immutable.
+	 * @return A multi-map with a single entry whose key is immutable with the given values
+	 */
+	public static <K, V> BetterMultiMap<K, V> of(K key, V... values) {
+		return new SingleEntryMultiMap<>(key, BetterList.of(values));
+	}
+
+	/**
 	 * Implements {@link BetterMultiMap#entrySet()}
 	 * 
 	 * @param <K> The key type of the map
@@ -1233,10 +1266,13 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 
 		@Override
 		public CollectionElement<V> getTerminalElement(boolean first) {
-			MultiEntryHandle<K, V> keyEntry = theMap.getTerminalEntry(first);
-			if (keyEntry == null)
-				return null;
-			return entryFor(keyEntry.getElementId(), keyEntry.getValues().getTerminalElement(first));
+			for (MultiEntryHandle<K, V> keyEntry = theMap.getTerminalEntry(first); keyEntry != null; keyEntry = theMap
+				.getAdjacentEntry(keyEntry.getElementId(), first)) {
+				CollectionElement<V> valueEl = keyEntry.getValues().getTerminalElement(first);
+				if (valueEl != null)
+					return entryFor(keyEntry.getElementId(), valueEl);
+			}
+			return null;
 		}
 
 		@Override
@@ -1246,7 +1282,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			MapValueId mvi = (MapValueId) elementId;
 			MultiEntryHandle<K, V> keyEntry = theMap.getEntryById(mvi.keyId);
 			CollectionElement<V> valueEntry = keyEntry.getValues().getAdjacentElement(mvi.valueId, next);
-			if (valueEntry == null) {
+			while (valueEntry == null && keyEntry != null) {
 				keyEntry = theMap.getAdjacentEntry(keyEntry.getElementId(), next);
 				if (keyEntry != null)
 					valueEntry = keyEntry.getValues().getTerminalElement(next);
@@ -1879,6 +1915,164 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 	}
 
+	/**
+	 * A multi-map with a single entry whose key is immutable but whose values may be any implementation of {@link BetterCollection}
+	 * 
+	 * @param <K> The key-type of the multi-map
+	 * @param <V> The value-type of the multi-map
+	 */
+	class SingleEntryMultiMap<K, V> extends AbstractIdentifiable implements BetterMultiMap<K, V> {
+		private final SingleEntry theEntry;
+		private final BetterSet<K> theKeySet;
+
+		SingleEntryMultiMap(K key, BetterCollection<V> values) {
+			theKeySet = new BetterSet.SingletonSet<>(key);
+			theEntry = new SingleEntry(theKeySet.getTerminalElement(true), values);
+		}
+
+		@Override
+		protected Object createIdentity() {
+			return Identifiable.baseId("BetterMultiMap", theEntry);
+		}
+
+		@Override
+		public boolean isLockSupported() {
+			return theEntry.getValues().isLockSupported();
+		}
+
+		@Override
+		public Transaction lock(boolean write, Object cause) {
+			return theEntry.getValues().lock(write, cause);
+		}
+
+		@Override
+		public Transaction tryLock(boolean write, Object cause) {
+			return theEntry.getValues().tryLock(write, cause);
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theEntry.getValues().getThreadConstraint();
+		}
+
+		@Override
+		public BetterSet<K> keySet() {
+			return theKeySet;
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return theEntry.getValues().getCoreId();
+		}
+
+		@Override
+		public long getStamp() {
+			return theEntry.getValues().getStamp();
+		}
+
+		@Override
+		public int valueSize() {
+			return theEntry.getValues().size();
+		}
+
+		@Override
+		public boolean clear() {
+			int preSize = theEntry.getValues().size();
+			theEntry.getValues().clear();
+			return theEntry.getValues().size() < preSize;
+		}
+
+		@Override
+		public Collection<Cause> getCurrentCauses() {
+			return theEntry.getValues().getCurrentCauses();
+		}
+
+		@Override
+		public MultiEntryHandle<K, V> getEntryById(ElementId keyId) {
+			if (keyId == theEntry.getElementId())
+				return theEntry;
+			else
+				throw new NoSuchElementException("No such element in this multi-map: " + keyId);
+		}
+
+		@Override
+		public BetterCollection<V> get(K key) {
+			if (Objects.equals(theEntry.getKey(), key))
+				return theEntry.getValues();
+			return BetterCollection.empty();
+		}
+
+		@Override
+		public MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, ElementId afterKey,
+			ElementId beforeKey, boolean first, Runnable preAdd, Runnable postAdd) {
+			if (Objects.equals(theEntry.getKey(), key)) {
+				return theEntry;
+			} else
+				return null;
+		}
+
+		@Override
+		public int hashCode() {
+			return BetterMultiMap.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return BetterMultiMap.equals(this, obj);
+		}
+
+		@Override
+		public String toString() {
+			return BetterMultiMap.toString(this);
+		}
+
+		class SingleEntry implements MultiEntryHandle<K, V> {
+			private final ElementId theId;
+			private final K theKey;
+			private final BetterCollection<V> theValues;
+
+			SingleEntry(CollectionElement<K> key, BetterCollection<V> values) {
+				theId = key.getElementId();
+				theKey = key.get();
+				theValues = values;
+			}
+
+			@Override
+			public ElementId getElementId() {
+				return theId;
+			}
+
+			@Override
+			public K getKey() {
+				return theKey;
+			}
+
+			@Override
+			public BetterCollection<V> getValues() {
+				return theValues;
+			}
+
+			@Override
+			public int hashCode() {
+				return Objects.hash(theKey, theValues);
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				if (obj == this)
+					return true;
+				else if (!(obj instanceof MultiMap.MultiEntry))
+					return false;
+				return theKey.equals(((MultiMap.MultiEntry<?, ?>) obj).getKey())//
+					&& theValues.equals(((MultiMap.MultiEntry<?, ?>) obj).getValues());
+			}
+
+			@Override
+			public String toString() {
+				return theKey + "=" + theValues;
+			}
+		}
+	}
 	/**
 	 * Abstract implementation of a {@link BetterMap} backed by a {@link BetterMultiMap}
 	 * 

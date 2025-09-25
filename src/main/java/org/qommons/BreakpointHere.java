@@ -77,6 +77,21 @@ public class BreakpointHere {
 	 * @return Whether the breakpoint was actually caught
 	 */
 	public static boolean breakpoint() {
+		return breakpoint(false, 1);
+	}
+
+	/**
+	 * Same as {@link #breakpoint()}, but with the option to suspend all the threads on the virtual machine at once
+	 * 
+	 * @param suspendVM Whether to suspend all threads on the VM, or just the current thread
+	 * @return Whether the breakpoint was actually caught
+	 * @see #breakpoint()
+	 */
+	public static boolean breakpoint(boolean suspendVM) {
+		return breakpoint(suspendVM, 1);
+	}
+
+	private static boolean breakpoint(boolean suspendVM, int depth) {
 		StackTraceElement[] stack;
 		long now = System.currentTimeMillis();
 		IgnoredBreakpoint ignored = IGNORE_ALL;
@@ -99,7 +114,7 @@ public class BreakpointHere {
 				System.err.println("WARNING! Application is attempting to catch a breakpoint, but line numbers seem to not be included");
 				return false;
 			}
-			source = stack[2];
+			source = stack[2 + depth];
 			ignored = IGNORING_CLASSES.get(source.getClassName());
 			if (ignored != null) {
 				if (ignored.stillIgnored(now, source))
@@ -142,15 +157,21 @@ public class BreakpointHere {
 				 * ||   ||  ||  \\   ||      ||      || ||  \\      ||    ||  ||       ||  \\   ||
 				 * ||===//  ||   \\  ||===== ||      || ||   \\     ||    ||  ||=====  ||   \\  ||=====  () ()
 				 *
-				 * The user should set a breakpoint on the following line */
+				 * The user should set 2 breakpoints on the following lines: */
 				/*         \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ \/ */
-				/* >>>> */ stack = Thread.currentThread().getStackTrace(); // <<<< Yeah, right here.
+				if (suspendVM) {
+					// One here with the option selected to suspend all threads on the Virtual Machine
+					/* >>>> */ stack = Thread.currentThread().getStackTrace(); // <<<< Yeah, right here.
+				} else {
+					// And one here without that option set
+					/* >>>> */ stack = Thread.currentThread().getStackTrace(); // <<<< Yeah, right here.
+				}
 				/*         /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ /\ */
 				// Good. If you're here, press step return now.
 
 				// Or you can choose to ignore this breakpoint or others like it in the future by changing the value the ignore variable
 
-				source = stack[2];
+				source = stack[2 + depth];
 				if (System.nanoTime() - pre < 10000000) {
 					// There is not a breakpoint set here.
 					StackTraceElement stackTop = stack[1];
@@ -341,6 +362,12 @@ public class BreakpointHere {
 						System.err.println("Could not read from System.in" + e);
 						theCommand = "";
 						break;
+					}
+					if (keepReading) {
+						try {
+							Thread.sleep(10);
+						} catch (InterruptedException e) {
+						}
 					}
 				}
 			}, BreakpointHere.class.getSimpleName() + " Input Reader");

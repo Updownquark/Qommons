@@ -8,6 +8,7 @@ import java.util.function.UnaryOperator;
 
 import org.qommons.collect.BetterBitSet;
 import org.qommons.collect.BetterList;
+import org.qommons.collect.BetterableList;
 import org.qommons.collect.CircularArrayList;
 import org.qommons.collect.DequeList;
 import org.qommons.ex.ExIterable;
@@ -33,14 +34,14 @@ public class IterableUtils {
 	 * @param end The index to end at (exclusive)
 	 * @return An iterable that iterates through integers starting at the given start and incrementing or decrementing until the given end
 	 */
-	public static Betterable<Integer> indexIterator(int start, int end) {
-		return new ToStringIterable<>(() -> new IndexIterator(start, end));
+	public static BetterableList<Integer> indexList(int start, int end) {
+		return new IndexCollection(start, end);
 	}
 
 	/**
 	 * @param <T> The type of the value to iterate over
 	 * @param value The supplier for the single value of the iterator
-	 * @return An iterable that supplies iterators that return a single value, supplied by the given suppliers
+	 * @return An iterable that supplies iterators that return a single value, supplied by the given supplier
 	 */
 	public static <T> Betterable<T> single(Supplier<T> value) {
 		class SingleIterator implements Iterator<T> {
@@ -56,6 +57,32 @@ public class IterableUtils {
 				if (!used) {
 					used = true;
 					return value.get();
+				}
+				throw new NoSuchElementException();
+			}
+		}
+		return new ToStringIterable<>(SingleIterator::new);
+	}
+
+	/**
+	 * @param <T> The type of the value to iterate over
+	 * @param value The single value of the iterator
+	 * @return An iterable that supplies iterators that returns the given single value
+	 */
+	public static <T> Betterable<T> single(T value) {
+		class SingleIterator implements Iterator<T> {
+			private boolean used;
+
+			@Override
+			public boolean hasNext() {
+				return !used;
+			}
+
+			@Override
+			public T next() {
+				if (!used) {
+					used = true;
+					return value;
 				}
 				throw new NoSuchElementException();
 			}
@@ -108,7 +135,7 @@ public class IterableUtils {
 
 	/**
 	 * @param <T> The type of the values to iterate over
-	 * @param compound The iterables to compound in a single iterable
+	 * @param compound The iterables to compound
 	 * @return An Iterable that iterates through all elements in the given iterables
 	 * @deprecated Use {@link #concat(Iterable...)}
 	 */
@@ -119,11 +146,35 @@ public class IterableUtils {
 
 	/**
 	 * @param <T> The type of the values to iterate over
-	 * @param components The iterables to concatenate in a single iterable
+	 * @param components The iterables to concatenate
 	 * @return An Iterable that iterates through all elements in the given iterables
 	 */
 	public static <T> Betterable<T> concat(final Iterable<? extends T>... components) {
 		return IterableUtils.flatten(Arrays.asList(components));
+	}
+
+	/**
+	 * @param <T> The type of the values to iterate over
+	 * @param components The collections to concatenate in a single iterable
+	 * @return A collection containing the values of all the given collections
+	 */
+	public static <T> Collection<T> concat(final Collection<? extends T>... components) {
+		Betterable<T> iterable = IterableUtils.flatten(Arrays.asList(components));
+		class ConcatenatedCollection extends AbstractCollection<T> implements Betterable<T> {
+			@Override
+			public Iterator<T> iterator() {
+				return iterable.iterator();
+			}
+
+			@Override
+			public int size() {
+				int size = 0;
+				for (Collection<? extends T> component : components)
+					size += component.size();
+				return size;
+			}
+		}
+		return new ConcatenatedCollection();
 	}
 
 	/**
@@ -574,6 +625,29 @@ public class IterableUtils {
 	}
 
 	/**
+	 * @param <T> The type of the collection to map
+	 * @param <V> The type of the collection to produce
+	 * @param collection The collection to map the values of
+	 * @param map The mapping function for collection values
+	 * @return A collection whose values are those of the given collection, mapped via the given function
+	 */
+	public static <T, V> Collection<V> map(Collection<T> collection, Function<? super T, ? extends V> map) {
+		Betterable<V> iterable = IterableUtils.map((Iterable<T>) collection, map);
+		class ConcatenatedCollection extends AbstractCollection<V> implements Betterable<V> {
+			@Override
+			public Iterator<V> iterator() {
+				return iterable.iterator();
+			}
+
+			@Override
+			public int size() {
+				return collection.size();
+			}
+		}
+		return new ConcatenatedCollection();
+	}
+
+	/**
 	 * @param <T> The type of the iterable to filter
 	 * @param iterable The iterable to filter
 	 * @param filter The function to filter items from the iterable
@@ -886,6 +960,63 @@ public class IterableUtils {
 	 */
 	public static <T> PermutationIterable<T> fullPermutation(Iterable<T> source) {
 		return new PermutationIterable<>(source);
+	}
+
+	static class IndexCollection extends AbstractList<Integer> implements BetterableList<Integer> {
+		private final int theStart;
+		private final int theEnd;
+		private final boolean isIncrement;
+
+		public IndexCollection(int start, int end) {
+			theStart = start;
+			theEnd = end;
+			isIncrement = start <= end;
+		}
+
+		@Override
+		public Integer get(int index) {
+			if (index < 0)
+				throw new IndexOutOfBoundsException("" + index);
+			if (isIncrement) {
+				int v = theStart + index;
+				if (v < theEnd)
+					return v;
+				else
+					throw new IndexOutOfBoundsException(index + " of " + size());
+			} else {
+				int v = theStart - index;
+				if (v > theEnd)
+					return v;
+				else
+					throw new IndexOutOfBoundsException(index + " of " + size());
+			}
+		}
+
+		@Override
+		public int size() {
+			return Math.abs(theEnd - theStart);
+		}
+
+		@Override
+		public Iterator<Integer> iterator() {
+			return new IndexIterator(theStart, theEnd);
+		}
+
+		@Override
+		public boolean isEmpty() {
+			return theStart == theEnd;
+		}
+
+		@Override
+		public boolean contains(Object o) {
+			if (!(o instanceof Integer))
+				return false;
+			int v = ((Integer) o).intValue();
+			if (isIncrement) {
+				return v >= theStart && v < theEnd;
+			} else
+				return v <= theStart && v > theEnd;
+		}
 	}
 
 	static class IndexIterator implements Iterator<Integer> {

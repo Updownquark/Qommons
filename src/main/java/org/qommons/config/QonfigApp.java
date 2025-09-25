@@ -2,6 +2,7 @@ package org.qommons.config;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
 import java.util.function.Consumer;
@@ -100,6 +101,16 @@ public class QonfigApp {
 			URL toolkitURL = loader == null ? null : loader.getResource(toolkitDef);
 			if (toolkitURL == null)
 				toolkitURL = QonfigApp.class.getResource(toolkitDef);
+			if (toolkitURL == null) {
+				String appLoc = appDefUrl.toString();
+				int lastSlash = appLoc.lastIndexOf('/');
+				if (lastSlash > 0) {
+					try {
+						toolkitURL = new URL(appLoc.substring(0, lastSlash) + "/" + toolkitDef);
+					} catch (MalformedURLException e) {
+					}
+				}
+			}
 			if (toolkitURL == null)
 				throw new IllegalArgumentException("Could not find toolkit " + toolkitDef);
 			try (InputStream tkIn = toolkitURL.openStream()) {

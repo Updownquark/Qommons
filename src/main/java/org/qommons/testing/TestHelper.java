@@ -940,10 +940,17 @@ public class TestHelper extends TestUtil {
 					System.out.println("Breakpoint detected--no more timeout checking for this case");
 					sleep = Duration.ofDays(1);
 				}
-				try {
-					if (sleep.compareTo(Duration.ZERO) > 0)
-						Thread.sleep(sleep.toMillis(), sleep.getNano() % 1000000);
-				} catch (InterruptedException e) {}
+				if (sleep.compareTo(Duration.ZERO) > 0) {
+					long end = System.currentTimeMillis() + sleep.toMillis();
+					if (sleep.compareTo(Duration.ofSeconds(1)) > 0)
+						sleep = Duration.ofSeconds(1);
+					try {
+						do {
+							Thread.sleep(sleep.toMillis(), sleep.getNano() % 1000000);
+						} while (System.currentTimeMillis() < end);
+					} catch (InterruptedException e) {
+					}
+				}
 			}
 			isTestCaseDone = false;
 			theCaseStart = null;
@@ -1844,6 +1851,8 @@ public class TestHelper extends TestUtil {
 				else {
 					placemarks = new TreeMap<>();
 					for (int h = 4; h < headers.length; h++) {
+						if (line[h].isEmpty())
+							continue;
 						try {
 							placemarks.put(headers[h], Long.parseLong(line[h]));
 						} catch (NumberFormatException e) {

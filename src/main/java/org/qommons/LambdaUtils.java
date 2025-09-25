@@ -161,6 +161,9 @@ public class LambdaUtils {
 		}
 	};
 
+	/** A predicate for Boolean instances */
+	public static final Predicate<Boolean> BOOLEAN_PREDICATE = printablePred(Boolean.TRUE::equals, "isTrue", "isTrue");
+
 	/** Static predicate for {@link Objects#isNull(Object) Objects::isNull} */
 	public static final Predicate<Object> IS_NULL = printablePred(Objects::isNull, "isNull", "isNull");
 
@@ -173,6 +176,39 @@ public class LambdaUtils {
 	/** Static binary predicate for two objects being {@link Object#equals(Object) equal} */
 	public static final BiPredicate<Object, Object> NOT_EQUALS = printableBiPredicate(
 		(v1, v2) -> v1 == null ? (v2 != null) : !v1.equals(v2), () -> "notEquals", "notEquals");
+
+	/** A trivial comparator that always returns zero for any two objects */
+	public static final Comparator<Object> ALWAYS_ZERO = new Comparator<Object>() {
+		@Override
+		public int compare(Object o1, Object o2) {
+			return 0;
+		}
+
+		@Override
+		public Comparator<Object> reversed() {
+			return this;
+		}
+
+		@Override
+		public Comparator<Object> thenComparing(Comparator<? super Object> other) {
+			return other;
+		}
+
+		@Override
+		public int hashCode() {
+			return 0;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return this == obj;
+		}
+
+		@Override
+		public String toString() {
+			return "Always zero";
+		}
+	};
 
 	/**
 	 * @param o The lambda to check
@@ -337,6 +373,16 @@ public class LambdaUtils {
 	 * @param <T> The argument type of the function
 	 * @param <X> The result type of the function
 	 * @param value The value to return from the function
+	 * @return A function that always returns the given value
+	 */
+	public static <T, X> Function<T, X> constantFn(X value) {
+		return constantFn(value, value == null ? () -> "null" : value::toString, value);
+	}
+
+	/**
+	 * @param <T> The argument type of the function
+	 * @param <X> The result type of the function
+	 * @param value The value to return from the function
 	 * @param print The printed function representation
 	 * @param identifier The identifier for the function
 	 * @return A function that always returns the given value
@@ -394,6 +440,21 @@ public class LambdaUtils {
 	 */
 	public static <T, V, X> BiFunction<T, V, X> constantBiFn(X value, String print, Object identifier) {
 		return new PrintableBiFunction<>((t, v) -> value, print != null ? new ConstantSupply(print) : () -> String.valueOf(value),
+			identifier);
+	}
+
+	/**
+	 * @param <T> The first argument type of the function
+	 * @param <U> The second argument type of the function
+	 * @param <V> The third argument type of the function
+	 * @param <X> The result type of the function
+	 * @param value The value to return from the function
+	 * @param print The printed function representation
+	 * @param identifier The identifier for the function
+	 * @return A function that always returns the given value
+	 */
+	public static <T, U, V, X> TriFunction<T, U, V, X> constantTriFn(X value, String print, Object identifier) {
+		return new PrintableTriFunction<>((t, u, v) -> value, print != null ? new ConstantSupply(print) : () -> String.valueOf(value),
 			identifier);
 	}
 
@@ -537,6 +598,13 @@ public class LambdaUtils {
 		return new PrintableFunction<>(fn, print, identifier);
 	}
 
+	/**
+	 * @param <T> The argument type of the operator
+	 * @param fn The operator
+	 * @param print The printed representation of the operator
+	 * @param identifier The identifier for the operator
+	 * @return The printable operator
+	 */
 	public static <T> UnaryOperator<T> printableUnaryOp(UnaryOperator<T> fn, Supplier<String> print, Object identifier) {
 		if (fn == null)
 			return null;

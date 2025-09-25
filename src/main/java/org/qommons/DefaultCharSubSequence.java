@@ -5,6 +5,7 @@ public class DefaultCharSubSequence extends AbstractCharSequence {
 	private final CharSequence theBacking;
 	private final int theStart;
 	private final int theEnd;
+	private String theCachedToString;
 
 	/**
 	 * @param backing The char sequence that this is a sub-sequence of
@@ -48,5 +49,12 @@ public class DefaultCharSubSequence extends AbstractCharSequence {
 		if (start < 0 || start > end || end > length)
 			throw new IndexOutOfBoundsException(start + "..." + end + " of " + length);
 		return new DefaultCharSubSequence(theBacking, theStart + start, theStart + end);
+	}
+
+	@Override
+	public String toString() {
+		if (theCachedToString == null)
+			theCachedToString = super.toString();
+		return theCachedToString;
 	}
 }

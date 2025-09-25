@@ -1,5 +1,7 @@
 package org.qommons;
 
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
@@ -901,14 +903,12 @@ public class QommonsUtils {
 	 * @param values The values to include
 	 * @return An unmodifiable set containing all values in the given collection
 	 */
-	public static <T> Set<T> unmodifiableDistinctCopy(Collection<? extends T> values) {
+	public static <T> BetterSet<T> unmodifiableDistinctCopy(Collection<? extends T> values) {
 		if (values == null || values.isEmpty())
-			return Collections.emptySet();
+			return BetterSet.empty();
 		else if (values.size() == 1)
-			return Collections.singleton(values.iterator().next());
-		LinkedHashSet<T> set = new LinkedHashSet<>(values.size() * 3 / 2 + 1);
-		set.addAll(values);
-		return Collections.unmodifiableSet(set);
+			return BetterSet.single(values.iterator().next());
+		return BetterHashSet.build().build(values);
 	}
 
 	/**
@@ -929,15 +929,12 @@ public class QommonsUtils {
 	 * @param values The values to include
 	 * @return An unmodifiable set containing all values in the given array
 	 */
-	public static <T> Set<T> unmodifiableDistinctCopy(T... values) {
+	public static <T> BetterSet<T> unmodifiableDistinctCopy(T... values) {
 		if (values == null || values.length == 0)
-			return Collections.emptySet();
-		else if (values.length == 0)
-			return Collections.singleton(values[0]);
-		LinkedHashSet<T> set = new LinkedHashSet<>(values.length * 3 / 2 + 1);
-		for (T v : values)
-			set.add(v);
-		return Collections.unmodifiableSet(set);
+			return BetterSet.empty();
+		else if (values.length == 1)
+			return BetterSet.single(values[0]);
+		return BetterHashSet.build().build(values);
 	}
 
 	/**
@@ -1696,6 +1693,12 @@ public class QommonsUtils {
 	 */
 	public static <T> T min(Iterable<? extends T> values, Comparator<? super T> compare) {
 		return max(values, compare.reversed());
+	}
+
+	/** @param content The string to set as the content's of the system's clipboard */
+	public static void setClipboard(String content) {
+		StringSelection text = new StringSelection(content);
+		Toolkit.getDefaultToolkit().getSystemClipboard().setContents(text, text);
 	}
 
 	/**

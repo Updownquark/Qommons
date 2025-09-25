@@ -13,7 +13,7 @@ import org.qommons.Stamped;
  * 
  * @param <E> The type of values in the queue
  */
-public interface SequencedDeque<E> extends Deque<E>, Sequenced<E>, Stamped {
+public interface SequencedDeque<E> extends Deque<E>, Sequenced<E>, PureQueue<E>, Stamped {
 	/**
 	 * @param c The collection
 	 * @return Whether this collection contains any elements of the given collection

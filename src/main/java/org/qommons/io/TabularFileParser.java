@@ -558,7 +558,7 @@ public interface TabularFileParser extends AutoCloseable {
 		 * @return A new parser that can parse lines containing the given column
 		 * @throws TextParseException If <code>optional</code> is false and the column is not present in the file header
 		 */
-		<T> AbstractTypedLineParser with(String column, boolean optional, ExFunction<String, ? extends T, ParseException> parser,
+		<T> TypedLineParser<?> with(String column, boolean optional, ExFunction<String, ? extends T, ParseException> parser,
 			String... otherPossibilities) throws TextParseException;
 
 		/**
@@ -572,7 +572,7 @@ public interface TabularFileParser extends AutoCloseable {
 		 * @return A new parser that can parse lines containing the given column
 		 * @throws TextParseException If <code>optional</code> is false and the column is not present in the file header
 		 */
-		<T> AbstractTypedLineParser with2(String column, boolean optional, Function<String, ? extends T> parser,
+		<T> TypedLineParser<?> with2(String column, boolean optional, Function<String, ? extends T> parser,
 			String... otherPossibilities) throws TextParseException;
 
 		/**
@@ -585,7 +585,7 @@ public interface TabularFileParser extends AutoCloseable {
 		 * @return A new parser that can parse lines containing the given column
 		 * @throws TextParseException If <code>optional</code> is false and the column is not present in the file header
 		 */
-		<T> AbstractTypedLineParser with(Pattern column, boolean optional, ExFunction<String, ? extends T, ParseException> parser)
+		<T> TypedLineParser<?> with(Pattern column, boolean optional, ExFunction<String, ? extends T, ParseException> parser)
 			throws TextParseException;
 
 		/**
@@ -598,7 +598,7 @@ public interface TabularFileParser extends AutoCloseable {
 		 * @return A new parser that can parse lines containing the given column
 		 * @throws TextParseException If <code>optional</code> is false and the column is not present in the file header
 		 */
-		<T> AbstractTypedLineParser with2(Pattern column, boolean optional, Function<String, ? extends T> parser) throws TextParseException;
+		<T> TypedLineParser<?> with2(Pattern column, boolean optional, Function<String, ? extends T> parser) throws TextParseException;
 
 		@Override
 		default void close() throws IOException {
@@ -700,7 +700,7 @@ public interface TabularFileParser extends AutoCloseable {
 		 * @return A new parser that can parse lines containing the given column
 		 * @throws TextParseException If <code>optional</code> is false and the column is not present in the file header
 		 */
-		protected <T> AbstractTypedLineParser with(String column, boolean optional, ExFunction<String, ? extends T, ParseException> parser,
+		protected <T> TypedLineParser<?> with(String column, boolean optional, ExFunction<String, ? extends T, ParseException> parser,
 			String... otherPossibilities) throws TextParseException {
 			return with(findColumn(column, otherPossibilities, optional), parser);
 		}
@@ -716,7 +716,7 @@ public interface TabularFileParser extends AutoCloseable {
 		 * @return A new parser that can parse lines containing the given column
 		 * @throws TextParseException If <code>optional</code> is false and the column is not present in the file header
 		 */
-		protected <T> AbstractTypedLineParser with2(String column, boolean optional, Function<String, ? extends T> parser,
+		protected <T> TypedLineParser<?> with2(String column, boolean optional, Function<String, ? extends T> parser,
 			String... otherPossibilities) throws TextParseException {
 			return with(findColumn(column, otherPossibilities, optional), ExFunction.of(parser));
 		}
@@ -731,7 +731,7 @@ public interface TabularFileParser extends AutoCloseable {
 		 * @return A new parser that can parse lines containing the given column
 		 * @throws TextParseException If <code>optional</code> is false and the column is not present in the file header
 		 */
-		protected <T> AbstractTypedLineParser with(Pattern column, boolean optional, ExFunction<String, ? extends T, ParseException> parser)
+		protected <T> TypedLineParser<?> with(Pattern column, boolean optional, ExFunction<String, ? extends T, ParseException> parser)
 			throws TextParseException {
 			return with(findColumn(column, optional), parser);
 		}
@@ -746,7 +746,7 @@ public interface TabularFileParser extends AutoCloseable {
 		 * @return A new parser that can parse lines containing the given column
 		 * @throws TextParseException If <code>optional</code> is false and the column is not present in the file header
 		 */
-		protected <T> AbstractTypedLineParser with2(Pattern column, boolean optional, Function<String, ? extends T> parser)
+		protected <T> TypedLineParser<?> with2(Pattern column, boolean optional, Function<String, ? extends T> parser)
 			throws TextParseException {
 			return with(findColumn(column, optional), ExFunction.of(parser));
 		}
@@ -762,8 +762,7 @@ public interface TabularFileParser extends AutoCloseable {
 		 * @param parser The parser to parse the column value
 		 * @return A new parser that can parse lines containing the given column
 		 */
-		protected abstract <T> AbstractTypedLineParser with(int[] columnAndOptionIndex,
-			ExFunction<String, ? extends T, ParseException> parser);
+		protected abstract <T> TypedLineParser<?> with(int[] columnAndOptionIndex, ExFunction<String, ? extends T, ParseException> parser);
 	}
 
 	/** A builder for {@link TypedLineParser}s */

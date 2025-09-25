@@ -1192,7 +1192,7 @@ public class DefaultQonfigParser implements QonfigParser {
 			private QonfigAttributeDef getAttribute(ElementQualifiedParseItem qualified) {
 				if (qualified.declaredElementName == null)
 					return null;
-				QonfigElementOrAddOn owner = getQonfigType(qualified);
+				QonfigElementOrAddOn owner = getQonfigType(qualified.declaredNamespace, qualified.declaredElementName);
 				if (qualified.declaredNamespace != null) {
 					QonfigToolkit dep = theSession.getToolkit().getDependencies().get(qualified.declaredNamespace);
 					if (dep == null)
@@ -1214,19 +1214,19 @@ public class DefaultQonfigParser implements QonfigParser {
 				return override.getFirst();
 			}
 
-			private QonfigElementOrAddOn getQonfigType(ElementQualifiedParseItem qualified) {
-				if (qualified.declaredNamespace != null) {
-					QonfigToolkit dep = theSession.getToolkit().getDependencies().get(qualified.declaredNamespace);
+			private QonfigElementOrAddOn getQonfigType(String ns, String name) {
+				if (ns != null) {
+					QonfigToolkit dep = theSession.getToolkit().getDependencies().get(ns);
 					if (dep == null)
 						return null; // This is an error, but we'll let the parser report it later
-					return dep.getElementOrAddOn(qualified.declaredElementName);
+					return dep.getElementOrAddOn(name);
 				} else {
-					QonfigElementOrAddOn.Builder builder = theBuilders.get(qualified.declaredElementName);
+					QonfigElementOrAddOn.Builder builder = theBuilders.get(name);
 					if (builder != null) {
 						parseExtensions(theNodes.get(builder.getName()), path, elsSession, addOnsSession, completed);
 						return builder.get();
 					} else
-						return theSession.getToolkit().getElementOrAddOn(qualified.declaredElementName);
+						return theSession.getToolkit().getElementOrAddOn(name);
 				}
 			}
 
@@ -1236,7 +1236,12 @@ public class DefaultQonfigParser implements QonfigParser {
 				Object valueV = type.parse(valueS.toString(), attrSession.getToolkit(), attrSession);
 				if (valueV == null) {
 					if (type instanceof QonfigValueType.QonfigTypeValueType) {
-						QonfigElementOrAddOn qonfigType = getQonfigType(parseQualified(valueS.toString(), valueS));
+						Matcher m = QonfigValueType.QonfigTypeValueType.PATTERN.matcher(valueS);
+						if (!m.matches()) {
+							attrSession.at(valueS).error("Unrecognized qonfig type reference");
+							return null;
+						}
+						QonfigElementOrAddOn qonfigType = getQonfigType(m.group("ns"), m.group("name"));
 						if (qonfigType == null || !type.isInstance(qonfigType))
 							return null;
 						valueV = new QonfigValueType.QonfigTypeReference<>(qonfigType,
@@ -1250,7 +1255,12 @@ public class DefaultQonfigParser implements QonfigParser {
 							String valueStr = valueS.toString();
 							int comma = valueStr.indexOf(',');
 							if (comma < 0) {
-								QonfigElementOrAddOn qonfigType = getQonfigType(parseQualified(valueStr, valueS));
+								Matcher m = QonfigValueType.QonfigTypeValueType.PATTERN.matcher(valueS);
+								if (!m.matches()) {
+									attrSession.at(valueS).error("Unrecognized qonfig type reference");
+									return null;
+								}
+								QonfigElementOrAddOn qonfigType = getQonfigType(m.group("ns"), m.group("name"));
 								if (qonfigType instanceof QonfigAddOn)
 									valueV = Collections.singleton(new QonfigValueType.QonfigTypeReference<>(qonfigType,
 										LocatedPositionedContent.of(theSession.getFileLocation().getFileLocation(), valueS)));
@@ -1270,7 +1280,12 @@ public class DefaultQonfigParser implements QonfigParser {
 										return null;
 									}
 									comma = nextComma;
-									QonfigElementOrAddOn qonfigType = getQonfigType(parseQualified(valueStr, valueS));
+									Matcher m = QonfigValueType.QonfigTypeValueType.PATTERN.matcher(valueS);
+									if (!m.matches()) {
+										attrSession.at(valueS).error("Unrecognized qonfig type reference");
+										return null;
+									}
+									QonfigElementOrAddOn qonfigType = getQonfigType(m.group("ns"), m.group("name"));
 									if (qonfigType instanceof QonfigAddOn)
 										refs.add(new QonfigValueType.QonfigTypeReference<>((QonfigAddOn) qonfigType,
 											LocatedPositionedContent.of(theSession.getFileLocation().getFileLocation(), valueS)));

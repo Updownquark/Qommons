@@ -444,6 +444,7 @@ public class ElasticExecutor<T> implements Named {
 	public boolean waitWhileActive(int maxUnfinished, long timeout) {
 		if (theUnfinishedTaskCount.get() <= maxUnfinished)
 			return true;
+		long endTime = timeout <= 0 ? 0 : System.currentTimeMillis() + timeout;
 		if (maxUnfinished >= getActiveThreads() && !theTaskQueue.isEmpty()) {
 			// If X tasks are waiting for all but themselves to be completed,
 			// but there are max <=X workers total, this would otherwise result in deadlock
@@ -459,13 +460,14 @@ public class ElasticExecutor<T> implements Named {
 						}
 						taskFinished();
 					}
+					if (timeout > 0 && System.currentTimeMillis() >= endTime)
+						break;
 				}
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 		}
 		synchronized (this) {
-			long endTime = timeout <= 0 ? 0 : System.currentTimeMillis() + timeout;
 			while (theUnfinishedTaskCount.get() > maxUnfinished) {
 				long sleepTime;
 				if (timeout > 0) {
@@ -651,6 +653,9 @@ public class ElasticExecutor<T> implements Named {
 
 				task = waitForTask(this);
 			} while (!isDead);
+
+			if (task != null) // Should never happen, but good to know if it does
+				System.err.println("Dying with unfinished task !!! " + task);
 
 			// Re-cache or destroy the executor
 			ConcurrentLinkedQueue<TaskExecutor<? super T>> cache = theCachedWorkers;

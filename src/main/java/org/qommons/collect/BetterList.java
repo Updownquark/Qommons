@@ -394,6 +394,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	}
 
 	@Override
+	default BetterListSequence<E> sequence() {
+		return sequence(true);
+	}
+
+	@Override
 	default BetterListSequence<E> sequence(boolean fromBeginning) {
 		return sequence(null, null, fromBeginning, null, fromBeginning);
 	}
@@ -532,7 +537,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 			return empty();
 		else if (values.length == 1)
 			return new SingletonList<>(values[0]);
-		return new ConstantList<>(Arrays.asList(values));
+		return new BetterArrayList<>(values);
 	}
 
 	/**
@@ -543,9 +548,17 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	public static <E> BetterList<E> of(Collection<? extends E> values) {
 		if (values == null || values.isEmpty())
 			return empty();
-		else if (values.size() == 1)
-			return new SingletonList<>(values.iterator().next());
-		return new ConstantList<>(values instanceof List ? (List<? extends E>) values : QommonsUtils.unmodifiableCopy(values));
+		else if (values.size() == 1) {
+			if (values instanceof Sequenced) {
+				Sequence<E> sequence = ((Sequenced<E>) values).sequence();
+				if (sequence.next())
+					return new SingletonList<>(sequence.get());
+				else
+					return empty();
+			} else
+				return new SingletonList<>(values.iterator().next());
+		}
+		return new BetterArrayList<>(values.toArray());
 	}
 
 	/**
@@ -556,12 +569,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	public static <E> BetterList<E> of(Stream<? extends E> values) {
 		ArrayList<E> list = new ArrayList<>();
 		values.collect(Collectors.toCollection(() -> list));
-		if (list.isEmpty())
-			return empty();
-		else if (list.size() == 1)
-			return new SingletonList<>(list.get(0));
-		list.trimToSize();
-		return new ConstantList<>(list);
+		return of(list);
 	}
 
 	/**
@@ -775,7 +783,16 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	 * 
 	 * @param <E> The type of values in the sequence
 	 */
-	class BetterListSequence<E> extends BetterSequence<E> implements ListSequence<E> {
+	public class BetterListSequence<E> extends BetterSequence<E> implements ListSequence<E> {
+		/**
+		 * @param collection The collection to iterate over
+		 * @param lowBound The minimum element to iterate over
+		 * @param highBound The maximum element to iterate over
+		 * @param forward Whether to iterate forward as opposed to reversed
+		 * @param position The initial position for the sequence
+		 * @param atStart Whether, if <code>position</code> is null, to start before the beginning or after the end of the sequence (by this
+		 *        collection's reckoning, regardless of the <code>forward</code> parameter)
+		 */
 		public BetterListSequence(BetterList<E> collection, ElementId lowBound, ElementId highBound, boolean forward, ElementId position,
 			boolean atStart) {
 			super(collection, lowBound, highBound, forward, position, atStart);
@@ -1522,27 +1539,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	 * 
 	 * @param <E> The type of values in the list
 	 */
-	class ConstantList<E> extends AbstractIdentifiable implements BetterList<E> {
-		private final List<? extends E> theValues;
-
-		/** @param values The values for this list. The backing list should never be modified. */
-		public ConstantList(List<? extends E> values) {
-			if (values == null)
-				throw new NullPointerException();
-			theValues = values;
-		}
-
-		@Override
-		protected Object createIdentity() {
-			List<Object> identities = QommonsUtils.map(theValues, v -> {
-				if (v instanceof Identifiable)
-					return ((Identifiable) v).getIdentity();
-				else
-					return v;
-			}, true);
-			return Identifiable.idFor(identities, identities::toString, identities::hashCode, identities::equals);
-		}
-
+	abstract class AbstractConstantList<E> extends AbstractIdentifiable implements BetterList<E> {
 		@Override
 		public ThreadConstraint getThreadConstraint() {
 			return ThreadConstraint.NONE;
@@ -1584,20 +1581,13 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public int size() {
-			return theValues.size();
-		}
-
-		@Override
-		public boolean isEmpty() {
-			return theValues.isEmpty();
-		}
+		public abstract E get(int index);
 
 		@Override
 		public CollectionElement<E> getTerminalElement(boolean first) {
-			if (theValues.isEmpty())
+			if (isEmpty())
 				return null;
-			return elementFor(first ? 0 : theValues.size() - 1);
+			return elementFor(first ? 0 : size() - 1);
 		}
 
 		@Override
@@ -1607,7 +1597,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		@Override
 		public int getElementsAfter(ElementId id) {
-			return theValues.size() - ((IndexElementId) id).index - 1;
+			return size() - ((IndexElementId) id).index - 1;
 		}
 
 		@Override
@@ -1616,8 +1606,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		private CollectionElement<E> elementFor(int index) {
-			if (index < 0 || index >= theValues.size())
-				throw new IndexOutOfBoundsException(index + " of " + theValues.size());
+			if (index < 0 || index >= size())
+				throw new IndexOutOfBoundsException(index + " of " + size());
 			return new CollectionElement<E>() {
 				@Override
 				public ElementId getElementId() {
@@ -1626,13 +1616,13 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 				@Override
 				public E get() {
-					return theValues.get(index);
+					return AbstractConstantList.this.get(index);
 				}
 
 				@Override
 				public String toString() {
 					return new StringBuilder()//
-						.append('[').append(index).append(']').append('=').append(theValues.get(index))//
+						.append('[').append(index).append(']').append('=').append(get())//
 						.toString();
 				}
 			};
@@ -1640,8 +1630,9 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		@Override
 		public CollectionElement<E> getElement(E value, boolean first) {
-			for (int i = 0; i < theValues.size(); i++)
-				if (Objects.equals(theValues.get(i), value))
+			int size = size();
+			for (int i = 0; i < size; i++)
+				if (Objects.equals(get(i), value))
 					return elementFor(i);
 			return null;
 		}
@@ -1655,7 +1646,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
 			int index = ((IndexElementId) elementId).index;
 			index += next ? 1 : -1;
-			if (index < 0 || index >= theValues.size())
+			if (index < 0 || index >= size())
 				return null;
 			return getElement(index);
 		}
@@ -1666,12 +1657,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		private MutableCollectionElement<E> mutableElementFor(int index) {
-			if (index < 0 || index >= theValues.size())
-				throw new IndexOutOfBoundsException(index + " of " + theValues.size());
+			if (index < 0 || index >= size())
+				throw new IndexOutOfBoundsException(index + " of " + size());
 			return new MutableCollectionElement<E>() {
 				@Override
 				public BetterCollection<E> getCollection() {
-					return ConstantList.this;
+					return AbstractConstantList.this;
 				}
 
 				@Override
@@ -1681,7 +1672,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 				@Override
 				public E get() {
-					return theValues.get(index);
+					return AbstractConstantList.this.get(index);
 				}
 
 				@Override
@@ -1712,7 +1703,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 				@Override
 				public String toString() {
 					return new StringBuilder()//
-						.append('[').append(index).append(']').append('=').append(theValues.get(index))//
+						.append('[').append(index).append(']').append('=').append(get())//
 						.toString();
 				}
 			};
@@ -1728,7 +1719,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		@Override
 		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
 			if (sourceCollection == this) {
-				if (!(localElement instanceof ConstantList<?>.IndexElementId) || ((IndexElementId) localElement).getList() != this)
+				if (!(localElement instanceof AbstractConstantList<?>.IndexElementId) || ((IndexElementId) localElement).getList() != this)
 					throw new IllegalArgumentException(localElement + " is not an element of this list");
 				return BetterList.of(localElement);
 			}
@@ -1737,60 +1728,45 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		@Override
 		public ElementId getEquivalentElement(ElementId equivalentEl) {
-			if (equivalentEl instanceof ConstantList.IndexElementId && ((IndexElementId) equivalentEl).getList() == this)
+			if (equivalentEl instanceof AbstractConstantList.IndexElementId && ((IndexElementId) equivalentEl).getList() == this)
 				return equivalentEl;
 			return null;
 		}
 
 		@Override
 		public E getFirst() {
-			if (theValues.isEmpty())
+			if (isEmpty())
 				throw new NoSuchElementException();
-			return theValues.get(0);
+			return get(0);
 		}
 
 		@Override
 		public E getLast() {
-			if (theValues.isEmpty())
+			if (isEmpty())
 				throw new NoSuchElementException();
-			return theValues.get(theValues.size() - 1);
+			return get(size() - 1);
 		}
 
 		@Override
 		public E peekFirst() {
-			return theValues.isEmpty() ? null : theValues.get(0);
+			return isEmpty() ? null : get(0);
 		}
 
 		@Override
 		public E peekLast() {
-			return theValues.isEmpty() ? null : theValues.get(theValues.size() - 1);
+			return isEmpty() ? null : get(size() - 1);
 		}
 
 		@Override
 		public E element() {
-			if (theValues.isEmpty())
+			if (isEmpty())
 				throw new NoSuchElementException();
-			return theValues.get(0);
+			return get(0);
 		}
 
 		@Override
 		public E peek() {
-			return theValues.isEmpty() ? null : theValues.get(0);
-		}
-
-		@Override
-		public int indexOf(Object value) {
-			return theValues.indexOf(value);
-		}
-
-		@Override
-		public E get(int index) {
-			return theValues.get(index);
-		}
-
-		@Override
-		public boolean contains(Object o) {
-			return theValues.contains(o);
+			return isEmpty() ? null : get(0);
 		}
 
 		@Override
@@ -1848,8 +1824,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 				this.index = index;
 			}
 
-			ConstantList<E> getList() {
-				return ConstantList.this;
+			AbstractConstantList<E> getList() {
+				return AbstractConstantList.this;
 			}
 
 			@Override
@@ -1869,14 +1845,100 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 			@Override
 			public boolean equals(Object obj) {
-				return obj instanceof ConstantList<?>.IndexElementId && index == ((IndexElementId) obj).index//
+				return obj instanceof AbstractConstantList<?>.IndexElementId && index == ((IndexElementId) obj).index//
 					&& getList().getIdentity().equals(((IndexElementId) obj).getList().getIdentity());
 			}
 
 			@Override
 			public String toString() {
-				return new StringBuilder("[").append(index).append("]=").append(theValues.get(index)).toString();
+				return new StringBuilder("[").append(index).append("]=").append(get(index)).toString();
 			}
+		}
+	}
+
+	/**
+	 * A constant BetterList backed by an array
+	 * 
+	 * @param <E> The type of values in the list
+	 */
+	class BetterArrayList<E> extends AbstractConstantList<E> {
+		private final Object[] theValues;
+
+		public BetterArrayList(Object[] values) {
+			theValues = values;
+		}
+
+		@Override
+		protected Object createIdentity() {
+			List<Object> identities = QommonsUtils.map(Arrays.asList(theValues), v -> {
+				if (v instanceof Identifiable)
+					return ((Identifiable) v).getIdentity();
+				else
+					return v;
+			}, true);
+			return Identifiable.idFor(identities, identities::toString, identities::hashCode, identities::equals);
+		}
+
+		@Override
+		public int size() {
+			return theValues.length;
+		}
+
+		@Override
+		public boolean isEmpty() {
+			return theValues.length == 0;
+		}
+
+		@Override
+		public E get(int index) {
+			return (E) theValues[index];
+		}
+	}
+
+	/**
+	 * An immutable {@link BetterList}
+	 * 
+	 * @param <E> The type of values in the list
+	 */
+	class ConstantList<E> extends AbstractConstantList<E> implements BetterList<E> {
+		private final List<? extends E> theValues;
+
+		/** @param values The values for this list. The backing list should never be modified. */
+		public ConstantList(List<? extends E> values) {
+			if (values == null)
+				throw new NullPointerException();
+			theValues = values;
+		}
+
+		@Override
+		protected Object createIdentity() {
+			List<Object> identities = QommonsUtils.map(theValues, v -> {
+				if (v instanceof Identifiable)
+					return ((Identifiable) v).getIdentity();
+				else
+					return v;
+			}, true);
+			return Identifiable.idFor(identities, identities::toString, identities::hashCode, identities::equals);
+		}
+
+		@Override
+		public int size() {
+			return theValues.size();
+		}
+
+		@Override
+		public boolean isEmpty() {
+			return theValues.isEmpty();
+		}
+
+		@Override
+		public E get(int index) {
+			return theValues.get(index);
+		}
+
+		@Override
+		public boolean contains(Object o) {
+			return theValues.contains(o);
 		}
 	}
 }

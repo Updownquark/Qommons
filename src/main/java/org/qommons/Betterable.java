@@ -11,7 +11,7 @@ import org.qommons.collect.BetterList;
 /**
  * An extension of {@link Iterable} that supports several simple chained operations
  * 
- * @param <T>
+ * @param <T> The type of values iterated over
  */
 public interface Betterable<T> extends Iterable<T> {
 	/**
@@ -153,7 +153,7 @@ public interface Betterable<T> extends Iterable<T> {
 	 * @return An iterable that iterates through integers starting at the given start and incrementing or decrementing until the given end
 	 */
 	static Betterable<Integer> index(int start, int end) {
-		return IterableUtils.indexIterator(start, end);
+		return IterableUtils.indexList(start, end);
 	}
 
 	/**
